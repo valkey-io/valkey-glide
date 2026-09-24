@@ -93,7 +93,7 @@ impl RdmaFabric {
             return Err(RdmaError::Configuration("cannot register 0 bytes".into()));
         }
         // SAFETY: `memory` is boxed and moved into the returned RdmaBuffer, which
-        // declares its registration first so the region closes before the memory drops.
+        // frees it only after the region is closed.
         let memory_region = unsafe { self.endpoint().register_remote(buffer)? };
         let registration = Registration::new(memory_region, self.clone());
         let region_ref = self.region_ref(pointer, &registration);
@@ -211,6 +211,10 @@ impl RdmaFabric {
 
     /// Close a fid belonging to this domain, returning libfabric's result code.
     pub(crate) fn fi_close(&self, fid: *mut ofi_libfabric_sys::bindgen::fid) -> i32 {
+        #[cfg(test)]
+        if tests::take_failed_close() {
+            return -libc::EBUSY;
+        }
         // this is the domain synchronization lock
         let _domain = self.endpoint();
         // SAFETY: the caller owns `fid`, it is live, and is closed exactly once. The
@@ -240,10 +244,30 @@ impl RdmaFabric {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::RdmaFabric;
     use crate::config::{FabricConfig, Provider};
+    use std::cell::Cell;
     use std::sync::Arc;
+
+    thread_local! {
+        /// How many of this thread's next `fi_close` calls fail without closing.
+        static FAILED_CLOSES: Cell<u32> = const { Cell::new(0) };
+    }
+
+    /// Make the next `count` calls to [`RdmaFabric::fi_close`] on this thread fail.
+    pub(crate) fn fail_next_closes(count: u32) {
+        FAILED_CLOSES.with(|closes| closes.set(count));
+    }
+
+    /// Whether this `fi_close` should fail, using up one of the failures if so.
+    pub(super) fn take_failed_close() -> bool {
+        FAILED_CLOSES.with(|closes| {
+            let left = closes.get();
+            closes.set(left.saturating_sub(1));
+            left > 0
+        })
+    }
 
     fn fabric() -> RdmaFabric {
         RdmaFabric::open(&FabricConfig::new(Provider::Tcp)).expect("tcp should open")

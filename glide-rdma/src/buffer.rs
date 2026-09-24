@@ -3,6 +3,7 @@
 //! Registered memory and the windows a transfer advertises.
 
 use std::fmt;
+use std::mem::ManuallyDrop;
 use std::sync::Arc;
 
 use crate::endpoint::{Registration, RevokeHandle};
@@ -56,7 +57,8 @@ pub struct RdmaBuffer {
     registration: Registration,
     region_ref: RegionRef,
     length: usize,
-    backing: Backing,
+    /// Freed only once the region is closed; see the `Drop` impl.
+    backing: ManuallyDrop<Backing>,
     /// Never read: held so the domain outlives the registration.
     _fabric: RdmaFabric,
 }
@@ -73,7 +75,7 @@ impl RdmaBuffer {
             registration,
             region_ref,
             length,
-            backing: Backing::Owned(memory),
+            backing: ManuallyDrop::new(Backing::Owned(memory)),
             _fabric: fabric,
         }
     }
@@ -90,7 +92,7 @@ impl RdmaBuffer {
             registration,
             region_ref,
             length,
-            backing: Backing::Shared(memory),
+            backing: ManuallyDrop::new(Backing::Shared(memory)),
             _fabric: fabric,
         }
     }
@@ -168,7 +170,7 @@ impl RdmaBuffer {
     /// The host mapping, or `None` for a shared source, which is not writable through
     /// this handle.
     pub fn as_host_mut(&mut self) -> Option<&mut [u8]> {
-        match &mut self.backing {
+        match &mut *self.backing {
             Backing::Owned(memory) => Some((**memory).as_mut()),
             Backing::Shared(_) => None,
         }
@@ -186,6 +188,16 @@ impl RdmaBuffer {
         let destination = self.as_host_mut()?.get_mut(..value.len())?;
         destination.copy_from_slice(value);
         Some(value.len())
+    }
+}
+
+impl Drop for RdmaBuffer {
+    /// Free the memory only after the region over it is closed.
+    fn drop(&mut self) {
+        if self.registration.revoke().is_ok() {
+            // SAFETY: the region is closed, and `backing` is not touched again after this.
+            unsafe { ManuallyDrop::drop(&mut self.backing) };
+        }
     }
 }
 
@@ -227,7 +239,9 @@ impl fmt::Debug for RdmaBuffer {
 mod tests {
     use crate::config::{FabricConfig, Provider};
     use crate::fabric::RdmaFabric;
+    use crate::fabric::tests::fail_next_closes;
     use std::sync::Arc;
+    use std::sync::atomic::{AtomicBool, Ordering};
 
     fn fabric() -> RdmaFabric {
         RdmaFabric::open(&FabricConfig::new(Provider::Tcp)).expect("tcp should open")
@@ -359,6 +373,71 @@ mod tests {
         buffer.revoke().unwrap();
 
         assert!(revoker.is_released());
+    }
+
+    /// Memory that records when it is freed.
+    struct Tracked {
+        bytes: Vec<u8>,
+        freed: Arc<AtomicBool>,
+    }
+
+    impl AsMut<[u8]> for Tracked {
+        fn as_mut(&mut self) -> &mut [u8] {
+            &mut self.bytes
+        }
+    }
+
+    impl Drop for Tracked {
+        fn drop(&mut self) {
+            self.freed.store(true, Ordering::SeqCst);
+        }
+    }
+
+    fn tracked() -> (Tracked, Arc<AtomicBool>) {
+        let freed = Arc::new(AtomicBool::new(false));
+        let memory = Tracked {
+            bytes: vec![0u8; 64],
+            freed: freed.clone(),
+        };
+        (memory, freed)
+    }
+
+    #[test]
+    fn dropping_a_buffer_frees_its_memory() {
+        let (memory, freed) = tracked();
+        let buffer = fabric().register(memory).unwrap();
+
+        drop(buffer);
+
+        assert!(freed.load(Ordering::SeqCst));
+    }
+
+    #[test]
+    fn a_failed_close_on_drop_leaks_the_memory() {
+        let (memory, freed) = tracked();
+        let buffer = fabric().register(memory).unwrap();
+
+        // One failure, so the registration's own drop still closes the region and
+        // the test leaves nothing registered behind.
+        fail_next_closes(1);
+        drop(buffer);
+
+        assert!(!freed.load(Ordering::SeqCst), "the memory must be leaked");
+    }
+
+    #[test]
+    fn a_failed_close_on_drop_leaks_shared_memory() {
+        let memory = Arc::new(vec![1u8; 64]);
+        let buffer = fabric().register_shared(memory.clone()).unwrap();
+
+        fail_next_closes(1);
+        drop(buffer);
+
+        assert_eq!(
+            Arc::strong_count(&memory),
+            2,
+            "the buffer's reference is leaked"
+        );
     }
 
     #[test]
