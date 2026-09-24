@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import gc
 import math
 import os
 import platform
@@ -19,6 +20,7 @@ else:
 import anyio
 import pytest
 from glide import GlideClient, GlideClusterClient, Script, TGlideClient
+from glide.glide_client import _client_registry
 from glide_shared import ClosingError, RequestError
 from glide_shared.commands.batch import Batch, ClusterBatch
 from glide_shared.commands.batch_options import ClusterBatchOptions
@@ -177,6 +179,37 @@ class TestGlideClients:
             )
 
         assert client._is_closed
+
+    @pytest.mark.parametrize("cluster_mode", [False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP3])
+    async def test_unreferenced_client_releases_connection(
+        self, request, cluster_mode, protocol
+    ):
+        """A client dropped without close() is collected and its connection closed."""
+        observer = await create_client(
+            request, cluster_mode=cluster_mode, protocol=protocol
+        )
+        client = await create_client(
+            request,
+            cluster_mode=cluster_mode,
+            protocol=protocol,
+            client_name="gc_dropped",
+        )
+        assert b"name=gc_dropped" in await observer.custom_command(["CLIENT", "LIST"])
+        pipe_client_id = client._pipe_client_id
+        del client
+        gc.collect()
+        assert pipe_client_id not in _client_registry
+        for _ in range(50):
+            if b"name=gc_dropped" not in await observer.custom_command(
+                ["CLIENT", "LIST"]
+            ):
+                break
+            await anyio.sleep(0.1)
+        assert b"name=gc_dropped" not in await observer.custom_command(
+            ["CLIENT", "LIST"]
+        )
+        await observer.close()
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])

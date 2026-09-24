@@ -6,6 +6,7 @@ import os
 import struct
 import sys
 import threading
+import weakref
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -221,7 +222,10 @@ _async_pipe_loop: Optional[asyncio.AbstractEventLoop] = (
 # trio raises BusyResourceError if two tasks wait on the same fd at once.
 _trio_pipe_token: Optional[object] = None
 _async_pipe_lock = threading.Lock()
-_client_registry: dict = {}
+# Weak refs: routing frames must not keep an unclosed client (and its connection) alive.
+_client_registry: "weakref.WeakValueDictionary[int, Any]" = (
+    weakref.WeakValueDictionary()
+)
 _pipe_remainder: bytes = b""
 _FRAME_STRUCT = struct.Struct("=QQQQ")  # Pre-compiled for hot path
 _PUBSUB_SENTINEL = 0xFFFFFFFFFFFFFFFF  # request_id sentinel for pubsub frames
@@ -249,24 +253,29 @@ def _free_orphaned_frame(request_id, response_ptr, arena_or_err):
         if arena_or_err & (1 << 63):
             # Pointer-mode pubsub: free the heap-allocated payload
             payload_len = arena_or_err & 0x7FFFFFFFFFFFFFFF
-            any_c = next(iter(_client_registry.values()), None)
-            if any_c:
-                any_c._lib.free_pubsub_pointer_payload(
-                    any_c._ffi.cast("uint8_t*", response_ptr), payload_len
-                )
-        return
-    any_c = next(iter(_client_registry.values()), None)
-    if any_c is None:
+            _ASYNC_FFI.lib.free_pubsub_pointer_payload(
+                _ASYNC_FFI.ffi.cast("uint8_t*", response_ptr), payload_len
+            )
         return
     try:
         if response_ptr != 0 and arena_or_err != 0:
-            any_c._lib.free_response_arena(any_c._ffi.cast("void*", arena_or_err))
+            _ASYNC_FFI.lib.free_response_arena(
+                _ASYNC_FFI.ffi.cast("void*", arena_or_err)
+            )
         elif response_ptr == 0 and arena_or_err != 0:
             err_ptr = arena_or_err & 0x00FFFFFFFFFFFFFF
             if err_ptr:
-                any_c._lib.free_pipe_error_string(any_c._ffi.cast("char*", err_ptr))
+                _ASYNC_FFI.lib.free_pipe_error_string(
+                    _ASYNC_FFI.ffi.cast("char*", err_ptr)
+                )
     except Exception:
         pass
+
+
+def _release_core_client(lib, core_client, create_pid: int) -> None:
+    """Close the core client of a client garbage-collected without close() (same fork guard)."""
+    if create_pid == os.getpid():
+        lib.close_client(core_client)
 
 
 def _resolve_future(fut, result, client):
@@ -478,11 +487,9 @@ def _on_async_pipe_readable() -> None:  # noqa: C901
                 if client is not None:
                     _handle_pointer_pubsub(client, response_ptr, payload_len)
                 else:
-                    any_c = next(iter(_client_registry.values()), None)
-                    if any_c:
-                        any_c._lib.free_pubsub_pointer_payload(
-                            any_c._ffi.cast("uint8_t*", response_ptr), payload_len
-                        )
+                    _ASYNC_FFI.lib.free_pubsub_pointer_payload(
+                        _ASYNC_FFI.ffi.cast("uint8_t*", response_ptr), payload_len
+                    )
             else:
                 # Inline pubsub: response_ptr = payload_len, data follows header
                 payload_len = response_ptr
@@ -649,6 +656,12 @@ class BaseClient(CoreCommands):
             raise ClosingError(error_msg)
 
         self._lib.free_connection_response(client_response_ptr)
+
+        # Close the connection if the client is dropped without close(); holds no ref to self.
+        self._core_client_finalizer = weakref.finalize(
+            self, _release_core_client, self._lib, self._core_client, self._create_pid
+        )
+        self._core_client_finalizer.atexit = False
 
         self._setup_pipe()
 
@@ -1149,6 +1162,9 @@ class BaseClient(CoreCommands):
 
             _client_registry.pop(getattr(self, "_pipe_client_id", 0), None)
 
+            finalizer = getattr(self, "_core_client_finalizer", None)
+            if finalizer is not None:
+                finalizer.detach()
             # Skip FFI call if this client was created in a different process
             # (the tokio Runtime doesn't survive fork; dropping it would hang).
             if self._core_client is not None and self._create_pid == os.getpid():
