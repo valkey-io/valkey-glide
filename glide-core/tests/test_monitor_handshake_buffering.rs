@@ -334,11 +334,22 @@ mod test_monitor_handshake_buffering {
         let _ = server.answered.await;
         let _ = server.release.send(());
 
-        // Not a wait for a condition: blocking this thread is the stall being
-        // reproduced, since it starves the reader task while the server writes.
-        std::thread::sleep(std::time::Duration::from_millis(500));
+        // Blocking this thread is the stall being reproduced, not a wait for a
+        // condition: it starves the reader task while the server writes. The loop only
+        // bounds how long the test is willing to wait for the server thread to be
+        // scheduled, and never awaits, so the reader task stays starved throughout.
+        let deadline = std::time::Instant::now() + DEADLINE;
+        let wrote = loop {
+            if server.wrote.try_recv().is_ok() {
+                break true;
+            }
+            if std::time::Instant::now() >= deadline {
+                break false;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        };
         assert!(
-            server.wrote.try_recv().is_ok(),
+            wrote,
             "the server did not write the line during the stall, so nothing was starved"
         );
         assert!(
