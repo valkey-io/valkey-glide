@@ -3,6 +3,7 @@
 pub mod circuit_breaker;
 mod types;
 
+use crate::client::rdma_connection::GlideConnectionWithRdma;
 use crate::cluster_scan_container::insert_cluster_scan_cursor;
 use crate::compression::CompressionBackendType;
 use crate::compression::lz4_backend::Lz4Backend;
@@ -35,6 +36,7 @@ use tokio::runtime::{Builder, Handle};
 pub use types::*;
 
 use self::value_conversion::{convert_to_expected_type, expected_type_for_cmd, get_value_type};
+pub mod rdma_connection;
 mod reconnecting_connection;
 pub use reconnecting_connection::IAMTokenHandle;
 pub mod monitor_client;
@@ -387,7 +389,7 @@ fn request_configures_cert_material(request: &ConnectionRequest) -> bool {
 pub enum ClientWrapper {
     Standalone(StandaloneClient),
     Cluster {
-        client: ClusterConnection,
+        client: ClusterConnection<GlideConnectionWithRdma>,
         /// Owns the background mTLS certificate reload task for cluster clients, if
         /// path-based reload is configured. Held so the task lives for the client's
         /// lifetime; the [`crate::tls_reload::CertReloadHandle`] shared with the reconnect loop keeps
@@ -465,6 +467,12 @@ pub struct ClientShared {
     // it cannot distinguish "nothing configured" from "configured but the parent
     // has not connected" — the scope guard needs that distinction.
     configures_cert_material: bool,
+    // The open fabric endpoint when RDMA is configured.
+    #[cfg(feature = "rdma")]
+    rdma_fabric: Option<crate::rdma::Fabric>,
+    // Every region registered through any clone of this client, revoked by `close_rdma`.
+    #[cfg(feature = "rdma")]
+    rdma_regions: crate::rdma::Regions,
 }
 
 /// Why [`Client::address_for_slot`] / [`Client::try_address_for_slot`] could not
@@ -635,6 +643,10 @@ pub fn is_blocking_command_name(name: &[u8], args: &[Vec<u8>]) -> bool {
     match upper.as_slice() {
         b"BLPOP" | b"BRPOP" | b"BLMOVE" | b"BZPOPMAX" | b"BZPOPMIN" | b"BRPOPLPUSH" | b"BLMPOP"
         | b"BZMPOP" | b"WAIT" | b"WAITAOF" => true,
+        // A RDMA transfer is treated as blocking mainly so the client does not
+        // abandon it while it is in flight and leave the registered memory in
+        // an undefined state.
+        b"LO.GET" | b"LO.SET" => true,
         // BLOCK is matched case-insensitively, mirroring `Cmd::position`.
         b"XREAD" | b"XREADGROUP" => args.iter().any(|a| a.eq_ignore_ascii_case(b"BLOCK")),
         _ => false,
@@ -660,6 +672,14 @@ fn get_request_timeout(cmd: &Cmd, default_timeout: Duration) -> RedisResult<Opti
             };
             get_timeout_from_cmd_arg(cmd, idx, TimeUnit::Milliseconds)
         }
+        // A RDMA transfer should not have a timeout.
+        //
+        // Timing out will abandon the request and ignore the reply which isn't
+        // safe because the server may still be writing into the caller's
+        // registered memory.
+        //
+        // Close the client instead to abort a transfer and revoke the registration.
+        b"LO.GET" | b"LO.SET" => Ok(RequestTimeoutOption::NoTimeout),
         _ => Ok(RequestTimeoutOption::ClientConfig),
     }?;
 
@@ -1102,6 +1122,7 @@ impl Client {
                     push_sender,
                     iam_manager_ref,
                     self.pubsub_synchronizer.clone(),
+                    None,
                 )
                 .await?;
                 let _ = self.cert_material.set(cert_material);
@@ -1254,7 +1275,21 @@ impl Client {
         cmd: &'a mut Cmd,
         routing: Option<RoutingInfo>,
     ) -> redis::RedisFuture<'a, Value> {
+        self.send_command_inner(cmd, routing, false)
+    }
+
+    /// [`Self::send_command`], which refuses `LO.*` commands unless
+    /// `from_rdma_method` is set. Only `rdma_transfer` sets it.
+    fn send_command_inner<'a>(
+        &'a mut self,
+        cmd: &'a mut Cmd,
+        routing: Option<RoutingInfo>,
+        from_rdma_method: bool,
+    ) -> redis::RedisFuture<'a, Value> {
         Box::pin(async move {
+            if !from_rdma_method {
+                crate::rdma::refuse_direct_command(cmd)?;
+            }
             // Refresh IAM auth before the command (see `reconcile_iam_before_dispatch`).
             self.reconcile_iam_before_dispatch().await?;
             // Track MULTI/EXEC/DISCARD for the borrow-time re-AUTH defer.
@@ -1941,6 +1976,7 @@ impl Client {
         raise_on_error: bool,
     ) -> redis::RedisFuture<'a, Value> {
         Box::pin(async move {
+            crate::rdma::refuse_direct_in_batch(pipeline)?;
             self.reconcile_iam_before_dispatch().await?;
             let client = self.get_or_initialize_client().await?;
 
@@ -2019,6 +2055,7 @@ impl Client {
         pipeline_retry_strategy: PipelineRetryStrategy,
     ) -> redis::RedisFuture<'a, Value> {
         Box::pin(async move {
+            crate::rdma::refuse_direct_in_batch(pipeline)?;
             self.reconcile_iam_before_dispatch().await?;
             // Non-atomic: a raw MULTI here stays open on the connection after the
             // pipeline returns, so the defer in `prepare_for_borrow` must see it.
@@ -2482,8 +2519,9 @@ async fn create_cluster_client(
     push_sender: Option<mpsc::UnboundedSender<PushInfo>>,
     iam_token_manager: Option<&Arc<crate::iam::IAMTokenManager>>,
     pubsub_synchronizer: Arc<dyn crate::pubsub::PubSubSynchronizer>,
+    _rdma_fabric: Option<crate::rdma::Fabric>,
 ) -> RedisResult<(
-    redis::cluster_async::ClusterConnection,
+    redis::cluster_async::ClusterConnection<GlideConnectionWithRdma>,
     Option<Arc<crate::tls_reload::CertReloadManager>>,
     InheritedCertMaterial,
 )> {
@@ -2603,6 +2641,10 @@ async fn create_cluster_client(
     builder = builder.database_id(valkey_connection_info.db);
     builder = builder.cache(valkey_connection_info.cache);
     builder = builder.server_assisted_cache(valkey_connection_info.server_assisted_cache);
+    #[cfg(feature = "rdma")]
+    {
+        builder = builder.rdma_fabric(_rdma_fabric.map(crate::rdma::Fabric::opened));
+    }
     if let Some(client_name) = valkey_connection_info.client_name {
         builder = builder.client_name(client_name);
     }
@@ -2666,7 +2708,7 @@ async fn create_cluster_client(
         cert_material_handle.map(|handle| Arc::new(handle) as Arc<dyn redis::CertParamsProvider>);
 
     let mut con = client
-        .get_async_connection(
+        .get_generic_async_connection(
             push_sender,
             Some(pubsub_synchronizer),
             iam_token_provider,
@@ -2730,6 +2772,13 @@ pub enum ConnectionError {
     IoError(std::io::Error),
     Configuration(String),
     IAMError(String),
+    Rdma(crate::rdma::RdmaUnavailable),
+}
+
+impl From<crate::rdma::RdmaUnavailable> for ConnectionError {
+    fn from(reason: crate::rdma::RdmaUnavailable) -> Self {
+        ConnectionError::Rdma(reason)
+    }
 }
 
 impl std::fmt::Debug for ConnectionError {
@@ -2741,6 +2790,7 @@ impl std::fmt::Debug for ConnectionError {
             Self::Timeout => write!(f, "Timeout"),
             Self::Configuration(arg0) => f.debug_tuple("Configuration").field(arg0).finish(),
             Self::IAMError(arg0) => f.debug_tuple("IAMError").field(arg0).finish(),
+            Self::Rdma(arg0) => f.debug_tuple("Rdma").field(arg0).finish(),
         }
     }
 }
@@ -2754,6 +2804,7 @@ impl std::fmt::Display for ConnectionError {
             ConnectionError::Timeout => f.write_str("connection attempt timed out"),
             ConnectionError::Configuration(msg) => write!(f, "configuration error: {msg}"),
             ConnectionError::IAMError(msg) => write!(f, "IAM authentication error: {msg}"),
+            ConnectionError::Rdma(reason) => write!(f, "RDMA unavailable: {reason}"),
         }
     }
 }
@@ -2895,9 +2946,77 @@ fn sanitized_request_string(request: &ConnectionRequest) -> String {
         })
         .unwrap_or_default();
 
+    let rdma = request.rdma.log_summary();
+
     format!(
-        "\nAddresses: {addresses}{tls_mode}{cluster_mode}{request_timeout}{connection_timeout}{rfr_strategy}{connection_retry_strategy}{database_id}{protocol}{client_name}{periodic_checks}{pubsub_subscriptions}{inflight_requests_limit}{recovery_requests_queue_size}{node_discovery_mode}{client_cert_paths}{cert_reload}",
+        "\nAddresses: {addresses}{tls_mode}{cluster_mode}{request_timeout}{connection_timeout}{rfr_strategy}{connection_retry_strategy}{database_id}{protocol}{client_name}{periodic_checks}{pubsub_subscriptions}{inflight_requests_limit}{recovery_requests_queue_size}{node_discovery_mode}{client_cert_paths}{cert_reload}{rdma}",
     )
+}
+
+/// What an RDMA transfer hands back: the buffer, and how the transfer went.
+///
+/// The buffer is `None` only when a transfer was abandoned and its region could
+/// not be closed, so the memory had to be leaked.
+#[cfg(feature = "rdma")]
+pub type RdmaOutcome<T> = (Option<glide_rdma::RdmaBuffer>, Result<T, redis::RedisError>);
+
+/// End a loan the server replied to, with `reply` as parsed from that reply.
+#[cfg(feature = "rdma")]
+fn reclaim_rdma_loan(
+    loan: glide_rdma::LentBuffer,
+    reply: redis::RedisResult<glide_rdma::TransferReply>,
+) -> RdmaOutcome<Option<glide_rdma::ReadReceipt>> {
+    // A reply that could not be parsed is still a reply, so the server is done.
+    let (transfer_reply, parse_error) = match reply {
+        Ok(reply) => (reply, None),
+        Err(error) => (glide_rdma::TransferReply::Failed, Some(error)),
+    };
+    match loan.reclaim(transfer_reply) {
+        Ok((buffer, receipt)) => (Some(buffer), parse_error.map_or(Ok(receipt), Err)),
+        Err((buffer, error)) => (
+            Some(buffer),
+            Err(crate::rdma::protocol::as_redis_error(error)),
+        ),
+    }
+}
+
+/// End a loan the server may still be using: close the region, then hand the
+/// buffer back.
+#[cfg(feature = "rdma")]
+fn recall_rdma_loan(
+    loan: glide_rdma::LentBuffer,
+    error: redis::RedisError,
+) -> RdmaOutcome<Option<glide_rdma::ReadReceipt>> {
+    match loan.recall() {
+        Ok(buffer) => (Some(buffer), Err(error)),
+        // The server may still reach the memory. Dropping the loan tries to close
+        // the region once more, and leaks the memory if that fails too.
+        Err((_loan, _)) => (None, Err(error)),
+    }
+}
+
+/// Check the checksum a `LO.GET` reported against the bytes that landed.
+#[cfg(feature = "rdma")]
+fn verify_rdma_checksum(
+    buffer: &glide_rdma::RdmaBuffer,
+    offset: usize,
+    receipt: &glide_rdma::ReadReceipt,
+) -> Result<(), redis::RedisError> {
+    let Some(reported) = receipt.checksum else {
+        return Ok(());
+    };
+    // `reclaim` checked the byte count against the window, which fits the buffer.
+    let landed = &buffer.as_host()[offset..offset + receipt.bytes_written];
+    let computed = glide_rdma::checksum(landed);
+    if computed != reported {
+        return Err(crate::rdma::protocol::as_redis_error(
+            glide_rdma::RdmaError::ChecksumMismatch {
+                expected: reported,
+                actual: computed,
+            },
+        ));
+    }
+    Ok(())
 }
 
 /// Create a compression manager from the given configuration
@@ -2951,6 +3070,47 @@ impl Client {
                 })
             })?;
         }
+
+        if request.rdma.is_requested()
+            && request
+                .compression_config
+                .as_ref()
+                .is_some_and(|compression| compression.enabled)
+        {
+            return Err(ConnectionError::Configuration(
+                "RDMA and compression cannot be enabled on the same client: a RDMA \
+                 read transfers stored bytes directly and does not decompress them. \
+                 Use separate clients, one per feature."
+                    .to_string(),
+            ));
+        }
+
+        if request.rdma.is_requested() && request.lazy_connect {
+            return Err(ConnectionError::Configuration(
+                "RDMA is not yet supported with lazy_connect.".to_string(),
+            ));
+        }
+
+        if request.rdma.is_requested() && request.read_only {
+            return Err(ConnectionError::Configuration(
+                "RDMA cannot be combined with read-only mode: the transfer commands \
+                 are not recognised as readonly commands, so a read-only client \
+                 rejects them. RDMA transfers run against the primary."
+                    .to_string(),
+            ));
+        }
+
+        // `Static` discovery exists mainly for clients that connect through a proxy.
+        if request.rdma.is_requested() && request.node_discovery_mode == NodeDiscoveryMode::Static {
+            return Err(ConnectionError::Configuration(
+                "RDMA cannot be combined with static node discovery, which is meant \
+                 for proxies."
+                    .to_string(),
+            ));
+        }
+
+        // Open the fabric before connecting, or fail fast with the root cause.
+        let rdma_fabric = crate::rdma::open(&request.rdma)?;
 
         // Add buffer to connection_timeout to allow inner connection logic to fully execute before the outer timeout triggers
         let client_creation_timeout = request.get_connection_timeout() + Duration::from_millis(500);
@@ -3039,6 +3199,10 @@ impl Client {
                     compression_manager: compression_manager.clone(),
                     pubsub_synchronizer: pubsub_synchronizer.clone(),
                     client_side_cache,
+                    #[cfg(feature = "rdma")]
+                    rdma_fabric: rdma_fabric.clone(),
+                    #[cfg(feature = "rdma")]
+                    rdma_regions: Default::default(),
                     latency_tracker: Arc::new(crate::timeout_watchdog::LatencyTracker::new(4096)),
                     circuit_breaker: request.client_circuit_breaker.as_ref().map(|config| {
                         let defaults = circuit_breaker::ClientCircuitBreakerConfig::default();
@@ -3124,6 +3288,7 @@ impl Client {
                     push_sender,
                     iam_token_manager.as_ref(),
                     pubsub_synchronizer.clone(),
+                    rdma_fabric,
                 )
                 .await
                 .map_err(ConnectionError::Cluster)?;
@@ -3133,11 +3298,12 @@ impl Client {
                     _cert_material_manager: cert_material_manager,
                 }
             } else {
-                let standalone = StandaloneClient::create_client(
+                let standalone = StandaloneClient::create_client_with_rdma(
                     request,
                     push_sender,
                     iam_token_manager.as_ref(),
                     Some(pubsub_synchronizer.clone()),
+                    rdma_fabric,
                 )
                 .await
                 .map_err(ConnectionError::Standalone)?;
@@ -3183,6 +3349,212 @@ impl Client {
     /// * `None` - If compression is disabled or not configured
     pub fn compression_manager(&self) -> Option<Arc<CompressionManager>> {
         self.compression_manager.clone()
+    }
+
+    /// Register memory for the server to transfer data into or out of.
+    ///
+    /// Registration is expensive and pins pages against `RLIMIT_MEMLOCK`, so a
+    /// caller should register a region once and advertise windows of it per
+    /// transfer rather than registering per operation.
+    ///
+    /// The region is revoked when the client is closed with [`Self::close_rdma`].
+    #[cfg(feature = "rdma")]
+    pub fn register_rdma_region(
+        &self,
+        memory: impl AsMut<[u8]> + Send + 'static,
+    ) -> Result<glide_rdma::RdmaBuffer, redis::RedisError> {
+        let rdma_fabric = self.require_rdma_fabric()?;
+        self.rdma_regions.register(|| rdma_fabric.register(memory))
+    }
+
+    /// Cancel every transfer this client has in flight and refuse new ones.
+    ///
+    /// Revokes every region registered through this client or any clone of it.
+    /// The server can then no longer reach that memory. Bytes that landed
+    /// before the revoke stay.
+    ///
+    /// When libfabric cannot close a region, that region stays registered
+    /// and a transfer using it keeps waiting for the server's reply. Every other
+    /// region is still revoked.
+    #[cfg(feature = "rdma")]
+    pub fn close_rdma(&self) -> Result<(), redis::RedisError> {
+        self.rdma_regions.close()
+    }
+
+    /// Read a value directly into the `[offset, offset + length)` window of
+    /// registered memory.
+    ///
+    /// The buffer is lent to the server for the transfer and handed back with
+    /// the result. The buffer is `None` only when the transfer was abandoned and
+    /// its region could not be closed; the memory is then leaked, because the
+    /// server may still reach it.
+    ///
+    /// `Ok(None)` means the key does not exist. `Ok(Some(receipt))` means the
+    /// bytes are already in the window by the time this returns.
+    ///
+    /// Any error other than a reply the server sent revokes the buffer, because
+    /// the server may not be done with the memory. A revoked buffer cannot be
+    /// used for another transfer; register the memory again.
+    ///
+    /// TODO: add `length` parameter
+    #[cfg(feature = "rdma")]
+    pub async fn rdma_get(
+        &mut self,
+        key: &[u8],
+        buffer: glide_rdma::RdmaBuffer,
+        offset: usize,
+        length: usize,
+    ) -> RdmaOutcome<Option<glide_rdma::ReadReceipt>> {
+        if let Err(error) = self.check_rdma_buffer(&buffer) {
+            return (Some(buffer), Err(error));
+        }
+        let (command, loan) = match buffer.lend_for_get(key, offset, length) {
+            Ok(lent) => lent,
+            Err((buffer, error)) => {
+                return (
+                    Some(buffer),
+                    Err(crate::rdma::protocol::as_redis_error(error)),
+                );
+            }
+        };
+        let (buffer, result) = self
+            .rdma_transfer(command, loan, crate::rdma::protocol::parse_read_reply)
+            .await;
+        let result = match (&buffer, result) {
+            (Some(buffer), Ok(Some(receipt))) => {
+                verify_rdma_checksum(buffer, offset, &receipt).map(|()| Some(receipt))
+            }
+            (_, result) => result,
+        };
+        (buffer, result)
+    }
+
+    /// Store a value the server reads directly out of the `[offset, offset + length)`
+    /// window of registered memory.
+    ///
+    /// Hands the buffer back as [`Self::rdma_get`] does.
+    #[cfg(feature = "rdma")]
+    pub async fn rdma_set(
+        &mut self,
+        key: &[u8],
+        buffer: glide_rdma::RdmaBuffer,
+        offset: usize,
+        length: usize,
+    ) -> RdmaOutcome<()> {
+        if let Err(error) = self.check_rdma_buffer(&buffer) {
+            return (Some(buffer), Err(error));
+        }
+        let (command, loan) = match buffer.lend_for_set(key, offset, length) {
+            Ok(lent) => lent,
+            Err((buffer, error)) => {
+                return (
+                    Some(buffer),
+                    Err(crate::rdma::protocol::as_redis_error(error)),
+                );
+            }
+        };
+        let (buffer, result) = self
+            .rdma_transfer(command, loan, crate::rdma::protocol::parse_write_reply)
+            .await;
+        (buffer, result.map(|_| ()))
+    }
+
+    /// Send a lent buffer's command and end the loan.
+    ///
+    /// The loan is reclaimed when the server has provably stopped using the
+    /// memory: it sent a reply, even an error reply or one `parse` rejects, or it
+    /// refused the handshake, so the transfer command was never sent. Any other
+    /// error proves nothing about what the server is doing, so the loan is
+    /// recalled instead, which closes the region first. So is a revoke that wins
+    /// the race against the reply.
+    ///
+    /// If this future is dropped, so is the loan, which also closes the region.
+    #[cfg(feature = "rdma")]
+    async fn rdma_transfer(
+        &mut self,
+        command: glide_rdma::RdmaCommand,
+        loan: glide_rdma::LentBuffer,
+        parse: fn(redis::Value) -> redis::RedisResult<glide_rdma::TransferReply>,
+    ) -> RdmaOutcome<Option<glide_rdma::ReadReceipt>> {
+        let mut command = crate::rdma::protocol::redis_command(&command);
+        let reply = tokio::select! {
+            // A reply that is ready wins over a revoke that is also ready: the
+            // transfer did finish, so the caller should hear that it did.
+            biased;
+            reply = self.send_command_inner(&mut command, None, true) => Some(reply),
+            () = loan.revoked() => None,
+        };
+        match reply {
+            Some(Ok(value)) => reclaim_rdma_loan(loan, parse(value)),
+            Some(Err(error)) => {
+                // Decided before the error is rewritten as a cancellation below.
+                let server_replied = error.is_server_reply();
+                let client_closed = self.rdma_wait_if_closing().await;
+                let error =
+                    crate::rdma::cancelled_if_revoked(Err(error), loan.is_revoked(), client_closed)
+                        .expect_err("an error stays an error");
+                if server_replied {
+                    reclaim_rdma_loan(loan, Err(error))
+                } else {
+                    recall_rdma_loan(loan, error)
+                }
+            }
+            None => {
+                let error = self.rdma_cancellation();
+                recall_rdma_loan(loan, error)
+            }
+        }
+    }
+
+    /// Whether the client is closing, and if so, once the close has tried every
+    /// region, so a failed transfer can tell whether it was cancelled.
+    #[cfg(feature = "rdma")]
+    async fn rdma_wait_if_closing(&self) -> bool {
+        let client_closed = self.rdma_regions.is_closed();
+        if client_closed {
+            self.rdma_regions.close_finished().await;
+        }
+        client_closed
+    }
+
+    #[cfg(feature = "rdma")]
+    fn rdma_cancellation(&self) -> redis::RedisError {
+        crate::rdma::cancellation(self.rdma_regions.is_closed())
+    }
+
+    /// Refuse a buffer this client cannot transfer through, naming why.
+    #[cfg(feature = "rdma")]
+    fn check_rdma_buffer(&self, buffer: &glide_rdma::RdmaBuffer) -> Result<(), redis::RedisError> {
+        let rdma_fabric = self.require_rdma_fabric()?;
+        if !buffer.is_registered_on(rdma_fabric) {
+            return Err(crate::rdma::protocol::configuration_error(
+                "buffer is registered on a different fabric".to_string(),
+            ));
+        }
+        if self.rdma_regions.is_closed() {
+            return Err(crate::rdma::protocol::cancelled(
+                "the client is closed, so it cannot start a transfer",
+            ));
+        }
+        if buffer.is_revoked() {
+            return Err(crate::rdma::protocol::cancelled(
+                "the region was revoked, so nothing can transfer through it",
+            ));
+        }
+        Ok(())
+    }
+    /// The fabric this client opened or an error naming what is missing.
+    #[cfg(feature = "rdma")]
+    fn require_rdma_fabric(&self) -> Result<&glide_rdma::RdmaFabric, redis::RedisError> {
+        self.rdma_fabric
+            .as_ref()
+            .map(crate::rdma::Fabric::get)
+            .ok_or_else(|| {
+                crate::rdma::protocol::configuration_error(
+                    "this client has no RDMA fabric: pass a RdmaConfiguration when creating it"
+                        .to_string(),
+                )
+            })
     }
 
     /// Returns the configured request timeout for this client.
@@ -3487,7 +3859,7 @@ impl GlideClientForTests for StandaloneClient {
 }
 
 // This is used for pubsub tests
-impl GlideClientForTests for ClusterConnection {
+impl GlideClientForTests for ClusterConnection<GlideConnectionWithRdma> {
     fn send_command<'a>(
         &'a mut self,
         cmd: &'a mut redis::Cmd,
@@ -3530,6 +3902,10 @@ impl Client {
                 cert_material: Arc::default(),
                 address_resolver: None,
                 configures_cert_material: false,
+                #[cfg(feature = "rdma")]
+                rdma_fabric: None,
+                #[cfg(feature = "rdma")]
+                rdma_regions: Default::default(),
             }),
             iam_token_manager: None,
             otel_metadata: Arc::new(OTelMetadata {
@@ -3729,6 +4105,157 @@ mod tests {
 
         assert!(matches!(error, ConnectionError::Configuration(_)));
         assert!(error.to_string().contains("library name"));
+    }
+
+    #[tokio::test]
+    async fn test_new_rejects_rdma_combined_with_compression() {
+        use crate::compression::{CompressionBackendType, CompressionConfig};
+        use crate::rdma::{RdmaSetting, RdmaUnavailable};
+
+        let request = ConnectionRequest {
+            addresses: vec![NodeAddress {
+                host: "127.0.0.1".to_string(),
+                port: 1,
+            }],
+            lazy_connect: true,
+            rdma: RdmaSetting::Rejected(RdmaUnavailable::NotCompiledIn),
+            compression_config: Some(CompressionConfig::new(CompressionBackendType::Zstd)),
+            ..Default::default()
+        };
+
+        let error = match Client::new(request, None).await {
+            Ok(_) => panic!("RDMA with compression should fail client creation"),
+            Err(error) => error,
+        };
+
+        assert!(
+            matches!(error, ConnectionError::Configuration(_)),
+            "{error:?}"
+        );
+        let message = error.to_string();
+        assert!(message.contains("compression"), "{message}");
+        assert!(
+            !message.contains("no RDMA support compiled in"),
+            "the conflict must be reported, not RDMA availability: {message}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_new_allows_rdma_with_compression_configured_but_disabled() {
+        use crate::compression::{CompressionBackendType, CompressionConfig};
+        use crate::rdma::{RdmaSetting, RdmaUnavailable};
+
+        let mut compression = CompressionConfig::new(CompressionBackendType::Zstd);
+        compression.enabled = false;
+
+        let request = ConnectionRequest {
+            addresses: vec![NodeAddress {
+                host: "127.0.0.1".to_string(),
+                port: 1,
+            }],
+            lazy_connect: true,
+            rdma: RdmaSetting::Rejected(RdmaUnavailable::NotCompiledIn),
+            compression_config: Some(compression),
+            ..Default::default()
+        };
+
+        let error = match Client::new(request, None).await {
+            Ok(_) => panic!("RDMA is still unavailable in this build"),
+            Err(error) => error,
+        };
+
+        assert!(
+            !error.to_string().contains("compression"),
+            "disabled compression must not be reported as a conflict: {error}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_new_rejects_rdma_combined_with_lazy_connect() {
+        use crate::rdma::{RdmaSetting, RdmaUnavailable};
+
+        let request = ConnectionRequest {
+            addresses: vec![NodeAddress {
+                host: "127.0.0.1".to_string(),
+                port: 1,
+            }],
+            lazy_connect: true,
+            rdma: RdmaSetting::Rejected(RdmaUnavailable::NotCompiledIn),
+            ..Default::default()
+        };
+
+        let error = match Client::new(request, None).await {
+            Ok(_) => panic!("RDMA with lazy_connect should fail client creation"),
+            Err(error) => error,
+        };
+
+        assert!(
+            matches!(error, ConnectionError::Configuration(_)),
+            "{error:?}"
+        );
+        assert!(error.to_string().contains("lazy_connect"), "{error}");
+    }
+
+    #[tokio::test]
+    async fn test_new_rejects_rdma_combined_with_static_node_discovery() {
+        use crate::rdma::{RdmaSetting, RdmaUnavailable};
+
+        let request = ConnectionRequest {
+            addresses: vec![NodeAddress {
+                host: "127.0.0.1".to_string(),
+                port: 1,
+            }],
+            node_discovery_mode: crate::client::NodeDiscoveryMode::Static,
+            rdma: RdmaSetting::Rejected(RdmaUnavailable::NotCompiledIn),
+            ..Default::default()
+        };
+
+        let error = match Client::new(request, None).await {
+            Ok(_) => panic!("RDMA with static node discovery should fail client creation"),
+            Err(error) => error,
+        };
+
+        assert!(
+            matches!(error, ConnectionError::Configuration(_)),
+            "{error:?}"
+        );
+        let message = error.to_string();
+        assert!(
+            message.contains("static node discovery") && message.contains("proxies"),
+            "the message must name the conflict and why it matters: {message}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_new_rejects_rdma_combined_with_read_only() {
+        use crate::rdma::{RdmaSetting, RdmaUnavailable};
+
+        let request = ConnectionRequest {
+            addresses: vec![NodeAddress {
+                host: "127.0.0.1".to_string(),
+                port: 1,
+            }],
+            lazy_connect: false,
+            read_only: true,
+            rdma: RdmaSetting::Rejected(RdmaUnavailable::NotCompiledIn),
+            ..Default::default()
+        };
+
+        let error = match Client::new(request, None).await {
+            Ok(_) => panic!("RDMA with read-only mode should fail client creation"),
+            Err(error) => error,
+        };
+
+        assert!(
+            matches!(error, ConnectionError::Configuration(_)),
+            "{error:?}"
+        );
+        let message = error.to_string();
+        assert!(message.contains("read-only"), "{message}");
+        assert!(
+            !message.contains("no RDMA support compiled in"),
+            "the conflict must be reported, not RDMA availability: {message}"
+        );
     }
 
     #[test]
@@ -3980,6 +4507,31 @@ mod tests {
     }
 
     #[test]
+    fn test_rdma_transfers_have_no_timeout() {
+        // `LO.GET <key> <rkey> <remote-address>`, `LO.SET <key> <len> <rkey> <remote-address>`
+        for name in ["LO.GET", "LO.SET"] {
+            let mut cmd = Cmd::new();
+            cmd.arg(name)
+                .arg("key")
+                .arg("439041101")
+                .arg("140229324210176");
+            let result = get_request_timeout(&cmd, Duration::from_millis(250)).unwrap();
+            assert_eq!(
+                result, None,
+                "{name} waits for the transfer rather than the client's timeout"
+            );
+        }
+    }
+
+    #[test]
+    fn test_rdma_handshake_keeps_the_default_timeout() {
+        let mut cmd = Cmd::new();
+        cmd.arg("LO.HELLO");
+        let result = get_request_timeout(&cmd, Duration::from_millis(250)).unwrap();
+        assert_eq!(result, Some(Duration::from_millis(250)));
+    }
+
+    #[test]
     fn test_is_select_command_detects_valid_select_commands() {
         // Test detection of valid SELECT commands
         let client = create_test_client();
@@ -4106,6 +4658,10 @@ mod tests {
                 cert_material: Arc::default(),
                 address_resolver: None,
                 configures_cert_material: false,
+                #[cfg(feature = "rdma")]
+                rdma_fabric: None,
+                #[cfg(feature = "rdma")]
+                rdma_regions: Default::default(),
             }),
             iam_token_manager: None,
             otel_metadata: Arc::new(OTelMetadata {
@@ -4773,6 +5329,33 @@ mod tests {
         let mut cmd = Cmd::new();
         cmd.arg("SET").arg("key").arg("value");
         assert!(!is_blocking_command(&cmd));
+    }
+
+    #[test]
+    fn test_rdma_transfers_count_as_blocking() {
+        for name in ["LO.GET", "LO.SET"] {
+            let mut cmd = Cmd::new();
+            cmd.arg(name)
+                .arg("key")
+                .arg("439041101")
+                .arg("140229324210176");
+            assert!(is_blocking_command(&cmd), "{name}");
+            // The FFI hot path must agree without building a Cmd.
+            assert!(
+                is_blocking_command_name(name.as_bytes(), &[]),
+                "{name} by name"
+            );
+            assert!(
+                is_blocking_command_name(name.to_ascii_lowercase().as_bytes(), &[]),
+                "{name} lowercased"
+            );
+        }
+
+        // The handshake is an ordinary round trip with a request timeout
+        let mut cmd = Cmd::new();
+        cmd.arg("LO.HELLO");
+        assert!(!is_blocking_command(&cmd));
+        assert!(!is_blocking_command_name(b"LO.HELLO", &[]));
     }
 
     #[test]

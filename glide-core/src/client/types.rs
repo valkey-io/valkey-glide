@@ -16,6 +16,7 @@ use crate::compression::CompressionConfig;
 use crate::connection_request as protobuf;
 use crate::iam::CredentialsProvider;
 use crate::iam::ServiceType;
+use crate::rdma::RdmaSetting;
 #[cfg(feature = "proto")]
 #[allow(unused_imports)]
 use ::protobuf::EnumOrUnknown;
@@ -54,6 +55,8 @@ pub struct ConnectionRequest {
     /// Optional automatic reload configuration for the path-based client cert/key.
     pub cert_reload: Option<CertReloadConfig>,
     pub compression_config: Option<CompressionConfig>,
+    /// What the request asked of RDMA. `Absent` means the feature is off.
+    pub rdma: RdmaSetting,
     pub tcp_nodelay: bool,
     pub pubsub_reconciliation_interval_ms: Option<u32>,
     pub read_only: bool,
@@ -271,6 +274,45 @@ fn chars_to_string_option(chars: &::protobuf::Chars) -> Option<String> {
 #[cfg(feature = "proto")]
 pub(crate) fn none_if_zero(value: u32) -> Option<u32> {
     if value == 0 { None } else { Some(value) }
+}
+
+/// Convert the protobuf RDMA configuration into what this build can honor.
+#[cfg(all(feature = "proto", not(feature = "rdma")))]
+fn convert_rdma(config: Option<&protobuf::RdmaConfig>) -> RdmaSetting {
+    use crate::rdma::RdmaUnavailable;
+
+    match config {
+        None => RdmaSetting::Absent,
+        Some(_) => RdmaSetting::Rejected(RdmaUnavailable::NotCompiledIn),
+    }
+}
+
+/// Convert the protobuf RDMA configuration into glide-rdma's own `FabricConfig`.
+#[cfg(all(feature = "proto", feature = "rdma"))]
+fn convert_rdma(config: Option<&protobuf::RdmaConfig>) -> RdmaSetting {
+    use crate::rdma::{FabricConfig, Provider, RdmaUnavailable};
+
+    let Some(config) = config else {
+        return RdmaSetting::Absent;
+    };
+    let Some(provider) = config.provider.as_ref() else {
+        return RdmaSetting::Rejected(RdmaUnavailable::NoProviderConfigured);
+    };
+    let fabric = match provider {
+        protobuf::rdma_config::Provider::EfaDirect(_) => FabricConfig::new(Provider::EfaDirect),
+        protobuf::rdma_config::Provider::Tcp(tcp) => {
+            let fabric = FabricConfig::new(Provider::Tcp);
+            match tcp.bind.as_ref() {
+                Some(bind) => fabric.with_bind(bind.to_string()),
+                None => fabric,
+            }
+        }
+    };
+    let fabric = match config.interface.as_ref() {
+        Some(interface) => fabric.with_interface(interface.to_string()),
+        None => fabric,
+    };
+    RdmaSetting::Configured(fabric)
 }
 
 #[cfg(feature = "proto")]
@@ -516,6 +558,8 @@ impl From<protobuf::ConnectionRequest> for ConnectionRequest {
             }
         });
 
+        let rdma = convert_rdma(value.rdma_config.as_ref());
+
         let tcp_nodelay = value.tcp_nodelay.unwrap_or(true);
         let pubsub_reconciliation_interval_ms =
             value.pubsub_reconciliation_interval_ms.filter(|&v| v != 0);
@@ -560,6 +604,7 @@ impl From<protobuf::ConnectionRequest> for ConnectionRequest {
             client_key_path,
             cert_reload,
             compression_config,
+            rdma,
             tcp_nodelay,
             pubsub_reconciliation_interval_ms,
             read_only,

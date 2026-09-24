@@ -33,6 +33,7 @@ type ResponseContext<'a> = (
     &'a Arc<AtomicU16>,
     SetInfoResponse,
     &'a HashMap<String, Value>,
+    &'a mut HashMap<String, Vec<String>>,
 );
 
 pub struct ServerMock {
@@ -101,15 +102,32 @@ fn is_command(value: &Value, expected_tokens: &[&[u8]]) -> bool {
             })
 }
 
+/// The command name of a request, upper-cased, or `None` if it is not an array.
+fn command_name(value: &Value) -> Option<String> {
+    let Value::Array(tokens) = value else {
+        return None;
+    };
+    match tokens.first()? {
+        Value::BulkString(name) => Some(String::from_utf8_lossy(name).to_uppercase()),
+        _ => None,
+    }
+}
+
 fn respond_to_message(
     receiver: &mut tokio::sync::mpsc::UnboundedReceiver<MockedRequest>,
     socket: &mut StdTcpStream,
-    response_context: ResponseContext<'_>,
+    response_context: &mut ResponseContext<'_>,
     message: String,
     value: Value,
 ) {
-    let (received_commands, received_setinfo_commands, setinfo_response, constant_responses) =
-        response_context;
+    let (
+        received_commands,
+        received_setinfo_commands,
+        setinfo_response,
+        constant_responses,
+        command_scripts,
+    ) = response_context;
+    let setinfo_response = *setinfo_response;
 
     log_resp_message(&message);
 
@@ -140,6 +158,22 @@ fn respond_to_message(
         return;
     }
 
+    // Scripted by command name for commands whose arguments a test cannot predict.
+    // The last reply in a script is repeated, so a script of one reply answers
+    // that command however many times it arrives.
+    if let Some(name) = command_name(&value)
+        && let Some(replies) = command_scripts.get_mut(&name)
+    {
+        let reply = match replies.len() {
+            0 => panic!("The script for {name} ran out of replies"),
+            1 => replies[0].clone(),
+            _ => replies.remove(0),
+        };
+        received_commands.fetch_add(1, Ordering::AcqRel);
+        socket.write_all(reply.as_bytes()).unwrap();
+        return;
+    }
+
     if let Some(response) = constant_responses.get(&message) {
         let mut buffer = Vec::new();
         super::encode_value(response, &mut buffer).unwrap();
@@ -157,7 +191,7 @@ fn respond_to_message(
 fn receive_and_respond_to_next_message(
     receiver: &mut tokio::sync::mpsc::UnboundedReceiver<MockedRequest>,
     socket: &mut StdTcpStream,
-    response_context: ResponseContext<'_>,
+    response_context: &mut ResponseContext<'_>,
     closing_signal: &Arc<ManualResetEvent>,
     pending: &mut BytesMut,
     codec: &mut ValueCodec,
@@ -199,7 +233,12 @@ impl ServerMock {
         setinfo_response: SetInfoResponse,
     ) -> Self {
         let listener = super::get_listener_on_available_port();
-        Self::new_with_listener_and_setinfo_response(constant_responses, listener, setinfo_response)
+        Self::new_with_listener_and_setinfo_response(
+            constant_responses,
+            listener,
+            setinfo_response,
+            HashMap::new(),
+        )
     }
 
     pub fn new_with_listener(
@@ -210,6 +249,28 @@ impl ServerMock {
             constant_responses,
             listener,
             SetInfoResponse::Ok,
+            HashMap::new(),
+        )
+    }
+
+    /// A mock that answers by command name for commands whose arguments a test
+    /// cannot predict. Each entry is a queue of raw RESP replies -- so an error
+    /// reply is expressible, unlike the `Value` map -- and the last one repeats
+    /// once the queue is down to it.
+    ///
+    /// A scripted name answers before anything queued with `add_response`, and
+    /// swallows the command rather than matching it, so do not script a command
+    /// a test also wants to assert the exact arguments of.
+    pub fn new_with_command_scripts(
+        constant_responses: HashMap<String, Value>,
+        command_scripts: HashMap<String, Vec<String>>,
+    ) -> Self {
+        let listener = super::get_listener_on_available_port();
+        Self::new_with_listener_and_setinfo_response(
+            constant_responses,
+            listener,
+            SetInfoResponse::Ok,
+            command_scripts,
         )
     }
 
@@ -217,6 +278,7 @@ impl ServerMock {
         constant_responses: HashMap<String, Value>,
         listener: TcpListener,
         setinfo_response: SetInfoResponse,
+        mut command_scripts: HashMap<String, Vec<String>>,
     ) -> Self {
         let (request_sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
         let received_commands = Arc::new(AtomicU16::new(0));
@@ -239,15 +301,17 @@ impl ServerMock {
             let mut pending = BytesMut::new();
             let mut codec = ValueCodec::default();
 
+            let mut response_context = (
+                &received_commands_clone,
+                &received_setinfo_commands_clone,
+                setinfo_response,
+                &constant_responses,
+                &mut command_scripts,
+            );
             while receive_and_respond_to_next_message(
                 &mut receiver,
                 &mut socket,
-                (
-                    &received_commands_clone,
-                    &received_setinfo_commands_clone,
-                    setinfo_response,
-                    &constant_responses,
-                ),
+                &mut response_context,
                 &closing_signal_clone,
                 &mut pending,
                 &mut codec,

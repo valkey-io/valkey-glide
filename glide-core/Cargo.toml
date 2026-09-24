@@ -21,6 +21,8 @@ edition = "2024"
 glide-logger = { path = "../glide-logger", version = "0.1" }
 glide-telemetry = { path = "../glide-telemetry", version = "0.1" }
 glide-core-engine = { path = "./redis-rs/redis", version = "0.1", features = ["aio", "keep-alive", "tokio-comp", "tokio-rustls-comp", "connection-manager", "cluster", "cluster-async"] }
+# The RDMA data path. Opt-in so a standard build does not link it at all.
+glide-rdma = { path = "../glide-rdma", optional = true }
 
 # External dependencies
 async-trait = { version = "0.1" }
@@ -62,6 +64,8 @@ zstd = { version = "0.14" }
 
 [features]
 proto = ["protobuf"]
+# RDMA over fabric. libfabric is dynamically linked at runtime.
+rdma = ["dep:glide-rdma", "glide-rdma/libfabric", "glide-core-engine/rdma"]
 socket-layer = [
     "proto",
     "directories",

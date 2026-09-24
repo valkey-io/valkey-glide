@@ -6,6 +6,7 @@ use futures::future::{BoxFuture, join_all};
 use glide_core::client::Client;
 #[cfg(not(feature = "mock-pubsub"))]
 use glide_core::client::ClientWrapper;
+use glide_core::client::rdma_connection::GlideConnectionWithRdma;
 #[cfg(not(feature = "mock-pubsub"))]
 use glide_core::pubsub::synchronizer::GlidePubSubSynchronizer;
 #[cfg(not(feature = "mock-pubsub"))]
@@ -431,7 +432,7 @@ CLUSTER_NODES=127.0.0.1:39163,127.0.0.1:23178,127.0.0.1:25186,127.0.0.1:52500,12
 /// The `client_holder` keeps the Arc alive so the weak reference in the synchronizer remains valid.
 #[cfg(not(feature = "mock-pubsub"))]
 pub struct PubSubTestSetup {
-    pub connection: ClusterConnection,
+    pub connection: ClusterConnection<GlideConnectionWithRdma>,
     pub synchronizer: Arc<dyn PubSubSynchronizer>,
     pub client_holder: Arc<TokioRwLock<ClientWrapper>>,
     pub glide_client: Client,
@@ -477,8 +478,8 @@ impl PubSubTestSetup {
             .build()
             .expect("Failed to build cluster client for topology test");
 
-        let connection = client
-            .get_async_connection(None, Some(synchronizer.clone()), None, None)
+        let connection: ClusterConnection<GlideConnectionWithRdma> = client
+            .get_generic_async_connection(None, Some(synchronizer.clone()), None, None)
             .await
             .expect("Failed to get async connection for topology test");
 
@@ -562,7 +563,9 @@ pub struct ClusterNodeInfo {
 
 impl ClusterTopology {
     /// Get cluster topology from a connection.
-    pub async fn from_connection(connection: &mut ClusterConnection) -> Self {
+    pub async fn from_connection(
+        connection: &mut ClusterConnection<GlideConnectionWithRdma>,
+    ) -> Self {
         Self::try_from_connection(connection)
             .await
             .expect("Failed to get CLUSTER NODES")
@@ -571,7 +574,7 @@ impl ClusterTopology {
     /// Try to get cluster topology, returning an error instead of panicking.
     /// Useful in retry loops where transient errors (e.g. connection recovery) are expected.
     pub async fn try_from_connection(
-        connection: &mut ClusterConnection,
+        connection: &mut ClusterConnection<GlideConnectionWithRdma>,
     ) -> Result<Self, redis::RedisError> {
         let nodes_output = connection
             .route_command(
@@ -692,7 +695,7 @@ impl ClusterTopology {
 
 /// Migrate a slot from one node to another using CLUSTER SETSLOT commands.
 pub async fn migrate_slot(
-    connection: &mut ClusterConnection,
+    connection: &mut ClusterConnection<GlideConnectionWithRdma>,
     slot: u16,
     to_node_id: &str,
     all_node_addresses: &[(String, u16)],
@@ -729,7 +732,7 @@ pub async fn migrate_slot(
 /// Migrate a channel's slot to a different node than its current owner.
 /// Returns Some(target_node_id) if migration was performed, None if not possible.
 pub async fn migrate_channel_to_different_node(
-    connection: &mut ClusterConnection,
+    connection: &mut ClusterConnection<GlideConnectionWithRdma>,
     topology: &ClusterTopology,
     slot: u16,
 ) -> Option<String> {
@@ -774,7 +777,7 @@ pub async fn migrate_channel_to_different_node(
 /// Migrate multiple channels to different nodes than their current owners.
 /// Returns count of successful migrations.
 pub async fn migrate_channels_to_different_nodes(
-    connection: &mut ClusterConnection,
+    connection: &mut ClusterConnection<GlideConnectionWithRdma>,
     topology: &ClusterTopology,
     channels_with_slots: &[(Vec<u8>, u16)],
     delay_between_migrations: Duration,
@@ -813,7 +816,7 @@ pub async fn migrate_channels_to_different_nodes(
 /// Trigger a failover on a replica node.
 /// Returns true if failover was initiated successfully.
 pub async fn trigger_failover(
-    connection: &mut ClusterConnection,
+    connection: &mut ClusterConnection<GlideConnectionWithRdma>,
     replica: &ClusterNodeInfo,
 ) -> bool {
     let cmd = redis::cmd("CLUSTER").arg("FAILOVER").to_owned();
@@ -849,7 +852,7 @@ pub async fn trigger_failover(
 
 /// Wait for a node to become primary.
 pub async fn wait_for_node_to_become_primary(
-    connection: &mut ClusterConnection,
+    connection: &mut ClusterConnection<GlideConnectionWithRdma>,
     node_id: &str,
     timeout: Duration,
 ) -> bool {

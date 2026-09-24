@@ -59,6 +59,32 @@ To run [DNS tests](tests/test_dns.rs) locally:
 
 If the environment variable is not set, DNS tests will be skipped.
 
+### RDMA Tests
+
+RDMA is opt-in at build time through the `rdma` feature. `libfabric` 2.4 or newer is
+loaded when a client first opens a fabric, so it only has to be installed where the tests
+run. Set `GLIDE_LIBFABRIC_PATH` to the library file to use a copy the default search does
+not find. On Linux the search tries the EFA installer's copy under `/opt/amazon/efa` first.
+
+[`tests/test_rdma.rs`](tests/test_rdma.rs) needs no fabric hardware. It opens a fabric over
+the `tcp` provider and runs against the servers the test suite starts:
+
+```bash
+cargo test --features rdma --test test_rdma
+```
+
+[`tests/test_rdma_remote.rs`](tests/test_rdma_remote.rs) performs real transfers and is
+`#[ignore]`d, because it needs a server that serves the `LO.*` commands. Point it at one,
+and pick the provider:
+
+```bash
+export GLIDE_RDMA_SERVER=<host>:<port>
+export GLIDE_RDMA_PROVIDER=efa-direct  # on a machine with an EFA device
+cargo test --features rdma --test test_rdma_remote -- --ignored --nocapture
+```
+
+Set `GLIDE_RDMA_INTERFACE` to choose a network interface when the machine has more than one.
+
 ## Timeout Watchdog Diagnostics
 
 The timeout watchdog provides structured diagnostic information when command timeouts occur. It runs on a dedicated OS thread independent of the Tokio runtime, guaranteeing timeout delivery even under runtime starvation.

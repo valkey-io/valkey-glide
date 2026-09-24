@@ -2160,6 +2160,8 @@ mod scope_pool_tests {
         loop {
             if let Ok(client) = redis::Client::open(format!("redis://127.0.0.1:{port}")) {
                 let opts = redis::GlideConnectionOptions {
+                    #[cfg(feature = "rdma")]
+                    rdma_fabric: None,
                     push_sender: None,
                     disconnect_notifier: None,
                     discover_az: false,

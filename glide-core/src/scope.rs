@@ -241,6 +241,7 @@ pub async fn execute_scope_command(
     args: &[Vec<u8>],
     client: Option<&Client>,
 ) -> RedisResult<Value> {
+    crate::rdma::refuse_direct(cmd_name.as_bytes())?;
     let registry = get_scope_registry();
     let entry = match registry.get(&scope_id) {
         Some(e) => e.connection.clone(),
@@ -754,6 +755,9 @@ async fn build_scope_connection(
     })
     .map_err(ScopeCreateError::ClientOpenFailed)?;
     let opts = redis::GlideConnectionOptions {
+        // An isolated scope's connection never carries a transfer.
+        #[cfg(feature = "rdma")]
+        rdma_fabric: None,
         push_sender: None,
         disconnect_notifier: None,
         discover_az: false,

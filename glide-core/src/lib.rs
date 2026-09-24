@@ -16,6 +16,7 @@ pub use socket_listener::*;
 pub mod address_resolver_registry;
 pub mod compression;
 pub mod errors;
+pub mod rdma;
 pub mod scripts_container;
 pub mod timeout_watchdog;
 pub use client::ConnectionRequest;
