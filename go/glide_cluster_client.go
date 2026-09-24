@@ -9,6 +9,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"runtime"
 	"strconv"
 	"unsafe"
 
@@ -696,6 +697,9 @@ func (client *ClusterClient) clusterScan(
 		argLengthsPtr,
 	)
 	client.mu.Unlock()
+	// Keep args alive until after C.request_cluster_scan returns, since toCStrings stores raw
+	// pointers to string data as uintptr values which are invisible to the GC.
+	runtime.KeepAlive(args)
 
 	// Wait for result or context cancellation
 	var payload payload

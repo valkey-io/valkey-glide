@@ -27,6 +27,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"runtime"
 	"strconv"
 	"sync"
 	"time"
@@ -354,6 +355,11 @@ func (client *baseClient) executeCommandWithRoute(
 		C.uint64_t(spanPtr),
 	)
 	client.mu.Unlock()
+	// Keep args alive until after C.command returns, since toCStrings stores raw pointers
+	// to string data as uintptr values which are invisible to the GC. Without this, the GC
+	// may collect the underlying string data during the C call under heavy GC pressure
+	// (e.g., TestParallelizedSetWithGC with 640 goroutines calling runtime.GC()).
+	runtime.KeepAlive(args)
 	// Wait for result or context cancellation
 	var payload payload
 	select {
@@ -468,6 +474,9 @@ func (client *baseClient) executeBatch(
 		C.uint64_t(spanPtr),
 	)
 	client.mu.Unlock()
+	// Keep batch alive until after C.batch returns, since createCmdInfo stores raw pointers
+	// to string data via unsafe.StringData which are invisible to the GC.
+	runtime.KeepAlive(batch)
 
 	// Wait for result or context cancellation
 	var payload payload
@@ -9873,6 +9882,10 @@ func (client *baseClient) executeScriptWithRoute(
 		C.uint64_t(spanPtr),
 	)
 	client.mu.Unlock()
+	// Keep keys and args alive until after C.invoke_script returns, since toCStrings stores raw
+	// pointers to string data as uintptr values which are invisible to the GC.
+	runtime.KeepAlive(keys)
+	runtime.KeepAlive(args)
 
 	// Wait for result or context cancellation
 	var payload payload
