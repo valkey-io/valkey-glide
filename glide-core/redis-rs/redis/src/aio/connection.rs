@@ -894,6 +894,45 @@ mod pubsub_tests {
         assert_expected_message(msg);
     }
 
+    // The consuming `into_on_message()` moves the socket out of the `PubSub`, so it has
+    // its own chance to leave the decoder's bytes behind. It owes the caller the same
+    // frame the borrowed path does, and this is the path a caller holding the stream
+    // past the `PubSub` takes.
+    #[tokio::test]
+    async fn into_on_message_delivers_fully_buffered_message() {
+        let (client, mut server) = duplex(4096);
+
+        let mut handshake = subscribe_confirmation();
+        handshake.push_str(&message_frame());
+        server.write_all(handshake.as_bytes()).await.unwrap();
+
+        let mut pubsub = pubsub_over(client);
+        pubsub.subscribe(CHANNEL).await.unwrap();
+
+        // Check the precondition instead of assuming it: the handshake read has to pull
+        // the whole message frame into the decoder, so the socket holds nothing more.
+        assert_eq!(
+            pubsub.0.decoder.buffer(),
+            message_frame().as_bytes(),
+            "handshake did not buffer the whole message frame, so the test would not exercise the handoff"
+        );
+
+        // Hold the server end open so a buffer-dropping stream blocks on the socket
+        // rather than seeing end of input, which makes a timeout here a real failure signal.
+        let (_stop_tx, stop_rx) = oneshot::channel::<()>();
+        let _server_task = tokio::spawn(async move {
+            let _ = stop_rx.await;
+            drop(server);
+        });
+
+        let mut stream = pubsub.into_on_message();
+        let msg = ::tokio::time::timeout(std::time::Duration::from_secs(2), stream.next())
+            .await
+            .expect("into_on_message dropped the buffered message")
+            .expect("stream ended before delivering the buffered message");
+        assert_expected_message(msg);
+    }
+
     // When only part of the first message was buffered with the confirmation, the
     // borrowed `on_message()` has to resume the frame from the buffered prefix and read
     // the rest from the socket. A fresh codec over the bare socket starts mid-frame on
