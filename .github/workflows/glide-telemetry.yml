@@ -1,0 +1,64 @@
+name: Rust glide-telemetry
+
+permissions:
+    contents: read
+
+on:
+    push:
+        branches:
+            - main
+            - release-*
+            - v*
+        paths:
+            - glide-logger/**
+            - glide-telemetry/**
+            - .github/workflows/glide-telemetry.yml
+            - .github/workflows/lint-rust/action.yml
+            - deny.toml
+    pull_request:
+        paths:
+            - glide-logger/**
+            - glide-telemetry/**
+            - .github/workflows/glide-telemetry.yml
+            - .github/workflows/lint-rust/action.yml
+            - deny.toml
+    workflow_dispatch:
+
+concurrency:
+    group: glide-telemetry-${{ github.head_ref || github.ref }}
+    cancel-in-progress: true
+
+env:
+    CARGO_TERM_COLOR: always
+
+jobs:
+    test:
+        runs-on: ubuntu-latest
+        timeout-minutes: 15
+        steps:
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+            - name: Install Rust toolchain
+              uses: ./.github/actions/install-rust
+
+            - name: Install protoc
+              uses: ./.github/actions/install-protoc
+              with:
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
+
+            - name: Run glide-telemetry tests
+              working-directory: ./glide-telemetry
+              run: cargo test --all-features -- --test-threads=1
+              # TODO: Remove `--test-threads=1` once https://github.com/valkey-io/valkey-glide/issues/4057 is resolved
+
+    lint:
+        runs-on: ubuntu-latest
+        timeout-minutes: 30
+        steps:
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+            - uses: ./.github/workflows/lint-rust
+              with:
+                  cargo-toml-folder: glide-telemetry
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
+              name: lint glide-telemetry
