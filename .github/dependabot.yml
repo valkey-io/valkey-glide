@@ -215,27 +215,6 @@ updates:
           - "dependencies"
           - "Rust ⚙️"
 
-    # Enable version updates for Cargo (Rust - telemetry)
-    - package-ecosystem: "cargo"
-      directory: "/glide-core/telemetry"
-      schedule:
-          interval: "weekly"
-          day: "monday"
-          time: "09:00"
-      cooldown:
-          default-days: 7
-      open-pull-requests-limit: 10
-      groups:
-          patch-updates:
-              update-types:
-                  - "patch"
-          minor-updates:
-              update-types:
-                  - "minor"
-      labels:
-          - "dependencies"
-          - "Rust ⚙️"
-
     # Enable version updates for Cargo (Rust - redis-rs vendored fork)
     - package-ecosystem: "cargo"
       directory: "/glide-core/redis-rs"
@@ -260,27 +239,6 @@ updates:
     # Enable version updates for Cargo (Rust - benchmarks)
     - package-ecosystem: "cargo"
       directory: "/benchmarks/rust"
-      schedule:
-          interval: "weekly"
-          day: "monday"
-          time: "09:00"
-      cooldown:
-          default-days: 7
-      open-pull-requests-limit: 10
-      groups:
-          patch-updates:
-              update-types:
-                  - "patch"
-          minor-updates:
-              update-types:
-                  - "minor"
-      labels:
-          - "dependencies"
-          - "Rust ⚙️"
-
-    # Enable version updates for Cargo (Rust - GLIDE logger)
-    - package-ecosystem: "cargo"
-      directory: "/glide-logger"
       schedule:
           interval: "weekly"
           day: "monday"
@@ -403,3 +361,49 @@ updates:
       labels:
           - "dependencies"
           - "node 🐢"
+
+    # --- Rust crates --- #
+
+    # TODO #6905: Move remaining Rust crates here
+
+    # Enable version updates for Cargo (glide-logger)
+    - package-ecosystem: "cargo"
+      directory: "/glide-logger"
+      schedule:
+          interval: "weekly"
+          day: "monday"
+          time: "09:00"
+      cooldown:
+          default-days: 7
+      open-pull-requests-limit: 10
+      groups:
+          patch-updates:
+              update-types:
+                  - "patch"
+          minor-updates:
+              update-types:
+                  - "minor"
+      labels:
+          - "dependencies"
+          - "Rust ⚙️"
+
+    # Enable version updates for Cargo (glide-telemetry)
+    - package-ecosystem: "cargo"
+      directory: "/glide-telemetry"
+      schedule:
+          interval: "weekly"
+          day: "monday"
+          time: "09:00"
+      cooldown:
+          default-days: 7
+      open-pull-requests-limit: 10
+      groups:
+          patch-updates:
+              update-types:
+                  - "patch"
+          minor-updates:
+              update-types:
+                  - "minor"
+      labels:
+          - "dependencies"
+          - "Rust ⚙️"

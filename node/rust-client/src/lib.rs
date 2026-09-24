@@ -13,11 +13,11 @@ use glide_core::{
     GlideOpenTelemetrySignalsExporter, GlideSpan, Telemetry,
 };
 use glide_logger::{log_warn, log_warn_lazy};
+use glide_telemetry::GlideSpanStatus;
 use redis::cluster_routing::Routable;
 use redis::{
     Arg, ClusterScanArgs, Cmd, ErrorKind, PipelineRetryStrategy, PushInfo, RedisError, ScanStateRC,
 };
-use telemetrylib::GlideSpanStatus;
 
 #[cfg(not(target_env = "msvc"))]
 use tikv_jemallocator::Jemalloc;

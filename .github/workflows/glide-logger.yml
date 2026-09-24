@@ -1,0 +1,68 @@
+name: Rust glide-logger
+
+permissions:
+    contents: read
+
+on:
+    push:
+        branches:
+            - main
+            - release-*
+            - v*
+        paths:
+            - glide-logger/**
+            - .github/workflows/glide-logger.yml
+            - .github/workflows/lint-rust/action.yml
+            - deny.toml
+    pull_request:
+        paths:
+            - glide-logger/**
+            - .github/workflows/glide-logger.yml
+            - .github/workflows/lint-rust/action.yml
+            - deny.toml
+    workflow_dispatch:
+
+concurrency:
+    group: glide-logger-${{ github.head_ref || github.ref }}
+    cancel-in-progress: true
+
+env:
+    CARGO_TERM_COLOR: always
+
+jobs:
+    test:
+        runs-on: ubuntu-latest
+        timeout-minutes: 15
+        steps:
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+              with:
+                  persist-credentials: false
+
+            - name: Install Rust toolchain
+              uses: ./.github/actions/install-rust
+
+            - name: Install protoc
+              uses: ./.github/actions/install-protoc
+              with:
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
+
+            - name: Run glide-logger tests
+              working-directory: ./glide-logger
+
+              # `--test-threads=1`: Tests install a global logger and share a
+              # single `glide-logs` directory, so they cannot run in parallel.
+              run: cargo test --all-features -- --test-threads=1
+
+    lint:
+        runs-on: ubuntu-latest
+        timeout-minutes: 30
+        steps:
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+              with:
+                  persist-credentials: false
+
+            - uses: ./.github/workflows/lint-rust
+              with:
+                  cargo-toml-folder: glide-logger
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
+              name: lint glide-logger

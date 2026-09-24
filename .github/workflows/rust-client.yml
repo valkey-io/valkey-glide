@@ -13,6 +13,7 @@ on:
             - rust/**
             - glide-core/**
             - glide-logger/**
+            - glide-telemetry/**
             - deny.toml
             - utils/cluster_manager.py
             - .github/actions/install-engine/action.yml
@@ -25,6 +26,7 @@ on:
             - rust/**
             - glide-core/**
             - glide-logger/**
+            - glide-telemetry/**
             - deny.toml
             - utils/cluster_manager.py
             - .github/actions/install-engine/action.yml

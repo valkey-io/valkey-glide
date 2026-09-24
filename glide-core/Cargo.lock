@@ -1283,6 +1283,7 @@ dependencies = [
  "futures-intrusive",
  "glide-core",
  "glide-logger",
+ "glide-telemetry",
  "gungraun",
  "http 1.5.0",
  "integer-encoding",
@@ -1308,7 +1309,6 @@ dependencies = [
  "socket2",
  "strum",
  "strum_macros",
- "telemetrylib",
  "tempfile",
  "thiserror 2.0.20",
  "tokio",
@@ -1330,6 +1330,24 @@ dependencies = [
  "tracing",
  "tracing-appender",
  "tracing-subscriber",
+]
+
+[[package]]
+name = "glide-telemetry"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "glide-logger",
+ "lazy_static",
+ "once_cell",
+ "opentelemetry",
+ "opentelemetry-otlp",
+ "opentelemetry_sdk",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.20",
+ "tokio",
+ "url",
 ]
 
 [[package]]
@@ -2590,6 +2608,7 @@ dependencies = [
  "futures",
  "futures-util",
  "glide-logger",
+ "glide-telemetry",
  "itoa",
  "lazy_static",
  "lru",
@@ -2605,7 +2624,6 @@ dependencies = [
  "socket2",
  "strum",
  "strum_macros",
- "telemetrylib",
  "tokio",
  "tokio-retry2 0.5.8",
  "tokio-rustls",
@@ -3174,24 +3192,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.117",
-]
-
-[[package]]
-name = "telemetrylib"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "glide-logger",
- "lazy_static",
- "once_cell",
- "opentelemetry",
- "opentelemetry-otlp",
- "opentelemetry_sdk",
- "serde",
- "serde_json",
- "thiserror 2.0.20",
- "tokio",
- "url",
 ]
 
 [[package]]

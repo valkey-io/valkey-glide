@@ -734,7 +734,7 @@ pub fn try_acquire_scope(
             };
             match pool.try_acquire(registry, target.clone(), runtime_db, attempt_token) {
                 ScopeAcquire::Reused(scope_id) => {
-                    let _ = telemetrylib::GlideOpenTelemetry::record_scope_acquire();
+                    let _ = glide_telemetry::GlideOpenTelemetry::record_scope_acquire();
                     scope_id as i64
                 }
                 ScopeAcquire::Reserved(reservation) => {
@@ -849,7 +849,7 @@ pub fn release_scope(scope_id: u64, client_id: u64, runtime: &tokio::runtime::Ha
             // (for dirty-state cleanup) has a reactor available.
             let _guard = runtime.enter();
             pool.release(scope_id, registry);
-            let _ = telemetrylib::GlideOpenTelemetry::record_scope_release();
+            let _ = glide_telemetry::GlideOpenTelemetry::record_scope_release();
             0
         }
         Err(_) => {

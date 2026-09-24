@@ -43,10 +43,10 @@ mod standalone_client;
 mod value_conversion;
 use crate::pubsub::{PubSubSynchronizer, create_pubsub_synchronizer};
 use crate::request_type::RequestType;
+use glide_telemetry::GlideOpenTelemetry;
 use redis::InfoDict;
 use std::future::Future;
 use std::pin::Pin;
-use telemetrylib::GlideOpenTelemetry;
 use tokio::sync::{Notify, RwLock, mpsc, oneshot};
 use versions::Versioning;
 

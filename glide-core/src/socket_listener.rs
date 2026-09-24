@@ -21,6 +21,7 @@ use PipeListeningResult::*;
 use bytes::Bytes;
 use directories::BaseDirs;
 use glide_logger::{log_debug, log_error, log_info, log_trace, log_warn};
+use glide_telemetry::{GlideSpan, GlideSpanStatus};
 use once_cell::sync::Lazy;
 use protobuf::{Chars, Message};
 use redis::cluster_routing::{
@@ -39,7 +40,6 @@ use std::ptr::from_mut;
 use std::rc::Rc;
 use std::str;
 use std::sync::{Arc, RwLock};
-use telemetrylib::{GlideSpan, GlideSpanStatus};
 use thiserror::Error;
 
 use tokio::net::{UnixListener, UnixStream};

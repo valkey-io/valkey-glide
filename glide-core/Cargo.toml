@@ -11,10 +11,10 @@ authors = ["Valkey GLIDE Maintainers"]
 
 # GLIDE dependencies
 glide-logger = { path = "../glide-logger", version = "0.1" }
+glide-telemetry = { path = "../glide-telemetry", version = "0.1" }
 
 # TODO #6905: Update once renamed.
 redis = { path = "./redis-rs/redis", features = ["aio", "keep-alive", "tokio-comp", "tokio-rustls-comp", "connection-manager", "cluster", "cluster-async"] }
-telemetrylib = { path = "./telemetry" }
 
 # External dependencies
 async-trait = { version = "0.1" }

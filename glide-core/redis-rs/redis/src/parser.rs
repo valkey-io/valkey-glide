@@ -9,7 +9,7 @@ use crate::types::{
 };
 
 use glide_logger::log_error;
-use telemetrylib::GlideOpenTelemetry;
+use glide_telemetry::GlideOpenTelemetry;
 
 use combine::{
     any,

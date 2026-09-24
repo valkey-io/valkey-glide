@@ -751,6 +751,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "glide-telemetry"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "glide-logger",
+ "lazy_static",
+ "once_cell",
+ "opentelemetry",
+ "opentelemetry-otlp",
+ "opentelemetry_sdk",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tokio",
+ "url",
+]
+
+[[package]]
 name = "h2"
 version = "0.4.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1791,6 +1809,7 @@ dependencies = [
  "futures-time",
  "futures-util",
  "glide-logger",
+ "glide-telemetry",
  "itoa",
  "lazy_static",
  "lru",
@@ -1811,7 +1830,6 @@ dependencies = [
  "socket2",
  "strum",
  "strum_macros",
- "telemetrylib",
  "tempfile",
  "tokio",
  "tokio-retry2",
@@ -2272,24 +2290,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.117",
-]
-
-[[package]]
-name = "telemetrylib"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "glide-logger",
- "lazy_static",
- "once_cell",
- "opentelemetry",
- "opentelemetry-otlp",
- "opentelemetry_sdk",
- "serde",
- "serde_json",
- "thiserror",
- "tokio",
- "url",
 ]
 
 [[package]]

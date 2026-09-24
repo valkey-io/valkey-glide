@@ -5,7 +5,7 @@ edition = "2024"
 
 [dependencies]
 
-# Mock crates that can be used as drop-in replacements for the real crates
+# Mock crates for testing
 tokio = { path = "./mock-tokio", package = "mock-tokio" }
 glide-logger = { path = "./mock-glide-logger", package = "mock-glide-logger" }
 

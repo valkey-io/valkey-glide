@@ -13,11 +13,11 @@ use crate::{cluster_routing::Route, Cmd, ErrorKind, RedisError};
 use cluster_routing::RoutingInfo::{MultiNode, SingleNode};
 use futures::FutureExt;
 use glide_logger::log_error;
+use glide_telemetry::GlideOpenTelemetry;
 use rand::prelude::IteratorRandom;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
-use telemetrylib::GlideOpenTelemetry;
 use tokio::sync::oneshot;
 use tokio::sync::oneshot::error::RecvError;
 
