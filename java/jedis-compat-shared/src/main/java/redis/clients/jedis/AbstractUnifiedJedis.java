@@ -1396,6 +1396,7 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @return the substring, or empty string if the key does not exist
      * @deprecated Use {@link #getrange(String, long, long)} instead
      */
+    @Deprecated
     public String substr(String key, int start, int end) {
         return getrange(key, start, end);
     }

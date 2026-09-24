@@ -1343,6 +1343,8 @@ public abstract class AbstractGlideJedis extends JedisCommon {
     /**
      * Whether this connection is considered broken (must not be returned to the pool as healthy).
      * Matches core Jedis {@code Jedis#isBroken()} semantics for pooled usage.
+     *
+     * @return {@code true} if this connection has been marked broken, {@code false} otherwise
      */
     public boolean isBroken() {
         return broken;
@@ -1351,6 +1353,8 @@ public abstract class AbstractGlideJedis extends JedisCommon {
     /**
      * Marks this connection as broken so the next {@link #close()} returns it to the pool via {@link
      * Pool#returnBrokenResource} instead of {@link Pool#returnResource}.
+     *
+     * @param broken {@code true} to mark this connection broken, {@code false} to clear the mark
      */
     public void setBroken(boolean broken) {
         this.broken = broken;
@@ -3992,11 +3996,8 @@ public abstract class AbstractGlideJedis extends JedisCommon {
     }
 
     /**
-     * Return the position of the first bit set to 1 or 0 in a string within a range.
+     * Return the position of the first bit set to 1 or 0 in a string - binary version.
      *
-     * @param key the key
-     * @param value the bit value to search for (true for 1, false for 0) /** Return the position of
-     *     the first bit set to 1 or 0 in a string.
      * @param key the key
      * @param value the bit value to search for (true for 1, false for 0)
      * @return the position of the first bit set to the specified value, or -1 if not found
@@ -4007,7 +4008,7 @@ public abstract class AbstractGlideJedis extends JedisCommon {
     }
 
     /**
-     * /** Return the position of the first bit set to 1 or 0 in a string with parameters.
+     * Return the position of the first bit set to 1 or 0 in a string with parameters.
      *
      * @param key the key
      * @param value the bit value to search for (true for 1, false for 0)
@@ -6968,7 +6969,12 @@ public abstract class AbstractGlideJedis extends JedisCommon {
                 });
     }
 
-    /** Returns the number of entries in the stream. Uses GLIDE xlen. */
+    /**
+     * Returns the number of entries in the stream. Uses GLIDE xlen.
+     *
+     * @param key stream key
+     * @return number of entries in the stream
+     */
     public long xlen(String key) {
         return executeCommandWithGlide("XLEN", () -> glideClient.xlen(key).get());
     }
@@ -6983,12 +6989,24 @@ public abstract class AbstractGlideJedis extends JedisCommon {
         return executeCommandWithGlide("XLEN", () -> glideClient.xlen(new String(key)).get());
     }
 
-    /** Removes entries by id from the stream. Uses GLIDE xdel. */
+    /**
+     * Removes entries by id from the stream. Uses GLIDE xdel.
+     *
+     * @param key stream key
+     * @param ids entry IDs to delete
+     * @return number of entries deleted
+     */
     public long xdel(String key, String... ids) {
         return executeCommandWithGlide("XDEL", () -> glideClient.xdel(key, ids).get());
     }
 
-    /** Removes entries by id from the stream. Uses GLIDE xdel. */
+    /**
+     * Removes entries by id from the stream. Uses GLIDE xdel.
+     *
+     * @param key stream key
+     * @param ids entry IDs to delete
+     * @return number of entries deleted
+     */
     public long xdel(String key, StreamEntryID... ids) {
         String[] idStrs = new String[ids.length];
         for (int i = 0; i < ids.length; i++) {
@@ -7018,6 +7036,7 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param key stream key
      * @param start start id ("-" for minimum)
      * @param end end id ("+" for maximum)
+     * @return entries in the requested range, oldest first; empty if the stream has none
      */
     public List<StreamEntry> xrange(String key, String start, String end) {
         return executeCommandWithGlide(
@@ -7032,7 +7051,15 @@ public abstract class AbstractGlideJedis extends JedisCommon {
                 });
     }
 
-    /** Returns up to count entries in the stream in range [start, end]. Uses GLIDE xrange. */
+    /**
+     * Returns up to count entries in the stream in range [start, end]. Uses GLIDE xrange.
+     *
+     * @param key stream key
+     * @param start start id ("-" for minimum)
+     * @param end end id ("+" for maximum)
+     * @param count maximum number of entries to return
+     * @return at most {@code count} entries in the requested range, oldest first
+     */
     public List<StreamEntry> xrange(String key, String start, String end, long count) {
         return executeCommandWithGlide(
                 "XRANGE",
@@ -7046,7 +7073,14 @@ public abstract class AbstractGlideJedis extends JedisCommon {
                 });
     }
 
-    /** Returns entries in the stream in reverse order [end, start]. Uses GLIDE xrevrange. */
+    /**
+     * Returns entries in the stream in reverse order [end, start]. Uses GLIDE xrevrange.
+     *
+     * @param key stream key
+     * @param end end id ("+" for maximum)
+     * @param start start id ("-" for minimum)
+     * @return entries in the requested range, newest first; empty if the stream has none
+     */
     public List<StreamEntry> xrevrange(String key, String end, String start) {
         return executeCommandWithGlide(
                 "XREVRANGE",
@@ -7060,7 +7094,15 @@ public abstract class AbstractGlideJedis extends JedisCommon {
                 });
     }
 
-    /** Returns up to count entries in reverse order. Uses GLIDE xrevrange. */
+    /**
+     * Returns up to count entries in reverse order. Uses GLIDE xrevrange.
+     *
+     * @param key stream key
+     * @param end end id ("+" for maximum)
+     * @param start start id ("-" for minimum)
+     * @param count maximum number of entries to return
+     * @return at most {@code count} entries in the requested range, newest first
+     */
     public List<StreamEntry> xrevrange(String key, String end, String start, long count) {
         return executeCommandWithGlide(
                 "XREVRANGE",
@@ -7148,6 +7190,7 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param count max entries per stream (null to omit)
      * @param block block milliseconds (null to omit)
      * @param keysAndIds map of stream key to start id
+     * @return entries read per stream key; empty if nothing was available
      */
     public Map<String, List<StreamEntry>> xread(
             Long count, Long block, Map<String, String> keysAndIds) {
@@ -7162,19 +7205,38 @@ public abstract class AbstractGlideJedis extends JedisCommon {
                 });
     }
 
-    /** Trims the stream by max length. Uses GLIDE xtrim. */
+    /**
+     * Trims the stream by max length. Uses GLIDE xtrim.
+     *
+     * @param key stream key
+     * @param maxLen maximum length
+     * @return number of entries deleted
+     */
     public long xtrim(String key, long maxLen) {
         return executeCommandWithGlide(
                 "XTRIM", () -> glideClient.xtrim(key, new StreamTrimOptions.MaxLen(maxLen)).get());
     }
 
-    /** Trims the stream by max length (exact or approximate). Uses GLIDE xtrim. */
+    /**
+     * Trims the stream by max length (exact or approximate). Uses GLIDE xtrim.
+     *
+     * @param key stream key
+     * @param maxLen maximum length
+     * @param exact if true, trim exactly; if false, trim approximately
+     * @return number of entries deleted
+     */
     public long xtrim(String key, long maxLen, boolean exact) {
         return executeCommandWithGlide(
                 "XTRIM", () -> glideClient.xtrim(key, new StreamTrimOptions.MaxLen(exact, maxLen)).get());
     }
 
-    /** Trims the stream by minimum id. Uses GLIDE xtrim. */
+    /**
+     * Trims the stream by minimum id. Uses GLIDE xtrim.
+     *
+     * @param key stream key
+     * @param minId smallest entry ID to keep; older entries are removed
+     * @return number of entries deleted
+     */
     public long xtrim(String key, String minId) {
         return executeCommandWithGlide(
                 "XTRIM", () -> glideClient.xtrim(key, new StreamTrimOptions.MinId(minId)).get());
@@ -7231,13 +7293,28 @@ public abstract class AbstractGlideJedis extends JedisCommon {
         return xtrim(new String(key), params);
     }
 
-    /** Creates a consumer group. Uses GLIDE xgroupCreate. */
+    /**
+     * Creates a consumer group. Uses GLIDE xgroupCreate.
+     *
+     * @param key stream key
+     * @param groupName name of the consumer group to create
+     * @param id id to start delivering from ("$" for entries added after creation)
+     * @return {@code "OK"} when the group was created
+     */
     public String xgroupCreate(String key, String groupName, String id) {
         return executeCommandWithGlide(
                 "XGROUP CREATE", () -> glideClient.xgroupCreate(key, groupName, id).get());
     }
 
-    /** Creates a consumer group, optionally creating the stream. Uses GLIDE xgroupCreate. */
+    /**
+     * Creates a consumer group, optionally creating the stream. Uses GLIDE xgroupCreate.
+     *
+     * @param key stream key
+     * @param groupName name of the consumer group to create
+     * @param id id to start delivering from ("$" for entries added after creation)
+     * @param makeStream if true, create the stream when it does not exist
+     * @return {@code "OK"} when the group was created
+     */
     public String xgroupCreate(String key, String groupName, String id, boolean makeStream) {
         return executeCommandWithGlide(
                 "XGROUP CREATE",
@@ -7248,26 +7325,53 @@ public abstract class AbstractGlideJedis extends JedisCommon {
                                 .get());
     }
 
-    /** Destroys a consumer group. Uses GLIDE xgroupDestroy. */
+    /**
+     * Destroys a consumer group. Uses GLIDE xgroupDestroy.
+     *
+     * @param key stream key
+     * @param groupName name of the consumer group to destroy
+     * @return {@code true} if the group existed and was destroyed
+     */
     public boolean xgroupDestroy(String key, String groupName) {
         return executeCommandWithGlide(
                 "XGROUP DESTROY", () -> glideClient.xgroupDestroy(key, groupName).get());
     }
 
-    /** Sets the last delivered id of a group. Uses GLIDE xgroupSetId. */
+    /**
+     * Sets the last delivered id of a group. Uses GLIDE xgroupSetId.
+     *
+     * @param key stream key
+     * @param groupName name of the consumer group
+     * @param id new last-delivered id for the group
+     * @return {@code "OK"} when the id was set
+     */
     public String xgroupSetId(String key, String groupName, String id) {
         return executeCommandWithGlide(
                 "XGROUP SETID", () -> glideClient.xgroupSetId(key, groupName, id).get());
     }
 
-    /** Creates a consumer in the group. Uses GLIDE xgroupCreateConsumer. */
+    /**
+     * Creates a consumer in the group. Uses GLIDE xgroupCreateConsumer.
+     *
+     * @param key stream key
+     * @param group name of the consumer group
+     * @param consumer name of the consumer to create
+     * @return {@code true} if the consumer was created, {@code false} if it already existed
+     */
     public boolean xgroupCreateConsumer(String key, String group, String consumer) {
         return executeCommandWithGlide(
                 "XGROUP CREATECONSUMER",
                 () -> glideClient.xgroupCreateConsumer(key, group, consumer).get());
     }
 
-    /** Deletes a consumer from the group. Uses GLIDE xgroupDelConsumer. */
+    /**
+     * Deletes a consumer from the group. Uses GLIDE xgroupDelConsumer.
+     *
+     * @param key stream key
+     * @param group name of the consumer group
+     * @param consumer name of the consumer to delete
+     * @return number of pending messages the deleted consumer still owned
+     */
     public long xgroupDelConsumer(String key, String group, String consumer) {
         return executeCommandWithGlide(
                 "XGROUP DELCONSUMER", () -> glideClient.xgroupDelConsumer(key, group, consumer).get());
@@ -7276,7 +7380,10 @@ public abstract class AbstractGlideJedis extends JedisCommon {
     /**
      * Reads from streams as a consumer in a group. Uses GLIDE xreadgroup.
      *
+     * @param group name of the consumer group
+     * @param consumer name of the consumer reading on behalf of the group
      * @param keysAndIds map of stream key to id (typically "&gt;" for new entries)
+     * @return entries read per stream key; empty if nothing was available
      */
     public Map<String, List<StreamEntry>> xreadgroup(
             String group, String consumer, Map<String, String> keysAndIds) {
@@ -7291,7 +7398,17 @@ public abstract class AbstractGlideJedis extends JedisCommon {
                 });
     }
 
-    /** Reads from streams as a consumer with options. Uses GLIDE xreadgroup. */
+    /**
+     * Reads from streams as a consumer with options. Uses GLIDE xreadgroup.
+     *
+     * @param group name of the consumer group
+     * @param consumer name of the consumer reading on behalf of the group
+     * @param keysAndIds map of stream key to id (typically "&gt;" for new entries)
+     * @param count max entries per stream (null to omit)
+     * @param block block milliseconds (null to omit)
+     * @param noack if true, deliver entries without adding them to the pending entries list
+     * @return entries read per stream key; empty if nothing was available
+     */
     public Map<String, List<StreamEntry>> xreadgroup(
             String group,
             String consumer,
@@ -7312,12 +7429,26 @@ public abstract class AbstractGlideJedis extends JedisCommon {
                 });
     }
 
-    /** Acknowledges messages. Uses GLIDE xack. */
+    /**
+     * Acknowledges messages. Uses GLIDE xack.
+     *
+     * @param key stream key
+     * @param group name of the consumer group
+     * @param ids entry IDs to acknowledge
+     * @return number of entries acknowledged
+     */
     public long xack(String key, String group, String... ids) {
         return executeCommandWithGlide("XACK", () -> glideClient.xack(key, group, ids).get());
     }
 
-    /** Acknowledges messages. Uses GLIDE xack. */
+    /**
+     * Acknowledges messages. Uses GLIDE xack.
+     *
+     * @param key stream key
+     * @param group name of the consumer group
+     * @param ids entry IDs to acknowledge
+     * @return number of entries acknowledged
+     */
     public long xack(String key, String group, StreamEntryID... ids) {
         String[] idStrs = new String[ids.length];
         for (int i = 0; i < ids.length; i++) {
@@ -7329,6 +7460,10 @@ public abstract class AbstractGlideJedis extends JedisCommon {
     /**
      * Returns pending summary for the group. Uses GLIDE xpending. Converts response to
      * StreamPendingSummary (total, minId, maxId, consumerMessageCount).
+     *
+     * @param key stream key
+     * @param group name of the consumer group
+     * @return summary of the group's pending entries; a zero-total summary if there are none
      */
     public StreamPendingSummary xpending(String key, String group) {
         return executeCommandWithGlide(
@@ -7368,7 +7503,16 @@ public abstract class AbstractGlideJedis extends JedisCommon {
                 });
     }
 
-    /** Returns pending entries in range. Uses GLIDE xpending. */
+    /**
+     * Returns pending entries in range. Uses GLIDE xpending.
+     *
+     * @param key stream key
+     * @param group name of the consumer group
+     * @param start start of the id range
+     * @param end end of the id range
+     * @param count maximum number of entries to return
+     * @return at most {@code count} pending entries in the range; empty if there are none
+     */
     public List<StreamPendingEntry> xpending(
             String key, String group, StreamRange start, StreamRange end, long count) {
         return executeCommandWithGlide(
@@ -7395,7 +7539,16 @@ public abstract class AbstractGlideJedis extends JedisCommon {
                 });
     }
 
-    /** Returns pending entries in id range. Uses GLIDE xpending. */
+    /**
+     * Returns pending entries in id range. Uses GLIDE xpending.
+     *
+     * @param key stream key
+     * @param group name of the consumer group
+     * @param start start id ("-" for minimum)
+     * @param end end id ("+" for maximum)
+     * @param count maximum number of entries to return
+     * @return at most {@code count} pending entries in the range; empty if there are none
+     */
     public List<StreamPendingEntry> xpending(
             String key, String group, String start, String end, long count) {
         StreamRange s =
@@ -7404,7 +7557,16 @@ public abstract class AbstractGlideJedis extends JedisCommon {
         return xpending(key, group, s, e, count);
     }
 
-    /** Claims pending messages. Uses GLIDE xclaim. */
+    /**
+     * Claims pending messages. Uses GLIDE xclaim.
+     *
+     * @param key stream key
+     * @param group name of the consumer group
+     * @param consumer name of the consumer taking ownership of the entries
+     * @param minIdleTime only claim entries idle for at least this many milliseconds
+     * @param ids entry IDs to claim
+     * @return the claimed entries; empty if none matched
+     */
     public List<StreamEntry> xclaim(
             String key, String group, String consumer, long minIdleTime, String... ids) {
         return executeCommandWithGlide(
@@ -7416,7 +7578,17 @@ public abstract class AbstractGlideJedis extends JedisCommon {
                 });
     }
 
-    /** Claims pending messages with options. Uses GLIDE xclaim. */
+    /**
+     * Claims pending messages with options. Uses GLIDE xclaim.
+     *
+     * @param key stream key
+     * @param group name of the consumer group
+     * @param consumer name of the consumer taking ownership of the entries
+     * @param minIdleTime only claim entries idle for at least this many milliseconds
+     * @param options additional XCLAIM options (IDLE, TIME, RETRYCOUNT, FORCE, JUSTID)
+     * @param ids entry IDs to claim
+     * @return the claimed entries; empty if none matched
+     */
     public List<StreamEntry> xclaim(
             String key,
             String group,
@@ -7581,6 +7753,9 @@ public abstract class AbstractGlideJedis extends JedisCommon {
     /**
      * Constructor with Connection (compatibility stub). NOTE: Connection is not used in GLIDE
      * compatibility layer.
+     *
+     * @param connection source of the host and port used to create the GLIDE client; the connection
+     *     object itself is otherwise unused
      */
     protected AbstractGlideJedis(Connection connection) {
         // Extract host/port from connection for GLIDE client creation
