@@ -970,6 +970,20 @@ impl ScopeReservation {
         self.committed = true;
     }
 
+    /// Guard an already-incremented slot that tracks no in-flight creation, so a
+    /// cancel/panic across an `await` still gives the slot back on `Drop`. Used by
+    /// the resync path, which pops a counted idle connection and re-`SELECT`s it
+    /// off-lock: `commit()` on success (the connection returns to idle, slot kept),
+    /// `Drop` otherwise (the connection is discarded, slot reclaimed).
+    #[cfg(feature = "proto")]
+    pub(crate) fn for_slot(total_count: Arc<AtomicU32>) -> Self {
+        Self {
+            total_count,
+            committed: false,
+            pending: None,
+        }
+    }
+
     /// Test-only: mint a guard for an already-incremented counter.
     #[cfg(test)]
     pub(crate) fn for_test(total_count: Arc<AtomicU32>) -> Self {
@@ -1268,7 +1282,7 @@ impl ScopePool {
         if self.state.load(Ordering::Acquire) == POOL_RUNNING {
             self.idle.push_back(conn);
         } else {
-            self.total_count.fetch_sub(1, Ordering::AcqRel);
+            saturating_dec(&self.total_count);
         }
     }
 

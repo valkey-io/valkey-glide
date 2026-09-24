@@ -855,11 +855,12 @@ pub unsafe extern "C" fn glide_scope_prewarm(
 
     // Spawn min_idle background creation tasks. Each resolves slot 0 through the
     // parent client's current topology first, then reserves a slot against
-    // max_total via the target-aware helper (registering as in-flight so a
-    // concurrent acquire sees it), skipping if full or closed. Resolving before
-    // reserving means an unresolvable target never holds a slot. Each task carries
-    // a unique attempt token, so the min_idle prewarms are distinct dials that do
-    // not dedupe against each other. An unresolvable target skips the connection —
+    // max_total via the target-aware helper (for slot accounting; the marker is
+    // never matched, since each task mints its own token — see below), skipping if
+    // full or closed. Resolving before reserving means an unresolvable target never
+    // holds a slot. Each task carries a unique attempt token, so the min_idle
+    // prewarms are distinct dials that do not dedupe against each other or against
+    // a concurrent acquire. An unresolvable target skips the connection —
     // expected for a lazily connected cluster client (no slot map until its first
     // command), so logged at debug rather than warn. The guard means a failed or
     // cancelled prewarm always gives its slot back.

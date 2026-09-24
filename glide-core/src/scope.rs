@@ -789,11 +789,20 @@ pub(crate) async fn resync_idle_connection_database(
     runtime_db: u32,
 ) {
     // Take the wrong-db connection out of idle, capturing the request timeout in the
-    // same critical section so the round-trip below needs no extra lock.
-    let (mut conn, request_timeout) = {
+    // same critical section so the round-trip below needs no extra lock. Hold a
+    // slot guard across the off-lock re-SELECT: the popped connection's slot stays
+    // counted, and a cancel/panic mid-await would otherwise leak it (neither
+    // `reidle_after_resync` nor the failure decrement runs). `commit()` on success
+    // keeps the count (connection returns to idle); `Drop` reclaims the slot when
+    // the connection is discarded or the task unwinds.
+    let (mut conn, request_timeout, reservation) = {
         let mut guard = pool.lock().await;
         match guard.take_idle_for_resync(target, runtime_db) {
-            Some(c) => (c, guard.config.request_timeout),
+            Some(c) => {
+                let reservation =
+                    crate::pool::ScopeReservation::for_slot(guard.total_count.clone());
+                (c, guard.config.request_timeout, reservation)
+            }
             // Another acquire raced us and took or fixed it; nothing to do.
             None => return,
         }
@@ -816,12 +825,10 @@ pub(crate) async fn resync_idle_connection_database(
         conn.state = ConnectionState::with_configured_db(runtime_db);
         conn.last_idle_at = std::time::Instant::now();
         guard.reidle_after_resync(conn);
-    } else {
-        // Re-SELECT failed — discard the connection and reclaim its slot.
-        guard
-            .total_count
-            .fetch_sub(1, std::sync::atomic::Ordering::AcqRel);
+        reservation.commit();
     }
+    // else: re-SELECT failed — drop the connection and let `reservation`'s `Drop`
+    // reclaim the slot via `saturating_dec`.
 }
 
 /// Release a scope back to the pool. Fire-and-forget, non-blocking.
