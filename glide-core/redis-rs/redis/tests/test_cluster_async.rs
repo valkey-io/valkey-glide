@@ -4852,20 +4852,26 @@ mod cluster_async {
             runtime,
             async_connection: mut connection,
             ..
-        } = MockEnv::new(name, move |received_cmd: &[u8], port| {
-            respond_startup_with_replica_using_config(
-                name,
-                received_cmd,
-                Some(vec![MockSlotRange {
-                    primary_port: 6381,
-                    replica_ports: vec![6382],
-                    slot_range: (8192..16383),
-                }]),
-            )?;
-            Err(Ok(Value::Array(vec![Value::BulkString(
-                format!("{port}").into_bytes().into(),
-            )])))
-        });
+        } = MockEnv::with_client_builder(
+            // The mock never owns the slots for `bar`/`baz`, so the first attempt already
+            // yields the final error; retries would only add minutes of exponential backoff.
+            ClusterClient::builder(vec![&*format!("redis://{name}")]).retries(0),
+            name,
+            move |received_cmd: &[u8], port| {
+                respond_startup_with_replica_using_config(
+                    name,
+                    received_cmd,
+                    Some(vec![MockSlotRange {
+                        primary_port: 6381,
+                        replica_ports: vec![6382],
+                        slot_range: (8192..16383),
+                    }]),
+                )?;
+                Err(Ok(Value::Array(vec![Value::BulkString(
+                    format!("{port}").into_bytes().into(),
+                )])))
+            },
+        );
 
         let result = runtime
             .block_on(cmd.query_async::<_, Vec<String>>(&mut connection))
