@@ -31,7 +31,7 @@ redis = {path = "../glide-core/redis-rs/redis", features = ["aio", "tokio-comp",
 async-trait = "0.1"
 bytes = "1"
 futures = "0.3"
-num-bigint = "0.4"
+num-bigint = "0.5"
 ryu = "1"
 sealed = "0.7"
 sha1_smol = "1"
