@@ -17,11 +17,14 @@ mod test_monitor_handshake_buffering {
     use tokio::net::TcpListener;
     use tokio::sync::oneshot;
 
-    /// Short enough to survive the connection decoder's read window intact, which is
-    /// what makes this the whole-frame case.
+    /// The connection decoder has 54 bytes of room left at the `MONITOR` read: it
+    /// reserves 64 up front and the two `CLIENT SETINFO` replies from setup consume the
+    /// first 10. `+OK\r\n` plus this line is 42 bytes, so it arrives whole and the
+    /// decoder buffers the line entire.
     const SHORT_PACKED_LINE: &str = "+1.5 [0 1.2.3.4:1] \"GET\" \"shortkey\"\r\n";
-    /// A realistically sized line, longer than that read window, so the handshake read
-    /// stops in the middle of it.
+    /// A realistically sized line: `+OK\r\n` plus this one is 63 bytes, past the 54 the
+    /// read can take, so the handshake read stops mid-line with 49 of its 58 bytes
+    /// buffered.
     const LONG_PACKED_LINE: &str =
         "+1720000000.000000 [0 127.0.0.1:55501] \"GET\" \"other_key\"\r\n";
     /// The line every scenario waits for, standing in for the command under test.
@@ -217,7 +220,7 @@ mod test_monitor_handshake_buffering {
     }
 
     /// Runs one scenario end to end and reports which lines arrived.
-    async fn run(packed: String, remainder: String, want_canary: bool) -> Outcome {
+    async fn run(packed: String, remainder: String) -> Outcome {
         let server = scripted_server(packed, remainder);
         let node_addr = NodeAddress {
             host: server.addr.ip().to_string(),
@@ -233,9 +236,16 @@ mod test_monitor_handshake_buffering {
         let _ = server.answered.await;
         let _ = server.release.send(());
 
-        let canary_seen = want_canary && wait_for(&lines, is_canary).await;
+        // The server writes the remainder in one go, so once the target has arrived every
+        // line written before it is already collected and needs no separate wait.
         let target = wait_for(&lines, is_target).await;
-        let packed_seen = lines.lock().unwrap().iter().any(is_short_packed);
+        let (packed_seen, canary_seen) = {
+            let collected = lines.lock().unwrap();
+            (
+                collected.iter().any(is_short_packed),
+                collected.iter().any(is_canary),
+            )
+        };
         let diagnostics = format!("{:?}", monitor.diagnostics());
         monitor.stop_async().await;
         Outcome {
@@ -250,7 +260,7 @@ mod test_monitor_handshake_buffering {
     /// itself, so a failure elsewhere in this file points at the client.
     #[tokio::test]
     async fn unpacked_handshake_delivers_the_line() {
-        let outcome = run(String::new(), TARGET_LINE.to_string(), false).await;
+        let outcome = run(String::new(), TARGET_LINE.to_string()).await;
         assert!(
             outcome.target,
             "scripted server never delivered a line; diagnostics: {}",
@@ -262,12 +272,7 @@ mod test_monitor_handshake_buffering {
     /// enough on its own, so this checks the packed line itself reaches the caller.
     #[tokio::test]
     async fn whole_packed_line_is_delivered() {
-        let outcome = run(
-            SHORT_PACKED_LINE.to_string(),
-            TARGET_LINE.to_string(),
-            false,
-        )
-        .await;
+        let outcome = run(SHORT_PACKED_LINE.to_string(), TARGET_LINE.to_string()).await;
         assert!(
             outcome.target,
             "timed out waiting for the later line; diagnostics: {}",
@@ -282,35 +287,23 @@ mod test_monitor_handshake_buffering {
 
     /// The handshake write is cut mid-line. Resuming at the wrong offset fails to parse,
     /// which ends the stream and costs every later line too. This is the case that made
-    /// the monitor deliver nothing at all.
+    /// the monitor deliver nothing at all. Two lines follow the cut, so a stream that
+    /// resumes but swallows the line right after it still fails here.
     #[tokio::test]
     async fn partially_packed_line_does_not_end_the_stream() {
-        let outcome = run(LONG_PACKED_LINE.to_string(), TARGET_LINE.to_string(), false).await;
-        assert!(
-            outcome.target,
-            "timed out waiting for the later line; diagnostics: {}",
-            outcome.diagnostics
-        );
-    }
-
-    /// Same cut line, with an earlier line to wait for first. A dead stream loses both,
-    /// which is how one cut line costs a monitor everything that comes after it.
-    #[tokio::test]
-    async fn partially_packed_line_does_not_cost_following_lines() {
         let outcome = run(
             LONG_PACKED_LINE.to_string(),
             format!("{CANARY_LINE}{TARGET_LINE}"),
-            true,
         )
         .await;
         assert!(
-            outcome.canary_seen,
-            "timed out waiting for the first line after the handshake; diagnostics: {}",
+            outcome.target,
+            "timed out waiting for the later line; diagnostics: {}",
             outcome.diagnostics
         );
         assert!(
-            outcome.target,
-            "timed out waiting for the later line; diagnostics: {}",
+            outcome.canary_seen,
+            "the first line after the cut was lost; diagnostics: {}",
             outcome.diagnostics
         );
     }
