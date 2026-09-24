@@ -310,10 +310,15 @@ mod test_monitor_handshake_buffering {
 
     /// The server writes a line while the reader task cannot run at all, and the line
     /// still has to reach the caller once it runs again. A slow machine and the
-    /// buffering bug look alike from the outside, and this test separates them, so the
-    /// next person here does not blame scheduling. The scripted server has its own
-    /// thread and runtime, so it writes while this test's runtime is blocked.
-    #[tokio::test]
+    /// buffering bug look alike from the outside, and this test separates them rather
+    /// than guarding the fix, so the next person here does not blame scheduling. The
+    /// scripted server has its own thread and runtime, so it writes while this test's
+    /// runtime is blocked.
+    ///
+    /// The flavor is pinned because starving the reader needs one runtime thread: on a
+    /// multi-threaded runtime another worker would poll it and the empty-lines check
+    /// below would become a race.
+    #[tokio::test(flavor = "current_thread")]
     async fn line_written_while_the_task_cannot_run_is_not_lost() {
         let mut server = scripted_server(String::new(), TARGET_LINE.to_string());
         let node_addr = NodeAddress {
