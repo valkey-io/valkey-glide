@@ -4,7 +4,7 @@
 
 #![cfg(feature = "libfabric")]
 
-use glide_rdma::{ensure_loaded, FabricConfig, Provider, RdmaError, RdmaFabric};
+use glide_rdma::{FabricConfig, Provider, RdmaError, RdmaFabric, ensure_loaded};
 
 #[test]
 fn a_missing_libfabric_is_a_readable_error_rather_than_a_dead_process() {

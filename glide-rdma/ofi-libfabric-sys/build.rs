@@ -83,8 +83,12 @@ fn stage_bindings(source: &std::path::Path, destination: &std::path::Path) {
 }
 
 fn main() {
-    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
-    compile_error!("This binding is only compatible with Linux and macOS.");
+    // Checked at run time, for the same reason as `target_is_macos`.
+    let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
+    assert!(
+        matches!(target_os.as_str(), "linux" | "macos"),
+        "This binding is only compatible with Linux and macOS (target_os = {target_os})."
+    );
 
     let manifest_dir = get_cargo_manifest_dir().clone();
 
