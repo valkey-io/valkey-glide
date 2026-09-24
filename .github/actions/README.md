@@ -65,7 +65,7 @@ Installs platform-specific dependencies for valkey-glide builds. This is the pri
 
 ### install-engine
 
-Installs and caches a specific Valkey server version for testing. Uses intelligent caching based on version, git SHA, and target platform.
+Installs and caches a specific Valkey server version for testing. Caching is based on the source version, the target platform, and the runner image.
 
 **Location:** `.github/actions/install-engine/action.yml`
 
@@ -78,8 +78,9 @@ Installs and caches a specific Valkey server version for testing. Uses intellige
 
 #### Behavior
 
-- Computes a cache key from version, git SHA, and target
+- Computes a cache key from the source version, the target, and the runner image
 - Restores from cache if available, otherwise builds from source
+- Rebuilds from source when a restored binary cannot run on the current image
 - Creates backward-compatible symlinks (`redis-*` → `valkey-*`)
 - Adds binaries to `PATH`
 - Uses WSL shell on Windows, bash on other platforms
@@ -87,10 +88,10 @@ Installs and caches a specific Valkey server version for testing. Uses intellige
 #### Cache Key Format
 
 ```
-valkey-{version}-{target}
+valkey-{version}-{target}-{image}
 ```
 
-Example: `valkey-9.0-x86_64-unknown-linux-gnu`
+Example: `valkey-9.0.6-x86_64-unknown-linux-gnu-ubuntu24.04-x86_64`
 
 #### Example Usage
 
