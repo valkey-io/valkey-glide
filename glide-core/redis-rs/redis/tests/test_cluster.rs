@@ -1038,6 +1038,82 @@ mod cluster {
 
     #[test]
     #[serial_test::serial]
+    fn test_cluster_readonly_after_moved_uses_refreshed_slots() {
+        let name = "node";
+        let ports = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let slots_requests = Arc::new(AtomicI32::new(0));
+        let user_requests = Arc::new(AtomicI32::new(0));
+        let MockEnv {
+            mut connection,
+            handler: _handler,
+            ..
+        } = MockEnv::with_client_builder(
+            ClusterClient::builder(vec![&*format!("redis://{name}")]).retries(3),
+            name,
+            {
+                let ports = ports.clone();
+                let slots_requests = slots_requests.clone();
+                let user_requests = user_requests.clone();
+                move |cmd: &[u8], port| {
+                    let is_get = contains_slice(cmd, b"GET");
+                    if is_get {
+                        ports.lock().unwrap().push(port);
+                    }
+                    if contains_slice(cmd, b"CLUSTER") && contains_slice(cmd, b"SLOTS") {
+                        let request = slots_requests.fetch_add(1, Ordering::SeqCst);
+                        let slots = if request == 0 {
+                            vec![
+                                Value::Array(vec![
+                                    Value::Int(0),
+                                    Value::Int(8191),
+                                    Value::Array(vec![
+                                        Value::BulkString(name.as_bytes().to_vec().into()),
+                                        Value::Int(6379),
+                                    ]),
+                                ]),
+                                Value::Array(vec![
+                                    Value::Int(8192),
+                                    Value::Int(16383),
+                                    Value::Array(vec![
+                                        Value::BulkString(name.as_bytes().to_vec().into()),
+                                        Value::Int(6381),
+                                    ]),
+                                ]),
+                            ]
+                        } else {
+                            vec![Value::Array(vec![
+                                Value::Int(0),
+                                Value::Int(16383),
+                                Value::Array(vec![
+                                    Value::BulkString(name.as_bytes().to_vec().into()),
+                                    Value::Int(6379),
+                                ]),
+                            ])]
+                        };
+                        return Err(Ok(Value::Array(slots)));
+                    }
+                    respond_startup_two_nodes(name, cmd)?;
+                    if port == 6379 && is_get && user_requests.fetch_add(1, Ordering::SeqCst) == 0 {
+                        Err(parse_redis_value(b"-MOVED 123 node:6381\r\n"))
+                    } else if port == 6381 && contains_slice(cmd, b"GET") {
+                        Err(Err((ErrorKind::ReadOnly, "READONLY").into()))
+                    } else {
+                        Err(Ok(Value::BulkString(b"value".to_vec().into())))
+                    }
+                }
+            },
+        );
+
+        let value = cmd("GET")
+            .arg("test")
+            .query::<Option<String>>(&mut connection);
+
+        assert_eq!(value, Ok(Some("value".to_string())));
+        assert_eq!(&*ports.lock().unwrap(), &[6379, 6381, 6379]);
+    }
+
+    #[test]
+    #[serial_test::serial]
     fn test_cluster_readonly_error_exhausts_retries() {
         let name = "node";
         let requests = Arc::new(AtomicI32::new(0));

@@ -840,6 +840,7 @@ where
                         }
                         RetryMethod::RefreshSlotsAndRetry => {
                             self.refresh_slots()?;
+                            redirected = None;
                         }
                         RetryMethod::NoRetry => {
                             return Err(err);
