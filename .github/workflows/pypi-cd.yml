@@ -457,6 +457,11 @@ jobs:
                   CIBW_ARCHS_MACOS: auto
                   CIBW_ENABLE: ${{ steps.cibw_config.outputs.enable_flags }}
                   MACOSX_DEPLOYMENT_TARGET: "10.12"
+                  # Build RDMA into every published wheel. Users opt in per client,
+                  # and libfabric is only loaded when they do.
+                  # This replaces [tool.cibuildwheel.environment] in pyproject.toml
+                  # rather than adding to it, so RELEASE_MODE must be repeated here.
+                  CIBW_ENVIRONMENT: RELEASE_MODE=1 GLIDE_SYNC_RDMA=1
 
             - name: Smoke test wheels
               run: |
@@ -477,6 +482,13 @@ jobs:
                   /tmp/smoke-sync/bin/python /tmp/get-pip.py
                   /tmp/smoke-sync/bin/pip install --find-links python/glide-sync/wheels "valkey-glide-sync==${RELEASE_VERSION}"
                   /tmp/smoke-sync/bin/python -c "from glide_sync import GlideClient; print('Sync smoke test passed')"
+
+                  /tmp/smoke-sync/bin/python - <<'PYEOF'
+                  from glide_sync import GlideClient
+
+                  assert GlideClient.rdma_available(), "wheel was built without RDMA support"
+                  print("RDMA usable:", GlideClient.rdma_usable())
+                  PYEOF
 
             ### UPLOAD WHEELS ###
 
