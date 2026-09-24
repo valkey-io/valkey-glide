@@ -13,18 +13,24 @@ pool-support = []
 crate-type = ["staticlib", "rlib", "cdylib"]
 
 [dependencies]
-bytes = "1"
-libc = "0.2"
-dashmap = "~6.2.1"
-protobuf = { version = "3", features = [] }
+
+# GLIDE dependencies
+glide-logger = { path = "../glide-logger" }
+
+# TODO #6905: Update once renamed.
 redis = { path = "../glide-core/redis-rs/redis", features = ["aio", "tokio-comp", "tokio-rustls-comp"] }
 glide-core = { path = "../glide-core", features = ["proto"] }
-tokio = { version = "^1", features = ["rt", "macros", "rt-multi-thread", "time"] }
-logger_core = { path = "../logger_core" }
-tracing = "0.1"
-serde_json = "1.0"
-url = "2"
+
+# External dependencies
+bytes = "1"
+dashmap = "~6.2.1"
+libc = "0.2"
 percent-encoding = "2"
+protobuf = { version = "3", features = [] }
+serde_json = "1.0"
+tokio = { version = "^1", features = ["rt", "macros", "rt-multi-thread", "time"] }
+tracing = "0.1"
+url = "2"
 uuid = { version = "1", features = ["v4", "fast-rng"] }
 
 [dev-dependencies]

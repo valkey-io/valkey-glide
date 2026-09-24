@@ -12,7 +12,7 @@ on:
         paths:
             - rust/**
             - glide-core/**
-            - logger_core/**
+            - glide-logger/**
             - deny.toml
             - utils/cluster_manager.py
             - .github/actions/install-engine/action.yml
@@ -24,7 +24,7 @@ on:
         paths:
             - rust/**
             - glide-core/**
-            - logger_core/**
+            - glide-logger/**
             - deny.toml
             - utils/cluster_manager.py
             - .github/actions/install-engine/action.yml

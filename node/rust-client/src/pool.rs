@@ -236,7 +236,7 @@ fn start_node_abandon_monitor(pool_id: u64, abandon_timeout: Duration) {
                     CLIENT_ACTIVITY.remove(&client_id);
                     CLIENT_BLOCKING.remove(&client_id);
                     DISCARDED_CLIENTS.insert(client_id, pool_id);
-                    logger_core::log_warn(
+                    glide_logger::log_warn(
                         "pool",
                         format!(
                             "Abandon detection: client {client_id} exceeded inactivity timeout — discarding"
@@ -353,7 +353,7 @@ pub fn create_pool(
                     }
                 }
                 Err(e) => {
-                    logger_core::log_warn("pool", format!("Background warmup failed: {e}"));
+                    glide_logger::log_warn("pool", format!("Background warmup failed: {e}"));
                 }
             }
         }
