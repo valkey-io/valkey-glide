@@ -255,13 +255,15 @@ public class GlideClusterClient extends BaseClient
         int routingSlot = routingKey != null ? slotForKey(routingKey.getBytes()) : 0;
         long timeoutMs = timeout.toMillis();
         long deadline = System.currentTimeMillis() + timeoutMs;
+        // One logical acquire: one stable attempt token across the retry loop.
+        long attemptToken = glide.ffi.resolvers.GlideScopeResolver.glideScopeNextAttemptToken();
 
         return CompletableFuture.supplyAsync(
                 () -> {
                     while (true) {
                         long scopeId =
                                 glide.ffi.resolvers.GlideScopeResolver.glideScopeTryAcquire(
-                                        clientId, connBytes, routingSlot);
+                                        clientId, connBytes, routingSlot, attemptToken);
                         if (scopeId >= 0) {
                             return new glide.api.models.scope.IsolatedScope(scopeId, clientId);
                         }

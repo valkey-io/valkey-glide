@@ -278,9 +278,9 @@ updates:
           - "dependencies"
           - "Rust ⚙️"
 
-    # Enable version updates for Cargo (Rust - logger core)
+    # Enable version updates for Cargo (Rust - GLIDE logger)
     - package-ecosystem: "cargo"
-      directory: "/logger_core"
+      directory: "/glide-logger"
       schedule:
           interval: "weekly"
           day: "monday"

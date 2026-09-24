@@ -4,7 +4,7 @@ use aws_sigv4::http_request::{
     SignableBody, SignableRequest, SignatureLocation, SigningSettings, sign,
 };
 use aws_sigv4::sign::v4;
-use logger_core::{log_debug, log_error, log_info, log_warn};
+use glide_logger::{log_debug, log_error, log_info, log_warn};
 use rand::Rng;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};

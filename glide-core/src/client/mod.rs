@@ -10,7 +10,7 @@ use crate::compression::zstd_backend::ZstdBackend;
 use crate::compression::{CompressionConfig, CompressionManager};
 use crate::scripts_container::get_script;
 use futures::FutureExt;
-use logger_core::{log_debug, log_error, log_info, log_warn, log_warn_rate_limited};
+use glide_logger::{log_debug, log_error, log_info, log_warn, log_warn_rate_limited};
 use once_cell::sync::OnceCell;
 use redis::aio::ConnectionLike;
 use redis::cache::{get_or_create_cache, glide_cache::GlideCache};

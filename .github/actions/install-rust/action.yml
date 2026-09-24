@@ -1,9 +1,13 @@
 name: Install Rust toolchain
-description: Install Rust toolchain with stable version, rustfmt, and clippy
+description: Install a Rust toolchain with rustfmt and clippy
 
 inputs:
+    toolchain:
+        description: "Rust toolchain to install (e.g. '1.88.0')"
+        required: false
+        default: "stable"
     target:
-        description: "Specified target for rust toolchain, ex. x86_64-apple-darwin"
+        description: "Build target (e.g. 'x86_64-unknown-linux-gnu')"
         required: false
         default: "x86_64-unknown-linux-gnu"
 
@@ -13,6 +17,6 @@ runs:
         - name: Install Rust toolchain
           uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
           with:
-              toolchain: stable
+              toolchain: ${{ inputs.toolchain }}
               targets: ${{ inputs.target }}
               components: rustfmt, clippy

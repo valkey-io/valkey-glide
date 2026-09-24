@@ -1,7 +1,7 @@
 [package]
 name = "glide-rust"
 version = "0.2.0"
-# TODO #7167: declare a `rust-version` (MSRV) before publishing.
+rust-version = "1.94.1"
 edition = "2024"
 license = "Apache-2.0"
 authors = ["Valkey GLIDE Maintainers"]
@@ -18,15 +18,16 @@ name = "glide"
 path = "src/lib.rs"
 
 [dependencies]
+
+# GLIDE dependencies
+glide-logger = { path = "../glide-logger", version = "0.1" }
+
+# TODO #6905: Update once renamed.
 # TODO #6519: Add version once the dependency chain is published to crates.io.
 glide-core = { path = "../glide-core" }
-
-# TODO #6519: Add version once the dependency chain is published to crates.io.
 redis = {path = "../glide-core/redis-rs/redis", features = ["aio", "tokio-comp", "cluster", "cluster-async"] }
 
-# TODO #6519: Add version once the dependency chain is published to crates.io.
-logger_core = { path = "../logger_core" }
-
+# External dependencies
 async-trait = "0.1"
 bytes = "1"
 futures = "0.3"
@@ -34,8 +35,8 @@ num-bigint = "0.4"
 ryu = "1"
 sealed = "0.7"
 sha1_smol = "1"
-tokio = { version = "1", features = ["rt", "rt-multi-thread", "sync", "macros", "time"] }
 thiserror = "2"
+tokio = { version = "1", features = ["rt", "rt-multi-thread", "sync", "macros", "time"] }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full"] }

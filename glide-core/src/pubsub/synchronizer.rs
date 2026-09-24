@@ -2,7 +2,7 @@
 
 use crate::client::{ClientWrapper, PubSubCommandApplier};
 use async_trait::async_trait;
-use logger_core::{log_debug, log_error, log_warn};
+use glide_logger::{log_debug, log_error, log_warn};
 use once_cell::sync::OnceCell;
 use redis::{
     Cmd, ErrorKind, PubSubChannelOrPattern, PubSubSubscriptionInfo, PubSubSubscriptionKind,

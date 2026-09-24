@@ -236,7 +236,7 @@ fn start_node_abandon_monitor(pool_id: u64, abandon_timeout: Duration) {
                     CLIENT_ACTIVITY.remove(&client_id);
                     CLIENT_BLOCKING.remove(&client_id);
                     DISCARDED_CLIENTS.insert(client_id, pool_id);
-                    logger_core::log_warn(
+                    glide_logger::log_warn(
                         "pool",
                         format!(
                             "Abandon detection: client {client_id} exceeded inactivity timeout — discarding"
@@ -353,7 +353,7 @@ pub fn create_pool(
                     }
                 }
                 Err(e) => {
-                    logger_core::log_warn("pool", format!("Background warmup failed: {e}"));
+                    glide_logger::log_warn("pool", format!("Background warmup failed: {e}"));
                 }
             }
         }
@@ -548,12 +548,37 @@ pub fn scope_try_acquire(
     client_id: i64,
     connection_request_bytes: Uint8Array,
     routing_slot: u16,
+    attempt_token: BigInt,
 ) -> Result<i64> {
     let conn_bytes = connection_request_bytes.as_ref().to_vec();
     let runtime = get_pool_runtime();
-    let result =
-        scope::try_acquire_scope(client_id as u64, conn_bytes, runtime.handle(), routing_slot);
+    // scope_next_attempt_token mints the token, but this export is public, so a JS
+    // caller can pass any BigInt. Reject a negative or >u64 value rather than
+    // silently narrowing it (which could collide with a live token and wrongly
+    // report CreationPending).
+    let (signed, token, lossless) = attempt_token.get_u64();
+    if signed || !lossless {
+        return Err(Error::new(
+            Status::InvalidArg,
+            "attempt_token must be a non-negative u64",
+        ));
+    }
+    let result = scope::try_acquire_scope(
+        client_id as u64,
+        conn_bytes,
+        runtime.handle(),
+        routing_slot,
+        token,
+    );
     Ok(result)
+}
+
+/// Allocate a unique scope-acquire attempt token. The caller mints one per
+/// `acquire()` and passes it on every retry poll of `scope_try_acquire`, so the
+/// core dedupes a single acquire's retries without serializing distinct borrowers.
+#[napi]
+pub fn scope_next_attempt_token() -> BigInt {
+    BigInt::from(glide_core::pool::next_scope_attempt_token())
 }
 
 /// Execute a command on a scoped connection. Returns `Promise<string | null>`.

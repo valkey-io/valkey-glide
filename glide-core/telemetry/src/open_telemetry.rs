@@ -1,5 +1,5 @@
 use crate::Telemetry;
-use logger_core::log_warn;
+use glide_logger::log_warn;
 use once_cell::sync::OnceCell;
 use opentelemetry::trace::{
     Span, SpanContext, SpanId, SpanKind, TraceContextExt, TraceFlags, TraceId, TraceState,
@@ -658,14 +658,14 @@ impl GlideOpenTelemetry {
     pub unsafe fn is_span_pointer_valid(span_ptr: u64) -> bool {
         // Check for null pointer
         if span_ptr == 0 {
-            logger_core::log_warn("OpenTelemetry", "Invalid span pointer - null pointer (0)");
+            glide_logger::log_warn("OpenTelemetry", "Invalid span pointer - null pointer (0)");
             return false;
         }
 
         // Check for obviously invalid pointer values
         // Pointers should be aligned to at least 8 bytes on 64-bit systems
         if !span_ptr.is_multiple_of(8) {
-            logger_core::log_warn(
+            glide_logger::log_warn(
                 "OpenTelemetry",
                 format!(
                     "Invalid span pointer - misaligned pointer: 0x{:x}",
@@ -679,7 +679,7 @@ impl GlideOpenTelemetry {
         // Valid heap addresses are typically much higher than this
         const MIN_VALID_ADDRESS: u64 = 0x1000; // 4KB, below this is likely invalid
         if span_ptr < MIN_VALID_ADDRESS {
-            logger_core::log_warn(
+            glide_logger::log_warn(
                 "OpenTelemetry",
                 format!("Invalid span pointer - address too low: 0x{:x}", span_ptr),
             );
@@ -691,7 +691,7 @@ impl GlideOpenTelemetry {
         // On most 64-bit systems, user space is limited to the lower half of the address space
         const MAX_VALID_ADDRESS: u64 = 0x7FFF_FFFF_FFFF_FFF8; // Max user space on most 64-bit systems
         if span_ptr > MAX_VALID_ADDRESS {
-            logger_core::log_warn(
+            glide_logger::log_warn(
                 "OpenTelemetry",
                 format!("Invalid span pointer - address too high: 0x{:x}", span_ptr),
             );
