@@ -1,0 +1,3625 @@
+{
+  "source": "redis-rs fork v0.25.2 (glide-core/redis-rs/redis/src/commands)",
+  "methods": [
+    {
+      "name": "append",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "V",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "value",
+          "type_name": "V"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "bit_and",
+      "generics": [
+        {
+          "name": "D",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "S",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "dstkey",
+          "type_name": "D"
+        },
+        {
+          "name": "srckeys",
+          "type_name": "S"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "bit_not",
+      "generics": [
+        {
+          "name": "D",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "S",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "dstkey",
+          "type_name": "D"
+        },
+        {
+          "name": "srckey",
+          "type_name": "S"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "bit_or",
+      "generics": [
+        {
+          "name": "D",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "S",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "dstkey",
+          "type_name": "D"
+        },
+        {
+          "name": "srckeys",
+          "type_name": "S"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "bit_xor",
+      "generics": [
+        {
+          "name": "D",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "S",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "dstkey",
+          "type_name": "D"
+        },
+        {
+          "name": "srckeys",
+          "type_name": "S"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "bitcount",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "bitcount_range",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "start",
+          "type_name": "usize"
+        },
+        {
+          "name": "end",
+          "type_name": "usize"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "blmove",
+      "generics": [
+        {
+          "name": "S",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "D",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "srckey",
+          "type_name": "S"
+        },
+        {
+          "name": "dstkey",
+          "type_name": "D"
+        },
+        {
+          "name": "src_dir",
+          "type_name": "Direction"
+        },
+        {
+          "name": "dst_dir",
+          "type_name": "Direction"
+        },
+        {
+          "name": "timeout",
+          "type_name": "f64"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "blmpop",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "timeout",
+          "type_name": "f64"
+        },
+        {
+          "name": "numkeys",
+          "type_name": "usize"
+        },
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "dir",
+          "type_name": "Direction"
+        },
+        {
+          "name": "count",
+          "type_name": "usize"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "blpop",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "timeout",
+          "type_name": "f64"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "brpop",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "timeout",
+          "type_name": "f64"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "brpoplpush",
+      "generics": [
+        {
+          "name": "S",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "D",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "srckey",
+          "type_name": "S"
+        },
+        {
+          "name": "dstkey",
+          "type_name": "D"
+        },
+        {
+          "name": "timeout",
+          "type_name": "f64"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "bzmpop_max",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "timeout",
+          "type_name": "f64"
+        },
+        {
+          "name": "keys",
+          "type_name": "&'a [K]"
+        },
+        {
+          "name": "count",
+          "type_name": "isize"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "bzmpop_min",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "timeout",
+          "type_name": "f64"
+        },
+        {
+          "name": "keys",
+          "type_name": "&'a [K]"
+        },
+        {
+          "name": "count",
+          "type_name": "isize"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "bzpopmax",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "timeout",
+          "type_name": "f64"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "bzpopmin",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "timeout",
+          "type_name": "f64"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "decr",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "V",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "delta",
+          "type_name": "V"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "del",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "exists",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "expire",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "seconds",
+          "type_name": "i64"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "expire_at",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "ts",
+          "type_name": "i64"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "get",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "get_del",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "get_ex",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "expire_at",
+          "type_name": "Expiry"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "getbit",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "offset",
+          "type_name": "usize"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "getrange",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "from",
+          "type_name": "isize"
+        },
+        {
+          "name": "to",
+          "type_name": "isize"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "getset",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "V",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "value",
+          "type_name": "V"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "hdel",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "F",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "field",
+          "type_name": "F"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "hexists",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "F",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "field",
+          "type_name": "F"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "hget",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "F",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "field",
+          "type_name": "F"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "hgetall",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "hincr",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "F",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "D",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "field",
+          "type_name": "F"
+        },
+        {
+          "name": "delta",
+          "type_name": "D"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "hkeys",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "hlen",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "hset",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "F",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "V",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "field",
+          "type_name": "F"
+        },
+        {
+          "name": "value",
+          "type_name": "V"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "hset_multiple",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "F",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "V",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "items",
+          "type_name": "&'a [(F, V)]"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "hset_nx",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "F",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "V",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "field",
+          "type_name": "F"
+        },
+        {
+          "name": "value",
+          "type_name": "V"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "hvals",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "incr",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "V",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "delta",
+          "type_name": "V"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "key_type",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "keys",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "lindex",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "index",
+          "type_name": "isize"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "linsert_after",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "P",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "V",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "pivot",
+          "type_name": "P"
+        },
+        {
+          "name": "value",
+          "type_name": "V"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "linsert_before",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "P",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "V",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "pivot",
+          "type_name": "P"
+        },
+        {
+          "name": "value",
+          "type_name": "V"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "llen",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "lmove",
+      "generics": [
+        {
+          "name": "S",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "D",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "srckey",
+          "type_name": "S"
+        },
+        {
+          "name": "dstkey",
+          "type_name": "D"
+        },
+        {
+          "name": "src_dir",
+          "type_name": "Direction"
+        },
+        {
+          "name": "dst_dir",
+          "type_name": "Direction"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "lmpop",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "numkeys",
+          "type_name": "usize"
+        },
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "dir",
+          "type_name": "Direction"
+        },
+        {
+          "name": "count",
+          "type_name": "usize"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "lpop",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "count",
+          "type_name": "Option<core::num::NonZeroUsize>"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "lpos",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "V",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "value",
+          "type_name": "V"
+        },
+        {
+          "name": "options",
+          "type_name": "LposOptions"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "lpush",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "V",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "value",
+          "type_name": "V"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "lpush_exists",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "V",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "value",
+          "type_name": "V"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "lrange",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "start",
+          "type_name": "isize"
+        },
+        {
+          "name": "stop",
+          "type_name": "isize"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "lrem",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "V",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "count",
+          "type_name": "isize"
+        },
+        {
+          "name": "value",
+          "type_name": "V"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "lset",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "V",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "index",
+          "type_name": "isize"
+        },
+        {
+          "name": "value",
+          "type_name": "V"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "ltrim",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "start",
+          "type_name": "isize"
+        },
+        {
+          "name": "stop",
+          "type_name": "isize"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "mget",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "mset",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "V",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "items",
+          "type_name": "&'a [(K, V)]"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "mset_nx",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "V",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "items",
+          "type_name": "&'a [(K, V)]"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "object_encoding",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "object_freq",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "object_idletime",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "object_refcount",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "persist",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "pexpire",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "ms",
+          "type_name": "i64"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "pexpire_at",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "ts",
+          "type_name": "i64"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "pfadd",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "E",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "element",
+          "type_name": "E"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "pfcount",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "pfmerge",
+      "generics": [
+        {
+          "name": "D",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "S",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "dstkey",
+          "type_name": "D"
+        },
+        {
+          "name": "srckeys",
+          "type_name": "S"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "pset_ex",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "V",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "value",
+          "type_name": "V"
+        },
+        {
+          "name": "milliseconds",
+          "type_name": "u64"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "pttl",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "publish",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "E",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "channel",
+          "type_name": "K"
+        },
+        {
+          "name": "message",
+          "type_name": "E"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "rename",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "N",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "new_key",
+          "type_name": "N"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "rename_nx",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "N",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "new_key",
+          "type_name": "N"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "rpop",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "count",
+          "type_name": "Option<core::num::NonZeroUsize>"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "rpoplpush",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "D",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "dstkey",
+          "type_name": "D"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "rpush",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "V",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "value",
+          "type_name": "V"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "rpush_exists",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "V",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "value",
+          "type_name": "V"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "sadd",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "M",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "member",
+          "type_name": "M"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "scard",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "sdiff",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "keys",
+          "type_name": "K"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "sdiffstore",
+      "generics": [
+        {
+          "name": "D",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "dstkey",
+          "type_name": "D"
+        },
+        {
+          "name": "keys",
+          "type_name": "K"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "set",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "V",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "value",
+          "type_name": "V"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "set_ex",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "V",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "value",
+          "type_name": "V"
+        },
+        {
+          "name": "seconds",
+          "type_name": "u64"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "set_multiple",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "V",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "items",
+          "type_name": "&'a [(K, V)]"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "set_nx",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "V",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "value",
+          "type_name": "V"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "set_options",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "V",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "value",
+          "type_name": "V"
+        },
+        {
+          "name": "options",
+          "type_name": "SetOptions"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "setbit",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "offset",
+          "type_name": "usize"
+        },
+        {
+          "name": "value",
+          "type_name": "bool"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "setrange",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "V",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "offset",
+          "type_name": "isize"
+        },
+        {
+          "name": "value",
+          "type_name": "V"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "sinter",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "keys",
+          "type_name": "K"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "sinterstore",
+      "generics": [
+        {
+          "name": "D",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "dstkey",
+          "type_name": "D"
+        },
+        {
+          "name": "keys",
+          "type_name": "K"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "sismember",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "M",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "member",
+          "type_name": "M"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "smembers",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "smismember",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "M",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "members",
+          "type_name": "M"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "smove",
+      "generics": [
+        {
+          "name": "S",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "D",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "M",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "srckey",
+          "type_name": "S"
+        },
+        {
+          "name": "dstkey",
+          "type_name": "D"
+        },
+        {
+          "name": "member",
+          "type_name": "M"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "spop",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "srandmember",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "srandmember_multiple",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "count",
+          "type_name": "usize"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "srem",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "M",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "member",
+          "type_name": "M"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "strlen",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "sunion",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "keys",
+          "type_name": "K"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "sunionstore",
+      "generics": [
+        {
+          "name": "D",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "dstkey",
+          "type_name": "D"
+        },
+        {
+          "name": "keys",
+          "type_name": "K"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "ttl",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "unlink",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "zadd",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "S",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "M",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "member",
+          "type_name": "M"
+        },
+        {
+          "name": "score",
+          "type_name": "S"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "zadd_multiple",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "S",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "M",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "items",
+          "type_name": "&'a [(S, M)]"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "zcard",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "zcount",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "M",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "MM",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "min",
+          "type_name": "M"
+        },
+        {
+          "name": "max",
+          "type_name": "MM"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "zincr",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "M",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "D",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "member",
+          "type_name": "M"
+        },
+        {
+          "name": "delta",
+          "type_name": "D"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "zinterstore",
+      "generics": [
+        {
+          "name": "D",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "dstkey",
+          "type_name": "D"
+        },
+        {
+          "name": "keys",
+          "type_name": "&'a [K]"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "zinterstore_max",
+      "generics": [
+        {
+          "name": "D",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "dstkey",
+          "type_name": "D"
+        },
+        {
+          "name": "keys",
+          "type_name": "&'a [K]"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "zinterstore_max_weights",
+      "generics": [
+        {
+          "name": "D",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "W",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "dstkey",
+          "type_name": "D"
+        },
+        {
+          "name": "keys",
+          "type_name": "&'a [(K, W)]"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "zinterstore_min",
+      "generics": [
+        {
+          "name": "D",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "dstkey",
+          "type_name": "D"
+        },
+        {
+          "name": "keys",
+          "type_name": "&'a [K]"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "zinterstore_min_weights",
+      "generics": [
+        {
+          "name": "D",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "W",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "dstkey",
+          "type_name": "D"
+        },
+        {
+          "name": "keys",
+          "type_name": "&'a [(K, W)]"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "zinterstore_weights",
+      "generics": [
+        {
+          "name": "D",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "W",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "dstkey",
+          "type_name": "D"
+        },
+        {
+          "name": "keys",
+          "type_name": "&'a [(K, W)]"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "zlexcount",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "M",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "MM",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "min",
+          "type_name": "M"
+        },
+        {
+          "name": "max",
+          "type_name": "MM"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "zmpop_max",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "keys",
+          "type_name": "&'a [K]"
+        },
+        {
+          "name": "count",
+          "type_name": "isize"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "zmpop_min",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "keys",
+          "type_name": "&'a [K]"
+        },
+        {
+          "name": "count",
+          "type_name": "isize"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "zpopmax",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "count",
+          "type_name": "isize"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "zpopmin",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "count",
+          "type_name": "isize"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "zrandmember",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "count",
+          "type_name": "Option<isize>"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "zrandmember_withscores",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "count",
+          "type_name": "isize"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "zrange",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "start",
+          "type_name": "isize"
+        },
+        {
+          "name": "stop",
+          "type_name": "isize"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "zrange_withscores",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "start",
+          "type_name": "isize"
+        },
+        {
+          "name": "stop",
+          "type_name": "isize"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "zrangebylex",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "M",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "MM",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "min",
+          "type_name": "M"
+        },
+        {
+          "name": "max",
+          "type_name": "MM"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "zrangebylex_limit",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "M",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "MM",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "min",
+          "type_name": "M"
+        },
+        {
+          "name": "max",
+          "type_name": "MM"
+        },
+        {
+          "name": "offset",
+          "type_name": "isize"
+        },
+        {
+          "name": "count",
+          "type_name": "isize"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "zrangebyscore",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "M",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "MM",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "min",
+          "type_name": "M"
+        },
+        {
+          "name": "max",
+          "type_name": "MM"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "zrangebyscore_limit",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "M",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "MM",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "min",
+          "type_name": "M"
+        },
+        {
+          "name": "max",
+          "type_name": "MM"
+        },
+        {
+          "name": "offset",
+          "type_name": "isize"
+        },
+        {
+          "name": "count",
+          "type_name": "isize"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "zrangebyscore_limit_withscores",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "M",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "MM",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "min",
+          "type_name": "M"
+        },
+        {
+          "name": "max",
+          "type_name": "MM"
+        },
+        {
+          "name": "offset",
+          "type_name": "isize"
+        },
+        {
+          "name": "count",
+          "type_name": "isize"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "zrangebyscore_withscores",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "M",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "MM",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "min",
+          "type_name": "M"
+        },
+        {
+          "name": "max",
+          "type_name": "MM"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "zrank",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "M",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "member",
+          "type_name": "M"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "zrem",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "M",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "members",
+          "type_name": "M"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "zrembylex",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "M",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "MM",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "min",
+          "type_name": "M"
+        },
+        {
+          "name": "max",
+          "type_name": "MM"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "zrembyscore",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "M",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "MM",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "min",
+          "type_name": "M"
+        },
+        {
+          "name": "max",
+          "type_name": "MM"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "zremrangebyrank",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "start",
+          "type_name": "isize"
+        },
+        {
+          "name": "stop",
+          "type_name": "isize"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "zrevrange",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "start",
+          "type_name": "isize"
+        },
+        {
+          "name": "stop",
+          "type_name": "isize"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "zrevrange_withscores",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "start",
+          "type_name": "isize"
+        },
+        {
+          "name": "stop",
+          "type_name": "isize"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "zrevrangebylex",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "MM",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "M",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "max",
+          "type_name": "MM"
+        },
+        {
+          "name": "min",
+          "type_name": "M"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "zrevrangebylex_limit",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "MM",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "M",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "max",
+          "type_name": "MM"
+        },
+        {
+          "name": "min",
+          "type_name": "M"
+        },
+        {
+          "name": "offset",
+          "type_name": "isize"
+        },
+        {
+          "name": "count",
+          "type_name": "isize"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "zrevrangebyscore",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "MM",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "M",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "max",
+          "type_name": "MM"
+        },
+        {
+          "name": "min",
+          "type_name": "M"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "zrevrangebyscore_limit",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "MM",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "M",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "max",
+          "type_name": "MM"
+        },
+        {
+          "name": "min",
+          "type_name": "M"
+        },
+        {
+          "name": "offset",
+          "type_name": "isize"
+        },
+        {
+          "name": "count",
+          "type_name": "isize"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "zrevrangebyscore_limit_withscores",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "MM",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "M",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "max",
+          "type_name": "MM"
+        },
+        {
+          "name": "min",
+          "type_name": "M"
+        },
+        {
+          "name": "offset",
+          "type_name": "isize"
+        },
+        {
+          "name": "count",
+          "type_name": "isize"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "zrevrangebyscore_withscores",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "MM",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "M",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "max",
+          "type_name": "MM"
+        },
+        {
+          "name": "min",
+          "type_name": "M"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "zrevrank",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "M",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "member",
+          "type_name": "M"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "zscore",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "M",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "member",
+          "type_name": "M"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "zscore_multiple",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "M",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "members",
+          "type_name": "&'a [M]"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "zunionstore",
+      "generics": [
+        {
+          "name": "D",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "dstkey",
+          "type_name": "D"
+        },
+        {
+          "name": "keys",
+          "type_name": "&'a [K]"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "zunionstore_max",
+      "generics": [
+        {
+          "name": "D",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "dstkey",
+          "type_name": "D"
+        },
+        {
+          "name": "keys",
+          "type_name": "&'a [K]"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "zunionstore_max_weights",
+      "generics": [
+        {
+          "name": "D",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "W",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "dstkey",
+          "type_name": "D"
+        },
+        {
+          "name": "keys",
+          "type_name": "&'a [(K, W)]"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "zunionstore_min",
+      "generics": [
+        {
+          "name": "D",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "dstkey",
+          "type_name": "D"
+        },
+        {
+          "name": "keys",
+          "type_name": "&'a [K]"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "zunionstore_min_weights",
+      "generics": [
+        {
+          "name": "D",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "W",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "dstkey",
+          "type_name": "D"
+        },
+        {
+          "name": "keys",
+          "type_name": "&'a [(K, W)]"
+        }
+      ],
+      "return_type": null
+    },
+    {
+      "name": "zunionstore_weights",
+      "generics": [
+        {
+          "name": "D",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "W",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "dstkey",
+          "type_name": "D"
+        },
+        {
+          "name": "keys",
+          "type_name": "&'a [(K, W)]"
+        }
+      ],
+      "return_type": null
+    }
+  ]
+}
