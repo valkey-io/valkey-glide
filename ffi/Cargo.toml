@@ -11,6 +11,8 @@ edition = "2024"
 [features]
 default = ["pool-support"]
 pool-support = []
+# RDMA over EFA. libfabric is dynamically linked at runtime.
+rdma = ["dep:glide-rdma", "glide-core/rdma"]
 
 [lib]
 crate-type = ["staticlib", "rlib", "cdylib"]
@@ -21,6 +23,7 @@ crate-type = ["staticlib", "rlib", "cdylib"]
 glide-logger = { path = "../glide-logger" }
 glide-core-engine = { path = "../glide-core/redis-rs/redis", features = ["aio", "tokio-comp", "tokio-rustls-comp"] }
 glide-core = { path = "../glide-core", features = ["proto"] }
+glide-rdma = { path = "../glide-rdma", optional = true }
 
 # External dependencies
 bytes = "1"

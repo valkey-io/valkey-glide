@@ -4178,6 +4178,11 @@ fn apply_json_options(
 ///
 /// `client_adapter_ptr` is a pointer to a valid `GlideClient` returned in the `ConnectionResponse` from [`create_client`].
 ///
+/// With RDMA, this also cancels every transfer in flight on the client by
+/// revoking every region the client registered. It does not free the
+/// regions. The caller still owns each one and must call `free_rdma_region`
+/// after this function returns.
+///
 /// # Panics
 ///
 /// This function panics when called with a null `client_adapter_ptr`.
@@ -4197,6 +4202,21 @@ pub unsafe extern "C" fn close_client(client_adapter_ptr: *const c_void) {
     {
         let client_id = client_adapter_ptr as usize as u64;
         glide_core::scope::unregister_client(client_id);
+    }
+
+    // Revoke RDMA regions first and cancel any in-flight transfers.
+    #[cfg(feature = "rdma")]
+    {
+        // SAFETY: the caller's reference is still held until the decrement below.
+        let adapter = unsafe { &*(client_adapter_ptr as *const ClientAdapter) };
+        if let Err(error) = adapter.core.client.close_rdma() {
+            glide_logger::log_error(
+                "close_client",
+                format!(
+                    "could not revoke every RDMA region, so a transfer may still be waiting: {error}"
+                ),
+            );
+        }
     }
 
     // This will bring the strong count down to 0 once all client requests are done.
@@ -8309,3 +8329,6 @@ mod tests_push_notification_safety {
 mod pool_ffi;
 #[cfg(feature = "pool-support")]
 pub use pool_ffi::*;
+
+mod rdma_ffi;
+pub use rdma_ffi::*;

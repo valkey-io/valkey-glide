@@ -228,6 +228,15 @@ pub unsafe extern "C" fn glide_pool_create(
                 );
                 return POOL_ERROR_UNSUPPORTED_CONFIG;
             }
+            // TODO: support RDMA in pools.
+            if r.rdma_config.is_some() {
+                glide_logger::log_error(
+                    "pool",
+                    "Cannot create pool with an RDMA configuration: RDMA is not yet \
+                     supported with pools. Use a client outside a pool instead.",
+                );
+                return POOL_ERROR_UNSUPPORTED_CONFIG;
+            }
         }
         req.ok()
             .and_then(|r| {
