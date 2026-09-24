@@ -12,9 +12,9 @@ use ofi_libfabric_sys::bindgen::{
     FI_CONTEXT2, FI_MR_ALLOCATED, FI_MR_LOCAL, FI_MR_PROV_KEY, FI_MR_VIRT_ADDR, FI_MSG, FI_READ,
     FI_RECV, FI_REMOTE_READ, FI_REMOTE_WRITE, FI_RMA, FI_SOURCE, FI_TRANSMIT, FI_WRITE, fi_addr_t,
     fi_allocinfo, fi_av_attr, fi_av_insert, fi_av_open, fi_av_remove, fi_av_type_FI_AV_MAP,
-    fi_close, fi_cq_attr, fi_cq_format_FI_CQ_FORMAT_CONTEXT, fi_cq_open, fi_domain, fi_dupinfo,
-    fi_enable, fi_endpoint, fi_ep_bind, fi_ep_type_FI_EP_RDM, fi_fabric, fi_freeinfo, fi_getinfo,
-    fi_getname, fi_info, fi_mr_key, fi_mr_reg, fi_strerror, fi_threading,
+    fi_close, fi_cq_attr, fi_cq_format_FI_CQ_FORMAT_CONTEXT, fi_cq_open, fi_domain, fi_domain_attr,
+    fi_dupinfo, fi_enable, fi_endpoint, fi_ep_bind, fi_ep_type_FI_EP_RDM, fi_fabric, fi_freeinfo,
+    fi_getinfo, fi_getname, fi_info, fi_mr_key, fi_mr_reg, fi_strerror, fi_threading,
     fi_threading_FI_THREAD_COMPLETION, fi_threading_FI_THREAD_DOMAIN,
     fi_threading_FI_THREAD_ENDPOINT, fi_threading_FI_THREAD_FID, fi_threading_FI_THREAD_SAFE,
     fi_threading_FI_THREAD_UNSPEC, fid_av, fid_cq, fid_domain, fid_ep, fid_fabric, fid_mr,
@@ -89,7 +89,8 @@ pub(crate) fn query_info_requiring(
         return Err(error);
     };
     // SAFETY: an owned list from fi_getinfo, read once and freed here.
-    let model = unsafe { (*(*offered).domain_attr).threading };
+    let model = unsafe { domain_attr(offered) }
+        .map_or(fi_threading_FI_THREAD_UNSPEC, |attr| attr.threading);
     unsafe { fi_freeinfo(offered) };
     Err(RdmaError::Configuration(format!(
         "the {} provider offers the {} threading model, but this client polls it for \
@@ -98,6 +99,22 @@ pub(crate) fn query_info_requiring(
         threading_name(model),
         threading_name(required),
     )))
+}
+
+/// The domain attributes of one `fi_info` entry or `None` if the entry or its
+/// attributes are null.
+///
+/// libfabric fills in `domain_attr` on every entry it returns. This checks anyway,
+/// so that a provider that breaks that rule gets skipped instead of crashing the
+/// client.
+///
+/// # Safety
+/// `info` must be null or point to an `fi_info` that stays allocated for as long as
+/// the returned reference is used.
+unsafe fn domain_attr<'a>(info: *const fi_info) -> Option<&'a fi_domain_attr> {
+    // SAFETY: the caller guarantees `info` is null or live, and libfabric keeps a
+    // non-null `domain_attr` allocated for as long as its `fi_info`.
+    unsafe { info.as_ref()?.domain_attr.as_ref() }
 }
 
 /// libfabric's name for a threading model, for a message a reader can act on.
@@ -213,22 +230,10 @@ fn query_info_with(
 /// the host has without a second `fi_getinfo`.
 pub(crate) fn domain_names(list: *mut fi_info) -> Vec<String> {
     let mut names: Vec<String> = Vec::new();
-    // SAFETY: a valid fi_info list from fi_getinfo, only read and walked via `next`.
-    unsafe {
-        let mut node = list;
-        while !node.is_null() {
-            let current = node;
-            node = (*current).next;
-            let name = (*(*current).domain_attr).name;
-            if name.is_null() {
-                continue;
-            }
-            let Ok(name) = CStr::from_ptr(name).to_str() else {
-                continue;
-            };
-            if !names.iter().any(|existing| existing == name) {
-                names.push(name.to_string());
-            }
+    // SAFETY: a valid fi_info list from fi_getinfo, only read.
+    for name in unsafe { entries(list) }.filter_map(|info| unsafe { domain_name(info) }) {
+        if !names.iter().any(|existing| existing == name) {
+            names.push(name.to_string());
         }
     }
     names
@@ -236,18 +241,50 @@ pub(crate) fn domain_names(list: *mut fi_info) -> Vec<String> {
 
 /// The first entry in `list` whose fabric domain is named `want`, or null.
 fn select_domain(list: *mut fi_info, want: &str) -> *mut fi_info {
-    let mut node = list;
-    // SAFETY: a valid fi_info list from fi_getinfo, only read and walked via `next`.
-    unsafe {
-        while !node.is_null() {
-            let name = (*(*node).domain_attr).name;
-            if !name.is_null() && CStr::from_ptr(name).to_str() == Ok(want) {
-                return node;
-            }
-            node = (*node).next;
-        }
+    // SAFETY: a valid fi_info list from fi_getinfo, only read.
+    unsafe { entries(list) }
+        .find(|info| unsafe { domain_name(info) } == Some(want))
+        .map_or(ptr::null_mut(), |info| ptr::from_ref(info).cast_mut())
+}
+
+/// Each entry of an `fi_info` list, in order.
+///
+/// # Safety
+/// `list` must be null or the head of an `fi_info` list that stays allocated for as
+/// long as the entries are used.
+unsafe fn entries<'a>(list: *const fi_info) -> impl Iterator<Item = &'a fi_info> {
+    // SAFETY: the caller guarantees every entry reached through `next` is live.
+    std::iter::successors(unsafe { list.as_ref() }, |info| unsafe {
+        info.next.as_ref()
+    })
+}
+
+/// The fabric domain name of one entry, or `None` if it has no readable name.
+///
+/// # Safety
+/// As for [`domain_attr`].
+unsafe fn domain_name(info: &fi_info) -> Option<&str> {
+    // SAFETY: the caller guarantees `info` is live.
+    let name = unsafe { domain_attr(info) }?.name;
+    if name.is_null() {
+        return None;
     }
-    ptr::null_mut()
+    // SAFETY: libfabric names are NUL-terminated and live as long as their entry.
+    unsafe { CStr::from_ptr(name) }.to_str().ok()
+}
+
+/// The object a successful `fi_*_open` call wrote out, or an error if it wrote null.
+///
+/// # Safety
+/// `pointer` must be null or point to an open object that stays open for as long as
+/// the returned reference is used.
+unsafe fn opened<'a, T>(pointer: *mut T, operation: &'static str) -> Result<&'a mut T, RdmaError> {
+    // SAFETY: the caller guarantees `pointer` is null or live.
+    unsafe { pointer.as_mut() }.ok_or_else(|| RdmaError::Fabric {
+        operation,
+        message: "returned null".into(),
+        errno: None,
+    })
 }
 
 /// Where a registration's remote key comes from, per `FI_MR_PROV_KEY`.
@@ -543,13 +580,17 @@ impl LibfabricEndpoint {
                 "fi_endpoint",
             )?;
             check(
-                fi_ep_bind(endpoint.endpoint, &mut (*endpoint.address_vector).fid, 0),
+                fi_ep_bind(
+                    endpoint.endpoint,
+                    &mut opened(endpoint.address_vector, "fi_av_open")?.fid,
+                    0,
+                ),
                 "fi_ep_bind(av)",
             )?;
             check(
                 fi_ep_bind(
                     endpoint.endpoint,
-                    &mut (*endpoint.completion_queue).fid,
+                    &mut opened(endpoint.completion_queue, "fi_cq_open")?.fid,
                     u64::from(FI_TRANSMIT | FI_RECV),
                 ),
                 "fi_ep_bind(cq)",
@@ -722,12 +763,15 @@ impl Drop for LibfabricEndpoint {
 
 #[cfg(test)]
 pub(crate) mod tests {
-    use super::{LibfabricEndpoint, check, query_info, query_info_requiring};
+    use super::{
+        LibfabricEndpoint, check, domain_attr, domain_names, query_info, query_info_requiring,
+        select_domain,
+    };
     use crate::config::{FabricConfig, Provider};
     use crate::error::RdmaError;
     use ofi_libfabric_sys::bindgen::{
-        fi_cq_entry, fi_cq_read, fi_freeinfo, fi_mr_desc, fi_read, fi_threading_FI_THREAD_FID,
-        fi_threading_FI_THREAD_SAFE, fid_mr,
+        fi_cq_entry, fi_cq_read, fi_domain_attr, fi_freeinfo, fi_info, fi_mr_desc, fi_read,
+        fi_threading_FI_THREAD_FID, fi_threading_FI_THREAD_SAFE, fid_mr,
     };
     use std::ptr;
     use std::time::{Duration, Instant};
@@ -787,6 +831,31 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn a_null_entry_has_no_domain_attributes() {
+        // SAFETY: null is allowed.
+        assert!(unsafe { domain_attr(ptr::null()) }.is_none());
+    }
+
+    #[test]
+    fn an_entry_without_domain_attributes_is_skipped() {
+        // SAFETY: all-zero is a valid `fi_domain_attr` and `fi_info`: null pointers and
+        // zero counts.
+        let mut attributes: fi_domain_attr = unsafe { std::mem::zeroed() };
+        attributes.name = c"eth0".as_ptr().cast_mut();
+        let mut named: fi_info = unsafe { std::mem::zeroed() };
+        named.domain_attr = &raw mut attributes;
+        let mut missing: fi_info = unsafe { std::mem::zeroed() };
+        missing.next = &raw mut named;
+        let list = &raw mut missing;
+
+        // SAFETY: `missing` is live, and its `domain_attr` is null.
+        assert!(unsafe { domain_attr(&raw const missing) }.is_none());
+        assert_eq!(domain_names(list), ["eth0"]);
+        assert_eq!(select_domain(list, "eth0"), &raw mut named);
+        assert!(select_domain(list, "eth1").is_null());
+    }
+
+    #[test]
     fn a_failure_carries_its_errno_and_libfabric_message() {
         // Any negative code will do here; this one is -ENODATA on Linux.
         // What is under test is how check() reports a code, not the code.
@@ -836,7 +905,9 @@ pub(crate) mod tests {
         );
         let list = query_info(&config).expect("tcp should be available");
         // SAFETY: an owned fi_info list from query_info, read once and freed here.
-        let threading = unsafe { (*(*list).domain_attr).threading };
+        let threading = unsafe { domain_attr(list) }
+            .expect("libfabric fills in domain_attr")
+            .threading;
         unsafe { fi_freeinfo(list) };
         assert_eq!(
             threading, fi_threading_FI_THREAD_SAFE,
