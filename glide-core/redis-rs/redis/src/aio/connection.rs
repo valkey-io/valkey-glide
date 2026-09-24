@@ -742,10 +742,11 @@ mod monitor_tests {
         drop(server);
     }
 
-    // The handshake read can over-read more than one line: two lines can share the
-    // segment that carried `+OK`, so both land in the decoder. A single borrowed
-    // stream owns the whole leftover, so it has to hand back both lines in order,
-    // decoding the second from the seeded buffer once the first is consumed.
+    // The handshake read can over-read past the first line: two lines share the segment
+    // that carried `+OK`, and the decoder's fixed 64-byte first read window leaves the
+    // whole first line plus the start of the second in the decoder. A single borrowed
+    // stream owns that leftover, so it has to hand back both lines in order, decoding
+    // the first from the seeded buffer and completing the second from the socket.
     #[tokio::test]
     async fn on_message_delivers_two_buffered_lines() {
         let (client, mut server) = duplex(4096);
@@ -758,14 +759,14 @@ mod monitor_tests {
         let mut monitor = monitor_over(client);
         monitor.monitor().await.unwrap();
 
-        // The read that satisfies `+OK` over-reads a prefix of the two lines; whatever
-        // it buffered has to line up with them, and the stream reads any remainder from
-        // the socket.
+        // Check the precondition: the leftover has to hold the whole first line, plus
+        // however much of the second the read window reached, so the stream decodes one
+        // line from the buffer and completes the next from the socket.
         let two_lines = format!("{MONITOR_LINE}{MONITOR_LINE}");
         let buffered = monitor.0.decoder.buffer();
         assert!(
-            !buffered.is_empty(),
-            "handshake did not buffer any of the monitor lines, so the test would not exercise the two-frame handoff"
+            buffered.starts_with(MONITOR_LINE.as_bytes()),
+            "handshake did not buffer the whole first monitor line: {buffered:?}"
         );
         assert!(
             two_lines.as_bytes().starts_with(buffered),
@@ -801,8 +802,11 @@ mod pubsub_tests {
     use ::tokio::io::{duplex, AsyncWriteExt, DuplexStream};
     use ::tokio::sync::oneshot;
 
-    const CHANNEL: &str = "ch";
-    const PAYLOAD: &str = "hello";
+    // Kept short so the subscribe confirmation (30 bytes) and one message frame
+    // (32 bytes) both fit the decoder's fixed 64-byte first read window, which is what
+    // lets a test distinguish a wholly buffered frame from a partial one.
+    const CHANNEL: &str = "c";
+    const PAYLOAD: &str = "hi";
 
     // The RESP2 confirmation the server sends in reply to SUBSCRIBE.
     fn subscribe_confirmation() -> String {
@@ -848,26 +852,11 @@ mod pubsub_tests {
         );
     }
 
-    // The confirmation is parsed through the combine decoder, whose async read grows
-    // the buffer in increments, so it over-reads a prefix of the message frame rather
-    // than a fixed amount. Asserting that prefix is non-empty and lines up with the
-    // frame is enough to prove the handshake buffered bytes the stream must recover.
-    fn assert_buffered_prefix(buffered: &[u8]) {
-        let frame = message_frame();
-        assert!(
-            !buffered.is_empty(),
-            "handshake did not buffer any of the message frame, so the test would not exercise the handoff"
-        );
-        assert!(
-            frame.as_bytes().starts_with(buffered),
-            "buffered bytes are not a prefix of the message frame: {buffered:?}"
-        );
-    }
-
     // The server can pack the first published message into the same segment as the
     // subscribe confirmation. `subscribe()` reads the confirmation through the decoder,
-    // which over-reads and leaves the whole message frame sitting in `decoder`. The
-    // borrowed `on_message()` has to hand that frame back: dropping the buffer (the
+    // whose first read window is a fixed 64 bytes, so a 30-byte confirmation and a
+    // 32-byte frame arrive together and the whole frame is left sitting in `decoder`.
+    // The borrowed `on_message()` has to hand that frame back: dropping the buffer (the
     // codec built over the bare socket) hangs here, because the socket has nothing
     // left to read.
     #[tokio::test]
@@ -881,7 +870,13 @@ mod pubsub_tests {
         let mut pubsub = pubsub_over(client);
         pubsub.subscribe(CHANNEL).await.unwrap();
 
-        assert_buffered_prefix(pubsub.0.decoder.buffer());
+        // Check the precondition instead of assuming it: the handshake read has to pull
+        // the whole message frame into the decoder, so the socket holds nothing more.
+        assert_eq!(
+            pubsub.0.decoder.buffer(),
+            message_frame().as_bytes(),
+            "handshake did not buffer the whole message frame, so the test would not exercise the handoff"
+        );
 
         // Hold the server end open so a buffer-dropping stream blocks on the socket
         // rather than seeing end of input, which makes a timeout here a real failure signal.
@@ -955,7 +950,11 @@ mod pubsub_tests {
 
         let mut pubsub = pubsub_over(client);
         pubsub.subscribe(CHANNEL).await.unwrap();
-        assert_buffered_prefix(pubsub.0.decoder.buffer());
+        assert_eq!(
+            pubsub.0.decoder.buffer(),
+            message_frame().as_bytes(),
+            "handshake did not buffer the whole message frame"
+        );
 
         {
             let mut first = pubsub.on_message();
@@ -980,11 +979,12 @@ mod pubsub_tests {
         drop(server);
     }
 
-    // The handshake read can over-read more than one message: two messages can share
-    // the segment that carried the subscribe confirmation, so both land in the decoder.
-    // A single borrowed stream owns the whole leftover, so it has to hand back both
-    // messages in order, decoding the second from the seeded buffer once the first is
-    // consumed.
+    // The handshake read can over-read past the first message: two messages share the
+    // segment that carried the subscribe confirmation, and the 64-byte read window
+    // leaves the whole first frame plus the start of the second in the decoder. A
+    // single borrowed stream owns that leftover, so it has to hand back both messages
+    // in order, decoding the first from the seeded buffer and completing the second
+    // from the socket.
     #[tokio::test]
     async fn on_message_delivers_two_buffered_messages() {
         let (client, mut server) = duplex(4096);
@@ -998,13 +998,14 @@ mod pubsub_tests {
         let mut pubsub = pubsub_over(client);
         pubsub.subscribe(CHANNEL).await.unwrap();
 
-        // The decoder over-reads a prefix of the two frames; whatever it buffered has
-        // to line up with them, and the stream reads any remainder from the socket.
+        // Check the precondition: the leftover has to hold the whole first frame, plus
+        // however much of the second the read window reached, so the stream decodes one
+        // frame from the buffer and completes the next from the socket.
         let two_frames = format!("{frame}{frame}");
         let buffered = pubsub.0.decoder.buffer();
         assert!(
-            !buffered.is_empty(),
-            "handshake did not buffer any of the message frames, so the test would not exercise the two-frame handoff"
+            buffered.starts_with(frame.as_bytes()),
+            "handshake did not buffer the whole first message frame: {buffered:?}"
         );
         assert!(
             two_frames.as_bytes().starts_with(buffered),
