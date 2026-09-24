@@ -8,6 +8,7 @@ use futures::{StreamExt, future, stream};
 use glide_logger::log_debug;
 use glide_logger::log_info;
 use glide_logger::log_warn;
+use glide_telemetry::Telemetry;
 use redis::aio::ConnectionLike;
 use redis::cluster_routing::{self, ResponsePolicy, Routable, RoutingInfo, is_readonly_cmd};
 use redis::{AddressResolver, PushInfo, RedisError, RedisResult, RetryStrategy, Value};
@@ -15,7 +16,6 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
-use telemetrylib::Telemetry;
 use tokio::sync::mpsc;
 use tokio::task;
 

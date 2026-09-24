@@ -29,7 +29,7 @@ pub use connection_request::{
     PubSubChannelsOrPatterns, PubSubSubscriptions, ReadFrom, ServiceType, TlsMode,
 };
 
-pub use telemetrylib::*;
+pub use glide_telemetry::*;
 
 pub const DEFAULT_FLUSH_SIGNAL_INTERVAL_MS: u32 = 0;
 

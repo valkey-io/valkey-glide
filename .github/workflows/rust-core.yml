@@ -11,6 +11,7 @@ on:
             - v*
         paths:
             - glide-logger/**
+            - glide-telemetry/**
             - glide-core/**
             - glide-core/redis-rs/redis/src/**
             - ffi/**
@@ -26,6 +27,7 @@ on:
     pull_request:
         paths:
             - glide-logger/**
+            - glide-telemetry/**
             - glide-core/**
             - glide-core/redis-rs/redis/src/**
             - ffi/**
@@ -157,8 +159,8 @@ jobs:
               working-directory: ./glide-core
               run: cargo test --features "proto,socket-layer,standalone_heartbeat"
 
-            - name: Run glide-core telemetry tests
-              working-directory: ./glide-core/telemetry
+            - name: Run glide-telemetry tests
+              working-directory: ./glide-telemetry
               run: cargo test --all-features -- --test-threads=1
               # TODO: Remove `--test-threads=1` once https://github.com/valkey-io/valkey-glide/issues/4057 is resolved
 

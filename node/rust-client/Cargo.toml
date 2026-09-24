@@ -14,11 +14,11 @@ crate-type = ["cdylib"]
 
 # GLIDE dependencies
 glide-logger = { path = "../../glide-logger" }
+glide-telemetry = { path = "../../glide-telemetry" }
 
 # TODO #6905: Update once renamed.
 redis = { path = "../../glide-core/redis-rs/redis", features = ["aio", "tokio-comp", "tokio-rustls-comp"] }
 glide-core = { path = "../../glide-core", features = ["proto"] }
-telemetrylib = { path = "../../glide-core/telemetry" }
 
 # External dependencies
 byteorder = "1"

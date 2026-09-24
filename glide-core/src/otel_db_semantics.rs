@@ -1,9 +1,9 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 use crate::client::Client;
+use glide_telemetry::GlideSpan;
 use redis::{Arg, Cmd};
 use std::borrow::Borrow;
-use telemetrylib::GlideSpan;
 
 /// Defines how command arguments are masked in `db.query.text` to prevent
 /// sensitive values from leaking into telemetry.

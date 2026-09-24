@@ -162,6 +162,7 @@ protoc-*.zip
 glide-sync/ffi
 glide-sync/glide-core
 glide-sync/glide-logger
+glide-sync/glide-telemetry
 glide-sync/glide_shared
 glide-async/python/glide_shared
 
