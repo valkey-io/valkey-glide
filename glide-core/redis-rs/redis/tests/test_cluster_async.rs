@@ -46,8 +46,24 @@ mod cluster_async {
         ))
     }
 
-    const SPANS_JSON: &str = "/tmp/spans.json";
-    const METRICS_JSON: &str = "/tmp/metrics.json";
+    // The OpenTelemetry exporter is a process singleton, so its output files are
+    // scoped to the process too: per-test files would not match what it writes.
+    fn otel_dir() -> &'static std::path::Path {
+        static DIR: std::sync::OnceLock<tempfile::TempDir> = std::sync::OnceLock::new();
+        DIR.get_or_init(|| {
+            tempfile::Builder::new()
+                .prefix("glide-otel")
+                .tempdir()
+                .expect("failed to create OpenTelemetry output dir")
+        })
+        .path()
+    }
+    fn spans_json() -> PathBuf {
+        otel_dir().join("spans.json")
+    }
+    fn metrics_json() -> PathBuf {
+        otel_dir().join("metrics.json")
+    }
     // const SPANS_CLOUDWATCH: &str = "http://localhost:4318/v1/traces";
     // const METRICS_CLOUDWATCH: &str = "http://localhost:4318/v1/metrics";
     const PUBLISH_TIME: u64 = 2000;
@@ -58,12 +74,10 @@ mod cluster_async {
         let config = GlideOpenTelemetryConfigBuilder::default()
             .with_flush_interval(Duration::from_millis(PUBLISH_TIME))
             .with_trace_exporter(
-                GlideOpenTelemetrySignalsExporter::File(PathBuf::from(SPANS_JSON)),
+                GlideOpenTelemetrySignalsExporter::File(spans_json()),
                 Some(100),
             )
-            .with_metrics_exporter(GlideOpenTelemetrySignalsExporter::File(PathBuf::from(
-                METRICS_JSON,
-            )))
+            .with_metrics_exporter(GlideOpenTelemetrySignalsExporter::File(metrics_json()))
             .build();
         if let Err(e) = GlideOpenTelemetry::initialise(config) {
             panic!("Failed to initialize OpenTelemetry: {e}");
@@ -156,7 +170,7 @@ mod cluster_async {
 
     fn read_latest_metrics_json() -> serde_json::Value {
         let file_content =
-            std::fs::read_to_string(METRICS_JSON).expect("Failed to read metrics JSON file");
+            std::fs::read_to_string(metrics_json()).expect("Failed to read metrics JSON file");
         let lines: Vec<&str> = file_content
             .lines()
             .filter(|l| !l.trim().is_empty())
@@ -178,7 +192,7 @@ mod cluster_async {
     }
 
     fn get_start_value(metric_name: &str) -> u64 {
-        let file_content = match std::fs::read_to_string(METRICS_JSON) {
+        let file_content = match std::fs::read_to_string(metrics_json()) {
             Ok(content) => content,
             Err(_) => return 0, // File not found or unreadable
         };
@@ -236,7 +250,7 @@ mod cluster_async {
     fn test_async_open_telemetry_moved_command() {
         let rt = shared_runtime();
         rt.block_on(async {
-            let _ = std::fs::remove_file(METRICS_JSON);
+            let _ = std::fs::remove_file(metrics_json());
             init_otel().await.unwrap();
 
             sleep(Duration::from_millis(PUBLISH_TIME + 100).into()).await;
@@ -312,7 +326,7 @@ mod cluster_async {
     fn test_async_open_telemetry_moved_pipeline_atomic() {
         let rt = shared_runtime();
         rt.block_on(async {
-            let _ = std::fs::remove_file(METRICS_JSON);
+            let _ = std::fs::remove_file(metrics_json());
             init_otel().await.unwrap();
 
             sleep(Duration::from_millis(PUBLISH_TIME + 100).into()).await;
@@ -401,7 +415,7 @@ mod cluster_async {
     fn test_async_open_telemetry_moved_pipeline_non_atomic() {
         let rt = shared_runtime();
         rt.block_on(async {
-            let _ = std::fs::remove_file(METRICS_JSON);
+            let _ = std::fs::remove_file(metrics_json());
             init_otel().await.unwrap();
 
             sleep(Duration::from_millis(PUBLISH_TIME + 100).into()).await;
@@ -487,7 +501,7 @@ mod cluster_async {
     fn test_async_open_telemetry_retry_pipeline_atomic() {
         let rt = shared_runtime();
         rt.block_on(async {
-            let _ = std::fs::remove_file(METRICS_JSON);
+            let _ = std::fs::remove_file(metrics_json());
             init_otel().await.unwrap();
 
             sleep(Duration::from_millis(PUBLISH_TIME + 100).into()).await;
@@ -584,7 +598,7 @@ mod cluster_async {
     fn test_async_open_telemetry_retry_pipeline_non_atomic() {
         let rt = shared_runtime();
         rt.block_on(async {
-            let _ = std::fs::remove_file(METRICS_JSON);
+            let _ = std::fs::remove_file(metrics_json());
             init_otel().await.unwrap();
 
             sleep(Duration::from_millis(PUBLISH_TIME + 100).into()).await;
@@ -689,7 +703,7 @@ mod cluster_async {
     /// Helper to read the spans file and find a span by name.
     fn read_span_from_file(span_name: &str) -> serde_json::Value {
         let file_content =
-            std::fs::read_to_string(SPANS_JSON).expect("Failed to read spans JSON file");
+            std::fs::read_to_string(spans_json()).expect("Failed to read spans JSON file");
         file_content
             .lines()
             .filter(|l| !l.trim().is_empty())
@@ -715,7 +729,7 @@ mod cluster_async {
     fn test_async_open_telemetry_cluster_routed_node_address() {
         let rt = shared_runtime();
         rt.block_on(async {
-            let _ = std::fs::remove_file(SPANS_JSON);
+            let _ = std::fs::remove_file(spans_json());
             init_otel().await.unwrap();
 
             let cluster = TestClusterContext::new(3, 0);
@@ -805,7 +819,7 @@ mod cluster_async {
     fn test_async_open_telemetry_cluster_routed_node_address_pipeline() {
         let rt = shared_runtime();
         rt.block_on(async {
-            let _ = std::fs::remove_file(SPANS_JSON);
+            let _ = std::fs::remove_file(spans_json());
             init_otel().await.unwrap();
 
             let cluster = TestClusterContext::new(3, 0);
