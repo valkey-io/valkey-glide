@@ -26,44 +26,76 @@ public abstract class AbstractSortingParams<T extends AbstractSortingParams<T>> 
 
     protected AbstractSortingParams() {}
 
-    /** Sort in ascending order (default). */
+    /**
+     * Sort in ascending order (default).
+     *
+     * @return this instance, for chaining
+     */
     public T asc() {
         order = Order.ASC;
         return self();
     }
 
-    /** Sort in descending order. */
+    /**
+     * Sort in descending order.
+     *
+     * @return this instance, for chaining
+     */
     public T desc() {
         order = Order.DESC;
         return self();
     }
 
-    /** Sort lexicographically. */
+    /**
+     * Sort lexicographically.
+     *
+     * @return this instance, for chaining
+     */
     public T alpha() {
         alpha = true;
         return self();
     }
 
-    /** Limit the number of returned elements. */
+    /**
+     * Limit the number of returned elements.
+     *
+     * @param offset how many sorted elements to skip
+     * @param count how many elements to return after the offset
+     * @return this instance, for chaining
+     */
     public T limit(int offset, int count) {
         limitOffset = offset;
         limitCount = count;
         return self();
     }
 
-    /** Sort by external key pattern. */
+    /**
+     * Sort by external key pattern.
+     *
+     * @param pattern key pattern whose values are used as sort weights
+     * @return this instance, for chaining
+     */
     public T by(String pattern) {
         byPattern = pattern;
         return self();
     }
 
-    /** Get external key pattern. */
+    /**
+     * Get external key pattern.
+     *
+     * @param pattern key pattern whose values are returned instead of the sorted elements
+     * @return this instance, for chaining
+     */
     public T get(String pattern) {
         getPatterns.add(pattern);
         return self();
     }
 
-    /** Get the parameters as a string array. */
+    /**
+     * Get the parameters as a string array.
+     *
+     * @return the configured options as SORT command arguments
+     */
     public String[] getParams() {
         List<String> params = new ArrayList<>();
         if (byPattern != null) {

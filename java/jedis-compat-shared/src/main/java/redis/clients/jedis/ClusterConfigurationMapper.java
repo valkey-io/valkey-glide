@@ -373,6 +373,8 @@ public class ClusterConfigurationMapper {
      *
      * @param nodes the cluster nodes
      * @param useSsl whether to use SSL
+     * @param jedis5CompatibilityLayer whether to apply Jedis 5.x-shaped rather than 4.x-shaped
+     *     compatibility semantics
      * @return GLIDE cluster configuration
      */
     public static GlideClusterClientConfiguration createDefaultConfig(

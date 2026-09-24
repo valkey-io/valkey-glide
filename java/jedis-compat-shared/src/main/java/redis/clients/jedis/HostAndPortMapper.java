@@ -7,6 +7,11 @@ package redis.clients.jedis;
  */
 public interface HostAndPortMapper {
 
-    /** Map a HostAndPort to another HostAndPort. Used for host mapping in cluster configurations. */
+    /**
+     * Map a HostAndPort to another HostAndPort. Used for host mapping in cluster configurations.
+     *
+     * @param hostAndPort the address reported by the cluster
+     * @return the address to connect to instead, or {@code null} to keep the reported one
+     */
     HostAndPort getHostAndPort(HostAndPort hostAndPort);
 }

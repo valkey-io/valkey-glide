@@ -26,6 +26,8 @@ public class Document {
     /**
      * TODO(search): Return the document relevance score when Valkey Search result mapping is
      * implemented. Currently returns 0.0 as a compatibility stub.
+     *
+     * @return always {@code 0.0} until Valkey Search result mapping is implemented
      */
     public double getScore() {
         return 0.0;

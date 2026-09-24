@@ -9,10 +9,18 @@ import java.io.Closeable;
  */
 public interface ConnectionProvider extends Closeable {
 
-    /** Get a connection from the provider */
+    /**
+     * Get a connection from the provider
+     *
+     * @return a connection to use for the next command
+     */
     Connection getConnection();
 
-    /** Get the client configuration */
+    /**
+     * Get the client configuration
+     *
+     * @return the client configuration this provider was built with
+     */
     JedisClientConfig getClientConfig();
 
     /** Close the provider and all its connections */

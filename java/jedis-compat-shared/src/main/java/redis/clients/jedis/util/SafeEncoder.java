@@ -38,7 +38,8 @@ public final class SafeEncoder {
      * This method takes an object and will convert all bytes[] and list of byte[] and will encode the
      * object in a recursive way.
      *
-     * @param dataToEncode
+     * @param dataToEncode the value to encode; may be a byte[], a collection, a map, or any other
+     *     object, which is returned unchanged
      * @return the object fully encoded
      */
     public static Object encodeObject(Object dataToEncode) {

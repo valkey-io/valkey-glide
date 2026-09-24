@@ -7608,6 +7608,13 @@ public abstract class AbstractGlideJedis extends JedisCommon {
     /**
      * Auto-claims pending messages. Uses GLIDE xautoclaim. Returns Object[]: [String nextStartId,
      * List of StreamEntry claimed].
+     *
+     * @param key stream key
+     * @param group name of the consumer group
+     * @param consumer name of the consumer taking ownership of the entries
+     * @param minIdleTime only claim entries idle for at least this many milliseconds
+     * @param start id to start scanning the pending entries list from
+     * @return a two-element array: the next start id, and the list of claimed entries
      */
     public Object[] xautoclaim(
             String key, String group, String consumer, long minIdleTime, String start) {
@@ -7615,7 +7622,17 @@ public abstract class AbstractGlideJedis extends JedisCommon {
                 "XAUTOCLAIM", () -> glideClient.xautoclaim(key, group, consumer, minIdleTime, start).get());
     }
 
-    /** Auto-claims pending messages with count. Uses GLIDE xautoclaim. */
+    /**
+     * Auto-claims pending messages with count. Uses GLIDE xautoclaim.
+     *
+     * @param key stream key
+     * @param group name of the consumer group
+     * @param consumer name of the consumer taking ownership of the entries
+     * @param minIdleTime only claim entries idle for at least this many milliseconds
+     * @param start id to start scanning the pending entries list from
+     * @param count maximum number of entries to scan
+     * @return a two-element array: the next start id, and the list of claimed entries
+     */
     public Object[] xautoclaim(
             String key, String group, String consumer, long minIdleTime, String start, long count) {
         return executeCommandWithGlide(
@@ -7626,12 +7643,20 @@ public abstract class AbstractGlideJedis extends JedisCommon {
     /**
      * Returns stream info. Uses GLIDE xinfoStream. Returns raw Map; for StreamInfo use {@link
      * #xinfoStreamAsInfo(String)}.
+     *
+     * @param key stream key
+     * @return the raw XINFO STREAM response as a field-to-value map
      */
     public Map<String, Object> xinfoStream(String key) {
         return executeCommandWithGlide("XINFO STREAM", () -> glideClient.xinfoStream(key).get());
     }
 
-    /** Returns stream info as StreamInfo. Uses GLIDE xinfoStream and converts response. */
+    /**
+     * Returns stream info as StreamInfo. Uses GLIDE xinfoStream and converts response.
+     *
+     * @param key stream key
+     * @return the stream info, or {@code null} if the server returned no response
+     */
     public StreamInfo xinfoStreamAsInfo(String key) {
         return executeCommandWithGlide(
                 "XINFO STREAM",
@@ -7681,7 +7706,12 @@ public abstract class AbstractGlideJedis extends JedisCommon {
         return null;
     }
 
-    /** Returns consumer groups info. Uses GLIDE xinfoGroups. */
+    /**
+     * Returns consumer groups info. Uses GLIDE xinfoGroups.
+     *
+     * @param key stream key
+     * @return one entry per consumer group on the stream; empty if it has none
+     */
     public List<StreamGroupInfo> xinfoGroups(String key) {
         return executeCommandWithGlide(
                 "XINFO GROUPS",
@@ -7702,7 +7732,13 @@ public abstract class AbstractGlideJedis extends JedisCommon {
                 });
     }
 
-    /** Returns consumers info for a group. Uses GLIDE xinfoConsumers. */
+    /**
+     * Returns consumers info for a group. Uses GLIDE xinfoConsumers.
+     *
+     * @param key stream key
+     * @param groupName name of the consumer group
+     * @return one entry per consumer in the group; empty if it has none
+     */
     public List<StreamConsumerInfo> xinfoConsumers(String key, String groupName) {
         return executeCommandWithGlide(
                 "XINFO CONSUMERS",
@@ -7765,6 +7801,10 @@ public abstract class AbstractGlideJedis extends JedisCommon {
     /**
      * Send a blocking command to Valkey server. Uses the same implementation as sendCommand since
      * GLIDE handles blocking internally.
+     *
+     * @param cmd the command to send
+     * @param args the command arguments
+     * @return the server's reply
      */
     public Object sendBlockingCommand(ProtocolCommand cmd, String... args) {
         return sendCommand(cmd, args);
@@ -7773,6 +7813,10 @@ public abstract class AbstractGlideJedis extends JedisCommon {
     /**
      * Send a blocking command to Valkey server with byte arrays. Uses the same implementation as
      * sendCommand since GLIDE handles blocking internally.
+     *
+     * @param cmd the command to send
+     * @param args the command arguments
+     * @return the server's reply
      */
     public Object sendBlockingCommand(ProtocolCommand cmd, byte[]... args) {
         return sendCommand(cmd, args);
@@ -7781,6 +7825,8 @@ public abstract class AbstractGlideJedis extends JedisCommon {
     /**
      * Returns the logical database index for this client: {@link JedisClientConfig#getDatabase()} on
      * connect, or the last index passed to {@link #select(int)} after a successful SELECT.
+     *
+     * @return the logical database index this client is currently using
      */
     public int getDB() {
         checkNotClosed();

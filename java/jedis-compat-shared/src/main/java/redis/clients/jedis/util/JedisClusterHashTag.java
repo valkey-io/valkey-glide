@@ -9,6 +9,9 @@ public class JedisClusterHashTag {
 
     /**
      * Check if a key pattern is cluster compliant. Stub implementation for compilation compatibility.
+     *
+     * @param keyPattern the key pattern to check
+     * @return {@code true} if the pattern carries a hash tag, {@code false} otherwise
      */
     public static boolean isClusterCompliantMatchPattern(String keyPattern) {
         if (keyPattern == null) {
@@ -19,7 +22,13 @@ public class JedisClusterHashTag {
         return keyPattern.contains("{") && keyPattern.contains("}");
     }
 
-    /** Extract hash tag from a key. Stub implementation for compilation compatibility. */
+    /**
+     * Extract hash tag from a key. Stub implementation for compilation compatibility.
+     *
+     * @param key the key to inspect
+     * @return the text between the first {@code \{} and the following {@code \}}, or the whole key
+     *     when it carries no hash tag
+     */
     public static String getHashTag(String key) {
         if (key == null) {
             return null;

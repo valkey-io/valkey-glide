@@ -20,13 +20,21 @@ public abstract class AbstractMigrateParams<T extends AbstractMigrateParams<T>> 
 
     protected AbstractMigrateParams() {}
 
-    /** Copy the key instead of moving it. */
+    /**
+     * Copy the key instead of moving it.
+     *
+     * @return this instance, for chaining
+     */
     public T copy() {
         this.copy = true;
         return self();
     }
 
-    /** Replace existing key at destination. */
+    /**
+     * Replace existing key at destination.
+     *
+     * @return this instance, for chaining
+     */
     public T replace() {
         this.replace = true;
         return self();
@@ -35,6 +43,9 @@ public abstract class AbstractMigrateParams<T extends AbstractMigrateParams<T>> 
     /**
      * Set authentication password (AUTH form). If {@link #auth2(String, String)} is called later, it
      * replaces this password-only authentication.
+     *
+     * @param password the password to authenticate with on the destination
+     * @return this instance, for chaining
      */
     public T auth(String password) {
         this.authPassword = password;
@@ -46,6 +57,10 @@ public abstract class AbstractMigrateParams<T extends AbstractMigrateParams<T>> 
     /**
      * Set authentication with username and password (AUTH2 form). Replaces any prior {@link
      * #auth(String)} configuration.
+     *
+     * @param username the username to authenticate with on the destination
+     * @param password the password to authenticate with on the destination
+     * @return this instance, for chaining
      */
     public T auth2(String username, String password) {
         this.auth2Username = username;
@@ -54,7 +69,11 @@ public abstract class AbstractMigrateParams<T extends AbstractMigrateParams<T>> 
         return self();
     }
 
-    /** Get the parameters as a string array. */
+    /**
+     * Get the parameters as a string array.
+     *
+     * @return the configured options as MIGRATE command arguments
+     */
     public String[] getParams() {
         List<String> params = new ArrayList<>();
         if (copy) {

@@ -95,6 +95,7 @@ public abstract class AbstractGeoSearchParam<T extends AbstractGeoSearchParam<T>
      * Limit the number of results with ANY option (may not return closest matches).
      *
      * @param count the maximum number of results
+     * @param any if true, return as soon as enough matches are found rather than the closest ones
      * @return this GeoSearchParam instance
      */
     public T count(int count, boolean any) {
