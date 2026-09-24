@@ -14,7 +14,20 @@ TESTS_SYNC_DIR = PYTHON_DIR / "tests" / "sync_tests"
 
 EXCLUDED_API_FUNCTIONS = {
     "async_only": ["aclose", "done", "result", "set_exception", "set_result"],
-    "sync_only": ["get_min_compressed_size"],
+    "sync_only": [
+        "get_min_compressed_size",
+        "rdma_available",
+        "rdma_usable",
+        "rdma_checksum",
+        "register_rdma_region",
+        "rdma_get",
+        "rdma_set",
+        # RdmaRegion and RdmaWindow members, declared in the same module.
+        "capacity",
+        "closed",
+        "memoryview",
+        "window",
+    ],
 }
 
 EXCLUDED_API_FILENAMES = {
@@ -112,6 +125,8 @@ EXCLUDED_TESTS = {
     ],
     "sync_only": [
         "test_sync_fork",
+        # RDMA is sync-only, and async clients refuse it at creation
+        "test_pool_rejects_rdma_config",
         "sync_poll_for_timestamp_change",
         "get_min_compressed_size",
         # get() with buffer — sync-only FFI path, no async equivalent
@@ -151,6 +166,7 @@ EXCLUDED_TESTS_FILENAMES = {
         "test_async_scope_backends.py",
     ],
     "sync_only": [
+        "test_sync_rdma.py",
         "test_sync_client_side_cache.py",
         "test_sync_freethreading.py",
     ],

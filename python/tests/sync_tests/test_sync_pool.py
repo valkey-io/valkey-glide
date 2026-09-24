@@ -19,6 +19,8 @@ from glide_shared.config import (
     GlideClusterClientConfiguration,
     IamAuthConfig,
     NodeAddress,
+    RdmaConfiguration,
+    RdmaProvider,
     ServerCredentials,
     ServiceType,
 )
@@ -517,6 +519,22 @@ class TestPoolPubsubRejection:
         )
         with pytest.raises(ValueError, match="cannot use a custom IAM"):
             ClientPool(config, PoolConfig(max_size=1, min_idle=0))
+
+
+class TestPoolRdmaRejection:
+    """Pool creation should reject configs with RDMA."""
+
+    @pytest.mark.parametrize(
+        "config_class", [GlideClientConfiguration, GlideClusterClientConfiguration]
+    )
+    def test_pool_rejects_rdma_config(self, config_class):
+        """Refused before any client is created, so no server is needed."""
+        config = config_class(
+            addresses=[_get_standalone_address()],
+            rdma=RdmaConfiguration(provider=RdmaProvider.Tcp()),
+        )
+        with pytest.raises(ValueError, match="RDMA"):
+            ClientPool(config, PoolConfig(max_size=2, min_idle=1))
 
 
 class TestPoolErrorHandling:

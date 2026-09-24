@@ -679,6 +679,12 @@ class BaseClient(CoreCommands):
         Returns:
             Self: A promise that resolves to a connected client instance.
         """
+        if getattr(config, "rdma", None) is not None:
+            raise ConfigurationError(
+                "RDMA is only available on the synchronous client; create a "
+                "glide_sync client to use RdmaConfiguration"
+            )
+
         self = cls(config)
 
         try:
