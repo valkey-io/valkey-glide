@@ -1,9 +1,11 @@
 #![cfg(feature = "cluster")]
 #![allow(dead_code)]
 
+use std::cell::RefCell;
 use std::convert::identity;
 use std::env;
 use std::process;
+use std::rc::Rc;
 use std::thread::sleep;
 use std::time::Duration;
 
@@ -96,6 +98,15 @@ pub struct NodePorts {
     pub bus: u16,
 }
 
+/// What to do when a node fails to start on its assigned ports.
+#[derive(Clone, Copy, Debug)]
+enum PortPolicy {
+    /// Pick new random ports for the next attempt (new clusters).
+    Fresh,
+    /// Keep the same ports (restarting at addresses a client already knows).
+    Fixed,
+}
+
 pub struct RedisCluster {
     pub servers: Vec<RedisServer>,
     pub folders: Vec<TempDir>,
@@ -130,16 +141,8 @@ impl RedisCluster {
         modules: &[Module],
         mtls_enabled: bool,
     ) -> RedisCluster {
-        let ports = (0..nodes)
-            .map(|_| NodePorts {
-                client: get_random_available_port(),
-                // Picked explicitly: valkey's default is `port + 10000`, which it
-                // rejects for any client port above 55535 and which could collide
-                // with another node's client port.
-                bus: get_random_available_port(),
-            })
-            .collect();
-        Self::with_modules_on_ports(ports, replicas, modules, mtls_enabled)
+        let ports = (0..nodes).map(|_| Self::fresh_node_ports()).collect();
+        Self::start(ports, replicas, modules, mtls_enabled, PortPolicy::Fresh)
     }
 
     /// Start a cluster on exactly `ports`, for restarting at addresses a client
@@ -150,9 +153,30 @@ impl RedisCluster {
         modules: &[Module],
         mtls_enabled: bool,
     ) -> RedisCluster {
+        Self::start(ports, replicas, modules, mtls_enabled, PortPolicy::Fixed)
+    }
+
+    fn fresh_node_ports() -> NodePorts {
+        NodePorts {
+            client: get_random_available_port(),
+            // Picked explicitly: valkey's default is `port + 10000`, which it
+            // rejects for any client port above 55535 and which could collide
+            // with another node's client port.
+            bus: get_random_available_port(),
+        }
+    }
+
+    fn start(
+        requested_ports: Vec<NodePorts>,
+        replicas: u16,
+        modules: &[Module],
+        mtls_enabled: bool,
+        port_policy: PortPolicy,
+    ) -> RedisCluster {
         let mut servers = vec![];
         let mut folders = vec![];
         let mut addrs = vec![];
+        let mut ports = vec![];
         let mut tls_paths = None;
 
         let mut is_tls = false;
@@ -171,89 +195,45 @@ impl RedisCluster {
 
         let max_attempts = 5;
 
-        for NodePorts {
-            client: port,
-            bus: cluster_port,
-        } in ports.iter().copied()
-        {
-            servers.push(RedisServer::new_with_addr_tls_modules_and_spawner(
-                ClusterType::build_addr(port),
-                None,
-                tls_paths.clone(),
-                mtls_enabled,
-                modules,
-                |cmd| {
-                    let tempdir = tempfile::Builder::new()
-                        .prefix("redis")
-                        .tempdir()
-                        .expect("failed to create tempdir");
-                    let acl_path = tempdir.path().join("users.acl");
-                    let acl_content = format!(
-                        "user {} on allcommands allkeys >{}",
-                        Self::username(),
-                        Self::password()
-                    );
-                    std::fs::write(&acl_path, acl_content).expect("failed to write acl file");
-                    cmd.arg("--cluster-enabled")
-                        .arg("yes")
-                        .arg("--cluster-port")
-                        .arg(cluster_port.to_string())
-                        .arg("--cluster-config-file")
-                        .arg(tempdir.path().join("nodes.conf"))
-                        .arg("--cluster-node-timeout")
-                        .arg("5000")
-                        .arg("--appendonly")
-                        .arg("yes")
-                        .arg("--aclfile")
-                        .arg(&acl_path);
-                    if is_tls {
-                        cmd.arg("--tls-cluster").arg("yes");
-                        if replicas > 0 {
-                            cmd.arg("--tls-replication").arg("yes");
+        for mut node_ports in requested_ports {
+            let mut cur_attempts = 0;
+            let server = loop {
+                match Self::start_node(
+                    node_ports,
+                    replicas,
+                    modules,
+                    mtls_enabled,
+                    tls_paths.clone(),
+                    is_tls,
+                    &mut folders,
+                ) {
+                    Ok(server) => break server,
+                    Err(err) => {
+                        if cur_attempts == max_attempts {
+                            panic!("{err}");
                         }
-                    }
-                    let addr = format!("127.0.0.1:{port}");
-                    cmd.current_dir(tempdir.path());
-                    folders.push(tempdir);
-                    addrs.push(addr.clone());
-
-                    let mut cur_attempts = 0;
-                    loop {
-                        let mut process = cmd.spawn().unwrap();
-                        sleep(Duration::from_millis(100));
-
-                        match process.try_wait() {
-                            Ok(Some(status)) => {
-                                let err =
-                                    format!("redis server creation failed with status {status:?}");
-                                if cur_attempts == max_attempts {
-                                    panic!("{err}");
-                                }
-                                eprintln!("Retrying: {err}");
-                                cur_attempts += 1;
+                        cur_attempts += 1;
+                        match port_policy {
+                            // `get_random_available_port` releases its probe socket before the
+                            // server binds, so a concurrently starting test can take the port.
+                            PortPolicy::Fresh => {
+                                let next = Self::fresh_node_ports();
+                                eprintln!(
+                                    "Retrying on fresh ports {next:?} (was {node_ports:?}): {err}"
+                                );
+                                node_ports = next;
                             }
-                            Ok(None) => {
-                                let max_attempts = 20;
-                                let mut cur_attempts = 0;
-                                loop {
-                                    if cur_attempts == max_attempts {
-                                        panic!("redis server creation failed: Port {port} closed")
-                                    }
-                                    if port_in_use(&addr) {
-                                        return process;
-                                    }
-                                    eprintln!("Waiting for redis process to initialize");
-                                    sleep(Duration::from_millis(50));
-                                    cur_attempts += 1;
-                                }
-                            }
-                            Err(e) => {
-                                panic!("Unexpected error in redis server creation {e}");
+                            PortPolicy::Fixed => {
+                                eprintln!("Retrying on {node_ports:?}: {err}");
+                                sleep(Duration::from_millis(100));
                             }
                         }
                     }
-                },
-            ));
+                }
+            };
+            addrs.push(format!("127.0.0.1:{}", node_ports.client));
+            ports.push(node_ports);
+            servers.push(server);
         }
 
         let cli_command = ["valkey-cli", "redis-cli"]
@@ -321,6 +301,109 @@ impl RedisCluster {
 
         wait_for_status_ok(&cluster);
         cluster
+    }
+
+    /// Make one attempt to start a cluster node on `node_ports`. Returns `Err`
+    /// (with the process already reaped) if the server exited early, e.g. because
+    /// the port was taken, or never opened its client port.
+    fn start_node(
+        node_ports: NodePorts,
+        replicas: u16,
+        modules: &[Module],
+        mtls_enabled: bool,
+        tls_paths: Option<TlsFilePaths>,
+        is_tls: bool,
+        folders: &mut Vec<TempDir>,
+    ) -> Result<RedisServer, String> {
+        let NodePorts {
+            client: port,
+            bus: cluster_port,
+        } = node_ports;
+        let failure: Rc<RefCell<Option<String>>> = Rc::new(RefCell::new(None));
+        let failure_slot = failure.clone();
+
+        let server = RedisServer::new_with_addr_tls_modules_and_spawner(
+            ClusterType::build_addr(port),
+            None,
+            tls_paths,
+            mtls_enabled,
+            modules,
+            |cmd| {
+                let tempdir = tempfile::Builder::new()
+                    .prefix("redis")
+                    .tempdir()
+                    .expect("failed to create tempdir");
+                let acl_path = tempdir.path().join("users.acl");
+                let acl_content = format!(
+                    "user {} on allcommands allkeys >{}",
+                    Self::username(),
+                    Self::password()
+                );
+                std::fs::write(&acl_path, acl_content).expect("failed to write acl file");
+                cmd.arg("--cluster-enabled")
+                    .arg("yes")
+                    .arg("--cluster-port")
+                    .arg(cluster_port.to_string())
+                    .arg("--cluster-config-file")
+                    .arg(tempdir.path().join("nodes.conf"))
+                    .arg("--cluster-node-timeout")
+                    .arg("5000")
+                    .arg("--appendonly")
+                    .arg("yes")
+                    .arg("--aclfile")
+                    .arg(&acl_path);
+                if is_tls {
+                    cmd.arg("--tls-cluster").arg("yes");
+                    if replicas > 0 {
+                        cmd.arg("--tls-replication").arg("yes");
+                    }
+                }
+                let addr = format!("127.0.0.1:{port}");
+                cmd.current_dir(tempdir.path());
+                folders.push(tempdir);
+
+                let mut process = cmd.spawn().unwrap();
+                sleep(Duration::from_millis(100));
+
+                match process.try_wait() {
+                    Ok(Some(status)) => {
+                        *failure_slot.borrow_mut() = Some(format!(
+                            "redis server creation failed with status {status:?} on port {port}"
+                        ));
+                    }
+                    Ok(None) => {
+                        let max_attempts = 20;
+                        let mut cur_attempts = 0;
+                        loop {
+                            if port_in_use(&addr) {
+                                break;
+                            }
+                            if cur_attempts == max_attempts {
+                                let _ = process.kill();
+                                let _ = process.wait();
+                                *failure_slot.borrow_mut() = Some(format!(
+                                    "redis server creation failed: Port {port} closed"
+                                ));
+                                break;
+                            }
+                            eprintln!("Waiting for redis process to initialize");
+                            sleep(Duration::from_millis(50));
+                            cur_attempts += 1;
+                        }
+                    }
+                    Err(e) => {
+                        panic!("Unexpected error in redis server creation {e}");
+                    }
+                }
+                process
+            },
+        );
+
+        let failed = failure.borrow_mut().take();
+        match failed {
+            Some(err) => Err(err),
+            None => Ok(server),
+        }
     }
 
     // parameter `_mtls_enabled` can only be used if `feature = tls-rustls` is active
