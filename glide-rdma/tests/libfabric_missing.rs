@@ -4,7 +4,7 @@
 
 #![cfg(feature = "libfabric")]
 
-use glide_rdma::{FabricConfig, Provider, RdmaError, RdmaFabric, discover_domains, ensure_loaded};
+use glide_rdma::{ensure_loaded, FabricConfig, Provider, RdmaError, RdmaFabric};
 
 #[test]
 fn a_missing_libfabric_is_a_readable_error_rather_than_a_dead_process() {
@@ -29,19 +29,10 @@ fn a_missing_libfabric_is_a_readable_error_rather_than_a_dead_process() {
         "the error should name the path it tried, got: {detail}"
     );
 
-    // The two public ways in have to say the same thing. The failed load above
-    // is remembered for the life of the process, so no second set_var is needed.
-    let config = FabricConfig::new(Provider::Tcp);
-
-    let error = RdmaFabric::open(&config).expect_err("no libfabric, no fabric");
+    let error =
+        RdmaFabric::open(&FabricConfig::new(Provider::Tcp)).expect_err("no libfabric, no fabric");
     assert!(
         matches!(error, RdmaError::LibfabricUnavailable { .. }),
         "opening a fabric should say libfabric is unavailable, got {error:?}"
-    );
-
-    let error = discover_domains(&config).expect_err("no libfabric, no domains");
-    assert!(
-        matches!(error, RdmaError::LibfabricUnavailable { .. }),
-        "discovery should say libfabric is unavailable, got {error:?}"
     );
 }

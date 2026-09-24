@@ -5,7 +5,7 @@
 
 #![cfg(feature = "libfabric")]
 
-use glide_rdma::{encode_hex, FabricConfig, Provider, RdmaFabric};
+use glide_rdma::{FabricConfig, Provider, RdmaFabric, encode_hex};
 
 /// The whole client-side sequence short of the transfer itself.
 #[test]

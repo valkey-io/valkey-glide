@@ -57,8 +57,8 @@ pub struct RdmaBuffer {
     region_ref: RegionRef,
     length: usize,
     backing: Backing,
-    /// Keeps the domain alive for as long as the registration.
-    fabric: RdmaFabric,
+    /// Never read: held so the domain outlives the registration.
+    _fabric: RdmaFabric,
 }
 
 impl RdmaBuffer {
@@ -74,7 +74,7 @@ impl RdmaBuffer {
             region_ref,
             length,
             backing: Backing::Owned(memory),
-            fabric,
+            _fabric: fabric,
         }
     }
 
@@ -91,7 +91,7 @@ impl RdmaBuffer {
             region_ref,
             length,
             backing: Backing::Shared(memory),
-            fabric,
+            _fabric: fabric,
         }
     }
 
@@ -163,11 +163,6 @@ impl RdmaBuffer {
     /// dropped, revoking through the handle does nothing.
     pub fn revoker(&self) -> RdmaRevoker {
         RdmaRevoker(self.registration.handle())
-    }
-
-    /// The fabric this buffer is registered with.
-    pub fn fabric(&self) -> &RdmaFabric {
-        &self.fabric
     }
 
     /// The host mapping, or `None` for a shared source, which is not writable through

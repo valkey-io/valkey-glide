@@ -5,7 +5,7 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use crate::buffer::RdmaBuffer;
 use crate::config::FabricConfig;
-use crate::endpoint::{LibfabricEndpoint, Registration, domain_names, query_info};
+use crate::endpoint::{LibfabricEndpoint, Registration};
 use crate::error::RdmaError;
 use crate::progress::{ProgressDriver, ProgressGuard};
 use crate::region_ref::RegionRef;
@@ -47,13 +47,6 @@ struct PeerEntry {
 pub struct RdmaSession {
     fabric: RdmaFabric,
     addresses: Vec<Vec<u8>>,
-}
-
-impl RdmaSession {
-    /// Every server address this session depends on.
-    pub fn addresses(&self) -> &[Vec<u8>] {
-        &self.addresses
-    }
 }
 
 impl Drop for RdmaSession {
@@ -158,7 +151,8 @@ impl RdmaFabric {
     }
 
     /// How many distinct peer addresses the address vector currently holds.
-    pub fn peer_count(&self) -> usize {
+    #[cfg(test)]
+    fn peer_count(&self) -> usize {
         self.peers().len()
     }
 
@@ -215,12 +209,6 @@ impl RdmaFabric {
         &self.inner.address
     }
 
-    /// Whether this provider addresses registrations by virtual address rather than by
-    /// offset into the region.
-    pub fn uses_virtual_addressing(&self) -> bool {
-        self.inner.uses_virtual_addressing
-    }
-
     /// Close a fid belonging to this domain, returning libfabric's result code.
     pub(crate) fn fi_close(&self, fid: *mut ofi_libfabric_sys::bindgen::fid) -> i32 {
         // this is the domain synchronization lock
@@ -251,20 +239,9 @@ impl RdmaFabric {
     }
 }
 
-/// Every fabric domain the configured provider offers, deduplicated, in the order
-/// libfabric returns them. Pass one back via [`FabricConfig::with_interface`].
-pub fn discover_domains(config: &FabricConfig) -> Result<Vec<String>, RdmaError> {
-    crate::libfabric_dl::ensure_loaded()?;
-    let list = query_info(config)?;
-    let names = domain_names(list);
-    // SAFETY: the list came from query_info and is freed exactly once here.
-    unsafe { ofi_libfabric_sys::bindgen::fi_freeinfo(list) };
-    Ok(names)
-}
-
 #[cfg(test)]
 mod tests {
-    use super::{RdmaFabric, discover_domains};
+    use super::RdmaFabric;
     use crate::config::{FabricConfig, Provider};
     use std::sync::Arc;
 
@@ -287,7 +264,6 @@ mod tests {
             .open_session(&handshake_of(&fabric))
             .expect("the fabric accepts its own address");
         assert_eq!(fabric.peer_count(), 1);
-        assert_eq!(session.addresses().len(), 1);
 
         drop(session);
         assert_eq!(fabric.peer_count(), 0, "the entry left with the session");
@@ -352,21 +328,6 @@ mod tests {
     }
 
     #[test]
-    fn the_host_reports_its_domains() {
-        let domains =
-            discover_domains(&FabricConfig::new(Provider::Tcp)).expect("discovery failed");
-        assert!(!domains.is_empty(), "tcp reported no domains");
-    }
-
-    /// An interface that does not exist still queries: filtering happens when the
-    /// endpoint is opened, not here.
-    #[test]
-    fn discovery_ignores_the_interface_hint() {
-        let config = FabricConfig::new(Provider::Tcp).with_interface("definitely-not-a-card");
-        assert!(discover_domains(&config).is_ok());
-    }
-
-    #[test]
     fn registers_a_buffer_and_advertises_it() {
         let fabric = fabric();
         let buffer = fabric
@@ -386,7 +347,7 @@ mod tests {
     fn offset_addressing_advertises_zero_for_the_region_start() {
         let fabric = fabric();
         let buffer = fabric.register(vec![0u8; 4096]).unwrap();
-        if fabric.uses_virtual_addressing() {
+        if fabric.inner.uses_virtual_addressing {
             assert_ne!(buffer.region_ref().remote_address, 0);
         } else {
             assert_eq!(buffer.region_ref().remote_address, 0);

@@ -32,7 +32,7 @@ pub use command::{RdmaCommand, ReadReceipt, get, hello, needs_session, set};
 pub use config::{FabricConfig, Provider};
 pub use error::RdmaError;
 #[cfg(feature = "libfabric")]
-pub use fabric::{RdmaFabric, RdmaSession, discover_domains};
+pub use fabric::{RdmaFabric, RdmaSession};
 #[cfg(feature = "libfabric")]
 pub use libfabric_dl::{ensure_loaded, header_api_version};
 #[cfg(feature = "libfabric")]
