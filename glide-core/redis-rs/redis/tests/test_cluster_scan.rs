@@ -1032,15 +1032,22 @@ mod test_cluster_scan_async {
                 break;
             }
             if count == 5 {
+                // The old connection keeps retrying these addresses, so the cluster must come back on them.
+                let ports = cluster.cluster.ports();
                 drop(cluster);
                 let scan_response: RedisResult<(ScanStateRC, Vec<Value>)> = connection
                     .cluster_scan(scan_state_rc.clone(), ClusterScanArgs::default())
                     .await;
                 assert!(scan_response.is_err());
+                cluster = TestClusterContext::restart_on_ports(
+                    ports,
+                    0,
+                    |builder| builder.retries(1),
+                    false,
+                );
                 break;
             };
         }
-        cluster = TestClusterContext::new(3, 0);
         connection = cluster.async_connection(None).await;
         loop {
             let scan_response: RedisResult<(ScanStateRC, Vec<Value>)> = connection
