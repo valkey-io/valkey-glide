@@ -28,8 +28,7 @@ mod test_monitor_handshake_buffering {
     const LONG_PACKED_LINE: &str =
         "+1720000000.000000 [0 127.0.0.1:55501] \"GET\" \"other_key\"\r\n";
     /// The line every scenario waits for, standing in for the command under test.
-    const TARGET_LINE: &str =
-        "+1720000000.500000 [0 127.0.0.1:55502] \"SET\" \"monitor_test_key\" \"monitor_test_val\"\r\n";
+    const TARGET_LINE: &str = "+1720000000.500000 [0 127.0.0.1:55502] \"SET\" \"monitor_test_key\" \"monitor_test_val\"\r\n";
     const CANARY_LINE: &str =
         "+1720000000.100000 [0 127.0.0.1:55503] \"PING\" \"monitor_canary\"\r\n";
 
