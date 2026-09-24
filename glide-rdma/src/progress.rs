@@ -12,7 +12,9 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Condvar, Mutex, PoisonError};
 use std::thread::JoinHandle;
 
-use ofi_libfabric_sys::bindgen::{fi_cq_entry, fi_cq_read, fid_cq};
+use ofi_libfabric_sys::bindgen::{
+    FI_EAVAIL, fi_cq_entry, fi_cq_err_entry, fi_cq_read, fi_cq_readerr, fid_cq,
+};
 
 struct SendCompletionQueue(*mut fid_cq);
 
@@ -111,17 +113,45 @@ fn poll_loop(shared: &ProgressShared) {
         // Drain fully. EFA's rxr provider emulates RMA with a software-segmented protocol that
         // advances only while the target polls, so pacing this with a sleep throttles large
         // transfers.
-        loop {
-            let mut entry = fi_cq_entry {
-                op_context: std::ptr::null_mut(),
-            };
-            let read =
-                unsafe { fi_cq_read(shared.queue.0, std::ptr::from_mut(&mut entry).cast(), 1) };
-            if read <= 0 {
-                break;
-            }
-        }
+        // SAFETY: the queue stays open until this thread is joined; see `SendCompletionQueue`.
+        unsafe { drain(shared.queue.0) };
         std::hint::spin_loop();
+    }
+}
+
+/// Read every entry off `queue`, returning how many of them were errors.
+///
+/// An error entry sits at the front of the queue, and every read returns
+/// `-FI_EAVAIL` until `fi_cq_readerr` takes it off. Nothing waits on these
+/// completions, so an error is read and dropped, the same as a success.
+///
+/// # Safety
+/// `queue` must be an open completion queue that no other thread reads.
+unsafe fn drain(queue: *mut fid_cq) -> usize {
+    let mut errors = 0;
+    loop {
+        let mut entry = fi_cq_entry {
+            op_context: std::ptr::null_mut(),
+        };
+        // SAFETY: the caller guarantees the queue is open, and `entry` has room for
+        // the one entry asked for.
+        let read = unsafe { fi_cq_read(queue, std::ptr::from_mut(&mut entry).cast(), 1) };
+        if read > 0 {
+            continue;
+        }
+        if read != -(FI_EAVAIL as isize) {
+            // Empty (-FI_EAGAIN), or a failure that no entry explains.
+            return errors;
+        }
+        // SAFETY: as above; an all-zero entry is a valid value to be overwritten.
+        let mut error: fi_cq_err_entry = unsafe { std::mem::zeroed() };
+        // SAFETY: the caller guarantees the queue is open, and `error` has room for
+        // one entry.
+        if unsafe { fi_cq_readerr(queue, &mut error, 0) } <= 0 {
+            // Nothing was removed, so reading again would only see it again.
+            return errors;
+        }
+        errors += 1;
     }
 }
 
@@ -154,16 +184,56 @@ impl fmt::Debug for ProgressGuard {
 
 #[cfg(test)]
 mod tests {
-    use super::ProgressDriver;
+    use super::{ProgressDriver, drain};
     use crate::config::{FabricConfig, Provider};
     use crate::endpoint::LibfabricEndpoint;
+    use crate::endpoint::tests::post_failing_read;
+    use ofi_libfabric_sys::bindgen::{fi_close, fi_cq_entry, fi_cq_read};
     use std::sync::atomic::Ordering;
+    use std::time::{Duration, Instant};
 
     fn driver() -> (LibfabricEndpoint, ProgressDriver) {
         let endpoint = LibfabricEndpoint::open(&FabricConfig::new(Provider::Tcp))
             .expect("the tcp provider should open");
         let driver = ProgressDriver::new(endpoint.completion_queue());
         (endpoint, driver)
+    }
+
+    #[test]
+    fn draining_reads_off_an_error_entry() {
+        let mut endpoint = LibfabricEndpoint::open(&FabricConfig::new(Provider::Tcp))
+            .expect("the tcp provider should open");
+        let destination = vec![0u8; 64];
+        // SAFETY: `destination` outlives the region, which is closed below.
+        let region = unsafe { post_failing_read(&mut endpoint, &destination) };
+        let queue = endpoint.completion_queue();
+
+        // The error completes some time after the post.
+        let deadline = Instant::now() + Duration::from_secs(5);
+        let mut errors = 0;
+        while errors == 0 {
+            assert!(
+                Instant::now() < deadline,
+                "the error entry was never drained"
+            );
+            // SAFETY: the queue is open, and only this thread reads it.
+            errors = unsafe { drain(queue) };
+        }
+        assert_eq!(errors, 1);
+
+        let mut entry = fi_cq_entry {
+            op_context: std::ptr::null_mut(),
+        };
+        // SAFETY: as above.
+        let read = unsafe { fi_cq_read(queue, std::ptr::from_mut(&mut entry).cast(), 1) };
+        assert_eq!(
+            read,
+            -(libc::EAGAIN as isize),
+            "the queue is empty, not still reporting the error"
+        );
+
+        // SAFETY: the region is open, and nothing uses it after this.
+        unsafe { fi_close(&raw mut (*region).fid) };
     }
 
     #[test]

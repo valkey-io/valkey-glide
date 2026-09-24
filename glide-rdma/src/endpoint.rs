@@ -721,13 +721,70 @@ impl Drop for LibfabricEndpoint {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::{LibfabricEndpoint, check, query_info, query_info_requiring};
     use crate::config::{FabricConfig, Provider};
     use crate::error::RdmaError;
     use ofi_libfabric_sys::bindgen::{
-        fi_freeinfo, fi_threading_FI_THREAD_FID, fi_threading_FI_THREAD_SAFE,
+        fi_cq_entry, fi_cq_read, fi_freeinfo, fi_mr_desc, fi_read, fi_threading_FI_THREAD_FID,
+        fi_threading_FI_THREAD_SAFE, fid_mr,
     };
+    use std::ptr;
+    use std::time::{Duration, Instant};
+
+    /// Post a read from `endpoint`'s own address under a remote key that no region
+    /// has, so that it completes with an error entry on the completion queue. Returns
+    /// the region registered for the read's destination, for the caller to close.
+    ///
+    /// # Safety
+    /// `into` must stay allocated and unmoved until the returned region is closed.
+    pub(crate) unsafe fn post_failing_read(
+        endpoint: &mut LibfabricEndpoint,
+        into: &[u8],
+    ) -> *mut fid_mr {
+        let own_address = endpoint
+            .local_address()
+            .expect("an endpoint has an address");
+        let peer = endpoint
+            .fi_av_insert(&own_address)
+            .expect("its own address inserts");
+        // SAFETY: the caller keeps `into` alive until the region is closed.
+        let region = unsafe { endpoint.register_remote(into) }.expect("the destination registers");
+        let deadline = Instant::now() + Duration::from_secs(5);
+        loop {
+            // SAFETY: `into` is registered as `region`, and every handle is open.
+            let posted = unsafe {
+                fi_read(
+                    endpoint.endpoint,
+                    into.as_ptr().cast_mut().cast(),
+                    into.len(),
+                    fi_mr_desc(region),
+                    peer,
+                    0,
+                    u64::MAX,
+                    ptr::null_mut(),
+                )
+            };
+            if posted == 0 {
+                return region;
+            }
+            // tcp connects on first use and asks for a retry until it has. Reading the
+            // queue is what moves the connection along.
+            assert_eq!(posted, -(libc::EAGAIN as isize), "fi_read failed");
+            assert!(Instant::now() < deadline, "fi_read never posted");
+            let mut entry = fi_cq_entry {
+                op_context: ptr::null_mut(),
+            };
+            // SAFETY: the queue is open, and `entry` has room for one entry.
+            unsafe {
+                fi_cq_read(
+                    endpoint.completion_queue,
+                    ptr::from_mut(&mut entry).cast(),
+                    1,
+                )
+            };
+        }
+    }
 
     #[test]
     fn a_failure_carries_its_errno_and_libfabric_message() {
