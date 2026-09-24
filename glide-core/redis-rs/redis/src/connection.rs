@@ -1333,10 +1333,9 @@ impl Connection {
         };
         // shutdown connection on protocol error
         if let Err(e) = &result {
-            let shutdown = match e.as_io_error() {
-                Some(e) => e.kind() == io::ErrorKind::UnexpectedEof,
-                None => false,
-            };
+            // Not just UnexpectedEof: a peer killed with data in flight delivers RST,
+            // which surfaces as ConnectionReset and must also mark the socket closed.
+            let shutdown = e.is_connection_dropped();
             if shutdown {
                 // Notify the PushManager that the connection was lost
                 self.push_manager.try_send_raw(&Value::Push {
