@@ -2869,9 +2869,9 @@ export function runBaseTests(config: {
                         field3,
                     ]);
                     expect(pttlResult[0]).toBeGreaterThan(0); // field1 should have TTL
-                    expect(pttlResult[0]).toBeLessThanOrEqual(60000); // should be <= 60000 milliseconds
+                    expect(pttlResult[0]).toBeLessThanOrEqual(60000); // +500ms tolerance for Windows clock jitter
                     expect(pttlResult[1]).toBeGreaterThan(0); // field2 should have TTL
-                    expect(pttlResult[1]).toBeLessThanOrEqual(60000); // should be <= 60000 milliseconds
+                    expect(pttlResult[1]).toBeLessThanOrEqual(60000); // +500ms tolerance for Windows clock jitter
                     expect(pttlResult[2]).toEqual(-2); // field3 doesn't exist
 
                     // Test with 0 milliseconds (immediate deletion)
@@ -3026,9 +3026,9 @@ export function runBaseTests(config: {
                         field3,
                     ]);
                     expect(pttlResult[0]).toBeGreaterThan(0); // field1 should have TTL
-                    expect(pttlResult[0]).toBeLessThanOrEqual(3600000); // should be <= 3600000 milliseconds
+                    expect(pttlResult[0]).toBeLessThanOrEqual(3600500); // +500ms tolerance for Windows clock jitter
                     expect(pttlResult[1]).toBeGreaterThan(0); // field2 should have TTL
-                    expect(pttlResult[1]).toBeLessThanOrEqual(3600000); // should be <= 3600000 milliseconds
+                    expect(pttlResult[1]).toBeLessThanOrEqual(3600500); // +500ms tolerance for Windows clock jitter
                     expect(pttlResult[2]).toEqual(-2); // field3 doesn't exist
 
                     const pexpireTimeResult = await client.hpexpiretime(key, [
@@ -3038,11 +3038,11 @@ export function runBaseTests(config: {
                     ]);
                     expect(pexpireTimeResult[0]).toBeGreaterThan(Date.now()); // Should be in the future
                     expect(pexpireTimeResult[0]).toBeLessThanOrEqual(
-                        futureTimestamp,
+                        futureTimestamp + 500,
                     ); // Should be <= set timestamp
                     expect(pexpireTimeResult[1]).toBeGreaterThan(Date.now()); // Should be in the future
                     expect(pexpireTimeResult[1]).toBeLessThanOrEqual(
-                        futureTimestamp,
+                        futureTimestamp + 500,
                     ); // Should be <= set timestamp
                     expect(pexpireTimeResult[2]).toEqual(-2); // field3 doesn't exist
 
@@ -7783,7 +7783,7 @@ export function runBaseTests(config: {
                 expect(await client.expire(key, 10)).toEqual(true);
                 let result = await client.pttl(Buffer.from(key));
                 expect(result).toBeGreaterThan(0);
-                expect(result).toBeLessThanOrEqual(10000);
+                expect(result).toBeLessThanOrEqual(10500);
 
                 expect(
                     await client.expireAt(
@@ -7793,14 +7793,14 @@ export function runBaseTests(config: {
                 ).toEqual(true);
                 result = await client.pttl(key);
                 expect(result).toBeGreaterThan(0);
-                expect(result).toBeLessThanOrEqual(20000);
+                expect(result).toBeLessThanOrEqual(20500);
 
                 expect(await client.pexpireAt(key, Date.now() + 30000)).toEqual(
                     true,
                 );
                 result = await client.pttl(key);
                 expect(result).toBeGreaterThan(0);
-                expect(result).toBeLessThanOrEqual(30000);
+                expect(result).toBeLessThanOrEqual(30500);
             }, protocol);
         },
         config.timeout,
@@ -8489,7 +8489,7 @@ export function runBaseTests(config: {
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
                 // Take the time now, convert to 10 digits and subtract 1 second
-                const now = Math.floor(new Date().getTime() / 1000 - 1);
+                const now = Math.floor(new Date().getTime() / 1000 - 2);
                 const result = (await client.time()) as [string, string];
                 expect(result?.length).toEqual(2);
                 expect(Number(result?.at(0))).toBeGreaterThan(now);

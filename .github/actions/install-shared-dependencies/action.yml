@@ -5,8 +5,12 @@ inputs:
     os:
         description: "The current operating system"
         required: true
+    rust-toolchain:
+        description: "Rust toolchain to install (e.g. '1.88.0')"
+        required: false
+        default: "stable"
     target:
-        description: "Specified target for rust toolchain, ex. x86_64-apple-darwin"
+        description: "Build target (e.g. 'x86_64-unknown-linux-gnu')"
         required: false
         default: "x86_64-unknown-linux-gnu"
     engine-version:
@@ -41,6 +45,7 @@ runs:
           if: "${{ contains(inputs.target, 'musl') }}"
           env:
               GH_TARGET: ${{ inputs.target }}
+              RUST_TOOLCHAIN: ${{ inputs.rust-toolchain }}
           run: |
               apk update
               RUSTUP_DIR=$(mktemp -d)
@@ -63,7 +68,7 @@ runs:
               wget -O "$RUSTUP_INIT" "$RUSTUP_URL"
               echo "$RUSTUP_SHA256  $RUSTUP_INIT" | sha256sum -c -
               chmod +x "$RUSTUP_INIT"
-              "$RUSTUP_INIT" -y --no-modify-path --default-toolchain stable
+              "$RUSTUP_INIT" -y --no-modify-path --default-toolchain "$RUST_TOOLCHAIN"
               source "$HOME/.cargo/env"
               apk add protobuf-dev musl-dev make gcc envsubst openssl libressl-dev py3-pip
 
@@ -88,10 +93,11 @@ runs:
           with:
               python-version: "3.x"
 
-        - name: Install Rust toolchain
+        - name: Install Rust
           if: "${{ !contains(inputs.target, 'musl') }}"
           uses: ./.github/actions/install-rust
           with:
+              toolchain: ${{ inputs.rust-toolchain }}
               target: ${{ inputs.target }}
 
         - name: Install protoc

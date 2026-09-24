@@ -5,7 +5,7 @@
 //!    `implement_commands!` table (names, generic order, argument lists), and
 //!    the scan-iterator methods against the fork's `commands/macros.rs`
 //!    definitions. Pure Rust — no external interpreter needed. The fork source
-//!    is resolved through `cargo metadata` (the in-tree path dependency).
+//!    is resolved directly from the `redis` path dependency in `Cargo.toml`.
 //!  * `fork_trait_escape_path_*` — locks the compatibility promise that the
 //!    *literal* fork traits (`glide::redis::AsyncCommands` / `Commands`)
 //!    still work on the clients, including generic code bounded on them.
@@ -19,8 +19,9 @@ mod parity;
 fn command_table_matches_fork() {
     match parity::check() {
         Ok(summary) => println!("{summary}"),
-        // TODO #6904: a failure currently prints SKIP and passes (fail-open).
-        // Revisit whether this should fail loudly.
+        // TODO #7154: a Skip currently prints and passes (fail-open). With the
+        // fork now resolved deterministically, remaining Skips are genuine
+        // failures and should fail loudly.
         Err(parity::ParityError::Skip(reason)) => eprintln!("SKIP: {reason}"),
         Err(parity::ParityError::Violations(problems)) => panic!(
             "command table diverges from the fork — PARITY VIOLATIONS ({}):\n - {}",
@@ -42,7 +43,7 @@ fn command_table_matches_fork() {
 async fn via_glide_async_trait<C: glide::AsyncCommands>(
     con: &C,
     key: &str,
-) -> glide::RedisResult<i64> {
+) -> glide::ValkeyResult<i64> {
     con.set::<_, _, ()>(key, 7).await?;
     con.get(key).await
 }
@@ -64,7 +65,7 @@ fn generic_code_on_glide_sync_trait() {
 
     let k = common::key("rrs_glide_generic_sync");
     // Generic bound on GLIDE's blocking trait.
-    fn via_glide_sync_trait<C: Commands>(con: &C, key: &str) -> glide::RedisResult<i64> {
+    fn via_glide_sync_trait<C: Commands>(con: &C, key: &str) -> glide::ValkeyResult<i64> {
         con.set::<_, _, ()>(key, 9)?;
         con.get(key)
     }

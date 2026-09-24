@@ -1515,6 +1515,7 @@ pub(crate) mod shared_client_tests {
     /// slot from the parent client when one is supplied).
     fn scope_request_bytes(server: &BackingServer, configuration: &TestConfiguration) -> Vec<u8> {
         use protobuf::Message as _;
+        let cluster_mode_enabled = matches!(server, BackingServer::Cluster(_));
         let addresses: Vec<redis::ConnectionAddr> = match server {
             BackingServer::Standalone(server) => vec![
                 server
@@ -1527,7 +1528,9 @@ pub(crate) mod shared_client_tests {
                 .map(|c| c.get_server_addresses())
                 .unwrap_or_else(|| get_shared_cluster_addresses(configuration.use_tls)),
         };
-        create_connection_request(&addresses, configuration)
+        let mut request = create_connection_request(&addresses, configuration);
+        request.cluster_mode_enabled = cluster_mode_enabled;
+        request
             .write_to_bytes()
             .expect("serialize scope connection request")
     }
@@ -1565,17 +1568,24 @@ pub(crate) mod shared_client_tests {
                 .await
                 .total_count
                 .fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+            let target = glide_core::scope::resolve_scope_target(Some(&client), routing_slot)
+                .await
+                .expect("slot owner resolvable against live topology");
             glide_core::scope::create_scope_connection(
                 pool.clone(),
                 Some(&client),
                 &bytes,
-                routing_slot,
+                target.clone(),
             )
             .await;
 
             let scope_id = {
                 let mut guard = pool.lock().await;
-                match guard.try_acquire(glide_core::pool::get_scope_registry(), routing_slot) {
+                match guard.try_acquire(
+                    glide_core::pool::get_scope_registry(),
+                    target,
+                    client.current_database(),
+                ) {
                     glide_core::pool::ScopeAcquire::Reused(scope_id) => scope_id,
                     other => panic!("failed to acquire scope (connection not seated): {other:?}"),
                 }
@@ -1591,8 +1601,7 @@ pub(crate) mod shared_client_tests {
         }
 
         async fn send(&self, cmd_name: &str, args: &mut [Vec<u8>]) -> redis::RedisResult<Value> {
-            glide_core::scope::send_scope_command(self.scope_id, cmd_name, args, Some(&self.client))
-                .await
+            glide_core::scope::send_scope_command(self.scope_id, cmd_name, args, &self.client).await
         }
 
         fn release(&self) {
@@ -4529,10 +4538,10 @@ pub(crate) mod shared_client_tests {
     /// (`create_scope_connection`), isolated from the command-time rotation
     /// re-authentication that otherwise masks it.
     ///
-    /// The command is sent with `client: None`, which routes through the raw
-    /// `send_packed_command` fallback in `execute_scope_command`. That fallback
-    /// cannot re-authenticate, so the identity observed here is whatever
-    /// `create_scope_connection`'s init pipeline established and nothing else.
+    /// The command is sent through `execute_scope_command` with `client: None`,
+    /// the raw path that cannot re-authenticate, so the identity observed here is
+    /// whatever `create_scope_connection`'s init pipeline established and nothing
+    /// else. (`send_scope_command` requires a parent and would re-auth.)
     #[cfg(feature = "proto")]
     #[rstest]
     #[serial_test::serial]
@@ -4567,8 +4576,8 @@ pub(crate) mod shared_client_tests {
             })
             .await;
 
-            let mut args: Vec<Vec<u8>> = vec![b"WHOAMI".to_vec()];
-            let response = scope::send_scope_command(scope_id as u64, "ACL", &mut args, None).await;
+            let args: Vec<Vec<u8>> = vec![b"WHOAMI".to_vec()];
+            let response = scope::execute_scope_command(scope_id as u64, "ACL", &args, None).await;
 
             let value = response.expect("ACL WHOAMI through the scope should succeed");
             let whoami = match value {

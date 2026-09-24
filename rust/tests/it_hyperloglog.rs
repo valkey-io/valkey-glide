@@ -51,6 +51,6 @@ matrix_test!(pf_wrong_type_errors, c, {
     // A plain string that is not an HLL raises when counted.
     let k = common::key("wt");
     let _: () = c.set(&k, "not-an-hll-value").await.unwrap();
-    let result: redis::RedisResult<i64> = c.pfcount(&k).await;
+    let result: glide::ValkeyResult<i64> = c.pfcount(&k).await;
     assert!(result.is_err());
 });

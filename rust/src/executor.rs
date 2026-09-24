@@ -1,5 +1,5 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
-//! The command dispatch seam.
+//! The command dispatch trait.
 //!
 //! [`CommandExecutor`] is the single trait every command family builds on. Both
 //! [`crate::GlideClient`] and [`crate::GlideClusterClient`] implement it. All the
@@ -7,21 +7,22 @@
 //! `CommandExecutor`, so a single implementation of this trait unlocks the entire
 //! command surface.
 
-use crate::error::Result;
+use crate::ValkeyResult;
+use crate::cmd::Cmd;
 use crate::routes::Route;
+use crate::value::ValkeyValue;
+use crate::write::ToValkeyArgs;
 use async_trait::async_trait;
-use redis::cluster_routing::RoutingInfo;
-use redis::{Cmd, Value};
 
 /// The low-level command execution interface.
 ///
-/// Implementors forward a fully-built [`Cmd`] to `glide-core` and return the raw
-/// [`Value`] reply (already normalized by core's value-conversion layer).
+/// Implementors forward a fully-built [`Cmd`] to `glide-core` and return the
+/// decoded [`ValkeyValue`] reply.
 #[async_trait]
 pub trait CommandExecutor: Send + Sync {
     /// Execute `cmd`, optionally routed to a specific node/set of nodes (cluster).
-    /// Standalone implementations ignore `routing`.
-    async fn execute_command(&self, cmd: Cmd, routing: Option<RoutingInfo>) -> Result<Value>;
+    /// Standalone implementations ignore `route`.
+    async fn execute_command(&self, cmd: Cmd, route: Option<Route>) -> ValkeyResult<ValkeyValue>;
 }
 
 /// Convenience helpers layered on top of [`CommandExecutor`], available on every
@@ -33,9 +34,9 @@ pub trait CustomCommand: CommandExecutor {
     /// `client.custom_command(&["SET", "key", "value"]).await`.
     ///
     /// The first argument is the command keyword; the rest are its arguments.
-    async fn custom_command<A>(&self, args: &[A]) -> Result<Value>
+    async fn custom_command<A>(&self, args: &[A]) -> ValkeyResult<ValkeyValue>
     where
-        A: redis::ToRedisArgs + Sync,
+        A: ToValkeyArgs + Sync,
     {
         let mut cmd = Cmd::new();
         for a in args {
@@ -46,16 +47,19 @@ pub trait CustomCommand: CommandExecutor {
 
     /// Like [`CustomCommand::custom_command`] but routed (cluster). Ignored for
     /// standalone clients.
-    async fn custom_command_with_route<A>(&self, args: &[A], route: Route) -> Result<Value>
+    async fn custom_command_with_route<A>(
+        &self,
+        args: &[A],
+        route: Route,
+    ) -> ValkeyResult<ValkeyValue>
     where
-        A: redis::ToRedisArgs + Sync,
+        A: ToValkeyArgs + Sync,
     {
         let mut cmd = Cmd::new();
         for a in args {
             cmd.arg(a);
         }
-        let routing = route.to_routing_info(Some(&cmd));
-        self.execute_command(cmd, Some(routing)).await
+        self.execute_command(cmd, Some(route)).await
     }
 }
 

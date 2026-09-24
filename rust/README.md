@@ -1,7 +1,7 @@
 # Valkey GLIDE for Rust (`glide`)
 
 [![CI](https://github.com/valkey-io/valkey-glide/actions/workflows/rust-client.yml/badge.svg)](https://github.com/valkey-io/valkey-glide/actions/workflows/rust-client.yml)
-[![Rust](https://img.shields.io/badge/rust-1.91.1%2B-orange.svg)](https://www.rust-lang.org)
+[![Rust](https://img.shields.io/badge/dynamic/toml?url=https%3A%2F%2Fraw.githubusercontent.com%2Fvalkey-io%2Fvalkey-glide%2Fmain%2Frust%2FCargo.toml&query=%24.package%5B%27rust-version%27%5D&label=rust&suffix=%2B&color=orange)](https://www.rust-lang.org)
 
 A first-class, native **Rust** client for [Valkey](https://valkey.io) and Redis OSS,
 built directly on the shared **`glide-core`** engine that powers the official
@@ -24,9 +24,9 @@ GLIDE binding.
   routing) even where a typed wrapper is not provided, guaranteeing 100%
   functional coverage.
 - **Batching** — `pipe()` pipelines and `MULTI`/`EXEC` transactions, executed
-  typed via `query_glide` (zero extra payload copies) or with GLIDE execution
+  typed via `query_async` (zero extra payload copies) or with GLIDE execution
   controls (`PipelineOptions`: per-call timeout and pipeline retry strategy)
-  via `execute_pipeline`.
+  via `exec`.
 - **Dynamic authentication** — rotate the connection password at runtime with
   `update_connection_password`, or use **AWS IAM** auth (ElastiCache / MemoryDB)
   via `ServerCredentials::iam`.
@@ -61,7 +61,7 @@ should work wherever `glide-core` builds, but are not exercised in CI.
 
 ### Prerequisites
 
-- **Rust 1.91.1+** (the crate and `glide-core` use edition 2024).
+- **Rust** — install via [rustup](https://rustup.rs)
 - **A monorepo checkout** — this crate lives in the `valkey-io/valkey-glide`
   monorepo under `rust/` and links `glide-core` and `redis-rs` via
   in-repo **path** dependencies (see [Status & publishing](#status--publishing)).
@@ -101,8 +101,7 @@ takes a few minutes; subsequent builds are incremental.
 
 Cloning this repository to develop the client? See **[DEVELOPER.md](./DEVELOPER.md)**
 for the full workflow (build, run the unit + live integration tests — which spawn
-a `valkey-server`, set `VALKEY_SERVER_PATH` to point at your binary — lint,
-coverage, and benchmarks).
+a `valkey-server`, set `VALKEY_SERVER_PATH` to point at your binary — lint, and coverage).
 
 ## Quick start (async)
 
@@ -110,7 +109,7 @@ coverage, and benchmarks).
 use glide::{AsyncCommands, GlideClient, GlideClientConfiguration};
 
 #[tokio::main]
-async fn main() -> glide::RedisResult<()> {
+async fn main() -> glide::ValkeyResult<()> {
     let config = GlideClientConfiguration::with_address("localhost", 6379);
     let client = GlideClient::connect(config).await.expect("connect");
 
@@ -127,7 +126,7 @@ async fn main() -> glide::RedisResult<()> {
 use glide::sync::SyncGlideClient;
 use glide::{Commands, GlideClientConfiguration};
 
-fn main() -> glide::RedisResult<()> {
+fn main() -> glide::ValkeyResult<()> {
     let client = SyncGlideClient::connect(
         GlideClientConfiguration::with_address("localhost", 6379),
     ).expect("connect");
@@ -143,7 +142,7 @@ fn main() -> glide::RedisResult<()> {
 ```rust,no_run
 use glide::{GlideClusterClient, GlideClusterClientConfiguration, Route, CustomCommand};
 
-# async fn demo() -> glide::Result<()> {
+# async fn demo() -> glide::ValkeyResult<()> {
 let client = GlideClusterClient::connect(
     GlideClusterClientConfiguration::with_address("localhost", 7000),
 ).await?;
@@ -153,15 +152,23 @@ client.custom_command_with_route(&["PING"], Route::AllPrimaries).await?;
 # Ok(()) }
 ```
 
-See `DESIGN.md` for architecture, and `DEVELOPER.md` for how to
-build, test, and benchmark.
+See `DESIGN.md` for architecture, and `DEVELOPER.md` for how to build and test.
 
 ## Migrating from redis-rs
 
-GLIDE's command API is **source-compatible with the redis-rs fork
-(v0.25.2, predating the upstream license change)**: method names, signatures,
-and wire encoding match, so existing typed call sites compile unchanged with
-`RedisResult` errors. Everything you need is re-exported from `glide`.
+GLIDE's command API **mirrors the redis-rs fork (v0.25.2, before the upstream
+license change)**. Method names, signatures, and wire encoding match, with
+GLIDE-specific equivalents to redis-rs types:
+
+| redis-rs         | GLIDE              |
+|------------------|--------------------|
+| `RedisResult`    | `ValkeyResult`     |
+| `RedisError`     | `GlideError`       |
+| `Value`          | `ValkeyValue`      |
+| `ToRedisArgs`    | `ToValkeyArgs`     |
+| `FromRedisValue` | `FromValkeyValue`  |
+
+To migrate a typed call site, you only rename the type.
 
 Every command is executed by glide-core (multiplexing, cluster routing,
 reconnection, IAM auth), handed over **by value** on GLIDE's zero-extra-copy
@@ -172,15 +179,15 @@ command. The migrations that follow from this are mechanical:
 
 | redis-rs call site            | GLIDE call site                          |
 |-------------------------------|------------------------------------------|
-| `pipe()….query_async(&mut c)` | `pipe()….query_glide(&c)` (`PipelineExt`) |
-| sync `pipe()….query(&mut c)`  | `pipe()….query_glide(&c)` (`sync::PipelineExt`) |
+| `pipe()….query_async(&mut c)` | `pipe()….query_async(&c)` (`PipelineExt`) |
+| sync `pipe()….query(&mut c)`  | `pipe()….query(&c)` (`sync::PipelineExt`) |
 | `cmd("X")….query_async(&mut c)` | `c.glide_send(cmd)` (typed, by value)  |
-| `con.scan_match(pat)` iterators | same call — GLIDE-owned iterator; `next_item()` / `Iterator` yield `RedisResult<RV>` (a `Result` per item) |
+| `con.scan_match(pat)` iterators | same call — GLIDE-owned iterator; `next_item()` / `Iterator` yield `ValkeyResult<RV>` (a `Result` per item) |
 
 ```rust,no_run
 use glide::{AsyncCommands, GlideClient, GlideClientConfiguration, PipelineExt, Script, pipe};
 
-# async fn demo() -> glide::RedisResult<()> {
+# async fn demo() -> glide::ValkeyResult<()> {
 // Standard connection-URL semantics, including rediss:// and database selection:
 let config = GlideClientConfiguration::from_url("redis://user:pass@localhost:6379/2")
     .expect("valid URL");
@@ -190,12 +197,12 @@ let config = GlideClientConfiguration::from_url("redis://user:pass@localhost:637
 client.set::<_, _, ()>("key", 42).await?;
 let value: i64 = client.get("key").await?;
 
-// Pipelines and transactions (zero extra payload copies):
+// Pipelines and transactions:
 let (a, b): (i64, i64) = pipe()
     .atomic()
     .incr("counter", 1)
     .incr("counter", 1)
-    .query_glide(&client)
+    .query_async(&client)
     .await?;
 
 // Lua scripts with EVALSHA caching:
@@ -212,9 +219,9 @@ Notes:
 - Cluster: `GlideClusterClientConfiguration::from_urls([...])` accepts
   seed-node URLs; commands are routed automatically.
 - Mutual TLS: `config.client_identity(cert_pem, key_pem)`.
-- Raw commands: build a `redis::Cmd` and send it typed with
-  `client.glide_send(cmd)` (or untyped with `glide_send_owned` /
-  `custom_command`) — this replaces `cmd().query_async()`, without the
+- Raw commands: build a `glide::Cmd` with `glide::cmd("X")`. Send it typed with
+  `client.glide_send(cmd)`, or untyped with `glide_send_owned` /
+  `custom_command`. This replaces `cmd().query_async()` without the
   connection-object copy.
 - Accepted gaps: no Sentinel / unix sockets / async-std (unsupported by
   glide-core); Pub/Sub stays client-integrated by design; generic code
@@ -246,7 +253,7 @@ cargo test           # everything, incl. live integration tests + doctests
 
 Integration tests auto-discover a `valkey-server`/`redis-server` on `PATH`; point
 them at a specific binary with `VALKEY_SERVER_PATH=/path/to/valkey-server`. See
-`DEVELOPER.md` for coverage and benchmarks.
+`DEVELOPER.md` for coverage.
 
 ## Status & publishing
 

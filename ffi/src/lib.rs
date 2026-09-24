@@ -2641,7 +2641,6 @@ pub unsafe extern "C" fn close_client(client_adapter_ptr: *const c_void) {
     #[cfg(feature = "pool-support")]
     {
         let client_id = client_adapter_ptr as usize as u64;
-        glide_core::pool::get_client_scope_pools().remove(&client_id);
         glide_core::scope::unregister_client(client_id);
     }
 
@@ -4086,6 +4085,7 @@ pub unsafe extern "C-unwind" fn request_cluster_scan(
         ClusterScanArgs::builder().build()
     };
 
+    // TODO #7161: Update to use new glide_core::Client methods.
     let scan_state_cursor = if cursor_id.is_empty() || cursor_id == "0" {
         ScanStateRC::new()
     } else {

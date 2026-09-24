@@ -15,14 +15,17 @@
 use crate::client::{GlideClient, GlideClusterClient};
 use crate::commands::prelude::*;
 use crate::config::{GlideClientConfiguration, GlideClusterClientConfiguration};
-use crate::error::Result;
 use crate::executor::CustomCommand;
 use crate::pipeline_options::PipelineOptions;
 use crate::routes::Route;
-use redis::{ToRedisArgs, Value};
+use crate::write::ToValkeyArgs;
+use crate::{ValkeyResult, ValkeyValue};
 use std::future::Future;
 use std::sync::OnceLock;
 use tokio::runtime::{Builder, Runtime};
+
+mod pipeline;
+pub use pipeline::PipelineExt;
 
 fn runtime() -> &'static Runtime {
     static RUNTIME: OnceLock<Runtime> = OnceLock::new();
@@ -51,7 +54,7 @@ pub struct SyncGlideClient {
 
 impl SyncGlideClient {
     /// Connect using the given standalone configuration (blocking).
-    pub fn connect(config: GlideClientConfiguration) -> Result<Self> {
+    pub fn connect(config: GlideClientConfiguration) -> ValkeyResult<Self> {
         let inner = runtime().block_on(GlideClient::connect(config))?;
         Ok(SyncGlideClient { inner })
     }
@@ -67,7 +70,7 @@ impl SyncGlideClient {
     /// ```rust,no_run
     /// # use glide::sync::SyncGlideClient;
     /// # use glide::{AsyncCommands, GlideClientConfiguration};
-    /// # fn demo(client: SyncGlideClient) -> glide::RedisResult<()> {
+    /// # fn demo(client: SyncGlideClient) -> glide::ValkeyResult<()> {
     /// let value: Option<String> = client.run(|c| async move { c.get("key").await })?;
     /// # let _ = value; Ok(()) }
     /// ```
@@ -85,7 +88,7 @@ impl SyncGlideClient {
         &self,
         password: Option<String>,
         immediate_auth: bool,
-    ) -> Result<()> {
+    ) -> ValkeyResult<()> {
         runtime().block_on(
             self.inner
                 .update_connection_password(password, immediate_auth),
@@ -93,27 +96,24 @@ impl SyncGlideClient {
     }
 
     /// Run an arbitrary command (blocking escape hatch).
-    pub fn custom_command<A: ToRedisArgs + Sync>(&self, args: &[A]) -> Result<Value> {
+    pub fn custom_command<A: ToValkeyArgs + Sync>(&self, args: &[A]) -> ValkeyResult<ValkeyValue> {
         runtime().block_on(self.inner.custom_command(args))
     }
 
-    /// Execute a [`redis::Pipeline`] with GLIDE execution options
-    /// (blocking). See [`crate::GlideClient::execute_pipeline`]; for plain
-    /// typed execution prefer [`PipelineExt::query_glide`].
-    pub fn execute_pipeline(
+    /// Execute a [`crate::Pipeline`] with GLIDE execution options
+    /// (blocking). See [`crate::GlideClient::exec`]; for plain
+    /// typed execution prefer [`PipelineExt::query`].
+    pub fn exec(
         &self,
-        pipeline: &redis::Pipeline,
+        pipeline: &crate::pipeline::Pipeline,
         raise_on_error: bool,
         options: &PipelineOptions,
-    ) -> Result<Vec<Value>> {
-        runtime().block_on(
-            self.inner
-                .execute_pipeline(pipeline, raise_on_error, options),
-        )
+    ) -> ValkeyResult<Vec<ValkeyValue>> {
+        runtime().block_on(self.inner.exec(pipeline, raise_on_error, options))
     }
 
     /// Blocking `PING`.
-    pub fn ping(&self) -> Result<String> {
+    pub fn ping(&self) -> ValkeyResult<String> {
         runtime().block_on(self.inner.ping())
     }
 }
@@ -126,7 +126,7 @@ pub struct SyncGlideClusterClient {
 
 impl SyncGlideClusterClient {
     /// Connect using the given cluster configuration (blocking).
-    pub fn connect(config: GlideClusterClientConfiguration) -> Result<Self> {
+    pub fn connect(config: GlideClusterClientConfiguration) -> ValkeyResult<Self> {
         let inner = runtime().block_on(GlideClusterClient::connect(config))?;
         Ok(SyncGlideClusterClient { inner })
     }
@@ -146,16 +146,16 @@ impl SyncGlideClusterClient {
     }
 
     /// Run an arbitrary command (blocking escape hatch).
-    pub fn custom_command<A: ToRedisArgs + Sync>(&self, args: &[A]) -> Result<Value> {
+    pub fn custom_command<A: ToValkeyArgs + Sync>(&self, args: &[A]) -> ValkeyResult<ValkeyValue> {
         runtime().block_on(self.inner.custom_command(args))
     }
 
     /// Run an arbitrary command with an explicit route (blocking).
-    pub fn custom_command_with_route<A: ToRedisArgs + Sync>(
+    pub fn custom_command_with_route<A: ToValkeyArgs + Sync>(
         &self,
         args: &[A],
         route: Route,
-    ) -> Result<Value> {
+    ) -> ValkeyResult<ValkeyValue> {
         runtime().block_on(self.inner.custom_command_with_route(args, route))
     }
 
@@ -165,44 +165,39 @@ impl SyncGlideClusterClient {
         &self,
         password: Option<String>,
         immediate_auth: bool,
-    ) -> Result<()> {
+    ) -> ValkeyResult<()> {
         runtime().block_on(
             self.inner
                 .update_connection_password(password, immediate_auth),
         )
     }
 
-    /// Execute a [`redis::Pipeline`] with GLIDE execution options,
+    /// Execute a [`crate::pipeline::Pipeline`] with GLIDE execution options,
     /// optionally routed (blocking). See
-    /// [`crate::GlideClusterClient::execute_pipeline`].
-    pub fn execute_pipeline(
+    /// [`crate::GlideClusterClient::exec`].
+    pub fn exec(
         &self,
-        pipeline: &redis::Pipeline,
+        pipeline: &crate::pipeline::Pipeline,
         raise_on_error: bool,
         route: Option<crate::Route>,
         options: &PipelineOptions,
-    ) -> Result<Vec<Value>> {
-        runtime().block_on(
-            self.inner
-                .execute_pipeline(pipeline, raise_on_error, route, options),
-        )
+    ) -> ValkeyResult<Vec<ValkeyValue>> {
+        runtime().block_on(self.inner.exec(pipeline, raise_on_error, route, options))
     }
 
     /// Blocking `PING`.
-    pub fn ping(&self) -> Result<String> {
+    pub fn ping(&self) -> ValkeyResult<String> {
         runtime().block_on(self.inner.ping())
     }
 }
 
-// ---- unified command API dispatch ---------------------------------------------
-// See the async impls in `client/`: commands arrive **by value**, so the
-// blocking typed API costs no `Cmd` clone and no packed-byte round-trip.
+// ---- Command dispatch -------------------------------------------------------
 
-macro_rules! impl_sync_owned_send {
-    ($sync_ty:ty) => {
-        impl crate::commands::core::Commands for $sync_ty {
-            fn glide_send_owned_sync(&self, cmd: redis::Cmd) -> redis::RedisResult<Value> {
-                runtime().block_on(crate::commands::core::AsyncCommands::glide_send_owned(
+macro_rules! impl_sync_command_dispatch {
+    ($ty:ty) => {
+        impl crate::commands::core::Commands for $ty {
+            fn glide_send_command(&self, cmd: crate::cmd::Cmd) -> ValkeyResult<ValkeyValue> {
+                runtime().block_on(crate::commands::core::AsyncCommands::glide_send_command(
                     &self.inner,
                     cmd,
                 ))
@@ -211,83 +206,54 @@ macro_rules! impl_sync_owned_send {
     };
 }
 
-impl_sync_owned_send!(SyncGlideClient);
-impl_sync_owned_send!(SyncGlideClusterClient);
+impl_sync_command_dispatch!(SyncGlideClient);
+impl_sync_command_dispatch!(SyncGlideClusterClient);
 
-// ---- native-copy sync pipelines ----------------------------------------------
-//
-// `query_glide` drives the async `PipelineExt::query_glide` (which hands the
-// built `&Pipeline` to glide-core by reference) on the wrapped async client,
-// so a blocking pipeline copies the payload exactly as many times as the
-// async pipeline path. Drop-in shape: `pipe()...query_glide(&client)`.
+// ---- Script dispatch --------------------------------------------------------
 
-/// A blocking GLIDE client that can run a [`redis::Pipeline`] with
-/// **native copy behavior**. Sealed — implemented only by
-/// [`SyncGlideClient`] and [`SyncGlideClusterClient`].
-pub trait SyncPipelineTarget: sealed::Sealed {
-    /// The wrapped async client type.
-    #[doc(hidden)]
-    type Async: crate::client::GlidePipelineTarget;
-    /// A cheap clone of the wrapped async client (Arc inside).
-    #[doc(hidden)]
-    fn async_conn(&self) -> Self::Async;
+macro_rules! impl_sync_script_invoke {
+    ($ty:ty) => {
+        #[::sealed::sealed]
+        impl crate::script::ScriptInvokeSync for $ty {
+            fn glide_invoke_script(
+                &self,
+                hash: &str,
+                keys: &[Vec<u8>],
+                args: &[Vec<u8>],
+            ) -> ValkeyResult<ValkeyValue> {
+                runtime().block_on(crate::script::ScriptInvoke::glide_invoke_script(
+                    &self.inner,
+                    hash,
+                    keys,
+                    args,
+                ))
+            }
+        }
+    };
 }
 
-mod sealed {
-    pub trait Sealed {}
-    impl Sealed for super::SyncGlideClient {}
-    impl Sealed for super::SyncGlideClusterClient {}
+impl_sync_script_invoke!(SyncGlideClient);
+impl_sync_script_invoke!(SyncGlideClusterClient);
+
+// ---- Pipeline dispatch ------------------------------------------------------
+
+macro_rules! impl_sync_pipeline_dispatch {
+    ($ty:ty) => {
+        #[::sealed::sealed]
+        impl pipeline::SyncPipelineDispatch for $ty {
+            fn glide_dispatch_pipeline<T: crate::value::FromValkeyValue + Send>(
+                &self,
+                pipeline: &crate::pipeline::Pipeline,
+            ) -> ValkeyResult<T> {
+                let async_conn = self.inner.clone();
+                runtime().block_on(crate::client::PipelineExt::query_async(
+                    pipeline,
+                    &async_conn,
+                ))
+            }
+        }
+    };
 }
 
-impl SyncPipelineTarget for SyncGlideClient {
-    type Async = GlideClient;
-    fn async_conn(&self) -> GlideClient {
-        self.inner.clone()
-    }
-}
-
-impl SyncPipelineTarget for SyncGlideClusterClient {
-    type Async = GlideClusterClient;
-    fn async_conn(&self) -> GlideClusterClient {
-        self.inner.clone()
-    }
-}
-
-/// Extension for running a [`redis::Pipeline`] on a blocking GLIDE
-/// client with **native copy behavior** (no packed-byte round-trip).
-///
-/// Like the rest of the sync layer, this blocks on the internal runtime and
-/// therefore **must not be called from within an async context** (doing so
-/// panics with tokio's "cannot block the current thread from within a runtime"
-/// — use the async [`crate::PipelineExt::query_glide`] there instead).
-///
-/// ```no_run
-/// use glide::sync::{PipelineExt, SyncGlideClient};
-/// # fn demo(client: &SyncGlideClient) -> glide::RedisResult<()> {
-/// let (a, b): (i64, i64) = glide::pipe()
-///     .atomic()
-///     .incr("c", 1)
-///     .incr("c", 1)
-///     .query_glide(client)?;
-/// # let _ = (a, b); Ok(()) }
-/// ```
-pub trait PipelineExt {
-    /// Execute this pipeline on a blocking GLIDE client, sending the built
-    /// `Pipeline` to glide-core by reference (native copy count), and decode
-    /// the replies into `T` honoring `.ignore()` markers and transaction
-    /// unwrapping.
-    fn query_glide<C: SyncPipelineTarget, T: redis::FromRedisValue + Send>(
-        &self,
-        con: &C,
-    ) -> redis::RedisResult<T>;
-}
-
-impl PipelineExt for redis::Pipeline {
-    fn query_glide<C: SyncPipelineTarget, T: redis::FromRedisValue + Send>(
-        &self,
-        con: &C,
-    ) -> redis::RedisResult<T> {
-        let async_conn = con.async_conn();
-        runtime().block_on(crate::client::PipelineExt::query_glide(self, &async_conn))
-    }
-}
+impl_sync_pipeline_dispatch!(SyncGlideClient);
+impl_sync_pipeline_dispatch!(SyncGlideClusterClient);

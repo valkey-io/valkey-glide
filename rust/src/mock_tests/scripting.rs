@@ -1,15 +1,15 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 //! Mock-executor unit tests for the scripting & function command family.
 use super::Mock;
-use glide::commands::scripting::ScriptingCommands;
-use redis::Value;
+use crate::ValkeyValue;
+use crate::commands::scripting::ScriptingCommands;
 
 #[tokio::test]
 async fn eval_encodes_numkeys() {
     let m = Mock::int(1);
     let v = m.eval("return 1", &["k1"], &["a1"]).await.unwrap();
     m.assert_args(&["EVAL", "return 1", "1", "k1", "a1"]);
-    assert_eq!(v, Value::Int(1));
+    assert_eq!(v, ValkeyValue::Int(1));
 }
 
 #[tokio::test]
@@ -37,7 +37,7 @@ async fn script_load_returns_sha() {
 
 #[tokio::test]
 async fn script_exists_returns_bools() {
-    let m = Mock::array(vec![Value::Int(1), Value::Int(0)]);
+    let m = Mock::array(vec![ValkeyValue::Int(1), ValkeyValue::Int(0)]);
     assert_eq!(
         m.script_exists(&["sha_a", "sha_b"]).await.unwrap(),
         vec![true, false]
@@ -90,7 +90,7 @@ async fn function_delete_and_flush() {
 #[tokio::test]
 async fn function_flush_mode_encoding() {
     let m = Mock::ok();
-    m.function_flush_mode(glide::commands::options::FlushMode::Async)
+    m.function_flush_mode(crate::commands::options::FlushMode::Async)
         .await
         .unwrap();
     m.assert_args(&["FUNCTION", "FLUSH", "ASYNC"]);
@@ -116,7 +116,7 @@ async fn function_dump_restore_stats_kill() {
     let m = Mock::ok();
     m.function_restore(
         "payload-bytes",
-        glide::commands::options::FunctionRestorePolicy::Append,
+        crate::commands::options::FunctionRestorePolicy::Append,
     )
     .await
     .unwrap();
@@ -144,7 +144,7 @@ async fn script_kill_and_show() {
 
 #[tokio::test]
 async fn fcall_route_encodes_and_routes() {
-    use glide::routes::Route;
+    use crate::routes::Route;
     let m = Mock::bulk("ok");
     m.fcall_route("myfunc", &[] as &[&str], &["a1"], Route::AllPrimaries)
         .await
@@ -158,7 +158,7 @@ async fn fcall_route_encodes_and_routes() {
 
 #[tokio::test]
 async fn fcall_ro_route_encodes_and_routes() {
-    use glide::routes::Route;
+    use crate::routes::Route;
     let m = Mock::bulk("ok");
     m.fcall_ro_route("rofn", &["k1"], &[] as &[&str], Route::RandomNode)
         .await
