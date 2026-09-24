@@ -53,6 +53,8 @@ struct BuilderParams {
     tcp_nodelay: bool,
     cache: Option<Arc<dyn GlideCache>>,
     server_assisted_cache: bool,
+    #[cfg(feature = "rdma")]
+    rdma_fabric: Option<glide_rdma::RdmaFabric>,
     address_resolver: Option<Arc<dyn AddressResolver>>,
     recovery_requests_queue_size: Option<u32>,
 }
@@ -161,6 +163,8 @@ pub struct ClusterParams {
     pub(crate) tcp_nodelay: bool,
     pub(crate) cache: Option<Arc<dyn GlideCache>>,
     pub(crate) server_assisted_cache: bool,
+    #[cfg(feature = "rdma")]
+    pub(crate) rdma_fabric: Option<glide_rdma::RdmaFabric>,
     /// Optional callback for resolving addresses before connection.
     pub(crate) address_resolver: Option<Arc<dyn AddressResolver>>,
     pub(crate) recovery_requests_queue_size: Option<u32>,
@@ -206,6 +210,8 @@ impl ClusterParams {
             tcp_nodelay: value.tcp_nodelay,
             cache: value.cache,
             server_assisted_cache: value.server_assisted_cache,
+            #[cfg(feature = "rdma")]
+            rdma_fabric: value.rdma_fabric,
             address_resolver: value.address_resolver,
             recovery_requests_queue_size: value.recovery_requests_queue_size,
         })
@@ -241,6 +247,8 @@ impl ClusterParams {
             tcp_nodelay: false,
             cache: None,
             server_assisted_cache: false,
+            #[cfg(feature = "rdma")]
+            rdma_fabric: None,
             address_resolver: None,
             recovery_requests_queue_size: None, // will use default of 1000 in buffer_pending_requests
         }
@@ -638,6 +646,16 @@ impl ClusterClientBuilder {
         self
     }
 
+    /// Sets the fabric a connection advertises when it handshakes for RDMA.
+    #[cfg(feature = "rdma")]
+    pub fn rdma_fabric(
+        mut self,
+        rdma_fabric: Option<glide_rdma::RdmaFabric>,
+    ) -> ClusterClientBuilder {
+        self.builder_params.rdma_fabric = rdma_fabric;
+        self
+    }
+
     /// Sets whether server-assisted client-side caching (CLIENT TRACKING) is enabled.
     pub fn server_assisted_cache(mut self, enabled: bool) -> ClusterClientBuilder {
         self.builder_params.server_assisted_cache = enabled;
@@ -732,6 +750,33 @@ impl ClusterClient {
         iam_token_provider: Option<Arc<dyn crate::client::IAMTokenProvider>>,
         cert_params_provider: Option<Arc<dyn crate::client::CertParamsProvider>>,
     ) -> RedisResult<cluster_async::ClusterConnection> {
+        self.get_generic_async_connection(
+            push_sender,
+            pubsub_synchronizer,
+            iam_token_provider,
+            cert_params_provider,
+        )
+        .await
+    }
+
+    /// Basically [`Self::get_async_connection`] over a connection type of the caller's
+    /// choosing. Allows for pairing an RDMA session with a cluster connection.
+    pub async fn get_generic_async_connection<C>(
+        &self,
+        push_sender: Option<mpsc::UnboundedSender<PushInfo>>,
+        pubsub_synchronizer: Option<Arc<dyn crate::pubsub_synchronizer::PubSubSynchronizer>>,
+        iam_token_provider: Option<Arc<dyn crate::client::IAMTokenProvider>>,
+        cert_params_provider: Option<Arc<dyn crate::client::CertParamsProvider>>,
+    ) -> RedisResult<cluster_async::ClusterConnection<C>>
+    where
+        C: cluster_async::Connect
+            + crate::aio::ConnectionLike
+            + Clone
+            + Send
+            + Sync
+            + Unpin
+            + 'static,
+    {
         cluster_async::ClusterConnection::new(
             &self.initial_nodes,
             self.cluster_params.clone(),

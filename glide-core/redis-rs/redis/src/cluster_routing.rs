@@ -743,6 +743,11 @@ fn base_routing(cmd: &[u8]) -> RouteBy {
 
         b"MIGRATE" => RouteBy::ThirdArg,
 
+        // The RDMA transfer commands are of the form:
+        // LO.GET <key> <rkey> <remote-address>
+        // LO.SET <key> <length> <rkey> <remote-address>
+        b"LO.GET" | b"LO.SET" => RouteBy::FirstKey,
+
         b"LMPOP" | b"SINTERCARD" | b"ZDIFF" | b"ZINTER" | b"ZINTERCARD" | b"ZMPOP" | b"ZUNION" => {
             RouteBy::SecondArgAfterKeyCount
         }
@@ -1559,6 +1564,86 @@ mod tests_routing {
     use crate::{cluster_topology::slot, cmd, parser::parse_redis_value, Value};
     use core::panic;
     use std::sync::{Arc, RwLock};
+
+    /// `LO.GET <key> <rkey> <remote-address>`, the read half of a RDMA transfer.
+    fn rdma_get(key: &str) -> crate::Cmd {
+        let mut command = cmd("LO.GET");
+        command
+            .arg(key)
+            .arg("439041101") // rkey
+            .arg("140229324210176"); // remote-address
+        command
+    }
+
+    /// `LO.SET <key> <length> <rkey> <remote-address>`, the write half.
+    fn rdma_set(key: &str) -> crate::Cmd {
+        let mut command = cmd("LO.SET");
+        command
+            .arg(key)
+            .arg("262144") // payload length
+            .arg("439041101") // rkey
+            .arg("140229324210176"); // remote-address
+        command
+    }
+
+    fn rdma_cmd(name: &str, key: &str) -> crate::Cmd {
+        match name {
+            "LO.GET" => rdma_get(key),
+            "LO.SET" => rdma_set(key),
+            other => panic!("not a RDMA transfer command: {other}"),
+        }
+    }
+
+    fn slot_of(routable: &impl Routable) -> u16 {
+        match RoutingInfo::for_routable(routable) {
+            Some(RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(route))) => {
+                route.slot()
+            }
+            other => panic!("expected a single specific node, got {other:?}"),
+        }
+    }
+
+    fn slot_addr_of(routable: &impl Routable) -> SlotAddr {
+        match RoutingInfo::for_routable(routable) {
+            Some(RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(route))) => {
+                route.slot_addr()
+            }
+            other => panic!("expected a single specific node, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_routing_info_rdma_routes_by_its_key() {
+        let mut plain = cmd("GET");
+        plain.arg("foo");
+        let expected = slot_of(&plain);
+
+        for name in ["LO.GET", "LO.SET"] {
+            assert_eq!(
+                slot_of(&rdma_cmd(name, "foo")),
+                expected,
+                "{name} should hash the same key as GET"
+            );
+        }
+    }
+
+    #[test]
+    fn test_routing_info_rdma_reads_are_pinned_to_the_primary() {
+        // Unlike a plain GET: the server holds the transfer's state on the
+        // connection the handshake arrived on, and that is a primary.
+        let mut plain_get = cmd("GET");
+        plain_get.arg("foo");
+        assert_eq!(slot_addr_of(&plain_get), SlotAddr::ReplicaOptional);
+
+        assert_eq!(slot_addr_of(&rdma_get("foo")), SlotAddr::Master);
+        assert_eq!(slot_addr_of(&rdma_set("foo")), SlotAddr::Master);
+    }
+
+    #[test]
+    fn test_rdma_data_commands_trigger_moved() {
+        assert!(RoutingInfo::is_key_routing_command(b"LO.GET"));
+        assert!(RoutingInfo::is_key_routing_command(b"LO.SET"));
+    }
 
     #[test]
     fn test_routing_info_mixed_capatalization() {

@@ -1172,6 +1172,8 @@ mod iam_token_refresh_tests {
         provider: Option<Arc<dyn crate::client::IAMTokenProvider>>,
     ) -> GlideConnectionOptions {
         GlideConnectionOptions {
+            #[cfg(feature = "rdma")]
+            rdma_fabric: None,
             push_sender: None,
             disconnect_notifier: None,
             discover_az: false,
@@ -1647,6 +1649,8 @@ where
         let connection_retry_strategy = cluster_params.reconnect_retry_strategy.unwrap_or_default();
 
         let glide_connection_options = GlideConnectionOptions {
+            #[cfg(feature = "rdma")]
+            rdma_fabric: cluster_params.rdma_fabric.clone(),
             push_sender,
             disconnect_notifier,
             discover_az,

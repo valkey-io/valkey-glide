@@ -400,13 +400,17 @@ impl From<tokio::time::error::Elapsed> for RedisError {
     }
 }
 
+/// How every error parsed from a server's error reply is described, which is how
+/// [`RedisError::is_server_reply`] tells those apart from errors raised locally.
+pub const SERVER_ERROR_DESCRIPTION: &str = "An error was signalled by the server:";
+
 impl From<ServerError> for RedisError {
     fn from(value: ServerError) -> Self {
         // TODO - Consider changing RedisError to explicitly represent whether an error came from the server or not. Today it is only implied.
         match value {
             ServerError::ExtensionError { code, detail } => make_extension_error(code, detail),
             ServerError::KnownError { kind, detail } => {
-                let desc = "An error was signalled by the server:";
+                let desc = SERVER_ERROR_DESCRIPTION;
                 let kind: ErrorKind = kind.into();
                 match detail {
                     Some(detail) => RedisError::from((kind, desc, detail)),
@@ -1009,6 +1013,22 @@ impl RedisError {
             | ErrorRepr::WithDescriptionAndDetail(kind, _, _) => kind,
             ErrorRepr::ExtensionError(_, _) => ErrorKind::ExtensionError,
             ErrorRepr::IoError(_) => ErrorKind::IoError,
+        }
+    }
+
+    /// Whether this error is an error reply the server sent, rather than one
+    /// raised on the client, such as a lost connection.
+    ///
+    /// An error reply proves the server answered the command. A client-side error
+    /// proves nothing about what the server did, even when it has the same kind:
+    /// some local failures are reported as `ResponseError` too.
+    pub fn is_server_reply(&self) -> bool {
+        match self.repr {
+            ErrorRepr::ExtensionError(_, _) => true,
+            ErrorRepr::WithDescription(_, desc) | ErrorRepr::WithDescriptionAndDetail(_, desc, _) => {
+                desc == SERVER_ERROR_DESCRIPTION
+            }
+            ErrorRepr::IoError(_) => false,
         }
     }
 
