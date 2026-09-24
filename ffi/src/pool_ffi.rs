@@ -853,12 +853,17 @@ pub unsafe extern "C" fn glide_scope_prewarm(
     // Create the scope pool (registers it if not exists)
     let pool = glide_core::pool::get_or_create_scope_pool(client_id, conn_bytes.clone());
 
-    // Spawn min_idle background connection creation tasks on the scope runtime.
-    // Resolve slot 0 through the parent client's current topology so cluster
-    // prewarming targets slot 0's primary while standalone prewarming targets its
-    // server. An unresolvable target skips the prewarm connection: this is
-    // expected for a lazily connected cluster client, which has no slot map until
-    // its first command, so it is logged at debug rather than warn.
+    // Spawn min_idle background creation tasks. Each resolves slot 0 through the
+    // parent client's current topology first, then reserves a slot against
+    // max_total via the target-aware helper (for slot accounting; the marker is
+    // never matched, since each task mints its own token — see below), skipping if
+    // full or closed. Resolving before reserving means an unresolvable target never
+    // holds a slot. Each task carries a unique attempt token, so the min_idle
+    // prewarms are distinct dials that do not dedupe against each other or against
+    // a concurrent acquire. An unresolvable target skips the connection —
+    // expected for a lazily connected cluster client (no slot map until its first
+    // command), so logged at debug rather than warn. The guard means a failed or
+    // cancelled prewarm always gives its slot back.
     for _ in 0..min_idle {
         let pool_clone = pool.clone();
         let bytes = conn_bytes.clone();
@@ -875,14 +880,48 @@ pub unsafe extern "C" fn glide_scope_prewarm(
                     return;
                 }
             };
-            scope::create_scope_connection(pool_clone, client.as_ref(), &bytes, target).await;
+            // Reserve respecting max_total; skip if full or closed. Unique token per
+            // prewarm task so they do not dedupe against each other.
+            let token = glide_core::pool::next_scope_attempt_token();
+            let reservation = match pool_clone
+                .lock()
+                .await
+                .reserve_slot_for(target.clone(), token)
+            {
+                Some(reservation) => reservation,
+                None => return,
+            };
+            scope::create_scope_connection(
+                pool_clone,
+                client.as_ref(),
+                &bytes,
+                target,
+                reservation,
+            )
+            .await;
         });
     }
+}
+
+/// Allocate a unique scope-acquire attempt token.
+///
+/// A binding calls this once per `acquire()` and passes the returned value as the
+/// `attempt_token` argument on every retry poll of [`glide_scope_try_acquire`], so
+/// the core dedupes that acquire's retries to a single in-flight creation without
+/// serializing distinct concurrent borrowers. The value is opaque and never reused.
+#[unsafe(no_mangle)]
+pub extern "C" fn glide_scope_next_attempt_token() -> u64 {
+    glide_core::pool::next_scope_attempt_token()
 }
 
 /// Acquire a scope from the client's internal scope pool.
 ///
 /// Returns scope_id >= 0 on success, -1 if pool exhausted, -2 on error.
+///
+/// `attempt_token` identifies one logical acquire. The binding generates it once
+/// per `acquire()` call (via [`glide_core::pool::next_scope_attempt_token`]) and
+/// passes the same value on every retry poll, so the core dedupes a single
+/// acquire's retries while letting distinct concurrent borrowers each dial.
 ///
 /// # Safety
 /// `connection_request_ptr` must point to `connection_request_len` valid bytes.
@@ -892,6 +931,7 @@ pub unsafe extern "C" fn glide_scope_try_acquire(
     connection_request_ptr: *const u8,
     connection_request_len: usize,
     routing_slot: u16,
+    attempt_token: u64,
 ) -> i64 {
     let conn_bytes = if connection_request_ptr.is_null() || connection_request_len == 0 {
         Vec::new()
@@ -901,7 +941,13 @@ pub unsafe extern "C" fn glide_scope_try_acquire(
     };
 
     let runtime = get_pool_runtime();
-    scope::try_acquire_scope(client_id, conn_bytes, runtime.handle(), routing_slot)
+    scope::try_acquire_scope(
+        client_id,
+        conn_bytes,
+        runtime.handle(),
+        routing_slot,
+        attempt_token,
+    )
 }
 
 /// Release a scope back to the pool. Fire-and-forget.
