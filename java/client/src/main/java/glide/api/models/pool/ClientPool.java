@@ -6,6 +6,7 @@ import glide.api.GlideClusterClient;
 import glide.api.models.configuration.BaseClientConfiguration;
 import glide.api.models.configuration.GlideClientConfiguration;
 import glide.api.models.configuration.GlideClusterClientConfiguration;
+import glide.api.models.configuration.GlideCredentialProvider;
 import glide.api.models.configuration.ServerCredentials;
 import glide.api.models.exceptions.ClosingException;
 import glide.ffi.resolvers.GlidePoolResolver;
@@ -75,19 +76,6 @@ public class ClientPool implements AutoCloseable {
                             + "Use the main client's pubsub API instead.");
         }
 
-        // Reject a custom IAM credentials provider — it is a Java callback handed to native per
-        // client, and glidePoolCreate takes only the request bytes with no way to forward it. Failing
-        // here beats silently falling back to the core's default AWS credential chain (a different
-        // principal).
-        ServerCredentials credentials = config.getClientConfig().getCredentials();
-        if (credentials != null
-                && credentials.getIamConfig() != null
-                && credentials.getIamConfig().getCredentialsProvider() != null) {
-            throw new IllegalArgumentException(
-                    "Pool clients cannot use a custom IAM credentials provider. "
-                            + "Configure IAM without a provider to use the default credential chain.");
-        }
-
         // Reject a custom address resolver for the same reason: it is a Java callback forwarded to
         // native per client, and glidePoolCreate cannot receive it. The connectivity probe below runs
         // the resolver and could pass, but pooled connections would then use the untranslated address
@@ -106,6 +94,15 @@ public class ClientPool implements AutoCloseable {
 
         byte[] connectionRequestBytes = serializeConnectionRequest(config.getClientConfig());
 
+        // Extract credential provider from IAM config if set
+        GlideCredentialProvider credentialProvider = null;
+        ServerCredentials creds = config.getClientConfig().getCredentials();
+        if (creds != null
+                && creds.getIamConfig() != null
+                && creds.getIamConfig().getCredentialsProvider() != null) {
+            credentialProvider = creds.getIamConfig().getCredentialsProvider();
+        }
+
         long poolId =
                 GlidePoolResolver.glidePoolCreate(
                         config.getMaxSize(),
@@ -113,7 +110,8 @@ public class ClientPool implements AutoCloseable {
                         config.getIdleTimeout().toMillis(),
                         config.getRequestTimeout().toMillis(),
                         config.getAbandonTimeout().toMillis(),
-                        connectionRequestBytes);
+                        connectionRequestBytes,
+                        credentialProvider);
 
         if (poolId == -1) throw new IllegalArgumentException("Invalid pool configuration");
         if (poolId < 0) throw new RuntimeException("Pool creation failed: " + poolId);

@@ -884,4 +884,98 @@ describe("IAM Auth: Mock Credentials", () => {
         },
         TIMEOUT,
     );
+
+    it(
+        "test_iam_pool_with_custom_credentials_provider",
+        async () => {
+            // Skip test if AWS credentials are not set in OS environment
+            if (!process.env.AWS_ACCESS_KEY_ID) {
+                console.log(
+                    "Skipping IAM pool test - AWS credentials not set in OS environment",
+                );
+                return;
+            }
+
+            let invocations = 0;
+
+            const countingProvider = () => {
+                invocations++;
+                return {
+                    accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
+                    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
+                    sessionToken: process.env.AWS_SESSION_TOKEN,
+                };
+            };
+
+            const iamConfig: IamAuthConfig = {
+                clusterName: IAM_TEST_CLUSTER_NAME,
+                service: ServiceType.Elasticache,
+                region: IAM_TEST_REGION_US_EAST_1,
+                refreshIntervalSeconds: 5,
+                credentialProvider: countingProvider,
+            };
+
+            // Use existing standalone server from global setup
+            const standaloneAddresses = global.STAND_ALONE_ENDPOINT;
+            const server = standaloneAddresses
+                ? await ValkeyCluster.initFromExistingCluster(
+                      false,
+                      parseEndpoints(standaloneAddresses),
+                      getServerVersion,
+                  )
+                : await ValkeyCluster.createCluster(
+                      false,
+                      1,
+                      0,
+                      getServerVersion,
+                  );
+
+            const addresses = server
+                .getAddresses()
+                .map(([host, port]) => ({ host, port }));
+
+            try {
+                const { ClientPool } = await import("../build-ts");
+                const pool = await ClientPool.create(
+                    {
+                        addresses,
+                        credentials: {
+                            username: IAM_USERNAME,
+                            iamConfig,
+                        },
+                        useTLS: global.TLS,
+                    },
+                    { maxSize: 3, minIdle: 1 },
+                );
+
+                try {
+                    const client = await pool.acquire();
+
+                    try {
+                        await assertConnected(
+                            client as GlideClient | GlideClusterClient,
+                        );
+                        expect(
+                            await client.set(
+                                "iam_pool_custom_provider_key",
+                                "iam_pool_custom_provider_value",
+                            ),
+                        ).toBe("OK");
+                        expect(
+                            await client.get("iam_pool_custom_provider_key"),
+                        ).toBe("iam_pool_custom_provider_value");
+                    } finally {
+                        await pool.release(client);
+                    }
+                } finally {
+                    pool.close();
+                }
+
+                expect(invocations).toBeGreaterThan(0);
+            } finally {
+                await server.close();
+            }
+        },
+        TIMEOUT,
+    );
 });

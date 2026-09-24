@@ -4,6 +4,8 @@ package integTest
 
 import (
 	"context"
+	"os"
+	"sync/atomic"
 	"time"
 
 	"github.com/google/uuid"
@@ -218,4 +220,60 @@ func (suite *GlideTestSuite) TestIamAuthenticationAutomaticTokenRefreshStandalon
 	getResult, err := client.Get(context.Background(), key)
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), value, getResult.Value())
+}
+
+// TestIamPoolWithCustomCredentialsProvider tests that a ClientPool with a custom IAM credential
+// provider correctly invokes the provider and executes commands via a borrowed client.
+func (suite *GlideTestSuite) TestIamPoolWithCustomCredentialsProvider() {
+	var invocations int32
+	provider := config.GlideCredentialProvider(func() (config.AwsCredentials, error) {
+		atomic.AddInt32(&invocations, 1)
+		return config.AwsCredentials{
+			AccessKeyID:     os.Getenv("AWS_ACCESS_KEY_ID"),
+			SecretAccessKey: os.Getenv("AWS_SECRET_ACCESS_KEY"),
+			SessionToken:    os.Getenv("AWS_SESSION_TOKEN"),
+		}, nil
+	})
+
+	iamConfig := config.NewIamAuthConfig(
+		TestClusterName,
+		config.ElastiCache,
+		TestRegionUsEast1,
+	).WithRefreshIntervalSeconds(5).
+		WithCredentialProvider(provider)
+
+	credentials, err := config.NewServerCredentialsWithIam(TestIamUsername, iamConfig)
+	require.NoError(suite.T(), err)
+
+	clientCfg := config.NewClientConfiguration().
+		WithAddress(&config.NodeAddress{
+			Host: suite.standaloneHosts[0].Host,
+			Port: suite.standaloneHosts[0].Port,
+		}).
+		WithCredentials(credentials).
+		WithUseTLS(suite.tls)
+
+	poolCfg := glide.DefaultPoolConfig()
+	pool, err := glide.NewClientPool(clientCfg, poolCfg)
+	require.NoError(suite.T(), err, "Failed to create IAM pool - ensure AWS mock credentials are set")
+	defer pool.Close()
+
+	ctx := context.Background()
+	clientID, err := pool.Acquire(ctx)
+	require.NoError(suite.T(), err)
+	defer pool.Release(clientID)
+
+	client, err := pool.GetClient(clientID)
+	require.NoError(suite.T(), err)
+
+	setResult, err := client.Set(ctx, "iam_pool_custom_provider_key", "iam_pool_custom_provider_value")
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), "OK", setResult)
+
+	getResult, err := client.Get(ctx, "iam_pool_custom_provider_key")
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), "iam_pool_custom_provider_value", getResult.Value())
+
+	assert.Greater(suite.T(), atomic.LoadInt32(&invocations), int32(0),
+		"Custom credentials provider was never invoked for pool client")
 }

@@ -5,7 +5,18 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from enum import Enum, IntEnum
-from typing import Any, Callable, Dict, List, Optional, Protocol, Set, Tuple, Union
+from typing import (
+    Any,
+    Awaitable,
+    Callable,
+    Dict,
+    List,
+    Optional,
+    Protocol,
+    Set,
+    Tuple,
+    Union,
+)
 
 from glide_shared.cache import ClientSideCache
 from glide_shared.commands.core_options import PubSubMsg
@@ -345,6 +356,109 @@ class ServiceType(Enum):
     """Amazon MemoryDB service."""
 
 
+class AwsCredentials:
+    """
+    Value object representing AWS credentials for IAM authentication token signing.
+
+    Use the constructor to create instances. ``access_key_id`` and ``secret_access_key``
+    are required and must not be blank. ``session_token`` and ``expires_at_epoch_millis``
+    are optional.
+
+    Example::
+
+        # Long-term credentials:
+        creds = AwsCredentials(
+            access_key_id="AKIAIOSFODNN7EXAMPLE",
+            secret_access_key="wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+        )
+
+        # Session credentials with expiry:
+        creds = AwsCredentials(
+            access_key_id=vault_client.get_access_key_id(),
+            secret_access_key=vault_client.get_secret_access_key(),
+            session_token=vault_client.get_session_token(),
+            expires_at_epoch_millis=int(vault_client.get_expiry().timestamp() * 1000),
+        )
+    """
+
+    def __init__(
+        self,
+        access_key_id: str,
+        secret_access_key: str,
+        session_token: Optional[str] = None,
+        expires_at_epoch_millis: Optional[int] = None,
+    ):
+        if not access_key_id or not access_key_id.strip():
+            raise ValueError("access_key_id must not be blank")
+        if not secret_access_key or not secret_access_key.strip():
+            raise ValueError("secret_access_key must not be blank")
+        if expires_at_epoch_millis is not None and expires_at_epoch_millis < 0:
+            raise ValueError(
+                "expires_at_epoch_millis must be a non-negative integer (epoch milliseconds), "
+                f"got: {expires_at_epoch_millis}"
+            )
+        self.access_key_id = access_key_id
+        self.secret_access_key = secret_access_key
+        self.session_token = session_token
+        self.expires_at_epoch_millis = expires_at_epoch_millis
+
+
+#: A callable that returns AWS credentials for IAM token signing, either
+#: synchronously or asynchronously.
+#:
+#: Both synchronous and async (``async def``) callables are accepted.
+#: Async providers are supported in the **async glide client** — they are driven
+#: via ``asyncio.run_coroutine_threadsafe``. The **sync glide client** only
+#: supports synchronous providers and will raise ``ValueError`` at connection
+#: time if an async callable is supplied.
+#:
+#: **Thread safety**: implementations must be safe for concurrent calls.
+#:
+#: **Promptness**: return quickly; this callable sits on the reconnect path.
+#: The Rust core imposes a 10-second timeout for each credential fetch.
+#:
+#: Example (sync)::
+#:
+#:     def my_provider() -> AwsCredentials:
+#:         return AwsCredentials(
+#:             access_key_id=vault_client.get_access_key_id(),
+#:             secret_access_key=vault_client.get_secret_access_key(),
+#:             session_token=vault_client.get_session_token(),
+#:         )
+#:
+#: Example (async, async client only)::
+#:
+#:     async def my_async_provider() -> AwsCredentials:
+#:         creds = await vault_client.get_credentials_async()
+#:         return AwsCredentials(
+#:             access_key_id=creds.access_key_id,
+#:             secret_access_key=creds.secret_access_key,
+#:             session_token=creds.session_token,
+#:         )
+GlideCredentialProvider = Union[
+    Callable[[], "AwsCredentials"],
+    Callable[[], Awaitable["AwsCredentials"]],
+]
+
+
+def _is_async_callable(fn) -> bool:
+    """Return True if fn is an async function or a callable object with async __call__.
+
+    ``inspect.iscoroutinefunction`` only detects bare ``async def`` functions.
+    Callable objects whose ``__call__`` method is ``async def`` are also async
+    but are missed by a bare ``iscoroutinefunction(fn)`` check. This helper
+    covers both cases.
+    """
+    import inspect
+
+    if inspect.iscoroutinefunction(fn):
+        return True
+    call_method = getattr(fn, "__call__", None)
+    if call_method is not None and inspect.iscoroutinefunction(call_method):
+        return True
+    return False
+
+
 class IamAuthConfig:
     """
     Configuration settings for IAM authentication.
@@ -355,6 +469,9 @@ class IamAuthConfig:
         region (str): The AWS region where the ElastiCache/MemoryDB cluster is located.
         refresh_interval_seconds (Optional[int]): Optional refresh interval in seconds for renewing IAM authentication tokens.
             If not provided, the core will use a default value of 300 seconds (5 min).
+        credential_provider (Optional[GlideCredentialProvider]): Optional callable that returns AWS credentials
+            for IAM token signing. When provided, credentials are fetched from this callable instead of the
+            default AWS credential chain.
     """
 
     def __init__(
@@ -363,11 +480,25 @@ class IamAuthConfig:
         service: ServiceType,
         region: str,
         refresh_interval_seconds: Optional[int] = None,
+        credential_provider: Optional["GlideCredentialProvider"] = None,
     ):
         self.cluster_name = cluster_name
         self.service = service
         self.region = region
         self.refresh_interval_seconds = refresh_interval_seconds
+        if credential_provider is not None:
+            if not callable(credential_provider):
+                raise ValueError(
+                    "credential_provider must be a callable, got: "
+                    f"{type(credential_provider).__name__}"
+                )
+            # Both sync and async providers accepted; the async detection handles
+            # both bare async functions and callable objects with async __call__.
+        self.credential_provider = credential_provider
+        # Track whether the provider is async so bindings can validate at connection time.
+        self._credential_provider_is_async = (
+            credential_provider is not None and _is_async_callable(credential_provider)
+        )
 
 
 class ServerCredentials:

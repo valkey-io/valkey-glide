@@ -19,6 +19,7 @@ from glide_shared.config import (
     GlideClusterClientConfiguration,
 )
 from glide_shared.connection_request import _create_async_connection_request
+from glide_shared.ffi_helpers import create_credential_provider_callback
 
 from .glide_client import (
     _ASYNC_FFI,
@@ -28,6 +29,11 @@ from .glide_client import (
     _async_pipe_lock,
     _client_registry,
 )
+
+# Module-level list that keeps CFFI credential-provider callbacks alive after
+# pool.close(). Rust's IAM refresh task may still invoke the callback briefly
+# after close(). Callbacks are removed after a fixed grace period (15 seconds).
+_pinned_credential_callbacks: list = []
 
 
 @dataclass
@@ -61,6 +67,8 @@ class AsyncClientPool:
         "_pool_id",
         "_cache_lock",
         "_is_cluster",
+        "_credential_provider_callback_ref",
+        "_probe_callback_refs",
     )
 
     @classmethod
@@ -91,6 +99,15 @@ class AsyncClientPool:
             ClientClass = GlideClusterClient if pool._is_cluster else GlideClient
             probe = await ClientClass.create(client_config)
             await probe.close()
+            # Keep the probe's CFFI callback alive until the pool is closed.
+            # After probe.close(), Rust decrements the Arc but a background
+            # IAM token-refresh task may still be running and may invoke the
+            # callback.  If the Python object is GC'd first, the CFFI closure
+            # is freed -> SIGSEGV.  Holding a reference here prevents that.
+            if getattr(probe, "_credential_provider_callback_ref", None) is not None:
+                pool._probe_callback_refs.append(
+                    probe._credential_provider_callback_ref
+                )
         except Exception:
             pool.close()
             raise
@@ -120,6 +137,8 @@ class AsyncClientPool:
         self._client_cache: dict = {}
         self._cache_lock = threading.Lock()
         self._is_cluster = isinstance(client_config, GlideClusterClientConfiguration)
+        self._credential_provider_callback_ref = None
+        self._probe_callback_refs: list = []
 
         # Serialize connection request. Route through the shared helper so
         # pooled clients honour lib_name / client_info_tag exactly like direct
@@ -161,6 +180,43 @@ class AsyncClientPool:
         client_type.async_client.failure_callback = self._lib.noop_failure_callback
         client_type.async_client.allow_stack_response = False
 
+        # Extract credential provider from IAM config if set
+        _credential_provider_fn = None
+        if (
+            hasattr(client_config, "credentials")
+            and client_config.credentials is not None
+            and hasattr(client_config.credentials, "iam_config")
+            and client_config.credentials.iam_config is not None
+            and hasattr(client_config.credentials.iam_config, "credential_provider")
+            and client_config.credentials.iam_config.credential_provider is not None
+        ):
+            _credential_provider_fn = (
+                client_config.credentials.iam_config.credential_provider
+            )
+
+        # Get the event loop for async credential providers
+        try:
+            import asyncio as _asyncio
+
+            _event_loop = _asyncio.get_running_loop()
+        except RuntimeError:
+            _event_loop = None
+
+        credential_provider_callback = create_credential_provider_callback(
+            self._ffi, _credential_provider_fn, event_loop=_event_loop
+        )
+        if _credential_provider_fn is not None:
+            # Keep a reference so the CFFI callback is not garbage-collected
+            self._credential_provider_callback_ref = credential_provider_callback
+
+        # Cast to void* for CFFI backward compat: pre-1.8.3 CFFI does not
+        # auto-convert typed function pointers to void* parameters.
+        credential_provider_ptr = (
+            self._ffi.cast("void *", credential_provider_callback)
+            if credential_provider_callback != self._ffi.NULL
+            else self._ffi.NULL
+        )
+
         buf = self._ffi.from_buffer(self._conn_req_bytes)
         pool_id = self._lib.glide_pool_create(
             self._pool_config.max_size,
@@ -171,6 +227,8 @@ class AsyncClientPool:
             self._ffi.cast("const uint8_t*", buf),
             len(self._conn_req_bytes),
             client_type,
+            credential_provider_ptr,
+            0,  # credential_client_id: not used in Python (direct CFFI callback)
         )
         if pool_id < 0:
             raise RuntimeError(f"Failed to create pool: error code {pool_id}")
@@ -257,6 +315,11 @@ class AsyncClientPool:
             # (set in create_client_internal via the pre-assigned ID).
             # Register so the pipe reader routes responses here.
             client._pipe_client_id = client_id
+            # Ensure the Rust adapter's pipe_client_id matches the Python-side
+            # client_id.  When a credential_provider is set, the adapter may
+            # have been created with a different ffi_client_id; this call
+            # forces the correct pipe routing for async response delivery.
+            self._lib.glide_pool_set_pipe_client_id(client_id, client_id)
             try:
                 client._loop = asyncio.get_running_loop()
             except RuntimeError:
@@ -310,6 +373,42 @@ class AsyncClientPool:
         )
         return total[0]
 
+    def _pin_callbacks_with_grace_period(self) -> None:
+        """Pin CFFI credential callbacks for 15 s after pool destruction.
+
+        Rust's IAM refresh task may fire after ``glide_pool_destroy`` and
+        invoke the credential-provider callback.  If the Python object is
+        GC'd first the CFFI closure is freed — causing a SIGSEGV.  Keeping
+        the callbacks in a module-level list for 15 s (Rust's 10-second
+        callback deadline + margin) prevents that.
+        """
+        callbacks = list(self._probe_callback_refs)
+        if self._credential_provider_callback_ref is not None:
+            callbacks.append(self._credential_provider_callback_ref)
+        if not callbacks:
+            return
+
+        _pinned_credential_callbacks.extend(callbacks)
+
+        def _unpin(refs=callbacks):
+            for cb in refs:
+                try:
+                    _pinned_credential_callbacks.remove(cb)
+                except ValueError:
+                    pass
+
+        try:
+            asyncio.get_running_loop().call_later(15.0, _unpin)
+        except RuntimeError:
+            # No running event loop — use a daemon thread as fallback.
+            import time
+
+            def _unpin_thread(refs=callbacks):
+                time.sleep(15)
+                _unpin(refs)
+
+            threading.Thread(target=_unpin_thread, daemon=True).start()
+
     def close(self):
         if not self._closed:
             self._closed = True
@@ -317,6 +416,8 @@ class AsyncClientPool:
                 _client_registry.pop(cid, None)
             self._lib.glide_pool_destroy(self._pool_id)
             self._client_cache.clear()
+            self._pin_callbacks_with_grace_period()
+            self._probe_callback_refs.clear()
 
     async def aclose(self):
         self.close()

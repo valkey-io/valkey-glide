@@ -96,6 +96,11 @@ EXCLUDED_TESTS = {
         # Abandon detection tests — async-only (monitor runs on tokio runtime)
         "test_pool_abandon_detection",
         "test_pool_abandon_detection_disabled",
+        # Pool credential provider wiring tests — async-only (no sync pool)
+        "test_credential_provider_callback_created_when_iam_configured",
+        "test_null_callback_when_no_credential_provider",
+        "test_pool_init_forwards_void_ptr_to_glide_pool_create",
+        "my_provider",
     ],
     "sync_only": [
         "test_sync_fork",
@@ -126,6 +131,8 @@ EXCLUDED_TESTS = {
         "acl_glide_sync_client",
         "glide_sync_client",
         "management_sync_client",
+        # Sync-only pool test: sync client rejects async credential providers
+        "test_iam_sync_pool_rejects_credential_provider",
     ],
 }
 
