@@ -126,6 +126,14 @@ libfabric on the runtime machine.
 Together, (3) and (4) mean a release builder needs neither `libfabric-dev` nor
 `libclang`.
 
+### License
+
+libfabric is offered under a choice of the BSD-2-Clause license or GPL-2.0-only;
+see `COPYING`. Valkey GLIDE uses and redistributes this crate, including the
+vendored headers, under the BSD-2-Clause option. `COPYING` is kept word for word
+from upstream, because the BSD license requires the copyright notice and license
+text to travel with the code.
+
 ### Regenerating the bindings
 
 After changing anything under `include/`:

@@ -16,7 +16,8 @@
 # licenses. You may choose to be licensed under the terms of the BSD
 # license or the GNU General Public License (GPL) Version 2.
 #
-# See COPYING file for full license details.
+# See COPYING file for full license details. Valkey GLIDE uses this crate, and the
+# vendored headers, under the BSD-2-Clause option.
 
 [package]
 name = "ofi-libfabric-sys"
