@@ -131,11 +131,16 @@ where
         crate::parser::parse_redis_value_async(&mut self.decoder, &mut self.con).await
     }
 
-    /// Takes out the bytes the decoder read past the last parsed response.
+    /// Takes out the bytes the decoder read past the last parsed response, leaving the
+    /// decoder empty so those bytes are delivered exactly once.
     ///
-    /// Ownership moves to the caller, so these bytes are parsed exactly once.
-    /// `combine`'s decoder has no in-place clear, so the reset is a replacement,
-    /// which is also how the decoder is built in the first place.
+    /// `combine`'s decoder has no in-place clear, so emptying it means replacing it,
+    /// which is also how it is built in the first place. Replacing it is only safe
+    /// because every caller runs after a complete response parse, so there is never a
+    /// half-parsed frame whose progress would be thrown away.
+    ///
+    /// The caller owns the bytes from here on, so a stream built with them and then
+    /// dropped without being read discards them rather than returning them here.
     fn take_decoder_buffer(&mut self) -> bytes::BytesMut {
         let leftover = bytes::BytesMut::from(self.decoder.buffer());
         self.decoder = combine::stream::Decoder::new();
@@ -395,9 +400,8 @@ where
     /// The message itself is still generic and can be converted into an appropriate type through
     /// the helper methods on it.
     pub fn on_message(&mut self) -> impl Stream<Item = Msg> + '_ {
-        // Hand the buffered bytes to the stream rather than copying them: the stream
-        // owns them now, so leaving a copy behind would replay delivered messages on
-        // the next call.
+        // Taking the bytes leaves the decoder empty, so a later call cannot deliver a
+        // message this stream already delivered.
         let leftover = self.0.take_decoder_buffer();
         framed_with_leftover(&mut self.0.con, leftover)
             .filter_map(|msg| Box::pin(async move { Msg::from_value(&msg.ok()?.ok()?) }))
@@ -440,9 +444,8 @@ where
 
     /// Returns [`Stream`] of [`FromRedisValue`] values from this [`Monitor`]ing connection
     pub fn on_message<'a, T: FromRedisValue + 'a>(&'a mut self) -> impl Stream<Item = T> + 'a {
-        // Hand the buffered bytes to the stream rather than copying them: the stream
-        // owns them now, so leaving a copy behind would replay delivered lines on the
-        // next call.
+        // Taking the bytes leaves the decoder empty, so a later call cannot deliver a
+        // line this stream already delivered.
         let leftover = self.0.take_decoder_buffer();
         monitor_stream(&mut self.0.con, leftover)
     }
@@ -458,9 +461,9 @@ where
 /// the `leftover` bytes the connection decoder read past the handshake.
 ///
 /// A stream handshake (`MONITOR`, `SUBSCRIBE`, `PSUBSCRIBE`) is parsed through
-/// `Connection::decoder`, which reads from the socket in chunks. Under load the
-/// server can pack the first stream payload into the same TCP segment as the
-/// handshake reply, leaving those bytes buffered inside the decoder. Building the
+/// `Connection::decoder`, which reads from the socket in small chunks. A busy server
+/// sends the first stream payload in the same write as the handshake reply, so one
+/// chunk holds both and the payload stays buffered inside the decoder. Building the
 /// stream's codec over the bare socket would drop that buffer, and the damage
 /// depends on how much was buffered: a complete frame is lost outright, while a
 /// partial frame leaves the new codec resuming mid-frame, which fails to parse and
@@ -642,7 +645,7 @@ mod monitor_tests {
         );
 
         // Hold the server end open so a buffer-dropping stream blocks on the socket
-        // rather than seeing EOF, which makes a timeout here a real failure signal.
+        // rather than seeing end of input, which makes a timeout here a real failure signal.
         let (_stop_tx, stop_rx) = oneshot::channel::<()>();
         let _server_task = tokio::spawn(async move {
             let _ = stop_rx.await;
@@ -681,11 +684,15 @@ mod monitor_tests {
             "handshake did not buffer the partial monitor line prefix"
         );
 
-        // Send the remainder only after the handshake read has buffered the prefix.
+        // Send the remainder only after the handshake read has buffered the prefix, then
+        // hold the server end open until the test drops `_stop_tx`. A stream that
+        // mishandles the prefix then blocks on the socket instead of seeing end of input, which
+        // keeps a timeout here meaningful.
         let rest = MONITOR_LINE[split..].to_string();
+        let (_stop_tx, stop_rx) = oneshot::channel::<()>();
         let _server_task = tokio::spawn(async move {
             server.write_all(rest.as_bytes()).await.unwrap();
-            ::tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+            let _ = stop_rx.await;
             drop(server);
         });
 
@@ -766,7 +773,7 @@ mod monitor_tests {
         );
 
         // Hold the server end open so a stream that mishandles the second line blocks
-        // on the socket rather than seeing EOF, which makes a timeout a real failure.
+        // on the socket rather than seeing end of input, which makes a timeout a real failure.
         let (_stop_tx, stop_rx) = oneshot::channel::<()>();
         let _server_task = tokio::spawn(async move {
             let _ = stop_rx.await;
@@ -877,7 +884,7 @@ mod pubsub_tests {
         assert_buffered_prefix(pubsub.0.decoder.buffer());
 
         // Hold the server end open so a buffer-dropping stream blocks on the socket
-        // rather than seeing EOF, which makes a timeout here a real failure signal.
+        // rather than seeing end of input, which makes a timeout here a real failure signal.
         let (_stop_tx, stop_rx) = oneshot::channel::<()>();
         let _server_task = tokio::spawn(async move {
             let _ = stop_rx.await;
@@ -915,11 +922,15 @@ mod pubsub_tests {
             "handshake did not buffer the partial message prefix"
         );
 
-        // Send the remainder only after the handshake read has buffered the prefix.
+        // Send the remainder only after the handshake read has buffered the prefix, then
+        // hold the server end open until the test drops `_stop_tx`. A stream that
+        // mishandles the prefix then blocks on the socket instead of seeing end of input, which
+        // keeps a timeout here meaningful.
         let rest = frame[split..].to_string();
+        let (_stop_tx, stop_rx) = oneshot::channel::<()>();
         let _server_task = tokio::spawn(async move {
             server.write_all(rest.as_bytes()).await.unwrap();
-            ::tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+            let _ = stop_rx.await;
             drop(server);
         });
 
@@ -1001,7 +1012,7 @@ mod pubsub_tests {
         );
 
         // Hold the server end open so a stream that mishandles the second message blocks
-        // on the socket rather than seeing EOF, which makes a timeout a real failure.
+        // on the socket rather than seeing end of input, which makes a timeout a real failure.
         let (_stop_tx, stop_rx) = oneshot::channel::<()>();
         let _server_task = tokio::spawn(async move {
             let _ = stop_rx.await;
