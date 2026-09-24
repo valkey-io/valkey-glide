@@ -11,7 +11,7 @@ public abstract class AbstractGetExParams<T extends AbstractGetExParams<T>> {
         return (T) this;
     }
 
-    /** Creates parameters for GETEX (same as {@link #getExParams()}). */
+    /** Creates parameters for GETEX (same as the {@code getExParams()} factory method). */
     protected AbstractGetExParams() {}
 
     public enum ExpiryType {

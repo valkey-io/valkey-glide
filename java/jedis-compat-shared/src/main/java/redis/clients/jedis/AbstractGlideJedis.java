@@ -2126,7 +2126,7 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @return the value of the key, or null if the key does not exist
      * @throws JedisException if the operation fails
      * @since Valkey 6.2.0
-     * @see AbstractGetExParams<?>
+     * @see AbstractGetExParams
      */
     public String getEx(final String key, final AbstractGetExParams<?> params) {
         return executeCommandWithGlide(
@@ -2156,7 +2156,7 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @return the binary value of the key, or null if the key does not exist
      * @throws JedisException if the operation fails
      * @since Valkey 6.2.0
-     * @see AbstractGetExParams<?>
+     * @see AbstractGetExParams
      */
     public byte[] getEx(final byte[] key, final AbstractGetExParams<?> params) {
         return executeCommandWithGlide(
@@ -6926,7 +6926,8 @@ public abstract class AbstractGlideJedis extends JedisCommon {
     }
 
     /**
-     * Adds an entry to the stream at key with AbstractXAddParams<?>. Uses GLIDE type-safe xadd.
+     * Adds an entry to the stream at key with {@code AbstractXAddParams<?>} . Uses GLIDE type-safe
+     * xadd.
      *
      * @param key stream key
      * @param params add parameters
@@ -6943,8 +6944,8 @@ public abstract class AbstractGlideJedis extends JedisCommon {
     }
 
     /**
-     * Adds an entry to the stream at key with AbstractXAddParams<?> - binary version. Uses GLIDE
-     * type-safe xadd.
+     * Adds an entry to the stream at key with {@code AbstractXAddParams<?>} - binary version. Uses
+     * GLIDE type-safe xadd.
      *
      * @param key stream key
      * @param params add parameters
@@ -7180,7 +7181,7 @@ public abstract class AbstractGlideJedis extends JedisCommon {
     }
 
     /**
-     * Trims the stream using AbstractXTrimParams<?>. Uses GLIDE xtrim.
+     * Trims the stream using {@code AbstractXTrimParams<?>}. Uses GLIDE xtrim.
      *
      * @param key stream key
      * @param params trim parameters
@@ -7220,7 +7221,7 @@ public abstract class AbstractGlideJedis extends JedisCommon {
     }
 
     /**
-     * Trims the stream using AbstractXTrimParams<?> - binary version. Uses GLIDE xtrim.
+     * Trims the stream using {@code AbstractXTrimParams<?>} - binary version. Uses GLIDE xtrim.
      *
      * @param key stream key
      * @param params trim parameters
@@ -10203,7 +10204,8 @@ public abstract class AbstractGlideJedis extends JedisCommon {
     }
 
     /**
-     * Returns elements from a sorted set using AbstractZRangeParams<?> for advanced range queries.
+     * Returns elements from a sorted set using {@code AbstractZRangeParams<?>} for advanced range
+     * queries.
      *
      * @param key the key of the sorted set
      * @param zRangeParams the range parameters (by index, score, or lex)
@@ -10220,8 +10222,8 @@ public abstract class AbstractGlideJedis extends JedisCommon {
     }
 
     /**
-     * Returns elements from a sorted set using AbstractZRangeParams<?> for advanced range queries
-     * (binary version).
+     * Returns elements from a sorted set using {@code AbstractZRangeParams<?>} for advanced range
+     * queries (binary version).
      *
      * @param key the key of the sorted set
      * @param zRangeParams the range parameters (by index, score, or lex)
@@ -10814,7 +10816,7 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * destination key.
      *
      * @param dstkey the destination key
-     * @param params the AbstractZParams<?> containing weights and aggregation options
+     * @param params the {@code AbstractZParams<?>} containing weights and aggregation options
      * @param sets the keys of the sorted sets to union
      * @return the number of elements in the resulting sorted set
      * @see <a href="https://valkey.io/commands/zunionstore/">valkey.io</a>
@@ -10839,7 +10841,7 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * destination key (binary version).
      *
      * @param dstkey the destination key
-     * @param params the AbstractZParams<?> containing weights and aggregation options
+     * @param params the {@code AbstractZParams<?>} containing weights and aggregation options
      * @param sets the keys of the sorted sets to union
      * @return the number of elements in the resulting sorted set
      */
@@ -10900,7 +10902,7 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * destination key.
      *
      * @param dstkey the destination key
-     * @param params the AbstractZParams<?> containing weights and aggregation options
+     * @param params the {@code AbstractZParams<?>} containing weights and aggregation options
      * @param sets the keys of the sorted sets to intersect
      * @return the number of elements in the resulting sorted set
      * @see <a href="https://valkey.io/commands/zinterstore/">valkey.io</a>
@@ -10925,7 +10927,7 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * destination key (binary version).
      *
      * @param dstkey the destination key
-     * @param params the AbstractZParams<?> containing weights and aggregation options
+     * @param params the {@code AbstractZParams<?>} containing weights and aggregation options
      * @param sets the keys of the sorted sets to intersect
      * @return the number of elements in the resulting sorted set
      */
@@ -11232,7 +11234,8 @@ public abstract class AbstractGlideJedis extends JedisCommon {
     }
 
     /**
-     * Stores elements from a sorted set using AbstractZRangeParams<?> into a destination key.
+     * Stores elements from a sorted set using {@code AbstractZRangeParams<?>} into a destination
+     * key.
      *
      * @param dest the destination key
      * @param src the source key
@@ -11251,8 +11254,8 @@ public abstract class AbstractGlideJedis extends JedisCommon {
     }
 
     /**
-     * Stores elements from a sorted set using AbstractZRangeParams<?> into a destination key (binary
-     * version).
+     * Stores elements from a sorted set using {@code AbstractZRangeParams<?>} into a destination
+     * key (binary version).
      *
      * @param dest the destination key
      * @param src the source key
@@ -14073,7 +14076,7 @@ public abstract class AbstractGlideJedis extends JedisCommon {
 
     /**
      * Returns the members of a sorted set populated with geospatial information using GEOADD, which
-     * are within the borders of the area specified by the AbstractGeoSearchParam<?>.
+     * are within the borders of the area specified by the {@code AbstractGeoSearchParam<?>}.
      *
      * @param key the key of the sorted set
      * @param params the search parameters
@@ -14130,7 +14133,8 @@ public abstract class AbstractGlideJedis extends JedisCommon {
 
     /**
      * Returns the members of a sorted set populated with geospatial information using GEOADD, which
-     * are within the borders of the area specified by the AbstractGeoSearchParam<?> (binary version).
+     * are within the borders of the area specified by the {@code AbstractGeoSearchParam<?>} (binary
+     * version).
      *
      * @param key the key of the sorted set
      * @param params the search parameters
@@ -14443,7 +14447,7 @@ public abstract class AbstractGlideJedis extends JedisCommon {
 
     /**
      * Searches for members in a sorted set representing geospatial data using a
-     * AbstractGeoSearchParam<?> and stores the result in a destination key.
+     * {@code AbstractGeoSearchParam<?>} and stores the result in a destination key.
      *
      * @param dest the destination key to store the result
      * @param src the source key of the sorted set
@@ -14489,7 +14493,8 @@ public abstract class AbstractGlideJedis extends JedisCommon {
 
     /**
      * Searches for members in a sorted set representing geospatial data using a
-     * AbstractGeoSearchParam<?> and stores the result in a destination key (binary version).
+     * {@code AbstractGeoSearchParam<?>} and stores the result in a destination key (binary
+     * version).
      *
      * @param dest the destination key to store the result
      * @param src the source key of the sorted set
@@ -14540,7 +14545,7 @@ public abstract class AbstractGlideJedis extends JedisCommon {
 
     /**
      * Searches for members in a sorted set representing geospatial data using a
-     * AbstractGeoSearchParam<?> and stores the result with distances in a destination key.
+     * {@code AbstractGeoSearchParam<?>} and stores the result with distances in a destination key.
      *
      * @param dest the destination key to store the result
      * @param src the source key of the sorted set
@@ -14588,8 +14593,8 @@ public abstract class AbstractGlideJedis extends JedisCommon {
 
     /**
      * Searches for members in a sorted set representing geospatial data using a
-     * AbstractGeoSearchParam<?> and stores the result with distances in a destination key (binary
-     * version).
+     * {@code AbstractGeoSearchParam<?>} and stores the result with distances in a destination key
+     * (binary version).
      *
      * @param dest the destination key to store the result
      * @param src the source key of the sorted set

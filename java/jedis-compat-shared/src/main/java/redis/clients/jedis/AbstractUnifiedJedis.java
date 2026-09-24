@@ -835,7 +835,7 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * with optional parameters. This method provides advanced SET functionality including conditional
      * setting, expiration, and atomic get-and-set operations.
      *
-     * <p>The AbstractSetParams<?> object allows you to specify:
+     * <p>The {@code AbstractSetParams<?>} object allows you to specify:
      *
      * <ul>
      *   <li>Existence conditions (NX - only if key doesn't exist, XX - only if key exists)
