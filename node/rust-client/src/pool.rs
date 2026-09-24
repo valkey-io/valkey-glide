@@ -602,18 +602,18 @@ pub fn pool_destroy(pool_id: i64) {
     if let Some(pool_arc) = pool::unregister_pool(pool_id as u64) {
         get_pool_runtime().block_on(async {
             let mut pool_guard = pool_arc.lock().await;
-            // Clean up global registries before destroying the pool.
+            // Remove each client from the scope client registry. unregister_blocking_flag and
+            // unregister_pool_client are intentionally omitted here: ClientPool::destroy() already
+            // handles those as a defensive fallback for idle and in_use entries.
+            // scope::unregister_client is NOT called by destroy(), so we must do it ourselves.
             for entry in pool_guard.idle.iter() {
-                glide_core::pool::unregister_blocking_flag(entry.client_id);
-                glide_core::pool::unregister_pool_client(entry.client_id);
                 scope::unregister_client(entry.client_id);
             }
             for entry in pool_guard.in_use.iter() {
-                glide_core::pool::unregister_blocking_flag(*entry.key());
-                glide_core::pool::unregister_pool_client(*entry.key());
                 scope::unregister_client(*entry.key());
             }
-            // Also drain any discard ids the monitor queued.
+            // Discarded IDs are not tracked by ClientPool::destroy() at all, so they need
+            // full cleanup: unregister_blocking_flag, unregister_pool_client, and scope.
             let discarded = pool_guard.drain_discarded_ids();
             for cid in discarded {
                 glide_core::pool::unregister_blocking_flag(cid);
