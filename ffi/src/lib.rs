@@ -429,7 +429,7 @@ impl redis::AddressResolver for FFIAddressResolver {
         match std::str::from_utf8(&resolved_host_buf[..resolved_host_len]) {
             Ok(resolved_host) => (resolved_host.to_string(), resolved_port),
             Err(_) => {
-                logger_core::log_error_lazy!(
+                glide_logger::log_error_lazy!(
                     "address_resolver",
                     "Address resolver returned invalid UTF-8 for host, using original address"
                 );
@@ -4897,7 +4897,7 @@ fn extract_command_name(request_type: RequestType, context: &str) -> Option<Stri
     let cmd = match request_type.get_command() {
         Some(cmd) => cmd,
         None => {
-            logger_core::log_error(
+            glide_logger::log_error(
                 "ffi_otel",
                 format!("{context}: RequestType has no command available"),
             );
@@ -4911,7 +4911,7 @@ fn extract_command_name(request_type: RequestType, context: &str) -> Option<Stri
         Some(bytes) => match std::str::from_utf8(bytes.as_slice()) {
             Ok(name) => name.to_owned(),
             Err(e) => {
-                logger_core::log_error(
+                glide_logger::log_error(
                     "ffi_otel",
                     format!("{context}: Command bytes are not valid UTF-8: {e}"),
                 );
@@ -4923,7 +4923,7 @@ fn extract_command_name(request_type: RequestType, context: &str) -> Option<Stri
 
     // Validate command name length (reasonable limit to prevent abuse)
     if command_name.len() > 256 {
-        logger_core::log_error(
+        glide_logger::log_error(
             "ffi_otel",
             format!(
                 "{context}: Command name too long ({} chars), max 256",
@@ -4950,7 +4950,7 @@ pub extern "C" fn create_otel_span(request_type: RequestType) -> u64 {
     let ptr = Arc::into_raw(arc);
     let span_ptr = ptr as u64;
 
-    logger_core::log_debug(
+    glide_logger::log_debug(
         "ffi_otel",
         format!(
             "create_otel_span: Successfully created span '{command_name}' with pointer 0x{span_ptr:x}",
@@ -4971,7 +4971,7 @@ pub extern "C" fn create_batch_otel_span() -> u64 {
     let ptr = Arc::into_raw(arc);
     let span_ptr = ptr as u64;
 
-    logger_core::log_debug(
+    glide_logger::log_debug(
         "ffi_otel",
         format!(
             "create_batch_otel_span: Successfully created batch span with pointer 0x{span_ptr:x}",
@@ -5031,7 +5031,7 @@ unsafe fn create_span_with_remote_context(
     let trace_id = match unsafe { required_c_str(trace_id, "trace_id") } {
         Ok(value) => value,
         Err(err) => {
-            logger_core::log_warn(
+            glide_logger::log_warn(
                 "ffi_otel",
                 format!("{function_name}: {err}. Creating independent span as fallback."),
             );
@@ -5042,7 +5042,7 @@ unsafe fn create_span_with_remote_context(
     let span_id = match unsafe { required_c_str(span_id, "span_id") } {
         Ok(value) => value,
         Err(err) => {
-            logger_core::log_warn(
+            glide_logger::log_warn(
                 "ffi_otel",
                 format!("{function_name}: {err}. Creating independent span as fallback."),
             );
@@ -5053,7 +5053,7 @@ unsafe fn create_span_with_remote_context(
     let trace_state = match unsafe { optional_c_str(trace_state, "trace_state") } {
         Ok(value) => value,
         Err(err) => {
-            logger_core::log_warn(
+            glide_logger::log_warn(
                 "ffi_otel",
                 format!("{function_name}: {err}. Creating independent span as fallback."),
             );
@@ -5070,7 +5070,7 @@ unsafe fn create_span_with_remote_context(
     ) {
         Ok(span) => span,
         Err(err) => {
-            logger_core::log_warn(
+            glide_logger::log_warn(
                 "ffi_otel",
                 format!(
                     "{function_name}: failed to create span with remote context: {err}. Creating independent span as fallback.",
@@ -5102,7 +5102,7 @@ pub unsafe extern "C" fn create_batch_otel_span_with_parent(parent_span_ptr: u64
 
     // Handle parent span pointer validation with graceful fallback
     if parent_span_ptr == 0 {
-        logger_core::log_warn(
+        glide_logger::log_warn(
             "ffi_otel",
             "create_batch_otel_span_with_parent: parent_span_ptr is null (0), creating independent batch span as fallback",
         );
@@ -5111,7 +5111,7 @@ pub unsafe extern "C" fn create_batch_otel_span_with_parent(parent_span_ptr: u64
         let arc = Arc::new(span);
         let ptr = Arc::into_raw(arc);
         let span_ptr = ptr as u64;
-        logger_core::log_debug(
+        glide_logger::log_debug(
             "ffi_otel",
             format!(
                 "create_batch_otel_span_with_parent: Created independent fallback batch span with pointer 0x{span_ptr:x}",
@@ -5127,7 +5127,7 @@ pub unsafe extern "C" fn create_batch_otel_span_with_parent(parent_span_ptr: u64
             match parent_span.add_span(command_name) {
                 Ok(child_span) => child_span,
                 Err(e) => {
-                    logger_core::log_warn(
+                    glide_logger::log_warn(
                         "ffi_otel",
                         format!(
                             "create_batch_otel_span_with_parent: Failed to create child batch span with parent 0x{parent_span_ptr:x}: {e}. Creating independent batch span as fallback.",
@@ -5139,7 +5139,7 @@ pub unsafe extern "C" fn create_batch_otel_span_with_parent(parent_span_ptr: u64
             }
         }
         Err(e) => {
-            logger_core::log_warn(
+            glide_logger::log_warn(
                 "ffi_otel",
                 format!(
                     "create_batch_otel_span_with_parent: Invalid parent span pointer 0x{parent_span_ptr:x}: {e}. Creating independent batch span as fallback.",
@@ -5155,7 +5155,7 @@ pub unsafe extern "C" fn create_batch_otel_span_with_parent(parent_span_ptr: u64
     let ptr = Arc::into_raw(arc);
     let span_ptr = ptr as u64;
 
-    logger_core::log_debug(
+    glide_logger::log_debug(
         "ffi_otel",
         format!(
             "create_batch_otel_span_with_parent: Successfully created batch span with parent 0x{parent_span_ptr:x}, child pointer 0x{span_ptr:x}",
@@ -5182,7 +5182,7 @@ pub unsafe extern "C" fn create_batch_otel_span_with_parent(parent_span_ptr: u64
 pub unsafe extern "C" fn create_named_otel_span(span_name: *const c_char) -> u64 {
     // Validate input pointer
     if span_name.is_null() {
-        logger_core::log_error(
+        glide_logger::log_error(
             "ffi_otel",
             "create_named_otel_span: span_name pointer is null",
         );
@@ -5195,7 +5195,7 @@ pub unsafe extern "C" fn create_named_otel_span(span_name: *const c_char) -> u64
     let name_str = match c_str.to_str() {
         Ok(s) => s,
         Err(e) => {
-            logger_core::log_error(
+            glide_logger::log_error(
                 "ffi_otel",
                 format!("create_named_otel_span: span_name is not valid UTF-8: {e}",),
             );
@@ -5206,7 +5206,7 @@ pub unsafe extern "C" fn create_named_otel_span(span_name: *const c_char) -> u64
     // Validate string length (reasonable limit to prevent abuse)
     // Note: Empty names are allowed as per test expectations
     if name_str.len() > 256 {
-        logger_core::log_error(
+        glide_logger::log_error(
             "ffi_otel",
             format!(
                 "create_named_otel_span: span_name too long ({} chars), max 256",
@@ -5221,7 +5221,7 @@ pub unsafe extern "C" fn create_named_otel_span(span_name: *const c_char) -> u64
         .chars()
         .any(|c| c.is_control() && c != '\t' && c != '\n' && c != '\r')
     {
-        logger_core::log_error(
+        glide_logger::log_error(
             "ffi_otel",
             "create_named_otel_span: span_name contains invalid control characters",
         );
@@ -5234,7 +5234,7 @@ pub unsafe extern "C" fn create_named_otel_span(span_name: *const c_char) -> u64
     let ptr = Arc::into_raw(arc);
     let span_ptr = ptr as u64;
 
-    logger_core::log_debug(
+    glide_logger::log_debug(
         "ffi_otel",
         format!(
             "create_named_otel_span: Successfully created named span '{name_str}' with pointer 0x{span_ptr:x}",
@@ -5268,7 +5268,7 @@ pub unsafe extern "C" fn create_otel_span_with_parent(
 
     // Handle parent span pointer validation with graceful fallback
     if parent_span_ptr == 0 {
-        logger_core::log_warn(
+        glide_logger::log_warn(
             "ffi_otel",
             "create_otel_span_with_parent: parent_span_ptr is null (0), creating independent span as fallback",
         );
@@ -5277,7 +5277,7 @@ pub unsafe extern "C" fn create_otel_span_with_parent(
         let arc = Arc::new(span);
         let ptr = Arc::into_raw(arc);
         let span_ptr = ptr as u64;
-        logger_core::log_debug(
+        glide_logger::log_debug(
             "ffi_otel",
             format!(
                 "create_otel_span_with_parent: Created independent fallback span '{command_name}' with pointer 0x{span_ptr:x}",
@@ -5293,7 +5293,7 @@ pub unsafe extern "C" fn create_otel_span_with_parent(
             match parent_span.add_span(&command_name) {
                 Ok(child_span) => child_span,
                 Err(e) => {
-                    logger_core::log_warn(
+                    glide_logger::log_warn(
                         "ffi_otel",
                         format!(
                             "create_otel_span_with_parent: Failed to create child span '{command_name}' with parent 0x{parent_span_ptr:x}: {e}. Creating independent span as fallback.",
@@ -5305,7 +5305,7 @@ pub unsafe extern "C" fn create_otel_span_with_parent(
             }
         }
         Err(e) => {
-            logger_core::log_warn(
+            glide_logger::log_warn(
                 "ffi_otel",
                 format!(
                     "create_otel_span_with_parent: Invalid parent span pointer 0x{parent_span_ptr:x}: {e}. Creating independent span as fallback.",
@@ -5321,7 +5321,7 @@ pub unsafe extern "C" fn create_otel_span_with_parent(
     let ptr = Arc::into_raw(arc);
     let span_ptr = ptr as u64;
 
-    logger_core::log_debug(
+    glide_logger::log_debug(
         "ffi_otel",
         format!(
             "create_otel_span_with_parent: Successfully created span '{command_name}' with parent 0x{parent_span_ptr:x}, child pointer 0x{span_ptr:x}",
@@ -5397,13 +5397,13 @@ pub unsafe extern "C" fn create_batch_otel_span_with_trace_context(
 pub unsafe extern "C" fn drop_otel_span(span_ptr: u64) {
     // Validate span pointer
     if span_ptr == 0 {
-        logger_core::log_debug("ffi_otel", "drop_otel_span: Ignoring null span pointer (0)");
+        glide_logger::log_debug("ffi_otel", "drop_otel_span: Ignoring null span pointer (0)");
         return;
     }
 
     // Validate pointer alignment and bounds (basic safety checks)
     if !span_ptr.is_multiple_of(8) {
-        logger_core::log_error(
+        glide_logger::log_error(
             "ffi_otel",
             format!("drop_otel_span: Invalid span pointer - misaligned: 0x{span_ptr:x}",),
         );
@@ -5415,7 +5415,7 @@ pub unsafe extern "C" fn drop_otel_span(span_ptr: u64) {
     const MAX_VALID_ADDRESS: u64 = 0x7FFF_FFFF_FFFF_FFF8; // Max user space on most 64-bit systems
 
     if span_ptr < MIN_VALID_ADDRESS {
-        logger_core::log_error(
+        glide_logger::log_error(
             "ffi_otel",
             format!("drop_otel_span: Invalid span pointer - address too low: 0x{span_ptr:x}",),
         );
@@ -5423,7 +5423,7 @@ pub unsafe extern "C" fn drop_otel_span(span_ptr: u64) {
     }
 
     if span_ptr > MAX_VALID_ADDRESS {
-        logger_core::log_error(
+        glide_logger::log_error(
             "ffi_otel",
             format!("drop_otel_span: Invalid span pointer - address too high: 0x{span_ptr:x}",),
         );
@@ -5439,7 +5439,7 @@ pub unsafe extern "C" fn drop_otel_span(span_ptr: u64) {
 
         match result {
             Ok(_) => {
-                logger_core::log_debug(
+                glide_logger::log_debug(
                     "ffi_otel",
                     format!(
                         "drop_otel_span: Successfully dropped span with pointer 0x{span_ptr:x}",
@@ -5447,7 +5447,7 @@ pub unsafe extern "C" fn drop_otel_span(span_ptr: u64) {
                 );
             }
             Err(_) => {
-                logger_core::log_error(
+                glide_logger::log_error(
                     "ffi_otel",
                     format!(
                         "drop_otel_span: Panic occurred while dropping span pointer 0x{span_ptr:x} - likely invalid pointer",
@@ -5672,28 +5672,28 @@ pub enum Level {
     OFF = 5,
 }
 
-impl From<logger_core::Level> for Level {
-    fn from(level: logger_core::Level) -> Self {
+impl From<glide_logger::Level> for Level {
+    fn from(level: glide_logger::Level) -> Self {
         match level {
-            logger_core::Level::Error => Level::ERROR,
-            logger_core::Level::Warn => Level::WARN,
-            logger_core::Level::Info => Level::INFO,
-            logger_core::Level::Debug => Level::DEBUG,
-            logger_core::Level::Trace => Level::TRACE,
-            logger_core::Level::Off => Level::OFF,
+            glide_logger::Level::Error => Level::ERROR,
+            glide_logger::Level::Warn => Level::WARN,
+            glide_logger::Level::Info => Level::INFO,
+            glide_logger::Level::Debug => Level::DEBUG,
+            glide_logger::Level::Trace => Level::TRACE,
+            glide_logger::Level::Off => Level::OFF,
         }
     }
 }
 
-impl From<Level> for logger_core::Level {
+impl From<Level> for glide_logger::Level {
     fn from(level: Level) -> Self {
         match level {
-            Level::ERROR => logger_core::Level::Error,
-            Level::WARN => logger_core::Level::Warn,
-            Level::INFO => logger_core::Level::Info,
-            Level::DEBUG => logger_core::Level::Debug,
-            Level::TRACE => logger_core::Level::Trace,
-            Level::OFF => logger_core::Level::Off,
+            Level::ERROR => glide_logger::Level::Error,
+            Level::WARN => glide_logger::Level::Warn,
+            Level::INFO => glide_logger::Level::Info,
+            Level::DEBUG => glide_logger::Level::Debug,
+            Level::TRACE => glide_logger::Level::Trace,
+            Level::OFF => glide_logger::Level::Off,
         }
     }
 }
@@ -5749,7 +5749,7 @@ pub unsafe extern "C" fn glide_log(
         }
     };
 
-    logger_core::log(level.into(), id_str, msg_str);
+    glide_logger::log(level.into(), id_str, msg_str);
 
     Box::into_raw(Box::new(LogResult {
         log_error: std::ptr::null_mut(),
@@ -5807,7 +5807,7 @@ pub unsafe extern "C" fn init(level: *const Level, file_name: *const c_char) -> 
         }
     };
 
-    let logger_level = logger_core::init(level_option, file_name_option);
+    let logger_level = glide_logger::init(level_option, file_name_option);
 
     Box::into_raw(Box::new(LogResult {
         log_error: std::ptr::null_mut(),

@@ -12,7 +12,7 @@ use glide_core::{
     DEFAULT_FLUSH_SIGNAL_INTERVAL_MS, GlideOpenTelemetry, GlideOpenTelemetryConfigBuilder,
     GlideOpenTelemetrySignalsExporter, GlideSpan, Telemetry,
 };
-use logger_core::{log_warn, log_warn_lazy};
+use glide_logger::{log_warn, log_warn_lazy};
 use redis::cluster_routing::Routable;
 use redis::{
     Arg, ClusterScanArgs, Cmd, ErrorKind, PipelineRetryStrategy, PushInfo, RedisError, ScanStateRC,
@@ -2177,40 +2177,40 @@ pub fn init_open_telemetry(open_telemetry_config: OpenTelemetryConfig) -> Result
     Ok(())
 }
 
-impl From<logger_core::Level> for Level {
-    fn from(level: logger_core::Level) -> Self {
+impl From<glide_logger::Level> for Level {
+    fn from(level: glide_logger::Level) -> Self {
         match level {
-            logger_core::Level::Error => Level::Error,
-            logger_core::Level::Warn => Level::Warn,
-            logger_core::Level::Info => Level::Info,
-            logger_core::Level::Debug => Level::Debug,
-            logger_core::Level::Trace => Level::Trace,
-            logger_core::Level::Off => Level::Off,
+            glide_logger::Level::Error => Level::Error,
+            glide_logger::Level::Warn => Level::Warn,
+            glide_logger::Level::Info => Level::Info,
+            glide_logger::Level::Debug => Level::Debug,
+            glide_logger::Level::Trace => Level::Trace,
+            glide_logger::Level::Off => Level::Off,
         }
     }
 }
 
-impl From<Level> for logger_core::Level {
-    fn from(level: Level) -> logger_core::Level {
+impl From<Level> for glide_logger::Level {
+    fn from(level: Level) -> glide_logger::Level {
         match level {
-            Level::Error => logger_core::Level::Error,
-            Level::Warn => logger_core::Level::Warn,
-            Level::Info => logger_core::Level::Info,
-            Level::Debug => logger_core::Level::Debug,
-            Level::Trace => logger_core::Level::Trace,
-            Level::Off => logger_core::Level::Off,
+            Level::Error => glide_logger::Level::Error,
+            Level::Warn => glide_logger::Level::Warn,
+            Level::Info => glide_logger::Level::Info,
+            Level::Debug => glide_logger::Level::Debug,
+            Level::Trace => glide_logger::Level::Trace,
+            Level::Off => glide_logger::Level::Off,
         }
     }
 }
 
 #[napi]
 pub fn log(log_level: Level, log_identifier: String, message: String) {
-    logger_core::log(log_level.into(), log_identifier, message);
+    glide_logger::log(log_level.into(), log_identifier, message);
 }
 
 #[napi(js_name = "InitInternalLogger")]
 pub fn init(level: Option<Level>, file_name: Option<String>) -> Level {
-    let logger_level = logger_core::init(level.map(|level| level.into()), file_name.as_deref());
+    let logger_level = glide_logger::init(level.map(|level| level.into()), file_name.as_deref());
     logger_level.into()
 }
 

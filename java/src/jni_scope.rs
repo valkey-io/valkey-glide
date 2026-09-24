@@ -19,6 +19,7 @@ pub extern "system" fn Java_glide_ffi_resolvers_GlideScopeResolver_glideScopeTry
     client_id: jlong,
     connection_request_bytes: JByteArray,
     routing_slot: jint,
+    attempt_token: jlong,
 ) -> jlong {
     let bytes = match env.convert_byte_array(&connection_request_bytes) {
         Ok(b) => b,
@@ -31,7 +32,19 @@ pub extern "system" fn Java_glide_ffi_resolvers_GlideScopeResolver_glideScopeTry
         bytes,
         runtime.handle(),
         routing_slot as u16,
+        attempt_token as u64,
     )
+}
+
+/// Allocate a unique scope-acquire attempt token. Called once per `acquire()` and
+/// passed on every retry poll of `glideScopeTryAcquire`, so the core dedupes a
+/// single acquire's retries without serializing distinct concurrent borrowers.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_glide_ffi_resolvers_GlideScopeResolver_glideScopeNextAttemptToken(
+    _env: JNIEnv,
+    _class: JClass,
+) -> jlong {
+    glide_core::pool::next_scope_attempt_token() as jlong
 }
 
 /// Release a scope back to the pool. Fire-and-forget.

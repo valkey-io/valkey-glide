@@ -1018,9 +1018,9 @@ dependencies = [
  "dashmap",
  "futures",
  "futures-intrusive",
+ "glide-logger",
  "http 1.4.2",
  "libc",
- "logger_core",
  "lz4",
  "nanoid",
  "once_cell",
@@ -1047,6 +1047,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "glide-logger"
+version = "0.1.0"
+dependencies = [
+ "file-rotate",
+ "once_cell",
+ "tracing",
+ "tracing-appender",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "glide-rust"
 version = "0.2.0"
 dependencies = [
@@ -1054,7 +1065,7 @@ dependencies = [
  "bytes",
  "futures",
  "glide-core",
- "logger_core",
+ "glide-logger",
  "num-bigint",
  "once_cell",
  "redis",
@@ -1549,17 +1560,6 @@ name = "log"
 version = "0.4.33"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0ceec5bc11778974d1bcb055b18002eba7f4b3518b6a0081b3af5f21666da9ad"
-
-[[package]]
-name = "logger_core"
-version = "0.1.0"
-dependencies = [
- "file-rotate",
- "once_cell",
- "tracing",
- "tracing-appender",
- "tracing-subscriber",
-]
 
 [[package]]
 name = "lru"
@@ -2099,9 +2099,9 @@ dependencies = [
  "dispose",
  "futures",
  "futures-util",
+ "glide-logger",
  "itoa",
  "lazy_static",
- "logger_core",
  "lru",
  "num-bigint",
  "parking_lot",
@@ -2622,8 +2622,8 @@ name = "telemetrylib"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "glide-logger",
  "lazy_static",
- "logger_core",
  "once_cell",
  "opentelemetry",
  "opentelemetry-otlp",

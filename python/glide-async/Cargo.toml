@@ -11,16 +11,17 @@ crate-type = ["cdylib"]
 path = "src/lib.rs"
 
 [dependencies]
-pyo3 = { version = "^0.29", features = ["extension-module", "num-bigint"] }
-bytes = { version = "^1.8" }
-redis = { path = "../../glide-core/redis-rs/redis", features = [
-    "aio",
-    "tokio-comp",
-    "connection-manager",
-    "tokio-rustls-comp",
-] }
+
+# GLIDE dependencies
+glide-logger = { path = "../../glide-logger" }
+
+# TODO #6905: Update once renamed.
 glide-core = { path = "../../glide-core", features = ["socket-layer"] }
-logger_core = { path = "../../logger_core" }
+redis = { path = "../../glide-core/redis-rs/redis", features = ["aio", "tokio-comp", "connection-manager", "tokio-rustls-comp"] }
+
+# External dependencies
+bytes = { version = "^1.8" }
+pyo3 = { version = "^0.29", features = ["extension-module", "num-bigint"] }
 tracing = "0.1"
 uuid = { version = "1", features = ["v4"] }
 

@@ -678,29 +678,29 @@ pub extern "system" fn Java_glide_ffi_resolvers_ScriptResolver_dropScript<'local
     .unwrap_or(())
 }
 
-impl From<logger_core::Level> for Level {
-    fn from(level: logger_core::Level) -> Self {
+impl From<glide_logger::Level> for Level {
+    fn from(level: glide_logger::Level) -> Self {
         match level {
-            logger_core::Level::Error => Level(0),
-            logger_core::Level::Warn => Level(1),
-            logger_core::Level::Info => Level(2),
-            logger_core::Level::Debug => Level(3),
-            logger_core::Level::Trace => Level(4),
-            logger_core::Level::Off => Level(5),
+            glide_logger::Level::Error => Level(0),
+            glide_logger::Level::Warn => Level(1),
+            glide_logger::Level::Info => Level(2),
+            glide_logger::Level::Debug => Level(3),
+            glide_logger::Level::Trace => Level(4),
+            glide_logger::Level::Off => Level(5),
         }
     }
 }
 
-impl TryFrom<Level> for logger_core::Level {
+impl TryFrom<Level> for glide_logger::Level {
     type Error = FFIError;
-    fn try_from(level: Level) -> Result<Self, <logger_core::Level as TryFrom<Level>>::Error> {
+    fn try_from(level: Level) -> Result<Self, <glide_logger::Level as TryFrom<Level>>::Error> {
         match level.0 {
-            0 => Ok(logger_core::Level::Error),
-            1 => Ok(logger_core::Level::Warn),
-            2 => Ok(logger_core::Level::Info),
-            3 => Ok(logger_core::Level::Debug),
-            4 => Ok(logger_core::Level::Trace),
-            5 => Ok(logger_core::Level::Off),
+            0 => Ok(glide_logger::Level::Error),
+            1 => Ok(glide_logger::Level::Warn),
+            2 => Ok(glide_logger::Level::Info),
+            3 => Ok(glide_logger::Level::Debug),
+            4 => Ok(glide_logger::Level::Trace),
+            5 => Ok(glide_logger::Level::Off),
             _ => Err(FFIError::Logger(format!(
                 "Invalid log level: {:?}",
                 level.0
@@ -730,7 +730,7 @@ pub extern "system" fn Java_glide_ffi_resolvers_LoggerResolver_logInternal<'loca
 
             let message: String = env.get_string(&message)?.into();
 
-            logger_core::log(level.try_into()?, log_identifier, message);
+            glide_logger::log(level.try_into()?, log_identifier, message);
             Ok(())
         }
         let result = log_internal(&mut env, level, log_identifier, message);
@@ -762,7 +762,7 @@ pub extern "system" fn Java_glide_ffi_resolvers_LoggerResolver_initInternal<'loc
                 Some(lvl) => Some(Level(lvl).try_into()?),
                 None => None,
             };
-            let logger_level = logger_core::init(level, file_name.as_deref());
+            let logger_level = glide_logger::init(level, file_name.as_deref());
             Ok(Level::from(logger_level).0)
         }
         let result = init_internal(&mut env, level, file_name);
@@ -1080,8 +1080,8 @@ pub extern "system" fn Java_glide_ffi_resolvers_OpenTelemetryResolver_initOpenTe
 
                 glide_rt.runtime.block_on(async {
                     if let Err(e) = glide_core::GlideOpenTelemetry::initialise(config.build()) {
-                        logger_core::log(
-                            logger_core::Level::Error,
+                        glide_logger::log(
+                            glide_logger::Level::Error,
                             "OpenTelemetry",
                             format!("Failed to initialize OpenTelemetry: {e}"),
                         );
@@ -1763,7 +1763,7 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBatchAsync(
                                         ) {
                                             Ok(decompressed) => Ok(decompressed),
                                             Err(e) => {
-                                                logger_core::log_warn_rate_limited!(
+                                                glide_logger::log_warn_rate_limited!(
                                                     "compression",
                                                     5,
                                                     format!("Failed to decompress batch response: {}, returning original", e)
