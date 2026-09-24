@@ -239,10 +239,14 @@ public class ClientPool implements AutoCloseable {
                 configuredTimeout != null
                         ? configuredTimeout
                         : GlideNativeBridge.getGlideCoreDefaultRequestTimeoutMs();
+        // Carry the config's credentials so the borrowed client's IAM guards (refreshIamToken,
+        // updateConnectionPassword) see them, as they do on a directly-created client.
+        ServerCredentials credentials = config.getClientConfig().getCredentials();
         return clientCache.computeIfAbsent(
                 clientId,
                 id ->
-                        GlideClient.fromPoolHandle(id, maxInflight, requestTimeoutMs, connectionRequestBytes));
+                        GlideClient.fromPoolHandle(
+                                id, maxInflight, requestTimeoutMs, credentials, connectionRequestBytes));
     }
 
     /** Release a client back to the pool. */
