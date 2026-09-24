@@ -616,6 +616,121 @@ public class ClientPoolIntegrationTest {
         System.out.println("testPoolBlockingCmdIsolation PASSED (cluster=" + clusterMode + ")");
     }
 
+    /**
+     * Regression test for #6971: the abandon monitor must NOT reclaim a borrowed client that is
+     * executing a blocking command (BLPOP).
+     *
+     * <p>This test exercises the full JNI dispatch path: {@code executeCommandAsync} → {@code
+     * pre_blocking_arc} → {@code fetch_add} → {@code spawn} → {@code UnmarkOnDrop}. It verifies the
+     * actual fix works end-to-end with a real Valkey server.
+     */
+    @Test
+    public void testAbandonMonitorDoesNotReclaimBlockingClient() throws Exception {
+        assumeTrue(standaloneAvailable(), "No standalone endpoints configured");
+
+        String[] parts = STANDALONE_HOSTS[0].split(":");
+        String host = parts[0];
+        int port = Integer.parseInt(parts[1]);
+
+        // Pool with a very short abandon timeout (500 ms) and enough room for contention.
+        ClientPoolConfig cfg =
+                ClientPoolConfig.builder()
+                        .maxSize(6)
+                        .minIdle(1)
+                        .acquireTimeout(Duration.ofSeconds(15))
+                        .abandonTimeout(Duration.ofMillis(500))
+                        .clientConfig(
+                                GlideClientConfiguration.builder()
+                                        .address(NodeAddress.builder().host(host).port(port).build())
+                                        .requestTimeout(35000)
+                                        .build())
+                        .build();
+
+        ClientPool pool = ClientPool.create(cfg);
+        waitForPoolReady(pool, 1);
+
+        String blpopKey = testKey(false, "abandon-monitor-blpop");
+        String blpopValue = "sentinel-" + UUID.randomUUID().toString().substring(0, 8);
+
+        int numContention = 4;
+        CountDownLatch contentionReady = new CountDownLatch(numContention);
+        AtomicInteger stopFlag = new AtomicInteger(0);
+        AtomicInteger contentionErrors = new AtomicInteger(0);
+        CountDownLatch contentionDone = new CountDownLatch(numContention);
+
+        // Contention threads: tight acquire → SET → release loops to keep the pool busy.
+        for (int t = 0; t < numContention; t++) {
+            final int idx = t;
+            new Thread(
+                            () -> {
+                                try {
+                                    contentionReady.countDown();
+                                    while (stopFlag.get() == 0) {
+                                        try (glide.api.models.pool.PooledGlideClient c =
+                                                pool.acquire().get(5, TimeUnit.SECONDS)) {
+                                            c.set("contention-key-" + idx, "val").get(3, TimeUnit.SECONDS);
+                                        }
+                                    }
+                                } catch (Exception e) {
+                                    if (stopFlag.get() == 0) {
+                                        System.err.println("Contention thread " + idx + " error: " + e);
+                                        contentionErrors.incrementAndGet();
+                                    }
+                                } finally {
+                                    contentionDone.countDown();
+                                }
+                            },
+                            "contention-" + idx)
+                    .start();
+        }
+
+        // Wait until all contention threads are cycling.
+        assertTrue(contentionReady.await(10, TimeUnit.SECONDS), "Contention threads should start");
+
+        // Acquire a client for BLPOP and dispatch it WITHOUT awaiting (fire-and-forget future).
+        glide.api.models.pool.PooledGlideClient blpopClient = pool.acquire().get(10, TimeUnit.SECONDS);
+        long blpopClientId = blpopClient.getClientId();
+        java.util.concurrent.CompletableFuture<Object> blpopFuture =
+                blpopClient.unwrap().customCommand(new String[] {"BLPOP", blpopKey, "30"});
+
+        try {
+            // Sleep for 3× the abandon window (1500 ms). The monitor runs every ~500 ms and
+            // should see the BLPOP client as "blocking" and leave it alone.
+            Thread.sleep(1500);
+
+            // Stop contention threads and wait for all releases.
+            stopFlag.set(1);
+            assertTrue(contentionDone.await(10, TimeUnit.SECONDS), "Contention threads should stop");
+
+            // Core assertion: the BLPOP client must still be in the pool's active set.
+            int active = pool.getActiveCount();
+            assertEquals(
+                    1, active, "Pool should have exactly 1 active client (the BLPOP holder); got " + active);
+
+            // Unblock the BLPOP by pushing the sentinel value.
+            try (glide.api.models.pool.PooledGlideClient helper =
+                    pool.acquire().get(10, TimeUnit.SECONDS)) {
+                helper
+                        .unwrap()
+                        .customCommand(new String[] {"LPUSH", blpopKey, blpopValue})
+                        .get(5, TimeUnit.SECONDS);
+            }
+
+            // Verify BLPOP returned the correct key and value.
+            Object[] blpopResult = (Object[]) blpopFuture.get(10, TimeUnit.SECONDS);
+            assertNotNull(blpopResult, "BLPOP should return a non-null result");
+            assertEquals(2, blpopResult.length, "BLPOP result should have [key, value]");
+            assertEquals(blpopKey, blpopResult[0].toString(), "BLPOP key mismatch");
+            assertEquals(blpopValue, blpopResult[1].toString(), "BLPOP value mismatch");
+
+            System.out.println("testAbandonMonitorDoesNotReclaimBlockingClient PASSED");
+        } finally {
+            // Always release the BLPOP client back to the pool.
+            blpopClient.close();
+            pool.close();
+        }
+    }
+
     @Test
     public void testPoolBadAddressAcquireFails() throws Exception {
         // Pool with unreachable address: create should fail (probe connectivity check)
