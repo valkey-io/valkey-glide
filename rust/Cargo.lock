@@ -1057,6 +1057,7 @@ dependencies = [
  "logger_core",
  "num-bigint",
  "once_cell",
+ "parity-guard",
  "redis",
  "ryu",
  "sealed",
@@ -1775,6 +1776,15 @@ name = "outref"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1a80800c0488c3a21695ea981a54918fbb37abf04f4d0720c453632255e2ff0e"
+
+[[package]]
+name = "parity-guard"
+version = "0.0.0"
+dependencies = [
+ "regex",
+ "serde",
+ "serde_json",
+]
 
 [[package]]
 name = "parking_lot"
