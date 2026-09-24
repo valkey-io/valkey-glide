@@ -4,6 +4,7 @@
 
 - Rust 1.91.1+ (edition 2024; developed on 1.95). No MSRV is declared, matching the
   upstream valkey-glide Rust crates.
+  - [`rust-script`](https://rust-script.org/) – install with `cargo install rust-script`.
 - The crate depends on `glide-core` and its vendored `redis-rs` via in-repo
   **path dependencies** (`../glide-core` and `../glide-core/redis-rs/redis`), so
   it builds from a checkout of the `valkey-io/valkey-glide` monorepo where those
@@ -98,6 +99,8 @@ shapes there rather than in individual commands.
 
 ## Maintaining the unified command table
 
+TODO #7058: Update/extract once parity guard work done.
+
 The unified `AsyncCommands` / `Commands` traits are defined by the
 **hand-maintained** command table in `src/commands/core.rs` (one
 `implement_glide_commands!` invocation; each `fn name<G: Bound>(args);` entry
@@ -105,19 +108,15 @@ expands to both the async and the blocking method, delegating to the fork's
 `Cmd::<name>()` constructor for identical wire encoding).
 
 To add or change an entry, edit the table directly — then run the
-signature-parity guard, which compares every entry against the vendored
-redis-rs fork's `implement_commands!` table (names, generic order, argument
-lists) and fails on any divergence. It also checks the `scan*` methods
-(names, generics, and arguments must match the fork's macro definitions;
-receivers and return types deliberately deviate — GLIDE-owned iterators on
-the owned-send path, see `src/commands/scan.rs`):
+signature-parity guard. It diffs GLIDE's command table, generated at runtime
+from `src/commands/core.rs`, against a committed redis-rs baseline
+(`tests/parity/fixtures/redis-command-table.json`) and fails on any divergence.
 
 ```bash
-cargo test --test it_parity_guard   # pure Rust; resolves the fork via cargo metadata
+cargo test --test it_parity_guard   # requires rust-script (see Prerequisites)
 ```
 
-When the pinned fork rev is bumped, run the verifier to see what changed in
-the fork's surface, update the table deliberately, and refresh the pinned rev
-references. Commands beyond the fork's surface belong
-in the per-family extension traits (`src/commands/<family>.rs`), not in the
-table.
+Refresh the committed baseline only when deliberately retargeting a redis-rs
+version; regenerate it with the generator (see `tests/parity/README.md`).
+Commands beyond the redis-rs surface belong in the per-family extension traits
+(`src/commands/<family>.rs`), not in the table.
