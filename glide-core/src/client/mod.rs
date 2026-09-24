@@ -395,10 +395,12 @@ pub struct ClientShared {
     // connection can hold a token that rotated in the gap; a direct client stays
     // hot and keeps the existing reconnect-deferred `token_changed` refresh.
     is_pool_managed: Arc<AtomicBool>,
-    // Set while `prepare_for_borrow` is dispatching its own re-AUTH. That AUTH goes
-    // through `send_command`, which would otherwise re-enter the borrow gate and
-    // recurse forever (the bookmark only advances after AUTH returns). The guard
-    // makes the nested AUTH command skip the gate.
+    // Serializes the borrow-time IAM reconcile so concurrent commands on the same
+    // client don't each re-AUTH; see `prepare_for_borrow` for the full protocol.
+    iam_reconcile_lock: Arc<tokio::sync::Mutex<()>>,
+    // Set while `prepare_for_borrow` dispatches its own re-AUTH so that one nested
+    // `send_command` skips the borrow gate instead of recursing; see
+    // `ReconcileReentryGuard`.
     reconciling_borrow: Arc<AtomicBool>,
     // Whether this client is in cluster mode (immutable).
     is_cluster: bool,
@@ -1755,6 +1757,7 @@ impl Client {
         let cluster_scan_args_clone = cluster_scan_args.clone(); // Assuming ClusterScanArgs is Clone
 
         // Check and initialize if lazy *inside* the async block
+        self.reconcile_iam_before_dispatch().await?;
         let client = self.get_or_initialize_client().await?;
 
         match client {
@@ -2082,6 +2085,12 @@ impl Client {
         {
             Ok(result) => {
                 if immediate_auth {
+                    // Fail before AUTHing if storing the password for reconnect failed:
+                    // otherwise a transient store failure is swallowed, the AUTH runs
+                    // anyway, and on success the caller advances its generation bookmark
+                    // (and clears token_changed) while the reconnect password was never
+                    // updated — so the next reconnect would use the stale password.
+                    result?;
                     self.send_immediate_auth(password).await
                 } else {
                     result
@@ -2825,6 +2834,28 @@ fn create_compression_manager(
     Ok(Some(Arc::new(manager)))
 }
 
+/// RAII guard that marks a borrow-reconcile AUTH in progress and clears the mark
+/// on drop. The reconcile's own AUTH re-enters `send_command`; while this guard is
+/// alive that one nested command skips the borrow gate instead of recursing.
+/// Clearing on drop (rather than a manual store on the success/error paths) means a
+/// dropped AUTH future cannot leave the gate wedged open for the client's lifetime.
+struct ReconcileReentryGuard {
+    flag: Arc<AtomicBool>,
+}
+
+impl ReconcileReentryGuard {
+    fn new(flag: Arc<AtomicBool>) -> Self {
+        flag.store(true, Ordering::Release);
+        Self { flag }
+    }
+}
+
+impl Drop for ReconcileReentryGuard {
+    fn drop(&mut self) {
+        self.flag.store(false, Ordering::Release);
+    }
+}
+
 impl Client {
     pub async fn new(
         request: ConnectionRequest,
@@ -2961,6 +2992,7 @@ impl Client {
                     current_database: Arc::new(AtomicU32::new(request.database_id as u32)),
                     last_iam_generation: Arc::new(AtomicU64::new(0)),
                     is_pool_managed: Arc::new(AtomicBool::new(false)),
+                    iam_reconcile_lock: Arc::new(tokio::sync::Mutex::new(())),
                     reconciling_borrow: Arc::new(AtomicBool::new(false)),
                     is_cluster: request.cluster_mode_enabled,
                 }),
@@ -3169,10 +3201,29 @@ impl Client {
     /// when a rotation is pending. Non-IAM (password) clients are a no-op. An `Err`
     /// means the connection could not be re-authenticated and the command fails
     /// rather than running on a stale-auth connection.
+    ///
+    /// Concurrency: all clones share one `ClientShared`, and the FFI dispatches
+    /// parallel commands on separate tasks, so several commands can enter here at
+    /// once after a rotation. The AUTH is serialized by `iam_reconcile_lock`: the
+    /// first command to take the lock re-AUTHs; every command that then acquires it
+    /// re-reads the generation and — seeing it already advanced — skips. So no
+    /// command dispatches on the old-token connection while an AUTH is in flight,
+    /// which a bare check-then-set flag could not guarantee.
     pub async fn prepare_for_borrow(&mut self) -> RedisResult<()> {
         let Some(iam_manager) = self.iam_token_manager.clone() else {
             return Ok(());
         };
+        // Fast path: no rotation pending — the common case, no lock taken.
+        if iam_manager.token_generation() == self.last_iam_generation.load(Ordering::Acquire) {
+            return Ok(());
+        }
+
+        // Serialize the AUTH (see the Concurrency note above): hold the lock across
+        // the re-check and the round-trip.
+        let lock = self.iam_reconcile_lock.clone();
+        let _reconcile_guard = lock.lock().await;
+
+        // A prior holder may have re-AUTHed while we waited; if so, nothing to do.
         let current_generation = iam_manager.token_generation();
         if current_generation == self.last_iam_generation.load(Ordering::Acquire) {
             return Ok(());
@@ -3187,16 +3238,13 @@ impl Client {
         }
 
         // immediate_auth=true sends a real AUTH on the live connection, unlike the
-        // reconnect-only password update the `token_changed` pull-model performs.
-        // The AUTH is itself a command through `send_command`; set reconciling_borrow
-        // so that nested call skips the borrow gate instead of recursing. Clear it on
-        // every exit path (the AUTH may fail).
-        self.reconciling_borrow.store(true, Ordering::Release);
-        let auth_result = self
-            .update_connection_password(Some(current_token), true)
-            .await;
-        self.reconciling_borrow.store(false, Ordering::Release);
-        auth_result?;
+        // reconnect-only password update the `token_changed` pull-model performs. The
+        // guard keeps that AUTH's nested `send_command` from re-entering the gate.
+        {
+            let _reentry = ReconcileReentryGuard::new(self.reconciling_borrow.clone());
+            self.update_connection_password(Some(current_token), true)
+                .await?;
+        }
 
         if let Some(iam_manager) = &self.iam_token_manager {
             iam_manager.clear_token_changed();
@@ -3301,6 +3349,7 @@ impl Client {
                 current_database: Arc::new(AtomicU32::new(0)),
                 last_iam_generation: Arc::new(AtomicU64::new(0)),
                 is_pool_managed: Arc::new(AtomicBool::new(false)),
+                iam_reconcile_lock: Arc::new(tokio::sync::Mutex::new(())),
                 reconciling_borrow: Arc::new(AtomicBool::new(false)),
                 is_cluster: false,
             }),
@@ -3789,6 +3838,7 @@ mod tests {
                 current_database: Arc::new(AtomicU32::new(0)),
                 last_iam_generation: Arc::new(AtomicU64::new(0)),
                 is_pool_managed: Arc::new(AtomicBool::new(false)),
+                iam_reconcile_lock: Arc::new(tokio::sync::Mutex::new(())),
                 reconciling_borrow: Arc::new(AtomicBool::new(false)),
                 is_cluster: false,
             }),
@@ -3923,10 +3973,20 @@ mod tests {
         });
 
         let result = rt.block_on(client.prepare_for_borrow());
-        assert!(
-            result.is_err(),
+        let err = result.expect_err(
             "a pending rotation must drive prepare_for_borrow into a re-AUTH attempt, \
-             which errors here (no live connection); neutralizing the gate makes this Ok"
+             which errors here (no live connection); neutralizing the gate makes this Ok",
+        );
+        // Distinguish "reached the AUTH round-trip and it failed against the dead
+        // connection" from "short-circuited at the gate" (which would return Ok, not
+        // Err) or "token unavailable" (a ClientError with a fixed message). The dead
+        // lazy connection fails the password update with an IoError/timeout, so the
+        // error must NOT be the token-unavailable ClientError.
+        let msg = err.to_string();
+        assert!(
+            !msg.contains("IAM token not available"),
+            "reconcile reached AUTH, so the error must be a connection/timeout failure, \
+             not the pre-AUTH token-unavailable guard; got: {msg}"
         );
         assert_eq!(
             seeded,
@@ -3950,6 +4010,52 @@ mod tests {
         assert!(
             client.shared.is_pool_managed.load(Ordering::Acquire),
             "mark_pool_managed must enable the borrow reconcile for pooled clients"
+        );
+    }
+
+    /// The re-entrancy guard must set `reconciling_borrow` while alive and clear it on
+    /// drop — including when dropped by an early return / dropped future — so the
+    /// nested reconcile AUTH skips the gate but a dropped AUTH can't wedge it open.
+    #[test]
+    fn reconcile_reentry_guard_sets_and_clears_on_drop() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+        let flag = std::sync::Arc::new(AtomicBool::new(false));
+        {
+            let _guard = super::ReconcileReentryGuard::new(flag.clone());
+            assert!(
+                flag.load(Ordering::Acquire),
+                "guard must mark reconcile-in-progress while alive"
+            );
+        }
+        assert!(
+            !flag.load(Ordering::Acquire),
+            "guard must clear the flag on drop so a dropped AUTH future can't wedge the gate"
+        );
+    }
+
+    /// With `reconciling_borrow` set, the dispatch gate must short-circuit to Ok even
+    /// for a pool-managed IAM client with a stale bookmark — this is what stops the
+    /// nested reconcile AUTH from recursing back through the gate.
+    #[test]
+    fn reconciling_borrow_suppresses_the_dispatch_gate() {
+        use std::sync::atomic::Ordering;
+        let client = create_test_client(); // built outside any runtime
+        let rt = borrow_test_runtime();
+        let mut client = rt.block_on(async move {
+            let manager = test_iam_manager().await;
+            let seeded = manager.token_generation();
+            let client = attach_iam(client, manager.clone(), seeded);
+            manager.refresh_token().await; // make the bookmark stale
+            client
+        });
+        client.mark_pool_managed();
+        client
+            .shared
+            .reconciling_borrow
+            .store(true, Ordering::Release);
+        assert!(
+            rt.block_on(client.reconcile_iam_before_dispatch()).is_ok(),
+            "a set reconciling_borrow flag must make the gate skip reconcile (no recursion)"
         );
     }
 

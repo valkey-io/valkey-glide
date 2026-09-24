@@ -215,6 +215,10 @@ impl ClientPool {
     /// Add a newly created client to the idle pool. Returns the assigned client_id.
     /// Increments total_count. Use `add_client_reserved` if the slot was pre-reserved.
     pub fn add_client(&mut self, client: GlideClient) -> u64 {
+        // Enable the borrow-time IAM reconcile for every pooled client, regardless
+        // of which binding created it (Java/Node call this directly). Marking at the
+        // pool's ownership boundary means no binding can forget to mark.
+        client.mark_pool_managed();
         let client_id = self.next_id();
         let flag = Arc::new(AtomicU32::new(0));
         let entry = PooledClient {
@@ -236,6 +240,8 @@ impl ClientPool {
     /// pre-incremented total_count (e.g., background creation after should_create check).
     /// Returns the assigned client_id.
     pub fn add_client_reserved(&mut self, client: GlideClient) -> u64 {
+        // See `add_client`: mark at the pool ownership boundary so every binding is covered.
+        client.mark_pool_managed();
         let client_id = self.next_id();
         let flag = Arc::new(AtomicU32::new(0));
         let entry = PooledClient {
