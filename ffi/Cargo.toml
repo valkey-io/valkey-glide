@@ -28,7 +28,7 @@ percent-encoding = "2"
 uuid = { version = "1", features = ["v4", "fast-rng"] }
 
 [dev-dependencies]
-rstest = "^0.26"
+rstest = "^0.27"
 serial_test = "4"
 lazy_static = "1"
 

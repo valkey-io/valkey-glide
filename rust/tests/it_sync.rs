@@ -10,7 +10,10 @@ mod common;
 
 use glide::pipeline_options::PipelineOptions;
 use glide::sync::{SyncGlideClient, SyncGlideClusterClient};
-use glide::{CustomCommand, GlideClientConfiguration, GlideClusterClientConfiguration, Route};
+use glide::{
+    CustomCommand, FromValkeyValue, GlideClientConfiguration, GlideClusterClientConfiguration,
+    Route, cmd,
+};
 // Bring the unified command traits into scope.
 use glide::Commands;
 // Bring async command traits into scope for the `run` combinator closures.
@@ -19,6 +22,15 @@ use glide::AsyncCommands;
 fn sync_client(port: u16) -> SyncGlideClient {
     SyncGlideClient::connect(GlideClientConfiguration::with_address("127.0.0.1", port))
         .expect("connect sync client")
+}
+#[test]
+fn sync_cmd_query() {
+    let srv = server_or_skip!();
+    let c = sync_client(srv.port);
+    let k = common::key("sync:cmd_query");
+    let _: () = cmd("SET").arg(&k).arg(9).query(&c).unwrap();
+    let v: i64 = cmd("GET").arg(&k).query(&c).unwrap();
+    assert_eq!(v, 9);
 }
 
 #[test]
@@ -57,10 +69,10 @@ fn sync_standalone_set_options() {
     let k = common::key("sync:opt");
 
     let _: () = c.set(&k, "first").unwrap();
-    // NX must not overwrite an existing key. Use redis::SetOptions.
-    let opts = glide::redis::SetOptions::default()
-        .conditional_set(glide::redis::ExistenceCheck::NX)
-        .with_expiration(glide::redis::SetExpiry::EX(50));
+    // NX must not overwrite an existing key. Use SetOptions.
+    let opts = glide::SetOptions::default()
+        .conditional_set(glide::ExistenceCheck::NX)
+        .with_expiration(glide::SetExpiry::EX(50));
     let _: () = c.set_options(&k, "second", opts).unwrap();
     let v: Option<String> = c.get(&k).unwrap();
     assert_eq!(v.as_deref(), Some("first"));
@@ -74,22 +86,30 @@ fn sync_standalone_custom_command_and_pipeline() {
 
     c.custom_command(&["SET", &k, "42"]).unwrap();
     let v = c.custom_command(&["GET", &k]).unwrap();
-    assert_eq!(glide::value::to_string(v).unwrap(), "42");
+    assert_eq!(String::from_owned_valkey_value(v).unwrap(), "42");
 
-    // Atomic transaction via redis::Pipeline
+    // Atomic transaction via pipeline
     let bk = common::key("sync:batch");
-    let mut pipe = redis::Pipeline::new();
-    pipe.atomic();
-    pipe.cmd("SET").arg(&bk).arg("10");
-    pipe.cmd("INCRBY").arg(&bk).arg(1);
-    pipe.cmd("INCRBY").arg(&bk).arg(1);
-    pipe.cmd("GET").arg(&bk);
-    let results = c
-        .execute_pipeline(&pipe, true, &PipelineOptions::default())
-        .unwrap();
+
+    let mut pipe = glide::pipe();
+    pipe.atomic()
+        .cmd("SET")
+        .arg(&bk)
+        .arg("10")
+        .cmd("INCRBY")
+        .arg(&bk)
+        .arg(1)
+        .cmd("INCRBY")
+        .arg(&bk)
+        .arg(1)
+        .cmd("GET")
+        .arg(&bk);
+
+    let results = c.exec(&pipe, true, &PipelineOptions::default()).unwrap();
+
     assert_eq!(results.len(), 4);
-    assert_eq!(glide::value::to_i64(results[2].clone()).unwrap(), 12);
-    assert_eq!(glide::value::to_string(results[3].clone()).unwrap(), "12");
+    assert_eq!(i64::from_valkey_value(&results[2]).unwrap(), 12);
+    assert_eq!(String::from_valkey_value(&results[3]).unwrap(), "12");
 }
 
 #[test]
@@ -129,25 +149,17 @@ fn sync_standalone_run_full_async_surface() {
 
 #[test]
 fn sync_cluster_commands() {
-    let cluster = cluster_or_skip!();
-    let client = SyncGlideClusterClient::connect(
-        GlideClusterClientConfiguration::with_address("127.0.0.1", cluster.seed_port())
-            .request_timeout(std::time::Duration::from_secs(5)),
-    );
-    let client = match client {
-        Ok(c) => c,
-        Err(_) => {
-            eprintln!("SKIP: could not connect sync cluster client");
-            return;
-        }
-    };
+    let cluster = common::ClusterHarness::start_blocking();
+    let config = GlideClusterClientConfiguration::with_address("127.0.0.1", cluster.seed_port())
+        .request_timeout(std::time::Duration::from_secs(5));
+    let client = SyncGlideClusterClient::connect(config).expect("connect sync cluster client");
 
     assert_eq!(client.ping().unwrap(), "PONG");
 
     let k = common::key("sync:cluster:k");
     client.custom_command(&["SET", &k, "v"]).unwrap();
     let v = client.custom_command(&["GET", &k]).unwrap();
-    assert_eq!(glide::value::to_string(v).unwrap(), "v");
+    assert_eq!(String::from_owned_valkey_value(v).unwrap(), "v");
 
     // Routed command to all primaries.
     client
@@ -159,5 +171,5 @@ fn sync_cluster_commands() {
         let k = k.clone();
         async move { c.custom_command(&["GET", &k]).await.unwrap() }
     });
-    assert_eq!(glide::value::to_string(got).unwrap(), "v");
+    assert_eq!(String::from_owned_valkey_value(got).unwrap(), "v");
 }

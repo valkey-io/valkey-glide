@@ -19,31 +19,19 @@ from glide_shared.config import (
 )
 from glide_shared.routes import AllNodes
 from glide_sync.client_pool import ClientPool, PoolConfig
-from glide_sync.glide_client import GlideClusterClient
+from glide_sync.glide_client import GlideClient, GlideClusterClient
 
-from tests.utils.utils import get_cluster_addresses as _get_cluster_addresses
 from tests.utils.utils import get_standalone_address as _get_standalone_address
-from tests.utils.utils import sync_check_if_server_version_lt
+from tests.utils.utils import require_cluster_addresses, sync_check_if_server_version_lt
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
-
-
-def _skip_cluster_if_unavailable():
-    """Skip test if no cluster endpoints are configured."""
-    try:
-        cluster = pytest.valkey_cluster  # type: ignore[attr-defined]
-        if cluster is None or len(cluster.nodes_addr) == 0:
-            pytest.skip("No cluster endpoints available")
-    except AttributeError:
-        pytest.skip("No cluster endpoints available (pytest.valkey_cluster not set)")
 
 
 def _get_pool_client_config(cluster_mode: bool):
     """Build a client configuration for standalone or cluster mode."""
     if cluster_mode:
-        _skip_cluster_if_unavailable()
         return GlideClusterClientConfiguration(
-            addresses=_get_cluster_addresses(),
+            addresses=require_cluster_addresses(),
             request_timeout=5000,
         )
     else:
@@ -61,9 +49,8 @@ def _get_lib_name_config(cluster_mode: bool, lib_name, client_info_tag, client_n
     if client_info_tag is not None:
         kwargs["client_info_tag"] = client_info_tag
     if cluster_mode:
-        _skip_cluster_if_unavailable()
         return GlideClusterClientConfiguration(
-            addresses=_get_cluster_addresses(), **kwargs
+            addresses=require_cluster_addresses(), **kwargs
         )
     return GlideClientConfiguration(addresses=[_get_standalone_address()], **kwargs)
 
@@ -315,6 +302,51 @@ class TestClientPool:
         finally:
             pool.close()
 
+    @pytest.mark.parametrize("cluster_mode", [False])
+    def test_scope_stops_executing_after_pool_close(self, cluster_mode):
+        """A scope must not outlive the pool its client was borrowed from.
+
+        Closing the pool has to invalidate outstanding scopes before it returns;
+        otherwise the scope keeps reading and mutating keyspace on a connection
+        whose owner is gone.
+        """
+        config = _get_pool_client_config(cluster_mode)
+        pool = ClientPool.create(config, PoolConfig(max_size=3, min_idle=1))
+        _wait_for_pool_ready(pool, 1)
+        key = _make_key(cluster_mode, "scope-after-pool-close")
+        scope = None
+        try:
+            with pool.borrow() as client:
+                scope = client.scoped_connection()
+
+                # Prove the scope works first, so a later failure cannot be a
+                # false positive.
+                scope.set(key, "before")
+                assert scope.get(key) == "before"
+                client.delete([key])
+
+                # Tear the pool down with the scope still outstanding and the
+                # client still borrowed — how #6889 was reported.
+                pool.close()
+
+                # No polling: invalidation happens before glide_pool_destroy
+                # returns, so the very next command must fail. A write, so a
+                # regression is the actual harm — mutating keyspace through a
+                # scope whose owner is gone.
+                with pytest.raises(RuntimeError, match="invalid scope"):
+                    scope.set(key, "after")
+        finally:
+            if scope is not None and not scope.is_released:
+                scope.close()
+            pool.close()
+            # This test builds its own pool, so no fixture FLUSHALL runs. If the
+            # scope got one write in before invalidation, drop the key.
+            cleanup = GlideClient.create(config)
+            try:
+                cleanup.delete([key])
+            finally:
+                cleanup.close()
+
 
 def _has_client_info_field(client_info: str, field: str, expected: str) -> bool:
     """Return True if a whitespace-delimited ``field=expected`` token is present."""
@@ -365,7 +397,7 @@ class TestSyncPoolLibName:
         """Inspect CLIENT LIST across all nodes for the pooled connection."""
         observer = GlideClusterClient.create(
             GlideClusterClientConfiguration(
-                addresses=_get_cluster_addresses(), request_timeout=5000
+                addresses=require_cluster_addresses(), request_timeout=5000
             )
         )
         try:
@@ -443,9 +475,8 @@ class TestPoolPubsubRejection:
 
     def test_pool_rejects_cluster_pubsub_config(self):
         """Pool creation with cluster pubsub subscriptions raises ValueError."""
-        _skip_cluster_if_unavailable()
         config = GlideClusterClientConfiguration(
-            addresses=_get_cluster_addresses(),
+            addresses=require_cluster_addresses(),
             request_timeout=5000,
             pubsub_subscriptions=GlideClusterClientConfiguration.PubSubSubscriptions(
                 callback=None,

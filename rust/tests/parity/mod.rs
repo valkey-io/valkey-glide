@@ -17,18 +17,17 @@
 //! (minus GLIDE's deliberate `&self`-receiver / lifetime / `Send` additions),
 //! present in both the async and blocking flavors.
 //!
-//! The fork source is resolved via `cargo metadata` (the in-tree path
-//! dependency), exactly like the Python script did.
+//! The redis-rs source is resolved directly from the `redis` path dependency
+//! declared in `Cargo.toml`.
 //!
-//! TODO #6904: This guard verifies our command table against the *in-repo*
+//! TODO #7058: This guard verifies our command table against the *in-repo*
 //! redis-rs fork, not upstream redis-rs. The client's real goal is
 //! compatibility with actual redis-rs, which the fork may diverge from —
-//! revisit as part of the API-compatibility work.
+//! revisit as part of the redis-rs 1.7.0 compatibility work.
 
 use regex::Regex;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
 /// Outcome of a failed or skipped parity check.
 pub enum ParityError {
@@ -53,15 +52,15 @@ pub fn check() -> Result<String, ParityError> {
     let fork_mod_rs = resolve_fork_mod_rs(manifest_dir)?;
     let ours_core_rs = manifest_dir.join("src/commands/core.rs");
 
-    let fork_src = read(&fork_mod_rs)?;
-    let ours_src = read(&ours_core_rs)?;
+    let redis_src = read(&fork_mod_rs)?;
+    let glide_src = read(&ours_core_rs)?;
 
-    let fork = parse_fork(&fork_src);
-    let ours = parse_ours(&ours_src);
+    let redis_table = parse_redis_command_table(&redis_src);
+    let glide_table = convert_to_redis_command_table(parse_glide_command_table(&glide_src));
 
     let mut problems = Vec::new();
-    for (name, sig) in &fork {
-        match ours.get(name) {
+    for (name, sig) in &redis_table {
+        match glide_table.get(name) {
             None => problems.push(format!("MISSING in ours: {name}")),
             Some(our_sig) if our_sig != sig => problems.push(format!(
                 "SIGNATURE DIFF {name}:\n     fork: {sig:?}\n     ours: {our_sig:?}"
@@ -69,19 +68,19 @@ pub fn check() -> Result<String, ParityError> {
             _ => {}
         }
     }
-    for name in ours.keys() {
-        if !fork.contains_key(name) {
+    for name in glide_table.keys() {
+        if !redis_table.contains_key(name) {
             problems.push(format!("EXTRA in ours (not in fork table): {name}"));
         }
     }
 
-    check_scan_methods(&fork_mod_rs, &ours_src, &mut problems)?;
+    check_scan_methods(&fork_mod_rs, &glide_src, &mut problems)?;
 
     if problems.is_empty() {
         Ok(format!(
             "parity OK: {} methods match the fork table exactly; \
              scan iterators match the fork's macro definitions",
-            fork.len()
+            redis_table.len()
         ))
     } else {
         Err(ParityError::Violations(problems))
@@ -93,36 +92,31 @@ fn read(path: &Path) -> Result<String, ParityError> {
         .map_err(|e| ParityError::Skip(format!("cannot read {}: {e}", path.display())))
 }
 
-/// Locate the fork's `src/commands/mod.rs` via `cargo metadata` (the same
-/// resolution the Python script used): find the `redis` package's manifest and
-/// take `src/commands/mod.rs` next to it.
+/// Locate redis-rs's `src/commands/mod.rs` file from the `redis`
+/// path dependency declared in this crate's `Cargo.toml`.
 fn resolve_fork_mod_rs(manifest_dir: &Path) -> Result<PathBuf, ParityError> {
-    let out = Command::new(env!("CARGO"))
-        .args(["metadata", "--format-version", "1", "--offline"])
-        .current_dir(manifest_dir)
-        .output()
-        .map_err(|e| ParityError::Skip(format!("cannot run cargo metadata: {e}")))?;
-    if !out.status.success() {
+    let manifest_path = manifest_dir.join("Cargo.toml");
+    let manifest = std::fs::read_to_string(&manifest_path)
+        .map_err(|e| ParityError::Skip(format!("cannot read {}: {e}", manifest_path.display())))?;
+
+    // Declared as `redis = { path = "..." }`.
+    let rel = Regex::new(r#"(?m)^\s*redis\s*=\s*\{[^}]*\bpath\s*=\s*"([^"]+)""#)
+        .unwrap()
+        .captures(&manifest)
+        .and_then(|c| c.get(1))
+        .ok_or_else(|| ParityError::Skip("no `redis` path dependency in Cargo.toml".into()))?
+        .as_str()
+        .to_owned();
+
+    let mod_rs = manifest_dir.join(rel).join("src/commands/mod.rs");
+    if !mod_rs.exists() {
         return Err(ParityError::Skip(format!(
-            "cargo metadata failed:\n{}",
-            String::from_utf8_lossy(&out.stderr)
+            "fork source not found at {}",
+            mod_rs.display()
         )));
     }
-    let meta: serde_json::Value = serde_json::from_slice(&out.stdout)
-        .map_err(|e| ParityError::Skip(format!("cannot parse cargo metadata: {e}")))?;
-    let manifest = meta["packages"]
-        .as_array()
-        .into_iter()
-        .flatten()
-        .find(|p| p["name"] == "redis")
-        .and_then(|p| p["manifest_path"].as_str())
-        .ok_or_else(|| {
-            ParityError::Skip("could not resolve the `redis` package via cargo metadata".into())
-        })?;
-    let dir = Path::new(manifest)
-        .parent()
-        .expect("manifest path has a parent");
-    Ok(dir.join("src").join("commands").join("mod.rs"))
+
+    Ok(mod_rs)
 }
 
 /// Extract the body of a top-level `<macro_name> {` invocation: from the marker
@@ -191,9 +185,8 @@ fn norm_sig(generics: &str, args: &str) -> NormSig {
     (gens, arglist)
 }
 
-/// Parse the fork's `implement_commands!` table: method name -> normalized sig.
-fn parse_fork(src: &str) -> BTreeMap<String, NormSig> {
-    let body = macro_body(src, "implement_commands! {");
+/// Parse the command table from the given source body.
+fn parse_table(body: &str) -> BTreeMap<String, NormSig> {
     let sig_re =
         Regex::new(r"^fn\s+([a-z_0-9]+)\s*(?:<([^>]*)>)?\s*\((.*?)\)\s*\{").expect("valid regex");
 
@@ -214,6 +207,9 @@ fn parse_fork(src: &str) -> BTreeMap<String, NormSig> {
         }
         li += 1;
         // Skip the method body by brace counting.
+        // TODO #7154: only the signature is compared; the body is discarded, so a
+        // typo in a hand-copied `build_cmd!` encoder passes. Compare packed
+        // commands/args too.
         let count = |s: &str, c: char| s.matches(c).count() as i64;
         let mut depth = count(&sig, '{') - count(&sig, '}');
         while depth > 0 {
@@ -223,7 +219,7 @@ fn parse_fork(src: &str) -> BTreeMap<String, NormSig> {
         let sig1 = sig.split_whitespace().collect::<Vec<_>>().join(" ");
         let caps = sig_re.captures(&sig1).unwrap_or_else(|| {
             panic!(
-                "unparseable fork table entry (did the fork's table style change on a rev \
+                "unparseable command table entry (did the table style change on a rev \
                  bump?):\n  {}",
                 &sig1[..sig1.len().min(160)]
             )
@@ -236,20 +232,28 @@ fn parse_fork(src: &str) -> BTreeMap<String, NormSig> {
     out
 }
 
-/// Parse our `implement_glide_commands!` table: method name -> normalized sig.
-fn parse_ours(src: &str) -> BTreeMap<String, NormSig> {
-    let body = macro_body(src, "implement_glide_commands! {");
-    let re = Regex::new(r"(?s)fn\s+([a-z_0-9]+)\s*(?:<([^>]*)>)?\s*\(([^;]*?)\)\s*;")
-        .expect("valid regex");
-    re.captures_iter(body)
-        .map(|caps| {
-            let args = caps[3].split_whitespace().collect::<Vec<_>>().join(" ");
-            (
-                caps[1].to_string(),
-                norm_sig(caps.get(2).map_or("", |m| m.as_str()), &args),
-            )
-        })
-        .collect()
+/// Parse `redis-rs`'s `implement_commands!` table.
+fn parse_redis_command_table(src: &str) -> BTreeMap<String, NormSig> {
+    parse_table(macro_body(src, "implement_commands! {"))
+}
+
+/// Parse GLIDE's `implement_glide_commands!` table.
+fn parse_glide_command_table(src: &str) -> BTreeMap<String, NormSig> {
+    parse_table(macro_body(src, "implement_glide_commands! {"))
+}
+
+/// Converts the given GLIDE command table so it can be compared to a `redis-rs` command table.
+fn convert_to_redis_command_table(table: BTreeMap<String, NormSig>) -> BTreeMap<String, NormSig> {
+    let mut converted = BTreeMap::new();
+    for (name, (mut generics, args)) in table {
+        for generic in &mut generics {
+            if let [_name, bound] = generic.as_mut_slice() {
+                *bound = bound_from_glide_to_redis(bound);
+            }
+        }
+        converted.insert(name, (generics, args));
+    }
+    converted
 }
 
 // ---- scan-iterator methods ------------------------------------------------------
@@ -275,11 +279,18 @@ fn norm_scan_generics(generics: &str) -> Vec<(String, String)> {
                 .split('+')
                 .map(str::trim)
                 .filter(|b| !b.is_empty() && *b != "Send" && !b.starts_with('\''))
-                .map(|b| b.replace("redis::", ""))
+                .map(bound_from_glide_to_redis)
                 .collect();
             (name.trim().to_string(), kept.join(" + "))
         })
         .collect()
+}
+
+/// Maps the given GLIDE bound to the corresponding redis-rs bound.
+fn bound_from_glide_to_redis(bound: &str) -> String {
+    bound
+        .replace("FromValkeyValue", "FromRedisValue")
+        .replace("ToValkeyArgs", "ToRedisArgs")
 }
 
 /// `name -> sorted list of normalized (generics, args)` — one element per trait

@@ -215,8 +215,8 @@ export type GlideClientConfiguration = BaseClientConfiguration & {
      * This is useful for connecting to replica-only deployments or when you want to
      * prevent accidental write operations.
      *
-     * Note: read-only mode is not compatible with AZAffinity or AZAffinityReplicasAndPrimary
-     * read strategies.
+     * Note: read-only mode is not compatible with AZAffinity, AZAffinityReplicasAndPrimary, or
+     * AZAffinityAllNodes read strategies.
      *
      * Defaults to false.
      */

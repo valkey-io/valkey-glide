@@ -1061,6 +1061,7 @@ pub fn create_direct_client<'a>(
 
                     task::spawn_local(async move {
                         // Get or create scan cursor
+                        // TODO #7161: Update to use new glide_core::Client methods.
                         let cursor_result = if scan_msg.cursor.is_empty() {
                             Ok(ScanStateRC::new())
                         } else {

@@ -40,6 +40,8 @@ matrix_test!(bitcount_missing_zero, c, {
 });
 
 matrix_test!(bitcount_range_byte, c, {
+    skip_if_version_below!(c, 7, 0, 0);
+
     let k = common::key("bit");
     // Two bytes: first byte has 8 set bits, second has 0.
     for i in 0..8usize {
@@ -58,15 +60,19 @@ matrix_test!(bitcount_range_byte, c, {
     assert_eq!(count, 0);
 });
 
+// TODO #7082: replace the raw `BITCOUNT` with a typed `bitcount_range` that
+// accepts the BYTE/BIT index unit.
 matrix_test!(bitcount_range_bit, c, {
+    skip_if_version_below!(c, 7, 0, 0);
+
     let k = common::key("bit");
     let _: i64 = c.setbit(&k, 5, true).await.unwrap();
     let _: i64 = c.setbit(&k, 6, true).await.unwrap();
     // bitcount_range in compat takes byte offsets; use native bitpos_range for BIT index type
     // Use cmd for BITCOUNT with BIT index type
     let count: i64 = c
-        .glide_send(
-            redis::cmd("BITCOUNT")
+        .glide_send_command_as(
+            glide::cmd("BITCOUNT")
                 .arg(&k)
                 .arg(0i64)
                 .arg(7i64)
@@ -140,6 +146,6 @@ matrix_test!(bitop_not, c, {
 matrix_test!(bitmap_wrong_type_errors, c, {
     let k = common::key("wt");
     let _: i64 = c.rpush(&k, &["x"]).await.unwrap();
-    let res: redis::RedisResult<i64> = c.setbit(&k, 0, true).await;
+    let res: glide::ValkeyResult<i64> = c.setbit(&k, 0, true).await;
     assert!(res.is_err());
 });

@@ -37,7 +37,7 @@ resp_test!(script_noscript_fallback_after_flush, c, {
     // Flush the script cache so EVALSHA is guaranteed to miss, exercising the
     // transparent EVAL fallback.
     let _: () = c
-        .glide_send(cmd("SCRIPT").arg("FLUSH").arg("SYNC").clone())
+        .glide_send_command_as(cmd("SCRIPT").arg("FLUSH").arg("SYNC").clone())
         .await
         .unwrap();
     let script = Script::new("return 41 + 1");
@@ -63,7 +63,7 @@ timed_tokio_test!(
 
         // A db-0 client must not see the key; a second db-1 client must.
         let c0 = glide::GlideClient::connect(
-            GlideClientConfiguration::from_url(&format!("redis://127.0.0.1:{}", srv.port)).unwrap(),
+            GlideClientConfiguration::from_url(format!("redis://127.0.0.1:{}", srv.port)).unwrap(),
         )
         .await
         .unwrap();
@@ -118,7 +118,7 @@ fn sync_pipeline_and_transaction() {
         .ignore()
         .get(&k1)
         .get(&k2)
-        .query_glide(&c)
+        .query(&c)
         .unwrap();
     assert_eq!((v1.as_str(), v2), ("x", 9));
 
@@ -127,11 +127,11 @@ fn sync_pipeline_and_transaction() {
         .atomic()
         .incr(&ctr, 1)
         .incr(&ctr, 1)
-        .query_glide(&c)
+        .query(&c)
         .unwrap();
     assert_eq!((a, b), (1, 2));
 
-    // Native-copy path: PipelineExt::query_glide (borrows &client, sends the
+    // Native-copy path: PipelineExt::query (borrows &client, sends the
     // built Pipeline directly — no packed-byte round-trip) must honor
     // .ignore() handling and atomic transactions.
     let k3 = common::tkey("cmd_sp", "k3");
@@ -140,7 +140,7 @@ fn sync_pipeline_and_transaction() {
         .ignore()
         .get(&k3)
         .incr(&ctr, 5)
-        .query_glide(&c)
+        .query(&c)
         .unwrap();
     assert_eq!((v3.as_str(), cnt), ("y", 7));
 
@@ -149,7 +149,7 @@ fn sync_pipeline_and_transaction() {
         .atomic()
         .incr(&ctr2, 3)
         .incr(&ctr2, 4)
-        .query_glide(&c)
+        .query(&c)
         .unwrap();
     assert_eq!((x, y), (3, 7));
 }
@@ -174,7 +174,7 @@ fn sync_pipeline_with_literal_multi_exec_is_not_atomic() {
         .cmd("INCR")
         .arg(&ctr)
         .cmd("EXEC")
-        .query_glide(&c)
+        .query(&c)
         .unwrap();
     assert_eq!(multi_ok, "OK");
     assert_eq!(queued, "QUEUED");
@@ -214,22 +214,21 @@ resp_test!(script_load_async_returns_hash, c, {
     assert_eq!(hash, script.get_hash());
     // Loaded: EVALSHA now succeeds without fallback.
     let v: i64 = c
-        .glide_send(cmd("EVALSHA").arg(script.get_hash()).arg(0).clone())
+        .glide_send_command_as(cmd("EVALSHA").arg(script.get_hash()).arg(0).clone())
         .await
         .unwrap();
     assert_eq!(v, 7);
 });
 
-resp_test!(noscript_errorkind_passthrough, c, {
-    // migrated call sites `match err.kind()`; NOSCRIPT must surface as
-    // ErrorKind::NoScriptError outside the Script type's internal fallback.
+resp_test!(noscript_surfaces_as_request_error, c, {
+    // An unknown script hash raises a RequestError with NOSCRIPT.
     let c = c;
     let _: () = c
-        .glide_send(cmd("SCRIPT").arg("FLUSH").arg("SYNC").clone())
+        .glide_send_command_as(cmd("SCRIPT").arg("FLUSH").arg("SYNC").clone())
         .await
         .unwrap();
     let err = c
-        .glide_send::<i64>(
+        .glide_send_command_as::<i64>(
             cmd("EVALSHA")
                 .arg("0000000000000000000000000000000000000000")
                 .arg(0)
@@ -237,7 +236,9 @@ resp_test!(noscript_errorkind_passthrough, c, {
         )
         .await
         .unwrap_err();
-    assert_eq!(err.kind(), glide::ErrorKind::NoScriptError, "got: {err}");
+
+    assert_eq!(err.class_name(), "RequestError", "got: {err}");
+    assert!(err.message().contains("NoScriptError"), "got: {err}");
 });
 
 // ---- normalized reply shapes: streams / geo / CONFIG GET ------------------------
@@ -245,7 +246,7 @@ resp_test!(noscript_errorkind_passthrough, c, {
 matrix_test!(config_get_decodes_to_map, c, {
     let c = c;
     let cfg: HashMap<String, String> = c
-        .glide_send(cmd("CONFIG").arg("GET").arg("maxmemory").clone())
+        .glide_send_command_as(cmd("CONFIG").arg("GET").arg("maxmemory").clone())
         .await
         .unwrap();
     assert!(cfg.contains_key("maxmemory"), "got: {cfg:?}");
@@ -257,15 +258,18 @@ matrix_test!(xadd_xlen_via_cmd, c, {
     let c = c;
     let k = common::key("cmd_stream");
     let id1: String = c
-        .glide_send(cmd("XADD").arg(&k).arg("*").arg("f").arg("v1").clone())
+        .glide_send_command_as(cmd("XADD").arg(&k).arg("*").arg("f").arg("v1").clone())
         .await
         .unwrap();
     let _: String = c
-        .glide_send(cmd("XADD").arg(&k).arg("*").arg("f").arg("v2").clone())
+        .glide_send_command_as(cmd("XADD").arg(&k).arg("*").arg("f").arg("v2").clone())
         .await
         .unwrap();
     assert!(id1.contains('-'));
-    let len: i64 = c.glide_send(cmd("XLEN").arg(&k).clone()).await.unwrap();
+    let len: i64 = c
+        .glide_send_command_as(cmd("XLEN").arg(&k).clone())
+        .await
+        .unwrap();
     assert_eq!(len, 2);
 });
 
@@ -275,15 +279,15 @@ matrix_test!(xrange_decode_shape, c, {
     let c = c;
     let k = common::key("cmd_xr");
     let _: String = c
-        .glide_send(cmd("XADD").arg(&k).arg("1-1").arg("a").arg("1").clone())
+        .glide_send_command_as(cmd("XADD").arg(&k).arg("1-1").arg("a").arg("1").clone())
         .await
         .unwrap();
     let _: String = c
-        .glide_send(cmd("XADD").arg(&k).arg("2-2").arg("b").arg("2").clone())
+        .glide_send_command_as(cmd("XADD").arg(&k).arg("2-2").arg("b").arg("2").clone())
         .await
         .unwrap();
     let entries: HashMap<String, Vec<(String, String)>> = c
-        .glide_send(cmd("XRANGE").arg(&k).arg("-").arg("+").clone())
+        .glide_send_command_as(cmd("XRANGE").arg(&k).arg("-").arg("+").clone())
         .await
         .unwrap();
     assert_eq!(entries.len(), 2);
@@ -296,7 +300,7 @@ matrix_test!(geo_decode_shapes, c, {
     let c = c;
     let k = common::key("cmd_geo");
     let added: i64 = c
-        .glide_send(
+        .glide_send_command_as(
             cmd("GEOADD")
                 .arg(&k)
                 .arg(13.361389)
@@ -313,7 +317,7 @@ matrix_test!(geo_decode_shapes, c, {
 
     // GEODIST is normalized to a double.
     let dist: f64 = c
-        .glide_send(
+        .glide_send_command_as(
             cmd("GEODIST")
                 .arg(&k)
                 .arg("Palermo")
@@ -327,7 +331,7 @@ matrix_test!(geo_decode_shapes, c, {
 
     // GEOPOS is normalized to arrays of double pairs.
     let pos: Vec<Vec<(f64, f64)>> = c
-        .glide_send(cmd("GEOPOS").arg(&k).arg("Palermo").clone())
+        .glide_send_command_as(cmd("GEOPOS").arg(&k).arg("Palermo").clone())
         .await
         .unwrap();
     assert!((pos[0][0].0 - 13.361389).abs() < 0.001);
@@ -351,7 +355,7 @@ matrix_test!(lmpop_typed_method, c, {
 
 #[tokio::test]
 async fn cluster_from_urls_connects_and_routes() {
-    let cluster = cluster_or_skip!();
+    let cluster = common::ClusterHarness::start().await;
     // Build seed-node URLs from the real cluster's primaries and connect via
     // the URL constructor.
     let urls: Vec<String> = cluster
@@ -361,41 +365,34 @@ async fn cluster_from_urls_connects_and_routes() {
         .collect();
     let cfg = GlideClusterClientConfiguration::from_urls(urls.iter().map(String::as_str)).unwrap();
     assert_eq!(cfg.addresses.len(), cluster.primary_ports.len());
-    let c = match glide::GlideClusterClient::connect(cfg).await {
-        Ok(c) => c,
-        Err(e) => {
-            eprintln!("SKIP: cluster connect failed: {e}");
-            return;
-        }
-    };
+
+    let client: glide::GlideClusterClient = glide::GlideClusterClient::connect(cfg)
+        .await
+        .expect("connect cluster client");
+
     // Keys hash to different slots; the compat typed API routes each.
     for i in 0..20 {
         let k = format!("cmd_cluster_url:{i}");
-        AsyncCommands::set::<_, _, ()>(&c, &k, i).await.unwrap();
-        let v: i64 = AsyncCommands::get(&c, &k).await.unwrap();
+        AsyncCommands::set::<_, _, ()>(&client, &k, i)
+            .await
+            .unwrap();
+        let v: i64 = AsyncCommands::get(&client, &k).await.unwrap();
         assert_eq!(v, i);
     }
 }
 
 #[test]
 fn sync_cluster_commands_trait() {
-    let cluster = cluster_or_skip!();
-    let c = match SyncGlideClusterClient::connect(GlideClusterClientConfiguration::with_address(
-        "127.0.0.1",
-        cluster.seed_port(),
-    )) {
-        Ok(c) => c,
-        Err(e) => {
-            eprintln!("SKIP: sync cluster connect failed: {e}");
-            return;
-        }
-    };
+    let cluster = common::ClusterHarness::start_blocking();
+    let config = GlideClusterClientConfiguration::with_address("127.0.0.1", cluster.seed_port());
+    let client = SyncGlideClusterClient::connect(config).expect("connect sync cluster client");
+
     // Blocking typed API on the cluster client.
     let k = format!("cmd_sync_cluster:{}", common::key("k"));
-    Commands::set::<_, _, ()>(&c, &k, 123).unwrap();
-    let v: i64 = Commands::get(&c, &k).unwrap();
+    Commands::set::<_, _, ()>(&client, &k, 123).unwrap();
+    let v: i64 = Commands::get(&client, &k).unwrap();
     assert_eq!(v, 123);
-    let v: i64 = Commands::incr(&c, &k, 7).unwrap();
+    let v: i64 = Commands::incr(&client, &k, 7).unwrap();
     assert_eq!(v, 130);
 }
 
@@ -405,21 +402,16 @@ async fn cluster_script_noscript_fallback() {
     // node it lands on — exercising the transparent EVAL fallback in cluster
     // mode. Flush all nodes first to guarantee the miss, then invoke enough
     // times to hit multiple nodes.
-    let cluster = cluster_or_skip!();
-    let c = match cluster.client().await {
-        Some(c) => c,
-        None => {
-            eprintln!("SKIP: cluster client connect failed");
-            return;
-        }
-    };
-    let _: () = c
-        .glide_send(cmd("SCRIPT").arg("FLUSH").arg("SYNC").clone())
+    let cluster = common::ClusterHarness::start().await;
+    let client = cluster.client().await;
+
+    let _: () = client
+        .glide_send_command_as(cmd("SCRIPT").arg("FLUSH").arg("SYNC").clone())
         .await
         .unwrap_or(());
     let script = Script::new("return 40 + 2");
     for _ in 0..10 {
-        let v: i64 = script.invoke_async(&c).await.unwrap();
+        let v: i64 = script.invoke_async(&client).await.unwrap();
         assert_eq!(v, 42);
     }
 }

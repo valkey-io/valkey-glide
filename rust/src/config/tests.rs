@@ -6,7 +6,8 @@
 //! the standalone `From` conversions for each config enum.
 use super::*;
 use glide_core::client::{
-    ConnectionRetryStrategy, PeriodicCheck, ReadFrom as CoreReadFrom, TlsMode,
+    ConnectionRetryStrategy, NodeDiscoveryMode as CoreNodeDiscoveryMode, PeriodicCheck,
+    ReadFrom as CoreReadFrom, TlsMode,
 };
 use glide_core::iam::ServiceType as CoreServiceType;
 use std::time::Duration;
@@ -51,6 +52,24 @@ fn lib_name_is_glide_rust() {
             .lib_name
             .as_deref(),
         Some("GlideRust")
+    );
+}
+
+#[test]
+fn lib_ver_is_cargo_pkg_version() {
+    assert_eq!(
+        GlideClientConfiguration::with_address("h", 1)
+            .to_request()
+            .lib_ver
+            .as_deref(),
+        Some(env!("CARGO_PKG_VERSION"))
+    );
+    assert_eq!(
+        GlideClusterClientConfiguration::with_address("h", 1)
+            .to_request()
+            .lib_ver
+            .as_deref(),
+        Some(env!("CARGO_PKG_VERSION"))
     );
 }
 
@@ -145,9 +164,9 @@ fn tls_insecure() {
 
 #[test]
 fn tls_mode_from_conversion() {
-    assert_eq!(TlsMode::from(TlsConfig::NoTls), TlsMode::NoTls);
-    assert_eq!(TlsMode::from(TlsConfig::SecureTls), TlsMode::SecureTls);
-    assert_eq!(TlsMode::from(TlsConfig::InsecureTls), TlsMode::InsecureTls);
+    assert_eq!(TlsConfig::NoTls.to_core(), TlsMode::NoTls);
+    assert_eq!(TlsConfig::SecureTls.to_core(), TlsMode::SecureTls);
+    assert_eq!(TlsConfig::InsecureTls.to_core(), TlsMode::InsecureTls);
 }
 
 #[test]
@@ -184,11 +203,11 @@ fn protocol_default_is_resp3() {
 #[test]
 fn protocol_from_conversion() {
     assert_eq!(
-        redis::ProtocolVersion::from(ProtocolVersion::RESP2),
+        ProtocolVersion::RESP2.to_core(),
         redis::ProtocolVersion::RESP2
     );
     assert_eq!(
-        redis::ProtocolVersion::from(ProtocolVersion::RESP3),
+        ProtocolVersion::RESP3.to_core(),
         redis::ProtocolVersion::RESP3
     );
 }
@@ -256,25 +275,22 @@ fn read_from_az_affinity_all_nodes_carries_az() {
 
 #[test]
 fn read_from_from_conversions() {
-    assert_eq!(CoreReadFrom::from(ReadFrom::Primary), CoreReadFrom::Primary);
+    assert_eq!(ReadFrom::Primary.to_core(), CoreReadFrom::Primary);
     assert_eq!(
-        CoreReadFrom::from(ReadFrom::PreferReplica),
+        ReadFrom::PreferReplica.to_core(),
         CoreReadFrom::PreferReplica
     );
+    assert_eq!(ReadFrom::AllNodes.to_core(), CoreReadFrom::AllNodes);
     assert_eq!(
-        CoreReadFrom::from(ReadFrom::AllNodes),
-        CoreReadFrom::AllNodes
-    );
-    assert_eq!(
-        CoreReadFrom::from(ReadFrom::AZAffinity("z".into())),
+        ReadFrom::AZAffinity("z".into()).to_core(),
         CoreReadFrom::AZAffinity("z".into())
     );
     assert_eq!(
-        CoreReadFrom::from(ReadFrom::AZAffinityReplicasAndPrimary("z".into())),
+        ReadFrom::AZAffinityReplicasAndPrimary("z".into()).to_core(),
         CoreReadFrom::AZAffinityReplicasAndPrimary("z".into())
     );
     assert_eq!(
-        CoreReadFrom::from(ReadFrom::AZAffinityAllNodes("z".into())),
+        ReadFrom::AZAffinityAllNodes("z".into()).to_core(),
         CoreReadFrom::AZAffinityAllNodes("z".into())
     );
 }
@@ -299,7 +315,7 @@ fn credentials_password_only() {
 #[test]
 fn credentials_username_and_password() {
     let req = GlideClientConfiguration::with_address("h", 1)
-        .credentials(ServerCredentials::new("alice", "hunter2"))
+        .credentials(ServerCredentials::username_password("alice", "hunter2"))
         .to_request();
     let auth = req.authentication_info.expect("auth set");
     assert_eq!(auth.username.as_deref(), Some("alice"));
@@ -309,7 +325,7 @@ fn credentials_username_and_password() {
 #[test]
 fn credentials_apply_to_cluster() {
     let req = GlideClusterClientConfiguration::with_address("h", 1)
-        .credentials(ServerCredentials::new("u", "p"))
+        .credentials(ServerCredentials::username_password("u", "p"))
         .to_request();
     let auth = req.authentication_info.expect("auth set");
     assert_eq!(auth.username.as_deref(), Some("u"));
@@ -354,23 +370,6 @@ fn iam_credentials_memorydb_with_refresh_interval() {
     assert_eq!(iam.service_type, CoreServiceType::MemoryDB);
     assert_eq!(iam.region, "eu-west-1");
     assert_eq!(iam.refresh_interval_seconds, Some(300));
-}
-
-#[test]
-fn iam_with_fallback_password_keeps_both() {
-    // IAM takes precedence at auth time, but a fallback password may still be
-    // provided and must be lowered alongside the IAM config.
-    let creds = ServerCredentials::iam(
-        "u",
-        IamAuthConfig::new("c", "us-west-2", ServiceType::ElastiCache),
-    )
-    .with_password("fallback");
-    let req = GlideClientConfiguration::with_address("h", 1)
-        .credentials(creds)
-        .to_request();
-    let auth = req.authentication_info.expect("auth set");
-    assert_eq!(auth.password.as_deref(), Some("fallback"));
-    assert!(auth.iam_config.is_some());
 }
 
 #[test]
@@ -421,7 +420,7 @@ fn enable_pubsub_sets_flag_cluster() {
 
 #[test]
 fn credentials_debug_redacts_password() {
-    let creds = ServerCredentials::new("alice", "super-secret");
+    let creds = ServerCredentials::username_password("alice", "super-secret");
     let shown = format!("{creds:?}");
     assert!(!shown.contains("super-secret"), "password leaked: {shown}");
     assert!(shown.contains("<redacted>"));
@@ -478,6 +477,22 @@ fn cluster_never_sets_database_id() {
     // Cluster config has no database_id setter; request keeps the default 0.
     let req = GlideClusterClientConfiguration::with_address("h", 1).to_request();
     assert_eq!(req.database_id, 0);
+}
+
+// ---- node_discovery_mode ---------------------------------------------
+
+#[test]
+fn node_discovery_mode() {
+    let req = GlideClientConfiguration::with_address("h", 1)
+        .node_discovery_mode(NodeDiscoveryMode::Static)
+        .to_request();
+    assert_eq!(req.node_discovery_mode, CoreNodeDiscoveryMode::Static);
+}
+
+#[test]
+fn node_discovery_mode_default() {
+    let req = GlideClientConfiguration::with_address("h", 1).to_request();
+    assert_eq!(req.node_discovery_mode, CoreNodeDiscoveryMode::Standard);
 }
 
 // ---- client_name -----------------------------------------------------
@@ -588,7 +603,7 @@ fn backoff_strategy_from_conversion() {
         exponent_base: 7,
         jitter_percent: Some(6),
     }
-    .into();
+    .to_core();
     assert_eq!(s.number_of_retries, 9);
     assert_eq!(s.factor, 8);
     assert_eq!(s.exponent_base, 7);
@@ -627,14 +642,14 @@ fn periodic_checks_manual_interval() {
 #[test]
 fn periodic_checks_from_conversions() {
     assert!(matches!(
-        PeriodicCheck::from(PeriodicChecks::Enabled),
+        PeriodicChecks::Enabled.to_core(),
         PeriodicCheck::Enabled
     ));
     assert!(matches!(
-        PeriodicCheck::from(PeriodicChecks::Disabled),
+        PeriodicChecks::Disabled.to_core(),
         PeriodicCheck::Disabled
     ));
-    match PeriodicCheck::from(PeriodicChecks::ManualInterval(5)) {
+    match PeriodicChecks::ManualInterval(5).to_core() {
         PeriodicCheck::ManualInterval(d) => assert_eq!(d, Duration::from_secs(5)),
         other => panic!("unexpected: {other:?}"),
     }
@@ -696,7 +711,7 @@ fn standalone_request_full() {
     let cfg =
         GlideClientConfiguration::new(vec![NodeAddress::new("a", 1), NodeAddress::new("b", 2)])
             .tls(TlsConfig::SecureTls)
-            .credentials(ServerCredentials::new("user", "pass"))
+            .credentials(ServerCredentials::username_password("user", "pass"))
             .read_from(ReadFrom::PreferReplica)
             .protocol(ProtocolVersion::RESP2)
             .database_id(3)
@@ -753,13 +768,39 @@ fn cluster_request_full() {
 
 #[test]
 fn from_url_basic() {
-    let cfg = GlideClientConfiguration::from_url("redis://localhost:6380").unwrap();
-    assert_eq!(cfg.addresses.len(), 1);
-    assert_eq!(cfg.addresses[0].host, "localhost");
-    assert_eq!(cfg.addresses[0].port, 6380);
-    assert_eq!(cfg.tls, TlsConfig::NoTls);
-    assert_eq!(cfg.database_id, 0);
-    assert!(cfg.credentials.is_none());
+    fn check_standalone(url: impl AsRef<str>) {
+        let cfg = GlideClientConfiguration::from_url(url).unwrap();
+        assert_eq!(cfg.addresses.len(), 1);
+        assert_eq!(cfg.addresses[0].host, "localhost");
+        assert_eq!(cfg.addresses[0].port, 6380);
+        assert_eq!(cfg.tls, TlsConfig::NoTls);
+        assert_eq!(cfg.database_id, 0);
+        assert!(cfg.credentials.is_none());
+    }
+
+    fn check_cluster(url: impl AsRef<str>) {
+        let cfg = GlideClusterClientConfiguration::from_url(url).unwrap();
+        assert_eq!(cfg.addresses.len(), 1);
+        assert_eq!(cfg.addresses[0].host, "localhost");
+        assert_eq!(cfg.addresses[0].port, 6380);
+        assert_eq!(cfg.tls, TlsConfig::NoTls);
+        assert!(cfg.credentials.is_none());
+    }
+
+    // Verify types that implement `AsRef<str>`.
+    let s = "redis://localhost:6380";
+    check_standalone(s);
+    check_cluster(s);
+
+    let owned = s.to_string();
+    check_standalone(owned.clone());
+    check_standalone(&owned);
+    check_cluster(owned.clone());
+    check_cluster(&owned);
+
+    let url = s.parse::<url::Url>().unwrap();
+    check_standalone(&url);
+    check_cluster(&url);
 }
 
 #[test]
@@ -773,13 +814,13 @@ fn from_url_default_port_and_db() {
 fn from_url_credentials() {
     let cfg = GlideClientConfiguration::from_url("redis://user:secret@h:1234").unwrap();
     let creds = cfg.credentials.expect("credentials parsed");
-    assert_eq!(creds.username.as_deref(), Some("user"));
+    assert_eq!(creds.username(), Some("user"));
     assert_eq!(creds.password.as_deref(), Some("secret"));
 
     // Password-only (empty username) form.
     let cfg = GlideClientConfiguration::from_url("redis://:secret@h:1234").unwrap();
     let creds = cfg.credentials.expect("credentials parsed");
-    assert!(creds.username.is_none());
+    assert!(creds.username().is_none());
     assert_eq!(creds.password.as_deref(), Some("secret"));
 }
 

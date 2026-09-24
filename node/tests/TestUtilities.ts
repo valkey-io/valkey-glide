@@ -51,13 +51,21 @@ import {
 const execAsync = promisify(exec);
 
 /**
+ * Small delay between cluster close() calls to allow OS to drain socket
+ * file descriptors. Prevents socket exhaustion when multiple clusters are
+ * torn down sequentially in afterAll.
+ */
+export async function socketDrainDelay(ms = 50): Promise<void> {
+    await new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
  * Reads and returns the CA certificate data for TLS connections.
  *
  * @returns The CA certificate data as a Buffer
  */
 export function getCaCertificateData(): Buffer {
-    const glideHomeDir = process.env.GLIDE_HOME_DIR || process.cwd() + "/..";
-    const caCertPath = `${glideHomeDir}/utils/tls_crts/ca.crt`;
+    const caCertPath = `${process.cwd()}/../utils/tls_crts/ca.crt`;
     return fs.readFileSync(caCertPath);
 }
 
@@ -2543,6 +2551,7 @@ export async function getServerVersion(
     addresses: [string, number][],
     clusterMode = false,
     tlsConfig?: TestTLSConfig,
+    readOnly = false,
 ): Promise<string> {
     let info: string;
 
@@ -2550,6 +2559,10 @@ export async function getServerVersion(
         const glideClusterClient = await GlideClusterClient.createClient({
             ...getClientConfigurationOption(addresses, ProtocolVersion.RESP2),
             ...tlsConfig,
+            advancedConfiguration: {
+                connectionTimeout: 10000,
+                ...(tlsConfig?.advancedConfiguration ?? {}),
+            },
         });
         info = getFirstResult(
             await glideClusterClient.info({ sections: [InfoOptions.Server] }),
@@ -2564,6 +2577,11 @@ export async function getServerVersion(
         const glideClient = await GlideClient.createClient({
             ...getClientConfigurationOption(addresses, ProtocolVersion.RESP2),
             ...tlsConfig,
+            advancedConfiguration: {
+                connectionTimeout: 10000,
+                ...(tlsConfig?.advancedConfiguration ?? {}),
+            },
+            ...(readOnly && { readFrom: "preferReplica" }),
         });
         info = await glideClient.info([InfoOptions.Server]);
         await flushAndCloseClient(

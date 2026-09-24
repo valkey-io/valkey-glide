@@ -44,6 +44,7 @@ struct BuilderParams {
     slots_refresh_rate_limit: SlotsRefreshRateLimit,
     client_name: Option<String>,
     lib_name: Option<String>,
+    lib_ver: Option<String>,
     response_timeout: Option<Duration>,
     protocol: ProtocolVersion,
     reconnect_retry_strategy: Option<RetryStrategy>,
@@ -150,6 +151,7 @@ pub struct ClusterParams {
     pub(crate) tls_params: Option<TlsConnParams>,
     pub(crate) client_name: Option<String>,
     pub(crate) lib_name: Option<String>,
+    pub(crate) lib_ver: Option<String>,
     pub(crate) connection_timeout: Duration,
     pub(crate) response_timeout: Duration,
     pub(crate) protocol: ProtocolVersion,
@@ -195,6 +197,7 @@ impl ClusterParams {
             tls_params,
             client_name: value.client_name,
             lib_name: value.lib_name,
+            lib_ver: value.lib_ver,
             response_timeout: value.response_timeout.unwrap_or(Duration::MAX),
             protocol: value.protocol,
             reconnect_retry_strategy: value.reconnect_retry_strategy,
@@ -229,6 +232,7 @@ impl ClusterParams {
             tls_params: None,
             client_name: None,
             lib_name: None,
+            lib_ver: None,
             response_timeout: Duration::from_secs(1),
             protocol: ProtocolVersion::RESP2,
             reconnect_retry_strategy: None,
@@ -371,6 +375,12 @@ impl ClusterClientBuilder {
     /// Sets library name for the new ClusterClient.
     pub fn lib_name(mut self, lib_name: String) -> ClusterClientBuilder {
         self.builder_params.lib_name = Some(lib_name);
+        self
+    }
+
+    /// Sets library version for the new ClusterClient.
+    pub fn lib_ver(mut self, lib_ver: String) -> ClusterClientBuilder {
+        self.builder_params.lib_ver = Some(lib_ver);
         self
     }
 

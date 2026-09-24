@@ -8,18 +8,13 @@
 
 mod common;
 
-use glide::{AsyncCommands, ConnectionManagementCommands, CustomCommand, Route};
+use glide::{AsyncCommands, ConnectionManagementCommands, CustomCommand, FromValkeyValue, Route};
 
 #[tokio::test]
 async fn cluster_set_get_routed_by_key() {
-    let cluster = cluster_or_skip!();
-    let client = match cluster.client().await {
-        Some(c) => c,
-        None => {
-            eprintln!("SKIP: cluster client connect failed");
-            return;
-        }
-    };
+    let cluster = common::ClusterHarness::start().await;
+    let client = cluster.client().await;
+
     // Keys hash to different slots; the client routes each automatically.
     for i in 0..50 {
         let k = format!("clusterkey:{i}");
@@ -31,33 +26,23 @@ async fn cluster_set_get_routed_by_key() {
 
 #[tokio::test]
 async fn cluster_ping_all_primaries() {
-    let cluster = cluster_or_skip!();
-    let client = match cluster.client().await {
-        Some(c) => c,
-        None => {
-            eprintln!("SKIP: cluster client connect failed");
-            return;
-        }
-    };
+    let cluster = common::ClusterHarness::start().await;
+    let client = cluster.client().await;
+
     // Broadcast PING to all primaries via explicit routing.
     let reply = client
         .custom_command_with_route(&["PING"], Route::AllPrimaries)
         .await
         .unwrap();
     // Multi-node replies aggregate; just assert it succeeded (non-nil).
-    assert!(!matches!(reply, glide::Value::Nil));
+    assert!(!matches!(reply, glide::ValkeyValue::Nil));
 }
 
 #[tokio::test]
 async fn cluster_info_reports_ok() {
-    let cluster = cluster_or_skip!();
-    let client = match cluster.client().await {
-        Some(c) => c,
-        None => {
-            eprintln!("SKIP: cluster client connect failed");
-            return;
-        }
-    };
+    let cluster = common::ClusterHarness::start().await;
+    let client = cluster.client().await;
+
     // Retry briefly to absorb any residual propagation lag under load.
     let mut info = String::new();
     for _ in 0..10 {
@@ -65,7 +50,7 @@ async fn cluster_info_reports_ok() {
             .custom_command_with_route(&["CLUSTER", "INFO"], Route::RandomNode)
             .await
             .unwrap();
-        info = glide::value::to_string(reply).unwrap_or_default();
+        info = String::from_owned_valkey_value(reply).unwrap_or_default();
         if info.contains("cluster_state:ok") {
             break;
         }
@@ -79,14 +64,9 @@ async fn cluster_info_reports_ok() {
 
 #[tokio::test]
 async fn cluster_del_and_exists() {
-    let cluster = cluster_or_skip!();
-    let client = match cluster.client().await {
-        Some(c) => c,
-        None => {
-            eprintln!("SKIP: cluster client connect failed");
-            return;
-        }
-    };
+    let cluster = common::ClusterHarness::start().await;
+    let client = cluster.client().await;
+
     let k = "cluster:delkey";
     let _: () = client.set(k, "v").await.unwrap();
     let exists: i64 = client.exists(k).await.unwrap();
@@ -99,14 +79,9 @@ async fn cluster_del_and_exists() {
 
 #[tokio::test]
 async fn cluster_incr() {
-    let cluster = cluster_or_skip!();
-    let client = match cluster.client().await {
-        Some(c) => c,
-        None => {
-            eprintln!("SKIP: cluster client connect failed");
-            return;
-        }
-    };
+    let cluster = common::ClusterHarness::start().await;
+    let client = cluster.client().await;
+
     let k = "cluster:counter";
     let v: i64 = client.incr(k, 1i64).await.unwrap();
     assert_eq!(v, 1);
@@ -116,14 +91,9 @@ async fn cluster_incr() {
 
 #[tokio::test]
 async fn cluster_hashtag_same_slot() {
-    let cluster = cluster_or_skip!();
-    let client = match cluster.client().await {
-        Some(c) => c,
-        None => {
-            eprintln!("SKIP: cluster client connect failed");
-            return;
-        }
-    };
+    let cluster = common::ClusterHarness::start().await;
+    let client = cluster.client().await;
+
     // Hash tags force keys into the same slot, so a multi-key MSET/MGET works.
     let _: () = client.set("{tag}:a", "1").await.unwrap();
     let _: () = client.set("{tag}:b", "2").await.unwrap();
@@ -134,15 +104,9 @@ async fn cluster_hashtag_same_slot() {
 
 #[tokio::test]
 async fn cluster_ping_resp2_and_resp3() {
-    let cluster = cluster_or_skip!();
+    let cluster = common::ClusterHarness::start().await;
     for proto in [glide::ProtocolVersion::RESP2, glide::ProtocolVersion::RESP3] {
-        let client = match cluster.client_with_protocol(proto).await {
-            Some(c) => c,
-            None => {
-                eprintln!("SKIP: cluster client connect failed for {proto:?}");
-                return;
-            }
-        };
+        let client = cluster.client_with_protocol(proto).await;
         assert_eq!(client.ping().await.unwrap(), "PONG");
     }
 }

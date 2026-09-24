@@ -11,6 +11,22 @@ use glide_core::pool::{self, ClientPool, ClientState, POOL_RUNNING, PoolConfig, 
 use glide_core::scope;
 use std::sync::atomic::Ordering as AtomicOrdering;
 
+/// Whether the diagnostic timeout watchdog should be armed for a scoped command.
+///
+/// The watchdog arms at the flat client request timeout and aborts the command
+/// when it fires. That is meaningless for a blocking command, which is expected
+/// to wait far longer than the request timeout (the authoritative deadline for
+/// blocking commands is derived per-command in `send_command_on_connection`).
+/// Arming it would wrongly abort a blocking scoped command, so skip it for those
+/// and let the command block for as long as its own semantics allow (see #6780).
+///
+/// Takes the command name and args directly (rather than a `redis::Cmd`) so the
+/// hot path avoids allocating a `Cmd` and copying every argument byte — notably a
+/// large SET payload — just to answer this yes/no question.
+fn should_arm_watchdog(cmd_name: &str, args: &[Vec<u8>]) -> bool {
+    !glide_core::client::is_blocking_command_name(cmd_name.as_bytes(), args)
+}
+
 /// Pool creation/acquire error codes
 const POOL_ERROR_INVALID_CONFIG: i64 = -1;
 #[allow(dead_code)] // used in future pool expansion (documented in FFI contract)
@@ -266,6 +282,7 @@ pub extern "C" fn glide_pool_try_acquire(pool_id: u64) -> i64 {
             for cid in discarded {
                 if let Some((_, entry)) = get_pool_clients().remove(&cid) {
                     get_pool_adapter_map().remove(&entry.adapter_ptr);
+                    glide_core::scope::unregister_client(entry.adapter_ptr as u64);
                     // Release the adapter Arc that was kept alive via mem::forget
                     // in create_pool_client. This drops the connection properly.
                     unsafe {
@@ -384,6 +401,7 @@ pub extern "C" fn glide_pool_acquire_blocking(pool_id: u64, timeout_ms: u64) -> 
                 for cid in discarded {
                     if let Some((_, entry)) = get_pool_clients().remove(&cid) {
                         get_pool_adapter_map().remove(&entry.adapter_ptr);
+                        glide_core::scope::unregister_client(entry.adapter_ptr as u64);
                         unsafe {
                             drop(Arc::from_raw(entry.adapter_ptr as *const ClientAdapter));
                         }
@@ -499,6 +517,20 @@ pub extern "C" fn glide_pool_destroy(pool_id: u64) -> i32 {
         Some(arc) => arc,
         None => return -1,
     };
+
+    // Invalidate this pool's scopes before returning. The cleanup below may be
+    // deferred to a spawned task when the pool lock is contended, and until it ran
+    // a caller could still dispatch on a scope whose pool is already destroyed.
+    // The adapter map is keyed independently of the pool lock, so this needs no lock.
+    let owned: Vec<usize> = get_pool_adapter_map()
+        .iter()
+        .filter(|e| e.value().0 == pool_id)
+        .map(|e| *e.key())
+        .collect();
+    for adapter_ptr in owned {
+        glide_core::scope::unregister_client(adapter_ptr as u64);
+    }
+
     {
         // try_lock rather than blocking_lock: the abandon monitor may hold the
         // lock briefly during a scan. Using blocking_lock here can deadlock if
@@ -517,6 +549,7 @@ pub extern "C" fn glide_pool_destroy(pool_id: u64) -> i32 {
             for cid in client_ids {
                 if let Some((_, entry)) = get_pool_clients().remove(&cid) {
                     get_pool_adapter_map().remove(&entry.adapter_ptr);
+                    glide_core::scope::unregister_client(entry.adapter_ptr as u64);
                     unsafe {
                         drop(Arc::from_raw(entry.adapter_ptr as *const ClientAdapter));
                     }
@@ -539,6 +572,7 @@ pub extern "C" fn glide_pool_destroy(pool_id: u64) -> i32 {
                 for cid in client_ids {
                     if let Some((_, entry)) = get_pool_clients().remove(&cid) {
                         get_pool_adapter_map().remove(&entry.adapter_ptr);
+                        glide_core::scope::unregister_client(entry.adapter_ptr as u64);
                         unsafe {
                             drop(Arc::from_raw(entry.adapter_ptr as *const ClientAdapter));
                         }
@@ -658,32 +692,14 @@ pub unsafe extern "C" fn glide_scope_execute_async(
         None => return -2,
     };
 
-    // Verify scope exists
-    let registry = glide_core::pool::get_scope_registry();
-    if registry.get(&scope_id).is_none() {
-        return -1;
-    }
+    let client = match scope::resolve_scope_parent(scope_id) {
+        Some(c) => c,
+        None => return -1,
+    };
 
     let runtime = get_pool_runtime();
 
     runtime.spawn(async move {
-        // Get the parent client for timeout/decompression/IAM
-        let client_registry = scope::get_client_registry();
-        let client = {
-            let pools = glide_core::pool::get_client_scope_pools();
-            let parent_id = pools
-                .iter()
-                .find(|e| {
-                    e.value()
-                        .try_lock()
-                        .map(|p| p.in_use.contains_key(&scope_id))
-                        .unwrap_or(false)
-                })
-                .map(|e| *e.key());
-
-            parent_id.and_then(|pid| client_registry.get(&pid).map(|e| e.value().clone()))
-        };
-
         // OTel: create span for scope command
         let span_ptr = if GlideOpenTelemetry::is_initialized() {
             create_otel_span(RequestType::CustomCommand)
@@ -693,18 +709,20 @@ pub unsafe extern "C" fn glide_scope_execute_async(
 
         // Watchdog: register for timeout diagnostics
         let cmd_start = std::time::Instant::now();
-        let timeout_duration = client
-            .as_ref()
-            .map(|c| c.get_request_timeout())
-            .unwrap_or(std::time::Duration::from_millis(250));
-        let timeout_rx = glide_core::timeout_watchdog::TimeoutWatchdog::global()
-            .register(timeout_duration, cmd_start);
+        let timeout_duration = client.get_request_timeout();
+
+        // Skip the watchdog for blocking commands: it would abort them at the flat
+        // request timeout. Blocking commands manage their own deadline in the core.
+        let arm_watchdog = should_arm_watchdog(&cmd_name, &args);
 
         // Execute with watchdog race — send_scope_command handles CB, inflight,
         // compression, latency recording internally
-        let result = {
-            let execute =
-                scope::send_scope_command(scope_id, &cmd_name, &mut args, client.as_ref());
+        let result = if !arm_watchdog {
+            scope::send_scope_command(scope_id, &cmd_name, &mut args, &client).await
+        } else {
+            let timeout_rx = glide_core::timeout_watchdog::TimeoutWatchdog::global()
+                .register(timeout_duration, cmd_start);
+            let execute = scope::send_scope_command(scope_id, &cmd_name, &mut args, &client);
             tokio::pin!(execute);
             tokio::select! {
                 result = &mut execute => result,
@@ -714,7 +732,7 @@ pub unsafe extern "C" fn glide_scope_execute_async(
                         Ok(()) => {
                             let actual_elapsed = cmd_start.elapsed();
                             let pending = glide_core::timeout_watchdog::pending_count();
-                            let p99 = client.as_ref().and_then(|c| c.latency_tracker().p99());
+                            let p99 = client.latency_tracker().p99();
                             let cause = if pending > 100 {
                                 glide_core::timeout_watchdog::TimeoutCause::SystemOverload {
                                     pending_total: pending,
@@ -835,14 +853,29 @@ pub unsafe extern "C" fn glide_scope_prewarm(
     // Create the scope pool (registers it if not exists)
     let pool = glide_core::pool::get_or_create_scope_pool(client_id, conn_bytes.clone());
 
-    // Spawn min_idle background connection creation tasks on the scope runtime
+    // Spawn min_idle background connection creation tasks on the scope runtime.
+    // Resolve slot 0 through the parent client's current topology so cluster
+    // prewarming targets slot 0's primary while standalone prewarming targets its
+    // server. An unresolvable target skips the prewarm connection: this is
+    // expected for a lazily connected cluster client, which has no slot map until
+    // its first command, so it is logged at debug rather than warn.
     for _ in 0..min_idle {
         let pool_clone = pool.clone();
         let bytes = conn_bytes.clone();
         let cid = client_id;
         runtime.spawn(async move {
-            let client = scope::get_parent_client(cid).await;
-            scope::create_scope_connection(pool_clone, client.as_ref(), &bytes, 0).await;
+            let client = scope::get_parent_client(cid);
+            let target = match scope::resolve_scope_target(client.as_ref(), 0).await {
+                Ok(target) => target,
+                Err(cause) => {
+                    logger_core::log_debug(
+                        "glide_scope_prewarm",
+                        format!("client {cid}: prewarm skipped, target unresolved: {cause}"),
+                    );
+                    return;
+                }
+            };
+            scope::create_scope_connection(pool_clone, client.as_ref(), &bytes, target).await;
         });
     }
 }
@@ -905,25 +938,9 @@ pub unsafe extern "C" fn glide_scope_execute(
         None => return std::ptr::null_mut(),
     };
 
-    // Verify scope exists
-    let registry = glide_core::pool::get_scope_registry();
-    if registry.get(&scope_id).is_none() {
-        return std::ptr::null_mut();
-    }
-
-    let client_registry = scope::get_client_registry();
-    let parent_client = {
-        let pools = glide_core::pool::get_client_scope_pools();
-        let parent_id = pools
-            .iter()
-            .find(|e| {
-                e.value()
-                    .try_lock()
-                    .map(|p| p.in_use.contains_key(&scope_id))
-                    .unwrap_or(false)
-            })
-            .map(|e| *e.key());
-        parent_id.and_then(|pid| client_registry.get(&pid).map(|e| e.value().clone()))
+    let parent_client = match scope::resolve_scope_parent(scope_id) {
+        Some(c) => c,
+        None => return std::ptr::null_mut(),
     };
 
     let runtime = get_pool_runtime();
@@ -937,16 +954,19 @@ pub unsafe extern "C" fn glide_scope_execute(
 
     // Watchdog: register for timeout diagnostics
     let cmd_start = std::time::Instant::now();
-    let timeout_duration = parent_client
-        .as_ref()
-        .map(|c| c.get_request_timeout())
-        .unwrap_or(std::time::Duration::from_millis(250));
-    let timeout_rx = glide_core::timeout_watchdog::TimeoutWatchdog::global()
-        .register(timeout_duration, cmd_start);
+    let timeout_duration = parent_client.get_request_timeout();
+
+    // Skip the watchdog for blocking commands: it would abort them at the flat
+    // request timeout. Blocking commands manage their own deadline in the core.
+    let arm_watchdog = should_arm_watchdog(&cmd_name, &args);
 
     let result = runtime.block_on(async {
-        let execute =
-            scope::send_scope_command(scope_id, &cmd_name, &mut args, parent_client.as_ref());
+        if !arm_watchdog {
+            return scope::send_scope_command(scope_id, &cmd_name, &mut args, &parent_client).await;
+        }
+        let timeout_rx = glide_core::timeout_watchdog::TimeoutWatchdog::global()
+            .register(timeout_duration, cmd_start);
+        let execute = scope::send_scope_command(scope_id, &cmd_name, &mut args, &parent_client);
         tokio::pin!(execute);
         tokio::select! {
             result = &mut execute => result,
@@ -956,7 +976,7 @@ pub unsafe extern "C" fn glide_scope_execute(
                     Ok(()) => {
                         let actual_elapsed = cmd_start.elapsed();
                         let pending = glide_core::timeout_watchdog::pending_count();
-                        let p99 = parent_client.as_ref().and_then(|c| c.latency_tracker().p99());
+                        let p99 = parent_client.latency_tracker().p99();
                         let cause = if pending > 100 {
                             glide_core::timeout_watchdog::TimeoutCause::SystemOverload {
                                 pending_total: pending,
@@ -1075,5 +1095,53 @@ pub unsafe extern "C" fn glide_scope_execute(
                 arena: std::ptr::null_mut(),
             }))
         }
+    }
+}
+
+#[cfg(test)]
+mod watchdog_gating_tests {
+    use super::should_arm_watchdog;
+
+    fn arms(cmd_name: &str, args: &[&str]) -> bool {
+        let args: Vec<Vec<u8>> = args.iter().map(|a| a.as_bytes().to_vec()).collect();
+        should_arm_watchdog(cmd_name, &args)
+    }
+
+    #[test]
+    fn non_blocking_commands_arm_the_watchdog() {
+        assert!(arms("GET", &["key"]));
+        assert!(arms("SET", &["key", "value"]));
+        assert!(arms("LPUSH", &["key", "value"]));
+    }
+
+    #[test]
+    fn blocking_commands_skip_the_watchdog() {
+        // Arming the diagnostic watchdog for these would abort them at the flat
+        // request timeout, defeating their blocking semantics — regardless of
+        // whether the command's own timeout is bounded or unbounded (#6780).
+        assert!(!arms("BLPOP", &["key", "0"]));
+        assert!(!arms("BLPOP", &["key", "5"]));
+        assert!(!arms("BRPOP", &["key", "0"]));
+        assert!(!arms("BLMOVE", &["src", "dst", "LEFT", "RIGHT", "0"]));
+        assert!(!arms("BRPOPLPUSH", &["src", "dst", "0"]));
+        assert!(!arms("BZPOPMIN", &["key", "0"]));
+        assert!(!arms("BZPOPMAX", &["key", "0"]));
+        assert!(!arms("BLMPOP", &["0", "1", "k", "LEFT"]));
+        assert!(!arms("BZMPOP", &["0", "1", "k", "MIN"]));
+        assert!(!arms("WAIT", &["0", "100"]));
+        assert!(!arms("WAITAOF", &["1", "0", "0"]));
+    }
+
+    #[test]
+    fn xread_is_blocking_only_with_the_block_option() {
+        // XREAD/XREADGROUP block only when BLOCK is present; a plain XREAD is a
+        // normal command and should keep watchdog coverage.
+        assert!(!arms("XREAD", &["BLOCK", "0", "STREAMS", "s", "$"]));
+        assert!(!arms("XREAD", &["BLOCK", "5000", "STREAMS", "s", "$"]));
+        assert!(arms("XREAD", &["COUNT", "10", "STREAMS", "s", "0"]));
+        assert!(!arms(
+            "XREADGROUP",
+            &["GROUP", "g", "c", "BLOCK", "0", "STREAMS", "s", ">"]
+        ));
     }
 }

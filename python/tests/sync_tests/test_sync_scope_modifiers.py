@@ -29,8 +29,8 @@ from glide_sync import (
 )
 from packaging import version
 
-from tests.utils.utils import get_cluster_addresses as _get_cluster_addresses
 from tests.utils.utils import get_standalone_address as _get_standalone_address
+from tests.utils.utils import require_cluster_addresses
 
 
 def _get_server_version(client) -> str:
@@ -45,16 +45,6 @@ def _get_server_version(client) -> str:
         if line.startswith("valkey_version:") or line.startswith("redis_version:"):
             return line.split(":")[1].strip()
     return "0.0.0"
-
-
-def _skip_cluster_if_unavailable():
-    """Skip test if no cluster endpoints are configured."""
-    try:
-        cluster = pytest.valkey_cluster  # type: ignore[attr-defined]
-        if cluster is None or len(cluster.nodes_addr) == 0:
-            pytest.skip("No cluster endpoints available")
-    except AttributeError:
-        pytest.skip("No cluster endpoints available (pytest.valkey_cluster not set)")
 
 
 def _skip_standalone_if_unavailable():
@@ -132,9 +122,8 @@ def _make_key(cluster_mode: bool, prefix: str) -> str:
 def _create_client(cluster_mode: bool, **extra_config):  # type: ignore[return]
     """Create a GlideClient or GlideClusterClient based on mode."""
     if cluster_mode:
-        _skip_cluster_if_unavailable()
         cluster_cfg = GlideClusterClientConfiguration(
-            addresses=_get_cluster_addresses(),
+            addresses=require_cluster_addresses(),
             **extra_config,
         )
         return GlideClusterClient.create(cluster_cfg)
@@ -575,9 +564,8 @@ class TestDatabaseStateInheritance:
         """Scope connections use the database from the client's config."""
         if cluster_mode:
             # Cluster database selection requires Valkey 9+
-            _skip_cluster_if_unavailable()
             config = GlideClusterClientConfiguration(
-                addresses=_get_cluster_addresses(),
+                addresses=require_cluster_addresses(),
                 request_timeout=5000,
                 database_id=2,
             )
@@ -617,7 +605,7 @@ class TestDatabaseStateInheritance:
             # A client on database 0 should NOT see the key
             if cluster_mode:
                 config_db0 = GlideClusterClientConfiguration(
-                    addresses=_get_cluster_addresses(),
+                    addresses=require_cluster_addresses(),
                     request_timeout=5000,
                 )
                 client_db0 = GlideClusterClient.create(config_db0)
@@ -646,9 +634,8 @@ class TestDatabaseStateInheritance:
         time, which reflects any runtime SELECT calls made on the parent.
         """
         if cluster_mode:
-            _skip_cluster_if_unavailable()
             config = GlideClusterClientConfiguration(
-                addresses=_get_cluster_addresses(),
+                addresses=require_cluster_addresses(),
                 request_timeout=5000,
             )
             try:
@@ -700,9 +687,8 @@ class TestDatabaseStateInheritance:
         import time
 
         if cluster_mode:
-            _skip_cluster_if_unavailable()
             config = GlideClusterClientConfiguration(
-                addresses=_get_cluster_addresses(),
+                addresses=require_cluster_addresses(),
                 request_timeout=5000,
                 database_id=2,
             )
@@ -751,7 +737,7 @@ class TestDatabaseStateInheritance:
             # Clean up key on db 4
             if cluster_mode:
                 config_db4 = GlideClusterClientConfiguration(
-                    addresses=_get_cluster_addresses(),
+                    addresses=require_cluster_addresses(),
                     request_timeout=5000,
                     database_id=4,
                 )

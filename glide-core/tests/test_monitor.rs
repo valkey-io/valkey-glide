@@ -21,6 +21,7 @@ mod test_monitor {
             protocol: redis::ProtocolVersion::RESP2,
             client_name: None,
             lib_name: None,
+            lib_ver: None,
             cache: None,
             server_assisted_cache: false,
         }
@@ -80,9 +81,10 @@ mod test_monitor {
             }) {
                 break;
             }
+            let diagnostics = monitor.diagnostics();
             assert!(
                 std::time::Instant::now() < deadline,
-                "timed out waiting for SET line"
+                "timed out waiting for SET line; monitor diagnostics: {diagnostics:?}"
             );
             tokio::time::sleep(std::time::Duration::from_millis(10)).await;
         }

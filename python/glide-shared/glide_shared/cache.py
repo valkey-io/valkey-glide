@@ -40,7 +40,9 @@ class ClientSideCache:
     to the cache, so values may become stale before TTL expires.
     Expiration is lazy — entries are removed when accessed after their TTL, not
     proactively in the background.
-    Supported read commands: GET, HGETALL, SMEMBERS.
+    Supported read commands: GET, MGET, HGETALL, SMEMBERS. An MGET response may
+    combine locally cached values with values fetched from the server, so it
+    does not provide an atomic snapshot across all keys.
     """
 
     # Class variables - shared across all instances

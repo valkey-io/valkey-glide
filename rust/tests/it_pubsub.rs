@@ -8,7 +8,7 @@
 
 mod common;
 
-use glide::CustomCommand;
+use glide::{CustomCommand, FromValkeyValue};
 
 resp_test!(publish_no_subscribers_returns_zero, c, {
     let chan = common::key("chan");
@@ -16,7 +16,7 @@ resp_test!(publish_no_subscribers_returns_zero, c, {
         .custom_command(&["PUBLISH", &chan, "hello"])
         .await
         .unwrap();
-    assert_eq!(glide::value::to_i64(received).unwrap(), 0);
+    assert_eq!(i64::from_owned_valkey_value(received).unwrap(), 0);
 });
 
 // Compile-lock for the "names never collide — import both freely" contract:
@@ -27,7 +27,7 @@ resp_test!(publish_no_subscribers_returns_zero, c, {
 mod glob_import_lock {
     use glide::*;
 
-    pub async fn publish_via_glob(c: &GlideClient, chan: &str) -> RedisResult<i64> {
+    pub async fn publish_via_glob(c: &GlideClient, chan: &str) -> ValkeyResult<i64> {
         c.publish(chan, "nobody-listens").await
     }
 }
@@ -43,22 +43,22 @@ resp_test!(pubsub_channels_empty, c, {
     let reply = c.custom_command(&["PUBSUB", "CHANNELS"]).await.unwrap();
     // No active subscriptions on a fresh server.
     match reply {
-        glide::Value::Array(items) => assert!(items.is_empty()),
-        glide::Value::Nil => {}
+        glide::ValkeyValue::Array(items) => assert!(items.is_empty()),
+        glide::ValkeyValue::Nil => {}
         other => panic!("unexpected PUBSUB CHANNELS reply: {other:?}"),
     }
 });
 
 resp_test!(pubsub_numpat_zero, c, {
     let reply = c.custom_command(&["PUBSUB", "NUMPAT"]).await.unwrap();
-    assert_eq!(glide::value::to_i64(reply).unwrap(), 0);
+    assert_eq!(i64::from_owned_valkey_value(reply).unwrap(), 0);
 });
 
 resp_test!(spublish_no_subscribers, c, {
     // Sharded publish (SPUBLISH) on a standalone server also returns 0.
     let chan = common::key("schan");
     match c.custom_command(&["SPUBLISH", &chan, "msg"]).await {
-        Ok(v) => assert_eq!(glide::value::to_i64(v).unwrap(), 0),
+        Ok(v) => assert_eq!(i64::from_owned_valkey_value(v).unwrap(), 0),
         // Older servers may not support SPUBLISH in standalone mode.
         Err(glide::GlideError::Request(_)) => {}
         Err(other) => panic!("unexpected: {other:?}"),
@@ -72,25 +72,17 @@ timed_tokio_test!(
         use glide::{GlideClient, GlideClientConfiguration};
         use std::time::Duration;
 
-        let srv = match common::TestServer::start() {
-            Some(s) => s,
-            None => {
-                eprintln!("SKIP: no valkey-server binary available");
-                return;
-            }
-        };
-        let chan = common::key("rt-chan");
-
-        // A client with the push channel enabled but NO connect-time subscriptions.
-        let subscriber = GlideClient::connect(
-            GlideClientConfiguration::with_address("127.0.0.1", srv.port).enable_pubsub(),
-        )
-        .await
-        .expect("connect subscriber");
-        let publisher = srv.client().await;
+        let server = server_or_skip!();
+        let subscriber_config =
+            GlideClientConfiguration::with_address("127.0.0.1", server.port).enable_pubsub();
+        let subscriber = GlideClient::connect(subscriber_config)
+            .await
+            .expect("connect subscriber");
+        let publisher = server.client().await;
 
         // Subscribe at runtime, then wait until the server has registered it
         // (poll-until-state instead of a fixed sleep).
+        let chan = common::key("rt-chan");
         subscriber.subscribe(&[chan.as_str()]).await.unwrap();
         assert!(
             common::wait_for_numsub(&publisher, &chan, |n| n >= 1, Duration::from_secs(3)).await,
@@ -125,19 +117,13 @@ timed_tokio_test!(
         use glide::{GlideClient, GlideClientConfiguration, PubSubMessageKind};
         use std::time::Duration;
 
-        let srv = match common::TestServer::start() {
-            Some(s) => s,
-            None => {
-                eprintln!("SKIP: no valkey-server binary available");
-                return;
-            }
-        };
-        let subscriber = GlideClient::connect(
-            GlideClientConfiguration::with_address("127.0.0.1", srv.port).enable_pubsub(),
-        )
-        .await
-        .expect("connect subscriber");
-        let publisher = srv.client().await;
+        let server = server_or_skip!();
+        let subscriber_config =
+            GlideClientConfiguration::with_address("127.0.0.1", server.port).enable_pubsub();
+        let subscriber = GlideClient::connect(subscriber_config)
+            .await
+            .expect("connect subscriber");
+        let publisher = server.client().await;
 
         subscriber.psubscribe(&["news.*"]).await.unwrap();
         assert!(
@@ -164,26 +150,20 @@ timed_tokio_test!(
         use glide::{GlideClient, GlideClientConfiguration};
         use std::time::Duration;
 
-        let srv = match common::TestServer::start() {
-            Some(s) => s,
-            None => {
-                eprintln!("SKIP: no valkey-server binary available");
-                return;
-            }
-        };
+        let server = server_or_skip!();
+        let subscriber_config =
+            GlideClientConfiguration::with_address("127.0.0.1", server.port).enable_pubsub();
+        let subscriber = GlideClient::connect(subscriber_config)
+            .await
+            .expect("connect subscriber");
+        let publisher = server.client().await;
+
         let c1 = common::key("uc1");
         let c2 = common::key("uc2");
-        let subscriber = GlideClient::connect(
-            GlideClientConfiguration::with_address("127.0.0.1", srv.port).enable_pubsub(),
-        )
-        .await
-        .expect("connect subscriber");
-
         subscriber
             .subscribe(&[c1.as_str(), c2.as_str()])
             .await
             .unwrap();
-        let publisher = srv.client().await;
         assert!(
             common::wait_for_numsub(&publisher, &c1, |n| n >= 1, Duration::from_secs(3)).await,
             "subscription c1 not registered in time"

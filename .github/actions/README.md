@@ -46,7 +46,8 @@ Installs platform-specific dependencies for valkey-glide builds. This is the pri
 | Name | Required | Default | Description |
 |------|----------|---------|-------------|
 | `os` | Yes | - | The current operating system (e.g., `ubuntu`, `macos`, `windows`, `amazon-linux`) |
-| `target` | No | `x86_64-unknown-linux-gnu` | Rust target toolchain (e.g., `x86_64-unknown-linux-gnu`, `aarch64-apple-darwin`) |
+| `rust-toolchain` | No | `stable` | Rust toolchain to install (e.g., `1.88.0`, `stable`) |
+| `target` | No | `x86_64-unknown-linux-gnu` | Build target (e.g., `x86_64-unknown-linux-gnu`, `aarch64-apple-darwin`) |
 | `engine-version` | No | `''` | Valkey engine version to install (optional) |
 | `language` | No | - | The language being built (optional, for language-specific setup) |
 | `github-token` | Yes | - | GitHub token for API access (typically `${{ secrets.GITHUB_TOKEN }}`) |
@@ -64,7 +65,7 @@ Installs platform-specific dependencies for valkey-glide builds. This is the pri
 
 ### install-engine
 
-Installs and caches a specific Valkey server version for testing. Uses intelligent caching based on version, git SHA, and target platform.
+Installs and caches a specific Valkey server version for testing. Caching is based on the source version, the target platform, and the runner image.
 
 **Location:** `.github/actions/install-engine/action.yml`
 
@@ -77,8 +78,9 @@ Installs and caches a specific Valkey server version for testing. Uses intellige
 
 #### Behavior
 
-- Computes a cache key from version, git SHA, and target
+- Computes a cache key from the source version, the target, and the runner image
 - Restores from cache if available, otherwise builds from source
+- Rebuilds from source when a restored binary cannot run on the current image
 - Creates backward-compatible symlinks (`redis-*` → `valkey-*`)
 - Adds binaries to `PATH`
 - Uses WSL shell on Windows, bash on other platforms
@@ -86,10 +88,10 @@ Installs and caches a specific Valkey server version for testing. Uses intellige
 #### Cache Key Format
 
 ```
-valkey-{version}-{target}
+valkey-{version}-{target}-{image}
 ```
 
-Example: `valkey-9.0-x86_64-unknown-linux-gnu`
+Example: `valkey-9.0.6-x86_64-unknown-linux-gnu-ubuntu24.04-x86_64`
 
 #### Example Usage
 
@@ -145,7 +147,7 @@ Starts standalone and cluster Valkey servers with modules (Search, JSON, Bloom, 
 
 #### Behavior
 
-- Pulls `valkey/valkey-bundle:9.1` Docker image
+- Pulls `valkey/valkey-bundle:9.1.3` Docker image
 - Starts a standalone Valkey server with modules on the configured port
 - Starts a 6-node Valkey cluster (3 primaries, 3 replicas) on consecutive ports
 - Waits for all servers to be ready (PING returns PONG)
@@ -201,7 +203,7 @@ jobs:
 
 ### install-rust
 
-Installs the Rust stable toolchain with rustfmt and clippy components.
+Installs a Rust toolchain with rustfmt and clippy components.
 
 **Location:** `.github/actions/install-rust/action.yml`
 
@@ -209,7 +211,8 @@ Installs the Rust stable toolchain with rustfmt and clippy components.
 
 | Name | Required | Default | Description |
 |------|----------|---------|-------------|
-| `target` | No | `x86_64-unknown-linux-gnu` | Rust target triple (e.g., `aarch64-apple-darwin`) |
+| `toolchain` | No | `stable` | Rust toolchain to install (e.g., `1.88.0`, `stable`) |
+| `target` | No | `x86_64-unknown-linux-gnu` | Build target (e.g., `aarch64-apple-darwin`) |
 
 #### Example Usage
 

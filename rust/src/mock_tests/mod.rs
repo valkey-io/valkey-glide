@@ -1,32 +1,35 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 //! Server-free tests for every command family (no Valkey server needed).
 //!
-//! Each command method builds a `redis::Cmd` and dispatches it through the
-//! [`CommandExecutor`] seam. These tests install an in-process [`Mock`] executor
+//! Each command method builds a `Cmd` and dispatches it through the
+//! [`CommandExecutor`] trait. These tests install an in-process [`Mock`] executor
 //! that (a) captures the exact command tokens the wrapper produced — verifying
-//! request *encoding* — and (b) returns a preconfigured `redis::Value` so the
+//! request *encoding* — and (b) returns a preconfigured `Value` so the
 //! method's response *decoding* into its typed return can be asserted. No Valkey
 //! server is involved, so the whole suite is deterministic and fast.
+//!
+//! In-crate (`#[cfg(test)]`) so they can read the built command's bytes through
+//! the crate-internal `Cmd::as_redis()` rather than a public accessor.
 
+use crate::Cmd;
+use crate::Route;
+use crate::executor::CommandExecutor;
+use crate::{ValkeyResult, ValkeyValue};
 use async_trait::async_trait;
-use glide::error::Result;
-use glide::executor::CommandExecutor;
-use redis::cluster_routing::RoutingInfo;
-use redis::{Arg, Cmd, Value};
 use std::sync::Mutex;
 
-/// A captured command: the raw argument tokens plus the routing it was sent with.
-type CapturedCommand = (Vec<Vec<u8>>, Option<RoutingInfo>);
+/// A captured command: the raw argument tokens plus the route it was sent with.
+type CapturedCommand = (Vec<Vec<u8>>, Option<Route>);
 
 /// A deterministic, server-free `CommandExecutor` used by the family tests.
 pub(crate) struct Mock {
-    response: Mutex<Value>,
+    response: Mutex<ValkeyValue>,
     captured: Mutex<Option<CapturedCommand>>,
 }
 
 impl Mock {
     /// Build a mock that replies with `response`.
-    pub(crate) fn new(response: Value) -> Self {
+    pub(crate) fn new(response: ValkeyValue) -> Self {
         Mock {
             response: Mutex::new(response),
             captured: Mutex::new(None),
@@ -35,27 +38,27 @@ impl Mock {
 
     /// Reply with `+OK`.
     pub(crate) fn ok() -> Self {
-        Mock::new(Value::Okay)
+        Mock::new(ValkeyValue::Okay)
     }
     /// Reply with an integer.
     pub(crate) fn int(n: i64) -> Self {
-        Mock::new(Value::Int(n))
+        Mock::new(ValkeyValue::Int(n))
     }
     /// Reply with a bulk string.
     pub(crate) fn bulk(s: impl AsRef<[u8]>) -> Self {
-        Mock::new(Value::BulkString(s.as_ref().to_vec().into()))
+        Mock::new(ValkeyValue::BulkString(s.as_ref().to_vec().into()))
     }
     /// Reply with a simple string.
     pub(crate) fn simple(s: &str) -> Self {
-        Mock::new(Value::SimpleString(s.to_string()))
+        Mock::new(ValkeyValue::SimpleString(s.to_string()))
     }
     /// Reply with nil.
     pub(crate) fn nil() -> Self {
-        Mock::new(Value::Nil)
+        Mock::new(ValkeyValue::Nil)
     }
     /// Reply with an array.
-    pub(crate) fn array(items: Vec<Value>) -> Self {
-        Mock::new(Value::Array(items))
+    pub(crate) fn array(items: Vec<ValkeyValue>) -> Self {
+        Mock::new(ValkeyValue::Array(items))
     }
 
     /// The captured command tokens, decoded lossily to UTF-8 strings.
@@ -78,8 +81,8 @@ impl Mock {
         assert_eq!(got, exp, "command encoding mismatch");
     }
 
-    /// The routing the executor was handed (cluster paths). Consumes it.
-    pub(crate) fn routing(&self) -> Option<RoutingInfo> {
+    /// The route the executor was handed (cluster paths). Consumes it.
+    pub(crate) fn routing(&self) -> Option<Route> {
         self.captured
             .lock()
             .unwrap()
@@ -92,15 +95,16 @@ impl Mock {
 
 #[async_trait]
 impl CommandExecutor for Mock {
-    async fn execute_command(&self, cmd: Cmd, routing: Option<RoutingInfo>) -> Result<Value> {
+    async fn execute_command(&self, cmd: Cmd, route: Option<Route>) -> ValkeyResult<ValkeyValue> {
         let args: Vec<Vec<u8>> = cmd
+            .as_redis()
             .args_iter()
             .map(|a| match a {
-                Arg::Simple(s) => s.to_vec(),
-                Arg::Cursor => b"0".to_vec(),
+                redis::Arg::Simple(bytes) => bytes.to_vec(),
+                redis::Arg::Cursor => b"0".to_vec(),
             })
             .collect();
-        *self.captured.lock().unwrap() = Some((args, routing));
+        *self.captured.lock().unwrap() = Some((args, route));
         Ok(self.response.lock().unwrap().clone())
     }
 }

@@ -1321,6 +1321,44 @@ func TestClusterConfig_TcpNoDelay(t *testing.T) {
 	assert.Nil(t, request.TcpNodelay)
 }
 
+func TestStandaloneConfig_PubSubReconciliationIntervalMs(t *testing.T) {
+	// Test interval set
+	config := NewClientConfiguration().
+		WithAdvancedConfiguration(
+			NewAdvancedClientConfiguration().WithPubSubReconciliationIntervalMs(500),
+		)
+
+	request, err := config.ToProtobuf()
+	assert.NoError(t, err)
+	assert.NotNil(t, request.PubsubReconciliationIntervalMs)
+	assert.Equal(t, uint32(500), *request.PubsubReconciliationIntervalMs)
+
+	// Test interval not set (default)
+	config = NewClientConfiguration()
+	request, err = config.ToProtobuf()
+	assert.NoError(t, err)
+	assert.Nil(t, request.PubsubReconciliationIntervalMs)
+}
+
+func TestClusterConfig_PubSubReconciliationIntervalMs(t *testing.T) {
+	// Test interval set
+	config := NewClusterClientConfiguration().
+		WithAdvancedConfiguration(
+			NewAdvancedClusterClientConfiguration().WithPubSubReconciliationIntervalMs(500),
+		)
+
+	request, err := config.ToProtobuf()
+	assert.NoError(t, err)
+	assert.NotNil(t, request.PubsubReconciliationIntervalMs)
+	assert.Equal(t, uint32(500), *request.PubsubReconciliationIntervalMs)
+
+	// Test interval not set (default)
+	config = NewClusterClientConfiguration()
+	request, err = config.ToProtobuf()
+	assert.NoError(t, err)
+	assert.Nil(t, request.PubsubReconciliationIntervalMs)
+}
+
 // ============================================================================
 // Compression Configuration Tests
 // ============================================================================

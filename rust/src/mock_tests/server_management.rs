@@ -1,16 +1,16 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 //! Mock-executor unit tests for the server-management command family.
 use super::Mock;
-use glide::commands::options::FlushMode;
-use glide::commands::server_management::ServerManagementCommands;
-use redis::Value;
+use crate::ValkeyValue;
+use crate::commands::options::FlushMode;
+use crate::commands::server_management::ServerManagementCommands;
 
 #[tokio::test]
 async fn info_and_sections() {
     let m = Mock::bulk("# Server\nredis_version:7.0\n");
     let info = m.info().await.unwrap();
     m.assert_args(&["INFO"]);
-    assert!(info.starts_with(b"# Server"));
+    assert!(info.starts_with("# Server"));
 
     let m = Mock::bulk("# CPU\n");
     m.info_sections(&["cpu", "memory"]).await.unwrap();
@@ -45,8 +45,8 @@ async fn flushall_with_mode() {
 #[tokio::test]
 async fn config_get_parses_map() {
     let m = Mock::array(vec![
-        Value::BulkString(b"maxmemory".to_vec().into()),
-        Value::BulkString(b"100mb".to_vec().into()),
+        ValkeyValue::BulkString(b"maxmemory".to_vec().into()),
+        ValkeyValue::BulkString(b"100mb".to_vec().into()),
     ]);
     let cfg = m.config_get("maxmemory").await.unwrap();
     m.assert_args(&["CONFIG", "GET", "maxmemory"]);
@@ -77,8 +77,8 @@ async fn config_resetstat_and_rewrite() {
 #[tokio::test]
 async fn time_parses_pair() {
     let m = Mock::array(vec![
-        Value::BulkString(b"1700000000".to_vec().into()),
-        Value::BulkString(b"123456".to_vec().into()),
+        ValkeyValue::BulkString(b"1700000000".to_vec().into()),
+        ValkeyValue::BulkString(b"123456".to_vec().into()),
     ]);
     assert_eq!(m.time().await.unwrap(), (1700000000, 123456));
     m.assert_args(&["TIME"]);
@@ -166,7 +166,7 @@ async fn client_pause_variants() {
     m.assert_args(&["CLIENT", "PAUSE", "1000"]);
 
     let m = Mock::ok();
-    m.client_pause(1000, Some(glide::commands::options::ClientPauseMode::Write))
+    m.client_pause(1000, Some(crate::commands::options::ClientPauseMode::Write))
         .await
         .unwrap();
     m.assert_args(&["CLIENT", "PAUSE", "1000", "WRITE"]);

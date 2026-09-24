@@ -51,27 +51,27 @@ fn parse_version(s: &str) -> Option<(u32, u32, u32)> {
 /// `out`. Handles the flat bulk string a standalone `INFO` returns AND the
 /// multi-node Map/Array a cluster client returns (so the version can be found in
 /// either shape).
-fn collect_value_text(v: &glide::Value, out: &mut String) {
-    use glide::Value;
+fn collect_value_text(v: &glide::ValkeyValue, out: &mut String) {
+    use glide::ValkeyValue;
     match v {
-        Value::BulkString(b) => {
+        ValkeyValue::BulkString(b) => {
             out.push_str(&String::from_utf8_lossy(b));
             out.push('\n');
         }
-        Value::SimpleString(s) => {
+        ValkeyValue::SimpleString(s) => {
             out.push_str(s);
             out.push('\n');
         }
-        Value::VerbatimString { text, .. } => {
+        ValkeyValue::VerbatimString { text, .. } => {
             out.push_str(text);
             out.push('\n');
         }
-        Value::Array(items) | Value::Set(items) => {
+        ValkeyValue::Array(items) | ValkeyValue::Set(items) => {
             for it in items {
                 collect_value_text(it, out);
             }
         }
-        Value::Map(pairs) => {
+        ValkeyValue::Map(pairs) => {
             for (k, val) in pairs {
                 collect_value_text(k, out);
                 collect_value_text(val, out);
@@ -123,13 +123,13 @@ where
 /// `COMMAND INFO <name>` returns `[[ <details> ]]` when known and `[nil]` when
 /// unknown. On cluster it may be a per-node Map. Present ⇔ a non-empty details
 /// array exists somewhere in the reply.
-fn command_info_present(v: &glide::Value) -> bool {
-    use glide::Value;
+fn command_info_present(v: &glide::ValkeyValue) -> bool {
+    use glide::ValkeyValue;
     match v {
-        Value::Array(items) => items
+        ValkeyValue::Array(items) => items
             .iter()
-            .any(|it| matches!(it, Value::Array(inner) if !inner.is_empty())),
-        Value::Map(pairs) => pairs.iter().any(|(_, val)| command_info_present(val)),
+            .any(|it| matches!(it, ValkeyValue::Array(inner) if !inner.is_empty())),
+        ValkeyValue::Map(pairs) => pairs.iter().any(|(_, val)| command_info_present(val)),
         _ => false,
     }
 }

@@ -7,7 +7,7 @@ mod common;
 
 use glide::AsyncCommands;
 use glide::StringCommands; // surviving native extension: lcs, lcs_len, lcs_idx
-use redis::{ExistenceCheck, SetExpiry, SetOptions};
+use glide::{ExistenceCheck, SetExpiry, SetOptions};
 
 matrix_test!(set_and_get, c, {
     let k = common::key("str");
@@ -114,7 +114,7 @@ matrix_test!(incr_by_float, c, {
 matrix_test!(incr_non_integer_errors, c, {
     let k = common::key("nonint");
     let _: () = c.set(&k, "notanumber").await.unwrap();
-    let result: redis::RedisResult<i64> = c.incr(&k, 1i64).await;
+    let result: glide::ValkeyResult<i64> = c.incr(&k, 1i64).await;
     assert!(result.is_err());
 });
 
@@ -159,7 +159,7 @@ matrix_test!(getdel_returns_and_removes, c, {
 matrix_test!(getex_sets_expiry, c, {
     let k = common::key("gx");
     let _: () = c.set(&k, "v").await.unwrap();
-    let v: Option<String> = c.get_ex(&k, redis::Expiry::EX(100)).await.unwrap();
+    let v: Option<String> = c.get_ex(&k, glide::Expiry::EX(100)).await.unwrap();
     assert_eq!(v.as_deref(), Some("v"));
 
     let ttl: i64 = c.ttl(&k).await.unwrap();
@@ -215,11 +215,13 @@ matrix_test!(get_wrong_type_errors, c, {
     // GET against a list key must be an error (WRONGTYPE).
     let k = common::key("wt");
     let _: i64 = c.rpush(&k, &["a"]).await.unwrap();
-    let result: redis::RedisResult<Option<String>> = c.get(&k).await;
+    let result: glide::ValkeyResult<Option<String>> = c.get(&k).await;
     assert!(result.is_err());
 });
 
 matrix_test!(lcs_len, c, {
+    skip_if_version_below!(c, 7, 0, 0);
+
     let k1 = common::tkey("lcs", "1");
     let k2 = common::tkey("lcs", "2");
     let _: () = c.set(&k1, "ohmytext").await.unwrap();

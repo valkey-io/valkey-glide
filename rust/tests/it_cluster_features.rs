@@ -1,109 +1,85 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 //! Cluster-mode integration tests for the parity features (pipeline options,
 //! routed FCALL, runtime pub/sub incl. sharded) against a real multi-primary
-//! cluster. Each test SKIPs gracefully when a cluster cannot be formed.
+//! cluster.
 
 mod common;
 
 use glide::commands::pubsub::PubSubCommands;
 use glide::{
-    AsyncCommands, CustomCommand, GlideClusterClient, GlideClusterClientConfiguration,
-    PipelineOptions, PubSubMessageKind, Route, ScriptingCommands, SortedSetCommands, pipe,
+    AsyncCommands, CustomCommand, FromValkeyValue, GlideClusterClient,
+    GlideClusterClientConfiguration, PipelineOptions, PubSubMessageKind, Route, ScriptingCommands,
+    SortedSetCommands, pipe,
 };
 use std::time::Duration;
 
-/// Connect a default cluster client, or SKIP.
-macro_rules! cluster_client {
-    ($cluster:expr) => {
-        match $cluster.client().await {
-            Some(c) => c,
-            None => {
-                eprintln!("SKIP: cluster client connect failed");
-                return;
-            }
-        }
-    };
-}
-
 timed_tokio_test!(
     async fn cluster_exec_with_options() {
-        let cluster = match common::ClusterHarness::start() {
-            Some(c) => c,
-            None => {
-                eprintln!("SKIP: cluster harness unavailable");
-                return;
-            }
-        };
-        let c = cluster_client!(cluster);
+        let cluster = common::ClusterHarness::start().await;
+        let c = cluster.client().await;
 
         // Same-slot keys (hash tag) so the pipeline routes to one shard; options
         // carry a timeout + explicit (disabled) retry strategy.
         let k = common::tkey("cbo", "k");
         let mut pipeline = pipe();
         pipeline.set(&k, "1").incr(&k, 1i64).get(&k);
+
         let opts = PipelineOptions::new()
             .with_timeout(Duration::from_secs(5))
             .with_retry_server_error(true);
-        let results = c
-            .execute_pipeline(&pipeline, true, None, &opts)
-            .await
-            .unwrap();
+        let results = c.exec(&pipeline, true, None, &opts).await.unwrap();
+
         assert_eq!(results.len(), 3);
         // results[0] = SET reply (OK), results[1] = INCR reply (2), results[2] = GET reply ("2")
-        assert_eq!(glide::value::to_i64(results[1].clone()).unwrap(), 2);
-        assert_eq!(glide::value::to_string(results[2].clone()).unwrap(), "2");
+        assert_eq!(i64::from_valkey_value(&results[1]).unwrap(), 2);
+        assert_eq!(String::from_valkey_value(&results[2]).unwrap(), "2");
 
         // Atomic transaction with options routed to the key's slot.
         let k2 = common::tkey("cbo", "tx");
         let mut tx = pipe();
         tx.atomic().set(&k2, "5").incr(&k2, 1i64);
+
         let res2 = c
-            .execute_pipeline(&tx, true, None, &PipelineOptions::new())
+            .exec(&tx, true, None, &PipelineOptions::new())
             .await
             .unwrap();
+
         // res2[0] = SET reply (OK), res2[1] = INCR reply (6)
-        assert_eq!(glide::value::to_i64(res2[1].clone()).unwrap(), 6);
+        assert_eq!(i64::from_valkey_value(&res2[1]).unwrap(), 6);
     }
 );
 
 timed_tokio_test!(
     async fn cluster_fcall_route() {
-        let cluster = match common::ClusterHarness::start() {
-            Some(c) => c,
-            None => {
-                eprintln!("SKIP: cluster harness unavailable");
-                return;
-            }
-        };
-        let c = cluster_client!(cluster);
+        let cluster = common::ClusterHarness::start().await;
+        let client = cluster.client().await;
+
+        skip_if_version_below!(client, 7, 0, 0);
 
         // Load the library on every primary so a routed FCALL resolves on any node.
         let lib = "#!lua name=glideclib\n\
                redis.register_function{function_name='gc_echo', \
                callback=function(keys, args) return args[1] end, flags={'no-writes'}}";
-        if let Err(e) = c
+        client
             .custom_command_with_route(&["FUNCTION", "LOAD", "REPLACE", lib], Route::AllPrimaries)
             .await
-        {
-            eprintln!("SKIP: FUNCTION unsupported: {e:?}");
-            return;
-        }
+            .expect("FUNCTION LOAD");
 
         // Routed to a single node -> scalar reply.
-        let r = c
+        let r = client
             .fcall_route("gc_echo", &[] as &[&str], &["hi"], Route::RandomNode)
             .await
             .unwrap();
-        assert_eq!(glide::value::to_string(r).unwrap(), "hi");
+        assert_eq!(String::from_owned_valkey_value(r).unwrap(), "hi");
 
-        let r = c
+        let r = client
             .fcall_ro_route("gc_echo", &[] as &[&str], &["ro"], Route::RandomNode)
             .await
             .unwrap();
-        assert_eq!(glide::value::to_string(r).unwrap(), "ro");
+        assert_eq!(String::from_owned_valkey_value(r).unwrap(), "ro");
 
         // Broadcast to all primaries -> one reply per node (map/array), all echo.
-        let all = c
+        let all = client
             .fcall_route("gc_echo", &[] as &[&str], &["x"], Route::AllPrimaries)
             .await
             .unwrap();
@@ -114,14 +90,8 @@ timed_tokio_test!(
 
 timed_tokio_test!(
     async fn cluster_runtime_subscribe_receive() {
-        let cluster = match common::ClusterHarness::start() {
-            Some(c) => c,
-            None => {
-                eprintln!("SKIP: cluster harness unavailable");
-                return;
-            }
-        };
-        let publisher = cluster_client!(cluster);
+        let cluster = common::ClusterHarness::start().await;
+        let publisher = cluster.client().await;
         let subscriber = GlideClusterClient::connect(
             GlideClusterClientConfiguration::with_address("127.0.0.1", cluster.seed_port())
                 .enable_pubsub(),
@@ -147,14 +117,12 @@ timed_tokio_test!(
 
 timed_tokio_test!(
     async fn cluster_ssubscribe_sharded_receive() {
-        let cluster = match common::ClusterHarness::start() {
-            Some(c) => c,
-            None => {
-                eprintln!("SKIP: cluster harness unavailable");
-                return;
-            }
-        };
-        let publisher = cluster_client!(cluster);
+        let cluster = common::ClusterHarness::start().await;
+        let publisher = cluster.client().await;
+
+        // Sharded pub/sub is Valkey 7.0+
+        skip_if_version_below!(publisher, 7, 0, 0);
+
         let subscriber = GlideClusterClient::connect(
             GlideClusterClientConfiguration::with_address("127.0.0.1", cluster.seed_port())
                 .enable_pubsub(),
@@ -181,22 +149,17 @@ timed_tokio_test!(
 
 timed_tokio_test!(
     async fn cluster_zrangestore_by_score_same_slot() {
-        let cluster = match common::ClusterHarness::start() {
-            Some(c) => c,
-            None => {
-                eprintln!("SKIP: cluster harness unavailable");
-                return;
-            }
-        };
-        let c = cluster_client!(cluster);
+        let cluster = common::ClusterHarness::start().await;
+        let client = cluster.client().await;
+
         // src + dst must share a slot in cluster mode (multi-key command).
         let src = common::tkey("czr", "src");
         let dst = common::tkey("czr", "dst");
-        let _: i64 = c
+        let _: i64 = client
             .zadd_multiple(&src, &[(1.0, "a"), (2.0, "b"), (3.0, "c")])
             .await
             .unwrap();
-        let n = c
+        let n = client
             .zrangestore_by_score(
                 &dst,
                 &src,
@@ -208,7 +171,7 @@ timed_tokio_test!(
             .await
             .unwrap();
         assert_eq!(n, 2);
-        let card: i64 = c.zcard(&dst).await.unwrap();
+        let card: i64 = client.zcard(&dst).await.unwrap();
         assert_eq!(card, 2);
     }
 );

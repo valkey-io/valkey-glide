@@ -1177,15 +1177,37 @@ class TestJson:
             -1,
             ['"negative_index_value"'],
         )
-        assert result == [9, 13, None, 11, 10, None, None, 12]  # Update valid paths
+        # NOTE(#6990): ValkeyJSON 1.0.3 (GHSA-q7rf-74qm-hr9g) changed recursive
+        # JSONPath mutation to process matches deepest-first. As a side effect,
+        # the earlier out-of-range ("$..a"/"..a" at index 10) inserts partially
+        # apply to d[0].a before erroring, so d[0].a ends up with two extra
+        # "out_of_range_value" entries. Only d[0].a diverges from the pre-1.0.3
+        # document; the other matched arrays are unchanged.
+        assert result == [9, 13, None, 13, 10, None, None, 12]  # Update valid paths
 
         # Check document after negative index insertion
         updated_doc_negative = await json.get(glide_client, key)
         expected_doc["a"].insert(-1, "negative_index_value")
         expected_doc["b"]["a"].insert(-1, "negative_index_value")
-        expected_doc["d"][0]["a"].insert(-1, "negative_index_value")
         expected_doc["d"][1]["a"].insert(-1, "negative_index_value")
         expected_doc["f"]["a"].insert(-1, "negative_index_value")
+        # d[0].a reflects the two partially-applied out-of-range inserts plus the
+        # negative-index insert under ValkeyJSON 1.0.3 deepest-first processing.
+        expected_doc["d"][0]["a"] = [
+            "legacy_value",
+            "string_value",
+            123,
+            "insert_at_2",
+            {"key": "value"},
+            True,
+            None,
+            ["bar"],
+            "x",
+            "y",
+            "out_of_range_value",
+            "negative_index_value",
+            "out_of_range_value",
+        ]
         assert OuterJson.loads(updated_doc_negative) == expected_doc
 
         # Non-existing path

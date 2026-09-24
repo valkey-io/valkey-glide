@@ -1,35 +1,63 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 //! Lua script helper (`Script`): SHA-caching `EVALSHA` with `EVAL` fallback.
 //!
-//! A clean-room implementation of the `Script` convenience type (absent from
-//! the vendored fork), provided for migration parity:
 //!
 //! ```rust,no_run
 //! use glide::Script;
-//! # async fn demo(mut client: glide::GlideClient) -> glide::RedisResult<()> {
+//! # async fn demo(mut client: glide::GlideClient) -> glide::ValkeyResult<()> {
 //! let script = Script::new("return tonumber(ARGV[1]) + tonumber(ARGV[2])");
 //! let sum: i64 = script.arg(1).arg(2).invoke_async(&mut client).await?;
 //! assert_eq!(sum, 3);
 //! # Ok(()) }
 //! ```
 //!
-//! `invoke_async` / `invoke` first attempt `EVALSHA`
-//! (cheap, cached) and transparently fall back to `EVAL` (which also loads the
-//! script) when the server does not know the hash (`NOSCRIPT`); `load_async` /
-//! `load` populate the script cache explicitly. Invocations ride the unified
-//! command API's zero-extra-copy path: async methods take any
-//! [`crate::AsyncCommands`] implementor ([`crate::GlideClient`] /
-//! [`crate::GlideClusterClient`]); blocking methods take any `glide::Commands`
-//! implementor (the sync clients).
+//! Async methods take an async GLIDE client ([`crate::GlideClient`] or
+//! [`crate::GlideClusterClient`]); blocking methods take a sync GLIDE client
+//! ([`crate::sync::SyncGlideClient`] or [`crate::sync::SyncGlideClusterClient`]).
 
+use crate::ValkeyFuture;
+use crate::ValkeyResult;
+use crate::cmd::cmd;
 use crate::commands::core::AsyncCommands;
-use redis::{ErrorKind, FromRedisValue, RedisResult, ToRedisArgs, cmd};
+use crate::value::FromValkeyValue;
+use crate::value::ValkeyValue;
+use crate::write::ToValkeyArgs;
+use glide_core::scripts_container::add_script;
+use glide_core::scripts_container::remove_script;
+
+/// Runs a cached script by hash on an async client.
+/// Implemented by [`GlideClient`] and [`GlideClusterClient`].
+#[doc(hidden)]
+#[sealed::sealed(pub(crate))]
+pub trait ScriptInvoke {
+    fn glide_invoke_script<'a>(
+        &'a self,
+        hash: &'a str,
+        keys: &'a [Vec<u8>],
+        args: &'a [Vec<u8>],
+    ) -> ValkeyFuture<'a, ValkeyValue>;
+}
+
+/// Runs a cached script by hash on a sync client.
+/// Blocking counterpart of [`ScriptInvoke`].
+/// Implemented by the [`SyncGlideClient`] and [`SyncGlideClusterClient`].
+#[cfg(feature = "sync")]
+#[doc(hidden)]
+#[sealed::sealed(pub(crate))]
+pub trait ScriptInvokeSync {
+    fn glide_invoke_script(
+        &self,
+        hash: &str,
+        keys: &[Vec<u8>],
+        args: &[Vec<u8>],
+    ) -> ValkeyResult<ValkeyValue>;
+}
 
 /// A cached Lua script with its SHA-1 hash.
 ///
 /// Create once (computes the SHA-1), then [`Self::arg`]/[`Self::key`] to build
 /// an invocation. See the [module docs](self) for an example.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Script {
     code: String,
     hash: String,
@@ -38,11 +66,10 @@ pub struct Script {
 impl Script {
     /// Create a new script object with a precomputed SHA-1 hash.
     pub fn new(code: &str) -> Script {
-        let mut sha1 = sha1_smol::Sha1::new();
-        sha1.update(code.as_bytes());
+        let hash = add_script(code.as_bytes());
         Script {
             code: code.to_string(),
-            hash: sha1.digest().to_string(),
+            hash,
         }
     }
 
@@ -53,7 +80,7 @@ impl Script {
 
     /// Create an invocation and add a regular argument (`ARGV[…]`).
     #[must_use]
-    pub fn arg<'a, T: ToRedisArgs>(&'a self, arg: T) -> ScriptInvocation<'a> {
+    pub fn arg<'a, T: ToValkeyArgs>(&'a self, arg: T) -> ScriptInvocation<'a> {
         let mut invocation = self.prepare_invoke();
         invocation.arg(arg);
         invocation
@@ -61,7 +88,7 @@ impl Script {
 
     /// Create an invocation and add a key argument (`KEYS[…]`).
     #[must_use]
-    pub fn key<'a, T: ToRedisArgs>(&'a self, key: T) -> ScriptInvocation<'a> {
+    pub fn key<'a, T: ToValkeyArgs>(&'a self, key: T) -> ScriptInvocation<'a> {
         let mut invocation = self.prepare_invoke();
         invocation.key(key);
         invocation
@@ -78,38 +105,52 @@ impl Script {
     }
 
     /// Invoke the script without keys or args.
-    pub async fn invoke_async<C: AsyncCommands, T: FromRedisValue>(
+    pub async fn invoke_async<C: ScriptInvoke, T: FromValkeyValue>(
         &self,
         con: &C,
-    ) -> RedisResult<T> {
+    ) -> ValkeyResult<T> {
         self.prepare_invoke().invoke_async(con).await
     }
 
     /// Invoke the script without keys or args on a **blocking** connection
     /// ([`crate::sync::SyncGlideClient`] / [`crate::sync::SyncGlideClusterClient`]).
     #[cfg(feature = "sync")]
-    pub fn invoke<C: crate::commands::core::Commands, T: FromRedisValue>(
-        &self,
-        con: &C,
-    ) -> RedisResult<T> {
+    pub fn invoke<C: ScriptInvokeSync, T: FromValkeyValue>(&self, con: &C) -> ValkeyResult<T> {
         self.prepare_invoke().invoke(con)
     }
 
     /// Load the script into the server's script cache (`SCRIPT LOAD`) without
     /// running it; returns the SHA-1 hash.
-    pub async fn load_async<C: AsyncCommands>(&self, con: &C) -> RedisResult<String> {
+    pub async fn load_async<C: AsyncCommands>(&self, con: &C) -> ValkeyResult<String> {
         let mut load = cmd("SCRIPT");
         load.arg("LOAD").arg(self.code.as_bytes());
-        redis::from_owned_redis_value(con.glide_send_owned(load).await?)
+        String::from_owned_valkey_value(con.glide_send_command(load).await?)
     }
 
     /// Load the script into the server's script cache (`SCRIPT LOAD`) on a
     /// **blocking** connection; returns the SHA-1 hash.
     #[cfg(feature = "sync")]
-    pub fn load<C: crate::commands::core::Commands>(&self, con: &C) -> RedisResult<String> {
+    pub fn load<C: crate::commands::core::Commands>(&self, con: &C) -> ValkeyResult<String> {
         let mut load = cmd("SCRIPT");
         load.arg("LOAD").arg(self.code.as_bytes());
-        redis::from_owned_redis_value(con.glide_send_owned_sync(load)?)
+        String::from_owned_valkey_value(con.glide_send_command(load)?)
+    }
+}
+
+impl Clone for Script {
+    fn clone(&self) -> Self {
+        // Bump glide-core's ref-count for the script.
+        add_script(self.code.as_bytes());
+        Script {
+            code: self.code.clone(),
+            hash: self.hash.clone(),
+        }
+    }
+}
+
+impl Drop for Script {
+    fn drop(&mut self) {
+        remove_script(&self.hash);
     }
 }
 
@@ -123,67 +164,41 @@ pub struct ScriptInvocation<'a> {
 
 impl ScriptInvocation<'_> {
     /// Add a regular argument (`ARGV[…]`). Builder form.
-    pub fn arg<T: ToRedisArgs>(&mut self, arg: T) -> &mut Self {
-        arg.write_redis_args(&mut self.args);
+    pub fn arg<T: ToValkeyArgs>(&mut self, arg: T) -> &mut Self {
+        arg.write_valkey_args(&mut self.args);
         self
     }
 
     /// Add a key argument (`KEYS[…]`). Builder form.
-    pub fn key<T: ToRedisArgs>(&mut self, key: T) -> &mut Self {
-        key.write_redis_args(&mut self.keys);
+    pub fn key<T: ToValkeyArgs>(&mut self, key: T) -> &mut Self {
+        key.write_valkey_args(&mut self.keys);
         self
     }
 
-    /// Build the `EVALSHA` command for this invocation.
-    fn evalsha_cmd(&self) -> redis::Cmd {
-        let mut evalsha = cmd("EVALSHA");
-        evalsha
-            .arg(self.script.hash.as_bytes())
-            .arg(self.keys.len())
-            .arg(&self.keys)
-            .arg(&self.args);
-        evalsha
-    }
-
-    /// Build the `EVAL` fallback command (also loads the script server-side).
-    fn eval_cmd(&self) -> redis::Cmd {
-        let mut eval = cmd("EVAL");
-        eval.arg(self.script.code.as_bytes())
-            .arg(self.keys.len())
-            .arg(&self.keys)
-            .arg(&self.args);
-        eval
-    }
-
-    /// Invoke the script: `EVALSHA` first, transparent `EVAL` fallback when the
-    /// server does not have the script cached (`NOSCRIPT`).
-    pub async fn invoke_async<C: AsyncCommands, T: FromRedisValue>(
+    /// Executes the script using [`EVALSHA`], with automatic fallback to
+    /// [`EVAL`] if the script is not cached on the server.
+    ///
+    /// [`EVALSHA`]: https://valkey.io/commands/evalsha/
+    /// [`EVAL`]: https://valkey.io/commands/eval/
+    pub async fn invoke_async<C: ScriptInvoke, T: FromValkeyValue>(
         &self,
         con: &C,
-    ) -> RedisResult<T> {
-        match con.glide_send_owned(self.evalsha_cmd()).await {
-            Err(err) if err.kind() == ErrorKind::NoScriptError => {
-                // Not cached on the server yet — EVAL both runs and caches it.
-                redis::from_owned_redis_value(con.glide_send_owned(self.eval_cmd()).await?)
-            }
-            other => redis::from_owned_redis_value(other?),
-        }
+    ) -> ValkeyResult<T> {
+        let value = con
+            .glide_invoke_script(&self.script.hash, &self.keys, &self.args)
+            .await?;
+        T::from_owned_valkey_value(value)
     }
 
-    /// Invoke the script on a **blocking** connection
-    /// ([`crate::sync::SyncGlideClient`] / [`crate::sync::SyncGlideClusterClient`]):
-    /// `EVALSHA` first, transparent `EVAL` fallback on `NOSCRIPT`.
+    /// Executes the script on a **blocking** connection using [`EVALSHA`],
+    /// with automatic fallback to [`EVAL`] if the script is not cached on the server.
+    ///
+    /// [`EVALSHA`]: https://valkey.io/commands/evalsha/
+    /// [`EVAL`]: https://valkey.io/commands/eval/
     #[cfg(feature = "sync")]
-    pub fn invoke<C: crate::commands::core::Commands, T: FromRedisValue>(
-        &self,
-        con: &C,
-    ) -> RedisResult<T> {
-        match con.glide_send_owned_sync(self.evalsha_cmd()) {
-            Err(err) if err.kind() == ErrorKind::NoScriptError => {
-                redis::from_owned_redis_value(con.glide_send_owned_sync(self.eval_cmd())?)
-            }
-            other => redis::from_owned_redis_value(other?),
-        }
+    pub fn invoke<C: ScriptInvokeSync, T: FromValkeyValue>(&self, con: &C) -> ValkeyResult<T> {
+        let value = con.glide_invoke_script(&self.script.hash, &self.keys, &self.args)?;
+        T::from_owned_valkey_value(value)
     }
 }
 

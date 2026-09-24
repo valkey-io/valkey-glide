@@ -49,7 +49,9 @@ func (e EvictionPolicy) String() string {
 //   - Currently, Glide's client-side cache supports lazy eviction only. Expired entries
 //     are removed only when accessed after their TTL has expired. There is no proactive
 //     background cleanup of expired entries.
-//   - Currently, only read commands that retrieve entire values are cached (GET, HGETALL, SMEMBERS).
+//   - Currently, only read commands that retrieve entire values are cached (GET, MGET, HGETALL, SMEMBERS).
+//   - An MGET response may combine locally cached values with values fetched from the server, so it does not
+//     provide an atomic snapshot across all keys.
 type ClientSideCache struct {
 	// cacheId is a unique identifier for the cache instance, used internally to
 	// identify the cache in the Rust core. Multiple clients sharing the same
@@ -97,7 +99,9 @@ type ClientSideCache struct {
 //   - Currently, Glide's client-side cache supports lazy eviction only. Expired entries
 //     are removed only when accessed after their TTL has expired. There is no proactive
 //     background cleanup of expired entries.
-//   - Currently, only read commands that retrieve entire values are cached (GET, HGETALL, SMEMBERS).
+//   - Currently, only read commands that retrieve entire values are cached (GET, MGET, HGETALL, SMEMBERS).
+//   - An MGET response may combine locally cached values with values fetched from the server, so it does not
+//     provide an atomic snapshot across all keys.
 //
 // Note: In order for 2 clients to share the same cache, they must be
 // created with the same ClientSideCache instance.

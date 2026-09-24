@@ -9,8 +9,8 @@ pub(crate) mod test_cache {
     use glide_core::connection_request::ClientSideCache;
     use glide_core::connection_request::EvictionPolicy;
     use glide_core::connection_request::ProtocolVersion;
-    use redis::Value;
     use redis::cache::glide_cache::CachedKeyType;
+    use redis::{Value, cluster_topology::get_slot};
     use rstest::rstest;
     use utilities::cluster::*;
     use utilities::*;
@@ -115,6 +115,508 @@ pub(crate) mod test_cache {
 
             let total_lookups = test_basics.client.cache_total_lookups().unwrap();
             assert_eq!(total_lookups, Value::Int(3), "Expected 3 total lookups");
+        });
+    }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_mget_cache_uses_hits_and_fetches_only_misses(#[values(false, true)] use_cluster: bool) {
+        block_on_all(async {
+            let mut test_basics = setup_test_basics(
+                use_cluster,
+                TestConfiguration {
+                    shared_server: true,
+                    client_side_cache: Some(ClientSideCache {
+                        cache_id: format!("test_cache_mget_{use_cluster}").into(),
+                        max_cache_kb: 1,
+                        entry_ttl_ms: 0,
+                        eviction_policy: None,
+                        enable_metrics: true,
+                        ..Default::default()
+                    }),
+                    ..Default::default()
+                },
+            )
+            .await;
+
+            let keys = [
+                "{mget-cache}first",
+                "{mget-cache}second",
+                "{mget-cache}third",
+                "{mget-cache}fourth",
+            ];
+            for (key, value) in
+                keys.iter()
+                    .zip(["first value", "second value", "third value", "fourth value"])
+            {
+                let mut set_cmd = redis::Cmd::new();
+                set_cmd.arg("SET").arg(key).arg(value);
+                test_basics
+                    .client
+                    .send_command(&mut set_cmd, None)
+                    .await
+                    .unwrap();
+            }
+
+            let mut reset_cmd = redis::Cmd::new();
+            reset_cmd.arg("CONFIG").arg("RESETSTAT");
+            test_basics
+                .client
+                .send_command(&mut reset_cmd, None)
+                .await
+                .unwrap();
+
+            let mut mget_cmd = redis::Cmd::new();
+            mget_cmd.arg("MGET").arg(keys[0]).arg(keys[1]);
+            let result = test_basics
+                .client
+                .send_command(&mut mget_cmd, None)
+                .await
+                .unwrap();
+            assert_eq!(
+                result,
+                Value::Array(vec![
+                    Value::BulkString(b"first value".to_vec().into()),
+                    Value::BulkString(b"second value".to_vec().into()),
+                ])
+            );
+            assert_command_count(&mut test_basics.client, "MGET", 1, use_cluster).await;
+
+            let mut cached_mget_cmd = redis::Cmd::new();
+            cached_mget_cmd.arg("MGET").arg(keys[0]).arg(keys[1]);
+            let result = test_basics
+                .client
+                .send_command(&mut cached_mget_cmd, None)
+                .await
+                .unwrap();
+            assert_eq!(
+                result,
+                Value::Array(vec![
+                    Value::BulkString(b"first value".to_vec().into()),
+                    Value::BulkString(b"second value".to_vec().into()),
+                ])
+            );
+            assert_command_count(&mut test_basics.client, "MGET", 1, use_cluster).await;
+
+            let mut mixed_mget_cmd = redis::Cmd::new();
+            mixed_mget_cmd
+                .arg("MGET")
+                .arg(keys[0])
+                .arg(keys[2])
+                .arg(keys[0]);
+            let result = test_basics
+                .client
+                .send_command(&mut mixed_mget_cmd, None)
+                .await
+                .unwrap();
+            assert_eq!(
+                result,
+                Value::Array(vec![
+                    Value::BulkString(b"first value".to_vec().into()),
+                    Value::BulkString(b"third value".to_vec().into()),
+                    Value::BulkString(b"first value".to_vec().into()),
+                ])
+            );
+            assert_command_count(&mut test_basics.client, "MGET", 2, use_cluster).await;
+
+            let mut get_cmd = redis::Cmd::new();
+            get_cmd.arg("GET").arg(keys[2]);
+            let result = test_basics
+                .client
+                .send_command(&mut get_cmd, None)
+                .await
+                .unwrap();
+            assert_eq!(result, Value::BulkString(b"third value".to_vec().into()));
+            assert_command_count(&mut test_basics.client, "GET", 0, use_cluster).await;
+
+            let mut uncached_get_cmd = redis::Cmd::new();
+            uncached_get_cmd.arg("GET").arg(keys[3]);
+            let result = test_basics
+                .client
+                .send_command(&mut uncached_get_cmd, None)
+                .await
+                .unwrap();
+            assert_eq!(result, Value::BulkString(b"fourth value".to_vec().into()));
+            assert_command_count(&mut test_basics.client, "GET", 1, use_cluster).await;
+
+            let mut get_warmed_mget_cmd = redis::Cmd::new();
+            get_warmed_mget_cmd.arg("MGET").arg(keys[3]).arg(keys[0]);
+            let result = test_basics
+                .client
+                .send_command(&mut get_warmed_mget_cmd, None)
+                .await
+                .unwrap();
+            assert_eq!(
+                result,
+                Value::Array(vec![
+                    Value::BulkString(b"fourth value".to_vec().into()),
+                    Value::BulkString(b"first value".to_vec().into()),
+                ])
+            );
+            assert_command_count(&mut test_basics.client, "MGET", 2, use_cluster).await;
+
+            let hit_rate = match test_basics.client.cache_hit_rate().unwrap() {
+                Value::Double(rate) => rate,
+                value => panic!("Expected Value::Double, got {value:?}"),
+            };
+            assert_eq!(hit_rate, 7.0 / 11.0);
+            assert_eq!(
+                test_basics.client.cache_total_lookups().unwrap(),
+                Value::Int(11)
+            );
+        });
+    }
+
+    /// Verify that MGET caching preserves the response order when cluster routing
+    /// splits the request into commands for different shards.
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_mget_cache_multi_slot_cluster() {
+        block_on_all(async {
+            let mut test_basics = setup_test_basics(
+                true,
+                TestConfiguration {
+                    shared_server: true,
+                    client_side_cache: Some(ClientSideCache {
+                        cache_id: "test_cache_mget_multi_slot".into(),
+                        max_cache_kb: 1,
+                        entry_ttl_ms: 0,
+                        eviction_policy: None,
+                        enable_metrics: true,
+                        ..Default::default()
+                    }),
+                    ..Default::default()
+                },
+            )
+            .await;
+
+            // These tags map to the low, middle, and high slot ranges of the
+            // shared three-primary test cluster.
+            let keys = [
+                "{user1000}mget-cache-low",
+                "{foo}mget-cache-high",
+                "{zap}mget-cache-middle",
+            ];
+            assert_eq!(get_slot(keys[0].as_bytes()), 3443);
+            assert_eq!(get_slot(keys[1].as_bytes()), 12182);
+            assert_eq!(get_slot(keys[2].as_bytes()), 6469);
+
+            for (key, value) in keys.iter().zip(["low value", "high value", "middle value"]) {
+                let mut set_cmd = redis::cmd("SET");
+                set_cmd.arg(key).arg(value);
+                test_basics
+                    .client
+                    .send_command(&mut set_cmd, None)
+                    .await
+                    .unwrap();
+            }
+
+            let mut reset_cmd = redis::cmd("CONFIG");
+            reset_cmd.arg("RESETSTAT");
+            test_basics
+                .client
+                .send_command(&mut reset_cmd, None)
+                .await
+                .unwrap();
+
+            let expected_initial = Value::Array(vec![
+                Value::BulkString(b"low value".to_vec().into()),
+                Value::BulkString(b"high value".to_vec().into()),
+            ]);
+            let mut initial_mget = redis::cmd("MGET");
+            initial_mget.arg(keys[0]).arg(keys[1]);
+            assert_eq!(
+                test_basics
+                    .client
+                    .send_command(&mut initial_mget, None)
+                    .await
+                    .unwrap(),
+                expected_initial
+            );
+            assert_command_count(&mut test_basics.client, "MGET", 2, true).await;
+
+            let mut cached_mget = redis::cmd("MGET");
+            cached_mget.arg(keys[0]).arg(keys[1]);
+            assert_eq!(
+                test_basics
+                    .client
+                    .send_command(&mut cached_mget, None)
+                    .await
+                    .unwrap(),
+                expected_initial
+            );
+            assert_command_count(&mut test_basics.client, "MGET", 2, true).await;
+
+            let mut partially_cached_mget = redis::cmd("MGET");
+            partially_cached_mget.arg(keys[0]).arg(keys[2]).arg(keys[1]);
+            assert_eq!(
+                test_basics
+                    .client
+                    .send_command(&mut partially_cached_mget, None)
+                    .await
+                    .unwrap(),
+                Value::Array(vec![
+                    Value::BulkString(b"low value".to_vec().into()),
+                    Value::BulkString(b"middle value".to_vec().into()),
+                    Value::BulkString(b"high value".to_vec().into()),
+                ])
+            );
+            assert_command_count(&mut test_basics.client, "MGET", 3, true).await;
+
+            assert_eq!(
+                test_basics.client.cache_total_lookups().unwrap(),
+                Value::Int(7)
+            );
+            assert_eq!(
+                test_basics.client.cache_hit_rate().unwrap(),
+                Value::Double(4.0 / 7.0)
+            );
+        });
+    }
+
+    /// Verify that server-assisted invalidation refetches only the changed MGET key across shards.
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_server_assisted_mget_cache_multi_slot_invalidation() {
+        block_on_all(async {
+            let mut cached_client = setup_test_basics(
+                true,
+                TestConfiguration {
+                    shared_server: true,
+                    protocol: ProtocolVersion::RESP3,
+                    client_side_cache: Some(ClientSideCache {
+                        cache_id: "server_assisted_mget_multi_slot".into(),
+                        max_cache_kb: 1024,
+                        entry_ttl_ms: 0,
+                        eviction_policy: None,
+                        enable_metrics: true,
+                        server_assisted: true,
+                        ..Default::default()
+                    }),
+                    ..Default::default()
+                },
+            )
+            .await;
+            let mut writer = setup_test_basics(
+                true,
+                TestConfiguration {
+                    shared_server: true,
+                    ..Default::default()
+                },
+            )
+            .await;
+
+            let keys = [
+                "{user1000}server-assisted-mget-low",
+                "{foo}server-assisted-mget-high",
+            ];
+            assert_eq!(get_slot(keys[0].as_bytes()), 3443);
+            assert_eq!(get_slot(keys[1].as_bytes()), 12182);
+
+            for (key, value) in keys.iter().zip(["low value", "high value"]) {
+                let mut set_cmd = redis::cmd("SET");
+                set_cmd.arg(key).arg(value);
+                writer
+                    .client
+                    .send_command(&mut set_cmd, None)
+                    .await
+                    .unwrap();
+            }
+
+            let mut reset_cmd = redis::cmd("CONFIG");
+            reset_cmd.arg("RESETSTAT");
+            cached_client
+                .client
+                .send_command(&mut reset_cmd, None)
+                .await
+                .unwrap();
+
+            let expected_initial = Value::Array(vec![
+                Value::BulkString(b"low value".to_vec().into()),
+                Value::BulkString(b"high value".to_vec().into()),
+            ]);
+            let mut initial_mget = redis::cmd("MGET");
+            initial_mget.arg(keys[0]).arg(keys[1]);
+            assert_eq!(
+                cached_client
+                    .client
+                    .send_command(&mut initial_mget, None)
+                    .await
+                    .unwrap(),
+                expected_initial
+            );
+            assert_command_count(&mut cached_client.client, "MGET", 2, true).await;
+
+            let mut cached_mget = redis::cmd("MGET");
+            cached_mget.arg(keys[0]).arg(keys[1]);
+            assert_eq!(
+                cached_client
+                    .client
+                    .send_command(&mut cached_mget, None)
+                    .await
+                    .unwrap(),
+                expected_initial
+            );
+            assert_command_count(&mut cached_client.client, "MGET", 2, true).await;
+
+            let mut update_cmd = redis::cmd("SET");
+            update_cmd.arg(keys[0]).arg("updated low value");
+            writer
+                .client
+                .send_command(&mut update_cmd, None)
+                .await
+                .unwrap();
+
+            tokio::time::timeout(std::time::Duration::from_secs(1), async {
+                loop {
+                    if cached_client.client.cache_entry_count().unwrap() == Value::Int(1) {
+                        break;
+                    }
+                    tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+                }
+            })
+            .await
+            .expect("server-assisted invalidation must remove only the changed key");
+
+            let mut refreshed_mget = redis::cmd("MGET");
+            refreshed_mget.arg(keys[0]).arg(keys[1]);
+            assert_eq!(
+                cached_client
+                    .client
+                    .send_command(&mut refreshed_mget, None)
+                    .await
+                    .unwrap(),
+                Value::Array(vec![
+                    Value::BulkString(b"updated low value".to_vec().into()),
+                    Value::BulkString(b"high value".to_vec().into()),
+                ])
+            );
+            assert_command_count(&mut cached_client.client, "MGET", 3, true).await;
+        });
+    }
+
+    /// Test that server-assisted invalidation removes only the changed MGET key.
+    /// The final MGET must fetch the invalidated key and merge it with the cached key.
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_server_assisted_mget_cache_invalidation(#[values(false, true)] use_cluster: bool) {
+        block_on_all(async move {
+            let mut cached_client = setup_test_basics(
+                use_cluster,
+                TestConfiguration {
+                    shared_server: true,
+                    protocol: ProtocolVersion::RESP3,
+                    client_side_cache: Some(ClientSideCache {
+                        cache_id: format!("server_assisted_mget_invalidation_{use_cluster}").into(),
+                        max_cache_kb: 1024,
+                        entry_ttl_ms: 0,
+                        eviction_policy: None,
+                        enable_metrics: true,
+                        server_assisted: true,
+                        ..Default::default()
+                    }),
+                    ..Default::default()
+                },
+            )
+            .await;
+            let mut writer = setup_test_basics(
+                use_cluster,
+                TestConfiguration {
+                    shared_server: true,
+                    ..Default::default()
+                },
+            )
+            .await;
+
+            // Keep both keys on one cluster shard so the writer triggers the
+            // BCAST invalidation on the tracking connection that served MGET.
+            let keys = [
+                "{server-assisted-mget}first",
+                "{server-assisted-mget}second",
+            ];
+            for (key, value) in keys.iter().zip(["first value", "second value"]) {
+                let mut set_cmd = redis::cmd("SET");
+                set_cmd.arg(key).arg(value);
+                writer
+                    .client
+                    .send_command(&mut set_cmd, None)
+                    .await
+                    .unwrap();
+            }
+
+            let mut reset_cmd = redis::cmd("CONFIG");
+            reset_cmd.arg("RESETSTAT");
+            cached_client
+                .client
+                .send_command(&mut reset_cmd, None)
+                .await
+                .unwrap();
+
+            let mut mget_cmd = redis::cmd("MGET");
+            mget_cmd.arg(keys[0]).arg(keys[1]);
+            let expected_initial = Value::Array(vec![
+                Value::BulkString(b"first value".to_vec().into()),
+                Value::BulkString(b"second value".to_vec().into()),
+            ]);
+            assert_eq!(
+                cached_client
+                    .client
+                    .send_command(&mut mget_cmd, None)
+                    .await
+                    .unwrap(),
+                expected_initial
+            );
+            assert_command_count(&mut cached_client.client, "MGET", 1, use_cluster).await;
+
+            let mut cached_mget_cmd = redis::cmd("MGET");
+            cached_mget_cmd.arg(keys[0]).arg(keys[1]);
+            assert_eq!(
+                cached_client
+                    .client
+                    .send_command(&mut cached_mget_cmd, None)
+                    .await
+                    .unwrap(),
+                expected_initial
+            );
+            assert_command_count(&mut cached_client.client, "MGET", 1, use_cluster).await;
+
+            let mut update_cmd = redis::cmd("SET");
+            update_cmd.arg(keys[0]).arg("updated first value");
+            writer
+                .client
+                .send_command(&mut update_cmd, None)
+                .await
+                .unwrap();
+
+            tokio::time::timeout(std::time::Duration::from_secs(1), async {
+                loop {
+                    if cached_client.client.cache_entry_count().unwrap() == Value::Int(1) {
+                        break;
+                    }
+                    tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+                }
+            })
+            .await
+            .expect("server-assisted invalidation must remove the changed MGET key");
+
+            let mut refreshed_mget_cmd = redis::cmd("MGET");
+            refreshed_mget_cmd.arg(keys[0]).arg(keys[1]);
+            assert_eq!(
+                cached_client
+                    .client
+                    .send_command(&mut refreshed_mget_cmd, None)
+                    .await
+                    .unwrap(),
+                Value::Array(vec![
+                    Value::BulkString(b"updated first value".to_vec().into()),
+                    Value::BulkString(b"second value".to_vec().into()),
+                ])
+            );
+            assert_command_count(&mut cached_client.client, "MGET", 2, use_cluster).await;
         });
     }
 
