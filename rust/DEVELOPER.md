@@ -103,7 +103,7 @@ TODO #7058: Update/extract once parity guard work done.
 
 The unified `AsyncCommands` / `Commands` traits are defined by the
 **hand-maintained** command table in `src/commands/core.rs` (one
-`implement_glide_commands!` invocation; each `fn name<G: Bound>(args);` entry
+`implement_commands!` invocation; each `fn name<G: Bound>(args);` entry
 expands to both the async and the blocking method, delegating to the fork's
 `Cmd::<name>()` constructor for identical wire encoding).
 
