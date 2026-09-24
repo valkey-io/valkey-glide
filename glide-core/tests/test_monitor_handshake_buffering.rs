@@ -339,19 +339,20 @@ mod test_monitor_handshake_buffering {
         // bounds how long the test is willing to wait for the server thread to be
         // scheduled, and never awaits, so the reader task stays starved throughout.
         let deadline = std::time::Instant::now() + DEADLINE;
-        let wrote = loop {
-            if server.wrote.try_recv().is_ok() {
-                break true;
+        loop {
+            match server.wrote.try_recv() {
+                Ok(()) => break,
+                Err(oneshot::error::TryRecvError::Closed) => {
+                    panic!("the scripted server died before writing the line")
+                }
+                Err(oneshot::error::TryRecvError::Empty) => {}
             }
-            if std::time::Instant::now() >= deadline {
-                break false;
-            }
+            assert!(
+                std::time::Instant::now() < deadline,
+                "the server did not write the line during the stall, so nothing was starved"
+            );
             std::thread::sleep(std::time::Duration::from_millis(5));
-        };
-        assert!(
-            wrote,
-            "the server did not write the line during the stall, so nothing was starved"
-        );
+        }
         assert!(
             lines.lock().unwrap().is_empty(),
             "the reader task ran while its thread was blocked"

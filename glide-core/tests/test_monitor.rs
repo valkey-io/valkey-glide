@@ -144,20 +144,8 @@ mod test_monitor {
             .await
             .unwrap();
 
-        // `stop_async` joined the reader task, so no further line can reach the
-        // collector and the count is already final. Read the key back anyway, so a
-        // failure to reach the server cannot make this test pass for the wrong reason.
-        let stored: Option<String> = redis::cmd("GET")
-            .arg("monitor_after_stop_key")
-            .query_async(&mut conn)
-            .await
-            .unwrap();
-        assert_eq!(
-            stored.as_deref(),
-            Some("val"),
-            "server never stored the key written after stop"
-        );
-
+        // The awaited write above is the proof the server was reached, and `stop_async`
+        // joined the reader task, so no further line can reach the collector.
         let count_final = lines.lock().unwrap().len();
         assert_eq!(count_after_stop, count_final, "lines received after stop");
     }
