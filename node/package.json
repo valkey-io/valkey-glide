@@ -82,7 +82,7 @@
         "staged": "lint-staged",
         "prereq": "npm ci",
         "artifacts": "napi artifacts",
-        "prepublishOnly": "cd ../.. && napi prepublish --config npm/glide/package.json -t npm --skip-gh-release",
+        "prepublishOnly": "echo 'napi prepublish is run explicitly in CI before npm publish'",
         "docs": "npm run build && ./docs/build-docs"
     },
     "devDependencies": {
@@ -131,6 +131,7 @@
     "engines": {
         "node": ">=20"
     },
+    "workspaces": [],
     "napi": {
         "binaryName": "valkey-glide",
         "triples": {

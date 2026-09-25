@@ -427,7 +427,28 @@ jobs:
                   sed -i 's/"version": "0\.0\.0"/"version": "'"${NAPI_RS_VERSION_FROM_TAG}"'"/' package.json
                   echo "Base package version is now: $(jq -r .version package.json)"
 
-            # Use prepublishOnly, which call to napi prepublish -t npm to set up everything properly, versions of native modules reflecting the base package version, and optional dependencies base on triples are added to the base package.
+            # Run napi prepublish explicitly from node/ before npm publish.
+            # This must run from the project root (node/) — not from node/npm/glide/ —
+            # because napi v3 enforces a workspace boundary check that requires a
+            # workspace marker (workspaces field in package.json) to be discoverable
+            # by walking up from the package directory. Running from node/npm/glide/
+            # (the npm lifecycle cwd) pins the discovery root to that directory,
+            # making the walk impossible. See: napi-rs/napi-rs#2571
+            - name: Run napi prepublish
+              if: ${{ needs.get-build-parameters.outputs.should_publish == 'true' }}
+              shell: bash
+              working-directory: ./node
+              env:
+                  NAPI_RS_VERSION_FROM_TAG: ${{ needs.get-build-parameters.outputs.release_version }}
+              run: |
+                  node_modules/.bin/napi prepublish \
+                    --package-json-path npm/glide/package.json \
+                    --npm-dir npm \
+                    -t npm \
+                    --no-gh-release
+
+            # Publish the base package. napi prepublish has already been run in the
+            # preceding step to inject optionalDependencies and version platform packages.
             - name: Publish packages
               if: ${{ needs.get-build-parameters.outputs.should_publish == 'true' }}
               shell: bash
@@ -663,25 +684,30 @@ jobs:
                       continue
                     fi
 
-                    # Extract details from the matrix JSON object for each platform
-                    os=$(echo "$target_json_line" | jq -r '.NAMED_OS // empty')
-                    arch=$(echo "$target_json_line" | jq -r '.ARCH // empty')
-                    build_type=$(echo "$target_json_line" | jq -r '.build_type // empty') # build_type is used to determine -gnu or -musl suffix
-
-                    if [[ -n "$os" && -n "$arch" && -n "$build_type" ]]; then
-                      additional_suffix=""
-                      if [[ "$build_type" == "musl" ]]; then
-                        additional_suffix="-musl"
-                      elif [[ "$build_type" == "gnu" ]]; then
-                        additional_suffix="-gnu"
-                      elif [[ "$build_type" == "windows" ]]; then
-                        additional_suffix="-msvc"
-                      fi
-
-                      package_name="@valkey/valkey-glide-${os}-${arch}${additional_suffix}"
-                      attempt_deprecate "${package_name}@${VERSION}" "${DEPRECATION_MESSAGE}"
-                    else
-                      echo "Warning: Incomplete data in matrix object, cannot form package name. Object: $target_json_line"
+                    # Derive the napi-rs platform string directly from the Rust target triple.
+                    # This mirrors SysToNodePlatform + CpuToNodeArch in napi-rs cli/src/utils/target.ts
+                    # and avoids the NAMED_OS mismatch where "windows" != napi-rs's "win32".
+                    target=$(echo "$target_json_line" | jq -r '.TARGET // empty')
+                    if [[ -z "$target" ]]; then
+                      echo "Warning: No TARGET field in matrix object, skipping. Object: $target_json_line"
+                      continue
                     fi
+
+                    case "$target" in
+                      x86_64-unknown-linux-gnu)   platform="linux-x64-gnu" ;;
+                      aarch64-unknown-linux-gnu)  platform="linux-arm64-gnu" ;;
+                      x86_64-unknown-linux-musl)  platform="linux-x64-musl" ;;
+                      aarch64-unknown-linux-musl) platform="linux-arm64-musl" ;;
+                      x86_64-apple-darwin)        platform="darwin-x64" ;;
+                      aarch64-apple-darwin)       platform="darwin-arm64" ;;
+                      x86_64-pc-windows-msvc)     platform="win32-x64-msvc" ;;
+                      *)
+                        echo "Warning: Unknown target triple '$target', cannot form package name. Skipping."
+                        continue
+                        ;;
+                    esac
+
+                    package_name="@valkey/valkey-glide-${platform}"
+                    attempt_deprecate "${package_name}@${VERSION}" "${DEPRECATION_MESSAGE}"
                   done
                   echo "Finished deprecation attempts for platform packages."
