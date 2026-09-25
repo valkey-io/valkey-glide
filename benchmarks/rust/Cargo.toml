@@ -11,10 +11,10 @@ authors = ["Valkey GLIDE Maintainers"]
 
 # GLIDE dependencies
 glide-logger = { path = "../../glide-logger" }
+glide-core-engine = { path = "../../glide-core/redis-rs/redis", features = ["aio"] }
 
 # TODO #6905: Update once renamed.
 glide-core = { path = "../../glide-core" }
-redis = { path = "../../glide-core/redis-rs/redis", features = ["aio"] }
 
 # External dependencies
 average = "0.17"

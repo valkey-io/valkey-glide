@@ -16,9 +16,9 @@ crate-type = ["staticlib", "rlib", "cdylib"]
 
 # GLIDE dependencies
 glide-logger = { path = "../glide-logger" }
+glide-core-engine = { path = "../glide-core/redis-rs/redis", features = ["aio", "tokio-comp", "tokio-rustls-comp"] }
 
 # TODO #6905: Update once renamed.
-redis = { path = "../glide-core/redis-rs/redis", features = ["aio", "tokio-comp", "tokio-rustls-comp"] }
 glide-core = { path = "../glide-core", features = ["proto"] }
 
 # External dependencies

@@ -1016,6 +1016,7 @@ dependencies = [
  "dashmap",
  "futures",
  "futures-intrusive",
+ "glide-core-engine",
  "glide-logger",
  "glide-telemetry",
  "http 1.4.0",
@@ -1026,7 +1027,6 @@ dependencies = [
  "protobuf",
  "protobuf-codegen",
  "rand 0.8.6",
- "redis",
  "regex",
  "rustls",
  "rustls-pki-types",
@@ -1043,6 +1043,44 @@ dependencies = [
  "uuid",
  "versions",
  "zstd",
+]
+
+[[package]]
+name = "glide-core-engine"
+version = "0.1.0"
+dependencies = [
+ "arc-swap",
+ "async-trait",
+ "bytes",
+ "combine",
+ "crc16",
+ "dashmap",
+ "dispose",
+ "futures",
+ "futures-util",
+ "glide-logger",
+ "glide-telemetry",
+ "itoa",
+ "lazy_static",
+ "lru",
+ "num-bigint",
+ "parking_lot",
+ "percent-encoding",
+ "pin-project-lite",
+ "rand 0.9.4",
+ "rustls",
+ "rustls-pki-types",
+ "rustls-platform-verifier",
+ "ryu",
+ "socket2",
+ "strum",
+ "strum_macros",
+ "tokio",
+ "tokio-retry2 0.5.8",
+ "tokio-rustls",
+ "tokio-util",
+ "tracing",
+ "url",
 ]
 
 [[package]]
@@ -1064,13 +1102,13 @@ dependencies = [
  "bytes",
  "dashmap",
  "glide-core",
+ "glide-core-engine",
  "glide-logger",
  "glide-telemetry",
  "jni 0.21.1",
  "log",
  "parking_lot",
  "protobuf",
- "redis",
  "scopeguard",
  "serde",
  "serde_json",
@@ -2172,44 +2210,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "513962919efc330f829edb2535844d1b912b0fbe2ca165d613e4e8788bb05a5a"
 dependencies = [
  "rand_core 0.9.5",
-]
-
-[[package]]
-name = "redis"
-version = "0.25.2"
-dependencies = [
- "arc-swap",
- "async-trait",
- "bytes",
- "combine",
- "crc16",
- "dashmap",
- "dispose",
- "futures",
- "futures-util",
- "glide-logger",
- "glide-telemetry",
- "itoa",
- "lazy_static",
- "lru",
- "num-bigint",
- "parking_lot",
- "percent-encoding",
- "pin-project-lite",
- "rand 0.9.4",
- "rustls",
- "rustls-pki-types",
- "rustls-platform-verifier",
- "ryu",
- "socket2",
- "strum",
- "strum_macros",
- "tokio",
- "tokio-retry2 0.5.8",
- "tokio-rustls",
- "tokio-util",
- "tracing",
- "url",
 ]
 
 [[package]]

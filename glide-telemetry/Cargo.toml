@@ -8,7 +8,7 @@ authors = ["Valkey GLIDE Maintainers"]
 [dependencies]
 
 # GLIDE dependencies
-glide-logger = { path = "../glide-logger", version = "0.1" }
+glide-logger = { path = "../glide-logger", version = "0.1.0" }
 
 # External dependencies
 chrono = "0.4"

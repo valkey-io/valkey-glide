@@ -1,5 +1,5 @@
 [package]
-name = "mock-redis"
+name = "mock-glide-core-engine"
 version = "0.1.0"
 edition = "2024"
 
@@ -9,8 +9,7 @@ edition = "2024"
 glide-telemetry = { path = "../mock-glide-telemetry", package = "mock-glide-telemetry" }
 
 # GLIDE dependencies
-# TODO #6905: Update once renamed.
-redis = { path = "../../../glide-core/redis-rs/redis", features = ["aio", "tokio-comp", "tokio-rustls-comp"] }
+glide-core-engine = { path = "../../../glide-core/redis-rs/redis", features = ["aio", "tokio-comp", "tokio-rustls-comp"] }
 
 # External dependencies
 bytes = "1"

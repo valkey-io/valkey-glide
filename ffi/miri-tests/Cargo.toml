@@ -8,9 +8,9 @@ edition = "2024"
 # Mock crates for testing
 tokio = { path = "./mock-tokio", package = "mock-tokio" }
 glide-logger = { path = "./mock-glide-logger", package = "mock-glide-logger" }
+redis = { path = "./mock-glide-core-engine", package = "mock-glide-core-engine" }
 
 # TODO #6905: Update remaining GLIDE dependencies once renamed.
-redis = { path = "./mock-redis", package = "mock-redis" }
 glide-core = { path = "./mock-glide-core",  package = "mock-glide-core" }
 
 # External dependencies

@@ -982,6 +982,7 @@ dependencies = [
  "dashmap",
  "futures",
  "futures-intrusive",
+ "glide-core-engine",
  "glide-logger",
  "glide-telemetry",
  "http 1.4.0",
@@ -992,7 +993,6 @@ dependencies = [
  "protobuf",
  "protobuf-codegen",
  "rand 0.8.6",
- "redis",
  "regex",
  "rustls",
  "rustls-pki-types",
@@ -1009,6 +1009,44 @@ dependencies = [
  "uuid",
  "versions",
  "zstd",
+]
+
+[[package]]
+name = "glide-core-engine"
+version = "0.1.0"
+dependencies = [
+ "arc-swap",
+ "async-trait",
+ "bytes",
+ "combine",
+ "crc16",
+ "dashmap",
+ "dispose",
+ "futures",
+ "futures-util",
+ "glide-logger",
+ "glide-telemetry",
+ "itoa",
+ "lazy_static",
+ "lru",
+ "num-bigint",
+ "parking_lot",
+ "percent-encoding",
+ "pin-project-lite",
+ "rand 0.9.4",
+ "rustls",
+ "rustls-pki-types",
+ "rustls-platform-verifier",
+ "ryu",
+ "socket2",
+ "strum",
+ "strum_macros",
+ "tokio",
+ "tokio-retry2 0.5.8",
+ "tokio-rustls",
+ "tokio-util",
+ "tracing",
+ "url",
 ]
 
 [[package]]
@@ -1618,8 +1656,8 @@ dependencies = [
  "bytes",
  "libc",
  "mock-glide-core",
+ "mock-glide-core-engine",
  "mock-glide-logger",
- "mock-redis",
  "mock-tokio",
  "percent-encoding",
  "protobuf",
@@ -1633,10 +1671,20 @@ name = "mock-glide-core"
 version = "0.1.0"
 dependencies = [
  "glide-core",
+ "mock-glide-core-engine",
  "mock-glide-telemetry",
- "mock-redis",
  "protobuf",
  "tokio",
+]
+
+[[package]]
+name = "mock-glide-core-engine"
+version = "0.1.0"
+dependencies = [
+ "bytes",
+ "glide-core-engine",
+ "mock-glide-telemetry",
+ "url",
 ]
 
 [[package]]
@@ -1646,16 +1694,6 @@ version = "0.1.0"
 [[package]]
 name = "mock-glide-telemetry"
 version = "0.1.0"
-
-[[package]]
-name = "mock-redis"
-version = "0.1.0"
-dependencies = [
- "bytes",
- "mock-glide-telemetry",
- "redis",
- "url",
-]
 
 [[package]]
 name = "mock-tokio"
@@ -2144,44 +2182,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "513962919efc330f829edb2535844d1b912b0fbe2ca165d613e4e8788bb05a5a"
 dependencies = [
  "rand_core 0.9.5",
-]
-
-[[package]]
-name = "redis"
-version = "0.25.2"
-dependencies = [
- "arc-swap",
- "async-trait",
- "bytes",
- "combine",
- "crc16",
- "dashmap",
- "dispose",
- "futures",
- "futures-util",
- "glide-logger",
- "glide-telemetry",
- "itoa",
- "lazy_static",
- "lru",
- "num-bigint",
- "parking_lot",
- "percent-encoding",
- "pin-project-lite",
- "rand 0.9.4",
- "rustls",
- "rustls-pki-types",
- "rustls-platform-verifier",
- "ryu",
- "socket2",
- "strum",
- "strum_macros",
- "tokio",
- "tokio-retry2 0.5.8",
- "tokio-rustls",
- "tokio-util",
- "tracing",
- "url",
 ]
 
 [[package]]
