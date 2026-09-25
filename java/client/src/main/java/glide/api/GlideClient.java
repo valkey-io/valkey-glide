@@ -173,8 +173,10 @@ public class GlideClient extends BaseClient
      * counter. Pool ids are always positive, so negating one yields a distinct key that no positive
      * directly-created handle can match, and distinct pool ids stay distinct. The native handle
      * itself is unchanged and still used for every native call.
+     *
+     * <p>Public so {@code AsyncRegistryTest} can key its regression test on the real mapping.
      */
-    private static long poolInflightCounterKey(long poolClientId) {
+    public static long poolInflightCounterKey(long poolClientId) {
         return -poolClientId;
     }
 

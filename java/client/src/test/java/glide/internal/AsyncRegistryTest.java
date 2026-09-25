@@ -5,9 +5,11 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import glide.api.GlideClient;
 import glide.api.models.exceptions.ClosingException;
 import glide.api.models.exceptions.RequestException;
 import java.util.concurrent.CompletableFuture;
@@ -258,11 +260,16 @@ public class AsyncRegistryTest {
     void register_distinctCounterKeys_doNotShareTheInflightCounter() {
         // The fix: a pooled client keys its inflight counter on a value disjoint from a directly-
         // created client's native handle, so saturating one does not falsely reject the other even
-        // when their native handles collide. Here both native handles are 5 (the collision), but the
-        // pooled client's counter key is -5.
+        // when their native handles collide. The pooled key is derived from the production mapping
+        // GlideClient.poolInflightCounterKey rather than a hard-coded copy, so reverting that method
+        // to return the raw id (the collision) makes this test fail.
         long collidingHandle = 5L;
         long directKey = collidingHandle; // direct client keys on its native handle
-        long pooledKey = -collidingHandle; // pooled client keys on a disjoint value
+        long pooledKey = GlideClient.poolInflightCounterKey(collidingHandle); // the fix under test
+
+        // The mapping must actually produce a value that cannot collide with the positive handle.
+        assertNotEquals(
+                directKey, pooledKey, "pooled counter key must differ from the colliding native handle");
 
         // Saturate the direct client's counter (limit 1).
         CompletableFuture<Object> direct = new CompletableFuture<>();
