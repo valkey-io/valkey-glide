@@ -110,7 +110,7 @@ public abstract class AbstractSetParams<T extends AbstractSetParams<T>> {
     }
 
     /**
-     * Return the old string stored at key, or null if key did not exist.
+     * Ask SET to return the old string stored at key, or null if the key did not exist.
      *
      * @return this instance, for chaining
      */

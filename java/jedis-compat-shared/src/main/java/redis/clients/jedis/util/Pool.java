@@ -223,7 +223,7 @@ public abstract class Pool<T> implements Closeable {
     }
 
     /**
-     * Add objects to the pool to reach the minimum idle count.
+     * Add exactly {@code count} objects to the pool.
      *
      * @param count how many objects to add
      */

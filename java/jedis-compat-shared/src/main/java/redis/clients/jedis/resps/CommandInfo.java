@@ -112,7 +112,7 @@ public class CommandInfo {
     /**
      * All the command's subcommands, if any
      *
-     * @return the command's subcommands, or an empty list if it has none
+     * @return the command's subcommands as supplied, which may be {@code null}
      */
     public List<String> getSubcommands() {
         return subcommands;

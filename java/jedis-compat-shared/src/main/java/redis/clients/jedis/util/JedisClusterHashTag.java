@@ -11,7 +11,8 @@ public class JedisClusterHashTag {
      * Check if a key pattern is cluster compliant. Stub implementation for compilation compatibility.
      *
      * @param keyPattern the key pattern to check
-     * @return {@code true} if the pattern carries a hash tag, {@code false} otherwise
+     * @return {@code true} if the pattern contains both an opening and a closing brace character,
+     *     {@code false} otherwise
      */
     public static boolean isClusterCompliantMatchPattern(String keyPattern) {
         if (keyPattern == null) {
@@ -26,8 +27,8 @@ public class JedisClusterHashTag {
      * Extract hash tag from a key. Stub implementation for compilation compatibility.
      *
      * @param key the key to inspect
-     * @return the text between the first {@code \{} and the following {@code \}}, or the whole key
-     *     when it carries no hash tag
+     * @return the text between the first opening brace and the following closing brace, or the
+     *     whole key when no such pair exists
      */
     public static String getHashTag(String key) {
         if (key == null) {

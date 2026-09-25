@@ -6927,7 +6927,7 @@ public abstract class AbstractGlideJedis extends JedisCommon {
     }
 
     /**
-     * Adds an entry to the stream at key with {@code AbstractXAddParams<?>} . Uses GLIDE type-safe
+     * Adds an entry to the stream at key with {@code AbstractXAddParams<?>}. Uses GLIDE type-safe
      * xadd.
      *
      * @param key stream key
@@ -7585,7 +7585,7 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param group name of the consumer group
      * @param consumer name of the consumer taking ownership of the entries
      * @param minIdleTime only claim entries idle for at least this many milliseconds
-     * @param options additional XCLAIM options (IDLE, TIME, RETRYCOUNT, FORCE, JUSTID)
+     * @param options additional XCLAIM options (IDLE, TIME, RETRYCOUNT, FORCE)
      * @param ids entry IDs to claim
      * @return the claimed entries; empty if none matched
      */
@@ -7606,15 +7606,17 @@ public abstract class AbstractGlideJedis extends JedisCommon {
     }
 
     /**
-     * Auto-claims pending messages. Uses GLIDE xautoclaim. Returns Object[]: [String nextStartId,
-     * List of StreamEntry claimed].
+     * Auto-claims pending messages. Uses GLIDE xautoclaim. Returns the raw GLIDE response with no
+     * conversion.
      *
      * @param key stream key
      * @param group name of the consumer group
      * @param consumer name of the consumer taking ownership of the entries
      * @param minIdleTime only claim entries idle for at least this many milliseconds
      * @param start id to start scanning the pending entries list from
-     * @return a two-element array: the next start id, and the list of claimed entries
+     * @return the raw GLIDE response: element [0] is the next start id, element [1] is a map of
+     *     claimed entry id to a 2D field-value array, and on Valkey 7.0.0 or above element [2] is
+     *     a list of pending entry ids that no longer exist in the stream
      */
     public Object[] xautoclaim(
             String key, String group, String consumer, long minIdleTime, String start) {
@@ -7623,15 +7625,18 @@ public abstract class AbstractGlideJedis extends JedisCommon {
     }
 
     /**
-     * Auto-claims pending messages with count. Uses GLIDE xautoclaim.
+     * Auto-claims pending messages with count. Uses GLIDE xautoclaim. Returns the raw GLIDE
+     * response with no conversion.
      *
      * @param key stream key
      * @param group name of the consumer group
      * @param consumer name of the consumer taking ownership of the entries
      * @param minIdleTime only claim entries idle for at least this many milliseconds
      * @param start id to start scanning the pending entries list from
-     * @param count maximum number of entries to scan
-     * @return a two-element array: the next start id, and the list of claimed entries
+     * @param count upper limit on the number of entries claimed
+     * @return the raw GLIDE response: element [0] is the next start id, element [1] is a map of
+     *     claimed entry id to a 2D field-value array, and on Valkey 7.0.0 or above element [2] is
+     *     a list of pending entry ids that no longer exist in the stream
      */
     public Object[] xautoclaim(
             String key, String group, String consumer, long minIdleTime, String start, long count) {

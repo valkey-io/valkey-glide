@@ -373,8 +373,8 @@ public class ClusterConfigurationMapper {
      *
      * @param nodes the cluster nodes
      * @param useSsl whether to use SSL
-     * @param jedis5CompatibilityLayer whether to apply Jedis 5.x-shaped rather than 4.x-shaped
-     *     compatibility semantics
+     * @param jedis5CompatibilityLayer accepted for parity with the mapping entry point; it has no
+     *     effect here because the config built below always carries the default RESP2 protocol
      * @return GLIDE cluster configuration
      */
     public static GlideClusterClientConfiguration createDefaultConfig(

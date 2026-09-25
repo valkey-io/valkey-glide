@@ -27,7 +27,7 @@ public abstract class AbstractRestoreParams<T extends AbstractRestoreParams<T>> 
     }
 
     /**
-     * Don't set TTL if key already exists.
+     * Treat the RESTORE ttl argument as an absolute Unix timestamp in milliseconds.
      *
      * @return this instance, for chaining
      */
