@@ -1,4 +1,4 @@
-name: Rust glide-telemetry
+name: glide-telemetry CI
 
 permissions:
     contents: read

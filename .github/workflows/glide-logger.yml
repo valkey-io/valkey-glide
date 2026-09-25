@@ -1,4 +1,4 @@
-name: Rust glide-logger
+name: glide-logger CI
 
 permissions:
     contents: read

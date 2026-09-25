@@ -1,4 +1,4 @@
-name: Rust glide-ffi
+name: FFI CI
 
 permissions:
     contents: read

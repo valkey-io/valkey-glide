@@ -1,4 +1,4 @@
-name: Rust glide-core
+name: glide-core CI
 
 permissions:
     contents: read
