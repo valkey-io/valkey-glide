@@ -1282,11 +1282,12 @@ dependencies = [
  "futures",
  "futures-intrusive",
  "glide-core",
+ "glide-logger",
+ "glide-telemetry",
  "gungraun",
  "http 1.5.0",
  "integer-encoding",
  "libc",
- "logger_core",
  "lz4",
  "nanoid",
  "num_cpus",
@@ -1308,7 +1309,6 @@ dependencies = [
  "socket2",
  "strum",
  "strum_macros",
- "telemetrylib",
  "tempfile",
  "thiserror 2.0.20",
  "tokio",
@@ -1319,6 +1319,35 @@ dependencies = [
  "versions",
  "which 8.0.6",
  "zstd",
+]
+
+[[package]]
+name = "glide-logger"
+version = "0.1.0"
+dependencies = [
+ "file-rotate",
+ "once_cell",
+ "tracing",
+ "tracing-appender",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "glide-telemetry"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "glide-logger",
+ "lazy_static",
+ "once_cell",
+ "opentelemetry",
+ "opentelemetry-otlp",
+ "opentelemetry_sdk",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.20",
+ "tokio",
+ "url",
 ]
 
 [[package]]
@@ -1917,17 +1946,6 @@ name = "log"
 version = "0.4.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "953f07c43838f8e6f9758cab68bf5bed85465e7587ebe0b823f1bcd81978ad3a"
-
-[[package]]
-name = "logger_core"
-version = "0.1.0"
-dependencies = [
- "file-rotate",
- "once_cell",
- "tracing",
- "tracing-appender",
- "tracing-subscriber",
-]
 
 [[package]]
 name = "lru"
@@ -2589,9 +2607,10 @@ dependencies = [
  "dispose",
  "futures",
  "futures-util",
+ "glide-logger",
+ "glide-telemetry",
  "itoa",
  "lazy_static",
- "logger_core",
  "lru",
  "num-bigint",
  "parking_lot",
@@ -2605,7 +2624,6 @@ dependencies = [
  "socket2",
  "strum",
  "strum_macros",
- "telemetrylib",
  "tokio",
  "tokio-retry2 0.5.8",
  "tokio-rustls",
@@ -3174,24 +3192,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.117",
-]
-
-[[package]]
-name = "telemetrylib"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "lazy_static",
- "logger_core",
- "once_cell",
- "opentelemetry",
- "opentelemetry-otlp",
- "opentelemetry_sdk",
- "serde",
- "serde_json",
- "thiserror 2.0.20",
- "tokio",
- "url",
 ]
 
 [[package]]

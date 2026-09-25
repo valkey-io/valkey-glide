@@ -1,7 +1,7 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 use bytes::BytesMut;
-use logger_core::{log_info, log_warn};
+use glide_logger::{log_info, log_warn};
 use once_cell::sync::Lazy;
 use sha1_smol::Sha1;
 use std::cell::Cell;

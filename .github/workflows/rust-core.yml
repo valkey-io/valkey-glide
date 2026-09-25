@@ -10,7 +10,8 @@ on:
             - release-*
             - v*
         paths:
-            - logger_core/**
+            - glide-logger/**
+            - glide-telemetry/**
             - glide-core/**
             - glide-core/redis-rs/redis/src/**
             - ffi/**
@@ -25,7 +26,8 @@ on:
             - benchmarks/rust/**
     pull_request:
         paths:
-            - logger_core/**
+            - glide-logger/**
+            - glide-telemetry/**
             - glide-core/**
             - glide-core/redis-rs/redis/src/**
             - ffi/**
@@ -157,11 +159,6 @@ jobs:
               working-directory: ./glide-core
               run: cargo test --features "proto,socket-layer,standalone_heartbeat"
 
-            - name: Run glide-core telemetry tests
-              working-directory: ./glide-core/telemetry
-              run: cargo test --all-features -- --test-threads=1
-              # TODO: Remove `--test-threads=1` once https://github.com/valkey-io/valkey-glide/issues/4057 is resolved
-
             - name: Run glide-ffi tests
               working-directory: ./ffi
               run: cargo test
@@ -169,17 +166,6 @@ jobs:
             - name: Run glide-ffi MIRI tests
               working-directory: ./ffi/miri-tests
               run: cargo miri test
-
-            - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-              with:
-                  path: |
-                      glide-core/target
-                      glide-core/src/generated
-                  key: ${{ matrix.host.TARGET }}-logger_core
-
-            - name: Run logger tests
-              working-directory: ./logger_core
-              run: cargo test --all-features -- --test-threads=1
 
             - name: Check features
               working-directory: ./glide-core
@@ -218,12 +204,6 @@ jobs:
                   cargo-toml-folder: ffi
                   github-token: ${{ secrets.GITHUB_TOKEN }}
               name: lint glide-ffi
-
-            - uses: ./.github/workflows/lint-rust
-              with:
-                  cargo-toml-folder: logger_core
-                  github-token: ${{ secrets.GITHUB_TOKEN }}
-              name: lint logger
 
             - uses: ./.github/workflows/lint-rust
               with:

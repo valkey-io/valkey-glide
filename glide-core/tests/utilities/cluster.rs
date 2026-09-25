@@ -533,7 +533,7 @@ impl PubSubTestSetup {
 macro_rules! skip_if_version_below {
     ($setup:expr, $version:expr) => {
         if !$setup.version_gte($version).await {
-            logger_core::log_info(
+            glide_logger::log_info(
                 "test_pubsub",
                 format!("Skipping test: requires server version >= {}", $version),
             );
@@ -708,7 +708,7 @@ pub async fn migrate_slot(
 
         match connection.route_command(&cmd, routing).await {
             Ok(_) => {
-                logger_core::log_debug(
+                glide_logger::log_debug(
                     "migrate_slot",
                     format!(
                         "CLUSTER SETSLOT {} NODE {} on {}:{} succeeded",
@@ -717,7 +717,7 @@ pub async fn migrate_slot(
                 );
             }
             Err(e) => {
-                logger_core::log_warn(
+                glide_logger::log_warn(
                     "migrate_slot",
                     format!("CLUSTER SETSLOT on {}:{} failed: {:?}", host, port, e),
                 );
@@ -734,7 +734,7 @@ pub async fn migrate_channel_to_different_node(
     slot: u16,
 ) -> Option<String> {
     let Some(owner) = topology.find_slot_owner(slot) else {
-        logger_core::log_warn(
+        glide_logger::log_warn(
             "migrate_channel",
             format!("No owner found for slot {}", slot),
         );
@@ -742,7 +742,7 @@ pub async fn migrate_channel_to_different_node(
     };
 
     let Some(target) = topology.find_different_primary(&owner.node_id) else {
-        logger_core::log_warn(
+        glide_logger::log_warn(
             "migrate_channel",
             format!(
                 "No different primary found for slot {} (owner: {})",
@@ -752,7 +752,7 @@ pub async fn migrate_channel_to_different_node(
         return None;
     };
 
-    logger_core::log_info(
+    glide_logger::log_info(
         "migrate_channel",
         format!(
             "Migrating slot {} from {} to {}",
@@ -785,7 +785,7 @@ pub async fn migrate_channels_to_different_nodes(
         match migrate_channel_to_different_node(connection, topology, *slot).await {
             Some(_) => {
                 migrated_count += 1;
-                logger_core::log_debug(
+                glide_logger::log_debug(
                     "migrate_channels",
                     format!(
                         "Successfully migrated slot {} for channel {:?}",
@@ -795,7 +795,7 @@ pub async fn migrate_channels_to_different_nodes(
                 );
             }
             None => {
-                logger_core::log_debug(
+                glide_logger::log_debug(
                     "migrate_channels",
                     format!("Skipped migration for slot {}", slot),
                 );
@@ -825,7 +825,7 @@ pub async fn trigger_failover(
 
     match connection.route_command(&cmd, routing).await {
         Ok(_) => {
-            logger_core::log_info(
+            glide_logger::log_info(
                 "trigger_failover",
                 format!(
                     "CLUSTER FAILOVER initiated on {}:{}",
@@ -835,7 +835,7 @@ pub async fn trigger_failover(
             true
         }
         Err(e) => {
-            logger_core::log_warn(
+            glide_logger::log_warn(
                 "trigger_failover",
                 format!(
                     "CLUSTER FAILOVER on {}:{} failed: {:?}",
@@ -865,7 +865,7 @@ pub async fn wait_for_node_to_become_primary(
                 }
             }
             Err(e) => {
-                logger_core::log_debug(
+                glide_logger::log_debug(
                     "wait_for_node_to_become_primary",
                     format!("CLUSTER NODES failed (retrying): {:?}", e),
                 );

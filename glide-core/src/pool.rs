@@ -34,9 +34,11 @@
 
 use crate::client::Client as GlideClient;
 use dashmap::DashMap;
+use std::collections::HashMap;
+use std::collections::HashSet;
 use std::collections::VecDeque;
-use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU32, AtomicU64, Ordering};
-use std::sync::{Arc, OnceLock};
+use std::sync::atomic::{AtomicU8, AtomicU32, AtomicU64, Ordering};
+use std::sync::{Arc, Mutex as StdMutex, OnceLock};
 use std::time::{Duration, Instant};
 use tokio::sync::Mutex as TokioMutex;
 
@@ -109,7 +111,7 @@ pub struct PooledClient {
     pub state: ClientState,
     /// True while the client is executing a blocking command (BLPOP, XREAD BLOCK, etc.).
     /// The abandon monitor skips clients with this flag set.
-    pub is_blocking: Arc<AtomicBool>,
+    pub is_blocking: Arc<AtomicU32>,
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -166,9 +168,13 @@ impl ClientPool {
         NEXT_CLIENT_ID.fetch_add(1, Ordering::Relaxed)
     }
 
-    /// Non-blocking acquire. Returns client_id on success.
-    /// Returns -1 if pool is closed/closing, -3 if no idle client available.
+    /// Non-blocking acquire. Returns `client_id` on success (>= 0).
+    /// Returns `-1` if pool is closed/closing, `-3` if no idle client available.
     /// Evicts idle connections past idle_timeout internally.
+    ///
+    /// The `is_blocking` flag for the acquired client is accessible lock-free via
+    /// `glide_core::pool::get_blocking_flag(client_id)`, populated at client-creation
+    /// time in the global `BLOCKING_FLAG_REGISTRY`.
     pub fn try_acquire(&mut self) -> i64 {
         if self.state.load(Ordering::Acquire) != POOL_RUNNING {
             return -1;
@@ -178,7 +184,10 @@ impl ClientPool {
             let idle_duration = Instant::now().duration_since(entry.last_idle_at);
             if idle_duration > self.config.idle_timeout {
                 self.total_count.fetch_sub(1, Ordering::AcqRel);
-                logger_core::log_debug(
+                // Fix 5: clean up registries for evicted idle clients to prevent leaks.
+                unregister_blocking_flag(entry.client_id);
+                unregister_pool_client(entry.client_id);
+                glide_logger::log_debug(
                     "pool",
                     format!(
                         "Evicted idle client {} (idle {:?}, threshold {:?})",
@@ -207,6 +216,7 @@ impl ClientPool {
     /// Increments total_count. Use `add_client_reserved` if the slot was pre-reserved.
     pub fn add_client(&mut self, client: GlideClient) -> u64 {
         let client_id = self.next_id();
+        let flag = Arc::new(AtomicU32::new(0));
         let entry = PooledClient {
             client_id,
             client,
@@ -214,10 +224,11 @@ impl ClientPool {
             last_idle_at: Instant::now(),
             borrowed_at: None,
             state: ClientState::Idle,
-            is_blocking: Arc::new(AtomicBool::new(false)),
+            is_blocking: flag.clone(),
         };
         self.idle.push_back(entry);
         self.total_count.fetch_add(1, Ordering::AcqRel);
+        get_blocking_flag_registry().insert(client_id, flag);
         client_id
     }
 
@@ -226,6 +237,7 @@ impl ClientPool {
     /// Returns the assigned client_id.
     pub fn add_client_reserved(&mut self, client: GlideClient) -> u64 {
         let client_id = self.next_id();
+        let flag = Arc::new(AtomicU32::new(0));
         let entry = PooledClient {
             client_id,
             client,
@@ -233,9 +245,10 @@ impl ClientPool {
             last_idle_at: Instant::now(),
             borrowed_at: None,
             state: ClientState::Idle,
-            is_blocking: Arc::new(AtomicBool::new(false)),
+            is_blocking: flag.clone(),
         };
         self.idle.push_back(entry);
+        get_blocking_flag_registry().insert(client_id, flag);
         client_id
     }
 
@@ -263,7 +276,7 @@ impl ClientPool {
         entry.state = ClientState::Idle;
         entry.last_idle_at = Instant::now();
         entry.borrowed_at = None;
-        entry.is_blocking.store(false, Ordering::Release);
+        entry.is_blocking.store(0, Ordering::Release);
         self.idle.push_back(entry);
 
         // Notify any threads waiting in blocking acquire
@@ -284,7 +297,7 @@ impl ClientPool {
         // Warn if any clients are still borrowed (likely leak)
         let in_use_count = self.in_use.len();
         if in_use_count > 0 {
-            logger_core::log_warn(
+            glide_logger::log_warn(
                 "pool",
                 format!(
                     "Pool destroyed with {} client(s) still borrowed — possible connection leak. \
@@ -292,6 +305,19 @@ impl ClientPool {
                     in_use_count
                 ),
             );
+        }
+
+        // Defensive fallback: callers SHOULD call unregister_blocking_flag /
+        // unregister_pool_client for every client before calling destroy(), but if a
+        // future binding forgets we still clean up rather than silently leaking entries.
+        // DashMap::remove is idempotent, so double-removes are harmless.
+        for entry in self.idle.iter() {
+            unregister_blocking_flag(entry.client_id);
+            unregister_pool_client(entry.client_id);
+        }
+        for entry in self.in_use.iter() {
+            unregister_blocking_flag(*entry.key());
+            unregister_pool_client(*entry.key());
         }
 
         self.state.store(POOL_CLOSED, Ordering::Release);
@@ -311,7 +337,7 @@ impl ClientPool {
         self.idle.clear();
         self.in_use.clear();
         self.total_count.store(0, Ordering::Release);
-        logger_core::log_info("pool", "Pool destroyed");
+        glide_logger::log_info("pool", "Pool destroyed");
     }
 
     /// Get idle count.
@@ -352,18 +378,24 @@ pub async fn release_client_async(pool_arc: Arc<TokioMutex<ClientPool>>, client_
         }
     };
 
+    // Remove client→pool mapping so refresh_activity_by_client no-ops from here on.
+    unregister_pool_client(client_id);
+
     // Safety: if this task is cancelled after take_for_release but before
     // return_to_idle/discard_client, decrement total_count to prevent slot leak.
     // Note: blocking_lock() is safe here because this code runs on the dedicated
     // POOL_RUNTIME (not the main tokio runtime), and cancellation only occurs when
     // the pool is being destroyed (no other task holds the lock on this runtime).
     let pool_for_guard = pool_arc.clone();
+    let guard_client_id = entry.client_id;
     struct LeakGuard {
         pool: Option<Arc<TokioMutex<ClientPool>>>,
+        client_id: u64,
     }
     impl Drop for LeakGuard {
         fn drop(&mut self) {
             if let Some(pool_arc) = self.pool.take() {
+                unregister_blocking_flag(self.client_id);
                 if let Ok(mut pool) = pool_arc.try_lock() {
                     pool.discard_client();
                 } else {
@@ -374,6 +406,7 @@ pub async fn release_client_async(pool_arc: Arc<TokioMutex<ClientPool>>, client_
     }
     let mut guard = LeakGuard {
         pool: Some(pool_for_guard),
+        client_id: guard_client_id,
     };
 
     // Reset state: DISCARD (cancel MULTI/WATCH) + SELECT <configured_db>
@@ -390,11 +423,15 @@ pub async fn release_client_async(pool_arc: Arc<TokioMutex<ClientPool>>, client_
     match reset_result {
         Ok(Ok(_)) => pool.return_to_idle(entry),
         _ => {
-            logger_core::log_warn_rate_limited!(
+            glide_logger::log_warn_rate_limited!(
                 "pool",
                 10,
                 "Client reset failed on release — discarding connection"
             );
+            // Clean up the blocking flag registry entry for this permanently
+            // discarded client. On a normal release (return-to-idle) this must
+            // NOT be called so the recycled client keeps its registry entry.
+            unregister_blocking_flag(entry.client_id);
             pool.discard_client();
         }
     }
@@ -414,6 +451,135 @@ static MONITOR_HANDLES: OnceLock<DashMap<u64, tokio::task::JoinHandle<()>>> = On
 fn get_monitor_handles() -> &'static DashMap<u64, tokio::task::JoinHandle<()>> {
     MONITOR_HANDLES.get_or_init(DashMap::new)
 }
+
+/// Process-global lockless map: client_id → is_blocking flag.
+/// Populated when a client enters the pool (add_client / add_client_reserved)
+/// and removed when discarded. Any binding can set the flag lock-free
+/// via `get_blocking_flag(client_id)` without acquiring the pool mutex.
+///
+/// Uses an `AtomicU32` counter: increment before each blocking dispatch,
+/// decrement when it completes. The abandon monitor skips the client while
+/// the counter is > 0, allowing multiple concurrent blocking dispatches
+/// on the same client to be tracked correctly.
+///
+/// **Exclusive-borrow invariant (pool path):** The pool ensures at most one
+/// caller holds a given pooled client at a time via `try_acquire`/
+/// `release_client_async`, so in practice the counter is ≤ 1 for pool clients.
+/// The `AtomicU32` is future-proof and handles direct-client concurrent usage.
+static BLOCKING_FLAG_REGISTRY: OnceLock<DashMap<u64, Arc<AtomicU32>>> = OnceLock::new();
+
+fn get_blocking_flag_registry() -> &'static DashMap<u64, Arc<AtomicU32>> {
+    BLOCKING_FLAG_REGISTRY.get_or_init(DashMap::new)
+}
+
+/// Get the `is_blocking` flag Arc for a pool client.
+/// Returns `None` if the client is not currently registered in any pool.
+/// The caller increments the counter before spawning a blocking command
+/// (`.fetch_add(1, Ordering::Release)`) and decrements it on completion via
+/// `fetch_update` (atomic CAS: decrement if > 0, no-op if already 0).
+///
+/// Uses an `AtomicU32` counter: increment before each blocking dispatch,
+/// decrement when it completes. The abandon monitor skips the client while
+/// the counter is > 0, allowing multiple concurrent blocking dispatches
+/// on the same client to be tracked correctly.
+///
+/// **Exclusive-borrow invariant (pool path):** The pool ensures at most one
+/// caller holds a given pooled client at a time via `try_acquire`/
+/// `release_client_async`, so in practice the counter is ≤ 1 for pool clients.
+/// The `AtomicU32` is future-proof and handles direct-client concurrent usage.
+pub fn get_blocking_flag(client_id: u64) -> Option<Arc<AtomicU32>> {
+    get_blocking_flag_registry()
+        .get(&client_id)
+        .map(|e| e.value().clone())
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CLIENT → POOL MAPPING
+//
+// A lightweight process-global map: client_id → pool_id.
+// Populated when a client is acquired from a pool and removed when it is
+// returned or discarded. Allows any binding to call
+// `refresh_activity_by_client(client_id)` without needing to track pool_id
+// separately — useful for bindings (e.g. Node N-API) where the dispatch path
+// only has the client_id readily available.
+// ─────────────────────────────────────────────────────────────────────────────
+
+static CLIENT_TO_POOL: OnceLock<DashMap<u64, u64>> = OnceLock::new();
+
+fn get_client_to_pool() -> &'static DashMap<u64, u64> {
+    CLIENT_TO_POOL.get_or_init(DashMap::new)
+}
+
+/// Record that `client_id` was borrowed from `pool_id`.
+/// Called by language bindings immediately after a successful `try_acquire`.
+pub fn register_pool_client(pool_id: u64, client_id: u64) {
+    get_client_to_pool().insert(client_id, pool_id);
+}
+
+/// Remove the `client_id → pool_id` mapping.
+/// Called when a client is returned to the pool or discarded.
+pub fn unregister_pool_client(client_id: u64) {
+    get_client_to_pool().remove(&client_id);
+}
+
+/// Returns `true` if `client_id` is currently registered as a pool-borrowed client.
+pub fn is_pool_client(client_id: u64) -> bool {
+    get_client_to_pool().contains_key(&client_id)
+}
+
+/// Returns the pool_id for the given `client_id`, or `None` if not registered.
+/// Convenience helper for bindings that need to look up pool configuration by client.
+pub fn get_pool_id_for_client(client_id: u64) -> Option<u64> {
+    get_client_to_pool().get(&client_id).map(|e| *e.value())
+}
+
+/// Refresh the inactivity timer for a pool-borrowed client, looked up by
+/// client_id alone. No-op if the client is not currently pool-registered.
+/// Convenience wrapper used by bindings where pool_id is not on the hot path.
+/// For glide-core-managed pools this updates `borrowed_at` in `ClientPool.in_use`.
+/// For TS-managed pools (not in POOL_REGISTRY) this is a no-op at the pool level;
+/// language bindings should maintain their own activity timestamps for those.
+pub fn refresh_activity_by_client(client_id: u64) {
+    if let Some(pool_id) = get_client_to_pool().get(&client_id).map(|e| *e.value()) {
+        refresh_client_activity(pool_id, client_id);
+    }
+}
+
+/// Attempt to refresh the inactivity timer for a pool-borrowed client.
+/// Returns `true` if the refresh succeeded, `false` if the pool mutex was
+/// contended and the update was skipped.
+pub fn try_refresh_activity_by_client(client_id: u64) -> bool {
+    let Some(pool_id) = get_client_to_pool().get(&client_id).map(|e| *e.value()) else {
+        return false;
+    };
+    let Some(pool_arc) = get_pool(pool_id) else {
+        return false;
+    };
+    // try_lock: if contended, caller must decide whether to clear is_blocking
+    if let Ok(pool) = pool_arc.try_lock() {
+        if let Some(mut entry) = pool.in_use.get_mut(&client_id) {
+            entry.value_mut().borrowed_at = Some(Instant::now());
+        }
+        true
+    } else {
+        false
+    }
+}
+
+/// Register a blocking flag for a client that was manually added to the pool
+/// (i.e. without going through `add_client`/`add_client_reserved`).
+/// The provided Arc must be the same one stored in the `PooledClient.is_blocking` field
+/// so that the abandon monitor and the binding share the same atomic.
+pub fn register_blocking_flag(client_id: u64, flag: Arc<AtomicU32>) {
+    get_blocking_flag_registry().insert(client_id, flag);
+}
+
+/// Remove a client's blocking flag from the registry.
+/// Call this when a client is permanently discarded (not just returned to idle).
+pub fn unregister_blocking_flag(client_id: u64) {
+    get_blocking_flag_registry().remove(&client_id);
+}
+
 /// Global client_id allocator — ensures uniqueness across all pools.
 static NEXT_CLIENT_ID: AtomicU64 = AtomicU64::new(1);
 
@@ -429,7 +595,7 @@ pub fn get_pool_registry() -> &'static DashMap<u64, Arc<TokioMutex<ClientPool>>>
 /// Register a pool. Returns assigned pool_id.
 pub fn register_pool(pool: ClientPool) -> u64 {
     let pool_id = NEXT_POOL_ID.fetch_add(1, Ordering::Relaxed);
-    logger_core::log_info(
+    glide_logger::log_info(
         "pool",
         format!(
             "Pool {} created (max_size={}, min_idle={}, abandon_timeout={:?})",
@@ -447,7 +613,7 @@ pub fn start_abandon_monitor(pool_id: u64, runtime_handle: &tokio::runtime::Hand
     let pool_arc = match get_pool(pool_id) {
         Some(arc) => arc,
         None => {
-            logger_core::log_debug(
+            glide_logger::log_debug(
                 "pool",
                 format!(
                     "start_abandon_monitor: pool {} not found (already destroyed?)",
@@ -464,13 +630,13 @@ pub fn start_abandon_monitor(pool_id: u64, runtime_handle: &tokio::runtime::Hand
     };
 
     if abandon_timeout.is_zero() {
-        logger_core::log_debug("pool", "Abandon monitor disabled (timeout=0)");
+        glide_logger::log_debug("pool", "Abandon monitor disabled (timeout=0)");
         return;
     }
 
     // Wake at half the abandon timeout for timely detection
     let scan_interval = abandon_timeout / 2;
-    logger_core::log_debug(
+    glide_logger::log_debug(
         "pool",
         format!(
             "Abandon monitor started for pool {} (timeout={:?}, scan_interval={:?})",
@@ -493,7 +659,7 @@ pub fn start_abandon_monitor(pool_id: u64, runtime_handle: &tokio::runtime::Hand
                     .iter()
                     .filter_map(|entry| {
                         // Skip clients currently executing blocking commands
-                        if entry.value().is_blocking.load(Ordering::Acquire) {
+                        if entry.value().is_blocking.load(Ordering::Acquire) > 0 {
                             return None;
                         }
                         let borrowed_at = entry.value().borrowed_at?;
@@ -507,7 +673,7 @@ pub fn start_abandon_monitor(pool_id: u64, runtime_handle: &tokio::runtime::Hand
             };
 
             for client_id in abandoned_ids {
-                logger_core::log_warn(
+                glide_logger::log_warn(
                     "pool",
                     format!(
                         "Abandon detection: client {} exceeded inactivity timeout ({:?}) — \
@@ -522,7 +688,7 @@ pub fn start_abandon_monitor(pool_id: u64, runtime_handle: &tokio::runtime::Hand
                 // Revalidate under lock: activity may have been refreshed or blocking
                 // flag set between the scan and this removal.
                 if let Some(entry) = pool.in_use.get(&client_id) {
-                    if entry.value().is_blocking.load(Ordering::Acquire) {
+                    if entry.value().is_blocking.load(Ordering::Acquire) > 0 {
                         continue;
                     }
                     if entry.value().borrowed_at.is_some_and(|borrowed_at| {
@@ -534,6 +700,10 @@ pub fn start_abandon_monitor(pool_id: u64, runtime_handle: &tokio::runtime::Hand
                 if pool.in_use.remove(&client_id).is_some() {
                     pool.discard_client();
                     pool.discarded_ids.push(client_id);
+                    // Remove client→pool mapping so refresh_activity_by_client no-ops.
+                    unregister_pool_client(client_id);
+                    // Fix 1: remove blocking flag to prevent BLOCKING_FLAG_REGISTRY leak.
+                    unregister_blocking_flag(client_id);
                 }
             }
         }
@@ -541,49 +711,6 @@ pub fn start_abandon_monitor(pool_id: u64, runtime_handle: &tokio::runtime::Hand
 
     // Store handle outside the pool mutex so destroy() can abort without locking.
     get_monitor_handles().insert(pool_id, handle);
-}
-
-/// Mark a borrowed client as currently executing a blocking command.
-/// The abandon monitor will skip this client until unmarked.
-/// This is a no-op if the client is not found in any pool's `in_use` map.
-pub fn mark_client_blocking(pool_id: u64, client_id: u64, blocking: bool) -> bool {
-    let pool_arc = match get_pool(pool_id) {
-        Some(arc) => arc,
-        None => return false,
-    };
-    // Use try_lock to avoid blocking the command dispatch path.
-    // If the pool is locked (e.g., during release), skip — the client
-    // will either be released soon or caught on the next monitor scan.
-    #[allow(clippy::collapsible_if)]
-    if let Ok(pool) = pool_arc.try_lock() {
-        if let Some(entry) = pool.in_use.get(&client_id) {
-            entry.value().is_blocking.store(blocking, Ordering::Release);
-        } else {
-            return false;
-        }
-        // When unmarking (command completed), refresh borrowed_at so the client
-        // isn't instantly reclaimable after a long-running blocking command.
-        if !blocking {
-            if let Some(mut entry) = pool.in_use.get_mut(&client_id) {
-                entry.value_mut().borrowed_at = Some(Instant::now());
-            }
-        }
-        return true;
-    }
-    false
-}
-
-/// Get the `is_blocking` flag Arc for a client (for use by the command dispatch path).
-/// Returns None if the client is not currently borrowed from this pool.
-pub fn get_client_blocking_flag(pool_id: u64, client_id: u64) -> Option<Arc<AtomicBool>> {
-    let pool_arc = get_pool(pool_id)?;
-    #[allow(clippy::collapsible_if)]
-    if let Ok(pool) = pool_arc.try_lock() {
-        if let Some(entry) = pool.in_use.get(&client_id) {
-            return Some(entry.value().is_blocking.clone());
-        }
-    }
-    None
 }
 
 /// Refresh a borrowed client's `borrowed_at` timestamp to the current instant.
@@ -809,7 +936,7 @@ impl Default for ScopePoolConfig {
 /// handling and its periodic topology check, not on a MOVED seen by a scoped
 /// connection, so a scope-only workload can keep matching the former owner until
 /// the next refresh.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub enum ScopeTarget {
     /// The configured server for a standalone client.
     Standalone,
@@ -894,12 +1021,19 @@ pub struct ScopedConnection {
     pub last_iam_generation: AtomicU64,
 }
 
+/// In-flight scope creations, keyed by target then by the acquire-attempt tokens
+/// dialing it. Shared (`Arc<StdMutex>`) so a [`ScopeReservation`] can clear its own
+/// token from `Drop`.
+pub type ScopePendingMap = Arc<StdMutex<HashMap<ScopeTarget, HashSet<u64>>>>;
+
 /// Per-client scope pool.
 pub struct ScopePool {
     pub config: ScopePoolConfig,
     pub idle: VecDeque<ScopedConnection>,
     pub in_use: DashMap<u64, ()>,
-    pub total_count: AtomicU32,
+    /// Reservation count. `Arc` so a [`ScopeReservation`] can decrement it
+    /// lock-free from its `Drop` (which cannot `.await` the pool mutex).
+    pub total_count: Arc<AtomicU32>,
     pub state: AtomicU8,
     pub connection_request_bytes: Vec<u8>,
     /// The parent client_id that owns this scope pool (for accessing client config).
@@ -918,19 +1052,112 @@ pub struct ScopePool {
     /// attempt. The value is still the latest one, so the slot in the message is
     /// current.
     pub last_unresolved_target: Option<ScopeTargetUnresolved>,
+    /// In-flight creations, keyed by target then by the acquire-attempt token that
+    /// spawned each one. A single acquire polls with the same token across its
+    /// retries, so a repeat poll finds its own token already in flight and does not
+    /// spawn a second creation (the #7067 retry storm). Distinct concurrent
+    /// borrowers carry distinct tokens, so each reserves and dials its own
+    /// connection up to `max_total` — the RFC #5815 unbounded-concurrent-dials
+    /// contract, which a target-only key would collapse into one serialized creation.
+    /// `Arc<StdMutex>` so a [`ScopeReservation`] can clear its token from `Drop`.
+    pub pending: ScopePendingMap,
+}
+
+/// Saturating give-back for the sites the guard doesn't own (idle eviction,
+/// release paths). A wrap below zero pins `total_count >= max_total` forever,
+/// reporting the pool permanently exhausted.
+#[inline]
+fn saturating_dec(total_count: &AtomicU32) {
+    let _ = total_count.fetch_update(Ordering::AcqRel, Ordering::Acquire, |c| {
+        Some(c.saturating_sub(1))
+    });
+}
+
+/// RAII guard owning one `ScopePool` reservation. Gives the slot back on `Drop`
+/// (saturating, lock-free) unless [`ScopeReservation::commit`] is called once the
+/// connection is seated, so the give-back is automatic across every early return,
+/// cancellation, or panic in the detached creation task. Also clears the
+/// pending-target marker on every `Drop`, so a cancelled creator can't wedge a
+/// target as permanently pending.
+#[must_use = "dropping uncommitted gives the reserved slot back"]
+#[derive(Debug)]
+pub struct ScopeReservation {
+    total_count: Arc<AtomicU32>,
+    committed: bool,
+    /// `(pending map, target, attempt token)` to clear on `Drop`; `None` when no
+    /// creation is tracked (the prewarm path and test guards).
+    pending: Option<(ScopePendingMap, ScopeTarget, u64)>,
+}
+
+impl ScopeReservation {
+    /// Keep the reservation (connection seated).
+    pub fn commit(mut self) {
+        self.committed = true;
+    }
+
+    /// Guard an already-incremented slot that tracks no in-flight creation, so a
+    /// cancel/panic across an `await` still gives the slot back on `Drop`. Used by
+    /// the resync path, which pops a counted idle connection and re-`SELECT`s it
+    /// off-lock: `commit()` on success (the connection returns to idle, slot kept),
+    /// `Drop` otherwise (the connection is discarded, slot reclaimed).
+    #[cfg(feature = "proto")]
+    pub(crate) fn for_slot(total_count: Arc<AtomicU32>) -> Self {
+        Self {
+            total_count,
+            committed: false,
+            pending: None,
+        }
+    }
+
+    /// Test-only: mint a guard for an already-incremented counter.
+    #[cfg(test)]
+    pub(crate) fn for_test(total_count: Arc<AtomicU32>) -> Self {
+        Self {
+            total_count,
+            committed: false,
+            pending: None,
+        }
+    }
+}
+
+impl Drop for ScopeReservation {
+    fn drop(&mut self) {
+        // Give the slot back FIRST, then clear the token. A parameter-position
+        // `reservation` drops after the creation task's `pool_guard`, so a retry can
+        // lock the pool mid-drop; releasing the slot before removing the token means
+        // it never observes a token-cleared-but-slot-still-held pool and evicts a
+        // healthy idle connection for a slot that is about to free itself.
+        if !self.committed {
+            saturating_dec(&self.total_count);
+        }
+        // Clear this creation's token regardless of commit: it is no longer in
+        // flight. Remove only our own token so a concurrent borrower's in-flight
+        // creation to the same target is untouched; drop the target entry once its
+        // last in-flight token is gone.
+        if let Some((pending, target, token)) = &self.pending {
+            let mut map = pending.lock().unwrap_or_else(|e| e.into_inner());
+            if let Some(tokens) = map.get_mut(target) {
+                tokens.remove(token);
+                if tokens.is_empty() {
+                    map.remove(target);
+                }
+            }
+        }
+    }
 }
 
 /// Outcome of [`ScopePool::try_acquire`], which owns the `max_total` reservation
-/// for the acquire path (prewarm currently seats connections without reserving).
-/// A caller that re-checks `total_count` against `max_total` after seeing
-/// `Reserved` rejects the last slot, because the reservation is already counted.
-#[derive(Debug, PartialEq, Eq)]
+/// for the acquire path. The prewarm path reserves through the same guard.
+#[derive(Debug)]
 pub enum ScopeAcquire {
     /// An idle connection was reused; carries its scope id.
     Reused(u64),
-    /// A slot was reserved against `max_total`; the caller must create a
-    /// connection to fill it.
-    Reserved,
+    /// A slot was reserved against `max_total`; the caller fills it. The
+    /// [`ScopeReservation`] gives the slot back unless the creator commits it.
+    Reserved(ScopeReservation),
+    /// This acquire's own creation (same attempt token) is already in flight;
+    /// retry and pick it up once it lands, without reserving or spawning again.
+    CreationPending,
     /// The only reusable idle connection is on a database other than the parent's runtime
     /// database. Left in the idle queue; the caller must re-`SELECT` it onto the runtime
     /// database and retry, so the borrower never observes a connection on the wrong database.
@@ -969,13 +1196,14 @@ impl ScopePool {
             config,
             idle: VecDeque::new(),
             in_use: DashMap::new(),
-            total_count: AtomicU32::new(0),
+            total_count: Arc::new(AtomicU32::new(0)),
             state: AtomicU8::new(POOL_RUNNING),
             connection_request_bytes,
             parent_client_id,
             configured_database_id,
             configured_client_name,
             last_unresolved_target: None,
+            pending: Arc::new(StdMutex::new(HashMap::new())),
         }
     }
 
@@ -991,11 +1219,18 @@ impl ScopePool {
     /// round-trip); if the only reusable one is on another database,
     /// [`ScopeAcquire::NeedsResync`] is returned so the caller re-`SELECT`s it before a
     /// borrower can see it.
+    ///
+    /// `attempt_token` identifies the logical acquire: a binding generates one
+    /// token per `acquire()` call and passes it on every retry poll. Retries of the
+    /// same acquire (same token) dedupe to a single in-flight creation; distinct
+    /// concurrent borrowers (distinct tokens) each reserve and dial, up to
+    /// `max_total`.
     pub fn try_acquire(
         &mut self,
         registry: &DashMap<u64, ScopeEntry>,
         target: ScopeTarget,
         runtime_db: u32,
+        attempt_token: u64,
     ) -> ScopeAcquire {
         if self.state.load(Ordering::Acquire) != POOL_RUNNING {
             return ScopeAcquire::Exhausted;
@@ -1013,7 +1248,7 @@ impl ScopePool {
             // Evict if idle too long
             let idle_duration = Instant::now().duration_since(conn.last_idle_at);
             if idle_duration > self.config.idle_timeout {
-                self.total_count.fetch_sub(1, Ordering::AcqRel);
+                saturating_dec(&self.total_count);
                 continue;
             }
             // Scoped connections are reusable only for the same physical target.
@@ -1055,6 +1290,21 @@ impl ScopePool {
             return ScopeAcquire::NeedsResync;
         }
 
+        // No idle match. Check dedupe BEFORE touching capacity: a retry from this
+        // same acquire (its token already in flight for this target) must be a
+        // cheap no-op, never evict a healthy idle connection to another primary for
+        // a slot it won't use. A distinct borrower (a token not yet in flight)
+        // falls through to reserve its own slot, so concurrent scopes to one target
+        // are not serialized.
+        let pending = self.pending.clone();
+        let mut pending = pending.lock().unwrap_or_else(|e| e.into_inner());
+        if pending
+            .get(&target)
+            .is_some_and(|tokens| tokens.contains(&attempt_token))
+        {
+            return ScopeAcquire::CreationPending;
+        }
+
         if self.total_count.load(Ordering::Acquire) >= self.config.max_total {
             // Full, and every idle connection points at a different target. Evict
             // the oldest idle one (front of the LIFO deque) to make room rather
@@ -1063,8 +1313,8 @@ impl ScopePool {
             let Some(evicted) = self.idle.pop_front() else {
                 return ScopeAcquire::Exhausted;
             };
-            self.total_count.fetch_sub(1, Ordering::AcqRel);
-            logger_core::log_debug(
+            saturating_dec(&self.total_count);
+            glide_logger::log_debug(
                 "pool",
                 format!(
                     "Evicted idle scope {} targeting {:?} to make room for {:?}",
@@ -1074,8 +1324,54 @@ impl ScopePool {
             drop(evicted);
         }
 
-        self.total_count.fetch_add(1, Ordering::AcqRel);
-        ScopeAcquire::Reserved
+        match self.reserve_slot_inner() {
+            Some(mut reservation) => {
+                pending
+                    .entry(target.clone())
+                    .or_default()
+                    .insert(attempt_token);
+                reservation.pending = Some((self.pending.clone(), target, attempt_token));
+                ScopeAcquire::Reserved(reservation)
+            }
+            None => ScopeAcquire::Exhausted,
+        }
+    }
+
+    /// Reserve one slot against `max_total` for a resolved `target`, registering
+    /// `attempt_token` as an in-flight creation so the reservation participates in
+    /// the same dedupe/accounting as [`Self::try_acquire`]. Returns `None` if closed or
+    /// at capacity. Used by the prewarm path, which resolves its target first and
+    /// passes a unique token per task (prewarm wants `min_idle` distinct dials, so
+    /// the tokens differ and none dedupe against each other). The guard clears the
+    /// token on drop.
+    pub fn reserve_slot_for(
+        &mut self,
+        target: ScopeTarget,
+        attempt_token: u64,
+    ) -> Option<ScopeReservation> {
+        let mut reservation = self.reserve_slot_inner()?;
+        {
+            let mut map = self.pending.lock().unwrap_or_else(|e| e.into_inner());
+            map.entry(target.clone()).or_default().insert(attempt_token);
+        }
+        reservation.pending = Some((self.pending.clone(), target, attempt_token));
+        Some(reservation)
+    }
+
+    fn reserve_slot_inner(&self) -> Option<ScopeReservation> {
+        if self.state.load(Ordering::Acquire) != POOL_RUNNING {
+            return None;
+        }
+        if self.total_count.load(Ordering::Acquire) < self.config.max_total {
+            self.total_count.fetch_add(1, Ordering::AcqRel);
+            Some(ScopeReservation {
+                total_count: self.total_count.clone(),
+                committed: false,
+                pending: None,
+            })
+        } else {
+            None
+        }
     }
 
     /// Pop a target-matching idle connection that is on a database other than `runtime_db`,
@@ -1111,7 +1407,7 @@ impl ScopePool {
         if self.state.load(Ordering::Acquire) == POOL_RUNNING {
             self.idle.push_back(conn);
         } else {
-            self.total_count.fetch_sub(1, Ordering::AcqRel);
+            saturating_dec(&self.total_count);
         }
     }
 
@@ -1135,7 +1431,7 @@ impl ScopePool {
         };
 
         if self.state.load(Ordering::Acquire) != POOL_RUNNING {
-            self.total_count.fetch_sub(1, Ordering::AcqRel);
+            saturating_dec(&self.total_count);
             return true;
         }
 
@@ -1164,7 +1460,7 @@ impl ScopePool {
                     // cleanup command, so discard rather than return to idle.
                     if conn.state.blocking_in_flight || conn.state.must_discard {
                         drop(conn);
-                        self.total_count.fetch_sub(1, Ordering::AcqRel);
+                        saturating_dec(&self.total_count);
                         return true;
                     }
                     // Dirty state — pipeline all cleanup commands in a single round-trip.
@@ -1299,14 +1595,14 @@ impl ScopePool {
                                 if pool.state.load(Ordering::Acquire) == POOL_RUNNING {
                                     pool.idle.push_back(idle_conn);
                                 } else {
-                                    pool.total_count.fetch_sub(1, Ordering::AcqRel);
+                                    saturating_dec(&pool.total_count);
                                 }
                             } else {
                                 drop(guard);
                             }
                         } else {
                             // Cleanup failed — discard the connection entirely
-                            logger_core::log_warn_rate_limited!(
+                            glide_logger::log_warn_rate_limited!(
                                 "pool",
                                 10,
                                 "Scope connection cleanup failed — discarding connection"
@@ -1314,7 +1610,7 @@ impl ScopePool {
                             drop(guard);
                             if let Some(pool_arc) = pool_arc {
                                 let pool = pool_arc.lock().await;
-                                pool.total_count.fetch_sub(1, Ordering::AcqRel);
+                                saturating_dec(&pool.total_count);
                             }
                         }
                     });
@@ -1333,7 +1629,7 @@ impl ScopePool {
                 // POOL_RUNNING above. It can't be deferred: for an unbounded blocking
                 // command (BLPOP key 0) the lock may never free, so a decrement gated
                 // on it would leak the slot.
-                self.total_count.fetch_sub(1, Ordering::AcqRel);
+                saturating_dec(&self.total_count);
                 let conn_arc = entry.connection.clone();
                 tokio::spawn(async move {
                     // Best-effort: drop the connection once the command frees the lock
@@ -1360,6 +1656,10 @@ impl ScopePool {
             registry.remove(&key);
         }
         self.total_count.store(0, Ordering::Release);
+        {
+            let mut pending = self.pending.lock().unwrap_or_else(|e| e.into_inner());
+            pending.clear();
+        }
     }
 }
 
@@ -1394,6 +1694,20 @@ static NEXT_SCOPE_ID: AtomicU64 = AtomicU64::new(1);
 /// Allocate a globally unique scope_id.
 pub fn allocate_scope_id() -> u64 {
     NEXT_SCOPE_ID.fetch_add(1, Ordering::Relaxed)
+}
+
+/// Monotonic source of scope-acquire attempt tokens. A binding takes one token
+/// per `acquire()` call and passes it on every retry poll of `try_acquire_scope`,
+/// so the core can tell one acquire's retries (same token — dedupe to a single
+/// in-flight creation) from distinct concurrent borrowers (different tokens — each
+/// dials its own connection up to `max_total`). Process-wide and never reused, so
+/// tokens are unique across clients and pools; the value is opaque.
+static NEXT_SCOPE_ATTEMPT_TOKEN: AtomicU64 = AtomicU64::new(1);
+
+/// Allocate a unique scope-acquire attempt token. Tokens are monotonic and
+/// process-wide; the value is opaque (identity only).
+pub fn next_scope_attempt_token() -> u64 {
+    NEXT_SCOPE_ATTEMPT_TOKEN.fetch_add(1, Ordering::Relaxed)
 }
 
 /// Global scope registry: scope_id → ScopeEntry (for command dispatch).
@@ -1602,11 +1916,11 @@ mod connection_state_tests {
 #[cfg(test)]
 mod scope_pool_tests {
     use super::{
-        DashMap, Ordering, ScopeAcquire, ScopeEntry, ScopePool, ScopePoolConfig, ScopeTarget,
+        Arc, AtomicU32, DashMap, Ordering, ScopeAcquire, ScopeEntry, ScopePool, ScopePoolConfig,
+        ScopeReservation, ScopeTarget, next_scope_attempt_token, saturating_dec,
     };
     use std::net::SocketAddr;
     use std::process::{Child, Command, Stdio};
-    use std::sync::Arc;
     use tokio::sync::Mutex as TokioMutex;
 
     /// `max_total = N` must grant exactly N reservations before reporting
@@ -1622,22 +1936,47 @@ mod scope_pool_tests {
             let mut pool = ScopePool::new(config, Vec::new(), 1);
             let registry: DashMap<u64, ScopeEntry> = DashMap::new();
 
+            // Hold each guard: dropping one gives its slot straight back. Each
+            // acquire uses a distinct routing slot so per-target dedupe doesn't
+            // collapse them — the point here is max_total capacity.
+            let mut guards = Vec::new();
             for slot in 0..max_total {
-                assert_eq!(
-                    pool.try_acquire(&registry, ScopeTarget::Standalone, 0),
-                    ScopeAcquire::Reserved,
-                    "max_total={max_total}: reservation {slot} must be granted"
-                );
+                match pool.try_acquire(
+                    &registry,
+                    ScopeTarget::cluster_primary(format!("10.0.0.1:{slot}")),
+                    0,
+                    next_scope_attempt_token(),
+                ) {
+                    ScopeAcquire::Reserved(guard) => guards.push(guard),
+                    other => panic!(
+                        "max_total={max_total}: reservation {slot} must be granted, got {other:?}"
+                    ),
+                }
             }
-            assert_eq!(
-                pool.try_acquire(&registry, ScopeTarget::Standalone, 0),
-                ScopeAcquire::Exhausted,
+            assert!(
+                matches!(
+                    pool.try_acquire(
+                        &registry,
+                        ScopeTarget::cluster_primary(format!("10.0.0.1:{max_total}")),
+                        0,
+                        next_scope_attempt_token()
+                    ),
+                    ScopeAcquire::Exhausted
+                ),
                 "max_total={max_total}: only N reservations fit"
             );
             assert_eq!(
                 pool.total_count.load(Ordering::Acquire),
                 max_total,
                 "max_total={max_total}: a rejected acquire must not reserve"
+            );
+
+            // Dropping the guards frees every slot.
+            drop(guards);
+            assert_eq!(
+                pool.total_count.load(Ordering::Acquire),
+                0,
+                "max_total={max_total}: dropping every reservation guard frees all slots"
             );
         }
     }
@@ -1787,16 +2126,17 @@ mod scope_pool_tests {
 
         // Reserve a slot and create the real connection, mirroring the
         // production `ScopeAcquire::Reserved` path.
-        pool_arc
+        let reservation = pool_arc
             .lock()
             .await
-            .total_count
-            .fetch_add(1, Ordering::Release);
+            .reserve_slot_for(ScopeTarget::Standalone, next_scope_attempt_token())
+            .expect("fresh pool must grant a reservation");
         crate::scope::create_scope_connection(
             pool_arc.clone(),
             None,
             &connection_request_bytes,
             ScopeTarget::Standalone,
+            reservation,
         )
         .await;
 
@@ -1804,7 +2144,12 @@ mod scope_pool_tests {
         // same way `try_acquire` would for a real borrower.
         let scope_id = {
             let mut pool = pool_arc.lock().await;
-            match pool.try_acquire(registry, ScopeTarget::Standalone, 0) {
+            match pool.try_acquire(
+                registry,
+                ScopeTarget::Standalone,
+                0,
+                next_scope_attempt_token(),
+            ) {
                 ScopeAcquire::Reused(id) => id,
                 other => panic!("expected the freshly created connection to be idle: {other:?}"),
             }
@@ -1845,7 +2190,12 @@ mod scope_pool_tests {
         // cleared by the release cleanup pipeline, not merely reclassified.
         let scope_id = {
             let mut pool = pool_arc.lock().await;
-            match pool.try_acquire(registry, ScopeTarget::Standalone, 0) {
+            match pool.try_acquire(
+                registry,
+                ScopeTarget::Standalone,
+                0,
+                next_scope_attempt_token(),
+            ) {
                 ScopeAcquire::Reused(id) => id,
                 other => panic!("expected the cleaned-up connection to be reused: {other:?}"),
             }
@@ -1909,16 +2259,17 @@ mod scope_pool_tests {
 
         // Reserve a slot and create the real connection, mirroring the
         // production `ScopeAcquire::Reserved` path.
-        pool_arc
+        let reservation = pool_arc
             .lock()
             .await
-            .total_count
-            .fetch_add(1, Ordering::Release);
+            .reserve_slot_for(ScopeTarget::Standalone, next_scope_attempt_token())
+            .expect("fresh pool must grant a reservation");
         crate::scope::create_scope_connection(
             pool_arc.clone(),
             None,
             &connection_request_bytes,
             ScopeTarget::Standalone,
+            reservation,
         )
         .await;
 
@@ -1926,7 +2277,12 @@ mod scope_pool_tests {
         // same way `try_acquire` would for a real borrower.
         let scope_id = {
             let mut pool = pool_arc.lock().await;
-            match pool.try_acquire(registry, ScopeTarget::Standalone, 0) {
+            match pool.try_acquire(
+                registry,
+                ScopeTarget::Standalone,
+                0,
+                next_scope_attempt_token(),
+            ) {
                 ScopeAcquire::Reused(id) => id,
                 other => panic!("expected the freshly created connection to be idle: {other:?}"),
             }
@@ -1986,7 +2342,12 @@ mod scope_pool_tests {
         // borrower's override, and not empty.
         let scope_id = {
             let mut pool = pool_arc.lock().await;
-            match pool.try_acquire(registry, ScopeTarget::Standalone, 0) {
+            match pool.try_acquire(
+                registry,
+                ScopeTarget::Standalone,
+                0,
+                next_scope_attempt_token(),
+            ) {
                 ScopeAcquire::Reused(id) => id,
                 other => panic!("expected the cleaned-up connection to be reused: {other:?}"),
             }
@@ -2058,16 +2419,17 @@ mod scope_pool_tests {
         let registry = crate::pool::get_scope_registry();
 
         // Create the connection with no parent: it opens on the configured db (2).
-        pool_arc
+        let reservation = pool_arc
             .lock()
             .await
-            .total_count
-            .fetch_add(1, Ordering::Release);
+            .reserve_slot_for(ScopeTarget::Standalone, next_scope_attempt_token())
+            .expect("pool must grant a reservation");
         crate::scope::create_scope_connection(
             pool_arc.clone(),
             None,
             &connection_request_bytes,
             ScopeTarget::Standalone,
+            reservation,
         )
         .await;
 
@@ -2076,11 +2438,15 @@ mod scope_pool_tests {
         // then acquire — now it's a clean db match.
         let first_acquire = {
             let mut pool = pool_arc.lock().await;
-            pool.try_acquire(registry, ScopeTarget::Standalone, runtime_db)
+            pool.try_acquire(
+                registry,
+                ScopeTarget::Standalone,
+                runtime_db,
+                next_scope_attempt_token(),
+            )
         };
-        assert_eq!(
-            first_acquire,
-            ScopeAcquire::NeedsResync,
+        assert!(
+            matches!(first_acquire, ScopeAcquire::NeedsResync),
             "a connection on the configured db must need a resync to the runtime db"
         );
         crate::scope::resync_idle_connection_database(
@@ -2092,7 +2458,12 @@ mod scope_pool_tests {
 
         let scope_id = {
             let mut pool = pool_arc.lock().await;
-            match pool.try_acquire(registry, ScopeTarget::Standalone, runtime_db) {
+            match pool.try_acquire(
+                registry,
+                ScopeTarget::Standalone,
+                runtime_db,
+                next_scope_attempt_token(),
+            ) {
                 ScopeAcquire::Reused(id) => id,
                 other => panic!("expected the resynced connection to be reused: {other:?}"),
             }
@@ -2128,7 +2499,12 @@ mod scope_pool_tests {
         // no resync needed.
         let scope_id = {
             let mut pool = pool_arc.lock().await;
-            match pool.try_acquire(registry, ScopeTarget::Standalone, runtime_db) {
+            match pool.try_acquire(
+                registry,
+                ScopeTarget::Standalone,
+                runtime_db,
+                next_scope_attempt_token(),
+            ) {
                 ScopeAcquire::Reused(id) => id,
                 other => {
                     panic!("expected the idle connection to be reused on the runtime db: {other:?}")
@@ -2200,29 +2576,32 @@ mod scope_pool_tests {
         crate::pool::get_client_scope_pools().insert(client_id, pool_arc.clone());
         let registry = crate::pool::get_scope_registry();
 
-        pool_arc
+        let reservation = pool_arc
             .lock()
             .await
-            .total_count
-            .fetch_add(1, Ordering::Release);
+            .reserve_slot_for(ScopeTarget::Standalone, next_scope_attempt_token())
+            .expect("pool must grant a reservation");
         crate::scope::create_scope_connection(
             pool_arc.clone(),
             None,
             &connection_request_bytes,
             ScopeTarget::Standalone,
+            reservation,
         )
         .await;
 
         // Bring the connection onto the runtime database (3), mirroring the acquire path.
-        assert_eq!(
+        assert!(matches!(
             {
-                pool_arc
-                    .lock()
-                    .await
-                    .try_acquire(registry, ScopeTarget::Standalone, runtime_db)
+                pool_arc.lock().await.try_acquire(
+                    registry,
+                    ScopeTarget::Standalone,
+                    runtime_db,
+                    next_scope_attempt_token(),
+                )
             },
             ScopeAcquire::NeedsResync
-        );
+        ));
         crate::scope::resync_idle_connection_database(
             pool_arc.clone(),
             ScopeTarget::Standalone,
@@ -2232,7 +2611,12 @@ mod scope_pool_tests {
 
         let scope_id = {
             let mut pool = pool_arc.lock().await;
-            match pool.try_acquire(registry, ScopeTarget::Standalone, runtime_db) {
+            match pool.try_acquire(
+                registry,
+                ScopeTarget::Standalone,
+                runtime_db,
+                next_scope_attempt_token(),
+            ) {
                 ScopeAcquire::Reused(id) => id,
                 other => panic!("expected reuse on the runtime db: {other:?}"),
             }
@@ -2271,7 +2655,12 @@ mod scope_pool_tests {
         // and the key written on db 3 must be visible.
         let scope_id = {
             let mut pool = pool_arc.lock().await;
-            match pool.try_acquire(registry, ScopeTarget::Standalone, runtime_db) {
+            match pool.try_acquire(
+                registry,
+                ScopeTarget::Standalone,
+                runtime_db,
+                next_scope_attempt_token(),
+            ) {
                 ScopeAcquire::Reused(id) => id,
                 other => panic!(
                     "release must restore the runtime baseline so reuse is a clean db match: {other:?}"
@@ -2336,35 +2725,43 @@ mod scope_pool_tests {
         crate::pool::get_client_scope_pools().insert(client_id, pool_arc.clone());
         let registry = crate::pool::get_scope_registry();
 
-        pool_arc
+        let reservation = pool_arc
             .lock()
             .await
-            .total_count
-            .fetch_add(1, Ordering::Release);
+            .reserve_slot_for(ScopeTarget::Standalone, next_scope_attempt_token())
+            .expect("pool must grant a reservation");
         crate::scope::create_scope_connection(
             pool_arc.clone(),
             None,
             &connection_request_bytes,
             ScopeTarget::Standalone,
+            reservation,
         )
         .await;
 
         // Borrow at runtime db 3 (connection opens on db 0, so it needs a resync first),
         // then release cleanly so it idles on db 3.
-        assert_eq!(
+        assert!(matches!(
             {
-                pool_arc
-                    .lock()
-                    .await
-                    .try_acquire(registry, ScopeTarget::Standalone, 3)
+                pool_arc.lock().await.try_acquire(
+                    registry,
+                    ScopeTarget::Standalone,
+                    3,
+                    next_scope_attempt_token(),
+                )
             },
             ScopeAcquire::NeedsResync
-        );
+        ));
         crate::scope::resync_idle_connection_database(pool_arc.clone(), ScopeTarget::Standalone, 3)
             .await;
         let scope_id = {
             let mut pool = pool_arc.lock().await;
-            match pool.try_acquire(registry, ScopeTarget::Standalone, 3) {
+            match pool.try_acquire(
+                registry,
+                ScopeTarget::Standalone,
+                3,
+                next_scope_attempt_token(),
+            ) {
                 ScopeAcquire::Reused(id) => id,
                 other => panic!("expected reuse on db 3: {other:?}"),
             }
@@ -2381,21 +2778,30 @@ mod scope_pool_tests {
 
         // Parent has since moved to db 5. Acquiring at the new runtime db must not reuse
         // the idle db-3 connection as-is — it needs a resync onto db 5.
-        assert_eq!(
-            {
-                pool_arc
-                    .lock()
-                    .await
-                    .try_acquire(registry, ScopeTarget::Standalone, 5)
-            },
-            ScopeAcquire::NeedsResync,
+        assert!(
+            matches!(
+                {
+                    pool_arc.lock().await.try_acquire(
+                        registry,
+                        ScopeTarget::Standalone,
+                        5,
+                        next_scope_attempt_token(),
+                    )
+                },
+                ScopeAcquire::NeedsResync
+            ),
             "an idle connection on the old db must be resynced to the new parent db"
         );
         crate::scope::resync_idle_connection_database(pool_arc.clone(), ScopeTarget::Standalone, 5)
             .await;
         let scope_id = {
             let mut pool = pool_arc.lock().await;
-            match pool.try_acquire(registry, ScopeTarget::Standalone, 5) {
+            match pool.try_acquire(
+                registry,
+                ScopeTarget::Standalone,
+                5,
+                next_scope_attempt_token(),
+            ) {
                 ScopeAcquire::Reused(id) => id,
                 other => panic!("expected reuse on db 5 after resync: {other:?}"),
             }
@@ -2468,16 +2874,17 @@ mod scope_pool_tests {
         // take_idle_for_resync pops LIFO and skips connections already on the target, the
         // db-3 connection must be held OUT of idle while the second is moved to db 5 —
         // otherwise the second resync would just move the db-3 connection to db 5.
-        pool_arc
+        let reservation = pool_arc
             .lock()
             .await
-            .total_count
-            .fetch_add(1, Ordering::Release);
+            .reserve_slot_for(ScopeTarget::Standalone, next_scope_attempt_token())
+            .expect("pool must grant a reservation");
         crate::scope::create_scope_connection(
             pool_arc.clone(),
             None,
             &connection_request_bytes,
             ScopeTarget::Standalone,
+            reservation,
         )
         .await;
         crate::scope::resync_idle_connection_database(pool_arc.clone(), ScopeTarget::Standalone, 3)
@@ -2485,21 +2892,27 @@ mod scope_pool_tests {
         // Hold the db-3 connection by acquiring it, so the next resync can't touch it.
         let held_db3 = {
             let mut pool = pool_arc.lock().await;
-            match pool.try_acquire(registry, ScopeTarget::Standalone, 3) {
+            match pool.try_acquire(
+                registry,
+                ScopeTarget::Standalone,
+                3,
+                next_scope_attempt_token(),
+            ) {
                 ScopeAcquire::Reused(id) => id,
                 other => panic!("expected to hold the db-3 connection: {other:?}"),
             }
         };
-        pool_arc
+        let reservation = pool_arc
             .lock()
             .await
-            .total_count
-            .fetch_add(1, Ordering::Release);
+            .reserve_slot_for(ScopeTarget::Standalone, next_scope_attempt_token())
+            .expect("pool must grant a reservation");
         crate::scope::create_scope_connection(
             pool_arc.clone(),
             None,
             &connection_request_bytes,
             ScopeTarget::Standalone,
+            reservation,
         )
         .await;
         crate::scope::resync_idle_connection_database(pool_arc.clone(), ScopeTarget::Standalone, 5)
@@ -2523,7 +2936,12 @@ mod scope_pool_tests {
         // Acquire at runtime db 5: must be a clean reuse of the db-5 connection, no resync.
         let scope_id = {
             let mut pool = pool_arc.lock().await;
-            match pool.try_acquire(registry, ScopeTarget::Standalone, 5) {
+            match pool.try_acquire(
+                registry,
+                ScopeTarget::Standalone,
+                5,
+                next_scope_attempt_token(),
+            ) {
                 ScopeAcquire::Reused(id) => id,
                 other => {
                     panic!("acquire at db 5 must directly reuse the db-5 connection, not {other:?}")
@@ -2609,16 +3027,17 @@ mod scope_pool_tests {
 
         // Initialization: the connection opens on the configured db (4); the tracker must
         // record 4, not 0.
-        pool_arc
+        let reservation = pool_arc
             .lock()
             .await
-            .total_count
-            .fetch_add(1, Ordering::Release);
+            .reserve_slot_for(ScopeTarget::Standalone, next_scope_attempt_token())
+            .expect("pool must grant a reservation");
         crate::scope::create_scope_connection(
             pool_arc.clone(),
             None,
             &connection_request_bytes,
             ScopeTarget::Standalone,
+            reservation,
         )
         .await;
         assert_eq!(
@@ -2628,15 +3047,17 @@ mod scope_pool_tests {
         );
 
         // Acquire at runtime db 6 → resync → the idle connection is now tracked on db 6.
-        assert_eq!(
+        assert!(matches!(
             {
-                pool_arc
-                    .lock()
-                    .await
-                    .try_acquire(registry, ScopeTarget::Standalone, 6)
+                pool_arc.lock().await.try_acquire(
+                    registry,
+                    ScopeTarget::Standalone,
+                    6,
+                    next_scope_attempt_token(),
+                )
             },
             ScopeAcquire::NeedsResync
-        );
+        ));
         crate::scope::resync_idle_connection_database(pool_arc.clone(), ScopeTarget::Standalone, 6)
             .await;
         assert_eq!(
@@ -2647,7 +3068,12 @@ mod scope_pool_tests {
 
         let scope_id = {
             let mut pool = pool_arc.lock().await;
-            match pool.try_acquire(registry, ScopeTarget::Standalone, 6) {
+            match pool.try_acquire(
+                registry,
+                ScopeTarget::Standalone,
+                6,
+                next_scope_attempt_token(),
+            ) {
                 ScopeAcquire::Reused(id) => id,
                 other => panic!("expected reuse on db 6: {other:?}"),
             }
@@ -2707,16 +3133,17 @@ mod scope_pool_tests {
         crate::pool::get_client_scope_pools().insert(client_id, pool_arc.clone());
 
         // Seat one connection on db 0.
-        pool_arc
+        let reservation = pool_arc
             .lock()
             .await
-            .total_count
-            .fetch_add(1, Ordering::Release);
+            .reserve_slot_for(ScopeTarget::Standalone, next_scope_attempt_token())
+            .expect("pool must grant a reservation");
         crate::scope::create_scope_connection(
             pool_arc.clone(),
             None,
             &connection_request_bytes,
             ScopeTarget::Standalone,
+            reservation,
         )
         .await;
         assert_eq!(pool_arc.lock().await.idle.len(), 1);
@@ -2785,16 +3212,17 @@ mod scope_pool_tests {
         )));
         crate::pool::get_client_scope_pools().insert(client_id, pool_arc.clone());
 
-        pool_arc
+        let reservation = pool_arc
             .lock()
             .await
-            .total_count
-            .fetch_add(1, Ordering::Release);
+            .reserve_slot_for(ScopeTarget::Standalone, next_scope_attempt_token())
+            .expect("pool must grant a reservation");
         crate::scope::create_scope_connection(
             pool_arc.clone(),
             None,
             &connection_request_bytes,
             ScopeTarget::Standalone,
+            reservation,
         )
         .await;
 
@@ -2851,22 +3279,28 @@ mod scope_pool_tests {
         crate::pool::get_client_scope_pools().insert(client_id, pool_arc.clone());
         let registry = crate::pool::get_scope_registry();
 
-        pool_arc
+        let reservation = pool_arc
             .lock()
             .await
-            .total_count
-            .fetch_add(1, Ordering::Release);
+            .reserve_slot_for(ScopeTarget::Standalone, next_scope_attempt_token())
+            .expect("pool must grant a reservation");
         crate::scope::create_scope_connection(
             pool_arc.clone(),
             None,
             &connection_request_bytes,
             ScopeTarget::Standalone,
+            reservation,
         )
         .await;
 
         let scope_id = {
             let mut pool = pool_arc.lock().await;
-            match pool.try_acquire(registry, ScopeTarget::Standalone, 0) {
+            match pool.try_acquire(
+                registry,
+                ScopeTarget::Standalone,
+                0,
+                next_scope_attempt_token(),
+            ) {
                 ScopeAcquire::Reused(id) => id,
                 other => panic!("expected a clean reuse on db 0: {other:?}"),
             }
@@ -2972,27 +3406,31 @@ mod scope_pool_tests {
         crate::pool::get_client_scope_pools().insert(client_id, pool_arc.clone());
 
         // Seat one idle connection on db 0 (mismatched with the parent's db 4).
-        pool_arc
+        let reservation = pool_arc
             .lock()
             .await
-            .total_count
-            .fetch_add(1, Ordering::Release);
+            .reserve_slot_for(ScopeTarget::Standalone, next_scope_attempt_token())
+            .expect("pool must grant a reservation");
         crate::scope::create_scope_connection(
             pool_arc.clone(),
             None,
             &connection_request_bytes,
             ScopeTarget::Standalone,
+            reservation,
         )
         .await;
 
         // First FFI acquire: the only idle connection is on db 0 while the parent is on
         // db 4, so the glue must read db 4, return -1, and spawn the resync.
         let handle = tokio::runtime::Handle::current();
+        // One logical acquire: the same token on the first call and every retry poll.
+        let attempt_token = next_scope_attempt_token();
         let first = crate::scope::try_acquire_scope(
             client_id,
             connection_request_bytes.clone(),
             &handle,
             0,
+            attempt_token,
         );
         assert_eq!(
             first, -1,
@@ -3007,6 +3445,7 @@ mod scope_pool_tests {
                 connection_request_bytes.clone(),
                 &handle,
                 0,
+                attempt_token,
             );
             if id >= 0 {
                 break id as u64;
@@ -3040,5 +3479,534 @@ mod scope_pool_tests {
 
         crate::scope::unregister_client(client_id);
         crate::pool::get_client_scope_pools().remove(&client_id);
+    }
+
+    #[test]
+    fn guard_commit_keeps_slot_drop_reclaims_it() {
+        let count = Arc::new(AtomicU32::new(2));
+
+        let committed = ScopeReservation::for_test(count.clone());
+        committed.commit();
+        assert_eq!(
+            count.load(Ordering::Acquire),
+            2,
+            "commit must not decrement the reservation count"
+        );
+
+        let dropped = ScopeReservation::for_test(count.clone());
+        drop(dropped);
+        assert_eq!(
+            count.load(Ordering::Acquire),
+            1,
+            "dropping an uncommitted guard must give the slot back exactly once"
+        );
+    }
+
+    /// Regression: a detached creation task cancelled before commit must still
+    /// give its reservation back.
+    #[tokio::test]
+    async fn guard_reclaims_slot_when_creation_task_is_cancelled() {
+        let count = Arc::new(AtomicU32::new(1));
+        let count_in_task = count.clone();
+
+        // Task parks forever (models a create_scope_connection blocked on a
+        // paused shard), then gets cancelled.
+        let handle = tokio::spawn(async move {
+            let _reservation = ScopeReservation::for_test(count_in_task);
+            futures::future::pending::<()>().await;
+        });
+        tokio::task::yield_now().await;
+        handle.abort();
+        let _ = handle.await;
+
+        assert_eq!(
+            count.load(Ordering::Acquire),
+            0,
+            "a cancelled creation task must give its reservation back, not leak it"
+        );
+    }
+
+    #[test]
+    fn give_back_saturates_at_zero() {
+        let count = Arc::new(AtomicU32::new(0));
+
+        drop(ScopeReservation::for_test(count.clone()));
+        assert_eq!(
+            count.load(Ordering::Acquire),
+            0,
+            "guard give-back must saturate at zero"
+        );
+
+        saturating_dec(&count);
+        assert_eq!(
+            count.load(Ordering::Acquire),
+            0,
+            "saturating_dec must saturate at zero"
+        );
+    }
+
+    /// Retries for an in-flight target must not reserve or spawn again — the
+    /// Retries of the SAME acquire (same attempt token) for an in-flight target
+    /// must not reserve or spawn again — the first poll reserves once, the rest
+    /// return CreationPending. (A distinct borrower carrying a different token is
+    /// covered by `distinct_borrower_same_target_each_reserve`.)
+    #[test]
+    fn same_target_retries_reserve_only_once() {
+        let config = ScopePoolConfig {
+            max_total: 8,
+            ..ScopePoolConfig::default()
+        };
+        let mut pool = ScopePool::new(config, Vec::new(), 1);
+        let registry: DashMap<u64, ScopeEntry> = DashMap::new();
+
+        let target = ScopeTarget::cluster_primary("10.0.0.1:6379");
+        let other = ScopeTarget::cluster_primary("10.0.0.2:6379");
+        // One logical acquire — the same token on every poll.
+        let token = next_scope_attempt_token();
+
+        let reservation = match pool.try_acquire(&registry, target.clone(), 0, token) {
+            ScopeAcquire::Reserved(r) => r,
+            other => panic!("first acquire must reserve, got {other:?}"),
+        };
+        assert_eq!(pool.total_count.load(Ordering::Acquire), 1);
+
+        for _ in 0..5 {
+            assert!(
+                matches!(
+                    pool.try_acquire(&registry, target.clone(), 0, token),
+                    ScopeAcquire::CreationPending
+                ),
+                "a same-token retry for an in-flight target must be CreationPending"
+            );
+        }
+        assert_eq!(
+            pool.total_count.load(Ordering::Acquire),
+            1,
+            "same-token retries must not increase total_count"
+        );
+
+        // A different target still reserves independently.
+        let _r2 = match pool.try_acquire(&registry, other, 0, next_scope_attempt_token()) {
+            ScopeAcquire::Reserved(r) => r,
+            other => panic!("a different target must reserve, got {other:?}"),
+        };
+        assert_eq!(pool.total_count.load(Ordering::Acquire), 2);
+
+        // Once the first creation finishes (guard drops), the token is no longer
+        // in flight, so a fresh acquire for it reserves again.
+        drop(reservation);
+        assert!(
+            matches!(
+                pool.try_acquire(&registry, target, 0, next_scope_attempt_token()),
+                ScopeAcquire::Reserved(_)
+            ),
+            "after the in-flight creation completes, the target reserves again"
+        );
+    }
+
+    /// The heart of option 1: two DISTINCT concurrent borrowers of the same
+    /// healthy target (distinct attempt tokens) must EACH reserve their own slot
+    /// while capacity is free — a target-only dedupe would serialize the second
+    /// into CreationPending with slots idle (RFC #5815: concurrent dials are
+    /// unbounded up to max_total). A-B: on target-only keying the second acquire
+    /// returns CreationPending and total_count stays at 1.
+    #[test]
+    fn distinct_borrower_same_target_each_reserve() {
+        let config = ScopePoolConfig {
+            max_total: 8,
+            ..ScopePoolConfig::default()
+        };
+        let mut pool = ScopePool::new(config, Vec::new(), 1);
+        let registry: DashMap<u64, ScopeEntry> = DashMap::new();
+        let target = ScopeTarget::cluster_primary("10.0.0.1:6379");
+
+        // Borrower #1 reserves and holds its slot (its creation is in flight).
+        let _r1 = match pool.try_acquire(&registry, target.clone(), 0, next_scope_attempt_token()) {
+            ScopeAcquire::Reserved(r) => r,
+            other => panic!("borrower #1 must reserve, got {other:?}"),
+        };
+        // Borrower #2, a distinct acquire (different token) to the SAME target,
+        // must get its own reservation, not CreationPending, with 6 slots free.
+        let _r2 = match pool.try_acquire(&registry, target, 0, next_scope_attempt_token()) {
+            ScopeAcquire::Reserved(r) => r,
+            other => panic!(
+                "a distinct concurrent borrower of the same target must reserve \
+                 (not serialize), got {other:?}"
+            ),
+        };
+        assert_eq!(
+            pool.total_count.load(Ordering::Acquire),
+            2,
+            "both distinct borrowers reserve their own slot"
+        );
+    }
+
+    /// A cancelled creation must clear its pending marker, or every future retry
+    /// for that target would be suppressed.
+    #[tokio::test]
+    async fn cancelled_creation_clears_pending_marker() {
+        let mut pool = ScopePool::new(ScopePoolConfig::default(), Vec::new(), 1);
+        let registry: DashMap<u64, ScopeEntry> = DashMap::new();
+
+        let target = ScopeTarget::cluster_primary("10.0.0.1:6379");
+        let reservation =
+            match pool.try_acquire(&registry, target.clone(), 0, next_scope_attempt_token()) {
+                ScopeAcquire::Reserved(r) => r,
+                other => panic!("expected a reservation, got {other:?}"),
+            };
+        let pending = pool.pending.clone();
+        assert!(pending.lock().unwrap().contains_key(&target));
+
+        let handle = tokio::spawn(async move {
+            let _r = reservation;
+            futures::future::pending::<()>().await;
+        });
+        tokio::task::yield_now().await;
+        handle.abort();
+        let _ = handle.await;
+
+        assert!(
+            !pending.lock().unwrap().contains_key(&target),
+            "a cancelled creation must clear its pending marker"
+        );
+        assert_eq!(
+            pool.total_count.load(Ordering::Acquire),
+            0,
+            "and give the reservation back"
+        );
+    }
+
+    /// Destroying a pool clears its pending markers — defensive cleanup that
+    /// also releases the held target `Arc`s. (A closed pool never returns to
+    /// RUNNING, so the markers can't affect a later acquire, but leaving them is
+    /// a needless retention.)
+    #[test]
+    fn destroy_clears_pending_markers() {
+        let mut pool = ScopePool::new(ScopePoolConfig::default(), Vec::new(), 1);
+        let registry: DashMap<u64, ScopeEntry> = DashMap::new();
+
+        let _reservation = match pool.try_acquire(
+            &registry,
+            ScopeTarget::cluster_primary("10.0.0.1:6379"),
+            0,
+            next_scope_attempt_token(),
+        ) {
+            ScopeAcquire::Reserved(r) => r,
+            other => panic!("expected a reservation, got {other:?}"),
+        };
+        assert!(!pool.pending.lock().unwrap().is_empty());
+
+        pool.destroy(&registry);
+        assert!(
+            pool.pending.lock().unwrap().is_empty(),
+            "destroy must clear pending markers"
+        );
+    }
+}
+
+/// Tests for the abandon-monitor race fix (issue #6971).
+///
+/// The abandon monitor must skip `PooledClient` entries whose `is_blocking` flag
+/// is `true`.  These tests verify the invariant end-to-end using the live monitor
+/// task against a pool populated with a lazy (no-connection) test client.
+///
+/// No real Valkey server is required.
+#[cfg(test)]
+mod abandon_monitor_tests {
+    use super::*;
+    use std::time::Duration;
+
+    /// Build a `PoolConfig` with the given `abandon_timeout` and otherwise
+    /// minimal / safe values.
+    fn test_pool_config(abandon_timeout: Duration) -> PoolConfig {
+        PoolConfig {
+            max_size: 4,
+            min_idle: 0,
+            idle_timeout: Duration::from_secs(300),
+            request_timeout: Duration::from_secs(5),
+            test_on_borrow: false,
+            connection_request: vec![],
+            is_async: false,
+            configured_database_id: 0,
+            abandon_timeout,
+        }
+    }
+
+    /// Regression test for issue #6971.
+    ///
+    /// The abandon monitor iterates `pool.in_use` and checks `is_blocking`
+    /// before deciding whether to evict a client.  This test inserts a client
+    /// whose `borrowed_at` is already past the abandon timeout, sets
+    /// `is_blocking = true`, and asserts the monitor does **not** evict it.
+    ///
+    /// On the buggy code path the flag was set via `try_lock`, which could fail
+    /// under pool-mutex contention, causing the monitor to evict the client
+    /// erroneously.  The fix stores the flag in `BLOCKING_FLAG_REGISTRY` as an
+    /// `Arc<AtomicU32>` shared with `PooledClient.is_blocking`, so the binding
+    /// can set it lock-free before spawn.
+    #[test]
+    #[serial_test::serial]
+    fn abandon_monitor_skips_blocking_clients() {
+        // ── 1. Runtime ─────────────────────────────────────────────────────────
+        let rt = tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .worker_threads(2)
+            .build()
+            .expect("tokio runtime");
+
+        let abandon_timeout = Duration::from_millis(200);
+
+        // ── 2. Pool setup ───────────────────────────────────────────────────────
+        let pool_id = {
+            let pool = ClientPool::new(test_pool_config(abandon_timeout)).expect("ClientPool::new");
+            register_pool(pool)
+        };
+        let pool_arc = get_pool(pool_id).expect("pool registered");
+
+        // ── 3. Insert a test client into the pool's in_use map ─────────────────
+        //
+        // We need a PooledClient in `pool.in_use` with:
+        //   • borrowed_at = some time well in the past (past abandon_timeout)
+        //   • is_blocking  = true
+        //
+        // Steps:
+        //   a. add_client() → idle
+        //   b. try_acquire() → in_use  (sets borrowed_at = now)
+        //   c. register_pool_client() so the monitor-side unregister works
+        //   d. Back-date borrowed_at so the monitor's age check triggers
+        //   e. Set is_blocking = true so the monitor must skip the entry
+        let client_id: u64;
+        {
+            let mut pool = pool_arc.blocking_lock();
+
+            // (a) add a lazy test client (no TCP connection)
+            let glide_client = crate::client::create_test_glide_client();
+            let cid = pool.add_client(glide_client);
+            client_id = cid;
+
+            // (b) move from idle → in_use
+            let acquired = pool.try_acquire();
+            assert_eq!(
+                acquired, client_id as i64,
+                "try_acquire should return the only idle client"
+            );
+
+            // (c) register the pool→client mapping (normally done by JNI/FFI after try_acquire)
+            register_pool_client(pool_id, client_id);
+
+            // (d) back-date borrowed_at so the monitor's age check fires
+            if let Some(mut entry) = pool.in_use.get_mut(&client_id) {
+                entry.borrowed_at = Some(Instant::now() - abandon_timeout * 3);
+            }
+        } // pool mutex released
+
+        // (e) Set is_blocking = true lock-free — simulates what a binding does
+        //     right before spawning the blocking command.
+        let flag = get_blocking_flag(client_id).expect("flag registered by add_client");
+        flag.fetch_add(1, Ordering::Release);
+
+        // ── 4. Start the abandon monitor ───────────────────────────────────────
+        start_abandon_monitor(pool_id, rt.handle());
+
+        // ── 5. Sleep 3× the scan interval so the monitor fires at least once ───
+        // scan_interval = abandon_timeout / 2, so 3× scan_interval = 1.5× timeout.
+        std::thread::sleep(abandon_timeout * 3);
+
+        // ── 6. Assertions ──────────────────────────────────────────────────────
+        {
+            let pool = pool_arc.blocking_lock();
+            assert!(
+                pool.in_use.contains_key(&client_id),
+                "Issue #6971 regression: abandon monitor evicted client {} even though \
+                 is_blocking=true. The monitor must skip clients executing blocking commands.",
+                client_id
+            );
+        }
+
+        assert!(
+            get_blocking_flag(client_id).is_some(),
+            "Client {} was removed from BLOCKING_FLAG_REGISTRY while is_blocking=true",
+            client_id
+        );
+
+        // ── 7. Cleanup ─────────────────────────────────────────────────────────
+        flag.store(0, Ordering::Release);
+        {
+            let pool = pool_arc.blocking_lock();
+            pool.in_use.remove(&client_id);
+            pool.total_count.fetch_sub(1, Ordering::AcqRel);
+        }
+        unregister_blocking_flag(client_id);
+        unregister_pool_client(client_id);
+        unregister_pool(pool_id);
+    }
+
+    /// Companion test: the monitor **does** evict a client whose `borrowed_at`
+    /// has passed the abandon timeout and whose `is_blocking` flag is `false`.
+    ///
+    /// This confirms the monitor is actually running and that the first test is
+    /// meaningful — it cannot pass simply because the monitor never fires.
+    #[test]
+    #[serial_test::serial]
+    fn abandon_monitor_evicts_non_blocking_abandoned_clients() {
+        // ── 1. Runtime ─────────────────────────────────────────────────────────
+        let rt = tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .worker_threads(2)
+            .build()
+            .expect("tokio runtime");
+
+        let abandon_timeout = Duration::from_millis(200);
+
+        // ── 2. Pool setup ───────────────────────────────────────────────────────
+        let pool_id = {
+            let pool = ClientPool::new(test_pool_config(abandon_timeout)).expect("ClientPool::new");
+            register_pool(pool)
+        };
+        let pool_arc = get_pool(pool_id).expect("pool registered");
+
+        // ── 3. Insert a test client (is_blocking stays false) ──────────────────
+        let client_id: u64;
+        {
+            let mut pool = pool_arc.blocking_lock();
+            let glide_client = crate::client::create_test_glide_client();
+            let cid = pool.add_client(glide_client);
+            client_id = cid;
+
+            let acquired = pool.try_acquire();
+            assert_eq!(acquired, client_id as i64);
+
+            register_pool_client(pool_id, client_id);
+
+            // Back-date borrowed_at past the abandon timeout
+            if let Some(mut entry) = pool.in_use.get_mut(&client_id) {
+                entry.borrowed_at = Some(Instant::now() - abandon_timeout * 3);
+            }
+        }
+        // is_blocking remains false — the monitor should evict this client.
+
+        // ── 4. Start the abandon monitor ───────────────────────────────────────
+        start_abandon_monitor(pool_id, rt.handle());
+
+        // ── 5. Sleep long enough for the monitor to fire ───────────────────────
+        std::thread::sleep(abandon_timeout * 4);
+
+        // ── 6. The client must have been evicted ───────────────────────────────
+        {
+            let pool = pool_arc.blocking_lock();
+            assert!(
+                !pool.in_use.contains_key(&client_id),
+                "Abandon monitor should have evicted client {} (is_blocking=false, \
+                 borrowed_at past timeout), but it is still in pool.in_use",
+                client_id
+            );
+        }
+
+        // The monitor also calls unregister_blocking_flag / unregister_pool_client,
+        // so the registries should no longer contain this client.
+        assert!(
+            get_blocking_flag(client_id).is_none(),
+            "Client {} should have been removed from BLOCKING_FLAG_REGISTRY by the monitor",
+            client_id
+        );
+
+        // ── 7. Cleanup ─────────────────────────────────────────────────────────
+        unregister_pool(pool_id);
+    }
+
+    /// Verifies that the `AtomicU32` blocking counter correctly handles concurrent
+    /// blocking dispatches: the abandon monitor must not evict a client until the
+    /// counter reaches zero, even after a partial decrement.
+    #[test]
+    #[serial_test::serial]
+    fn abandon_monitor_respects_blocking_counter() {
+        // ── 1. Runtime ─────────────────────────────────────────────────────────
+        let rt = tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .worker_threads(2)
+            .build()
+            .expect("tokio runtime");
+
+        let abandon_timeout = Duration::from_millis(200);
+
+        // ── 2. Pool setup ───────────────────────────────────────────────────────
+        let pool_id = {
+            let pool = ClientPool::new(test_pool_config(abandon_timeout)).expect("ClientPool::new");
+            register_pool(pool)
+        };
+        let pool_arc = get_pool(pool_id).expect("pool registered");
+
+        // ── 3. Insert a test client (backdated) ────────────────────────────────
+        let client_id: u64;
+        {
+            let mut pool = pool_arc.blocking_lock();
+            let glide_client = crate::client::create_test_glide_client();
+            let cid = pool.add_client(glide_client);
+            client_id = cid;
+
+            let acquired = pool.try_acquire();
+            assert_eq!(acquired, client_id as i64);
+
+            register_pool_client(pool_id, client_id);
+
+            // Back-date borrowed_at well past the abandon timeout
+            if let Some(mut entry) = pool.in_use.get_mut(&client_id) {
+                entry.borrowed_at = Some(Instant::now() - abandon_timeout * 3);
+            }
+        }
+
+        // ── 4. Simulate two concurrent blocking dispatches ─────────────────────
+        let arc = get_blocking_flag(client_id).expect("flag registered by add_client");
+        arc.fetch_add(1, Ordering::Release); // command 1 starts
+        arc.fetch_add(1, Ordering::Release); // command 2 starts
+
+        // ── 5. Start monitor and wait — should NOT evict (counter = 2) ─────────
+        start_abandon_monitor(pool_id, rt.handle());
+        std::thread::sleep(abandon_timeout * 3);
+
+        {
+            let pool = pool_arc.blocking_lock();
+            assert!(
+                pool.in_use.contains_key(&client_id),
+                "Abandon monitor must not evict client {} while blocking counter = 2",
+                client_id
+            );
+        }
+
+        // ── 6. Decrement once (command 1 completes) — still NOT evicted ─────────
+        arc.fetch_sub(1, Ordering::Release); // counter now 1
+        std::thread::sleep(abandon_timeout * 2);
+
+        {
+            let pool = pool_arc.blocking_lock();
+            assert!(
+                pool.in_use.contains_key(&client_id),
+                "Abandon monitor must not evict client {} while blocking counter = 1",
+                client_id
+            );
+        }
+
+        // ── 7. Decrement to 0 (command 2 completes) — NOW evicted ───────────────
+        arc.fetch_sub(1, Ordering::Release); // counter now 0
+        std::thread::sleep(abandon_timeout * 4);
+
+        {
+            let pool = pool_arc.blocking_lock();
+            assert!(
+                !pool.in_use.contains_key(&client_id),
+                "Abandon monitor should have evicted client {} once blocking counter = 0 \
+                 and borrowed_at past timeout, but it is still in pool.in_use",
+                client_id
+            );
+        }
+
+        assert!(
+            get_blocking_flag(client_id).is_none(),
+            "Client {} should have been removed from BLOCKING_FLAG_REGISTRY after eviction",
+            client_id
+        );
+
+        // ── 8. Cleanup ─────────────────────────────────────────────────────────
+        unregister_pool(pool_id);
     }
 }

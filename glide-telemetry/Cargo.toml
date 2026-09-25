@@ -1,24 +1,27 @@
 [package]
-name = "telemetrylib"
+name = "glide-telemetry"
 version = "0.1.0"
 edition = "2024"
 license = "Apache-2.0"
 authors = ["Valkey GLIDE Maintainers"]
 
 [dependencies]
-lazy_static = "1"
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-chrono = "0.4"
-tokio = { version = "1", features = ["macros", "time"] }
 
-thiserror = "2"
-url = "2"
+# GLIDE dependencies
+glide-logger = { path = "../glide-logger", version = "0.1" }
+
+# External dependencies
+chrono = "0.4"
+lazy_static = "1"
+once_cell = "1"
 opentelemetry = { version = "0.32", features = ["metrics"] }
 opentelemetry_sdk = { version = "0.32", features = ["rt-tokio", "metrics", "experimental_metrics_periodicreader_with_async_runtime", "experimental_trace_batch_span_processor_with_async_runtime"] }
 opentelemetry-otlp = { version = "0.32", features = ["http-proto", "http-json", "reqwest-client", "grpc-tonic"] }
-once_cell = "1"
-logger_core = { path = "../../logger_core" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+tokio = { version = "1", features = ["macros", "time"] }
+url = "2"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["rt", "macros", "rt-multi-thread", "time"] }

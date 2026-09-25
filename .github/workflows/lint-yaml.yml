@@ -55,6 +55,9 @@ jobs:
                   print(f"OK: all {len(config.get('updates', []))} entries have cooldown.default-days == 7")
                   EOF
 
+            - name: Validate engine runner classes
+              run: python3 .github/scripts/validate_engine_runners.py
+
             - name: Validate npmMinimalAgeGate
               run: |
                   python3 - <<'EOF'

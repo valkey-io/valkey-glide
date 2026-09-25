@@ -344,6 +344,52 @@ export class GlideClient extends BaseClient {
     }
 
     /**
+     * Acquire a pool client by ID and wrap it as a GlideClient.
+     *
+     * Called by {@link ClientPool} after a successful `poolTryAcquire` or
+     * `poolAcquireBlocking`. Spins up a fresh worker thread for the
+     * already-connected pool client and returns a fully operational instance.
+     *
+     * @internal - intended for use by ClientPool only.
+     */
+    public static async fromPoolClientId(
+        clientId: number,
+        options: GlideClientConfiguration,
+    ): Promise<GlideClient> {
+        const { poolBuildHandle } = await import("../build-ts/native");
+        // Create the client instance whose handleResponsesAvailable will be stored
+        // as the Rust TSFN wake callback. The same instance must be the one that
+        // receives the handle — arrow functions bind `this` at construction, so
+        // the callback and the client handle MUST live on the same object.
+        const client = new GlideClient(options);
+        const handle = await poolBuildHandle(
+            clientId,
+            (client as unknown as { handleResponsesAvailable: () => void })
+                .handleResponsesAvailable,
+        );
+        // Inject the handle into the SAME instance whose callback was registered.
+        (client as unknown as { clientHandle: typeof handle }).clientHandle =
+            handle;
+        return client;
+    }
+
+    /**
+     * @internal
+     * Serialise a {@link GlideClientConfiguration} into the protobuf bytes
+     * used by the pool Rust APIs.  Does not open a network connection.
+     */
+    public static serializeConfig(options: GlideClientConfiguration): {
+        bytes: Uint8Array;
+        resolverKey: string | undefined;
+    } {
+        return super.serializeConnectionRequest(
+            options,
+            (opts?: BaseClientConfiguration) =>
+                new GlideClient(opts as GlideClientConfiguration),
+        );
+    }
+
+    /**
      * Execute a batch by processing the queued commands.
      *
      * **Notes:**
