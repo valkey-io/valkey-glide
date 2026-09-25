@@ -23,11 +23,49 @@ from glide_shared.config import (
     GlideClusterClientConfiguration,
     ProtocolVersion,
 )
+from glide_shared.exceptions import ConnectionError as GlideConnectionError
+from glide_shared.exceptions import RequestError
+from glide_shared.exceptions import TimeoutError as GlideTimeoutError
 from glide_sync.glide_client import GlideClient as SyncGlideClient
 from glide_sync.glide_client import GlideClusterClient as SyncGlideClusterClient
 
 # Type alias for any glide client (async or sync)
 AnyGlideClient: TypeAlias = Union[TGlideClient, SyncGlideClient, SyncGlideClusterClient]
+
+# Substring identifying the cluster recovery rejection. While a cluster client
+# is refreshing slots or reconnecting to its initial nodes, redis-rs fails
+# pending requests with ErrorKind::ClientError / "Connection in recovery"
+# (cluster_async/mod.rs). glide-core maps ClientError to
+# RequestErrorType::Unspecified, so it reaches Python as a plain RequestError
+# rather than TimeoutError or ConnectionError, and has to be matched by message.
+_RECONNECT_REJECTION_MARKER = "connection in recovery"
+
+
+def is_reconnect_in_progress_error(error: BaseException) -> bool:
+    """Return True if ``error`` is a command failure caused by an in-progress reconnect.
+
+    Tests that sever connections on purpose (``CLIENT KILL``) have to tolerate
+    commands failing while the client re-establishes them. Three shapes are
+    possible and all three are transient:
+
+    * ``TimeoutError``: the command was dispatched and the reply did not arrive
+      within the request timeout (250 ms by default).
+    * ``ConnectionError``: the socket was already gone when the command was
+      dispatched.
+    * ``RequestError`` carrying "Connection in recovery": the cluster client
+      rejected the command outright while refreshing slots or reconnecting to
+      its initial nodes.
+
+    Everything else returns False so the caller re-raises it. That keeps a real
+    failure (NOPERM, CROSSSLOT, a closed client) loud instead of letting a retry
+    loop spin to its deadline and report a misleading "message never arrived".
+    """
+    if isinstance(error, (GlideTimeoutError, GlideConnectionError)):
+        return True
+    return (
+        isinstance(error, RequestError)
+        and _RECONNECT_REJECTION_MARKER in str(error).lower()
+    )
 
 
 class SubscriptionMethod(IntEnum):
@@ -1191,6 +1229,48 @@ def sync_check_no_messages_left(
         assert len(callback) == expected_callback_messages_count
 
 
+def _raise_subscription_state_mismatch(
+    subs,
+    modes,
+    expected_channels: Optional[Set[str]] = None,
+    expected_patterns: Optional[Set[str]] = None,
+    expected_sharded: Optional[Set[str]] = None,
+) -> None:
+    """Raise an AssertionError naming whichever expectation ``subs`` does not meet."""
+    if expected_channels is not None:
+        if len(expected_channels) == 0 and len(subs[modes.Exact]) > 0:
+            raise AssertionError(f"Expected no channels but found {subs[modes.Exact]}")
+        elif len(expected_channels) > 0 and not expected_channels.issubset(
+            subs[modes.Exact]
+        ):
+            raise AssertionError(
+                f"Expected channels {expected_channels} not in {subs[modes.Exact]}"
+            )
+
+    if expected_patterns is not None:
+        if len(expected_patterns) == 0 and len(subs[modes.Pattern]) > 0:
+            raise AssertionError(
+                f"Expected no patterns but found {subs[modes.Pattern]}"
+            )
+        elif len(expected_patterns) > 0 and not expected_patterns.issubset(
+            subs[modes.Pattern]
+        ):
+            raise AssertionError(
+                f"Expected patterns {expected_patterns} not in {subs[modes.Pattern]}"
+            )
+
+    if expected_sharded is not None and hasattr(modes, "Sharded"):
+        sharded_subs = subs.get(modes.Sharded, set())  # type: ignore[union-attr,arg-type]
+        if len(expected_sharded) == 0 and len(sharded_subs) > 0:
+            raise AssertionError(
+                f"Expected no sharded channels but found {sharded_subs}"
+            )
+        elif len(expected_sharded) > 0 and not expected_sharded.issubset(sharded_subs):
+            raise AssertionError(
+                f"Expected sharded {expected_sharded} not in {sharded_subs}"
+            )
+
+
 def sync_wait_for_subscription_state(
     client,
     expected_channels: Optional[Set[str]] = None,
@@ -1214,12 +1294,29 @@ def sync_wait_for_subscription_state(
 
     modes = get_pubsub_modes(client)
     start_time = time.time()
+    # Remember the most recent state we managed to read so the final error
+    # report can use it even if the client is timing out at the deadline.
+    last_subs = None
 
     while time.time() - start_time < timeout_sec:
-        state = client.get_subscriptions()
+        try:
+            state = client.get_subscriptions()
+        except RequestError as error:
+            if not is_reconnect_in_progress_error(error):
+                raise
+            # The client may still be recovering from a connection kill.
+            # GET_SUBSCRIPTIONS is answered from local synchronizer state, so
+            # it does not fail on a dead socket, but it is still dispatched
+            # through the core and is bounded by the request timeout, so a
+            # starved runtime can surface it as a timeout. Keep polling until
+            # the outer timeout expires.
+            time.sleep(0.1)
+            continue
+
         subs = (
             state.actual_subscriptions if check_actual else state.desired_subscriptions
         )
+        last_subs = subs
 
         # For each subscription type, check if it matches expected
         # If expected is None, skip the check
@@ -1253,42 +1350,22 @@ def sync_wait_for_subscription_state(
 
         time.sleep(0.1)
 
-    # Final check with detailed error
-    state = client.get_subscriptions()
-    subs = state.actual_subscriptions if check_actual else state.desired_subscriptions
-
-    if expected_channels is not None:
-        if len(expected_channels) == 0 and len(subs[modes.Exact]) > 0:
-            raise AssertionError(f"Expected no channels but found {subs[modes.Exact]}")
-        elif len(expected_channels) > 0 and not expected_channels.issubset(
-            subs[modes.Exact]
-        ):
-            raise AssertionError(
-                f"Expected channels {expected_channels} not in {subs[modes.Exact]}"
-            )
-
-    if expected_patterns is not None:
-        if len(expected_patterns) == 0 and len(subs[modes.Pattern]) > 0:
-            raise AssertionError(
-                f"Expected no patterns but found {subs[modes.Pattern]}"
-            )
-        elif len(expected_patterns) > 0 and not expected_patterns.issubset(
-            subs[modes.Pattern]
-        ):
-            raise AssertionError(
-                f"Expected patterns {expected_patterns} not in {subs[modes.Pattern]}"
-            )
-
-    if expected_sharded is not None and hasattr(modes, "Sharded"):
-        sharded_subs = subs.get(modes.Sharded, set())  # type: ignore[union-attr,arg-type]
-        if len(expected_sharded) == 0 and len(sharded_subs) > 0:
-            raise AssertionError(
-                f"Expected no sharded channels but found {sharded_subs}"
-            )
-        elif len(expected_sharded) > 0 and not expected_sharded.issubset(sharded_subs):
-            raise AssertionError(
-                f"Expected sharded {expected_sharded} not in {sharded_subs}"
-            )
+    # Final check with detailed error. Reuse the last state that was read
+    # successfully inside the loop instead of issuing another command: the
+    # client may still be reconnecting at the deadline, and re-reading here
+    # would raise the very TimeoutError this helper is meant to tolerate.
+    if last_subs is None:
+        raise AssertionError(
+            f"No subscription state could be read within {timeout_sec}s "
+            "(client did not reconnect in time)"
+        )
+    _raise_subscription_state_mismatch(
+        last_subs,
+        modes,
+        expected_channels=expected_channels,
+        expected_patterns=expected_patterns,
+        expected_sharded=expected_sharded,
+    )
 
 
 def sync_wait_for_subscription_state_if_needed(
