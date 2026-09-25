@@ -634,6 +634,43 @@ where
         })
     }
 
+    /// Returns whether every route resolves to the same connected primary.
+    ///
+    /// Replica read strategies can select a different connection for each route. Do not use a
+    /// pre-dispatch grouping decision in that case: the pipeline routing path performs its own
+    /// selection later and may resolve a different topology.
+    pub(crate) fn routes_share_primary_connection<'a>(
+        &self,
+        routes: impl IntoIterator<Item = &'a Route>,
+    ) -> bool {
+        if self.read_from_replica_strategy != ReadFromReplicaStrategy::AlwaysFromPrimary {
+            return false;
+        }
+
+        let mut route_count = 0;
+        let mut address = None;
+        for route in routes {
+            let Some(slot_map_value) = self.slot_map.slot_value_for_route(route) else {
+                return false;
+            };
+            let route_address = slot_map_value.addrs.primary();
+            if !self.connection_map.contains_key(route_address.as_str()) {
+                return false;
+            }
+
+            if let Some(address) = &address {
+                if address != &route_address {
+                    return false;
+                }
+            } else {
+                address = Some(route_address);
+            }
+            route_count += 1;
+        }
+
+        route_count > 1
+    }
+
     // Fetches the master address for a given route.
     // Returns `None` if no master address can be resolved.
     pub(crate) fn address_for_route(&self, route: &Route) -> Option<String> {

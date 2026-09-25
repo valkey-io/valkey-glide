@@ -306,15 +306,14 @@ macro_rules! implement_pipeline_commands {
             /// Adds a command to the cluster pipeline.
             #[inline]
             pub fn add_command(&mut self, cmd: Cmd) -> &mut Self {
-                self.add_command_with_arc(cmd.into())
+                self.add_shared_command(cmd.into())
             }
 
-            /// The provided command **must** be uniquely owned (i.e. not cloned or shared)
-            /// at the time it is added, as the pipeline's internal API assumes unique ownership
-            /// for later mutation via `get_last_command()`. If this invariant is violated,
-            /// `get_last_command()` will panic.
+            /// Adds a shared command to the pipeline.
+            ///
+            /// The command is cloned only if a later [`Pipeline::arg`] call mutates it.
             #[inline]
-            pub(crate) fn add_command_with_arc(&mut self, cmd: Arc<Cmd>) -> &mut Self {
+            pub fn add_shared_command(&mut self, cmd: Arc<Cmd>) -> &mut Self {
                 self.commands.push(cmd);
                 self
             }
@@ -382,7 +381,7 @@ macro_rules! implement_pipeline_commands {
                     0 => panic!("No command on stack"),
                     x => x - 1,
                 };
-                Arc::get_mut(&mut self.commands[idx]).expect("Cannot modify the last command: multiple active references exist. Ensure the command is uniquely owned before mutating.")
+                Arc::make_mut(&mut self.commands[idx])
             }
 
             fn make_pipeline_results(&self, resp: Vec<Value>) -> RedisResult<Value> {

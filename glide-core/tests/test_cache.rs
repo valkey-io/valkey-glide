@@ -376,6 +376,82 @@ pub(crate) mod test_cache {
         });
     }
 
+    /// Verify that the large multi-slot MGET pipeline optimization does not bypass
+    /// client-side cache lookup and fill.
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_mget_cache_multi_slot_cluster_above_pipeline_threshold() {
+        block_on_all(async {
+            let mut test_basics = setup_test_basics(
+                true,
+                TestConfiguration {
+                    shared_server: true,
+                    client_side_cache: Some(ClientSideCache {
+                        cache_id: "test_cache_mget_multi_slot_large".into(),
+                        max_cache_kb: 10,
+                        entry_ttl_ms: 0,
+                        eviction_policy: None,
+                        enable_metrics: true,
+                        ..Default::default()
+                    }),
+                    ..Default::default()
+                },
+            )
+            .await;
+
+            let key_tags = ["{user1000}", "{foo}", "{zap}"];
+            let mut keys = Vec::with_capacity(26);
+            let mut expected = Vec::with_capacity(26);
+            for key_index in 0..26 {
+                let key = format!("{}mget-cache-large-{key_index}", key_tags[key_index % 3]);
+                let value = format!("value-{key_index}");
+                let mut set_cmd = redis::cmd("SET");
+                set_cmd.arg(&key).arg(&value);
+                test_basics
+                    .client
+                    .send_command(&mut set_cmd, None)
+                    .await
+                    .unwrap();
+                keys.push(key);
+                expected.push(Value::BulkString(value.into_bytes().into()));
+            }
+
+            let mut reset_cmd = redis::cmd("CONFIG");
+            reset_cmd.arg("RESETSTAT");
+            test_basics
+                .client
+                .send_command(&mut reset_cmd, None)
+                .await
+                .unwrap();
+
+            for _ in 0..2 {
+                let mut mget = redis::cmd("MGET");
+                for key in &keys {
+                    mget.arg(key);
+                }
+                assert_eq!(
+                    test_basics
+                        .client
+                        .send_command(&mut mget, None)
+                        .await
+                        .unwrap(),
+                    Value::Array(expected.clone())
+                );
+            }
+
+            assert_command_count(&mut test_basics.client, "MGET", 3, true).await;
+            assert_eq!(
+                test_basics.client.cache_total_lookups().unwrap(),
+                Value::Int(52)
+            );
+            assert_eq!(
+                test_basics.client.cache_hit_rate().unwrap(),
+                Value::Double(0.5)
+            );
+        });
+    }
+
     /// Verify that server-assisted invalidation refetches only the changed MGET key across shards.
     #[rstest]
     #[serial_test::serial]

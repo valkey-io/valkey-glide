@@ -65,7 +65,7 @@ impl<C> NodePipelineContext<C> {
         inner_index: Option<usize>,
         ignore: bool,
     ) {
-        self.pipeline.add_command_with_arc(cmd);
+        self.pipeline.add_shared_command(cmd);
         self.command_indices.push((index, inner_index, ignore));
     }
 }
