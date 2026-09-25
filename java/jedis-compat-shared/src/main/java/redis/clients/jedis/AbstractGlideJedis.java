@@ -7615,8 +7615,8 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param minIdleTime only claim entries idle for at least this many milliseconds
      * @param start id to start scanning the pending entries list from
      * @return the raw GLIDE response: element [0] is the next start id, element [1] is a map of
-     *     claimed entry id to a 2D field-value array, and on Valkey 7.0.0 or above element [2] is
-     *     a list of pending entry ids that no longer exist in the stream
+     *     claimed entry id to a 2D field-value array, and on Valkey 7.0.0 or above element [2] is a
+     *     list of pending entry ids that no longer exist in the stream
      */
     public Object[] xautoclaim(
             String key, String group, String consumer, long minIdleTime, String start) {
@@ -7625,8 +7625,8 @@ public abstract class AbstractGlideJedis extends JedisCommon {
     }
 
     /**
-     * Auto-claims pending messages with count. Uses GLIDE xautoclaim. Returns the raw GLIDE
-     * response with no conversion.
+     * Auto-claims pending messages with count. Uses GLIDE xautoclaim. Returns the raw GLIDE response
+     * with no conversion.
      *
      * @param key stream key
      * @param group name of the consumer group
@@ -7635,8 +7635,8 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param start id to start scanning the pending entries list from
      * @param count upper limit on the number of entries claimed
      * @return the raw GLIDE response: element [0] is the next start id, element [1] is a map of
-     *     claimed entry id to a 2D field-value array, and on Valkey 7.0.0 or above element [2] is
-     *     a list of pending entry ids that no longer exist in the stream
+     *     claimed entry id to a 2D field-value array, and on Valkey 7.0.0 or above element [2] is a
+     *     list of pending entry ids that no longer exist in the stream
      */
     public Object[] xautoclaim(
             String key, String group, String consumer, long minIdleTime, String start, long count) {
@@ -11460,8 +11460,7 @@ public abstract class AbstractGlideJedis extends JedisCommon {
     }
 
     /**
-     * Stores elements from a sorted set using {@code AbstractZRangeParams<?>} into a destination
-     * key.
+     * Stores elements from a sorted set using {@code AbstractZRangeParams<?>} into a destination key.
      *
      * @param dest the destination key
      * @param src the source key
@@ -11480,8 +11479,8 @@ public abstract class AbstractGlideJedis extends JedisCommon {
     }
 
     /**
-     * Stores elements from a sorted set using {@code AbstractZRangeParams<?>} into a destination
-     * key (binary version).
+     * Stores elements from a sorted set using {@code AbstractZRangeParams<?>} into a destination key
+     * (binary version).
      *
      * @param dest the destination key
      * @param src the source key
@@ -14672,8 +14671,8 @@ public abstract class AbstractGlideJedis extends JedisCommon {
     }
 
     /**
-     * Searches for members in a sorted set representing geospatial data using a
-     * {@code AbstractGeoSearchParam<?>} and stores the result in a destination key.
+     * Searches for members in a sorted set representing geospatial data using a {@code
+     * AbstractGeoSearchParam<?>} and stores the result in a destination key.
      *
      * @param dest the destination key to store the result
      * @param src the source key of the sorted set
@@ -14718,9 +14717,8 @@ public abstract class AbstractGlideJedis extends JedisCommon {
     }
 
     /**
-     * Searches for members in a sorted set representing geospatial data using a
-     * {@code AbstractGeoSearchParam<?>} and stores the result in a destination key (binary
-     * version).
+     * Searches for members in a sorted set representing geospatial data using a {@code
+     * AbstractGeoSearchParam<?>} and stores the result in a destination key (binary version).
      *
      * @param dest the destination key to store the result
      * @param src the source key of the sorted set
@@ -14770,8 +14768,8 @@ public abstract class AbstractGlideJedis extends JedisCommon {
     }
 
     /**
-     * Searches for members in a sorted set representing geospatial data using a
-     * {@code AbstractGeoSearchParam<?>} and stores the result with distances in a destination key.
+     * Searches for members in a sorted set representing geospatial data using a {@code
+     * AbstractGeoSearchParam<?>} and stores the result with distances in a destination key.
      *
      * @param dest the destination key to store the result
      * @param src the source key of the sorted set
@@ -14818,9 +14816,9 @@ public abstract class AbstractGlideJedis extends JedisCommon {
     }
 
     /**
-     * Searches for members in a sorted set representing geospatial data using a
-     * {@code AbstractGeoSearchParam<?>} and stores the result with distances in a destination key
-     * (binary version).
+     * Searches for members in a sorted set representing geospatial data using a {@code
+     * AbstractGeoSearchParam<?>} and stores the result with distances in a destination key (binary
+     * version).
      *
      * @param dest the destination key to store the result
      * @param src the source key of the sorted set

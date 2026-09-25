@@ -27,8 +27,8 @@ public class JedisClusterHashTag {
      * Extract hash tag from a key. Stub implementation for compilation compatibility.
      *
      * @param key the key to inspect
-     * @return the text between the first opening brace and the following closing brace, or the
-     *     whole key when no such pair exists
+     * @return the text between the first opening brace and the following closing brace, or the whole
+     *     key when no such pair exists
      */
     public static String getHashTag(String key) {
         if (key == null) {

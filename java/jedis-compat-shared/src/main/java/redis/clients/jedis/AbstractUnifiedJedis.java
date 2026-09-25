@@ -4480,8 +4480,8 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
 
     /**
      * <b><a href="https://valkey.io/commands/substr">SUBSTR Command</a></b> Returns a substring of
-     * the string value stored at key. This method is deprecated in favor of {@link
-     * #getrange(byte[], long, long)} which provides the same functionality.
+     * the string value stored at key. This method is deprecated in favor of {@link #getrange(byte[],
+     * long, long)} which provides the same functionality.
      *
      * @param key the key containing the string
      * @param start the start offset
