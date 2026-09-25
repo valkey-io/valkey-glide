@@ -12,24 +12,28 @@ on:
         paths:
             - rust/**
             - glide-core/**
-            - logger_core/**
+            - glide-logger/**
+            - glide-telemetry/**
             - deny.toml
             - utils/cluster_manager.py
-            - .github/workflows/rust-client.yml
-            - .github/actions/install-shared-dependencies/action.yml
             - .github/actions/install-engine/action.yml
+            - .github/actions/install-rust/action.yml
+            - .github/actions/install-shared-dependencies/action.yml
             - .github/workflows/lint-rust/action.yml
+            - .github/workflows/rust-client.yml
     pull_request:
         paths:
             - rust/**
             - glide-core/**
-            - logger_core/**
+            - glide-logger/**
+            - glide-telemetry/**
             - deny.toml
             - utils/cluster_manager.py
-            - .github/workflows/rust-client.yml
-            - .github/actions/install-shared-dependencies/action.yml
             - .github/actions/install-engine/action.yml
+            - .github/actions/install-rust/action.yml
+            - .github/actions/install-shared-dependencies/action.yml
             - .github/workflows/lint-rust/action.yml
+            - .github/workflows/rust-client.yml
     workflow_dispatch:
 
 concurrency:
@@ -81,14 +85,28 @@ jobs:
               with:
                   persist-credentials: false
 
+            - name: Determine minimum supported Rust version (MSRV)
+              id: msrv
+              working-directory: ./rust
+              shell: bash
+              run: |
+                  # Fetch from Cargo.toml (rust-version = "X.Y.Z").
+                  msrv=$(awk -F'"' '/^rust-version/ { print $2; exit }' Cargo.toml)
+                  if [ -z "$msrv" ]; then
+                      echo "::error::rust-version not found in rust/Cargo.toml"
+                      exit 1
+                  fi
+                  echo "toolchain=$msrv" >> "$GITHUB_OUTPUT"
+
             - name: Install shared software dependencies
               uses: ./.github/actions/install-shared-dependencies
               with:
                   os: ubuntu
+                  rust-toolchain: ${{ steps.msrv.outputs.toolchain }}
                   target: ${{ matrix.host.target }}
                   engine-version: ${{ matrix.engine.version }}
                   github-token: ${{ secrets.GITHUB_TOKEN }}
 
             - name: Run rust client tests
               working-directory: ./rust
-              run: cargo test -- --show-output
+              run: cargo test --locked -- --show-output

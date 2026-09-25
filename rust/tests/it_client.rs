@@ -5,10 +5,12 @@
 
 mod common;
 
+use glide::Cmd;
 use glide::client::{ClusterScanCursor, PubSubMessageKind};
 use glide::config::{PubSubChannelMode, PubSubSubscriptions};
-use glide::{AsyncCommands, CustomCommand, GlideClient, GlideClientConfiguration, Route};
-use redis::Cmd;
+use glide::{
+    AsyncCommands, CustomCommand, FromValkeyValue, GlideClient, GlideClientConfiguration, Route,
+};
 use std::collections::HashSet;
 use std::time::Duration;
 
@@ -112,7 +114,7 @@ timed_tokio_test!(
         skip_if_version_below!(client, 7, 2, 0);
 
         let reply = client.custom_command(&["CLIENT", "INFO"]).await.unwrap();
-        let info = glide::value::to_string(reply).unwrap();
+        let info = String::from_owned_valkey_value(reply).unwrap();
 
         let expected_lib_name = format!("lib-name={}", "GlideRust");
         assert!(info.contains(&expected_lib_name));
@@ -124,7 +126,7 @@ timed_tokio_test!(
 
 timed_tokio_test!(
     async fn cluster_client_info_reports_lib_name_and_ver() {
-        let cluster = common::ClusterHarness::start();
+        let cluster = common::ClusterHarness::start().await;
         let client = cluster.client().await;
 
         skip_if_version_below!(client, 7, 2, 0);
@@ -133,7 +135,7 @@ timed_tokio_test!(
             .custom_command_with_route(&["CLIENT", "INFO"], Route::RandomNode)
             .await
             .unwrap();
-        let info = glide::value::to_string(reply).unwrap();
+        let info = String::from_owned_valkey_value(reply).unwrap();
 
         let expected_lib_name = format!("lib-name={}", "GlideRust");
         assert!(info.contains(&expected_lib_name));
@@ -149,7 +151,7 @@ timed_tokio_test!(
 
 timed_tokio_test!(
     async fn cluster_scan_iterates_all_keys() {
-        let cluster = common::ClusterHarness::start();
+        let cluster = common::ClusterHarness::start().await;
         let client = cluster.client().await;
 
         // Insert a known set of keys (routed automatically across shards).
@@ -199,7 +201,7 @@ timed_tokio_test!(
 
 timed_tokio_test!(
     async fn cluster_scan_with_match_pattern() {
-        let cluster = common::ClusterHarness::start();
+        let cluster = common::ClusterHarness::start().await;
         let client = cluster.client().await;
 
         let uniq = common::key("m");
@@ -233,7 +235,7 @@ timed_tokio_test!(
 
 timed_tokio_test!(
     async fn route_command_ping_variants() {
-        let cluster = common::ClusterHarness::start();
+        let cluster = common::ClusterHarness::start().await;
         let client = cluster.client().await;
 
         // ECHO to all primaries returns reply per primary node.
@@ -246,9 +248,9 @@ timed_tokio_test!(
             .unwrap();
 
         let echoed = match &r {
-            redis::Value::Map(pairs) => pairs
+            glide::ValkeyValue::Map(pairs) => pairs
                 .iter()
-                .filter(|(_, v)| glide::value::to_string(v.clone()).ok().as_deref() == Some(msg))
+                .filter(|(_, v)| String::from_valkey_value(v).ok().as_deref() == Some(msg))
                 .count(),
             _ => 0,
         };
@@ -262,7 +264,7 @@ timed_tokio_test!(
         let mut ping = Cmd::new();
         ping.arg("PING");
         let r2 = client.route_command(ping, Route::RandomNode).await.unwrap();
-        assert_eq!(glide::value::to_string(r2).unwrap(), "PONG");
+        assert_eq!(String::from_owned_valkey_value(r2).unwrap(), "PONG");
 
         // A key-routed SET then GET through the slot-key route.
         let k = common::key("route:k");

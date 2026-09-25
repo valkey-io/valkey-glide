@@ -51,27 +51,27 @@ fn parse_version(s: &str) -> Option<(u32, u32, u32)> {
 /// `out`. Handles the flat bulk string a standalone `INFO` returns AND the
 /// multi-node Map/Array a cluster client returns (so the version can be found in
 /// either shape).
-fn collect_value_text(v: &glide::Value, out: &mut String) {
-    use glide::Value;
+fn collect_value_text(v: &glide::ValkeyValue, out: &mut String) {
+    use glide::ValkeyValue;
     match v {
-        Value::BulkString(b) => {
+        ValkeyValue::BulkString(b) => {
             out.push_str(&String::from_utf8_lossy(b));
             out.push('\n');
         }
-        Value::SimpleString(s) => {
+        ValkeyValue::SimpleString(s) => {
             out.push_str(s);
             out.push('\n');
         }
-        Value::VerbatimString { text, .. } => {
+        ValkeyValue::VerbatimString { text, .. } => {
             out.push_str(text);
             out.push('\n');
         }
-        Value::Array(items) | Value::Set(items) => {
+        ValkeyValue::Array(items) | ValkeyValue::Set(items) => {
             for it in items {
                 collect_value_text(it, out);
             }
         }
-        Value::Map(pairs) => {
+        ValkeyValue::Map(pairs) => {
             for (k, val) in pairs {
                 collect_value_text(k, out);
                 collect_value_text(val, out);
@@ -103,6 +103,35 @@ where
         }
     }
     None
+}
+
+/// Whether the server recognises `name` (via `COMMAND INFO`). This is a
+/// version- and product-agnostic capability check — more robust than version
+/// math for commands whose availability differs between Redis and Valkey
+/// releases (e.g. hash-field TTL). Fails **closed** (returns `false`) if the
+/// capability cannot be determined, so gated tests SKIP rather than error.
+pub async fn command_exists<C>(c: &C, name: &str) -> bool
+where
+    C: glide::CustomCommand + Sync,
+{
+    match c.custom_command(&["COMMAND", "INFO", name]).await {
+        Ok(v) => command_info_present(&v),
+        Err(_) => false,
+    }
+}
+
+/// `COMMAND INFO <name>` returns `[[ <details> ]]` when known and `[nil]` when
+/// unknown. On cluster it may be a per-node Map. Present ⇔ a non-empty details
+/// array exists somewhere in the reply.
+fn command_info_present(v: &glide::ValkeyValue) -> bool {
+    use glide::ValkeyValue;
+    match v {
+        ValkeyValue::Array(items) => items
+            .iter()
+            .any(|it| matches!(it, ValkeyValue::Array(inner) if !inner.is_empty())),
+        ValkeyValue::Map(pairs) => pairs.iter().any(|(_, val)| command_info_present(val)),
+        _ => false,
+    }
 }
 
 /// True when the server version is strictly below `min`. Returns `false` if the

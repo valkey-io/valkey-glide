@@ -294,7 +294,7 @@ mod standalone_client_tests {
                 StandaloneClient::create_client(connection_request.into(), None, None, None)
                     .await
                     .unwrap();
-            logger_core::log_info(
+            glide_logger::log_info(
                 "Test",
                 format!(
                     "Closing {} servers after connection established",
@@ -304,7 +304,7 @@ mod standalone_client_tests {
             for server in servers.drain(1..config.number_of_replicas_dropped_after_connection + 1) {
                 server.close().await;
             }
-            logger_core::log_info(
+            glide_logger::log_info(
                 "Test",
                 format!("sending {} messages", config.number_of_requests_sent),
             );
@@ -854,7 +854,7 @@ mod standalone_client_tests {
 
             // 3. Get initial client count on the DEDICATED server.
             let clients_before_lazy_init = get_connected_clients(monitoring_client).await;
-            logger_core::log_info(
+            glide_logger::log_info(
                 "TestStandaloneLazy",
                 format!(
                     "Clients before lazy client init (protocol={protocol:?} on dedicated server): {clients_before_lazy_init}"
@@ -885,7 +885,7 @@ mod standalone_client_tests {
             // 6. Assert that no new connection was made yet by the lazy client
             tokio::time::sleep(std::time::Duration::from_millis(100)).await;
             let clients_after_lazy_init = get_connected_clients(monitoring_client).await; // Pass &mut StandaloneClient
-            logger_core::log_info(
+            glide_logger::log_info(
                 "TestStandaloneLazy",
                 format!(
                     "Clients after lazy client init (protocol={protocol:?} on dedicated server): {clients_after_lazy_init}"
@@ -897,7 +897,7 @@ mod standalone_client_tests {
             );
 
             // 7. Send the first command using the lazy client (which is a GlideClient)
-            logger_core::log_info(
+            glide_logger::log_info(
                 "TestStandaloneLazy",
                 format!(
                     "Sending first command to lazy client (PING) (protocol={protocol:?} on dedicated server)"
@@ -907,7 +907,7 @@ mod standalone_client_tests {
 
             // 8. Assert that a new connection was made by the lazy client on the dedicated server
             let clients_after_first_command = get_connected_clients(monitoring_client).await; // Pass &mut StandaloneClient
-            logger_core::log_info(
+            glide_logger::log_info(
                 "TestStandaloneLazy",
                 format!(
                     "Clients after first command (protocol={protocol:?} on dedicated server): {clients_after_first_command}"

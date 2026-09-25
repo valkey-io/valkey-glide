@@ -989,7 +989,7 @@ pub(crate) async fn setup_test_basics(
 #[cfg(test)]
 #[ctor::ctor]
 fn init() {
-    logger_core::init(Some(logger_core::Level::Debug), None);
+    glide_logger::init(Some(glide_logger::Level::Debug), None);
 
     // This needs to be done before any TLS connections are made
     let _ = rustls::crypto::CryptoProvider::install_default(

@@ -12,7 +12,7 @@ use std::{borrow::Borrow, fmt, io};
 use crate::pipeline::Pipeline;
 use crate::types::{from_owned_redis_value, FromRedisValue, RedisResult, RedisWrite, ToRedisArgs};
 use crate::{cache::glide_cache::CachedKeyType, connection::ConnectionLike};
-use telemetrylib::GlideSpan;
+use glide_telemetry::GlideSpan;
 
 /// An argument to a redis command
 #[derive(Clone)]

@@ -430,7 +430,7 @@ fn process_callback_job_with_env(
     binary_mode: bool,
 ) {
     if take_timed_out_callback(callback_id) {
-        logger_core::log_debug_rate_limited!(
+        glide_logger::log_debug_rate_limited!(
             "jni_callback",
             5,
             format!(

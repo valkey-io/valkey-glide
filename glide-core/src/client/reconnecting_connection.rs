@@ -3,7 +3,8 @@
 use super::{NodeAddress, TlsMode};
 use async_trait::async_trait;
 use futures_intrusive::sync::ManualResetEvent;
-use logger_core::{log_debug, log_error, log_trace, log_warn};
+use glide_logger::{log_debug, log_error, log_trace, log_warn};
+use glide_telemetry::Telemetry;
 use redis::aio::{DisconnectNotifier, MultiplexedConnection};
 use redis::{
     AddressResolver, GlideConnectionOptions, PushInfo, RedisConnectionInfo, RedisError,
@@ -15,7 +16,6 @@ use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{RwLock, RwLockReadGuard};
 use std::time::Duration;
-use telemetrylib::Telemetry;
 use tokio::sync::{Notify, mpsc};
 use tokio::task;
 use tokio::time::timeout;
@@ -69,7 +69,7 @@ impl IAMTokenHandle {
         };
 
         if is_expired {
-            logger_core::log_info(
+            glide_logger::log_info(
                 "IAM reconnect",
                 "Token expired, generating a fresh token before reconnection",
             );
@@ -90,7 +90,7 @@ impl IAMTokenHandle {
                 Err(_err) => {
                     // Do not include err in the log message — it may contain credential
                     // material from the user's GlideCredentialProvider implementation.
-                    logger_core::log_error(
+                    glide_logger::log_error(
                         "IAM reconnect",
                         "Failed to generate fresh IAM token. \
                          Using cached token. Check your GlideCredentialProvider implementation.",

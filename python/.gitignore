@@ -161,7 +161,8 @@ protoc-*.zip
 # python build artifact folders
 glide-sync/ffi
 glide-sync/glide-core
-glide-sync/logger_core
+glide-sync/glide-logger
+glide-sync/glide-telemetry
 glide-sync/glide_shared
 glide-async/python/glide_shared
 

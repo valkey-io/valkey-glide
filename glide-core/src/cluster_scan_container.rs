@@ -1,6 +1,6 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-use logger_core::log_debug;
+use glide_logger::log_debug;
 use nanoid::nanoid;
 use once_cell::sync::Lazy;
 use redis::{RedisResult, ScanStateRC};

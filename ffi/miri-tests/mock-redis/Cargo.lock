@@ -466,6 +466,35 @@ dependencies = [
 ]
 
 [[package]]
+name = "glide-logger"
+version = "0.1.0"
+dependencies = [
+ "file-rotate",
+ "once_cell",
+ "tracing",
+ "tracing-appender",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "glide-telemetry"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "glide-logger",
+ "lazy_static",
+ "once_cell",
+ "opentelemetry",
+ "opentelemetry-otlp",
+ "opentelemetry_sdk",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tokio",
+ "url",
+]
+
+[[package]]
 name = "h2"
 version = "0.4.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -876,17 +905,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5e5032e24019045c762d3c0f28f5b6b8bbf38563a65908389bf7978758920897"
 
 [[package]]
-name = "logger_core"
-version = "0.1.0"
-dependencies = [
- "file-rotate",
- "once_cell",
- "tracing",
- "tracing-appender",
- "tracing-subscriber",
-]
-
-[[package]]
 name = "lru"
 version = "0.18.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -923,18 +941,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "mock-glide-telemetry"
+version = "0.1.0"
+
+[[package]]
 name = "mock-redis"
 version = "0.1.0"
 dependencies = [
  "bytes",
- "mock-telemetry",
+ "mock-glide-telemetry",
  "redis",
  "url",
 ]
-
-[[package]]
-name = "mock-telemetry"
-version = "0.1.0"
 
 [[package]]
 name = "nu-ansi-term"
@@ -1285,9 +1303,10 @@ dependencies = [
  "dispose",
  "futures",
  "futures-util",
+ "glide-logger",
+ "glide-telemetry",
  "itoa",
  "lazy_static",
- "logger_core",
  "lru",
  "num-bigint",
  "parking_lot",
@@ -1301,7 +1320,6 @@ dependencies = [
  "socket2",
  "strum",
  "strum_macros",
- "telemetrylib",
  "tokio",
  "tokio-retry2",
  "tokio-rustls",
@@ -1686,24 +1704,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
-]
-
-[[package]]
-name = "telemetrylib"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "lazy_static",
- "logger_core",
- "once_cell",
- "opentelemetry",
- "opentelemetry-otlp",
- "opentelemetry_sdk",
- "serde",
- "serde_json",
- "thiserror",
- "tokio",
- "url",
 ]
 
 [[package]]

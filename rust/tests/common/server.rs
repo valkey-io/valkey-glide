@@ -116,7 +116,7 @@ impl TestServer {
     pub async fn try_connect(
         &self,
         config: GlideClientConfiguration,
-    ) -> glide::Result<GlideClient> {
+    ) -> glide::ValkeyResult<GlideClient> {
         GlideClient::connect(config).await
     }
 }

@@ -10,24 +10,29 @@ authors = ["Valkey GLIDE Maintainers"]
 crate-type = ["cdylib"]
 
 [dependencies]
+
+# GLIDE dependencies
+glide-logger = { path = "../glide-logger" }
+glide-telemetry = { path = "../glide-telemetry" }
+
+# TODO #6905: Update once renamed.
 redis = { path = "../glide-core/redis-rs/redis", features = ["aio", "tokio-comp", "connection-manager", "tokio-rustls-comp"] }
 glide-core = { path = "../glide-core", features = [ "proto"] }
-protobuf = "3.7"
-tokio = { version = "^1", features = ["rt", "macros", "rt-multi-thread", "time"] }
-logger_core = { path = "../logger_core" }
-tracing = "0.1"
-tracing-subscriber = "0.3.16"
+
+# External dependencies
+anyhow = "1.0"
+bytes = { version = "1.6.0" }
+dashmap = "~6.2.1"
 jni = "0.21.1"
 log = "0.4.30"
-bytes = { version = "1.6.0" }
+parking_lot = "0.12"
+protobuf = "3.7"
+scopeguard = "1.2"
 serde = "1.0.225"
 serde_json = "1.0.149"
-# Additional dependencies for JNI implementation
-anyhow = "1.0"
-dashmap = "~6.2.1"
-parking_lot = "0.12"
-scopeguard = "1.2"
-telemetrylib = { path = "../glide-core/telemetry"}
+tokio = { version = "^1", features = ["rt", "macros", "rt-multi-thread", "time"] }
+tracing = "0.1"
+tracing-subscriber = "0.3.16"
 
 [profile.release]
 opt-level = 3

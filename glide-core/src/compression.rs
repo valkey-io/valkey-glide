@@ -7,7 +7,7 @@ use std::borrow::Cow;
 use std::fmt;
 
 use crate::request_type::RequestType;
-use telemetrylib::Telemetry;
+use glide_telemetry::Telemetry;
 
 /// Detailed compression error with context for debugging
 #[derive(Debug, Clone, PartialEq)]

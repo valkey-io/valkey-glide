@@ -2,7 +2,8 @@
 
 use crate::client::ClientWrapper;
 use async_trait::async_trait;
-use logger_core::{log_debug, log_warn};
+use glide_logger::{log_debug, log_warn};
+use glide_telemetry::GlideOpenTelemetry;
 use once_cell::sync::Lazy;
 use once_cell::sync::OnceCell;
 use redis::cluster_routing::Routable;
@@ -15,7 +16,6 @@ use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, RwLock, Weak};
 use std::time::Duration;
-use telemetrylib::GlideOpenTelemetry;
 use tokio::sync::{Notify, RwLock as TokioRwLock, mpsc};
 use tokio::time::sleep;
 

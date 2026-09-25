@@ -619,9 +619,9 @@ checksum = "a6ef517f0926dd24a1582492c791b6a4818a4d94e789a334894aa15b0d12f55c"
 
 [[package]]
 name = "convert_case"
-version = "0.11.0"
+version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "affbf0190ed2caf063e3def54ff444b449371d55c58e513a95ab98eca50adb49"
+checksum = "1af709f1f33454bf52eadfc8c78b3b9ef9cb26fb54d16dc9cd9a7299f899fd1b"
 dependencies = [
  "unicode-segmentation",
 ]
@@ -1022,9 +1022,10 @@ dependencies = [
  "dashmap",
  "futures",
  "futures-intrusive",
+ "glide-logger",
+ "glide-telemetry",
  "http 1.4.0",
  "libc",
- "logger_core",
  "lz4",
  "nanoid",
  "once_cell",
@@ -1041,7 +1042,6 @@ dependencies = [
  "sha2",
  "strum",
  "strum_macros",
- "telemetrylib",
  "thiserror 2.0.18",
  "tokio",
  "tokio-retry2 0.6.2",
@@ -1049,6 +1049,35 @@ dependencies = [
  "uuid",
  "versions",
  "zstd",
+]
+
+[[package]]
+name = "glide-logger"
+version = "0.1.0"
+dependencies = [
+ "file-rotate",
+ "once_cell",
+ "tracing",
+ "tracing-appender",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "glide-telemetry"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "glide-logger",
+ "lazy_static",
+ "once_cell",
+ "opentelemetry",
+ "opentelemetry-otlp",
+ "opentelemetry_sdk",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
+ "url",
 ]
 
 [[package]]
@@ -1584,17 +1613,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5e5032e24019045c762d3c0f28f5b6b8bbf38563a65908389bf7978758920897"
 
 [[package]]
-name = "logger_core"
-version = "0.1.0"
-dependencies = [
- "file-rotate",
- "once_cell",
- "tracing",
- "tracing-appender",
- "tracing-subscriber",
-]
-
-[[package]]
 name = "lru"
 version = "0.18.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1660,9 +1678,9 @@ dependencies = [
 
 [[package]]
 name = "napi"
-version = "3.12.2"
+version = "3.12.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "58c5f4d5375213fdb7be2655e152386e82f026f9a5ba36a75556e11359aafe09"
+checksum = "3d2c1d080c842ec1347ebf3cfb9347c15f8c2262f143cc30eea41ddf1c7da720"
 dependencies = [
  "bitflags",
  "ctor",
@@ -1676,15 +1694,15 @@ dependencies = [
 
 [[package]]
 name = "napi-build"
-version = "2.4.1"
+version = "2.4.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "60fdf9b392c50e7c4170fa633bd909490ed7835cea4c046776d1a4dd8d2ae0ab"
+checksum = "9befcb51d87271051c0c11aaf625d09340266b7f1ac3fef5975e62274dc2813f"
 
 [[package]]
 name = "napi-derive"
-version = "3.6.3"
+version = "3.6.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0fa55ea69990c90b888e9e77044410e304ce7f35de599dc6d0b5c1923d2e59af"
+checksum = "350057056a30368aa76c11a0d406b0aa61321710be2c36656ab4f6efe0b785a2"
 dependencies = [
  "convert_case",
  "ctor",
@@ -1696,9 +1714,9 @@ dependencies = [
 
 [[package]]
 name = "napi-derive-backend"
-version = "6.1.2"
+version = "6.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "df4056ac7c18e4438ccf0edaed4340ca0d269278c8ec19284f7b23cb039fd0ae"
+checksum = "fd6856fe1686867da90ed0dc292d7c0c87a695eb7c578b913360f33619ee01e3"
 dependencies = [
  "convert_case",
  "proc-macro2",
@@ -1709,9 +1727,9 @@ dependencies = [
 
 [[package]]
 name = "napi-sys"
-version = "3.3.0"
+version = "3.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "85fbf1fa9f1babfe396d74bbbf52b3643770243e8f5b0b46715d4caf7f0dfc9a"
+checksum = "6801fc65ba4d7035636e93635e281113f00410401a237dcd4f55b1565ead2115"
 dependencies = [
  "libloading",
 ]
@@ -2217,9 +2235,10 @@ dependencies = [
  "dispose",
  "futures",
  "futures-util",
+ "glide-logger",
+ "glide-telemetry",
  "itoa",
  "lazy_static",
- "logger_core",
  "lru",
  "num-bigint",
  "parking_lot",
@@ -2233,7 +2252,6 @@ dependencies = [
  "socket2",
  "strum",
  "strum_macros",
- "telemetrylib",
  "tokio",
  "tokio-retry2 0.5.8",
  "tokio-rustls",
@@ -2709,24 +2727,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "telemetrylib"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "lazy_static",
- "logger_core",
- "once_cell",
- "opentelemetry",
- "opentelemetry-otlp",
- "opentelemetry_sdk",
- "serde",
- "serde_json",
- "thiserror 2.0.18",
- "tokio",
- "url",
-]
-
-[[package]]
 name = "tempfile"
 version = "3.27.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3169,9 +3169,9 @@ checksum = "b6c140620e7ffbb22c2dee59cafe6084a59b5ffc27a8859a5f0d494b5d52b6be"
 
 [[package]]
 name = "uuid"
-version = "1.26.0"
+version = "1.26.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b5772d71c9be8a8a6ac2117d949c5b224c1b72241bb611d9a3012edcf8af7812"
+checksum = "2ef6dac1e96601b4fb3acccccff2139741fcb757cb9a36089bf5be91cfb285ce"
 dependencies = [
  "getrandom 0.4.2",
  "js-sys",
@@ -3187,7 +3187,8 @@ dependencies = [
  "bytes",
  "dashmap",
  "glide-core",
- "logger_core",
+ "glide-logger",
+ "glide-telemetry",
  "napi",
  "napi-build",
  "napi-derive",
@@ -3197,7 +3198,6 @@ dependencies = [
  "parking_lot",
  "protobuf",
  "redis",
- "telemetrylib",
  "tikv-jemallocator",
  "tokio",
  "tokio-util",
@@ -3766,27 +3766,27 @@ checksum = "b8848ee67ecc8aedbaf3e4122217aff892639231befc6a1b58d29fff4c2cabaa"
 
 [[package]]
 name = "zstd"
-version = "0.13.3"
+version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e91ee311a569c327171651566e07972200e76fcfe2242a4fa446149a3881c08a"
+checksum = "bf06bd8162af0734b344780deb55b42a2429ae430870d13fcc12f238e880fe6e"
 dependencies = [
  "zstd-safe",
 ]
 
 [[package]]
 name = "zstd-safe"
-version = "7.2.4"
+version = "8.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8f49c4d5f0abb602a93fb8736af2a4f4dd9512e36f7f570d66e65ff867ed3b9d"
+checksum = "ae42c0555055784c70058d19ba8e275528e8a99a706684868ace5da4e716a4ab"
 dependencies = [
  "zstd-sys",
 ]
 
 [[package]]
 name = "zstd-sys"
-version = "2.0.16+zstd.1.5.7"
+version = "2.1.0+zstd.1.5.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "91e19ebc2adc8f83e43039e79776e3fda8ca919132d68a1fed6a5faca2683748"
+checksum = "0ef0a8027ec3ee71300ab3bcbcd0393f434aa72b91ca6d635a39941deae8eea0"
 dependencies = [
  "cc",
  "pkg-config",
