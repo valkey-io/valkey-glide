@@ -8,6 +8,8 @@
 //! the RDMA transfer should be performed.
 
 use crate::error::RdmaError;
+#[cfg(any(feature = "libfabric", test))]
+use crate::region_ref::RegionRef;
 
 /// What a `LO.GET` yielded.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -36,8 +38,25 @@ impl ReadReceipt {
     }
 }
 
+/// The server's reply to a `LO.GET` or `LO.SET`.
+///
+/// The server finishes moving bytes to or from the client's memory before it
+/// replies, so any reply means it is done with that memory. Passing a reply
+/// to `LentBuffer::reclaim` is how a caller gets its buffer back.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TransferReply {
+    /// `LO.GET` wrote the stored object into the window.
+    Read(ReadReceipt),
+    /// `LO.GET` found no such key and wrote nothing.
+    Missing,
+    /// `LO.SET` read the window and stored it.
+    Stored,
+    /// The server replied with an error.
+    Failed,
+}
+
 /// A `LO.*` command: its name, and its arguments in wire order.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct RdmaCommand {
     name: &'static str,
     arguments: Vec<Vec<u8>>,
@@ -87,7 +106,8 @@ pub fn hello(client_address: &[u8]) -> RdmaCommand {
 /// `LO.SET <key> <length> <rkey> <remote-address>`
 ///
 /// The server reads `length` bytes out of the named window and stores them.
-pub fn set(key: &[u8], length: usize, region_ref: &crate::RegionRef) -> RdmaCommand {
+#[cfg(any(feature = "libfabric", test))]
+pub(crate) fn set(key: &[u8], length: usize, region_ref: &RegionRef) -> RdmaCommand {
     let mut arguments = vec![key.to_vec(), number(length as u64)];
     arguments.extend(region_ref.to_args().into_iter().map(String::into_bytes));
     RdmaCommand {
@@ -99,7 +119,8 @@ pub fn set(key: &[u8], length: usize, region_ref: &crate::RegionRef) -> RdmaComm
 /// `LO.GET <key> <rkey> <remote-address>`
 ///
 // TODO(lo-get-length): send the length as an argument once module accepts it.
-pub fn get(key: &[u8], region_ref: &crate::RegionRef) -> RdmaCommand {
+#[cfg(any(feature = "libfabric", test))]
+pub(crate) fn get(key: &[u8], region_ref: &RegionRef) -> RdmaCommand {
     let mut arguments = vec![key.to_vec()];
     arguments.extend(region_ref.to_args().into_iter().map(String::into_bytes));
     RdmaCommand {
@@ -109,6 +130,7 @@ pub fn get(key: &[u8], region_ref: &crate::RegionRef) -> RdmaCommand {
 }
 
 /// Decimal ASCII, matching how a RESP client renders an integer argument.
+#[cfg(any(feature = "libfabric", test))]
 fn number(value: u64) -> Vec<u8> {
     value.to_string().into_bytes()
 }
@@ -116,11 +138,10 @@ fn number(value: u64) -> Vec<u8> {
 #[cfg(test)]
 mod tests {
     use super::{RdmaCommand, ReadReceipt, get, hello, needs_session, set};
-    use crate::RegionRef;
+    use crate::region_ref::RegionRef;
 
     fn region_ref() -> RegionRef {
         RegionRef {
-            address: vec![0xde, 0xad],
             remote_key: 7,
             remote_address: 0x1000,
         }

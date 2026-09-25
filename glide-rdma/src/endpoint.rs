@@ -315,11 +315,6 @@ fn remote_access() -> u64 {
     u64::from(FI_REMOTE_READ | FI_REMOTE_WRITE | FI_READ | FI_WRITE)
 }
 
-/// A source pool is read by the server and never written.
-fn source_access() -> u64 {
-    u64::from(FI_REMOTE_READ | FI_READ)
-}
-
 /// A registered memory region, deregistered on drop or when revoked.
 ///
 /// Holds a [`RdmaFabric`] so the domain cannot close while a registration against it is
@@ -650,17 +645,6 @@ impl LibfabricEndpoint {
         buffer: &[u8],
     ) -> Result<*mut fid_mr, RdmaError> {
         unsafe { self.register(buffer, remote_access()) }
-    }
-
-    /// Register host memory the server may only *read* for the `LO.SET` direction.
-    ///
-    /// # Safety
-    /// `buffer` must stay allocated and unmoved until the region is closed.
-    pub(crate) unsafe fn register_source(
-        &mut self,
-        buffer: &[u8],
-    ) -> Result<*mut fid_mr, RdmaError> {
-        unsafe { self.register(buffer, source_access()) }
     }
 
     /// # Safety

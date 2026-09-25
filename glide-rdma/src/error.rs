@@ -29,6 +29,11 @@ pub enum RdmaError {
         capacity: usize,
     },
 
+    /// The buffer was revoked, so the server can no longer reach it and it cannot be
+    /// lent to another transfer. Register the memory again to keep using it.
+    #[error("the buffer was revoked, so nothing can transfer through it")]
+    Revoked,
+
     /// A libfabric call failed.
     #[error("fabric error in {operation}: {message}{}", errno.map(|e| format!(" (errno {e})")).unwrap_or_default())]
     Fabric {

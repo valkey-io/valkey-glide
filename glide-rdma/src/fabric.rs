@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
-use crate::buffer::RdmaBuffer;
+use crate::buffer::{HostMemory, RdmaBuffer};
 use crate::config::FabricConfig;
 use crate::endpoint::{LibfabricEndpoint, Registration};
 use crate::error::RdmaError;
@@ -80,54 +80,25 @@ impl RdmaFabric {
     /// Register host memory for the server to RMA against.
     ///
     /// Registration is expensive and pins pages against `RLIMIT_MEMLOCK`, so reuse a
-    /// region and advertise windows of it with [`RdmaBuffer::slice`] rather than
+    /// buffer, lending a different window of it to each transfer, rather than
     /// registering per transfer.
     pub fn register(
         &self,
         memory: impl AsMut<[u8]> + Send + 'static,
     ) -> Result<RdmaBuffer, RdmaError> {
-        let mut memory: Box<dyn AsMut<[u8]> + Send> = Box::new(memory);
-        let buffer = (*memory).as_mut();
-        let (pointer, length) = (buffer.as_ptr() as u64, buffer.len());
-        if length == 0 {
+        let host = HostMemory::new(memory);
+        if host.len() == 0 {
             return Err(RdmaError::Configuration("cannot register 0 bytes".into()));
         }
-        // SAFETY: `memory` is boxed and moved into the returned RdmaBuffer, which
-        // frees it only after the region is closed.
-        let memory_region = unsafe { self.endpoint().register_remote(buffer)? };
+        // SAFETY: `host` keeps the bytes at one address until it is dropped, and the
+        // returned RdmaBuffer drops it only after the region is closed.
+        let memory_region = unsafe { self.endpoint().register_remote(host.bytes())? };
         let registration = Registration::new(memory_region, self.clone());
-        let region_ref = self.region_ref(pointer, &registration);
-        Ok(RdmaBuffer::host(
+        let region_ref = self.region_ref(host.address(), &registration);
+        Ok(RdmaBuffer::new(
             registration,
             region_ref,
-            length,
-            memory,
-            self.clone(),
-        ))
-    }
-
-    /// Register shared, read-only memory as a source for the `LO.SET` direction.
-    ///
-    /// Registered `FI_REMOTE_READ` only, so a server can read any window advertised
-    /// from it but never write. Each registration counts separately against
-    /// `RLIMIT_MEMLOCK` even though the physical pages are the same.
-    pub fn register_shared<S>(&self, memory: Arc<S>) -> Result<RdmaBuffer, RdmaError>
-    where
-        S: AsRef<[u8]> + Send + Sync + 'static,
-    {
-        let bytes: &[u8] = (*memory).as_ref();
-        let (pointer, length) = (bytes.as_ptr() as u64, bytes.len());
-        if length == 0 {
-            return Err(RdmaError::Configuration("cannot register 0 bytes".into()));
-        }
-        let memory_region = unsafe { self.endpoint().register_source(bytes)? };
-        let registration = Registration::new(memory_region, self.clone());
-        let region_ref = self.region_ref(pointer, &registration);
-        Ok(RdmaBuffer::shared(
-            registration,
-            region_ref,
-            length,
-            memory,
+            host,
             self.clone(),
         ))
     }
@@ -148,12 +119,6 @@ impl RdmaFabric {
             fabric: self.clone(),
             addresses: held,
         })
-    }
-
-    /// How many distinct peer addresses the address vector currently holds.
-    #[cfg(test)]
-    fn peer_count(&self) -> usize {
-        self.peers().len()
     }
 
     /// Take a reference to `address`, inserting it if this is the first.
@@ -204,6 +169,12 @@ impl RdmaFabric {
         self.inner.progress.as_ref().map(ProgressDriver::drive)
     }
 
+    /// Whether `self` and `other` are the same open fabric, rather than two opened
+    /// separately.
+    pub(crate) fn is(&self, other: &RdmaFabric) -> bool {
+        Arc::ptr_eq(&self.inner, &other.inner)
+    }
+
     /// This endpoint's local fabric address.
     pub fn local_address(&self) -> &[u8] {
         &self.inner.address
@@ -231,7 +202,6 @@ impl RdmaFabric {
 
     fn region_ref(&self, remote_address: u64, registration: &Registration) -> RegionRef {
         RegionRef {
-            address: self.inner.address.clone(),
             remote_key: registration.remote_key(),
             remote_address: if self.inner.uses_virtual_addressing {
                 remote_address
@@ -247,8 +217,23 @@ impl RdmaFabric {
 pub(crate) mod tests {
     use super::RdmaFabric;
     use crate::config::{FabricConfig, Provider};
+    use crate::progress::ProgressDriver;
     use std::cell::Cell;
-    use std::sync::Arc;
+
+    impl RdmaFabric {
+        /// How many distinct peer addresses the address vector currently holds.
+        fn peer_count(&self) -> usize {
+            self.peers().len()
+        }
+
+        /// How many transfers are keeping the progress thread polling.
+        pub(crate) fn transfers_in_flight(&self) -> usize {
+            self.inner
+                .progress
+                .as_ref()
+                .map_or(0, ProgressDriver::active)
+        }
+    }
 
     thread_local! {
         /// How many of this thread's next `fi_close` calls fail without closing.
@@ -352,16 +337,20 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn registers_a_buffer_and_advertises_it() {
+    fn a_buffer_belongs_to_the_fabric_that_registered_it() {
         let fabric = fabric();
         let buffer = fabric
             .register(vec![0u8; 4096])
             .expect("registration failed");
         assert_eq!(buffer.capacity(), 4096);
-        assert_eq!(buffer.region_ref().address, fabric.local_address());
+        assert!(buffer.is_registered_on(&fabric));
         assert!(
-            !buffer.region_ref().address.is_empty(),
-            "an enabled endpoint has an address to advertise"
+            buffer.is_registered_on(&fabric.clone()),
+            "a clone is the same fabric"
+        );
+        assert!(
+            !buffer.is_registered_on(&self::fabric()),
+            "a fabric opened separately is a different one"
         );
     }
 
@@ -376,24 +365,6 @@ pub(crate) mod tests {
         } else {
             assert_eq!(buffer.region_ref().remote_address, 0);
         }
-    }
-
-    #[test]
-    fn registering_nothing_is_a_configuration_error() {
-        assert!(fabric().register(Vec::new()).is_err());
-        assert!(fabric().register_shared(Arc::new(Vec::new())).is_err());
-    }
-
-    /// A shared source can be registered on several fabrics at once.
-    #[test]
-    fn one_allocation_registers_on_several_fabrics() {
-        let shared: Arc<Vec<u8>> = Arc::new(vec![7u8; 2048]);
-        let first = fabric().register_shared(shared.clone()).unwrap();
-        let second = fabric().register_shared(shared.clone()).unwrap();
-        assert_eq!(first.capacity(), 2048);
-        assert_eq!(second.capacity(), 2048);
-        // Distinct endpoints, so distinct advertised addresses.
-        assert_ne!(first.region_ref().address, second.region_ref().address);
     }
 
     /// tcp emulates RMA in software, so a transfer only progresses while the target

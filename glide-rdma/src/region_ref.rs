@@ -1,23 +1,26 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 /// Where in a client's registered memory a transfer should land or read from.
+///
+/// Private to this crate so that code outside it cannot build a transfer command
+/// for memory it has not lent.
+#[cfg(any(feature = "libfabric", test))]
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RegionRef {
-    /// The client endpoint's fabric address. Sent at handshake, not per transfer.
-    pub address: Vec<u8>,
+pub(crate) struct RegionRef {
     /// The key a peer presents to access the registered region.
-    pub remote_key: u64,
+    pub(crate) remote_key: u64,
     /// The buffer's virtual address on `FI_MR_VIRT_ADDR` providers like efa, and 0
     /// where addressing is by offset into the region, like tcp.
-    pub remote_address: u64,
+    pub(crate) remote_address: u64,
 }
 
+#[cfg(any(feature = "libfabric", test))]
 impl RegionRef {
     /// Command arguments a region reference occupies.
-    pub const ARG_COUNT: usize = 2;
+    pub(crate) const ARG_COUNT: usize = 2;
 
     /// The arguments a transfer carries: `<rkey> <remote-address>`.
-    pub fn to_args(&self) -> [String; Self::ARG_COUNT] {
+    pub(crate) fn to_args(&self) -> [String; Self::ARG_COUNT] {
         [self.remote_key.to_string(), self.remote_address.to_string()]
     }
 }

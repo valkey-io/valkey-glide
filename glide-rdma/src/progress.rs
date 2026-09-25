@@ -192,6 +192,13 @@ mod tests {
     use std::sync::atomic::Ordering;
     use std::time::{Duration, Instant};
 
+    impl ProgressDriver {
+        /// How many guards are outstanding.
+        pub(crate) fn active(&self) -> usize {
+            self.shared.active.load(Ordering::Acquire)
+        }
+    }
+
     fn driver() -> (LibfabricEndpoint, ProgressDriver) {
         let endpoint = LibfabricEndpoint::open(&FabricConfig::new(Provider::Tcp))
             .expect("the tcp provider should open");
@@ -239,7 +246,7 @@ mod tests {
     #[test]
     fn starts_parked_and_joins_on_drop() {
         let (endpoint, driver) = driver();
-        assert_eq!(driver.shared.active.load(Ordering::Relaxed), 0);
+        assert_eq!(driver.active(), 0);
         drop(driver);
         drop(endpoint);
     }
@@ -250,13 +257,13 @@ mod tests {
     fn guards_nest() {
         let (endpoint, driver) = driver();
         let first = driver.drive();
-        assert_eq!(driver.shared.active.load(Ordering::Relaxed), 1);
+        assert_eq!(driver.active(), 1);
         let second = driver.drive();
-        assert_eq!(driver.shared.active.load(Ordering::Relaxed), 2);
+        assert_eq!(driver.active(), 2);
         drop(second);
-        assert_eq!(driver.shared.active.load(Ordering::Relaxed), 1);
+        assert_eq!(driver.active(), 1);
         drop(first);
-        assert_eq!(driver.shared.active.load(Ordering::Relaxed), 0);
+        assert_eq!(driver.active(), 0);
         drop(driver);
         drop(endpoint);
     }
