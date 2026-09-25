@@ -172,6 +172,7 @@ updates:
     # --- Rust crates --------------------------------------------------------------------------- #
 
     # Label node 'cargo-rust' so that it can be re-used to avoid duplication.
+    # Entries should override 'directories' and 'labels' nodes.
     - &cargo-rust
       package-ecosystem: "cargo"
       directories:
