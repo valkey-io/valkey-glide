@@ -1607,7 +1607,7 @@ dependencies = [
 
 [[package]]
 name = "mock-glide-core"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "glide-core",
  "mock-glide-core-engine",
@@ -1618,7 +1618,7 @@ dependencies = [
 
 [[package]]
 name = "mock-glide-core-engine"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "bytes",
  "glide-core-engine",
@@ -1628,7 +1628,7 @@ dependencies = [
 
 [[package]]
 name = "mock-glide-telemetry"
-version = "0.1.0"
+version = "0.0.0"
 
 [[package]]
 name = "nanoid"

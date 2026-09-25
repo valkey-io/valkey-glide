@@ -978,7 +978,7 @@ dependencies = [
 
 [[package]]
 name = "mock-glide-core-engine"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "bytes",
  "glide-core-engine",
@@ -988,7 +988,7 @@ dependencies = [
 
 [[package]]
 name = "mock-glide-telemetry"
-version = "0.1.0"
+version = "0.0.0"
 
 [[package]]
 name = "nu-ansi-term"
