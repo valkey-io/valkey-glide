@@ -1,5 +1,5 @@
 {
-  "source": "redis-rs fork v0.25.2 (glide-core/redis-rs/redis/src/commands)",
+  "version": "0.25.2",
   "methods": [
     {
       "name": "append",
