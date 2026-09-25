@@ -398,10 +398,12 @@ pub struct ClientShared {
     // Serializes the borrow-time IAM reconcile so concurrent commands on the same
     // client don't each re-AUTH; see `prepare_for_borrow` for the full protocol.
     iam_reconcile_lock: Arc<tokio::sync::Mutex<()>>,
-    // Set while `prepare_for_borrow` dispatches its own re-AUTH so that one nested
-    // `send_command` skips the borrow gate instead of recursing; see
-    // `ReconcileReentryGuard`.
-    reconciling_borrow: Arc<AtomicBool>,
+    // Whether a raw MULTI is open on the live connection (set by MULTI, cleared by
+    // EXEC/DISCARD in the dispatch path). `prepare_for_borrow` defers the re-AUTH
+    // while it's set. Mirrors the open-transaction half of the scope path's
+    // `defer_reauth`; the scope path also defers RESP2 subscribed mode, which is out
+    // of contract for a pooled client (see `reset_connection_state`).
+    multi_active: Arc<AtomicBool>,
     // Whether this client is in cluster mode (immutable).
     is_cluster: bool,
 }
@@ -1184,6 +1186,8 @@ impl Client {
         Ok(value)
     }
 
+    /// Gated dispatch entry: reconcile pool-borrowed IAM auth and track open-MULTI
+    /// state, then dispatch through `send_command_ungated`.
     pub fn send_command<'a>(
         &'a mut self,
         cmd: &'a mut Cmd,
@@ -1192,278 +1196,290 @@ impl Client {
         Box::pin(async move {
             // Refresh IAM auth before the command (see `reconcile_iam_before_dispatch`).
             self.reconcile_iam_before_dispatch().await?;
+            // Track MULTI/EXEC/DISCARD for the borrow-time re-AUTH defer.
+            self.track_transaction_state(cmd);
+            self.send_command_ungated(cmd, routing).await
+        })
+    }
 
-            let client = self.get_or_initialize_client().await?;
+    /// Ungated dispatch: everything `send_command` does after the borrow gate. The
+    /// pool-borrow reconcile AUTH targets this directly, so it bypasses the gate
+    /// structurally rather than via a re-entrancy flag. Kept private and off
+    /// `RedisFuture`/`Box::pin` so it neither exports a gate-skipping entry point nor
+    /// adds a second heap allocation on the hot path.
+    async fn send_command_ungated<'a>(
+        &'a mut self,
+        cmd: &'a mut Cmd,
+        routing: Option<RoutingInfo>,
+    ) -> RedisResult<Value> {
+        let client = self.get_or_initialize_client().await?;
 
-            // Reject immediately if circuit breaker is open.
-            if !self.is_circuit_breaker_healthy() {
+        // Reject immediately if circuit breaker is open.
+        if !self.is_circuit_breaker_healthy() {
+            return Err(RedisError::from((
+                ErrorKind::CircuitBreakerOpen,
+                "Client circuit breaker is open - core unhealthy",
+            )));
+        }
+
+        if let Some(result) = self.pubsub_synchronizer.intercept_pubsub_command(cmd).await {
+            return result;
+        }
+
+        let request_timeout = get_request_timeout(cmd, self.request_timeout)?;
+
+        // Reserve an inflight slot. The tracker holds the slot until the
+        // last clone of the Cmd is dropped (i.e. all sub-commands in the
+        // cluster event loop finish). This decouples user-facing timeout
+        // from internal pipeline cleanup.
+        let tracker = match self.reserve_inflight_request() {
+            Some(t) => t,
+            None => {
+                let available = self.inflight_requests_allowed.load(Ordering::Relaxed);
+                log_warn_rate_limited!(
+                    "inflight",
+                    10,
+                    format!(
+                        "Inflight request limit exhausted. limit={}, available={}",
+                        self.inflight_requests_limit, available
+                    )
+                );
                 return Err(RedisError::from((
-                    ErrorKind::CircuitBreakerOpen,
-                    "Client circuit breaker is open - core unhealthy",
+                    ErrorKind::ClientError,
+                    "Reached maximum inflight requests",
                 )));
             }
+        };
 
-            if let Some(result) = self.pubsub_synchronizer.intercept_pubsub_command(cmd).await {
-                return result;
+        // Log at debug level when inflight usage crosses a 10% threshold.
+        // Only one log per threshold crossing — zero noise when stable.
+        {
+            static LAST_BUCKET: AtomicIsize = AtomicIsize::new(0);
+            let remaining = self.inflight_requests_allowed.load(Ordering::Relaxed);
+            let used = self.inflight_requests_limit - remaining;
+            let bucket = used / self.inflight_log_interval;
+            let prev = LAST_BUCKET.load(Ordering::Relaxed);
+            if bucket != prev {
+                LAST_BUCKET.store(bucket, Ordering::Relaxed);
+                log_debug(
+                    "inflight",
+                    format!(
+                        "Inflight: {used}/{} slots used",
+                        self.inflight_requests_limit
+                    ),
+                );
             }
+        }
 
-            let request_timeout = get_request_timeout(cmd, self.request_timeout)?;
+        cmd.set_inflight_tracker(tracker);
+        cmd.set_response_timeout(request_timeout);
 
-            // Reserve an inflight slot. The tracker holds the slot until the
-            // last clone of the Cmd is dropped (i.e. all sub-commands in the
-            // cluster event loop finish). This decouples user-facing timeout
-            // from internal pipeline cleanup.
-            let tracker = match self.reserve_inflight_request() {
-                Some(t) => t,
-                None => {
-                    let available = self.inflight_requests_allowed.load(Ordering::Relaxed);
-                    log_warn_rate_limited!(
-                        "inflight",
-                        10,
-                        format!(
-                            "Inflight request limit exhausted. limit={}, available={}",
-                            self.inflight_requests_limit, available
-                        )
-                    );
-                    return Err(RedisError::from((
-                        ErrorKind::ClientError,
-                        "Reached maximum inflight requests",
-                    )));
-                }
-            };
+        // Clone compression_manager reference only if compression is enabled
+        let compression_manager = if self.is_compression_enabled() {
+            self.compression_manager.clone()
+        } else {
+            None
+        };
+        let self_clone = self.clone();
 
-            // Log at debug level when inflight usage crosses a 10% threshold.
-            // Only one log per threshold crossing — zero noise when stable.
-            {
-                static LAST_BUCKET: AtomicIsize = AtomicIsize::new(0);
-                let remaining = self.inflight_requests_allowed.load(Ordering::Relaxed);
-                let used = self.inflight_requests_limit - remaining;
-                let bucket = used / self.inflight_log_interval;
-                let prev = LAST_BUCKET.load(Ordering::Relaxed);
-                if bucket != prev {
-                    LAST_BUCKET.store(bucket, Ordering::Relaxed);
-                    log_debug(
-                        "inflight",
-                        format!(
-                            "Inflight: {used}/{} slots used",
-                            self.inflight_requests_limit
-                        ),
-                    );
-                }
-            }
+        // Blocking commands have artificially long latencies; exclude from tracker.
+        let is_blocking_cmd = is_blocking_command(cmd);
+        // Propagate the blocking flag into the Cmd BEFORE cloning owned_cmd so
+        // the copy that actually travels to the multiplexed connection carries
+        // it, letting that connection suppress false-positive response-wait
+        // warnings (#6283).
+        cmd.set_is_blocking(is_blocking_cmd);
+        let owned_cmd = cmd.clone();
 
-            cmd.set_inflight_tracker(tracker);
-            cmd.set_response_timeout(request_timeout);
+        // Captured by the timeout path for watchdog-informed CB decisions.
+        let mut timeout_cause: Option<crate::timeout_watchdog::TimeoutCause> = None;
 
-            // Clone compression_manager reference only if compression is enabled
-            let compression_manager = if self.is_compression_enabled() {
-                self.compression_manager.clone()
-            } else {
-                None
-            };
-            let self_clone = self.clone();
+        let result = match request_timeout {
+            Some(duration) => {
+                // Compute inflight count (cheap atomic load)
+                let inflight = Some(
+                    (self.inflight_requests_limit
+                        - self.inflight_requests_allowed.load(Ordering::Relaxed))
+                        as usize,
+                );
 
-            // Blocking commands have artificially long latencies; exclude from tracker.
-            let is_blocking_cmd = is_blocking_command(cmd);
-            // Propagate the blocking flag into the Cmd BEFORE cloning owned_cmd so
-            // the copy that actually travels to the multiplexed connection carries
-            // it, letting that connection suppress false-positive response-wait
-            // warnings (#6283).
-            cmd.set_is_blocking(is_blocking_cmd);
-            let owned_cmd = cmd.clone();
+                // Wrap Cmd in Arc so the timeout arm can still read watchdog fields after execute takes ownership
+                let owned_cmd = Arc::new(owned_cmd);
 
-            // Captured by the timeout path for watchdog-informed CB decisions.
-            let mut timeout_cause: Option<crate::timeout_watchdog::TimeoutCause> = None;
+                // Single Instant::now() shared between watchdog and latency tracking
+                let cmd_start = Instant::now();
 
-            let result = match request_timeout {
-                Some(duration) => {
-                    // Compute inflight count (cheap atomic load)
-                    let inflight = Some(
-                        (self.inflight_requests_limit
-                            - self.inflight_requests_allowed.load(Ordering::Relaxed))
-                            as usize,
-                    );
+                let timeout_rx = crate::timeout_watchdog::TimeoutWatchdog::global()
+                    .register(duration, cmd_start);
+                // Defer the expensive Debug-format of the route to the (rare)
+                // timeout path. Cloning the routing is cheap for the common
+                // single-node case (no heap allocation); previously a String was
+                // allocated and Debug-formatted on EVERY command just for a
+                // diagnostic field that is only read when a timeout fires.
+                let routing_for_diag = routing.clone();
+                let execute = Self::execute_command_owned(
+                    self_clone,
+                    owned_cmd.clone(),
+                    routing,
+                    client,
+                    compression_manager,
+                );
 
-                    // Wrap Cmd in Arc so the timeout arm can still read watchdog fields after execute takes ownership
-                    let owned_cmd = Arc::new(owned_cmd);
-
-                    // Single Instant::now() shared between watchdog and latency tracking
-                    let cmd_start = Instant::now();
-
-                    let timeout_rx = crate::timeout_watchdog::TimeoutWatchdog::global()
-                        .register(duration, cmd_start);
-                    // Defer the expensive Debug-format of the route to the (rare)
-                    // timeout path. Cloning the routing is cheap for the common
-                    // single-node case (no heap allocation); previously a String was
-                    // allocated and Debug-formatted on EVERY command just for a
-                    // diagnostic field that is only read when a timeout fires.
-                    let routing_for_diag = routing.clone();
-                    let execute = Self::execute_command_owned(
-                        self_clone,
-                        owned_cmd.clone(),
-                        routing,
-                        client,
-                        compression_manager,
-                    );
-
-                    tokio::pin!(execute);
-                    tokio::select! {
-                        result = &mut execute => {
-                            // Record latency into per-client tracker
-                            if !is_blocking_cmd {
-                                let elapsed = cmd_start.elapsed();
-                                self.latency_tracker.record(elapsed);
-                            }
-                            result
+                tokio::pin!(execute);
+                tokio::select! {
+                    result = &mut execute => {
+                        // Record latency into per-client tracker
+                        if !is_blocking_cmd {
+                            let elapsed = cmd_start.elapsed();
+                            self.latency_tracker.record(elapsed);
                         }
-                        recv_result = timeout_rx => {
-                            match recv_result {
-                                Err(_) => {
-                                    // Watchdog thread died — fall through to let the
-                                    // command complete via Tokio's timer as fallback.
-                                    execute.await
-                                }
-                                Ok(()) => {
-                                    // Build diagnostic event on the consumer side (rare timeout path)
-                                    let actual_elapsed = cmd_start.elapsed();
-                                    let (phase, node, retry_count, command) = {
-                                        let p = owned_cmd.watchdog_phase.load(Ordering::Acquire);
-                                        let n: String = routing_for_diag
-                                            .as_ref()
-                                            .map(|r| format!("{:?}", r))
-                                            .unwrap_or_else(|| "unknown".to_owned());
-                                        let r = owned_cmd.watchdog_retry_count.load(Ordering::Relaxed);
-                                        let c = owned_cmd.arg_idx(0)
-                                            .map(crate::timeout_watchdog::cmd_name_from_bytes)
-                                            .unwrap_or("UNKNOWN");
-                                        (
-                                            if p == redis::PHASE_SENT {
-                                                crate::timeout_watchdog::CommandPhase::Sent
-                                            } else {
-                                                crate::timeout_watchdog::CommandPhase::Queued
-                                            },
-                                            n,
-                                            r,
-                                            c,
-                                        )
-                                    };
-                                    let pending = crate::timeout_watchdog::pending_count();
-                                    let inflight_now = (self.inflight_requests_limit
-                                        - self.inflight_requests_allowed.load(Ordering::Relaxed))
-                                        as usize;
-                                    let p99 = self.latency_tracker.p99();
-                                    let cause = if phase == crate::timeout_watchdog::CommandPhase::Queued {
-                                        crate::timeout_watchdog::TimeoutCause::ClientBackpressure {
-                                            queue_depth: pending,
-                                            scheduling_delay: actual_elapsed,
-                                        }
-                                    } else if pending > 100 {
-                                        crate::timeout_watchdog::TimeoutCause::SystemOverload {
-                                            pending_total: pending,
-                                        }
-                                    } else {
-                                        crate::timeout_watchdog::TimeoutCause::ServerUnresponsive {
-                                            node: node.clone(),
-                                        }
-                                    };
-                                    timeout_cause = Some(cause.clone());
-                                    let event = crate::timeout_watchdog::TimeoutEvent {
-                                        cause,
-                                        command,
-                                        node,
-                                        phase,
-                                        configured_timeout: duration,
-                                        actual_elapsed,
-                                        pending_commands: pending,
-                                        recent_p99_latency: p99,
-                                        rss_bytes: crate::timeout_watchdog::get_rss(),
-                                        suggested_timeout: p99.map(|p| (p * 3).max(duration)),
-                                        inflight_at_register: inflight,
-                                        inflight_at_timeout: Some(inflight_now),
-                                        retry_count,
-                                    };
-
-                                    log_warn_rate_limited!(
-                                        "timeout_watchdog",
-                                        2,
-                                        event.to_string()
-                                    );
-                                    if let Err(e) = GlideOpenTelemetry::record_timeout_error() {
-                                        log_error(
-                                            "OpenTelemetry:timeout_error",
-                                            format!("Failed to record timeout error: {e}"),
-                                        );
+                        result
+                    }
+                    recv_result = timeout_rx => {
+                        match recv_result {
+                            Err(_) => {
+                                // Watchdog thread died — fall through to let the
+                                // command complete via Tokio's timer as fallback.
+                                execute.await
+                            }
+                            Ok(()) => {
+                                // Build diagnostic event on the consumer side (rare timeout path)
+                                let actual_elapsed = cmd_start.elapsed();
+                                let (phase, node, retry_count, command) = {
+                                    let p = owned_cmd.watchdog_phase.load(Ordering::Acquire);
+                                    let n: String = routing_for_diag
+                                        .as_ref()
+                                        .map(|r| format!("{:?}", r))
+                                        .unwrap_or_else(|| "unknown".to_owned());
+                                    let r = owned_cmd.watchdog_retry_count.load(Ordering::Relaxed);
+                                    let c = owned_cmd.arg_idx(0)
+                                        .map(crate::timeout_watchdog::cmd_name_from_bytes)
+                                        .unwrap_or("UNKNOWN");
+                                    (
+                                        if p == redis::PHASE_SENT {
+                                            crate::timeout_watchdog::CommandPhase::Sent
+                                        } else {
+                                            crate::timeout_watchdog::CommandPhase::Queued
+                                        },
+                                        n,
+                                        r,
+                                        c,
+                                    )
+                                };
+                                let pending = crate::timeout_watchdog::pending_count();
+                                let inflight_now = (self.inflight_requests_limit
+                                    - self.inflight_requests_allowed.load(Ordering::Relaxed))
+                                    as usize;
+                                let p99 = self.latency_tracker.p99();
+                                let cause = if phase == crate::timeout_watchdog::CommandPhase::Queued {
+                                    crate::timeout_watchdog::TimeoutCause::ClientBackpressure {
+                                        queue_depth: pending,
+                                        scheduling_delay: actual_elapsed,
                                     }
-                                    Err(io::Error::from(io::ErrorKind::TimedOut).into())
+                                } else if pending > 100 {
+                                    crate::timeout_watchdog::TimeoutCause::SystemOverload {
+                                        pending_total: pending,
+                                    }
+                                } else {
+                                    crate::timeout_watchdog::TimeoutCause::ServerUnresponsive {
+                                        node: node.clone(),
+                                    }
+                                };
+                                timeout_cause = Some(cause.clone());
+                                let event = crate::timeout_watchdog::TimeoutEvent {
+                                    cause,
+                                    command,
+                                    node,
+                                    phase,
+                                    configured_timeout: duration,
+                                    actual_elapsed,
+                                    pending_commands: pending,
+                                    recent_p99_latency: p99,
+                                    rss_bytes: crate::timeout_watchdog::get_rss(),
+                                    suggested_timeout: p99.map(|p| (p * 3).max(duration)),
+                                    inflight_at_register: inflight,
+                                    inflight_at_timeout: Some(inflight_now),
+                                    retry_count,
+                                };
+
+                                log_warn_rate_limited!(
+                                    "timeout_watchdog",
+                                    2,
+                                    event.to_string()
+                                );
+                                if let Err(e) = GlideOpenTelemetry::record_timeout_error() {
+                                    log_error(
+                                        "OpenTelemetry:timeout_error",
+                                        format!("Failed to record timeout error: {e}"),
+                                    );
                                 }
+                                Err(io::Error::from(io::ErrorKind::TimedOut).into())
                             }
                         }
                     }
                 }
-                None => {
-                    let owned_cmd = Arc::new(owned_cmd);
-                    let execute = Self::execute_command_owned(
-                        self_clone,
-                        owned_cmd,
-                        routing,
-                        client,
-                        compression_manager,
-                    );
-                    execute.await
+            }
+            None => {
+                let owned_cmd = Arc::new(owned_cmd);
+                let execute = Self::execute_command_owned(
+                    self_clone,
+                    owned_cmd,
+                    routing,
+                    client,
+                    compression_manager,
+                );
+                execute.await
+            }
+        };
+
+        // Report result to client-wide circuit breaker
+        if let Some(cb) = &self.circuit_breaker {
+            let (is_error, error_kind) = match result.as_ref() {
+                Ok(_) => (false, None),
+                Err(e) => {
+                    let counts = if e.is_timeout() {
+                        cb.counts_timeouts()
+                    } else {
+                        matches!(
+                            e.kind(),
+                            ErrorKind::IoError
+                                | ErrorKind::FatalSendError
+                                | ErrorKind::FatalReceiveError
+                        ) || e.is_connection_dropped()
+                    };
+                    if counts {
+                        let kind_str = if e.is_timeout() {
+                            match &timeout_cause {
+                                Some(crate::timeout_watchdog::TimeoutCause::SystemOverload {
+                                    ..
+                                }) => "TimeoutSystemOverload",
+                                Some(
+                                    crate::timeout_watchdog::TimeoutCause::ClientBackpressure {
+                                        ..
+                                    },
+                                ) => "TimeoutClientBackpressure",
+                                _ => "TimeoutServerUnresponsive",
+                            }
+                        } else {
+                            match e.kind() {
+                                ErrorKind::FatalSendError => "FatalSendError",
+                                ErrorKind::FatalReceiveError => "FatalReceiveError",
+                                _ => "IoError",
+                            }
+                        };
+                        (true, Some(kind_str))
+                    } else {
+                        (false, None)
+                    }
                 }
             };
+            let current_inflight = (self.inflight_requests_limit
+                - self.inflight_requests_allowed.load(Ordering::Relaxed))
+                as u32;
+            cb.on_result(is_error, error_kind, current_inflight);
+        }
 
-            // Report result to client-wide circuit breaker
-            if let Some(cb) = &self.circuit_breaker {
-                let (is_error, error_kind) = match result.as_ref() {
-                    Ok(_) => (false, None),
-                    Err(e) => {
-                        let counts = if e.is_timeout() {
-                            cb.counts_timeouts()
-                        } else {
-                            matches!(
-                                e.kind(),
-                                ErrorKind::IoError
-                                    | ErrorKind::FatalSendError
-                                    | ErrorKind::FatalReceiveError
-                            ) || e.is_connection_dropped()
-                        };
-                        if counts {
-                            let kind_str = if e.is_timeout() {
-                                match &timeout_cause {
-                                    Some(
-                                        crate::timeout_watchdog::TimeoutCause::SystemOverload {
-                                            ..
-                                        },
-                                    ) => "TimeoutSystemOverload",
-                                    Some(
-                                        crate::timeout_watchdog::TimeoutCause::ClientBackpressure {
-                                            ..
-                                        },
-                                    ) => "TimeoutClientBackpressure",
-                                    _ => "TimeoutServerUnresponsive",
-                                }
-                            } else {
-                                match e.kind() {
-                                    ErrorKind::FatalSendError => "FatalSendError",
-                                    ErrorKind::FatalReceiveError => "FatalReceiveError",
-                                    _ => "IoError",
-                                }
-                            };
-                            (true, Some(kind_str))
-                        } else {
-                            (false, None)
-                        }
-                    }
-                };
-                let current_inflight = (self.inflight_requests_limit
-                    - self.inflight_requests_allowed.load(Ordering::Relaxed))
-                    as u32;
-                cb.on_result(is_error, error_kind, current_inflight);
-            }
-
-            result
-        })
+        result
     }
 
     /// Execute a command on a provided dedicated connection (for isolated execution).
@@ -2134,7 +2150,9 @@ impl Client {
             cmd.arg(&username);
         }
         cmd.arg(pass);
-        self.send_command(&mut cmd, Some(routing)).await
+        // Ungated: this AUTH is itself the pool-borrow reconcile's dispatch, so it
+        // must not re-enter the borrow gate.
+        self.send_command_ungated(&mut cmd, Some(routing)).await
     }
 
     /// Returns the username if one was configured during client creation. Otherwise, returns None.
@@ -2834,28 +2852,6 @@ fn create_compression_manager(
     Ok(Some(Arc::new(manager)))
 }
 
-/// RAII guard that marks a borrow-reconcile AUTH in progress and clears the mark
-/// on drop. The reconcile's own AUTH re-enters `send_command`; while this guard is
-/// alive that one nested command skips the borrow gate instead of recursing.
-/// Clearing on drop (rather than a manual store on the success/error paths) means a
-/// dropped AUTH future cannot leave the gate wedged open for the client's lifetime.
-struct ReconcileReentryGuard {
-    flag: Arc<AtomicBool>,
-}
-
-impl ReconcileReentryGuard {
-    fn new(flag: Arc<AtomicBool>) -> Self {
-        flag.store(true, Ordering::Release);
-        Self { flag }
-    }
-}
-
-impl Drop for ReconcileReentryGuard {
-    fn drop(&mut self) {
-        self.flag.store(false, Ordering::Release);
-    }
-}
-
 impl Client {
     pub async fn new(
         request: ConnectionRequest,
@@ -2993,7 +2989,7 @@ impl Client {
                     last_iam_generation: Arc::new(AtomicU64::new(0)),
                     is_pool_managed: Arc::new(AtomicBool::new(false)),
                     iam_reconcile_lock: Arc::new(tokio::sync::Mutex::new(())),
-                    reconciling_borrow: Arc::new(AtomicBool::new(false)),
+                    multi_active: Arc::new(AtomicBool::new(false)),
                     is_cluster: request.cluster_mode_enabled,
                 }),
                 iam_token_manager: None,
@@ -3147,13 +3143,7 @@ impl Client {
     /// the first command runs, so the borrower never runs on a stale-auth connection.
     /// A direct client stays hot and keeps the reconnect-deferred pull model: refresh
     /// the stored password on `token_changed` without an immediate AUTH.
-    ///
-    /// `reconciling_borrow` suppresses both paths: the AUTH `prepare_for_borrow`
-    /// dispatches comes back through `send_command`, and must not re-enter the gate.
     async fn reconcile_iam_before_dispatch(&mut self) -> RedisResult<()> {
-        if self.reconciling_borrow.load(Ordering::Acquire) {
-            return Ok(());
-        }
         if self.is_pool_managed.load(Ordering::Acquire) {
             return self.prepare_for_borrow().await;
         }
@@ -3178,11 +3168,30 @@ impl Client {
         Ok(())
     }
 
-    /// Mark this client as pool-managed. Called by the pool FFI right after a
-    /// pooled client is created. Enables the borrow-time IAM reconcile in
+    /// Mark this client as pool-managed. Called at the pool ownership boundary
+    /// (`ClientPool::add_client`/`add_client_reserved`, and the FFI
+    /// `create_pool_client`). Enables the borrow-time IAM reconcile in
     /// `send_command`; direct clients leave it unset.
     pub fn mark_pool_managed(&self) {
         self.is_pool_managed.store(true, Ordering::Release);
+    }
+
+    /// Whether this client has been marked pool-managed (test/introspection helper).
+    #[cfg(test)]
+    pub(crate) fn is_pool_managed(&self) -> bool {
+        self.is_pool_managed.load(Ordering::Acquire)
+    }
+
+    /// Track whether a raw MULTI is open on the live connection, so
+    /// [`prepare_for_borrow`](Self::prepare_for_borrow) can defer the re-AUTH while a
+    /// transaction is in flight. Only raw MULTI/EXEC/DISCARD custom commands move it —
+    /// the batch APIs build and close their own MULTI/EXEC in one pipeline.
+    fn track_transaction_state(&self, cmd: &Cmd) {
+        match cmd.command().as_deref() {
+            Some(b"MULTI") => self.multi_active.store(true, Ordering::Release),
+            Some(b"EXEC") | Some(b"DISCARD") => self.multi_active.store(false, Ordering::Release),
+            _ => {}
+        }
     }
 
     /// Reconcile per-borrow IAM authentication on the first command after a borrow.
@@ -3218,6 +3227,22 @@ impl Client {
             return Ok(());
         }
 
+        // Defer while a raw MULTI is open: an AUTH sent mid-transaction is queued
+        // into the MULTI (read back as +QUEUED, corrupting EXEC) or dropped by
+        // DISCARD, and advancing the bookmark then would mark a connection re-authed
+        // that never was. Retry on the next command after EXEC/DISCARD clears it.
+        //
+        // `multi_active` is tracked pre-dispatch (like the scope path's
+        // `update_state_for_command`), so it assumes sequential use within a borrow:
+        // it reflects intended transaction state, not the wire outcome. A borrower
+        // that fires commands concurrently on one borrowed client, or one whose EXEC
+        // is rejected pre-wire (circuit breaker / inflight limit), can momentarily
+        // desync the flag — both are already out-of-contract usage for a borrowed
+        // client and self-heal on release.
+        if self.multi_active.load(Ordering::Acquire) {
+            return Ok(());
+        }
+
         // Serialize the AUTH (see the Concurrency note above): hold the lock across
         // the re-check and the round-trip.
         let lock = self.iam_reconcile_lock.clone();
@@ -3238,13 +3263,10 @@ impl Client {
         }
 
         // immediate_auth=true sends a real AUTH on the live connection, unlike the
-        // reconnect-only password update the `token_changed` pull-model performs. The
-        // guard keeps that AUTH's nested `send_command` from re-entering the gate.
-        {
-            let _reentry = ReconcileReentryGuard::new(self.reconciling_borrow.clone());
-            self.update_connection_password(Some(current_token), true)
-                .await?;
-        }
+        // reconnect-only password update the `token_changed` pull-model performs.
+        // The AUTH routes through `send_command_ungated`, bypassing this gate.
+        self.update_connection_password(Some(current_token), true)
+            .await?;
 
         if let Some(iam_manager) = &self.iam_token_manager {
             iam_manager.clear_token_changed();
@@ -3350,7 +3372,7 @@ impl Client {
                 last_iam_generation: Arc::new(AtomicU64::new(0)),
                 is_pool_managed: Arc::new(AtomicBool::new(false)),
                 iam_reconcile_lock: Arc::new(tokio::sync::Mutex::new(())),
-                reconciling_borrow: Arc::new(AtomicBool::new(false)),
+                multi_active: Arc::new(AtomicBool::new(false)),
                 is_cluster: false,
             }),
             iam_token_manager: None,
@@ -3418,6 +3440,10 @@ pub fn create_test_glide_client() -> Client {
             latency_tracker: Arc::new(crate::timeout_watchdog::LatencyTracker::new(64)),
             circuit_breaker: None,
             current_database: Arc::new(AtomicU32::new(0)),
+            last_iam_generation: Arc::new(std::sync::atomic::AtomicU64::new(0)),
+            is_pool_managed: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            iam_reconcile_lock: Arc::new(tokio::sync::Mutex::new(())),
+            multi_active: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             is_cluster: false,
         }),
         iam_token_manager: None,
@@ -3839,7 +3865,7 @@ mod tests {
                 last_iam_generation: Arc::new(AtomicU64::new(0)),
                 is_pool_managed: Arc::new(AtomicBool::new(false)),
                 iam_reconcile_lock: Arc::new(tokio::sync::Mutex::new(())),
-                reconciling_borrow: Arc::new(AtomicBool::new(false)),
+                multi_active: Arc::new(AtomicBool::new(false)),
                 is_cluster: false,
             }),
             iam_token_manager: None,
@@ -4013,31 +4039,12 @@ mod tests {
         );
     }
 
-    /// The re-entrancy guard must set `reconciling_borrow` while alive and clear it on
-    /// drop — including when dropped by an early return / dropped future — so the
-    /// nested reconcile AUTH skips the gate but a dropped AUTH can't wedge it open.
+    /// While a raw MULTI is open, `prepare_for_borrow` must defer: skip the AUTH and
+    /// leave the bookmark unadvanced, so a re-AUTH is not queued into the transaction
+    /// (which would corrupt EXEC / be dropped by DISCARD while the bookmark falsely
+    /// moved). It retries once EXEC/DISCARD clears `multi_active`.
     #[test]
-    fn reconcile_reentry_guard_sets_and_clears_on_drop() {
-        use std::sync::atomic::{AtomicBool, Ordering};
-        let flag = std::sync::Arc::new(AtomicBool::new(false));
-        {
-            let _guard = super::ReconcileReentryGuard::new(flag.clone());
-            assert!(
-                flag.load(Ordering::Acquire),
-                "guard must mark reconcile-in-progress while alive"
-            );
-        }
-        assert!(
-            !flag.load(Ordering::Acquire),
-            "guard must clear the flag on drop so a dropped AUTH future can't wedge the gate"
-        );
-    }
-
-    /// With `reconciling_borrow` set, the dispatch gate must short-circuit to Ok even
-    /// for a pool-managed IAM client with a stale bookmark — this is what stops the
-    /// nested reconcile AUTH from recursing back through the gate.
-    #[test]
-    fn reconciling_borrow_suppresses_the_dispatch_gate() {
+    fn prepare_for_borrow_defers_while_multi_open() {
         use std::sync::atomic::Ordering;
         let client = create_test_client(); // built outside any runtime
         let rt = borrow_test_runtime();
@@ -4049,13 +4056,61 @@ mod tests {
             client
         });
         client.mark_pool_managed();
-        client
-            .shared
-            .reconciling_borrow
-            .store(true, Ordering::Release);
+        let stale = client.shared.last_iam_generation.load(Ordering::Acquire);
+
+        // Open a MULTI, then reconcile: it must defer without touching the bookmark.
+        client.shared.multi_active.store(true, Ordering::Release);
         assert!(
-            rt.block_on(client.reconcile_iam_before_dispatch()).is_ok(),
-            "a set reconciling_borrow flag must make the gate skip reconcile (no recursion)"
+            rt.block_on(client.prepare_for_borrow()).is_ok(),
+            "reconcile must defer to Ok while a MULTI is open"
+        );
+        assert_eq!(
+            client.shared.last_iam_generation.load(Ordering::Acquire),
+            stale,
+            "bookmark must not advance while the reconcile is deferred (no AUTH ran)"
+        );
+    }
+
+    /// `track_transaction_state` must set `multi_active` on MULTI and clear it on
+    /// EXEC/DISCARD — the state `prepare_for_borrow`'s defer keys on.
+    #[test]
+    fn track_transaction_state_tracks_multi_open_and_close() {
+        use std::sync::atomic::Ordering;
+        let client = create_test_client();
+
+        client.track_transaction_state(&redis::cmd("MULTI"));
+        assert!(
+            client.shared.multi_active.load(Ordering::Acquire),
+            "MULTI must mark a transaction open"
+        );
+        client.track_transaction_state(&redis::cmd("EXEC"));
+        assert!(
+            !client.shared.multi_active.load(Ordering::Acquire),
+            "EXEC must clear the open-transaction flag"
+        );
+
+        client.track_transaction_state(&redis::cmd("MULTI"));
+        client.track_transaction_state(&redis::cmd("DISCARD"));
+        assert!(
+            !client.shared.multi_active.load(Ordering::Acquire),
+            "DISCARD must clear the open-transaction flag"
+        );
+    }
+
+    /// `send_command` must route through `track_transaction_state` — pins the wiring
+    /// so removing that call is caught. A non-IAM lazy client reconciles to Ok, then
+    /// tracks the MULTI, then fails to connect; the flag must be set regardless of the
+    /// dispatch error.
+    #[test]
+    fn send_command_tracks_open_multi() {
+        use std::sync::atomic::Ordering;
+        let mut client = create_test_client(); // non-IAM, lazy (no network)
+        let rt = borrow_test_runtime();
+        let _ = rt.block_on(client.send_command(&mut redis::cmd("MULTI"), None));
+        assert!(
+            client.shared.multi_active.load(Ordering::Acquire),
+            "send_command must track a raw MULTI via track_transaction_state, \
+             even when the dispatch itself fails"
         );
     }
 
