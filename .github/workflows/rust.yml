@@ -1,4 +1,4 @@
-name: Rust client tests
+name: Rust client CI
 
 permissions:
     contents: read
@@ -20,7 +20,7 @@ on:
             - .github/actions/install-rust/action.yml
             - .github/actions/install-shared-dependencies/action.yml
             - .github/workflows/lint-rust/action.yml
-            - .github/workflows/rust-client.yml
+            - .github/workflows/rust.yml
     pull_request:
         paths:
             - rust/**
@@ -33,11 +33,11 @@ on:
             - .github/actions/install-rust/action.yml
             - .github/actions/install-shared-dependencies/action.yml
             - .github/workflows/lint-rust/action.yml
-            - .github/workflows/rust-client.yml
+            - .github/workflows/rust.yml
     workflow_dispatch:
 
 concurrency:
-    group: rust-client-${{ github.head_ref || github.ref }}
+    group: rust-${{ github.head_ref || github.ref }}
     cancel-in-progress: true
 
 env:

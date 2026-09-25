@@ -72,7 +72,7 @@ jobs:
 
     fmt-rust:
         if: github.repository_owner == 'valkey-io'
-        uses: ./.github/workflows/rust-core.yml
+        uses: ./.github/workflows/glide-core.yml
         with:
             full-matrix: true
             run-with-macos: ${{ inputs.run-with-macos }}

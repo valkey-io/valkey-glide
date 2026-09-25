@@ -1,4 +1,7 @@
-name: Python tests
+name: Python client CI
+
+permissions:
+    contents: read
 
 on:
     push:
@@ -96,11 +99,6 @@ on:
 concurrency:
     group: python-${{ github.head_ref || github.ref }}-${{ toJson(inputs) }}
     cancel-in-progress: true
-
-permissions:
-    contents: read
-    # Allows the GITHUB_TOKEN to make an API call to generate an OIDC token.
-    id-token: write
 
 run-name:
     # Set custom name if job is started manually and name is given

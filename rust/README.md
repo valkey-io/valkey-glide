@@ -1,6 +1,6 @@
 # Valkey GLIDE for Rust (`glide`)
 
-[![CI](https://github.com/valkey-io/valkey-glide/actions/workflows/rust-client.yml/badge.svg)](https://github.com/valkey-io/valkey-glide/actions/workflows/rust-client.yml)
+[![CI](https://github.com/valkey-io/valkey-glide/actions/workflows/rust.yml/badge.svg)](https://github.com/valkey-io/valkey-glide/actions/workflows/rust.yml)
 [![Rust](https://img.shields.io/badge/dynamic/toml?url=https%3A%2F%2Fraw.githubusercontent.com%2Fvalkey-io%2Fvalkey-glide%2Fmain%2Frust%2FCargo.toml&query=%24.package%5B%27rust-version%27%5D&label=rust&suffix=%2B&color=orange)](https://www.rust-lang.org)
 
 A first-class, native **Rust** client for [Valkey](https://valkey.io) and Redis OSS,
