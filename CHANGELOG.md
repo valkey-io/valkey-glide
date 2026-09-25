@@ -44,6 +44,7 @@
 
 ### Changes
 
+* Java: Add `HGETDEL` command support ([#6145](https://github.com/valkey-io/valkey-glide/issues/6145))
 * Core: Add client-side caching support for MGET. Fully cached requests return locally; partially cached requests fetch only misses and preserve duplicate-key and NIL response semantics. ([#6793](https://github.com/valkey-io/valkey-glide/issues/6793))
 * Rust: Add an initial native Rust client (preview) built directly on `glide-core` ([#6864](https://github.com/valkey-io/valkey-glide/pull/6864))
 * Rust: Tracing target renamed from `logger_core` to `glide_logger` ([#7178](https://github.com/valkey-io/valkey-glide/pull/7178))
