@@ -131,7 +131,7 @@
     "engines": {
         "node": ">=20"
     },
-    "workspaces": ["npm/*"],
+    "workspaces": [],
     "napi": {
         "binaryName": "valkey-glide",
         "triples": {
