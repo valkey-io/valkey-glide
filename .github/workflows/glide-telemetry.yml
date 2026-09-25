@@ -23,6 +23,7 @@ on:
             - .github/workflows/lint-rust/action.yml
             - deny.toml
     workflow_dispatch:
+    workflow_call:
 
 concurrency:
     group: glide-telemetry-${{ github.head_ref || github.ref }}

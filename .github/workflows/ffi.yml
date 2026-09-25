@@ -31,6 +31,7 @@ on:
             - .github/actions/install-engine/action.yml
             - .github/workflows/lint-rust/action.yml
     workflow_dispatch:
+    workflow_call:
 
 concurrency:
     group: ffi-${{ github.head_ref || github.ref }}

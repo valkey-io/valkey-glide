@@ -21,6 +21,7 @@ on:
             - .github/workflows/lint-rust/action.yml
             - deny.toml
     workflow_dispatch:
+    workflow_call:
 
 concurrency:
     group: glide-logger-${{ github.head_ref || github.ref }}

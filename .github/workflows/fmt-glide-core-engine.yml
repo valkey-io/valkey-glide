@@ -1,17 +1,17 @@
-# Nightly full-matrix tests for the Rust (glide-core) client.
-# Thin wrapper around glide-core.yml that isolates scheduling so per-language
+# Nightly full-matrix tests for the glide-core-engine (vendored redis-rs fork) crate.
+# Thin wrapper around glide-core-engine.yml that isolates scheduling so per-language
 # full-matrix runs can be staggered and failures do not cascade across
 # languages. Flaky-test isolation work: see #4629.
-name: FMT Rust
+name: FMT glide-core-engine
 
 permissions:
     contents: read
     actions: write
 
 on:
-    # Nightly at 05:00 UTC (10:00 PM PDT).
+    # Nightly at 05:30 UTC (10:30 PM PDT).
     schedule:
-        - cron: "0 5 * * *"
+        - cron: "30 5 * * *"
     workflow_dispatch:
         inputs:
             use-self-hosted-linux:
@@ -20,14 +20,13 @@ on:
                 default: false
 
 concurrency:
-    group: fmt-rust-${{ github.ref }}
+    group: fmt-glide-core-engine-${{ github.ref }}
     cancel-in-progress: true
 
 jobs:
-    run-fmt-rust:
+    run-fmt-glide-core-engine:
         if: github.repository_owner == 'valkey-io'
-        uses: ./.github/workflows/glide-core.yml
+        uses: ./.github/workflows/glide-core-engine.yml
         with:
-            run-with-macos: use-self-hosted
             use-self-hosted-linux: ${{ inputs.use-self-hosted-linux || false }}
-        name: FMT - Rust
+        name: FMT - glide-core-engine

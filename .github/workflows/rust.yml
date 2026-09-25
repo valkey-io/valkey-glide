@@ -35,6 +35,7 @@ on:
             - .github/workflows/lint-rust/action.yml
             - .github/workflows/rust.yml
     workflow_dispatch:
+    workflow_call:
 
 concurrency:
     group: rust-${{ github.head_ref || github.ref }}
