@@ -4,6 +4,7 @@
 
 ### Fixes
 
+* Java: Clear jedis-compat-shared javadoc errors and deprecate substr ([#7191](https://github.com/valkey-io/valkey-glide/pull/7191))
 * Core: A scope pool no longer leaks capacity when connecting to a paused or unreachable shard. A reserved `max_total` slot is now held by an RAII guard that returns it on every creation outcome — including a creation cancelled mid-handshake, which previously leaked the slot until scopes to healthy shards could no longer be opened — and decrements saturate at zero so a give-back cannot wrap into permanent exhaustion. Concurrent retries of a single acquire are deduped to one in-flight creation, so a retry storm against a slow shard can no longer consume the whole pool, while distinct concurrent acquires each still open their own connection ([#6966](https://github.com/valkey-io/valkey-glide/issues/6966), [#7067](https://github.com/valkey-io/valkey-glide/issues/7067))
 * Core/All, Node: Fix ClientPool abandon monitor race for blocking commands ([#7063](https://github.com/valkey-io/valkey-glide/pull/7063))
 * Core: Scoped cluster connections are keyed on the resolved primary's address instead of the requested hash slot, so cluster slot 0 is treated as an ordinary slot rather than a wildcard that matched every idle scoped connection. A scope for a key in slot 0 no longer reuses a connection to a different primary and receives an unfollowable `MOVED`, while slots that share a primary now share its idle connections. A slot whose primary cannot currently be resolved (topology not yet fetched, or mid-resharding) fails the acquire with the reason logged instead of connecting to a configured seed node, and a full pool whose idle connections all target other primaries evicts its oldest idle connection instead of reporting exhaustion ([#6975](https://github.com/valkey-io/valkey-glide/issues/6975))
@@ -40,7 +41,6 @@
 * Core: Update `anyhow` to 1.0.103 to fix RUSTSEC-2026-0190, an unsoundness advisory in `anyhow::Error::downcast_mut()` that can trigger undefined behavior ([#6364](https://github.com/valkey-io/valkey-glide/pull/6364))
 * Go: Remove `.gitignore` from the released module so consumers who commit `vendor/` keep the generated artifacts (`internal/protobuf/*.pb.go`, `rustbin/**`, `lib.h`) ([#6441](https://github.com/valkey-io/valkey-glide/pull/6441))
 * Core: Validate client library names ([#6891](https://github.com/valkey-io/valkey-glide/pull/6891))
-* Java: Fix javadoc errors in jedis-compat-shared and mark `substr` as `@Deprecated`
 
 ### Changes
 

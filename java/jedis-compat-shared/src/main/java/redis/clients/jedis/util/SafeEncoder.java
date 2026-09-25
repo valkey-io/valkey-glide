@@ -40,7 +40,9 @@ public final class SafeEncoder {
      *
      * @param dataToEncode the value to encode; a byte[] becomes a String and a List is encoded
      *     element by element, while anything else, sets and maps included, is returned unchanged
-     * @return the encoded value, or the original object when no encoding applies
+     * @return a {@code String} for a {@code byte[]} input, a fresh mutable {@code ArrayList} for a
+     *     {@code List} input (even when no element needed encoding), and the original object
+     *     unchanged for anything else
      */
     public static Object encodeObject(Object dataToEncode) {
         if (dataToEncode instanceof byte[]) {

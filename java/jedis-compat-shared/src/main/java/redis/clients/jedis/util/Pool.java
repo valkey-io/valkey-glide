@@ -223,9 +223,10 @@ public abstract class Pool<T> implements Closeable {
     }
 
     /**
-     * Add exactly {@code count} objects to the pool.
+     * Ask the pool to add {@code count} objects. The pool adds fewer, and reports no error, when it
+     * is already at its {@code maxTotal} capacity.
      *
-     * @param count how many objects to add
+     * @param count how many objects to ask the pool to add
      */
     public void addObjects(int count) {
         try {
