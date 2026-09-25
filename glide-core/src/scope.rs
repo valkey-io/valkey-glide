@@ -504,10 +504,11 @@ async fn build_scope_connection(
     // Build a structured `ConnectionInfo` directly rather than a `redis://` URL,
     // which would require a bare IPv6 host to be bracketed. Every other connection
     // path in glide-core avoids the URL layer for this reason.
+    // An unrecognized tls_mode must fail closed: default to TLS, never plaintext.
     let tls_mode = proto
         .tls_mode
         .enum_value()
-        .unwrap_or(crate::connection_request::TlsMode::NoTls);
+        .unwrap_or(crate::connection_request::TlsMode::SecureTls);
     let (host, port) = match target {
         ScopeTarget::Standalone => {
             let addr = proto
