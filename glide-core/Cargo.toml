@@ -1,6 +1,7 @@
 [package]
 name = "glide-core"
 version = "0.1.0"
+description = "Core for Valkey GLIDE. This crate isn't intended to be used directly."
 authors = ["Valkey GLIDE Maintainers"]
 license = "Apache-2.0"
 

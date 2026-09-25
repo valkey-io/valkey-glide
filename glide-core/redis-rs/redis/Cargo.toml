@@ -1,6 +1,7 @@
 [package]
 name = "glide-core-engine"
 version = "0.1.0"
+description = "Core engine for Valkey GLIDE. This crate isn't intended to be used directly."
 authors = ["Valkey GLIDE Maintainers"]
 license = "BSD-3-Clause"
 
