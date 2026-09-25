@@ -7,6 +7,7 @@ import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleM
 import static org.junit.jupiter.api.Assertions.*;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
+import glide.api.GlideClient;
 import glide.api.GlideClusterClient;
 import glide.api.models.ClusterValue;
 import glide.api.models.configuration.GlideClientConfiguration;
@@ -746,5 +747,151 @@ public class ClientPoolIntegrationTest {
                         .build();
 
         assertThrows(RuntimeException.class, () -> ClientPool.create(badConfig));
+    }
+
+    /**
+     * A pool-borrowed client must enforce the configured inflight limit on the Java side, like a
+     * directly-created client. {@code ClientPool.getClient} previously hard-coded {@code
+     * maxInflight=0} into {@code fromPoolHandle}, disabling the Java-side (AsyncRegistry) limiter for
+     * pooled clients regardless of {@code inflightRequestsLimit}.
+     *
+     * <p>The test exercises the batch path deliberately. On the command path the JNI pre-check also
+     * rejects an over-limit request with the same message, so a command-based test cannot tell the
+     * Java limiter apart from the core one. The batch path has no such native pre-check and {@code
+     * send_pipeline}/{@code send_transaction} never reserve a core inflight slot, so the Java-side
+     * limiter is the only thing bounding concurrent batches: with it off, an over-limit batch stays
+     * pending; with it on, it is rejected. That makes this a genuine A-B of the fix.
+     */
+    @Test
+    public void testPooledClientHonorsInflightRequestsLimit() throws Exception {
+        assumeTrue(standaloneAvailable(), "No standalone endpoints configured");
+        int inflightRequestsLimit = 5;
+        String[] parts = STANDALONE_HOSTS[0].split(":");
+        ClientPoolConfig config =
+                ClientPoolConfig.builder()
+                        .maxSize(2)
+                        .minIdle(1)
+                        .acquireTimeout(Duration.ofSeconds(10))
+                        .clientConfig(
+                                GlideClientConfiguration.builder()
+                                        .address(
+                                                NodeAddress.builder()
+                                                        .host(parts[0])
+                                                        .port(Integer.parseInt(parts[1]))
+                                                        .build())
+                                        .requestTimeout(5000)
+                                        .inflightRequestsLimit(inflightRequestsLimit)
+                                        .build())
+                        .build();
+
+        ClientPool pool = ClientPool.create(config);
+        try {
+            waitForPoolReady(pool, 1);
+            glide.api.models.pool.PooledGlideClient pooled = pool.acquire().get(10, TimeUnit.SECONDS);
+            glide.api.GlideClient borrowed = pooled.unwrap();
+
+            String keyName = testKey(false, "inflight-batch-nonexist");
+
+            // Saturate the Java limiter with non-atomic batches each holding a blocking pop that never
+            // completes. The batch path has no native inflight pre-check, so only the Java-side
+            // limiter bounds these -- unlike the command path where the JNI pre-check would reject
+            // regardless of this fix.
+            java.util.List<java.util.concurrent.CompletableFuture<Object[]>> responses =
+                    new java.util.ArrayList<>();
+            for (int i = 0; i < inflightRequestsLimit + 1; i++) {
+                glide.api.models.Batch batch = new glide.api.models.Batch(false);
+                batch.blpop(new String[] {keyName}, 0);
+                responses.add(borrowed.exec(batch, false));
+            }
+
+            for (int i = 0; i < inflightRequestsLimit; i++) {
+                assertFalse(responses.get(i).isDone(), "Batch " + i + " should still be pending");
+            }
+
+            // The (limit + 1)-th batch must be rejected by the Java-side limiter. On the batch path
+            // the core does not reserve a slot, so the exact AsyncRegistry message is reachable only
+            // when the Java limiter is armed -- an exact-match assertion tells the layers apart.
+            try {
+                responses.get(inflightRequestsLimit).get(1, TimeUnit.SECONDS);
+                fail("Expected the (limit + 1)-th batch to be rejected by the inflight limiter");
+            } catch (java.util.concurrent.ExecutionException e) {
+                assertInstanceOf(glide.api.models.exceptions.RequestException.class, e.getCause());
+                assertEquals("Client reached maximum inflight requests", e.getCause().getMessage());
+            }
+
+            // Unblock the pending pops so the borrowed client releases cleanly.
+            try (glide.api.GlideClient cleanup =
+                    GlideClient.createClient(
+                                    GlideClientConfiguration.builder()
+                                            .address(
+                                                    NodeAddress.builder()
+                                                            .host(parts[0])
+                                                            .port(Integer.parseInt(parts[1]))
+                                                            .build())
+                                            .requestTimeout(5000)
+                                            .build())
+                            .get()) {
+                for (int i = 0; i < inflightRequestsLimit; i++) {
+                    cleanup.lpush(keyName, new String[] {"val"}).get();
+                }
+            }
+            pooled.close();
+        } finally {
+            pool.close();
+        }
+    }
+
+    /**
+     * A pool-borrowed client must time out commands per its own client config. {@code
+     * ClientPool.getClient} previously passed the pool's own cleanup {@code requestTimeout} (the
+     * {@link ClientPoolConfig} default of 5s) into {@code fromPoolHandle} instead of the client
+     * config's {@code requestTimeout}. Unlike the inflight limiter (whose JNI pre-check rejects
+     * regardless), this half is genuinely A-B distinguishable: with the pool's cleanup timeout short
+     * (500ms) and the client config's timeout long (5s), a ~2s command completes post-fix but times
+     * out pre-fix.
+     */
+    @Test
+    public void testPooledClientHonorsClientConfigRequestTimeout() throws Exception {
+        assumeTrue(standaloneAvailable(), "No standalone endpoints configured");
+        String[] parts = STANDALONE_HOSTS[0].split(":");
+        ClientPoolConfig config =
+                ClientPoolConfig.builder()
+                        .maxSize(2)
+                        .minIdle(1)
+                        .acquireTimeout(Duration.ofSeconds(10))
+                        // Pool's own cleanup timeout, short. Pre-fix this leaked onto the borrowed
+                        // client and would time out the command below.
+                        .requestTimeout(Duration.ofMillis(500))
+                        .clientConfig(
+                                GlideClientConfiguration.builder()
+                                        .address(
+                                                NodeAddress.builder()
+                                                        .host(parts[0])
+                                                        .port(Integer.parseInt(parts[1]))
+                                                        .build())
+                                        // Client's configured timeout, long. Post-fix the borrowed
+                                        // client uses this, so the command completes.
+                                        .requestTimeout(5000)
+                                        .build())
+                        .build();
+
+        ClientPool pool = ClientPool.create(config);
+        try {
+            waitForPoolReady(pool, 1);
+            glide.api.models.pool.PooledGlideClient pooled = pool.acquire().get(10, TimeUnit.SECONDS);
+            glide.api.GlideClient borrowed = pooled.unwrap();
+
+            // DEBUG SLEEP blocks the connection server-side ~2s but is NOT a blocking command, so
+            // (unlike BLPOP) it is subject to the client's request timeout. Pre-fix the borrowed
+            // client inherited the pool's 500ms cleanup timeout and this fails with a TimeoutException;
+            // post-fix it uses the client config's 5s timeout and completes.
+            Object result =
+                    borrowed.customCommand(new String[] {"DEBUG", "SLEEP", "2"}).get(10, TimeUnit.SECONDS);
+            assertEquals("OK", result, "DEBUG SLEEP should complete under the client-config timeout");
+
+            pooled.close();
+        } finally {
+            pool.close();
+        }
     }
 }
