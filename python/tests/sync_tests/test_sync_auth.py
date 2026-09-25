@@ -750,9 +750,8 @@ class TestSyncAuthCommands:
 
 @pytest.mark.parametrize("cluster_mode", [False])
 def test_iam_pool_with_custom_credentials_provider(request, cluster_mode):
-    """Sync pool with IAM credential provider: the sync pool raises ValueError
-    because it does not support custom credential providers by design.
-    Verify the error occurs before any native client creation."""
+    """Sync pool with IAM credential provider: the sync pool now supports custom
+    credential providers. Verify the pool is created without raising ValueError."""
     from glide_shared.config import AwsCredentials
     from glide_sync.client_pool import ClientPool, PoolConfig
 
@@ -776,12 +775,13 @@ def test_iam_pool_with_custom_credentials_provider(request, cluster_mode):
         cluster_mode=cluster_mode,
         credentials=credentials,
     )
-    with pytest.raises(ValueError, match="credential_provider"):
-        ClientPool(client_config, PoolConfig())
+    # The sync pool now supports custom credential providers — no ValueError should be raised.
+    pool = ClientPool(client_config, PoolConfig(min_idle=0))
+    pool.close()
 
 
 def test_iam_sync_pool_rejects_credential_provider(request):
-    """Sync pool raises ValueError when IamAuthConfig.credential_provider is set."""
+    """Sync pool accepts IamAuthConfig.credential_provider without raising ValueError."""
     from glide_shared.config import AwsCredentials
     from glide_sync.client_pool import ClientPool, PoolConfig
 
@@ -805,5 +805,6 @@ def test_iam_sync_pool_rejects_credential_provider(request):
         cluster_mode=False,
         credentials=credentials,
     )
-    with pytest.raises(ValueError, match="credential_provider"):
-        ClientPool(client_config, PoolConfig())
+    # The sync pool now accepts custom IAM credential providers — no ValueError should be raised.
+    pool = ClientPool(client_config, PoolConfig(min_idle=0))
+    pool.close()

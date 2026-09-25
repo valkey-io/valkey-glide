@@ -1642,7 +1642,7 @@ fn create_client_internal(
             {
                 iam_config.credentials_provider = Some(provider_arc);
             } else {
-                logger_core::log_warn(
+                glide_logger::log_warn(
                     "credential_provider",
                     "A credential_provider callback was supplied but the connection request \
                      contains no IAM configuration. The callback will be ignored and the \
