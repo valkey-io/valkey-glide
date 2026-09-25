@@ -576,10 +576,13 @@ func (suite *GlideTestSuite) runParallelizedWithClients(
 	for _, client := range clients {
 		suite.T().Run(fmt.Sprintf("%T", client)[1:], func(t *testing.T) {
 			done := make(chan struct{}, parallelism)
+			// Signal goroutines to exit on timeout so they don't outlive the test and
+			// report failures after it has completed.
+			var stopped atomic.Int32
 			for i := 0; i < parallelism; i++ {
 				go func() {
 					defer func() { done <- struct{}{} }()
-					for !suite.T().Failed() && atomic.AddInt64(&count, -1) > 0 {
+					for stopped.Load() == 0 && !suite.T().Failed() && atomic.AddInt64(&count, -1) > 0 {
 						test(client)
 					}
 				}()
@@ -590,6 +593,7 @@ func (suite *GlideTestSuite) runParallelizedWithClients(
 				select {
 				case <-done:
 				case <-tm.C:
+					stopped.Store(1)
 					suite.T().Fatalf("parallelized test timeout")
 				}
 			}
