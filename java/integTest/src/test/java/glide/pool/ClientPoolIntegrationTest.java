@@ -761,6 +761,10 @@ public class ClientPoolIntegrationTest {
     @Test
     public void testPooledClientHonorsInflightRequestsLimit() throws Exception {
         assumeTrue(standaloneAvailable(), "No standalone endpoints configured");
+        // Relies on a directly-created client already existing (TestConfiguration's standalone client
+        // takes JNI handle 1) so the pool's connectivity probe doesn't collide with the background
+        // pooled client's id 1 and evict it on close. Pooled ids and JNI handles share one table but
+        // draw from independent counters that both start at 1.
         int inflightRequestsLimit = 5;
         String[] parts = STANDALONE_HOSTS[0].split(":");
         ClientPoolConfig config =

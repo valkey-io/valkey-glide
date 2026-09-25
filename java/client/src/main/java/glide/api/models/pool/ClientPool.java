@@ -229,6 +229,11 @@ public class ClientPool implements AutoCloseable {
         // does for direct clients, so a pooled client fast-fails excess requests and times out
         // commands per its own config instead of the pool's defaults. The wire ConnectionRequest
         // already carries both values; these govern the host-side AsyncRegistry enforcement.
+        //
+        // AsyncRegistry keys its inflight counter on the raw native handle, and pooled client ids and
+        // JNI handles come from independent counters that can collide, so a pooled client colliding
+        // with a live ordinary client shares its counter and can be falsely rejected. The core limiter
+        // enforces the real limit regardless, until the id spaces are unified.
         Integer configuredLimit = config.getClientConfig().getInflightRequestsLimit();
         int maxInflight =
                 configuredLimit != null
