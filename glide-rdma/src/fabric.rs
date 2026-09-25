@@ -227,6 +227,11 @@ pub(crate) mod tests {
             self.peers().len()
         }
 
+        /// How many handles hold this fabric open, this one included.
+        pub(crate) fn holders(&self) -> usize {
+            std::sync::Arc::strong_count(&self.inner)
+        }
+
         /// How many transfers are keeping the progress thread polling.
         pub(crate) fn transfers_in_flight(&self) -> usize {
             self.inner

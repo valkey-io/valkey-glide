@@ -346,13 +346,21 @@ pub(crate) struct Registration {
 #[derive(Debug)]
 struct RegistrationState {
     /// The open region, or `None` once it has been closed.
-    memory_region: Mutex<Option<NonNull<fid_mr>>>,
+    open: Mutex<Option<OpenRegion>>,
     /// Becomes `true` when the region is revoked for transfers waiting on it.
     revoked: watch::Sender<bool>,
+}
+
+/// A region and the fabric it was registered on, held until the region closes.
+#[derive(Debug)]
+struct OpenRegion {
+    memory_region: NonNull<fid_mr>,
+    /// Let go of once the region is closed, so a state leaked after a failed close
+    /// does not keep the fabric open once a retry succeeds.
     fabric: RdmaFabric,
 }
 
-// SAFETY: the region pointer is only dereferenced under `memory_region`'s lock, to
+// SAFETY: the region pointer is only dereferenced under `open`'s lock, to
 // close it once, and `fi_close` also takes the domain lock, as `fi_mr_reg` did. So no
 // two threads ever use the pointer at once, and the close cannot overlap any other
 // call into the domain.
@@ -361,21 +369,21 @@ unsafe impl Sync for RegistrationState {}
 
 impl RegistrationState {
     fn revoke(&self) -> Result<(), RdmaError> {
-        let mut memory_region = self
-            .memory_region
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner);
-        let Some(open) = *memory_region else {
+        let mut open = self.open.lock().unwrap_or_else(PoisonError::into_inner);
+        let Some(region) = open.as_ref() else {
             return Ok(());
         };
         // SAFETY: the region is open, and the lock above keeps any other thread from
         // closing it while this one does.
-        let fid = unsafe { &raw mut (*open.as_ptr()).fid };
+        let fid = unsafe { &raw mut (*region.memory_region.as_ptr()).fid };
         // A failed close leaves the region open, so it stays recorded as open: a later
         // revoke, or the drop, tries again.
-        check(self.fabric.fi_close(fid), "fi_close")?;
-        *memory_region = None;
+        check(region.fabric.fi_close(fid), "fi_close")?;
+        let closed = open.take();
         self.revoked.send_replace(true);
+        // Dropped after the lock, in case this is the last hold on the fabric.
+        drop(open);
+        drop(closed);
         Ok(())
     }
 }
@@ -387,9 +395,11 @@ impl Registration {
             // SAFETY: a region returned by a successful fi_mr_reg.
             remote_key: unsafe { fi_mr_key(memory_region) },
             state: Arc::new(RegistrationState {
-                memory_region: Mutex::new(NonNull::new(memory_region)),
+                open: Mutex::new(NonNull::new(memory_region).map(|memory_region| OpenRegion {
+                    memory_region,
+                    fabric,
+                })),
                 revoked,
-                fabric,
             }),
         }
     }
@@ -414,7 +424,8 @@ impl Registration {
     pub(crate) fn revoked(&self) -> impl Future<Output = ()> + Send + 'static {
         let mut revoked = self.state.revoked.subscribe();
         async move {
-            // An error means the registration was dropped, which closed the region.
+            // An error means the state was dropped, which it only is once the region
+            // has closed.
             let _ = revoked.wait_for(|revoked| *revoked).await;
         }
     }
@@ -429,8 +440,16 @@ impl Drop for Registration {
     /// Close the region before the memory it covers is freed.
     ///
     /// If a revoke is under way, this waits for it to finish.
+    ///
+    /// If the close fails, the region is still registered, so the state is leaked
+    /// rather than dropped. That keeps [`Self::revoked`] from resolving and
+    /// [`RevokeHandle::is_released`] from reporting it released, and it leaves the
+    /// region for a [`RevokeHandle`] to try closing again. It also keeps the fabric
+    /// open, which could not close with the region still open on it anyway.
     fn drop(&mut self) {
-        let _ = self.state.revoke();
+        if self.state.revoke().is_err() {
+            std::mem::forget(Arc::clone(&self.state));
+        }
     }
 }
 

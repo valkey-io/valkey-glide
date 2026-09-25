@@ -219,7 +219,9 @@ impl RdmaBuffer {
 
     /// Resolves once this buffer is revoked.
     ///
-    /// Borrows nothing, so it can still be awaited after the buffer is lent.
+    /// Borrows nothing so it can still be awaited after the buffer is lent. If the
+    /// buffer is dropped, it resolves once the region closes, which may be never if
+    /// closing it keeps failing.
     pub fn revoked(&self) -> impl Future<Output = ()> + Send + 'static {
         self.registration.revoked()
     }
@@ -377,7 +379,10 @@ pub struct RdmaRevoker(RevokeHandle);
 
 impl RdmaRevoker {
     /// Revoke the buffer, as [`RdmaBuffer::revoke`] does. A no-op if it is already
-    /// revoked or has been dropped.
+    /// revoked or was dropped and its region closed.
+    ///
+    /// If the buffer was dropped but its region failed to close, this tries closing
+    /// it again.
     ///
     /// # Errors
     ///
@@ -386,8 +391,8 @@ impl RdmaRevoker {
         self.0.revoke()
     }
 
-    /// Whether the buffer is revoked or dropped, so that this handle has nothing
-    /// left to do.
+    /// Whether the buffer's region is closed. A buffer dropped
+    /// while its region failed to close is not released.
     pub fn is_released(&self) -> bool {
         self.0.is_released()
     }
@@ -404,6 +409,7 @@ mod tests {
     use crate::region_ref::RegionRef;
     use std::sync::Arc;
     use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+    use std::time::Duration;
 
     impl RdmaBuffer {
         /// Where this buffer lives, as a transfer command names it.
@@ -802,6 +808,39 @@ mod tests {
         assert!(!freed.load(Ordering::SeqCst), "the memory must be leaked");
     }
 
+    #[tokio::test]
+    async fn a_region_that_fails_to_close_on_drop_stays_open_until_a_retry() {
+        let fabric = fabric();
+        let alone = fabric.holders();
+        let buffer = fabric.register(vec![0u8; 64]).unwrap();
+        let revoker = buffer.revoker();
+        let mut revoked = tokio::spawn(buffer.revoked());
+
+        // Both the buffer's close and the registration's retry on drop fail.
+        fail_next_closes(2);
+        drop(buffer);
+
+        assert!(
+            !revoker.is_released(),
+            "the server may still reach the memory"
+        );
+        tokio::time::timeout(Duration::from_millis(50), &mut revoked)
+            .await
+            .expect_err("the region is still open, so a waiter keeps waiting");
+
+        revoker.revoke().expect("a retry closes the region");
+        assert!(revoker.is_released());
+        tokio::time::timeout(Duration::from_secs(5), revoked)
+            .await
+            .expect("the waiter wakes once the region closes")
+            .unwrap();
+        assert_eq!(
+            fabric.holders(),
+            alone,
+            "the closed region no longer holds the fabric open"
+        );
+    }
+
     /// The caller stopped waiting for the reply, so the server may still be using the
     /// memory: it must be revoked before it is freed.
     #[test]
@@ -814,17 +853,6 @@ mod tests {
 
         assert!(revoker.is_released());
         assert!(freed.load(Ordering::SeqCst));
-    }
-
-    #[test]
-    fn a_failed_close_on_loan_drop_leaks_the_memory() {
-        let (memory, freed, _) = tracked();
-        let loan = lent_for_set(fabric().register(memory).unwrap());
-
-        fail_next_closes(1);
-        drop(loan);
-
-        assert!(!freed.load(Ordering::SeqCst), "the memory must be leaked");
     }
 
     #[test]
