@@ -1353,6 +1353,25 @@ func CreateHashTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer strin
 		)
 	}
 
+	// HGETDEL command (Valkey 9.1+)
+	if serverVer >= "9.1.0" {
+		getdelKey := prefix + "getdel-" + uuid.NewString()
+		batch.HSet(getdelKey, map[string]string{"field1": "value1", "field2": "value2"})
+		testData = append(testData, CommandTestData{ExpectedResponse: int64(2), TestName: "HSet(getdelKey, 2 fields)"})
+
+		batch.HGetDel(getdelKey, []string{"field1", "nonexistent"})
+		testData = append(
+			testData,
+			CommandTestData{
+				ExpectedResponse: []models.Result[string]{
+					models.CreateStringResult("value1"),
+					models.CreateNilStringResult(),
+				},
+				TestName: "HGetDel(getdelKey, [field1, nonexistent])",
+			},
+		)
+	}
+
 	return BatchTestData{CommandTestData: testData, TestName: "Hash commands"}
 }
 
