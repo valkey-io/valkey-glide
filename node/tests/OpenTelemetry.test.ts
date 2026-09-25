@@ -89,6 +89,51 @@ const INIT_PARENT_CTX: GlideSpanContext = {
     traceFlags: 1,
 };
 
+/**
+ * Creates a Valkey cluster, retrying transient startup failures.
+ *
+ * `utils/cluster_manager.py` occasionally fails to bring up a fresh cluster in
+ * CI (e.g. "Failed to send CLUSTER MEET command", preceded by a port-in-use
+ * check timeout). Each attempt spawns a fresh cluster_manager.py invocation
+ * with newly allocated random ports, so a retry is a clean, independent attempt
+ * rather than a wait on the same failing resource. No artificial backoff is
+ * used.
+ *
+ * @param clusterMode - Whether to create a cluster-mode deployment.
+ * @param shardCount - Number of shards (primaries).
+ * @param replicaCount - Number of replicas per shard.
+ * @param attempts - Maximum number of creation attempts.
+ * @returns The created ValkeyCluster.
+ * @throws The last error encountered if every attempt fails.
+ */
+async function createClusterWithRetry(
+    clusterMode: boolean,
+    shardCount: number,
+    replicaCount: number,
+    attempts = 3,
+): Promise<ValkeyCluster> {
+    let lastError: unknown;
+
+    for (let attempt = 1; attempt <= attempts; attempt++) {
+        try {
+            return await ValkeyCluster.createCluster(
+                clusterMode,
+                shardCount,
+                replicaCount,
+                getServerVersion,
+            );
+        } catch (error: unknown) {
+            lastError = error;
+            console.warn(
+                `Cluster creation attempt ${attempt}/${attempts} failed: ` +
+                    `${error instanceof Error ? error.message : String(error)}`,
+            );
+        }
+    }
+
+    throw lastError;
+}
+
 async function wrongOpenTelemetryConfig() {
     // wrong traces endpoint
     let openTelemetryConfig: OpenTelemetryConfig = {
@@ -185,7 +230,7 @@ describe("OpenTelemetry GlideClusterClient", () => {
                   getServerVersion,
               )
             : // setting replicaCount to 1 to facilitate tests routed to replicas
-              await ValkeyCluster.createCluster(true, 3, 1, getServerVersion);
+              await createClusterWithRetry(true, 3, 1);
 
         // check wrong open telemetry config before initilise it
         await wrongOpenTelemetryConfig();
@@ -226,10 +271,12 @@ describe("OpenTelemetry GlideClusterClient", () => {
     });
 
     afterAll(async () => {
-        if (testsFailed === 0) {
-            await cluster.close();
-        } else {
-            await cluster.close(true);
+        if (cluster) {
+            if (testsFailed === 0) {
+                await cluster.close();
+            } else {
+                await cluster.close(true);
+            }
         }
     });
 
@@ -558,7 +605,7 @@ describe("OpenTelemetry GlideClient", () => {
                   parseEndpoints(standaloneAddresses),
                   getServerVersion,
               )
-            : await ValkeyCluster.createCluster(false, 1, 1, getServerVersion);
+            : await createClusterWithRetry(false, 1, 1);
     }, 20000);
 
     afterEach(async () => {
@@ -567,14 +614,16 @@ describe("OpenTelemetry GlideClient", () => {
             fs.unlinkSync(VALID_ENDPOINT_TRACES);
         }
 
-        await flushAndCloseClient(false, cluster.getAddresses(), client);
+        await flushAndCloseClient(false, cluster?.getAddresses(), client);
     });
 
     afterAll(async () => {
-        if (testsFailed === 0) {
-            await cluster.close();
-        } else {
-            await cluster.close(true);
+        if (cluster) {
+            if (testsFailed === 0) {
+                await cluster.close();
+            } else {
+                await cluster.close(true);
+            }
         }
     });
 
@@ -953,7 +1002,7 @@ describe("OpenTelemetry parent span context propagation", () => {
                   parseEndpoints(clusterAddresses),
                   getServerVersion,
               )
-            : await ValkeyCluster.createCluster(true, 3, 1, getServerVersion);
+            : await createClusterWithRetry(true, 3, 1);
     }, 40000);
 
     afterEach(async () => {
@@ -967,7 +1016,9 @@ describe("OpenTelemetry parent span context propagation", () => {
     });
 
     afterAll(async () => {
-        await cluster.close();
+        if (cluster) {
+            await cluster.close();
+        }
     });
 
     it(
