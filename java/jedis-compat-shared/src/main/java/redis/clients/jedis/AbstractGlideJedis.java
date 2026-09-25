@@ -3452,9 +3452,8 @@ public abstract class AbstractGlideJedis extends JedisCommon {
     /**
      * Helper method to convert Set of GlideString to Set of byte arrays.
      *
-     * <p>Returns a wrapper that avoids the HashSet<byte[]> performance issue where byte[] identity
-     * hashCode causes all entries to hash to the same bucket. The wrapper keeps data as GlideString
-     * internally (which has proper hashCode/equals) and converts to byte[] lazily.
+     * <p>Returns a {@code GlideStringSetWrapper}, which compares elements by content rather than by
+     * array identity as a {@code HashSet<byte[]>} would.
      */
     private static Set<byte[]> convertGlideStringsToByteArraySet(Set<GlideString> glideStrings) {
         return new GlideStringSetWrapper(glideStrings);
