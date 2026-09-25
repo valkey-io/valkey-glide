@@ -217,6 +217,7 @@ impl RdmaFabric {
 pub(crate) mod tests {
     use super::RdmaFabric;
     use crate::config::{FabricConfig, Provider};
+    use crate::error::RdmaError;
     use crate::progress::ProgressDriver;
     use std::cell::Cell;
 
@@ -334,6 +335,26 @@ pub(crate) mod tests {
 
         drop(session);
         assert_eq!(fabric.peer_count(), 0, "both references were given back");
+    }
+
+    #[test]
+    fn a_peer_address_of_the_wrong_length_is_refused() {
+        let fabric = fabric();
+        let length = fabric.local_address().len();
+        for wrong in [0, 1, length - 1, length + 1] {
+            let result = fabric.open_session(&crate::session::Handshake {
+                peers: vec![fabric.local_address().to_vec(), vec![0u8; wrong]],
+            });
+            assert!(
+                matches!(result, Err(RdmaError::Protocol(_))),
+                "a {wrong}-byte address should be refused, got {result:?}"
+            );
+            assert_eq!(
+                fabric.peer_count(),
+                0,
+                "the good address before it was given back"
+            );
+        }
     }
 
     #[test]

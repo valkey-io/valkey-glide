@@ -694,9 +694,21 @@ impl LibfabricEndpoint {
     ///
     /// efa-direct requires a target to hold the initiator's address before any RMA, so
     /// every address a handshake returned must be inserted before the first transfer.
+    ///
+    /// The address must be the same length as this endpoint's own. libfabric reads
+    /// as many bytes as its address format says, whatever the slice holds, so a
+    /// shorter one would be read past its end.
     pub(crate) fn fi_av_insert(&mut self, peer_address: &[u8]) -> Result<fi_addr_t, RdmaError> {
+        let expected = self.local_address()?.len();
+        if peer_address.len() != expected {
+            return Err(RdmaError::Protocol(format!(
+                "a peer address is {} bytes, but this fabric's addresses are {expected}",
+                peer_address.len()
+            )));
+        }
         let mut peer: fi_addr_t = 0;
-        // SAFETY: inserting one address from a caller-owned slice.
+        // SAFETY: inserting one address from a caller-owned slice, which is as long
+        // as an address in this endpoint's format, checked above.
         let inserted = unsafe {
             fi_av_insert(
                 self.address_vector,
