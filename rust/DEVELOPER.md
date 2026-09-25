@@ -1,4 +1,4 @@
-# DEVELOPER guide — `glide-rust`
+# DEVELOPER guide — `valkey-glide`
 
 ## Prerequisites
 

@@ -1,4 +1,4 @@
-# DESIGN — `glide-rust`
+# DESIGN — `valkey-glide`
 
 ## Dependency strategy
 

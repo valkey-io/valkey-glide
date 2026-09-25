@@ -76,7 +76,7 @@ This crate is not yet on crates.io and links `glide-core` and its vendored
 [Status & publishing](#status--publishing)), so it is currently built from a
 checkout of the [`valkey-io/valkey-glide`](https://github.com/valkey-io/valkey-glide)
 monorepo rather than added as an external dependency. The package is named
-`glide-rust` and the library is imported as `glide`; you will also need an async
+`valkey-glide` and the library is imported as `glide`; you will also need an async
 runtime (the async client is built on Tokio):
 
 ```toml
