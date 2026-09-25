@@ -1,0 +1,85 @@
+name: Rust glide-ffi
+
+permissions:
+    contents: read
+
+on:
+    push:
+        branches:
+            - main
+            - release-*
+            - v*
+        paths:
+            - ffi/**
+            - glide-logger/**
+            - glide-telemetry/**
+            - glide-core/**
+            - deny.toml
+            - .github/workflows/ffi.yml
+            - .github/actions/install-shared-dependencies/action.yml
+            - .github/actions/install-engine/action.yml
+            - .github/workflows/lint-rust/action.yml
+    pull_request:
+        paths:
+            - ffi/**
+            - glide-logger/**
+            - glide-telemetry/**
+            - glide-core/**
+            - deny.toml
+            - .github/workflows/ffi.yml
+            - .github/actions/install-shared-dependencies/action.yml
+            - .github/actions/install-engine/action.yml
+            - .github/workflows/lint-rust/action.yml
+    workflow_dispatch:
+
+concurrency:
+    group: ffi-${{ github.head_ref || github.ref }}
+    cancel-in-progress: true
+
+env:
+    CARGO_TERM_COLOR: always
+
+jobs:
+    test:
+        runs-on: ubuntu-latest
+        timeout-minutes: 35
+        steps:
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+              with:
+                  persist-credentials: false
+
+            - name: Install shared software dependencies
+              uses: ./.github/actions/install-shared-dependencies
+              with:
+                  os: "ubuntu"
+                  target: "x86_64-unknown-linux-gnu"
+                  engine-version: "7.2.5"
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
+
+            - name: Cache dependencies
+              uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+              with:
+                  cache-on-failure: true
+                  workspaces: ./ffi
+
+            - name: Run glide-ffi tests
+              working-directory: ./ffi
+              run: cargo test
+
+            - name: Run glide-ffi MIRI tests
+              working-directory: ./ffi/miri-tests
+              run: cargo miri test
+
+    lint:
+        runs-on: ubuntu-latest
+        timeout-minutes: 30
+        steps:
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+              with:
+                  persist-credentials: false
+
+            - uses: ./.github/workflows/lint-rust
+              with:
+                  cargo-toml-folder: ffi
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
+              name: lint glide-ffi

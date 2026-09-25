@@ -12,9 +12,7 @@ on:
         paths:
             - glide-logger/**
             - glide-telemetry/**
-            - glide-core/redis-rs/redis/src/**
             - glide-core/**
-            - ffi/**
             - utils/cluster_manager.py
             - .github/workflows/glide-core.yml
             - .github/actions/install-shared-dependencies/action.yml
@@ -29,8 +27,6 @@ on:
             - glide-logger/**
             - glide-telemetry/**
             - glide-core/**
-            - glide-core/redis-rs/redis/src/**
-            - ffi/**
             - utils/cluster_manager.py
             - .github/workflows/glide-core.yml
             - .github/actions/install-shared-dependencies/action.yml
@@ -159,14 +155,6 @@ jobs:
               working-directory: ./glide-core
               run: cargo test --features "proto,socket-layer,standalone_heartbeat"
 
-            - name: Run glide-ffi tests
-              working-directory: ./ffi
-              run: cargo test
-
-            - name: Run glide-ffi MIRI tests
-              working-directory: ./ffi/miri-tests
-              run: cargo miri test
-
             - name: Check features
               working-directory: ./glide-core
               run: |
@@ -198,12 +186,6 @@ jobs:
                   cargo-toml-folder: glide-core
                   github-token: ${{ secrets.GITHUB_TOKEN }}
               name: lint glide-core
-
-            - uses: ./.github/workflows/lint-rust
-              with:
-                  cargo-toml-folder: ffi
-                  github-token: ${{ secrets.GITHUB_TOKEN }}
-              name: lint glide-ffi
 
             - uses: ./.github/workflows/lint-rust
               with:

@@ -11,9 +11,9 @@ on:
             - v*
         paths:
             - rust/**
-            - glide-core/**
             - glide-logger/**
             - glide-telemetry/**
+            - glide-core/**
             - deny.toml
             - utils/cluster_manager.py
             - .github/actions/install-engine/action.yml
@@ -24,9 +24,9 @@ on:
     pull_request:
         paths:
             - rust/**
-            - glide-core/**
             - glide-logger/**
             - glide-telemetry/**
+            - glide-core/**
             - deny.toml
             - utils/cluster_manager.py
             - .github/actions/install-engine/action.yml
