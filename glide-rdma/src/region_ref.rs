@@ -40,13 +40,16 @@ pub fn encode_hex(bytes: &[u8]) -> String {
 
 /// Decode an [`encode_hex`] string back to bytes.
 pub fn decode_hex(text: &[u8]) -> Result<Vec<u8>, InvalidHex> {
-    if !text.len().is_multiple_of(2) {
+    let (pairs, remainder) = text.as_chunks::<2>();
+    // A leftover byte means an odd-length input, which can't be valid hex.
+    if !remainder.is_empty() {
         return Err(InvalidHex);
     }
-    text.chunks_exact(2)
-        .map(|pair| {
-            let high = (pair[0] as char).to_digit(16).ok_or(InvalidHex)?;
-            let low = (pair[1] as char).to_digit(16).ok_or(InvalidHex)?;
+    pairs
+        .iter()
+        .map(|&[high, low]| {
+            let high = (high as char).to_digit(16).ok_or(InvalidHex)?;
+            let low = (low as char).to_digit(16).ok_or(InvalidHex)?;
             Ok((high << 4 | low) as u8)
         })
         .collect()
