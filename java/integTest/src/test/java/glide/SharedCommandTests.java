@@ -1818,6 +1818,90 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void hgetdel_basic_functionality(BaseClient client) {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("9.1.0"),
+                "HGETDEL command requires Valkey 9.1.0 or higher");
+
+        String key = "test_hgetdel_basic_" + UUID.randomUUID();
+
+        Map<String, String> fieldValueMap = new LinkedHashMap<>();
+        fieldValueMap.put("field1", "value1");
+        fieldValueMap.put("field2", "value2");
+        fieldValueMap.put("field3", "value3");
+        client.hset(key, fieldValueMap).get();
+
+        // Get and delete field1 and a nonexistent field
+        String[] fields = {"field1", "nonexistent"};
+        String[] result = client.hgetdel(key, fields).get();
+
+        assertEquals(2, result.length);
+        assertEquals("value1", result[0]);
+        assertNull(result[1]); // nonexistent field returns null
+
+        // field1 should now be deleted; field2 and field3 remain
+        assertNull(client.hget(key, "field1").get());
+        assertEquals("value2", client.hget(key, "field2").get());
+        assertEquals("value3", client.hget(key, "field3").get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void hgetdel_deletes_key_when_last_field_removed(BaseClient client) {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("9.1.0"),
+                "HGETDEL command requires Valkey 9.1.0 or higher");
+
+        String key = "test_hgetdel_lastfield_" + UUID.randomUUID();
+
+        Map<String, String> fieldValueMap = new LinkedHashMap<>();
+        fieldValueMap.put("field1", "value1");
+        client.hset(key, fieldValueMap).get();
+
+        String[] result = client.hgetdel(key, new String[] {"field1"}).get();
+        assertEquals(1, result.length);
+        assertEquals("value1", result[0]);
+
+        // The key is deleted automatically when its last field is removed
+        assertEquals(0L, client.exists(new String[] {key}).get());
+
+        // HGETDEL on a nonexistent key returns an array of nulls
+        String[] missing = client.hgetdel(key, new String[] {"field1", "field2"}).get();
+        assertEquals(2, missing.length);
+        assertNull(missing[0]);
+        assertNull(missing[1]);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void hgetdel_binary_parameters(BaseClient client) {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("9.1.0"),
+                "HGETDEL command requires Valkey 9.1.0 or higher");
+
+        GlideString key = gs("test_hgetdel_binary_" + UUID.randomUUID());
+
+        Map<GlideString, GlideString> fieldValueMap = new LinkedHashMap<>();
+        fieldValueMap.put(gs("field1"), gs("value1"));
+        fieldValueMap.put(gs("field2"), gs("value2"));
+        client.hset(key, fieldValueMap).get();
+
+        GlideString[] fields = {gs("field1"), gs("field2")};
+        GlideString[] result = client.hgetdel(key, fields).get();
+
+        assertEquals(2, result.length);
+        assertEquals(gs("value1"), result[0]);
+        assertEquals(gs("value2"), result[1]);
+
+        // Both fields removed -> key deleted
+        assertEquals(0L, client.exists(new GlideString[] {key}).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void hexpire_basic_functionality(BaseClient client) {
         assumeTrue(
                 SERVER_VERSION.isGreaterThanOrEqualTo("9.0.0"),

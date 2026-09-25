@@ -110,10 +110,10 @@ pub fn extract_key_args<'a>(cmd_name: &str, args: &[&'a [u8]]) -> Vec<&'a [u8]> 
         "GET" | "SET" | "DEL" | "INCR" | "DECR" | "INCRBY" | "DECRBY" | "SETNX" | "SETEX"
         | "PSETEX" | "GETSET" | "GETDEL" | "GETEX" | "APPEND" | "STRLEN" | "TYPE" | "EXISTS"
         | "EXPIRE" | "EXPIREAT" | "TTL" | "PTTL" | "PERSIST" | "DUMP" | "RESTORE" | "HGET"
-        | "HSET" | "HDEL" | "HLEN" | "HGETALL" | "HMGET" | "HMSET" | "LPUSH" | "RPUSH" | "LPOP"
-        | "RPOP" | "LLEN" | "LRANGE" | "SADD" | "SREM" | "SMEMBERS" | "SCARD" | "SISMEMBER"
-        | "ZADD" | "ZREM" | "ZRANGE" | "ZCARD" | "ZSCORE" | "SUBSCRIBE" | "UNSUBSCRIBE"
-        | "BLPOP" | "BRPOP" | "BLMOVE" => {
+        | "HSET" | "HDEL" | "HLEN" | "HGETALL" | "HGETDEL" | "HMGET" | "HMSET" | "LPUSH"
+        | "RPUSH" | "LPOP" | "RPOP" | "LLEN" | "LRANGE" | "SADD" | "SREM" | "SMEMBERS"
+        | "SCARD" | "SISMEMBER" | "ZADD" | "ZREM" | "ZRANGE" | "ZCARD" | "ZSCORE" | "SUBSCRIBE"
+        | "UNSUBSCRIBE" | "BLPOP" | "BRPOP" | "BLMOVE" => {
             if !args.is_empty() {
                 vec![args[0]]
             } else {
