@@ -1852,6 +1852,16 @@ fn parse_connection_url(input: &str) -> Option<url::Url> {
     redis::parse_redis_url(normalize_uri_scheme(input).as_ref())
 }
 
+fn decode_uri_str(encoded: &str, component: &str) -> Result<Option<String>, String> {
+    if encoded.is_empty() {
+        return Ok(None);
+    }
+    percent_encoding::percent_decode(encoded.as_bytes())
+        .decode_utf8()
+        .map(|decoded| Some(decoded.into_owned()))
+        .map_err(|_| format!("{component} in URI is not valid UTF-8"))
+}
+
 /// Internal function to parse URI and JSON options into a ConnectionRequest protobuf message.
 fn create_client_from_uri_internal(
     uri_str: *const c_char,
@@ -1884,29 +1894,14 @@ fn create_client_from_uri_internal(
     node_address.port = port;
     request.addresses.push(node_address);
 
-    // Extract authentication. `url::Url::password()` / `::username()` return the
-    // *percent-encoded* substring per RFC 3986 §3.2.1; the caller is expected
-    // to decode. Forwarding the encoded form as-is causes AUTH to fail whenever
-    // the password contains reserved characters (@, :, /, ?, #, %, +, space,
-    // non-ASCII) — see valkey-glide/issues/6659. This mirrors the decode step
-    // redis-rs itself performs at glide-core/redis-rs/redis/src/connection.rs:370,379.
-    if let Some(password) = url.password() {
+    // `url` returns userinfo percent-encoded; decode it or AUTH fails on reserved chars (#6659)
+    let username = decode_uri_str(url.username(), "Username")?;
+    let password = decode_uri_str(url.password().unwrap_or_default(), "Password")?;
+    // Either part alone is valid: password-only uses the default user; username-only is for IAM.
+    if username.is_some() || password.is_some() {
         let mut auth_info = connection_request::AuthenticationInfo::new();
-        auth_info.password = percent_encoding::percent_decode(password.as_bytes())
-            .decode_utf8()
-            .map_err(|_| "Password in URI is not valid UTF-8".to_string())?
-            .into_owned()
-            .into();
-
-        // Handle username if present
-        if !url.username().is_empty() {
-            auth_info.username = percent_encoding::percent_decode(url.username().as_bytes())
-                .decode_utf8()
-                .map_err(|_| "Username in URI is not valid UTF-8".to_string())?
-                .into_owned()
-                .into();
-        }
-
+        auth_info.username = username.unwrap_or_default().into();
+        auth_info.password = password.unwrap_or_default().into();
         request.authentication_info = ::protobuf::MessageField::some(auth_info);
     }
 
@@ -2093,6 +2088,104 @@ mod tests_create_client_from_uri_internal {
         let err = create_client_from_uri_internal(c_uri.as_ptr(), std::ptr::null())
             .expect_err("expected missing-host error");
         assert!(err.contains("URI missing host"), "unexpected error: {err}");
+    }
+
+    fn parse_uri_with_options(
+        uri: &str,
+        options_json: &str,
+    ) -> Result<connection_request::ConnectionRequest, String> {
+        let c_uri = CString::new(uri).unwrap();
+        let c_options = CString::new(options_json).unwrap();
+        create_client_from_uri_internal(c_uri.as_ptr(), c_options.as_ptr())
+    }
+
+    fn iam_options_json(refresh_interval_seconds: &str) -> String {
+        format!(
+            r#"{{"iam_credentials": {{"cluster_name": "my-cluster", "region": "us-east-1", "service_type": "ELASTICACHE", "refresh_interval_seconds": {refresh_interval_seconds}}}}}"#
+        )
+    }
+
+    #[test]
+    fn username_only_uri_keeps_username() {
+        let req = parse_uri("redis://iam-user@127.0.0.1:6379");
+        let auth = req.authentication_info.as_ref().expect("auth info missing");
+        assert_eq!(&*auth.username, "iam-user");
+        assert_eq!(&*auth.password, "");
+    }
+
+    #[test]
+    fn percent_encoded_username_only_is_decoded() {
+        let req = parse_uri("redis://us%3Aer@127.0.0.1:6379");
+        let auth = req.authentication_info.as_ref().expect("auth info missing");
+        assert_eq!(&*auth.username, "us:er");
+        assert_eq!(&*auth.password, "");
+    }
+
+    #[test]
+    fn invalid_utf8_in_username_only_returns_error() {
+        let c_uri = CString::new("redis://%C3%28@127.0.0.1:6379").unwrap();
+        let err = create_client_from_uri_internal(c_uri.as_ptr(), std::ptr::null())
+            .expect_err("expected UTF-8 error");
+        assert!(
+            err.contains("Username in URI is not valid UTF-8"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn empty_password_keeps_username() {
+        let req = parse_uri("redis://user:@127.0.0.1:6379");
+        let auth = req.authentication_info.as_ref().expect("auth info missing");
+        assert_eq!(&*auth.username, "user");
+        assert_eq!(&*auth.password, "");
+    }
+
+    #[test]
+    fn uri_without_userinfo_has_no_authentication_info() {
+        let req = parse_uri("redis://127.0.0.1:6379");
+        assert!(req.authentication_info.is_none());
+    }
+
+    #[test]
+    fn username_only_uri_with_iam_credentials_sets_both() {
+        let req =
+            parse_uri_with_options("redis://iam-user@127.0.0.1:6379", &iam_options_json("300"))
+                .unwrap_or_else(|e| panic!("failed to parse: {e}"));
+        let auth = req.authentication_info.as_ref().expect("auth info missing");
+        assert_eq!(&*auth.username, "iam-user");
+        assert_eq!(&*auth.password, "");
+        let iam = auth
+            .iam_credentials
+            .as_ref()
+            .expect("iam credentials missing");
+        assert_eq!(&*iam.cluster_name, "my-cluster");
+        assert_eq!(&*iam.region, "us-east-1");
+        assert_eq!(iam.refresh_interval_seconds, Some(300));
+    }
+
+    #[test]
+    fn zero_refresh_interval_is_preserved_for_core_validation() {
+        let req = parse_uri_with_options("redis://iam-user@127.0.0.1:6379", &iam_options_json("0"))
+            .unwrap_or_else(|e| panic!("failed to parse: {e}"));
+        let iam = req
+            .authentication_info
+            .as_ref()
+            .and_then(|auth| auth.iam_credentials.as_ref())
+            .expect("iam credentials missing");
+        assert_eq!(iam.refresh_interval_seconds, Some(0));
+    }
+
+    #[test]
+    fn refresh_interval_above_u32_max_is_rejected() {
+        let err = parse_uri_with_options(
+            "redis://iam-user@127.0.0.1:6379",
+            &iam_options_json("4294967296"),
+        )
+        .expect_err("expected refresh interval error");
+        assert!(
+            err.contains("refresh_interval_seconds must be a positive integer"),
+            "unexpected error: {err}"
+        );
     }
 }
 
@@ -2521,9 +2614,13 @@ fn apply_json_options(
         }
 
         if let Some(refresh_interval) = iam_obj.get("refresh_interval_seconds") {
-            let interval_val = refresh_interval.as_u64().ok_or_else(|| {
-                "iam_credentials.refresh_interval_seconds must be a positive integer".to_string()
-            })? as u32;
+            let interval_val = refresh_interval
+                .as_u64()
+                .and_then(|seconds| u32::try_from(seconds).ok()) // reject > u32::MAX
+                .ok_or_else(|| {
+                    "iam_credentials.refresh_interval_seconds must be a positive integer"
+                        .to_string()
+                })?;
             iam_creds.refresh_interval_seconds = Some(interval_val);
         }
 

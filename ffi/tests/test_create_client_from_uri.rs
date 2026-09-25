@@ -1000,6 +1000,39 @@ fn test_create_client_from_uri_with_iam_credentials() {
 }
 
 #[test]
+fn test_create_client_from_uri_with_username_only() {
+    let server = Server::new();
+    let uri = CString::new(format!("redis://default@127.0.0.1:{}", server.port)).unwrap();
+
+    let client_type = Box::into_raw(Box::new(ClientType::SyncClient));
+
+    let response = unsafe {
+        create_client_from_uri(
+            uri.as_ptr(),
+            ptr::null(),
+            client_type,
+            null_pubsub_callback(),
+        )
+    };
+
+    assert!(!response.is_null());
+    let conn_response = unsafe { &*response };
+
+    if conn_response.connection_error_message.is_null() {
+        assert!(!conn_response.conn_ptr.is_null());
+
+        unsafe {
+            close_client(conn_response.conn_ptr);
+            free_connection_response(response as *mut ConnectionResponse);
+            drop(Box::from_raw(client_type));
+        }
+    } else {
+        let error = parse_error_msg(conn_response.connection_error_message);
+        panic!("Failed to create client with username only: {}", error);
+    }
+}
+
+#[test]
 fn test_create_client_from_uri_with_pubsub_subscriptions() {
     let server = Server::new();
     let uri = CString::new(format!("redis://127.0.0.1:{}", server.port)).unwrap();
