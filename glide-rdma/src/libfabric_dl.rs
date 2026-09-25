@@ -80,8 +80,8 @@ const PATH_OVERRIDE_VAR: &str = "GLIDE_LIBFABRIC_PATH";
 /// The libfabric API version these bindings were generated against.
 ///
 /// libfabric encodes a version as major in the high 16 bits, minor in the low 16.
-/// A library reporting less than this may lay its structs out differently from
-/// what this build expects, so it is refused.
+/// A library reporting an older version or a different major version may lay
+/// its structs out differently from what this build expects, so it is refused.
 const HEADER_API_VERSION: u32 = (ofi_libfabric_sys::bindgen::FI_MAJOR_VERSION << 16)
     | ofi_libfabric_sys::bindgen::FI_MINOR_VERSION;
 
@@ -227,7 +227,7 @@ fn resolved() -> Option<&'static Resolved> {
 ///
 /// Returns [`RdmaError::LibfabricUnavailable`] if no candidate could be loaded,
 /// or if the one that loaded reports an API version older than the headers this
-/// crate was built against.
+/// crate was built against or a different major version.
 pub fn ensure_loaded() -> Result<(), RdmaError> {
     let table = match LIBFABRIC.get_or_init(load) {
         Ok(table) => table,
@@ -243,15 +243,26 @@ pub fn ensure_loaded() -> Result<(), RdmaError> {
         std::mem::transmute::<*mut c_void, extern "C" fn() -> u32>(table.address[slot::VERSION])()
     };
 
-    if runtime_version < HEADER_API_VERSION {
+    check_version(runtime_version)
+}
+
+/// Refuses a libfabric whose structures may be laid out differently from the
+/// ones these bindings read.
+///
+/// An older minor version may be missing fields the headers have. A different
+/// major version may have moved them. libfabric's own check in `fi_getinfo`
+/// only covers a request newer than the library, so both are checked here.
+fn check_version(runtime_version: u32) -> Result<(), RdmaError> {
+    if runtime_version >> 16 != HEADER_API_VERSION >> 16 || runtime_version < HEADER_API_VERSION {
         return Err(RdmaError::LibfabricUnavailable {
             detail: format!(
-                "libfabric reports API {}.{}, but this build needs at least {}.{}; \
+                "libfabric reports API {}.{}, but this build needs {}.{} or a later {}.x; \
                  the two may disagree about how libfabric's structures are laid out",
                 runtime_version >> 16,
                 runtime_version & 0xffff,
                 HEADER_API_VERSION >> 16,
                 HEADER_API_VERSION & 0xffff,
+                HEADER_API_VERSION >> 16,
             ),
         });
     }
@@ -462,7 +473,10 @@ pub unsafe extern "C" fn fi_param_get(
 
 #[cfg(test)]
 mod tests {
-    use super::{FI_ENODATA, SYMBOLS, ensure_loaded, header_api_version};
+    use super::{
+        FI_ENODATA, HEADER_API_VERSION, SYMBOLS, check_version, ensure_loaded, header_api_version,
+    };
+    use crate::error::RdmaError;
 
     #[test]
     fn names_and_positions_agree() {
@@ -523,5 +537,39 @@ mod tests {
             FI_ENODATA, expected,
             "ENODATA is not the value this target uses"
         );
+    }
+
+    fn version(major: u32, minor: u32) -> u32 {
+        (major << 16) | minor
+    }
+
+    #[test]
+    fn the_same_or_a_later_minor_version_is_accepted() {
+        let major = HEADER_API_VERSION >> 16;
+        let minor = HEADER_API_VERSION & 0xffff;
+        assert!(check_version(HEADER_API_VERSION).is_ok());
+        assert!(check_version(version(major, minor + 1)).is_ok());
+        assert!(check_version(version(major, 0xffff)).is_ok());
+    }
+
+    #[test]
+    fn an_older_or_a_different_major_version_is_refused() {
+        let major = HEADER_API_VERSION >> 16;
+        let minor = HEADER_API_VERSION & 0xffff;
+        let mut refused = vec![version(major - 1, 0xffff), version(major + 1, 0)];
+        if minor > 0 {
+            refused.push(version(major, minor - 1));
+        }
+        for runtime in refused {
+            assert!(
+                matches!(
+                    check_version(runtime),
+                    Err(RdmaError::LibfabricUnavailable { .. })
+                ),
+                "{}.{} should be refused",
+                runtime >> 16,
+                runtime & 0xffff
+            );
+        }
     }
 }
