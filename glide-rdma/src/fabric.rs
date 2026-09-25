@@ -387,11 +387,4 @@ pub(crate) mod tests {
             assert_eq!(buffer.region_ref().remote_address, 0);
         }
     }
-
-    /// tcp emulates RMA in software, so a transfer only progresses while the target
-    /// polls. efa-direct needs no driver and would return None.
-    #[test]
-    fn tcp_drives_progress() {
-        assert!(fabric().drive_progress().is_some());
-    }
 }

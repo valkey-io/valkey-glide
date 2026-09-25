@@ -6,15 +6,25 @@
 //! its completion queue, so the software `tcp` provider needs a poller thread for a
 //! transfer to make progress at all. `efa-direct` needs none (the NIC services it)
 //! so no driver is created there and the guards below are never taken.
+//!
+//! The poller waits in `fi_cq_sread`, which sleeps in the kernel until the provider
+//! has work, so a transfer in flight costs no CPU while the server is not sending.
 
 use std::fmt;
+use std::os::raw::c_int;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Condvar, Mutex, PoisonError};
 use std::thread::JoinHandle;
 
 use ofi_libfabric_sys::bindgen::{
-    FI_EAVAIL, fi_cq_entry, fi_cq_err_entry, fi_cq_read, fi_cq_readerr, fid_cq,
+    FI_EAVAIL, fi_cq_entry, fi_cq_err_entry, fi_cq_read, fi_cq_readerr, fi_cq_signal, fi_cq_sread,
+    fid_cq,
 };
+
+/// The longest the poller sleeps in one `fi_cq_sread`. It is woken sooner by any
+/// completion or provider activity, and by [`ProgressDriver`]'s drop, so this only
+/// bounds how long it keeps waiting after the last guard is gone before parking.
+const WAIT_MS: c_int = 10;
 
 struct SendCompletionQueue(*mut fid_cq);
 
@@ -87,6 +97,10 @@ impl Drop for ProgressDriver {
                 .unwrap_or_else(PoisonError::into_inner);
             self.shared.wakeup.notify_one();
         }
+        // Wake the poller if it is asleep in `fi_cq_sread`. If this fails, it wakes
+        // on its own within `WAIT_MS`.
+        // SAFETY: the queue stays open until after the poller is joined below.
+        unsafe { fi_cq_signal(self.shared.queue.0) };
         if let Some(handle) = self.handle.take() {
             let _ = handle.join();
         }
@@ -110,13 +124,36 @@ fn poll_loop(shared: &ProgressShared) {
             return;
         }
 
-        // Drain fully. EFA's rxr provider emulates RMA with a software-segmented protocol that
-        // advances only while the target polls, so pacing this with a sleep throttles large
-        // transfers.
         // SAFETY: the queue stays open until this thread is joined; see `SendCompletionQueue`.
-        unsafe { drain(shared.queue.0) };
-        std::hint::spin_loop();
+        unsafe {
+            wait(shared.queue.0);
+            drain(shared.queue.0);
+        }
     }
+}
+
+/// Sleep until `queue` has an entry, the provider has work to do, `fi_cq_signal`
+/// is called on it, or `WAIT_MS` passes. Reads at most one entry and leaves an
+/// error entry for [`drain`].
+///
+/// # Safety
+/// `queue` must be an open completion queue opened with a wait object that no
+/// other thread reads.
+unsafe fn wait(queue: *mut fid_cq) {
+    let mut entry = fi_cq_entry {
+        op_context: std::ptr::null_mut(),
+    };
+    // SAFETY: the caller guarantees the queue is open and has a wait object, and
+    // `entry` has room for the one entry asked for.
+    unsafe {
+        fi_cq_sread(
+            queue,
+            std::ptr::from_mut(&mut entry).cast(),
+            1,
+            std::ptr::null(),
+            WAIT_MS,
+        )
+    };
 }
 
 /// Read every entry off `queue`, returning how many of them were errors.
@@ -187,8 +224,8 @@ mod tests {
     use super::{ProgressDriver, drain};
     use crate::config::{FabricConfig, Provider};
     use crate::endpoint::LibfabricEndpoint;
-    use crate::endpoint::tests::post_failing_read;
-    use ofi_libfabric_sys::bindgen::{fi_close, fi_cq_entry, fi_cq_read};
+    use crate::endpoint::tests::{post_failing_read, post_read};
+    use ofi_libfabric_sys::bindgen::{fi_close, fi_cq_entry, fi_cq_read, fi_mr_key};
     use std::sync::atomic::Ordering;
     use std::time::{Duration, Instant};
 
@@ -204,6 +241,28 @@ mod tests {
             .expect("the tcp provider should open");
         let driver = ProgressDriver::new(endpoint.completion_queue());
         (endpoint, driver)
+    }
+
+    /// Poll `endpoint`'s completion queue until one entry arrives or `deadline`
+    /// passes. Returns the read's result code: positive for a completion,
+    /// `-FI_EAVAIL` for an error entry, `-FI_EAGAIN` if nothing came in time.
+    fn wait_for_completion(endpoint: &LibfabricEndpoint, deadline: Instant) -> isize {
+        loop {
+            let mut entry = fi_cq_entry {
+                op_context: std::ptr::null_mut(),
+            };
+            // SAFETY: the queue is open, and `entry` has room for one entry.
+            let read = unsafe {
+                fi_cq_read(
+                    endpoint.completion_queue(),
+                    std::ptr::from_mut(&mut entry).cast(),
+                    1,
+                )
+            };
+            if read != -(libc::EAGAIN as isize) || Instant::now() >= deadline {
+                return read;
+            }
+        }
     }
 
     #[test]
@@ -249,6 +308,81 @@ mod tests {
         assert_eq!(driver.active(), 0);
         drop(driver);
         drop(endpoint);
+    }
+
+    /// The poller sleeps in `fi_cq_sread` while a guard is held, and dropping the
+    /// driver must still wake it and join it.
+    #[test]
+    fn drops_while_a_guard_is_outstanding() {
+        let (endpoint, driver) = driver();
+        let guard = driver.drive();
+        std::thread::sleep(Duration::from_millis(50));
+        let started = Instant::now();
+        drop(driver);
+        assert!(
+            started.elapsed() < Duration::from_secs(1),
+            "the poller took {:?} to shut down",
+            started.elapsed()
+        );
+        drop(guard);
+        drop(endpoint);
+    }
+
+    #[test]
+    fn an_inbound_read_completes_only_while_progress_is_driven() {
+        let (mut target, driver) = driver();
+        let mut initiator = LibfabricEndpoint::open(&FabricConfig::new(Provider::Tcp))
+            .expect("the tcp provider should open");
+        let pattern: Vec<u8> = (0..1u32 << 20).map(|i| i as u8).collect();
+        // SAFETY: `pattern` outlives the region, which is closed below.
+        let source = unsafe { target.register_remote(&pattern) }.expect("the source registers");
+        // SAFETY: `source` is an open region.
+        let remote_key = unsafe { fi_mr_key(source) };
+        let remote_address = if target.uses_virtual_addressing() {
+            pattern.as_ptr() as u64
+        } else {
+            0
+        };
+        let target_address = target.local_address().expect("has an address");
+        let read = |initiator: &mut LibfabricEndpoint, into: &[u8]| {
+            // SAFETY: each caller keeps `into` alive until it closes the region.
+            unsafe { post_read(initiator, into, &target_address, remote_address, remote_key) }
+        };
+        let nothing_yet = -(libc::EAGAIN as isize);
+
+        let guard = driver.drive();
+        let first = vec![0u8; pattern.len()];
+        let region = read(&mut initiator, &first);
+        let deadline = Instant::now() + Duration::from_secs(5);
+        assert!(wait_for_completion(&initiator, deadline) > 0);
+        assert_eq!(first, pattern);
+        // SAFETY: the read into it has completed, and nothing uses it after this.
+        unsafe { fi_close(&raw mut (*region).fid) };
+        drop(guard);
+        // The poller parks once its current wait ends, which takes at most `WAIT_MS`.
+        std::thread::sleep(Duration::from_millis(100));
+
+        let second = vec![0u8; pattern.len()];
+        let region = read(&mut initiator, &second);
+        let deadline = Instant::now() + Duration::from_millis(200);
+        assert_eq!(
+            wait_for_completion(&initiator, deadline),
+            nothing_yet,
+            "nothing polled the target, so the read should not have completed"
+        );
+
+        let guard = driver.drive();
+        let deadline = Instant::now() + Duration::from_secs(5);
+        assert!(wait_for_completion(&initiator, deadline) > 0);
+        assert_eq!(second, pattern);
+        drop(guard);
+        // SAFETY: both reads have completed, and nothing uses either region after this.
+        unsafe {
+            fi_close(&raw mut (*region).fid);
+            fi_close(&raw mut (*source).fid);
+        }
+        drop(driver);
+        drop(target);
     }
 
     /// Guards are counted, not boolean: overlapping transfers must not let the first

@@ -17,7 +17,8 @@ use ofi_libfabric_sys::bindgen::{
     fi_getinfo, fi_getname, fi_info, fi_mr_key, fi_mr_reg, fi_strerror, fi_threading,
     fi_threading_FI_THREAD_COMPLETION, fi_threading_FI_THREAD_DOMAIN,
     fi_threading_FI_THREAD_ENDPOINT, fi_threading_FI_THREAD_FID, fi_threading_FI_THREAD_SAFE,
-    fi_threading_FI_THREAD_UNSPEC, fid_av, fid_cq, fid_domain, fid_ep, fid_fabric, fid_mr,
+    fi_threading_FI_THREAD_UNSPEC, fi_wait_obj_FI_WAIT_UNSPEC, fid_av, fid_cq, fid_domain, fid_ep,
+    fid_fabric, fid_mr,
 };
 
 use crate::config::{FabricConfig, Provider};
@@ -573,6 +574,10 @@ impl LibfabricEndpoint {
 
             let mut cq_attr: fi_cq_attr = std::mem::zeroed();
             cq_attr.format = fi_cq_format_FI_CQ_FORMAT_CONTEXT;
+            if config.provider().needs_manual_progress() {
+                // Lets the progress poller sleep in `fi_cq_sread` rather than spin.
+                cq_attr.wait_obj = fi_wait_obj_FI_WAIT_UNSPEC;
+            }
             check(
                 fi_cq_open(
                     endpoint.domain,
@@ -806,9 +811,26 @@ pub(crate) mod tests {
         let own_address = endpoint
             .local_address()
             .expect("an endpoint has an address");
+        // SAFETY: passed on from the caller.
+        unsafe { post_read(endpoint, into, &own_address, 0, u64::MAX) }
+    }
+
+    /// Post a read of `into.len()` bytes from the region `remote_key` names at
+    /// `remote_address` on the endpoint at `peer_address`. Returns the region
+    /// registered for the read's destination, for the caller to close.
+    ///
+    /// # Safety
+    /// `into` must stay allocated and unmoved until the returned region is closed.
+    pub(crate) unsafe fn post_read(
+        endpoint: &mut LibfabricEndpoint,
+        into: &[u8],
+        peer_address: &[u8],
+        remote_address: u64,
+        remote_key: u64,
+    ) -> *mut fid_mr {
         let peer = endpoint
-            .fi_av_insert(&own_address)
-            .expect("its own address inserts");
+            .fi_av_insert(peer_address)
+            .expect("the peer address inserts");
         // SAFETY: the caller keeps `into` alive until the region is closed.
         let region = unsafe { endpoint.register_remote(into) }.expect("the destination registers");
         let deadline = Instant::now() + Duration::from_secs(5);
@@ -821,8 +843,8 @@ pub(crate) mod tests {
                     into.len(),
                     fi_mr_desc(region),
                     peer,
-                    0,
-                    u64::MAX,
+                    remote_address,
+                    remote_key,
                     ptr::null_mut(),
                 )
             };
