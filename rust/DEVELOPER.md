@@ -56,13 +56,30 @@ cargo build --release  # optimized
 ## Test
 
 ```bash
-cargo test --lib              # fast, pure unit tests (no server)
-cargo test --test it_string   # a single live integration suite (spawns valkey-server)
-cargo test                    # everything, incl. doctests
+cargo unit-tests         # unit tests
+cargo doc-tests          # doctests
+cargo integration-tests  # integration tests
+cargo test               # all tests (unit, docs, and integration)
+```
+
+To run only some tests, pass a filter. A test runs if its full name (e.g.
+`value::from_valkey_value_tests::from_owned_valkey_value_array`) contains the filter:
+
+```bash
+cargo unit-tests value::              # unit tests containing `value::`
+cargo doc-tests cmd::Cmd              # doctests containing `cmd::Cmd`
+cargo integration-tests get_missing   # integration tests containing `get_missing`
+```
+
+To run one integration test file, use `cargo test --test <file>`, with an optional filter:
+
+```bash
+cargo test --test it_string               # every test in tests/it_string.rs
+cargo test --test it_string get_missing   # only those containing `get_missing`
 ```
 
 Integration tests each boot their own ephemeral server on a free port and tear it
-down on drop. When no server binary is found, they print `SKIP` and pass.
+down on drop. The test fails if a server cannot be started.
 
 ## Lint & format
 
@@ -97,13 +114,13 @@ src/
   script.rs       Script (SHA-caching EVALSHA with EVAL fallback)
   telemetry.rs    OpenTelemetry config + init
   sync/mod.rs     blocking clients over a shared runtime
+  mock_tests/     server-free encoding/decoding tests for the extensions
   commands/
     core.rs       the unified command table (AsyncCommands / Commands)
     scan.rs       GLIDE-owned scan iterators
     <family>.rs   extension traits (blanket impls over CommandExecutor)
 tests/
   common/         shared harness (server, cluster, timeout, pubsub, macros)
-  mock_commands/  server-free encoding/decoding tests for the extensions
   it_*.rs         per-family live tests (one file per command family)
 ```
 
@@ -115,7 +132,7 @@ tests/
    convert with a `crate::value::*` helper.
 3. Add an integration test in the family's `tests/it_<family>.rs` (use the
    `resp_test!` macro for RESP2/RESP3 coverage), and a server-free encoding test
-   in `tests/mock_commands/<family>.rs`.
+   in `src/mock_tests/<family>.rs`.
 4. `cargo test && cargo clippy --all-targets`.
 
 ## Extending value conversion
