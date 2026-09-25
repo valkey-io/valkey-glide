@@ -111,46 +111,12 @@ public class GlideClient extends BaseClient
     /**
      * Creates a GlideClient that wraps an existing native handle from the pool.
      *
-     * <p>Backward-compatible overload for callers that do not have the pool's serialized
-     * ConnectionRequest available. Scope acquisition ({@link #scopedConnection}) on the returned
-     * client requires the 4-arg overload so the pool's connection bytes are threaded through.
-     *
-     * @param nativeHandle the native client handle (same as client_id from pool)
-     * @param maxInflight max inflight requests (0 = use core defaults)
-     * @param requestTimeoutMs request timeout in ms (0 = no Java-side timeout)
-     * @return a fully-functional GlideClient backed by the pool connection
-     */
-    public static GlideClient fromPoolHandle(
-            long nativeHandle, int maxInflight, long requestTimeoutMs) {
-        return fromPoolHandle(nativeHandle, maxInflight, requestTimeoutMs, null, null);
-    }
-
-    /**
-     * Creates a GlideClient that wraps an existing native handle from the pool.
-     *
      * <p>The pool's Rust side creates the actual connection and registers it in the JNI handle table.
      * This factory wires up the Java command dispatch chain so that commands flow through the
      * existing native bridge, and seeds the {@link glide.managers.ConnectionManager} with the pool's
      * native handle and serialized ConnectionRequest so {@link #scopedConnection} can materialize an
-     * isolated scope pool for this borrowed client.
-     *
-     * @param nativeHandle the native client handle (same as client_id from pool)
-     * @param maxInflight max inflight requests (0 = use core defaults)
-     * @param requestTimeoutMs request timeout in ms (0 = no Java-side timeout)
-     * @param connectionRequestBytes the pool's serialized protobuf ConnectionRequest, or {@code null}
-     *     when unavailable (scope acquisition will fail with "Client not connected")
-     * @return a fully-functional GlideClient backed by the pool connection
-     */
-    public static GlideClient fromPoolHandle(
-            long nativeHandle, int maxInflight, long requestTimeoutMs, byte[] connectionRequestBytes) {
-        return fromPoolHandle(
-                nativeHandle, maxInflight, requestTimeoutMs, null, connectionRequestBytes);
-    }
-
-    /**
-     * Creates a GlideClient that wraps an existing native handle from the pool, carrying the client
-     * config's credentials so the borrowed client's IAM guards behave as on a directly-created
-     * client.
+     * isolated scope pool for this borrowed client. The client config's credentials are carried so
+     * the borrowed client's IAM guards behave as on a directly-created client.
      *
      * @param nativeHandle the native client handle (same as client_id from pool)
      * @param maxInflight max inflight requests (0 = use core defaults)

@@ -61,14 +61,6 @@ public class ConnectionManager {
     private boolean poolBorrowed = false;
 
     /**
-     * Backward-compatible pool-borrowed constructor that defers inflight/timeout to core defaults and
-     * carries no credentials. Delegates to the full constructor.
-     */
-    public ConnectionManager(long nativeClientHandle, byte[] connectionRequestBytes) {
-        this(nativeClientHandle, 0, 5000, null, connectionRequestBytes);
-    }
-
-    /**
      * Constructor for pool-borrowed clients. Seeds the fields the direct path sets in {@link
      * #connectToValkey}: the native handle and serialized ConnectionRequest that {@code
      * scopedConnection} reads, the resolved inflight/timeout values the getters report, and the
