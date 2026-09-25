@@ -174,6 +174,18 @@ fn query_info_with(
                 errno: None,
             });
         }
+        // libfabric allocates all three, but a null one would be written through below.
+        if (*hints).ep_attr.is_null()
+            || (*hints).domain_attr.is_null()
+            || (*hints).fabric_attr.is_null()
+        {
+            fi_freeinfo(hints);
+            return Err(RdmaError::Fabric {
+                operation: "fi_allocinfo",
+                message: "returned an entry without its attributes".into(),
+                errno: None,
+            });
+        }
         let caps =
             u64::from(FI_MSG | FI_RMA | FI_READ | FI_WRITE | FI_REMOTE_READ | FI_REMOTE_WRITE);
         // Leaving mr_mode 0 makes efa hand back a variant whose RMA still needs
@@ -515,7 +527,13 @@ impl LibfabricEndpoint {
                 });
             }
 
-            let mr_mode = (*(*endpoint.info).domain_attr).mr_mode as u32;
+            let mr_mode = domain_attr(endpoint.info)
+                .ok_or_else(|| RdmaError::Fabric {
+                    operation: "fi_dupinfo",
+                    message: "returned an entry without domain attributes".into(),
+                    errno: None,
+                })?
+                .mr_mode as u32;
             endpoint.uses_virtual_addressing = mr_mode & FI_MR_VIRT_ADDR != 0;
             endpoint.remote_keys = if mr_mode & FI_MR_PROV_KEY != 0 {
                 RKeySource::ProviderSelected
