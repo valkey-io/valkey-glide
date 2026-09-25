@@ -1229,6 +1229,48 @@ def sync_check_no_messages_left(
         assert len(callback) == expected_callback_messages_count
 
 
+def _raise_subscription_state_mismatch(
+    subs,
+    modes,
+    expected_channels: Optional[Set[str]] = None,
+    expected_patterns: Optional[Set[str]] = None,
+    expected_sharded: Optional[Set[str]] = None,
+) -> None:
+    """Raise an AssertionError naming whichever expectation ``subs`` does not meet."""
+    if expected_channels is not None:
+        if len(expected_channels) == 0 and len(subs[modes.Exact]) > 0:
+            raise AssertionError(f"Expected no channels but found {subs[modes.Exact]}")
+        elif len(expected_channels) > 0 and not expected_channels.issubset(
+            subs[modes.Exact]
+        ):
+            raise AssertionError(
+                f"Expected channels {expected_channels} not in {subs[modes.Exact]}"
+            )
+
+    if expected_patterns is not None:
+        if len(expected_patterns) == 0 and len(subs[modes.Pattern]) > 0:
+            raise AssertionError(
+                f"Expected no patterns but found {subs[modes.Pattern]}"
+            )
+        elif len(expected_patterns) > 0 and not expected_patterns.issubset(
+            subs[modes.Pattern]
+        ):
+            raise AssertionError(
+                f"Expected patterns {expected_patterns} not in {subs[modes.Pattern]}"
+            )
+
+    if expected_sharded is not None and hasattr(modes, "Sharded"):
+        sharded_subs = subs.get(modes.Sharded, set())  # type: ignore[union-attr,arg-type]
+        if len(expected_sharded) == 0 and len(sharded_subs) > 0:
+            raise AssertionError(
+                f"Expected no sharded channels but found {sharded_subs}"
+            )
+        elif len(expected_sharded) > 0 and not expected_sharded.issubset(sharded_subs):
+            raise AssertionError(
+                f"Expected sharded {expected_sharded} not in {sharded_subs}"
+            )
+
+
 def sync_wait_for_subscription_state(
     client,
     expected_channels: Optional[Set[str]] = None,
@@ -1317,40 +1359,13 @@ def sync_wait_for_subscription_state(
             f"No subscription state could be read within {timeout_sec}s "
             "(client did not reconnect in time)"
         )
-    subs = last_subs
-
-    if expected_channels is not None:
-        if len(expected_channels) == 0 and len(subs[modes.Exact]) > 0:
-            raise AssertionError(f"Expected no channels but found {subs[modes.Exact]}")
-        elif len(expected_channels) > 0 and not expected_channels.issubset(
-            subs[modes.Exact]
-        ):
-            raise AssertionError(
-                f"Expected channels {expected_channels} not in {subs[modes.Exact]}"
-            )
-
-    if expected_patterns is not None:
-        if len(expected_patterns) == 0 and len(subs[modes.Pattern]) > 0:
-            raise AssertionError(
-                f"Expected no patterns but found {subs[modes.Pattern]}"
-            )
-        elif len(expected_patterns) > 0 and not expected_patterns.issubset(
-            subs[modes.Pattern]
-        ):
-            raise AssertionError(
-                f"Expected patterns {expected_patterns} not in {subs[modes.Pattern]}"
-            )
-
-    if expected_sharded is not None and hasattr(modes, "Sharded"):
-        sharded_subs = subs.get(modes.Sharded, set())  # type: ignore[union-attr,arg-type]
-        if len(expected_sharded) == 0 and len(sharded_subs) > 0:
-            raise AssertionError(
-                f"Expected no sharded channels but found {sharded_subs}"
-            )
-        elif len(expected_sharded) > 0 and not expected_sharded.issubset(sharded_subs):
-            raise AssertionError(
-                f"Expected sharded {expected_sharded} not in {sharded_subs}"
-            )
+    _raise_subscription_state_mismatch(
+        last_subs,
+        modes,
+        expected_channels=expected_channels,
+        expected_patterns=expected_patterns,
+        expected_sharded=expected_sharded,
+    )
 
 
 def sync_wait_for_subscription_state_if_needed(

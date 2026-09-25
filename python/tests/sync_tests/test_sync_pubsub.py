@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import time
-from typing import List, Optional, cast
+from typing import List, Optional, Tuple, cast
 
 import pytest
 from glide_shared.commands.core_options import PubSubMsg
@@ -66,6 +66,45 @@ _PUBLISH_POLL_INTERVAL_SEC = 0.1
 _MANY_CHANNELS_PUBLISH_DEADLINE_SEC = 60.0
 
 
+def _try_receive_expected(
+    method: MethodTesting,
+    listening_client,
+    callback_messages: List[PubSubMsg],
+    expected_idx: int,
+) -> Optional[PubSubMsg]:
+    """Return the message at ``expected_idx`` if it has arrived yet, else None."""
+    if method == MethodTesting.Callback:
+        if len(callback_messages) > expected_idx:
+            return decode_pubsub_msg(callback_messages[expected_idx])
+        return None
+    result = listening_client.try_get_pubsub_message()
+    return decode_pubsub_msg(result) if result is not None else None
+
+
+def _take_available_messages(
+    method: MethodTesting,
+    listening_client,
+    callback_messages: List[PubSubMsg],
+    callback_cursor: int,
+) -> Tuple[List[PubSubMsg], int]:
+    """Return every message available right now, plus the new callback cursor.
+
+    The callback list only grows, so ``callback_cursor`` resumes where the
+    previous call stopped rather than re-reading the whole list. The queue read
+    methods drain the client instead and leave the cursor alone.
+    """
+    if method == MethodTesting.Callback:
+        taken = [decode_pubsub_msg(m) for m in callback_messages[callback_cursor:]]
+        return taken, len(callback_messages)
+
+    taken = []
+    while True:
+        result = listening_client.try_get_pubsub_message()
+        if result is None:
+            return taken, callback_cursor
+        taken.append(decode_pubsub_msg(result))
+
+
 def _publish_and_wait_for_message(
     publishing_client,
     message: str,
@@ -107,14 +146,9 @@ def _publish_and_wait_for_message(
     """
 
     def _try_receive() -> Optional[PubSubMsg]:
-        if method == MethodTesting.Callback:
-            if len(callback_messages) >= expected_idx + 1:
-                return decode_pubsub_msg(callback_messages[expected_idx])
-            return None
-        result = listening_client.try_get_pubsub_message()
-        if result is not None:
-            return decode_pubsub_msg(result)
-        return None
+        return _try_receive_expected(
+            method, listening_client, callback_messages, expected_idx
+        )
 
     deadline = time.time() + deadline_sec
     while time.time() < deadline:
@@ -4278,26 +4312,14 @@ class TestSyncPubSub:
             # get_pubsub_message(), which waits on a condition variable with no
             # timeout and would hang the test on an undelivered message.
             received_channels: set = set()
-            validated_callbacks = 0
+            callback_cursor = 0
 
             def _drain_available() -> None:
-                nonlocal validated_callbacks
-                if method == MethodTesting.Callback:
-                    # The callback list only grows, so resume where the previous
-                    # drain stopped instead of re-validating the whole list.
-                    while validated_callbacks < len(callback_messages):
-                        msg = decode_pubsub_msg(callback_messages[validated_callbacks])
-                        validated_callbacks += 1
-                        assert msg.message == message_after
-                        assert msg.pattern is None
-                        assert msg.channel in channels
-                        received_channels.add(msg.channel)
-                    return
-                while True:
-                    result = listening_client.try_get_pubsub_message()
-                    if result is None:
-                        return
-                    msg = decode_pubsub_msg(result)
+                nonlocal callback_cursor
+                taken, callback_cursor = _take_available_messages(
+                    method, listening_client, callback_messages, callback_cursor
+                )
+                for msg in taken:
                     assert msg.message == message_after
                     assert msg.pattern is None
                     assert msg.channel in channels
