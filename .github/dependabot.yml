@@ -171,10 +171,7 @@ updates:
 
     # --- Rust crates --------------------------------------------------------------------------- #
 
-    # Label node 'cargo-rust' so that it can be re-used to avoid duplication.
-    # Entries should override 'directories' and 'labels' nodes.
-    - &cargo-rust
-      package-ecosystem: "cargo"
+    - package-ecosystem: "cargo"
       directories:
           - "/glide-logger"
           - "/glide-telemetry"
@@ -201,26 +198,68 @@ updates:
           - "dependencies"
           - "Rust ⚙️"
 
-    - <<: *cargo-rust
+    - package-ecosystem: "cargo"
       directories:
           - "/java"
+      schedule:
+          interval: "weekly"
+          day: "monday"
+          time: "09:00"
+      cooldown:
+          default-days: 7
+      open-pull-requests-limit: 10
+      groups:
+          patch-updates:
+              update-types:
+                  - "patch"
+          minor-updates:
+              update-types:
+                  - "minor"
       labels:
           - "dependencies"
           - "Rust ⚙️"
           - "java ☕"
 
-    - <<: *cargo-rust
+    - package-ecosystem: "cargo"
       directories:
           - "/python/glide-async"
           - "/python/glide-shared"
+      schedule:
+          interval: "weekly"
+          day: "monday"
+          time: "09:00"
+      cooldown:
+          default-days: 7
+      open-pull-requests-limit: 10
+      groups:
+          patch-updates:
+              update-types:
+                  - "patch"
+          minor-updates:
+              update-types:
+                  - "minor"
       labels:
           - "dependencies"
           - "Rust ⚙️"
           - "python 🐍"
 
-    - <<: *cargo-rust
+    - package-ecosystem: "cargo"
       directories:
           - "/node/rust-client"
+      schedule:
+          interval: "weekly"
+          day: "monday"
+          time: "09:00"
+      cooldown:
+          default-days: 7
+      open-pull-requests-limit: 10
+      groups:
+          patch-updates:
+              update-types:
+                  - "patch"
+          minor-updates:
+              update-types:
+                  - "minor"
       labels:
           - "dependencies"
           - "Rust ⚙️"
