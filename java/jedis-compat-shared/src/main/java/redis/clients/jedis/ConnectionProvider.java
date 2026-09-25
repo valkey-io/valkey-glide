@@ -12,7 +12,8 @@ public interface ConnectionProvider extends Closeable {
     /**
      * Get a connection from the provider
      *
-     * @return the address the GLIDE client connects to; not used to issue commands
+     * @return a {@code Connection} carrying an address; consulted only on the standalone path,
+     *     where its host and port seed the GLIDE client, and never used to issue commands
      */
     Connection getConnection();
 
