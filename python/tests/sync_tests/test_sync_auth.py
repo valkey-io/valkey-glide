@@ -750,23 +750,28 @@ class TestSyncAuthCommands:
 
 @pytest.mark.parametrize("cluster_mode", [False])
 def test_iam_pool_with_custom_credentials_provider(request, cluster_mode):
-    """Sync pool with IAM credential provider: the sync pool now supports custom
-    credential providers. Verify the pool is created without raising ValueError."""
+    """Sync pool with custom IAM credential provider: verifies the provider is
+    invoked when the pool creates clients and commands succeed."""
     from glide_shared.config import AwsCredentials
     from glide_sync.client_pool import ClientPool, PoolConfig
 
     from tests.utils.utils import create_sync_client_config
 
+    invocations = [0]
+
     def provider():
+        invocations[0] += 1
         return AwsCredentials(
             access_key_id="test_access_key",
             secret_access_key="test_secret_key",
+            session_token="test_session_token",
         )
 
     iam_config = IamAuthConfig(
         cluster_name=IAM_TEST_CLUSTER_NAME,
         service=ServiceType.ELASTICACHE,
         region=IAM_TEST_REGION_US_EAST_1,
+        refresh_interval_seconds=5,
         credential_provider=provider,
     )
     credentials = ServerCredentials(username=IAM_USERNAME, iam_config=iam_config)
@@ -775,36 +780,12 @@ def test_iam_pool_with_custom_credentials_provider(request, cluster_mode):
         cluster_mode=cluster_mode,
         credentials=credentials,
     )
-    # The sync pool now supports custom credential providers — no ValueError should be raised.
-    pool = ClientPool(client_config, PoolConfig(min_idle=0))
-    pool.close()
-
-
-def test_iam_sync_pool_rejects_credential_provider(request):
-    """Sync pool accepts IamAuthConfig.credential_provider without raising ValueError."""
-    from glide_shared.config import AwsCredentials
-    from glide_sync.client_pool import ClientPool, PoolConfig
-
-    from tests.utils.utils import create_sync_client_config
-
-    def provider():
-        return AwsCredentials(
-            access_key_id="test_access_key",
-            secret_access_key="test_secret_key",
-        )
-
-    iam_config = IamAuthConfig(
-        cluster_name=IAM_TEST_CLUSTER_NAME,
-        service=ServiceType.ELASTICACHE,
-        region=IAM_TEST_REGION_US_EAST_1,
-        credential_provider=provider,
-    )
-    credentials = ServerCredentials(username=IAM_USERNAME, iam_config=iam_config)
-    client_config = create_sync_client_config(
-        request,
-        cluster_mode=False,
-        credentials=credentials,
-    )
-    # The sync pool now accepts custom IAM credential providers — no ValueError should be raised.
-    pool = ClientPool(client_config, PoolConfig(min_idle=0))
-    pool.close()
+    pool = ClientPool(client_config, PoolConfig(max_size=3, min_idle=0))
+    try:
+        with pool.borrow() as client:
+            client.set("iam_sync_pool_custom_provider_key", "iam_sync_pool_custom_provider_value")
+            val = client.get("iam_sync_pool_custom_provider_key")
+            assert val == b"iam_sync_pool_custom_provider_value"
+    finally:
+        pool.close()
+    assert invocations[0] > 0, "Custom credential provider was never invoked for sync pool client"
