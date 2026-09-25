@@ -3,17 +3,48 @@
 ## Prerequisites
 
 - **Rust** — install via [rustup](https://rustup.rs)
-- The crate depends on `glide-core` and its vendored `redis-rs` via in-repo
-  **path dependencies** (`../glide-core` and `../glide-core/redis-rs/redis`), so
-  it builds from a checkout of the `valkey-io/valkey-glide` monorepo where those
-  crates sit alongside it — **a monorepo checkout is required** (this crate lives
-  in it, under `rust/`). No network fetch is needed to resolve the dependencies.
+- The crate depends on other in-repo crates via **path dependencies** (see the
+  Crates & dependencies section below), so **a monorepo checkout is required** —
+  it builds from a `valkey-io/valkey-glide` checkout where those crates sit
+  alongside it (this crate lives under `rust/`). No network fetch is needed to
+  resolve the dependencies.
 - A `valkey-server` (or `redis-server`) binary for integration tests.
   The harness auto-discovers one on `PATH`; override with:
 
   ```bash
   export VALKEY_SERVER_PATH=/path/to/valkey-server
   ```
+
+## Crates & dependencies
+
+The `valkey-glide` crate depends on several internal crates:
+
+| Package name        | Library name      | Directory                    | Depends on                                             |
+| ------------------- | ----------------- | ---------------------------- | ------------------------------------------------------ |
+| `valkey-glide`      | `glide`           | `rust/`                      | `glide-core`, `glide-core-engine`, `glide-logger`      |
+| `glide-core`        | `glide_core`      | `glide-core/`                | `glide-core-engine`, `glide-telemetry`, `glide-logger` |
+| `glide-core-engine` | `redis`           | `glide-core/redis-rs/redis/` | `glide-telemetry`, `glide-logger`                      |
+| `glide-telemetry`   | `glide_telemetry` | `glide-telemetry/`           | `glide-logger`                                         |
+| `glide-logger`      | `glide_logger`    | `glide-logger/`              | None                                                   |
+
+The `glide-core-engine` crate is forked from redis-rs 0.25.2, so it uses the `redis` library name.
+
+### Publishing and dual versioning
+
+Cargo requires every dependency of a published crate to also be published, so
+the internal crates it depends on must be published too. They are published
+with `0.x` versions and marked as internal, consistent with Rust conventions.
+
+In order to allow developers to build against the local source rather than a
+released version, the internal dependencies are declared with **both** `path`
+and `version` in `Cargo.toml`:
+
+```toml
+glide-core = { path = "../glide-core", version = "0.1.0" }
+```
+
+Cargo uses `path` when building locally, and `version` when the crate is resolved
+from crates.io after publishing.
 
 ## Build
 

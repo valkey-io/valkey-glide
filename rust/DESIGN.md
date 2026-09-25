@@ -1,5 +1,9 @@
 # DESIGN — `valkey-glide`
 
+<!-- TODO #7205: parts of this document predate the glide- crate renames — e.g.
+     the vendored fork is now published as `glide-core-engine` (still imported
+     as `redis::` via `[lib] name`). A thorough refresh is tracked in #7205. -->
+
 ## Dependency strategy
 
 The crate lives in the `valkey-io/valkey-glide` monorepo under `rust/` and
