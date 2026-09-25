@@ -72,7 +72,7 @@ fn masking_pattern(cmd_name: &str) -> MaskingPattern {
         | "WATCH" | "UNWATCH"
         // Hash (read)
         | "HDEL" | "HEXISTS" | "HGET" | "HGETALL" | "HINCRBY" | "HINCRBYFLOAT"
-        | "HKEYS" | "HLEN" | "HMGET" | "HRANDFIELD" | "HSCAN" | "HSTRLEN" | "HVALS"
+        | "HKEYS" | "HLEN" | "HMGET" | "HRANDFIELD" | "HSCAN" | "HSTRLEN" | "HVALS" | "HGETDEL"
         // List (read/structural)
         | "LINDEX" | "LLEN" | "LMOVE" | "LMPOP" | "LPOP" | "LRANGE" | "LREM" | "LTRIM"
         | "RPOP" | "RPOPLPUSH"

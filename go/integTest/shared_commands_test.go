@@ -1606,6 +1606,12 @@ func (suite *GlideTestSuite) TestHGetDel() {
 		assert.NoError(suite.T(), err)
 		assert.True(suite.T(), values3[0].IsNil())
 		assert.True(suite.T(), values3[1].IsNil())
+
+		// HGETDEL on a key holding a non-hash value returns a WRONGTYPE error
+		stringKey := uuid.NewString()
+		suite.verifyOK(client.Set(context.Background(), stringKey, "not_a_hash"))
+		_, err = client.HGetDel(context.Background(), stringKey, []string{"field1"})
+		suite.ErrorContains(err, "WRONGTYPE")
 	})
 }
 
