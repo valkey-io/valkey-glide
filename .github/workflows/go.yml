@@ -192,8 +192,12 @@ jobs:
                   make -k opentelemetry-test
 
             - name: Run Example Tests
+              # Runs on the newest Valkey engine in the matrix so that examples for
+              # commands from any supported version (e.g. HGETDEL, added in 9.1) are
+              # exercised against a server that actually implements them. Older engines
+              # remain covered by the version-gated integration tests.
               working-directory: go
-              if: ${{ contains(matrix.engine.version, '9') && !github.event.inputs.rc-version }}
+              if: ${{ matrix.engine.type == 'valkey' && matrix.engine.version == '9.1' && !github.event.inputs.rc-version }}
               run: |
                   make -k example-test
 
