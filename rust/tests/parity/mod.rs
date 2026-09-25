@@ -104,7 +104,9 @@ fn resolve_fork_mod_rs(manifest_dir: &Path) -> Result<PathBuf, ParityError> {
         .unwrap()
         .captures(&manifest)
         .and_then(|c| c.get(1))
-        .ok_or_else(|| ParityError::Skip("no `glide-core-engine` path dependency in Cargo.toml".into()))?
+        .ok_or_else(|| {
+            ParityError::Skip("no `glide-core-engine` path dependency in Cargo.toml".into())
+        })?
         .as_str()
         .to_owned();
 
