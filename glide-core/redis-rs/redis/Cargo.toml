@@ -143,6 +143,7 @@ tempfile = "3"
 once_cell = "1"
 anyhow = "1"
 serial_test = "4"
+rstest = "^0.27"
 versions = "7"
 which = "8"
 tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter"] }

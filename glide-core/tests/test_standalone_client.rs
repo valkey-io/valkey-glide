@@ -1707,4 +1707,57 @@ mod standalone_client_tests {
             );
         });
     }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
+    fn test_reconnect_with_zero_retries_reaches_recovered_node() {
+        let primary = ServerMock::new(create_primary_responses());
+        let refusing_port = get_available_port();
+        let mut addresses = get_mock_addresses(std::slice::from_ref(&primary));
+        addresses.push(redis::ConnectionAddr::Tcp(
+            IP_ADDRESS_V4.to_string(),
+            refusing_port,
+        ));
+        let connection_request = create_connection_request(
+            addresses.as_slice(),
+            &TestConfiguration {
+                connection_retry_strategy: Some(
+                    glide_core::connection_request::ConnectionRetryStrategy {
+                        number_of_retries: 0,
+                        factor: 10,
+                        exponent_base: 2,
+                        ..Default::default()
+                    },
+                ),
+                ..Default::default()
+            },
+        );
+
+        // shutdown_background prevents a spinning reconnect task from blocking the test process.
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(2)
+            .enable_all()
+            .build()
+            .unwrap();
+        let reconnect_reached_node = runtime.block_on(async move {
+            let _client =
+                StandaloneClient::create_client(connection_request.into(), None, None, None)
+                    .await
+                    .expect("client creation should succeed with a reachable primary");
+
+            let listener = tokio::net::TcpListener::bind((IP_ADDRESS_V4, refusing_port))
+                .await
+                .expect("failed to bind the previously refusing port");
+            let reconnect_attempt =
+                tokio::time::timeout(std::time::Duration::from_secs(5), listener.accept()).await;
+            reconnect_attempt.is_ok()
+        });
+        runtime.shutdown_background();
+
+        assert!(
+            reconnect_reached_node,
+            "background reconnect never reached the recovered node"
+        );
+    }
 }
