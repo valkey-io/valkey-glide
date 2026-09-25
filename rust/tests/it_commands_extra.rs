@@ -52,8 +52,8 @@ resp_test!(script_noscript_fallback_after_flush, c, {
 
 timed_tokio_test!(
     async fn from_url_connects_and_selects_db() {
-        let srv = server_or_skip!();
-        let url = format!("redis://127.0.0.1:{}/1", srv.port);
+        let server = common::TestServer::start();
+        let url = format!("redis://127.0.0.1:{}/1", server.port);
         let cfg = GlideClientConfiguration::from_url(&url).unwrap();
         assert_eq!(cfg.database_id, 1);
         let c1 = glide::GlideClient::connect(cfg).await.unwrap();
@@ -63,7 +63,8 @@ timed_tokio_test!(
 
         // A db-0 client must not see the key; a second db-1 client must.
         let c0 = glide::GlideClient::connect(
-            GlideClientConfiguration::from_url(format!("redis://127.0.0.1:{}", srv.port)).unwrap(),
+            GlideClientConfiguration::from_url(format!("redis://127.0.0.1:{}", server.port))
+                .unwrap(),
         )
         .await
         .unwrap();
@@ -78,10 +79,10 @@ timed_tokio_test!(
 
 #[test]
 fn sync_commands_trait_typed_api() {
-    let srv = server_or_skip!();
+    let server = common::TestServer::start();
     let c = SyncGlideClient::connect(GlideClientConfiguration::with_address(
         "127.0.0.1",
-        srv.port,
+        server.port,
     ))
     .unwrap();
 
@@ -102,10 +103,10 @@ fn sync_commands_trait_typed_api() {
 #[test]
 fn sync_pipeline_and_transaction() {
     use glide::sync::PipelineExt;
-    let srv = server_or_skip!();
+    let server = common::TestServer::start();
     let c = SyncGlideClient::connect(GlideClientConfiguration::with_address(
         "127.0.0.1",
-        srv.port,
+        server.port,
     ))
     .unwrap();
 
@@ -161,10 +162,10 @@ fn sync_pipeline_with_literal_multi_exec_is_not_atomic() {
     // be collapsed into a glide-core transaction (only `.atomic()` is): each
     // command gets its own reply.
     use glide::sync::PipelineExt;
-    let srv = server_or_skip!();
+    let server = common::TestServer::start();
     let c = SyncGlideClient::connect(GlideClientConfiguration::with_address(
         "127.0.0.1",
-        srv.port,
+        server.port,
     ))
     .unwrap();
 
@@ -184,10 +185,10 @@ fn sync_pipeline_with_literal_multi_exec_is_not_atomic() {
 #[test]
 fn sync_script_invoke_and_load() {
     // Blocking Script API (P1 parity gap): invoke() + load() on the sync client.
-    let srv = server_or_skip!();
+    let server = common::TestServer::start();
     let c = SyncGlideClient::connect(GlideClientConfiguration::with_address(
         "127.0.0.1",
-        srv.port,
+        server.port,
     ))
     .unwrap();
 

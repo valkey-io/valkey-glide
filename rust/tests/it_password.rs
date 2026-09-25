@@ -15,7 +15,7 @@ const NEW_PASS: &str = "rotated-p4ss";
 
 #[tokio::test]
 async fn update_password_immediate_auth_succeeds() {
-    let server = server_or_skip!();
+    let server = common::TestServer::start();
     let client = server.client().await;
     assert_eq!(client.ping().await.unwrap(), "PONG");
 
@@ -49,7 +49,7 @@ async fn update_password_immediate_auth_succeeds() {
 
 #[tokio::test]
 async fn update_password_immediate_auth_wrong_password_errors() {
-    let server = server_or_skip!();
+    let server = common::TestServer::start();
     let client = server.client().await;
 
     client
@@ -79,7 +79,7 @@ async fn update_password_immediate_auth_wrong_password_errors() {
 
 #[tokio::test]
 async fn update_password_store_only_is_ok_without_auth() {
-    let server = server_or_skip!();
+    let server = common::TestServer::start();
     let client = server.client().await;
 
     // Storing a password without immediate auth is a no-op on the wire and must
@@ -102,7 +102,7 @@ fn sync_update_password_store_only() {
     use glide::GlideClientConfiguration;
     use glide::sync::SyncGlideClient;
 
-    let server = server_or_skip!();
+    let server = common::TestServer::start();
     let config = GlideClientConfiguration::with_address("127.0.0.1", server.port);
     let client = SyncGlideClient::connect(config).expect("connect");
 

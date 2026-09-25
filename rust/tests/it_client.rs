@@ -20,16 +20,16 @@ use std::time::Duration;
 
 timed_tokio_test!(
     async fn pubsub_publish_receive_exact() {
-        let srv = server_or_skip!();
+        let server = common::TestServer::start();
         let channel = common::key("chan");
 
         let subs = PubSubSubscriptions::new().subscribe(PubSubChannelMode::Exact, channel.clone());
         let subscriber = GlideClient::connect(
-            GlideClientConfiguration::with_address("127.0.0.1", srv.port).subscriptions(subs),
+            GlideClientConfiguration::with_address("127.0.0.1", server.port).subscriptions(subs),
         )
         .await
         .expect("connect subscriber");
-        let publisher = srv.client().await;
+        let publisher = server.client().await;
 
         // Wait until the subscription is registered server-side (poll, not sleep).
         assert!(
@@ -52,14 +52,14 @@ timed_tokio_test!(
 
 timed_tokio_test!(
     async fn pubsub_pattern_receive() {
-        let srv = server_or_skip!();
+        let server = common::TestServer::start();
         let subs = PubSubSubscriptions::new().subscribe(PubSubChannelMode::Pattern, "news.*");
         let subscriber = GlideClient::connect(
-            GlideClientConfiguration::with_address("127.0.0.1", srv.port).subscriptions(subs),
+            GlideClientConfiguration::with_address("127.0.0.1", server.port).subscriptions(subs),
         )
         .await
         .expect("connect subscriber");
-        let publisher = srv.client().await;
+        let publisher = server.client().await;
 
         assert!(
             common::wait_for_numpat(&publisher, |n| n >= 1, Duration::from_secs(3)).await,
@@ -80,10 +80,10 @@ timed_tokio_test!(
 
 timed_tokio_test!(
     async fn pubsub_try_get_empty_returns_none() {
-        let srv = server_or_skip!();
+        let server = common::TestServer::start();
         let subs = PubSubSubscriptions::new().subscribe(PubSubChannelMode::Exact, "quiet");
         let subscriber = GlideClient::connect(
-            GlideClientConfiguration::with_address("127.0.0.1", srv.port).subscriptions(subs),
+            GlideClientConfiguration::with_address("127.0.0.1", server.port).subscriptions(subs),
         )
         .await
         .expect("connect subscriber");
@@ -94,11 +94,11 @@ timed_tokio_test!(
 
 timed_tokio_test!(
     async fn pubsub_without_subscriptions_errors() {
-        let srv = server_or_skip!();
-        let c = srv.client().await;
+        let server = common::TestServer::start();
+        let client = server.client().await;
         // A client not configured with subscriptions cannot receive.
-        assert!(c.get_pubsub_message().await.is_err());
-        assert!(c.try_get_pubsub_message().await.is_err());
+        assert!(client.get_pubsub_message().await.is_err());
+        assert!(client.try_get_pubsub_message().await.is_err());
     }
 );
 
@@ -108,7 +108,7 @@ timed_tokio_test!(
 
 timed_tokio_test!(
     async fn client_info_reports_lib_name_and_ver() {
-        let server = server_or_skip!();
+        let server = common::TestServer::start();
         let client = server.client().await;
 
         skip_if_version_below!(client, 7, 2, 0);

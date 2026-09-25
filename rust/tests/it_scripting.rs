@@ -71,7 +71,7 @@ resp_test!(eval_error_propagates, c, {
 
 #[tokio::test]
 async fn fcall_and_fcall_route_live() {
-    let server = server_or_skip!();
+    let server = common::TestServer::start();
     let client = server.client().await;
 
     skip_if_version_below!(client, 7, 0, 0);

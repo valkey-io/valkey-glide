@@ -13,8 +13,8 @@ use std::time::Duration;
 
 /// A lazy standalone client connects on first use and works normally.
 async fn standalone_lazy(protocol: ProtocolVersion) {
-    let srv = server_or_skip!();
-    let cfg = GlideClientConfiguration::with_address("127.0.0.1", srv.port)
+    let server = common::TestServer::start();
+    let cfg = GlideClientConfiguration::with_address("127.0.0.1", server.port)
         .lazy_connect(true)
         .protocol(protocol);
     let c = GlideClient::connect(cfg)

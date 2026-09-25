@@ -25,8 +25,8 @@ fn sync_client(port: u16) -> SyncGlideClient {
 }
 #[test]
 fn sync_cmd_query() {
-    let srv = server_or_skip!();
-    let c = sync_client(srv.port);
+    let server = common::TestServer::start();
+    let c = sync_client(server.port);
     let k = common::key("sync:cmd_query");
     let _: () = cmd("SET").arg(&k).arg(9).query(&c).unwrap();
     let v: i64 = cmd("GET").arg(&k).query(&c).unwrap();
@@ -35,8 +35,8 @@ fn sync_cmd_query() {
 
 #[test]
 fn sync_standalone_common_commands() {
-    let srv = server_or_skip!();
-    let c = sync_client(srv.port);
+    let server = common::TestServer::start();
+    let c = sync_client(server.port);
     let k = common::key("sync:str");
 
     let _: () = c.set(&k, "hello").unwrap();
@@ -64,8 +64,8 @@ fn sync_standalone_common_commands() {
 
 #[test]
 fn sync_standalone_set_options() {
-    let srv = server_or_skip!();
-    let c = sync_client(srv.port);
+    let server = common::TestServer::start();
+    let c = sync_client(server.port);
     let k = common::key("sync:opt");
 
     let _: () = c.set(&k, "first").unwrap();
@@ -80,8 +80,8 @@ fn sync_standalone_set_options() {
 
 #[test]
 fn sync_standalone_custom_command_and_pipeline() {
-    let srv = server_or_skip!();
-    let c = sync_client(srv.port);
+    let server = common::TestServer::start();
+    let c = sync_client(server.port);
     let k = common::key("sync:cc");
 
     c.custom_command(&["SET", &k, "42"]).unwrap();
@@ -114,8 +114,8 @@ fn sync_standalone_custom_command_and_pipeline() {
 
 #[test]
 fn sync_standalone_run_full_async_surface() {
-    let srv = server_or_skip!();
-    let c = sync_client(srv.port);
+    let server = common::TestServer::start();
+    let c = sync_client(server.port);
     let h = common::key("sync:hash");
     let l = common::key("sync:list");
     let z = common::key("sync:zset");

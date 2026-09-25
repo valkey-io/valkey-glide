@@ -59,7 +59,7 @@ fn generic_code_on_glide_sync_trait() {
     use glide::Commands;
     use glide::sync::SyncGlideClient;
 
-    let server = server_or_skip!();
+    let server = common::TestServer::start();
     let config = glide::GlideClientConfiguration::with_address("127.0.0.1", server.port);
     let client = SyncGlideClient::connect(config).unwrap();
 
