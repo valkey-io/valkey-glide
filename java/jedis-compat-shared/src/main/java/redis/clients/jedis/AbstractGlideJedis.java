@@ -27,6 +27,7 @@ import glide.api.models.commands.SetOptions;
 import glide.api.models.commands.SortBaseOptions;
 import glide.api.models.commands.SortOptions;
 import glide.api.models.commands.SortOptionsBinary;
+import glide.api.models.commands.SortOrder;
 import glide.api.models.commands.WeightAggregateOptions;
 import glide.api.models.commands.WeightAggregateOptions.Aggregate;
 import glide.api.models.commands.WeightAggregateOptions.KeyArray;
@@ -49,7 +50,9 @@ import glide.api.models.commands.bitmap.BitFieldOptions.SignedEncoding;
 import glide.api.models.commands.bitmap.BitFieldOptions.UnsignedEncoding;
 import glide.api.models.commands.bitmap.BitmapIndexType;
 import glide.api.models.commands.bitmap.BitwiseOperation;
+import glide.api.models.commands.geospatial.GeoSearchOptions;
 import glide.api.models.commands.geospatial.GeoSearchOrigin;
+import glide.api.models.commands.geospatial.GeoSearchResultOptions;
 import glide.api.models.commands.geospatial.GeoSearchShape;
 import glide.api.models.commands.geospatial.GeoSearchStoreOptions;
 import glide.api.models.commands.geospatial.GeoUnit;
@@ -100,6 +103,7 @@ import redis.clients.jedis.args.ListPosition;
 import redis.clients.jedis.args.SortedSetOption;
 import redis.clients.jedis.commands.ProtocolCommand;
 import redis.clients.jedis.exceptions.JedisConnectionException;
+import redis.clients.jedis.exceptions.JedisDataException;
 import redis.clients.jedis.exceptions.JedisException;
 import redis.clients.jedis.params.AbstractBitPosParams;
 import redis.clients.jedis.params.AbstractGeoSearchParam;
@@ -14082,50 +14086,41 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @since Valkey 6.2.0
      */
     public List<GeoRadiusResponse> geosearch(String key, AbstractGeoSearchParam<?> params) {
-        return executeCommandWithGlide(
-                "GEOSEARCH",
-                () -> {
-                    GeoUnit glideUnit = convertToGlideGeoUnit(params.getUnit());
+        return executeCommandWithGlide("GEOSEARCH", () -> runGeosearch(key, params));
+    }
 
-                    // Determine origin
-                    GeoSearchOrigin.SearchOrigin origin;
-                    if (params.getFromMember() != null) {
-                        origin = new GeoSearchOrigin.MemberOrigin(params.getFromMember());
-                    } else if (params.getFromCoordinate() != null) {
-                        GeoCoordinate coord = params.getFromCoordinate();
-                        origin =
-                                new GeoSearchOrigin.CoordOrigin(
-                                        new GeospatialData(coord.getLongitude(), coord.getLatitude()));
-                    } else {
-                        throw new IllegalArgumentException(
-                                "AbstractGeoSearchParam<?> must specify either fromMember or fromCoordinate");
-                    }
+    /** Runs GEOSEARCH with every option the caller set on the search parameters. */
+    private List<GeoRadiusResponse> runGeosearch(String key, AbstractGeoSearchParam<?> params)
+            throws InterruptedException, ExecutionException {
+        GeoSearchOrigin.SearchOrigin origin = toGlideSearchOrigin(params);
+        GeoSearchShape shape = toGlideSearchShape(params);
+        GeoSearchOptions withOptions = toGlideGeoSearchOptions(params);
+        GeoSearchResultOptions resultOptions = toGlideGeoSearchResultOptions(params);
 
-                    // Determine shape
-                    GeoSearchShape shape;
-                    if (params.getRadius() != null) {
-                        shape = new GeoSearchShape(params.getRadius(), glideUnit);
-                    } else if (params.getWidth() != null && params.getHeight() != null) {
-                        shape = new GeoSearchShape(params.getWidth(), params.getHeight(), glideUnit);
-                    } else {
-                        throw new IllegalArgumentException(
-                                "AbstractGeoSearchParam<?> must specify either radius or width/height");
-                    }
+        if (withOptions != null) {
+            Object[] rows;
+            if (resultOptions == null) {
+                rows = glideClient.geosearch(key, origin, shape, withOptions).get();
+            } else {
+                rows = glideClient.geosearch(key, origin, shape, withOptions, resultOptions).get();
+            }
+            return toEnrichedGeoRadiusResponses(rows, params);
+        }
 
-                    // For simple search without options, use basic geosearch
-                    // Note: GLIDE's geosearch doesn't support all Jedis options like WITHCOORD, WITHDIST,
-                    // etc.
-                    // in the same way, so this is a simplified implementation
-                    String[] result = glideClient.geosearch(key, origin, shape).get();
-                    if (result == null) {
-                        return Collections.emptyList();
-                    }
-                    List<GeoRadiusResponse> responses = new ArrayList<>();
-                    for (String m : result) {
-                        responses.add(new GeoRadiusResponse(m.getBytes(StandardCharsets.UTF_8)));
-                    }
-                    return responses;
-                });
+        String[] result;
+        if (resultOptions == null) {
+            result = glideClient.geosearch(key, origin, shape).get();
+        } else {
+            result = glideClient.geosearch(key, origin, shape, resultOptions).get();
+        }
+        if (result == null) {
+            return Collections.emptyList();
+        }
+        List<GeoRadiusResponse> responses = new ArrayList<>();
+        for (String member : result) {
+            responses.add(new GeoRadiusResponse(member.getBytes(StandardCharsets.UTF_8)));
+        }
+        return responses;
     }
 
     /**
@@ -14139,48 +14134,43 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @since Valkey 6.2.0
      */
     public List<GeoRadiusResponse> geosearch(final byte[] key, AbstractGeoSearchParam<?> params) {
-        return executeCommandWithGlide(
-                "GEOSEARCH",
-                () -> {
-                    GeoUnit glideUnit = convertToGlideGeoUnit(params.getUnit());
+        return executeCommandWithGlide("GEOSEARCH", () -> runGeosearchBinary(key, params));
+    }
 
-                    // Determine origin
-                    GeoSearchOrigin.SearchOrigin origin;
-                    if (params.getFromMember() != null) {
-                        origin =
-                                new GeoSearchOrigin.MemberOriginBinary(
-                                        GlideString.of(params.getFromMember().getBytes(StandardCharsets.UTF_8)));
-                    } else if (params.getFromCoordinate() != null) {
-                        GeoCoordinate coord = params.getFromCoordinate();
-                        origin =
-                                new GeoSearchOrigin.CoordOrigin(
-                                        new GeospatialData(coord.getLongitude(), coord.getLatitude()));
-                    } else {
-                        throw new IllegalArgumentException(
-                                "AbstractGeoSearchParam<?> must specify either fromMember or fromCoordinate");
-                    }
+    /** Binary counterpart of {@link #runGeosearch(String, AbstractGeoSearchParam)}. */
+    private List<GeoRadiusResponse> runGeosearchBinary(
+            final byte[] key, AbstractGeoSearchParam<?> params)
+            throws InterruptedException, ExecutionException {
+        GlideString binaryKey = GlideString.of(key);
+        GeoSearchOrigin.SearchOrigin origin = toGlideSearchOriginBinary(params);
+        GeoSearchShape shape = toGlideSearchShape(params);
+        GeoSearchOptions withOptions = toGlideGeoSearchOptions(params);
+        GeoSearchResultOptions resultOptions = toGlideGeoSearchResultOptions(params);
 
-                    // Determine shape
-                    GeoSearchShape shape;
-                    if (params.getRadius() != null) {
-                        shape = new GeoSearchShape(params.getRadius(), glideUnit);
-                    } else if (params.getWidth() != null && params.getHeight() != null) {
-                        shape = new GeoSearchShape(params.getWidth(), params.getHeight(), glideUnit);
-                    } else {
-                        throw new IllegalArgumentException(
-                                "AbstractGeoSearchParam<?> must specify either radius or width/height");
-                    }
+        if (withOptions != null) {
+            Object[] rows;
+            if (resultOptions == null) {
+                rows = glideClient.geosearch(binaryKey, origin, shape, withOptions).get();
+            } else {
+                rows = glideClient.geosearch(binaryKey, origin, shape, withOptions, resultOptions).get();
+            }
+            return toEnrichedGeoRadiusResponses(rows, params);
+        }
 
-                    GlideString[] result = glideClient.geosearch(GlideString.of(key), origin, shape).get();
-                    if (result == null) {
-                        return Collections.emptyList();
-                    }
-                    List<GeoRadiusResponse> responses = new ArrayList<>();
-                    for (GlideString m : result) {
-                        responses.add(new GeoRadiusResponse(m.getBytes()));
-                    }
-                    return responses;
-                });
+        GlideString[] result;
+        if (resultOptions == null) {
+            result = glideClient.geosearch(binaryKey, origin, shape).get();
+        } else {
+            result = glideClient.geosearch(binaryKey, origin, shape, resultOptions).get();
+        }
+        if (result == null) {
+            return Collections.emptyList();
+        }
+        List<GeoRadiusResponse> responses = new ArrayList<>();
+        for (GlideString member : result) {
+            responses.add(new GeoRadiusResponse(member.getBytes()));
+        }
+        return responses;
     }
 
     /**
@@ -14453,38 +14443,7 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @since Valkey 6.2.0
      */
     public long geosearchStore(String dest, String src, AbstractGeoSearchParam<?> params) {
-        return executeCommandWithGlide(
-                "GEOSEARCHSTORE",
-                () -> {
-                    GeoUnit glideUnit = convertToGlideGeoUnit(params.getUnit());
-
-                    // Determine origin
-                    GeoSearchOrigin.SearchOrigin origin;
-                    if (params.getFromMember() != null) {
-                        origin = new GeoSearchOrigin.MemberOrigin(params.getFromMember());
-                    } else if (params.getFromCoordinate() != null) {
-                        GeoCoordinate coord = params.getFromCoordinate();
-                        origin =
-                                new GeoSearchOrigin.CoordOrigin(
-                                        new GeospatialData(coord.getLongitude(), coord.getLatitude()));
-                    } else {
-                        throw new IllegalArgumentException(
-                                "AbstractGeoSearchParam<?> must specify either fromMember or fromCoordinate");
-                    }
-
-                    // Determine shape
-                    GeoSearchShape shape;
-                    if (params.getRadius() != null) {
-                        shape = new GeoSearchShape(params.getRadius(), glideUnit);
-                    } else if (params.getWidth() != null && params.getHeight() != null) {
-                        shape = new GeoSearchShape(params.getWidth(), params.getHeight(), glideUnit);
-                    } else {
-                        throw new IllegalArgumentException(
-                                "AbstractGeoSearchParam<?> must specify either radius or width/height");
-                    }
-
-                    return glideClient.geosearchstore(dest, src, origin, shape).get();
-                });
+        return geosearchStore(dest, src, params, false);
     }
 
     /**
@@ -14500,42 +14459,7 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      */
     public long geosearchStore(
             final byte[] dest, final byte[] src, AbstractGeoSearchParam<?> params) {
-        return executeCommandWithGlide(
-                "GEOSEARCHSTORE",
-                () -> {
-                    GeoUnit glideUnit = convertToGlideGeoUnit(params.getUnit());
-
-                    // Determine origin
-                    GeoSearchOrigin.SearchOrigin origin;
-                    if (params.getFromMember() != null) {
-                        origin =
-                                new GeoSearchOrigin.MemberOriginBinary(
-                                        GlideString.of(params.getFromMember().getBytes(StandardCharsets.UTF_8)));
-                    } else if (params.getFromCoordinate() != null) {
-                        GeoCoordinate coord = params.getFromCoordinate();
-                        origin =
-                                new GeoSearchOrigin.CoordOrigin(
-                                        new GeospatialData(coord.getLongitude(), coord.getLatitude()));
-                    } else {
-                        throw new IllegalArgumentException(
-                                "AbstractGeoSearchParam<?> must specify either fromMember or fromCoordinate");
-                    }
-
-                    // Determine shape
-                    GeoSearchShape shape;
-                    if (params.getRadius() != null) {
-                        shape = new GeoSearchShape(params.getRadius(), glideUnit);
-                    } else if (params.getWidth() != null && params.getHeight() != null) {
-                        shape = new GeoSearchShape(params.getWidth(), params.getHeight(), glideUnit);
-                    } else {
-                        throw new IllegalArgumentException(
-                                "AbstractGeoSearchParam<?> must specify either radius or width/height");
-                    }
-
-                    return glideClient
-                            .geosearchstore(GlideString.of(dest), GlideString.of(src), origin, shape)
-                            .get();
-                });
+        return geosearchStore(dest, src, params, false);
     }
 
     /**
@@ -14550,40 +14474,7 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @since Valkey 6.2.0
      */
     public long geosearchStoreStoreDist(String dest, String src, AbstractGeoSearchParam<?> params) {
-        return executeCommandWithGlide(
-                "GEOSEARCHSTORE",
-                () -> {
-                    GeoUnit glideUnit = convertToGlideGeoUnit(params.getUnit());
-
-                    // Determine origin
-                    GeoSearchOrigin.SearchOrigin origin;
-                    if (params.getFromMember() != null) {
-                        origin = new GeoSearchOrigin.MemberOrigin(params.getFromMember());
-                    } else if (params.getFromCoordinate() != null) {
-                        GeoCoordinate coord = params.getFromCoordinate();
-                        origin =
-                                new GeoSearchOrigin.CoordOrigin(
-                                        new GeospatialData(coord.getLongitude(), coord.getLatitude()));
-                    } else {
-                        throw new IllegalArgumentException(
-                                "AbstractGeoSearchParam<?> must specify either fromMember or fromCoordinate");
-                    }
-
-                    // Determine shape
-                    GeoSearchShape shape;
-                    if (params.getRadius() != null) {
-                        shape = new GeoSearchShape(params.getRadius(), glideUnit);
-                    } else if (params.getWidth() != null && params.getHeight() != null) {
-                        shape = new GeoSearchShape(params.getWidth(), params.getHeight(), glideUnit);
-                    } else {
-                        throw new IllegalArgumentException(
-                                "AbstractGeoSearchParam<?> must specify either radius or width/height");
-                    }
-
-                    // Use geosearchstore with STOREDIST option
-                    GeoSearchStoreOptions options = GeoSearchStoreOptions.builder().storeDist(true).build();
-                    return glideClient.geosearchstore(dest, src, origin, shape, options).get();
-                });
+        return geosearchStore(dest, src, params, true);
     }
 
     /**
@@ -14600,44 +14491,195 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      */
     public long geosearchStoreStoreDist(
             final byte[] dest, final byte[] src, AbstractGeoSearchParam<?> params) {
+        return geosearchStore(dest, src, params, true);
+    }
+
+    /**
+     * Runs GEOSEARCHSTORE for the given search parameters. GEOSEARCHSTORE rejects WITHCOORD, WITHDIST
+     * and WITHHASH, so only the origin, the shape, the sort order, the count and STOREDIST are sent.
+     *
+     * @param dest the destination key to store the result
+     * @param src the source key of the sorted set
+     * @param params the search parameters
+     * @param storeDist whether to store the distance from the center instead of the geohash
+     * @return the number of elements in the resulting sorted set
+     */
+    private long geosearchStore(
+            String dest, String src, AbstractGeoSearchParam<?> params, boolean storeDist) {
         return executeCommandWithGlide(
-                "GEOSEARCHSTORE",
-                () -> {
-                    GeoUnit glideUnit = convertToGlideGeoUnit(params.getUnit());
+                "GEOSEARCHSTORE", () -> runGeosearchStore(dest, src, params, storeDist));
+    }
 
-                    // Determine origin
-                    GeoSearchOrigin.SearchOrigin origin;
-                    if (params.getFromMember() != null) {
-                        origin =
-                                new GeoSearchOrigin.MemberOriginBinary(
-                                        GlideString.of(params.getFromMember().getBytes(StandardCharsets.UTF_8)));
-                    } else if (params.getFromCoordinate() != null) {
-                        GeoCoordinate coord = params.getFromCoordinate();
-                        origin =
-                                new GeoSearchOrigin.CoordOrigin(
-                                        new GeospatialData(coord.getLongitude(), coord.getLatitude()));
-                    } else {
-                        throw new IllegalArgumentException(
-                                "AbstractGeoSearchParam<?> must specify either fromMember or fromCoordinate");
-                    }
+    /** Binary counterpart of the String form of this helper. */
+    private long geosearchStore(
+            final byte[] dest, final byte[] src, AbstractGeoSearchParam<?> params, boolean storeDist) {
+        return executeCommandWithGlide(
+                "GEOSEARCHSTORE", () -> runGeosearchStoreBinary(dest, src, params, storeDist));
+    }
 
-                    // Determine shape
-                    GeoSearchShape shape;
-                    if (params.getRadius() != null) {
-                        shape = new GeoSearchShape(params.getRadius(), glideUnit);
-                    } else if (params.getWidth() != null && params.getHeight() != null) {
-                        shape = new GeoSearchShape(params.getWidth(), params.getHeight(), glideUnit);
-                    } else {
-                        throw new IllegalArgumentException(
-                                "AbstractGeoSearchParam<?> must specify either radius or width/height");
-                    }
+    private long runGeosearchStore(
+            String dest, String src, AbstractGeoSearchParam<?> params, boolean storeDist)
+            throws InterruptedException, ExecutionException {
+        GeoSearchOrigin.SearchOrigin origin = toGlideSearchOrigin(params);
+        GeoSearchShape shape = toGlideSearchShape(params);
+        GeoSearchResultOptions resultOptions = toGlideGeoSearchResultOptions(params);
+        GeoSearchStoreOptions storeOptions =
+                GeoSearchStoreOptions.builder().storeDist(storeDist).build();
 
-                    // Use geosearchstore with STOREDIST option
-                    GeoSearchStoreOptions options = GeoSearchStoreOptions.builder().storeDist(true).build();
-                    return glideClient
-                            .geosearchstore(GlideString.of(dest), GlideString.of(src), origin, shape, options)
-                            .get();
-                });
+        if (resultOptions == null) {
+            return glideClient.geosearchstore(dest, src, origin, shape, storeOptions).get();
+        }
+        return glideClient.geosearchstore(dest, src, origin, shape, storeOptions, resultOptions).get();
+    }
+
+    private long runGeosearchStoreBinary(
+            final byte[] dest, final byte[] src, AbstractGeoSearchParam<?> params, boolean storeDist)
+            throws InterruptedException, ExecutionException {
+        GlideString binaryDest = GlideString.of(dest);
+        GlideString binarySrc = GlideString.of(src);
+        GeoSearchOrigin.SearchOrigin origin = toGlideSearchOriginBinary(params);
+        GeoSearchShape shape = toGlideSearchShape(params);
+        GeoSearchResultOptions resultOptions = toGlideGeoSearchResultOptions(params);
+        GeoSearchStoreOptions storeOptions =
+                GeoSearchStoreOptions.builder().storeDist(storeDist).build();
+
+        if (resultOptions == null) {
+            return glideClient.geosearchstore(binaryDest, binarySrc, origin, shape, storeOptions).get();
+        }
+        return glideClient
+                .geosearchstore(binaryDest, binarySrc, origin, shape, storeOptions, resultOptions)
+                .get();
+    }
+
+    /** Builds the GLIDE search origin for the String form of a Jedis geo search. */
+    private static GeoSearchOrigin.SearchOrigin toGlideSearchOrigin(
+            AbstractGeoSearchParam<?> params) {
+        if (params.getFromMember() != null) {
+            return new GeoSearchOrigin.MemberOrigin(params.getFromMember());
+        }
+        if (params.getFromCoordinate() != null) {
+            GeoCoordinate coord = params.getFromCoordinate();
+            return new GeoSearchOrigin.CoordOrigin(
+                    new GeospatialData(coord.getLongitude(), coord.getLatitude()));
+        }
+        throw new IllegalArgumentException(
+                "AbstractGeoSearchParam<?> must specify either fromMember or fromCoordinate");
+    }
+
+    /** Builds the GLIDE search origin for the binary form of a Jedis geo search. */
+    private static GeoSearchOrigin.SearchOrigin toGlideSearchOriginBinary(
+            AbstractGeoSearchParam<?> params) {
+        if (params.getFromMember() != null) {
+            return new GeoSearchOrigin.MemberOriginBinary(
+                    GlideString.of(params.getFromMember().getBytes(StandardCharsets.UTF_8)));
+        }
+        if (params.getFromCoordinate() != null) {
+            GeoCoordinate coord = params.getFromCoordinate();
+            return new GeoSearchOrigin.CoordOrigin(
+                    new GeospatialData(coord.getLongitude(), coord.getLatitude()));
+        }
+        throw new IllegalArgumentException(
+                "AbstractGeoSearchParam<?> must specify either fromMember or fromCoordinate");
+    }
+
+    /** Builds the GLIDE search shape from the radius or the box the caller set. */
+    private static GeoSearchShape toGlideSearchShape(AbstractGeoSearchParam<?> params) {
+        GeoUnit glideUnit = convertToGlideGeoUnit(params.getUnit());
+        if (params.getRadius() != null) {
+            return new GeoSearchShape(params.getRadius(), glideUnit);
+        }
+        if (params.getWidth() != null && params.getHeight() != null) {
+            return new GeoSearchShape(params.getWidth(), params.getHeight(), glideUnit);
+        }
+        throw new IllegalArgumentException(
+                "AbstractGeoSearchParam<?> must specify either radius or width/height");
+    }
+
+    /**
+     * Maps withCoord, withDist and withHash onto GLIDE's options. Returns null when the caller asked
+     * for none of them, which is the signal to use the plain member-only overload.
+     */
+    private static GeoSearchOptions toGlideGeoSearchOptions(AbstractGeoSearchParam<?> params) {
+        if (!params.isWithCoord() && !params.isWithDist() && !params.isWithHash()) {
+            return null;
+        }
+        return GeoSearchOptions.builder()
+                .withCoord(params.isWithCoord())
+                .withDist(params.isWithDist())
+                .withHash(params.isWithHash())
+                .build();
+    }
+
+    /**
+     * Maps the sort order, the count and the any flag onto GLIDE's options. Returns null when the
+     * caller set none of them. Like upstream Jedis, ANY is only sent alongside COUNT.
+     */
+    private static GeoSearchResultOptions toGlideGeoSearchResultOptions(
+            AbstractGeoSearchParam<?> params) {
+        Boolean ascending = params.getAscending();
+        Integer count = params.getCount();
+        SortOrder sortOrder = null;
+        if (ascending != null) {
+            sortOrder = ascending ? SortOrder.ASC : SortOrder.DESC;
+        }
+
+        if (sortOrder == null && count == null) {
+            return null;
+        }
+        if (count == null) {
+            return new GeoSearchResultOptions(sortOrder);
+        }
+        // GLIDE drops a non-positive COUNT; the server rejects it, so report that rather than
+        // silently returning every match.
+        if (count <= 0) {
+            throw new JedisDataException("ERR COUNT must be > 0");
+        }
+        return sortOrder == null
+                ? new GeoSearchResultOptions(count, params.isAny())
+                : new GeoSearchResultOptions(sortOrder, count, params.isAny());
+    }
+
+    /**
+     * Converts a GEOSEARCH reply carrying WITHCOORD, WITHDIST or WITHHASH data into Jedis responses.
+     * Each row is the member followed by the requested extras, which the server always orders
+     * distance, geohash, coordinates. Fields the caller did not request keep the same defaults
+     * upstream Jedis gives them.
+     */
+    private static List<GeoRadiusResponse> toEnrichedGeoRadiusResponses(
+            Object[] rows, AbstractGeoSearchParam<?> params) {
+        if (rows == null) {
+            return Collections.emptyList();
+        }
+
+        List<GeoRadiusResponse> responses = new ArrayList<>();
+        for (Object row : rows) {
+            Object[] entry = (Object[]) row;
+            GeoRadiusResponse response = new GeoRadiusResponse(toMemberBytes(entry[0]));
+            Object[] extras = (Object[]) entry[1];
+
+            int next = 0;
+            if (params.isWithDist()) {
+                response.setDistance(((Number) extras[next++]).doubleValue());
+            }
+            if (params.isWithHash()) {
+                response.setRawScore(((Number) extras[next++]).longValue());
+            }
+            if (params.isWithCoord()) {
+                Object[] coord = (Object[]) extras[next];
+                double longitude = ((Number) coord[0]).doubleValue();
+                double latitude = ((Number) coord[1]).doubleValue();
+                response.setCoordinate(new GeoCoordinate(longitude, latitude));
+            }
+            responses.add(response);
+        }
+        return responses;
+    }
+
+    /** Reads a member name out of a GEOSEARCH reply, which is a String or a GlideString. */
+    private static byte[] toMemberBytes(Object member) {
+        return member instanceof GlideString
+                ? ((GlideString) member).getBytes()
+                : ((String) member).getBytes(StandardCharsets.UTF_8);
     }
 
     // ==================== DEPRECATED GEO COMMANDS ====================
