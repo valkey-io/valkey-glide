@@ -491,6 +491,14 @@ public class BatchTestUtilities {
                     .hpexpiretime(hashKey3, new String[] {field1, field2});
         }
 
+        // HGETDEL command (Valkey 9.1.0+)
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("9.1.0")) {
+            String hashKey4 = generateKey("HashKey", isAtomic);
+            batch
+                    .hset(hashKey4, createMap(field1, value1, field2, value2))
+                    .hgetdel(hashKey4, new String[] {field1, field2});
+        }
+
         if (SERVER_VERSION.isGreaterThanOrEqualTo("8.0.0")) {
             batch
                     .hscan(hashKey2, "0", HScanOptions.builder().count(20L).noValues(false).build())
@@ -566,6 +574,17 @@ public class BatchTestUtilities {
                                     -2L, -2L
                                 }, // hpexpiretime(hashKey3, new String[] {field1, field2}) - fields expired (don't
                                 // exist)
+                            });
+        }
+
+        // Add expected results for HGETDEL command (Valkey 9.1.0+)
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("9.1.0")) {
+            result =
+                    concatenateArrays(
+                            result,
+                            new Object[] {
+                                2L, // hset(hashKey4, createMap(field1, value1, field2, value2))
+                                new Object[] {value1, value2}, // hgetdel(hashKey4, new String[] {field1, field2})
                             });
         }
 
