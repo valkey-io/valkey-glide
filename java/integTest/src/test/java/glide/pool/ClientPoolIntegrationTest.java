@@ -753,18 +753,18 @@ public class ClientPoolIntegrationTest {
      * A pool-borrowed client must enforce the configured inflight limit on the Java side, like a
      * directly-created client. {@code ClientPool.getClient} previously hard-coded {@code
      * maxInflight=0} into {@code fromPoolHandle}, disabling the Java-side (AsyncRegistry) limiter for
-     * pooled clients regardless of {@code inflightRequestsLimit} (see {@code
-     * SharedClientTests.inflight_requests_limit}). Note the JNI pre-check also rejects an over-limit
-     * request with the same message, so this test guards the wiring rather than distinguishing the
-     * two enforcement layers.
+     * pooled clients regardless of {@code inflightRequestsLimit}.
+     *
+     * <p>The test exercises the batch path deliberately. On the command path the JNI pre-check also
+     * rejects an over-limit request with the same message, so a command-based test cannot tell the
+     * Java limiter apart from the core one. The batch path has no such native pre-check and {@code
+     * send_pipeline}/{@code send_transaction} never reserve a core inflight slot, so the Java-side
+     * limiter is the only thing bounding concurrent batches: with it off, an over-limit batch stays
+     * pending; with it on, it is rejected. That makes this a genuine A-B of the fix.
      */
     @Test
     public void testPooledClientHonorsInflightRequestsLimit() throws Exception {
         assumeTrue(standaloneAvailable(), "No standalone endpoints configured");
-        // Relies on a directly-created client already existing (TestConfiguration's standalone client
-        // takes JNI handle 1) so the pool's connectivity probe doesn't collide with the background
-        // pooled client's id 1 and evict it on close. Pooled ids and JNI handles share one table but
-        // draw from independent counters that both start at 1.
         int inflightRequestsLimit = 5;
         String[] parts = STANDALONE_HOSTS[0].split(":");
         ClientPoolConfig config =
@@ -790,26 +790,33 @@ public class ClientPoolIntegrationTest {
             glide.api.models.pool.PooledGlideClient pooled = pool.acquire().get(10, TimeUnit.SECONDS);
             glide.api.GlideClient borrowed = pooled.unwrap();
 
-            String keyName = testKey(false, "inflight-nonexist");
+            String keyName = testKey(false, "inflight-batch-nonexist");
 
-            // Saturate the limiter with blocking pops that never complete.
-            java.util.List<java.util.concurrent.CompletableFuture<String[]>> responses =
+            // Saturate the Java limiter with non-atomic batches each holding a blocking pop that never
+            // completes. The batch path has no native inflight pre-check, so only the Java-side
+            // limiter bounds these -- unlike the command path where the JNI pre-check would reject
+            // regardless of this fix.
+            java.util.List<java.util.concurrent.CompletableFuture<Object[]>> responses =
                     new java.util.ArrayList<>();
             for (int i = 0; i < inflightRequestsLimit + 1; i++) {
-                responses.add(borrowed.blpop(new String[] {keyName}, 0));
+                glide.api.models.Batch batch = new glide.api.models.Batch(false);
+                batch.blpop(new String[] {keyName}, 0);
+                responses.add(borrowed.exec(batch, false));
             }
 
             for (int i = 0; i < inflightRequestsLimit; i++) {
-                assertFalse(responses.get(i).isDone(), "Request " + i + " should still be pending");
+                assertFalse(responses.get(i).isDone(), "Batch " + i + " should still be pending");
             }
 
-            // The (limit + 1)-th request must fast-fail at the Java-side limiter.
+            // The (limit + 1)-th batch must be rejected by the Java-side limiter. On the batch path
+            // the core does not reserve a slot, so the exact AsyncRegistry message is reachable only
+            // when the Java limiter is armed -- an exact-match assertion tells the layers apart.
             try {
-                responses.get(inflightRequestsLimit).get(100, TimeUnit.MILLISECONDS);
-                fail("Expected the (limit + 1)-th request to be rejected by the inflight limiter");
+                responses.get(inflightRequestsLimit).get(1, TimeUnit.SECONDS);
+                fail("Expected the (limit + 1)-th batch to be rejected by the inflight limiter");
             } catch (java.util.concurrent.ExecutionException e) {
                 assertInstanceOf(glide.api.models.exceptions.RequestException.class, e.getCause());
-                assertTrue(e.getCause().getMessage().contains("maximum inflight requests"));
+                assertEquals("Client reached maximum inflight requests", e.getCause().getMessage());
             }
 
             // Unblock the pending pops so the borrowed client releases cleanly.

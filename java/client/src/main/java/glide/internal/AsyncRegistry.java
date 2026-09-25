@@ -158,6 +158,32 @@ public final class AsyncRegistry {
      */
     public static <T> long register(
             CompletableFuture<T> future, int maxInflightRequests, long clientHandle, long timeoutMillis) {
+        // Direct clients key the inflight counter on the native handle.
+        return register(future, maxInflightRequests, clientHandle, clientHandle, timeoutMillis);
+    }
+
+    /**
+     * Register future with an inflight counter key distinct from the native handle.
+     *
+     * <p>Pooled clients draw their native handle from the same positive id space as directly-created
+     * clients, so the two can collide and share one inflight counter. Callers that need a
+     * collision-free counter (pooled clients) pass a {@code counterKey} in a disjoint range; the
+     * {@code clientHandle} is unused here and retained only for signature parity with native
+     * tracking.
+     *
+     * @param future the future to register
+     * @param maxInflightRequests per-client limit (0 = no Java-side limit, defer to core)
+     * @param clientHandle native client handle (unused for counting; kept for parity)
+     * @param counterKey key for the per-client inflight counter, distinct from any other client's
+     * @param timeoutMillis Java-side timeout in milliseconds (0 = use Rust default timeout)
+     * @return correlation ID for native callback, or 0 if shutdown is in progress
+     */
+    public static <T> long register(
+            CompletableFuture<T> future,
+            int maxInflightRequests,
+            long clientHandle,
+            long counterKey,
+            long timeoutMillis) {
         if (future == null) {
             throw new IllegalArgumentException("Future cannot be null");
         }
@@ -173,7 +199,7 @@ public final class AsyncRegistry {
         // Client-specific inflight limit check
         // 0 means "use native/core defaults" - no limit enforcement in Java layer
         if (maxInflightRequests > 0) {
-            enforceInflightLimit(clientHandle, maxInflightRequests);
+            enforceInflightLimit(counterKey, maxInflightRequests);
         }
 
         long correlationId = nextId.getAndIncrement();
@@ -192,7 +218,7 @@ public final class AsyncRegistry {
             activeFutures.remove(correlationId);
             registrationTimestamps.remove(correlationId);
             if (maxInflightRequests > 0) {
-                decrementInflightCount(clientHandle);
+                decrementInflightCount(counterKey);
             }
             future.completeExceptionally(
                     new ClosingException("Client is shutting down, cannot register new requests"));
@@ -206,7 +232,7 @@ public final class AsyncRegistry {
 
         // Set up cleanup on the original future
         // This ensures proper resource cleanup when completed
-        setupCleanup(correlationId, originalFuture, maxInflightRequests, clientHandle);
+        setupCleanup(correlationId, originalFuture, maxInflightRequests, counterKey);
 
         return correlationId;
     }

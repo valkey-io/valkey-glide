@@ -5,9 +5,11 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import glide.api.models.exceptions.ClosingException;
+import glide.api.models.exceptions.RequestException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import org.junit.jupiter.api.BeforeEach;
@@ -232,6 +234,45 @@ public class AsyncRegistryTest {
         // Clean up: cancel the abandoned future so its 60s timeout task is cancelled and doesn't
         // outlive this test and invoke GlideNativeBridge.markTimedOut in the test JVM.
         f.cancel(true);
+    }
+
+    // ==================== Inflight Counter Key Tests ====================
+
+    @Test
+    void register_sameCounterKey_sharesTheInflightCounter() {
+        // Characterizes the collision the pooled-client fix guards against: two clients keyed on the
+        // same value share one counter, so requests from one count against the other's limit.
+        long sharedKey = 7L;
+        CompletableFuture<Object> f1 = new CompletableFuture<>();
+        CompletableFuture<Object> f2 = new CompletableFuture<>();
+        AsyncRegistry.register(f1, 1, sharedKey, sharedKey, 0);
+
+        // Second registration on the same counter key exceeds the limit of 1 and is rejected.
+        RequestException ex =
+                assertThrows(
+                        RequestException.class, () -> AsyncRegistry.register(f2, 1, sharedKey, sharedKey, 0));
+        assertEquals("Client reached maximum inflight requests", ex.getMessage());
+    }
+
+    @Test
+    void register_distinctCounterKeys_doNotShareTheInflightCounter() {
+        // The fix: a pooled client keys its inflight counter on a value disjoint from a directly-
+        // created client's native handle, so saturating one does not falsely reject the other even
+        // when their native handles collide. Here both native handles are 5 (the collision), but the
+        // pooled client's counter key is -5.
+        long collidingHandle = 5L;
+        long directKey = collidingHandle; // direct client keys on its native handle
+        long pooledKey = -collidingHandle; // pooled client keys on a disjoint value
+
+        // Saturate the direct client's counter (limit 1).
+        CompletableFuture<Object> direct = new CompletableFuture<>();
+        AsyncRegistry.register(direct, 1, collidingHandle, directKey, 0);
+
+        // The pooled client (same native handle, distinct counter key) must not be rejected.
+        CompletableFuture<Object> pooled = new CompletableFuture<>();
+        assertDoesNotThrow(
+                () -> AsyncRegistry.register(pooled, 1, collidingHandle, pooledKey, 0),
+                "pooled client must not share the direct client's inflight counter");
     }
 
     private static void assertClosingException(CompletableFuture<?> future, String expectedMessage) {

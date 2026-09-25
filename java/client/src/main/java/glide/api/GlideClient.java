@@ -133,7 +133,8 @@ public class GlideClient extends BaseClient
             ServerCredentials credentials,
             byte[] connectionRequestBytes) {
         glide.internal.GlideCoreClient coreClient =
-                new glide.internal.GlideCoreClient(nativeHandle, maxInflight, requestTimeoutMs);
+                new glide.internal.GlideCoreClient(
+                        nativeHandle, maxInflight, requestTimeoutMs, poolInflightCounterKey(nativeHandle));
         glide.managers.CommandManager commandManager = new glide.managers.CommandManager(coreClient);
         glide.managers.ConnectionManager connectionManager =
                 new glide.managers.ConnectionManager(
@@ -160,6 +161,21 @@ public class GlideClient extends BaseClient
         }
 
         return client;
+    }
+
+    /**
+     * Map a pool client id to a Java-side inflight-counter key that cannot collide with a
+     * directly-created client's key.
+     *
+     * <p>{@link glide.internal.AsyncRegistry} keys its per-client inflight counter on the native
+     * handle. A pooled client's handle is its pool client id, drawn from a positive id space
+     * independent of the JNI handle space, so the two can produce the same value and share one
+     * counter. Pool ids are always positive, so negating one yields a distinct key that no positive
+     * directly-created handle can match, and distinct pool ids stay distinct. The native handle
+     * itself is unchanged and still used for every native call.
+     */
+    private static long poolInflightCounterKey(long poolClientId) {
+        return -poolClientId;
     }
 
     /**
