@@ -7,6 +7,11 @@ import pytest
 
 from tests.sync_tests.conftest import create_sync_client
 from tests.utils.cluster import ValkeyCluster
+from tests.utils.cluster_skip_guard import (
+    fail_session_on_unexpected_cluster_skips,
+    record_cluster_skip_report,
+    reset_unexpected_cluster_skips,
+)
 from tests.utils.utils import sync_check_if_server_version_lt
 
 DEFAULT_HOST = "localhost"
@@ -214,11 +219,20 @@ def call_before_all_pytests(request):
     create_clusters(tls, load_module, cluster_endpoints, standalone_endpoints)
 
 
+def pytest_sessionstart(session):
+    reset_unexpected_cluster_skips()
+
+
+def pytest_runtest_logreport(report):
+    record_cluster_skip_report(report)
+
+
 def pytest_sessionfinish(session, exitstatus):
     """
     Called after whole test run finished, right before
     returning the exit status to the system.
     """
+    fail_session_on_unexpected_cluster_skips(session)
     for attr in (
         "valkey_cluster",
         "standalone_cluster",
