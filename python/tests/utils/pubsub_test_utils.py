@@ -23,12 +23,49 @@ from glide_shared.config import (
     GlideClusterClientConfiguration,
     ProtocolVersion,
 )
+from glide_shared.exceptions import ConnectionError as GlideConnectionError
+from glide_shared.exceptions import RequestError
 from glide_shared.exceptions import TimeoutError as GlideTimeoutError
 from glide_sync.glide_client import GlideClient as SyncGlideClient
 from glide_sync.glide_client import GlideClusterClient as SyncGlideClusterClient
 
 # Type alias for any glide client (async or sync)
 AnyGlideClient: TypeAlias = Union[TGlideClient, SyncGlideClient, SyncGlideClusterClient]
+
+# Substring identifying the cluster recovery rejection. While a cluster client
+# is refreshing slots or reconnecting to its initial nodes, redis-rs fails
+# pending requests with ErrorKind::ClientError / "Connection in recovery"
+# (cluster_async/mod.rs). glide-core maps ClientError to
+# RequestErrorType::Unspecified, so it reaches Python as a plain RequestError
+# rather than TimeoutError or ConnectionError, and has to be matched by message.
+_RECONNECT_REJECTION_MARKER = "connection in recovery"
+
+
+def is_reconnect_in_progress_error(error: BaseException) -> bool:
+    """Return True if ``error`` is a command failure caused by an in-progress reconnect.
+
+    Tests that sever connections on purpose (``CLIENT KILL``) have to tolerate
+    commands failing while the client re-establishes them. Three shapes are
+    possible and all three are transient:
+
+    * ``TimeoutError``: the command was dispatched and the reply did not arrive
+      within the request timeout (250 ms by default).
+    * ``ConnectionError``: the socket was already gone when the command was
+      dispatched.
+    * ``RequestError`` carrying "Connection in recovery": the cluster client
+      rejected the command outright while refreshing slots or reconnecting to
+      its initial nodes.
+
+    Everything else returns False so the caller re-raises it. That keeps a real
+    failure (NOPERM, CROSSSLOT, a closed client) loud instead of letting a retry
+    loop spin to its deadline and report a misleading "message never arrived".
+    """
+    if isinstance(error, (GlideTimeoutError, GlideConnectionError)):
+        return True
+    return (
+        isinstance(error, RequestError)
+        and _RECONNECT_REJECTION_MARKER in str(error).lower()
+    )
 
 
 class SubscriptionMethod(IntEnum):
@@ -1222,11 +1259,15 @@ def sync_wait_for_subscription_state(
     while time.time() - start_time < timeout_sec:
         try:
             state = client.get_subscriptions()
-        except GlideTimeoutError:
-            # Client may still be reconnecting after a connection kill;
-            # get_subscriptions() is a command that can time out while the
-            # underlying connection is being re-established.  Continue
-            # polling until the outer timeout expires.
+        except RequestError as error:
+            if not is_reconnect_in_progress_error(error):
+                raise
+            # The client may still be recovering from a connection kill.
+            # GET_SUBSCRIPTIONS is answered from local synchronizer state, so
+            # it does not fail on a dead socket, but it is still dispatched
+            # through the core and is bounded by the request timeout, so a
+            # starved runtime can surface it as a timeout. Keep polling until
+            # the outer timeout expires.
             time.sleep(0.1)
             continue
 
