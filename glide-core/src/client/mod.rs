@@ -316,10 +316,13 @@ pub(super) fn get_connection_info(
     tls_params: Option<redis::TlsConnParams>,
     address_resolver: Option<&Arc<dyn AddressResolver>>,
 ) -> redis::ConnectionInfo {
+    // Trim an IPv6 host's `[ ]` before use (and before the resolver sees it), so a
+    // configured `[::1]` reaches redis-rs's tuple `lookup_host` as a bare `::1`.
+    let host = crate::scope::strip_host_brackets(&address.host);
     let (resolved_host, resolved_port) = if let Some(resolver) = address_resolver {
-        resolver.resolve(&address.host, get_port(address))
+        resolver.resolve(host, get_port(address))
     } else {
-        (address.host.to_string(), get_port(address))
+        (host.to_string(), get_port(address))
     };
 
     let addr = if tls_mode != TlsMode::NoTls {
@@ -3281,8 +3284,8 @@ mod tests {
     };
 
     use super::{
-        Client, ClientWrapper, ConnectionError, LazyClient, get_timeout_from_cmd_arg,
-        validate_effective_lib_name, validate_effective_lib_ver,
+        Client, ClientWrapper, ConnectionError, LazyClient, get_connection_info,
+        get_timeout_from_cmd_arg, validate_effective_lib_name, validate_effective_lib_ver,
     };
     use std::sync::Weak;
 
@@ -3300,6 +3303,38 @@ mod tests {
                 Ok(()),
                 "{lib_name:?}"
             );
+        }
+    }
+
+    #[test]
+    fn test_get_connection_info_trims_ipv6_brackets() {
+        use crate::client::types::NodeAddress;
+        use redis::ConnectionAddr;
+
+        for (configured, expected_host) in [
+            ("[::1]", "::1"),
+            ("::1", "::1"),
+            ("127.0.0.1", "127.0.0.1"),
+            ("example.com", "example.com"),
+        ] {
+            let address = NodeAddress {
+                host: configured.to_string(),
+                port: 6379,
+            };
+            let info = get_connection_info(
+                &address,
+                super::TlsMode::NoTls,
+                redis::RedisConnectionInfo::default(),
+                None,
+                None,
+            );
+            match info.addr {
+                ConnectionAddr::Tcp(host, port) => {
+                    assert_eq!(host, expected_host, "host for {configured:?}");
+                    assert_eq!(port, 6379);
+                }
+                other => panic!("expected Tcp addr, got {other:?}"),
+            }
         }
     }
 
