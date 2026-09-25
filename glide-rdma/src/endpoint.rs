@@ -707,6 +707,9 @@ impl LibfabricEndpoint {
                 ptr::null_mut(),
             )
         };
+        if inserted < 0 {
+            check(inserted, "fi_av_insert")?;
+        }
         if inserted != 1 {
             return Err(RdmaError::Fabric {
                 operation: "fi_av_insert",
@@ -830,6 +833,26 @@ pub(crate) mod tests {
                 )
             };
         }
+    }
+
+    #[test]
+    fn an_address_that_names_nothing_is_not_inserted() {
+        let mut endpoint = LibfabricEndpoint::open(&FabricConfig::new(Provider::Tcp))
+            .expect("the tcp provider should open");
+        let length = endpoint.local_address().expect("has an address").len();
+        let error = endpoint
+            .fi_av_insert(&vec![0xff; length])
+            .expect_err("nothing listens there");
+        assert!(
+            matches!(
+                error,
+                RdmaError::Fabric {
+                    operation: "fi_av_insert",
+                    ..
+                }
+            ),
+            "got {error:?}"
+        );
     }
 
     #[test]
