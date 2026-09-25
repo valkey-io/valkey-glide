@@ -9,10 +9,19 @@ import java.io.Closeable;
  */
 public interface ConnectionProvider extends Closeable {
 
-    /** Get a connection from the provider */
+    /**
+     * Get a connection from the provider
+     *
+     * @return a {@code Connection} carrying an address; consulted only on the standalone path, where
+     *     its host and port seed the GLIDE client, and never used to issue commands
+     */
     Connection getConnection();
 
-    /** Get the client configuration */
+    /**
+     * Get the client configuration
+     *
+     * @return the client configuration this provider was built with
+     */
     JedisClientConfig getClientConfig();
 
     /** Close the provider and all its connections */

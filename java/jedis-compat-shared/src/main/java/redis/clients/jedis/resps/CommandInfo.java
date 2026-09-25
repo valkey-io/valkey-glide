@@ -46,17 +46,27 @@ public class CommandInfo {
      * <p>GET's arity is 2 since the command only accepts one argument and always has the format GET
      * _key_. MGET's arity is -2 since the command accepts at least one argument, but possibly
      * multiple ones: MGET _key1_ [key2] [key3] ....
+     *
+     * @return the command's arity
      */
     public long getArity() {
         return arity;
     }
 
-    /** Command flags */
+    /**
+     * Command flags
+     *
+     * @return the command's flags
+     */
     public List<String> getFlags() {
         return flags;
     }
 
-    /** The position of the command's first key name argument */
+    /**
+     * The position of the command's first key name argument
+     *
+     * @return the 1-based position of the first key argument, or 0 if the command takes no key
+     */
     public long getFirstKey() {
         return firstKey;
     }
@@ -64,6 +74,8 @@ public class CommandInfo {
     /**
      * The position of the command's last key name argument Commands that accept a single key have
      * both first key and last key set to 1
+     *
+     * @return the 1-based position of the last key argument, or 0 if the command takes no key
      */
     public long getLastKey() {
         return lastKey;
@@ -72,22 +84,36 @@ public class CommandInfo {
     /**
      * This value is the step, or increment, between the first key and last key values where the keys
      * are
+     *
+     * @return the step between successive key positions
      */
     public long getStep() {
         return step;
     }
 
-    /** An array of simple strings that are the ACL categories to which the command belongs */
+    /**
+     * An array of simple strings that are the ACL categories to which the command belongs
+     *
+     * @return the ACL categories the command belongs to
+     */
     public List<String> getAclCategories() {
         return aclCategories;
     }
 
-    /** Helpful information about the command */
+    /**
+     * Helpful information about the command
+     *
+     * @return the command tips
+     */
     public List<String> getTips() {
         return tips;
     }
 
-    /** All the command's subcommands, if any */
+    /**
+     * All the command's subcommands, if any
+     *
+     * @return the command's subcommands as supplied, which may be {@code null}
+     */
     public List<String> getSubcommands() {
         return subcommands;
     }

@@ -263,12 +263,25 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
         }
     }
 
-    /** Constructor with host, port and config */
+    /**
+     * Constructor with host, port and config
+     *
+     * @param host the server host
+     * @param port the server port
+     * @param clientConfig the client configuration
+     */
     protected AbstractUnifiedJedis(String host, int port, JedisClientConfig clientConfig) {
         this(new HostAndPort(host, port), clientConfig);
     }
 
-    /** Constructor with host, port, timeout and password */
+    /**
+     * Constructor with host, port, timeout and password
+     *
+     * @param host the server host
+     * @param port the server port
+     * @param timeout the socket timeout, in milliseconds
+     * @param password the password to authenticate with
+     */
     protected AbstractUnifiedJedis(String host, int port, int timeout, String password) {
         this(
                 host,
@@ -276,12 +289,26 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
                 DefaultJedisClientConfig.builder().socketTimeoutMillis(timeout).password(password).build());
     }
 
-    /** Constructor with host, port and timeout */
+    /**
+     * Constructor with host, port and timeout
+     *
+     * @param host the server host
+     * @param port the server port
+     * @param timeout the socket timeout, in milliseconds
+     */
     protected AbstractUnifiedJedis(String host, int port, int timeout) {
         this(host, port, DefaultJedisClientConfig.builder().socketTimeoutMillis(timeout).build());
     }
 
-    /** Constructor with host, port, timeout, password and database */
+    /**
+     * Constructor with host, port, timeout, password and database
+     *
+     * @param host the server host
+     * @param port the server port
+     * @param timeout the socket timeout, in milliseconds
+     * @param password the password to authenticate with
+     * @param database the logical database index to select
+     */
     protected AbstractUnifiedJedis(
             String host, int port, int timeout, String password, int database) {
         this(
@@ -294,7 +321,16 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
                         .build());
     }
 
-    /** Constructor with host, port, timeout, password, database and clientName */
+    /**
+     * Constructor with host, port, timeout, password, database and clientName
+     *
+     * @param host the server host
+     * @param port the server port
+     * @param timeout the socket timeout, in milliseconds
+     * @param password the password to authenticate with
+     * @param database the logical database index to select
+     * @param clientName the client name to register with the server
+     */
     protected AbstractUnifiedJedis(
             String host, int port, int timeout, String password, int database, String clientName) {
         this(
@@ -310,12 +346,21 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
 
     // ========== CLUSTER CONSTRUCTORS ==========
 
-    /** Constructor for cluster with Set of nodes */
+    /**
+     * Constructor for cluster with Set of nodes
+     *
+     * @param jedisClusterNodes the cluster node addresses
+     */
     protected AbstractUnifiedJedis(Set<HostAndPort> jedisClusterNodes) {
         this(jedisClusterNodes, DefaultJedisClientConfig.builder().build());
     }
 
-    /** Constructor for cluster with Set of nodes and config */
+    /**
+     * Constructor for cluster with Set of nodes and config
+     *
+     * @param jedisClusterNodes the cluster node addresses
+     * @param clientConfig the client configuration
+     */
     protected AbstractUnifiedJedis(
             Set<HostAndPort> jedisClusterNodes, JedisClientConfig clientConfig) {
         this(false, jedisClusterNodes, clientConfig); // Default to Jedis 4.x for backward compatibility
@@ -351,6 +396,10 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
     /**
      * Constructor for cluster with Set of nodes, config and max attempts Note: maxAttempts is for
      * Jedis compatibility but not used in GLIDE configuration
+     *
+     * @param jedisClusterNodes the cluster node addresses
+     * @param clientConfig the client configuration
+     * @param maxAttempts accepted for Jedis compatibility and ignored
      */
     protected AbstractUnifiedJedis(
             Set<HostAndPort> jedisClusterNodes, JedisClientConfig clientConfig, int maxAttempts) {
@@ -361,6 +410,11 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * Constructor for cluster with Set of nodes, config, max attempts and max retry duration Note:
      * maxAttempts and maxTotalRetriesDuration are for Jedis compatibility but not used in GLIDE
      * configuration
+     *
+     * @param jedisClusterNodes the cluster node addresses
+     * @param clientConfig the client configuration
+     * @param maxAttempts accepted for Jedis compatibility and ignored
+     * @param maxTotalRetriesDuration accepted for Jedis compatibility and ignored
      */
     protected AbstractUnifiedJedis(
             Set<HostAndPort> jedisClusterNodes,
@@ -372,7 +426,11 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
 
     // ========== PROVIDER-BASED CONSTRUCTORS (for compatibility) ==========
 
-    /** Constructor with ConnectionProvider (for compatibility) */
+    /**
+     * Constructor with ConnectionProvider (for compatibility)
+     *
+     * @param provider supplies the address and client configuration to connect with
+     */
     protected AbstractUnifiedJedis(ConnectionProvider provider) {
         this(false, provider); // Default to Jedis 4.x for backward compatibility
     }
@@ -434,7 +492,13 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
         }
     }
 
-    /** Constructor with ConnectionProvider and max attempts */
+    /**
+     * Constructor with ConnectionProvider and max attempts
+     *
+     * @param provider supplies the address and client configuration to connect with
+     * @param maxAttempts accepted for Jedis compatibility and ignored
+     * @param maxTotalRetriesDuration accepted for Jedis compatibility and ignored
+     */
     protected AbstractUnifiedJedis(
             ConnectionProvider provider, int maxAttempts, Duration maxTotalRetriesDuration) {
         this(provider); // Delegate to main provider constructor for now
@@ -442,7 +506,12 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
 
     // ========== PROTECTED CONSTRUCTORS ==========
 
-    /** Protected constructor for internal use with standalone client */
+    /**
+     * Protected constructor for internal use with standalone client
+     *
+     * @param glideClient the standalone GLIDE client to wrap
+     * @param jedisConfig the client configuration
+     */
     protected AbstractUnifiedJedis(GlideClient glideClient, JedisClientConfig jedisConfig) {
         this(false, glideClient, jedisConfig); // Default to Jedis 4.x for backward compatibility
     }
@@ -464,7 +533,12 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
         this.resourceId = ResourceLifecycleManager.getInstance().registerResource(this);
     }
 
-    /** Protected constructor for internal use with cluster client */
+    /**
+     * Protected constructor for internal use with cluster client
+     *
+     * @param glideClusterClient the cluster GLIDE client to wrap
+     * @param jedisConfig the client configuration
+     */
     protected AbstractUnifiedJedis(
             GlideClusterClient glideClusterClient, JedisClientConfig jedisConfig) {
         this(false, glideClusterClient, jedisConfig); // Default to Jedis 4.x for backward compatibility
@@ -777,7 +851,11 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
         }
     }
 
-    /** Check if the connection is closed. */
+    /**
+     * Check if the connection is closed.
+     *
+     * @return {@code true} if this instance has been closed
+     */
     public boolean isClosed() {
         return closed;
     }
@@ -835,7 +913,7 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * with optional parameters. This method provides advanced SET functionality including conditional
      * setting, expiration, and atomic get-and-set operations.
      *
-     * <p>The AbstractSetParams<?> object allows you to specify:
+     * <p>The {@code AbstractSetParams<?>} object allows you to specify:
      *
      * <ul>
      *   <li>Existence conditions (NX - only if key doesn't exist, XX - only if key exists)
@@ -1396,6 +1474,7 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @return the substring, or empty string if the key does not exist
      * @deprecated Use {@link #getrange(String, long, long)} instead
      */
+    @Deprecated
     public String substr(String key, int start, int end) {
         return getrange(key, start, end);
     }
@@ -4401,7 +4480,8 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
 
     /**
      * <b><a href="https://valkey.io/commands/substr">SUBSTR Command</a></b> Returns a substring of
-     * the string value stored at key.
+     * the string value stored at key. This method is deprecated in favor of {@link #getrange(byte[],
+     * long, long)} which provides the same functionality.
      *
      * @param key the key containing the string
      * @param start the start offset
@@ -4409,7 +4489,9 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @return the substring as a byte array
      * @throws JedisException if the operation fails
      * @since Valkey 1.0.0
+     * @deprecated Use {@link #getrange(byte[], long, long)} instead
      */
+    @Deprecated
     public byte[] substr(byte[] key, int start, int end) {
         checkNotClosed();
         try {

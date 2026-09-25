@@ -16,33 +16,55 @@ public abstract class AbstractRestoreParams<T extends AbstractRestoreParams<T>> 
 
     protected AbstractRestoreParams() {}
 
-    /** Replace existing key. */
+    /**
+     * Replace existing key.
+     *
+     * @return this instance, for chaining
+     */
     public T replace() {
         params.add("REPLACE");
         return self();
     }
 
-    /** Don't set TTL if key already exists. */
+    /**
+     * Treat the RESTORE ttl argument as an absolute Unix timestamp in milliseconds.
+     *
+     * @return this instance, for chaining
+     */
     public T absTtl() {
         params.add("ABSTTL");
         return self();
     }
 
-    /** Set idle time. */
+    /**
+     * Set idle time.
+     *
+     * @param seconds the idle time, in seconds, to record for the restored key
+     * @return this instance, for chaining
+     */
     public T idleTime(long seconds) {
         params.add("IDLETIME");
         params.add(String.valueOf(seconds));
         return self();
     }
 
-    /** Set frequency. */
+    /**
+     * Set frequency.
+     *
+     * @param frequency the LFU access frequency to record for the restored key
+     * @return this instance, for chaining
+     */
     public T freq(int frequency) {
         params.add("FREQ");
         params.add(String.valueOf(frequency));
         return self();
     }
 
-    /** Get the parameters as a string array. */
+    /**
+     * Get the parameters as a string array.
+     *
+     * @return the configured options as RESTORE command arguments
+     */
     public String[] getParams() {
         return params.toArray(new String[0]);
     }

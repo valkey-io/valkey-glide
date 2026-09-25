@@ -30,54 +30,90 @@ public abstract class AbstractSetParams<T extends AbstractSetParams<T>> {
     private Long expirationValue;
     private boolean get = false; // GET option to return old value
 
-    /** Only set the key if it does not already exist. */
+    /**
+     * Only set the key if it does not already exist.
+     *
+     * @return this instance, for chaining
+     */
     public T nx() {
         this.existenceCondition = ExistenceCondition.NX;
         return self();
     }
 
-    /** Only set the key if it already exists. */
+    /**
+     * Only set the key if it already exists.
+     *
+     * @return this instance, for chaining
+     */
     public T xx() {
         this.existenceCondition = ExistenceCondition.XX;
         return self();
     }
 
-    /** Set the specified expire time, in seconds. */
+    /**
+     * Set the specified expire time, in seconds.
+     *
+     * @param seconds time to live in seconds
+     * @return this instance, for chaining
+     */
     public T ex(long seconds) {
         this.expirationType = ExpirationType.EX;
         this.expirationValue = seconds;
         return self();
     }
 
-    /** Set the specified expire time, in milliseconds. */
+    /**
+     * Set the specified expire time, in milliseconds.
+     *
+     * @param milliseconds time to live in milliseconds
+     * @return this instance, for chaining
+     */
     public T px(long milliseconds) {
         this.expirationType = ExpirationType.PX;
         this.expirationValue = milliseconds;
         return self();
     }
 
-    /** Set the specified Unix time at which the key will expire, in seconds. */
+    /**
+     * Set the specified Unix time at which the key will expire, in seconds.
+     *
+     * @param unixTimeSeconds expiry instant as a Unix timestamp in seconds
+     * @return this instance, for chaining
+     */
     public T exAt(long unixTimeSeconds) {
         this.expirationType = ExpirationType.EXAT;
         this.expirationValue = unixTimeSeconds;
         return self();
     }
 
-    /** Set the specified Unix time at which the key will expire, in milliseconds. */
+    /**
+     * Set the specified Unix time at which the key will expire, in milliseconds.
+     *
+     * @param unixTimeMilliseconds expiry instant as a Unix timestamp in milliseconds
+     * @return this instance, for chaining
+     */
     public T pxAt(long unixTimeMilliseconds) {
         this.expirationType = ExpirationType.PXAT;
         this.expirationValue = unixTimeMilliseconds;
         return self();
     }
 
-    /** Retain the time to live associated with the key. */
+    /**
+     * Retain the time to live associated with the key.
+     *
+     * @return this instance, for chaining
+     */
     public T keepTtl() {
         this.expirationType = ExpirationType.KEEPTTL;
         this.expirationValue = null;
         return self();
     }
 
-    /** Return the old string stored at key, or null if key did not exist. */
+    /**
+     * Ask SET to return the old string stored at key, or null if the key did not exist.
+     *
+     * @return this instance, for chaining
+     */
     public T get() {
         this.get = true;
         return self();

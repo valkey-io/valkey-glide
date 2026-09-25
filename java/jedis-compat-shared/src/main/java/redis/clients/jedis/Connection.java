@@ -12,17 +12,29 @@ public class Connection implements Closeable {
         this.hostAndPort = hostAndPort;
     }
 
-    /** Get the host and port for this connection */
+    /**
+     * Get the host and port for this connection
+     *
+     * @return the address this connection targets
+     */
     public HostAndPort getHostAndPort() {
         return hostAndPort;
     }
 
-    /** Get the host */
+    /**
+     * Get the host
+     *
+     * @return the host this connection targets
+     */
     public String getHost() {
         return hostAndPort.getHost();
     }
 
-    /** Get the port */
+    /**
+     * Get the port
+     *
+     * @return the port this connection targets
+     */
     public int getPort() {
         return hostAndPort.getPort();
     }

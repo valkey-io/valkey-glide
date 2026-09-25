@@ -222,7 +222,12 @@ public abstract class Pool<T> implements Closeable {
         return this.internalPool.isClosed();
     }
 
-    /** Add objects to the pool to reach the minimum idle count. */
+    /**
+     * Ask the pool to add {@code count} objects. The pool adds fewer, and reports no error, when it
+     * is already at its {@code maxTotal} capacity.
+     *
+     * @param count how many objects to ask the pool to add
+     */
     public void addObjects(int count) {
         try {
             for (int i = 0; i < count; i++) {
