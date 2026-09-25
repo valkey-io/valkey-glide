@@ -1,6 +1,11 @@
 [
     {
         "type": "valkey",
+        "version": "9.1",
+        "run": "always"
+    },
+    {
+        "type": "valkey",
         "version": "9.0",
         "run": "always"
     },
