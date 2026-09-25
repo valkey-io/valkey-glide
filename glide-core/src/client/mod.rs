@@ -3262,11 +3262,21 @@ impl Client {
             )));
         }
 
-        // immediate_auth=true sends a real AUTH on the live connection, unlike the
-        // reconnect-only password update the `token_changed` pull-model performs.
-        // The AUTH routes through `send_command_ungated`, bypassing this gate.
+        // Normalize a rejected re-AUTH to `AuthenticationFailed`: the server never
+        // emits this kind itself, so the borrower can tell a stale-token failure
+        // apart from a command's own auth error — the same contract the scope path
+        // gives at `send_command_on_connection`. Wrapped here, not in the shared
+        // `update_connection_password`, so the user-facing `UpdateConnectionPassword`
+        // API keeps its own error kinds.
         self.update_connection_password(Some(current_token), true)
-            .await?;
+            .await
+            .map_err(|e| {
+                RedisError::from((
+                    ErrorKind::AuthenticationFailed,
+                    "IAM borrow re-authentication failed",
+                    e.to_string(),
+                ))
+            })?;
 
         if let Some(iam_manager) = &self.iam_token_manager {
             iam_manager.clear_token_changed();
