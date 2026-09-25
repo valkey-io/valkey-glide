@@ -122,10 +122,12 @@ impl MonitorClient {
             })?;
         }
 
+        // MonitorClient bypasses `get_connection_info`, so trim the IPv6 host here too.
+        let host = crate::scope::strip_host_brackets(&address.host).to_string();
         let conn_addr = match tls_mode {
-            TlsMode::NoTls => ConnectionAddr::Tcp(address.host.clone(), address.port),
+            TlsMode::NoTls => ConnectionAddr::Tcp(host, address.port),
             _ => ConnectionAddr::TcpTls {
-                host: address.host.clone(),
+                host,
                 port: address.port,
                 insecure: matches!(tls_mode, TlsMode::InsecureTls),
                 tls_params: None,
