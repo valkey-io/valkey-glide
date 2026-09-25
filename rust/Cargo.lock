@@ -1096,28 +1096,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "glide-rust"
-version = "0.2.0"
-dependencies = [
- "async-trait",
- "bytes",
- "futures",
- "glide-core",
- "glide-core-engine",
- "glide-logger",
- "num-bigint",
- "once_cell",
- "regex",
- "ryu",
- "sealed",
- "serde_json",
- "sha1_smol",
- "thiserror 2.0.20",
- "tokio",
- "url",
-]
-
-[[package]]
 name = "glide-telemetry"
 version = "0.1.0"
 dependencies = [
@@ -3052,6 +3030,28 @@ dependencies = [
  "js-sys",
  "rand 0.10.1",
  "wasm-bindgen",
+]
+
+[[package]]
+name = "valkey-glide"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "bytes",
+ "futures",
+ "glide-core",
+ "glide-core-engine",
+ "glide-logger",
+ "num-bigint",
+ "once_cell",
+ "regex",
+ "ryu",
+ "sealed",
+ "serde_json",
+ "sha1_smol",
+ "thiserror 2.0.20",
+ "tokio",
+ "url",
 ]
 
 [[package]]
