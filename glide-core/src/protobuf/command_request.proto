@@ -190,6 +190,7 @@ enum RequestType {
     HPTtl                          = 625;
     HExpireTime                    = 626;
     HPExpireTime                   = 627;
+    HGetDel                        = 628;
 
     //// HyperLogLog commands
 

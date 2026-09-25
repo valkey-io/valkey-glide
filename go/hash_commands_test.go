@@ -864,6 +864,54 @@ func ExampleClusterClient_HGetEx() {
 	// value2
 }
 
+func ExampleClient_HGetDel() {
+	// This command requires Valkey 9.1+
+	var client *Client = getExampleClient() // example helper function
+
+	// First set some fields
+	fields := map[string]string{
+		"field1": "value1",
+		"field2": "value2",
+	}
+	client.HSet(context.Background(), "my_hash", fields)
+
+	// Atomically get and delete fields
+	result, err := client.HGetDel(context.Background(), "my_hash", []string{"field1", "field2"})
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(result[0].Value())
+	fmt.Println(result[1].Value())
+
+	// Output:
+	// value1
+	// value2
+}
+
+func ExampleClusterClient_HGetDel() {
+	// This command requires Valkey 9.1+
+	var client *ClusterClient = getExampleClusterClient() // example helper function
+
+	// First set some fields
+	fields := map[string]string{
+		"field1": "value1",
+		"field2": "value2",
+	}
+	client.HSet(context.Background(), "my_hash", fields)
+
+	// Atomically get and delete fields
+	result, err := client.HGetDel(context.Background(), "my_hash", []string{"field1", "field2"})
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(result[0].Value())
+	fmt.Println(result[1].Value())
+
+	// Output:
+	// value1
+	// value2
+}
+
 func ExampleClient_HExpire() {
 	// This command requires Valkey 9.0+
 	var client *Client = getExampleClient() // example helper function
