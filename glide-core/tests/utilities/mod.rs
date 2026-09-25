@@ -44,11 +44,17 @@ pub enum ServerType {
 }
 
 type SharedServer = Lazy<Mutex<Option<RedisServer>>>;
-static SHARED_SERVER: SharedServer =
-    Lazy::new(|| Mutex::new(Some(RedisServer::new(ServerType::Tcp { tls: false }))));
+static SHARED_SERVER: SharedServer = Lazy::new(|| {
+    let server = RedisServer::new(ServerType::Tcp { tls: false });
+    block_on_all(wait_for_server_to_become_ready(&server.get_client_addr()));
+    Mutex::new(Some(server))
+});
 
-static SHARED_TLS_SERVER: SharedServer =
-    Lazy::new(|| Mutex::new(Some(RedisServer::new(ServerType::Tcp { tls: true }))));
+static SHARED_TLS_SERVER: SharedServer = Lazy::new(|| {
+    let server = RedisServer::new(ServerType::Tcp { tls: true });
+    block_on_all(wait_for_server_to_become_ready(&server.get_client_addr()));
+    Mutex::new(Some(server))
+});
 
 static SHARED_SERVER_ADDRESS: Lazy<ConnectionAddr> = Lazy::new(|| {
     SHARED_SERVER
