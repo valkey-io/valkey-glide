@@ -87,7 +87,11 @@ updates:
 
     # Enable version updates for pip (Python)
     - package-ecosystem: "pip"
-      directory: "/python"
+      directories:
+          - "/python"
+          - "/python/glide-async"
+          - "/python/glide-sync"
+          - "/python/glide-shared"
       schedule:
           interval: "weekly"
           day: "monday"
