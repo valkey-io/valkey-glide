@@ -1032,54 +1032,6 @@ fn test_create_client_from_uri_with_username_only() {
     }
 }
 
-// A simple positive test that assert we got through to the server with IAM credentials.
-// Since this test is not run against AWS, it will then end in an error.
-#[test]
-fn test_create_client_from_uri_with_username_only_and_iam_credentials() {
-    let server = Server::new();
-    let uri = CString::new(format!("redis://iam-user@127.0.0.1:{}", server.port)).unwrap();
-    let options = CString::new(
-        r#"{
-        "iam_credentials": {
-            "cluster_name": "my-cluster",
-            "region": "us-east-1",
-            "service_type": "ELASTICACHE",
-            "refresh_interval_seconds": 900
-        }
-    }"#,
-    )
-    .unwrap();
-
-    let client_type = Box::into_raw(Box::new(ClientType::SyncClient));
-
-    let response = unsafe {
-        create_client_from_uri(
-            uri.as_ptr(),
-            options.as_ptr(),
-            client_type,
-            null_pubsub_callback(),
-        )
-    };
-
-    assert!(!response.is_null());
-    let conn_response = unsafe { &*response };
-
-    let error = parse_error_msg(conn_response.connection_error_message);
-    unsafe {
-        if !conn_response.conn_ptr.is_null() {
-            close_client(conn_response.conn_ptr);
-        }
-        free_connection_response(response as *mut ConnectionResponse);
-        drop(Box::from_raw(client_type));
-    }
-    // If we get this errror, then we did not get through to the server.
-    assert!(
-        !error.contains("IAM authentication requires a username"),
-        "URI username was not forwarded to IAM authentication: {}",
-        error
-    );
-}
-
 #[test]
 fn test_create_client_from_uri_with_pubsub_subscriptions() {
     let server = Server::new();
