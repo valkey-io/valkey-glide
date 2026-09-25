@@ -2164,13 +2164,15 @@ mod tests_create_client_from_uri_internal {
     }
 
     #[test]
-    fn zero_refresh_interval_is_rejected() {
-        let err = parse_uri_with_options("redis://iam-user@127.0.0.1:6379", &iam_options_json("0"))
-            .expect_err("expected refresh interval error");
-        assert!(
-            err.contains("refresh_interval_seconds must be a positive integer"),
-            "unexpected error: {err}"
-        );
+    fn zero_refresh_interval_is_preserved_for_core_validation() {
+        let req = parse_uri_with_options("redis://iam-user@127.0.0.1:6379", &iam_options_json("0"))
+            .unwrap_or_else(|e| panic!("failed to parse: {e}"));
+        let iam = req
+            .authentication_info
+            .as_ref()
+            .and_then(|auth| auth.iam_credentials.as_ref())
+            .expect("iam credentials missing");
+        assert_eq!(iam.refresh_interval_seconds, Some(0));
     }
 
     #[test]
@@ -2614,7 +2616,6 @@ fn apply_json_options(
         if let Some(refresh_interval) = iam_obj.get("refresh_interval_seconds") {
             let interval_val = refresh_interval
                 .as_u64()
-                .filter(|&seconds| seconds > 0) // rejects 0
                 .and_then(|seconds| u32::try_from(seconds).ok()) // reject > u32::MAX
                 .ok_or_else(|| {
                     "iam_credentials.refresh_interval_seconds must be a positive integer"
