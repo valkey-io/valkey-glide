@@ -14077,11 +14077,14 @@ public abstract class AbstractGlideJedis extends JedisCommon {
 
     /**
      * Returns the members of a sorted set populated with geospatial information using GEOADD, which
-     * are within the borders of the area specified by the AbstractGeoSearchParam<?>.
+     * are within the borders of the area specified by the AbstractGeoSearchParam<?>. Every option the
+     * parameters carry is applied, and withCoord, withDist and withHash populate the matching fields
+     * on each returned {@link GeoRadiusResponse}.
      *
      * @param key the key of the sorted set
      * @param params the search parameters
      * @return a list of members within the specified area
+     * @throws JedisDataException if the parameters set a COUNT of zero or less
      * @see <a href="https://valkey.io/commands/geosearch/">valkey.io</a> for details.
      * @since Valkey 6.2.0
      */
@@ -14126,10 +14129,13 @@ public abstract class AbstractGlideJedis extends JedisCommon {
     /**
      * Returns the members of a sorted set populated with geospatial information using GEOADD, which
      * are within the borders of the area specified by the AbstractGeoSearchParam<?> (binary version).
+     * Every option the parameters carry is applied, and withCoord, withDist and withHash populate the
+     * matching fields on each returned {@link GeoRadiusResponse}.
      *
      * @param key the key of the sorted set
      * @param params the search parameters
      * @return a list of members within the specified area
+     * @throws JedisDataException if the parameters set a COUNT of zero or less
      * @see <a href="https://valkey.io/commands/geosearch/">valkey.io</a> for details.
      * @since Valkey 6.2.0
      */
@@ -14433,12 +14439,15 @@ public abstract class AbstractGlideJedis extends JedisCommon {
 
     /**
      * Searches for members in a sorted set representing geospatial data using a
-     * AbstractGeoSearchParam<?> and stores the result in a destination key.
+     * AbstractGeoSearchParam<?> and stores the result in a destination key. The sort order and the
+     * count are applied; withCoord, withDist and withHash are not sent, because GEOSEARCHSTORE
+     * rejects them.
      *
      * @param dest the destination key to store the result
      * @param src the source key of the sorted set
      * @param params the search parameters
      * @return the number of elements in the resulting sorted set
+     * @throws JedisDataException if the parameters set a COUNT of zero or less
      * @see <a href="https://valkey.io/commands/geosearchstore/">valkey.io</a> for details.
      * @since Valkey 6.2.0
      */
@@ -14448,12 +14457,15 @@ public abstract class AbstractGlideJedis extends JedisCommon {
 
     /**
      * Searches for members in a sorted set representing geospatial data using a
-     * AbstractGeoSearchParam<?> and stores the result in a destination key (binary version).
+     * AbstractGeoSearchParam<?> and stores the result in a destination key (binary version). The sort
+     * order and the count are applied; withCoord, withDist and withHash are not sent, because
+     * GEOSEARCHSTORE rejects them.
      *
      * @param dest the destination key to store the result
      * @param src the source key of the sorted set
      * @param params the search parameters
      * @return the number of elements in the resulting sorted set
+     * @throws JedisDataException if the parameters set a COUNT of zero or less
      * @see <a href="https://valkey.io/commands/geosearchstore/">valkey.io</a> for details.
      * @since Valkey 6.2.0
      */
@@ -14464,12 +14476,15 @@ public abstract class AbstractGlideJedis extends JedisCommon {
 
     /**
      * Searches for members in a sorted set representing geospatial data using a
-     * AbstractGeoSearchParam<?> and stores the result with distances in a destination key.
+     * AbstractGeoSearchParam<?> and stores the result with distances in a destination key. The sort
+     * order and the count are applied; withCoord, withDist and withHash are not sent, because
+     * GEOSEARCHSTORE rejects them.
      *
      * @param dest the destination key to store the result
      * @param src the source key of the sorted set
      * @param params the search parameters
      * @return the number of elements in the resulting sorted set
+     * @throws JedisDataException if the parameters set a COUNT of zero or less
      * @see <a href="https://valkey.io/commands/geosearchstore/">valkey.io</a> for details.
      * @since Valkey 6.2.0
      */
@@ -14480,12 +14495,14 @@ public abstract class AbstractGlideJedis extends JedisCommon {
     /**
      * Searches for members in a sorted set representing geospatial data using a
      * AbstractGeoSearchParam<?> and stores the result with distances in a destination key (binary
-     * version).
+     * version). The sort order and the count are applied; withCoord, withDist and withHash are not
+     * sent, because GEOSEARCHSTORE rejects them.
      *
      * @param dest the destination key to store the result
      * @param src the source key of the sorted set
      * @param params the search parameters
      * @return the number of elements in the resulting sorted set
+     * @throws JedisDataException if the parameters set a COUNT of zero or less
      * @see <a href="https://valkey.io/commands/geosearchstore/">valkey.io</a> for details.
      * @since Valkey 6.2.0
      */

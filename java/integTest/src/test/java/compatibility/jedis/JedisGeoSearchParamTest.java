@@ -31,8 +31,8 @@ import redis.clients.jedis.resps.Tuple;
  * {@code geosearchStoreStoreDist}, in both the {@code String} and {@code byte[]} forms.
  *
  * <p>The expected orders, distances, geohashes and coordinates below were captured from upstream
- * Jedis 5.2.0 making the same calls against the same data set, so a passing assertion here means the
- * compatibility layer agrees with upstream.
+ * Jedis 5.2.0 making the same calls against the same data set, so a passing assertion here means
+ * the compatibility layer agrees with upstream.
  *
  * <p>The searches start from Catania on purpose. Without a sort the server replies in sorted-set
  * score order, which for this data set is Palermo, edge1, Catania, edge2, and that differs from
@@ -335,6 +335,33 @@ public class JedisGeoSearchParamTest {
         assertNotNull(palermo.getCoordinate());
         assertEquals(ECHO_LON_PALERMO, palermo.getCoordinate().getLongitude(), COORD_DELTA);
         assertEquals(ECHO_LAT_PALERMO, palermo.getCoordinate().getLatitude(), COORD_DELTA);
+    }
+
+    // Without a sort or a count the WITH flags go through a different GLIDE overload, so that
+    // combination gets its own coverage.
+    @Test
+    void geosearch_params_with_dist_without_sort_or_count_populates_distance() {
+        List<GeoRadiusResponse> results = jedis.geosearch(key, fromCatania().withDist());
+
+        assertEquals(4, results.size());
+        assertEquals(DIST_CATANIA, findMember(results, "Catania").getDistance(), DIST_DELTA);
+        assertEquals(DIST_PALERMO, findMember(results, "Palermo").getDistance(), DIST_DELTA);
+        assertEquals(DIST_EDGE2, findMember(results, "edge2").getDistance(), DIST_DELTA);
+        assertEquals(DIST_EDGE1, findMember(results, "edge1").getDistance(), DIST_DELTA);
+
+        for (GeoRadiusResponse response : results) {
+            assertEquals(0L, response.getRawScore(), "WITHHASH was not requested");
+            assertNull(response.getCoordinate(), "WITHCOORD was not requested");
+        }
+    }
+
+    @Test
+    void geosearch_params_with_all_three_without_sort_or_count_populates_every_field_binary() {
+        List<GeoRadiusResponse> results =
+                jedis.geosearch(keyBytes(), fromCatania().withCoord().withDist().withHash());
+
+        assertEquals(4, results.size());
+        assertEveryFieldPopulated(results);
     }
 
     @Test
