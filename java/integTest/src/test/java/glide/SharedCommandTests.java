@@ -1902,6 +1902,27 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void hgetdel_error_handling(BaseClient client) {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("9.1.0"),
+                "HGETDEL command requires Valkey 9.1.0 or higher");
+
+        String key = "test_hgetdel_error_" + UUID.randomUUID();
+
+        // Set up a non-hash key to test type error
+        client.set(key, "not_a_hash").get();
+
+        // Should throw an exception when trying to use HGETDEL on a non-hash key
+        ExecutionException exception =
+                assertThrows(
+                        ExecutionException.class, () -> client.hgetdel(key, new String[] {"field1"}).get());
+
+        assertInstanceOf(RequestException.class, exception.getCause());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void hexpire_basic_functionality(BaseClient client) {
         assumeTrue(
                 SERVER_VERSION.isGreaterThanOrEqualTo("9.0.0"),
