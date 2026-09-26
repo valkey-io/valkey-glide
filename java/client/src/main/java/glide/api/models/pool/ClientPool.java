@@ -9,6 +9,7 @@ import glide.api.models.configuration.GlideClusterClientConfiguration;
 import glide.api.models.configuration.ServerCredentials;
 import glide.api.models.exceptions.ClosingException;
 import glide.ffi.resolvers.GlidePoolResolver;
+import glide.internal.GlideNativeBridge;
 import glide.managers.ConnectionManager;
 import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
@@ -224,11 +225,32 @@ public class ClientPool implements AutoCloseable {
     public GlideClient getClient(long clientId) {
         GlideClient cached = clientCache.get(clientId);
         if (cached != null) return cached;
+        // Resolve the Java-side inflight limiter and request timeout the same way ConnectionManager
+        // does for direct clients, so a pooled client fast-fails excess requests and times out
+        // commands per its own config instead of the pool's defaults. The wire ConnectionRequest
+        // already carries both values; these govern the host-side AsyncRegistry enforcement.
+        //
+        // The borrowed client keys its AsyncRegistry inflight counter on a value disjoint from the
+        // native handle (see GlideClient.fromPoolHandle), so a pooled id sharing the native id space
+        // with a directly-created client's handle no longer shares its inflight counter.
+        Integer configuredLimit = config.getClientConfig().getInflightRequestsLimit();
+        int maxInflight =
+                configuredLimit != null
+                        ? configuredLimit
+                        : GlideNativeBridge.getGlideCoreDefaultMaxInflightRequests();
+        Integer configuredTimeout = config.getClientConfig().getRequestTimeout();
+        long requestTimeoutMs =
+                configuredTimeout != null
+                        ? configuredTimeout
+                        : GlideNativeBridge.getGlideCoreDefaultRequestTimeoutMs();
+        // Carry the config's credentials so the borrowed client's IAM guards (refreshIamToken,
+        // updateConnectionPassword) see them, as they do on a directly-created client.
+        ServerCredentials credentials = config.getClientConfig().getCredentials();
         return clientCache.computeIfAbsent(
                 clientId,
                 id ->
                         GlideClient.fromPoolHandle(
-                                id, 0, config.getRequestTimeout().toMillis(), connectionRequestBytes));
+                                id, maxInflight, requestTimeoutMs, credentials, connectionRequestBytes));
     }
 
     /** Release a client back to the pool. */
