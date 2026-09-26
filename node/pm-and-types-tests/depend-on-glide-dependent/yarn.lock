@@ -148,7 +148,7 @@ __metadata:
   resolution: "@test/consumer@workspace:."
   dependencies:
     "@test/common": "portal:../depend-on-glide-package"
-    "@types/node": "npm:26.6.1"
+    "@types/node": "npm:26.6.2"
     ts-node: "npm:^10.9.2"
     typescript: "npm:^5.0.4"
     winston: "npm:^3.17.0"
@@ -192,12 +192,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/node@npm:26.6.1":
-  version: 26.6.1
-  resolution: "@types/node@npm:26.6.1"
+"@types/node@npm:26.6.2":
+  version: 26.6.2
+  resolution: "@types/node@npm:26.6.2"
   dependencies:
     undici-types: "npm:~8.9.0"
-  checksum: 10c0/c90d3db40e7c9c92f0854ecdcaabd9c1923b7e2a43cf2c97cf147a5aba7e18a1c80034088edfb1bb2153ceffdd87be7ce0a256b80ec7cd92e619c564133ae5fe
+  checksum: 10c0/bb411ff5863a79a28ffa4ebadf2499d44046aa114d25a7a6c78f57def118123a0a7dea99e8fe38849099e9dba2b41b8853a7a282037618559f58653c35e7c5c5
   languageName: node
   linkType: hard
 
