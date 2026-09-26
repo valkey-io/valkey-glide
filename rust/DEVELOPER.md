@@ -71,7 +71,8 @@ cargo doc-tests cmd::Cmd              # doctests containing `cmd::Cmd`
 cargo integration-tests get_missing   # integration tests containing `get_missing`
 ```
 
-To run one integration test file, use `cargo test --test <file>`, with an optional filter:
+To run one integration test file, use `cargo test --test <file>`, with an
+optional filter:
 
 ```bash
 cargo test --test it_string               # every test in tests/it_string.rs

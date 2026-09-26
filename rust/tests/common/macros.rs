@@ -48,7 +48,7 @@ macro_rules! retry_transient {
 }
 
 /// Expand one test body into two `#[tokio::test]`s — one for RESP2, one for
-/// RESP3 — each with its own fresh standalone server bound to `$client.
+/// RESP3 — each with its own fresh standalone server bound to `$client`.
 ///
 /// ```ignore
 /// resp_test!(get_missing, c, {
@@ -153,7 +153,7 @@ macro_rules! matrix_test {
 
 /// Skip the current test (printing SKIP) when the server version is below
 /// `major.minor.patch` — the Rust analogue of Python's
-/// `@pytest.mark.skip_if_version_below`. Requires a connected client `$client that
+/// `@pytest.mark.skip_if_version_below`. Requires a connected client `$client` that
 /// implements `ServerManagementCommands`.
 ///
 /// ```ignore

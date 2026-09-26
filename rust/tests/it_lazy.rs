@@ -41,8 +41,11 @@ async fn standalone_lazy_resp3() {
 /// the first command. (If construction fails instead, lazy is not deferring.)
 #[tokio::test]
 async fn standalone_lazy_defers_connection_error() {
-    // A port nothing is listening on.
-    let dead_port = common::free_port();
+    // A port nothing is listening on: bind an ephemeral port, then release it.
+    let dead_port = std::net::TcpListener::bind("127.0.0.1:0")
+        .and_then(|l| l.local_addr())
+        .expect("bind ephemeral port")
+        .port();
     let cfg = GlideClientConfiguration::with_address("127.0.0.1", dead_port)
         .lazy_connect(true)
         .request_timeout(Duration::from_millis(500))
