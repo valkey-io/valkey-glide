@@ -699,12 +699,28 @@ public class ClientPoolIntegrationTest {
             // should see the BLPOP client as "blocking" and leave it alone.
             Thread.sleep(1500);
 
-            // Stop contention threads and wait for all releases.
+            // Stop contention threads and wait for their acquire→SET→release loops to exit.
             stopFlag.set(1);
             assertTrue(contentionDone.await(10, TimeUnit.SECONDS), "Contention threads should stop");
 
-            // Core assertion: the BLPOP client must still be in the pool's active set.
+            // A contention thread counts down its latch as soon as its last try-with-resources
+            // close() calls pool.release(clientId). That release is dispatched asynchronously in the
+            // native layer (glidePoolRelease spawns release_client_async, which removes the client
+            // from the in-use set only after a server-side reset round-trip). So when
+            // contentionDone fires, the final contention releases may not have drained yet and
+            // getActiveCount() can still observe them. Poll until the active count settles to the
+            // steady state — exactly 1, the BLPOP holder — instead of reading it once and racing
+            // the in-flight releases.
             int active = pool.getActiveCount();
+            long settleDeadline = System.currentTimeMillis() + 5000;
+            while (active != 1 && System.currentTimeMillis() < settleDeadline) {
+                Thread.sleep(50);
+                active = pool.getActiveCount();
+            }
+
+            // Core assertion: the BLPOP client must still be in the pool's active set. If the
+            // abandon monitor had wrongly reclaimed it, the count would settle to 0 (and this poll
+            // would never reach 1); if a contention release leaked, it would stay above 1.
             assertEquals(
                     1, active, "Pool should have exactly 1 active client (the BLPOP holder); got " + active);
 
