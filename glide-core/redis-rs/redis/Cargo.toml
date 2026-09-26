@@ -142,7 +142,7 @@ tempfile = "3"
 once_cell = "1"
 anyhow = "1"
 serial_test = "4"
-versions = "7"
+versions = "8"
 which = "8"
 tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter"] }
 serde_json = { version = "1" }
