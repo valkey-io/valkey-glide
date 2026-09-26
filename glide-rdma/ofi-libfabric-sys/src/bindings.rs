@@ -265,6 +265,7 @@ pub const FI_EFIREWALLADDR: _bindgen_ty_1 = 271;
 pub const FI_ERRNO_MAX: _bindgen_ty_1 = 272;
 pub type _bindgen_ty_1 = ::std::os::raw::c_uint;
 unsafe extern "C" {
+    #[link_name = "\u{1}_glide_fi_strerror"]
     pub fn fi_strerror(errnum: ::std::os::raw::c_int) -> *const ::std::os::raw::c_char;
 }
 pub const FI_NAME_MAX: _bindgen_ty_2 = 64;
@@ -272,6 +273,7 @@ pub const FI_ATOMIC_OP_LAST: _bindgen_ty_2 = 19;
 pub const FI_DATATYPE_LAST: _bindgen_ty_2 = 14;
 pub type _bindgen_ty_2 = ::std::os::raw::c_uint;
 unsafe extern "C" {
+    #[link_name = "\u{1}_glide_fi_version"]
     pub fn fi_version() -> u32;
 }
 pub type fid_t = *mut fid;
@@ -976,6 +978,7 @@ impl Default for fid {
     }
 }
 unsafe extern "C" {
+    #[link_name = "\u{1}_glide_fi_getinfo"]
     pub fn fi_getinfo(
         version: u32,
         node: *const ::std::os::raw::c_char,
@@ -986,9 +989,11 @@ unsafe extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
+    #[link_name = "\u{1}_glide_fi_freeinfo"]
     pub fn fi_freeinfo(info: *mut fi_info);
 }
 unsafe extern "C" {
+    #[link_name = "\u{1}_glide_fi_dupinfo"]
     pub fn fi_dupinfo(info: *const fi_info) -> *mut fi_info;
 }
 #[repr(C)]
@@ -1095,6 +1100,7 @@ unsafe extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
+    #[link_name = "\u{1}_glide_fi_fabric"]
     pub fn fi_fabric(
         attr: *mut fi_fabric_attr,
         fabric: *mut *mut fid_fabric,
@@ -1102,6 +1108,7 @@ unsafe extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
+    #[link_name = "\u{1}_glide_fi_open"]
     pub fn fi_open(
         version: u32,
         name: *const ::std::os::raw::c_char,
@@ -4226,6 +4233,7 @@ unsafe extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
+    #[link_name = "\u{1}_glide_fi_param_get"]
     pub fn fi_param_get(
         provider: *mut fi_provider,
         param_name: *const ::std::os::raw::c_char,

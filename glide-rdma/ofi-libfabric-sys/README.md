@@ -103,6 +103,13 @@ libfabric on the runtime machine.
    symbols and resolves them at runtime by the dlopen shim in `glide-rdma`.
    This crate is only usable together with `glide-rdma`.
 
+   Those definitions are named `glide_fi_getinfo` and so on, not libfabric's own
+   names, so that they cannot clash with a real libfabric that something else in
+   the same process has loaded. The Rust bindings keep libfabric's names but link
+   to the prefixed symbols and `wrapper.c` renames its calls to match. The list
+   of renamed functions is `SHIMMED` in `build.rs` and the same list is in
+   `wrapper.c`.
+
 3. **libfabric's public headers are vendored under `include/`.** Upstream builds
    against whatever `pkg-config` finds on the build machine.
 

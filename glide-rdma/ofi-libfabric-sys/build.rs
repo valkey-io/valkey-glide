@@ -7,6 +7,31 @@ use std::sync::OnceLock;
 // Global variables for common directories.
 static CARGO_MANIFEST_DIR: OnceLock<PathBuf> = OnceLock::new();
 
+/// DIVERGENCE FROM UPSTREAM: libfabric's exported functions, which glide-rdma
+/// defines itself under a `glide_` prefix, forwarding to the libfabric it loads at
+/// run time.
+///
+/// The Rust bindings keep libfabric's names but link to the prefixed symbols and
+/// `wrapper.c` renames its calls the same way. Without the prefix, a library built
+/// from this crate would export its own `fi_getinfo` and friends, and a process
+/// that also loads the real libfabric could bind calls to the wrong copy. The
+/// list must match the one in `wrapper.c`, which a test in glide-rdma checks.
+#[cfg_attr(not(feature = "regenerate-bindings"), allow(dead_code))]
+const SHIMMED: [&str; 8] = [
+    "fi_getinfo",
+    "fi_freeinfo",
+    "fi_dupinfo",
+    "fi_fabric",
+    "fi_strerror",
+    "fi_version",
+    "fi_open",
+    "fi_param_get",
+];
+
+/// Prefixes of link names that `stage_bindings` adjusts for the target: the
+/// static-inline wrappers, and the renamed exports in [`SHIMMED`].
+const LINK_NAME_PREFIXES: [&str; 2] = ["wrap_", "glide_"];
+
 fn get_cargo_manifest_dir() -> &'static PathBuf {
     CARGO_MANIFEST_DIR.get_or_init(|| PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap()))
 }
@@ -24,24 +49,29 @@ impl ParseCallbacks for RenameFunctions {
         original_name.name.strip_prefix("wrap_").map(String::from)
     }
 
-    // Explicitly use link_name for those marked with "wrap_" prefix, which indicates for static inline wrapper.
+    // Explicitly use link_name for the static-inline wrappers, marked with the "wrap_"
+    // prefix, and for the renamed exports in SHIMMED.
     fn generated_link_name_override(&self, item_info: ItemInfo<'_>) -> Option<String> {
         match item_info.kind {
             ItemKind::Function => {
-                if item_info.name.starts_with("wrap_") {
-                    // On macOS, C symbols carry a leading underscore in the object
-                    // file, and these link names bypass Rust's own mangling, so the
-                    // exact symbol has to be spelled out here.
-                    //
-                    // DIVERGENCE FROM UPSTREAM: produces symbol names for
-                    // the target OS, not the host.
-                    return Some(if target_is_macos() {
-                        format!("_{}", item_info.name)
-                    } else {
-                        item_info.name.to_string()
-                    });
-                }
-                None
+                let symbol = if item_info.name.starts_with("wrap_") {
+                    item_info.name.to_string()
+                } else if SHIMMED.contains(&item_info.name) {
+                    format!("glide_{}", item_info.name)
+                } else {
+                    return None;
+                };
+                // On macOS, C symbols carry a leading underscore in the object
+                // file, and these link names bypass Rust's own mangling, so the
+                // exact symbol has to be spelled out here.
+                //
+                // DIVERGENCE FROM UPSTREAM: produces symbol names for
+                // the target OS, not the host.
+                Some(if target_is_macos() {
+                    format!("_{symbol}")
+                } else {
+                    symbol
+                })
             }
             _ => None,
         }
@@ -59,24 +89,28 @@ fn target_is_macos() -> bool {
 /// Copies the checked-in bindings into `OUT_DIR`, fixing the link names for the
 /// target as it goes.
 ///
-/// The names of the static-inline wrappers are spelled out verbatim in the
-/// generated file, and macOS wants a leading underscore where Linux does not. A
-/// file generated on one therefore does not link on the other — which matters
-/// because the file is generated once, by whoever last changed the headers, on
-/// whatever machine they happened to use. Normalising here makes the checked-in
-/// file work for every target regardless of where it came from.
+/// The link names of the static-inline wrappers and of the renamed exports are
+/// spelled out verbatim in the generated file, and macOS wants a leading
+/// underscore where Linux does not. A file generated on one therefore does not
+/// link on the other — which matters because the file is generated once, by
+/// whoever last changed the headers, on whatever machine they happened to use.
+/// Normalising here makes the checked-in file work for every target regardless of
+/// where it came from.
 fn stage_bindings(source: &std::path::Path, destination: &std::path::Path) {
     let text = std::fs::read_to_string(source)
         .unwrap_or_else(|error| panic!("could not read {}: {error}", source.display()));
 
-    // Strip any leading underscore first, so the starting point is the same
-    // whichever platform generated the file.
-    let text = text.replace("\"\\u{1}_wrap_", "\"\\u{1}wrap_");
-    let text = if target_is_macos() {
-        text.replace("\"\\u{1}wrap_", "\"\\u{1}_wrap_")
-    } else {
-        text
-    };
+    let mut text = text;
+    for prefix in LINK_NAME_PREFIXES {
+        let bare = format!("\"\\u{{1}}{prefix}");
+        let underscored = format!("\"\\u{{1}}_{prefix}");
+        // Strip any leading underscore first, so the starting point is the same
+        // whichever platform generated the file.
+        text = text.replace(&underscored, &bare);
+        if target_is_macos() {
+            text = text.replace(&bare, &underscored);
+        }
+    }
 
     std::fs::write(destination, text)
         .unwrap_or_else(|error| panic!("could not write {}: {error}", destination.display()));

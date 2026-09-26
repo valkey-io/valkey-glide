@@ -1,3 +1,24 @@
+/*
+ * DIVERGENCE FROM UPSTREAM: libfabric's exported functions are renamed.
+ *
+ * libfabric is never linked. glide-rdma defines each of these functions itself
+ * under a glide_ prefix, forwarding to the libfabric it loads at run time. The
+ * prefix keeps those definitions from clashing with a real libfabric that
+ * something else in the same process has loaded.
+ *
+ * These are function-like macros, so a name is only replaced where it is called
+ * or declared. fi_prov.h also has a struct field named fi_version, which a plain
+ * macro would rename. The list must match SHIMMED in build.rs.
+ */
+#define fi_getinfo(...) glide_fi_getinfo(__VA_ARGS__)
+#define fi_freeinfo(...) glide_fi_freeinfo(__VA_ARGS__)
+#define fi_dupinfo(...) glide_fi_dupinfo(__VA_ARGS__)
+#define fi_fabric(...) glide_fi_fabric(__VA_ARGS__)
+#define fi_strerror(...) glide_fi_strerror(__VA_ARGS__)
+#define fi_version(...) glide_fi_version(__VA_ARGS__)
+#define fi_open(...) glide_fi_open(__VA_ARGS__)
+#define fi_param_get(...) glide_fi_param_get(__VA_ARGS__)
+
 #include "wrapper.h"
 
 /* Proprietary helper function declarations. */

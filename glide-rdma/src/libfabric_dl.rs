@@ -32,7 +32,8 @@
 //! necessarily the one these bindings were generated against. Everything past
 //! the bootstrap reads struct fields at fixed offsets, and nothing checks that
 //! those offsets still agree. [`ensure_loaded`] therefore refuses any libfabric
-//! older than the headers this crate was built from.
+//! older than the headers this crate was built from or of a different major
+//! version.
 
 use crate::error::RdmaError;
 use std::ffi::{CStr, c_char, c_int, c_void};
@@ -307,6 +308,14 @@ const FI_ENODATA: c_int = libc::ENODATA;
 // The definitions below take the place of libfabric's own exported symbols.
 // Both this crate's generated bindings and the compiled static-inline wrappers
 // resolve their libfabric references against these.
+//
+// Each is named after the function it stands in for but with a `glide_` prefix.
+// A library built from this crate exports these names, and a process may also load
+// the real libfabric. Under libfabric's own names, the dynamic loader could then
+// bind this crate's calls to the real functions, skipping `ensure_loaded`'s
+// version check, or bind the other library's calls to these, which fail until
+// this crate has loaded libfabric. `ofi-libfabric-sys` links to the same
+// prefixed names.
 
 /// See `fi_getinfo(3)`.
 ///
@@ -314,7 +323,7 @@ const FI_ENODATA: c_int = libc::ENODATA;
 ///
 /// The caller upholds libfabric's contract for this function.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn fi_getinfo(
+unsafe extern "C" fn glide_fi_getinfo(
     version: u32,
     node: *const c_char,
     service: *const c_char,
@@ -343,7 +352,7 @@ pub unsafe extern "C" fn fi_getinfo(
 ///
 /// The caller upholds libfabric's contract for this function.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn fi_freeinfo(info: *mut c_void) {
+unsafe extern "C" fn glide_fi_freeinfo(info: *mut c_void) {
     // Spelled out rather than going through `forward!`, because this is the one
     // shim that returns nothing and so has no fallback value to hand back.
     let Some(table) = resolved() else {
@@ -367,7 +376,7 @@ pub unsafe extern "C" fn fi_freeinfo(info: *mut c_void) {
 ///
 /// The caller upholds libfabric's contract for this function.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn fi_dupinfo(info: *const c_void) -> *mut c_void {
+unsafe extern "C" fn glide_fi_dupinfo(info: *const c_void) -> *mut c_void {
     let real = forward!(
         slot::DUPINFO,
         unsafe extern "C" fn(*const c_void) -> *mut c_void,
@@ -382,7 +391,7 @@ pub unsafe extern "C" fn fi_dupinfo(info: *const c_void) -> *mut c_void {
 ///
 /// The caller upholds libfabric's contract for this function.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn fi_fabric(
+unsafe extern "C" fn glide_fi_fabric(
     attr: *mut c_void,
     fabric: *mut *mut c_void,
     context: *mut c_void,
@@ -401,7 +410,7 @@ pub unsafe extern "C" fn fi_fabric(
 ///
 /// The caller upholds libfabric's contract for this function.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn fi_strerror(errnum: c_int) -> *const c_char {
+unsafe extern "C" fn glide_fi_strerror(errnum: c_int) -> *const c_char {
     let real = forward!(
         slot::STRERROR,
         unsafe extern "C" fn(c_int) -> *const c_char,
@@ -416,7 +425,7 @@ pub unsafe extern "C" fn fi_strerror(errnum: c_int) -> *const c_char {
 /// necessarily the one these bindings were built against — see
 /// [`header_api_version`].
 #[unsafe(no_mangle)]
-pub extern "C" fn fi_version() -> u32 {
+extern "C" fn glide_fi_version() -> u32 {
     let real = forward!(slot::VERSION, extern "C" fn() -> u32, 0);
     real()
 }
@@ -427,7 +436,7 @@ pub extern "C" fn fi_version() -> u32 {
 ///
 /// The caller upholds libfabric's contract for this function.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn fi_open(
+unsafe extern "C" fn glide_fi_open(
     version: u32,
     name: *const c_char,
     attr: *mut c_void,
@@ -458,7 +467,7 @@ pub unsafe extern "C" fn fi_open(
 ///
 /// The caller upholds libfabric's contract for this function.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn fi_param_get(
+unsafe extern "C" fn glide_fi_param_get(
     provider: *mut c_void,
     param_name: *const c_char,
     value: *mut c_void,
@@ -503,6 +512,29 @@ mod tests {
     }
 
     #[test]
+    fn the_wrappers_and_bindings_call_the_renamed_stand_ins() {
+        let wrapper = include_str!("../ofi-libfabric-sys/wrapper.c");
+        let bindings = include_str!("../ofi-libfabric-sys/src/bindings.rs");
+        for name in SYMBOLS {
+            let name = name.to_str().unwrap();
+            let rename = format!("#define {name}(...) glide_{name}(__VA_ARGS__)");
+            assert!(
+                wrapper.contains(&rename),
+                "wrapper.c should have `{rename}`"
+            );
+            let declared = format!("pub fn {name}(");
+            let at = bindings
+                .find(&declared)
+                .unwrap_or_else(|| panic!("bindings.rs should declare {name}"));
+            let block = &bindings[bindings[..at].rfind("extern \"C\"").unwrap()..at];
+            assert!(
+                block.contains(&format!("glide_{name}\"]")),
+                "bindings.rs should link {name} to glide_{name}"
+            );
+        }
+    }
+
+    #[test]
     fn header_api_version_is_set() {
         // The bindings are the only source of this number. If a regeneration
         // dropped the version constants, it would be 0 and ensure_loaded would
@@ -517,7 +549,7 @@ mod tests {
         // fi_strerror goes out through the shim and comes back with libfabric's
         // own wording, which is only possible if the forwarding works.
         // SAFETY: fi_strerror takes an error number and returns a static string.
-        let message = unsafe { std::ffi::CStr::from_ptr(super::fi_strerror(0)) };
+        let message = unsafe { std::ffi::CStr::from_ptr(super::glide_fi_strerror(0)) };
         assert_ne!(
             message.to_string_lossy(),
             "libfabric is not loaded",
