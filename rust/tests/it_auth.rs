@@ -13,22 +13,15 @@ use glide::{
 
 const PASSWORD: &str = "s3cr3t-p4ss";
 
-fn auth_server() -> Option<TestServer> {
-    TestServer::start_with_args(&["--requirepass", PASSWORD])
-}
-
 #[tokio::test]
 async fn auth_success_with_correct_password() {
-    let srv = match auth_server() {
-        Some(s) => s,
-        None => {
-            eprintln!("SKIP: no valkey-server binary available");
-            return;
-        }
-    };
-    let config = GlideClientConfiguration::with_address("127.0.0.1", srv.port)
+    let server = TestServer::start_with_args(&["--requirepass", PASSWORD]);
+    let config = GlideClientConfiguration::with_address("127.0.0.1", server.port)
         .credentials(ServerCredentials::password(PASSWORD));
-    let client = srv.try_connect(config).await.expect("auth should succeed");
+    let client = server
+        .try_connect(config)
+        .await
+        .expect("auth should succeed");
     assert_eq!(client.ping().await.unwrap(), "PONG");
     let _: () = client.set("k", "v").await.unwrap();
     let got: Option<glide::Bytes> = client.get("k").await.unwrap();
@@ -37,18 +30,12 @@ async fn auth_success_with_correct_password() {
 
 #[tokio::test]
 async fn auth_failure_with_wrong_password() {
-    let srv = match auth_server() {
-        Some(s) => s,
-        None => {
-            eprintln!("SKIP: no valkey-server binary available");
-            return;
-        }
-    };
-    let config = GlideClientConfiguration::with_address("127.0.0.1", srv.port)
+    let server = TestServer::start_with_args(&["--requirepass", PASSWORD]);
+    let config = GlideClientConfiguration::with_address("127.0.0.1", server.port)
         .credentials(ServerCredentials::password("wrong-password"));
     // Either the connect fails during the auth handshake, or a subsequent
     // command fails with an auth error.
-    match srv.try_connect(config).await {
+    match server.try_connect(config).await {
         Err(_) => {} // expected
         Ok(client) => {
             let res = client.ping().await;
@@ -59,15 +46,9 @@ async fn auth_failure_with_wrong_password() {
 
 #[tokio::test]
 async fn no_credentials_fails_against_protected_server() {
-    let srv = match auth_server() {
-        Some(s) => s,
-        None => {
-            eprintln!("SKIP: no valkey-server binary available");
-            return;
-        }
-    };
-    let config = GlideClientConfiguration::with_address("127.0.0.1", srv.port);
-    match srv.try_connect(config).await {
+    let server = TestServer::start_with_args(&["--requirepass", PASSWORD]);
+    let config = GlideClientConfiguration::with_address("127.0.0.1", server.port);
+    match server.try_connect(config).await {
         Err(_) => {} // expected: NOAUTH during handshake
         Ok(client) => {
             let res = client.ping().await;
@@ -78,17 +59,11 @@ async fn no_credentials_fails_against_protected_server() {
 
 #[tokio::test]
 async fn auth_with_username_default_user() {
-    let srv = match auth_server() {
-        Some(s) => s,
-        None => {
-            eprintln!("SKIP: no valkey-server binary available");
-            return;
-        }
-    };
+    let server = TestServer::start_with_args(&["--requirepass", PASSWORD]);
     // The built-in `default` user with the configured password.
-    let config = GlideClientConfiguration::with_address("127.0.0.1", srv.port)
+    let config = GlideClientConfiguration::with_address("127.0.0.1", server.port)
         .credentials(ServerCredentials::username_password("default", PASSWORD));
-    let client = srv
+    let client = server
         .try_connect(config)
         .await
         .expect("default-user auth should succeed");

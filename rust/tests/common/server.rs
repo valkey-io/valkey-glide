@@ -2,69 +2,100 @@
 //! Ephemeral standalone server harness.
 
 use glide::{GlideClient, GlideClientConfiguration, ProtocolVersion};
-use std::net::{TcpListener, TcpStream};
+use std::fs::OpenOptions;
+use std::net::TcpListener;
+use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
+
+// Maximum start timeout.
+// Matches `utils/cluster_manager.py`.
+const START_TIMEOUT: Duration = Duration::from_secs(10);
+
+// Constants for parsing server logs.
+const LOG_READY: &str = "Ready to accept connections";
+const LOG_PORT_IN_USE: &str = "in use";
 
 /// Locate a usable `valkey-server`/`redis-server` binary. Set the
 /// `VALKEY_SERVER_PATH` environment variable to point at a specific binary;
 /// otherwise the first `valkey-server`/`redis-server` found on `PATH` is used.
-/// Returns `None` (so tests SKIP) when no binary is available.
-pub fn server_binary() -> Option<String> {
-    if let Ok(p) = std::env::var("VALKEY_SERVER_PATH")
-        && std::path::Path::new(&p).exists()
-    {
-        return Some(p);
+///
+/// Panics when no binary is available.
+fn server_binary() -> String {
+    // [1] From environment variable:
+    if let Ok(p) = std::env::var("VALKEY_SERVER_PATH") {
+        assert!(
+            Path::new(&p).is_file(),
+            "VALKEY_SERVER_PATH={p} is not a file"
+        );
+        return p;
     }
+
+    // [2] From `PATH`:
     for name in ["valkey-server", "redis-server"] {
         if let Ok(output) = Command::new("which").arg(name).output()
             && output.status.success()
         {
             let p = String::from_utf8_lossy(&output.stdout).trim().to_string();
             if !p.is_empty() {
-                return Some(p);
+                return p;
             }
         }
     }
-    None
+
+    panic!("no valkey-server or redis-server binary found. Install one or set VALKEY_SERVER_PATH");
 }
 
 /// Grab a currently-free TCP port on loopback.
-pub fn free_port() -> u16 {
+fn free_port() -> u16 {
     let listener = TcpListener::bind("127.0.0.1:0").expect("bind ephemeral port");
     listener.local_addr().unwrap().port()
-}
-
-/// Block until `port` accepts a TCP connection, or `deadline` elapses.
-pub(crate) fn wait_for_port(port: u16, timeout: Duration) -> bool {
-    let deadline = Instant::now() + timeout;
-    while Instant::now() < deadline {
-        if TcpStream::connect(("127.0.0.1", port)).is_ok() {
-            return true;
-        }
-        std::thread::sleep(Duration::from_millis(30));
-    }
-    false
 }
 
 /// A running standalone server; killed on drop.
 pub struct TestServer {
     child: Child,
     pub port: u16,
+    log_path: PathBuf,
 }
 
 impl TestServer {
-    /// Start a fresh standalone server, or `None` when no binary is available.
-    pub fn start() -> Option<TestServer> {
+    /// Start a standalone server.
+    /// Panics if it cannot be started.
+    pub fn start() -> TestServer {
         Self::start_with_args(&[])
     }
 
     /// Start a standalone server with extra CLI arguments (e.g. `--requirepass`).
-    // TODO #6877: returning None here makes a missing/broken server a silent skip.
-    // It should fail instead; also retry on a port collision.
-    pub fn start_with_args(extra: &[&str]) -> Option<TestServer> {
-        let bin = server_binary()?;
-        let port = free_port();
+    /// Panics if it cannot be started.
+    pub fn start_with_args(extra: &[&str]) -> TestServer {
+        let bin = server_binary();
+
+        // If the port is already in use, retries on a new port until one is free,
+        loop {
+            if let Some(server) = Self::try_start_on(&bin, free_port(), extra) {
+                return server;
+            }
+        }
+    }
+
+    /// Attempts to start a server on the given port.
+    /// Returns `None` if the port is already in use.
+    /// Panics on any other failure.
+    fn try_start_on(bin: &str, port: u16, extra: &[&str]) -> Option<TestServer> {
+        // [1] Start logging.
+        let log_path = log_path(port);
+        let log = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&log_path)
+            .unwrap_or_else(|e| panic!("could not create {}: {e}", log_path.display()));
+        let log_err = log
+            .try_clone()
+            .unwrap_or_else(|e| panic!("could not clone log handle: {e}"));
+
+        // [2] Build arguments.
         let mut args: Vec<String> = vec![
             "--port".into(),
             port.to_string(),
@@ -78,19 +109,49 @@ impl TestServer {
             "no".into(),
         ];
         args.extend(extra.iter().map(|s| s.to_string()));
-        let child = Command::new(&bin)
+
+        // [3] Spawn the server.
+        let child = match Command::new(bin)
             .args(&args)
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
+            .stdout(Stdio::from(log))
+            .stderr(Stdio::from(log_err))
             .spawn()
-            .ok()?;
-        let mut server = TestServer { child, port };
-        if wait_for_port(port, Duration::from_secs(10)) {
-            std::thread::sleep(Duration::from_millis(100));
-            Some(server)
-        } else {
-            let _ = server.child.kill();
-            None
+        {
+            Ok(child) => child,
+            Err(e) => {
+                let _ = std::fs::remove_file(&log_path);
+                panic!("could not spawn {bin}: {e}");
+            }
+        };
+
+        // On every failure path below, dropping `server`
+        // kills the child and removes the log.
+        let mut server = TestServer {
+            child,
+            port,
+            log_path,
+        };
+
+        // [4] Wait for the server to become ready.
+        let deadline = Instant::now() + START_TIMEOUT;
+        loop {
+            // Check for exit before reading the log,
+            // so that an exited server's log is read in full.
+            let exited = server.child.try_wait().ok().flatten();
+            let log = std::fs::read_to_string(&server.log_path).unwrap_or_default();
+            if log.contains(LOG_READY) {
+                return Some(server);
+            }
+            if let Some(status) = exited {
+                if log.contains(LOG_PORT_IN_USE) {
+                    return None;
+                }
+                panic!("{bin} exited with {status} before becoming ready on port {port}:\n{log}");
+            }
+            if Instant::now() >= deadline {
+                panic!("{bin} not ready on port {port} after {START_TIMEOUT:?}:\n{log}");
+            }
+            std::thread::sleep(Duration::from_millis(30));
         }
     }
 
@@ -125,7 +186,16 @@ impl Drop for TestServer {
     fn drop(&mut self) {
         let _ = self.child.kill();
         let _ = self.child.wait();
+        let _ = std::fs::remove_file(&self.log_path);
     }
+}
+
+/// A unique per-server log path in the system temp directory.
+fn log_path(port: u16) -> PathBuf {
+    static COUNTER: AtomicU64 = AtomicU64::new(0);
+    let n = COUNTER.fetch_add(1, Ordering::Relaxed);
+    let pid = std::process::id();
+    std::env::temp_dir().join(format!("glide-rust-test-{pid}-{n}-{port}.log"))
 }
 
 /// Connect a standalone client, retrying on transient connect failures. Under

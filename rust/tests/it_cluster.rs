@@ -1,10 +1,5 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 //! Cluster integration tests against a real multi-primary cluster.
-//!
-//! The harness (see `common::ClusterHarness`) prefers
-//! `valkey-glide/utils/cluster_manager.py`; when `valkey-cli` is unavailable it
-//! builds the cluster natively from the `valkey-server` binary. Every test
-//! SKIPs gracefully when a cluster cannot be formed in this environment.
 
 mod common;
 

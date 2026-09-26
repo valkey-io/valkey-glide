@@ -29,5 +29,5 @@ mod timeout;
 pub use cluster::{ClusterHarness, is_transient_cluster_error};
 pub use helpers::{key, server_version, tkey, version_below};
 pub use pubsub::{wait_for_numpat, wait_for_numsub};
-pub use server::{TestServer, free_port, server_binary};
+pub use server::TestServer;
 pub use timeout::{test_timeout, with_test_timeout};
