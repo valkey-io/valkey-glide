@@ -1312,7 +1312,7 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.20",
  "tokio",
- "tokio-retry2 0.6.2",
+ "tokio-retry2 0.9.1",
  "tokio-util",
  "urlencoding",
  "uuid",
@@ -3347,9 +3347,9 @@ dependencies = [
 
 [[package]]
 name = "tokio-retry2"
-version = "0.6.2"
+version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e05e40fd65880de11383bbc693d3c636045ed1b5010ef1265a1d2b41d73334a1"
+checksum = "0266d56e57e6b29becbfce5daa6add8730941ca8192ddd7c24d25bf90c32a743"
 dependencies = [
  "pin-project",
  "rand 0.9.4",
