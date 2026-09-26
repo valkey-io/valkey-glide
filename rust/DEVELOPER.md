@@ -109,7 +109,7 @@ To add or change an entry, edit the table directly — then run the
 signature-parity guard. It diffs GLIDE's command table, parsed at runtime
 from `src/commands/core.rs`, against a committed redis-rs baseline
 (`tests/parity/fixtures/redis-command-table.json`) and fails on any divergence.
-Both sides are parsed by the shared `parity-guard` crate, in-process — no external
+Both sides are parsed by the shared `xtask` crate, in-process — no external
 tool is needed.
 
 ```bash
@@ -117,7 +117,7 @@ cargo test --test it_parity_guard
 ```
 
 Refresh the committed baseline only when deliberately retargeting a redis-rs
-version; regenerate it with `cargo run --manifest-path tests/parity/Cargo.toml`
+version; regenerate it with `cargo xtask build-redis-rs-command-table --version <x.y.z>`
 (see `tests/parity/README.md`).
 Commands beyond the redis-rs surface belong in the per-family extension traits
 (`src/commands/<family>.rs`), not in the table.
