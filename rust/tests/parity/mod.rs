@@ -92,19 +92,21 @@ fn read(path: &Path) -> Result<String, ParityError> {
         .map_err(|e| ParityError::Skip(format!("cannot read {}: {e}", path.display())))
 }
 
-/// Locate redis-rs's `src/commands/mod.rs` file from the `redis`
+/// Locate redis-rs's `src/commands/mod.rs` file from the `glide-core-engine`
 /// path dependency declared in this crate's `Cargo.toml`.
 fn resolve_fork_mod_rs(manifest_dir: &Path) -> Result<PathBuf, ParityError> {
     let manifest_path = manifest_dir.join("Cargo.toml");
     let manifest = std::fs::read_to_string(&manifest_path)
         .map_err(|e| ParityError::Skip(format!("cannot read {}: {e}", manifest_path.display())))?;
 
-    // Declared as `redis = { path = "..." }`.
-    let rel = Regex::new(r#"(?m)^\s*redis\s*=\s*\{[^}]*\bpath\s*=\s*"([^"]+)""#)
+    // Declared as `glide-core-engine = { path = "..." }`.
+    let rel = Regex::new(r#"(?m)^\s*glide-core-engine\s*=\s*\{[^}]*\bpath\s*=\s*"([^"]+)""#)
         .unwrap()
         .captures(&manifest)
         .and_then(|c| c.get(1))
-        .ok_or_else(|| ParityError::Skip("no `redis` path dependency in Cargo.toml".into()))?
+        .ok_or_else(|| {
+            ParityError::Skip("no `glide-core-engine` path dependency in Cargo.toml".into())
+        })?
         .as_str()
         .to_owned();
 

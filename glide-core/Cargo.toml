@@ -1,20 +1,19 @@
 [package]
 name = "glide-core"
 version = "0.1.0"
-edition = "2024"
-license = "Apache-2.0"
+description = "Core for Valkey GLIDE. This crate isn't intended to be used directly."
 authors = ["Valkey GLIDE Maintainers"]
+license = "Apache-2.0"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+# TODO #7175: Specify rust-version
+edition = "2024"
 
 [dependencies]
 
 # GLIDE dependencies
-glide-logger = { path = "../glide-logger", version = "0.1" }
-glide-telemetry = { path = "../glide-telemetry", version = "0.1" }
-
-# TODO #6905: Update once renamed.
-redis = { path = "./redis-rs/redis", features = ["aio", "keep-alive", "tokio-comp", "tokio-rustls-comp", "connection-manager", "cluster", "cluster-async"] }
+glide-logger = { path = "../glide-logger", version = "0.1.0" }
+glide-telemetry = { path = "../glide-telemetry", version = "0.1.0" }
+glide-core-engine = { path = "./redis-rs/redis", version = "0.1.0", features = ["aio", "keep-alive", "tokio-comp", "tokio-rustls-comp", "connection-manager", "cluster", "cluster-async"] }
 
 # External dependencies
 async-trait = { version = "0.1" }
@@ -69,22 +68,23 @@ mock-pubsub = []
 test-util = []
 
 [dev-dependencies]
+
+# GLIDE dependencies
+glide-core-engine = { path = "./redis-rs/redis", version = "0.1.0", features = ["tls-rustls-insecure"] }
+glide-core = { path = ".", features = ["socket-layer", "test-util"] }
+
+# External dependencies
+criterion = { version = "^0.8", features = ["html_reports", "async_tokio"] }
+ctor = "0.10"
+gungraun = "0.19"
 rsevents = "0.3.1"
+rstest = "^0.27"
+rustls = { version = "0.23", features = ["aws-lc-rs"]}
+serial_test = "4"
 socket2 = "0.6"
 tempfile = "3.3.0"
-rstest = "^0.27"
-serial_test = "4"
-criterion = { version = "^0.8", features = ["html_reports", "async_tokio"] }
-which = "8"
-ctor = "0.10"
-redis = { path = "./redis-rs/redis", features = ["tls-rustls-insecure"] }
-rustls = { version = "0.23", features = ["aws-lc-rs"]}
-gungraun = "0.19"
 tokio = { version = "1", features = ["rt-multi-thread"] }
-glide-core = { path = ".", features = [
-    "socket-layer",
-    "test-util",
-] } # always enable this feature in tests.
+which = "8"
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(standalone_heartbeat)', 'cfg(feature, values("iam_tests", "test-util"))'] }

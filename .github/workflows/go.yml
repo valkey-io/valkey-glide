@@ -1,4 +1,5 @@
-name: Go CI
+name: Go client CI
+
 permissions:
     contents: read
 

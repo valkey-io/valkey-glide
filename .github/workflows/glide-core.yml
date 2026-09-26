@@ -1,4 +1,4 @@
-name: Rust core tests
+name: glide-core CI
 
 permissions:
     contents: read
@@ -13,10 +13,8 @@ on:
             - glide-logger/**
             - glide-telemetry/**
             - glide-core/**
-            - glide-core/redis-rs/redis/src/**
-            - ffi/**
             - utils/cluster_manager.py
-            - .github/workflows/rust-core.yml
+            - .github/workflows/glide-core.yml
             - .github/actions/install-shared-dependencies/action.yml
             - .github/actions/install-engine/action.yml
             - .github/workflows/lint-rust/action.yml
@@ -29,10 +27,8 @@ on:
             - glide-logger/**
             - glide-telemetry/**
             - glide-core/**
-            - glide-core/redis-rs/redis/src/**
-            - ffi/**
             - utils/cluster_manager.py
-            - .github/workflows/rust-core.yml
+            - .github/workflows/glide-core.yml
             - .github/actions/install-shared-dependencies/action.yml
             - .github/actions/install-engine/action.yml
             - .github/workflows/lint-rust/action.yml
@@ -79,7 +75,7 @@ on:
                 default: false
 
 concurrency:
-    group: rust-core-${{ github.head_ref || github.ref }}-${{ toJson(inputs) }}
+    group: glide-core-${{ github.head_ref || github.ref }}-${{ toJson(inputs) }}
     cancel-in-progress: true
 
 env:
@@ -159,14 +155,6 @@ jobs:
               working-directory: ./glide-core
               run: cargo test --features "proto,socket-layer,standalone_heartbeat"
 
-            - name: Run glide-ffi tests
-              working-directory: ./ffi
-              run: cargo test
-
-            - name: Run glide-ffi MIRI tests
-              working-directory: ./ffi/miri-tests
-              run: cargo miri test
-
             - name: Check features
               working-directory: ./glide-core
               run: |
@@ -198,12 +186,6 @@ jobs:
                   cargo-toml-folder: glide-core
                   github-token: ${{ secrets.GITHUB_TOKEN }}
               name: lint glide-core
-
-            - uses: ./.github/workflows/lint-rust
-              with:
-                  cargo-toml-folder: ffi
-                  github-token: ${{ secrets.GITHUB_TOKEN }}
-              name: lint glide-ffi
 
             - uses: ./.github/workflows/lint-rust
               with:

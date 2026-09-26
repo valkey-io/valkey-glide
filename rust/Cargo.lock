@@ -1018,6 +1018,7 @@ dependencies = [
  "dashmap",
  "futures",
  "futures-intrusive",
+ "glide-core-engine",
  "glide-logger",
  "glide-telemetry",
  "http 1.4.2",
@@ -1027,7 +1028,6 @@ dependencies = [
  "once_cell",
  "protobuf-codegen",
  "rand 0.8.6",
- "redis",
  "regex",
  "rustls",
  "rustls-pki-types",
@@ -1047,6 +1047,44 @@ dependencies = [
 ]
 
 [[package]]
+name = "glide-core-engine"
+version = "0.1.0"
+dependencies = [
+ "arc-swap",
+ "async-trait",
+ "bytes",
+ "combine",
+ "crc16",
+ "dashmap",
+ "dispose",
+ "futures",
+ "futures-util",
+ "glide-logger",
+ "glide-telemetry",
+ "itoa",
+ "lazy_static",
+ "lru",
+ "num-bigint",
+ "parking_lot",
+ "percent-encoding",
+ "pin-project-lite",
+ "rand 0.9.4",
+ "rustls",
+ "rustls-pki-types",
+ "rustls-platform-verifier",
+ "ryu",
+ "socket2",
+ "strum",
+ "strum_macros",
+ "tokio",
+ "tokio-retry2 0.5.8",
+ "tokio-rustls",
+ "tokio-util",
+ "tracing",
+ "url",
+]
+
+[[package]]
 name = "glide-logger"
 version = "0.1.0"
 dependencies = [
@@ -1055,28 +1093,6 @@ dependencies = [
  "tracing",
  "tracing-appender",
  "tracing-subscriber",
-]
-
-[[package]]
-name = "glide-rust"
-version = "0.2.0"
-dependencies = [
- "async-trait",
- "bytes",
- "futures",
- "glide-core",
- "glide-logger",
- "num-bigint",
- "once_cell",
- "redis",
- "regex",
- "ryu",
- "sealed",
- "serde_json",
- "sha1_smol",
- "thiserror 2.0.20",
- "tokio",
- "url",
 ]
 
 [[package]]
@@ -2105,44 +2121,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "redis"
-version = "0.25.2"
-dependencies = [
- "arc-swap",
- "async-trait",
- "bytes",
- "combine",
- "crc16",
- "dashmap",
- "dispose",
- "futures",
- "futures-util",
- "glide-logger",
- "glide-telemetry",
- "itoa",
- "lazy_static",
- "lru",
- "num-bigint",
- "parking_lot",
- "percent-encoding",
- "pin-project-lite",
- "rand 0.9.4",
- "rustls",
- "rustls-pki-types",
- "rustls-platform-verifier",
- "ryu",
- "socket2",
- "strum",
- "strum_macros",
- "tokio",
- "tokio-retry2 0.5.8",
- "tokio-rustls",
- "tokio-util",
- "tracing",
- "url",
-]
-
-[[package]]
 name = "redox_syscall"
 version = "0.5.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3052,6 +3030,28 @@ dependencies = [
  "js-sys",
  "rand 0.10.1",
  "wasm-bindgen",
+]
+
+[[package]]
+name = "valkey-glide"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "bytes",
+ "futures",
+ "glide-core",
+ "glide-core-engine",
+ "glide-logger",
+ "num-bigint",
+ "once_cell",
+ "regex",
+ "ryu",
+ "sealed",
+ "serde_json",
+ "sha1_smol",
+ "thiserror 2.0.20",
+ "tokio",
+ "url",
 ]
 
 [[package]]

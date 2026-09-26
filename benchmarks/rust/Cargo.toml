@@ -1,20 +1,19 @@
 [package]
 name = "rust-benchmark"
-version = "0.1.0"
-edition = "2024"
-license = "Apache 2.0"
+version = "0.0.0"
 authors = ["Valkey GLIDE Maintainers"]
+license = "Apache-2.0"
+publish = false
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+# TODO #7175: Specify rust-version
+edition = "2024"
 
 [dependencies]
 
 # GLIDE dependencies
 glide-logger = { path = "../../glide-logger" }
-
-# TODO #6905: Update once renamed.
+glide-core-engine = { path = "../../glide-core/redis-rs/redis", features = ["aio"] }
 glide-core = { path = "../../glide-core" }
-redis = { path = "../../glide-core/redis-rs/redis", features = ["aio"] }
 
 # External dependencies
 average = "0.17"

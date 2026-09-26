@@ -1,5 +1,5 @@
 [package]
-name = "mock-glide-core"
+name = "mock-glide-core-engine"
 version = "0.0.0"
 authors = ["Valkey GLIDE Maintainers"]
 license = "Apache-2.0"
@@ -12,11 +12,10 @@ edition = "2024"
 
 # Mock crates for testing
 glide-telemetry = { path = "../mock-glide-telemetry", package = "mock-glide-telemetry" }
-redis = { path = "../mock-glide-core-engine", package = "mock-glide-core-engine" }
 
 # GLIDE dependencies
-glide-core = { path = "../../../glide-core", features = ["proto"] }
+glide-core-engine = { path = "../../../glide-core/redis-rs/redis", features = ["aio", "tokio-comp", "tokio-rustls-comp"] }
 
 # External dependencies
-protobuf = { version = "3", features = [] }
-tokio = { version = "^1", features = ["rt", "macros", "rt-multi-thread", "time"] }
+bytes = "1"
+url = "2"

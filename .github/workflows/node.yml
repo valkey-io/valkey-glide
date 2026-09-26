@@ -1,4 +1,4 @@
-name: Node
+name: Node client CI
 
 permissions:
     contents: read

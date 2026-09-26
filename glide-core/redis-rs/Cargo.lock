@@ -740,6 +740,57 @@ dependencies = [
 ]
 
 [[package]]
+name = "glide-core-engine"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "arc-swap",
+ "async-trait",
+ "bytes",
+ "combine",
+ "crc16",
+ "criterion",
+ "dashmap",
+ "dispose",
+ "fnv",
+ "futures",
+ "futures-time",
+ "futures-util",
+ "glide-logger",
+ "glide-telemetry",
+ "itoa",
+ "lazy_static",
+ "lru",
+ "num-bigint",
+ "once_cell",
+ "parking_lot",
+ "partial-io",
+ "percent-encoding",
+ "pin-project-lite",
+ "quickcheck",
+ "rand 0.9.4",
+ "rustls",
+ "rustls-pki-types",
+ "rustls-platform-verifier",
+ "ryu",
+ "serde_json",
+ "serial_test",
+ "socket2",
+ "strum",
+ "strum_macros",
+ "tempfile",
+ "tokio",
+ "tokio-retry2",
+ "tokio-rustls",
+ "tokio-util",
+ "tracing",
+ "tracing-subscriber",
+ "url",
+ "versions",
+ "which",
+]
+
+[[package]]
 name = "glide-logger"
 version = "0.1.0"
 dependencies = [
@@ -1789,57 +1840,6 @@ checksum = "22e18b0f0062d30d4230b2e85ff77fdfe4326feb054b9783a3460d8435c8ab91"
 dependencies = [
  "crossbeam-deque",
  "crossbeam-utils",
-]
-
-[[package]]
-name = "redis"
-version = "0.25.2"
-dependencies = [
- "anyhow",
- "arc-swap",
- "async-trait",
- "bytes",
- "combine",
- "crc16",
- "criterion",
- "dashmap",
- "dispose",
- "fnv",
- "futures",
- "futures-time",
- "futures-util",
- "glide-logger",
- "glide-telemetry",
- "itoa",
- "lazy_static",
- "lru",
- "num-bigint",
- "once_cell",
- "parking_lot",
- "partial-io",
- "percent-encoding",
- "pin-project-lite",
- "quickcheck",
- "rand 0.9.4",
- "rustls",
- "rustls-pki-types",
- "rustls-platform-verifier",
- "ryu",
- "serde_json",
- "serial_test",
- "socket2",
- "strum",
- "strum_macros",
- "tempfile",
- "tokio",
- "tokio-retry2",
- "tokio-rustls",
- "tokio-util",
- "tracing",
- "tracing-subscriber",
- "url",
- "versions",
- "which",
 ]
 
 [[package]]
