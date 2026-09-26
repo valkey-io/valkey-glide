@@ -1123,6 +1123,8 @@ dependencies = [
  "glide-logger",
  "lazy_static",
  "libc",
+ "opentelemetry",
+ "opentelemetry_sdk",
  "percent-encoding",
  "protobuf",
  "rstest",
