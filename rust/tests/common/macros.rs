@@ -132,8 +132,8 @@ macro_rules! matrix_test {
 
             #[tokio::test]
             async fn cluster_resp2() {
-                let __h = $crate::common::ClusterHarness::start().await;
-                let $client = __h
+                let __server = $crate::common::ClusterHarness::start().await;
+                let $client = __server
                     .client_with_protocol(glide::ProtocolVersion::RESP2)
                     .await;
                 $crate::common::with_test_timeout(async { $body }).await;
@@ -141,8 +141,8 @@ macro_rules! matrix_test {
 
             #[tokio::test]
             async fn cluster_resp3() {
-                let __h = $crate::common::ClusterHarness::start().await;
-                let $client = __h
+                let __server = $crate::common::ClusterHarness::start().await;
+                let $client = __server
                     .client_with_protocol(glide::ProtocolVersion::RESP3)
                     .await;
                 $crate::common::with_test_timeout(async { $body }).await;

@@ -80,7 +80,8 @@ cargo test --test it_string get_missing   # only those containing `get_missing`
 ```
 
 Integration tests each boot their own ephemeral server on a free port and tear it
-down on drop. The test fails if a server cannot be started.
+down on drop. The test fails if no server binary is found (see
+`VALKEY_SERVER_PATH` above) or the server cannot be started.
 
 ## Lint & format
 

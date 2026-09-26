@@ -242,13 +242,15 @@ The suite has three layers (all run in CI and are currently green):
   command family with edge/error cases (wrong-type, missing key, bounds, expiry
   conditions), **parametrized over RESP2 and RESP3**, plus suites for batches,
   scan, pub/sub, auth, TLS, and a **native multi-shard cluster** harness. Each
-  test boots its own ephemeral server and tears it down on drop; suites needing
-  unavailable infra (cluster/TLS/auth) **skip gracefully** rather than fail.
+  test boots its own ephemeral server and tears it down on drop; a test fails
+  if its server or cluster cannot be started.
 - **Doctests** — the examples in this README and the API docs are compiled.
 
 ```bash
-cargo test --lib     # fast unit + mock tests only (no server needed)
-cargo test           # everything, incl. live integration tests + doctests
+cargo unit-tests         # unit tests
+cargo doc-tests          # doctests
+cargo integration-tests  # integration tests
+cargo test               # all tests (unit, docs, and integration)
 ```
 
 Integration tests auto-discover a `valkey-server`/`redis-server` on `PATH`; point

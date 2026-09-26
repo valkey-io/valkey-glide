@@ -340,9 +340,7 @@ matrix_test!(geo_decode_shapes, c, {
 
 matrix_test!(lmpop_typed_method, c, {
     let c = c;
-    if common::version_below(&c, (7, 0, 0)).await {
-        return;
-    }
+    skip_if_version_below!(c, 7, 0, 0);
     let k = common::tkey("cmd_lmpop", "l1");
     let _: () = c.rpush(&k, &["a", "b"]).await.unwrap();
     // Fork signature: lmpop(numkeys, key, dir, count); normalized reply:

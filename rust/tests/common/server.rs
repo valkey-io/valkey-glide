@@ -2,21 +2,20 @@
 //! Ephemeral standalone server harness.
 
 use glide::{GlideClient, GlideClientConfiguration, ProtocolVersion};
-use std::fs::File;
+use std::fs::OpenOptions;
 use std::net::TcpListener;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
-// Maximum start attempts and timeout.
+// Maximum start timeout.
 // Matches `utils/cluster_manager.py`.
-const START_MAX_ATTEMPTS: u32 = 5;
 const START_TIMEOUT: Duration = Duration::from_secs(10);
 
 // Constants for parsing server logs.
 const LOG_READY: &str = "Ready to accept connections";
-const LOG_PORT_IN_USE: &str = "Address already in use";
+const LOG_PORT_IN_USE: &str = "in use";
 
 /// Locate a usable `valkey-server`/`redis-server` binary. Set the
 /// `VALKEY_SERVER_PATH` environment variable to point at a specific binary;
@@ -27,13 +26,13 @@ fn server_binary() -> String {
     // [1] From environment variable:
     if let Ok(p) = std::env::var("VALKEY_SERVER_PATH") {
         assert!(
-            Path::new(&p).exists(),
-            "VALKEY_SERVER_PATH={p} does not exist"
+            Path::new(&p).is_file(),
+            "VALKEY_SERVER_PATH={p} is not a file"
         );
         return p;
     }
 
-    // [2] From binary:
+    // [2] From `PATH`:
     for name in ["valkey-server", "redis-server"] {
         if let Ok(output) = Command::new("which").arg(name).output()
             && output.status.success()
@@ -72,12 +71,13 @@ impl TestServer {
     /// Panics if it cannot be started.
     pub fn start_with_args(extra: &[&str]) -> TestServer {
         let bin = server_binary();
-        for _ in 0..START_MAX_ATTEMPTS {
+
+        // If the port is already in use, retries on a new port until one is free,
+        loop {
             if let Some(server) = Self::try_start_on(&bin, free_port(), extra) {
                 return server;
             }
         }
-        panic!("{bin} could not bind a free port after {START_MAX_ATTEMPTS} attempts");
     }
 
     /// Attempts to start a server on the given port.
@@ -86,7 +86,10 @@ impl TestServer {
     fn try_start_on(bin: &str, port: u16, extra: &[&str]) -> Option<TestServer> {
         // [1] Start logging.
         let log_path = log_path(port);
-        let log = File::create(&log_path)
+        let log = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&log_path)
             .unwrap_or_else(|e| panic!("could not create {}: {e}", log_path.display()));
         let log_err = log
             .try_clone()
@@ -132,11 +135,14 @@ impl TestServer {
         // [4] Wait for the server to become ready.
         let deadline = Instant::now() + START_TIMEOUT;
         loop {
+            // Check for exit before reading the log,
+            // so that an exited server's log is read in full.
+            let exited = server.child.try_wait().ok().flatten();
             let log = std::fs::read_to_string(&server.log_path).unwrap_or_default();
             if log.contains(LOG_READY) {
                 return Some(server);
             }
-            if let Ok(Some(status)) = server.child.try_wait() {
+            if let Some(status) = exited {
                 if log.contains(LOG_PORT_IN_USE) {
                     return None;
                 }
