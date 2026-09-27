@@ -1,4 +1,0 @@
-# Alias for xtask task-runner.
-# See https://github.com/matklad/cargo-xtask for more details.
-[alias]
-xtask = "run --package xtask --"
