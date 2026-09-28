@@ -252,7 +252,22 @@ fn parse_args(args: &str) -> Vec<Argument> {
 /// Extract the names of every scan method declared in the given source.
 fn scan_method_names(src: &str) -> BTreeSet<String> {
     let re = Regex::new(r"fn\s+([a-z_0-9]*scan[a-z_0-9]*)").expect("valid regex");
-    re.captures_iter(src).map(|c| c[1].to_string()).collect()
+    let mut counts: BTreeMap<String, usize> = BTreeMap::new();
+    for caps in re.captures_iter(src) {
+        *counts.entry(caps[1].to_string()).or_insert(0) += 1;
+    }
+
+    // Each scan method must be defined once in the async trait and once in the blocking
+    // trait, so every name must appear exactly twice. Panics otherwise.
+    for (name, count) in &counts {
+        assert!(
+            *count == 2,
+            "scan method `{name}` is declared {count} time(s), expected 2 \
+             (an async and a blocking definition)"
+        );
+    }
+
+    counts.into_keys().collect()
 }
 
 /// Compares the given redis-rs and Valkey GLIDE method maps.
@@ -277,7 +292,7 @@ fn compare_method_maps(
     // Verify that GLIDE does not implement any extra methods.
     for name in glide.keys() {
         if !redis.contains_key(name) {
-            problems.push(format!("EXTRA method in ours (not in redis-rs): {name}"));
+            problems.push(format!("EXTRA method in GLIDE: {name}"));
         }
     }
 
@@ -300,9 +315,7 @@ fn compare_scan_method_names(redis: &BTreeSet<String>, glide: &BTreeSet<String>)
     // Verify that GLIDE does not implement any extra scan methods.
     for name in glide {
         if !redis.contains(name) {
-            problems.push(format!(
-                "EXTRA scan method in ours (not in redis-rs): {name}"
-            ));
+            problems.push(format!("EXTRA scan method in GLIDE: {name}"));
         }
     }
 

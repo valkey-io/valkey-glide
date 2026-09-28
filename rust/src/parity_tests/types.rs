@@ -13,7 +13,7 @@ pub struct RedisParity {
     pub version: String,
     /// The command-table methods, indexed by method name.
     pub methods: BTreeMap<String, Method>,
-    /// The scan-iterator method names (compared by name only).
+    /// The scan method names.
     pub scan_method_names: BTreeSet<String>,
 }
 
