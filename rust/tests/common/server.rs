@@ -197,12 +197,12 @@ impl Drop for TestServer {
     }
 }
 
-/// A unique per-server log path in the system temp directory.
+/// A unique per-server log path in Cargo's per-package target temp directory.
 fn log_path(port: u16) -> PathBuf {
     static COUNTER: AtomicU64 = AtomicU64::new(0);
     let n = COUNTER.fetch_add(1, Ordering::Relaxed);
     let pid = std::process::id();
-    std::env::temp_dir().join(format!("glide-rust-test-{pid}-{n}-{port}.log"))
+    PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join(format!("glide-rust-test-{pid}-{n}-{port}.log"))
 }
 
 /// Connect a standalone client, retrying on transient connect failures. Under
