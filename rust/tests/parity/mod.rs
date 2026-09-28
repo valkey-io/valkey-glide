@@ -6,6 +6,7 @@ mod types;
 
 use regex::Regex;
 use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use std::path::Path;
 use types::Argument;
 use types::Generic;
@@ -20,20 +21,34 @@ const REDIS_RS_VERSION: &str = "0.25.2";
 // TODO #7058: Update once we get the command table from GitHub.
 const REDIS_COMMAND_TABLE: &str = "../glide-core/redis-rs/redis/src/commands/mod.rs";
 
-/// Runs the parity check and returns the results.
+/// The vendored redis-rs fork's scan-iterator definitions, relative to `rust/`.
+// TODO #7058: Update once we get the scan definitions from GitHub.
+const REDIS_SCAN_METHODS: &str = "../glide-core/redis-rs/redis/src/commands/macros.rs";
+
+/// Runs the parity check between the Valkey GLIDE and redis-rs and returns the results:
 /// - `Ok` carries a human-readable summary.
 /// - `Err` lists the divergences, one message per problem.
 ///
 /// Panics if one of the command tables can't be read or parsed.
-pub fn check() -> Result<String, Vec<String>> {
+pub fn run_parity_check() -> Result<String, Vec<String>> {
     let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let redis_path = &read(&manifest.join(REDIS_COMMAND_TABLE));
-    let glide_path = &read(&manifest.join("src/commands/core.rs"));
+    let mut problems = Vec::new();
 
-    let redis_methods_map = parse_methods_map(redis_path);
-    let glide_methods_map = parse_methods_map(glide_path);
+    // Compare the command tables.
+    let redis_commands_path = &read(&manifest.join(REDIS_COMMAND_TABLE));
+    let glide_commands_path = &read(&manifest.join("src/commands/core.rs"));
+    let redis_methods_map = parse_methods_map(redis_commands_path);
+    let glide_methods_map = parse_methods_map(glide_commands_path);
+    problems.extend(compare_method_maps(redis_methods_map, glide_methods_map));
 
-    let problems = compare_method_maps(redis_methods_map, glide_methods_map);
+    // Compare scan method names.
+    // Scan iterators in Valkey GLIDE intentionally diverge from redis-rs, but we
+    // want to ensure that the scan method names still match.
+    let redis_scan_path = &read(&manifest.join(REDIS_SCAN_METHODS));
+    let redis_scan_names = scan_method_names(redis_scan_path);
+    let glide_scan_names = scan_method_names(glide_commands_path);
+    problems.extend(compare_scan_method_names(redis_scan_names, glide_scan_names));
+
     if problems.is_empty() {
         Ok(format!(
             "parity OK: GLIDE methods match redis-rs {REDIS_RS_VERSION} exactly"
@@ -179,6 +194,12 @@ fn parse_args(args: &str) -> Vec<Argument> {
         .collect()
 }
 
+/// Extract the names of every scan method declared in the given source.
+fn scan_method_names(src: &str) -> BTreeSet<String> {
+    let re = Regex::new(r"fn\s+([a-z_0-9]*scan[a-z_0-9]*)").expect("valid regex");
+    re.captures_iter(src).map(|c| c[1].to_string()).collect()
+}
+
 // --- comparison ---------------------------------------------------------------------------------
 
 /// Compares the given redis-rs and Valkey GLIDE method maps.
@@ -204,6 +225,29 @@ fn compare_method_maps(
     for name in glide.keys() {
         if !redis.contains_key(name) {
             problems.push(format!("EXTRA method in ours (not in redis-rs): {name}"));
+        }
+    }
+
+    problems
+}
+
+/// Compares the given redis-rs and Valkey GLIDE scan method names.
+/// Only names are compared: the clients intentionally have different scan method signatures.
+/// Returns one message per problem; empty means they match.
+fn compare_scan_method_names(redis: BTreeSet<String>, glide: BTreeSet<String>) -> Vec<String> {
+    let mut problems = Vec::new();
+
+    // Verify that all redis-rs scan methods are implemented by GLIDE.
+    for name in &redis {
+        if !glide.contains(name) {
+            problems.push(format!("MISSING scan method in GLIDE: {name}"));
+        }
+    }
+
+    // Verify that GLIDE does not implement any extra scan methods.
+    for name in &glide {
+        if !redis.contains(name) {
+            problems.push(format!("EXTRA scan method in ours (not in redis-rs): {name}"));
         }
     }
 
