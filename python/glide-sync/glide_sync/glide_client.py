@@ -157,7 +157,9 @@ class BaseClient(CoreCommands):
         self._pubsub_callback_ref = pubsub_callback
 
         # Create address resolver callback if configured
-        address_resolver_callback = self._ffi.NULL
+        address_resolver_callback = self._ffi.cast(
+            "AddressResolverCallback", self._ffi.NULL
+        )
         if self._config.address_resolver is not None:
             resolver_fn = self._config.address_resolver
 
@@ -189,7 +191,9 @@ class BaseClient(CoreCommands):
             self._address_resolver_callback_ref = address_resolver_callback
 
         # Create credential provider callback if configured in IAM config
-        credential_provider_callback = self._ffi.NULL
+        credential_provider_callback = self._ffi.cast(
+            "CredentialProviderCallback", self._ffi.NULL
+        )
         _credential_provider_fn = None
         if (
             self._config.credentials is not None
