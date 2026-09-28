@@ -72,7 +72,8 @@ impl TestServer {
     pub fn start_with_args(extra: &[&str]) -> TestServer {
         let bin = server_binary();
 
-        // If the port is already in use, retries on a new port until one is free,
+        // If the port is already in use, retry on a new port until one is free,
+        // like `utils/cluster_manager.py`.
         loop {
             if let Some(server) = Self::try_start_on(&bin, free_port(), extra) {
                 return server;
