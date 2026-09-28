@@ -2093,10 +2093,11 @@ impl Client {
                     result
                 }
             }
-            Err(_elapsed) => Err(RedisError::from((
-                ErrorKind::IoError,
+            Err(_elapsed) => Err(io::Error::new(
+                io::ErrorKind::TimedOut,
                 "Password update operation timed out, please check the connection",
-            ))),
+            )
+            .into()),
         }
     }
 

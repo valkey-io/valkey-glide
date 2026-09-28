@@ -374,6 +374,38 @@ pub(crate) mod shared_client_tests {
     }
 
     #[rstest]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_update_connection_password_timeout_is_a_timeout_error() {
+        block_on_all(async {
+            // Accepts connections but never answers, so the lazy connect inside the
+            // password update outlasts the request timeout.
+            let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let port = listener.local_addr().unwrap().port();
+            tokio::spawn(async move {
+                let mut held = Vec::new();
+                while let Ok((stream, _)) = listener.accept().await {
+                    held.push(stream);
+                }
+            });
+            let connection_request = create_connection_request(
+                &[redis::ConnectionAddr::Tcp("127.0.0.1".to_string(), port)],
+                &TestConfiguration {
+                    lazy_connect: true,
+                    request_timeout: Some(300),
+                    ..Default::default()
+                },
+            );
+            let mut client = Client::new(connection_request.into(), None).await.unwrap();
+
+            let err = client
+                .update_connection_password(Some("password".to_string()), false)
+                .await
+                .expect_err("the password update should time out");
+            assert!(err.is_timeout(), "expected a timeout error, got: {err}");
+        });
+    }
+
+    #[rstest]
     #[serial_test::serial]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
     fn test_authenticate_with_password(#[values(false, true)] use_cluster: bool) {
