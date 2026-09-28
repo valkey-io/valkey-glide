@@ -183,7 +183,8 @@ public interface GenericClusterCommands {
      *
      * <p>Each iteration is bounded by the client's request timeout. After a timeout, the cursor
      * passed to that call is still valid, so the scan can resume by retrying with it. If the same
-     * iteration keeps timing out, use a smaller count or a longer request timeout.
+     * iteration keeps timing out, use {@link #scan(ClusterScanCursor, ScanOptions)} with a smaller
+     * count, or a longer request timeout.
      *
      * <p>How to use the {@link ClusterScanCursor}: <br>
      * For each iteration, the previous scan {@link ClusterScanCursor} object should be used to
@@ -245,7 +246,8 @@ public interface GenericClusterCommands {
      *
      * <p>Each iteration is bounded by the client's request timeout. After a timeout, the cursor
      * passed to that call is still valid, so the scan can resume by retrying with it. If the same
-     * iteration keeps timing out, use a smaller count or a longer request timeout.
+     * iteration keeps timing out, use {@link #scanBinary(ClusterScanCursor, ScanOptions)} with a
+     * smaller count, or a longer request timeout.
      *
      * <p>How to use the {@link ClusterScanCursor}: <br>
      * For each iteration, the previous scan {@link ClusterScanCursor} object should be used to

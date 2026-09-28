@@ -722,7 +722,7 @@ func (client *ClusterClient) clusterScan(
 // The same key can be returned in multiple scan iterations.
 //
 // Each iteration is bounded by the client's request timeout. If iterations keep timing out,
-// use a smaller count or a longer request timeout.
+// use [ClusterClient.ScanWithOptions] with a smaller count, or a longer request timeout.
 //
 // See [valkey.io] for details.
 //
