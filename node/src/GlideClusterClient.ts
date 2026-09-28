@@ -909,6 +909,10 @@ export class GlideClusterClient extends BaseClient {
      * The same key may be returned in multiple scan iterations.
      * The API does not accept `route` as it go through all slots in the cluster.
      *
+     * Each iteration is bounded by the client's `requestTimeout`. After a timeout, the cursor passed
+     * to that call is still valid, so the scan can resume by retrying with it. If the same iteration
+     * keeps timing out, use a smaller `count` or a longer `requestTimeout`.
+     *
      * @see {@link https://valkey.io/commands/scan/ | valkey.io} for more details.
      *
      * @param cursor - The cursor object that wraps the scan state.
