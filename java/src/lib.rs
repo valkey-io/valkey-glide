@@ -2307,13 +2307,7 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeScriptAsync(
                             routing_info,
                         )
                         .await
-                        .map_err(|e| {
-                            redis::RedisError::from((
-                                redis::ErrorKind::ClientError,
-                                "Script execution failed",
-                                e.to_string(),
-                            ))
-                        });
+                        .map_err(|e| client_error_unless_timeout(e, "Script execution failed"));
 
                     // Refresh activity after script completes so the abandon monitor
                     // does not reclaim the client immediately after a long blocking script.
@@ -2374,13 +2368,7 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_updateConnectionPas
                         .update_connection_password(password_opt, do_immediate)
                         .await
                         .map(|_| redis::Value::Okay)
-                        .map_err(|e| {
-                            redis::RedisError::from((
-                                redis::ErrorKind::ClientError,
-                                "Password update failed",
-                                e.to_string(),
-                            ))
-                        });
+                        .map_err(|e| client_error_unless_timeout(e, "Password update failed"));
 
                     complete_callback(jvm, callback_id, result, false);
                 }
@@ -2423,13 +2411,7 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_refreshIamToken(
                         .refresh_iam_token()
                         .await
                         .map(|_| redis::Value::Okay)
-                        .map_err(|e| {
-                            redis::RedisError::from((
-                                redis::ErrorKind::ClientError,
-                                "IAM token refresh failed",
-                                e.to_string(),
-                            ))
-                        });
+                        .map_err(|e| client_error_unless_timeout(e, "IAM token refresh failed"));
                     complete_callback(jvm, callback_id, result, false);
                 }
                 Err(err) => {
@@ -2587,30 +2569,12 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeClusterScanA
                     }
                     let scan_args = scan_args_builder.build();
 
-                    // Execute cluster scan.
-                    //
-                    // A timeout is passed through as it is. `RedisError::is_timeout` reads the
-                    // error's inner representation rather than its `ErrorKind`, so rebuilding a
-                    // timeout drops the marker whichever kind is used, and `error_type` reports
-                    // `RequestErrorType::Unspecified` -- Java then raises `RequestException`
-                    // rather than `TimeoutException`.
-                    //
-                    // Every other error keeps the `ClientError` mapping. Passing those through
-                    // would sort the unrecoverable kinds into `RequestErrorType::Disconnect`,
-                    // which Java raises as `ClosingException`, and that closes the client.
+                    // Execute cluster scan
                     let result = client
                         .cluster_scan(&scan_state_cursor, scan_args)
                         .await
                         .map_err(|e| {
-                            if e.is_timeout() {
-                                e
-                            } else {
-                                redis::RedisError::from((
-                                    redis::ErrorKind::ClientError,
-                                    "Cluster scan execution failed",
-                                    e.to_string(),
-                                ))
-                            }
+                            client_error_unless_timeout(e, "Cluster scan execution failed")
                         });
 
                     // binary_mode = !expect_utf8

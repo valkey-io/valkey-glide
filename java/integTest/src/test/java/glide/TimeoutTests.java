@@ -12,6 +12,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import glide.api.BaseClient;
 import glide.api.GlideClient;
 import glide.api.GlideClusterClient;
+import glide.api.models.Script;
 import glide.api.models.exceptions.TimeoutException;
 import glide.internal.AsyncRegistry;
 import java.util.UUID;
@@ -209,6 +210,41 @@ public class TimeoutTests {
                             + (finalFutures - initialFutures)
                             + " leaked");
         } finally {
+            client.close();
+        }
+    }
+
+    /**
+     * Test 5: A script that runs past the request timeout raises TimeoutException.
+     *
+     * <p>The script bridge wraps errors as ClientError, which must not swallow the timeout type.
+     */
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    @SneakyThrows
+    public void script_exceeding_timeout_throws_timeout_exception(boolean clusterMode) {
+        BaseClient client =
+                clusterMode
+                        ? GlideClusterClient.createClient(
+                                        commonClusterClientConfig().requestTimeout(500).build())
+                                .get()
+                        : GlideClient.createClient(commonClientConfig().requestTimeout(500).build()).get();
+        // Spins for 1.5s, well past the 500ms request timeout.
+        String code =
+                "local s = redis.call('TIME') local start = s[1] * 1000000 + s[2] "
+                        + "while true do local t = redis.call('TIME') "
+                        + "if (t[1] * 1000000 + t[2]) - start > 1500000 then break end end return 1";
+
+        try (Script script = new Script(code, false)) {
+            ExecutionException ex =
+                    assertThrows(ExecutionException.class, () -> client.invokeScript(script).get());
+            assertInstanceOf(
+                    TimeoutException.class,
+                    ex.getCause(),
+                    "Expected TimeoutException but got: " + ex.getCause().getClass().getName());
+        } finally {
+            // Let the script finish before closing.
+            Thread.sleep(1600);
             client.close();
         }
     }
