@@ -15,7 +15,7 @@ const PASSWORD: &str = "s3cr3t-p4ss";
 
 #[tokio::test]
 async fn auth_success_with_correct_password() {
-    let server = TestServer::start_with_args(&["--requirepass", PASSWORD]);
+    let server = TestServer::start_with_password(PASSWORD);
     let config = GlideClientConfiguration::with_address("127.0.0.1", server.port)
         .credentials(ServerCredentials::password(PASSWORD));
     let client = server
@@ -30,7 +30,7 @@ async fn auth_success_with_correct_password() {
 
 #[tokio::test]
 async fn auth_failure_with_wrong_password() {
-    let server = TestServer::start_with_args(&["--requirepass", PASSWORD]);
+    let server = TestServer::start_with_password(PASSWORD);
     let config = GlideClientConfiguration::with_address("127.0.0.1", server.port)
         .credentials(ServerCredentials::password("wrong-password"));
     // Either the connect fails during the auth handshake, or a subsequent
@@ -46,7 +46,7 @@ async fn auth_failure_with_wrong_password() {
 
 #[tokio::test]
 async fn no_credentials_fails_against_protected_server() {
-    let server = TestServer::start_with_args(&["--requirepass", PASSWORD]);
+    let server = TestServer::start_with_password(PASSWORD);
     let config = GlideClientConfiguration::with_address("127.0.0.1", server.port);
     match server.try_connect(config).await {
         Err(_) => {} // expected: NOAUTH during handshake
@@ -59,7 +59,7 @@ async fn no_credentials_fails_against_protected_server() {
 
 #[tokio::test]
 async fn auth_with_username_default_user() {
-    let server = TestServer::start_with_args(&["--requirepass", PASSWORD]);
+    let server = TestServer::start_with_password(PASSWORD);
     // The built-in `default` user with the configured password.
     let config = GlideClientConfiguration::with_address("127.0.0.1", server.port)
         .credentials(ServerCredentials::username_password("default", PASSWORD));

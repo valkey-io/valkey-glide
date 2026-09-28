@@ -67,9 +67,15 @@ impl TestServer {
         Self::start_with_args(&[])
     }
 
-    /// Start a standalone server with extra CLI arguments (e.g. `--requirepass`).
+    /// Start a standalone server with the specified password.
     /// Panics if it cannot be started.
-    pub fn start_with_args(extra: &[&str]) -> TestServer {
+    pub fn start_with_password(password: &str) -> TestServer {
+        Self::start_with_args(&["--requirepass", password])
+    }
+
+    /// Start a standalone server with extra CLI arguments.
+    /// Panics if it cannot be started.
+    fn start_with_args(extra: &[&str]) -> TestServer {
         let bin = server_binary();
 
         // If the port is already in use, retry on a new port until one is free,
