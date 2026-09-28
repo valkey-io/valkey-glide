@@ -47,4 +47,10 @@ mod tests {
         ));
         assert_eq!(error_type(&err), RequestErrorType::CircuitBreakerOpen);
     }
+
+    #[test]
+    fn request_timeout_error_type() {
+        let err: redis::RedisError = std::io::Error::from(std::io::ErrorKind::TimedOut).into();
+        assert_eq!(error_type(&err), RequestErrorType::Timeout);
+    }
 }
