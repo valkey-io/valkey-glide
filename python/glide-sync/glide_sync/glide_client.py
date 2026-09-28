@@ -119,7 +119,9 @@ class BaseClient(CoreCommands):
             config, (GlideClientConfiguration, GlideClusterClientConfiguration)
         ):
             raise ConfigurationError(
-                "Configuration must be an instance of the sync version of GlideClientConfiguration or GlideClusterClientConfiguration, imported from glide_sync.config."
+                "Configuration must be an instance of the sync version of "
+                "GlideClientConfiguration or GlideClusterClientConfiguration, "
+                "imported from glide_sync.config."
             )
         self = cls(config)
         self._config = config
@@ -627,8 +629,9 @@ class BaseClient(CoreCommands):
             password (`Optional[str]`): The new password to use for the connection,
                 if `None` the password will be removed.
             immediate_auth (`bool`):
-                `True`: The client will authenticate immediately with the new password against all connections, Using `AUTH`
-                command. If password supplied is an empty string, auth will not be performed and warning will be returned.
+                `True`: The client will authenticate immediately with the new password
+                against all connections, Using `AUTH` command. If password supplied is
+                an empty string, auth will not be performed and warning will be returned.
                 The default is `False`.
 
         Returns:
