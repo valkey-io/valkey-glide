@@ -8,7 +8,7 @@
 //! migrated call sites (including turbofish annotations) compile unchanged.
 //! Each entry carries the command body (mirroring the redis-rs's
 //! `implement_commands!`), so the wire encoding is identical by construction;
-//! signature parity is enforced by `tests/it_parity_guard.rs`.
+//! signature parity is enforced by the `parity_tests` module (`src/parity_tests/`).
 //!
 //! The built command is handed to glide-core **by value** through
 //! [`AsyncCommands::glide_send_command`] — the same zero-extra-copy path as the

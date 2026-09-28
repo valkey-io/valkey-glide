@@ -49,16 +49,13 @@ fn redis_parity_check() {
 
 /// Runs the parity check for the given specified redis-rs version and returns the results:
 /// - `Ok` carries a human-readable summary.
-/// - `Err` lists the divergences, one message per problem.
+/// - `Err` lists the command-surface divergences, one message per problem.
 ///
-/// Panics if the parity check fails.
+/// Panics if a source or data file can't be read, parsed, serialized, or written,
+/// or if the cached snapshot records a different version than the one targeted.
 fn run_parity_check(version: &str) -> Result<String, Vec<String>> {
     let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
-
-    let redis = match load_redis_parity(manifest, version) {
-        Ok(redis) => redis,
-        Err(problem) => return Err(vec![problem]),
-    };
+    let redis = load_redis_parity(manifest, version);
 
     let glide_commands = &read(&manifest.join("src/commands/core.rs"));
     let glide_methods = parse_methods_map(glide_commands);
@@ -80,26 +77,27 @@ fn run_parity_check(version: &str) -> Result<String, Vec<String>> {
     }
 }
 
-/// Load the cached redis-rs parity snapshot for the specified version, or
+/// Loads the cached redis-rs parity snapshot for the specified version, or
 /// builds and saves it from the redis-rs source when the data file is missing.
 ///
-/// Returns `Err` if the snapshot does not match the specified version.
-/// Panics if the data file can't be read, parsed, serialized, or written.
-fn load_redis_parity(manifest: &Path, version: &str) -> Result<RedisParity, String> {
+/// Panics if the snapshot records a different version than the one targeted,
+/// or if the data file can't be read, parsed, serialized, or written.
+fn load_redis_parity(manifest: &Path, version: &str) -> RedisParity {
     let data_path = manifest.join(REDIS_PARITY_JSON);
 
     if data_path.exists() {
         let redis: RedisParity = serde_json::from_str(&read(&data_path))
             .unwrap_or_else(|e| panic!("cannot parse {}: {e}", data_path.display()));
-        if redis.version != version {
-            return Err(format!(
-                "redis-rs parity data records version {}, but {version} is targeted; \
-                 delete {} to regenerate it",
-                redis.version,
-                data_path.display()
-            ));
-        }
-        return Ok(redis);
+
+        assert!(
+            redis.version == version,
+            "redis-rs parity baseline is version {}, but {version} is specified; \
+             delete {} to regenerate it",
+            redis.version,
+            data_path.display()
+        );
+
+        return redis;
     }
 
     // Data file missing: build and save the snapshot from the redis-rs source.
@@ -116,7 +114,7 @@ fn load_redis_parity(manifest: &Path, version: &str) -> Result<RedisParity, Stri
     std::fs::write(&data_path, json)
         .unwrap_or_else(|e| panic!("cannot write {}: {e}", data_path.display()));
 
-    Ok(redis)
+    redis
 }
 
 /// Parse the command table methods from the given source, indexed by method name.

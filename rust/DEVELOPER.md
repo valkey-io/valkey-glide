@@ -97,8 +97,6 @@ shapes there rather than in individual commands.
 
 ## Maintaining the unified command table
 
-TODO #7058: Update/extract once parity guard work done.
-
 The unified `AsyncCommands` / `Commands` traits are defined by the
 **hand-maintained** command table in `src/commands/core.rs` (one
 `implement_commands!` invocation; each `fn name<G: Bound>(args);` entry
@@ -107,14 +105,22 @@ expands to both the async and the blocking method, delegating to the fork's
 
 To add or change an entry, edit the table directly — then run the
 signature-parity guard. It parses GLIDE's table (`src/commands/core.rs`)
-and compares it against the redis-rs surface.
+and compares it against a committed snapshot of the redis-rs surface
+(`src/parity_tests/redis_parity.json`).
 
 ```bash
 cargo test --lib parity_tests
 ```
 
+The snapshot is a **trusted baseline**: the guard does not re-verify it against
+the redis-rs source on every run — it only rebuilds the snapshot from
+that source when the file is absent. So if the vendored redis-rs is edited or
+re-vendored, regenerate the snapshot (delete it and re-run) so it reflects the
+new source.
+
 The targeted redis-rs version is `REDIS_RS_VERSION` in `src/parity_tests/mod.rs`
 (currently the fork's `0.25.2`); a `TODO #7058` there tracks retargeting to
-upstream 1.7.0. Bumping it fails the guard until the stale snapshot is deleted and
-regenerated. Commands beyond the redis-rs surface belong in the per-family
-extension traits (`src/commands/<family>.rs`), not in the table.
+upstream 1.7.0. Bumping the constant makes the committed snapshot's version
+mismatch and the guard fail until the snapshot is regenerated. Commands beyond the
+redis-rs surface belong in the per-family extension traits
+(`src/commands/<family>.rs`), not in the table.
