@@ -783,9 +783,14 @@ def test_iam_pool_with_custom_credentials_provider(request, cluster_mode):
     pool = ClientPool(client_config, PoolConfig(max_size=3, min_idle=0))
     try:
         with pool.borrow() as client:
-            client.set("iam_sync_pool_custom_provider_key", "iam_sync_pool_custom_provider_value")
+            client.set(
+                "iam_sync_pool_custom_provider_key",
+                "iam_sync_pool_custom_provider_value",
+            )
             val = client.get("iam_sync_pool_custom_provider_key")
             assert val == b"iam_sync_pool_custom_provider_value"
     finally:
         pool.close()
-    assert invocations[0] > 0, "Custom credential provider was never invoked for sync pool client"
+    assert (
+        invocations[0] > 0
+    ), "Custom credential provider was never invoked for sync pool client"

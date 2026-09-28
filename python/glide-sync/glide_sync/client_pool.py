@@ -34,7 +34,6 @@ from glide_shared.ffi_helpers import create_credential_provider_callback
 
 from .glide_client import BaseClient, GlideClient
 
-
 # Module-level list that keeps CFFI credential-provider callbacks alive after
 # pool close() to prevent Rust IAM tasks invoking freed CFFI closures.
 _pinned_credential_callbacks: list = []
@@ -157,7 +156,9 @@ class ClientPool:
         # Extract and wire credential provider if set.
         _credential_provider_fn = None
         _credentials = getattr(client_config, "credentials", None)
-        _iam_config = getattr(_credentials, "iam_config", None) if _credentials else None
+        _iam_config = (
+            getattr(_credentials, "iam_config", None) if _credentials else None
+        )
         if _iam_config is not None:
             _credential_provider_fn = getattr(_iam_config, "credential_provider", None)
 
@@ -328,9 +329,7 @@ class ClientPool:
             self._lib.glide_pool_destroy(self._pool_id)
             # Pin callbacks for 15s so Rust IAM refresh tasks finish before CFFI frees them.
             callbacks = [
-                cb
-                for cb in [self._credential_provider_callback_ref]
-                if cb is not None
+                cb for cb in [self._credential_provider_callback_ref] if cb is not None
             ]
             if callbacks:
                 import glide_sync.client_pool as _self_module
