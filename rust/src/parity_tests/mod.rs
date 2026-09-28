@@ -82,6 +82,14 @@ fn run_parity_check(version: &str) -> Result<String, Vec<String>> {
 ///
 /// Panics if the snapshot records a different version than the one targeted,
 /// or if the data file can't be read, parsed, serialized, or written.
+//
+// TODO #7230: the snapshot is a trusted baseline — it is not validated against the
+// vendored redis-rs source, and its `version` is stamped from `REDIS_RS_VERSION`
+// rather than derived from the source. So a source signature change with a stale
+// snapshot still passes, and regenerating after a version bump relabels the old
+// source as the new version. Harden by re-parsing (or hash-verifying) the source
+// each run, and make regeneration an explicit step rather than a side effect of
+// `cargo test` writing into `src/`.
 fn load_redis_parity(manifest: &Path, version: &str) -> RedisParity {
     let data_path = manifest.join(REDIS_PARITY_JSON);
 
