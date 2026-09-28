@@ -814,9 +814,12 @@ export class GlideClusterClient extends BaseClient {
      * Serialise a {@link GlideClusterClientConfiguration} into the protobuf
      * bytes used by the pool Rust APIs.  Does not open a network connection.
      */
-    public static serializeConfig(options: GlideClusterClientConfiguration): {
+    public static serializeConfig(
+        options: GlideClusterClientConfiguration,
+    ): {
         bytes: Uint8Array;
         resolverKey: string | undefined;
+        credentialProviderKey: string | undefined;
     } {
         return super.serializeConnectionRequest(
             options,
