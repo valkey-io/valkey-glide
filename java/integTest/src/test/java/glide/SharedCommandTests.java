@@ -12146,11 +12146,10 @@ public class SharedCommandTests {
     @MethodSource("getClients")
     public void objectEncoding_returns_string_raw(BaseClient client) {
         String stringRawKey = UUID.randomUUID().toString();
-        assertEquals(
-                OK,
-                client
-                        .set(stringRawKey, "a really loooooooooooooooooooooooooooooooooooooooong value")
-                        .get());
+        // Valkey 9.1 raised the embstr size limit (from 64 to 128 bytes), so a value must exceed
+        // 128 bytes to be stored as "raw" across all supported server versions.
+        String rawValue = Java8Utils.repeat("a", 200);
+        assertEquals(OK, client.set(stringRawKey, rawValue).get());
         assertEquals("raw", client.objectEncoding(stringRawKey).get());
     }
 
@@ -12159,11 +12158,10 @@ public class SharedCommandTests {
     @MethodSource("getClients")
     public void objectEncoding_binary_returns_string_raw(BaseClient client) {
         GlideString stringRawKey = gs(UUID.randomUUID().toString());
-        assertEquals(
-                OK,
-                client
-                        .set(stringRawKey, gs("a really loooooooooooooooooooooooooooooooooooooooong value"))
-                        .get());
+        // Valkey 9.1 raised the embstr size limit (from 64 to 128 bytes), so a value must exceed
+        // 128 bytes to be stored as "raw" across all supported server versions.
+        GlideString rawValue = gs(Java8Utils.repeat("a", 200));
+        assertEquals(OK, client.set(stringRawKey, rawValue).get());
         assertEquals("raw", client.objectEncoding(stringRawKey).get());
     }
 
