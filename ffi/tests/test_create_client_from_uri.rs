@@ -1002,7 +1002,7 @@ fn test_create_client_from_uri_with_iam_credentials() {
 #[test]
 fn test_create_client_from_uri_with_username_only() {
     let server = Server::new();
-    let uri = CString::new(format!("redis://default@127.0.0.1:{}", server.port)).unwrap();
+    let uri = CString::new(format!("redis://unknown-user@127.0.0.1:{}", server.port)).unwrap();
 
     let client_type = Box::into_raw(Box::new(ClientType::SyncClient));
 
