@@ -106,18 +106,15 @@ expands to both the async and the blocking method, delegating to the fork's
 `Cmd::<name>()` constructor for identical wire encoding).
 
 To add or change an entry, edit the table directly — then run the
-signature-parity guard. It diffs GLIDE's command table, parsed at runtime
-from `src/commands/core.rs`, against a committed redis-rs baseline
-(`tests/parity/fixtures/redis-command-table.json`) and fails on any divergence.
-Both sides are parsed by the shared `xtask` crate, in-process — no external
-tool is needed.
+signature-parity guard. It parses GLIDE's table (`src/commands/core.rs`)
+and compares it against the redis-rs surface.
 
 ```bash
-cargo test --test it_parity_guard
+cargo test --lib parity_tests
 ```
 
-Refresh the committed baseline only when deliberately retargeting a redis-rs
-version; regenerate it with `cargo xtask build-redis-rs-command-table --version <x.y.z>`
-(see `tests/parity/README.md`).
-Commands beyond the redis-rs surface belong in the per-family extension traits
-(`src/commands/<family>.rs`), not in the table.
+The targeted redis-rs version is `REDIS_RS_VERSION` in `src/parity_tests/mod.rs`
+(currently the fork's `0.25.2`); a `TODO #7058` there tracks retargeting to
+upstream 1.7.0. Bumping it fails the guard until the stale snapshot is deleted and
+regenerated. Commands beyond the redis-rs surface belong in the per-family
+extension traits (`src/commands/<family>.rs`), not in the table.
