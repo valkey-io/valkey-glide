@@ -944,19 +944,7 @@ mod cluster_client_tests {
         });
     }
 
-    /// `cluster_scan` must be bounded by the client's `request_timeout`, the way
-    /// every other command path is.
-    ///
-    /// Two things beneath it are unbounded. `send_scan` builds its `SCAN` command
-    /// without calling `set_response_timeout`, so the command inherits the
-    /// connection default, which is `Duration::MAX`; and the retry loop in
-    /// `try_scan` has neither a deadline nor a retry counter. A primary that
-    /// stops answering while still in the slot map therefore leaves the caller
-    /// waiting, with no error returned.
-    ///
-    /// This test blocks every primary with a busy script. Without the bound the
-    /// call does not settle and rstest kills the test at its own limit; with it,
-    /// the call returns a timeout error at `request_timeout`.
+    /// Without a bound, the scan never settles and rstest kills the test at its own limit.
     #[rstest]
     #[serial_test::serial]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
@@ -1053,10 +1041,8 @@ mod cluster_client_tests {
             };
             let test_basics = setup_test_basics_internal(config.clone()).await;
             let mut client = test_basics.client;
-            // Connected before the primaries are blocked, since a new connection's
-            // handshake would be refused while they are. A busy server serves no other
-            // client until `busy-reply-threshold` (5s by default) passes, so its
-            // SCRIPT KILL needs a longer timeout than the scan.
+            // Connected before blocking, since busy servers refuse handshakes. They serve
+            // nobody until `busy-reply-threshold` (5s), hence the longer timeout.
             let addresses = test_basics.cluster.as_ref().unwrap().get_server_addresses();
             let kill_config = TestConfiguration {
                 request_timeout: Some(10_000),

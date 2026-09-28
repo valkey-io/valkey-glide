@@ -1554,14 +1554,8 @@ fn fail_queued_senders<C>(
     failed
 }
 
-/// Holds `SlotRefreshState::in_progress` for the duration of a slot refresh and
-/// clears it on drop.
-///
-/// The refresh awaits network I/O while holding the flag, so its future can be
-/// dropped part-way through -- `cluster_scan` bounds it by the client's request
-/// timeout. Clearing the flag on drop keeps a cancelled refresh from leaving it
-/// set, which would make every later refresh return early as though another one
-/// were still running.
+/// Clears `SlotRefreshState::in_progress` on drop, so a refresh future cancelled
+/// mid-flight (e.g. by a `cluster_scan` timeout) cannot block all later refreshes.
 struct SlotRefreshInProgressGuard<'a> {
     in_progress: &'a AtomicBool,
 }
@@ -5352,7 +5346,6 @@ mod slot_refresh_in_progress_guard_tests {
                 in_progress: &in_progress,
             };
             if cancel {
-                // Stands in for the refresh future being dropped part-way through.
                 return "cancelled";
             }
             "completed"

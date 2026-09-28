@@ -1758,14 +1758,10 @@ impl Client {
         let scan_state_cursor_clone = scan_state_cursor.clone();
         let cluster_scan_args_clone = cluster_scan_args.clone(); // Assuming ClusterScanArgs is Clone
 
-        // Initialize a lazy client before the bound starts, as send_command does.
         let client = self.get_or_initialize_client().await?;
 
-        // Bound the scan by the client's configured request timeout, as every other
-        // command path is. The SCAN commands underneath carry no per-command response
-        // timeout, so they fall back to the connection default of Duration::MAX.
-        // tokio::time::timeout drops the inner future on expiry, which also ends the
-        // retry loop in try_scan rather than leaving it spinning.
+        // The SCANs underneath carry no response timeout of their own, and try_scan
+        // retries without limit, so this is the only bound on the call.
         run_with_timeout(Some(self.request_timeout), async move {
             match client {
                 ClientWrapper::Standalone(_) => {
