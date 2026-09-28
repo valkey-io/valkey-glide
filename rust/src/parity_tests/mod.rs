@@ -122,7 +122,6 @@ fn load_redis_parity(manifest: &Path, version: &str) -> Result<RedisParity, Stri
 /// Parse the command table methods from the given source, indexed by method name.
 /// Panics if the command table cannot be parsed.
 fn parse_methods_map(src: &str) -> BTreeMap<String, Method> {
-
     // Extract command table (the `implement_commands! { ... }` macro body).
     let start = src
         .find("implement_commands! {")
@@ -196,7 +195,6 @@ fn parse_implement_commands_macro(body: &str) -> BTreeMap<String, Method> {
     }
     out
 }
-
 
 /// Parse a generic parameter list.
 fn parse_generics(generics: &str) -> Vec<Generic> {
@@ -304,7 +302,9 @@ fn compare_scan_method_names(redis: &BTreeSet<String>, glide: &BTreeSet<String>)
     // Verify that GLIDE does not implement any extra scan methods.
     for name in glide {
         if !redis.contains(name) {
-            problems.push(format!("EXTRA scan method in ours (not in redis-rs): {name}"));
+            problems.push(format!(
+                "EXTRA scan method in ours (not in redis-rs): {name}"
+            ));
         }
     }
 
