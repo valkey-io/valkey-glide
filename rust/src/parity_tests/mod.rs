@@ -1,5 +1,5 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
-//! Supports comparisons between the Valkey GLIDE Rust client and redis-rs
+//! Compares the Valkey GLIDE Rust client and redis-rs
 //! to ensure parity between their commands public surface.
 
 mod types;
@@ -13,6 +13,11 @@ use types::Generic;
 use types::Method;
 use types::RedisParity;
 
+/// The redis-rs release GLIDE targets for parity.
+// TODO #7058: bump to "1.7.0" and retarget the guard to *upstream* redis-rs
+// (fetch `redis/src/commands/mod.rs` at the `redis-1.7.0` tag from GitHub).
+const REDIS_RS_VERSION: &str = "0.25.2";
+
 /// The vendored redis-rs fork's command table, relative to `rust/`.
 // TODO #7058: Update once we get the command table from GitHub.
 const REDIS_COMMAND_TABLE: &str = "../glide-core/redis-rs/redis/src/commands/mod.rs";
@@ -22,14 +27,32 @@ const REDIS_COMMAND_TABLE: &str = "../glide-core/redis-rs/redis/src/commands/mod
 const REDIS_SCAN_METHODS: &str = "../glide-core/redis-rs/redis/src/commands/macros.rs";
 
 /// The cached redis-rs parity snapshot, relative to `rust/`.
-const REDIS_PARITY_JSON: &str = "tests/parity/redis_parity.json";
+const REDIS_PARITY_JSON: &str = "src/parity_tests/redis_parity.json";
+
+// --- tests --------------------------------------------------------------------------------------
+
+/// Compares the methods defined by the Valkey GLIDE and redis-rs command tables
+/// (via the `implement_commands` macro) and fails if they do not match.
+#[test]
+fn redis_parity_check() {
+    match run_parity_check(REDIS_RS_VERSION) {
+        Ok(summary) => println!("{summary}"),
+        Err(problems) => panic!(
+            "command table diverges from redis-rs — PARITY VIOLATIONS ({}):\n - {}",
+            problems.len(),
+            problems.join("\n - ")
+        ),
+    }
+}
+
+// --- parity check -------------------------------------------------------------------------------
 
 /// Runs the parity check for the given specified redis-rs version and returns the results:
 /// - `Ok` carries a human-readable summary.
 /// - `Err` lists the divergences, one message per problem.
 ///
 /// Panics if the parity check fails.
-pub fn run_parity_check(version: &str) -> Result<String, Vec<String>> {
+fn run_parity_check(version: &str) -> Result<String, Vec<String>> {
     let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
 
     let redis = match load_redis_parity(manifest, version) {
@@ -95,8 +118,6 @@ fn load_redis_parity(manifest: &Path, version: &str) -> Result<RedisParity, Stri
 
     Ok(redis)
 }
-
-// --- parsing ------------------------------------------------------------------------------------
 
 /// Parse the command table methods from the given source, indexed by method name.
 /// Panics if the command table cannot be parsed.
@@ -238,8 +259,6 @@ fn scan_method_names(src: &str) -> BTreeSet<String> {
     re.captures_iter(src).map(|c| c[1].to_string()).collect()
 }
 
-// --- comparison ---------------------------------------------------------------------------------
-
 /// Compares the given redis-rs and Valkey GLIDE method maps.
 /// Returns one message per problem; empty means they match.
 fn compare_method_maps(
@@ -333,8 +352,6 @@ fn bound_from_redis_to_glide(bound: &str) -> String {
         .replace("ToSingleRedisArg", "ToSingleValkeyArg")
         .replace("ToRedisArgs", "ToValkeyArgs")
 }
-
-// --- helpers ------------------------------------------------------------------------------------
 
 /// Read the file at the given path and returns its contents.
 fn read(path: &Path) -> String {
