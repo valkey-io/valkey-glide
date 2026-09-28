@@ -1214,6 +1214,11 @@ class BaseClient(CoreCommands):
 
         loop = asyncio.get_running_loop()
 
+        # One logical acquire: mint a single attempt token and pass it on every
+        # retry poll, so the core dedupes this acquire's retries to one in-flight
+        # creation while distinct concurrent acquires each dial their own.
+        attempt_token = self._lib.glide_scope_next_attempt_token()
+
         def _acquire_sync():
             deadline = time.monotonic() + timeout
             backoff = 0.001
@@ -1224,6 +1229,7 @@ class BaseClient(CoreCommands):
                     self._ffi.cast("const uint8_t*", buf),
                     len(conn_req_bytes),
                     routing_slot,
+                    attempt_token,
                 )
                 if scope_id >= 0:
                     return scope_id

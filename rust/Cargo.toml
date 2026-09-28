@@ -1,6 +1,6 @@
 [package]
-name = "glide-rust"
-version = "0.2.0"
+name = "valkey-glide"
+version = "0.1.0"
 rust-version = "1.94.1"
 edition = "2024"
 license = "Apache-2.0"
@@ -20,12 +20,9 @@ path = "src/lib.rs"
 [dependencies]
 
 # GLIDE dependencies
-glide-logger = { path = "../glide-logger", version = "0.1" }
-
-# TODO #6905: Update once renamed.
-# TODO #6519: Add version once the dependency chain is published to crates.io.
-glide-core = { path = "../glide-core" }
-redis = {path = "../glide-core/redis-rs/redis", features = ["aio", "tokio-comp", "cluster", "cluster-async"] }
+glide-logger = { path = "../glide-logger", version = "0.1.0" }
+glide-core-engine = { path = "../glide-core/redis-rs/redis", version = "0.1.0", features = ["aio", "tokio-comp", "cluster", "cluster-async"] }
+glide-core = { path = "../glide-core", version = "0.1.0" }
 
 # External dependencies
 async-trait = "0.1"

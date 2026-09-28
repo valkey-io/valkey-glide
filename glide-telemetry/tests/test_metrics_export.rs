@@ -16,6 +16,7 @@
 //! This exercises the real aggregation pipeline and keeps the JSON-output
 //! contract assertions identical.
 
+use glide_telemetry::FileMetricExporter;
 use opentelemetry::KeyValue;
 use opentelemetry::metrics::MeterProvider;
 use opentelemetry_sdk::Resource;
@@ -25,7 +26,6 @@ use opentelemetry_sdk::metrics::{
     InMemoryMetricExporter, PeriodicReader, SdkMeterProvider, Temporality,
 };
 use std::fs;
-use telemetrylib::FileMetricExporter;
 use tempfile::TempDir;
 
 /// Build a meter provider backed by an in-memory exporter, returning both so the

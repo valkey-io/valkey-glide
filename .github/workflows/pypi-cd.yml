@@ -5,13 +5,13 @@ name: PyPI - Continuous Deployment
 on:
     pull_request:
         paths:
-            - .github/workflows/pypi-cd.yml
-            - .github/workflows/build-python-wrapper/action.yml
-            - .github/workflows/start-self-hosted-runner/action.yml
-            - .github/actions/install-shared-dependencies/action.yml
             - .github/actions/install-engine/action.yml
+            - .github/actions/install-shared-dependencies/action.yml
             - .github/json_matrices/**
+            - .github/workflows/build-python-wrapper/action.yml
             - .github/workflows/create-test-matrices/action.yml
+            - .github/workflows/pypi-cd.yml
+            - .github/workflows/start-self-hosted-runner/action.yml
     push:
         tags:
             - "v*.*"

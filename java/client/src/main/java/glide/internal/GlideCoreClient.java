@@ -129,6 +129,13 @@ public class GlideCoreClient implements AutoCloseable {
     /** Maximum number of inflight requests allowed for this client. */
     private final int maxInflightRequests;
 
+    /**
+     * Key for this client's {@link glide.internal.AsyncRegistry} inflight counter. Equals the native
+     * handle for directly-created clients; pooled clients pass a value in a disjoint range so their
+     * counter cannot collide with a directly-created client sharing the same native id space.
+     */
+    private final long inflightCounterKey;
+
     /** Request timeout in milliseconds for Java-side timeout detection. */
     private final long requestTimeoutMillis;
 
@@ -161,12 +168,33 @@ public class GlideCoreClient implements AutoCloseable {
             value = "CT_CONSTRUCTOR_THROW",
             justification = "Constructor fails fast on invalid handles prior to registering resources")
     public GlideCoreClient(long existingHandle, int maxInflight, long requestTimeoutMs) {
+        // Direct clients key their inflight counter on the native handle.
+        this(existingHandle, maxInflight, requestTimeoutMs, existingHandle);
+    }
+
+    /**
+     * Constructor variant that keys the Java-side inflight counter on {@code inflightCounterKey}
+     * rather than the native handle. Pooled clients pass a value in a disjoint range so their counter
+     * cannot collide with a directly-created client that shares the same native id space.
+     *
+     * @param existingHandle Native client handle from ConnectionManager
+     * @param maxInflight Maximum inflight requests (0 = use native defaults)
+     * @param requestTimeoutMs Request timeout in milliseconds for Java-side timeout detection
+     * @param inflightCounterKey key for the AsyncRegistry inflight counter, distinct from any other
+     *     client's
+     */
+    @SuppressFBWarnings(
+            value = "CT_CONSTRUCTOR_THROW",
+            justification = "Constructor fails fast on invalid handles prior to registering resources")
+    public GlideCoreClient(
+            long existingHandle, int maxInflight, long requestTimeoutMs, long inflightCounterKey) {
         if (existingHandle == 0) {
             throw new IllegalArgumentException("Native handle cannot be zero");
         }
 
         // Store the provided parameters
         this.maxInflightRequests = maxInflight > 0 ? maxInflight : 0; // 0 means use native defaults
+        this.inflightCounterKey = inflightCounterKey;
         this.requestTimeoutMillis =
                 requestTimeoutMs > 0 ? requestTimeoutMs : 0; // 0 means no Java timeout
 
@@ -210,7 +238,9 @@ public class GlideCoreClient implements AutoCloseable {
             CompletableFuture<Object> future = new CompletableFuture<>();
             long correlationId;
             try {
-                correlationId = AsyncRegistry.register(future, this.maxInflightRequests, handle, timeoutMs);
+                correlationId =
+                        AsyncRegistry.register(
+                                future, this.maxInflightRequests, handle, this.inflightCounterKey, timeoutMs);
             } catch (glide.api.models.exceptions.RequestException e) {
                 future.completeExceptionally(e);
                 return future;
@@ -263,7 +293,11 @@ public class GlideCoreClient implements AutoCloseable {
             try {
                 correlationId =
                         AsyncRegistry.register(
-                                future, this.maxInflightRequests, handle, this.requestTimeoutMillis);
+                                future,
+                                this.maxInflightRequests,
+                                handle,
+                                this.inflightCounterKey,
+                                this.requestTimeoutMillis);
             } catch (glide.api.models.exceptions.RequestException e) {
                 future.completeExceptionally(e);
                 return future;
@@ -297,7 +331,11 @@ public class GlideCoreClient implements AutoCloseable {
         try {
             correlationId =
                     AsyncRegistry.register(
-                            future, this.maxInflightRequests, handle, this.requestTimeoutMillis);
+                            future,
+                            this.maxInflightRequests,
+                            handle,
+                            this.inflightCounterKey,
+                            this.requestTimeoutMillis);
         } catch (glide.api.models.exceptions.RequestException e) {
             future.completeExceptionally(e);
             return future;
@@ -322,7 +360,11 @@ public class GlideCoreClient implements AutoCloseable {
         try {
             correlationId =
                     AsyncRegistry.register(
-                            future, this.maxInflightRequests, handle, this.requestTimeoutMillis);
+                            future,
+                            this.maxInflightRequests,
+                            handle,
+                            this.inflightCounterKey,
+                            this.requestTimeoutMillis);
         } catch (glide.api.models.exceptions.RequestException e) {
             future.completeExceptionally(e);
             return future;
@@ -347,7 +389,11 @@ public class GlideCoreClient implements AutoCloseable {
         try {
             correlationId =
                     AsyncRegistry.register(
-                            future, this.maxInflightRequests, handle, this.requestTimeoutMillis);
+                            future,
+                            this.maxInflightRequests,
+                            handle,
+                            this.inflightCounterKey,
+                            this.requestTimeoutMillis);
         } catch (glide.api.models.exceptions.RequestException e) {
             future.completeExceptionally(e);
             return future;
@@ -379,7 +425,9 @@ public class GlideCoreClient implements AutoCloseable {
             CompletableFuture<Object> future = new CompletableFuture<>();
             long correlationId;
             try {
-                correlationId = AsyncRegistry.register(future, this.maxInflightRequests, handle, timeoutMs);
+                correlationId =
+                        AsyncRegistry.register(
+                                future, this.maxInflightRequests, handle, this.inflightCounterKey, timeoutMs);
             } catch (glide.api.models.exceptions.RequestException e) {
                 future.completeExceptionally(e);
                 return future;
@@ -428,7 +476,11 @@ public class GlideCoreClient implements AutoCloseable {
             try {
                 correlationId =
                         AsyncRegistry.register(
-                                future, this.maxInflightRequests, handle, this.requestTimeoutMillis);
+                                future,
+                                this.maxInflightRequests,
+                                handle,
+                                this.inflightCounterKey,
+                                this.requestTimeoutMillis);
             } catch (glide.api.models.exceptions.RequestException e) {
                 future.completeExceptionally(e);
                 return future;

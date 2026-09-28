@@ -1,4 +1,4 @@
-name: Redis-rs CI
+name: glide-core-engine CI
 
 permissions:
     contents: read
@@ -15,14 +15,14 @@ on:
             - utils/cluster_manager.py
             - deny.toml
             - .github/actions/install-shared-dependencies/action.yml
-            - .github/workflows/redis-rs.yml
+            - .github/workflows/glide-core-engine.yml
     pull_request:
         paths:
             - glide-core/redis-rs/redis/**
             - utils/cluster_manager.py
             - deny.toml
             - .github/actions/install-shared-dependencies/action.yml
-            - .github/workflows/redis-rs.yml
+            - .github/workflows/glide-core-engine.yml
     workflow_dispatch:
         inputs:
             use-self-hosted-linux:
@@ -37,7 +37,7 @@ on:
                 default: false
 
 concurrency:
-    group: redis-rs-${{ github.head_ref || github.ref }}
+    group: glide-core-engine-${{ github.head_ref || github.ref }}
     cancel-in-progress: true
 
 env:
@@ -52,7 +52,7 @@ jobs:
             - name: Approval gate
               run: echo "Self-hosted Linux runner usage approved"
 
-    redis-rs-CI:
+    glide-core-engine-CI:
         needs: [approve-self-hosted]
         if: always() && (needs.approve-self-hosted.result == 'success' || needs.approve-self-hosted.result == 'skipped')
         runs-on: ${{ (inputs.use-self-hosted-linux || contains(github.event.pull_request.labels.*.name, 'ci/use-self-hosted')) && fromJSON('["self-hosted","Linux","x64","ephemeral"]') || 'ubuntu-latest' }}
@@ -79,7 +79,7 @@ jobs:
               run: cargo build --release
               working-directory: ./glide-core/redis-rs/redis/src
 
-            - name: Lint redis-rs
+            - name: Lint glide-core-engine
               shell: bash
               run: |
                   cargo fmt --all -- --check
@@ -101,7 +101,7 @@ jobs:
               continue-on-error: true
               uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
               with:
-                  name: test-reports-redis-rs-${{ github.sha }}
+                  name: test-reports-glide-core-engine-${{ github.sha }}
                   path: ./glide-core/redis-rs/redis/test-results.xml
 
             - name: Run benchmarks
@@ -114,7 +114,7 @@ jobs:
               continue-on-error: true
               uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
               with:
-                  name: benchmark-results-redis-rs-${{ github.sha }}
+                  name: benchmark-results-glide-core-engine-${{ github.sha }}
                   path: ./glide-core/redis-rs/redis/bench-results.xml
 
             - name: Test docs
@@ -140,7 +140,7 @@ jobs:
               continue-on-error: true
               uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
               with:
-                  name: audit-results-redis-rs--${{ github.sha }}
+                  name: audit-results-glide-core-engine-${{ github.sha }}
                   path: ./glide-core/redis-rs/redis/audit-results.txt
 
             - name: Run cargo machete
@@ -163,5 +163,5 @@ jobs:
               continue-on-error: true
               uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
               with:
-                  name: machete-results-redis-rs-${{ github.sha }}
+                  name: machete-results-glide-core-engine-${{ github.sha }}
                   path: ./glide-core/redis-rs/redis/machete-results.txt

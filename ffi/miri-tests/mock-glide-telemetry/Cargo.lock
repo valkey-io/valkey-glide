@@ -3,5 +3,5 @@
 version = 4
 
 [[package]]
-name = "mock-telemetry"
-version = "0.1.0"
+name = "mock-glide-telemetry"
+version = "0.0.0"

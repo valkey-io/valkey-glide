@@ -43,10 +43,10 @@ mod standalone_client;
 mod value_conversion;
 use crate::pubsub::{PubSubSynchronizer, create_pubsub_synchronizer};
 use crate::request_type::RequestType;
+use glide_telemetry::GlideOpenTelemetry;
 use redis::InfoDict;
 use std::future::Future;
 use std::pin::Pin;
-use telemetrylib::GlideOpenTelemetry;
 use tokio::sync::{Notify, RwLock, mpsc, oneshot};
 use versions::Versioning;
 
@@ -316,10 +316,13 @@ pub(super) fn get_connection_info(
     tls_params: Option<redis::TlsConnParams>,
     address_resolver: Option<&Arc<dyn AddressResolver>>,
 ) -> redis::ConnectionInfo {
+    // Trim an IPv6 host's `[ ]` before use (and before the resolver sees it), so a
+    // configured `[::1]` reaches redis-rs's tuple `lookup_host` as a bare `::1`.
+    let host = crate::scope::strip_host_brackets(&address.host);
     let (resolved_host, resolved_port) = if let Some(resolver) = address_resolver {
-        resolver.resolve(&address.host, get_port(address))
+        resolver.resolve(host, get_port(address))
     } else {
-        (address.host.to_string(), get_port(address))
+        (host.to_string(), get_port(address))
     };
 
     let addr = if tls_mode != TlsMode::NoTls {
@@ -3202,6 +3205,72 @@ impl Client {
     }
 }
 
+/// Creates a no-connection (lazy) [`Client`] suitable for unit tests that need a
+/// `GlideClient` value but do not issue any real network commands.
+///
+/// The client uses `lazy_connect = true` so no TCP connection is attempted at
+/// construction time.  It **must not** be used to send actual Valkey commands.
+#[cfg(test)]
+pub fn create_test_glide_client() -> Client {
+    use crate::client::types::{NodeAddress, OTelMetadata};
+    use crate::pubsub::create_pubsub_synchronizer;
+    use std::sync::atomic::AtomicIsize;
+    use std::sync::atomic::AtomicU32;
+    use tokio::sync::RwLock;
+
+    let config = ConnectionRequest {
+        database_id: 0,
+        cluster_mode_enabled: false,
+        addresses: vec![NodeAddress {
+            host: "127.0.0.1".to_string(),
+            port: 6379,
+        }],
+        lazy_connect: true,
+        ..Default::default()
+    };
+
+    let lazy_client = LazyClient {
+        config,
+        push_sender: None,
+    };
+
+    // A throwaway runtime just to create the pubsub synchronizer.
+    let rt = tokio::runtime::Runtime::new().expect("tokio runtime for test client");
+    let pubsub_synchronizer = rt.block_on(create_pubsub_synchronizer(
+        None,
+        None,
+        false,
+        std::sync::Weak::new(),
+        None,
+        Duration::from_millis(250),
+    ));
+
+    Client {
+        shared: Arc::new(ClientShared {
+            internal_client: Arc::new(RwLock::new(ClientWrapper::Lazy(Box::new(lazy_client)))),
+            request_timeout: Duration::from_millis(250),
+            inflight_requests_allowed: Arc::new(AtomicIsize::new(1000)),
+            inflight_requests_limit: 1000,
+            inflight_log_interval: 100,
+            compression_manager: None,
+            pubsub_synchronizer,
+            client_side_cache: None,
+            latency_tracker: Arc::new(crate::timeout_watchdog::LatencyTracker::new(64)),
+            circuit_breaker: None,
+            current_database: Arc::new(AtomicU32::new(0)),
+            is_cluster: false,
+        }),
+        iam_token_manager: None,
+        otel_metadata: Arc::new(OTelMetadata {
+            address: NodeAddress {
+                host: "127.0.0.1".to_string(),
+                port: 6379,
+            },
+            db_namespace: "0".to_string(),
+        }),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::time::Duration;
@@ -3215,8 +3284,8 @@ mod tests {
     };
 
     use super::{
-        Client, ClientWrapper, ConnectionError, LazyClient, get_timeout_from_cmd_arg,
-        validate_effective_lib_name, validate_effective_lib_ver,
+        Client, ClientWrapper, ConnectionError, LazyClient, get_connection_info,
+        get_timeout_from_cmd_arg, validate_effective_lib_name, validate_effective_lib_ver,
     };
     use std::sync::Weak;
 
@@ -3234,6 +3303,38 @@ mod tests {
                 Ok(()),
                 "{lib_name:?}"
             );
+        }
+    }
+
+    #[test]
+    fn test_get_connection_info_trims_ipv6_brackets() {
+        use crate::client::types::NodeAddress;
+        use redis::ConnectionAddr;
+
+        for (configured, expected_host) in [
+            ("[::1]", "::1"),
+            ("::1", "::1"),
+            ("127.0.0.1", "127.0.0.1"),
+            ("example.com", "example.com"),
+        ] {
+            let address = NodeAddress {
+                host: configured.to_string(),
+                port: 6379,
+            };
+            let info = get_connection_info(
+                &address,
+                super::TlsMode::NoTls,
+                redis::RedisConnectionInfo::default(),
+                None,
+                None,
+            );
+            match info.addr {
+                ConnectionAddr::Tcp(host, port) => {
+                    assert_eq!(host, expected_host, "host for {configured:?}");
+                    assert_eq!(port, 6379);
+                }
+                other => panic!("expected Tcp addr, got {other:?}"),
+            }
         }
     }
 
