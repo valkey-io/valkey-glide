@@ -259,6 +259,13 @@ fn scan_method_names(src: &str) -> BTreeSet<String> {
 
     // Each scan method must be defined once in the async trait and once in the blocking
     // trait, so every name must appear exactly twice. Panics otherwise.
+    //
+    // TODO #7230: harden this for the redis-rs 1.7.0 retarget. It runs on both the
+    // redis-rs and GLIDE sources and panics on violation, but upstream 1.7.0 declares
+    // each scan method once (in a macro expanded by both traits), so the count check
+    // must become GLIDE-only and report through `problems` rather than panic (a panic
+    // aborts before other divergences surface). The name regex also matches any
+    // `fn *scan*`, so an unrelated helper would be miscounted — tighten it then too.
     for (name, count) in &counts {
         assert!(
             *count == 2,
