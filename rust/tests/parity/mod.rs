@@ -11,11 +11,7 @@ use std::path::Path;
 use types::Argument;
 use types::Generic;
 use types::Method;
-
-/// The redis-rs release GLIDE currently targets.
-// TODO #7058: bump to "1.7.0" and retarget the guard to *upstream* redis-rs
-// (fetch `redis/src/commands/mod.rs` at the `redis-1.7.0` tag from GitHub).
-const REDIS_RS_VERSION: &str = "0.25.2";
+use types::RedisParity;
 
 /// The vendored redis-rs fork's command table, relative to `rust/`.
 // TODO #7058: Update once we get the command table from GitHub.
@@ -25,37 +21,79 @@ const REDIS_COMMAND_TABLE: &str = "../glide-core/redis-rs/redis/src/commands/mod
 // TODO #7058: Update once we get the scan definitions from GitHub.
 const REDIS_SCAN_METHODS: &str = "../glide-core/redis-rs/redis/src/commands/macros.rs";
 
-/// Runs the parity check between the Valkey GLIDE and redis-rs and returns the results:
+/// The cached redis-rs parity snapshot, relative to `rust/`.
+const REDIS_PARITY_JSON: &str = "tests/parity/redis_parity.json";
+
+/// Runs the parity check for the given specified redis-rs version and returns the results:
 /// - `Ok` carries a human-readable summary.
 /// - `Err` lists the divergences, one message per problem.
 ///
-/// Panics if one of the command tables can't be read or parsed.
-pub fn run_parity_check() -> Result<String, Vec<String>> {
+/// Panics if the parity check fails.
+pub fn run_parity_check(version: &str) -> Result<String, Vec<String>> {
     let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
+
+    let redis = match load_redis_parity(manifest, version) {
+        Ok(redis) => redis,
+        Err(problem) => return Err(vec![problem]),
+    };
+
+    let glide_commands = &read(&manifest.join("src/commands/core.rs"));
+    let glide_methods = parse_methods_map(glide_commands);
+    let glide_scan_names = scan_method_names(glide_commands);
+
     let mut problems = Vec::new();
-
-    // Compare the command tables.
-    let redis_commands_path = &read(&manifest.join(REDIS_COMMAND_TABLE));
-    let glide_commands_path = &read(&manifest.join("src/commands/core.rs"));
-    let redis_methods_map = parse_methods_map(redis_commands_path);
-    let glide_methods_map = parse_methods_map(glide_commands_path);
-    problems.extend(compare_method_maps(redis_methods_map, glide_methods_map));
-
-    // Compare scan method names.
-    // Scan iterators in Valkey GLIDE intentionally diverge from redis-rs, but we
-    // want to ensure that the scan method names still match.
-    let redis_scan_path = &read(&manifest.join(REDIS_SCAN_METHODS));
-    let redis_scan_names = scan_method_names(redis_scan_path);
-    let glide_scan_names = scan_method_names(glide_commands_path);
-    problems.extend(compare_scan_method_names(redis_scan_names, glide_scan_names));
+    problems.extend(compare_method_maps(&redis.methods, &glide_methods));
+    problems.extend(compare_scan_method_names(
+        &redis.scan_method_names,
+        &glide_scan_names,
+    ));
 
     if problems.is_empty() {
         Ok(format!(
-            "parity OK: GLIDE methods match redis-rs {REDIS_RS_VERSION} exactly"
+            "parity OK: GLIDE methods match redis-rs {version} exactly"
         ))
     } else {
         Err(problems)
     }
+}
+
+/// Load the cached redis-rs parity snapshot for the specified version, or
+/// builds and saves it from the redis-rs source when the data file is missing.
+///
+/// Returns `Err` if the snapshot does not match the specified version.
+/// Panics if the data file can't be read, parsed, serialized, or written.
+fn load_redis_parity(manifest: &Path, version: &str) -> Result<RedisParity, String> {
+    let data_path = manifest.join(REDIS_PARITY_JSON);
+
+    if data_path.exists() {
+        let redis: RedisParity = serde_json::from_str(&read(&data_path))
+            .unwrap_or_else(|e| panic!("cannot parse {}: {e}", data_path.display()));
+        if redis.version != version {
+            return Err(format!(
+                "redis-rs parity data records version {}, but {version} is targeted; \
+                 delete {} to regenerate it",
+                redis.version,
+                data_path.display()
+            ));
+        }
+        return Ok(redis);
+    }
+
+    // Data file missing: build and save the snapshot from the redis-rs source.
+    let commands = read(&manifest.join(REDIS_COMMAND_TABLE));
+    let scan = read(&manifest.join(REDIS_SCAN_METHODS));
+    let redis = RedisParity {
+        version: version.to_string(),
+        methods: parse_methods_map(&commands),
+        scan_method_names: scan_method_names(&scan),
+    };
+
+    let json = serde_json::to_string_pretty(&redis)
+        .unwrap_or_else(|e| panic!("cannot serialize parity data: {e}"));
+    std::fs::write(&data_path, json)
+        .unwrap_or_else(|e| panic!("cannot write {}: {e}", data_path.display()));
+
+    Ok(redis)
 }
 
 // --- parsing ------------------------------------------------------------------------------------
@@ -205,13 +243,13 @@ fn scan_method_names(src: &str) -> BTreeSet<String> {
 /// Compares the given redis-rs and Valkey GLIDE method maps.
 /// Returns one message per problem; empty means they match.
 fn compare_method_maps(
-    redis: BTreeMap<String, Method>,
-    glide: BTreeMap<String, Method>,
+    redis: &BTreeMap<String, Method>,
+    glide: &BTreeMap<String, Method>,
 ) -> Vec<String> {
     let mut problems = Vec::new();
 
     // Verify that all redis-rs methods are implemented by GLIDE.
-    for (name, method) in &redis {
+    for (name, method) in redis {
         match glide.get(name) {
             None => problems.push(format!("MISSING method in GLIDE: {name}")),
             Some(ours) if !compare_methods(method, ours) => problems.push(format!(
@@ -234,18 +272,18 @@ fn compare_method_maps(
 /// Compares the given redis-rs and Valkey GLIDE scan method names.
 /// Only names are compared: the clients intentionally have different scan method signatures.
 /// Returns one message per problem; empty means they match.
-fn compare_scan_method_names(redis: BTreeSet<String>, glide: BTreeSet<String>) -> Vec<String> {
+fn compare_scan_method_names(redis: &BTreeSet<String>, glide: &BTreeSet<String>) -> Vec<String> {
     let mut problems = Vec::new();
 
     // Verify that all redis-rs scan methods are implemented by GLIDE.
-    for name in &redis {
+    for name in redis {
         if !glide.contains(name) {
             problems.push(format!("MISSING scan method in GLIDE: {name}"));
         }
     }
 
     // Verify that GLIDE does not implement any extra scan methods.
-    for name in &glide {
+    for name in glide {
         if !redis.contains(name) {
             problems.push(format!("EXTRA scan method in ours (not in redis-rs): {name}"));
         }
