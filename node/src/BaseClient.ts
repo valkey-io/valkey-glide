@@ -10298,7 +10298,11 @@ export class BaseClient {
     public static serializeConnectionRequest(
         options: BaseClientConfiguration,
         constructor: (options?: BaseClientConfiguration) => BaseClient,
-    ): { bytes: Uint8Array; resolverKey: string | undefined } {
+    ): {
+        bytes: Uint8Array;
+        resolverKey: string | undefined;
+        credentialProviderKey: string | undefined;
+    } {
         const instance = constructor(options);
         const request = instance.createClientRequest(options);
 
@@ -10312,12 +10316,32 @@ export class BaseClient {
             request.addressResolverKey = resolverKey;
         }
 
+        // Register the credential provider so Rust can call it by key when
+        // creating pool connections. The key must be embedded in the serialised
+        // request so every new pool connection can locate the callback.
+        let credentialProviderKey: string | undefined;
+
+        if (
+            "iamConfig" in (options.credentials ?? {}) &&
+            (options.credentials as { iamConfig: IamAuthConfig }).iamConfig
+                ?.credentialProvider
+        ) {
+            const iamCreds = options.credentials as {
+                username: string;
+                iamConfig: IamAuthConfig;
+            };
+            credentialProviderKey = registerCredentialProvider(
+                iamCreds.iamConfig.credentialProvider!,
+            );
+            request.credentialProviderKey = credentialProviderKey;
+        }
+
         const bytes = Buffer.from(
             connection_request.ConnectionRequest.encode(
                 connection_request.ConnectionRequest.create(request),
             ).finish(),
         );
-        return { bytes, resolverKey };
+        return { bytes, resolverKey, credentialProviderKey };
     }
 
     /**
