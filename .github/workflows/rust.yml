@@ -108,6 +108,14 @@ jobs:
                   engine-version: ${{ matrix.engine.version }}
                   github-token: ${{ secrets.GITHUB_TOKEN }}
 
-            - name: Run rust client tests
+            - name: Run unit tests
               working-directory: ./rust
-              run: cargo test --locked -- --show-output
+              run: cargo unit-tests --locked -- --show-output
+
+            - name: Run doctests
+              working-directory: ./rust
+              run: cargo doc-tests --locked -- --show-output
+
+            - name: Run integration tests
+              working-directory: ./rust
+              run: cargo integration-tests --locked -- --show-output
