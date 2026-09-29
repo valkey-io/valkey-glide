@@ -24,8 +24,8 @@ async fn get_with_retry(c: &GlideClusterClient, k: &str) -> Option<glide::Bytes>
 }
 
 async fn standalone_roundtrip(read_from: ReadFrom, protocol: ProtocolVersion) {
-    let srv = server_or_skip!();
-    let cfg = GlideClientConfiguration::with_address("127.0.0.1", srv.port)
+    let server = common::TestServer::start();
+    let cfg = GlideClientConfiguration::with_address("127.0.0.1", server.port)
         .read_from(read_from)
         .protocol(protocol);
     let c = GlideClient::connect(cfg).await.expect("connect");

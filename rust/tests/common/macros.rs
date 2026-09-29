@@ -8,7 +8,7 @@
 ///
 /// ```ignore
 /// timed_tokio_test!(async fn my_test() {
-///     let srv = server_or_skip!();
+///     let server = common::TestServer::start();
 ///     // ...
 /// });
 /// ```
@@ -47,24 +47,8 @@ macro_rules! retry_transient {
     }};
 }
 
-/// Start a standalone server, or `return` from the test (printing SKIP) when no
-/// server binary is available.
-// TODO #6877: a missing/broken standalone server silently skips.
-#[macro_export]
-macro_rules! server_or_skip {
-    () => {{
-        match $crate::common::TestServer::start() {
-            Some(s) => s,
-            None => {
-                eprintln!("SKIP: no valkey-server binary available");
-                return;
-            }
-        }
-    }};
-}
-
 /// Expand one test body into two `#[tokio::test]`s — one for RESP2, one for
-/// RESP3 — each with its own fresh standalone server bound to `$c`.
+/// RESP3 — each with its own fresh standalone server bound to `$client`.
 ///
 /// ```ignore
 /// resp_test!(get_missing, c, {
@@ -73,7 +57,7 @@ macro_rules! server_or_skip {
 /// ```
 #[macro_export]
 macro_rules! resp_test {
-    ($name:ident, $c:ident, $body:block) => {
+    ($name:ident, $client:ident, $body:block) => {
         mod $name {
             use super::*;
             #[allow(unused_imports)]
@@ -81,8 +65,8 @@ macro_rules! resp_test {
 
             #[tokio::test]
             async fn resp2() {
-                let __srv = $crate::server_or_skip!();
-                let $c = __srv
+                let __server = $crate::common::TestServer::start();
+                let $client = __server
                     .client_with_protocol(glide::ProtocolVersion::RESP2)
                     .await;
                 $crate::common::with_test_timeout(async { $body }).await;
@@ -90,8 +74,8 @@ macro_rules! resp_test {
 
             #[tokio::test]
             async fn resp3() {
-                let __srv = $crate::server_or_skip!();
-                let $c = __srv
+                let __server = $crate::common::TestServer::start();
+                let $client = __server
                     .client_with_protocol(glide::ProtocolVersion::RESP3)
                     .await;
                 $crate::common::with_test_timeout(async { $body }).await;
@@ -106,7 +90,7 @@ macro_rules! resp_test {
 ///
 /// * standalone arms get a fresh [`TestServer`] each (cheap, fully isolated);
 /// * cluster arms form a fresh per-test [`ClusterHarness`] each (fully isolated;
-///   SKIP if a cluster cannot be formed in this environment).
+///   panics if a cluster cannot be formed).
 ///
 /// The body must be **cluster-safe**: use [`common::key`] for single-key work and
 /// [`common::tkey`] (hash-tagged) so multi-key commands land in one slot. The
@@ -122,7 +106,7 @@ macro_rules! resp_test {
 /// ```
 #[macro_export]
 macro_rules! matrix_test {
-    ($name:ident, $c:ident, $body:block) => {
+    ($name:ident, $client:ident, $body:block) => {
         mod $name {
             use super::*;
             #[allow(unused_imports)]
@@ -130,8 +114,8 @@ macro_rules! matrix_test {
 
             #[tokio::test]
             async fn standalone_resp2() {
-                let __srv = $crate::server_or_skip!();
-                let $c = __srv
+                let __server = $crate::common::TestServer::start();
+                let $client = __server
                     .client_with_protocol(glide::ProtocolVersion::RESP2)
                     .await;
                 $crate::common::with_test_timeout(async { $body }).await;
@@ -139,8 +123,8 @@ macro_rules! matrix_test {
 
             #[tokio::test]
             async fn standalone_resp3() {
-                let __srv = $crate::server_or_skip!();
-                let $c = __srv
+                let __server = $crate::common::TestServer::start();
+                let $client = __server
                     .client_with_protocol(glide::ProtocolVersion::RESP3)
                     .await;
                 $crate::common::with_test_timeout(async { $body }).await;
@@ -148,8 +132,8 @@ macro_rules! matrix_test {
 
             #[tokio::test]
             async fn cluster_resp2() {
-                let __h = $crate::common::ClusterHarness::start().await;
-                let $c = __h
+                let __server = $crate::common::ClusterHarness::start().await;
+                let $client = __server
                     .client_with_protocol(glide::ProtocolVersion::RESP2)
                     .await;
                 $crate::common::with_test_timeout(async { $body }).await;
@@ -157,8 +141,8 @@ macro_rules! matrix_test {
 
             #[tokio::test]
             async fn cluster_resp3() {
-                let __h = $crate::common::ClusterHarness::start().await;
-                let $c = __h
+                let __server = $crate::common::ClusterHarness::start().await;
+                let $client = __server
                     .client_with_protocol(glide::ProtocolVersion::RESP3)
                     .await;
                 $crate::common::with_test_timeout(async { $body }).await;
@@ -169,7 +153,7 @@ macro_rules! matrix_test {
 
 /// Skip the current test (printing SKIP) when the server version is below
 /// `major.minor.patch` — the Rust analogue of Python's
-/// `@pytest.mark.skip_if_version_below`. Requires a connected client `$c` that
+/// `@pytest.mark.skip_if_version_below`. Requires a connected client `$client` that
 /// implements `ServerManagementCommands`.
 ///
 /// ```ignore
@@ -180,8 +164,8 @@ macro_rules! matrix_test {
 /// ```
 #[macro_export]
 macro_rules! skip_if_version_below {
-    ($c:expr, $major:expr, $minor:expr, $patch:expr) => {{
-        if $crate::common::version_below(&$c, ($major, $minor, $patch)).await {
+    ($client:expr, $major:expr, $minor:expr, $patch:expr) => {{
+        if $crate::common::version_below(&$client, ($major, $minor, $patch)).await {
             eprintln!("SKIP: requires server >= {}.{}.{}", $major, $minor, $patch);
             return;
         }
