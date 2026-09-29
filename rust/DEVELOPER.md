@@ -1,19 +1,50 @@
-# DEVELOPER guide — `glide-rust`
+# DEVELOPER guide — `valkey-glide`
 
 ## Prerequisites
 
 - **Rust** — install via [rustup](https://rustup.rs)
-- The crate depends on `glide-core` and its vendored `redis-rs` via in-repo
-  **path dependencies** (`../glide-core` and `../glide-core/redis-rs/redis`), so
-  it builds from a checkout of the `valkey-io/valkey-glide` monorepo where those
-  crates sit alongside it — **a monorepo checkout is required** (this crate lives
-  in it, under `rust/`). No network fetch is needed to resolve the dependencies.
+- The crate depends on other in-repo crates via **path dependencies** (see the
+  Crates & dependencies section below), so **a monorepo checkout is required** —
+  it builds from a `valkey-io/valkey-glide` checkout where those crates sit
+  alongside it (this crate lives under `rust/`). No network fetch is needed to
+  resolve the dependencies.
 - A `valkey-server` (or `redis-server`) binary for integration tests.
   The harness auto-discovers one on `PATH`; override with:
 
   ```bash
   export VALKEY_SERVER_PATH=/path/to/valkey-server
   ```
+
+## Crates & dependencies
+
+The `valkey-glide` crate depends on several internal crates:
+
+| Package name        | Library name      | Directory                    | Depends on                                             |
+| ------------------- | ----------------- | ---------------------------- | ------------------------------------------------------ |
+| `valkey-glide`      | `glide`           | `rust/`                      | `glide-core`, `glide-core-engine`, `glide-logger`      |
+| `glide-core`        | `glide_core`      | `glide-core/`                | `glide-core-engine`, `glide-telemetry`, `glide-logger` |
+| `glide-core-engine` | `redis`           | `glide-core/redis-rs/redis/` | `glide-telemetry`, `glide-logger`                      |
+| `glide-telemetry`   | `glide_telemetry` | `glide-telemetry/`           | `glide-logger`                                         |
+| `glide-logger`      | `glide_logger`    | `glide-logger/`              | None                                                   |
+
+The `glide-core-engine` crate is forked from redis-rs 0.25.2, so it uses the `redis` library name.
+
+### Publishing and dual versioning
+
+Cargo requires every dependency of a published crate to also be published, so
+the internal crates it depends on must be published too. They are published
+with `0.x` versions and marked as internal, consistent with Rust conventions.
+
+In order to allow developers to build against the local source rather than a
+released version, the internal dependencies are declared with **both** `path`
+and `version` in `Cargo.toml`:
+
+```toml
+glide-core = { path = "../glide-core", version = "0.1.0" }
+```
+
+Cargo uses `path` when building locally, and `version` when the crate is resolved
+from crates.io after publishing.
 
 ## Build
 
@@ -25,13 +56,32 @@ cargo build --release  # optimized
 ## Test
 
 ```bash
-cargo test --lib              # fast, pure unit tests (no server)
-cargo test --test it_string   # a single live integration suite (spawns valkey-server)
-cargo test                    # everything, incl. doctests
+cargo unit-tests         # unit tests
+cargo doc-tests          # doctests
+cargo integration-tests  # integration tests
+cargo test               # all tests (unit, docs, and integration)
+```
+
+To run only some tests, pass a filter. A test runs if its full name (e.g.
+`value::from_valkey_value_tests::from_owned_valkey_value_array`) contains the filter:
+
+```bash
+cargo unit-tests value::              # unit tests containing `value::`
+cargo doc-tests cmd::Cmd              # doctests containing `cmd::Cmd`
+cargo integration-tests get_missing   # integration tests containing `get_missing`
+```
+
+To run one integration test file, use `cargo test --test <file>`, with an
+optional filter:
+
+```bash
+cargo test --test it_string               # every test in tests/it_string.rs
+cargo test --test it_string get_missing   # only those containing `get_missing`
 ```
 
 Integration tests each boot their own ephemeral server on a free port and tear it
-down on drop. When no server binary is found, they print `SKIP` and pass.
+down on drop. The test fails if no server binary is found (see
+`VALKEY_SERVER_PATH` above) or the server cannot be started.
 
 ## Lint & format
 
@@ -66,13 +116,13 @@ src/
   script.rs       Script (SHA-caching EVALSHA with EVAL fallback)
   telemetry.rs    OpenTelemetry config + init
   sync/mod.rs     blocking clients over a shared runtime
+  mock_tests/     server-free encoding/decoding tests for the extensions
   commands/
     core.rs       the unified command table (AsyncCommands / Commands)
     scan.rs       GLIDE-owned scan iterators
     <family>.rs   extension traits (blanket impls over CommandExecutor)
 tests/
   common/         shared harness (server, cluster, timeout, pubsub, macros)
-  mock_commands/  server-free encoding/decoding tests for the extensions
   it_*.rs         per-family live tests (one file per command family)
 ```
 
@@ -84,7 +134,7 @@ tests/
    convert with a `crate::value::*` helper.
 3. Add an integration test in the family's `tests/it_<family>.rs` (use the
    `resp_test!` macro for RESP2/RESP3 coverage), and a server-free encoding test
-   in `tests/mock_commands/<family>.rs`.
+   in `src/mock_tests/<family>.rs`.
 4. `cargo test && cargo clippy --all-targets`.
 
 ## Extending value conversion

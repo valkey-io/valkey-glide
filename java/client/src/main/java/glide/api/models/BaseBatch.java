@@ -64,6 +64,7 @@ import static command_request.CommandRequestOuterClass.RequestType.HExpireAt;
 import static command_request.CommandRequestOuterClass.RequestType.HExpireTime;
 import static command_request.CommandRequestOuterClass.RequestType.HGet;
 import static command_request.CommandRequestOuterClass.RequestType.HGetAll;
+import static command_request.CommandRequestOuterClass.RequestType.HGetDel;
 import static command_request.CommandRequestOuterClass.RequestType.HGetEx;
 import static command_request.CommandRequestOuterClass.RequestType.HIncrBy;
 import static command_request.CommandRequestOuterClass.RequestType.HIncrByFloat;
@@ -1305,6 +1306,28 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
     public <ArgType> T hdel(@NonNull ArgType key, @NonNull ArgType[] fields) {
         checkTypeOrThrow(key);
         addCommand(HDel, newArgsBuilder().add(key).add(fields));
+        return getThis();
+    }
+
+    /**
+     * Gets and deletes the specified fields from the hash stored at <code>key</code>. This command
+     * atomically retrieves the values of the given fields and removes them from the hash in a single
+     * operation. When the last field is removed, the key is deleted automatically.
+     *
+     * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
+     *     will throw {@link IllegalArgumentException}.
+     * @since Valkey 9.1.0.
+     * @see <a href="https://valkey.io/commands/hgetdel/">valkey.io</a> for details.
+     * @param key The key of the hash.
+     * @param fields The fields to get and delete from the hash stored at <code>key</code>.
+     * @return Command Response - An array of values associated with the given fields, in the same
+     *     order as they are requested. For every field that does not exist in the hash, a <code>null
+     *     </code> value is returned.
+     */
+    public <ArgType> T hgetdel(@NonNull ArgType key, @NonNull ArgType[] fields) {
+        checkTypeOrThrow(key);
+        addCommand(
+                HGetDel, newArgsBuilder().add(key).add(FIELDS_VALKEY_API).add(fields.length).add(fields));
         return getThis();
     }
 

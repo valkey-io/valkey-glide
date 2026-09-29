@@ -9832,12 +9832,11 @@ export function runBaseTests(config: {
                     null,
                 );
 
-                expect(
-                    await client.set(
-                        string_key,
-                        "a really loooooooooooooooooooooooooooooooooooooooong value",
-                    ),
-                ).toEqual("OK");
+                // Valkey 9.1 raised the embstr size limit (from 64 to 128 bytes), so the
+                // value must exceed 128 bytes to be stored as "raw" across all versions.
+                expect(await client.set(string_key, "a".repeat(200))).toEqual(
+                    "OK",
+                );
 
                 expect(await client.objectEncoding(string_key)).toEqual("raw");
 
