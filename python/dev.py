@@ -218,7 +218,9 @@ def copy_readme_to_package(package_dir: Path) -> None:
     copy2(source, dest)
 
 
-def install_glide_shared(env: Dict[str, str], release: bool = False) -> None:
+def install_glide_shared(
+    env: Dict[str, str], release: bool = False, no_cache: bool = False
+) -> None:
     cmd = [str(venv_ctx["python_exe"]), "-m", "maturin", "develop"]
     if release:
         cmd += ["--release"]
@@ -238,6 +240,13 @@ def install_glide_shared(env: Dict[str, str], release: bool = False) -> None:
     dest = None
 
     if needs_build:
+        if no_cache:
+            # Force a fresh Rust build by discarding stale incremental artifacts.
+            # Without this, `cargo build` may reuse object files compiled with a
+            # different FFI signature (e.g. 6-arg vs 7-arg create_client), causing
+            # ABI mismatches between the installed .so and the CFFI cdef, which
+            # manifests as SIGILL crashes in concurrent sync client tests.
+            _cargo_clean(FFI_DIR)
         ffi_build_cmd = ["cargo", "build"]
         if release:
             ffi_build_cmd += ["--release"]
@@ -400,13 +409,16 @@ def build_sync_client(
     if wheel:
         return build_sync_client_wheel(env)
 
-    install_glide_shared(env, release=release)
+    install_glide_shared(env, release=release, no_cache=no_cache)
     env.update(
         {  # Update it with your GLIDE variables
             "GLIDE_VERSION": glide_version,
         }
     )
     # Build the FFI library
+    if no_cache:
+        # Force a fresh Rust build; see install_glide_shared for rationale.
+        _cargo_clean(FFI_DIR)
     build_args = ["cargo", "build"]
     if release:
         build_args += ["--release"]
