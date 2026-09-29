@@ -16,6 +16,7 @@ import {
     Batch,
     ClientPauseMode,
     ClientSideCache,
+    ClosingError,
     ConfigurationError,
     Decoder,
     FlushMode,
@@ -2534,6 +2535,113 @@ describe("GlideClient", () => {
             );
             const info = await client.clientTrackingInfo();
             assertClientTrackingInfo(info, true);
+        },
+        TIMEOUT,
+    );
+
+    it.each([false, true])(
+        "close detaches a client with a blocked command from the server (lazyConnect: %p)",
+        async (lazyConnect) => {
+            const config = getClientConfigurationOption(
+                cluster.getAddresses(),
+                ProtocolVersion.RESP3,
+            );
+            const observer = await GlideClient.createClient(config);
+            const blocked = await GlideClient.createClient({
+                ...config,
+                lazyConnect,
+            });
+            const key = getRandomKey();
+            const group = getRandomKey();
+            const consumer = getRandomKey();
+
+            // A lazy client has no server-side id until it connects, so identify the
+            // blocked client by its last command: the observer never runs XREADGROUP.
+            const isAttached = async () => {
+                const list = (await observer.customCommand([
+                    "CLIENT",
+                    "LIST",
+                ])) as string;
+                return list
+                    .split("\n")
+                    .some((line) => / cmd=xreadgroup/.test(line));
+            };
+
+            const isBlocked = async () => {
+                const list = (await observer.customCommand([
+                    "CLIENT",
+                    "LIST",
+                ])) as string;
+                return list
+                    .split("\n")
+                    .some(
+                        (line) =>
+                            / cmd=xreadgroup/.test(line) &&
+                            / flags=\S*b/.test(line),
+                    );
+            };
+
+            const poll = async (
+                predicate: () => Promise<boolean>,
+                deadlineMs: number,
+            ) => {
+                const deadline = Date.now() + deadlineMs;
+
+                while (!(await predicate()) && Date.now() < deadline) {
+                    await sleep(5);
+                }
+
+                return predicate();
+            };
+
+            try {
+                expect(
+                    await observer.xgroupCreate(key, group, "$", {
+                        mkStream: true,
+                    }),
+                ).toEqual("OK");
+
+                const pending = blocked.xreadgroup(
+                    group,
+                    consumer,
+                    { [key]: ">" },
+                    { block: 10000 },
+                );
+
+                if (lazyConnect) {
+                    // Close before the lazy connection is established. The queued
+                    // command must not connect and block after close().
+                    blocked.close();
+                } else {
+                    expect(await poll(isBlocked, 2000)).toBe(true);
+                    blocked.close();
+                }
+
+                await expect(pending).rejects.toThrow(ClosingError);
+
+                // The server must drop the connection promptly, not when BLOCK expires.
+                const closedAt = Date.now();
+                expect(
+                    await poll(async () => !(await isAttached()), 1000),
+                ).toBe(true);
+                expect(Date.now() - closedAt).toBeLessThan(1000);
+
+                if (lazyConnect) {
+                    // Give a late lazy connection time to show up; it must not.
+                    await sleep(500);
+                    expect(await isAttached()).toBe(false);
+                }
+
+                // An entry added now must not be claimed by the closed consumer.
+                expect(
+                    await observer.xadd(key, [["field", "value"]]),
+                ).not.toBeNull();
+                const [pendingCount] = await observer.xpending(key, group);
+                expect(pendingCount).toEqual(0);
+            } finally {
+                await observer.del([key]);
+                observer.close();
+            }
         },
         TIMEOUT,
     );
