@@ -15,6 +15,20 @@ import (
 )
 
 func (suite *GlideTestSuite) TestMonitorReceivesCommands() {
+	suite.assertMonitorReceivesSet()
+}
+
+// TestTlsMonitorReceivesCommands runs MONITOR over a TLS socket. The plaintext pass cannot reach the TLS
+// branch of monitorClientConfigFor, and the TLS pass only selects Tls-named tests, so without this variant
+// no CI run would open a monitor connection over TLS.
+func (suite *GlideTestSuite) TestTlsMonitorReceivesCommands() {
+	skipIfTlsDisabled(suite)
+	suite.assertMonitorReceivesSet()
+}
+
+// assertMonitorReceivesSet opens a monitor client on the shared standalone server and checks that a SET
+// from a regular client shows up in its output.
+func (suite *GlideTestSuite) assertMonitorReceivesSet() {
 	var received []glide.MonitorLine
 	var mu sync.Mutex
 
