@@ -23,7 +23,7 @@ use redis::ObjectType;
 use redis::ScanStateRC;
 use redis::cluster_routing::ResponsePolicy;
 // Routable trait provides the command() method used for response policy lookup.
-// In miri-tests with mock-redis, this may appear unused due to mock implementations.
+// In miri-tests with mock-glide-core-engine, this may appear unused due to mock implementations.
 #[allow(unused_imports)]
 use redis::cluster_routing::Routable;
 use redis::cluster_routing::{

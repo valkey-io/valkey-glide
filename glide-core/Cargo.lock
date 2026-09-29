@@ -1282,6 +1282,7 @@ dependencies = [
  "futures",
  "futures-intrusive",
  "glide-core",
+ "glide-core-engine",
  "glide-logger",
  "glide-telemetry",
  "gungraun",
@@ -1295,7 +1296,6 @@ dependencies = [
  "protobuf",
  "protobuf-codegen",
  "rand 0.8.6",
- "redis",
  "regex",
  "rsevents",
  "rstest",
@@ -1319,6 +1319,44 @@ dependencies = [
  "versions",
  "which 8.0.6",
  "zstd",
+]
+
+[[package]]
+name = "glide-core-engine"
+version = "0.1.0"
+dependencies = [
+ "arc-swap",
+ "async-trait",
+ "bytes",
+ "combine",
+ "crc16",
+ "dashmap",
+ "dispose",
+ "futures",
+ "futures-util",
+ "glide-logger",
+ "glide-telemetry",
+ "itoa",
+ "lazy_static",
+ "lru",
+ "num-bigint",
+ "parking_lot",
+ "percent-encoding",
+ "pin-project-lite",
+ "rand 0.9.4",
+ "rustls",
+ "rustls-pki-types",
+ "rustls-platform-verifier",
+ "ryu",
+ "socket2",
+ "strum",
+ "strum_macros",
+ "tokio",
+ "tokio-retry2 0.5.8",
+ "tokio-rustls",
+ "tokio-util",
+ "tracing",
+ "url",
 ]
 
 [[package]]
@@ -2592,44 +2630,6 @@ checksum = "22e18b0f0062d30d4230b2e85ff77fdfe4326feb054b9783a3460d8435c8ab91"
 dependencies = [
  "crossbeam-deque",
  "crossbeam-utils",
-]
-
-[[package]]
-name = "redis"
-version = "0.25.2"
-dependencies = [
- "arc-swap",
- "async-trait",
- "bytes",
- "combine",
- "crc16",
- "dashmap",
- "dispose",
- "futures",
- "futures-util",
- "glide-logger",
- "glide-telemetry",
- "itoa",
- "lazy_static",
- "lru",
- "num-bigint",
- "parking_lot",
- "percent-encoding",
- "pin-project-lite",
- "rand 0.9.4",
- "rustls",
- "rustls-pki-types",
- "rustls-platform-verifier",
- "ryu",
- "socket2",
- "strum",
- "strum_macros",
- "tokio",
- "tokio-retry2 0.5.8",
- "tokio-rustls",
- "tokio-util",
- "tracing",
- "url",
 ]
 
 [[package]]
