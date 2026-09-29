@@ -58,6 +58,7 @@ import static command_request.CommandRequestOuterClass.RequestType.HExpireAt;
 import static command_request.CommandRequestOuterClass.RequestType.HExpireTime;
 import static command_request.CommandRequestOuterClass.RequestType.HGet;
 import static command_request.CommandRequestOuterClass.RequestType.HGetAll;
+import static command_request.CommandRequestOuterClass.RequestType.HGetDel;
 import static command_request.CommandRequestOuterClass.RequestType.HGetEx;
 import static command_request.CommandRequestOuterClass.RequestType.HIncrBy;
 import static command_request.CommandRequestOuterClass.RequestType.HIncrByFloat;
@@ -1893,6 +1894,28 @@ public abstract class BaseClient
     public CompletableFuture<Long> hdel(@NonNull GlideString key, @NonNull GlideString[] fields) {
         GlideString[] args = ArrayUtils.addFirst(fields, key);
         return commandManager.submitNewCommand(HDel, args, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<String[]> hgetdel(@NonNull String key, @NonNull String[] fields) {
+        String[] arguments =
+                concatenateArrays(
+                        new String[] {key},
+                        new String[] {FIELDS_VALKEY_API, String.valueOf(fields.length)},
+                        fields);
+        return commandManager.submitNewCommand(
+                HGetDel, arguments, response -> castArray(handleArrayResponse(response), String.class));
+    }
+
+    @Override
+    public CompletableFuture<GlideString[]> hgetdel(
+            @NonNull GlideString key, @NonNull GlideString[] fields) {
+        GlideString[] arguments =
+                new ArgsBuilder().add(key).add(FIELDS_VALKEY_API).add(fields.length).add(fields).toArray();
+        return commandManager.submitNewCommand(
+                HGetDel,
+                arguments,
+                response -> castArray(handleArrayOrNullResponseBinary(response), GlideString.class));
     }
 
     @Override
