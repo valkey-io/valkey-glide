@@ -379,8 +379,8 @@ mod cluster {
     }
 
     #[test]
-    #[serial_test::serial]
     #[ignore] // Flaky
+    #[serial_test::serial]
     fn test_cluster_pipeline_ordering_with_improper_command() {
         let cluster = TestClusterContext::new(3, 0);
         cluster.wait_for_cluster_up();
@@ -538,7 +538,7 @@ mod cluster {
     #[test]
     #[serial_test::serial]
     fn test_cluster_ask_redirect() {
-        let name = "node";
+        let name = "test_cluster_ask_redirect";
         let completed = Arc::new(AtomicI32::new(0));
         let MockEnv {
             mut connection,
@@ -555,7 +555,9 @@ mod cluster {
                     let count = completed.fetch_add(1, Ordering::SeqCst);
                     match port {
                         6379 => match count {
-                            0 => Err(parse_redis_value(b"-ASK 14000 node:6380\r\n")),
+                            0 => Err(parse_redis_value(
+                                format!("-ASK 14000 {name}:6380\r\n").as_bytes(),
+                            )),
                             _ => panic!("Node should not be called now"),
                         },
                         6380 => match count {
@@ -633,7 +635,7 @@ mod cluster {
     #[test]
     #[serial_test::serial]
     fn test_cluster_replica_read() {
-        let name = "node";
+        let name = "test_cluster_replica_read";
 
         // requests should route to replica
         let MockEnv {
@@ -658,7 +660,9 @@ mod cluster {
         let value = cmd("GET").arg("test").query::<Option<i32>>(&mut connection);
         assert_eq!(value, Ok(Some(123)));
 
-        // requests should route to primary
+        // requests should route to primary.
+        // The first MockEnv's handler is still alive, so this one needs its own name.
+        let name = "test_cluster_replica_read_primary";
         let MockEnv {
             mut connection,
             handler: _handler,
@@ -697,7 +701,7 @@ mod cluster {
         //
         // The MOVED response uses "node:6380" directly here (mock can't simulate raw IPs),
         // but this test validates the redirect routing and slot map update behavior.
-        let name = "node";
+        let name = "test_cluster_moved_redirect_with_raw_ip_resolved_via_reverse_lookup";
         let completed = Arc::new(AtomicI32::new(0));
         let MockEnv {
             mut connection,
@@ -742,7 +746,7 @@ mod cluster {
     #[test]
     #[serial_test::serial]
     fn test_cluster_io_error() {
-        let name = "node";
+        let name = "test_cluster_io_error";
         let completed = Arc::new(AtomicI32::new(0));
         let MockEnv {
             mut connection,
@@ -776,7 +780,7 @@ mod cluster {
     #[test]
     #[serial_test::serial]
     fn test_cluster_non_retryable_error_should_not_retry() {
-        let name = "node";
+        let name = "test_cluster_non_retryable_error_should_not_retry";
         let completed = Arc::new(AtomicI32::new(0));
         let MockEnv { mut connection, .. } = MockEnv::new(name, {
             let completed = completed.clone();
@@ -803,7 +807,7 @@ mod cluster {
     #[test]
     #[serial_test::serial]
     fn test_cluster_readonly_error_should_refresh_slots_and_retry() {
-        let name = "node";
+        let name = "test_cluster_readonly_error_should_refresh_slots_and_retry";
         let requests = Arc::new(AtomicI32::new(0));
         let MockEnv { mut connection, .. } = MockEnv::with_client_builder(
             ClusterClient::builder(vec![&*format!("redis://{name}")]).retries(3),
@@ -839,7 +843,7 @@ mod cluster {
     #[test]
     #[serial_test::serial]
     fn test_cluster_readonly_error_exhausts_retries() {
-        let name = "node";
+        let name = "test_cluster_readonly_error_exhausts_retries";
         let requests = Arc::new(AtomicI32::new(0));
         let MockEnv { mut connection, .. } = MockEnv::with_client_builder(
             ClusterClient::builder(vec![&*format!("redis://{name}")]).retries(2),
@@ -866,11 +870,11 @@ mod cluster {
     }
 
     fn test_cluster_fan_out(
+        name: &'static str,
         command: &'static str,
         expected_ports: Vec<u16>,
         slots_config: Option<Vec<MockSlotRange>>,
     ) {
-        let name = "node";
         let found_ports = Arc::new(std::sync::Mutex::new(Vec::new()));
         let ports_clone = found_ports.clone();
         let mut cmd = redis::Cmd::new();
@@ -911,19 +915,30 @@ mod cluster {
     #[test]
     #[serial_test::serial]
     fn test_cluster_fan_out_to_all_primaries() {
-        test_cluster_fan_out("FLUSHALL", vec![6379, 6381], None);
+        test_cluster_fan_out(
+            "test_cluster_fan_out_to_all_primaries",
+            "FLUSHALL",
+            vec![6379, 6381],
+            None,
+        );
     }
 
     #[test]
     #[serial_test::serial]
     fn test_cluster_fan_out_to_all_nodes() {
-        test_cluster_fan_out("CONFIG SET", vec![6379, 6380, 6381, 6382], None);
+        test_cluster_fan_out(
+            "test_cluster_fan_out_to_all_nodes",
+            "CONFIG SET",
+            vec![6379, 6380, 6381, 6382],
+            None,
+        );
     }
 
     #[test]
     #[serial_test::serial]
     fn test_cluster_fan_out_out_once_to_each_primary_when_no_replicas_are_available() {
         test_cluster_fan_out(
+            "test_cluster_fan_out_out_once_to_each_primary_when_no_replicas_are_available",
             "CONFIG SET",
             vec![6379, 6381],
             Some(vec![
@@ -945,6 +960,7 @@ mod cluster {
     #[serial_test::serial]
     fn test_cluster_fan_out_out_once_even_if_primary_has_multiple_slot_ranges() {
         test_cluster_fan_out(
+            "test_cluster_fan_out_out_once_even_if_primary_has_multiple_slot_ranges",
             "CONFIG SET",
             vec![6379, 6380, 6381, 6382],
             Some(vec![

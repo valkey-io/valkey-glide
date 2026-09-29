@@ -2382,12 +2382,12 @@ mod cluster_async {
     }
 
     fn test_async_cluster_refresh_topology_after_moved_assert_get_succeed_and_expected_retries(
+        name: &'static str,
         slots_config_vec: Vec<Vec<MockSlotRange>>,
         ports: Vec<u16>,
         has_a_majority: bool,
     ) {
         assert!(!ports.is_empty() && !slots_config_vec.is_empty());
-        let name = "refresh_topology_moved";
         let num_of_nodes = ports.len();
         let requests = atomic::AtomicUsize::new(0);
         let started = atomic::AtomicBool::new(false);
@@ -2582,11 +2582,11 @@ mod cluster_async {
     }
 
     fn test_async_cluster_refresh_topology_in_client_init_get_succeed(
+        name: &'static str,
         slots_config_vec: Vec<Vec<MockSlotRange>>,
         ports: Vec<u16>,
     ) {
         assert!(!ports.is_empty() && !slots_config_vec.is_empty());
-        let name = "refresh_topology_client_init";
         let started = atomic::AtomicBool::new(false);
         let MockEnv {
             runtime,
@@ -2686,6 +2686,7 @@ mod cluster_async {
     fn test_async_cluster_refresh_topology_after_moved_error_all_nodes_agree_get_succeed() {
         let ports = get_ports(3);
         test_async_cluster_refresh_topology_after_moved_assert_get_succeed_and_expected_retries(
+            "test_async_cluster_refresh_topology_after_moved_error_all_nodes_agree_get_succeed",
             get_topology_with_majority(&ports),
             ports,
             true,
@@ -2883,6 +2884,7 @@ mod cluster_async {
     fn test_async_cluster_refresh_topology_in_client_init_all_nodes_agree_get_succeed() {
         let ports = get_ports(3);
         test_async_cluster_refresh_topology_in_client_init_get_succeed(
+            "test_async_cluster_refresh_topology_in_client_init_all_nodes_agree_get_succeed",
             get_topology_with_majority(&ports),
             ports,
         );
@@ -2894,6 +2896,7 @@ mod cluster_async {
         for num_of_nodes in 2..4 {
             let ports = get_ports(num_of_nodes);
             test_async_cluster_refresh_topology_after_moved_assert_get_succeed_and_expected_retries(
+                "test_async_cluster_refresh_topology_after_moved_error_with_no_majority_get_succeed",
                 get_no_majority_topology_view(&ports),
                 ports,
                 false,
@@ -2907,6 +2910,7 @@ mod cluster_async {
         for num_of_nodes in 2..4 {
             let ports = get_ports(num_of_nodes);
             test_async_cluster_refresh_topology_in_client_init_get_succeed(
+                "test_async_cluster_refresh_topology_in_client_init_with_no_majority_get_succeed",
                 get_no_majority_topology_view(&ports),
                 ports,
             );
@@ -3822,7 +3826,7 @@ mod cluster_async {
     #[test]
     #[serial_test::serial]
     fn test_async_cluster_ask_redirect() {
-        let name = "node";
+        let name = "test_async_cluster_ask_redirect";
         let completed = Arc::new(AtomicI32::new(0));
         let MockEnv {
             async_connection: mut connection,
@@ -3840,7 +3844,9 @@ mod cluster_async {
                     let count = completed.fetch_add(1, Ordering::SeqCst);
                     match port {
                         6379 => match count {
-                            0 => Err(parse_redis_value(b"-ASK 14000 node:6380\r\n")),
+                            0 => Err(parse_redis_value(
+                                format!("-ASK 14000 {name}:6380\r\n").as_bytes(),
+                            )),
                             _ => panic!("Node should not be called now"),
                         },
                         6380 => match count {
@@ -3872,7 +3878,7 @@ mod cluster_async {
     #[test]
     #[serial_test::serial]
     fn test_async_cluster_ask_save_new_connection() {
-        let name = "node";
+        let name = "test_async_cluster_ask_save_new_connection";
         let ping_attempts = Arc::new(AtomicI32::new(0));
         let ping_attempts_clone = ping_attempts.clone();
         let MockEnv {
@@ -3887,7 +3893,9 @@ mod cluster_async {
                 move |cmd: &[u8], port| {
                     if port != 6391 {
                         respond_startup_two_nodes(name, cmd)?;
-                        return Err(parse_redis_value(b"-ASK 14000 node:6391\r\n"));
+                        return Err(parse_redis_value(
+                            format!("-ASK 14000 {name}:6391\r\n").as_bytes(),
+                        ));
                     }
 
                     if contains_slice(cmd, b"PING") {
@@ -3954,7 +3962,7 @@ mod cluster_async {
     #[test]
     #[serial_test::serial]
     fn test_async_cluster_ask_redirect_even_if_original_call_had_no_route() {
-        let name = "node";
+        let name = "test_async_cluster_ask_redirect_even_if_original_call_had_no_route";
         let completed = Arc::new(AtomicI32::new(0));
         let MockEnv {
             async_connection: mut connection,
@@ -3971,7 +3979,9 @@ mod cluster_async {
                     // other node (i.e., not doing a full slot rebuild)
                     let count = completed.fetch_add(1, Ordering::SeqCst);
                     if count == 0 {
-                        return Err(parse_redis_value(b"-ASK 14000 node:6380\r\n"));
+                        return Err(parse_redis_value(
+                            format!("-ASK 14000 {name}:6380\r\n").as_bytes(),
+                        ));
                     }
                     match port {
                         6380 => match count {
@@ -4061,7 +4071,7 @@ mod cluster_async {
     #[test]
     #[serial_test::serial]
     fn test_async_cluster_replica_read() {
-        let name = "node";
+        let name = "test_async_cluster_replica_read";
 
         // requests should route to replica
         let MockEnv {
@@ -4090,7 +4100,9 @@ mod cluster_async {
         );
         assert_eq!(value, Ok(Some(123)));
 
-        // requests should route to primary
+        // requests should route to primary.
+        // The first MockEnv's handler is still alive, so this one needs its own name.
+        let name = "test_async_cluster_replica_read_primary";
         let MockEnv {
             runtime,
             async_connection: mut connection,
@@ -4120,11 +4132,11 @@ mod cluster_async {
     }
 
     fn test_async_cluster_fan_out(
+        name: &'static str,
         command: &'static str,
         expected_ports: Vec<u16>,
         slots_config: Option<Vec<MockSlotRange>>,
     ) {
-        let name = "node";
         let found_ports = Arc::new(std::sync::Mutex::new(Vec::new()));
         let ports_clone = found_ports.clone();
         let mut cmd = Cmd::new();
@@ -4166,19 +4178,30 @@ mod cluster_async {
     #[test]
     #[serial_test::serial]
     fn test_async_cluster_fan_out_to_all_primaries() {
-        test_async_cluster_fan_out("FLUSHALL", vec![6379, 6381], None);
+        test_async_cluster_fan_out(
+            "test_async_cluster_fan_out_to_all_primaries",
+            "FLUSHALL",
+            vec![6379, 6381],
+            None,
+        );
     }
 
     #[test]
     #[serial_test::serial]
     fn test_async_cluster_fan_out_to_all_nodes() {
-        test_async_cluster_fan_out("CONFIG SET", vec![6379, 6380, 6381, 6382], None);
+        test_async_cluster_fan_out(
+            "test_async_cluster_fan_out_to_all_nodes",
+            "CONFIG SET",
+            vec![6379, 6380, 6381, 6382],
+            None,
+        );
     }
 
     #[test]
     #[serial_test::serial]
     fn test_async_cluster_fan_out_once_to_each_primary_when_no_replicas_are_available() {
         test_async_cluster_fan_out(
+            "test_async_cluster_fan_out_once_to_each_primary_when_no_replicas_are_available",
             "CONFIG SET",
             vec![6379, 6381],
             Some(vec![
@@ -4200,6 +4223,7 @@ mod cluster_async {
     #[serial_test::serial]
     fn test_async_cluster_fan_out_once_even_if_primary_has_multiple_slot_ranges() {
         test_async_cluster_fan_out(
+            "test_async_cluster_fan_out_once_even_if_primary_has_multiple_slot_ranges",
             "CONFIG SET",
             vec![6379, 6380, 6381, 6382],
             Some(vec![
@@ -4607,7 +4631,8 @@ mod cluster_async {
     #[test]
     #[serial_test::serial]
     fn test_async_cluster_fan_out_and_return_map_of_results_for_special_response_policy() {
-        let name = "foo";
+        let name =
+            "test_async_cluster_fan_out_and_return_map_of_results_for_special_response_policy";
         let mut cmd = Cmd::new();
         cmd.arg("FUNCTION").arg("STATS");
         let MockEnv {
@@ -4648,7 +4673,7 @@ mod cluster_async {
     #[test]
     #[serial_test::serial]
     fn test_async_cluster_fan_out_and_combine_arrays_of_values() {
-        let name = "foo";
+        let name = "test_async_cluster_fan_out_and_combine_arrays_of_values";
         let cmd = cmd("KEYS");
         let MockEnv {
             runtime,
@@ -4868,7 +4893,7 @@ mod cluster_async {
     #[test]
     #[serial_test::serial]
     fn test_async_cluster_io_error() {
-        let name = "node";
+        let name = "test_async_cluster_io_error";
         let completed = Arc::new(AtomicI32::new(0));
         let MockEnv {
             runtime,
@@ -4907,7 +4932,7 @@ mod cluster_async {
     #[test]
     #[serial_test::serial]
     fn test_async_cluster_non_retryable_error_should_not_retry() {
-        let name = "node";
+        let name = "test_async_cluster_non_retryable_error_should_not_retry";
         let completed = Arc::new(AtomicI32::new(0));
         let MockEnv {
             async_connection: mut connection,
@@ -5101,7 +5126,7 @@ mod cluster_async {
     #[test]
     #[serial_test::serial]
     fn test_async_cluster_read_from_primary() {
-        let name = "node";
+        let name = "test_async_cluster_read_from_primary";
         let found_ports = Arc::new(std::sync::Mutex::new(Vec::new()));
         let ports_clone = found_ports.clone();
         let MockEnv {
@@ -5159,7 +5184,7 @@ mod cluster_async {
     #[test]
     #[serial_test::serial]
     fn test_async_cluster_round_robin_read_from_replica() {
-        let name = "node";
+        let name = "test_async_cluster_round_robin_read_from_replica";
         let found_ports = Arc::new(std::sync::Mutex::new(Vec::new()));
         let ports_clone = found_ports.clone();
         let MockEnv {
@@ -7970,7 +7995,9 @@ mod cluster_async {
                         // The client will re-fetch CLUSTER SLOTS and re-route to the real node.
                         // We deliberately use a different hostname so the client does NOT take the
                         // circular-MOVED Reconnect fast-path; it must go through RefreshingSlots.
-                        return Err(parse_redis_value(b"-MOVED 0 other_host:6380\r\n"));
+                        return Err(parse_redis_value(
+                            format!("-MOVED 0 {name}_other_host:6380\r\n").as_bytes(),
+                        ));
                     }
                     if moved_fired_clone.load(atomic::Ordering::SeqCst) {
                         std::thread::sleep(std::time::Duration::from_millis(DELAY_AFTER_MOVED_MS));
@@ -7986,12 +8013,12 @@ mod cluster_async {
 
         // Register other_host so the client can resolve it if it attempts to connect
         // before the CLUSTER SLOTS topology update is applied.
-        let other_host_name = "other_host";
+        let other_host_name = format!("{name}_other_host");
         // Clone `name` so it can be captured by the other_host closure (name_handler already
         // owns a clone used by the primary handler above).
         let name_for_other_handler = name.to_string();
         let _other_handler = MockConnectionBehavior::register_new(
-            other_host_name,
+            &other_host_name,
             Arc::new(move |cmd: &[u8], _port| {
                 if contains_slice(cmd, b"PING") {
                     return Err(Ok(Value::SimpleString("OK".into())));
@@ -8122,7 +8149,9 @@ mod cluster_async {
                     if i == MOVED_ON_SET_N {
                         moved_fired_clone.store(true, atomic::Ordering::SeqCst);
                         // Non-circular MOVED: different hostname triggers RefreshingSlots.
-                        return Err(parse_redis_value(b"-MOVED 0 other_host:6380\r\n"));
+                        return Err(parse_redis_value(
+                            format!("-MOVED 0 {name}_other_host:6380\r\n").as_bytes(),
+                        ));
                     }
                     if moved_fired_clone.load(atomic::Ordering::SeqCst) {
                         std::thread::sleep(std::time::Duration::from_millis(DELAY_AFTER_MOVED_MS));
@@ -8136,11 +8165,11 @@ mod cluster_async {
         // Register other_host so the client can resolve it if it attempts to connect.
         // Once MOVED fires, other_host returns AllConnectionsUnavailable for all CLUSTER SLOTS
         // queries, ensuring all_failed=true is deterministic regardless of query ordering.
-        let other_host_name = "other_host";
+        let other_host_name = format!("{name}_other_host");
         let name_for_other_handler = name.to_string();
         let moved_fired_other = moved_fired.clone();
         let _other_handler = MockConnectionBehavior::register_new(
-            other_host_name,
+            &other_host_name,
             Arc::new(move |cmd: &[u8], _port| {
                 if contains_slice(cmd, b"PING") {
                     return Err(Ok(Value::SimpleString("OK".into())));
@@ -8289,7 +8318,9 @@ mod cluster_async {
                     if i == MOVED_ON_SET_N {
                         moved_fired_clone.store(true, atomic::Ordering::SeqCst);
                         // Non-circular MOVED: different hostname triggers RefreshingSlots.
-                        return Err(parse_redis_value(b"-MOVED 0 other_host:6380\r\n"));
+                        return Err(parse_redis_value(
+                            format!("-MOVED 0 {name}_other_host:6380\r\n").as_bytes(),
+                        ));
                     }
                     if moved_fired_clone.load(atomic::Ordering::SeqCst) {
                         std::thread::sleep(std::time::Duration::from_millis(DELAY_AFTER_MOVED_MS));
@@ -8302,10 +8333,10 @@ mod cluster_async {
 
         // Register other_host so the client can resolve it if it attempts to connect
         // before the CLUSTER SLOTS topology update is applied.
-        let other_host_name = "other_host";
+        let other_host_name = format!("{name}_other_host");
         let name_for_other_handler = name.to_string();
         let _other_handler = MockConnectionBehavior::register_new(
-            other_host_name,
+            &other_host_name,
             Arc::new(move |cmd: &[u8], _port| {
                 if contains_slice(cmd, b"PING") {
                     return Err(Ok(Value::SimpleString("OK".into())));
