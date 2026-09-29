@@ -221,7 +221,7 @@ make integ-test standalone-endpoints=localhost:6379 cluster-endpoints=localhost:
 ```
 
 The integration suite therefore runs in one of two modes: plaintext by default, or TLS when you pass `tls=true`.
-CI runs the suite both ways, so a break in either mode shows up.
+CI runs the full suite in plaintext and the TLS-designated tests (those with `Tls` in the method name) with `make tls-test tls=true`, so a break in either mode shows up.
 TLS-only tests skip themselves in a plaintext run, and the plaintext-only tests skip in a TLS run.
 
 Running the TLS suite against your own `standalone-endpoints` or `cluster-endpoints` is not supported for servers whose certificates are not signed by a platform certificate authority.
