@@ -1,5 +1,6 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
+import time
 import uuid
 
 import pytest
@@ -148,7 +149,16 @@ class TestSyncDiscoverAll:
                 )
             )
             try:
+                # The discovered replica connection is established asynchronously
+                # by DISCOVER_ALL, so it may not have propagated to the replica by
+                # the time the probe issues its first CLIENT LIST. Poll until the
+                # client name appears, up to a bounded deadline, instead of relying
+                # on a single immediate check (see issue #7234).
+                deadline = time.monotonic() + 5.0
                 client_list = str(probe.custom_command(["CLIENT", "LIST"]))
+                while unique_name not in client_list and time.monotonic() < deadline:
+                    time.sleep(0.1)
+                    client_list = str(probe.custom_command(["CLIENT", "LIST"]))
                 assert unique_name in client_list
             finally:
                 probe.close()
