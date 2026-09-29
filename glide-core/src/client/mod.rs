@@ -3265,20 +3265,26 @@ impl Client {
             )));
         }
 
-        // Normalize a rejected re-AUTH to `AuthenticationFailed`: the server never
-        // emits this kind itself, so the borrower can tell a stale-token failure
-        // apart from a command's own auth error — the same contract the scope path
-        // gives at `send_command_on_connection`. Wrapped here, not in the shared
-        // `update_connection_password`, so the user-facing `UpdateConnectionPassword`
-        // API keeps its own error kinds.
-        self.update_connection_password(Some(current_token), true)
+        // Store before AUTHing so a successful AUTH can never advance the bookmark
+        // over a stale reconnect password.
+        self.update_connection_password(Some(current_token.clone()), false)
+            .await?;
+
+        // `AuthenticationFailed` is never emitted by the server, so it lets the
+        // borrower tell a stale-token failure from a command's own auth error (same
+        // contract as the scope path). Local admission refusals are exempt because
+        // `AuthenticationFailed` maps to `RetryMethod::Reconnect`, which would
+        // misreport them to bindings as a disconnect. Kept out of
+        // `send_immediate_auth` so `UpdateConnectionPassword` keeps its own kinds.
+        self.send_immediate_auth(Some(current_token))
             .await
-            .map_err(|e| {
-                RedisError::from((
+            .map_err(|e| match e.kind() {
+                ErrorKind::CircuitBreakerOpen | ErrorKind::ClientError => e,
+                _ => RedisError::from((
                     ErrorKind::AuthenticationFailed,
                     "IAM borrow re-authentication failed",
                     e.to_string(),
-                ))
+                )),
             })?;
 
         if let Some(iam_manager) = &self.iam_token_manager {
