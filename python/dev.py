@@ -234,13 +234,8 @@ def install_glide_shared(env: Dict[str, str], release: bool = False) -> None:
     # Build the FFI library and copy to glide_shared so it can be found
     # without requiring glide-sync to be installed.
     ffi_output_dir = FFI_OUTPUT_DIR_RELEASE if release else FFI_OUTPUT_DIR_DEBUG
-    try:
-        ffi_lib_path = find_libglide_ffi(ffi_output_dir)
-        dest = SHARED_PACKAGE_DIR / ffi_lib_path.name
-        needs_build = not dest.exists()
-    except FileNotFoundError:
-        needs_build = True
-        dest = None
+    needs_build = True  # Always rebuild to ensure the .so matches current source
+    dest = None
 
     if needs_build:
         ffi_build_cmd = ["cargo", "build"]
