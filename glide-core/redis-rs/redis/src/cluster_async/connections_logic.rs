@@ -21,7 +21,6 @@ pub(crate) type ConnectionFuture<C> = futures::future::Shared<BoxFuture<'static,
 #[doc(hidden)]
 pub type AsyncClusterNode<C> = ClusterNode<ConnectionFuture<C>>;
 
-use crate::cluster::ClusterAddress;
 use crate::cluster::ReadyToDialAddress;
 
 #[doc(hidden)]
@@ -278,30 +277,7 @@ impl<C> From<RedisResult<AsyncClusterNode<C>>> for ConnectAndCheckResult<C> {
 }
 
 #[doc(hidden)]
-pub async fn connect_and_check<C>(
-    addr: &str,
-    params: ClusterParams,
-    socket_addr: Option<SocketAddr>,
-    conn_type: RefreshConnectionType,
-    node: Option<AsyncClusterNode<C>>,
-    glide_connection_options: GlideConnectionOptions,
-) -> ConnectAndCheckResult<C>
-where
-    C: ConnectionLike + Connect + Send + Sync + 'static + Clone,
-{
-    let ready = ClusterAddress::Raw(addr.to_owned()).prepare(params.address_resolver.as_deref());
-    connect_and_check_prepared(
-        &ready,
-        params,
-        socket_addr,
-        conn_type,
-        node,
-        glide_connection_options,
-    )
-    .await
-}
-
-pub(crate) async fn connect_and_check_prepared<C>(
+pub async fn connect_and_check_prepared<C>(
     addr: &ReadyToDialAddress,
     params: ClusterParams,
     socket_addr: Option<SocketAddr>,

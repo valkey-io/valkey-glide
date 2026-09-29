@@ -29,6 +29,7 @@ mod pipeline_routing;
 pub mod testing {
     pub use super::connections_container::ConnectionDetails;
     pub use super::connections_logic::*;
+    pub use crate::cluster::ReadyToDialAddress;
 }
 use crate::{
     client::GlideConnectionOptions,
@@ -5672,7 +5673,6 @@ pub(super) mod refresh_task_resolution_tests {
     use crate::cluster_async::connections_container::{
         ClusterNode, ConnectionDetails, ConnectionsContainer, ConnectionsMap,
     };
-    use crate::cluster_async::connections_logic::connect_and_check;
     use crate::cluster_routing::Slot;
     use crate::cluster_slotmap::{ReadFromReplicaStrategy, SlotMap};
     use crate::types::AddressResolver;
@@ -6259,9 +6259,11 @@ pub(super) mod refresh_task_resolution_tests {
     async fn initial_seed_connections_apply_address_resolution() {
         let mut params = ClusterParams::default_for_test(None);
         params.address_resolver = Some(Arc::new(SeedAddressResolver));
+        let ready_address = ClusterAddress::Raw("seed-node:6379".to_owned())
+            .prepare(params.address_resolver.as_deref());
 
-        let node = connect_and_check::<RecordingConnection>(
-            "seed-node:6379",
+        let node = connect_and_check_prepared::<RecordingConnection>(
+            &ready_address,
             params,
             None,
             RefreshConnectionType::AllConnections,

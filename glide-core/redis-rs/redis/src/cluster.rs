@@ -1032,12 +1032,15 @@ fn get_random_connection<C: ConnectionLike + Connect + Sized>(
 // - Created by calling ConnectionAddr::to_string (unix connections are not supported in cluster mode)
 // - Returned from redis via the ASK/MOVED response
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub(crate) struct ReadyToDialAddress(String);
+#[doc(hidden)]
+pub struct ReadyToDialAddress(String);
 impl ReadyToDialAddress {
-    pub(crate) fn new(address: String) -> Self {
+    #[doc(hidden)]
+    pub fn new(address: String) -> Self {
         Self(address)
     }
-    pub(crate) fn as_str(&self) -> &str {
+    #[doc(hidden)]
+    pub fn as_str(&self) -> &str {
         &self.0
     }
 }

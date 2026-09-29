@@ -6588,7 +6588,7 @@ mod cluster_async {
                     // 1. initial connection,
                     // 2. refresh slots on client creation,
                     // 3. refresh_connections `check_connection` after first GET failed,
-                    // 4. refresh_connections `connect_and_check` after first GET failed,
+                    // 4. refresh_connections `connect_and_check_prepared` after first GET failed,
                     // 5. reconnect on 2nd GET attempt (may not occur with non-blocking reconnection).
                     // more than 5 attempts mean that the server reconnects more than once, which is the behavior we're testing against.
                     if past_get_attempts != 1 || connect_attempt > 3 {
