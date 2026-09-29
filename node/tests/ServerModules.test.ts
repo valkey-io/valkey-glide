@@ -328,6 +328,81 @@ describe("Server Module Tests", () => {
                 ).toEqual([Buffer.from('"one"'), null]);
             });
 
+            it("json.mset", async () => {
+                client = await GlideClusterClient.createClient(
+                    getClientConfigurationOption(
+                        cluster.getAddresses(),
+                        protocol,
+                    ),
+                );
+                // Hash-tagged keys share a slot, so the command runs as one atomic request.
+                const tag = getRandomKey();
+                const key1 = `{${tag}}:1`;
+                const key2 = `{${tag}}:2`;
+                const key3 = `{${tag}}:3`;
+
+                expect(
+                    await GlideJson.mset(client, [
+                        {
+                            key: key1,
+                            path: "$",
+                            value: '{"a": 1, "b": ["one", "two"]}',
+                        },
+                        {
+                            key: Buffer.from(key2),
+                            path: Buffer.from("."),
+                            value: Buffer.from('{"a": 2, "c": false}'),
+                        },
+                    ]),
+                ).toEqual("OK");
+                expect(
+                    await GlideJson.mget(client, [key1, key2], "$.a"),
+                ).toEqual(["[1]", "[2]"]);
+
+                // Nested paths of existing documents, JSONPath and legacy syntax mixed.
+                expect(
+                    await GlideJson.mset(client, [
+                        { key: key1, path: "$.b[0]", value: '"uno"' },
+                        { key: key2, path: ".c", value: "true" },
+                    ]),
+                ).toEqual("OK");
+                expect(
+                    await GlideJson.get(client, key1, { path: "$.b" }),
+                ).toEqual('[["uno","two"]]');
+                expect(
+                    await GlideJson.get(client, key2, { path: "$.c" }),
+                ).toEqual("[true]");
+
+                // Atomic: a failing entry leaves every other entry unset.
+                await expect(
+                    GlideJson.mset(client, [
+                        { key: key3, path: "$", value: '{"a": 3}' },
+                        { key: key2, path: "$.missing.child", value: "1" },
+                    ]),
+                ).rejects.toThrow(RequestError);
+                expect(await GlideJson.get(client, key3)).toBeNull();
+                expect(
+                    await GlideJson.get(client, key2, { path: "$.c" }),
+                ).toEqual("[true]");
+
+                // Keys in different slots are split per slot by the client.
+                const key4 = getRandomKey();
+                const key5 = getRandomKey();
+                expect(
+                    await GlideJson.mset(client, [
+                        { key: key4, path: "$", value: "[1]" },
+                        { key: key5, path: "$", value: "[2]" },
+                    ]),
+                ).toEqual("OK");
+                expect(await GlideJson.mget(client, [key4, key5], "$")).toEqual(
+                    ["[[1]]", "[[2]]"],
+                );
+
+                await expect(GlideJson.mset(client, [])).rejects.toThrow(
+                    "at least one entry",
+                );
+            });
+
             it("json.arrinsert", async () => {
                 client = await GlideClusterClient.createClient(
                     getClientConfigurationOption(

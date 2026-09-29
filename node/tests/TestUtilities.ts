@@ -2511,6 +2511,19 @@ export async function CreateJsonBatchCommands(
         ["[[110,120]]", "[]", null],
     ]);
 
+    // JSON.MSET
+    JsonBatch.mset(baseBatch, [
+        { key: key3, path: "$", value: JSON.stringify({ a: [5] }) },
+        { key: key2, path: "$.a", value: "[7]" },
+    ]);
+    responseData.push(['json.mset([key3, "$"], [key2, "$.a"])', "OK"]);
+
+    JsonBatch.mget(baseBatch, [key, key2, key3], "$.a");
+    responseData.push([
+        'json.mget([key, key2, key3], "$.a")',
+        ["[[110,120]]", "[[7]]", "[[5]]"],
+    ]);
+
     // JSON.TOGGLE
     JsonBatch.toggle(baseBatch, key, { path: "$.d" });
     responseData.push(['toggle(key2, "$.d")', [false]]);
