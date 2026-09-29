@@ -1962,6 +1962,11 @@ impl Client {
     ) -> redis::RedisFuture<'a, Value> {
         Box::pin(async move {
             self.reconcile_iam_before_dispatch().await?;
+            // Non-atomic: a raw MULTI here stays open on the connection after the
+            // pipeline returns, so the defer in `prepare_for_borrow` must see it.
+            for cmd in pipeline.cmd_iter() {
+                self.track_transaction_state(cmd);
+            }
             let client = self.get_or_initialize_client().await?;
 
             let command_count = pipeline.cmd_iter().count();
@@ -3187,8 +3192,8 @@ impl Client {
 
     /// Track whether a raw MULTI is open on the live connection, so
     /// [`prepare_for_borrow`](Self::prepare_for_borrow) can defer the re-AUTH while a
-    /// transaction is in flight. Only raw MULTI/EXEC/DISCARD custom commands move it —
-    /// the batch APIs build and close their own MULTI/EXEC in one pipeline.
+    /// transaction is in flight. `send_transaction` is not tracked: redis-rs adds its
+    /// MULTI/EXEC bracket at pack time, outside `cmd_iter()`, and it always closes.
     fn track_transaction_state(&self, cmd: &Cmd) {
         match cmd.command().as_deref() {
             Some(b"MULTI") => self.multi_active.store(true, Ordering::Release),
@@ -4163,6 +4168,29 @@ mod tests {
             "send_command must track a raw MULTI via track_transaction_state, \
              even when the dispatch itself fails"
         );
+    }
+
+    #[test]
+    fn send_pipeline_tracks_multi_across_pipeline() {
+        use std::sync::atomic::Ordering;
+        let mut client = create_test_client();
+        let rt = borrow_test_runtime();
+        let strategy = redis::PipelineRetryStrategy::default();
+
+        let mut open = redis::pipe();
+        open.cmd("multi").ignore().cmd("SET").arg("k").arg("v");
+        let _ = rt.block_on(client.send_pipeline(&open, None, false, None, strategy));
+        assert!(client.shared.multi_active.load(Ordering::Acquire));
+
+        let mut close = redis::pipe();
+        close.cmd("INCR").arg("a").cmd("EXEC");
+        let _ = rt.block_on(client.send_pipeline(&close, None, false, None, strategy));
+        assert!(!client.shared.multi_active.load(Ordering::Acquire));
+
+        let mut bracketed = redis::pipe();
+        bracketed.cmd("MULTI").cmd("INCR").arg("a").cmd("EXEC");
+        let _ = rt.block_on(client.send_pipeline(&bracketed, None, false, None, strategy));
+        assert!(!client.shared.multi_active.load(Ordering::Acquire));
     }
 
     #[test]
