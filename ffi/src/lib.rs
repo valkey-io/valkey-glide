@@ -23,7 +23,7 @@ use redis::ObjectType;
 use redis::ScanStateRC;
 use redis::cluster_routing::ResponsePolicy;
 // Routable trait provides the command() method used for response policy lookup.
-// In miri-tests with mock-redis, this may appear unused due to mock implementations.
+// In miri-tests with mock-glide-core-engine, this may appear unused due to mock implementations.
 #[allow(unused_imports)]
 use redis::cluster_routing::Routable;
 use redis::cluster_routing::{
@@ -40,6 +40,7 @@ use std::str;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::sync::Condvar;
+use std::sync::atomic::AtomicU32;
 use std::{
     ffi::{CString, c_void},
     os::raw::{c_char, c_double, c_long, c_ulong},
@@ -47,6 +48,26 @@ use std::{
 use tokio::runtime::Builder;
 use tokio::runtime::Runtime;
 use uuid::Uuid;
+
+/// RAII guard that decrements the `is_blocking` counter when dropped.
+/// Ensures the counter is always decremented on every exit path from a blocking
+/// command dispatch (normal completion, early return, cancellation).
+#[cfg(feature = "pool-support")]
+struct UnmarkOnDrop(Option<Arc<AtomicU32>>);
+#[cfg(feature = "pool-support")]
+impl Drop for UnmarkOnDrop {
+    fn drop(&mut self) {
+        if let Some(arc) = self.0.take() {
+            // Atomic CAS decrement: avoids the TOCTOU window between load and fetch_sub.
+            // If count > 0, decrement atomically; if already 0, do nothing (no underflow).
+            let _ = arc.fetch_update(
+                std::sync::atomic::Ordering::AcqRel,
+                std::sync::atomic::Ordering::Acquire,
+                |v| if v > 0 { Some(v - 1) } else { None },
+            );
+        }
+    }
+}
 
 #[repr(C)]
 pub struct ScriptHashBuffer {
@@ -408,7 +429,7 @@ impl redis::AddressResolver for FFIAddressResolver {
         match std::str::from_utf8(&resolved_host_buf[..resolved_host_len]) {
             Ok(resolved_host) => (resolved_host.to_string(), resolved_port),
             Err(_) => {
-                logger_core::log_error_lazy!(
+                glide_logger::log_error_lazy!(
                     "address_resolver",
                     "Address resolver returned invalid UTF-8 for host, using original address"
                 );
@@ -1831,6 +1852,16 @@ fn parse_connection_url(input: &str) -> Option<url::Url> {
     redis::parse_redis_url(normalize_uri_scheme(input).as_ref())
 }
 
+fn decode_uri_str(encoded: &str, component: &str) -> Result<Option<String>, String> {
+    if encoded.is_empty() {
+        return Ok(None);
+    }
+    percent_encoding::percent_decode(encoded.as_bytes())
+        .decode_utf8()
+        .map(|decoded| Some(decoded.into_owned()))
+        .map_err(|_| format!("{component} in URI is not valid UTF-8"))
+}
+
 /// Internal function to parse URI and JSON options into a ConnectionRequest protobuf message.
 fn create_client_from_uri_internal(
     uri_str: *const c_char,
@@ -1863,29 +1894,14 @@ fn create_client_from_uri_internal(
     node_address.port = port;
     request.addresses.push(node_address);
 
-    // Extract authentication. `url::Url::password()` / `::username()` return the
-    // *percent-encoded* substring per RFC 3986 §3.2.1; the caller is expected
-    // to decode. Forwarding the encoded form as-is causes AUTH to fail whenever
-    // the password contains reserved characters (@, :, /, ?, #, %, +, space,
-    // non-ASCII) — see valkey-glide/issues/6659. This mirrors the decode step
-    // redis-rs itself performs at glide-core/redis-rs/redis/src/connection.rs:370,379.
-    if let Some(password) = url.password() {
+    // `url` returns userinfo percent-encoded; decode it or AUTH fails on reserved chars (#6659)
+    let username = decode_uri_str(url.username(), "Username")?;
+    let password = decode_uri_str(url.password().unwrap_or_default(), "Password")?;
+    // Either part alone is valid: password-only uses the default user; username-only is for IAM.
+    if username.is_some() || password.is_some() {
         let mut auth_info = connection_request::AuthenticationInfo::new();
-        auth_info.password = percent_encoding::percent_decode(password.as_bytes())
-            .decode_utf8()
-            .map_err(|_| "Password in URI is not valid UTF-8".to_string())?
-            .into_owned()
-            .into();
-
-        // Handle username if present
-        if !url.username().is_empty() {
-            auth_info.username = percent_encoding::percent_decode(url.username().as_bytes())
-                .decode_utf8()
-                .map_err(|_| "Username in URI is not valid UTF-8".to_string())?
-                .into_owned()
-                .into();
-        }
-
+        auth_info.username = username.unwrap_or_default().into();
+        auth_info.password = password.unwrap_or_default().into();
         request.authentication_info = ::protobuf::MessageField::some(auth_info);
     }
 
@@ -2072,6 +2088,104 @@ mod tests_create_client_from_uri_internal {
         let err = create_client_from_uri_internal(c_uri.as_ptr(), std::ptr::null())
             .expect_err("expected missing-host error");
         assert!(err.contains("URI missing host"), "unexpected error: {err}");
+    }
+
+    fn parse_uri_with_options(
+        uri: &str,
+        options_json: &str,
+    ) -> Result<connection_request::ConnectionRequest, String> {
+        let c_uri = CString::new(uri).unwrap();
+        let c_options = CString::new(options_json).unwrap();
+        create_client_from_uri_internal(c_uri.as_ptr(), c_options.as_ptr())
+    }
+
+    fn iam_options_json(refresh_interval_seconds: &str) -> String {
+        format!(
+            r#"{{"iam_credentials": {{"cluster_name": "my-cluster", "region": "us-east-1", "service_type": "ELASTICACHE", "refresh_interval_seconds": {refresh_interval_seconds}}}}}"#
+        )
+    }
+
+    #[test]
+    fn username_only_uri_keeps_username() {
+        let req = parse_uri("redis://iam-user@127.0.0.1:6379");
+        let auth = req.authentication_info.as_ref().expect("auth info missing");
+        assert_eq!(&*auth.username, "iam-user");
+        assert_eq!(&*auth.password, "");
+    }
+
+    #[test]
+    fn percent_encoded_username_only_is_decoded() {
+        let req = parse_uri("redis://us%3Aer@127.0.0.1:6379");
+        let auth = req.authentication_info.as_ref().expect("auth info missing");
+        assert_eq!(&*auth.username, "us:er");
+        assert_eq!(&*auth.password, "");
+    }
+
+    #[test]
+    fn invalid_utf8_in_username_only_returns_error() {
+        let c_uri = CString::new("redis://%C3%28@127.0.0.1:6379").unwrap();
+        let err = create_client_from_uri_internal(c_uri.as_ptr(), std::ptr::null())
+            .expect_err("expected UTF-8 error");
+        assert!(
+            err.contains("Username in URI is not valid UTF-8"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn empty_password_keeps_username() {
+        let req = parse_uri("redis://user:@127.0.0.1:6379");
+        let auth = req.authentication_info.as_ref().expect("auth info missing");
+        assert_eq!(&*auth.username, "user");
+        assert_eq!(&*auth.password, "");
+    }
+
+    #[test]
+    fn uri_without_userinfo_has_no_authentication_info() {
+        let req = parse_uri("redis://127.0.0.1:6379");
+        assert!(req.authentication_info.is_none());
+    }
+
+    #[test]
+    fn username_only_uri_with_iam_credentials_sets_both() {
+        let req =
+            parse_uri_with_options("redis://iam-user@127.0.0.1:6379", &iam_options_json("300"))
+                .unwrap_or_else(|e| panic!("failed to parse: {e}"));
+        let auth = req.authentication_info.as_ref().expect("auth info missing");
+        assert_eq!(&*auth.username, "iam-user");
+        assert_eq!(&*auth.password, "");
+        let iam = auth
+            .iam_credentials
+            .as_ref()
+            .expect("iam credentials missing");
+        assert_eq!(&*iam.cluster_name, "my-cluster");
+        assert_eq!(&*iam.region, "us-east-1");
+        assert_eq!(iam.refresh_interval_seconds, Some(300));
+    }
+
+    #[test]
+    fn zero_refresh_interval_is_preserved_for_core_validation() {
+        let req = parse_uri_with_options("redis://iam-user@127.0.0.1:6379", &iam_options_json("0"))
+            .unwrap_or_else(|e| panic!("failed to parse: {e}"));
+        let iam = req
+            .authentication_info
+            .as_ref()
+            .and_then(|auth| auth.iam_credentials.as_ref())
+            .expect("iam credentials missing");
+        assert_eq!(iam.refresh_interval_seconds, Some(0));
+    }
+
+    #[test]
+    fn refresh_interval_above_u32_max_is_rejected() {
+        let err = parse_uri_with_options(
+            "redis://iam-user@127.0.0.1:6379",
+            &iam_options_json("4294967296"),
+        )
+        .expect_err("expected refresh interval error");
+        assert!(
+            err.contains("refresh_interval_seconds must be a positive integer"),
+            "unexpected error: {err}"
+        );
     }
 }
 
@@ -2500,9 +2614,13 @@ fn apply_json_options(
         }
 
         if let Some(refresh_interval) = iam_obj.get("refresh_interval_seconds") {
-            let interval_val = refresh_interval.as_u64().ok_or_else(|| {
-                "iam_credentials.refresh_interval_seconds must be a positive integer".to_string()
-            })? as u32;
+            let interval_val = refresh_interval
+                .as_u64()
+                .and_then(|seconds| u32::try_from(seconds).ok()) // reject > u32::MAX
+                .ok_or_else(|| {
+                    "iam_credentials.refresh_interval_seconds must be a positive integer"
+                        .to_string()
+                })?;
             iam_creds.refresh_interval_seconds = Some(interval_val);
         }
 
@@ -3604,27 +3722,40 @@ unsafe fn execute_command(
         .map(|entry| *entry.value())
         .and_then(|(pool_id, client_id)| {
             glide_core::pool::refresh_client_activity(pool_id, client_id);
-            if glide_core::client::is_blocking_command(&cmd)
-                && glide_core::pool::mark_client_blocking(pool_id, client_id, true)
-            {
-                Some((pool_id, client_id))
+            if glide_core::client::is_blocking_command(&cmd) {
+                // Increment is_blocking counter via pre-fetched Arc — no pool mutex (#6971).
+                glide_core::pool::get_blocking_flag(client_id).map(|arc| {
+                    arc.fetch_add(1, std::sync::atomic::Ordering::Release);
+                    (pool_id, client_id, arc)
+                })
             } else {
                 None
             }
         });
     #[cfg(not(feature = "pool-support"))]
-    let blocking_flag: Option<(u64, u64)> = None;
+    let blocking_flag: Option<(u64, u64, std::sync::Arc<std::sync::atomic::AtomicU32>)> = None;
 
     client_adapter.execute_request_with_buffer(
         request_id,
         async move {
-            let result = client.send_command(&mut cmd, routing_info).await;
-            // Unmark blocking after command completes
+            // Guard arms immediately on task entry — flag was already set true before request.
+            // This ensures the flag is cleared on every exit path including task abort.
+            // UnmarkOnDrop(None) is a no-op for the non-blocking case.
             #[cfg(feature = "pool-support")]
-            if let Some((pool_id, client_id)) = blocking_flag {
-                glide_core::pool::mark_client_blocking(pool_id, client_id, false);
+            let _unmark_guard = blocking_flag
+                .as_ref()
+                .map(|(_, _, arc)| UnmarkOnDrop(Some(arc.clone())));
+            // No pool support — blocking flag guard not needed (blocking_flag is always None).
+            let result = client.send_command(&mut cmd, routing_info).await;
+            // Refresh activity BEFORE the UnmarkOnDrop guard fires so the abandon
+            // monitor never observes counter=0 with a stale borrowed_at.
+            // UnmarkOnDrop handles the counter decrement on all exit paths
+            // (normal completion, early return, task abort) — consistent with
+            // invoke_script and batch which use only the guard.
+            #[cfg(feature = "pool-support")]
+            if let Some((pool_id, client_id, _arc)) = blocking_flag {
+                glide_core::pool::refresh_client_activity(pool_id, client_id);
             }
-            let _ = blocking_flag; // suppress unused warning when pool-support disabled
             result
         },
         response_buffer,
@@ -4410,27 +4541,48 @@ pub unsafe extern "C-unwind" fn invoke_script(
     if let Some((pool_id, client_id)) = script_pool_ids {
         glide_core::pool::refresh_client_activity(pool_id, client_id);
     }
+    // Pre-fetch the blocking Arc so script execution can set is_blocking lock-free (#6971).
+    #[cfg(feature = "pool-support")]
+    let script_blocking_arc =
+        script_pool_ids.and_then(|(_, client_id)| glide_core::pool::get_blocking_flag(client_id));
     #[cfg(not(feature = "pool-support"))]
     let script_pool_ids: Option<(u64, u64)> = None;
+    #[cfg(not(feature = "pool-support"))]
+    let script_blocking_arc: Option<std::sync::Arc<std::sync::atomic::AtomicU32>> = None;
+
+    // Increment the blocking counter BEFORE spawning — on the synchronous caller's thread — so the
+    // abandon monitor cannot observe a window where the task is in-flight but the counter
+    // is still 0 (#6971).
+    // Conservative: mark blocking for the full batch/script duration regardless
+    // of whether the payload contains a blocking command.
+    #[cfg(feature = "pool-support")]
+    if let Some(ref arc) = script_blocking_arc {
+        arc.fetch_add(1, std::sync::atomic::Ordering::Release);
+    }
 
     client_adapter.execute_request(request_id, async move {
-        // Mark as blocking for duration of script execution
+        // RAII guard: ensures is_blocking counter is decremented on every exit path —
+        // routing errors (get_route ?), normal completion, or cancellation.
+        // Guard arms immediately on task entry — counter was already incremented before spawn.
         #[cfg(feature = "pool-support")]
-        if let Some((pool_id, client_id)) = script_pool_ids {
-            glide_core::pool::mark_client_blocking(pool_id, client_id, true);
-        }
+        let _unmark_guard = UnmarkOnDrop(script_blocking_arc.clone());
 
         let routing_info = get_route(route, None)?;
         let result = client
             .invoke_script(hash_str, &keys_vec, &args_vec, routing_info)
             .await;
 
-        // Unmark blocking after script completes
+        // Refresh activity timestamp so the abandon monitor does not
+        // reclaim this client immediately after a long blocking script.
+        // The RAII guard handles clearing the is_blocking flag on drop.
         #[cfg(feature = "pool-support")]
-        if let Some((pool_id, client_id)) = script_pool_ids {
-            glide_core::pool::mark_client_blocking(pool_id, client_id, false);
+        if script_blocking_arc.is_some()
+            && let Some((pool_id, client_id)) = script_pool_ids
+        {
+            glide_core::pool::refresh_client_activity(pool_id, client_id);
         }
         let _ = script_pool_ids;
+        let _ = script_blocking_arc;
 
         result
     })
@@ -4546,8 +4698,14 @@ pub unsafe extern "C" fn batch(
     if let Some((pool_id, client_id)) = batch_pool_ids {
         glide_core::pool::refresh_client_activity(pool_id, client_id);
     }
+    // Pre-fetch the blocking Arc so batch execution can set is_blocking lock-free (#6971).
+    #[cfg(feature = "pool-support")]
+    let batch_blocking_arc =
+        batch_pool_ids.and_then(|(_, client_id)| glide_core::pool::get_blocking_flag(client_id));
     #[cfg(not(feature = "pool-support"))]
     let batch_pool_ids: Option<(u64, u64)> = None;
+    #[cfg(not(feature = "pool-support"))]
+    let batch_blocking_arc: Option<std::sync::Arc<std::sync::atomic::AtomicU32>> = None;
 
     // Get compression manager for batch operations
     let compression_manager = client_adapter.core.client.compression_manager();
@@ -4577,12 +4735,22 @@ pub unsafe extern "C" fn batch(
 
     let (routing, timeout, pipeline_retry_strategy) = unsafe { get_pipeline_options(options_ptr) };
 
+    // Increment the blocking counter BEFORE spawning — on the synchronous caller's thread — so the
+    // abandon monitor cannot observe a window where the task is in-flight but the counter
+    // is still 0 (#6971).
+    // Conservative: mark blocking for the full batch/script duration regardless
+    // of whether the payload contains a blocking command.
+    #[cfg(feature = "pool-support")]
+    if let Some(ref arc) = batch_blocking_arc {
+        arc.fetch_add(1, std::sync::atomic::Ordering::Release);
+    }
+
     client_adapter.execute_request(callback_index, async move {
-        // Mark as blocking for duration of batch execution
+        // RAII guard: ensures is_blocking counter is decremented on every exit path —
+        // normal completion, decompression error, or cancellation.
+        // Guard arms immediately on task entry — counter was already incremented before spawn.
         #[cfg(feature = "pool-support")]
-        if let Some((pool_id, client_id)) = batch_pool_ids {
-            glide_core::pool::mark_client_blocking(pool_id, client_id, true);
-        }
+        let _unmark_guard = UnmarkOnDrop(batch_blocking_arc.clone());
 
         let result = if pipeline.is_atomic() {
             client
@@ -4600,12 +4768,17 @@ pub unsafe extern "C" fn batch(
                 .await
         };
 
-        // Unmark blocking after batch completes
+        // Refresh activity timestamp so the abandon monitor does not
+        // reclaim this client immediately after a long blocking batch.
+        // The RAII guard handles clearing the is_blocking flag on drop.
         #[cfg(feature = "pool-support")]
-        if let Some((pool_id, client_id)) = batch_pool_ids {
-            glide_core::pool::mark_client_blocking(pool_id, client_id, false);
+        if batch_blocking_arc.is_some()
+            && let Some((pool_id, client_id)) = batch_pool_ids
+        {
+            glide_core::pool::refresh_client_activity(pool_id, client_id);
         }
         let _ = batch_pool_ids;
+        let _ = batch_blocking_arc;
 
         // Process batch response for decompression if compression is enabled
         match result {
@@ -4821,7 +4994,7 @@ fn extract_command_name(request_type: RequestType, context: &str) -> Option<Stri
     let cmd = match request_type.get_command() {
         Some(cmd) => cmd,
         None => {
-            logger_core::log_error(
+            glide_logger::log_error(
                 "ffi_otel",
                 format!("{context}: RequestType has no command available"),
             );
@@ -4835,7 +5008,7 @@ fn extract_command_name(request_type: RequestType, context: &str) -> Option<Stri
         Some(bytes) => match std::str::from_utf8(bytes.as_slice()) {
             Ok(name) => name.to_owned(),
             Err(e) => {
-                logger_core::log_error(
+                glide_logger::log_error(
                     "ffi_otel",
                     format!("{context}: Command bytes are not valid UTF-8: {e}"),
                 );
@@ -4847,7 +5020,7 @@ fn extract_command_name(request_type: RequestType, context: &str) -> Option<Stri
 
     // Validate command name length (reasonable limit to prevent abuse)
     if command_name.len() > 256 {
-        logger_core::log_error(
+        glide_logger::log_error(
             "ffi_otel",
             format!(
                 "{context}: Command name too long ({} chars), max 256",
@@ -4874,7 +5047,7 @@ pub extern "C" fn create_otel_span(request_type: RequestType) -> u64 {
     let ptr = Arc::into_raw(arc);
     let span_ptr = ptr as u64;
 
-    logger_core::log_debug(
+    glide_logger::log_debug(
         "ffi_otel",
         format!(
             "create_otel_span: Successfully created span '{command_name}' with pointer 0x{span_ptr:x}",
@@ -4895,7 +5068,7 @@ pub extern "C" fn create_batch_otel_span() -> u64 {
     let ptr = Arc::into_raw(arc);
     let span_ptr = ptr as u64;
 
-    logger_core::log_debug(
+    glide_logger::log_debug(
         "ffi_otel",
         format!(
             "create_batch_otel_span: Successfully created batch span with pointer 0x{span_ptr:x}",
@@ -4955,7 +5128,7 @@ unsafe fn create_span_with_remote_context(
     let trace_id = match unsafe { required_c_str(trace_id, "trace_id") } {
         Ok(value) => value,
         Err(err) => {
-            logger_core::log_warn(
+            glide_logger::log_warn(
                 "ffi_otel",
                 format!("{function_name}: {err}. Creating independent span as fallback."),
             );
@@ -4966,7 +5139,7 @@ unsafe fn create_span_with_remote_context(
     let span_id = match unsafe { required_c_str(span_id, "span_id") } {
         Ok(value) => value,
         Err(err) => {
-            logger_core::log_warn(
+            glide_logger::log_warn(
                 "ffi_otel",
                 format!("{function_name}: {err}. Creating independent span as fallback."),
             );
@@ -4977,7 +5150,7 @@ unsafe fn create_span_with_remote_context(
     let trace_state = match unsafe { optional_c_str(trace_state, "trace_state") } {
         Ok(value) => value,
         Err(err) => {
-            logger_core::log_warn(
+            glide_logger::log_warn(
                 "ffi_otel",
                 format!("{function_name}: {err}. Creating independent span as fallback."),
             );
@@ -4994,7 +5167,7 @@ unsafe fn create_span_with_remote_context(
     ) {
         Ok(span) => span,
         Err(err) => {
-            logger_core::log_warn(
+            glide_logger::log_warn(
                 "ffi_otel",
                 format!(
                     "{function_name}: failed to create span with remote context: {err}. Creating independent span as fallback.",
@@ -5026,7 +5199,7 @@ pub unsafe extern "C" fn create_batch_otel_span_with_parent(parent_span_ptr: u64
 
     // Handle parent span pointer validation with graceful fallback
     if parent_span_ptr == 0 {
-        logger_core::log_warn(
+        glide_logger::log_warn(
             "ffi_otel",
             "create_batch_otel_span_with_parent: parent_span_ptr is null (0), creating independent batch span as fallback",
         );
@@ -5035,7 +5208,7 @@ pub unsafe extern "C" fn create_batch_otel_span_with_parent(parent_span_ptr: u64
         let arc = Arc::new(span);
         let ptr = Arc::into_raw(arc);
         let span_ptr = ptr as u64;
-        logger_core::log_debug(
+        glide_logger::log_debug(
             "ffi_otel",
             format!(
                 "create_batch_otel_span_with_parent: Created independent fallback batch span with pointer 0x{span_ptr:x}",
@@ -5051,7 +5224,7 @@ pub unsafe extern "C" fn create_batch_otel_span_with_parent(parent_span_ptr: u64
             match parent_span.add_span(command_name) {
                 Ok(child_span) => child_span,
                 Err(e) => {
-                    logger_core::log_warn(
+                    glide_logger::log_warn(
                         "ffi_otel",
                         format!(
                             "create_batch_otel_span_with_parent: Failed to create child batch span with parent 0x{parent_span_ptr:x}: {e}. Creating independent batch span as fallback.",
@@ -5063,7 +5236,7 @@ pub unsafe extern "C" fn create_batch_otel_span_with_parent(parent_span_ptr: u64
             }
         }
         Err(e) => {
-            logger_core::log_warn(
+            glide_logger::log_warn(
                 "ffi_otel",
                 format!(
                     "create_batch_otel_span_with_parent: Invalid parent span pointer 0x{parent_span_ptr:x}: {e}. Creating independent batch span as fallback.",
@@ -5079,7 +5252,7 @@ pub unsafe extern "C" fn create_batch_otel_span_with_parent(parent_span_ptr: u64
     let ptr = Arc::into_raw(arc);
     let span_ptr = ptr as u64;
 
-    logger_core::log_debug(
+    glide_logger::log_debug(
         "ffi_otel",
         format!(
             "create_batch_otel_span_with_parent: Successfully created batch span with parent 0x{parent_span_ptr:x}, child pointer 0x{span_ptr:x}",
@@ -5106,7 +5279,7 @@ pub unsafe extern "C" fn create_batch_otel_span_with_parent(parent_span_ptr: u64
 pub unsafe extern "C" fn create_named_otel_span(span_name: *const c_char) -> u64 {
     // Validate input pointer
     if span_name.is_null() {
-        logger_core::log_error(
+        glide_logger::log_error(
             "ffi_otel",
             "create_named_otel_span: span_name pointer is null",
         );
@@ -5119,7 +5292,7 @@ pub unsafe extern "C" fn create_named_otel_span(span_name: *const c_char) -> u64
     let name_str = match c_str.to_str() {
         Ok(s) => s,
         Err(e) => {
-            logger_core::log_error(
+            glide_logger::log_error(
                 "ffi_otel",
                 format!("create_named_otel_span: span_name is not valid UTF-8: {e}",),
             );
@@ -5130,7 +5303,7 @@ pub unsafe extern "C" fn create_named_otel_span(span_name: *const c_char) -> u64
     // Validate string length (reasonable limit to prevent abuse)
     // Note: Empty names are allowed as per test expectations
     if name_str.len() > 256 {
-        logger_core::log_error(
+        glide_logger::log_error(
             "ffi_otel",
             format!(
                 "create_named_otel_span: span_name too long ({} chars), max 256",
@@ -5145,7 +5318,7 @@ pub unsafe extern "C" fn create_named_otel_span(span_name: *const c_char) -> u64
         .chars()
         .any(|c| c.is_control() && c != '\t' && c != '\n' && c != '\r')
     {
-        logger_core::log_error(
+        glide_logger::log_error(
             "ffi_otel",
             "create_named_otel_span: span_name contains invalid control characters",
         );
@@ -5158,7 +5331,7 @@ pub unsafe extern "C" fn create_named_otel_span(span_name: *const c_char) -> u64
     let ptr = Arc::into_raw(arc);
     let span_ptr = ptr as u64;
 
-    logger_core::log_debug(
+    glide_logger::log_debug(
         "ffi_otel",
         format!(
             "create_named_otel_span: Successfully created named span '{name_str}' with pointer 0x{span_ptr:x}",
@@ -5192,7 +5365,7 @@ pub unsafe extern "C" fn create_otel_span_with_parent(
 
     // Handle parent span pointer validation with graceful fallback
     if parent_span_ptr == 0 {
-        logger_core::log_warn(
+        glide_logger::log_warn(
             "ffi_otel",
             "create_otel_span_with_parent: parent_span_ptr is null (0), creating independent span as fallback",
         );
@@ -5201,7 +5374,7 @@ pub unsafe extern "C" fn create_otel_span_with_parent(
         let arc = Arc::new(span);
         let ptr = Arc::into_raw(arc);
         let span_ptr = ptr as u64;
-        logger_core::log_debug(
+        glide_logger::log_debug(
             "ffi_otel",
             format!(
                 "create_otel_span_with_parent: Created independent fallback span '{command_name}' with pointer 0x{span_ptr:x}",
@@ -5217,7 +5390,7 @@ pub unsafe extern "C" fn create_otel_span_with_parent(
             match parent_span.add_span(&command_name) {
                 Ok(child_span) => child_span,
                 Err(e) => {
-                    logger_core::log_warn(
+                    glide_logger::log_warn(
                         "ffi_otel",
                         format!(
                             "create_otel_span_with_parent: Failed to create child span '{command_name}' with parent 0x{parent_span_ptr:x}: {e}. Creating independent span as fallback.",
@@ -5229,7 +5402,7 @@ pub unsafe extern "C" fn create_otel_span_with_parent(
             }
         }
         Err(e) => {
-            logger_core::log_warn(
+            glide_logger::log_warn(
                 "ffi_otel",
                 format!(
                     "create_otel_span_with_parent: Invalid parent span pointer 0x{parent_span_ptr:x}: {e}. Creating independent span as fallback.",
@@ -5245,7 +5418,7 @@ pub unsafe extern "C" fn create_otel_span_with_parent(
     let ptr = Arc::into_raw(arc);
     let span_ptr = ptr as u64;
 
-    logger_core::log_debug(
+    glide_logger::log_debug(
         "ffi_otel",
         format!(
             "create_otel_span_with_parent: Successfully created span '{command_name}' with parent 0x{parent_span_ptr:x}, child pointer 0x{span_ptr:x}",
@@ -5321,13 +5494,13 @@ pub unsafe extern "C" fn create_batch_otel_span_with_trace_context(
 pub unsafe extern "C" fn drop_otel_span(span_ptr: u64) {
     // Validate span pointer
     if span_ptr == 0 {
-        logger_core::log_debug("ffi_otel", "drop_otel_span: Ignoring null span pointer (0)");
+        glide_logger::log_debug("ffi_otel", "drop_otel_span: Ignoring null span pointer (0)");
         return;
     }
 
     // Validate pointer alignment and bounds (basic safety checks)
     if !span_ptr.is_multiple_of(8) {
-        logger_core::log_error(
+        glide_logger::log_error(
             "ffi_otel",
             format!("drop_otel_span: Invalid span pointer - misaligned: 0x{span_ptr:x}",),
         );
@@ -5339,7 +5512,7 @@ pub unsafe extern "C" fn drop_otel_span(span_ptr: u64) {
     const MAX_VALID_ADDRESS: u64 = 0x7FFF_FFFF_FFFF_FFF8; // Max user space on most 64-bit systems
 
     if span_ptr < MIN_VALID_ADDRESS {
-        logger_core::log_error(
+        glide_logger::log_error(
             "ffi_otel",
             format!("drop_otel_span: Invalid span pointer - address too low: 0x{span_ptr:x}",),
         );
@@ -5347,7 +5520,7 @@ pub unsafe extern "C" fn drop_otel_span(span_ptr: u64) {
     }
 
     if span_ptr > MAX_VALID_ADDRESS {
-        logger_core::log_error(
+        glide_logger::log_error(
             "ffi_otel",
             format!("drop_otel_span: Invalid span pointer - address too high: 0x{span_ptr:x}",),
         );
@@ -5363,7 +5536,7 @@ pub unsafe extern "C" fn drop_otel_span(span_ptr: u64) {
 
         match result {
             Ok(_) => {
-                logger_core::log_debug(
+                glide_logger::log_debug(
                     "ffi_otel",
                     format!(
                         "drop_otel_span: Successfully dropped span with pointer 0x{span_ptr:x}",
@@ -5371,7 +5544,7 @@ pub unsafe extern "C" fn drop_otel_span(span_ptr: u64) {
                 );
             }
             Err(_) => {
-                logger_core::log_error(
+                glide_logger::log_error(
                     "ffi_otel",
                     format!(
                         "drop_otel_span: Panic occurred while dropping span pointer 0x{span_ptr:x} - likely invalid pointer",
@@ -5596,28 +5769,28 @@ pub enum Level {
     OFF = 5,
 }
 
-impl From<logger_core::Level> for Level {
-    fn from(level: logger_core::Level) -> Self {
+impl From<glide_logger::Level> for Level {
+    fn from(level: glide_logger::Level) -> Self {
         match level {
-            logger_core::Level::Error => Level::ERROR,
-            logger_core::Level::Warn => Level::WARN,
-            logger_core::Level::Info => Level::INFO,
-            logger_core::Level::Debug => Level::DEBUG,
-            logger_core::Level::Trace => Level::TRACE,
-            logger_core::Level::Off => Level::OFF,
+            glide_logger::Level::Error => Level::ERROR,
+            glide_logger::Level::Warn => Level::WARN,
+            glide_logger::Level::Info => Level::INFO,
+            glide_logger::Level::Debug => Level::DEBUG,
+            glide_logger::Level::Trace => Level::TRACE,
+            glide_logger::Level::Off => Level::OFF,
         }
     }
 }
 
-impl From<Level> for logger_core::Level {
+impl From<Level> for glide_logger::Level {
     fn from(level: Level) -> Self {
         match level {
-            Level::ERROR => logger_core::Level::Error,
-            Level::WARN => logger_core::Level::Warn,
-            Level::INFO => logger_core::Level::Info,
-            Level::DEBUG => logger_core::Level::Debug,
-            Level::TRACE => logger_core::Level::Trace,
-            Level::OFF => logger_core::Level::Off,
+            Level::ERROR => glide_logger::Level::Error,
+            Level::WARN => glide_logger::Level::Warn,
+            Level::INFO => glide_logger::Level::Info,
+            Level::DEBUG => glide_logger::Level::Debug,
+            Level::TRACE => glide_logger::Level::Trace,
+            Level::OFF => glide_logger::Level::Off,
         }
     }
 }
@@ -5673,7 +5846,7 @@ pub unsafe extern "C" fn glide_log(
         }
     };
 
-    logger_core::log(level.into(), id_str, msg_str);
+    glide_logger::log(level.into(), id_str, msg_str);
 
     Box::into_raw(Box::new(LogResult {
         log_error: std::ptr::null_mut(),
@@ -5731,7 +5904,7 @@ pub unsafe extern "C" fn init(level: *const Level, file_name: *const c_char) -> 
         }
     };
 
-    let logger_level = logger_core::init(level_option, file_name_option);
+    let logger_level = glide_logger::init(level_option, file_name_option);
 
     Box::into_raw(Box::new(LogResult {
         log_error: std::ptr::null_mut(),

@@ -1016,16 +1016,17 @@ dependencies = [
  "dashmap",
  "futures",
  "futures-intrusive",
+ "glide-core-engine",
+ "glide-logger",
+ "glide-telemetry",
  "http 1.4.0",
  "libc",
- "logger_core",
  "lz4",
  "nanoid",
  "once_cell",
  "protobuf",
  "protobuf-codegen",
  "rand 0.8.6",
- "redis",
  "regex",
  "rustls",
  "rustls-pki-types",
@@ -1035,7 +1036,6 @@ dependencies = [
  "sha2",
  "strum",
  "strum_macros",
- "telemetrylib",
  "thiserror 2.0.18",
  "tokio",
  "tokio-retry2 0.6.2",
@@ -1046,6 +1046,55 @@ dependencies = [
 ]
 
 [[package]]
+name = "glide-core-engine"
+version = "0.1.0"
+dependencies = [
+ "arc-swap",
+ "async-trait",
+ "bytes",
+ "combine",
+ "crc16",
+ "dashmap",
+ "dispose",
+ "futures",
+ "futures-util",
+ "glide-logger",
+ "glide-telemetry",
+ "itoa",
+ "lazy_static",
+ "lru",
+ "num-bigint",
+ "parking_lot",
+ "percent-encoding",
+ "pin-project-lite",
+ "rand 0.9.4",
+ "rustls",
+ "rustls-pki-types",
+ "rustls-platform-verifier",
+ "ryu",
+ "socket2",
+ "strum",
+ "strum_macros",
+ "tokio",
+ "tokio-retry2 0.5.8",
+ "tokio-rustls",
+ "tokio-util",
+ "tracing",
+ "url",
+]
+
+[[package]]
+name = "glide-logger"
+version = "0.1.0"
+dependencies = [
+ "file-rotate",
+ "once_cell",
+ "tracing",
+ "tracing-appender",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "glide-rs"
 version = "0.1.0"
 dependencies = [
@@ -1053,19 +1102,37 @@ dependencies = [
  "bytes",
  "dashmap",
  "glide-core",
+ "glide-core-engine",
+ "glide-logger",
+ "glide-telemetry",
  "jni 0.21.1",
  "log",
- "logger_core",
  "parking_lot",
  "protobuf",
- "redis",
  "scopeguard",
  "serde",
  "serde_json",
- "telemetrylib",
  "tokio",
  "tracing",
  "tracing-subscriber",
+]
+
+[[package]]
+name = "glide-telemetry"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "glide-logger",
+ "lazy_static",
+ "once_cell",
+ "opentelemetry",
+ "opentelemetry-otlp",
+ "opentelemetry_sdk",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
+ "url",
 ]
 
 [[package]]
@@ -1610,17 +1677,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f9f8bd3e56ce4dfc153cf470fffbfa98c7620958b312ca5c3a4b8d5181fd13c6"
 
 [[package]]
-name = "logger_core"
-version = "0.1.0"
-dependencies = [
- "file-rotate",
- "once_cell",
- "tracing",
- "tracing-appender",
- "tracing-subscriber",
-]
-
-[[package]]
 name = "lru"
 version = "0.18.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2157,44 +2213,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "redis"
-version = "0.25.2"
-dependencies = [
- "arc-swap",
- "async-trait",
- "bytes",
- "combine",
- "crc16",
- "dashmap",
- "dispose",
- "futures",
- "futures-util",
- "itoa",
- "lazy_static",
- "logger_core",
- "lru",
- "num-bigint",
- "parking_lot",
- "percent-encoding",
- "pin-project-lite",
- "rand 0.9.4",
- "rustls",
- "rustls-pki-types",
- "rustls-platform-verifier",
- "ryu",
- "socket2",
- "strum",
- "strum_macros",
- "telemetrylib",
- "tokio",
- "tokio-retry2 0.5.8",
- "tokio-rustls",
- "tokio-util",
- "tracing",
- "url",
-]
-
-[[package]]
 name = "redox_syscall"
 version = "0.5.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2674,24 +2692,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.117",
-]
-
-[[package]]
-name = "telemetrylib"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "lazy_static",
- "logger_core",
- "once_cell",
- "opentelemetry",
- "opentelemetry-otlp",
- "opentelemetry_sdk",
- "serde",
- "serde_json",
- "thiserror 2.0.18",
- "tokio",
- "url",
 ]
 
 [[package]]

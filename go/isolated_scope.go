@@ -275,6 +275,11 @@ func (client *Client) ScopedConnection(ctx context.Context, timeout time.Duratio
 	deadline := time.Now().Add(timeout)
 	backoff := 10 * time.Millisecond
 
+	// One logical acquire: mint a single attempt token and pass it on every retry
+	// poll, so the core dedupes this acquire's retries to one in-flight creation
+	// while distinct concurrent acquires each dial their own.
+	attemptToken := C.glide_scope_next_attempt_token()
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -287,6 +292,7 @@ func (client *Client) ScopedConnection(ctx context.Context, timeout time.Duratio
 			(*C.uint8_t)(unsafe.Pointer(&connReqBytes[0])),
 			C.uintptr_t(len(connReqBytes)),
 			C.uint16_t(routingSlot),
+			attemptToken,
 		)
 
 		if scopeID >= 0 {
@@ -374,6 +380,11 @@ func (client *ClusterClient) ScopedConnection(
 	deadline := time.Now().Add(timeout)
 	backoff := 10 * time.Millisecond
 
+	// One logical acquire: mint a single attempt token and pass it on every retry
+	// poll, so the core dedupes this acquire's retries to one in-flight creation
+	// while distinct concurrent acquires each dial their own.
+	attemptToken := C.glide_scope_next_attempt_token()
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -386,6 +397,7 @@ func (client *ClusterClient) ScopedConnection(
 			(*C.uint8_t)(unsafe.Pointer(&connReqBytes[0])),
 			C.uintptr_t(len(connReqBytes)),
 			C.uint16_t(routingSlot),
+			attemptToken,
 		)
 
 		if scopeID >= 0 {

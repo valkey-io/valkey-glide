@@ -148,7 +148,7 @@ fn push_to_message(push: PushInfo) -> Option<PubSubMessage> {
     })();
 
     if message.is_none() {
-        logger_core::log_warn(
+        glide_logger::log_warn(
             "pubsub",
             format!("skipping malformed {kind:?} push: missing or non-string channel/payload"),
         );

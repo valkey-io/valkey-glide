@@ -1109,7 +1109,7 @@ pub(crate) mod shared_client_tests {
                 Ok(mut client) => {
                     // Test initial connection
 
-                    use logger_core::log_info;
+                    use glide_logger::log_info;
                     assert_connected(&mut client).await;
 
                     // Change to 900
@@ -1561,21 +1561,30 @@ pub(crate) mod shared_client_tests {
             glide_core::scope::register_client(client_id, client.clone());
             let pool = glide_core::pool::get_or_create_scope_pool(client_id, bytes.clone());
 
-            // Reserve capacity, then synchronously seat one idle connection. This
-            // mirrors the reserve-before-create contract that `try_acquire_scope`
-            // relies on: `create_scope_connection` only decrements on failure.
-            pool.lock()
-                .await
-                .total_count
-                .fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+            // Resolve the target, then reserve via try_acquire (the
+            // reserve-before-create contract) to get the guard; seating the
+            // connection commits it.
             let target = glide_core::scope::resolve_scope_target(Some(&client), routing_slot)
                 .await
                 .expect("slot owner resolvable against live topology");
+            let reservation = {
+                let mut guard = pool.lock().await;
+                match guard.try_acquire(
+                    glide_core::pool::get_scope_registry(),
+                    target.clone(),
+                    client.current_database(),
+                    glide_core::pool::next_scope_attempt_token(),
+                ) {
+                    glide_core::pool::ScopeAcquire::Reserved(reservation) => reservation,
+                    other => panic!("expected a fresh reservation from an empty pool: {other:?}"),
+                }
+            };
             glide_core::scope::create_scope_connection(
                 pool.clone(),
                 Some(&client),
                 &bytes,
                 target.clone(),
+                reservation,
             )
             .await;
 
@@ -1585,6 +1594,7 @@ pub(crate) mod shared_client_tests {
                     glide_core::pool::get_scope_registry(),
                     target,
                     client.current_database(),
+                    glide_core::pool::next_scope_attempt_token(),
                 ) {
                     glide_core::pool::ScopeAcquire::Reused(scope_id) => scope_id,
                     other => panic!("failed to acquire scope (connection not seated): {other:?}"),
@@ -1632,10 +1642,18 @@ pub(crate) mod shared_client_tests {
         timeout: std::time::Duration,
     ) -> Option<u64> {
         let runtime = tokio::runtime::Handle::current();
+        // One logical acquire — mint the token once and reuse it on every poll,
+        // as a production binding's acquire() does.
+        let attempt_token = glide_core::pool::next_scope_attempt_token();
         let deadline = std::time::Instant::now() + timeout;
         while std::time::Instant::now() < deadline {
-            let result =
-                glide_core::scope::try_acquire_scope(client_id, bytes.to_vec(), &runtime, 0);
+            let result = glide_core::scope::try_acquire_scope(
+                client_id,
+                bytes.to_vec(),
+                &runtime,
+                0,
+                attempt_token,
+            );
             if result >= 0 {
                 return Some(result as u64);
             }
@@ -4566,11 +4584,18 @@ pub(crate) mod shared_client_tests {
             scope::register_client(client_id, client.clone());
 
             let runtime = tokio::runtime::Handle::current();
+            // One logical acquire — one stable token across the retry loop.
+            let attempt_token = glide_core::pool::next_scope_attempt_token();
             let scope_id = retry(|| {
                 let connection_request_bytes = connection_request_bytes.clone();
                 async {
-                    let result =
-                        scope::try_acquire_scope(client_id, connection_request_bytes, &runtime, 0);
+                    let result = scope::try_acquire_scope(
+                        client_id,
+                        connection_request_bytes,
+                        &runtime,
+                        0,
+                        attempt_token,
+                    );
                     if result >= 0 { Some(result) } else { None }
                 }
             })

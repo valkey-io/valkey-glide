@@ -16,9 +16,7 @@ matrix_test!(zadd_incr_conditional_increment, c, {
 });
 
 matrix_test!(zrank_withscore_variants, c, {
-    if common::version_below(&c, (7, 2, 0)).await {
-        return;
-    }
+    skip_if_version_below!(c, 7, 2, 0);
     let k = common::key("rest_zr");
     let _: () = c
         .zadd_multiple(&k, &[(1.0, "a"), (2.0, "b")])

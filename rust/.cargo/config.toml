@@ -1,0 +1,4 @@
+[alias]
+unit-tests = "test --lib"
+doc-tests = "test --doc"
+integration-tests = "test --test it_*"

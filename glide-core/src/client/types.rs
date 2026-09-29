@@ -1,7 +1,7 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 #[allow(unused_imports)]
-use logger_core::log_warn;
+use glide_logger::log_warn;
 use redis::AddressResolver;
 use redis::cache::EvictionPolicy;
 #[allow(unused_imports)]

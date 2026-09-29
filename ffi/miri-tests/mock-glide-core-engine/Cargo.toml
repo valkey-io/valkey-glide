@@ -1,0 +1,21 @@
+[package]
+name = "mock-glide-core-engine"
+version = "0.0.0"
+authors = ["Valkey GLIDE Maintainers"]
+license = "Apache-2.0"
+publish = false
+
+# TODO #7175: Specify rust-version
+edition = "2024"
+
+[dependencies]
+
+# Mock crates for testing
+glide-telemetry = { path = "../mock-glide-telemetry", package = "mock-glide-telemetry" }
+
+# GLIDE dependencies
+glide-core-engine = { path = "../../../glide-core/redis-rs/redis", features = ["aio", "tokio-comp", "tokio-rustls-comp"] }
+
+# External dependencies
+bytes = "1"
+url = "2"

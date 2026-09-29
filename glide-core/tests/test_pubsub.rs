@@ -93,7 +93,7 @@ fn test_sharded_subscriptions_survive_slot_migrations(#[case] num_channels: usiz
             PubSubSubscriptionKind::Sharded,
         );
 
-        logger_core::log_debug(
+        glide_logger::log_debug(
             LOG_PREFIX,
             format!(
                 "Subscription address changes: {} changed, {} unchanged, {} not found",
@@ -181,7 +181,7 @@ fn test_exact_subscriptions_survive_slot_migrations(#[case] num_channels: usize)
             PubSubSubscriptionKind::Exact,
         );
 
-        logger_core::log_info(
+        glide_logger::log_info(
             LOG_PREFIX,
             format!(
                 "Subscription address changes: {} changed, {} unchanged, {} not found",
@@ -269,7 +269,7 @@ fn test_pattern_subscriptions_survive_slot_migrations(#[case] num_patterns: usiz
             PubSubSubscriptionKind::Pattern,
         );
 
-        logger_core::log_info(
+        glide_logger::log_info(
             LOG_PREFIX,
             format!(
                 "Subscription address changes: {} changed, {} unchanged, {} not found",
@@ -570,7 +570,7 @@ fn test_all_subscription_types_survive_failover() {
         );
         let replica = replicas[0];
 
-        logger_core::log_info(
+        glide_logger::log_info(
             LOG_PREFIX,
             format!(
                 "Channels hash to slot {}. Primary {}:{} with replica {}:{}",
@@ -670,7 +670,7 @@ fn test_all_subscription_types_survive_failover() {
         assert_eq!(pattern_changed, 1, "Pattern subscription should have moved");
         assert_eq!(sharded_changed, 1, "Sharded subscription should have moved");
 
-        logger_core::log_info(
+        glide_logger::log_info(
             LOG_PREFIX,
             "Test completed: all subscription types survived failover",
         );
