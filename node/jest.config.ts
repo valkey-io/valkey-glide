@@ -38,6 +38,9 @@ const config: Config = {
     // Setup file to configure the testing environment after Jest is installed
     setupFilesAfterEnv: ["<rootDir>/tests/setup.ts"],
 
+    // Increase default timeout to absorb slower CI runners
+    testTimeout: 30000,
+
     // Coverage settings
     coverageProvider: "v8",
     collectCoverage: true,

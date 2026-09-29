@@ -392,7 +392,7 @@ This section explains how the `valkey-glide` (async client) and `valkey-glide-sy
    This includes:
    - ffi
    - glide-core
-   - logger_core
+   - glide-logger
    - glide_shared (Python module)
 
    Vendoring ensures that all dependencies are self-contained within the package at build time, which is required for reproducible builds and compatibility with tools like cibuildwheel.
@@ -406,7 +406,7 @@ This section explains how the `valkey-glide` (async client) and `valkey-glide-sy
 3. **Multiplatform packaging for PyPI**
    To support building wheels for multiple platforms (Linux, macOS, and different Python versions), we use the [`cibuildwheel`](https://github.com/pypa/cibuildwheel) tool.
    This tool installs all required Python versions and runs the build inside isolated Docker containers (e.g., manylinux2014).
-   Because the sync client depends on external Rust code (`glide-core`, `ffi`, `logger_core`), we run `cibuildwheel` from the **project root** and specify `python/glide-sync` as the build target.
+   Because the sync client depends on external Rust code (`glide-core`, `ffi`, `glide-logger`), we run `cibuildwheel` from the **project root** and specify `python/glide-sync` as the build target.
    This allows the tool to copy the full project context into the container.
 
 4. **Local testing**

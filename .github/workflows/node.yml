@@ -1,4 +1,4 @@
-name: Node
+name: Node client CI
 
 permissions:
     contents: read
@@ -70,6 +70,10 @@ on:
                 description: "Use self-hosted runners for Linux x64"
                 type: boolean
                 default: false
+        secrets:
+            AWS_CODEBUILD_ROLE_ARN:
+                description: "AWS IAM role ARN for CodeBuild (used by test-windows job)"
+                required: false
 
 concurrency:
     group: node-${{ github.head_ref || github.ref }}-${{ toJson(inputs) }}
@@ -91,7 +95,7 @@ jobs:
             version-matrix-output: ${{ steps.get-matrices.outputs.version-matrix-output }}
 
         steps:
-            - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
             - id: get-matrices
               uses: ./.github/workflows/create-test-matrices
               with:
@@ -122,7 +126,7 @@ jobs:
                 host: ${{ fromJson(needs.get-matrices.outputs.host-matrix-output) }}
                 node: ${{ fromJson(needs.get-matrices.outputs.version-matrix-output) }}
         steps:
-            - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
             - name: Output Matrix Parameters for this job
               run: |
@@ -140,11 +144,11 @@ jobs:
 
             # Setup Node.js
             - name: Setup Node
-              uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+              uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
               with:
                   node-version: ${{ matrix.node }}
 
-            - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+            - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
               with:
                   path: |
                       node/rust-client/target
@@ -194,7 +198,7 @@ jobs:
         runs-on: ubuntu-latest
         timeout-minutes: 25
         steps:
-            - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
             - name: Output job information
               run: |
@@ -214,11 +218,11 @@ jobs:
 
             # Setup Node.js
             - name: Setup Node
-              uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+              uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
               with:
                   node-version: 26.x
 
-            - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+            - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
               with:
                   path: |
                       node/rust-client/target
@@ -311,7 +315,7 @@ jobs:
         timeout-minutes: 15
         runs-on: ubuntu-latest
         steps:
-            - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
             - name: lint node rust
               uses: ./.github/workflows/lint-rust
@@ -328,7 +332,7 @@ jobs:
             version-matrix-output: ${{ steps.get-matrices.outputs.version-matrix-output }}
 
         steps:
-            - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
             - id: get-matrices
               uses: ./.github/workflows/create-test-matrices
               with:
@@ -368,7 +372,7 @@ jobs:
               run: mkdir -p $GITHUB_WORKSPACE
 
             - name: Checkout code
-              uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
               with:
                   fetch-depth: 0
 
@@ -396,11 +400,11 @@ jobs:
                   echo "Current PATH: $PATH"
 
             - name: Setup Node
-              uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+              uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
               with:
                   node-version: ${{ matrix.node }}
 
-            - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+            - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
               with:
                   path: |
                       node/rust-client/target
@@ -445,3 +449,123 @@ jobs:
                       node/test-report*.html
                       utils/clusters/**
                       benchmarks/results/**
+
+    test-windows:
+        name: Test Windows (x86_64-pc-windows-msvc) via CodeBuild
+        runs-on: ubuntu-latest
+        # AWS_ACTIONS environment requires manual approval from a maintainer,
+        # acting as the gate for real AWS resource usage (EC2, S3, CodeBuild).
+        environment: AWS_ACTIONS
+        permissions:
+            id-token: write
+            contents: read
+        timeout-minutes: 120
+        steps:
+            - name: Configure AWS credentials
+              uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4
+              with:
+                  role-to-assume: ${{ secrets.AWS_CODEBUILD_ROLE_ARN }}
+                  aws-region: us-east-1
+                  role-duration-seconds: 7200
+
+            - name: Trigger CodeBuild
+              shell: bash
+              env:
+                  PROJECT_NAME: GlideNodeWindows
+              run: |
+                  echo "Starting CodeBuild project ${PROJECT_NAME}..."
+                  BUILD_ID=$(aws codebuild start-build \
+                    --project-name "${PROJECT_NAME}" \
+                    --source-version "${{ github.event.pull_request.head.sha || github.sha }}" \
+                    --environment-variables-override name=GHA_RUN_ID,value=${GITHUB_RUN_ID},type=PLAINTEXT \
+                    --query 'build.id' \
+                    --output text)
+                  echo "Build started: ${BUILD_ID}"
+                  echo "CODEBUILD_BUILD_ID=${BUILD_ID}" >> "$GITHUB_ENV"
+
+            - name: Poll CodeBuild for completion
+              shell: bash
+              run: |
+                  echo "Polling for build completion (max 90 min)..."
+                  POLL_START=$(date +%s)
+                  MAX_POLL_SECONDS=5400
+                  while true; do
+                    if (( $(date +%s) - POLL_START > MAX_POLL_SECONDS )); then
+                      echo "::error::CodeBuild polling timed out after ${MAX_POLL_SECONDS}s. Build ID: ${CODEBUILD_BUILD_ID}"
+                      exit 1
+                    fi
+                    STATUS=$(aws codebuild batch-get-builds \
+                      --ids "${CODEBUILD_BUILD_ID}" \
+                      --query 'builds[0].buildStatus' \
+                      --output text)
+                    echo "  Status: ${STATUS}"
+                    case "${STATUS}" in
+                      SUCCEEDED)
+                        echo "CodeBuild succeeded."
+                        break
+                        ;;
+                      FAILED|FAULT|STOPPED|TIMED_OUT)
+                        echo "::error::CodeBuild build ${CODEBUILD_BUILD_ID} finished with status: ${STATUS}"
+                        exit 1
+                        ;;
+                      IN_PROGRESS)
+                        sleep 30
+                        ;;
+                      *)
+                        echo "Unexpected status '${STATUS}', continuing to poll..."
+                        sleep 30
+                        ;;
+                    esac
+                  done
+
+            - name: Download Windows test report
+              if: always()
+              shell: bash
+              env:
+                  REPORT_BUCKET: valkey-glide-win
+              run: |
+                  if [[ -z "${CODEBUILD_BUILD_ID}" ]]; then
+                    echo "No CodeBuild build ID available, skipping report download."
+                    exit 0
+                  fi
+                  BUILD_ID="${CODEBUILD_BUILD_ID}"
+                  ARTIFACT_URL=$(aws codebuild batch-get-builds \
+                    --ids "${BUILD_ID}" \
+                    --query 'builds[0].artifacts.location' \
+                    --output text 2>/dev/null || true)
+                  echo "CodeBuild artifact location: ${ARTIFACT_URL}"
+                  if [[ -n "${ARTIFACT_URL}" && "${ARTIFACT_URL}" != "None" ]]; then
+                    if [[ "${ARTIFACT_URL}" == arn:aws:s3:::* ]]; then
+                      S3_URI="s3://${ARTIFACT_URL#arn:aws:s3:::}"
+                    else
+                      S3_URI="${ARTIFACT_URL}"
+                    fi
+                    echo "Downloading report from ${S3_URI}"
+                    aws s3 cp "${S3_URI}/test-report.html" ./test-report-windows.html \
+                      || aws s3 cp "${S3_URI}" ./test-report-windows.html \
+                      || aws s3 cp "s3://${REPORT_BUCKET}/${BUILD_ID}/test-report.html" ./test-report-windows.html \
+                      || echo "Warning: could not download test report from S3 path ${S3_URI}"
+                  else
+                    aws s3 cp "s3://${REPORT_BUCKET}/${BUILD_ID}/test-report.html" ./test-report-windows.html \
+                      || echo "Warning: could not download test report from S3"
+                  fi
+
+            - name: Stop CodeBuild on cancellation
+              if: cancelled()
+              shell: bash
+              env:
+                  PROJECT_NAME: GlideNodeWindows
+              run: |
+                  if [[ -n "${CODEBUILD_BUILD_ID}" ]]; then
+                    echo "Job cancelled - stopping CodeBuild build ${CODEBUILD_BUILD_ID}"
+                    aws codebuild stop-build --id "${CODEBUILD_BUILD_ID}" || true
+                  fi
+
+            - name: Upload Windows test report
+              if: always()
+              continue-on-error: true
+              uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+              with:
+                  name: node-test-report-windows-${{ github.run_id }}
+                  path: test-report-windows.html
+                  if-no-files-found: ignore

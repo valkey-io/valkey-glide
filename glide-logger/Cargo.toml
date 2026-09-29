@@ -1,0 +1,23 @@
+[package]
+name = "glide-logger"
+version = "0.1.0"
+description = "Logging for Valkey GLIDE. This crate isn't intended to be used directly."
+authors = ["Valkey GLIDE Maintainers"]
+license = "Apache-2.0"
+
+# TODO #7175: Specify rust-version
+edition = "2024"
+
+[lib]
+
+[dependencies]
+file-rotate = "0.8.0"
+once_cell = "1.16.0"
+tracing = "0.1"
+tracing-appender = { version = "0.2.3", default-features = false }
+tracing-subscriber = "0.3.17"
+
+[dev-dependencies]
+rand = "0.8.5"
+test-env-helpers = "0.2.2"
+

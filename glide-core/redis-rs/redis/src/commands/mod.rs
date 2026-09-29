@@ -154,15 +154,7 @@ implement_commands! {
 
     /// Get the value of a key and set expiration
     fn get_ex<K: ToRedisArgs>(key: K, expire_at: Expiry) {
-        let (option, time_arg) = match expire_at {
-            Expiry::EX(sec) => ("EX", Some(sec)),
-            Expiry::PX(ms) => ("PX", Some(ms)),
-            Expiry::EXAT(timestamp_sec) => ("EXAT", Some(timestamp_sec)),
-            Expiry::PXAT(timestamp_ms) => ("PXAT", Some(timestamp_ms)),
-            Expiry::PERSIST => ("PERSIST", None),
-        };
-
-        cmd("GETEX").arg(key).arg(option).arg(time_arg)
+        cmd("GETEX").arg(key).arg(expire_at)
     }
 
     /// Get the value of a key and delete it
@@ -1150,27 +1142,7 @@ impl ToRedisArgs for SetOptions {
             out.write_arg(b"GET");
         }
         if let Some(ref expiration) = self.expiration {
-            match expiration {
-                SetExpiry::EX(secs) => {
-                    out.write_arg(b"EX");
-                    out.write_arg(format!("{secs}").as_bytes());
-                }
-                SetExpiry::PX(millis) => {
-                    out.write_arg(b"PX");
-                    out.write_arg(format!("{millis}").as_bytes());
-                }
-                SetExpiry::EXAT(unix_time) => {
-                    out.write_arg(b"EXAT");
-                    out.write_arg(format!("{unix_time}").as_bytes());
-                }
-                SetExpiry::PXAT(unix_time) => {
-                    out.write_arg(b"PXAT");
-                    out.write_arg(format!("{unix_time}").as_bytes());
-                }
-                SetExpiry::KEEPTTL => {
-                    out.write_arg(b"KEEPTTL");
-                }
-            }
+            expiration.write_redis_args(out);
         }
     }
 }

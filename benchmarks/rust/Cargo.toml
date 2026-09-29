@@ -1,25 +1,30 @@
 [package]
 name = "rust-benchmark"
-version = "0.1.0"
-edition = "2024"
-license = "Apache 2.0"
+version = "0.0.0"
 authors = ["Valkey GLIDE Maintainers"]
+license = "Apache-2.0"
+publish = false
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+# TODO #7175: Specify rust-version
+edition = "2024"
 
 [dependencies]
-tokio = { version = "1", features = ["macros", "time", "rt-multi-thread"] }
+
+# GLIDE dependencies
+glide-logger = { path = "../../glide-logger" }
+glide-core-engine = { path = "../../glide-core/redis-rs/redis", features = ["aio"] }
 glide-core = { path = "../../glide-core" }
-logger_core = { path = "../../logger_core" }
-redis = { path = "../../glide-core/redis-rs/redis", features = ["aio"] }
-futures = "0.3.28"
-rand = "0.8.5"
-itoa = "1.0.6"
-clap = { version = "4.3.8", features = ["derive"] }
-chrono = "0.4.26"
-serde_json = "1.0.99"
+
+# External dependencies
 average = "0.17"
+chrono = "0.4.26"
+clap = { version = "4.3.8", features = ["derive"] }
+futures = "0.3.28"
+itoa = "1.0.6"
+rand = "0.8.5"
+serde_json = "1.0.99"
 tikv-jemallocator = "0.7.0"
+tokio = { version = "1", features = ["macros", "time", "rt-multi-thread"] }
 
 [profile.release]
 debug = true

@@ -515,7 +515,7 @@ impl Client {
     ///
     /// # Examples
     ///
-    /// ```no_run
+    /// ```rust,no_run
     /// use std::{fs::File, io::{BufReader, Read}};
     ///
     /// use redis::{Client, AsyncCommands as _, TlsCertificates, ClientTlsConfig};

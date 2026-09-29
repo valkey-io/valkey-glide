@@ -1,6 +1,6 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-use logger_core::log_debug;
+use glide_logger::log_debug;
 use nanoid::nanoid;
 use once_cell::sync::Lazy;
 use redis::{RedisResult, ScanStateRC};
@@ -48,5 +48,10 @@ pub fn remove_scan_state_cursor(id: String) {
         "scan_state_cursor remove",
         format!("Removed from container scan_state_cursor with id: `{id:?}`"),
     );
-    CONTAINER.lock().unwrap().remove(&id);
+
+    // Recover from a poisoned lock rather than panic so that cleanup always occurs.
+    CONTAINER
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .remove(&id);
 }

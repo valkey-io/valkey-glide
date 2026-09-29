@@ -3,6 +3,10 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 import argparse
+try:
+    import fcntl  # POSIX only — not available on Windows
+except ImportError:
+    fcntl = None  # type: ignore[assignment]  # Windows — flock is skipped, see issue #7066
 import json
 import logging
 import os
@@ -12,6 +16,7 @@ import signal
 import socket
 import string
 import subprocess
+import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -26,7 +31,7 @@ LOG_LEVELS = {
     "debug": logging.DEBUG,
 }
 
-GLIDE_HOME_DIR = os.getenv("GLIDE_HOME_DIR") or f"{__file__}/.."
+UTILS_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # Use /tmp/clusters for Windows WSL, otherwise use the default path
 def _get_clusters_folder():
@@ -41,13 +46,22 @@ def _get_clusters_folder():
     except (FileNotFoundError, PermissionError):
         pass
 
-    return os.path.abspath(f"{GLIDE_HOME_DIR}/clusters")
+    return os.path.join(UTILS_DIR, "clusters")
 
+# TLS and mTLS certificates.
 CLUSTERS_FOLDER = _get_clusters_folder()
-TLS_FOLDER = os.path.abspath(f"{GLIDE_HOME_DIR}/tls_crts")
-CA_CRT = f"{TLS_FOLDER}/ca.crt"
-SERVER_CRT = f"{TLS_FOLDER}/server.crt"
-SERVER_KEY = f"{TLS_FOLDER}/server.key"
+TLS_FOLDER = os.path.join(UTILS_DIR, "tls_crts")
+
+CA_CERTIFICATE_PATH = f"{TLS_FOLDER}/ca.crt"
+CA_KEY_PATH = f"{TLS_FOLDER}/ca.key"
+CA_SERIAL_PATH = f"{TLS_FOLDER}/ca.txt"
+OPENSSL_CONFIG_PATH = f"{TLS_FOLDER}/openssl.cnf"
+SERVER_CERTIFICATE_PATH = f"{TLS_FOLDER}/server.crt"
+SERVER_CSR_PATH = f"{TLS_FOLDER}/server.csr"
+SERVER_KEY_PATH = f"{TLS_FOLDER}/server.key"
+
+# Timeout for calls to `openssl`.
+OPENSSL_TIMEOUT_SECONDS = 30
 
 # Allowed hostname for TLS certificate.
 HOSTNAME_TLS: str = "valkey.glide.test.tls.com"
@@ -55,6 +69,14 @@ HOSTNAME_TLS: str = "valkey.glide.test.tls.com"
 # Default hosts (loopback addresses for IPv4 and IPv6)
 DEFAULT_HOST_IPV4: str = "127.0.0.1"
 DEFAULT_HOST_IPV6: str = "::1"
+
+# The `openssl` configuration for generating certificates. Defined after the
+# host constants above because it interpolates them.
+OPENSSL_CONFIG_CONTENTS = f"""\
+keyUsage = digitalSignature, keyEncipherment
+subjectAltName = IP:{DEFAULT_HOST_IPV4}, IP:{DEFAULT_HOST_IPV6}, DNS:localhost, DNS:{HOSTNAME_TLS}
+"""
+
 
 def get_command(commands: List[str]) -> str:
     for command in commands:
@@ -100,168 +122,150 @@ def init_logger(logfile: str):
     root_logger.addHandler(handler)
 
 
-def check_if_tls_cert_exist(tls_file: str, timeout: int = 15):
-    timeout_start = time.time()
-    while time.time() < timeout_start + timeout:
-        if os.path.exists(tls_file):
-            return True
-        else:
-            time.sleep(0.005)
-    logging.warn(f"Timed out waiting for certificate file {tls_file}")
-    return False
+def _verify_tls_certs() -> bool:
+    """Whether a complete, valid TLS certificate set exists."""
+    for cert in [CA_CERTIFICATE_PATH, SERVER_CERTIFICATE_PATH, SERVER_KEY_PATH]:
+        if not os.path.exists(cert):
+            return False
 
+    # Verify the server certificate parses, was signed by
+    # the CA certificate, and is within its validity dates.
+    verify_certs = _run_openssl(
+        ["verify", "-CAfile", CA_CERTIFICATE_PATH, SERVER_CERTIFICATE_PATH],
+        raise_on_error=False,
+    )
+    if verify_certs.returncode != 0:
+        return False
 
-def check_if_tls_cert_is_valid(tls_file: str):
-    file_creation_unix_time = os.path.getmtime(tls_file)
-    file_creation_utc = datetime.fromtimestamp(file_creation_unix_time)
-    current_time_utc = datetime.utcnow()
-    time_since_created = current_time_utc - file_creation_utc
-    return time_since_created.days < 3650
+    # Verify the server key parses.
+    key_public_key = _run_openssl(
+        ["pkey", "-in", SERVER_KEY_PATH, "-pubout"], raise_on_error=False
+    )
+    if key_public_key.returncode != 0:
+        return False
 
+    # Verify that the server key matches the server certificate.
+    cert_public_key = _run_openssl(
+        ["x509", "-in", SERVER_CERTIFICATE_PATH, "-noout", "-pubkey"],
+        raise_on_error=False,
+    )
+    if (
+        cert_public_key.returncode != 0
+        or cert_public_key.stdout != key_public_key.stdout
+    ):
+        return False
 
-def should_generate_new_tls_certs() -> bool:
-    # Returns False if we already have existing and valid TLS files, otherwise True
-    try:
-        Path(TLS_FOLDER).mkdir(exist_ok=False)
-    except FileExistsError:
-        files_list = [CA_CRT, SERVER_KEY, SERVER_CRT]
-        for file in files_list:
-            if check_if_tls_cert_exist(file) and check_if_tls_cert_is_valid(file):
-                return False
     return True
 
 
+def _run_openssl(
+    args: List[str], raise_on_error: bool = True
+) -> subprocess.CompletedProcess[str]:
+    """
+    Runs `openssl <args>` and returns the completed process.
+    If `raise_on_error` is true, raises an exception on nonzero exit.
+    """
+    result = subprocess.run(
+        ["openssl", *args],
+        capture_output=True,
+        text=True,
+        timeout=OPENSSL_TIMEOUT_SECONDS,
+    )
+
+    if raise_on_error and result.returncode != 0:
+        raise Exception(f"openssl {' '.join(args)} failed:\n{result.stderr}")
+
+    return result
+
+
 def generate_tls_certs():
-    # Based on shell script in valkey's server tests
-    # https://github.com/valkey-io/valkey/blob/0d2ba9b94d28d4022ea475a2b83157830982c941/utils/gen-test-certs.sh
-    logging.debug("## Generating TLS certificates")
-    tic = time.perf_counter()
-    ca_key = f"{TLS_FOLDER}/ca.key"
-    ca_serial = f"{TLS_FOLDER}/ca.txt"
-    ext_file = f"{TLS_FOLDER}/openssl.cnf"
+    """Generate the shared TLS certificates if needed."""
+    Path(TLS_FOLDER).mkdir(exist_ok=True)
 
-    f = open(ext_file, "w")
-    f.write(
-        f"keyUsage = digitalSignature, keyEncipherment\nsubjectAltName = IP:{DEFAULT_HOST_IPV4},IP:{DEFAULT_HOST_IPV6},DNS:localhost,DNS:{HOSTNAME_TLS}"
-    )
-    f.close()
+    # Blocks until any concurrent process releases the lock.
+    with open(f"{TLS_FOLDER}/.certs-lock", "w") as lock:
+        if fcntl is not None:
+            fcntl.flock(lock, fcntl.LOCK_EX)
+        # TODO(#7066): add Windows-compatible file locking for concurrent TLS cert generation
+        #              (e.g. msvcrt.locking or a cross-platform library like `filelock`)
+        #              https://github.com/valkey-io/valkey-glide/issues/7066
 
-    def make_key(name: str, size: int):
-        p = subprocess.Popen(
+        if _verify_tls_certs():
+            return
+
+        # Based on shell script in valkey's server tests
+        # https://github.com/valkey-io/valkey/blob/0d2ba9b94d28d4022ea475a2b83157830982c941/utils/gen-test-certs.sh
+        logging.debug("## Generating TLS certificates")
+        tic = time.perf_counter()
+
+        with open(OPENSSL_CONFIG_PATH, "w") as f:
+            f.write(OPENSSL_CONFIG_CONTENTS)
+
+        # Build CA and server keys.
+        _run_openssl(["genrsa", "-out", CA_KEY_PATH, "2048"])
+        _run_openssl(["genrsa", "-out", SERVER_KEY_PATH, "2048"])
+
+        # Build CA certificate.
+        _run_openssl(
             [
-                "openssl",
-                "genrsa",
+                "req",
+                "-x509",
+                "-new",
+                "-nodes",
+                "-sha256",
+                "-key",
+                CA_KEY_PATH,
+                "-days",
+                "3650",
+                "-subj",
+                "/O=Valkey GLIDE Test/CN=Certificate Authority",
                 "-out",
-                name,
-                str(size),
-            ],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-        )
-        # openssl genrsa can stall on low-entropy aarch64 runners. Time out here
-        # (inside cluster.py's 80s budget) and kill the child so it stops
-        # writing to the shared ca.key.
-        try:
-            output, err = p.communicate(timeout=30)
-        except subprocess.TimeoutExpired:
-            p.kill()
-            p.communicate()
-            raise
-        if p.returncode != 0:
-            raise Exception(
-                f"Failed to make key for {name}. Executed: {str(p.args)}:\n{err}"
-            )
-
-    # Build CA key
-    # 2048-bit is enough for test certs and faster on low-entropy runners.
-    make_key(ca_key, 2048)
-
-    # Build server key
-    make_key(SERVER_KEY, 2048)
-
-    # Build CA Cert
-    p = subprocess.Popen(
-        [
-            "openssl",
-            "req",
-            "-x509",
-            "-new",
-            "-nodes",
-            "-sha256",
-            "-key",
-            ca_key,
-            "-days",
-            "3650",
-            "-subj",
-            "/O=Valkey GLIDE Test/CN=Certificate Authority",
-            "-out",
-            CA_CRT,
-        ],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-    )
-    output, err = p.communicate(timeout=10)
-    if p.returncode != 0:
-        raise Exception(
-            f"Failed to make create CA cert. Executed: {str(p.args)}:\n{err}"
+                CA_CERTIFICATE_PATH,
+            ]
         )
 
-    # Read server key
-    p1 = subprocess.Popen(
-        [
-            "openssl",
-            "req",
-            "-new",
-            "-sha256",
-            "-subj",
-            "/O=Valkey GLIDE Test/CN=Generic-cert",
-            "-key",
-            SERVER_KEY,
-        ],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-    )
-    _key_output, err = p.communicate(timeout=10)
-    if p.returncode != 0:
-        raise Exception(f"Failed to read server key. Executed: {str(p.args)}:\n{err}")
-
-    # Build server cert
-    p = subprocess.Popen(
-        [
-            "openssl",
-            "x509",
-            "-req",
-            "-sha256",
-            "-CA",
-            CA_CRT,
-            "-CAkey",
-            ca_key,
-            "-CAserial",
-            ca_serial,
-            "-CAcreateserial",
-            "-days",
-            "3650",
-            "-extfile",
-            ext_file,
-            "-out",
-            SERVER_CRT,
-        ],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        stdin=p1.stdout,
-        text=True,
-    )
-    output, err = p.communicate(timeout=10)
-    if p.returncode != 0:
-        raise Exception(
-            f"Failed to create server cert. Executed: {str(p.args)}:\n{err}"
+        # Build server certificate signing request (CSR).
+        _run_openssl(
+            [
+                "req",
+                "-new",
+                "-sha256",
+                "-subj",
+                "/O=Valkey GLIDE Test/CN=Generic-cert",
+                "-key",
+                SERVER_KEY_PATH,
+                "-out",
+                SERVER_CSR_PATH,
+            ]
         )
-    toc = time.perf_counter()
-    logging.debug(f"generate_tls_certs() Elapsed time: {toc - tic:0.4f}")
-    logging.debug(f"TLS files= {SERVER_CRT}, {SERVER_KEY}, {CA_CRT}")
+
+        # Sign the CSR with the CA to produce the server certificate.
+        _run_openssl(
+            [
+                "x509",
+                "-req",
+                "-sha256",
+                "-in",
+                SERVER_CSR_PATH,
+                "-CA",
+                CA_CERTIFICATE_PATH,
+                "-CAkey",
+                CA_KEY_PATH,
+                "-CAserial",
+                CA_SERIAL_PATH,
+                "-CAcreateserial",
+                "-days",
+                "3650",
+                "-extfile",
+                OPENSSL_CONFIG_PATH,
+                "-out",
+                SERVER_CERTIFICATE_PATH,
+            ]
+        )
+
+        toc = time.perf_counter()
+        logging.debug(f"generate_tls_certs() Elapsed time: {toc - tic:0.4f}")
+        logging.debug(f"TLS files= {SERVER_CERTIFICATE_PATH}, {SERVER_KEY_PATH}, {CA_CERTIFICATE_PATH}")
 
 
 def get_cli_option_args(
@@ -274,11 +278,11 @@ def get_cli_option_args(
         [
             "--tls",
             "--cert",
-            tls_cert_file or SERVER_CRT,
+            tls_cert_file or SERVER_CERTIFICATE_PATH,
             "--key",
-            tls_key_file or SERVER_KEY,
+            tls_key_file or SERVER_KEY_PATH,
             "--cacert",
-            tls_ca_cert_file or CA_CRT,
+            tls_ca_cert_file or CA_CERTIFICATE_PATH,
         ]
         if use_tls
         else []
@@ -439,8 +443,12 @@ def start_server(
         "",
     ]
 
-    # Bind server to both IPv4 and IPv6 loopback addresses.
-    cmd_args.extend(["--bind", DEFAULT_HOST_IPV4, DEFAULT_HOST_IPV6])
+    # Bind server to the specified host. If host is not localhost, bind to both
+    # the private IP and loopback so local and remote clients can connect.
+    if host not in (DEFAULT_HOST_IPV4, DEFAULT_HOST_IPV6, "localhost"):
+        cmd_args.extend(["--bind", host, DEFAULT_HOST_IPV4])
+    else:
+        cmd_args.extend(["--bind", DEFAULT_HOST_IPV4, DEFAULT_HOST_IPV6])
 
     # If host is a DNS hostname, set cluster-announce-hostname so
     # the cluster topology reports DNS names instead of IP addresses.
@@ -509,15 +517,22 @@ def create_servers(
     ready_servers: List[Server] = []
     nodes_count = shard_count * (1 + replica_count)
     tls_args = []
-    if tls is True:
-        # Use custom TLS files if provided, otherwise use default ones
-        cert_file = tls_cert_file or SERVER_CRT
-        key_file = tls_key_file or SERVER_KEY
-        ca_file = tls_ca_cert_file or CA_CRT
 
-        # Only generate default certs if using default paths and they don't exist
-        if not tls_cert_file and should_generate_new_tls_certs():
+    if tls is True:
+        custom_tls_files = (tls_cert_file, tls_key_file, tls_ca_cert_file)
+
+        # Generate default TLS files if not provided.
+        if not any(custom_tls_files):
             generate_tls_certs()
+
+        # Otherwise, verify that all of the TLS files are provided.
+        # We do not support mixing custom and default TLS files.
+        elif not all(custom_tls_files):
+            raise ValueError("TLS certificate, key, and CA certificate must be provided together")
+
+        cert_file = tls_cert_file or SERVER_CERTIFICATE_PATH
+        key_file = tls_key_file or SERVER_KEY_PATH
+        ca_file = tls_ca_cert_file or CA_CERTIFICATE_PATH
 
         tls_args = [
             "--tls-cluster",
@@ -1119,6 +1134,159 @@ def stop_cluster(
         remove_folder(cluster_folder)
 
 
+# ---------------------------------------------------------------------------
+# EC2 remote execution helpers
+# ---------------------------------------------------------------------------
+
+
+def provision_ec2(
+    ami_id: str,
+    instance_type: str,
+    subnet_id: str,
+    security_group_id: str,
+    instance_profile: str,
+    region: str,
+    name_tag: str = "glide-ci-valkey",
+) -> Tuple[str, str]:
+    """
+    Launch an EC2 instance and wait for SSM to become ready.
+    Returns (instance_id, private_ip).
+    """
+    import boto3  # type: ignore[import-not-found]
+
+    ec2 = boto3.client("ec2", region_name=region)
+    ssm = boto3.client("ssm", region_name=region)
+
+    logging.info(f"[ec2] Launching EC2 instance (ami={ami_id}, type={instance_type})")
+    resp = ec2.run_instances(
+        ImageId=ami_id,
+        InstanceType=instance_type,
+        MinCount=1,
+        MaxCount=1,
+        SubnetId=subnet_id,
+        SecurityGroupIds=[security_group_id],
+        IamInstanceProfile={"Name": instance_profile},
+        MetadataOptions={
+            "HttpTokens": "required",
+            "HttpPutResponseHopLimit": 1,
+            "HttpEndpoint": "enabled",
+        },
+        TagSpecifications=[
+            {
+                "ResourceType": "instance",
+                "Tags": [
+                    {"Key": "Name", "Value": name_tag},
+                    {"Key": "Project", "Value": "glide-ci"},
+                ],
+            }
+        ],
+    )
+    instance_id = resp["Instances"][0]["InstanceId"]
+    logging.info(
+        f"[ec2] Launched {instance_id}, waiting for running state..."
+    )
+
+    # Wait until running before reading PrivateIpAddress — it may not be
+    # available in the run_instances response for pending instances.
+    waiter = ec2.get_waiter("instance_running")
+    waiter.wait(InstanceIds=[instance_id])
+    resp2 = ec2.describe_instances(InstanceIds=[instance_id])
+    private_ip = resp2["Reservations"][0]["Instances"][0]["PrivateIpAddress"]
+    logging.info(f"[ec2] {instance_id} is running ({private_ip}), waiting for SSM agent...")
+
+    # Wait for SSM agent to register (up to 5 minutes)
+    deadline = time.time() + 300
+    while time.time() < deadline:
+        info = ssm.describe_instance_information(
+            Filters=[{"Key": "InstanceIds", "Values": [instance_id]}]
+        )
+        if info.get("InstanceInformationList"):
+            logging.info(f"[ec2] SSM agent ready on {instance_id}")
+            break
+        time.sleep(10)
+    else:
+        raise TimeoutError(
+            f"[ec2] SSM agent did not become ready on {instance_id} within 5 minutes"
+        )
+
+    print(f"EC2_INSTANCE_ID={instance_id}")
+    print(f"EC2_PRIVATE_IP={private_ip}")
+    return instance_id, private_ip
+
+
+def teardown_ec2(instance_id: str, region: str) -> None:
+    """Terminate an EC2 instance."""
+    import boto3  # type: ignore[import-not-found]
+
+    ec2 = boto3.client("ec2", region_name=region)
+    logging.info(f"[ec2] Terminating instance {instance_id}")
+    try:
+        ec2.terminate_instances(InstanceIds=[instance_id])
+        logging.info(f"[ec2] Termination request sent for {instance_id}")
+    except Exception as e:
+        logging.error(f"[ec2] Failed to terminate {instance_id}: {e}")
+        raise
+
+
+def run_remote_command(
+    instance_id: str,
+    command: str,
+    region: str,
+    timeout_seconds: int = 600,
+) -> str:
+    """
+    Run a shell command on an EC2 instance via SSM Run Command.
+    Returns the combined stdout+stderr output.
+    Raises on non-zero exit code.
+    """
+    import boto3  # type: ignore[import-not-found]
+
+    ssm = boto3.client("ssm", region_name=region)
+    logging.info(
+        f"[ec2] Running remote command on {instance_id}: {command[:120]}"
+    )
+
+    resp = ssm.send_command(
+        InstanceIds=[instance_id],
+        DocumentName="AWS-RunShellScript",
+        Parameters={"commands": [command]},
+        TimeoutSeconds=timeout_seconds,
+    )
+    command_id = resp["Command"]["CommandId"]
+
+    # Poll until done
+    deadline = time.time() + timeout_seconds
+    while time.time() < deadline:
+        try:
+            result = ssm.get_command_invocation(
+                CommandId=command_id,
+                InstanceId=instance_id,
+            )
+        except ssm.exceptions.InvocationDoesNotExist:
+            # Invocation record not yet visible (AWS SSM eventual consistency).
+            # Poll at 1s until it appears.
+            time.sleep(1)
+            continue
+        status = result["Status"]
+        if status in ("Success", "Failed", "Cancelled", "TimedOut"):
+            stdout = result.get("StandardOutputContent", "")
+            stderr = result.get("StandardErrorContent", "")
+            output = stdout + stderr
+            if status != "Success":
+                raise RuntimeError(
+                    f"[ec2] Remote command failed with status={status}\n"
+                    f"stdout: {stdout}\nstderr: {stderr}"
+                )
+            logging.debug(f"[ec2] Remote command output: {output[:500]}")
+            return output
+        time.sleep(1)
+
+    raise TimeoutError(
+        f"[ec2] Remote command timed out after {timeout_seconds}s"
+    )
+
+
+
 def main():
     parser = argparse.ArgumentParser(description="Cluster manager tool")
     parser.add_argument(
@@ -1254,6 +1422,27 @@ def main():
         required=False,
     )
 
+    parser_start.add_argument(
+        "--remote",
+        type=str,
+        default=None,
+        metavar="INSTANCE_ID",
+        help="Run cluster_manager.py on a remote EC2 instance via SSM. "
+        "Pass the EC2 instance ID. Also requires --remote-ip.",
+    )
+    parser_start.add_argument(
+        "--remote-ip",
+        type=str,
+        default=None,
+        help="Private IP of the remote EC2 instance (used as host for Valkey servers).",
+    )
+    parser_start.add_argument(
+        "--remote-region",
+        type=str,
+        default=os.environ.get("AWS_REGION", "us-east-1"),
+        help="AWS region for SSM (default: us-east-1)",
+    )
+
     # Stop parser
     parser_stop = subparsers.add_parser("stop", help="Shutdown a running cluster")
     parser_stop.add_argument(
@@ -1293,6 +1482,76 @@ def main():
         default="",
     )
 
+    parser_stop.add_argument(
+        "--remote",
+        type=str,
+        default=None,
+        metavar="INSTANCE_ID",
+        help="Run stop on a remote EC2 instance via SSM.",
+    )
+    parser_stop.add_argument(
+        "--remote-region",
+        type=str,
+        default=os.environ.get("AWS_REGION", "us-east-1"),
+        help="AWS region for SSM (default: us-east-1)",
+    )
+    parser_stop.add_argument(
+        "--remote-ip",
+        type=str,
+        default=None,
+        help="Private IP of the remote EC2 instance (not used by stop, accepted for CLI compatibility).",
+    )
+
+    # provision-ec2 parser
+    parser_provision = subparsers.add_parser(
+        "provision-ec2", help="Launch an EC2 instance for remote Valkey hosting"
+    )
+    parser_provision.add_argument(
+        "--ami-id",
+        default=os.environ.get("EC2_AMI_ID"),
+        help="AMI ID for the Linux EC2 instance (default: EC2_AMI_ID env var)",
+    )
+    parser_provision.add_argument(
+        "--instance-type",
+        default=os.environ.get("EC2_INSTANCE_TYPE", "t3.small"),
+        help="EC2 instance type (default: t3.small)",
+    )
+    parser_provision.add_argument(
+        "--subnet-id",
+        default=os.environ.get("EC2_SUBNET_ID"),
+        help="Subnet ID (default: EC2_SUBNET_ID env var)",
+    )
+    parser_provision.add_argument(
+        "--security-group-id",
+        default=os.environ.get("EC2_SECURITY_GROUP"),
+        help="Security group ID (default: EC2_SECURITY_GROUP env var)",
+    )
+    parser_provision.add_argument(
+        "--instance-profile",
+        default=os.environ.get("EC2_INSTANCE_PROFILE"),
+        help="IAM instance profile name (default: EC2_INSTANCE_PROFILE env var)",
+    )
+    parser_provision.add_argument(
+        "--region",
+        default=os.environ.get("AWS_REGION", "us-east-1"),
+        help="AWS region (default: us-east-1)",
+    )
+
+    # teardown-ec2 parser
+    parser_teardown = subparsers.add_parser(
+        "teardown-ec2", help="Terminate an EC2 instance"
+    )
+    parser_teardown.add_argument(
+        "--instance-id",
+        required=True,
+        help="EC2 instance ID to terminate",
+    )
+    parser_teardown.add_argument(
+        "--region",
+        default=os.environ.get("AWS_REGION", "us-east-1"),
+        help="AWS region (default: us-east-1)",
+    )
+
     args = parser.parse_args()
     # Check logging level
 
@@ -1306,6 +1565,52 @@ def main():
     logging.info(f"## Executing cluster_manager.py with the following args:\n  {args}")
 
     if args.action == "start":
+        if getattr(args, "remote", None):
+            # Build the equivalent local command to run on the remote EC2
+            remote_ip = args.remote_ip
+            if not remote_ip:
+                parser.error("--remote-ip is required when using --remote")
+            import re as _re
+            if not _re.fullmatch(r'\d{1,3}(\.\d{1,3}){3}', remote_ip):
+                parser.error(f"--remote-ip must be a valid IPv4 address, got: {remote_ip!r}")
+
+            # Build cluster_manager.py args for the remote side.
+            # Do NOT pass -p — let cluster_manager.py on the remote side pick
+            # free ports using next_free_port() which does actual socket binding,
+            # same as local Mac/Linux runs. This avoids TIME_WAIT port conflicts.
+            cm_args = [
+                "python3",
+                "/home/ssm-user/glide/cluster_manager.py",
+                "--loglevel", args.log,
+                "-H", remote_ip,
+            ]
+            if args.tls:
+                cm_args.append("--tls")
+            cm_args += [
+                "start",
+                "-n", str(args.shard_count if args.cluster_mode else 1),
+                "-r", str(args.replica_count),
+            ]
+            if args.cluster_mode:
+                cm_args.append("--cluster-mode")
+            if args.ports:
+                # Explicit ports requested - pass them through
+                cm_args += ["-p"] + [str(p) for p in args.ports]
+            cm_args_str = " ".join(cm_args)
+
+            # Run the start command.
+            # cluster_manager.py is copied to the Linux EC2 once by the orchestrator
+            # before tests start (see ec2_orchestrator.py setup_linux_ec2).
+            run_cmd = ";".join([
+                "sudo sysctl vm.overcommit_memory=1 2>/dev/null || true",
+                f"GLIDE_HOME_DIR=/home/ssm-user/glide CLUSTERS_FOLDER=/home/ssm-user/glide/clusters {cm_args_str}",
+            ])
+            logging.info(f"[remote] Starting Valkey on {args.remote} ({remote_ip})")
+            output = run_remote_command(
+                args.remote, run_cmd, args.remote_region, timeout_seconds=300
+            )
+            print(output)
+            sys.exit(0)
         if not args.cluster_mode:
             args.shard_count = 1
         if args.ports and len(args.ports) != args.shard_count * (
@@ -1328,40 +1633,54 @@ def main():
             else args.logfile
         )
         init_logger(logfile)
-        servers = create_servers(
-            args.host,
-            args.shard_count,
-            args.replica_count,
-            args.ports,
-            cluster_folder,
-            args.tls,
-            args.cluster_mode,
-            args.load_module,
-            False,
-            getattr(args, 'tls_cert_file', None),
-            getattr(args, 'tls_key_file', None),
-            getattr(args, 'tls_ca_cert_file', None),
-            getattr(args, 'tls_auth_clients', False),
-        )
-        if args.cluster_mode:
-            # Create a cluster
-            create_cluster(
-                servers,
+        try:
+            servers = create_servers(
+                args.host,
                 args.shard_count,
                 args.replica_count,
+                args.ports,
                 cluster_folder,
                 args.tls,
+                args.cluster_mode,
+                args.load_module,
+                False,
                 getattr(args, 'tls_cert_file', None),
                 getattr(args, 'tls_key_file', None),
                 getattr(args, 'tls_ca_cert_file', None),
+                getattr(args, 'tls_auth_clients', False),
             )
-        elif args.replica_count > 0:
-            # Create a standalone replication group
-            create_standalone_replication(
-                servers,
+            if args.cluster_mode:
+                # Create a cluster
+                create_cluster(
+                    servers,
+                    args.shard_count,
+                    args.replica_count,
+                    cluster_folder,
+                    args.tls,
+                    getattr(args, 'tls_cert_file', None),
+                    getattr(args, 'tls_key_file', None),
+                    getattr(args, 'tls_ca_cert_file', None),
+                )
+            elif args.replica_count > 0:
+                # Create a standalone replication group
+                create_standalone_replication(
+                    servers,
+                    cluster_folder,
+                    args.tls,
+                )
+        except BaseException:
+            # Cleanup on failure.
+            stop_cluster(
+                args.host,
                 cluster_folder,
                 args.tls,
+                args.auth,
+                args.logfile,
+                keep_folder=True,
             )
+            logging.exception("Cluster creation failed.")
+            raise
+
         servers_str = ",".join(str(server) for server in servers)
         toc = time.perf_counter()
         logging.info(
@@ -1371,6 +1690,43 @@ def main():
         print(f"CLUSTER_NODES={servers_str}")
 
     elif args.action == "stop":
+        if getattr(args, "remote", None):
+            import re as _re
+            remote_ip = getattr(args, "remote_ip", None)
+            if remote_ip:
+                if not _re.fullmatch(r'\d{1,3}(\.\d{1,3}){3}', remote_ip):
+                    parser.error(f"--remote-ip must be a valid IPv4 address, got: {remote_ip!r}")
+            # Validate cluster_folder and prefix to prevent shell injection
+            # in the SSM command string (runs as root on the Linux EC2).
+            _path_safe = _re.compile(r'^[a-zA-Z0-9/_.-]+$')
+            if args.cluster_folder and not _path_safe.fullmatch(args.cluster_folder):
+                parser.error(f"--cluster-folder contains invalid characters: {args.cluster_folder!r}")
+            if getattr(args, 'prefix', None) and not _path_safe.fullmatch(args.prefix):
+                parser.error(f"--prefix contains invalid characters: {args.prefix!r}")
+            cmd_parts = [
+                "python3",
+                "/home/ssm-user/glide/cluster_manager.py",
+                "--loglevel",
+                args.log,
+                "stop",
+            ]
+            if args.cluster_folder:
+                cmd_parts += ["--cluster-folder", args.cluster_folder]
+            if getattr(args, "prefix", None):
+                cmd_parts += ["--prefix", args.prefix]
+            if getattr(args, "keep_folder", False):
+                cmd_parts.append("--keep-folder")
+            if getattr(args, "tls", False):
+                cmd_parts.append("--tls")
+            if getattr(args, "auth", None):
+                import shlex as _shlex
+                cmd_parts += ["--auth", _shlex.quote(str(args.auth))]
+            remote_cmd = "GLIDE_HOME_DIR=/home/ssm-user/glide CLUSTERS_FOLDER=/home/ssm-user/glide/clusters " + " ".join(cmd_parts)
+            output = run_remote_command(
+                args.remote, remote_cmd, args.remote_region, timeout_seconds=120
+            )
+            print(output)
+            sys.exit(0)
         if args.cluster_folder and args.prefix:
             raise parser.error(
                 "--cluster-folder cannot be passed together with --prefix"
@@ -1398,6 +1754,32 @@ def main():
         )
         toc = time.perf_counter()
         logging.info(f"Cluster stopped in {toc - tic:0.4f} seconds")
+
+    elif args.action == "provision-ec2":
+        if not args.ami_id:
+            parser.error("--ami-id or EC2_AMI_ID env var is required")
+        if not args.subnet_id:
+            parser.error("--subnet-id or EC2_SUBNET_ID env var is required")
+        if not args.security_group_id:
+            parser.error("--security-group-id or EC2_SECURITY_GROUP env var is required")
+        if not args.instance_profile:
+            parser.error(
+                "--instance-profile or EC2_INSTANCE_PROFILE env var is required"
+            )
+        provision_ec2(
+            ami_id=args.ami_id,
+            instance_type=args.instance_type,
+            subnet_id=args.subnet_id,
+            security_group_id=args.security_group_id,
+            instance_profile=args.instance_profile,
+            region=args.region,
+        )
+
+    elif args.action == "teardown-ec2":
+        teardown_ec2(
+            instance_id=args.instance_id,
+            region=args.region,
+        )
 
 
 if __name__ == "__main__":

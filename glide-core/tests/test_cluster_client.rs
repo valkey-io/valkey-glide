@@ -326,7 +326,7 @@ mod cluster_client_tests {
         let routing_info = RoutingInfo::MultiNode((MultipleNodeRoutingInfo::AllMasters, None));
         let mut total_clients = 0;
 
-        logger_core::log_info(
+        glide_logger::log_info(
             "TestClusterLazyHelper",
             "Querying CLIENT LIST on all shared cluster primaries via AllMasters routing.",
         );
@@ -345,7 +345,7 @@ mod cluster_client_tests {
                             total_clients += text.lines().count();
                         }
                         _ => {
-                            logger_core::log_warn(
+                            glide_logger::log_warn(
                                 "TestClusterLazyHelper",
                                 format!(
                                     "CLIENT LIST from a primary (AllMasters) returned unexpected inner type for a node's result: {node_result_value:?}"
@@ -357,7 +357,7 @@ mod cluster_client_tests {
             }
             Ok(other_type) => {
                 // Logging if returned type is not a map as we expect
-                logger_core::log_warn(
+                glide_logger::log_warn(
                     "TestClusterLazyHelper",
                     format!(
                         "CLIENT LIST with AllMasters routing returned an unexpected type (expected Map): {other_type:?}"
@@ -365,14 +365,14 @@ mod cluster_client_tests {
                 );
             }
             Err(e) => {
-                logger_core::log_warn(
+                glide_logger::log_warn(
                     "TestClusterLazyHelper",
                     format!("CLIENT LIST with AllMasters routing failed: {e:?}"),
                 );
             }
         }
 
-        logger_core::log_info(
+        glide_logger::log_info(
             "TestClusterLazyHelper",
             format!("Total clients found on shared primaries (AllMasters): {total_clients}"),
         );
@@ -523,7 +523,7 @@ mod cluster_client_tests {
             // 3. Get initial client count on Cluster A.
             let clients_before_lazy_init =
                 get_total_clients_on_shared_cluster_primaries(&mut monitoring_client).await;
-            logger_core::log_info(
+            glide_logger::log_info(
                 "TestClusterLazy",
                 format!(
                     "Clients before lazy client init (protocol={protocol:?} on dedicated cluster A): {clients_before_lazy_init}"
@@ -551,7 +551,7 @@ mod cluster_client_tests {
             // 6. Assert that no new connections were made yet by the lazy client on Cluster A.
             let clients_after_lazy_init =
                 get_total_clients_on_shared_cluster_primaries(&mut monitoring_client).await;
-            logger_core::log_info(
+            glide_logger::log_info(
                 "TestClusterLazy",
                 format!(
                     "Clients after lazy client init (protocol={protocol:?} on dedicated cluster A): {clients_after_lazy_init}"
@@ -563,7 +563,7 @@ mod cluster_client_tests {
             );
 
             // 7. Send the first command using the lazy client to Cluster A.
-            logger_core::log_info(
+            glide_logger::log_info(
                 "TestClusterLazy",
                 format!(
                     "Sending first command to lazy client (PING) (protocol={protocol:?} on dedicated cluster A)"
@@ -586,7 +586,7 @@ mod cluster_client_tests {
             // 8. Assert that new connections were made on Cluster A by the lazy client.
             let clients_after_first_command =
                 get_total_clients_on_shared_cluster_primaries(&mut monitoring_client).await;
-            logger_core::log_info(
+            glide_logger::log_info(
                 "TestClusterLazy",
                 format!(
                     "Clients after first command (protocol={protocol:?} on dedicated cluster A): {clients_after_first_command}"
@@ -838,9 +838,10 @@ mod cluster_client_tests {
         // See: https://github.com/valkey-io/valkey-glide/issues/4990
         //
         // Kills all cluster nodes with a TCP blackhole as seed node, then measures how many
-        // commands complete in a time window during reconnection. Without fixes, poll_flush blocks
-        // and causes commands to not be processed, leading to near-zero throughput (~1 completes
-        // every few seconds instead of immediately).
+        // commands complete in a time window during reconnection. Without the fix, poll_flush
+        // blocks behind the reconnect task (2000ms per attempt) and commands are not processed.
+        // With the fix, ReconnectToInitialNodes path calls fail_pending_requests immediately,
+        // so commands get ClientError quickly and the loop can advance.
         block_on_all(async {
             const CONNECTION_TIMEOUT_MS: u64 = 2000;
             const WINDOW_MS: u64 = 3000;
@@ -908,7 +909,10 @@ mod cluster_client_tests {
             // Wait for connection health checks to detect failures
             tokio::time::sleep(Duration::from_millis(500)).await;
 
-            // Measure how many commands complete (success or error) in the window
+            // Measure how many commands complete (success or error) in the window.
+            // With fail-fast, each command gets ClientError immediately so the loop
+            // advances quickly. Without the fix, each command would block for
+            // CONNECTION_TIMEOUT_MS waiting for the reconnect task to finish.
             let mut completed: u32 = 0;
             let mut cmd = redis::cmd("GET");
             cmd.arg("{test}key");
@@ -931,7 +935,7 @@ mod cluster_client_tests {
             assert!(
                 completed >= MIN_COMMANDS_WITH_FIX,
                 "Send loop blocked: only {}/{} commands completed in {}ms. \
-                 Each command serialized behind ready!(reconnect_to_initial_nodes) blocking for {}ms.",
+                 Each command serialized behind reconnect_to_initial_nodes blocking for {}ms.",
                 completed,
                 MIN_COMMANDS_WITH_FIX,
                 WINDOW_MS,

@@ -31,6 +31,9 @@ impl JavaAddressResolver {
         let class = match env.get_object_class(resolver_global.as_obj()) {
             Ok(class) => class,
             Err(e) => {
+                if env.exception_check().unwrap_or(false) {
+                    let _ = env.exception_clear();
+                }
                 log::error!("Failed to get class of the address resolver object: {e}");
                 return None;
             }
@@ -42,6 +45,9 @@ impl JavaAddressResolver {
         ) {
             Ok(method_id) => method_id,
             Err(e) => {
+                if env.exception_check().unwrap_or(false) {
+                    let _ = env.exception_clear();
+                }
                 log::error!("Failed to find 'resolve' method on the address resolver object: {e}");
                 return None;
             }
@@ -53,6 +59,9 @@ impl JavaAddressResolver {
         ) {
             Ok(method_id) => method_id,
             Err(e) => {
+                if env.exception_check().unwrap_or(false) {
+                    let _ = env.exception_clear();
+                }
                 log::error!("Failed to find 'getHost' method on the ResolvedAddress object: {e}");
                 return None;
             }
@@ -64,6 +73,9 @@ impl JavaAddressResolver {
         ) {
             Ok(method_id) => method_id,
             Err(e) => {
+                if env.exception_check().unwrap_or(false) {
+                    let _ = env.exception_clear();
+                }
                 log::error!("Failed to find 'getPort' method on the ResolvedAddress object: {e}");
                 return None;
             }

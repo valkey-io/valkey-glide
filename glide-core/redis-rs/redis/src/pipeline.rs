@@ -1,6 +1,6 @@
 #![macro_use]
 
-use telemetrylib::GlideSpan;
+use glide_telemetry::GlideSpan;
 
 use crate::cmd::{cmd, cmd_len, Cmd};
 use crate::connection::ConnectionLike;
@@ -329,6 +329,14 @@ macro_rules! implement_pipeline_commands {
             /// Returns an iterator over all the commands currently in the pipeline.
             pub fn cmd_iter(&self) -> impl Iterator<Item = &Arc<Cmd>> {
                 self.commands.iter()
+            }
+
+            // TODO #7024: Revisit this. Is it needed?
+            /// The indices of commands whose replies are ignored (`.ignore()`).
+            /// Exposed so a downstream runner can reproduce the reply filtering
+            /// that `make_pipeline_results` performs.
+            pub fn ignored_commands(&self) -> &std::collections::HashSet<usize> {
+                &self.ignored_commands
             }
 
             /// Instructs the pipeline to ignore the return value of this command.

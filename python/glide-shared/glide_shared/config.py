@@ -861,19 +861,6 @@ class BaseClientConfiguration:
             Must be a non-negative integer.If not set, the client will connect to database 0.
         client_name (Optional[str]): Client name to be used for the client. Will be used with CLIENT SETNAME command
             during connection establishment.
-        lib_name (Optional[str]): Library name to be used for the client. Will be used with CLIENT SETINFO LIB-NAME
-            command during connection establishment. Useful for identifying a wrapping library or framework in
-            ``CLIENT INFO``/``CLIENT LIST`` output. Every character in a non-empty value must be printable ASCII
-            from ``!`` (U+0021) through ``~`` (U+007E), inclusive, excluding ``(`` and ``)``.
-            An empty value is treated as unset.
-            If not set, a client-specific default (e.g. ``GlidePy`` for the async client,
-            ``GlidePySync`` for the sync client) is used.
-        client_info_tag (Optional[str]): Optional tag appended to the library name in parentheses
-            (e.g. ``GlidePy(my-framework:1.2.3)``), preserving the underlying GLIDE library identity while
-            attributing a wrapping library or framework in ``CLIENT INFO``/``CLIENT LIST`` output. Applied on top of
-            the default library name or a configured ``lib_name``. Every character in a non-empty value must be
-            printable ASCII from ``!`` (U+0021) through ``~`` (U+007E), inclusive, excluding ``(`` and ``)``.
-            An empty value is treated as unset.
         protocol (ProtocolVersion): Serialization protocol to be used. If not set, `RESP3` will be used.
         inflight_requests_limit (Optional[int]): The maximum number of concurrent requests allowed to be in-flight
             (sent but not yet completed).
@@ -949,6 +936,21 @@ class BaseClientConfiguration:
                     addresses=[NodeAddress("my-service", 6379)],
                     address_resolver=my_resolver,
                 )
+        client_circuit_breaker (Optional[ClientCircuitBreakerConfiguration]): Configuration for the client-wide circuit
+            breaker. If not set, the circuit breaker is disabled.
+        lib_name (Optional[str]): Library name to be used for the client. Will be used with CLIENT SETINFO LIB-NAME
+            command during connection establishment. Useful for identifying a wrapping library or framework in
+            ``CLIENT INFO``/``CLIENT LIST`` output. Every character in a non-empty value must be printable ASCII
+            from ``!`` (U+0021) through ``~`` (U+007E), inclusive, excluding ``(`` and ``)``.
+            An empty value is treated as unset.
+            If not set, a client-specific default (e.g. ``GlidePy`` for the async client,
+            ``GlidePySync`` for the sync client) is used.
+        client_info_tag (Optional[str]): Optional tag appended to the library name in parentheses
+            (e.g. ``GlidePy(my-framework:1.2.3)``), preserving the underlying GLIDE library identity while
+            attributing a wrapping library or framework in ``CLIENT INFO``/``CLIENT LIST`` output. Applied on top of
+            the default library name or a configured ``lib_name``. Every character in a non-empty value must be
+            printable ASCII from ``!`` (U+0021) through ``~`` (U+007E), inclusive, excluding ``(`` and ``)``.
+            An empty value is treated as unset.
     """
 
     def __init__(
@@ -961,8 +963,6 @@ class BaseClientConfiguration:
         reconnect_strategy: Optional[BackoffStrategy] = None,
         database_id: Optional[int] = None,
         client_name: Optional[str] = None,
-        lib_name: Optional[str] = None,
-        client_info_tag: Optional[str] = None,
         protocol: ProtocolVersion = ProtocolVersion.RESP3,
         inflight_requests_limit: Optional[int] = None,
         client_az: Optional[str] = None,
@@ -972,6 +972,8 @@ class BaseClientConfiguration:
         client_side_cache: Optional[ClientSideCache] = None,
         address_resolver: Optional[Callable[[str, int], Tuple[str, int]]] = None,
         client_circuit_breaker: Optional[ClientCircuitBreakerConfiguration] = None,
+        lib_name: Optional[str] = None,
+        client_info_tag: Optional[str] = None,
     ):
         self.addresses = addresses
         self.use_tls = use_tls
@@ -1328,8 +1330,6 @@ class GlideClientConfiguration(BaseClientConfiguration):
         reconnect_strategy: Optional[BackoffStrategy] = None,
         database_id: Optional[int] = None,
         client_name: Optional[str] = None,
-        lib_name: Optional[str] = None,
-        client_info_tag: Optional[str] = None,
         protocol: ProtocolVersion = ProtocolVersion.RESP3,
         pubsub_subscriptions: Optional[PubSubSubscriptions] = None,
         inflight_requests_limit: Optional[int] = None,
@@ -1342,6 +1342,8 @@ class GlideClientConfiguration(BaseClientConfiguration):
         node_discovery_mode: NodeDiscoveryMode = NodeDiscoveryMode.STANDARD,
         address_resolver: Optional[Callable[[str, int], Tuple[str, int]]] = None,
         client_circuit_breaker: Optional[ClientCircuitBreakerConfiguration] = None,
+        lib_name: Optional[str] = None,
+        client_info_tag: Optional[str] = None,
     ):
         super().__init__(
             addresses=addresses,
@@ -1596,8 +1598,6 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
         reconnect_strategy: Optional[BackoffStrategy] = None,
         database_id: Optional[int] = None,
         client_name: Optional[str] = None,
-        lib_name: Optional[str] = None,
-        client_info_tag: Optional[str] = None,
         protocol: ProtocolVersion = ProtocolVersion.RESP3,
         periodic_checks: Union[
             PeriodicChecksStatus, PeriodicChecksManualInterval
@@ -1612,6 +1612,8 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
         client_side_cache: Optional[ClientSideCache] = None,
         address_resolver: Optional[Callable[[str, int], Tuple[str, int]]] = None,
         client_circuit_breaker: Optional[ClientCircuitBreakerConfiguration] = None,
+        lib_name: Optional[str] = None,
+        client_info_tag: Optional[str] = None,
     ):
         super().__init__(
             addresses=addresses,

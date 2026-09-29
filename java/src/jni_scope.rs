@@ -19,6 +19,7 @@ pub extern "system" fn Java_glide_ffi_resolvers_GlideScopeResolver_glideScopeTry
     client_id: jlong,
     connection_request_bytes: JByteArray,
     routing_slot: jint,
+    attempt_token: jlong,
 ) -> jlong {
     let bytes = match env.convert_byte_array(&connection_request_bytes) {
         Ok(b) => b,
@@ -31,7 +32,19 @@ pub extern "system" fn Java_glide_ffi_resolvers_GlideScopeResolver_glideScopeTry
         bytes,
         runtime.handle(),
         routing_slot as u16,
+        attempt_token as u64,
     )
+}
+
+/// Allocate a unique scope-acquire attempt token. Called once per `acquire()` and
+/// passed on every retry poll of `glideScopeTryAcquire`, so the core dedupes a
+/// single acquire's retries without serializing distinct concurrent borrowers.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_glide_ffi_resolvers_GlideScopeResolver_glideScopeNextAttemptToken(
+    _env: JNIEnv,
+    _class: JClass,
+) -> jlong {
+    glide_core::pool::next_scope_attempt_token() as jlong
 }
 
 /// Release a scope back to the pool. Fire-and-forget.
@@ -65,36 +78,20 @@ pub extern "system" fn Java_glide_ffi_resolvers_GlideScopeResolver_glideScopeExe
         None => return -2,
     };
 
-    // Verify scope exists
-    let registry = glide_core::pool::get_scope_registry();
-    if registry.get(&(scope_id as u64)).is_none() {
-        return -1;
-    }
+    let sid = scope_id as u64;
+
+    let client = match glide_core::scope::resolve_scope_parent(sid) {
+        Some(c) => c,
+        None => return -1,
+    };
 
     let runtime = get_runtime();
     let jvm = JVM.get().unwrap().clone();
-    let sid = scope_id as u64;
 
     runtime.spawn(async move {
-        let client_registry = glide_core::scope::get_client_registry();
-        let client = {
-            let pools = glide_core::pool::get_client_scope_pools();
-            let parent_id = pools
-                .iter()
-                .find(|e| {
-                    e.value()
-                        .try_lock()
-                        .map(|p| p.in_use.contains_key(&sid))
-                        .unwrap_or(false)
-                })
-                .map(|e| *e.key());
-
-            parent_id.and_then(|pid| client_registry.get(&pid).map(|e| e.value().clone()))
-        };
-
         let mut args = args;
         let result =
-            glide_core::scope::send_scope_command(sid, &cmd_name, &mut args, client.as_ref()).await;
+            glide_core::scope::send_scope_command(sid, &cmd_name, &mut args, &client).await;
 
         complete_callback(jvm, callback_id, result, false);
     });

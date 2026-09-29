@@ -1,0 +1,172 @@
+# DEVELOPER guide — `valkey-glide`
+
+## Prerequisites
+
+- **Rust** — install via [rustup](https://rustup.rs)
+- The crate depends on other in-repo crates via **path dependencies** (see the
+  Crates & dependencies section below), so **a monorepo checkout is required** —
+  it builds from a `valkey-io/valkey-glide` checkout where those crates sit
+  alongside it (this crate lives under `rust/`). No network fetch is needed to
+  resolve the dependencies.
+- A `valkey-server` (or `redis-server`) binary for integration tests.
+  The harness auto-discovers one on `PATH`; override with:
+
+  ```bash
+  export VALKEY_SERVER_PATH=/path/to/valkey-server
+  ```
+
+## Crates & dependencies
+
+The `valkey-glide` crate depends on several internal crates:
+
+| Package name        | Library name      | Directory                    | Depends on                                             |
+| ------------------- | ----------------- | ---------------------------- | ------------------------------------------------------ |
+| `valkey-glide`      | `glide`           | `rust/`                      | `glide-core`, `glide-core-engine`, `glide-logger`      |
+| `glide-core`        | `glide_core`      | `glide-core/`                | `glide-core-engine`, `glide-telemetry`, `glide-logger` |
+| `glide-core-engine` | `redis`           | `glide-core/redis-rs/redis/` | `glide-telemetry`, `glide-logger`                      |
+| `glide-telemetry`   | `glide_telemetry` | `glide-telemetry/`           | `glide-logger`                                         |
+| `glide-logger`      | `glide_logger`    | `glide-logger/`              | None                                                   |
+
+The `glide-core-engine` crate is forked from redis-rs 0.25.2, so it uses the `redis` library name.
+
+### Publishing and dual versioning
+
+Cargo requires every dependency of a published crate to also be published, so
+the internal crates it depends on must be published too. They are published
+with `0.x` versions and marked as internal, consistent with Rust conventions.
+
+In order to allow developers to build against the local source rather than a
+released version, the internal dependencies are declared with **both** `path`
+and `version` in `Cargo.toml`:
+
+```toml
+glide-core = { path = "../glide-core", version = "0.1.0" }
+```
+
+Cargo uses `path` when building locally, and `version` when the crate is resolved
+from crates.io after publishing.
+
+## Build
+
+```bash
+cargo build            # debug
+cargo build --release  # optimized
+```
+
+## Test
+
+```bash
+cargo unit-tests         # unit tests
+cargo doc-tests          # doctests
+cargo integration-tests  # integration tests
+cargo test               # all tests (unit, docs, and integration)
+```
+
+To run only some tests, pass a filter. A test runs if its full name (e.g.
+`value::from_valkey_value_tests::from_owned_valkey_value_array`) contains the filter:
+
+```bash
+cargo unit-tests value::              # unit tests containing `value::`
+cargo doc-tests cmd::Cmd              # doctests containing `cmd::Cmd`
+cargo integration-tests get_missing   # integration tests containing `get_missing`
+```
+
+To run one integration test file, use `cargo test --test <file>`, with an
+optional filter:
+
+```bash
+cargo test --test it_string               # every test in tests/it_string.rs
+cargo test --test it_string get_missing   # only those containing `get_missing`
+```
+
+Integration tests each boot their own ephemeral server on a free port and tear it
+down on drop. The test fails if no server binary is found (see
+`VALKEY_SERVER_PATH` above) or the server cannot be started.
+
+## Lint & format
+
+Recommended checks before opening a PR:
+
+```bash
+cargo fmt --all -- --check
+cargo clippy --all-features --all-targets -- -D warnings
+cargo clippy --all-targets -- -D warnings
+cargo deny --config ../deny.toml check
+cargo doc --no-deps --document-private-items
+```
+
+## Layout
+
+```text
+src/
+  lib.rs          crate root + public re-exports
+  error.rs        GlideError (mirrors Python exceptions)
+  config/         client configuration -> glide_core ConnectionRequest
+    common.rs     shared types + builder-setter macro + request lowering
+    standalone.rs GlideClientConfiguration
+    cluster.rs    GlideClusterClientConfiguration
+  routes.rs       cluster routing (Route -> RoutingInfo)
+  value.rs        ValkeyValue and typed conversions (RESP2 + RESP3)
+  write.rs        ToValkeyArgs and ValkeyWrite argument encoding
+  executor.rs     CommandExecutor seam + custom_command
+  client/
+    mod.rs        GlideClient / GlideClusterClient (async)
+    connection.rs typed Pipeline execution (PipelineExt::query_async)
+  pipeline_options.rs  Pipeline execution options (exec)
+  script.rs       Script (SHA-caching EVALSHA with EVAL fallback)
+  telemetry.rs    OpenTelemetry config + init
+  sync/mod.rs     blocking clients over a shared runtime
+  mock_tests/     server-free encoding/decoding tests for the extensions
+  commands/
+    core.rs       the unified command table (AsyncCommands / Commands)
+    scan.rs       GLIDE-owned scan iterators
+    <family>.rs   extension traits (blanket impls over CommandExecutor)
+tests/
+  common/         shared harness (server, cluster, timeout, pubsub, macros)
+  it_*.rs         per-family live tests (one file per command family)
+```
+
+## Adding a command
+
+1. Pick the family module in `src/commands/`.
+2. Add an `async fn` to that family's trait following the template in
+   `string.rs`: build a `Cmd`, call `self.execute_command(cmd, None)`,
+   convert with a `crate::value::*` helper.
+3. Add an integration test in the family's `tests/it_<family>.rs` (use the
+   `resp_test!` macro for RESP2/RESP3 coverage), and a server-free encoding test
+   in `src/mock_tests/<family>.rs`.
+4. `cargo test && cargo clippy --all-targets`.
+
+## Extending value conversion
+
+Because the client negotiates **RESP3** by default, replies may arrive as
+`ValkeyValue::Map`, `ValkeyValue::Double`, `ValkeyValue::Boolean`, or
+`ValkeyValue::VerbatimString`.
+Prefer the helpers in `src/value.rs`, which already normalize these, and add new
+shapes there rather than in individual commands.
+
+## Maintaining the unified command table
+
+The unified `AsyncCommands` / `Commands` traits are defined by the
+**hand-maintained** command table in `src/commands/core.rs` (one
+`implement_glide_commands!` invocation; each `fn name<G: Bound>(args);` entry
+expands to both the async and the blocking method, delegating to the fork's
+`Cmd::<name>()` constructor for identical wire encoding).
+
+To add or change an entry, edit the table directly — then run the
+signature-parity guard, which compares every entry against the vendored
+redis-rs fork's `implement_commands!` table (names, generic order, argument
+lists) and fails on any divergence. It also checks the `scan*` methods
+(names, generics, and arguments must match the fork's macro definitions;
+receivers and return types deliberately deviate — GLIDE-owned iterators on
+the owned-send path, see `src/commands/scan.rs`):
+
+```bash
+cargo test --test it_parity_guard   # pure Rust; resolves the fork via cargo metadata
+```
+
+When the pinned fork rev is bumped, run the verifier to see what changed in
+the fork's surface, update the table deliberately, and refresh the pinned rev
+references. Commands beyond the fork's surface belong
+in the per-family extension traits (`src/commands/<family>.rs`), not in the
+table.

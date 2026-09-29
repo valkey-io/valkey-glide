@@ -32,6 +32,7 @@ var _ interfaces.GlideClientCommands = (*Client)(nil)
 type Client struct {
 	baseClient
 	clientConfig *config.ClientConfiguration // stored for scoped_connection
+	connReqBytes []byte                      // pre-serialized ConnectionRequest (set for pool-borrowed clients)
 }
 
 // Creates a new [Client] instance and establishes a connection to a standalone Valkey server.

@@ -4,8 +4,8 @@ package glide
 
 // #include "lib.h"
 //
-// void successCallback(void *channelPtr, struct CommandResponse *message);
-// void failureCallback(void *channelPtr, char *errMessage, RequestErrorType errType);
+// void successCallback(uintptr_t requestID, struct CommandResponse *message);
+// void failureCallback(uintptr_t requestID, char *errMessage, RequestErrorType errType);
 import "C"
 
 import (
@@ -147,25 +147,23 @@ func (s *IsolatedScope) cmd(ctx context.Context, command string, args ...string)
 
 	// Use async callback pattern (same as regular commands) — no thread blocking
 	resultChannel := make(chan payload, 1)
-	resultChannelPtr := unsafe.Pointer(&resultChannel)
-
-	pinner := pinner{}
-	pinnedChannelPtr := uintptr(pinner.Pin(resultChannelPtr))
-	defer pinner.Unpin()
+	requestID := registerRequest(resultChannel)
 
 	rc := C.glide_scope_execute_async(
 		C.uint64_t(s.scopeID),
 		(*C.uint8_t)(unsafe.Pointer(&wireData[0])),
 		C.uintptr_t(len(wireData)),
-		C.uintptr_t(pinnedChannelPtr),
+		C.uintptr_t(requestID),
 		C.SuccessCallback(unsafe.Pointer(C.successCallback)),
 		C.FailureCallback(unsafe.Pointer(C.failureCallback)),
 	)
 
 	if rc == -1 {
+		takeRequest(requestID)
 		return "", fmt.Errorf("scope execute failed: invalid scope %d", s.scopeID)
 	}
 	if rc == -2 {
+		takeRequest(requestID)
 		return "", errors.New("scope execute failed: invalid command")
 	}
 
@@ -173,12 +171,9 @@ func (s *IsolatedScope) cmd(ctx context.Context, command string, args ...string)
 	var result payload
 	select {
 	case <-ctx.Done():
-		// Async operation is in-flight — wait for it to complete to avoid use-after-free
-		go func() {
-			if p := <-resultChannel; p.value != nil {
-				C.free_command_response(p.value)
-			}
-		}()
+		if _, claimed := takeRequest(requestID); !claimed {
+			go discardResponse(resultChannel)
+		}
 		return "", ctx.Err()
 	case result = <-resultChannel:
 	}
@@ -256,14 +251,20 @@ func (client *Client) ScopedConnection(ctx context.Context, timeout time.Duratio
 	clientID := uint64(uintptr(client.coreClient))
 	client.mu.Unlock()
 
-	// Get connection request bytes
-	request, err := client.getConnectionRequest()
-	if err != nil {
-		return nil, err
-	}
-	connReqBytes, err := proto.Marshal(request)
-	if err != nil {
-		return nil, err
+	// Use pre-serialized connection request bytes if available (pool-borrowed clients),
+	// otherwise serialize from the client configuration.
+	var connReqBytes []byte
+	if client.connReqBytes != nil {
+		connReqBytes = client.connReqBytes
+	} else {
+		request, err := client.getConnectionRequest()
+		if err != nil {
+			return nil, err
+		}
+		connReqBytes, err = proto.Marshal(request)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	routingSlot := uint16(0)
@@ -273,6 +274,11 @@ func (client *Client) ScopedConnection(ctx context.Context, timeout time.Duratio
 
 	deadline := time.Now().Add(timeout)
 	backoff := 10 * time.Millisecond
+
+	// One logical acquire: mint a single attempt token and pass it on every retry
+	// poll, so the core dedupes this acquire's retries to one in-flight creation
+	// while distinct concurrent acquires each dial their own.
+	attemptToken := C.glide_scope_next_attempt_token()
 
 	for {
 		select {
@@ -286,6 +292,7 @@ func (client *Client) ScopedConnection(ctx context.Context, timeout time.Duratio
 			(*C.uint8_t)(unsafe.Pointer(&connReqBytes[0])),
 			C.uintptr_t(len(connReqBytes)),
 			C.uint16_t(routingSlot),
+			attemptToken,
 		)
 
 		if scopeID >= 0 {
@@ -350,14 +357,20 @@ func (client *ClusterClient) ScopedConnection(
 	clientID := uint64(uintptr(client.coreClient))
 	client.mu.Unlock()
 
-	// Get connection request bytes
-	request, err := client.getConnectionRequest()
-	if err != nil {
-		return nil, err
-	}
-	connReqBytes, err := proto.Marshal(request)
-	if err != nil {
-		return nil, err
+	// Use pre-serialized connection request bytes if available (pool-borrowed clients),
+	// otherwise serialize from the client configuration.
+	var connReqBytes []byte
+	if client.connReqBytes != nil {
+		connReqBytes = client.connReqBytes
+	} else {
+		request, err := client.getConnectionRequest()
+		if err != nil {
+			return nil, err
+		}
+		connReqBytes, err = proto.Marshal(request)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	routingSlot := uint16(0)
@@ -366,6 +379,11 @@ func (client *ClusterClient) ScopedConnection(
 	}
 	deadline := time.Now().Add(timeout)
 	backoff := 10 * time.Millisecond
+
+	// One logical acquire: mint a single attempt token and pass it on every retry
+	// poll, so the core dedupes this acquire's retries to one in-flight creation
+	// while distinct concurrent acquires each dial their own.
+	attemptToken := C.glide_scope_next_attempt_token()
 
 	for {
 		select {
@@ -379,6 +397,7 @@ func (client *ClusterClient) ScopedConnection(
 			(*C.uint8_t)(unsafe.Pointer(&connReqBytes[0])),
 			C.uintptr_t(len(connReqBytes)),
 			C.uint16_t(routingSlot),
+			attemptToken,
 		)
 
 		if scopeID >= 0 {

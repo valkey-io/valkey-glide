@@ -8,13 +8,28 @@ import lombok.NonNull;
 /**
  * Configuration settings for IAM authentication.
  *
- * @example
- *     <pre>{@code
+ * <p>Example:
+ *
+ * <pre>{@code
+ * // Standard IAM authentication (uses default AWS credential chain):
  * IamAuthConfig iamConfig = IamAuthConfig.builder()
  *     .clusterName("my-cluster")
  *     .service(ServiceType.ELASTICACHE)
  *     .region("us-east-1")
  *     .refreshIntervalSeconds(300)
+ *     .build();
+ *
+ * // Custom credentials provider (e.g., from HashiCorp Vault):
+ * GlideCredentialProvider vaultCallback = () -> AwsCredentials.builder()
+ *     .accessKeyId(vaultClient.getAccessKeyId())
+ *     .secretAccessKey(vaultClient.getSecretAccessKey())
+ *     .sessionToken(vaultClient.getSessionToken()) // optional
+ *     .build();
+ * IamAuthConfig iamConfigWithCustomProvider = IamAuthConfig.builder()
+ *     .clusterName("my-cluster")
+ *     .service(ServiceType.ELASTICACHE)
+ *     .region("us-east-1")
+ *     .credentialsProvider(vaultCallback)
  *     .build();
  * }</pre>
  */
@@ -35,4 +50,37 @@ public class IamAuthConfig {
      * defaults to 300 seconds (5 min).
      */
     private final Integer refreshIntervalSeconds;
+
+    /**
+     * Optional custom credentials provider. When set, this provider is invoked to retrieve AWS
+     * credentials (access key ID, secret access key, and optional session token) used to sign IAM
+     * authentication tokens, instead of relying on the default AWS credential chain in Rust.
+     *
+     * <p>This is useful in environments where credentials are managed by tools like HashiCorp Vault,
+     * custom STS assume-role flows, or any other non-standard credential source.
+     *
+     * <p>When not set (null), the default AWS credential chain is used (environment variables,
+     * ~/.aws/credentials, EC2/ECS metadata service, etc.).
+     *
+     * <p>The provider must return a non-null {@link AwsCredentials} instance. {@code accessKeyId} and
+     * {@code secretAccessKey} must not be blank; {@code sessionToken} may be {@code null} for
+     * long-term credentials.
+     *
+     * <p>Example:
+     *
+     * <pre>{@code
+     * GlideCredentialProvider provider = () -> AwsCredentials.builder()
+     *     .accessKeyId(myVaultClient.getAccessKeyId())
+     *     .secretAccessKey(myVaultClient.getSecretAccessKey())
+     *     .sessionToken(myVaultClient.getSessionToken())
+     *     .build();
+     * IamAuthConfig iamConfig = IamAuthConfig.builder()
+     *     .clusterName("my-cluster")
+     *     .service(ServiceType.ELASTICACHE)
+     *     .region("us-east-1")
+     *     .credentialsProvider(provider)
+     *     .build();
+     * }</pre>
+     */
+    private final GlideCredentialProvider credentialsProvider;
 }

@@ -30,7 +30,7 @@
 //!   SHA-256 fingerprint of the certificate chain DER only, mirroring the IAM
 //!   module's logging discipline.
 
-use logger_core::{log_debug, log_error, log_info, log_warn};
+use glide_logger::{log_debug, log_error, log_info, log_warn};
 use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -71,7 +71,7 @@ pub(crate) struct ClientCertReloadState {
     /// Root/CA certificate bytes (PEM), read once at construction and re-attached
     /// to every produced `TlsConnParams`. Root reload is out of scope, so this is
     /// constant for the client's lifetime.
-    // TODO(#6529): when root/CA reload lands, this field becomes reloadable
+    // TODO #6529: when root/CA reload lands, this field becomes reloadable
     // material rather than a constant. https://github.com/valkey-io/valkey-glide/issues/6529
     root_cert: Option<Vec<u8>>,
 }

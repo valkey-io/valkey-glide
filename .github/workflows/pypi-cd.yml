@@ -5,13 +5,13 @@ name: PyPI - Continuous Deployment
 on:
     pull_request:
         paths:
-            - .github/workflows/pypi-cd.yml
-            - .github/workflows/build-python-wrapper/action.yml
-            - .github/workflows/start-self-hosted-runner/action.yml
-            - .github/actions/install-shared-dependencies/action.yml
             - .github/actions/install-engine/action.yml
+            - .github/actions/install-shared-dependencies/action.yml
             - .github/json_matrices/**
+            - .github/workflows/build-python-wrapper/action.yml
             - .github/workflows/create-test-matrices/action.yml
+            - .github/workflows/pypi-cd.yml
+            - .github/workflows/start-self-hosted-runner/action.yml
     push:
         tags:
             - "v*.*"
@@ -48,7 +48,7 @@ jobs:
             TESTS_PLATFORM_MATRIX: ${{ steps.load-platform-matrix.outputs.TESTS_PLATFORM_MATRIX }}
         steps:
             - name: Checkout
-              uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
             - name: load-platform-matrix
               id: load-platform-matrix
@@ -78,7 +78,7 @@ jobs:
         environment: AWS_ACTIONS
         steps:
             - name: Checkout
-              uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
               with:
                   fetch-depth: 0
 
@@ -107,7 +107,7 @@ jobs:
               run: sudo chown -R $USER:$USER /home/ubuntu/actions-runner/_work/valkey-glide
 
             - name: Checkout
-              uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
               with:
                   submodules: "true"
 
@@ -165,7 +165,7 @@ jobs:
             - name: Set up Python 3.14
               if: ${{ !contains(matrix.build.RUNNER, 'self-hosted') }}
               id: setup_python
-              uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+              uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
               with:
                   python-version: "3.14"
 
@@ -501,7 +501,7 @@ jobs:
         needs: publish-binaries
         steps:
             - name: Checkout
-              uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
             - name: Set the release version
               shell: bash
@@ -553,7 +553,7 @@ jobs:
             - name: Async client - Publish binaries and source to PyPI
               # Trusted Publishing (OIDC) with PEP 740 attestations; requires the
               # top-level `id-token: write` permission and a GitHub-hosted runner.
-              uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b # release/v1
+              uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
               with:
                   packages-dir: python/glide-async/dist
                   skip-existing: true
@@ -575,7 +575,7 @@ jobs:
         needs: publish-binaries
         steps:
             - name: Checkout
-              uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5
 
             - name: Set the release version
               shell: bash
@@ -631,7 +631,7 @@ jobs:
             - name: Sync client - Publish binaries and source to PyPI
               # Trusted Publishing (OIDC) with PEP 740 attestations; requires the
               # top-level `id-token: write` permission and a GitHub-hosted runner.
-              uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b # release/v1
+              uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
               with:
                   packages-dir: python/glide-sync/dist
                   skip-existing: true
@@ -666,10 +666,10 @@ jobs:
               run: sudo chown -R $USER:$USER /home/ubuntu/actions-runner/_work/valkey-glide
 
             - name: checkout
-              uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
             - name: Set up Python
-              uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+              uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
               with:
                   python-version: 3.12
 

@@ -111,7 +111,6 @@ class _GlideFFI:
                 void* arena;
             } CommandResult;
 
-            const char* get_response_type_string(int response_type);
             void free_command_response(CommandResponse* command_response_ptr);
             void free_response_arena(void* arena_ptr);
             void free_command_result(CommandResult* command_result_ptr);
@@ -433,11 +432,13 @@ class _GlideFFI:
             );
 
             // ============== ISOLATED EXECUTION SCOPES ==============
+            uint64_t glide_scope_next_attempt_token(void);
             int64_t glide_scope_try_acquire(
                 uint64_t client_id,
                 const uint8_t* connection_request_ptr,
                 size_t connection_request_len,
-                uint16_t routing_slot
+                uint16_t routing_slot,
+                uint64_t attempt_token
             );
             int32_t glide_scope_release(uint64_t scope_id, uint64_t client_id);
             CommandResult* glide_scope_execute(

@@ -3,7 +3,6 @@
 package integTest
 
 import (
-	"os"
 	"path/filepath"
 	"strings"
 
@@ -217,18 +216,18 @@ func (suite *GlideTestSuite) TestTlsLoadClientCertificateAndKeyFromFile() {
 // It resolves the paths but does not stat them; callers use require.NoError
 // so a missing file fails the test at the top instead of silently skipping.
 func getClientCertAndKeyPaths() (certPath, keyPath string, err error) {
-	glideHome := os.Getenv("GLIDE_HOME_DIR")
-	if glideHome == "" {
-		glideHome = "../.."
-	}
-	certPath, err = filepath.Abs(filepath.Join(glideHome, "utils", "tls_crts", "server.crt"))
+	tlsDir := filepath.Join("..", "..", "utils", "tls_crts")
+
+	certPath, err = filepath.Abs(filepath.Join(tlsDir, "server.crt"))
 	if err != nil {
 		return "", "", err
 	}
-	keyPath, err = filepath.Abs(filepath.Join(glideHome, "utils", "tls_crts", "server.key"))
+
+	keyPath, err = filepath.Abs(filepath.Join(tlsDir, "server.key"))
 	if err != nil {
 		return "", "", err
 	}
+
 	return certPath, keyPath, nil
 }
 

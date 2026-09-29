@@ -1,8 +1,8 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 #[allow(unused_imports)]
 use bytes::{Bytes, BytesMut};
+use glide_logger::log_error;
 use integer_encoding::VarInt;
-use logger_core::log_error;
 use protobuf::Message;
 use std::io;
 

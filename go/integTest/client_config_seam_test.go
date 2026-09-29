@@ -67,12 +67,7 @@ func getCaCertificate() ([]byte, error) {
 		return caCertificatePem, nil
 	}
 
-	glideHome := os.Getenv("GLIDE_HOME_DIR")
-	if glideHome == "" {
-		glideHome = "../.."
-	}
-
-	absPath, err := filepath.Abs(filepath.Join(glideHome, "utils", "tls_crts", "ca.crt"))
+	absPath, err := filepath.Abs(filepath.Join("..", "..", "utils", "tls_crts", "ca.crt"))
 	if err != nil {
 		return nil, err
 	}

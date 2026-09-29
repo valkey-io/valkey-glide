@@ -141,7 +141,9 @@ describe("Auth tests", () => {
             }
         }
 
-        await deleteAclUsernameAndPassword(managementClient, USERNAME);
+        if (managementClient) {
+            await deleteAclUsernameAndPassword(managementClient, USERNAME);
+        }
 
         if (cmdCluster) {
             await flushAndCloseClient(false, cmdCluster.getAddresses());
@@ -413,7 +415,9 @@ describe("Auth tests", () => {
                         // Set a key to ensure connection is established
                         await client.set("test_key", "test_value");
                         // Update server password
-                        await client.configSet({ requirepass: NEW_PASSWORD });
+                        await client.configSet({
+                            requirepass: NEW_PASSWORD,
+                        });
                         // Kill client connections
                         await managementClient.customCommand([
                             "CLIENT",
@@ -628,10 +632,7 @@ describe("IAM Auth: Mock Credentials", () => {
 
             // Skip test if AWS credentials are not set in OS environment
             if (!process.env.AWS_ACCESS_KEY_ID) {
-                console.log(
-                    "Skipping IAM test - AWS credentials not set in OS environment",
-                );
-                return;
+                return; // IAM tests require AWS credentials — see DEVELOPER.md
             }
 
             const username = IAM_USERNAME; // Use default user
@@ -663,7 +664,7 @@ describe("IAM Auth: Mock Credentials", () => {
                         username: username,
                         iamConfig: iamConfig,
                     },
-                    useTLS: global.TLS, // Use TLS setting from test configuration
+                    useTLS: global.TLS,
                 });
 
                 // Basic ping test to verify connection
@@ -697,10 +698,7 @@ describe("IAM Auth: Mock Credentials", () => {
 
             // Skip test if AWS credentials are not set in OS environment
             if (!process.env.AWS_ACCESS_KEY_ID) {
-                console.log(
-                    "Skipping IAM test - AWS credentials not set in OS environment",
-                );
-                return;
+                return; // IAM tests require AWS credentials — see DEVELOPER.md
             }
 
             const username = IAM_USERNAME;
@@ -732,7 +730,7 @@ describe("IAM Auth: Mock Credentials", () => {
                         username: username,
                         iamConfig: iamConfig,
                     },
-                    useTLS: global.TLS, // Use TLS setting from test configuration
+                    useTLS: global.TLS,
                 });
 
                 // Verify initial connection
@@ -764,10 +762,7 @@ describe("IAM Auth: Mock Credentials", () => {
 
             // Skip test if AWS credentials are not set in OS environment
             if (!process.env.AWS_ACCESS_KEY_ID) {
-                console.log(
-                    "Skipping IAM test - AWS credentials not set in OS environment",
-                );
-                return;
+                return; // IAM tests require AWS credentials — see DEVELOPER.md
             }
 
             const username = IAM_USERNAME;
@@ -799,7 +794,7 @@ describe("IAM Auth: Mock Credentials", () => {
                         username: username,
                         iamConfig: iamConfig,
                     },
-                    useTLS: global.TLS, // Use TLS setting from test configuration
+                    useTLS: global.TLS,
                 });
 
                 // Basic ping test to verify connection
@@ -833,10 +828,7 @@ describe("IAM Auth: Mock Credentials", () => {
 
             // Skip test if AWS credentials are not set in OS environment
             if (!process.env.AWS_ACCESS_KEY_ID) {
-                console.log(
-                    "Skipping IAM test - AWS credentials not set in OS environment",
-                );
-                return;
+                return; // IAM tests require AWS credentials — see DEVELOPER.md
             }
 
             const username = IAM_USERNAME;
@@ -868,7 +860,7 @@ describe("IAM Auth: Mock Credentials", () => {
                         username: username,
                         iamConfig: iamConfig,
                     },
-                    useTLS: global.TLS, // Use TLS setting from test configuration
+                    useTLS: global.TLS,
                 });
 
                 // Verify initial connection

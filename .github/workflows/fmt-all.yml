@@ -6,6 +6,7 @@ name: FMT All Languages
 permissions:
     contents: read
     actions: write
+    id-token: write
 
 on:
     workflow_dispatch:
@@ -28,6 +29,40 @@ concurrency:
     cancel-in-progress: true
 
 jobs:
+    # --- Rust crate tests ---------------------------------------------------------------------- #
+
+    fmt-glide-logger:
+        if: github.repository_owner == 'valkey-io'
+        uses: ./.github/workflows/glide-logger.yml
+
+    fmt-glide-telemetry:
+        if: github.repository_owner == 'valkey-io'
+        uses: ./.github/workflows/glide-telemetry.yml
+
+    fmt-glide-core-engine:
+        if: github.repository_owner == 'valkey-io'
+        uses: ./.github/workflows/glide-core-engine.yml
+        with:
+            use-self-hosted-linux: ${{ inputs.use-self-hosted-linux }}
+
+    fmt-glide-core:
+        if: github.repository_owner == 'valkey-io'
+        uses: ./.github/workflows/glide-core.yml
+        with:
+            full-matrix: true
+            run-with-macos: ${{ inputs.run-with-macos }}
+            use-self-hosted-linux: ${{ inputs.use-self-hosted-linux }}
+
+    fmt-ffi:
+        if: github.repository_owner == 'valkey-io'
+        uses: ./.github/workflows/ffi.yml
+
+    # --- Client tests -------------------------------------------------------------------------- #
+
+    fmt-rust:
+        if: github.repository_owner == 'valkey-io'
+        uses: ./.github/workflows/rust.yml
+
     fmt-python:
         if: github.repository_owner == 'valkey-io'
         uses: ./.github/workflows/python.yml
@@ -43,6 +78,8 @@ jobs:
             full-matrix: true
             run-with-macos: ${{ inputs.run-with-macos }}
             use-self-hosted-linux: ${{ inputs.use-self-hosted-linux }}
+        secrets:
+            AWS_CODEBUILD_ROLE_ARN: ${{ secrets.AWS_CODEBUILD_ROLE_ARN }}
 
     fmt-go:
         if: github.repository_owner == 'valkey-io'
@@ -66,17 +103,3 @@ jobs:
         with:
             full-matrix: true
             windows-only: true
-
-    fmt-rust:
-        if: github.repository_owner == 'valkey-io'
-        uses: ./.github/workflows/rust.yml
-        with:
-            full-matrix: true
-            run-with-macos: ${{ inputs.run-with-macos }}
-            use-self-hosted-linux: ${{ inputs.use-self-hosted-linux }}
-
-    fmt-redis-rs:
-        if: github.repository_owner == 'valkey-io'
-        uses: ./.github/workflows/redis-rs.yml
-        with:
-            use-self-hosted-linux: ${{ inputs.use-self-hosted-linux }}

@@ -141,6 +141,27 @@ describe("ReadOnlyMode", () => {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "read-only mode rejects AZAffinityAllNodes strategy_%p",
+        async (protocol) => {
+            // Test that read-only mode with AZAffinityAllNodes strategy fails during client creation
+            await expect(
+                GlideClient.createClient({
+                    ...getClientConfigurationOption(
+                        cluster.getAddresses(),
+                        protocol,
+                    ),
+                    readOnly: true,
+                    readFrom: "AZAffinityAllNodes",
+                    clientAz: "us-east-1a",
+                }),
+            ).rejects.toThrow(
+                /read-only mode is not compatible with AZAffinity/,
+            );
+        },
+        10000,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         "read-only mode accepts PreferReplica strategy_%p",
         async (protocol) => {
             client = await GlideClient.createClient({

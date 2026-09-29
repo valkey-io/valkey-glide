@@ -4,8 +4,8 @@ package glide
 
 // #include "lib.h"
 //
-// void successCallback(void *channelPtr, struct CommandResponse *message);
-// void failureCallback(void *channelPtr, char *errMessage, RequestErrorType errType);
+// void successCallback(uintptr_t requestID, struct CommandResponse *message);
+// void failureCallback(uintptr_t requestID, char *errMessage, RequestErrorType errType);
 import "C"
 
 import (
@@ -114,6 +114,18 @@ func NewClientPool(clientConfig *config.ClientConfiguration, poolConfig PoolConf
 		return nil, errors.New(
 			"pool clients cannot have pubsub subscriptions configured; " +
 				"use the main client's pubsub API instead",
+		)
+	}
+
+	// Reject a custom address resolver. It is a per-client callback registered
+	// with the core outside the serialized ConnectionRequest; glide_pool_create
+	// takes only the bytes, so the pool cannot forward it. The probe below runs
+	// a real client and can pass, but pooled connections would then use the
+	// untranslated address and fail at runtime — so fail fast here instead.
+	if clientConfig.GetAddressResolver() != nil {
+		return nil, errors.New(
+			"pool clients cannot use a custom address resolver; " +
+				"resolve addresses before configuring the pool",
 		)
 	}
 
@@ -242,12 +254,16 @@ func (p *ClientPool) GetClient(clientID int64) (*PooledClient, error) {
 
 	// Create a Client wrapper pointing to the pooled adapter.
 	// The adapter is an AsyncClient type — commands via C.command() fire callbacks.
+	// connReqBytes carries the pool's serialized ConnectionRequest so ScopedConnection
+	// works on the borrowed client. clientConfig is intentionally not set: ScopedConnection
+	// always uses connReqBytes when present, so a config object here would never be read.
 	client := &Client{
 		baseClient: baseClient{
 			coreClient: unsafe.Pointer(adapterPtr),
-			pending:    make(map[unsafe.Pointer]struct{}),
+			pending:    make(map[uintptr]struct{}),
 			mu:         &sync.Mutex{},
 		},
+		connReqBytes: p.connReq,
 	}
 	client.setMessageHandler(NewMessageHandler(nil, nil))
 
@@ -329,6 +345,18 @@ func NewClusterClientPool(clientConfig *config.ClusterClientConfiguration, poolC
 		return nil, errors.New(
 			"pool clients cannot have pubsub subscriptions configured; " +
 				"use the main client's pubsub API instead",
+		)
+	}
+
+	// Reject a custom address resolver. It is a per-client callback registered
+	// with the core outside the serialized ConnectionRequest; glide_pool_create
+	// takes only the bytes, so the pool cannot forward it. The probe below runs
+	// a real client and can pass, but pooled connections would then use the
+	// untranslated address and fail at runtime — so fail fast here instead.
+	if clientConfig.GetAddressResolver() != nil {
+		return nil, errors.New(
+			"pool clients cannot use a custom address resolver; " +
+				"resolve addresses before configuring the pool",
 		)
 	}
 

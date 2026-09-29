@@ -1,0 +1,63 @@
+version: 0.2
+
+# node-windows-ec2.yml
+# AWS CodeBuild buildspec - EC2-orchestrated Windows CI
+# Runs on: Linux CodeBuild (cheap orchestrator - BUILD_GENERAL1_SMALL)
+#
+# CodeBuild only orchestrates: it launches Linux + Windows EC2s,
+# polls S3 for the build result, and downloads the test report.
+# All actual building and testing happens on the EC2 instances.
+#
+# See utils/ec2_orchestrator.py for the orchestration logic.
+# See docs/windows-ci-linux-ec2-ami-guide.md and
+#     docs/windows-ci-codebuild-ami-guide.md for AMI creation.
+#
+# Required CodeBuild project settings:
+#   Environment type: LINUX_CONTAINER
+#   Image: aws/codebuild/standard:7.0
+#   Compute: BUILD_GENERAL1_SMALL
+#
+# Required environment variables (CodeBuild project):
+#   EC2_WINDOWS_AMI_ID           - Windows AMI with Node/Rust/MSVC/protoc pre-installed
+#   EC2_LINUX_AMI_ID             - Linux AMI with Valkey pre-installed
+#   EC2_SUBNET_ID                - Subnet in the same VPC as CodeBuild
+#   EC2_SECURITY_GROUP           - Security group ID
+#   EC2_INSTANCE_PROFILE         - IAM instance profile for Linux EC2
+#   EC2_WINDOWS_INSTANCE_PROFILE - IAM instance profile for Windows EC2
+#   EC2_WINDOWS_INSTANCE_TYPE    - default c5.2xlarge
+#   EC2_LINUX_INSTANCE_TYPE      - default t3.small
+#   REPORT_BUCKET                - S3 bucket for test reports
+#   AWS_REGION                   - default us-east-1
+#   NODE_VERSION                 - Node.js version (informational)
+
+env:
+    variables:
+        AWS_REGION: "us-east-1"
+        NODE_VERSION: "20.18.0"
+        EC2_WINDOWS_INSTANCE_TYPE: "c5.2xlarge"
+        EC2_LINUX_INSTANCE_TYPE: "t3.small"
+
+phases:
+    install:
+        commands:
+            # boto3 is pre-installed in aws/codebuild/standard:7.0 — no install needed.
+            - pip show boto3 | grep Version
+
+    build:
+        commands:
+            - |
+                export BUILD_ID=$(echo "$CODEBUILD_BUILD_ID" | tr ':' '-')
+                export COMMIT_SHA="$CODEBUILD_RESOLVED_SOURCE_VERSION"
+                export GHA_RUN_ID="${GHA_RUN_ID:-${BUILD_ID}}"
+                mkdir -p node
+                python3 utils/ec2_orchestrator.py
+
+    post_build:
+        commands:
+            - echo "Build complete. Test report available as artifact if downloaded."
+
+artifacts:
+    files:
+        - "test-report*.html"
+    base-directory: "node"
+    discard-paths: yes

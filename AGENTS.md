@@ -16,7 +16,7 @@ This is the Valkey GLIDE mono-repository containing a Rust core (`glide-core`) a
 - `python/` - Python async/sync client bindings
 - `node/` - Node.js/TypeScript client bindings with npm
 - `go/` - Go client bindings
-- `logger_core/` - Shared logging infrastructure
+- `glide-logger/` - Shared logging infrastructure
 - `utils/` - Shared utilities and cluster management tools
 - `benchmarks/` - Performance benchmarks across languages
 - `examples/` - Usage examples for each language binding
@@ -259,18 +259,18 @@ Use conventional commit format for all commit messages:
 
 ```text
 valkey-glide/
-├── glide-core/          # Core Rust implementation
-├── ffi/                 # Foreign Function Interface layer
-├── java/                # Java client bindings (Gradle)
-├── python/              # Python async/sync bindings
-├── node/                # Node.js/TypeScript bindings (npm)
-├── go/                  # Go client bindings
-├── logger_core/         # Shared logging infrastructure
-├── utils/               # Cluster management and utilities
-├── benchmarks/          # Performance benchmarks
-├── examples/            # Usage examples per language
-├── docs/                # Documentation (MkDocs)
 ├── .github/workflows/   # CI/CD pipelines
+├── benchmarks/          # Performance benchmarks
+├── docs/                # Documentation (MkDocs)
+├── examples/            # Usage examples per language
+├── ffi/                 # Foreign Function Interface layer
+├── glide-core/          # Core Rust implementation
+├── glide-logger/        # Shared logging infrastructure
+├── go/                  # Go client bindings
+├── java/                # Java client bindings (Gradle)
+├── node/                # Node.js/TypeScript bindings (npm)
+├── python/              # Python async/sync bindings
+├── utils/               # Cluster management and utilities
 └── Makefile            # Top-level build orchestration
 ```
 

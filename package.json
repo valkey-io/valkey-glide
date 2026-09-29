@@ -1,10 +1,10 @@
 {
     "devDependencies": {
-        "@eslint/js": "9",
+        "@eslint/js": "10",
         "@types/eslint-config-prettier": "6",
         "eslint": "10",
         "eslint-config-prettier": "10",
-        "eslint-plugin-jsdoc": "63",
+        "eslint-plugin-jsdoc": "64",
         "prettier": "3",
         "prettier-eslint": "17",
         "typescript": "5",

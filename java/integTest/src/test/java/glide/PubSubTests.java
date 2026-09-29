@@ -318,6 +318,29 @@ public class PubSubTests {
         fail(message);
     }
 
+    /**
+     * Reports whether the server has confirmed an exact-channel subscription for the client. The
+     * caller must hold a single exact subscription, because a binary channel does not round-trip to
+     * the String keys {@code getActualSubscriptions()} exposes, so a non-empty EXACT set is the way
+     * to recognize it.
+     */
+    private boolean exactSubscriptionConfirmed(BaseClient client, boolean standalone)
+            throws Exception {
+        Set<String> exact =
+                standalone
+                        ? ((GlideClient) client)
+                                .getSubscriptions()
+                                .get()
+                                .getActualSubscriptions()
+                                .get(PubSubChannelMode.EXACT)
+                        : ((GlideClusterClient) client)
+                                .getSubscriptions()
+                                .get()
+                                .getActualSubscriptions()
+                                .get(PubSubClusterChannelMode.EXACT);
+        return exact != null && !exact.isEmpty();
+    }
+
     @AfterEach
     @SneakyThrows
     public void cleanup() {
@@ -1508,10 +1531,10 @@ public class PubSubTests {
         final GlideString channel = gs(UUID.randomUUID().toString());
         final GlideString message = gs(repeat("1", 512 * 1024 * 1024)); // 512MB
 
-        ArrayList<PubSubMessage> callbackMessages = new ArrayList<>();
+        List<PubSubMessage> callbackMessages = Collections.synchronizedList(new ArrayList<>());
         final MessageCallback callback =
                 (pubSubMessage, context) -> {
-                    ArrayList<PubSubMessage> receivedMessages = (ArrayList<PubSubMessage>) context;
+                    List<PubSubMessage> receivedMessages = (List<PubSubMessage>) context;
                     receivedMessages.add(pubSubMessage);
                 };
 
@@ -1555,10 +1578,10 @@ public class PubSubTests {
         final GlideString channel = gs(UUID.randomUUID().toString());
         final GlideString message = gs(repeat("1", 512 * 1024 * 1024)); // 512MB
 
-        ArrayList<PubSubMessage> callbackMessages = new ArrayList<>();
+        List<PubSubMessage> callbackMessages = Collections.synchronizedList(new ArrayList<>());
         final MessageCallback callback =
                 (pubSubMessage, context) -> {
-                    ArrayList<PubSubMessage> receivedMessages = (ArrayList<PubSubMessage>) context;
+                    List<PubSubMessage> receivedMessages = (List<PubSubMessage>) context;
                     receivedMessages.add(pubSubMessage);
                 };
 
@@ -1597,13 +1620,13 @@ public class PubSubTests {
         final GlideString errorMsg = gs("errorMsg");
         final GlideString message3 = gs("message3");
 
-        ArrayList<PubSubMessage> callbackMessages = new ArrayList<>();
+        List<PubSubMessage> callbackMessages = Collections.synchronizedList(new ArrayList<>());
         final MessageCallback callback =
                 (pubSubMessage, context) -> {
                     if (pubSubMessage.getMessage().equals(errorMsg)) {
                         throw new RuntimeException("Test callback error message");
                     }
-                    ArrayList<PubSubMessage> receivedMessages = (ArrayList<PubSubMessage>) context;
+                    List<PubSubMessage> receivedMessages = (List<PubSubMessage>) context;
                     receivedMessages.add(pubSubMessage);
                 };
 
@@ -1658,10 +1681,10 @@ public class PubSubTests {
         PubSubMessage message =
                 new PubSubMessage(gs(new byte[] {(byte) 0xF0, 0x28, (byte) 0x8C, (byte) 0xBC}), channel);
 
-        ArrayList<PubSubMessage> callbackMessages = new ArrayList<>();
+        List<PubSubMessage> callbackMessages = Collections.synchronizedList(new ArrayList<>());
         final MessageCallback callback =
                 (pubSubMessage, context) -> {
-                    ArrayList<PubSubMessage> receivedMessages = (ArrayList<PubSubMessage>) context;
+                    List<PubSubMessage> receivedMessages = (List<PubSubMessage>) context;
                     receivedMessages.add(pubSubMessage);
                 };
 
@@ -1677,11 +1700,24 @@ public class PubSubTests {
                         standalone, subscriptions, Optional.of(callback), Optional.of(callbackMessages));
         BaseClient sender = createClient(standalone);
 
+        // Subscriptions are applied on the server asynchronously, so a message published before
+        // the subscription registers is lost. Publish only once both listeners are confirmed.
+        waitForCondition(
+                () ->
+                        exactSubscriptionConfirmed(listener, standalone)
+                                && exactSubscriptionConfirmed(listener2, standalone),
+                MESSAGE_DELIVERY_DELAY,
+                "Timed out waiting for subscription to register on the server");
+
         assertEquals(OK, sender.publish(message.getMessage(), channel).get());
         waitForCondition(
                 () -> callbackMessages.size() >= 1,
                 MESSAGE_DELIVERY_DELAY,
-                "Timed out waiting for binary message");
+                "Timed out waiting for binary message via callback");
+        waitForCondition(
+                () -> listener.getPubSubMessageCount() >= 1,
+                MESSAGE_DELIVERY_DELAY,
+                "Timed out waiting for binary message via message buffer");
 
         assertEquals(message, listener.tryGetPubSubMessage());
         assertEquals(1, callbackMessages.size());

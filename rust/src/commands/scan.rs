@@ -1,0 +1,395 @@
+// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
+//! GLIDE's cursor-driven scan iterators, returned by the `scan*` methods of
+//! [`crate::AsyncCommands`] / `glide::Commands`.
+//!
+//! These ride the unified API's owned-send dispatch (each page is one command
+//! built fresh and handed to glide-core **by value**), so scanning never
+//! touches the `redis` connection-object machinery. Call-site shape matches
+//! the familiar redis-rs iterators:
+//!
+//! ```rust,no_run
+//! # use glide::AsyncCommands;
+//! # async fn demo(client: glide::GlideClient) -> glide::ValkeyResult<()> {
+//! let mut iter = client.scan_match::<_, String>("prefix:*").await?;
+//! while let Some(key) = iter.next_item().await {
+//!     println!("{}", key?);
+//! }
+//! # Ok(()) }
+//! ```
+//!
+//! The first page is fetched eagerly, so errors there surface at the `scan*`
+//! call. A failure while fetching a later page surfaces as an error from
+//! `next_item`, after which the iteration ends.
+
+use crate::ValkeyResult;
+use crate::cmd::Cmd;
+use crate::commands::core::AsyncCommands;
+use crate::value::FromValkeyValue;
+
+#[cfg(feature = "sync")]
+use crate::commands::core::Commands;
+
+/// Argument layout of one scan page: `prefix… <cursor> suffix…`
+/// (e.g. `HSCAN key <cursor> MATCH pattern`).
+#[derive(Debug)]
+struct PageSpec {
+    prefix: Vec<Vec<u8>>,
+    suffix: Vec<Vec<u8>>,
+}
+
+impl PageSpec {
+    fn to_cmd(&self, cursor: u64) -> Cmd {
+        let mut cmd = Cmd::new();
+        for a in &self.prefix {
+            cmd.arg(&a[..]);
+        }
+        cmd.arg(cursor);
+        for a in &self.suffix {
+            cmd.arg(&a[..]);
+        }
+        cmd
+    }
+}
+
+/// An in-progress async scan iteration.
+///
+/// ```rust,no_run
+/// # use glide::AsyncCommands;
+/// # async fn demo(client: glide::GlideClient) -> glide::ValkeyResult<()> {
+/// let mut iter = client.scan_match::<_, String>("prefix:*").await?;
+/// while let Some(key) = iter.next_item().await {
+///     println!("{}", key?);
+/// }
+/// # Ok(()) }
+/// ```
+pub struct ScanIter<'a, C: ?Sized, RV> {
+    con: &'a C,
+    spec: PageSpec,
+    cursor: u64,
+    batch: std::vec::IntoIter<RV>,
+}
+
+impl<'a, C: AsyncCommands, RV: FromValkeyValue> ScanIter<'a, C, RV> {
+    /// Returns an iterator for the scan, or
+    /// an error if fetching the first page fails.
+    pub(crate) async fn new(
+        con: &'a C,
+        prefix: Vec<Vec<u8>>,
+        suffix: Vec<Vec<u8>>,
+    ) -> ValkeyResult<ScanIter<'a, C, RV>> {
+        let spec = PageSpec { prefix, suffix };
+
+        // Fetch first page immediately.
+        let (cursor, batch): (u64, Vec<RV>) = FromValkeyValue::from_owned_valkey_value(
+            con.glide_send_command(spec.to_cmd(0)).await?,
+        )?;
+        Ok(ScanIter {
+            con,
+            spec,
+            cursor,
+            batch: batch.into_iter(),
+        })
+    }
+
+    /// The next element, an error if fetching a page fails, or `None` if the
+    /// scan completed. An error ends the iteration and subsequent calls return
+    /// `None`.
+    pub async fn next_item(&mut self) -> Option<ValkeyResult<RV>> {
+        // Page may be empty, so keep fetching until an
+        // item is produced or the cursor wraps to 0.
+        loop {
+            if let Some(v) = self.batch.next() {
+                return Some(Ok(v));
+            }
+            if self.cursor == 0 {
+                return None;
+            }
+            match self.fetch_page().await {
+                Ok(()) => {}
+                Err(e) => {
+                    // Never retry a failed page.
+                    self.cursor = 0;
+                    return Some(Err(e));
+                }
+            }
+        }
+    }
+
+    /// Fetch the page at the current cursor.
+    async fn fetch_page(&mut self) -> ValkeyResult<()> {
+        let reply = self
+            .con
+            .glide_send_command(self.spec.to_cmd(self.cursor))
+            .await?;
+        let (cursor, batch): (u64, Vec<RV>) = FromValkeyValue::from_owned_valkey_value(reply)?;
+        self.cursor = cursor;
+        self.batch = batch.into_iter();
+        Ok(())
+    }
+}
+
+/// An in-progress blocking scan iteration.
+///
+/// ```rust,no_run
+/// # use glide::Commands;
+/// # use glide::sync::SyncGlideClient;
+/// # fn demo(client: SyncGlideClient) -> glide::ValkeyResult<()> {
+/// for key in client.scan_match::<_, String>("prefix:*")? {
+///     println!("{}", key?);
+/// }
+/// # Ok(()) }
+/// ```
+#[cfg(feature = "sync")]
+pub struct SyncScanIter<'a, C: ?Sized, RV> {
+    con: &'a C,
+    spec: PageSpec,
+    cursor: u64,
+    batch: std::vec::IntoIter<RV>,
+}
+
+#[cfg(feature = "sync")]
+impl<'a, C: Commands, RV: FromValkeyValue> SyncScanIter<'a, C, RV> {
+    /// Returns an iterator for the scan, or
+    /// an error if fetching the first page fails.
+    pub(crate) fn new(
+        con: &'a C,
+        prefix: Vec<Vec<u8>>,
+        suffix: Vec<Vec<u8>>,
+    ) -> ValkeyResult<SyncScanIter<'a, C, RV>> {
+        let spec = PageSpec { prefix, suffix };
+
+        // Fetch first page immediately.
+        let (cursor, batch): (u64, Vec<RV>) =
+            FromValkeyValue::from_owned_valkey_value(con.glide_send_command(spec.to_cmd(0))?)?;
+        Ok(SyncScanIter {
+            con,
+            spec,
+            cursor,
+            batch: batch.into_iter(),
+        })
+    }
+
+    /// Fetch the page at the current cursor.
+    fn fetch_page(&mut self) -> ValkeyResult<()> {
+        let reply = self.con.glide_send_command(self.spec.to_cmd(self.cursor))?;
+        let (cursor, batch): (u64, Vec<RV>) = FromValkeyValue::from_owned_valkey_value(reply)?;
+        self.cursor = cursor;
+        self.batch = batch.into_iter();
+        Ok(())
+    }
+}
+
+#[cfg(feature = "sync")]
+impl<C: Commands, RV: FromValkeyValue> Iterator for SyncScanIter<'_, C, RV> {
+    type Item = ValkeyResult<RV>;
+
+    /// The next element, an error if fetching a page fails, or `None` if the
+    /// scan completed. An error ends the iteration and subsequent calls return
+    /// `None`.
+    fn next(&mut self) -> Option<ValkeyResult<RV>> {
+        // Page may be empty, so keep fetching until an
+        // item is produced or the cursor wraps to 0.
+        loop {
+            if let Some(v) = self.batch.next() {
+                return Some(Ok(v));
+            }
+            if self.cursor == 0 {
+                return None;
+            }
+            match self.fetch_page() {
+                Ok(()) => {}
+                Err(e) => {
+                    // Never retry a failed page.
+                    self.cursor = 0;
+                    return Some(Err(e));
+                }
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::error::GlideError;
+    use crate::value::ValkeyValue;
+    use crate::{ValkeyFuture, ValkeyResult};
+    use bytes::Bytes;
+    use std::collections::VecDeque;
+    use std::sync::Mutex;
+
+    /// A mock connection that returns queued replies in order.
+    struct MockConnection {
+        replies: Mutex<VecDeque<ValkeyResult<ValkeyValue>>>,
+    }
+
+    impl MockConnection {
+        fn new(replies: Vec<ValkeyResult<ValkeyValue>>) -> Self {
+            MockConnection {
+                replies: Mutex::new(replies.into()),
+            }
+        }
+
+        /// Pops and returns a queued reply.
+        /// Panics if there are none remaining.
+        fn pop(&self) -> ValkeyResult<ValkeyValue> {
+            self.replies
+                .lock()
+                .unwrap()
+                .pop_front()
+                .expect("scan iterator requested more pages than the test queued")
+        }
+
+        /// The number of queued replies remaining.
+        fn remaining(&self) -> usize {
+            self.replies.lock().unwrap().len()
+        }
+    }
+
+    impl crate::commands::core::AsyncCommands for MockConnection {
+        fn glide_send_command<'a>(&'a self, _cmd: Cmd) -> ValkeyFuture<'a, ValkeyValue> {
+            Box::pin(async move { self.pop() })
+        }
+    }
+
+    #[cfg(feature = "sync")]
+    impl crate::commands::core::Commands for MockConnection {
+        fn glide_send_command(&self, _cmd: Cmd) -> ValkeyResult<ValkeyValue> {
+            self.pop()
+        }
+    }
+
+    /// Creates a scan page reply.
+    fn page(cursor: &str, items: &[&str]) -> ValkeyValue {
+        ValkeyValue::Array(vec![
+            ValkeyValue::BulkString(Bytes::copy_from_slice(cursor.as_bytes())),
+            ValkeyValue::Array(
+                items
+                    .iter()
+                    .map(|s| ValkeyValue::BulkString(Bytes::copy_from_slice(s.as_bytes())))
+                    .collect(),
+            ),
+        ])
+    }
+
+    /// Creates a scan error.
+    fn error() -> GlideError {
+        GlideError::Request("simulated scan failure".into())
+    }
+
+    // ---- async (`ScanIter::next_item`) ------------------------------------------
+
+    /// Creates an async scan iterator over the mock connection.
+    async fn scan_iter(con: &MockConnection) -> ValkeyResult<ScanIter<'_, MockConnection, String>> {
+        ScanIter::new(con, vec![b"SCAN".to_vec()], Vec::new()).await
+    }
+
+    /// Returns all the items from an async scan iterator.
+    async fn get_items(iter: &mut ScanIter<'_, MockConnection, String>) -> Vec<String> {
+        let mut items = Vec::new();
+        while let Some(item) = iter.next_item().await {
+            items.push(item.expect("unexpected error during scan"));
+        }
+        items
+    }
+
+    #[tokio::test]
+    async fn async_success_empty_page() {
+        let con = MockConnection::new(vec![Ok(page("4", &[])), Ok(page("0", &[]))]);
+        let mut iter = scan_iter(&con).await.unwrap();
+        assert_eq!(get_items(&mut iter).await, Vec::<String>::new());
+        assert_eq!(con.remaining(), 0);
+    }
+
+    #[tokio::test]
+    async fn async_success_one_page() {
+        let con = MockConnection::new(vec![Ok(page("0", &["a", "b"]))]);
+        let mut iter = scan_iter(&con).await.unwrap();
+        assert_eq!(get_items(&mut iter).await, ["a", "b"]);
+        assert_eq!(con.remaining(), 0);
+    }
+
+    #[tokio::test]
+    async fn async_success_multi_page() {
+        let con = MockConnection::new(vec![Ok(page("6", &["a", "b"])), Ok(page("0", &["c"]))]);
+        let mut iter = scan_iter(&con).await.unwrap();
+        assert_eq!(get_items(&mut iter).await, ["a", "b", "c"]);
+        assert_eq!(con.remaining(), 0);
+    }
+
+    #[tokio::test]
+    async fn async_error_new() {
+        let con = MockConnection::new(vec![Err(error())]);
+        assert!(scan_iter(&con).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn async_error_scan() {
+        let con = MockConnection::new(vec![Ok(page("5", &["a"])), Err(error())]);
+        let mut iter = scan_iter(&con).await.unwrap();
+        assert_eq!(iter.next_item().await.unwrap().unwrap(), "a");
+        assert!(iter.next_item().await.expect("expected an error").is_err());
+        assert!(iter.next_item().await.is_none());
+    }
+
+    // ---- blocking (`SyncScanIter` / `Iterator`) ---------------------------------
+
+    /// Creates a sync scan iterator over the mock connection.
+    #[cfg(feature = "sync")]
+    fn sync_scan_iter(
+        con: &MockConnection,
+    ) -> ValkeyResult<SyncScanIter<'_, MockConnection, String>> {
+        SyncScanIter::new(con, vec![b"SCAN".to_vec()], Vec::new())
+    }
+
+    /// Returns all the items from a sync scan iterator.
+    #[cfg(feature = "sync")]
+    fn sync_get_items(iter: SyncScanIter<'_, MockConnection, String>) -> Vec<String> {
+        iter.collect::<ValkeyResult<Vec<String>>>()
+            .expect("unexpected error during scan")
+    }
+
+    #[cfg(feature = "sync")]
+    #[test]
+    fn sync_success_empty_page() {
+        let con = MockConnection::new(vec![Ok(page("4", &[])), Ok(page("0", &[]))]);
+        let items = sync_get_items(sync_scan_iter(&con).unwrap());
+        assert_eq!(items, Vec::<String>::new());
+        assert_eq!(con.remaining(), 0);
+    }
+
+    #[cfg(feature = "sync")]
+    #[test]
+    fn sync_success_one_page() {
+        let con = MockConnection::new(vec![Ok(page("0", &["a", "b"]))]);
+        let items = sync_get_items(sync_scan_iter(&con).unwrap());
+        assert_eq!(items, ["a", "b"]);
+        assert_eq!(con.remaining(), 0);
+    }
+
+    #[cfg(feature = "sync")]
+    #[test]
+    fn sync_success_multi_page() {
+        let con = MockConnection::new(vec![Ok(page("6", &["a", "b"])), Ok(page("0", &["c"]))]);
+        let items = sync_get_items(sync_scan_iter(&con).unwrap());
+        assert_eq!(items, ["a", "b", "c"]);
+        assert_eq!(con.remaining(), 0);
+    }
+
+    #[cfg(feature = "sync")]
+    #[test]
+    fn sync_error_new() {
+        let con = MockConnection::new(vec![Err(error())]);
+        assert!(sync_scan_iter(&con).is_err());
+    }
+
+    #[cfg(feature = "sync")]
+    #[test]
+    fn sync_error_scan() {
+        let con = MockConnection::new(vec![Ok(page("5", &["a"])), Err(error())]);
+        let mut iter = sync_scan_iter(&con).unwrap();
+        assert_eq!(iter.next().unwrap().unwrap(), "a");
+        assert!(iter.next().expect("expected an error").is_err());
+        assert!(iter.next().is_none());
+    }
+}

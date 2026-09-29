@@ -113,19 +113,32 @@ public class GlideClient extends BaseClient
      *
      * <p>The pool's Rust side creates the actual connection and registers it in the JNI handle table.
      * This factory wires up the Java command dispatch chain so that commands flow through the
-     * existing native bridge.
+     * existing native bridge, and seeds the {@link glide.managers.ConnectionManager} with the pool's
+     * native handle and serialized ConnectionRequest so {@link #scopedConnection} can materialize an
+     * isolated scope pool for this borrowed client. The client config's credentials are carried so
+     * the borrowed client's IAM guards behave as on a directly-created client.
      *
      * @param nativeHandle the native client handle (same as client_id from pool)
      * @param maxInflight max inflight requests (0 = use core defaults)
      * @param requestTimeoutMs request timeout in ms (0 = no Java-side timeout)
+     * @param credentials the client config's credentials, or {@code null} when none are set
+     * @param connectionRequestBytes the pool's serialized protobuf ConnectionRequest, or {@code null}
+     *     when unavailable (scope acquisition will fail with "Client not connected")
      * @return a fully-functional GlideClient backed by the pool connection
      */
     public static GlideClient fromPoolHandle(
-            long nativeHandle, int maxInflight, long requestTimeoutMs) {
+            long nativeHandle,
+            int maxInflight,
+            long requestTimeoutMs,
+            ServerCredentials credentials,
+            byte[] connectionRequestBytes) {
         glide.internal.GlideCoreClient coreClient =
-                new glide.internal.GlideCoreClient(nativeHandle, maxInflight, requestTimeoutMs);
+                new glide.internal.GlideCoreClient(
+                        nativeHandle, maxInflight, requestTimeoutMs, poolInflightCounterKey(nativeHandle));
         glide.managers.CommandManager commandManager = new glide.managers.CommandManager(coreClient);
-        glide.managers.ConnectionManager connectionManager = new glide.managers.ConnectionManager();
+        glide.managers.ConnectionManager connectionManager =
+                new glide.managers.ConnectionManager(
+                        nativeHandle, maxInflight, (int) requestTimeoutMs, credentials, connectionRequestBytes);
         glide.connectors.handlers.MessageHandler messageHandler =
                 new glide.connectors.handlers.MessageHandler(
                         java.util.Optional.empty(),
@@ -148,6 +161,23 @@ public class GlideClient extends BaseClient
         }
 
         return client;
+    }
+
+    /**
+     * Map a pool client id to a Java-side inflight-counter key that cannot collide with a
+     * directly-created client's key.
+     *
+     * <p>{@link glide.internal.AsyncRegistry} keys its per-client inflight counter on the native
+     * handle. A pooled client's handle is its pool client id, drawn from a positive id space
+     * independent of the JNI handle space, so the two can produce the same value and share one
+     * counter. Pool ids are always positive, so negating one yields a distinct key that no positive
+     * directly-created handle can match, and distinct pool ids stay distinct. The native handle
+     * itself is unchanged and still used for every native call.
+     *
+     * <p>Public so {@code AsyncRegistryTest} can key its regression test on the real mapping.
+     */
+    public static long poolInflightCounterKey(long poolClientId) {
+        return -poolClientId;
     }
 
     /**
@@ -226,13 +256,17 @@ public class GlideClient extends BaseClient
         int routingSlot = routingKey != null ? slotForKey(routingKey.getBytes()) : 0;
         long timeoutMs = timeout.toMillis();
         long deadline = System.currentTimeMillis() + timeoutMs;
+        // One logical acquire: mint a single attempt token and pass it on every
+        // retry poll, so the core dedupes this acquire's retries to one in-flight
+        // creation while distinct concurrent acquires each dial their own.
+        long attemptToken = glide.ffi.resolvers.GlideScopeResolver.glideScopeNextAttemptToken();
 
         return CompletableFuture.supplyAsync(
                 () -> {
                     while (true) {
                         long scopeId =
                                 glide.ffi.resolvers.GlideScopeResolver.glideScopeTryAcquire(
-                                        clientId, connBytes, routingSlot);
+                                        clientId, connBytes, routingSlot, attemptToken);
                         if (scopeId >= 0) {
                             return new IsolatedScope(scopeId, clientId);
                         }

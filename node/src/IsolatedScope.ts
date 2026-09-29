@@ -14,6 +14,7 @@
 
 import {
     scopeExecute,
+    scopeNextAttemptToken,
     scopeRelease,
     scopeTryAcquire,
 } from "../build-ts/native";
@@ -179,11 +180,17 @@ export class IsolatedScope {
 
         let backoffMs = 10;
 
+        // One logical acquire: mint a single attempt token and pass it on every
+        // retry poll, so the core dedupes this acquire's retries to one in-flight
+        // creation while distinct concurrent acquires each dial their own.
+        const attemptToken = scopeNextAttemptToken();
+
         for (let i = 0; i < maxRetries; i++) {
             const scopeId = scopeTryAcquire(
                 clientId,
                 connectionRequestBytes,
                 routingSlot,
+                attemptToken,
             );
 
             if (scopeId >= 0) {
