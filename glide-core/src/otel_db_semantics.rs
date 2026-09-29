@@ -71,8 +71,8 @@ fn masking_pattern(cmd_name: &str) -> MaskingPattern {
         | "SORT" | "SORT_RO" | "TOUCH" | "TTL" | "TYPE" | "UNLINK" | "WAIT" | "WAITAOF"
         | "WATCH" | "UNWATCH"
         // Hash (read)
-        | "HDEL" | "HEXISTS" | "HGET" | "HGETALL" | "HINCRBY" | "HINCRBYFLOAT"
-        | "HKEYS" | "HLEN" | "HMGET" | "HRANDFIELD" | "HSCAN" | "HSTRLEN" | "HVALS" | "HGETDEL"
+        | "HDEL" | "HEXISTS" | "HGET" | "HGETALL" | "HGETDEL" | "HINCRBY" | "HINCRBYFLOAT"
+        | "HKEYS" | "HLEN" | "HMGET" | "HRANDFIELD" | "HSCAN" | "HSTRLEN" | "HVALS"
         // List (read/structural)
         | "LINDEX" | "LLEN" | "LMOVE" | "LMPOP" | "LPOP" | "LRANGE" | "LREM" | "LTRIM"
         | "RPOP" | "RPOPLPUSH"

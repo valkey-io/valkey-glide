@@ -1,21 +1,20 @@
 [package]
-name = "redis"
-version = "0.25.2"
-keywords = ["redis", "database"]
-description = "Redis driver for Rust."
-homepage = "https://github.com/redis-rs/redis-rs"
-repository = "https://github.com/redis-rs/redis-rs"
-documentation = "https://docs.rs/redis"
+name = "glide-core-engine"
+version = "0.1.0"
+description = "Core engine for Valkey GLIDE. This crate isn't intended to be used directly."
+authors = ["Valkey GLIDE Maintainers"]
 license = "BSD-3-Clause"
-edition = "2021"
+
+# TODO #7175: Align rust-version and edition with the Rust client.
 rust-version = "1.71"
-readme = "../README.md"
+edition = "2021"
 
 [package.metadata.docs.rs]
 all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
 
 [lib]
+name = "redis"
 bench = false
 
 [lints.clippy]
@@ -27,8 +26,8 @@ mutex_atomic = "warn"
 [dependencies]
 
 # GLIDE dependencies
-glide-logger = { path = "../../../glide-logger", version = "0.1" }
-glide-telemetry = { path = "../../../glide-telemetry", version = "0.1" }
+glide-logger = { path = "../../../glide-logger", version = "0.1.0" }
+glide-telemetry = { path = "../../../glide-telemetry", version = "0.1.0" }
 
 # These two are generally really common simple dependencies so it does not seem
 # much of a point to optimize these, but these could in theory be removed for

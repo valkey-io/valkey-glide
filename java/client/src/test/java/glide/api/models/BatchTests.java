@@ -62,6 +62,7 @@ import static command_request.CommandRequestOuterClass.RequestType.HExpireAt;
 import static command_request.CommandRequestOuterClass.RequestType.HExpireTime;
 import static command_request.CommandRequestOuterClass.RequestType.HGet;
 import static command_request.CommandRequestOuterClass.RequestType.HGetAll;
+import static command_request.CommandRequestOuterClass.RequestType.HGetDel;
 import static command_request.CommandRequestOuterClass.RequestType.HGetEx;
 import static command_request.CommandRequestOuterClass.RequestType.HIncrBy;
 import static command_request.CommandRequestOuterClass.RequestType.HIncrByFloat;
@@ -496,6 +497,10 @@ public class BatchTests {
         // Test HGETEX with no expiry (empty options)
         batch.hgetex("key", new String[] {"field1"}, HGetExOptions.builder().build());
         results.add(Pair.of(HGetEx, buildArgs("key", "FIELDS", "1", "field1")));
+
+        // HGETDEL - get and delete hash fields
+        batch.hgetdel("key", new String[] {"field1", "field2"});
+        results.add(Pair.of(HGetDel, buildArgs("key", "FIELDS", "2", "field1", "field2")));
 
         batch.hexpire(
                 "key",

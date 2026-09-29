@@ -26,15 +26,22 @@ on:
                 description: "Run modules tests"
                 type: boolean
                 default: true
-            # GHA supports up to 10 inputs, there is no option for multi-choice
+
+            # Rust crates
             core:
-                description: "Test GLIDE core"
+                description: "Test GLIDE core crates (core, engine, telemetry, logger)"
                 type: boolean
                 default: true
-            redis-rs:
-                description: "Test Redis-RS client"
+            ffi:
+                description: "Test GLIDE FFI"
                 type: boolean
-                default: false
+                default: true
+
+            # GLIDE clients
+            rust:
+                description: "Test Rust client"
+                type: boolean
+                default: true
             node:
                 description: "Test Node client"
                 type: boolean
@@ -63,45 +70,71 @@ jobs:
         steps:
             - name: no tests selected
               run: false
-              if: github.event_name == 'workflow_dispatch' && inputs.core == false && inputs.java == false && inputs.python == false && inputs.node == false && inputs.java == false && inputs.csharp == false && inputs.go == false
+              if: github.event_name == 'workflow_dispatch' && inputs.core == false && inputs.ffi == false && inputs.rust == false && inputs.node == false && inputs.python == false && inputs.java == false && inputs.go == false
 
-    run-full-tests-for-core:
+    # --- Rust crate tests ---------------------------------------------------------------------- #
+
+    run-full-tests-for-glide-logger:
         if: (github.repository_owner == 'valkey-io' && github.event_name == 'schedule') || (github.event_name == 'workflow_dispatch' && inputs.core == true)
-        uses: ./.github/workflows/rust-core.yml
+        uses: ./.github/workflows/glide-logger.yml
+        name: Run CI for glide-logger
+
+    run-full-tests-for-glide-telemetry:
+        if: (github.repository_owner == 'valkey-io' && github.event_name == 'schedule') || (github.event_name == 'workflow_dispatch' && inputs.core == true)
+        uses: ./.github/workflows/glide-telemetry.yml
+        name: Run CI for glide-telemetry
+
+    run-full-tests-for-glide-core-engine:
+        if: (github.repository_owner == 'valkey-io' && github.event_name == 'schedule') || (github.event_name == 'workflow_dispatch' && inputs.core == true)
+        uses: ./.github/workflows/glide-core-engine.yml
+        name: Run CI for glide-core-engine
+
+    run-full-tests-for-glide-core:
+        if: (github.repository_owner == 'valkey-io' && github.event_name == 'schedule') || (github.event_name == 'workflow_dispatch' && inputs.core == true)
+        uses: ./.github/workflows/glide-core.yml
         with:
             run-with-macos: ${{ inputs.run-with-macos }}
-        name: Run CI for GLIDE core lib
+        name: Run CI for glide-core
 
-    run-full-tests-for-redis-rs:
-        if: (github.repository_owner == 'valkey-io' && github.event_name == 'schedule') || (github.event_name == 'workflow_dispatch' && inputs.redis-rs == true)
-        uses: ./.github/workflows/redis-rs.yml
-        name: Run CI for Redis-RS client
+    run-full-tests-for-ffi:
+        if: (github.repository_owner == 'valkey-io' && github.event_name == 'schedule') || (github.event_name == 'workflow_dispatch' && inputs.ffi == true)
+        uses: ./.github/workflows/ffi.yml
+        name: Run CI for FFI
+
+    # --- Client tests -------------------------------------------------------------------------- #
+
+    run-full-tests-for-rust:
+        if: (github.repository_owner == 'valkey-io' && github.event_name == 'schedule') || (github.event_name == 'workflow_dispatch' && inputs.rust == true)
+        uses: ./.github/workflows/rust.yml
+        name: Run CI for Rust client
 
     run-full-tests-for-java:
         if: (github.repository_owner == 'valkey-io' && github.event_name == 'schedule') || (github.event_name == 'workflow_dispatch' && inputs.java == true)
         uses: ./.github/workflows/java.yml
         with:
             run-with-macos: ${{ inputs.run-with-macos }}
-        name: Run CI for java client
+        name: Run CI for Java client
 
     run-full-tests-for-python:
         if: (github.repository_owner == 'valkey-io' && github.event_name == 'schedule') || (github.event_name == 'workflow_dispatch' && inputs.python == true)
         uses: ./.github/workflows/python.yml
         with:
             run-with-macos: ${{ inputs.run-with-macos }}
-        name: Run CI for python client
+        name: Run CI for Python client
 
     run-full-tests-for-node:
         if: (github.repository_owner == 'valkey-io' && github.event_name == 'schedule') || (github.event_name == 'workflow_dispatch' && inputs.node == true)
         uses: ./.github/workflows/node.yml
         with:
             run-with-macos: ${{ inputs.run-with-macos }}
-        name: Run CI for node client
+        name: Run CI for Node client
 
     run-full-tests-for-go:
         if: (github.repository_owner == 'valkey-io' && github.event_name == 'schedule') || (github.event_name == 'workflow_dispatch' && inputs.go == true)
         uses: ./.github/workflows/go.yml
         name: Run CI for go client
+
+    # --- Client module tests ------------------------------------------------------------------- #
 
     run-modules-tests-for-java:
         if: ((github.repository_owner == 'valkey-io' && github.event_name == 'schedule') || (github.event_name == 'workflow_dispatch' && inputs.run-modules-tests == true)) && inputs.java != false

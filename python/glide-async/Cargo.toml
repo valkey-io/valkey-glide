@@ -14,10 +14,8 @@ path = "src/lib.rs"
 
 # GLIDE dependencies
 glide-logger = { path = "../../glide-logger" }
-
-# TODO #6905: Update once renamed.
+glide-core-engine = { path = "../../glide-core/redis-rs/redis", features = ["aio", "tokio-comp", "connection-manager", "tokio-rustls-comp"] }
 glide-core = { path = "../../glide-core", features = ["socket-layer"] }
-redis = { path = "../../glide-core/redis-rs/redis", features = ["aio", "tokio-comp", "connection-manager", "tokio-rustls-comp"] }
 
 # External dependencies
 bytes = { version = "^1.8" }
