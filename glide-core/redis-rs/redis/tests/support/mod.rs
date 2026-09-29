@@ -46,23 +46,35 @@ pub fn block_on_all<F, V>(f: F) -> F::Output
 where
     F: Future<Output = redis::RedisResult<V>>,
 {
+    use std::cell::Cell;
     use std::panic;
-    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::Once;
 
-    static CHECK: AtomicBool = AtomicBool::new(false);
+    // Tokio's runtime silently swallows panics raised inside spawned tasks
+    // (https://users.rust-lang.org/t/tokio-runtime-what-happens-when-a-thread-panics/95819),
+    // so a panic hook records them and the driver below aborts the test. Once Tokio
+    // stabilizes `unhandled_panic` on the runtime builder this can go away.
+    //
+    // A thread-local flag is enough because `current_thread_runtime()` polls every
+    // task on the calling thread, so one test's panic is never seen by another.
+    thread_local! {
+        static PANICKED: Cell<bool> = const { Cell::new(false) };
+    }
+    static INSTALL_HOOK: Once = Once::new();
 
-    // TODO - this solution is purely single threaded, and won't work on multiple threads at the same time.
-    // This is needed because Tokio's Runtime silently ignores panics - https://users.rust-lang.org/t/tokio-runtime-what-happens-when-a-thread-panics/95819
-    // Once Tokio stabilizes the `unhandled_panic` field on the runtime builder, it should be used instead.
-    panic::set_hook(Box::new(|panic| {
-        println!("Panic: {panic}");
-        CHECK.store(true, Ordering::Relaxed);
-    }));
+    INSTALL_HOOK.call_once(|| {
+        let previous = panic::take_hook();
+        panic::set_hook(Box::new(move |info| {
+            previous(info);
+            PANICKED.with(|flag| flag.set(true));
+        }));
+    });
+    PANICKED.with(|flag| flag.set(false));
 
     // This continuously query the flag, in order to abort ASAP after a panic.
     let check_future = futures_util::FutureExt::fuse(async {
         loop {
-            if CHECK.load(Ordering::Relaxed) {
+            if PANICKED.with(|flag| flag.get()) {
                 return Err((redis::ErrorKind::IoError, "panic was caught").into());
             }
             futures_time::task::sleep(futures_time::time::Duration::from_millis(1)).await;
@@ -75,8 +87,7 @@ where
         futures::select! {res = f => res, err = check_future => err}
     });
 
-    let _ = panic::take_hook();
-    if CHECK.swap(false, Ordering::Relaxed) {
+    if PANICKED.with(|flag| flag.replace(false)) {
         panic!("Internal thread panicked");
     }
 
