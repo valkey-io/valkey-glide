@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import time
-from typing import List, Optional, Tuple, cast
+from collections import Counter
+from typing import Dict, List, Optional, Set, Tuple, cast
 
 import pytest
 from glide_shared.commands.core_options import PubSubMsg
@@ -56,6 +57,12 @@ from tests.utils.utils import (
 # arrives instead of asserting on the first attempt. The retry runs against a
 # wall-clock deadline rather than a fixed number of attempts, so its patience
 # matches the resubscribe window the callers allow.
+#
+# Re-publishing can leave duplicates: a copy that is only delayed, not dropped,
+# still arrives after the retry has published again. Valkey delivers each
+# PUBLISH at most once per subscribed connection, so the number of PUBLISH calls
+# issued is the exact upper bound on the copies a subscriber may legitimately
+# see, and the trailing checks enforce that bound rather than a fixed count.
 _PUBLISH_RETRY_DEADLINE_SEC = 15.0
 _PUBLISH_POLL_TIMEOUT_SEC = 3.0
 _PUBLISH_POLL_INTERVAL_SEC = 0.1
@@ -117,7 +124,7 @@ def _publish_and_wait_for_message(
     poll_timeout: float = _PUBLISH_POLL_TIMEOUT_SEC,
     poll_interval: float = _PUBLISH_POLL_INTERVAL_SEC,
     sharded: bool = False,
-) -> Optional[PubSubMsg]:
+) -> Tuple[Optional[PubSubMsg], int]:
     """
     Publish ``message`` to ``channel`` and poll for its receipt, re-publishing if
     it is not received within ``poll_timeout``, until ``deadline_sec`` elapses.
@@ -132,8 +139,9 @@ def _publish_and_wait_for_message(
     ``is_reconnect_in_progress_error`` for the three shapes that takes). Any
     other error propagates. A tolerated failure does not prove the PUBLISH never
     ran: a client-side timeout only means the client stopped waiting for the
-    reply, so a delivered message is always collected before re-publishing,
-    which keeps duplicates out of the queue.
+    reply, so a delivered message is always collected before re-publishing.
+    That keeps a duplicate out of the queue unless a copy is delayed past
+    ``poll_timeout``, in which case it can still arrive after the re-publish.
 
     Note: this intentionally polls with the non-blocking
     ``try_get_pubsub_message()`` instead of the blocking ``get_pubsub_message()``.
@@ -141,8 +149,11 @@ def _publish_and_wait_for_message(
     timeout, so a message that was never delivered would hang the test rather
     than fail it.
 
-    Returns the received message, or ``None`` if no message arrived before
-    ``deadline_sec``.
+    Returns ``(message, publishes)``: the received message, or ``None`` if none
+    arrived before ``deadline_sec``, and the number of PUBLISH calls issued,
+    counting calls that raised a tolerated error. Each PUBLISH is delivered at
+    most once, so ``publishes`` bounds the copies of ``message`` the caller may
+    see; pass it to ``_check_no_unexpected_messages_left``.
     """
 
     def _try_receive() -> Optional[PubSubMsg]:
@@ -150,6 +161,7 @@ def _publish_and_wait_for_message(
             method, listening_client, callback_messages, expected_idx
         )
 
+    publishes = 0
     deadline = time.time() + deadline_sec
     while time.time() < deadline:
         # Poll before publishing: a message from an earlier publish may already
@@ -157,8 +169,11 @@ def _publish_and_wait_for_message(
         # reached the server.
         received = _try_receive()
         if received is not None:
-            return received
+            return received, publishes
 
+        # Count before the call: the copy can be delivered, and a callback can
+        # record it, before publish() returns.
+        publishes += 1
         try:
             if sharded:
                 cast(GlideClusterClient, publishing_client).publish(
@@ -177,10 +192,10 @@ def _publish_and_wait_for_message(
         while time.time() < poll_deadline:
             received = _try_receive()
             if received is not None:
-                return received
+                return received, publishes
             time.sleep(poll_interval)
 
-    return None
+    return None, publishes
 
 
 def _check_no_unexpected_messages_left(
@@ -190,34 +205,123 @@ def _check_no_unexpected_messages_left(
     expected_count: int,
     message: str,
     channel: str,
+    publishes: int,
+    settle_sec: float = _PUBLISH_POLL_TIMEOUT_SEC,
+    poll_interval: float = _PUBLISH_POLL_INTERVAL_SEC,
 ) -> None:
-    """Assert nothing unexpected is queued, tolerating a duplicate delivery.
+    """Assert only the copies ``publishes`` PUBLISH calls can explain are left.
 
     ``_publish_and_wait_for_message`` re-publishes when it does not see a
-    delivery in time, and a publish that reported a client-side timeout may
-    still have reached the server. That can leave an extra copy of ``message``
-    on ``channel``. Asserting an exact message count here would turn a tolerated
-    timeout into an assertion failure, so extra copies of the message under test
-    are drained and anything else fails the test.
+    delivery in time, so a copy that was only delayed can still arrive after
+    the re-publish. Each PUBLISH is delivered at most once, so after the one
+    copy already consumed at most ``publishes - 1`` further copies of
+    ``message`` on ``channel`` are legitimate. This waits ``settle_sec`` for
+    late copies, then fails on one copy more than that or on any other message.
     """
-    if method == MethodTesting.Callback:
-        for extra in callback_messages[expected_count:]:
-            extra_msg = decode_pubsub_msg(extra)
+    max_extra = max(publishes - 1, 0)
+    extras = 0
+
+    def _count(msgs: List[PubSubMsg]) -> None:
+        nonlocal extras
+        for extra_msg in msgs:
             assert extra_msg.message == message, f"Unexpected message {extra_msg}"
             assert extra_msg.channel == channel, f"Unexpected message {extra_msg}"
-        return
+            extras += 1
+            assert extras <= max_extra, (
+                f"{extras} extra copies of {message!r} on {channel!r}, but only "
+                f"{publishes} PUBLISH calls were issued"
+            )
 
+    cursor = expected_count
+    settle_deadline = time.time() + settle_sec
     while True:
-        result = listening_client.try_get_pubsub_message()
-        if result is None:
+        taken, cursor = _take_available_messages(
+            method, listening_client, callback_messages, cursor
+        )
+        _count(taken)
+        if time.time() >= settle_deadline:
             break
-        extra_msg = decode_pubsub_msg(result)
-        assert extra_msg.message == message, f"Unexpected message {extra_msg}"
-        assert extra_msg.channel == channel, f"Unexpected message {extra_msg}"
+        time.sleep(poll_interval)
 
-    sync_check_no_messages_left(
-        method, listening_client, callback_messages, expected_count
-    )
+    if method != MethodTesting.Callback:
+        sync_check_no_messages_left(method, listening_client, callback_messages)
+
+
+def _publish_until_all_received(
+    publishing_client,
+    listening_client,
+    method: MethodTesting,
+    callback_messages: List[PubSubMsg],
+    message: str,
+    channels: Set[str],
+    deadline_sec: float = _MANY_CHANNELS_PUBLISH_DEADLINE_SEC,
+    poll_timeout: float = _PUBLISH_POLL_TIMEOUT_SEC,
+    poll_interval: float = _PUBLISH_POLL_INTERVAL_SEC,
+) -> Tuple[Set[str], Dict[str, int], Dict[str, int]]:
+    """Publish ``message`` to every channel until each has delivered a copy.
+
+    The fan-out version of ``_publish_and_wait_for_message``, with the same
+    rules applied per channel: a channel is published to again only once
+    ``poll_timeout`` has passed since its last PUBLISH, a transient
+    reconnect failure is tolerated and anything else propagates, and every
+    delivery must be ``message`` on one of ``channels`` with no more copies per
+    channel than PUBLISH calls issued to it. The deadline is checked inside the
+    fan-out too: while the publishing client is recovering each publish can
+    cost a full request timeout, so one uninterrupted pass over 256 channels
+    would otherwise overrun the budget many times over.
+
+    Returns ``(received_channels, copies, publishes)``, the last two keyed by
+    channel.
+    """
+    received: Set[str] = set()
+    copies: Counter = Counter()
+    publishes: Counter = Counter()
+    last_published: Dict[str, float] = {}
+    cursor = 0
+
+    def _drain() -> None:
+        nonlocal cursor
+        taken, cursor = _take_available_messages(
+            method, listening_client, callback_messages, cursor
+        )
+        for msg in taken:
+            channel = cast(str, msg.channel)
+            assert msg.message == message, f"Unexpected message {msg}"
+            assert msg.pattern is None, f"Unexpected message {msg}"
+            assert channel in channels, f"Unexpected message {msg}"
+            copies[channel] += 1
+            assert copies[channel] <= publishes[channel], (
+                f"{copies[channel]} copies on {channel!r}, but only "
+                f"{publishes[channel]} PUBLISH calls were issued to it"
+            )
+            received.add(channel)
+
+    deadline = time.time() + deadline_sec
+    while received != channels and time.time() < deadline:
+        _drain()
+        for channel in channels - received:
+            now = time.time()
+            if now >= deadline:
+                break
+            if now - last_published.get(channel, float("-inf")) < poll_timeout:
+                continue
+            # Count before the call, as in _publish_and_wait_for_message.
+            publishes[channel] += 1
+            last_published[channel] = now
+            try:
+                publishing_client.publish(message, channel)
+            except RequestError as error:
+                if not is_reconnect_in_progress_error(error):
+                    raise
+        time.sleep(poll_interval)
+        _drain()
+
+    # Let delayed copies land so the per-channel bound also covers them.
+    settle_deadline = time.time() + poll_timeout
+    while time.time() < settle_deadline:
+        time.sleep(poll_interval)
+        _drain()
+    return received, dict(copies), dict(publishes)
 
 
 class TestSyncPubSub:
@@ -3774,7 +3878,7 @@ class TestSyncPubSub:
             # subscription may still need a brief moment to become fully active
             # (especially in cluster mode). Use a publish-and-retry loop to
             # handle this race condition reliably.
-            msg_after = _publish_and_wait_for_message(
+            msg_after, publishes = _publish_and_wait_for_message(
                 publishing_client,
                 message_after,
                 channel,
@@ -3798,6 +3902,7 @@ class TestSyncPubSub:
                 2,
                 message_after,
                 channel,
+                publishes,
             )
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
@@ -3876,7 +3981,7 @@ class TestSyncPubSub:
             # subscription may still need a brief moment to become fully active
             # (especially in cluster mode). Use a publish-and-retry loop to
             # handle this race condition reliably.
-            msg_after = _publish_and_wait_for_message(
+            msg_after, publishes = _publish_and_wait_for_message(
                 publishing_client,
                 message_after,
                 channel,
@@ -3900,6 +4005,7 @@ class TestSyncPubSub:
                 2,
                 message_after,
                 channel,
+                publishes,
             )
 
     @pytest.mark.skip_if_version_below("7.0.0")
@@ -4207,7 +4313,7 @@ class TestSyncPubSub:
             # subscription may still need a brief moment to become fully active
             # (especially in cluster mode). Use a publish-and-retry loop to
             # handle this race condition reliably.
-            msg_after = _publish_and_wait_for_message(
+            msg_after, publishes = _publish_and_wait_for_message(
                 publishing_client,
                 message_after,
                 channel,
@@ -4232,6 +4338,7 @@ class TestSyncPubSub:
                 2,
                 message_after,
                 channel,
+                publishes,
             )
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
@@ -4298,64 +4405,23 @@ class TestSyncPubSub:
                 timeout_sec=resubscribe_timeout,
             )
 
-            # Publish to all channels after reconnection and collect deliveries,
-            # interleaving publish and receive against a wall-clock deadline.
-            #
-            # The publishing client may still be recovering from the kill, so a
-            # publish can fail transiently, and a failed publish is not proof
-            # that the PUBLISH never reached the server. Delivered messages are
-            # therefore collected first and only channels still missing are
-            # published to again, which keeps a channel whose publish failed
-            # client-side but still landed from being published to twice.
-            #
-            # Using try_get_pubsub_message() avoids the blocking
-            # get_pubsub_message(), which waits on a condition variable with no
-            # timeout and would hang the test on an undelivered message.
-            received_channels: set = set()
-            callback_cursor = 0
-
-            def _drain_available() -> None:
-                nonlocal callback_cursor
-                taken, callback_cursor = _take_available_messages(
-                    method, listening_client, callback_messages, callback_cursor
-                )
-                for msg in taken:
-                    assert msg.message == message_after
-                    assert msg.pattern is None
-                    assert msg.channel in channels
-                    received_channels.add(msg.channel)
-
-            publish_deadline = time.time() + _MANY_CHANNELS_PUBLISH_DEADLINE_SEC
-            while received_channels != channels and time.time() < publish_deadline:
-                _drain_available()
-                for channel in channels - received_channels:
-                    # The fan-out itself has to respect the deadline: while the
-                    # client is recovering, each publish can cost a full request
-                    # timeout, so one uninterrupted pass over 256 channels would
-                    # otherwise overrun the budget many times over.
-                    if time.time() >= publish_deadline:
-                        break
-                    try:
-                        publishing_client.publish(message_after, channel)
-                    except RequestError as error:
-                        # Still recovering; retry before the deadline. Anything
-                        # else is a real failure.
-                        if not is_reconnect_in_progress_error(error):
-                            raise
-                time.sleep(_PUBLISH_POLL_INTERVAL_SEC)
-                _drain_available()
+            # Publish to all channels after reconnection and collect deliveries.
+            # The helper retries each channel on its own poll window, tolerates
+            # transient reconnect failures, and bounds the copies per channel by
+            # the PUBLISH calls issued to it.
+            received_channels, _, _ = _publish_until_all_received(
+                publishing_client,
+                listening_client,
+                method,
+                callback_messages,
+                message_after,
+                channels,
+            )
 
             assert received_channels == channels, (
                 f"Not all channels received messages. "
                 f"Got {len(received_channels)}/{NUM_CHANNELS}"
             )
-
-            # A publish that failed client-side but still reached the server can
-            # leave one extra copy per channel, so the channel set above is the
-            # assertion rather than an exact message count. Draining the late
-            # copies here still rejects anything that is not message_after on one
-            # of the subscribed channels.
-            _drain_available()
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize(
