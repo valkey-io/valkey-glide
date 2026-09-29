@@ -1,6 +1,6 @@
 {
   "version": "0.25.2",
-  "methods": {
+  "command_table_methods": {
     "append": {
       "name": "append",
       "generics": [
@@ -3622,14 +3622,181 @@
       "return_type": null
     }
   },
-  "scan_method_names": [
-    "hscan",
-    "hscan_match",
-    "scan",
-    "scan_match",
-    "sscan",
-    "sscan_match",
-    "zscan",
-    "zscan_match"
-  ]
+  "scan_methods": {
+    "hscan": {
+      "name": "hscan",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "RV",
+          "bound": "FromRedisValue"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        }
+      ],
+      "return_type": null
+    },
+    "hscan_match": {
+      "name": "hscan_match",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "P",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "RV",
+          "bound": "FromRedisValue"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "pattern",
+          "type_name": "P"
+        }
+      ],
+      "return_type": null
+    },
+    "scan": {
+      "name": "scan",
+      "generics": [
+        {
+          "name": "RV",
+          "bound": "FromRedisValue"
+        }
+      ],
+      "args": [],
+      "return_type": null
+    },
+    "scan_match": {
+      "name": "scan_match",
+      "generics": [
+        {
+          "name": "P",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "RV",
+          "bound": "FromRedisValue"
+        }
+      ],
+      "args": [
+        {
+          "name": "pattern",
+          "type_name": "P"
+        }
+      ],
+      "return_type": null
+    },
+    "sscan": {
+      "name": "sscan",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "RV",
+          "bound": "FromRedisValue"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        }
+      ],
+      "return_type": null
+    },
+    "sscan_match": {
+      "name": "sscan_match",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "P",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "RV",
+          "bound": "FromRedisValue"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "pattern",
+          "type_name": "P"
+        }
+      ],
+      "return_type": null
+    },
+    "zscan": {
+      "name": "zscan",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "RV",
+          "bound": "FromRedisValue"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        }
+      ],
+      "return_type": null
+    },
+    "zscan_match": {
+      "name": "zscan_match",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "P",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "RV",
+          "bound": "FromRedisValue"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "pattern",
+          "type_name": "P"
+        }
+      ],
+      "return_type": null
+    }
+  }
 }

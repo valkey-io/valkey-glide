@@ -4,17 +4,16 @@
 use serde::Deserialize;
 use serde::Serialize;
 use std::collections::BTreeMap;
-use std::collections::BTreeSet;
 
 /// A snapshot of redis-rs commands for parity tests.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct RedisParity {
     /// The redis-rs release this snapshot describes (e.g. `0.25.2`).
     pub version: String,
-    /// The command-table methods, indexed by method name.
-    pub methods: BTreeMap<String, Method>,
-    /// The scan method names.
-    pub scan_method_names: BTreeSet<String>,
+    /// The command table methods, indexed by method name.
+    pub command_table_methods: BTreeMap<String, Method>,
+    /// The scan methods, indexed by method name.
+    pub scan_methods: BTreeMap<String, Method>,
 }
 
 /// A command-table method (e.g. `get`).
