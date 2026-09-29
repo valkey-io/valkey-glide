@@ -1110,8 +1110,6 @@ class BaseClient(CoreCommands):
                 self._lib.close_client(self._core_client)
                 self._core_client = self._ffi.NULL
                 self._pubsub_callback_ref = None
-                self._address_resolver_callback_ref = None
-                self._credential_provider_callback_ref = None
 
     def __enter__(self) -> Self:
         return self
