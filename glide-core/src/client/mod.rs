@@ -3208,8 +3208,9 @@ impl Client {
     /// which reconciles per-borrow *state* (db/MULTI) on release. Here we reconcile
     /// per-borrow *auth*: if the IAM token rotated while this pool-managed client sat
     /// idle, its live connection still holds the old (possibly expired) token — the
-    /// background refresh only updates the password stored for reconnect — so we
-    /// re-AUTH the live connection with the current token. Invoked from `send_command`
+    /// background refresh only updates the manager's token cache, which reconnect
+    /// reads — so we re-AUTH the live connection with the
+    /// current token. Invoked from `send_command`
     /// so it runs on the client's own runtime and is awaited (never blocking an async
     /// caller's event loop), before the command dispatches — so no command runs on a
     /// stale-auth connection, matching how the scope path re-auths at command time.
@@ -3270,8 +3271,9 @@ impl Client {
             )));
         }
 
-        // Store before AUTHing so a successful AUTH can never advance the bookmark
-        // over a stale reconnect password.
+        // Keep the stored password in step with the live session, as
+        // `update_connection_password(.., true)` does; IAM reconnect itself re-reads
+        // the manager's cache, so this is not what protects the reconnect path.
         self.update_connection_password(Some(current_token.clone()), false)
             .await?;
 
