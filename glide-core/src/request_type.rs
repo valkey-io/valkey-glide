@@ -155,6 +155,7 @@ pub enum RequestType {
     HPTtl = 625,
     HExpireTime = 626,
     HPExpireTime = 627,
+    HGetDel = 628,
 
     //// HyperLogLog commands
     PfAdd = 701,
@@ -548,6 +549,7 @@ impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
             ProtobufRequestType::HVals => RequestType::HVals,
             ProtobufRequestType::HSetEx => RequestType::HSetEx,
             ProtobufRequestType::HGetEx => RequestType::HGetEx,
+            ProtobufRequestType::HGetDel => RequestType::HGetDel,
             ProtobufRequestType::HExpire => RequestType::HExpire,
             ProtobufRequestType::HExpireAt => RequestType::HExpireAt,
             ProtobufRequestType::HPExpire => RequestType::HPExpire,
@@ -1118,6 +1120,7 @@ impl RequestType {
             RequestType::HVals => Some(cmd("HVALS")),
             RequestType::HSetEx => Some(cmd("HSETEX")),
             RequestType::HGetEx => Some(cmd("HGETEX")),
+            RequestType::HGetDel => Some(cmd("HGETDEL")),
             RequestType::HExpire => Some(cmd("HEXPIRE")),
             RequestType::HExpireAt => Some(cmd("HEXPIREAT")),
             RequestType::HPExpire => Some(cmd("HPEXPIRE")),

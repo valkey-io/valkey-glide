@@ -1381,6 +1381,26 @@ export async function batchTest(
         ]);
     }
 
+    if (!cluster.checkIfServerVersionLessThan("9.1.0")) {
+        // HGETDEL tests - only run if server version is 9.1.0 or higher
+        // Ensure fields exist before getting and deleting them
+        baseBatch.hset(key4, {
+            [field.toString()]: value.toString(),
+            [field2.toString()]: value.toString(),
+        });
+        responseData.push(["hset(key4, {field, field2})", 2]);
+
+        baseBatch.hgetdel(key4, [field.toString(), field2.toString()]);
+        responseData.push([
+            "hgetdel(key4, [field, field2])",
+            [value.toString(), value.toString()],
+        ]);
+
+        // Fields are now deleted, so a second call returns nulls
+        baseBatch.hgetdel(key4, [field.toString(), field2.toString()]);
+        responseData.push(["hgetdel(key4, [field, field2])", [null, null]]);
+    }
+
     baseBatch.lpush(key5, [field1, field2, field3, field4]);
     responseData.push(["lpush(key5, [1, 2, 3, 4])", 4]);
 
