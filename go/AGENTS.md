@@ -100,8 +100,8 @@ make integ-test test-filter="Test\(Set\|Get\)"
 # Run with existing endpoints
 make integ-test standalone-endpoints=localhost:6379 cluster-endpoints=localhost:7000
 
-# Run the TLS-designated tests over TLS (the suite starts its own servers; see DEVELOPER.md)
-make tls-test tls=true
+# Run with TLS
+make integ-test standalone-endpoints=localhost:6379 cluster-endpoints=localhost:7000 tls=true
 
 # Alpine/MUSL builds
 export GOFLAGS := -tags=musl
