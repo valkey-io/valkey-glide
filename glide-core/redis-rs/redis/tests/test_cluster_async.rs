@@ -6975,7 +6975,6 @@ mod cluster_async {
     }
 
     #[tokio::test]
-    #[serial_test::serial]
     async fn test_pending_requests_channel_throughput() {
         // Validates that the lock-free channel (mpsc::UnboundedChannel) for pending_requests
         // handles high request rates without blocking the Tokio runtime.
@@ -7023,7 +7022,6 @@ mod cluster_async {
     }
 
     #[tokio::test]
-    #[serial_test::serial]
     async fn test_high_concurrency_no_runtime_blocking() {
         // Validates that under high concurrency, operations complete without Tokio runtime
         // starvation.
@@ -7076,7 +7074,6 @@ mod cluster_async {
     }
 
     #[tokio::test]
-    #[serial_test::serial]
     async fn test_cluster_params_concurrent_access() {
         // Validates that the async RwLock for cluster_params doesn't block the Tokio runtime
         // when accessed concurrently (read or write).
