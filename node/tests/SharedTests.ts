@@ -2646,10 +2646,7 @@ export function runBaseTests(config: {
                     });
 
                     // Test HGETDEL with a mix of existing and non-existing fields
-                    const result1 = await client.hgetdel(key, [
-                        field1,
-                        field3,
-                    ]);
+                    const result1 = await client.hgetdel(key, [field1, field3]);
                     expect(result1).toEqual([value1, null]);
 
                     // field1 should now be deleted, field2 should remain
