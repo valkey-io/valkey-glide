@@ -2665,6 +2665,15 @@ export function runBaseTests(config: {
                         field2,
                     ]);
                     expect(result3).toEqual([null, null]);
+
+                    // Test HGETDEL on a key holding a non-hash value returns WRONGTYPE
+                    const stringKey = getRandomKey();
+                    expect(await client.set(stringKey, "not_a_hash")).toEqual(
+                        "OK",
+                    );
+                    await expect(
+                        client.hgetdel(stringKey, [field1]),
+                    ).rejects.toThrow(RequestError);
                 },
                 protocol,
             );
