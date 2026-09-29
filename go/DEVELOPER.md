@@ -217,16 +217,22 @@ Integration and modules tests accept `standalone-endpoints`, `cluster-endpoints`
 By default, those test suites start standalone and cluster servers without TLS and stop them at the end.
 
 ```bash
-make integ-test standalone-endpoints=localhost:6379 cluster-endpoints=localhost:7000 tls=true
+make integ-test standalone-endpoints=localhost:6379 cluster-endpoints=localhost:7000
 ```
 
 The integration suite therefore runs in one of two modes: plaintext by default, or TLS when you pass `tls=true`.
 CI runs the suite both ways, so a break in either mode shows up.
 TLS-only tests skip themselves in a plaintext run, and the plaintext-only tests skip in a TLS run.
 
+Running the TLS suite against your own `standalone-endpoints` or `cluster-endpoints` is not supported for servers whose certificates are not signed by a platform certificate authority.
+That includes localhost servers started with `cluster_manager.py --tls`.
+The suite verifies given endpoints against the platform's certificate authorities, not against `utils/tls_crts/ca.crt`, so the TLS handshake fails.
+To run the TLS suite locally, pass `tls=true` without any endpoints and let the suite start its own servers.
+
 Because of those two modes, a test client's address, its TLS setting and its root certificate have to agree with each other.
 Take every client configuration from [`integTest/client_config_seam_test.go`](integTest/client_config_seam_test.go) rather than calling `config.NewClientConfiguration` and friends directly, and pick the constructor that matches the server the test connects to.
-`clientConfigFor` and `clusterClientConfigFor` follow the run mode and attach the fixture CA under TLS, which is what a test wants for the suite's shared servers.
+`clientConfigFor` and `clusterClientConfigFor` follow the run mode, which is what a test wants for the suite's shared servers.
+Under TLS they attach the fixture CA only when the suite starts its own servers; with given endpoints they attach no root certificate, so the platform's certificate authorities verify the server.
 `plaintextClientConfigFor` is for a server the test starts itself without TLS, and `tlsClientConfigFor` is for a test that supplies its own certificates because the TLS wiring is what it checks.
 `TestClientConfigsComeFromTheSeam` fails if a file in the package builds a configuration directly.
 
