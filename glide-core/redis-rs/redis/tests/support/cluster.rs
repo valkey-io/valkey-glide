@@ -26,7 +26,7 @@ use tempfile::TempDir;
 
 use crate::support::{build_keys_and_certs_for_tls, Module};
 
-use super::{build_single_client, load_certs_from_file};
+use super::{build_single_client, get_random_available_port, load_certs_from_file};
 
 use super::use_protocol;
 use super::RedisServer;
@@ -87,10 +87,20 @@ fn port_in_use(addr: &str) -> bool {
     socket.connect(&socket_addr.into()).is_ok()
 }
 
+/// The two TCP ports a cluster node listens on.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct NodePorts {
+    /// Client-facing port.
+    pub client: u16,
+    /// Cluster bus port (`--cluster-port`).
+    pub bus: u16,
+}
+
 pub struct RedisCluster {
     pub servers: Vec<RedisServer>,
     pub folders: Vec<TempDir>,
     pub tls_paths: Option<TlsFilePaths>,
+    ports: Vec<NodePorts>,
 }
 
 impl RedisCluster {
@@ -120,10 +130,29 @@ impl RedisCluster {
         modules: &[Module],
         mtls_enabled: bool,
     ) -> RedisCluster {
+        let ports = (0..nodes)
+            .map(|_| NodePorts {
+                client: get_random_available_port(),
+                // Picked explicitly: valkey's default is `port + 10000`, which it
+                // rejects for any client port above 55535 and which could collide
+                // with another node's client port.
+                bus: get_random_available_port(),
+            })
+            .collect();
+        Self::with_modules_on_ports(ports, replicas, modules, mtls_enabled)
+    }
+
+    /// Start a cluster on exactly `ports`, for restarting at addresses a client
+    /// already holds. New clusters should use `with_modules`.
+    pub fn with_modules_on_ports(
+        ports: Vec<NodePorts>,
+        replicas: u16,
+        modules: &[Module],
+        mtls_enabled: bool,
+    ) -> RedisCluster {
         let mut servers = vec![];
         let mut folders = vec![];
         let mut addrs = vec![];
-        let start_port = 7000;
         let mut tls_paths = None;
 
         let mut is_tls = false;
@@ -142,9 +171,11 @@ impl RedisCluster {
 
         let max_attempts = 5;
 
-        for node in 0..nodes {
-            let port = start_port + node;
-
+        for NodePorts {
+            client: port,
+            bus: cluster_port,
+        } in ports.iter().copied()
+        {
             servers.push(RedisServer::new_with_addr_tls_modules_and_spawner(
                 ClusterType::build_addr(port),
                 None,
@@ -165,6 +196,8 @@ impl RedisCluster {
                     std::fs::write(&acl_path, acl_content).expect("failed to write acl file");
                     cmd.arg("--cluster-enabled")
                         .arg("yes")
+                        .arg("--cluster-port")
+                        .arg(cluster_port.to_string())
                         .arg("--cluster-config-file")
                         .arg(tempdir.path().join("nodes.conf"))
                         .arg("--cluster-node-timeout")
@@ -280,6 +313,7 @@ impl RedisCluster {
             servers,
             folders,
             tls_paths,
+            ports,
         };
         if replicas > 0 {
             cluster.wait_for_replicas(replicas, mtls_enabled);
@@ -331,6 +365,11 @@ impl RedisCluster {
 
     pub fn iter_servers(&self) -> impl Iterator<Item = &RedisServer> {
         self.servers.iter()
+    }
+
+    /// The ports each node listens on, in node order.
+    pub fn ports(&self) -> Vec<NodePorts> {
+        self.ports.clone()
     }
 }
 
@@ -384,6 +423,32 @@ impl TestClusterContext {
         F: FnOnce(redis::cluster::ClusterClientBuilder) -> redis::cluster::ClusterClientBuilder,
     {
         let cluster = RedisCluster::new(nodes, replicas);
+        Self::from_cluster(cluster, initializer, mtls_enabled)
+    }
+
+    /// Restart the cluster on the ports it previously used, so clients holding
+    /// the old addresses can reconnect.
+    pub fn restart_on_ports<F>(
+        ports: Vec<NodePorts>,
+        replicas: u16,
+        initializer: F,
+        mtls_enabled: bool,
+    ) -> TestClusterContext
+    where
+        F: FnOnce(redis::cluster::ClusterClientBuilder) -> redis::cluster::ClusterClientBuilder,
+    {
+        let cluster = RedisCluster::with_modules_on_ports(ports, replicas, &[], mtls_enabled);
+        Self::from_cluster(cluster, initializer, mtls_enabled)
+    }
+
+    fn from_cluster<F>(
+        cluster: RedisCluster,
+        initializer: F,
+        mtls_enabled: bool,
+    ) -> TestClusterContext
+    where
+        F: FnOnce(redis::cluster::ClusterClientBuilder) -> redis::cluster::ClusterClientBuilder,
+    {
         let initial_nodes: Vec<ConnectionInfo> = cluster
             .iter_servers()
             .map(RedisServer::connection_info)

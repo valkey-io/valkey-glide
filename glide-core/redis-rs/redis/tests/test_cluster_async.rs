@@ -5884,6 +5884,7 @@ mod cluster_async {
 
         block_on_all(async move {
             let mut connection = cluster.async_connection(None).await;
+            let ports = cluster.cluster.ports();
             drop(cluster);
             let cmd = cmd("PING");
 
@@ -5898,12 +5899,8 @@ mod cluster_async {
             // TODO - this should be a NoConnectionError, but ATM we get the errors from the failing
             assert!(result.is_err());
 
-            let _cluster = TestClusterContext::new_with_cluster_client_builder(
-                3,
-                0,
-                |builder| builder.retries(2),
-                false,
-            );
+            let _cluster =
+                TestClusterContext::restart_on_ports(ports, 0, |builder| builder.retries(2), false);
 
             let max_requests = 5;
             let mut i = 0;
@@ -5940,15 +5937,11 @@ mod cluster_async {
         );
         block_on_all(async move {
             let mut connection = cluster.async_connection(None).await;
+            let ports = cluster.cluster.ports();
             drop(cluster);
 
-            // recreate cluster
-            let _cluster = TestClusterContext::new_with_cluster_client_builder(
-                3,
-                0,
-                |builder| builder.retries(2),
-                false,
-            );
+            let _cluster =
+                TestClusterContext::restart_on_ports(ports, 0, |builder| builder.retries(2), false);
 
             let cmd = cmd("PING");
 
