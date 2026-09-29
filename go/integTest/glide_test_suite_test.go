@@ -225,7 +225,8 @@ func runClusterManager(suite *GlideTestSuite, args []string, ignoreExitCode bool
 func getServerVersion(suite *GlideTestSuite) string {
 	var err error = nil
 	if len(suite.standaloneHosts) > 0 {
-		client, err := glide.NewClient(clientConfigFor(suite.standaloneHosts[0]))
+		var client *glide.Client
+		client, err = glide.NewClient(clientConfigFor(suite.standaloneHosts[0]))
 		if err == nil && client != nil {
 			defer client.Close()
 			info, _ := client.InfoWithOptions(
