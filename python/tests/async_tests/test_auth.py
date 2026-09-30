@@ -703,22 +703,24 @@ class TestAuthCommands:
         3. Operations continue to work after token refresh
         """
         client = await create_iam_client(request, cluster_mode, protocol)
+        try:
+            # Verify connection works
+            await assert_connected(client)
 
-        # Verify connection works
-        await assert_connected(client)
+            # Test basic operations
+            await client.set("iam_test_key", "iam_test_value")
+            value = await client.get("iam_test_key")
+            assert value == b"iam_test_value"
 
-        # Test basic operations
-        await client.set("iam_test_key", "iam_test_value")
-        value = await client.get("iam_test_key")
-        assert value == b"iam_test_value"
+            # Test manual token refresh
+            await client.refresh_iam_token()
 
-        # Test manual token refresh
-        await client.refresh_iam_token()
-
-        # Verify operations still work after token refresh
-        await client.set("iam_test_key2", "iam_test_value2")
-        value2 = await client.get("iam_test_key2")
-        assert value2 == b"iam_test_value2"
+            # Verify operations still work after token refresh
+            await client.set("iam_test_key2", "iam_test_value2")
+            value2 = await client.get("iam_test_key2")
+            assert value2 == b"iam_test_value2"
+        finally:
+            await client.close()
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -734,17 +736,19 @@ class TestAuthCommands:
         client = await create_iam_client(
             request, cluster_mode, protocol, refresh_interval_seconds=2
         )
+        try:
+            # Verify initial connection
+            await assert_connected(client)
 
-        # Verify initial connection
-        await assert_connected(client)
+            # Wait for automatic token refresh to occur
+            await anyio.sleep(3)
 
-        # Wait for automatic token refresh to occur
-        await anyio.sleep(3)
-
-        # Verify client still works after automatic refresh
-        await client.set("iam_auto_refresh_key", "iam_auto_refresh_value")
-        value = await client.get("iam_auto_refresh_key")
-        assert value == b"iam_auto_refresh_value"
+            # Verify client still works after automatic refresh
+            await client.set("iam_auto_refresh_key", "iam_auto_refresh_value")
+            value = await client.get("iam_auto_refresh_key")
+            assert value == b"iam_auto_refresh_value"
+        finally:
+            await client.close()
 
 
 # ---------------------------------------------------------------------------
