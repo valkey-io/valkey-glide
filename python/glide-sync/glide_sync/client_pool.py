@@ -327,7 +327,11 @@ class ClientPool:
         if not self._closed:
             self._closed = True
             self._lib.glide_pool_destroy(self._pool_id)
-            # Pin callbacks for 15s so Rust IAM refresh tasks finish before CFFI frees them.
+            # Keep CFFI credential-provider callbacks alive until process exit.
+            # Rust's IAM refresh task fires periodically for the lifetime of the
+            # client and may invoke the callback long after pool destruction.
+            # A test process is short-lived and production code creates very few
+            # clients with credential providers, so the accumulation is negligible.
             callbacks = [
                 cb for cb in [self._credential_provider_callback_ref] if cb is not None
             ]
@@ -335,18 +339,6 @@ class ClientPool:
                 import glide_sync.client_pool as _self_module
 
                 _self_module._pinned_credential_callbacks.extend(callbacks)
-
-                def _unpin(refs=callbacks):
-                    import time
-
-                    time.sleep(15)
-                    for cb in refs:
-                        try:
-                            _self_module._pinned_credential_callbacks.remove(cb)
-                        except ValueError:
-                            pass
-
-                threading.Thread(target=_unpin, daemon=True).start()
             self._client_cache.clear()
 
     def __enter__(self):
