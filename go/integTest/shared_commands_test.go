@@ -12,7 +12,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/valkey-io/valkey-glide/go/v2/config"
 	"github.com/valkey-io/valkey-glide/go/v2/constants"
 
 	"github.com/google/uuid"
@@ -5582,14 +5581,10 @@ func (suite *GlideTestSuite) TestXRead() {
 		// ensure that commands doesn't time out even if timeout > request timeout
 		var testClient interfaces.BaseClientCommands
 		if _, ok := client.(interfaces.GlideClientCommands); ok {
-			testClient, err = suite.client(config.NewClientConfiguration().
-				WithAddress(&suite.standaloneHosts[0]).
-				WithUseTLS(suite.tls))
+			testClient, err = suite.client(suite.defaultClientConfig())
 			require.NoError(suite.T(), err)
 		} else {
-			testClient, err = suite.clusterClient(config.NewClusterClientConfiguration().
-				WithAddress(&suite.clusterHosts[0]).
-				WithUseTLS(suite.tls))
+			testClient, err = suite.clusterClient(suite.defaultClusterClientConfig())
 			require.NoError(suite.T(), err)
 		}
 		read, err = testClient.XReadWithOptions(

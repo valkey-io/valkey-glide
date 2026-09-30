@@ -37,7 +37,11 @@ public abstract class AbstractGlideJedisFactory<J extends AbstractGlideJedis>
         this.pool = null;
     }
 
-    /** Returns {@code true} for the Jedis 5.x layer, {@code false} for the Jedis 4.x layer. */
+    /**
+     * Returns {@code true} for the Jedis 5.x layer, {@code false} for the Jedis 4.x layer.
+     *
+     * @return {@code true} for the Jedis 5.x layer, {@code false} for the Jedis 4.x layer
+     */
     protected abstract boolean isJedis5CompatibilityLayer();
 
     /**
@@ -52,6 +56,8 @@ public abstract class AbstractGlideJedisFactory<J extends AbstractGlideJedis>
     /**
      * Set the pool reference. Called by the owning pool after factory creation and before {@code
      * initPool}.
+     *
+     * @param pool the pool that owns this factory
      */
     public void setPool(Pool<J> pool) {
         this.pool = pool;
