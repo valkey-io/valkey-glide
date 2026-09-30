@@ -328,6 +328,15 @@ fn remote_access() -> u64 {
     u64::from(FI_REMOTE_READ | FI_REMOTE_WRITE | FI_READ | FI_WRITE)
 }
 
+/// The region `fi_mr_reg` returned and the address it was told to cover. A peer is
+/// given this address, never a recomputed one.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct RegisteredMemory {
+    pub(crate) region: *mut fid_mr,
+    /// Where the registered bytes start, as passed to `fi_mr_reg`.
+    pub(crate) address: u64,
+}
+
 /// A registered memory region, deregistered on drop or when revoked.
 ///
 /// Holds a [`RdmaFabric`] so the domain cannot close while a registration against it is
@@ -335,12 +344,15 @@ fn remote_access() -> u64 {
 ///
 /// Revoking deregisters the region early, from any thread, even while a transfer is
 /// using it. That is how a transfer is cancelled: once `fi_close` returns, a peer can
-/// no longer reach the memory, so an operation the server posts, or has in flight,
-/// fails at the provider instead of landing.
+/// post nothing new against the memory. An operation the provider already accepted
+/// may still access it (`fi_mr(3)`), so the memory must outlive the endpoint; see
+/// [`crate::LentBuffer`].
 #[derive(Debug)]
 pub(crate) struct Registration {
     state: Arc<RegistrationState>,
     remote_key: u64,
+    /// The address `fi_mr_reg` was told the region starts at.
+    address: u64,
 }
 
 #[derive(Debug)]
@@ -389,16 +401,19 @@ impl RegistrationState {
 }
 
 impl Registration {
-    pub(crate) fn new(memory_region: *mut fid_mr, fabric: RdmaFabric) -> Self {
+    pub(crate) fn new(registered: RegisteredMemory, fabric: RdmaFabric) -> Self {
         let (revoked, _) = watch::channel(false);
         Self {
             // SAFETY: a region returned by a successful fi_mr_reg.
-            remote_key: unsafe { fi_mr_key(memory_region) },
+            remote_key: unsafe { fi_mr_key(registered.region) },
+            address: registered.address,
             state: Arc::new(RegistrationState {
-                open: Mutex::new(NonNull::new(memory_region).map(|memory_region| OpenRegion {
-                    memory_region,
-                    fabric,
-                })),
+                open: Mutex::new(
+                    NonNull::new(registered.region).map(|memory_region| OpenRegion {
+                        memory_region,
+                        fabric,
+                    }),
+                ),
                 revoked,
             }),
         }
@@ -407,6 +422,11 @@ impl Registration {
     /// The key a peer presents to reach this region.
     pub(crate) fn remote_key(&self) -> u64 {
         self.remote_key
+    }
+
+    /// The address `fi_mr_reg` was told the region starts at.
+    pub(crate) fn address(&self) -> u64 {
+        self.address
     }
 
     /// Close the region now. A no-op once it is closed.
@@ -648,12 +668,19 @@ impl LibfabricEndpoint {
 
     /// The endpoint's local fabric address, to advertise to the server.
     pub(crate) fn local_address(&self) -> Result<Vec<u8>, RdmaError> {
+        let endpoint = NonNull::new(self.endpoint).ok_or_else(|| RdmaError::Fabric {
+            operation: "fi_getname",
+            message: "the endpoint is not open".into(),
+            errno: None,
+        })?;
+        // SAFETY: `endpoint` is non-null and stays open for as long as `self` lives.
+        let fid = unsafe { &raw mut (*endpoint.as_ptr()).fid };
         let mut length: usize = 0;
         // The first call discovers the length, returning -FI_ETOOSMALL, which is why
         // its return code is deliberately not checked.
         // SAFETY: a null buffer with a zero length is how libfabric is asked for the size.
         unsafe {
-            fi_getname(&mut (*self.endpoint).fid, ptr::null_mut(), &mut length);
+            fi_getname(fid, ptr::null_mut(), &mut length);
         }
         if length == 0 {
             return Err(RdmaError::Fabric {
@@ -665,13 +692,7 @@ impl LibfabricEndpoint {
         let mut address = vec![0u8; length];
         check(
             // SAFETY: `address` has room for `length` bytes.
-            unsafe {
-                fi_getname(
-                    &mut (*self.endpoint).fid,
-                    address.as_mut_ptr().cast(),
-                    &mut length,
-                )
-            },
+            unsafe { fi_getname(fid, address.as_mut_ptr().cast(), &mut length) },
             "fi_getname",
         )?;
         address.truncate(length);
@@ -685,13 +706,17 @@ impl LibfabricEndpoint {
     pub(crate) unsafe fn register_remote(
         &mut self,
         buffer: &[u8],
-    ) -> Result<*mut fid_mr, RdmaError> {
+    ) -> Result<RegisteredMemory, RdmaError> {
         unsafe { self.register(buffer, remote_access()) }
     }
 
     /// # Safety
     /// `buffer` must stay allocated and unmoved until the region is closed.
-    unsafe fn register(&mut self, buffer: &[u8], access: u64) -> Result<*mut fid_mr, RdmaError> {
+    unsafe fn register(
+        &mut self,
+        buffer: &[u8],
+        access: u64,
+    ) -> Result<RegisteredMemory, RdmaError> {
         let requested_key = self.remote_keys.take();
         let mut memory_region: *mut fid_mr = ptr::null_mut();
         check(
@@ -711,7 +736,10 @@ impl LibfabricEndpoint {
             },
             "fi_mr_reg",
         )?;
-        Ok(memory_region)
+        Ok(RegisteredMemory {
+            region: memory_region,
+            address: buffer.as_ptr() as u64,
+        })
     }
 
     /// Insert a peer's fabric address into the address vector.
@@ -851,7 +879,9 @@ pub(crate) mod tests {
             .fi_av_insert(peer_address)
             .expect("the peer address inserts");
         // SAFETY: the caller keeps `into` alive until the region is closed.
-        let region = unsafe { endpoint.register_remote(into) }.expect("the destination registers");
+        let region = unsafe { endpoint.register_remote(into) }
+            .expect("the destination registers")
+            .region;
         let deadline = Instant::now() + Duration::from_secs(5);
         loop {
             // SAFETY: `into` is registered as `region`, and every handle is open.

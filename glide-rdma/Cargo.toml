@@ -8,7 +8,7 @@ description = "Direct memory access (RDMA-over-fabric) support for Valkey GLIDE"
 
 [features]
 default = []
-libfabric = ["dep:ofi-libfabric-sys", "dep:libc", "dep:tokio"]
+libfabric = ["dep:ofi-libfabric-sys", "dep:libc", "dep:tokio", "dep:log"]
 
 [dependencies]
 crc-fast = { version = "1.10", default-features = false, features = ["std"] }
@@ -21,6 +21,8 @@ ofi-libfabric-sys = { path = "ofi-libfabric-sys", optional = true }
 libc = { version = "0.2", optional = true }
 # Only for `watch`, which wakes a transfer waiting on its region being revoked.
 tokio = { version = "1", default-features = false, features = ["sync"], optional = true }
+# The progress poller reports a completion-queue read it did not expect to fail.
+log = { version = "0.4", optional = true }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["rt", "macros", "time"] }

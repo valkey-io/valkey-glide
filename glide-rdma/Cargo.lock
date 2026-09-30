@@ -63,6 +63,7 @@ version = "0.1.0"
 dependencies = [
  "crc-fast",
  "libc",
+ "log",
  "ofi-libfabric-sys",
  "thiserror",
  "tokio",
@@ -73,6 +74,12 @@ name = "libc"
 version = "0.2.189"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3eaf3ede3fee6db1a4c2ee091bf8a8b4dccdc6d17f656fb07896ee72867612f2"
+
+[[package]]
+name = "log"
+version = "0.4.34"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f9f8bd3e56ce4dfc153cf470fffbfa98c7620958b312ca5c3a4b8d5181fd13c6"
 
 [[package]]
 name = "ofi-libfabric-sys"

@@ -10,12 +10,12 @@
 //!
 //! [`RdmaBuffer::lend_for_get`] and [`RdmaBuffer::lend_for_set`] are the only way to
 //! build a transfer command and they consume the buffer to do it. The buffer comes
-//! back from [`LentBuffer::reclaim`] once the server has replied, or from
-//! [`LentBuffer::recall`] when no reply is coming.
+//! back from [`LentBuffer::reclaim`] once the server has replied. A loan that ends
+//! without a reply gives nothing back; its memory is parked in the fabric.
 
 use std::fmt;
 use std::mem::ManuallyDrop;
-use std::ptr::NonNull;
+use std::ptr::{self, NonNull};
 
 use crate::command::{self, RdmaCommand, ReadReceipt, TransferReply};
 use crate::endpoint::{Registration, RevokeHandle};
@@ -54,11 +54,6 @@ impl HostMemory {
         self.bytes.len()
     }
 
-    /// Where the bytes start in this process's address space.
-    pub(crate) fn address(&self) -> u64 {
-        self.bytes.cast::<u8>().as_ptr().addr() as u64
-    }
-
     pub(crate) fn bytes(&self) -> &[u8] {
         // SAFETY: `bytes` stays valid until `self` drops. The only `&mut` to it comes
         // from `bytes_mut`, which needs `&mut self`, so the two never overlap.
@@ -68,6 +63,16 @@ impl HostMemory {
     fn bytes_mut(&mut self) -> &mut [u8] {
         // SAFETY: as in `bytes`, and `&mut self` makes this the only reference.
         unsafe { self.bytes.as_mut() }
+    }
+}
+
+impl fmt::Debug for HostMemory {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("HostMemory")
+            .field("address", &self.bytes.cast::<u8>().as_ptr())
+            .field("len", &self.len())
+            .finish()
     }
 }
 
@@ -176,7 +181,7 @@ impl RdmaBuffer {
         let command = build(&window);
         let progress = self.fabric.drive_progress();
         let loan = LentBuffer {
-            buffer: self,
+            buffer: ManuallyDrop::new(self),
             window_length: length,
             _progress: progress,
         };
@@ -254,9 +259,26 @@ impl RdmaBuffer {
     }
 }
 
+impl RdmaBuffer {
+    /// Take the buffer apart without running its `Drop`.
+    fn into_parts(self) -> (Registration, HostMemory, RdmaFabric) {
+        let this = ManuallyDrop::new(self);
+        // SAFETY: `this` is never dropped, so each field is read out exactly once.
+        unsafe {
+            (
+                ptr::read(&this.registration),
+                ManuallyDrop::into_inner(ptr::read(&this.host)),
+                ptr::read(&this.fabric),
+            )
+        }
+    }
+}
+
 impl Drop for RdmaBuffer {
     /// Free the memory only after the region over it is closed. If the region cannot
     /// be closed, the server may still reach the memory, so it is leaked instead.
+    ///
+    /// Only an unlent buffer gets here; a loan decides for itself, see [`LentBuffer`].
     fn drop(&mut self) {
         if self.registration.revoke().is_ok() {
             // SAFETY: the region is closed, and `host` is not touched again after this.
@@ -285,20 +307,22 @@ impl fmt::Debug for RdmaBuffer {
 /// - [`Self::reclaim`] once the server has replied. The buffer can then be read and
 ///   lent again.
 /// - [`Self::recall`] when no reply is coming, for example because the connection
-///   failed or the caller gave up. This revokes the buffer first, so the server can
-///   no longer reach the memory.
+///   failed or the caller gave up. This revokes the buffer and parks its memory.
 /// - Dropping the loan, for example when the future awaiting the reply is
-///   cancelled. This also revokes then frees the memory. If the revoke fails, the
-///   memory is leaked rather than freed while the server might still reach it.
+///   cancelled. As a recall, except that a failed revoke is not reported.
+///
+/// Closing a region does not stop a write the provider already accepted
+/// (`fi_mr(3)`), so memory a loan ends without a reply is parked in the fabric
+/// and freed only when the fabric closes. Register fresh memory to carry on.
 ///
 /// On tcp, the fabric's progress thread keeps polling for as long as a loan exists,
 /// because that provider moves no bytes unless the client polls.
 #[derive(Debug)]
 pub struct LentBuffer {
-    /// Never exposed. Declared first so that when a loan is dropped, the region is
-    /// revoked before progress polling stops.
-    buffer: RdmaBuffer,
+    /// Never exposed; `reclaim`, `recall`, and `Drop` each take it apart.
+    buffer: ManuallyDrop<RdmaBuffer>,
     window_length: usize,
+    /// Declared last so the region is revoked before progress polling stops.
     _progress: Option<ProgressGuard>,
 }
 
@@ -317,11 +341,7 @@ impl LentBuffer {
         self,
         reply: TransferReply,
     ) -> Result<(RdmaBuffer, Option<ReadReceipt>), (RdmaBuffer, RdmaError)> {
-        let Self {
-            buffer,
-            window_length,
-            _progress,
-        } = self;
+        let (buffer, window_length, _progress) = self.dismantle();
         match reply {
             TransferReply::Read(receipt) if receipt.bytes_written > window_length => {
                 let error = RdmaError::PayloadTooLarge {
@@ -337,22 +357,23 @@ impl LentBuffer {
         }
     }
 
-    /// End the loan without a reply: revoke the buffer, then hand it back.
+    /// End the loan without a reply: revoke the buffer and park its memory.
     ///
-    /// The returned buffer is revoked, so it cannot be lent again. What the server
-    /// moved before the revoke stays, so after a cancelled `LO.GET` the window holds
-    /// an unknown mix of old and new bytes.
+    /// Nothing comes back; the memory stays untouchable until the fabric closes.
     ///
     /// # Errors
     ///
-    /// When libfabric fails to close the region, the server may still reach the
-    /// memory, so the loan is handed back unchanged. Retry, or drop it to leak the
-    /// memory.
-    pub fn recall(self) -> Result<RdmaBuffer, (Self, RdmaError)> {
-        match self.buffer.revoke() {
-            Ok(()) => Ok(self.buffer),
-            Err(error) => Err((self, error)),
+    /// When libfabric fails to close the region, the loan is handed back unchanged.
+    /// Retry, or drop it, which parks the memory just the same.
+    pub fn recall(self) -> Result<(), (Self, RdmaError)> {
+        if let Err(error) = self.buffer.revoke() {
+            return Err((self, error));
         }
+        let (buffer, _, _progress) = self.dismantle();
+        let (registration, host, fabric) = buffer.into_parts();
+        fabric.park(host);
+        drop(registration);
+        Ok(())
     }
 
     /// Whether the buffer has been revoked, for example through an [`RdmaRevoker`].
@@ -369,6 +390,32 @@ impl LentBuffer {
     /// A handle that revokes the buffer from elsewhere as [`RdmaBuffer::revoker`].
     pub fn revoker(&self) -> RdmaRevoker {
         self.buffer.revoker()
+    }
+
+    /// Take the loan apart without running its `Drop`.
+    fn dismantle(self) -> (RdmaBuffer, usize, Option<ProgressGuard>) {
+        let mut this = ManuallyDrop::new(self);
+        // SAFETY: `this` is never dropped, so each field is moved out exactly once.
+        unsafe {
+            (
+                ManuallyDrop::take(&mut this.buffer),
+                this.window_length,
+                ptr::read(&this._progress),
+            )
+        }
+    }
+}
+
+impl Drop for LentBuffer {
+    /// Revoke the region and park the memory. A failed revoke changes nothing: the
+    /// memory is parked either way, and `Registration`'s drop retries the close.
+    fn drop(&mut self) {
+        // SAFETY: `buffer` is taken exactly once, here.
+        let buffer = unsafe { ManuallyDrop::take(&mut self.buffer) };
+        let _ = buffer.revoke();
+        let (registration, host, fabric) = buffer.into_parts();
+        fabric.park(host);
+        drop(registration);
     }
 }
 
@@ -597,20 +644,51 @@ mod tests {
         }
     }
 
+    /// An accepted write can land after the region closes, so the memory must
+    /// outlive the endpoint, not the loan.
     #[test]
-    fn recalling_a_loan_revokes_it_and_keeps_the_memory() {
-        let buffer = fabric().register(vec![7u8; 64]).unwrap();
+    fn recalling_a_loan_parks_its_memory_until_the_fabric_closes() {
+        let fabric = fabric();
+        let (memory, freed, _) = tracked();
+        let loan = lent_for_get(fabric.register(memory).unwrap());
 
-        let buffer = lent_for_get(buffer).recall().expect("the region closes");
+        loan.recall().expect("the region closes");
 
-        assert!(buffer.is_revoked());
-        assert_eq!(
-            buffer.as_host(),
-            &[7u8; 64],
-            "only the fabric's access ends; the memory is still the caller's"
+        assert!(
+            !freed.load(Ordering::SeqCst),
+            "recalled memory is not freed"
         );
-        let (_, error) = buffer.lend_for_get(b"key", 0, 64).unwrap_err();
-        assert_eq!(error, RdmaError::Revoked);
+        assert_eq!(fabric.parked(), 1);
+        drop(fabric);
+        assert!(freed.load(Ordering::SeqCst), "the fabric frees it on close");
+    }
+
+    #[test]
+    fn dropping_a_loan_parks_its_memory_too() {
+        let fabric = fabric();
+        let (memory, freed, _) = tracked();
+
+        drop(lent_for_set(fabric.register(memory).unwrap()));
+
+        assert!(!freed.load(Ordering::SeqCst));
+        assert_eq!(fabric.parked(), 1);
+        drop(fabric);
+        assert!(freed.load(Ordering::SeqCst));
+    }
+
+    /// A reply proves the server is done, so a reclaimed buffer frees as usual.
+    #[test]
+    fn reclaiming_a_loan_hands_the_memory_back_unparked() {
+        let fabric = fabric();
+        let (memory, freed, _) = tracked();
+
+        let (buffer, _) = lent_for_get(fabric.register(memory).unwrap())
+            .reclaim(TransferReply::Missing)
+            .unwrap();
+        drop(buffer);
+
+        assert!(freed.load(Ordering::SeqCst));
+        assert_eq!(fabric.parked(), 0);
     }
 
     #[test]
@@ -842,9 +920,9 @@ mod tests {
     }
 
     /// The caller stopped waiting for the reply, so the server may still be using the
-    /// memory: it must be revoked before it is freed.
+    /// memory: it is freed only with the fabric, which here closes with the loan.
     #[test]
-    fn dropping_a_loan_revokes_and_then_frees() {
+    fn dropping_a_loan_revokes_it_and_the_fabric_frees_the_memory_on_close() {
         let (memory, freed, _) = tracked();
         let loan = lent_for_get(fabric().register(memory).unwrap());
         let revoker = loan.revoker();

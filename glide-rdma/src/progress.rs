@@ -13,8 +13,9 @@
 use std::fmt;
 use std::os::raw::c_int;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-use std::sync::{Arc, Condvar, Mutex, PoisonError};
+use std::sync::{Arc, Condvar, Mutex, Once, PoisonError};
 use std::thread::JoinHandle;
+use std::time::Duration;
 
 use ofi_libfabric_sys::bindgen::{
     FI_EAVAIL, fi_cq_entry, fi_cq_err_entry, fi_cq_read, fi_cq_readerr, fi_cq_signal, fi_cq_sread,
@@ -125,16 +126,26 @@ fn poll_loop(shared: &ProgressShared) {
         }
 
         // SAFETY: the queue stays open until this thread is joined; see `SendCompletionQueue`.
-        unsafe {
+        let errors = unsafe {
             wait(shared.queue.0);
-            drain(shared.queue.0);
+            drain(shared.queue.0)
+        };
+        if errors > 0 {
+            log::debug!("progress poller drained {errors} failed completion(s)");
         }
     }
 }
 
+/// Reports a `fi_cq_sread` failure once per process rather than once per pass.
+static SREAD_FAILURE_REPORTED: Once = Once::new();
+
 /// Sleep until `queue` has an entry, the provider has work to do, `fi_cq_signal`
 /// is called on it, or `WAIT_MS` passes. Reads at most one entry and leaves an
 /// error entry for [`drain`].
+///
+/// `-FI_EAGAIN` (timeout), `-FI_EAVAIL` (error entry) and `-FI_EINTR` (signal) are
+/// expected. Any other failure means the provider cannot block on this queue, so
+/// the poller sleeps `WAIT_MS` instead of spinning, and says so once.
 ///
 /// # Safety
 /// `queue` must be an open completion queue opened with a wait object that no
@@ -145,7 +156,7 @@ unsafe fn wait(queue: *mut fid_cq) {
     };
     // SAFETY: the caller guarantees the queue is open and has a wait object, and
     // `entry` has room for the one entry asked for.
-    unsafe {
+    let waited = unsafe {
         fi_cq_sread(
             queue,
             std::ptr::from_mut(&mut entry).cast(),
@@ -154,7 +165,19 @@ unsafe fn wait(queue: *mut fid_cq) {
             WAIT_MS,
         )
     };
+    if waited < 0 && !matches!(-waited as i32, libc::EAGAIN | libc::EINTR | FI_EAVAIL_CODE) {
+        SREAD_FAILURE_REPORTED.call_once(|| {
+            log::warn!(
+                "fi_cq_sread failed ({waited}); the progress poller is falling back to \
+                 timed polling"
+            );
+        });
+        std::thread::sleep(Duration::from_millis(WAIT_MS as u64));
+    }
 }
+
+/// `FI_EAVAIL` as `fi_cq_sread` returns it, negated back to positive.
+const FI_EAVAIL_CODE: i32 = FI_EAVAIL as i32;
 
 /// Read every entry off `queue`, returning how many of them were errors.
 ///
@@ -335,7 +358,9 @@ mod tests {
             .expect("the tcp provider should open");
         let pattern: Vec<u8> = (0..1u32 << 20).map(|i| i as u8).collect();
         // SAFETY: `pattern` outlives the region, which is closed below.
-        let source = unsafe { target.register_remote(&pattern) }.expect("the source registers");
+        let source = unsafe { target.register_remote(&pattern) }
+            .expect("the source registers")
+            .region;
         // SAFETY: `source` is an open region.
         let remote_key = unsafe { fi_mr_key(source) };
         let remote_address = if target.uses_virtual_addressing() {

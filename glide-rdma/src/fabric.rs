@@ -26,6 +26,7 @@ struct FabricInner {
     /// `None` for efa-direct.
     progress: Option<ProgressDriver>,
     endpoint: Mutex<LibfabricEndpoint>,
+    parked: Mutex<Vec<HostMemory>>,
     address: Vec<u8>,
     uses_virtual_addressing: bool,
     /// Every peer address currently in the address vector and how many sessions
@@ -70,6 +71,7 @@ impl RdmaFabric {
             inner: Arc::new(FabricInner {
                 progress,
                 endpoint: Mutex::new(endpoint),
+                parked: Mutex::new(Vec::new()),
                 address,
                 uses_virtual_addressing,
                 peers: Mutex::new(HashMap::new()),
@@ -92,9 +94,9 @@ impl RdmaFabric {
         }
         // SAFETY: `host` keeps the bytes at one address until it is dropped, and the
         // returned RdmaBuffer drops it only after the region is closed.
-        let memory_region = unsafe { self.endpoint().register_remote(host.bytes())? };
-        let registration = Registration::new(memory_region, self.clone());
-        let region_ref = self.region_ref(host.address(), &registration);
+        let registered = unsafe { self.endpoint().register_remote(host.bytes())? };
+        let registration = Registration::new(registered, self.clone());
+        let region_ref = self.region_ref(&registration);
         Ok(RdmaBuffer::new(
             registration,
             region_ref,
@@ -169,6 +171,15 @@ impl RdmaFabric {
         self.inner.progress.as_ref().map(ProgressDriver::drive)
     }
 
+    /// Keep `host` allocated until this fabric closes; see [`crate::LentBuffer`].
+    pub(crate) fn park(&self, host: HostMemory) {
+        self.inner
+            .parked
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .push(host);
+    }
+
     /// Whether `self` and `other` are the same open fabric, rather than two opened
     /// separately.
     pub(crate) fn is(&self, other: &RdmaFabric) -> bool {
@@ -200,11 +211,11 @@ impl RdmaFabric {
             .unwrap_or_else(PoisonError::into_inner)
     }
 
-    fn region_ref(&self, remote_address: u64, registration: &Registration) -> RegionRef {
+    fn region_ref(&self, registration: &Registration) -> RegionRef {
         RegionRef {
             remote_key: registration.remote_key(),
             remote_address: if self.inner.uses_virtual_addressing {
-                remote_address
+                registration.address()
             } else {
                 // for offset-addressed providers like tcp
                 0
@@ -220,11 +231,21 @@ pub(crate) mod tests {
     use crate::error::RdmaError;
     use crate::progress::ProgressDriver;
     use std::cell::Cell;
+    use std::sync::PoisonError;
 
     impl RdmaFabric {
         /// How many distinct peer addresses the address vector currently holds.
         fn peer_count(&self) -> usize {
             self.peers().len()
+        }
+
+        /// How many buffers' memory is parked until this fabric closes.
+        pub(crate) fn parked(&self) -> usize {
+            self.inner
+                .parked
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .len()
         }
 
         /// How many handles hold this fabric open, this one included.
