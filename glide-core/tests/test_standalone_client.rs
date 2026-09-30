@@ -125,6 +125,62 @@ mod standalone_client_tests {
         });
     }
 
+    /// Regression test: a request parked in `get_connection` while a reconnect is in
+    /// progress must fail once the client is killed. Before the fix the reconnect task exited
+    /// without setting the connection-available signal, so the request hung forever.
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
+    fn test_kill_fails_request_waiting_for_reconnect() {
+        block_on_all(async move {
+            let mut test_basics = setup_test_basics_internal(&TestConfiguration {
+                cluster_mode: ClusterMode::Disabled,
+                ..Default::default()
+            })
+            .await;
+            let server = test_basics.server.take().expect("Server shouldn't be None");
+            drop(server);
+
+            // Drive the client into the reconnecting state: a send on the dead socket fails
+            // and starts the reconnect task, or (if the periodic check already noticed the
+            // disconnect) parks on the reconnect signal and is abandoned by the timeout.
+            let mut ping = redis::Cmd::new();
+            ping.arg("PING");
+            while let Ok(Ok(_)) = tokio::time::timeout(
+                std::time::Duration::from_secs(1),
+                test_basics.client.send_command(&ping),
+            )
+            .await
+            {
+                tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+            }
+
+            // The server is gone, so this request waits for a reconnect that cannot succeed.
+            let mut waiting_client = test_basics.client.clone();
+            let waiter = tokio::spawn(async move {
+                let mut ping = redis::Cmd::new();
+                ping.arg("PING");
+                waiting_client.send_command(&ping).await
+            });
+            tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+            assert!(
+                !waiter.is_finished(),
+                "request should wait for the reconnect"
+            );
+
+            test_basics.client.kill();
+
+            let result = tokio::time::timeout(std::time::Duration::from_secs(2), waiter)
+                .await
+                .expect("request must fail promptly after kill()")
+                .expect("waiter task panicked");
+            assert!(
+                result.is_err(),
+                "expected an error after kill(), got {result:?}"
+            );
+        });
+    }
+
     fn get_mock_addresses(mocks: &[ServerMock]) -> Vec<redis::ConnectionAddr> {
         mocks.iter().flat_map(|mock| mock.get_addresses()).collect()
     }

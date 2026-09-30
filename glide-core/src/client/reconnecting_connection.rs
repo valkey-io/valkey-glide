@@ -121,6 +121,9 @@ struct ConnectionBackend {
     connection_info: RwLock<redis::Client>,
     /// Once this flag is set, the internal connection needs no longer try to reconnect to the server, because all the outer clients were dropped.
     client_dropped_flagged: AtomicBool,
+    /// Notified by [`ReconnectingConnection::kill`]. The reconnect task races its probe against
+    /// this so a connection opened during a reconnect is closed as soon as the client is killed.
+    kill_notify: Notify,
     /// Optional handle to the IAM token cache for refreshing the password before reconnection.
     iam_token_handle: Option<IAMTokenHandle>,
     /// Optional handle to the reloaded mTLS certificate cache for refreshing the
@@ -372,6 +375,7 @@ impl ReconnectingConnection {
             connection_info: RwLock::new(connection_info),
             connection_available_signal: ManualResetEvent::new(true),
             client_dropped_flagged: AtomicBool::new(false),
+            kill_notify: Notify::new(),
             iam_token_handle,
             cert_material_handle,
         };
@@ -425,10 +429,18 @@ impl ReconnectingConnection {
     /// Killing the connection makes the server drop the client immediately.
     pub(super) fn kill(&self) {
         self.mark_as_dropped();
-        let guard = self.inner.state.lock().unwrap();
-        if let ConnectionState::Connected(connection) = &*guard {
-            connection.kill();
+        {
+            let guard = self.inner.state.lock().unwrap();
+            if let ConnectionState::Connected(connection) = &*guard {
+                connection.kill();
+            }
         }
+        // A reconnect in progress owns its new connection until the probe completes; wake it
+        // so it closes that connection instead of installing it.
+        self.inner.backend.kill_notify.notify_one();
+        // Requests parked in get_connection wait for the reconnect that will never finish.
+        // Wake them so they fail instead of hanging.
+        self.inner.backend.connection_available_signal.set();
     }
 
     pub(super) async fn try_get_connection(&self) -> Option<MultiplexedConnection> {
@@ -445,6 +457,12 @@ impl ReconnectingConnection {
             self.inner.backend.connection_available_signal.wait().await;
             if let Some(connection) = self.try_get_connection().await {
                 return Ok(connection);
+            }
+            if self.is_dropped() {
+                return Err(RedisError::from((
+                    redis::ErrorKind::ClientError,
+                    "Client was closed while waiting for a connection",
+                )));
             }
         }
     }
@@ -513,7 +531,13 @@ impl ReconnectingConnection {
                         "ReconnectingConnection",
                         "reconnect stopped after client was dropped",
                     );
-                    // Client was dropped, reconnection attempts can stop
+                    // Client was dropped, reconnection attempts can stop. Wake requests
+                    // waiting for this reconnect so they fail instead of hanging.
+                    connection_clone
+                        .inner
+                        .backend
+                        .connection_available_signal
+                        .set();
                     return;
                 }
 
@@ -567,17 +591,42 @@ impl ReconnectingConnection {
                     .await
                 {
                     Ok(mut connection) => {
-                        if connection
-                            .send_packed_command(&redis::cmd("PING"))
-                            .await
-                            .is_err()
-                        {
-                            tokio::time::sleep(sleep_duration).await;
-                            continue;
+                        // Until the probe completes, this task is the only owner of the new
+                        // connection and kill() cannot reach it. Race the probe against the
+                        // kill signal so a close during the probe closes the socket right away
+                        // instead of after the server answers the PING.
+                        let ping = redis::cmd("PING");
+                        let probe = tokio::select! {
+                            biased;
+                            _ = connection_clone.inner.backend.kill_notify.notified() => None,
+                            result = connection.send_packed_command(&ping) => Some(result),
+                        };
+                        match probe {
+                            None => {
+                                log_debug(
+                                    "reconnect",
+                                    "client was dropped during the probe, closing the new connection",
+                                );
+                                connection.kill();
+                                connection_clone
+                                    .inner
+                                    .backend
+                                    .connection_available_signal
+                                    .set();
+                                return;
+                            }
+                            Some(Err(_)) => {
+                                // The connection is discarded; abort its driver instead of
+                                // leaving the socket open until the unanswered PING returns.
+                                connection.kill();
+                                tokio::time::sleep(sleep_duration).await;
+                                continue;
+                            }
+                            Some(Ok(_)) => {}
                         }
                         {
                             let mut guard = connection_clone.inner.state.lock().unwrap();
-                            // kill() may have run while this task was connecting. It found the
+                            // kill() may have run after the probe completed. It found the
                             // state Reconnecting and had nothing to close, so close the new
                             // connection here instead of installing it.
                             if connection_clone.is_dropped() {
@@ -586,6 +635,11 @@ impl ReconnectingConnection {
                                     "client was dropped during reconnect, closing the new connection",
                                 );
                                 connection.kill();
+                                connection_clone
+                                    .inner
+                                    .backend
+                                    .connection_available_signal
+                                    .set();
                                 return;
                             }
                             log_debug("reconnect", "completed successfully");
