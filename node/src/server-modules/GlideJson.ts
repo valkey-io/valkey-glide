@@ -1347,7 +1347,9 @@ export class JsonBatch {
      * The operation is atomic: either all values are set or none is set.
      *
      * @remarks Since valkey-json 1.0.0.
-     * @remarks When in cluster mode, all keys in the batch must be mapped to the same slot.
+     * @remarks In cluster mode, every key in an atomic batch must map to the same slot. For a
+     * non-atomic batch with no explicit route, entries may span slots; this command is split and
+     * is atomic only within each slot.
      *
      * @param batch - A batch to add commands to.
      * @param entries - The `key`, `path` and `value` triplets to set. Must contain at least one entry.
