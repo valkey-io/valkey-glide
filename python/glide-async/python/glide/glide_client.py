@@ -102,6 +102,19 @@ _EVALSHA_SPAN_NAME = _ASYNC_FFI.ffi.new("char[]", b"EVALSHA")
 _pinned_credential_callbacks: list = []
 
 
+def _clear_pinned_callbacks_after_fork() -> None:
+    """Clear inherited CFFI callbacks after fork.
+
+    After os.fork(), the child inherits the module-level callback list but
+    those CFFI objects point to the parent's Python heap and are invalid in
+    the child. Clear the list so the child starts clean.
+    """
+    _pinned_credential_callbacks.clear()
+
+
+os.register_at_fork(after_in_child=_clear_pinned_callbacks_after_fork)
+
+
 # ==================== Framework-Agnostic Future ====================
 
 
