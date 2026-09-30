@@ -4894,4 +4894,428 @@ pub(crate) mod shared_client_tests {
             );
         });
     }
+
+    /// Marks a client pool-managed and drives commands through the real
+    /// `send_command` dispatch gate (`prepare_for_borrow`). Mirrors the scope
+    /// path's `test_iam_rotation_reauthenticates_each_connection_independently`,
+    /// but for the pooled-client borrow path: a single token rotation must make
+    /// the borrowed client re-AUTH exactly once on its next command, and an
+    /// up-to-date generation must send no AUTH.
+    ///
+    /// A-B: neutralize the `is_pool_managed` gate (or the generation compare) in
+    /// `prepare_for_borrow` and the post-rotation AUTH count stays 0.
+    #[cfg(feature = "proto")]
+    #[rstest]
+    #[serial_test::serial]
+    fn test_pool_borrow_reauthenticates_after_rotation() {
+        block_on_all(async {
+            setup_test_credentials();
+
+            let iam_username = "iamuser";
+            let (_server, addr, proto_request) = setup_iam_local_server(iam_username).await;
+
+            let mut client = Client::new(proto_request.into(), None)
+                .await
+                .expect("Client::new with IAM config should succeed against local server");
+            // The borrow reconcile applies only to pool-managed clients; this is
+            // the marking that `ClientPool::add_client`/`add_client_reserved` do.
+            client.mark_pool_managed();
+
+            let admin_client = redis::Client::open(redis::ConnectionInfo {
+                addr: addr.clone(),
+                redis: RedisConnectionInfo::default(),
+            })
+            .unwrap();
+            let mut admin_conn = retry(|| async {
+                admin_client
+                    .get_multiplexed_async_connection(redis::GlideConnectionOptions::default())
+                    .await
+                    .ok()
+            })
+            .await;
+
+            // First command authenticates as the IAM user (also covers the
+            // single-arg AUTH bug: a username-less AUTH would fail this identity
+            // assertion).
+            let whoami_cmd = redis::cmd("ACL").arg("WHOAMI").to_owned();
+            let whoami = |value: redis::RedisResult<Value>| -> String {
+                match value.expect("ACL WHOAMI through send_command should succeed") {
+                    Value::BulkString(bytes) => String::from_utf8(bytes.to_vec()).unwrap(),
+                    Value::SimpleString(s) => s,
+                    other => panic!("Unexpected ACL WHOAMI response shape: {other:?}"),
+                }
+            };
+            let initial = client
+                .clone()
+                .send_command(&mut whoami_cmd.clone(), None)
+                .await;
+            assert_eq!(whoami(initial), iam_username);
+
+            let auth_before = auth_call_count(&mut admin_conn).await;
+
+            // One rotation: the borrowed client's generation is now stale by one.
+            client
+                .refresh_iam_token()
+                .await
+                .expect("refresh_iam_token should succeed with IAM configured");
+
+            // Next command on borrow must re-AUTH exactly once, and still be the
+            // IAM user.
+            let after = client
+                .clone()
+                .send_command(&mut whoami_cmd.clone(), None)
+                .await;
+            assert_eq!(whoami(after), iam_username);
+            let auth_after = auth_call_count(&mut admin_conn).await;
+            assert_eq!(
+                auth_after - auth_before,
+                1,
+                "a single rotation must make the borrowed client re-AUTH exactly once \
+                 (before={auth_before}, after={auth_after})"
+            );
+
+            // No further AUTH once the generation is current again.
+            let settled = client
+                .clone()
+                .send_command(&mut whoami_cmd.clone(), None)
+                .await;
+            assert_eq!(whoami(settled), iam_username);
+            assert_eq!(
+                auth_call_count(&mut admin_conn).await,
+                auth_after,
+                "an up-to-date generation must not re-authenticate"
+            );
+        });
+    }
+
+    /// After a rotation, many commands issued concurrently on clones of one
+    /// borrowed client must coalesce to exactly one AUTH: `iam_reconcile_lock`
+    /// serializes the re-AUTH and later acquirers re-read the generation and skip.
+    ///
+    /// A-B: remove the lock (or the post-lock generation re-check) in
+    /// `prepare_for_borrow` and the AUTH count jumps to ~N instead of 1.
+    #[cfg(feature = "proto")]
+    #[rstest]
+    #[serial_test::serial]
+    fn test_pool_borrow_concurrent_commands_send_single_auth() {
+        block_on_all(async {
+            setup_test_credentials();
+
+            let iam_username = "iamuser";
+            let (_server, addr, proto_request) = setup_iam_local_server(iam_username).await;
+
+            let mut client = Client::new(proto_request.into(), None)
+                .await
+                .expect("Client::new with IAM config should succeed against local server");
+            client.mark_pool_managed();
+
+            let admin_client = redis::Client::open(redis::ConnectionInfo {
+                addr: addr.clone(),
+                redis: RedisConnectionInfo::default(),
+            })
+            .unwrap();
+            let mut admin_conn = retry(|| async {
+                admin_client
+                    .get_multiplexed_async_connection(redis::GlideConnectionOptions::default())
+                    .await
+                    .ok()
+            })
+            .await;
+
+            // Warm the connection so the initial AUTH is not part of the count.
+            let mut ping = redis::cmd("PING");
+            client
+                .clone()
+                .send_command(&mut ping, None)
+                .await
+                .expect("initial PING should succeed");
+
+            let auth_before = auth_call_count(&mut admin_conn).await;
+
+            // One rotation, then fire N commands concurrently on clones. All see
+            // the same stale generation at once.
+            client
+                .refresh_iam_token()
+                .await
+                .expect("refresh_iam_token should succeed with IAM configured");
+
+            const CONCURRENCY: usize = 300;
+            let mut handles = Vec::with_capacity(CONCURRENCY);
+            for _ in 0..CONCURRENCY {
+                let mut c = client.clone();
+                handles.push(tokio::spawn(async move {
+                    let mut cmd = redis::cmd("ACL").arg("WHOAMI").to_owned();
+                    c.send_command(&mut cmd, None).await
+                }));
+            }
+            for h in handles {
+                let who = h.await.expect("task should not panic");
+                let name = match who.expect("WHOAMI should succeed") {
+                    Value::BulkString(bytes) => String::from_utf8(bytes.to_vec()).unwrap(),
+                    Value::SimpleString(s) => s,
+                    other => panic!("Unexpected WHOAMI shape: {other:?}"),
+                };
+                assert_eq!(name, iam_username);
+            }
+
+            let auth_after = auth_call_count(&mut admin_conn).await;
+            assert_eq!(
+                auth_after - auth_before,
+                1,
+                "{CONCURRENCY} concurrent commands after one rotation must coalesce to a \
+                 single AUTH (before={auth_before}, after={auth_after})"
+            );
+        });
+    }
+
+    /// A rejected borrow-time re-AUTH must make the command fail (identifiably),
+    /// not silently dispatch on the stale-auth connection. Mirrors the scope
+    /// path's `test_failed_iam_reauth_discards_the_scoped_connection`.
+    ///
+    /// A-B: drop the `result?`/AUTH error propagation in the reconcile and the
+    /// command succeeds (or the bookmark advances) despite the failed AUTH.
+    #[cfg(feature = "proto")]
+    #[rstest]
+    #[serial_test::serial]
+    fn test_pool_borrow_failed_reauth_fails_command() {
+        block_on_all(async {
+            setup_test_credentials();
+
+            let iam_username = "iamuser";
+            let (_server, addr, proto_request) = setup_iam_local_server(iam_username).await;
+
+            let mut client = Client::new(proto_request.into(), None)
+                .await
+                .expect("Client::new with IAM config should succeed against local server");
+            client.mark_pool_managed();
+
+            // Works before the credential change.
+            let mut whoami = redis::cmd("ACL").arg("WHOAMI").to_owned();
+            client
+                .clone()
+                .send_command(&mut whoami, None)
+                .await
+                .expect("the borrowed client should work before the credentials change");
+
+            // Revoke `nopass` so the generated IAM token no longer authenticates.
+            let admin_client = redis::Client::open(redis::ConnectionInfo {
+                addr,
+                redis: RedisConnectionInfo::default(),
+            })
+            .unwrap();
+            let mut admin_conn = retry(|| async {
+                admin_client
+                    .get_multiplexed_async_connection(redis::GlideConnectionOptions::default())
+                    .await
+                    .ok()
+            })
+            .await;
+            let mut revoke = redis::cmd("ACL");
+            revoke
+                .arg("SETUSER")
+                .arg(iam_username)
+                .arg("on")
+                .arg("allkeys")
+                .arg("+@all")
+                .arg("resetpass")
+                .arg(">not-the-iam-token");
+            admin_conn
+                .send_packed_command(&revoke)
+                .await
+                .expect("ACL SETUSER should succeed");
+
+            client
+                .refresh_iam_token()
+                .await
+                .expect("refresh_iam_token should succeed with IAM configured");
+
+            // The borrow reconcile's AUTH is now rejected, so the command must fail.
+            let mut whoami = redis::cmd("ACL").arg("WHOAMI").to_owned();
+            let err = client
+                .clone()
+                .send_command(&mut whoami, None)
+                .await
+                .expect_err("a rejected borrow re-auth must make the command fail");
+            assert_eq!(
+                err.kind(),
+                redis::ErrorKind::AuthenticationFailed,
+                "a failed re-auth must be identifiable by the caller, got: {err:?}"
+            );
+        });
+    }
+
+    /// The `cluster_scan` dispatch path also runs the borrow reconcile
+    /// (`cluster_scan` calls `reconcile_iam_before_dispatch` before dispatching),
+    /// so a pool-managed IAM client must re-AUTH on a `cluster_scan` after a
+    /// rotation rather than scan on a stale-auth connection. Runs against a real
+    /// local cluster (3 shards) to exercise the AllNodes routing and the cluster
+    /// `cluster_scan` entry point that the standalone `send_command` tests above
+    /// do not reach.
+    ///
+    /// A-B: neutralize the `is_pool_managed` gate in `reconcile_iam_before_dispatch`
+    /// and the post-rotation AUTH count stays 0 (the scan runs stale).
+    #[cfg(feature = "proto")]
+    #[rstest]
+    #[serial_test::serial]
+    fn test_pool_borrow_cluster_scan_reauthenticates_after_rotation() {
+        use redis::{ClusterScanArgs, ScanStateRC};
+
+        block_on_all(async {
+            setup_test_credentials();
+
+            let iam_username = "iamuser";
+            let cluster =
+                crate::utilities::cluster::RedisCluster::new(false, &None, Some(3), Some(0));
+            let addresses = cluster.get_server_addresses();
+
+            // Grant the `nopass` IAM user on every node (mirrors the standalone
+            // `setup_iam_local_server`; `nopass` lets a valid-looking token AUTH
+            // without real AWS).
+            for addr in &addresses {
+                let admin = redis::Client::open(redis::ConnectionInfo {
+                    addr: addr.clone(),
+                    redis: RedisConnectionInfo::default(),
+                })
+                .unwrap();
+                let mut conn = retry(|| async {
+                    admin
+                        .get_multiplexed_async_connection(redis::GlideConnectionOptions::default())
+                        .await
+                        .ok()
+                })
+                .await;
+                let mut acl = redis::cmd("ACL");
+                acl.arg("SETUSER")
+                    .arg(iam_username)
+                    .arg("on")
+                    .arg("allkeys")
+                    .arg("+@all")
+                    .arg("nopass");
+                conn.send_packed_command(&acl)
+                    .await
+                    .expect("ACL SETUSER should succeed on each cluster node");
+            }
+
+            // Build a cluster-mode, pool-managed IAM client against the cluster.
+            let proto_request = {
+                use ::protobuf::MessageField;
+                use glide_core::connection_request as protobuf;
+                use protobuf::{
+                    AuthenticationInfo as ProtoAuthInfo,
+                    ConnectionRequest as ProtoConnectionRequest, IamCredentials, NodeAddress,
+                    ServiceType as ProtoServiceType, TlsMode,
+                };
+                let mut req = ProtoConnectionRequest::new();
+                for addr in &addresses {
+                    if let redis::ConnectionAddr::Tcp(host, port) = addr {
+                        req.addresses.push(NodeAddress {
+                            host: host.clone().into(),
+                            port: (*port as u32),
+                            ..Default::default()
+                        });
+                    }
+                }
+                req.tls_mode = TlsMode::NoTls.into();
+                req.cluster_mode_enabled = true;
+                req.request_timeout = 10000;
+                let mut iam = IamCredentials::new();
+                iam.cluster_name = "test-scope-iam-cluster".into();
+                iam.region = "us-east-1".into();
+                iam.service_type = ProtoServiceType::ELASTICACHE.into();
+                let mut auth = ProtoAuthInfo::new();
+                auth.username = iam_username.into();
+                auth.iam_credentials = MessageField(Some(Box::new(iam)));
+                req.authentication_info = MessageField(Some(Box::new(auth)));
+                req
+            };
+
+            let mut client = Client::new(proto_request.into(), None)
+                .await
+                .expect("cluster IAM client should connect");
+            client.mark_pool_managed();
+
+            // Counts cmdstat_auth:calls summed across all nodes via the client's
+            // own AllNodes routing.
+            async fn cluster_auth_calls(client: &mut Client) -> u64 {
+                use redis::cluster_routing::{
+                    MultipleNodeRoutingInfo, ResponsePolicy, RoutingInfo,
+                };
+                let mut info = redis::cmd("INFO");
+                info.arg("commandstats");
+                let routing = Some(RoutingInfo::MultiNode((
+                    MultipleNodeRoutingInfo::AllNodes,
+                    None::<ResponsePolicy>,
+                )));
+                let res = client
+                    .send_command(&mut info, routing)
+                    .await
+                    .expect("INFO commandstats should succeed");
+                let mut total = 0u64;
+                let mut collect = |s: &str| {
+                    for line in s.lines() {
+                        if let Some(rest) = line.strip_prefix("cmdstat_auth:") {
+                            for f in rest.split(',') {
+                                if let Some(c) = f.strip_prefix("calls=") {
+                                    total += c.parse::<u64>().unwrap_or(0);
+                                }
+                            }
+                        }
+                    }
+                };
+                match res {
+                    Value::Map(m) => {
+                        for (_, v) in m {
+                            if let Ok(s) = redis::from_owned_redis_value::<String>(v) {
+                                collect(&s);
+                            }
+                        }
+                    }
+                    Value::Array(a) => {
+                        for v in a {
+                            if let Ok(s) = redis::from_owned_redis_value::<String>(v) {
+                                collect(&s);
+                            }
+                        }
+                    }
+                    other => {
+                        if let Ok(s) = redis::from_owned_redis_value::<String>(other) {
+                            collect(&s);
+                        }
+                    }
+                }
+                total
+            }
+
+            // Prime the connections (initial AUTH) with a first scan.
+            let scan_state = ScanStateRC::new();
+            client
+                .cluster_scan(&scan_state, ClusterScanArgs::default())
+                .await
+                .expect("initial cluster_scan should succeed");
+
+            let auth_before = cluster_auth_calls(&mut client).await;
+
+            // One rotation makes the borrowed client's generation stale.
+            client
+                .refresh_iam_token()
+                .await
+                .expect("refresh_iam_token should succeed with IAM configured");
+
+            // The next cluster_scan runs the borrow reconcile before dispatching,
+            // re-AUTHing the connections (AllNodes -> one AUTH per node).
+            let scan_state = ScanStateRC::new();
+            client
+                .cluster_scan(&scan_state, ClusterScanArgs::default())
+                .await
+                .expect("cluster_scan after rotation should succeed");
+
+            let auth_after = cluster_auth_calls(&mut client).await;
+            assert!(
+                auth_after > auth_before,
+                "a cluster_scan after rotation must trigger the borrow re-AUTH \
+                 (before={auth_before}, after={auth_after}); if equal, the \
+                 cluster_scan path did not run the reconcile"
+            );
+        });
+    }
 }
