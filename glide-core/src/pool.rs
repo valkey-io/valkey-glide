@@ -215,6 +215,10 @@ impl ClientPool {
     /// Add a newly created client to the idle pool. Returns the assigned client_id.
     /// Increments total_count. Use `add_client_reserved` if the slot was pre-reserved.
     pub fn add_client(&mut self, client: GlideClient) -> u64 {
+        // Enable the borrow-time IAM reconcile for every pooled client, regardless
+        // of which binding created it (Java/Node call this directly). Marking at the
+        // pool's ownership boundary means no binding can forget to mark.
+        client.mark_pool_managed();
         let client_id = self.next_id();
         let flag = Arc::new(AtomicU32::new(0));
         let entry = PooledClient {
@@ -236,6 +240,8 @@ impl ClientPool {
     /// pre-incremented total_count (e.g., background creation after should_create check).
     /// Returns the assigned client_id.
     pub fn add_client_reserved(&mut self, client: GlideClient) -> u64 {
+        // See `add_client`: mark at the pool ownership boundary so every binding is covered.
+        client.mark_pool_managed();
         let client_id = self.next_id();
         let flag = Arc::new(AtomicU32::new(0));
         let entry = PooledClient {
@@ -1909,6 +1915,89 @@ mod connection_state_tests {
         assert_eq!(
             selected.selected_db, 300,
             "SELECT tracking must not truncate"
+        );
+    }
+}
+
+#[cfg(test)]
+mod client_pool_marking_tests {
+    use super::{ClientPool, PoolConfig};
+    use crate::client::Client as GlideClient;
+    use std::time::Duration;
+
+    /// A lazy (no-network) client for pool intake tests. `lazy_connect: true` means
+    /// construction never touches the network.
+    async fn lazy_client() -> GlideClient {
+        use crate::client::{ConnectionRequest, NodeAddress};
+        let request = ConnectionRequest {
+            addresses: vec![NodeAddress {
+                host: "127.0.0.1".to_string(),
+                port: 1,
+            }],
+            cluster_mode_enabled: false,
+            lazy_connect: true,
+            ..Default::default()
+        };
+        GlideClient::new(request, None)
+            .await
+            .expect("lazy client construction does not touch the network")
+    }
+
+    fn test_pool() -> ClientPool {
+        ClientPool::new(PoolConfig {
+            max_size: 4,
+            min_idle: 0,
+            idle_timeout: Duration::from_secs(60),
+            request_timeout: Duration::from_secs(1),
+            test_on_borrow: false,
+            connection_request: Vec::new(),
+            is_async: true,
+            configured_database_id: 0,
+            abandon_timeout: Duration::from_secs(300),
+        })
+        .expect("valid pool config")
+    }
+
+    /// A client is not pool-managed until it enters the pool, and `add_client` must
+    /// mark it at the ownership boundary — this pins the marking that Java and Node's
+    /// Rust pool depend on (both reach the pool through `add_client`).
+    #[tokio::test]
+    async fn add_client_marks_pool_managed() {
+        let client = lazy_client().await;
+        assert!(
+            !client.is_pool_managed(),
+            "a fresh client must not be pool-managed before intake"
+        );
+        let mut pool = test_pool();
+        let id = pool.add_client(client);
+        let entry = pool
+            .idle
+            .iter()
+            .find(|e| e.client_id == id)
+            .expect("added client is in the idle pool");
+        assert!(
+            entry.client.is_pool_managed(),
+            "add_client must mark the client pool-managed"
+        );
+    }
+
+    /// The reserved-slot intake path (`add_client_reserved`) must mark too — Java's
+    /// second path reaches the pool this way.
+    #[tokio::test]
+    async fn add_client_reserved_marks_pool_managed() {
+        let client = lazy_client().await;
+        let mut pool = test_pool();
+        pool.total_count
+            .fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+        let id = pool.add_client_reserved(client);
+        let entry = pool
+            .idle
+            .iter()
+            .find(|e| e.client_id == id)
+            .expect("added client is in the idle pool");
+        assert!(
+            entry.client.is_pool_managed(),
+            "add_client_reserved must mark the client pool-managed"
         );
     }
 }

@@ -136,6 +136,8 @@ fn create_pool_client(
         Arc::from_raw(adapter_ptr)
     };
     let client = adapter.core.client.clone();
+    // Enable the borrow-time IAM reconcile in send_command for pooled clients.
+    client.mark_pool_managed();
     let ptr = adapter_ptr as usize;
     // Don't drop — the Arc is owned by the pool now
     std::mem::forget(adapter);
