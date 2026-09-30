@@ -3047,6 +3047,7 @@ dependencies = [
  "regex",
  "ryu",
  "sealed",
+ "serde",
  "serde_json",
  "sha1_smol",
  "thiserror 2.0.20",

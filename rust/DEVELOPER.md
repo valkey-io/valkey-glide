@@ -149,24 +149,28 @@ shapes there rather than in individual commands.
 
 The unified `AsyncCommands` / `Commands` traits are defined by the
 **hand-maintained** command table in `src/commands/core.rs` (one
-`implement_glide_commands!` invocation; each `fn name<G: Bound>(args);` entry
+`implement_commands!` invocation; each `fn name<G: Bound>(args);` entry
 expands to both the async and the blocking method, delegating to the fork's
 `Cmd::<name>()` constructor for identical wire encoding).
 
 To add or change an entry, edit the table directly — then run the
-signature-parity guard, which compares every entry against the vendored
-redis-rs fork's `implement_commands!` table (names, generic order, argument
-lists) and fails on any divergence. It also checks the `scan*` methods
-(names, generics, and arguments must match the fork's macro definitions;
-receivers and return types deliberately deviate — GLIDE-owned iterators on
-the owned-send path, see `src/commands/scan.rs`):
+signature-parity guard. It parses GLIDE's table (`src/commands/core.rs`)
+and compares it against a committed snapshot of the redis-rs surface
+(`src/parity_tests/redis_parity.json`).
 
 ```bash
-cargo test --test it_parity_guard   # pure Rust; resolves the fork via cargo metadata
+cargo test --lib parity_tests
 ```
 
-When the pinned fork rev is bumped, run the verifier to see what changed in
-the fork's surface, update the table deliberately, and refresh the pinned rev
-references. Commands beyond the fork's surface belong
-in the per-family extension traits (`src/commands/<family>.rs`), not in the
-table.
+The snapshot is a **trusted baseline**: the guard does not re-verify it against
+the redis-rs source on every run — it only rebuilds the snapshot from
+that source when the file is absent. So if the vendored redis-rs is edited or
+re-vendored, regenerate the snapshot (delete it and re-run) so it reflects the
+new source.
+
+The targeted redis-rs version is `REDIS_RS_VERSION` in `src/parity_tests/mod.rs`
+(currently the fork's `0.25.2`); a `TODO #7058` there tracks retargeting to
+upstream 1.7.0. Bumping the constant makes the committed snapshot's version
+mismatch and the guard fail until the snapshot is regenerated. Commands beyond the
+redis-rs surface belong in the per-family extension traits
+(`src/commands/<family>.rs`), not in the table.
