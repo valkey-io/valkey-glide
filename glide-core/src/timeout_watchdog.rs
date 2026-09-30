@@ -201,6 +201,7 @@ pub fn cmd_name_from_bytes(bytes: &[u8]) -> &'static str {
                 (b"HEXISTS", "HEXISTS"),
                 (b"HEXPIRE", "HEXPIRE"),
                 (b"HGETALL", "HGETALL"),
+                (b"HGETDEL", "HGETDEL"),
                 (b"HINCRBY", "HINCRBY"),
                 (b"HSTRLEN", "HSTRLEN"),
                 (b"LATENCY", "LATENCY"),

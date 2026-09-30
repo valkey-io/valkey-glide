@@ -8260,9 +8260,9 @@ class TestCommands:
 
         assert await glide_client.object_encoding(non_existing_key) is None
 
-        assert await glide_client.set(
-            string_key, "a really loooooooooooooooooooooooooooooooooooooooong value"
-        )
+        # Valkey 9.1 raised the embstr size limit (from 64 to 128 bytes), so the value
+        # must exceed 128 bytes to be stored as "raw" across all supported versions.
+        assert await glide_client.set(string_key, "a" * 200)
         assert await glide_client.object_encoding(string_key) == "raw".encode()
 
         assert await glide_client.set(string_key, "2") == OK
