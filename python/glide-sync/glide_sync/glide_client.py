@@ -59,6 +59,13 @@ _EVALSHA_SPAN_NAME = _SYNC_FFI.ffi.new("char[]", b"EVALSHA")
 
 ENCODING = "utf-8"
 
+# Module-level list that keeps CFFI credential-provider callbacks alive after
+# GlideClient.close(). The Rust IAM refresh task fires periodically for the
+# entire lifetime of the client and may still invoke the callback long after
+# close_client() returns. Callbacks are kept until process exit; accumulation
+# is negligible for production workloads.
+_pinned_credential_callbacks: list = []
+
 
 # Enum values must match the Rust definition
 class FFIClientTypeEnum:
@@ -1110,6 +1117,23 @@ class BaseClient(CoreCommands):
                 self._lib.close_client(self._core_client)
                 self._core_client = self._ffi.NULL
                 self._pubsub_callback_ref = None
+                # Keep credential/address-resolver callbacks alive until process
+                # exit so the Rust IAM refresh task (which fires periodically for
+                # the entire lifetime of the client) never invokes a freed CFFI
+                # trampoline.  A test process is short-lived; production code
+                # creates very few clients with credential providers.
+                _cbs = [
+                    cb
+                    for cb in [
+                        self._credential_provider_callback_ref,
+                        self._address_resolver_callback_ref,
+                    ]
+                    if cb is not None
+                ]
+                if _cbs:
+                    import glide_sync.glide_client as _self_module
+
+                    _self_module._pinned_credential_callbacks.extend(_cbs)
 
     def __enter__(self) -> Self:
         return self
