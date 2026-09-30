@@ -2547,39 +2547,36 @@ describe("GlideClient", () => {
                 ProtocolVersion.RESP3,
             );
             const observer = await GlideClient.createClient(config);
+            // A lazy client has no server-side id until it connects, and other test
+            // files may have their own XREADGROUP blocked on a shared server, so
+            // identify the blocked client by a unique name.
+            const blockedName = `blocked_close_${lazyConnect}_${getRandomKey()}`;
             const blocked = await GlideClient.createClient({
                 ...config,
                 lazyConnect,
+                clientName: blockedName,
             });
             const key = getRandomKey();
             const group = getRandomKey();
             const consumer = getRandomKey();
 
-            // A lazy client has no server-side id until it connects, so identify the
-            // blocked client by its last command: the observer never runs XREADGROUP.
-            const isAttached = async () => {
+            const blockedClientLines = async () => {
                 const list = (await observer.customCommand([
                     "CLIENT",
                     "LIST",
                 ])) as string;
                 return list
                     .split("\n")
-                    .some((line) => / cmd=xreadgroup/.test(line));
+                    .filter((line) => line.includes(`name=${blockedName} `));
             };
 
-            const isBlocked = async () => {
-                const list = (await observer.customCommand([
-                    "CLIENT",
-                    "LIST",
-                ])) as string;
-                return list
-                    .split("\n")
-                    .some(
-                        (line) =>
-                            / cmd=xreadgroup/.test(line) &&
-                            / flags=\S*b/.test(line),
-                    );
-            };
+            const isAttached = async () =>
+                (await blockedClientLines()).length > 0;
+
+            const isBlocked = async () =>
+                (await blockedClientLines()).some((line) =>
+                    / flags=\S*b/.test(line),
+                );
 
             const poll = async (
                 predicate: () => Promise<boolean>,
