@@ -102,19 +102,16 @@ impl Drop for DropWrapper {
         for node in self.nodes.iter() {
             node.kill();
         }
+        // The last StandaloneClient clone is gone. `total_clients` is incremented once per
+        // created client, so it must be decremented here and not per clone: clones are
+        // made for every command and would drive the metric to zero while the client is open.
+        Telemetry::decr_total_clients(1);
     }
 }
 
 #[derive(Clone, Debug)]
 pub struct StandaloneClient {
     inner: Arc<DropWrapper>,
-}
-
-impl Drop for StandaloneClient {
-    fn drop(&mut self) {
-        // Client was dropped, reduce the number of clients
-        Telemetry::decr_total_clients(1);
-    }
 }
 
 pub enum StandaloneClientConnectionError {
