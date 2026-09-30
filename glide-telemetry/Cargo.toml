@@ -17,7 +17,7 @@ glide-logger = { path = "../glide-logger", version = "0.1.0" }
 chrono = "0.4"
 lazy_static = "1"
 once_cell = "1"
-opentelemetry = { version = "0.32", features = ["metrics"] }
+opentelemetry = { version = "0.33", features = ["metrics"] }
 opentelemetry_sdk = { version = "0.32", features = ["rt-tokio", "metrics", "experimental_metrics_periodicreader_with_async_runtime", "experimental_trace_batch_span_processor_with_async_runtime"] }
 opentelemetry-otlp = { version = "0.32", features = ["http-proto", "http-json", "reqwest-client", "grpc-tonic"] }
 serde = { version = "1", features = ["derive"] }
