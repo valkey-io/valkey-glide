@@ -61,14 +61,14 @@ fn run_parity_check(version: &str) -> Result<String, Vec<String>> {
 
     // Compare command table methods.
     let glide_command_table_methods = parse_command_table_methods(glide_src);
-    problems.extend(compare_command_table_methods(
+    problems.extend(compare_method_maps(
         &redis_parity.command_table_methods,
         &glide_command_table_methods,
     ));
 
     // Compare scan methods.
     let glide_scan_methods = parse_scan_methods(glide_src);
-    problems.extend(compare_scan_methods(
+    problems.extend(compare_method_maps(
         &redis_parity.scan_methods,
         &glide_scan_methods,
     ));
@@ -88,7 +88,7 @@ fn run_parity_check(version: &str) -> Result<String, Vec<String>> {
 /// Panics if the snapshot records a different version than the one targeted,
 /// or if the data file can't be read, parsed, serialized, or written.
 //
-// TODO #7230: the snapshot is a trusted baseline — it is not validated against the
+// TODO #7058: the snapshot is a trusted baseline — it is not validated against the
 // vendored redis-rs source, and its `version` is stamped from `REDIS_RS_VERSION`
 // rather than derived from the source. So a source signature change with a stale
 // snapshot still passes, and regenerating after a version bump relabels the old
@@ -138,6 +138,10 @@ fn parse_command_table_methods(src: &str) -> BTreeMap<String, Method> {
         .find("implement_commands! {")
         .unwrap_or_else(|| panic!("command table not found"));
     let rest = &src[start..];
+
+    // The macro body ends at the first line that *starts* with `}`.
+    // TODO #7058: for robust parsing (comment/string/brace-safe), tokenize with
+    // `proc-macro2` and take the macro's brace `Group` instead of this heuristic.
     let end = rest
         .lines()
         .scan(0usize, |offset, line| {
@@ -282,7 +286,7 @@ fn parse_scan_methods(src: &str) -> BTreeMap<String, Method> {
     }
 
     // Verify that each scan method is defined for both async and blocking clients.
-    // TODO #7230: this two-flavor check runs on both the redis-rs and GLIDE sources.
+    // TODO #7058: this two-flavor check runs on both the redis-rs and GLIDE sources.
     // Upstream redis-rs 1.7.0 declares each scan method once (a macro expanded into both
     // traits), so on retarget the "both flavors present" expectation must apply to the
     // GLIDE source only.
@@ -314,9 +318,9 @@ fn parse_scan_args(args: &str) -> Vec<Argument> {
     parse_args(without_receiver.trim())
 }
 
-/// Compares the given redis-rs and Valkey GLIDE command table methods.
+/// Compares the given redis-rs and Valkey GLIDE methods.
 /// Returns one message per problem; empty means they match.
-fn compare_command_table_methods(
+fn compare_method_maps(
     redis: &BTreeMap<String, Method>,
     glide: &BTreeMap<String, Method>,
 ) -> Vec<String> {
@@ -337,35 +341,6 @@ fn compare_command_table_methods(
     for name in glide.keys() {
         if !redis.contains_key(name) {
             problems.push(format!("EXTRA method in GLIDE: {name}"));
-        }
-    }
-
-    problems
-}
-
-/// Compares the given redis-rs and Valkey GLIDE scan methods.
-/// Returns one message per problem; empty means they match.
-fn compare_scan_methods(
-    redis: &BTreeMap<String, Method>,
-    glide: &BTreeMap<String, Method>,
-) -> Vec<String> {
-    let mut problems = Vec::new();
-
-    // Verify that all redis-rs scan methods are implemented by GLIDE.
-    for (name, method) in redis {
-        match glide.get(name) {
-            None => problems.push(format!("MISSING scan method in GLIDE: {name}")),
-            Some(ours) if !compare_methods(method, ours) => problems.push(format!(
-                "SCAN SIGNATURE DIFF {name}:\n     redis-rs: {method:?}\n     GLIDE: {ours:?}"
-            )),
-            _ => {}
-        }
-    }
-
-    // Verify that GLIDE does not implement any extra scan methods.
-    for name in glide.keys() {
-        if !redis.contains_key(name) {
-            problems.push(format!("EXTRA scan method in GLIDE: {name}"));
         }
     }
 
