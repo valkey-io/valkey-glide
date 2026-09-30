@@ -385,9 +385,12 @@ describe("Server Module Tests", () => {
                     await GlideJson.get(client, key2, { path: "$.c" }),
                 ).toEqual("[true]");
 
-                // Keys in different slots are split per slot by the client.
-                const key4 = getRandomKey();
-                const key5 = getRandomKey();
+                // Keys in different slots are split per slot by the client. `{foo}` and
+                // `{foo2}` hash to slots 12182 and 1044, so the split is exercised
+                // deterministically.
+                const suffix = getRandomKey();
+                const key4 = `{foo}:${suffix}`;
+                const key5 = `{foo2}:${suffix}`;
                 expect(
                     await GlideJson.mset(client, [
                         { key: key4, path: "$", value: "[1]" },
