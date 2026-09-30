@@ -81,6 +81,20 @@ def test_standalone_only_cluster_skip_is_accepted(pytester, monkeypatch):
     assert "although one was expected" not in result.stdout.str()
 
 
+def test_cluster_endpoints_cluster_skip_fails_session(pytester, monkeypatch):
+    """--cluster-endpoints marks a cluster as expected even alongside
+    --standalone-endpoints, so the skip must still fail the session."""
+    _prepare(pytester, monkeypatch)
+    pytester.makepyfile(_REQUIRE_CLUSTER_ADDRESSES_TEST)
+    result = pytester.runpytest_subprocess(
+        "-q",
+        "--cluster-endpoints=127.0.0.1:1",
+        "--standalone-endpoints=127.0.0.1:2",
+    )
+    assert result.ret != 0
+    result.stdout.fnmatch_lines(["*although one was expected*", "*test_cluster_only*"])
+
+
 def test_unrelated_skip_does_not_fail_session(pytester, monkeypatch):
     _prepare(pytester, monkeypatch)
     pytester.makepyfile("""
