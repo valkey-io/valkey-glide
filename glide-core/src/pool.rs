@@ -4240,3 +4240,183 @@ mod abandon_monitor_tests {
         unregister_pool(pool_id);
     }
 }
+
+/// Regression tests for #7168: every path that permanently drops a `PooledClient`
+/// must report its id through `drain_discarded_ids()`, because that is the only
+/// signal a binding gets to reclaim the adapter / handle it holds for that id.
+#[cfg(test)]
+mod client_pool_tests {
+    use super::*;
+    use std::net::TcpListener;
+
+    fn test_pool_config(request_timeout: Duration) -> PoolConfig {
+        PoolConfig {
+            max_size: 4,
+            min_idle: 0,
+            idle_timeout: Duration::from_secs(300),
+            request_timeout,
+            test_on_borrow: false,
+            connection_request: vec![],
+            is_async: false,
+            configured_database_id: 0,
+            abandon_timeout: Duration::ZERO,
+        }
+    }
+
+    /// A lazily-connecting client aimed at `port` on loopback. Nothing is sent
+    /// until the first command, so the test controls what is (or is not)
+    /// listening when `reset_connection_state` runs.
+    async fn lazy_client_to(port: u16) -> GlideClient {
+        let mut request = crate::client::ConnectionRequest::default();
+        request.addresses.push(crate::client::NodeAddress {
+            host: "127.0.0.1".into(),
+            port,
+        });
+        request.lazy_connect = true;
+        request.connection_timeout = Some(60_000);
+        request.request_timeout = Some(60_000);
+        request.connection_retry_strategy = None;
+        GlideClient::new(request, None)
+            .await
+            .expect("lazy client construction does not connect")
+    }
+
+    /// Goes through acquire -> release rather than stopping at `add_client` so
+    /// the entry has a `last_idle_at` set by `return_to_idle`, the field the
+    /// eviction test back-dates.
+    fn add_idle_client(pool: &mut ClientPool, client: GlideClient) -> u64 {
+        let client_id = pool.add_client(client);
+        assert_eq!(pool.try_acquire(), client_id as i64);
+        let entry = pool.take_for_release(client_id).expect("in_use");
+        pool.return_to_idle(entry);
+        client_id
+    }
+
+    /// Idle-timeout eviction in `try_acquire` must report the evicted id; a
+    /// binding's per-id adapter (FFI: a tokio runtime + connection) is
+    /// otherwise held until destroy.
+    #[test]
+    fn idle_eviction_reports_discarded_id() {
+        let mut pool = ClientPool::new(test_pool_config(Duration::from_secs(5))).unwrap();
+        let client_id = add_idle_client(&mut pool, crate::client::create_test_glide_client());
+
+        pool.idle.back_mut().expect("client is idle").last_idle_at =
+            Instant::now() - pool.config.idle_timeout * 2;
+
+        assert_eq!(
+            pool.try_acquire(),
+            -3,
+            "the only idle client must be evicted"
+        );
+        assert_eq!(pool.total_count.load(Ordering::Acquire), 0);
+        assert_eq!(
+            pool.drain_discarded_ids(),
+            vec![client_id],
+            "evicted client id must be reported so bindings reclaim their side"
+        );
+        assert!(get_blocking_flag(client_id).is_none());
+    }
+
+    /// A client discarded after a failed reset in `release_client_async` must
+    /// have its id reported (the case from #7168).
+    #[test]
+    fn reset_failure_reports_discarded_id() {
+        let rt = tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .worker_threads(2)
+            .build()
+            .unwrap();
+
+        // Bind then drop: nothing listens on this port, so the lazy client's
+        // first command (the DISCARD/SELECT reset) fails with a connect error.
+        let dead_port = TcpListener::bind("127.0.0.1:0")
+            .unwrap()
+            .local_addr()
+            .unwrap()
+            .port();
+
+        rt.block_on(async {
+            let pool_arc = Arc::new(TokioMutex::new(
+                ClientPool::new(test_pool_config(Duration::from_millis(500))).unwrap(),
+            ));
+            let client = lazy_client_to(dead_port).await;
+            let client_id = {
+                let mut pool = pool_arc.lock().await;
+                let id = pool.add_client(client);
+                assert_eq!(pool.try_acquire(), id as i64);
+                id
+            };
+
+            release_client_async(pool_arc.clone(), client_id).await;
+
+            let mut pool = pool_arc.lock().await;
+            assert_eq!(
+                pool.idle_count(),
+                0,
+                "a client that failed reset must not be reused"
+            );
+            assert_eq!(pool.total_count.load(Ordering::Acquire), 0);
+            assert_eq!(
+                pool.drain_discarded_ids(),
+                vec![client_id],
+                "reset-failure discard must be reported so bindings reclaim their side"
+            );
+            assert!(get_blocking_flag(client_id).is_none());
+        });
+    }
+
+    /// `LeakGuard`, run when `release_client_async` is cancelled mid-reset
+    /// (pool destroy), must report the id along with freeing the slot.
+    #[test]
+    fn cancelled_release_reports_discarded_id() {
+        let rt = tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .worker_threads(2)
+            .build()
+            .unwrap();
+
+        // A listener that accepts (kernel backlog) but never speaks: the reset's
+        // connect succeeds and the handshake then waits, so the release future
+        // is still pending when it is aborted.
+        let blackhole = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = blackhole.local_addr().unwrap().port();
+
+        rt.block_on(async {
+            let pool_arc = Arc::new(TokioMutex::new(
+                ClientPool::new(test_pool_config(Duration::from_secs(30))).unwrap(),
+            ));
+            let client = lazy_client_to(port).await;
+            let client_id = {
+                let mut pool = pool_arc.lock().await;
+                let id = pool.add_client(client);
+                assert_eq!(pool.try_acquire(), id as i64);
+                id
+            };
+
+            let release = tokio::spawn(release_client_async(pool_arc.clone(), client_id));
+            let deadline = Instant::now() + Duration::from_secs(5);
+            loop {
+                if pool_arc.lock().await.in_use.is_empty() {
+                    break;
+                }
+                assert!(Instant::now() < deadline, "release never took the client");
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+            tokio::time::sleep(Duration::from_millis(100)).await;
+            assert!(!release.is_finished(), "reset must still be pending");
+
+            release.abort();
+            let _ = release.await;
+
+            let mut pool = pool_arc.lock().await;
+            assert_eq!(pool.total_count.load(Ordering::Acquire), 0);
+            assert_eq!(
+                pool.drain_discarded_ids(),
+                vec![client_id],
+                "LeakGuard discard must be reported so bindings reclaim their side"
+            );
+            assert!(get_blocking_flag(client_id).is_none());
+        });
+        drop(blackhole);
+    }
+}
