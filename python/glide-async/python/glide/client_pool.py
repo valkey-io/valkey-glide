@@ -387,6 +387,23 @@ class AsyncClientPool:
         )
         return total[0]
 
+    def _pin_callbacks_for_process_lifetime(self) -> None:
+        """Keep CFFI credential callbacks alive until process exit.
+
+        Rust's IAM refresh task fires periodically for the entire lifetime of the
+        client and may invoke the credential-provider callback long after
+        ``glide_pool_destroy``.  Keeping callbacks in a module-level list until
+        process exit prevents a freed CFFI closure from being called (SIGSEGV).
+        A test process is short-lived; production code creates very few clients
+        with credential providers, so the accumulation is negligible.
+        """
+        callbacks = list(self._probe_callback_refs)
+        if self._credential_provider_callback_ref is not None:
+            callbacks.append(self._credential_provider_callback_ref)
+        if not callbacks:
+            return
+        _pinned_credential_callbacks.extend(callbacks)
+
     def close(self):
         if not self._closed:
             self._closed = True
@@ -394,6 +411,7 @@ class AsyncClientPool:
                 _client_registry.pop(cid, None)
             self._lib.glide_pool_destroy(self._pool_id)
             self._client_cache.clear()
+            self._pin_callbacks_for_process_lifetime()
             self._probe_callback_refs.clear()
 
     async def aclose(self):
