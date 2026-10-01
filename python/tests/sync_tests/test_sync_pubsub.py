@@ -372,8 +372,6 @@ class TestSyncPubSub:
             result = publishing_client.publish(message, channel)
             if cluster_mode:
                 assert result == 1
-            # allow the message to propagate
-            time.sleep(1)
 
             pubsub_msg = sync_get_message_by_method(
                 method, listening_client, callback_messages, 0
@@ -417,11 +415,10 @@ class TestSyncPubSub:
                 if cluster_mode:
                     assert result == 1
 
-            # allow the message to propagate
-            time.sleep(1)
-
             async_msg_res = listening_client.get_pubsub_message()
-            sync_msg_res = listening_client.try_get_pubsub_message()
+            sync_msg_res = sync_get_message_by_method(
+                MethodTesting.Sync, listening_client
+            )
             assert sync_msg_res
             async_msg = decode_pubsub_msg(async_msg_res)
             sync_msg = decode_pubsub_msg(sync_msg_res)
@@ -500,9 +497,6 @@ class TestSyncPubSub:
                 if cluster_mode:
                     assert result == 1
 
-            # Allow the messages to propagate
-            time.sleep(1)
-
             # Check if all messages are received correctly
             for index in range(len(channels_and_messages)):
                 pubsub_msg = sync_get_message_by_method(
@@ -563,9 +557,6 @@ class TestSyncPubSub:
                 result = publishing_client.publish(message, channel)
                 if cluster_mode:
                     assert result == 1
-
-            # Allow the messages to propagate
-            time.sleep(1)
 
             # Check if all messages are received correctly by each method
             for index in range(len(channels_and_messages)):
@@ -641,9 +632,6 @@ class TestSyncPubSub:
                 == publish_response
             )
 
-            # allow the message to propagate
-            time.sleep(1)
-
             pubsub_msg = sync_get_message_by_method(
                 method, listening_client, callback_messages, 0
             )
@@ -702,11 +690,10 @@ class TestSyncPubSub:
                 == 1
             )
 
-            # allow the messages to propagate
-            time.sleep(1)
-
             async_msg_res = listening_client.get_pubsub_message()
-            sync_msg_res = listening_client.try_get_pubsub_message()
+            sync_msg_res = sync_get_message_by_method(
+                MethodTesting.Sync, listening_client
+            )
             assert sync_msg_res
             async_msg = decode_pubsub_msg(async_msg_res)
             sync_msg = decode_pubsub_msg(sync_msg_res)
@@ -790,9 +777,6 @@ class TestSyncPubSub:
                     == publish_response
                 )
 
-            # Allow the messages to propagate
-            time.sleep(1)
-
             # Check if all messages are received correctly
             for index in range(len(channels_and_messages)):
                 pubsub_msg = sync_get_message_by_method(
@@ -863,9 +847,6 @@ class TestSyncPubSub:
                 if cluster_mode:
                     assert result == 1
 
-            # allow the message to propagate
-            time.sleep(1)
-
             # Check if all messages are received correctly
             for index in range(len(channels)):
                 pubsub_msg = sync_get_message_by_method(
@@ -918,9 +899,6 @@ class TestSyncPubSub:
                 result = publishing_client.publish(message, channel)
                 if cluster_mode:
                     assert result == 1
-
-            # allow the message to propagate
-            time.sleep(1)
 
             # Check if all messages are received correctly by each method
             for index in range(len(channels)):
@@ -996,9 +974,6 @@ class TestSyncPubSub:
                 result = publishing_client.publish(message, channel)
                 if cluster_mode:
                     assert result == 1
-
-            # allow the message to propagate
-            time.sleep(1)
 
             # Check if all messages are received correctly
             for index in range(len(channels)):
@@ -1214,9 +1189,6 @@ class TestSyncPubSub:
                     if cluster_mode:
                         assert result == 1
 
-                # allow the messages to propagate
-                time.sleep(1)
-
                 # Verify messages for exact PUBSUB
                 for index in range(len(exact_channels_and_messages)):
                     pubsub_msg = sync_get_message_by_method(
@@ -1348,9 +1320,6 @@ class TestSyncPubSub:
                     )
                     == publish_response
                 )
-
-            # allow the messages to propagate
-            time.sleep(1)
 
             all_channels_and_messages = {
                 **exact_channels_and_messages,
@@ -1489,9 +1458,6 @@ class TestSyncPubSub:
                             )
                             == publish_response
                         )
-
-                    # allow the messages to propagate
-                    time.sleep(1)
 
                     # Verify messages for exact PUBSUB
                     for index in range(len(exact_channels_and_messages)):
@@ -1708,9 +1674,6 @@ class TestSyncPubSub:
                 == 1
             )
 
-            # allow the message to propagate
-            time.sleep(1)
-
             # Verify message for exact and pattern PUBSUB
             for client, callback_list, pattern in [  # type: ignore
                 (listening_client_exact, callback_messages_exact, None),
@@ -1816,9 +1779,6 @@ class TestSyncPubSub:
                     result = client_pattern.publish(msg, CHANNEL_NAME)
                     if cluster_mode:
                         assert result == 2
-
-                # allow the message to propagate
-                time.sleep(1)
 
                 # Verify message for exact and pattern PUBSUB
                 for client, callback_msgs, pattern in [  # type: ignore
@@ -1969,9 +1929,6 @@ class TestSyncPubSub:
                 )
                 == 1
             )
-
-            # allow the message to propagate
-            time.sleep(1)
 
             # Verify message for exact and pattern PUBSUB
             for client, callback_list, pattern in [  # type: ignore
@@ -2926,7 +2883,6 @@ class TestSyncPubSub:
             )
 
             publishing_client.publish(message1, channel)
-            time.sleep(1)
 
             # Get message
             pubsub_msg = sync_get_message_by_method(
@@ -3302,13 +3258,12 @@ class TestSyncPubSub:
 
             # Subscribe
             listening_client.subscribe_lazy({"test_channel"})
-            time.sleep(1)
-            # Publish message
+            sync_wait_for_subscription_state(
+                listening_client, expected_channels={"test_channel"}
+            )
             publishing_client.publish("test_message", "test_channel")
-            time.sleep(1)
 
-            # Verify message received via callback
-            assert len(callback_messages) >= 1
+            wait_for_messages(1, callback_messages)
 
             # Try to call get methods - should raise ConfigurationError
             with pytest.raises(ConfigurationError):
@@ -3382,7 +3337,6 @@ class TestSyncPubSub:
 
             # Publish first message
             publishing_client.publish(message1, channel)
-            time.sleep(1)
 
             # Get message
             pubsub_msg = sync_get_message_by_method(
@@ -3488,7 +3442,6 @@ class TestSyncPubSub:
             cast(GlideClusterClient, publishing_client).publish(
                 message1, channel, sharded=True
             )
-            time.sleep(1)
 
             # Get message
             pubsub_msg = sync_get_message_by_method(
@@ -3783,7 +3736,6 @@ class TestSyncPubSub:
             )
 
             publishing_client.publish(message, channel)
-            time.sleep(1)
 
             pubsub_msg = sync_get_message_by_method(
                 method, listening_client, callback_messages, 0
@@ -3853,7 +3805,6 @@ class TestSyncPubSub:
 
             # Verify subscription works before kill
             publishing_client.publish(message_before, channel)
-            time.sleep(1)
 
             msg_before = sync_get_message_by_method(
                 method, listening_client, callback_messages, 0
@@ -3956,7 +3907,6 @@ class TestSyncPubSub:
 
             # Verify subscription works before kill
             publishing_client.publish(message_before, channel)
-            time.sleep(1)
 
             msg_before = sync_get_message_by_method(
                 method, listening_client, callback_messages, 0
@@ -4052,8 +4002,6 @@ class TestSyncPubSub:
                 cast(GlideClusterClient, publishing_client).publish(
                     message, channel, sharded=True
                 )
-
-            time.sleep(1)
 
             # Retrieve all messages using try_get with retry
             received_messages = {}
@@ -4284,7 +4232,6 @@ class TestSyncPubSub:
             cast(GlideClusterClient, publishing_client).publish(
                 message_before, channel, sharded=True
             )
-            time.sleep(1)
 
             msg_before = sync_get_message_by_method(
                 method, listening_client, callback_messages, 0
