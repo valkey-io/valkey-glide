@@ -15,7 +15,6 @@ else:
     from typing_extensions import TypeAlias
 
 import anyio
-import pytest
 from glide.glide_client import GlideClusterClient, TGlideClient
 from glide_shared.commands.core_options import PubSubMsg
 from glide_shared.config import (
@@ -609,7 +608,6 @@ async def check_no_messages_left(
     client: TGlideClient,
     callback_messages: Optional[List[PubSubMsg]] = None,
     expected_callback_count: int = 0,
-    async_timeout: float = 3.0,
 ) -> None:
     """
     Verify there are no more messages to read.
@@ -619,16 +617,14 @@ async def check_no_messages_left(
         client: The client to check
         callback_messages: Callback message list (for Callback method)
         expected_callback_count: Expected number of messages in callback list
-        async_timeout: Timeout for async method check
 
     Raises:
         AssertionError if there are unexpected messages
     """
-    if method == MessageReadMethod.Async:
-        with pytest.raises(TimeoutError):
-            with anyio.fail_after(async_timeout):
-                await client.get_pubsub_message()
-    elif method == MessageReadMethod.Sync:
+    # Every read method checks the queue instantly: any message that could
+    # arrive has already been delivered on this connection by the time the
+    # caller has read its expected messages (or slept after an unsubscribe).
+    if method in (MessageReadMethod.Async, MessageReadMethod.Sync):
         assert client.try_get_pubsub_message() is None
     else:  # Callback
         assert callback_messages is not None
@@ -1211,18 +1207,7 @@ def sync_check_no_messages_left(
     Raises:
         AssertionError if there are unexpected messages
     """
-    import pytest
-
-    from tests.utils.utils import run_sync_func_with_timeout_in_thread
-
-    if method == MessageReadMethod.Async:
-        # assert there are no messages to read
-        with pytest.raises(TimeoutError):
-            run_sync_func_with_timeout_in_thread(
-                lambda: client.get_pubsub_message(),  # This blocks indefinitely
-                timeout=3.0,
-            )
-    elif method == MessageReadMethod.Sync:
+    if method in (MessageReadMethod.Async, MessageReadMethod.Sync):
         assert client.try_get_pubsub_message() is None
     else:
         assert callback is not None
