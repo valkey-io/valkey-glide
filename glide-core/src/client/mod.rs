@@ -2879,7 +2879,12 @@ impl Client {
                 strategy.number_of_retries,
                 strategy.jitter_percent,
             )
-            .map_err(|err| ConnectionError::Configuration(err.to_string()))?;
+            .map_err(|err| {
+                ConnectionError::Configuration(match err.detail() {
+                    Some(detail) => format!("invalid reconnect strategy: {detail}"),
+                    None => err.to_string(),
+                })
+            })?;
         }
 
         // Add buffer to connection_timeout to allow inner connection logic to fully execute before the outer timeout triggers
@@ -3684,7 +3689,14 @@ mod tests {
                     matches!(error, ConnectionError::Configuration(_)),
                     "unexpected error (cluster: {cluster_mode_enabled}, lazy: {lazy_connect}): {error:?}"
                 );
-                assert!(error.to_string().contains("jitterPercent"), "{error}");
+                let message = error.to_string();
+                assert!(
+                    message.contains(
+                        "invalid reconnect strategy: jitterPercent must be between 0 and 100, got 101"
+                    ),
+                    "{message}"
+                );
+                assert!(!message.contains("InvalidClientConfig"), "{message}");
             }
         }
     }
