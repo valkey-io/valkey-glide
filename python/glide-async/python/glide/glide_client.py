@@ -1,6 +1,7 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 import asyncio
+import atexit as _atexit
 import itertools
 import os
 import struct
@@ -113,6 +114,20 @@ def _clear_pinned_callbacks_after_fork() -> None:
 
 
 os.register_at_fork(after_in_child=_clear_pinned_callbacks_after_fork)
+
+
+def _clear_pinned_callbacks_at_exit() -> None:
+    """Clear CFFI callbacks at process exit before Rust runtime shuts down.
+
+    Python 3.9 tears down module globals in a different order than later
+    versions. Clearing the list here ensures CFFI objects are freed before
+    the Rust tokio runtime drops, preventing a panic across the C boundary
+    (SIGABRT / FATAL: exception not rethrown).
+    """
+    _pinned_credential_callbacks.clear()
+
+
+_atexit.register(_clear_pinned_callbacks_at_exit)
 
 
 # ==================== Framework-Agnostic Future ====================
