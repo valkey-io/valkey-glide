@@ -8,6 +8,7 @@ import java.io.ByteArrayInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -379,74 +380,55 @@ public class TlsAdvancedConfigurationTest {
     // useMutualTlsFromKeyStore
     // ---------------------------------------------------------------------------
 
-    // A self-signed test certificate (CN=glide-test) and its matching PKCS#8 RSA private key, as
-    // base64-encoded DER. Generated once with OpenSSL purely for these tests. Embedding static
-    // material keeps the suite portable: the keystore is assembled in-process with public JCA only
-    // (no JDK-internal cert generation, no keytool/openssl at runtime).
-    private static final String TEST_CERT_DER_B64 =
-            "MIIDCzCCAfOgAwIBAgIUFQK2et9Pudh5iYTRtZGhzw4sDD0wDQYJKoZIhvcNAQELBQAwFTETMBEG"
-                    + "A1UEAwwKZ2xpZGUtdGVzdDAeFw0yNjEwMDEyMjI3MjdaFw0zNjA5MjgyMjI3MjdaMBUxEzARBgNV"
-                    + "BAMMCmdsaWRlLXRlc3QwggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQDgnb1t8Ehycjj5"
-                    + "vJWgy+iMenZ2fyQsDLxueELNFei5Maf+R73aylg03nlbVXPy8e0l/Y+f7fidxqtKJ4L+FRak3Wy"
-                    + "EitEZA1PTBpqytdBmKrWFODGkgbef8RJMSI+mr1YA6WFiltWRhyX/RNzzK7h0Q2bHrI20Ub+eZ4"
-                    + "rV7FnxF8ATyaedjmXiGO+1m0SQ3+YeQwbF3siqYm6ZBsuCnmCPFO040iUNUjxsz82KQMLcDPmvx"
-                    + "jzrqUjy/KPBACXnAVENeImxDQm0xDidGA6sfd4lKA3bb3xpcA6GGwQ0ojK22L3K6BoAQKCleIZR"
-                    + "maDqovMBa6T+HK/cyJX7VPoq53vtAgMBAAGjUzBRMB0GA1UdDgQWBBRkKHAkdmNaG5uXO+T7B8Ru"
-                    + "AP2UyDAfBgNVHSMEGDAWgBRkKHAkdmNaG5uXO+T7B8RuAP2UyDAPBgNVHRMBAf8EBTADAQH/MA0G"
-                    + "CSqGSIb3DQEBCwUAA4IBAQB3FbtoxDMW+kmRSBYMKNNk98tEZcB3uXB2YULbDnYZbvRNC9jf2s68"
-                    + "6HRwZa66ATNTZFguPjR1bDYvjkg2SadlmrLl9hajl0jbmgy3nv/ovE0HPAmaPvmmiuuj9u9Ryph"
-                    + "oor0F+jKoVsCoiBb1hzy0OZzoie5JfExbYfMYe0XZQQJx6/qpNw6wDNETQyxbsU9JjgRW8ZBLVk"
-                    + "EDAi7ri8qp8Dr66u/uwhUmrAMZ5pFf9BfDwkT/NvbvEtSsdPyKpmXYkK4QBs3HawTG7oKAop/iU"
-                    + "rsQ2A6wQMRDd6aS60VI7bDK1T5bMPytLk3jLrFRHB0KEXnWzkRlpei1FmGI/hU9";
-
-    private static final String TEST_KEY_PKCS8_DER_B64 =
-            "MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQDgnb1t8Ehycjj5vJWgy+iMenZ2"
-                    + "fyQsDLxueELNFei5Maf+R73aylg03nlbVXPy8e0l/Y+f7fidxqtKJ4L+FRak3WyEitEZA1PTBpq"
-                    + "ytdBmKrWFODGkgbef8RJMSI+mr1YA6WFiltWRhyX/RNzzK7h0Q2bHrI20Ub+eZ4rV7FnxF8ATya"
-                    + "edjmXiGO+1m0SQ3+YeQwbF3siqYm6ZBsuCnmCPFO040iUNUjxsz82KQMLcDPmvxjzrqUjy/KPBA"
-                    + "CXnAVENeImxDQm0xDidGA6sfd4lKA3bb3xpcA6GGwQ0ojK22L3K6BoAQKCleIZRmaDqovMBa6T+"
-                    + "HK/cyJX7VPoq53vtAgMBAAECggEAI2/PeH5Nt7ycj434n088R5l0ghpp9wclXVpc06VOu5UBd4U"
-                    + "TB2cgBmtJAydWrTAM5Y7871Log9/Zm0/jgzmJgoYqfji2Z3dWbLcghexYTh4T2Eo2zsjmUvYCGI"
-                    + "XkH/yOmYM4aYj5dcW4MW9IWpb9uV3+46auDpJNJG0agsiQog/87JUGYUYkIbyMsvariYkKEIfNA"
-                    + "o2OEVlJCFZUVjOAFoBKovK/BcXFiE3dZ7YK3WSOb08+q5ep4ev9RtL2lB8NU442ZJ+7U0QEHSxw"
-                    + "YEwPz77aMDn/Kfr1eILEDWMoe31xoXbaEF2F94pxbOfGDQEUHtQZtBztTtKutI67SsQr8QKBgQD7"
-                    + "8XF+AkT40Bzr3as/a5UUPiRKpc0zSYw/crjBU2pMCpYU3IvqeWR4smmctp66KDa4pe0TFm7Gd0p"
-                    + "CdUhem3dcpdwRAtgDYZHcAwKOoUJOV3z0X5985+UBJV1lNqpEN1rRAHc7xB1Rq7sDoV8Nu8YdGd"
-                    + "hlzpxmNDXv+XKhmRVnhQKBgQDkO6ZXYR0yGKo8evgdzQw86KDVDJsuVPsESb0uNWW3MwPmG73ne"
-                    + "O8IOSH/hDS+ebD+0p4zCPrXaxLzAnLmc+S8hSLHt3OhUapiz9Kvhs722C/izO6g0G+eupMLscp6"
-                    + "AFRQU29oFwilke0fqrcEUHhohRB6qi5JV8Ii5nof+2VLSQKBgFsh+OWVuJEv5mZDJqCoL6LE36f"
-                    + "I1bMJlZuVydLUc4zR/3vIUywbgQZPsvgm7r9zsGeWTW0sHiHYIJpthiICpmhy7mmQ18ZRUst8oz"
-                    + "4ogq2H5AEZXb12vFVvyJrF7U0DoOwc+QQ7akeSkPE9O/7hv0XjhW0+EUC+/gux9Y8SqrVpAoGBA"
-                    + "KyeDNYjpjBAhWjO3J+1eN8MVrAsI6YsMdnxZ3rueerQU8+TBdNvHOKMS5F0zWuOoHZql6ojzYxl"
-                    + "+GQBYyO3XbXTwBVrQ7IsEQFBC6kj/Z6mrbkMpCLO4s0bcaGzq18QprRGFomUej63mq+Lr3Y84oS"
-                    + "yt17/HZjtHfDFfnJ38gm5AoGBAPgtFB6z79AMrme6Dzs1dIZZExXnZ5p5lhFUblw01NxlZT4V1a"
-                    + "dh71oD6reT9/ttKSPCeBOekejmYYsNfH5Xj4iewjNn1ZlCFBBH3yRzb3LMj729ddWOoqlMTivtv"
-                    + "+zcqcoHvV9V4qBRsvYIq8VGsVNP7trFAhWIBMk+3qN+OMUa";
+    // Classpath location of a prebuilt PKCS12 keystore fixture holding a single client identity
+    // (self-signed cert CN=glide-test + its RSA private key). Generated once with OpenSSL and
+    // checked in under src/test/resources/tls. Loading a fixture keeps the material inspectable and
+    // out of source, while the tests still assemble the specific keystore type/chain they need
+    // in-process from it.
+    private static final String FIXTURE_KEYSTORE = "/tls/client-identity.p12";
+    private static final char[] FIXTURE_PASSWORD = "testpass".toCharArray();
 
     /**
-     * Builds a keystore of the given type containing a single {@code PrivateKeyEntry} assembled from
-     * the embedded test cert + key, and persists it to {@code keyStorePath}. Uses only public JCA
-     * ({@link CertificateFactory}, {@link KeyFactory}, {@link KeyStore#setKeyEntry}), so it is
-     * portable across JDKs with no internal-API dependency.
+     * Loads the client identity (private key + leaf certificate) from the fixture keystore. Finds
+     * the first key entry rather than assuming an alias, avoiding any JVM alias-normalization
+     * dependency.
+     */
+    private static KeyStore.PrivateKeyEntry loadFixtureIdentity() throws Exception {
+        KeyStore fixture = KeyStore.getInstance("PKCS12");
+        try (InputStream is = TlsAdvancedConfigurationTest.class.getResourceAsStream(FIXTURE_KEYSTORE)) {
+            assertNotNull(is, "Missing test fixture on classpath: " + FIXTURE_KEYSTORE);
+            fixture.load(is, FIXTURE_PASSWORD);
+        }
+        String alias = null;
+        for (java.util.Enumeration<String> e = fixture.aliases(); e.hasMoreElements(); ) {
+            String a = e.nextElement();
+            if (fixture.isKeyEntry(a)) {
+                alias = a;
+                break;
+            }
+        }
+        assertNotNull(alias, "Fixture keystore has no private key entry: " + FIXTURE_KEYSTORE);
+        return (KeyStore.PrivateKeyEntry)
+                fixture.getEntry(alias, new KeyStore.PasswordProtection(FIXTURE_PASSWORD));
+    }
+
+    /**
+     * Builds a keystore of the given type containing a single {@code PrivateKeyEntry} sourced from
+     * the checked-in fixture, and persists it to {@code keyStorePath}. Uses only public JCA, so it
+     * is portable across JDKs with no internal-API dependency.
      *
-     * @param chainLength number of certificate entries in the chain (the same self-signed cert is
+     * @param chainLength number of certificate entries in the chain (the fixture's leaf cert is
      *     repeated; sufficient for asserting PEM block count).
      */
     private static void writeKeyStoreWithPrivateKey(
             Path keyStorePath, char[] password, String keyStoreType, int chainLength)
             throws Exception {
-        CertificateFactory cf = CertificateFactory.getInstance("X.509");
-        Certificate cert =
-                cf.generateCertificate(
-                        new ByteArrayInputStream(Base64.getDecoder().decode(TEST_CERT_DER_B64)));
-
-        KeyFactory kf = KeyFactory.getInstance("RSA");
-        PrivateKey privateKey =
-                kf.generatePrivate(
-                        new PKCS8EncodedKeySpec(Base64.getDecoder().decode(TEST_KEY_PKCS8_DER_B64)));
+        KeyStore.PrivateKeyEntry identity = loadFixtureIdentity();
+        PrivateKey privateKey = identity.getPrivateKey();
+        Certificate leaf = identity.getCertificate();
 
         Certificate[] chain = new Certificate[chainLength];
-        Arrays.fill(chain, cert);
+        Arrays.fill(chain, leaf);
 
         KeyStore keyStore = KeyStore.getInstance(keyStoreType);
         keyStore.load(null, password);
@@ -651,17 +633,16 @@ public class TlsAdvancedConfigurationTest {
                             .useMutualTlsFromKeyStore(keyStorePath.toString(), password, "PKCS12")
                             .build();
 
-            // The certificate PEM parses back into an X.509 certificate equal to the embedded one.
+            KeyStore.PrivateKeyEntry fixture = loadFixtureIdentity();
+
+            // The certificate PEM parses back into an X.509 certificate equal to the fixture's.
             CertificateFactory cf = CertificateFactory.getInstance("X.509");
             Certificate roundTrippedCert =
                     cf.generateCertificate(new ByteArrayInputStream(config.getClientCertificate()));
-            Certificate expectedCert =
-                    cf.generateCertificate(
-                            new ByteArrayInputStream(Base64.getDecoder().decode(TEST_CERT_DER_B64)));
-            assertEquals(expectedCert, roundTrippedCert);
+            assertEquals(fixture.getCertificate(), roundTrippedCert);
 
             // The key PEM is valid PKCS#8: strip the markers, Base64-decode the body, and reconstruct
-            // the private key, which must equal the embedded one.
+            // the private key, which must equal the fixture's.
             String keyPem = new String(config.getClientKey(), StandardCharsets.UTF_8);
             String keyBody =
                     keyPem
@@ -671,10 +652,7 @@ public class TlsAdvancedConfigurationTest {
             KeyFactory kf = KeyFactory.getInstance("RSA");
             PrivateKey roundTrippedKey =
                     kf.generatePrivate(new PKCS8EncodedKeySpec(Base64.getDecoder().decode(keyBody)));
-            PrivateKey expectedKey =
-                    kf.generatePrivate(
-                            new PKCS8EncodedKeySpec(Base64.getDecoder().decode(TEST_KEY_PKCS8_DER_B64)));
-            assertEquals(expectedKey, roundTrippedKey);
+            assertEquals(fixture.getPrivateKey(), roundTrippedKey);
         } finally {
             Files.deleteIfExists(keyStorePath);
         }
