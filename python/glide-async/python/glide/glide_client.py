@@ -1204,24 +1204,7 @@ class BaseClient(CoreCommands):
             if self._core_client is not None and self._create_pid == os.getpid():
                 self._lib.close_client(self._core_client)
                 self._core_client = None
-            # Keep credential/address-resolver callbacks alive until process exit
-            # so the Rust IAM refresh task never invokes a freed CFFI trampoline.
-            # The task fires periodically for the lifetime of the client and may
-            # still be running long after close_client() returns.  A test process
-            # is short-lived; production code creates very few clients with
-            # credential providers, so the accumulation is negligible.
-            _cbs = [
-                cb
-                for cb in [
-                    getattr(self, "_credential_provider_callback_ref", None),
-                    getattr(self, "_address_resolver_callback_ref", None),
-                ]
-                if cb is not None
-            ]
-            if _cbs:
-                import glide.glide_client as _self_module
 
-                _self_module._pinned_credential_callbacks.extend(_cbs)
 
     async def aclose(self, err_message: Optional[str] = None) -> None:
         """Alias for close() for compatibility with async context managers."""
