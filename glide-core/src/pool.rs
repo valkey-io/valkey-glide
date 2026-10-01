@@ -394,11 +394,11 @@ pub async fn release_client_async(pool_arc: Arc<TokioMutex<ClientPool>>, client_
     // Remove client→pool mapping so refresh_activity_by_client no-ops from here on.
     unregister_pool_client(client_id);
 
-    // Safety: if this task is cancelled after take_for_release but before
-    // return_to_idle/discard_client, decrement total_count to prevent slot leak.
-    // Note: blocking_lock() is safe here because this code runs on the dedicated
-    // POOL_RUNTIME (not the main tokio runtime), and cancellation only occurs when
-    // the pool is being destroyed (no other task holds the lock on this runtime).
+    // If this task is cancelled after take_for_release but before the outcome is
+    // recorded, the guard discards the client so neither the slot nor the id is
+    // lost. Cancellation can land while another task holds the pool lock, and
+    // blocking_lock() panics inside a runtime, so a contended lock is handed to
+    // a spawned task instead.
     let pool_for_guard = pool_arc.clone();
     let guard_client_id = entry.client_id;
     struct LeakGuard {
@@ -407,12 +407,18 @@ pub async fn release_client_async(pool_arc: Arc<TokioMutex<ClientPool>>, client_
     }
     impl Drop for LeakGuard {
         fn drop(&mut self) {
-            if let Some(pool_arc) = self.pool.take() {
-                if let Ok(mut pool) = pool_arc.try_lock() {
-                    pool.discard_client(self.client_id);
-                } else {
-                    pool_arc.blocking_lock().discard_client(self.client_id);
-                }
+            let Some(pool_arc) = self.pool.take() else {
+                return;
+            };
+            let client_id = self.client_id;
+            if let Ok(mut pool) = pool_arc.try_lock() {
+                pool.discard_client(client_id);
+            } else if let Ok(handle) = tokio::runtime::Handle::try_current() {
+                handle.spawn(async move {
+                    pool_arc.lock().await.discard_client(client_id);
+                });
+            } else {
+                pool_arc.blocking_lock().discard_client(client_id);
             }
         }
     }
@@ -428,10 +434,10 @@ pub async fn release_client_async(pool_arc: Arc<TokioMutex<ClientPool>>, client_
     )
     .await;
 
-    // Disarm the guard — we handle the outcome explicitly
-    guard.pool = None;
-
+    // Disarm only once the lock is held: the lock wait is itself a
+    // cancellation point, and the outcome is handled explicitly below.
     let mut pool = pool_arc.lock().await;
+    guard.pool = None;
     match reset_result {
         Ok(Ok(_)) => pool.return_to_idle(entry),
         _ => {
@@ -4441,6 +4447,78 @@ mod client_pool_tests {
                 pool.drain_discarded_ids(),
                 vec![client_id],
                 "LeakGuard discard must be reported so bindings reclaim their side"
+            );
+            assert!(get_blocking_flag(client_id).is_none());
+        });
+        drop(blackhole);
+    }
+
+    /// `LeakGuard` must stay armed while `release_client_async` waits for the
+    /// pool lock after the reset has finished; that wait is a cancellation
+    /// point too, and a release aborted there must still report the id.
+    #[test]
+    fn release_cancelled_while_waiting_for_lock_reports_discarded_id() {
+        let rt = tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .worker_threads(2)
+            .build()
+            .unwrap();
+
+        // Accepts but never speaks, so the reset pends until its 2x request
+        // timeout and the test has time to take the lock while it is in flight.
+        let blackhole = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = blackhole.local_addr().unwrap().port();
+
+        rt.block_on(async {
+            let pool_arc = Arc::new(TokioMutex::new(
+                ClientPool::new(test_pool_config(Duration::from_millis(100))).unwrap(),
+            ));
+            let client = lazy_client_to(port).await;
+            let client_id = {
+                let mut pool = pool_arc.lock().await;
+                let id = pool.add_client(client);
+                assert_eq!(pool.try_acquire(), id as i64);
+                id
+            };
+
+            let release = tokio::spawn(release_client_async(pool_arc.clone(), client_id));
+            let deadline = Instant::now() + Duration::from_secs(5);
+            loop {
+                if pool_arc.lock().await.in_use.is_empty() {
+                    break;
+                }
+                assert!(Instant::now() < deadline, "release never took the client");
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+
+            // Hold the lock across the reset's timeout so the release parks on
+            // `pool_arc.lock().await` instead of completing.
+            let held = pool_arc.lock().await;
+            tokio::time::sleep(Duration::from_secs(1)).await;
+            assert!(!release.is_finished(), "release must be parked on the lock");
+
+            release.abort();
+            drop(held);
+            let _ = release.await;
+
+            // The guard hands a contended lock to a spawned task, so the discard
+            // may land shortly after the aborted release has been joined.
+            let deadline = Instant::now() + Duration::from_secs(5);
+            loop {
+                if pool_arc.lock().await.total_count.load(Ordering::Acquire) == 0 {
+                    break;
+                }
+                assert!(
+                    Instant::now() < deadline,
+                    "cancelled release never freed its slot"
+                );
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+            let mut pool = pool_arc.lock().await;
+            assert_eq!(
+                pool.drain_discarded_ids(),
+                vec![client_id],
+                "a release cancelled at the lock wait must still be reported"
             );
             assert!(get_blocking_flag(client_id).is_none());
         });
