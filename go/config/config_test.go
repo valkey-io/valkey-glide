@@ -277,8 +277,15 @@ func TestBackoffStrategy_jitterAboveMax(t *testing.T) {
 			"jitter far above max", NewBackoffStrategy(5, 10, 50).WithJitterPercent(1000), "jitterPercent",
 			func(s *BackoffStrategy) uint32 { return *s.jitterPercent },
 		},
+	})
+}
+
+func TestBackoffStrategy_jitterAtMaxUint32(t *testing.T) {
+	max := maxUint32AsInt(t)
+
+	runOutOfRangeCases(t, []outOfRangeCase{
 		{
-			"jitter at max uint32", NewBackoffStrategy(5, 10, 50).WithJitterPercent(maxUint32AsInt(t)),
+			"jitter at max uint32", NewBackoffStrategy(5, 10, 50).WithJitterPercent(max),
 			"jitterPercent", func(s *BackoffStrategy) uint32 { return *s.jitterPercent },
 		},
 	})
