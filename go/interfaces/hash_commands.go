@@ -61,6 +61,8 @@ type HashCommands interface {
 
 	HGetEx(ctx context.Context, key string, fields []string, options options.HGetExOptions) ([]models.Result[string], error)
 
+	HGetDel(ctx context.Context, key string, fields []string) ([]models.Result[string], error)
+
 	HExpire(
 		ctx context.Context,
 		key string,
