@@ -218,13 +218,7 @@ func (suite *GlideTestSuite) TestIamPoolWithCustomCredentialsProvider() {
 	credentials, err := config.NewServerCredentialsWithIam(TestIamUsername, iamConfig)
 	require.NoError(suite.T(), err)
 
-	clientCfg := config.NewClientConfiguration().
-		WithAddress(&config.NodeAddress{
-			Host: suite.standaloneHosts[0].Host,
-			Port: suite.standaloneHosts[0].Port,
-		}).
-		WithCredentials(credentials).
-		WithUseTLS(suite.tls)
+	clientCfg := suite.defaultClientConfig().WithCredentials(credentials)
 
 	poolCfg := glide.DefaultPoolConfig()
 	pool, err := glide.NewClientPool(clientCfg, poolCfg)
