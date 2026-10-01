@@ -132,9 +132,8 @@ pub struct ClientPool {
     pub state: AtomicU8,
     /// Condvar notified when a client is returned to idle (for blocking acquire).
     pub release_notify: Arc<(std::sync::Mutex<()>, std::sync::Condvar)>,
-    /// Client IDs discarded by the abandon monitor. The FFI layer drains this
-    /// on acquire/destroy to clean up adapter mappings and close connections.
-    pub discarded_ids: Vec<u64>,
+    /// Only `discard_client` pushes here; bindings read it via `drain_discarded_ids`.
+    discarded_ids: Vec<u64>,
 }
 
 impl ClientPool {
@@ -183,10 +182,7 @@ impl ClientPool {
         while let Some(mut entry) = self.idle.pop_back() {
             let idle_duration = Instant::now().duration_since(entry.last_idle_at);
             if idle_duration > self.config.idle_timeout {
-                self.total_count.fetch_sub(1, Ordering::AcqRel);
-                // Fix 5: clean up registries for evicted idle clients to prevent leaks.
-                unregister_blocking_flag(entry.client_id);
-                unregister_pool_client(entry.client_id);
+                self.discard_client(entry.client_id);
                 glide_logger::log_debug(
                     "pool",
                     format!(
@@ -267,7 +263,7 @@ impl ClientPool {
     /// The caller is responsible for:
     /// 1. Calling `client.reset_connection_state(configured_db)` on the entry
     /// 2. Calling `return_to_idle(entry)` to put it back in the idle pool
-    ///    Or on failure, calling `discard_client()` to decrement the total count.
+    ///    Or on failure, calling `discard_client(client_id)` to remove it for good.
     pub fn take_for_release(&mut self, client_id: u64) -> Option<PooledClient> {
         let entry = self.in_use.remove(&client_id);
         entry.map(|(_, e)| e)
@@ -276,7 +272,7 @@ impl ClientPool {
     /// Return a client to the idle pool after successful state reset.
     pub fn return_to_idle(&mut self, mut entry: PooledClient) {
         if self.state.load(Ordering::Acquire) != POOL_RUNNING {
-            self.total_count.fetch_sub(1, Ordering::AcqRel);
+            self.discard_client(entry.client_id);
             return;
         }
         entry.state = ClientState::Idle;
@@ -290,10 +286,22 @@ impl ClientPool {
         condvar.notify_one();
     }
 
-    /// Discard a client (after failed state reset). Decrements total count.
-    pub fn discard_client(&mut self) {
+    /// Permanently remove `client_id` from the pool and report it through
+    /// `drain_discarded_ids` so every binding reclaims the adapter / handle it
+    /// holds for that id. Also clears both core registries, so callers need not.
+    pub fn discard_client(&mut self, client_id: u64) {
         self.total_count.fetch_sub(1, Ordering::AcqRel);
-        // Notify waiters since capacity freed up for a new connection
+        self.discarded_ids.push(client_id);
+        unregister_pool_client(client_id);
+        unregister_blocking_flag(client_id);
+        let (_, condvar) = &*self.release_notify;
+        condvar.notify_one();
+    }
+
+    /// Give back a slot reserved by a binding that never became a client.
+    /// No id exists, so there is nothing for a binding to reclaim.
+    pub fn release_reservation(&mut self) {
+        self.total_count.fetch_sub(1, Ordering::AcqRel);
         let (_, condvar) = &*self.release_notify;
         condvar.notify_one();
     }
@@ -313,10 +321,9 @@ impl ClientPool {
             );
         }
 
-        // Defensive fallback: callers SHOULD call unregister_blocking_flag /
-        // unregister_pool_client for every client before calling destroy(), but if a
-        // future binding forgets we still clean up rather than silently leaking entries.
-        // DashMap::remove is idempotent, so double-removes are harmless.
+        // Defensive fallback: every permanent drop should go through
+        // discard_client(), which unregisters both registries. If a path forgets,
+        // clean up here rather than leak; DashMap::remove is idempotent.
         for entry in self.idle.iter() {
             unregister_blocking_flag(entry.client_id);
             unregister_pool_client(entry.client_id);
@@ -351,8 +358,8 @@ impl ClientPool {
         self.idle.len() as u32
     }
 
-    /// Drain client IDs discarded by the abandon monitor.
-    /// The FFI layer calls this to clean up adapter mappings and close connections.
+    /// Drain the ids of clients permanently discarded since the last drain.
+    /// Bindings call this to release the adapter / handle they hold per id.
     pub fn drain_discarded_ids(&mut self) -> Vec<u64> {
         std::mem::take(&mut self.discarded_ids)
     }
@@ -370,7 +377,7 @@ impl ClientPool {
 /// 1. Takes the client out of `in_use`
 /// 2. Sends DISCARD + SELECT (batched reset) with a timeout of 2× request_timeout
 /// 3. Returns the client to idle on success, or discards it on failure
-/// 4. A `LeakGuard` ensures `discard_client()` is called if the future is cancelled
+/// 4. A `LeakGuard` ensures `discard_client(client_id)` is called if the future is cancelled
 ///
 /// Call this from a spawned task. The pool_arc should already be cloned for the task.
 pub async fn release_client_async(pool_arc: Arc<TokioMutex<ClientPool>>, client_id: u64) {
@@ -401,11 +408,10 @@ pub async fn release_client_async(pool_arc: Arc<TokioMutex<ClientPool>>, client_
     impl Drop for LeakGuard {
         fn drop(&mut self) {
             if let Some(pool_arc) = self.pool.take() {
-                unregister_blocking_flag(self.client_id);
                 if let Ok(mut pool) = pool_arc.try_lock() {
-                    pool.discard_client();
+                    pool.discard_client(self.client_id);
                 } else {
-                    pool_arc.blocking_lock().discard_client();
+                    pool_arc.blocking_lock().discard_client(self.client_id);
                 }
             }
         }
@@ -434,11 +440,7 @@ pub async fn release_client_async(pool_arc: Arc<TokioMutex<ClientPool>>, client_
                 10,
                 "Client reset failed on release — discarding connection"
             );
-            // Clean up the blocking flag registry entry for this permanently
-            // discarded client. On a normal release (return-to-idle) this must
-            // NOT be called so the recycled client keeps its registry entry.
-            unregister_blocking_flag(entry.client_id);
-            pool.discard_client();
+            pool.discard_client(entry.client_id);
         }
     }
 }
@@ -704,12 +706,7 @@ pub fn start_abandon_monitor(pool_id: u64, runtime_handle: &tokio::runtime::Hand
                     }
                 }
                 if pool.in_use.remove(&client_id).is_some() {
-                    pool.discard_client();
-                    pool.discarded_ids.push(client_id);
-                    // Remove client→pool mapping so refresh_activity_by_client no-ops.
-                    unregister_pool_client(client_id);
-                    // Fix 1: remove blocking flag to prevent BLOCKING_FLAG_REGISTRY leak.
-                    unregister_blocking_flag(client_id);
+                    pool.discard_client(client_id);
                 }
             }
         }
@@ -4290,6 +4287,36 @@ mod client_pool_tests {
         let entry = pool.take_for_release(client_id).expect("in_use");
         pool.return_to_idle(entry);
         client_id
+    }
+
+    #[test]
+    fn discard_client_reports_id_and_clears_registries() {
+        let mut pool = ClientPool::new(test_pool_config(Duration::from_secs(5))).unwrap();
+        let client_id = add_idle_client(&mut pool, crate::client::create_test_glide_client());
+        let entry = pool.idle.pop_back().expect("client is idle");
+        register_pool_client(1, client_id);
+        assert!(get_blocking_flag(client_id).is_some());
+
+        pool.discard_client(entry.client_id);
+
+        assert_eq!(pool.total_count.load(Ordering::Acquire), 0);
+        assert_eq!(pool.drain_discarded_ids(), vec![client_id]);
+        assert!(get_blocking_flag(client_id).is_none());
+        assert!(!is_pool_client(client_id));
+    }
+
+    /// A reserved slot has no client behind it, so releasing it must not hand
+    /// bindings an id to reclaim.
+    #[test]
+    fn release_reservation_reports_nothing() {
+        let mut pool = ClientPool::new(test_pool_config(Duration::from_secs(5))).unwrap();
+        // Bindings reserve a slot with a bare increment before creating the client.
+        pool.total_count.fetch_add(1, Ordering::AcqRel);
+
+        pool.release_reservation();
+
+        assert_eq!(pool.total_count.load(Ordering::Acquire), 0);
+        assert!(pool.drain_discarded_ids().is_empty());
     }
 
     /// Idle-timeout eviction in `try_acquire` must report the evicted id; a
