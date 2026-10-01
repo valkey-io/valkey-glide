@@ -1074,6 +1074,9 @@ pub struct ScopePool {
 /// reporting the pool permanently exhausted.
 #[inline]
 fn saturating_dec(total_count: &AtomicU32) {
+    //TODO: (#7175) `fetch_update` is deprecated for `try_update` since Rust 1.99, but `try_update`
+    // needs 1.95 and the MSRV is 1.94.1.
+    #[allow(deprecated)]
     let _ = total_count.fetch_update(Ordering::AcqRel, Ordering::Acquire, |c| {
         Some(c.saturating_sub(1))
     });
