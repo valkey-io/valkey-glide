@@ -1,6 +1,5 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-import atexit as _atexit
 import os
 import sys
 import threading
@@ -79,20 +78,6 @@ def _clear_pinned_callbacks_after_fork() -> None:
 
 
 os.register_at_fork(after_in_child=_clear_pinned_callbacks_after_fork)
-
-
-def _clear_pinned_callbacks_at_exit() -> None:
-    """Clear CFFI callbacks at process exit before Rust runtime shuts down.
-
-    Python 3.9 tears down module globals in a different order than later
-    versions. Clearing the list here ensures CFFI objects are freed before
-    the Rust tokio runtime drops, preventing a panic across the C boundary
-    (SIGABRT / FATAL: exception not rethrown).
-    """
-    _pinned_credential_callbacks.clear()
-
-
-_atexit.register(_clear_pinned_callbacks_at_exit)
 
 
 # Enum values must match the Rust definition
@@ -1142,8 +1127,7 @@ class BaseClient(CoreCommands):
                 self._is_closed = True
                 with self._pubsub_condition:
                     self._pubsub_condition.notify_all()
-                if self._core_client != self._ffi.NULL:
-                    self._lib.close_client(self._core_client)
+                self._lib.close_client(self._core_client)
                 self._core_client = self._ffi.NULL
                 self._pubsub_callback_ref = None
                 # Keep credential/address-resolver callbacks alive until process
