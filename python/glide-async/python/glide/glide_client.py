@@ -6,6 +6,7 @@ import os
 import struct
 import sys
 import threading
+import weakref
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -222,6 +223,16 @@ _async_pipe_loop: Optional[asyncio.AbstractEventLoop] = (
 # trio raises BusyResourceError if two tasks wait on the same fd at once.
 _trio_pipe_token: Optional[object] = None
 _async_pipe_lock = threading.Lock()
+# Loops with a reader registered on the shared fd.  A reader only delivers while
+# its loop runs, and a loop cannot be unregistered from another thread, so a
+# running loop adds its own reader instead of taking the idle one's place.
+_async_pipe_reader_loops: "weakref.WeakSet[asyncio.AbstractEventLoop]" = (
+    weakref.WeakSet()
+)
+# Serializes pipe reads so coexisting readers cannot interleave frames.
+_async_pipe_read_lock = threading.Lock()
+# Loop running the read in progress, for same-loop vs cross-loop delivery.
+_async_pipe_reading_loop: Optional[asyncio.AbstractEventLoop] = None
 _client_registry: dict = {}
 _pipe_remainder: bytes = b""
 _FRAME_STRUCT = struct.Struct("=QQQQ")  # Pre-compiled for hot path
@@ -285,7 +296,7 @@ def _resolve_future(fut, result, client):
             client._loop.call_soon_threadsafe(fut.set_exception, result)
         else:
             client._loop.call_soon_threadsafe(fut.set_result, result)
-    elif client._loop and client._loop != _async_pipe_loop:
+    elif client._loop and client._loop is not _async_pipe_reading_loop:
         if isinstance(result, Exception):
             client._loop.call_soon_threadsafe(fut.set_exception, result)
         else:
@@ -435,6 +446,7 @@ def _detect_fork_and_reset() -> None:
         _async_pipe_write_fd = -1
         _async_pipe_registered = False
         _async_pipe_loop = None
+        _async_pipe_reader_loops.clear()
         _pipe_remainder = b""
         _trio_pipe_token = None
         _client_registry.clear()
@@ -451,7 +463,21 @@ def _drain_stale_pipe_frames():
             break
 
 
-def _on_async_pipe_readable() -> None:  # noqa: C901
+def _on_async_pipe_readable() -> None:
+    global _async_pipe_reading_loop
+    with _async_pipe_read_lock:
+        try:
+            _async_pipe_reading_loop = asyncio.get_running_loop()
+        except RuntimeError:
+            _async_pipe_reading_loop = None
+        try:
+            _read_async_pipe_frames()
+        finally:
+            _async_pipe_reading_loop = None
+
+
+def _read_async_pipe_frames() -> None:  # noqa: C901
+    """Read and dispatch pending frames. Must hold _async_pipe_read_lock."""
     # Free-threading optimization: when GIL is disabled, dispatch response parsing
     # to a thread pool for parallel execution across cores. With GIL enabled,
     # parse serially on the event loop thread (thread pool overhead not worth it).
@@ -686,13 +712,15 @@ class BaseClient(CoreCommands):
                 except OSError:
                     _async_pipe_read_fd = -1
                     self._pipe_client_id = 0
-            # Detect stale registration: the loop that originally called
-            # add_reader has been closed/destroyed (e.g. between anyio.run()
-            # calls in benchmarks).  Reset so we re-register below.
+            # Detect stale registration: every loop that called add_reader has
+            # been closed/destroyed (e.g. between anyio.run() calls in
+            # benchmarks), so no reader is left.  Reset to re-register below;
+            # buffered frames belong to those loops' clients and are dropped.
             if _async_pipe_registered and _async_pipe_loop is not None:
-                if _async_pipe_loop.is_closed():
+                if all(loop.is_closed() for loop in list(_async_pipe_reader_loops)):
                     _async_pipe_registered = False
                     _async_pipe_loop = None
+                    _async_pipe_reader_loops.clear()
                     _pipe_remainder = b""
                     _drain_stale_pipe_frames()
             # Trio: registration belongs to exactly one trio.run().  If the
@@ -712,14 +740,27 @@ class BaseClient(CoreCommands):
                 _trio_pipe_token = None
                 _pipe_remainder = b""
                 _drain_stale_pipe_frames()
+            # A registered loop that is open but not running delivers nothing,
+            # and may legally resume later, so it is left registered and this
+            # loop adds a second reader; _async_pipe_read_lock serializes them.
+            needs_reader = not _async_pipe_registered or (
+                self._is_asyncio
+                and _async_pipe_loop is not None
+                and self._loop is not None
+                and self._loop not in _async_pipe_reader_loops
+                and not any(
+                    loop.is_running() for loop in list(_async_pipe_reader_loops)
+                )
+            )
             if _async_pipe_read_fd >= 0 and self._pipe_client_id:
                 _client_registry[self._pipe_client_id] = self
-                if not _async_pipe_registered:
+                if needs_reader:
                     if self._is_asyncio:
                         assert self._loop is not None
                         self._loop.add_reader(
                             _async_pipe_read_fd, _on_async_pipe_readable
                         )
+                        _async_pipe_reader_loops.add(self._loop)
                         _async_pipe_loop = self._loop
                     else:
                         # For trio: spawn a background task that polls the pipe.
