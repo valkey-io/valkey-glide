@@ -55,7 +55,10 @@ pub fn mark_blocking(client_id: u64, blocking: bool) -> bool {
             let _ = glide_core::pool::try_refresh_activity_by_client(client_id);
             // Atomic CAS decrement: avoids the TOCTOU window between load and fetch_sub.
             // If count > 0, decrement atomically; if already 0, do nothing (no underflow).
-            let _ = arc.try_update(Ordering::AcqRel, Ordering::Acquire, |v| {
+            //TODO: (#7175) `fetch_update` is deprecated for `try_update` since Rust 1.99, but `try_update`
+            // needs 1.95 and the MSRV is 1.94.1.
+            #[allow(deprecated)]
+            let _ = arc.fetch_update(Ordering::AcqRel, Ordering::Acquire, |v| {
                 if v > 0 { Some(v - 1) } else { None }
             });
         }

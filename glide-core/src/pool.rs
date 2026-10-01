@@ -482,7 +482,7 @@ fn get_blocking_flag_registry() -> &'static DashMap<u64, Arc<AtomicU32>> {
 /// Returns `None` if the client is not currently registered in any pool.
 /// The caller increments the counter before spawning a blocking command
 /// (`.fetch_add(1, Ordering::Release)`) and decrements it on completion via
-/// `try_update` (atomic CAS: decrement if > 0, no-op if already 0).
+/// `fetch_update` (atomic CAS: decrement if > 0, no-op if already 0).
 ///
 /// Uses an `AtomicU32` counter: increment before each blocking dispatch,
 /// decrement when it completes. The abandon monitor skips the client while
@@ -1074,7 +1074,10 @@ pub struct ScopePool {
 /// reporting the pool permanently exhausted.
 #[inline]
 fn saturating_dec(total_count: &AtomicU32) {
-    let _ = total_count.try_update(Ordering::AcqRel, Ordering::Acquire, |c| {
+    //TODO: (#7175) `fetch_update` is deprecated for `try_update` since Rust 1.99, but `try_update`
+    // needs 1.95 and the MSRV is 1.94.1.
+    #[allow(deprecated)]
+    let _ = total_count.fetch_update(Ordering::AcqRel, Ordering::Acquire, |c| {
         Some(c.saturating_sub(1))
     });
 }
