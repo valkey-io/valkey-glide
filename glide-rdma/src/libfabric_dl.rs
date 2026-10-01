@@ -189,6 +189,15 @@ fn try_candidate(path: &str) -> Result<Resolved, String> {
         *slot = symbol;
     }
 
+    // SAFETY: this slot holds fi_version, resolved above, and it takes no arguments.
+    let runtime_version = unsafe {
+        std::mem::transmute::<*mut c_void, extern "C" fn() -> u32>(address[slot::VERSION])()
+    };
+    if let Some(complaint) = version_complaint(runtime_version) {
+        unsafe { libc::dlclose(handle) };
+        return Err(format!("{path}: {complaint}"));
+    }
+
     // The handle is deliberately not closed and not stored. The resolved
     // addresses have to stay valid for the life of the process.
     Ok(Resolved { address })
@@ -226,37 +235,29 @@ fn resolved() -> Option<&'static Resolved> {
 ///
 /// # Errors
 ///
-/// Returns [`RdmaError::LibfabricUnavailable`] if no candidate could be loaded,
-/// or if the one that loaded reports an API version older than the headers this
-/// crate was built against or a different major version.
+/// Returns [`RdmaError::LibfabricUnavailable`] if no candidate could be loaded
+/// at a compatible version, naming each one tried and why it was passed over.
 pub fn ensure_loaded() -> Result<(), RdmaError> {
-    let table = match LIBFABRIC.get_or_init(load) {
-        Ok(table) => table,
-        Err(failure) => {
-            return Err(RdmaError::LibfabricUnavailable {
-                detail: failure.attempts.join("; "),
-            });
-        }
-    };
-
-    // SAFETY: this slot holds fi_version, resolved above, and it takes no arguments.
-    let runtime_version = unsafe {
-        std::mem::transmute::<*mut c_void, extern "C" fn() -> u32>(table.address[slot::VERSION])()
-    };
-
-    check_version(runtime_version)
+    match LIBFABRIC.get_or_init(load) {
+        Ok(_) => Ok(()),
+        Err(failure) => Err(RdmaError::LibfabricUnavailable {
+            detail: failure.attempts.join("; "),
+        }),
+    }
 }
 
-/// Refuses a libfabric whose structures may be laid out differently from the
-/// ones these bindings read.
+/// Why a libfabric reporting `runtime_version` cannot be used, or `None` if it
+/// can.
 ///
-/// An older minor version may be missing fields the headers have. A different
-/// major version may have moved them. libfabric's own check in `fi_getinfo`
-/// only covers a request newer than the library, so both are checked here.
-fn check_version(runtime_version: u32) -> Result<(), RdmaError> {
-    if runtime_version >> 16 != HEADER_API_VERSION >> 16 || runtime_version < HEADER_API_VERSION {
-        return Err(RdmaError::LibfabricUnavailable {
-            detail: format!(
+/// An older minor version may be missing fields the headers have, and a
+/// different major version may have moved them, so either may lay its structs
+/// out differently from what these bindings read. libfabric's own check in
+/// `fi_getinfo` only covers a request newer than the library, so both are
+/// checked here.
+fn version_complaint(runtime_version: u32) -> Option<String> {
+    (runtime_version >> 16 != HEADER_API_VERSION >> 16 || runtime_version < HEADER_API_VERSION)
+        .then(|| {
+            format!(
                 "libfabric reports API {}.{}, but this build needs {}.{} or a later {}.x; \
                  the two may disagree about how libfabric's structures are laid out",
                 runtime_version >> 16,
@@ -264,10 +265,8 @@ fn check_version(runtime_version: u32) -> Result<(), RdmaError> {
                 HEADER_API_VERSION >> 16,
                 HEADER_API_VERSION & 0xffff,
                 HEADER_API_VERSION >> 16,
-            ),
-        });
-    }
-    Ok(())
+            )
+        })
 }
 
 /// The libfabric API version this crate's bindings were generated against.
@@ -483,9 +482,9 @@ unsafe extern "C" fn glide_fi_param_get(
 #[cfg(test)]
 mod tests {
     use super::{
-        FI_ENODATA, HEADER_API_VERSION, SYMBOLS, check_version, ensure_loaded, header_api_version,
+        FI_ENODATA, HEADER_API_VERSION, SYMBOLS, ensure_loaded, header_api_version,
+        version_complaint,
     };
-    use crate::error::RdmaError;
 
     #[test]
     fn names_and_positions_agree() {
@@ -579,9 +578,9 @@ mod tests {
     fn the_same_or_a_later_minor_version_is_accepted() {
         let major = HEADER_API_VERSION >> 16;
         let minor = HEADER_API_VERSION & 0xffff;
-        assert!(check_version(HEADER_API_VERSION).is_ok());
-        assert!(check_version(version(major, minor + 1)).is_ok());
-        assert!(check_version(version(major, 0xffff)).is_ok());
+        assert_eq!(version_complaint(HEADER_API_VERSION), None);
+        assert_eq!(version_complaint(version(major, minor + 1)), None);
+        assert_eq!(version_complaint(version(major, 0xffff)), None);
     }
 
     #[test]
@@ -594,10 +593,7 @@ mod tests {
         }
         for runtime in refused {
             assert!(
-                matches!(
-                    check_version(runtime),
-                    Err(RdmaError::LibfabricUnavailable { .. })
-                ),
+                version_complaint(runtime).is_some(),
                 "{}.{} should be refused",
                 runtime >> 16,
                 runtime & 0xffff
