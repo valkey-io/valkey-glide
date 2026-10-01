@@ -560,7 +560,7 @@ impl LatencyTracker {
         if self.count.load(Ordering::Relaxed) < self.capacity {
             let _ = self
                 .count
-                .fetch_update(Ordering::Release, Ordering::Relaxed, |c| {
+                .try_update(Ordering::Release, Ordering::Relaxed, |c| {
                     if c < self.capacity { Some(c + 1) } else { None }
                 });
         }

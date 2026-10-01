@@ -308,7 +308,7 @@ impl Drop for UnmarkOnDrop {
                 glide_core::pool::refresh_activity_by_client(client_id);
             }
             // Saturating decrement via CAS to avoid TOCTOU between load and fetch_sub.
-            let _ = arc.fetch_update(Ordering::AcqRel, Ordering::Acquire, |v| {
+            let _ = arc.try_update(Ordering::AcqRel, Ordering::Acquire, |v| {
                 if v > 0 { Some(v - 1) } else { None }
             });
         }
