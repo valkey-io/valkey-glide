@@ -328,6 +328,30 @@ func TestBackoffStrategy_reportsEveryInvalidField(t *testing.T) {
 	}
 }
 
+// TestBackoffStrategy_isComparable covers equality and use as a map key.
+func TestBackoffStrategy_isComparable(t *testing.T) {
+	assert.True(t, *NewBackoffStrategy(1, 2, 3) == *NewBackoffStrategy(1, 2, 3))
+	assert.False(t, *NewBackoffStrategy(1, 2, 3) == *NewBackoffStrategy(-1, 2, 3))
+
+	counts := map[BackoffStrategy]int{*NewBackoffStrategy(1, 2, 3): 1}
+	counts[*NewBackoffStrategy(1, 2, 3)]++
+	assert.Equal(t, map[BackoffStrategy]int{*NewBackoffStrategy(1, 2, 3): 2}, counts)
+}
+
+// TestBackoffStrategy_copyIsIndependent covers a value copy: a setter on the copy leaves the
+// original's values and validation state alone.
+func TestBackoffStrategy_copyIsIndependent(t *testing.T) {
+	original := NewBackoffStrategy(5, 100, 2).WithJitterPercent(-1)
+	copied := *original
+	copied.WithJitterPercent(30)
+
+	require.NoError(t, copied.validationError())
+	_, err := original.toProtobuf()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "jitterPercent")
+	assert.Equal(t, uint32(0), *original.jitterPercent)
+}
+
 func TestBackoffStrategy_valuesAboveMaxUint32(t *testing.T) {
 	aboveMax := maxUint32AsInt(t) + 1
 

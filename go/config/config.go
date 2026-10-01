@@ -406,8 +406,9 @@ type BackoffStrategy struct {
 	exponentBase uint32
 	// The Jitter percent on the calculated duration, between 0 and 100. If not set, a default value will be used.
 	jitterPercent *uint32
-	// Out-of-range values seen by the setters, keyed by field name.
-	invalid map[string]error
+	// Out-of-range values seen by the setters, indexed like backoffFields. An array keeps the struct
+	// comparable and makes a value copy independent of its source.
+	invalid [len(backoffFields)]error
 }
 
 const (
@@ -421,7 +422,15 @@ const (
 
 // backoffFields lists the settable fields in report order, so a configuration error names them
 // deterministically.
-var backoffFields = []string{"numOfRetries", "factor", "exponentBase", "jitterPercent"}
+var backoffFields = [...]string{"numOfRetries", "factor", "exponentBase", "jitterPercent"}
+
+// Indexes into backoffFields.
+const (
+	numOfRetriesField = iota
+	factorField
+	exponentBaseField
+	jitterPercentField
+)
 
 // NewBackoffStrategy returns a [BackoffStrategy] with the given configuration parameters.
 //
@@ -429,9 +438,9 @@ var backoffFields = []string{"numOfRetries", "factor", "exponentBase", "jitterPe
 // invalid configuration, reported as an error when the client is created.
 func NewBackoffStrategy(numOfRetries int, factor int, exponentBase int) *BackoffStrategy {
 	strategy := &BackoffStrategy{}
-	strategy.numOfRetries = strategy.toUint32("numOfRetries", numOfRetries, maxBackoffValue)
-	strategy.factor = strategy.toUint32("factor", factor, maxBackoffValue)
-	strategy.exponentBase = strategy.toUint32("exponentBase", exponentBase, maxBackoffValue)
+	strategy.numOfRetries = strategy.toUint32(numOfRetriesField, numOfRetries, maxBackoffValue)
+	strategy.factor = strategy.toUint32(factorField, factor, maxBackoffValue)
+	strategy.exponentBase = strategy.toUint32(exponentBaseField, exponentBase, maxBackoffValue)
 	return strategy
 }
 
@@ -440,44 +449,28 @@ func NewBackoffStrategy(numOfRetries int, factor int, exponentBase int) *Backoff
 // The jitter must be between 0 and 100. Using a value outside that range leads to an invalid
 // configuration, reported as an error when the client is created.
 func (strategy *BackoffStrategy) WithJitterPercent(jitter int) *BackoffStrategy {
-	jitterPercent := strategy.toUint32("jitterPercent", jitter, maxJitterPercent)
+	jitterPercent := strategy.toUint32(jitterPercentField, jitter, maxJitterPercent)
 	strategy.jitterPercent = &jitterPercent
 	return strategy
 }
 
 // toUint32 narrows a parameter to the uint32 the core expects. An out-of-range value is recorded
-// instead of being wrapped around silently, because the setters cannot report it themselves.
-func (strategy *BackoffStrategy) toUint32(name string, value int, maxValue int64) uint32 {
+// instead of being wrapped around silently, because the setters cannot report it themselves. A valid
+// value clears the field's earlier error, so the reported error always describes the current state.
+func (strategy *BackoffStrategy) toUint32(field int, value int, maxValue int64) uint32 {
+	strategy.invalid[field] = nil
 	if value < 0 || int64(value) > maxValue {
-		strategy.record(name, fmt.Errorf("%s must be between 0 and %d, got %d", name, maxValue, value))
+		strategy.invalid[field] = fmt.Errorf(
+			"%s must be between 0 and %d, got %d", backoffFields[field], maxValue, value,
+		)
 		return 0
 	}
-	strategy.record(name, nil)
 	return uint32(value)
 }
 
-// record notes why a field is invalid, or clears the note when it is valid, so the reported error
-// always describes the current state even if a setter is called again with a corrected value.
-func (strategy *BackoffStrategy) record(name string, err error) {
-	if err == nil {
-		delete(strategy.invalid, name)
-		return
-	}
-	if strategy.invalid == nil {
-		strategy.invalid = make(map[string]error)
-	}
-	strategy.invalid[name] = err
-}
-
-// validationError reports every invalid field at once, in a deterministic order.
+// validationError reports every invalid field at once, in backoffFields order.
 func (strategy *BackoffStrategy) validationError() error {
-	var errs []error
-	for _, name := range backoffFields {
-		if err := strategy.invalid[name]; err != nil {
-			errs = append(errs, err)
-		}
-	}
-	return errors.Join(errs...)
+	return errors.Join(strategy.invalid[:]...)
 }
 
 func (strategy *BackoffStrategy) toProtobuf() (*protobuf.ConnectionRetryStrategy, error) {
