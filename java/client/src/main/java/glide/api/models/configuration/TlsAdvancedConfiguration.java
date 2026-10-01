@@ -8,9 +8,12 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.security.Key;
 import java.security.KeyStore;
 import java.security.KeyStoreException;
 import java.security.NoSuchAlgorithmException;
+import java.security.PrivateKey;
+import java.security.UnrecoverableKeyException;
 import java.security.cert.Certificate;
 import java.security.cert.CertificateException;
 import java.util.Base64;
@@ -36,6 +39,11 @@ import lombok.Getter;
  *       mTLS reloading at the core's default cadence (see {@link #certReloadIntervalSeconds}).
  *   <li>{@link TlsAdvancedConfigurationBuilder#useMutualTlsWithReload(String, String, int)} -
  *       path-based mTLS reloading every {@code intervalSecs} seconds.
+ *   <li>{@link TlsAdvancedConfigurationBuilder#useMutualTlsFromKeyStore(String, char[], String)} -
+ *       loads the client identity (private key and certificate chain) from a JKS or PKCS12
+ *       keystore, serializes it to PEM in memory, and uses it as static (no-reload) mTLS. This is
+ *       the client-identity counterpart of {@link #fromKeyStore(String, char[], String)}, which
+ *       loads trusted root certificates from a keystore.
  * </ul>
  *
  * <p>Using either {@code useMutualTlsWithReload} overload enables reloading; the explicit interval
@@ -374,6 +382,130 @@ public class TlsAdvancedConfiguration {
             this.clientKeyPath = clientKeyPath;
             this.certReloadIntervalSeconds = intervalSecs;
             return this;
+        }
+
+        /**
+         * Enables mutual TLS (mTLS) using the client identity (private key and its certificate chain)
+         * stored in a Java KeyStore (JKS or PKCS12), loaded once (static, no reload).
+         *
+         * <p>This is the client-identity counterpart of {@link
+         * TlsAdvancedConfiguration#fromKeyStore(String, char[], String)}, which loads trusted root
+         * certificates from a keystore. Where {@code fromKeyStore} reads the keystore's certificate
+         * entries into {@link TlsAdvancedConfiguration#rootCertificates}, this method reads the
+         * keystore's first {@code PrivateKeyEntry} (the private key plus its certificate chain),
+         * serializes them to PEM in memory, and feeds them to {@link #useMutualTls(byte[], byte[])},
+         * so all existing mTLS validation applies and the material is presented statically.
+         *
+         * <p>Keystore loading is a JVM-native convenience; the GLIDE core only consumes PEM. If the
+         * keystore holds more than one private key entry, the first one encountered is used
+         * (keystore alias iteration order is not guaranteed to be stable, so prefer a keystore with a
+         * single private key entry).
+         *
+         * <p>For automatic rotation of on-disk material, use {@link #useMutualTlsWithReload} with PEM
+         * files instead; keystore-based mTLS is inherently static.
+         *
+         * @param keyStorePath Path to the KeyStore file.
+         * @param keyStorePassword Password for the KeyStore (also used to recover the private key).
+         * @param keyStoreType KeyStore type (e.g., "JKS", "PKCS12").
+         * @return this builder instance
+         * @throws KeyStoreException if the KeyStore type is not supported or cannot be accessed
+         * @throws IOException if the KeyStore file cannot be read or the password is incorrect
+         * @throws NoSuchAlgorithmException if the integrity-check or key-recovery algorithm is
+         *     unavailable
+         * @throws CertificateException if certificates cannot be loaded or encoded
+         * @throws UnrecoverableKeyException if the private key cannot be recovered (e.g., wrong
+         *     password)
+         * @throws ConfigurationError if the keystore contains no private key entry, or the entry has
+         *     no certificate chain
+         */
+        public TlsAdvancedConfigurationBuilder useMutualTlsFromKeyStore(
+                String keyStorePath, char[] keyStorePassword, String keyStoreType)
+                throws KeyStoreException,
+                        IOException,
+                        NoSuchAlgorithmException,
+                        CertificateException,
+                        UnrecoverableKeyException {
+
+            KeyStore keyStore = KeyStore.getInstance(keyStoreType);
+            try (FileInputStream fis = new FileInputStream(keyStorePath)) {
+                keyStore.load(fis, keyStorePassword);
+            }
+
+            String alias = findPrivateKeyAlias(keyStore);
+            if (alias == null) {
+                throw new ConfigurationError(
+                        "KeyStore does not contain a private key entry; mTLS client identity requires a"
+                                + " PrivateKeyEntry (private key plus its certificate chain). Use"
+                                + " `fromKeyStore` for trusted root certificates.");
+            }
+
+            Key key = keyStore.getKey(alias, keyStorePassword);
+            if (!(key instanceof PrivateKey)) {
+                throw new ConfigurationError(
+                        "KeyStore entry `"
+                                + alias
+                                + "` is not a private key; mTLS client identity requires a PrivateKeyEntry.");
+            }
+
+            Certificate[] chain = keyStore.getCertificateChain(alias);
+            if (chain == null || chain.length == 0) {
+                throw new ConfigurationError(
+                        "KeyStore private key entry `"
+                                + alias
+                                + "` has no associated certificate chain; mTLS requires both the private key"
+                                + " and its certificate.");
+            }
+
+            byte[] certPem = encodeCertChainToPem(chain);
+            byte[] keyPem = encodePrivateKeyToPem((PrivateKey) key);
+
+            return useMutualTls(certPem, keyPem);
+        }
+
+        /**
+         * Returns the alias of the first private key entry in the keystore, or {@code null} if none
+         * exists. Alias iteration order is not guaranteed by the {@link KeyStore} contract, so this is
+         * deterministic only for keystores holding a single private key entry.
+         */
+        private static String findPrivateKeyAlias(KeyStore keyStore) throws KeyStoreException {
+            Enumeration<String> aliases = keyStore.aliases();
+            while (aliases.hasMoreElements()) {
+                String alias = aliases.nextElement();
+                if (keyStore.isKeyEntry(alias)) {
+                    return alias;
+                }
+            }
+            return null;
+        }
+
+        /**
+         * Serializes a certificate chain to concatenated PEM {@code CERTIFICATE} blocks (leaf first,
+         * matching keystore chain order), mirroring the encoding used by {@link
+         * TlsAdvancedConfiguration#fromKeyStore(String, char[], String)}.
+         */
+        private static byte[] encodeCertChainToPem(Certificate[] chain) throws CertificateException {
+            StringBuilder pemBuilder = new StringBuilder();
+            Encoder base64Encoder = Base64.getEncoder();
+            final String BEGIN_CERT = "-----BEGIN CERTIFICATE-----\n";
+            final String END_CERT = "\n-----END CERTIFICATE-----\n";
+            for (Certificate cert : chain) {
+                pemBuilder.append(BEGIN_CERT);
+                pemBuilder.append(base64Encoder.encodeToString(cert.getEncoded()));
+                pemBuilder.append(END_CERT);
+            }
+            return pemBuilder.toString().getBytes(StandardCharsets.UTF_8);
+        }
+
+        /**
+         * Serializes a private key to a PKCS#8 PEM {@code PRIVATE KEY} block. {@link Key#getEncoded()}
+         * returns the key in PKCS#8 DER form, which is wrapped here in the standard PEM markers.
+         */
+        private static byte[] encodePrivateKeyToPem(PrivateKey key) {
+            Encoder base64Encoder = Base64.getEncoder();
+            final String BEGIN_KEY = "-----BEGIN PRIVATE KEY-----\n";
+            final String END_KEY = "\n-----END PRIVATE KEY-----\n";
+            String pem = BEGIN_KEY + base64Encoder.encodeToString(key.getEncoded()) + END_KEY;
+            return pem.getBytes(StandardCharsets.UTF_8);
         }
 
         // The individual mutual-TLS setters below are hidden from the public API so that mTLS can only
