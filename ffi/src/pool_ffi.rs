@@ -314,10 +314,9 @@ pub extern "C" fn glide_pool_try_acquire(pool_id: u64) -> i64 {
 
     match pool_arc.try_lock() {
         Ok(mut pool) => {
-            // Clean up any clients discarded by the abandon monitor
+            // Reclaim the adapters of clients core has discarded
             let discarded = pool.drain_discarded_ids();
             for cid in discarded {
-                glide_core::pool::unregister_blocking_flag(cid);
                 if let Some((_, entry)) = get_pool_clients().remove(&cid) {
                     get_pool_adapter_map().remove(&entry.adapter_ptr);
                     glide_core::scope::unregister_client(entry.adapter_ptr as u64);
@@ -356,7 +355,7 @@ pub extern "C" fn glide_pool_try_acquire(pool_id: u64) -> i64 {
                             rt.spawn(async move {
                                 let mut pool = pool_clone.lock().await;
                                 if pool.state.load(AtomicOrdering::Acquire) != POOL_RUNNING {
-                                    pool.total_count.fetch_sub(1, AtomicOrdering::AcqRel);
+                                    pool.release_reservation();
                                     // Reconstruct and drop the Arc to avoid a memory leak:
                                     // create_pool_client transferred ownership into a raw pointer
                                     // via mem::forget; glide_pool_destroy cannot find this orphaned
@@ -398,8 +397,8 @@ pub extern "C" fn glide_pool_try_acquire(pool_id: u64) -> i64 {
                             );
                             let rt = get_pool_runtime();
                             rt.spawn(async move {
-                                let pool = pool_clone.lock().await;
-                                pool.total_count.fetch_sub(1, AtomicOrdering::AcqRel);
+                                let mut pool = pool_clone.lock().await;
+                                pool.release_reservation();
                             });
                         }
                     }
@@ -442,10 +441,9 @@ pub extern "C" fn glide_pool_acquire_blocking(pool_id: u64, timeout_ms: u64) -> 
         // Try to acquire (try_lock is synchronous on TokioMutex — no runtime needed)
         let result = match pool_arc.try_lock() {
             Ok(mut pool) => {
-                // Clean up any clients discarded by the abandon monitor
+                // Reclaim the adapters of clients core has discarded
                 let discarded = pool.drain_discarded_ids();
                 for cid in discarded {
-                    glide_core::pool::unregister_blocking_flag(cid);
                     if let Some((_, entry)) = get_pool_clients().remove(&cid) {
                         get_pool_adapter_map().remove(&entry.adapter_ptr);
                         glide_core::scope::unregister_client(entry.adapter_ptr as u64);
@@ -480,7 +478,7 @@ pub extern "C" fn glide_pool_acquire_blocking(pool_id: u64, timeout_ms: u64) -> 
                                 rt.spawn(async move {
                                     let mut p = pool_clone.lock().await;
                                     if p.state.load(AtomicOrdering::Acquire) != POOL_RUNNING {
-                                        p.total_count.fetch_sub(1, AtomicOrdering::AcqRel);
+                                        p.release_reservation();
                                         // Reconstruct and drop the Arc to avoid a memory leak:
                                         // create_pool_client transferred ownership into a raw pointer
                                         // via mem::forget; glide_pool_destroy cannot find this orphaned
@@ -521,8 +519,8 @@ pub extern "C" fn glide_pool_acquire_blocking(pool_id: u64, timeout_ms: u64) -> 
                             Err(_) => {
                                 let rt = get_pool_runtime();
                                 rt.spawn(async move {
-                                    let p = pool_clone.lock().await;
-                                    p.total_count.fetch_sub(1, AtomicOrdering::AcqRel);
+                                    let mut p = pool_clone.lock().await;
+                                    p.release_reservation();
                                 });
                             }
                         }
