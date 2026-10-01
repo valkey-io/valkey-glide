@@ -385,6 +385,9 @@ export type MutualTls =
  */
 const MAX_UINT32 = 2 ** 32 - 1;
 
+/** The largest reconnect jitter the core accepts. */
+const MAX_JITTER_PERCENT = 100;
+
 /**
  * Reads a PEM file for TLS configuration. Shared by
  * {@link loadRootCertificatesFromFile} and
@@ -493,6 +496,38 @@ function validateReloadInterval(value: number | undefined): void {
         throw new ConfigurationError(
             `mutualTls.reloadIntervalSeconds must be a positive integer no greater than ${MAX_UINT32}.`,
         );
+    }
+}
+
+/**
+ * Rejects a reconnect strategy value outside the range the core accepts, instead of letting
+ * protobuf wrap a negative or oversized value into a different unsigned one.
+ *
+ * @internal
+ */
+function validateConnectionBackoff(
+    backoff: BaseClientConfiguration["connectionBackoff"],
+): void {
+    if (backoff === undefined) {
+        return;
+    }
+
+    const fields: [string, number | undefined, number][] = [
+        ["numberOfRetries", backoff.numberOfRetries, MAX_UINT32],
+        ["factor", backoff.factor, MAX_UINT32],
+        ["exponentBase", backoff.exponentBase, MAX_UINT32],
+        ["jitterPercent", backoff.jitterPercent, MAX_JITTER_PERCENT],
+    ];
+
+    for (const [name, value, max] of fields) {
+        if (
+            value !== undefined &&
+            (!Number.isInteger(value) || value < 0 || value > max)
+        ) {
+            throw new ConfigurationError(
+                `invalid reconnect strategy: ${name} must be an integer between 0 and ${max}, got ${value}`,
+            );
+        }
     }
 }
 
@@ -953,7 +988,7 @@ export enum NodeDiscoveryMode {
  *     - After this limit is reached, the retry interval becomes constant.
  *   - `factor`: A multiplier applied to the base delay between retries, specified in milliseconds (e.g., `500` means a 500ms base delay). A value of `0` means the default (`100`) is used.
  *   - `exponentBase`: The exponential growth factor for delays (e.g., `2` means the delay doubles with each retry). A value of `0` means the default (`2`) is used.
- *  - `jitterPercent`: An optional percentage of jitter to add to the delay, between `0` and `100` (e.g., `30` means the final delay will vary randomly between 70% and 130% of the calculated delay). A value above `100` is rejected when the client is created.
+ *  - `jitterPercent`: An optional percentage of jitter to add to the delay, between `0` and `100` (e.g., `30` means the final delay will vary randomly between 70% and 130% of the calculated delay). A value outside that range is rejected when the client is created.
  *
  * @example
  * ```typescript
@@ -1141,24 +1176,25 @@ export interface BaseClientConfiguration {
         /**
          * Number of retry attempts that the client should perform when disconnected from the server, where the time between retries increases.
          * Once the retries have reached the maximum value, the time between retries will remain constant until a reconnect attempt is succesful.
-         * Value must be an integer.
+         * Value must be an integer between 0 and 2^32 - 1; any other value is rejected when the client is created.
          */
         numberOfRetries: number;
         /**
          * The multiplier that will be applied to the waiting time between each retry.
          * This value is specified in milliseconds.
-         * Value must be an integer. A value of 0 means the default (100) is used.
+         * Value must be an integer between 0 and 2^32 - 1; any other value is rejected when the client is created.
+         * A value of 0 means the default (100) is used.
          */
         factor: number;
         /**
          * The exponent base configured for the strategy.
-         * Value must be an integer. A value of 0 means the default (2) is used.
+         * Value must be an integer between 0 and 2^32 - 1; any other value is rejected when the client is created.
+         * A value of 0 means the default (2) is used.
          */
         exponentBase: number;
         /** The Jitter percent on the calculated duration, between 0 and 100.
-         * A value above 100 is rejected when the client is created.
+         * Any other value, or a non-integer, is rejected when the client is created.
          * If not set, a default value will be used.
-         * Value is optional, and must be an integer.
          */
         jitterPercent?: number;
     };
@@ -9907,6 +9943,8 @@ export class BaseClient {
     protected createClientRequest(
         options: BaseClientConfiguration,
     ): connection_request.IConnectionRequest {
+        validateConnectionBackoff(options.connectionBackoff);
+
         const readFrom = options.readFrom
             ? this.MAP_READ_FROM_STRATEGY[options.readFrom]
             : connection_request.ReadFrom.Primary;

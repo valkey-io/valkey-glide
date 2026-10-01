@@ -360,6 +360,73 @@ describe("ReadFrom strategy configuration", () => {
     });
 });
 
+describe("Reconnect strategy validation", () => {
+    class TestBaseClient extends BaseClient {
+        public constructor() {
+            super();
+        }
+
+        public buildRequest(
+            options: BaseClientConfiguration,
+        ): connection_request.IConnectionRequest {
+            return this.createClientRequest(options);
+        }
+    }
+
+    const withBackoff = (
+        connectionBackoff: BaseClientConfiguration["connectionBackoff"],
+    ): BaseClientConfiguration => ({
+        addresses: [{ host: "localhost", port: 6379 }],
+        connectionBackoff,
+    });
+
+    const maxUint32 = 2 ** 32 - 1;
+
+    it.each([
+        ["numberOfRetries", -1, maxUint32],
+        ["numberOfRetries", 2 ** 32, maxUint32],
+        ["numberOfRetries", 1.5, maxUint32],
+        ["factor", -1, maxUint32],
+        ["factor", 2 ** 32, maxUint32],
+        ["exponentBase", -1, maxUint32],
+        ["exponentBase", 2 ** 32, maxUint32],
+        ["jitterPercent", -1, 100],
+        ["jitterPercent", 101, 100],
+        ["jitterPercent", 2 ** 32 + 50, 100],
+    ])("rejects %s=%p with a ConfigurationError", (field, value, max) => {
+        const config = withBackoff({
+            numberOfRetries: 3,
+            factor: 100,
+            exponentBase: 2,
+            [field]: value,
+        });
+
+        expect(() => new TestBaseClient().buildRequest(config)).toThrow(
+            new ConfigurationError(
+                `invalid reconnect strategy: ${field} must be an integer between 0 and ${max}, got ${value}`,
+            ),
+        );
+    });
+
+    it.each([
+        [{ numberOfRetries: 0, factor: 0, exponentBase: 0, jitterPercent: 0 }],
+        [
+            {
+                numberOfRetries: maxUint32,
+                factor: maxUint32,
+                exponentBase: maxUint32,
+                jitterPercent: 100,
+            },
+        ],
+        [{ numberOfRetries: 3, factor: 100, exponentBase: 2 }],
+    ])("forwards in-range values unchanged: %j", (connectionBackoff) => {
+        expect(
+            new TestBaseClient().buildRequest(withBackoff(connectionBackoff))
+                .connectionRetryStrategy,
+        ).toEqual(connectionBackoff);
+    });
+});
+
 describe("BaseClient response handling", () => {
     class TestBaseClient extends BaseClient {
         public constructor() {

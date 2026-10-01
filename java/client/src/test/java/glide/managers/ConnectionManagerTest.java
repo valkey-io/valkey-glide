@@ -351,11 +351,10 @@ public class ConnectionManagerTest {
 
     /**
      * The bounds of jitterPercent must reach the pooled wire as set, matching a directly-created
-     * client. 0 and 100 must not fall back to the core default of 20, and 101 must reach the core so
-     * it is rejected there the same way as for a direct client.
+     * client, rather than falling back to the core default of 20.
      */
     @ParameterizedTest
-    @org.junit.jupiter.params.provider.ValueSource(ints = {0, 100, 101})
+    @org.junit.jupiter.params.provider.ValueSource(ints = {0, 100})
     void clientPoolSerialization_carriesReconnectJitterPercentBounds(int jitter) throws Exception {
         GlideClientConfiguration clientConfig =
                 GlideClientConfiguration.builder()
@@ -378,6 +377,58 @@ public class ConnectionManagerTest {
                 ConnectionManager.buildConnectionRequest(clientConfig).getConnectionRetryStrategy(),
                 pooled,
                 "pooled retry strategy matches direct");
+    }
+
+    static Stream<org.junit.jupiter.params.provider.Arguments> outOfRangeReconnectStrategies() {
+        return Stream.of(
+                org.junit.jupiter.params.provider.Arguments.of(
+                        "numOfRetries",
+                        -1,
+                        BackoffStrategy.builder().numOfRetries(-1).factor(2).exponentBase(2)),
+                org.junit.jupiter.params.provider.Arguments.of(
+                        "factor", -1, BackoffStrategy.builder().numOfRetries(3).factor(-1).exponentBase(2)),
+                org.junit.jupiter.params.provider.Arguments.of(
+                        "exponentBase",
+                        -1,
+                        BackoffStrategy.builder().numOfRetries(3).factor(2).exponentBase(-1)),
+                org.junit.jupiter.params.provider.Arguments.of(
+                        "jitterPercent",
+                        -1,
+                        BackoffStrategy.builder().numOfRetries(3).factor(2).exponentBase(2).jitterPercent(-1)),
+                org.junit.jupiter.params.provider.Arguments.of(
+                        "jitterPercent",
+                        101,
+                        BackoffStrategy.builder()
+                                .numOfRetries(3)
+                                .factor(2)
+                                .exponentBase(2)
+                                .jitterPercent(101)));
+    }
+
+    /**
+     * An out-of-range reconnect value is rejected with a ConfigurationError naming the field, on both
+     * the direct and the pooled path, instead of wrapping to a huge unsigned value or being dropped.
+     */
+    @ParameterizedTest
+    @MethodSource("outOfRangeReconnectStrategies")
+    void buildConnectionRequest_rejectsOutOfRangeReconnectStrategy(
+            String field, int value, BackoffStrategy.BackoffStrategyBuilder strategy) {
+        GlideClientConfiguration clientConfig =
+                GlideClientConfiguration.builder().reconnectStrategy(strategy.build()).build();
+        int max = "jitterPercent".equals(field) ? 100 : Integer.MAX_VALUE;
+        String expected =
+                "invalid reconnect strategy: " + field + " must be between 0 and " + max + ", got " + value;
+
+        ConfigurationError direct =
+                assertThrows(
+                        ConfigurationError.class, () -> ConnectionManager.buildConnectionRequest(clientConfig));
+        assertEquals(expected, direct.getMessage());
+
+        Exception pooled = assertThrows(Exception.class, () -> poolBytes(clientConfig));
+        // Reflection wraps the ConfigurationError in an InvocationTargetException.
+        Throwable cause = pooled.getCause() != null ? pooled.getCause() : pooled;
+        assertTrue(cause instanceof ConfigurationError, "cause: " + cause);
+        assertEquals(expected, cause.getMessage());
     }
 
     /**
