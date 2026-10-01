@@ -350,6 +350,37 @@ public class ConnectionManagerTest {
     }
 
     /**
+     * The bounds of jitterPercent must reach the pooled wire as set, matching a directly-created
+     * client. 0 and 100 must not fall back to the core default of 20, and 101 must reach the core so
+     * it is rejected there the same way as for a direct client.
+     */
+    @ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(ints = {0, 100, 101})
+    void clientPoolSerialization_carriesReconnectJitterPercentBounds(int jitter) throws Exception {
+        GlideClientConfiguration clientConfig =
+                GlideClientConfiguration.builder()
+                        .reconnectStrategy(
+                                BackoffStrategy.builder()
+                                        .numOfRetries(3)
+                                        .factor(2)
+                                        .exponentBase(2)
+                                        .jitterPercent(jitter)
+                                        .build())
+                        .build();
+
+        ConnectionRequestOuterClass.ConnectionRetryStrategy pooled =
+                ConnectionRequestOuterClass.ConnectionRequest.parseFrom(poolBytes(clientConfig))
+                        .getConnectionRetryStrategy();
+
+        assertTrue(pooled.hasJitterPercent(), "pooled jitter_percent present");
+        assertEquals(jitter, pooled.getJitterPercent(), "pooled jitter_percent");
+        assertEquals(
+                ConnectionManager.buildConnectionRequest(clientConfig).getConnectionRetryStrategy(),
+                pooled,
+                "pooled retry strategy matches direct");
+    }
+
+    /**
      * Locks in the deduplication fix: pooled serialization now delegates to the one shared {@code
      * ConnectionManager.buildConnectionRequest}, so a field the old hand-copied pool serializer never
      * mirrored — here compression — reaches the pooled wire. Fails on the pre-extraction copy, which
