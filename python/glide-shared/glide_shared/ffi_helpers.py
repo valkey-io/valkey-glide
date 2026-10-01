@@ -2,6 +2,7 @@
 
 """Shared FFI helper utilities for converting Python arguments to C-compatible arrays."""
 
+import weakref
 from enum import IntEnum
 
 from glide_shared._glide_ffi import GlideFFI as _GlideFFI_singleton
@@ -393,6 +394,12 @@ def create_credential_provider_callback(ffi, credential_provider_fn, event_loop=
             # Not in a trio context; will fail at invocation time with a clear error
             pass
 
+    # Use a weak reference to the event loop so the CFFI callback does not
+    # prevent the asyncio event loop from being garbage-collected during
+    # process teardown. The Rust IAM refresh task handles a None/dead loop
+    # gracefully (returns 0 = credentials error, Rust surfaces CredentialsError).
+    _event_loop_ref = weakref.ref(event_loop) if event_loop is not None else None
+
     def _credential_provider_callback(
         client_id,  # provided by Rust; unused on the Python side
         access_key_id_buf,
@@ -408,8 +415,11 @@ def create_credential_provider_callback(ffi, credential_provider_fn, event_loop=
     ):
         try:
             if is_async:
+                _loop = _event_loop_ref() if _event_loop_ref is not None else None
+                if _loop is None or _loop.is_closed():
+                    return 0  # loop is gone; signal credentials error to Rust
                 creds = _invoke_async_credential_provider(
-                    credential_provider_fn, event_loop, trio_token=trio_token
+                    credential_provider_fn, _loop, trio_token=trio_token
                 )
             else:
                 creds = credential_provider_fn()
