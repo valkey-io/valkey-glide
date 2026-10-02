@@ -69,9 +69,10 @@ runs:
           env:
               CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
               CRATE: ${{ inputs.crate }}
+              PUBLISH: ${{ inputs.publish }}
           run: |
               ARGS=(--manifest-path "${CRATE}/Cargo.toml")
-              if ${{ inputs.publish != 'true' }}; then
+              if [[ "${PUBLISH}" != "true" ]]; then
                   ARGS+=(--dry-run)
               fi
               cargo publish "${ARGS[@]}"
