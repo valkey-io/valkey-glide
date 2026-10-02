@@ -15,7 +15,6 @@ else:
     from typing_extensions import TypeAlias
 
 import anyio
-import pytest
 from glide.glide_client import GlideClusterClient, TGlideClient
 from glide_shared.commands.core_options import PubSubMsg
 from glide_shared.config import (
@@ -31,6 +30,10 @@ from glide_sync.glide_client import GlideClusterClient as SyncGlideClusterClient
 
 # Type alias for any glide client (async or sync)
 AnyGlideClient: TypeAlias = Union[TGlideClient, SyncGlideClient, SyncGlideClusterClient]
+
+# Reads poll for delivery instead of tests sleeping a fixed second after publish.
+MESSAGE_DELIVERY_TIMEOUT = 3.0
+DELIVERY_POLL_INTERVAL = 0.01
 
 # Substring identifying the cluster recovery rejection. While a cluster client
 # is refreshing slots or reconnecting to its initial nodes, redis-rs fails
@@ -598,9 +601,15 @@ async def get_message_by_method(
     if method == MessageReadMethod.Async:
         return decode_pubsub_msg(await client.get_pubsub_message())
     elif method == MessageReadMethod.Sync:
-        return decode_pubsub_msg(client.try_get_pubsub_message())
+        with anyio.fail_after(MESSAGE_DELIVERY_TIMEOUT):
+            while (msg := client.try_get_pubsub_message()) is None:
+                await anyio.sleep(DELIVERY_POLL_INTERVAL)
+        return decode_pubsub_msg(msg)
     else:  # Callback
         assert callback_messages is not None and index is not None
+        with anyio.fail_after(MESSAGE_DELIVERY_TIMEOUT):
+            while len(callback_messages) <= index:
+                await anyio.sleep(DELIVERY_POLL_INTERVAL)
         return decode_pubsub_msg(callback_messages[index])
 
 
@@ -609,7 +618,6 @@ async def check_no_messages_left(
     client: TGlideClient,
     callback_messages: Optional[List[PubSubMsg]] = None,
     expected_callback_count: int = 0,
-    async_timeout: float = 3.0,
 ) -> None:
     """
     Verify there are no more messages to read.
@@ -619,16 +627,14 @@ async def check_no_messages_left(
         client: The client to check
         callback_messages: Callback message list (for Callback method)
         expected_callback_count: Expected number of messages in callback list
-        async_timeout: Timeout for async method check
 
     Raises:
         AssertionError if there are unexpected messages
     """
-    if method == MessageReadMethod.Async:
-        with pytest.raises(TimeoutError):
-            with anyio.fail_after(async_timeout):
-                await client.get_pubsub_message()
-    elif method == MessageReadMethod.Sync:
+    # Every read method checks the queue instantly: any message that could
+    # arrive has already been delivered on this connection by the time the
+    # caller has read its expected messages (or slept after an unsubscribe).
+    if method in (MessageReadMethod.Async, MessageReadMethod.Sync):
         assert client.try_get_pubsub_message() is None
     else:  # Callback
         assert callback_messages is not None
@@ -1185,11 +1191,24 @@ def sync_get_message_by_method(
     Returns:
         Decoded PubSubMsg
     """
+    import time
+
+    deadline = time.monotonic() + MESSAGE_DELIVERY_TIMEOUT
     if method == MessageReadMethod.Async:
         return decode_pubsub_msg(client.get_pubsub_message())
     elif method == MessageReadMethod.Sync:
-        return decode_pubsub_msg(client.try_get_pubsub_message())
-    assert messages and (index is not None)
+        while (msg := client.try_get_pubsub_message()) is None:
+            if time.monotonic() > deadline:
+                raise TimeoutError("no pubsub message delivered")
+            time.sleep(DELIVERY_POLL_INTERVAL)
+        return decode_pubsub_msg(msg)
+    assert messages is not None and index is not None
+    while len(messages) <= index:
+        if time.monotonic() > deadline:
+            raise TimeoutError(
+                f"callback received {len(messages)} messages, need {index + 1}"
+            )
+        time.sleep(DELIVERY_POLL_INTERVAL)
     return decode_pubsub_msg(messages[index])
 
 
@@ -1211,18 +1230,7 @@ def sync_check_no_messages_left(
     Raises:
         AssertionError if there are unexpected messages
     """
-    import pytest
-
-    from tests.utils.utils import run_sync_func_with_timeout_in_thread
-
-    if method == MessageReadMethod.Async:
-        # assert there are no messages to read
-        with pytest.raises(TimeoutError):
-            run_sync_func_with_timeout_in_thread(
-                lambda: client.get_pubsub_message(),  # This blocks indefinitely
-                timeout=3.0,
-            )
-    elif method == MessageReadMethod.Sync:
+    if method in (MessageReadMethod.Async, MessageReadMethod.Sync):
         assert client.try_get_pubsub_message() is None
     else:
         assert callback is not None
