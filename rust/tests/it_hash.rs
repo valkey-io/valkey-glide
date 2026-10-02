@@ -435,17 +435,14 @@ matrix_test!(hset_ex, c, {
     assert_eq!(pet, vec![FUTURE_EXPIRY_MS as isize]);
 
     // HSETEX with KEEPTTL.
-    let before = c.hpttl(&k, "f").await.unwrap()[0]
-        .integer()
-        .expect("TTL set");
+    let before = c.hpttl(&k, "f").await.unwrap()[0].raw();
+    assert!(before > 0, "TTL set");
     let options = HashFieldExpirationOptions::default().set_expiration(SetExpiry::KEEPTTL);
     let res: bool = c.hset_ex(&k, &options, &[("f", "v7")]).await.unwrap();
     assert!(res);
     let v: Option<String> = c.hget(&k, "f").await.unwrap();
     assert_eq!(v.as_deref(), Some("v7"));
-    let after = c.hpttl(&k, "f").await.unwrap()[0]
-        .integer()
-        .expect("TTL retained");
+    let after = c.hpttl(&k, "f").await.unwrap()[0].raw();
     assert!((1..=before).contains(&after));
 
     // HSETEX with no expiry option.

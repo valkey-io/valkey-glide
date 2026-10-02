@@ -321,49 +321,118 @@ where
     items.into_iter().map(T::from_owned_valkey_value).collect()
 }
 
-/// Converts a `ValkeyValue` to a number.
-macro_rules! impl_from_valkey_num {
+// Integer decoding diverges from redis-rs.
+// See `migration.md#integer-decoding-is-strict`.
+macro_rules! decode_valkey_int {
+    ($t:ty, $value:expr) => {
+        match $value {
+            #[allow(clippy::unnecessary_fallible_conversions)]
+            ValkeyValue::Int(v) => <$t>::try_from(v).map_err(|_| {
+                to_glide_error(
+                    ValkeyValue::Int(v),
+                    concat!("Response integer out of range for ", stringify!($t), "."),
+                )
+            }),
+            // `$t::MAX as f64` may round up (e.g. to 2^64 for `u64`), so compare
+            // against the exclusive bound `MAX + 1`.
+            ValkeyValue::Double(v)
+                if v.is_finite()
+                    && v.fract() == 0.0
+                    && v >= <$t>::MIN as f64
+                    && v < <$t>::MAX as f64 + 1.0 =>
+            {
+                Ok(v as $t)
+            }
+            ValkeyValue::Double(v) => Err(to_glide_error(
+                ValkeyValue::Double(v),
+                concat!(
+                    "Response double is not an integer in range for ",
+                    stringify!($t),
+                    "."
+                ),
+            )),
+            ValkeyValue::SimpleString(s) => {
+                let parsed = s.parse::<$t>().ok();
+                parsed.ok_or_else(|| {
+                    to_glide_error(
+                        ValkeyValue::SimpleString(s),
+                        concat!("Could not convert string to ", stringify!($t), "."),
+                    )
+                })
+            }
+            ValkeyValue::BulkString(bytes) => {
+                let parsed = std::str::from_utf8(&bytes)
+                    .ok()
+                    .and_then(|s| s.parse::<$t>().ok());
+                parsed.ok_or_else(|| {
+                    to_glide_error(
+                        ValkeyValue::BulkString(bytes),
+                        concat!("Could not convert string to ", stringify!($t), "."),
+                    )
+                })
+            }
+            other => Err(to_glide_error(
+                other,
+                concat!("Response type not convertible to ", stringify!($t), "."),
+            )),
+        }
+    };
+}
+
+macro_rules! impl_from_valkey_int {
+    ($($t:ty),* $(,)?) => {$(
+        impl FromValkeyValue for $t {
+            fn from_owned_valkey_value(value: ValkeyValue) -> ValkeyResult<$t> {
+                decode_valkey_int!($t, value)
+            }
+        }
+    )*};
+}
+
+impl_from_valkey_int!(i8, i16, i32, i64, i128, u16, u32, u64, u128, isize, usize);
+
+macro_rules! impl_from_valkey_float {
     ($($t:ty),* $(,)?) => {$(
         impl FromValkeyValue for $t {
             fn from_owned_valkey_value(value: ValkeyValue) -> ValkeyResult<$t> {
                 match value {
                     ValkeyValue::Int(v) => Ok(v as $t),
                     ValkeyValue::Double(v) => Ok(v as $t),
-                    ValkeyValue::SimpleString(s) => s
-                        .parse::<$t>()
-                        .map_err(|_| GlideError::Request("Could not convert from string.".into())),
-                    ValkeyValue::BulkString(bytes) => std::str::from_utf8(&bytes)
-                        .ok()
-                        .and_then(|s| s.parse::<$t>().ok())
-                        .ok_or_else(|| GlideError::Request("Could not convert from string.".into())),
-                    other => Err(to_glide_error(other, "Response type not convertible to numeric.")),
+                    ValkeyValue::SimpleString(s) => {
+                        let parsed = s.parse::<$t>().ok();
+                        parsed.ok_or_else(|| {
+                            to_glide_error(
+                                ValkeyValue::SimpleString(s),
+                                concat!("Could not convert string to ", stringify!($t), "."),
+                            )
+                        })
+                    }
+                    ValkeyValue::BulkString(bytes) => {
+                        let parsed = std::str::from_utf8(&bytes)
+                            .ok()
+                            .and_then(|s| s.parse::<$t>().ok());
+                        parsed.ok_or_else(|| {
+                            to_glide_error(
+                                ValkeyValue::BulkString(bytes),
+                                concat!("Could not convert string to ", stringify!($t), "."),
+                            )
+                        })
+                    }
+                    other => Err(to_glide_error(
+                        other,
+                        concat!("Response type not convertible to ", stringify!($t), "."),
+                    )),
                 }
             }
         }
     )*};
 }
 
-impl_from_valkey_num!(
-    i8, i16, i32, i64, i128, u16, u32, u64, u128, f32, f64, isize, usize
-);
+impl_from_valkey_float!(f32, f64);
 
 impl FromValkeyValue for u8 {
     fn from_owned_valkey_value(value: ValkeyValue) -> ValkeyResult<u8> {
-        match value {
-            ValkeyValue::Int(v) => Ok(v as u8),
-            ValkeyValue::Double(v) => Ok(v as u8),
-            ValkeyValue::SimpleString(s) => s
-                .parse::<u8>()
-                .map_err(|_| GlideError::Request("Could not convert from string.".into())),
-            ValkeyValue::BulkString(bytes) => std::str::from_utf8(&bytes)
-                .ok()
-                .and_then(|s| s.parse::<u8>().ok())
-                .ok_or_else(|| GlideError::Request("Could not convert from string.".into())),
-            other => Err(to_glide_error(
-                other,
-                "Response type not convertible to numeric.",
-            )),
-        }
+        decode_valkey_int!(u8, value)
     }
 
     // Specialization that makes `Vec<u8>` consume raw bulk-string bytes directly.
@@ -664,19 +733,82 @@ mod from_valkey_value_tests {
     }
 
     #[test]
-    fn from_owned_valkey_value_numeric() {
-        let bulk_string_numeric = ValkeyValue::BulkString(Bytes::from_static(b"42"));
-        let simple_string_numeric = ValkeyValue::SimpleString("100".into());
-
+    fn from_owned_valkey_value_integer() {
+        // Integer.
         assert_eq!(decode::<i64>(INT), 7);
-        assert_eq!(decode::<i64>(DOUBLE), 1); // 1.5 truncates to 1
-        assert_eq!(decode::<i64>(bulk_string_numeric), 42);
-        assert_eq!(decode::<i64>(simple_string_numeric), 100);
         assert_eq!(decode::<u64>(INT), 7);
+        assert_eq!(decode::<u8>(ValkeyValue::Int(255)), 255);
+        assert_eq!(decode::<i128>(ValkeyValue::Int(i64::MIN)), i64::MIN as i128);
 
-        // Non-numeric input is a decode error.
+        // Out-of-range integer.
+        assert!(usize::from_owned_valkey_value(ValkeyValue::Int(-2)).is_err());
+        assert!(u8::from_owned_valkey_value(ValkeyValue::Int(300)).is_err());
+        assert!(i32::from_owned_valkey_value(ValkeyValue::Int(i64::MAX)).is_err());
+
+        // Double.
+        assert_eq!(decode::<i64>(ValkeyValue::Double(10.0)), 10);
+        assert_eq!(decode::<i8>(ValkeyValue::Double(-128.0)), i8::MIN);
+        assert_eq!(decode::<i8>(ValkeyValue::Double(127.0)), i8::MAX);
+
+        // Non-integral double.
+        assert!(i64::from_owned_valkey_value(DOUBLE).is_err());
+        assert!(isize::from_owned_valkey_value(ValkeyValue::Double(10.6)).is_err());
+
+        // Non-finite double.
+        assert!(i64::from_owned_valkey_value(ValkeyValue::Double(f64::NAN)).is_err());
+        assert!(i64::from_owned_valkey_value(ValkeyValue::Double(f64::INFINITY)).is_err());
+
+        // Out-of-range double.
+        assert!(i64::from_owned_valkey_value(ValkeyValue::Double(1e30)).is_err());
+        assert!(u64::from_owned_valkey_value(ValkeyValue::Double(-1.0)).is_err());
+        assert!(i8::from_owned_valkey_value(ValkeyValue::Double(128.0)).is_err());
+        assert!(u64::from_owned_valkey_value(ValkeyValue::Double(18446744073709551616.0)).is_err());
+
+        // Numeric string.
+        assert_eq!(
+            decode::<i64>(ValkeyValue::BulkString(Bytes::from_static(b"42"))),
+            42
+        );
+        assert_eq!(decode::<i64>(ValkeyValue::SimpleString("100".into())), 100);
+
+        // Non-numeric.
         assert!(i64::from_owned_valkey_value(OKAY).is_err());
         assert!(i64::from_owned_valkey_value(BULK).is_err());
+
+
+    }
+
+    #[test]
+    fn from_owned_valkey_value_double() {
+        let bulk = |s: &'static str| ValkeyValue::BulkString(Bytes::from_static(s.as_bytes()));
+
+        // Integer.
+        assert_eq!(decode::<f64>(INT), 7.0);
+        assert_eq!(
+            decode::<f64>(ValkeyValue::Int((1 << 53) + 1)),
+            9007199254740992.0
+        );
+
+        // Double.
+        assert_eq!(decode::<f64>(DOUBLE), 1.5);
+        assert_eq!(decode::<f32>(DOUBLE), 1.5);
+        assert_eq!(decode::<f32>(ValkeyValue::Double(1e300)), f32::INFINITY);
+
+        // Numeric string.
+        assert_eq!(decode::<f64>(bulk("4.25")), 4.25);
+        assert_eq!(
+            decode::<f64>(ValkeyValue::SimpleString("-2.5".into())),
+            -2.5
+        );
+        assert_eq!(decode::<f64>(bulk("inf")), f64::INFINITY);
+        assert!(decode::<f64>(bulk("nan")).is_nan());
+
+        // Non-numeric.
+        assert!(f64::from_owned_valkey_value(NIL).is_err());
+        assert!(f64::from_owned_valkey_value(OKAY).is_err());
+        assert!(f64::from_owned_valkey_value(BOOLEAN).is_err());
+        assert!(f64::from_owned_valkey_value(BULK).is_err());
+        assert!(f64::from_owned_valkey_value(simple()).is_err());
     }
 
     #[test]
