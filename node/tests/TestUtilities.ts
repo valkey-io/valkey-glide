@@ -1381,6 +1381,30 @@ export async function batchTest(
         ]);
     }
 
+    if (!cluster.checkIfServerVersionLessThan("9.1.0")) {
+        // HGETDEL tests - only run if server version is 9.1.0 or higher
+        // Use a fresh hash key so the test is independent of earlier commands on key4.
+        const hgetdelKey = decodeString("{key}" + getRandomKey(), decoder);
+        baseBatch.hset(hgetdelKey, {
+            [field.toString()]: value.toString(),
+            [field2.toString()]: value.toString(),
+        });
+        responseData.push(["hset(hgetdelKey, {field, field2})", 2]);
+
+        baseBatch.hgetdel(hgetdelKey, [field.toString(), field2.toString()]);
+        responseData.push([
+            "hgetdel(hgetdelKey, [field, field2])",
+            [value.toString(), value.toString()],
+        ]);
+
+        // Fields are now deleted (and the key removed), so a second call returns nulls
+        baseBatch.hgetdel(hgetdelKey, [field.toString(), field2.toString()]);
+        responseData.push([
+            "hgetdel(hgetdelKey, [field, field2])",
+            [null, null],
+        ]);
+    }
+
     baseBatch.lpush(key5, [field1, field2, field3, field4]);
     responseData.push(["lpush(key5, [1, 2, 3, 4])", 4]);
 
