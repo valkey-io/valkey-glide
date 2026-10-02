@@ -1,8 +1,9 @@
 [package]
 name = "glide-telemetry"
-version = "0.1.0"
+version = "0.1.1"
 description = "Telemetry for Valkey GLIDE. This crate isn't intended to be used directly."
 authors = ["Valkey GLIDE Maintainers"]
+repository = "https://github.com/valkey-io/valkey-glide"
 license = "Apache-2.0"
 
 # TODO #7175: Specify rust-version

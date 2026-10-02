@@ -17,6 +17,11 @@ concurrency:
 permissions:
     contents: read
 
+# Each crate has a test job and a publish job. Each publish job:
+# - Runs in the AWS_ACTIONS environment when publishing so that approval is required.
+# - Has `id-token: write`, which crates.io trusted publishing (OIDC) requires.
+# - Depends on the publish jobs of the crates it depends on.
+#
 # TODO #7261: Replace with `cargo publish --workspace`.
 jobs:
     validate-branch:
@@ -41,11 +46,9 @@ jobs:
     publish-glide-logger:
         needs: [test-glide-logger]
         runs-on: ubuntu-latest
-        # Only require approval (via AWS_ACTIONS) for publishing.
         environment: ${{ inputs.publish && 'AWS_ACTIONS' || '' }}
         permissions:
             contents: read
-            # Required for crates.io trusted publishing (OIDC).
             id-token: write
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -59,4 +62,31 @@ jobs:
               uses: ./.github/workflows/publish-rust-crate
               with:
                   crate: glide-logger
+                  publish: ${{ inputs.publish }}
+
+    # --- glide-telemetry crate -------------------------------------------------------------------
+
+    test-glide-telemetry:
+        needs: [validate-branch]
+        uses: ./.github/workflows/glide-telemetry.yml
+
+    publish-glide-telemetry:
+        needs: [test-glide-telemetry, publish-glide-logger]
+        runs-on: ubuntu-latest
+        environment: ${{ inputs.publish && 'AWS_ACTIONS' || '' }}
+        permissions:
+            contents: read
+            id-token: write
+        steps:
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+              with:
+                  persist-credentials: false
+
+            - name: Install Rust toolchain
+              uses: ./.github/actions/install-rust
+
+            - name: Publish glide-telemetry
+              uses: ./.github/workflows/publish-rust-crate
+              with:
+                  crate: glide-telemetry
                   publish: ${{ inputs.publish }}
