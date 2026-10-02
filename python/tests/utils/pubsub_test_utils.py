@@ -1193,10 +1193,10 @@ def sync_get_message_by_method(
     """
     import time
 
-    deadline = time.monotonic() + MESSAGE_DELIVERY_TIMEOUT
     if method == MessageReadMethod.Async:
         return decode_pubsub_msg(client.get_pubsub_message())
-    elif method == MessageReadMethod.Sync:
+    deadline = time.monotonic() + MESSAGE_DELIVERY_TIMEOUT
+    if method == MessageReadMethod.Sync:
         while (msg := client.try_get_pubsub_message()) is None:
             if time.monotonic() > deadline:
                 raise TimeoutError("no pubsub message delivered")
