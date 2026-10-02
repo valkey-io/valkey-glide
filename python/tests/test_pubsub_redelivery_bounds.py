@@ -31,20 +31,59 @@ def _msg(message: str = MESSAGE, channel: str = CHANNEL) -> PubSubMsg:
     return PubSubMsg(message=message, channel=channel, pattern=None)
 
 
-class _FakeListener:
-    """Holds scheduled deliveries and releases them once their time has come."""
+class _FakeClock:
+    """A clock that only moves when the code under test sleeps.
 
-    def __init__(self, method: MessageReadMethod, callback_messages: List[PubSubMsg]):
+    Deliveries scheduled against it are released by ``sleep``, so the order of
+    polls, re-publishes and deliveries is fixed by the test's numbers alone and
+    cannot be reshuffled by a stalled host.
+    """
+
+    def __init__(self) -> None:
+        self._now = 0.0
+        self._listeners: List["_FakeListener"] = []
+
+    def time(self) -> float:
+        return self._now
+
+    def sleep(self, seconds: float) -> None:
+        self._now += seconds
+        for listener in self._listeners:
+            listener._release()
+
+    def attach(self, listener: "_FakeListener") -> None:
+        self._listeners.append(listener)
+
+
+class _FakeListener:
+    """Holds scheduled deliveries and releases them once their time has come.
+
+    Without a ``clock`` it runs on wall time: queue reads release due
+    deliveries, and callback deliveries fire from a timer thread the way a real
+    client's callback does. With a ``clock`` both read methods are released by
+    the clock instead.
+    """
+
+    def __init__(
+        self,
+        method: MessageReadMethod,
+        callback_messages: List[PubSubMsg],
+        clock: Optional[_FakeClock] = None,
+    ):
         self._method = method
         self._callback_messages = callback_messages
+        self._clock = clock
         self._scheduled: List[Tuple[float, PubSubMsg]] = []
         self._queue: List[PubSubMsg] = []
         self._timers: List[threading.Timer] = []
+        if clock is not None:
+            clock.attach(self)
+
+    def _now(self) -> float:
+        return self._clock.time() if self._clock is not None else time.time()
 
     def deliver(self, msg: PubSubMsg, delay: float = 0.0) -> None:
-        if self._method == MessageReadMethod.Callback:
-            # Real callbacks run on the client's own thread, so a delayed copy
-            # shows up in the list without the test reading anything.
+        if self._method == MessageReadMethod.Callback and self._clock is None:
             if delay <= 0:
                 self._callback_messages.append(msg)
             else:
@@ -52,13 +91,17 @@ class _FakeListener:
                 self._timers.append(timer)
                 timer.start()
             return
-        self._scheduled.append((time.time() + delay, msg))
+        self._scheduled.append((self._now() + delay, msg))
         self._release()
 
     def _release(self) -> None:
-        now = time.time()
-        self._queue.extend(m for at, m in self._scheduled if at <= now)
+        now = self._now()
+        due = [m for at, m in self._scheduled if at <= now]
         self._scheduled = [(at, m) for at, m in self._scheduled if at > now]
+        if self._method == MessageReadMethod.Callback:
+            self._callback_messages.extend(due)
+        else:
+            self._queue.extend(due)
 
     def try_get_pubsub_message(self) -> Optional[PubSubMsg]:
         self._release()
@@ -157,8 +200,9 @@ def test_tail_check_waits_for_a_late_copy(method):
 
 
 def _fan_out(method, lag, copies_per_publish, channels):
+    clock = _FakeClock()
     callback_messages: List[PubSubMsg] = []
-    listener = _FakeListener(method, callback_messages)
+    listener = _FakeListener(method, callback_messages, clock)
     publisher = _FakePublisher(listener, lag, copies_per_publish)
     result = _publish_until_all_received(
         publisher,
@@ -170,6 +214,8 @@ def _fan_out(method, lag, copies_per_publish, channels):
         deadline_sec=5.0,
         poll_timeout=0.3,
         poll_interval=0.02,
+        now=clock.time,
+        sleep=clock.sleep,
     )
     return result, listener
 
@@ -187,12 +233,9 @@ def test_fan_out_publishes_each_channel_once_when_delivery_beats_the_poll(method
 @pytest.mark.parametrize("method", READ_METHODS)
 def test_fan_out_accepts_a_delayed_copy_per_republish(method):
     # Delivery slower than the poll window forces a re-publish; both copies
-    # land, and each is explained by its own PUBLISH. The re-publish fires on
-    # the first poll after poll_timeout (0.3s), so the lag must exceed that by
-    # more than any stall a loaded host can insert between two polls, or the
-    # delivery lands first and nothing is re-published.
+    # land, and each is explained by its own PUBLISH.
     channels = {f"ch{i}" for i in range(4)}
-    (received, copies, publishes), _ = _fan_out(method, 1.0, 1, channels)
+    (received, copies, publishes), _ = _fan_out(method, 0.4, 1, channels)
     assert received == channels
     assert all(copies[ch] <= publishes[ch] for ch in channels)
     assert any(publishes[ch] >= 2 for ch in channels)
