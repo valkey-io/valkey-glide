@@ -2372,7 +2372,7 @@ dependencies = [
  "glide-core-engine",
  "glide-logger",
  "itoa",
- "rand 0.8.8",
+ "rand 0.10.3",
  "serde_json",
  "tikv-jemallocator",
  "tokio",
