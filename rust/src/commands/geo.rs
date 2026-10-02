@@ -1,52 +1,94 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
-//! Geospatial commands. Mirrors Python's geo command surface.
+//! Geospatial types and commands.
+
 #![allow(clippy::too_many_arguments)]
 
+use crate::GlideError;
 use crate::ValkeyResult;
 use crate::cmd::Cmd;
-use crate::commands::options::{ConditionalChange, OrderBy};
+use crate::commands::options::{ExistenceCheck, OrderBy};
 use crate::executor::CommandExecutor;
 use crate::value::FromValkeyValue;
 use crate::value::ValkeyValue;
+use crate::value::to_glide_error;
+use crate::write::ToSingleValkeyArg;
 use crate::write::ToValkeyArgs;
+use crate::write::ValkeyWrite;
 use async_trait::async_trait;
 use bytes::Bytes;
 
-/// Distance unit for geo commands.
+/// Distance unit for the geo commands.
 ///
-/// Mirrors Python `GeoUnit`.
+/// Mirrors redis-rs's `geo::Unit` type.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GeoUnit {
-    /// Meters.
+    /// Meters (`m`).
     Meters,
-    /// Kilometers.
+    /// Kilometers (`km`).
     Kilometers,
-    /// Miles.
+    /// Miles (`mi`).
     Miles,
-    /// Feet.
+    /// Feet (`ft`).
     Feet,
 }
 
-impl GeoUnit {
-    fn as_arg(&self) -> &'static str {
-        match self {
-            GeoUnit::Meters => "m",
-            GeoUnit::Kilometers => "km",
-            GeoUnit::Miles => "mi",
-            GeoUnit::Feet => "ft",
+impl ToValkeyArgs for GeoUnit {
+    fn write_valkey_args<W: ?Sized + ValkeyWrite>(&self, out: &mut W) {
+        out.write_arg(match self {
+            GeoUnit::Meters => b"m".as_slice(),
+            GeoUnit::Kilometers => b"km".as_slice(),
+            GeoUnit::Miles => b"mi".as_slice(),
+            GeoUnit::Feet => b"ft".as_slice(),
+        });
+    }
+}
+
+impl ToSingleValkeyArg for GeoUnit {}
+
+/// A longitude/latitude coordinate.
+///
+/// Mirrors redis-rs's `geo::Coord` type.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GeoCoord<T> {
+    /// Longitude.
+    pub longitude: T,
+    /// Latitude.
+    pub latitude: T,
+}
+
+impl<T> GeoCoord<T> {
+    /// Create a coordinate from a longitude and a latitude.
+    pub fn lon_lat(longitude: T, latitude: T) -> Self {
+        Self {
+            longitude,
+            latitude,
         }
     }
 }
 
-/// A longitude/latitude pair.
-///
-/// Mirrors Python `GeospatialData`.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct GeospatialData {
-    /// Longitude.
-    pub longitude: f64,
-    /// Latitude.
-    pub latitude: f64,
+impl<T: ToValkeyArgs> ToValkeyArgs for GeoCoord<T> {
+    fn write_valkey_args<W: ?Sized + ValkeyWrite>(&self, out: &mut W) {
+        self.longitude.write_valkey_args(out);
+        self.latitude.write_valkey_args(out);
+    }
+}
+
+impl<T: FromValkeyValue> FromValkeyValue for GeoCoord<T> {
+    fn from_owned_valkey_value(value: ValkeyValue) -> ValkeyResult<Self> {
+        match value {
+            ValkeyValue::Array(items) if items.len() == 2 => {
+                let mut items = items.into_iter();
+                let (Some(longitude), Some(latitude)) = (items.next(), items.next()) else {
+                    unreachable!("checked length");
+                };
+                Ok(Self {
+                    longitude: T::from_owned_valkey_value(longitude)?,
+                    latitude: T::from_owned_valkey_value(latitude)?,
+                })
+            }
+            other => Err(to_glide_error(other, "Expected a pair of numbers.")),
+        }
+    }
 }
 
 /// The search area shape for `GEOSEARCH`/`GEOSEARCHSTORE`.
@@ -72,107 +114,31 @@ pub enum GeoSearchShape {
     },
 }
 
-impl GeoSearchShape {
-    fn add_to(&self, cmd: &mut Cmd) {
+impl ToValkeyArgs for GeoSearchShape {
+    fn write_valkey_args<W: ?Sized + ValkeyWrite>(&self, out: &mut W) {
         match self {
             GeoSearchShape::ByRadius { radius, unit } => {
-                cmd.arg("BYRADIUS").arg(radius).arg(unit.as_arg());
+                out.write_arg(b"BYRADIUS");
+                radius.write_valkey_args(out);
+                unit.write_valkey_args(out);
             }
             GeoSearchShape::ByBox {
                 width,
                 height,
                 unit,
             } => {
-                cmd.arg("BYBOX").arg(width).arg(height).arg(unit.as_arg());
+                out.write_arg(b"BYBOX");
+                width.write_valkey_args(out);
+                height.write_valkey_args(out);
+                unit.write_valkey_args(out);
             }
         }
     }
 }
 
-/// Geospatial commands (`GEOADD`, `GEOPOS`, `GEODIST`, `GEOHASH`, `GEOSEARCH`).
+/// Geospatial commands.
 #[async_trait]
 pub trait GeoCommands: CommandExecutor {
-    /// Add geospatial members to `key` (`GEOADD`); returns members added.
-    async fn geoadd<K: ToValkeyArgs + Send, M: ToValkeyArgs + Send + Sync>(
-        &self,
-        key: K,
-        members_positions: &[(M, GeospatialData)],
-    ) -> ValkeyResult<i64> {
-        let mut cmd = Cmd::new();
-        cmd.arg("GEOADD").arg(key);
-        for (m, pos) in members_positions {
-            cmd.arg(pos.longitude).arg(pos.latitude).arg(m);
-        }
-        i64::from_owned_valkey_value(self.execute_command(cmd, None).await?)
-    }
-
-    /// Get the distance between two members (`GEODIST`).
-    async fn geodist<K: ToValkeyArgs + Send, M1: ToValkeyArgs + Send, M2: ToValkeyArgs + Send>(
-        &self,
-        key: K,
-        member1: M1,
-        member2: M2,
-        unit: Option<GeoUnit>,
-    ) -> ValkeyResult<Option<f64>> {
-        let mut cmd = Cmd::new();
-        cmd.arg("GEODIST").arg(key).arg(member1).arg(member2);
-        if let Some(u) = unit {
-            cmd.arg(u.as_arg());
-        }
-        Option::<f64>::from_owned_valkey_value(self.execute_command(cmd, None).await?)
-    }
-
-    /// Get the geohash strings of members (`GEOHASH`).
-    async fn geohash<K: ToValkeyArgs + Send, M: ToValkeyArgs + Send + Sync>(
-        &self,
-        key: K,
-        members: &[M],
-    ) -> ValkeyResult<Vec<Option<Bytes>>> {
-        let mut cmd = Cmd::new();
-        cmd.arg("GEOHASH").arg(key);
-        for m in members {
-            cmd.arg(m);
-        }
-        match self.execute_command(cmd, None).await? {
-            ValkeyValue::Array(items) => items
-                .into_iter()
-                .map(Option::<Bytes>::from_owned_valkey_value)
-                .collect(),
-            other => Ok(vec![Option::<Bytes>::from_owned_valkey_value(other)?]),
-        }
-    }
-
-    /// Get the positions (longitude, latitude) of members (`GEOPOS`).
-    async fn geopos<K: ToValkeyArgs + Send, M: ToValkeyArgs + Send + Sync>(
-        &self,
-        key: K,
-        members: &[M],
-    ) -> ValkeyResult<Vec<Option<(f64, f64)>>> {
-        let mut cmd = Cmd::new();
-        cmd.arg("GEOPOS").arg(key);
-        for m in members {
-            cmd.arg(m);
-        }
-        match self.execute_command(cmd, None).await? {
-            ValkeyValue::Array(items) => {
-                let mut out = Vec::with_capacity(items.len());
-                for it in items {
-                    match it {
-                        ValkeyValue::Nil => out.push(None),
-                        ValkeyValue::Array(mut pair) if pair.len() == 2 => {
-                            let lat = f64::from_owned_valkey_value(pair.pop().unwrap())?;
-                            let lon = f64::from_owned_valkey_value(pair.pop().unwrap())?;
-                            out.push(Some((lon, lat)));
-                        }
-                        _ => out.push(None),
-                    }
-                }
-                Ok(out)
-            }
-            _ => Ok(Vec::new()),
-        }
-    }
-
     /// Search a geospatial index by radius from a member (`GEOSEARCH ... FROMMEMBER ... BYRADIUS`).
     async fn geosearch_by_radius_from_member<K: ToValkeyArgs + Send, M: ToValkeyArgs + Send>(
         &self,
@@ -188,7 +154,7 @@ pub trait GeoCommands: CommandExecutor {
             .arg(member)
             .arg("BYRADIUS")
             .arg(radius)
-            .arg(unit.as_arg());
+            .arg(unit);
         match self.execute_command(cmd, None).await? {
             ValkeyValue::Array(items) => items
                 .into_iter()
@@ -204,66 +170,63 @@ pub trait GeoCommands: CommandExecutor {
     async fn geoadd_options<K: ToValkeyArgs + Send, M: ToValkeyArgs + Send + Sync>(
         &self,
         key: K,
-        members_positions: &[(M, GeospatialData)],
-        conditional_change: Option<ConditionalChange>,
+        members: M,
+        existence_check: Option<ExistenceCheck>,
         changed: bool,
     ) -> ValkeyResult<i64> {
         let mut cmd = Cmd::new();
         cmd.arg("GEOADD").arg(key);
-        if let Some(c) = conditional_change {
-            c.add_to(&mut cmd);
+        if let Some(c) = existence_check {
+            cmd.arg(c);
         }
         if changed {
             cmd.arg("CH");
         }
-        for (m, pos) in members_positions {
-            cmd.arg(pos.longitude).arg(pos.latitude).arg(m);
-        }
+        cmd.arg(members);
         i64::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
-    /// Search a geospatial index from a member with a given shape (`GEOSEARCH
-    /// ... FROMMEMBER ... BYRADIUS|BYBOX`). Returns matching member names.
+    /// Search a geospatial index from a member with a given shape.
+    /// Returns the matching members.
     async fn geosearch_from_member<K: ToValkeyArgs + Send, M: ToValkeyArgs + Send>(
         &self,
         key: K,
         member: M,
         shape: GeoSearchShape,
-        order: Option<OrderBy>,
-        count: Option<i64>,
-        any: bool,
-    ) -> ValkeyResult<Vec<Bytes>> {
+        options: GeoSearchOptions,
+    ) -> ValkeyResult<Vec<GeoSearchResult>> {
         let mut cmd = Cmd::new();
-        cmd.arg("GEOSEARCH").arg(key).arg("FROMMEMBER").arg(member);
-        shape.add_to(&mut cmd);
-        add_search_tail(&mut cmd, order, count, any);
-        collect_bytes(self.execute_command(cmd, None).await?)
+        cmd.arg("GEOSEARCH")
+            .arg(key)
+            .arg("FROMMEMBER")
+            .arg(member)
+            .arg(shape)
+            .arg(options);
+        Vec::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
-    /// Search a geospatial index from a coordinate with a given shape
-    /// (`GEOSEARCH ... FROMLONLAT ... BYRADIUS|BYBOX`).
+    /// Search a geospatial index from a coordinate with a given shape.
+    /// Returns the matching members.
     async fn geosearch_from_coord<K: ToValkeyArgs + Send>(
         &self,
         key: K,
-        coord: GeospatialData,
+        coord: GeoCoord<f64>,
         shape: GeoSearchShape,
-        order: Option<OrderBy>,
-        count: Option<i64>,
-        any: bool,
-    ) -> ValkeyResult<Vec<Bytes>> {
+        options: GeoSearchOptions,
+    ) -> ValkeyResult<Vec<GeoSearchResult>> {
         let mut cmd = Cmd::new();
         cmd.arg("GEOSEARCH")
             .arg(key)
             .arg("FROMLONLAT")
             .arg(coord.longitude)
-            .arg(coord.latitude);
-        shape.add_to(&mut cmd);
-        add_search_tail(&mut cmd, order, count, any);
-        collect_bytes(self.execute_command(cmd, None).await?)
+            .arg(coord.latitude)
+            .arg(shape)
+            .arg(options);
+        Vec::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
-    /// Search from a member and store the results into `destination`
-    /// (`GEOSEARCHSTORE ... FROMMEMBER`). Returns the number stored.
+    /// Search from a member and store the results into `destination`.
+    /// Returns the number of members stored.
     async fn geosearchstore_from_member<
         D: ToValkeyArgs + Send,
         S: ToValkeyArgs + Send,
@@ -274,37 +237,28 @@ pub trait GeoCommands: CommandExecutor {
         source: S,
         member: M,
         shape: GeoSearchShape,
-        order: Option<OrderBy>,
-        count: Option<i64>,
-        any: bool,
-        store_dist: bool,
+        options: GeoSearchStoreOptions,
     ) -> ValkeyResult<i64> {
         let mut cmd = Cmd::new();
         cmd.arg("GEOSEARCHSTORE")
             .arg(destination)
             .arg(source)
             .arg("FROMMEMBER")
-            .arg(member);
-        shape.add_to(&mut cmd);
-        add_search_tail(&mut cmd, order, count, any);
-        if store_dist {
-            cmd.arg("STOREDIST");
-        }
+            .arg(member)
+            .arg(shape)
+            .arg(options);
         i64::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
-    /// Search from a coordinate and store the results into `destination`
-    /// (`GEOSEARCHSTORE ... FROMLONLAT`).
+    /// Search from a coordinate and store the results into `destination`.
+    /// Returns the number of members stored.
     async fn geosearchstore_from_coord<D: ToValkeyArgs + Send, S: ToValkeyArgs + Send>(
         &self,
         destination: D,
         source: S,
-        coord: GeospatialData,
+        coord: GeoCoord<f64>,
         shape: GeoSearchShape,
-        order: Option<OrderBy>,
-        count: Option<i64>,
-        any: bool,
-        store_dist: bool,
+        options: GeoSearchStoreOptions,
     ) -> ValkeyResult<i64> {
         let mut cmd = Cmd::new();
         cmd.arg("GEOSEARCHSTORE")
@@ -312,37 +266,149 @@ pub trait GeoCommands: CommandExecutor {
             .arg(source)
             .arg("FROMLONLAT")
             .arg(coord.longitude)
-            .arg(coord.latitude);
-        shape.add_to(&mut cmd);
-        add_search_tail(&mut cmd, order, count, any);
-        if store_dist {
-            cmd.arg("STOREDIST");
-        }
+            .arg(coord.latitude)
+            .arg(shape)
+            .arg(options);
         i64::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 }
 
-/// Append the common `[ASC|DESC] [COUNT count [ANY]]` tail to a geo search.
-fn add_search_tail(cmd: &mut Cmd, order: Option<OrderBy>, count: Option<i64>, any: bool) {
-    if let Some(o) = order {
-        cmd.arg(o.as_arg());
-    }
-    if let Some(c) = count {
-        cmd.arg("COUNT").arg(c);
-        if any {
-            cmd.arg("ANY");
+/// Options for `GEOSEARCH`.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct GeoSearchOptions {
+    /// The sort order for results, or `None` for the server default (`ASC`/`DESC`).
+    pub order: Option<OrderBy>,
+    /// The maximum number of results to return, or `None` for no limit (`COUNT`).
+    pub count: Option<i64>,
+    /// Whether to allow non-closest results (`ANY`). Requires `count`.
+    pub any: bool,
+    /// Whether to include each member's position (`WITHCOORD`).
+    pub with_position: bool,
+    /// Whether to include each member's distance from the search origin (`WITHDIST`).
+    pub with_distance: bool,
+    /// Whether to include each member's geohash (`WITHHASH`).
+    pub with_hash: bool,
+}
+
+impl ToValkeyArgs for GeoSearchOptions {
+    fn write_valkey_args<W: ?Sized + ValkeyWrite>(&self, out: &mut W) {
+        write_order_count_any(out, self.order, self.count, self.any);
+        if self.with_position {
+            out.write_arg(b"WITHCOORD");
+        }
+        if self.with_distance {
+            out.write_arg(b"WITHDIST");
+        }
+        if self.with_hash {
+            out.write_arg(b"WITHHASH");
         }
     }
 }
 
-fn collect_bytes(v: ValkeyValue) -> ValkeyResult<Vec<Bytes>> {
-    match v {
-        ValkeyValue::Array(items) => items
-            .into_iter()
-            .map(Bytes::from_owned_valkey_value)
-            .collect(),
-        ValkeyValue::Nil => Ok(Vec::new()),
-        other => Ok(vec![Bytes::from_owned_valkey_value(other)?]),
+/// A matching member from a `GEOSEARCH` command.
+#[derive(Debug, Clone, PartialEq)]
+pub struct GeoSearchResult {
+    /// The member name.
+    pub member: Bytes,
+    /// The member's position (`WITHCOORD`).
+    pub position: Option<GeoCoord<f64>>,
+    /// The member's distance from the search origin, in the shape's unit (`WITHDIST`).
+    pub distance: Option<f64>,
+    /// The member's geohash (`WITHHASH`).
+    pub hash: Option<i64>,
+}
+
+impl FromValkeyValue for GeoSearchResult {
+    fn from_owned_valkey_value(value: ValkeyValue) -> ValkeyResult<Self> {
+        // Without `WITH*` flags, each result is a member name.
+        if let ValkeyValue::BulkString(member) = value {
+            return Ok(Self {
+                member,
+                position: None,
+                distance: None,
+                hash: None,
+            });
+        }
+
+        let ValkeyValue::Array(items) = value else {
+            return Err(to_glide_error(value, "Unexpected GEOSEARCH result."));
+        };
+
+        // With `WITH*` flags, each result is a `[member, [distance?, hash?, position?]]` array.
+        if items.len() != 2 {
+            return Err(to_glide_error(
+                ValkeyValue::Array(items),
+                "Unexpected GEOSEARCH result.",
+            ));
+        }
+        let mut items = items.into_iter();
+        let (Some(member), Some(ValkeyValue::Array(extras))) = (items.next(), items.next()) else {
+            return Err(GlideError::Request("Unexpected GEOSEARCH result.".into()));
+        };
+
+        let mut result = Self {
+            member: Bytes::from_owned_valkey_value(member)?,
+            position: None,
+            distance: None,
+            hash: None,
+        };
+
+        // The extras have distinct reply types:
+        //  - distance is a double
+        //  - hash is an integer
+        //  - position is an array
+        for extra in extras {
+            match extra {
+                ValkeyValue::Int(hash) => result.hash = Some(hash),
+                ValkeyValue::Array(_) => {
+                    result.position = Some(GeoCoord::from_owned_valkey_value(extra)?)
+                }
+                distance => result.distance = Some(f64::from_owned_valkey_value(distance)?),
+            }
+        }
+
+        Ok(result)
+    }
+}
+
+/// Options for `GEOSEARCHSTORE`.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct GeoSearchStoreOptions {
+    /// The sort order for results, or `None` for the server default (`ASC`/`DESC`).
+    pub order: Option<OrderBy>,
+    /// The maximum number of results to store, or `None` for no limit (`COUNT`).
+    pub count: Option<i64>,
+    /// Whether to allow non-closest results (`ANY`). Requires `count`.
+    pub any: bool,
+    /// Whether to store distances as scores instead of geohash values (`STOREDIST`).
+    pub store_dist: bool,
+}
+
+impl ToValkeyArgs for GeoSearchStoreOptions {
+    fn write_valkey_args<W: ?Sized + ValkeyWrite>(&self, out: &mut W) {
+        write_order_count_any(out, self.order, self.count, self.any);
+        if self.store_dist {
+            out.write_arg(b"STOREDIST");
+        }
+    }
+}
+
+/// Writes the `[ASC|DESC] [COUNT count [ANY]]` arguments shared by the geo search options.
+fn write_order_count_any<W: ?Sized + ValkeyWrite>(
+    out: &mut W,
+    order: Option<OrderBy>,
+    count: Option<i64>,
+    any: bool,
+) {
+    if let Some(order) = order {
+        out.write_arg(order.as_arg().as_bytes());
+    }
+    if let Some(count) = count {
+        out.write_arg(b"COUNT");
+        out.write_arg_fmt(count);
+    }
+    if any {
+        out.write_arg(b"ANY");
     }
 }
 
@@ -351,49 +417,161 @@ impl<T: CommandExecutor + ?Sized> GeoCommands for T {}
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_utils::assert_args;
+    use crate::test_utils::assert_args_empty;
 
-    fn args_of(cmd: &Cmd) -> Vec<String> {
-        cmd.as_redis()
-            .args_iter()
-            .filter_map(|a| match a {
-                redis::Arg::Simple(bytes) => Some(String::from_utf8_lossy(bytes).into_owned()),
-                redis::Arg::Cursor => None,
-            })
-            .collect()
+    #[test]
+    fn unit_args() {
+        assert_args(GeoUnit::Meters, &["m"]);
+        assert_args(GeoUnit::Kilometers, &["km"]);
+        assert_args(GeoUnit::Miles, &["mi"]);
+        assert_args(GeoUnit::Feet, &["ft"]);
     }
 
     #[test]
-    fn geo_unit_args() {
-        assert_eq!(GeoUnit::Meters.as_arg(), "m");
-        assert_eq!(GeoUnit::Kilometers.as_arg(), "km");
-        assert_eq!(GeoUnit::Miles.as_arg(), "mi");
-        assert_eq!(GeoUnit::Feet.as_arg(), "ft");
+    fn coord_args() {
+        assert_args(GeoCoord::lon_lat(13.5, 38.5), &["13.5", "38.5"]);
     }
 
     #[test]
     fn geosearch_shape_args() {
-        let mut cmd = Cmd::new();
-        GeoSearchShape::ByRadius {
-            radius: 5.0,
-            unit: GeoUnit::Kilometers,
-        }
-        .add_to(&mut cmd);
-        assert_eq!(args_of(&cmd), vec!["BYRADIUS", "5.0", "km"]);
-
-        let mut cmd = Cmd::new();
-        GeoSearchShape::ByBox {
-            width: 2.0,
-            height: 3.0,
-            unit: GeoUnit::Meters,
-        }
-        .add_to(&mut cmd);
-        assert_eq!(args_of(&cmd), vec!["BYBOX", "2.0", "3.0", "m"]);
+        assert_args(
+            GeoSearchShape::ByRadius {
+                radius: 5.0,
+                unit: GeoUnit::Kilometers,
+            },
+            &["BYRADIUS", "5.0", "km"],
+        );
+        assert_args(
+            GeoSearchShape::ByBox {
+                width: 2.0,
+                height: 3.0,
+                unit: GeoUnit::Meters,
+            },
+            &["BYBOX", "2.0", "3.0", "m"],
+        );
     }
 
     #[test]
-    fn search_tail_args() {
-        let mut cmd = Cmd::new();
-        add_search_tail(&mut cmd, Some(OrderBy::Asc), Some(10), true);
-        assert_eq!(args_of(&cmd), vec!["ASC", "COUNT", "10", "ANY"]);
+    fn geosearch_options_args() {
+        assert_args_empty(GeoSearchOptions::default());
+        assert_args(
+            GeoSearchOptions {
+                order: Some(OrderBy::Asc),
+                count: Some(10),
+                any: true,
+                ..Default::default()
+            },
+            &["ASC", "COUNT", "10", "ANY"],
+        );
+        assert_args(
+            GeoSearchOptions {
+                order: Some(OrderBy::Desc),
+                count: Some(5),
+                with_position: true,
+                with_distance: true,
+                with_hash: true,
+                ..Default::default()
+            },
+            &["DESC", "COUNT", "5", "WITHCOORD", "WITHDIST", "WITHHASH"],
+        );
+    }
+
+    #[test]
+    fn geosearchstore_options_args() {
+        assert_args_empty(GeoSearchStoreOptions::default());
+        assert_args(
+            GeoSearchStoreOptions {
+                order: Some(OrderBy::Desc),
+                count: Some(3),
+                any: true,
+                store_dist: true,
+            },
+            &["DESC", "COUNT", "3", "ANY", "STOREDIST"],
+        );
+    }
+
+    #[test]
+    fn coord_decoding() {
+        let pos = ValkeyValue::Array(vec![
+            ValkeyValue::BulkString(b"13.5".to_vec().into()),
+            ValkeyValue::BulkString(b"38.5".to_vec().into()),
+        ]);
+        assert_eq!(
+            GeoCoord::<f64>::from_owned_valkey_value(pos.clone()).unwrap(),
+            GeoCoord::lon_lat(13.5, 38.5)
+        );
+        assert_eq!(
+            GeoCoord::<String>::from_owned_valkey_value(pos).unwrap(),
+            GeoCoord::lon_lat("13.5".to_string(), "38.5".to_string())
+        );
+        assert!(
+            GeoCoord::<f64>::from_owned_valkey_value(ValkeyValue::Array(vec![ValkeyValue::Int(1)]))
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn geosearch_result_decoding() {
+        let bulk = |s: &str| ValkeyValue::BulkString(s.as_bytes().to_vec().into());
+        let member = |name: &str| GeoSearchResult {
+            member: Bytes::from(name.to_string()),
+            position: None,
+            distance: None,
+            hash: None,
+        };
+
+        assert_eq!(
+            GeoSearchResult::from_owned_valkey_value(bulk("Palermo")).unwrap(),
+            member("Palermo")
+        );
+
+        let all = ValkeyValue::Array(vec![
+            bulk("Palermo"),
+            ValkeyValue::Array(vec![
+                ValkeyValue::Double(190.4424),
+                ValkeyValue::Int(3479099956230698),
+                ValkeyValue::Array(vec![ValkeyValue::Double(13.5), ValkeyValue::Double(38.5)]),
+            ]),
+        ]);
+        assert_eq!(
+            GeoSearchResult::from_owned_valkey_value(all).unwrap(),
+            GeoSearchResult {
+                position: Some(GeoCoord::lon_lat(13.5, 38.5)),
+                distance: Some(190.4424),
+                hash: Some(3479099956230698),
+                ..member("Palermo")
+            }
+        );
+
+        let hash_only = ValkeyValue::Array(vec![
+            bulk("Catania"),
+            ValkeyValue::Array(vec![ValkeyValue::Int(42)]),
+        ]);
+        assert_eq!(
+            GeoSearchResult::from_owned_valkey_value(hash_only).unwrap(),
+            GeoSearchResult {
+                hash: Some(42),
+                ..member("Catania")
+            }
+        );
+
+        assert!(GeoSearchResult::from_owned_valkey_value(ValkeyValue::Int(1)).is_err());
+        assert!(GeoSearchResult::from_owned_valkey_value(ValkeyValue::Array(vec![])).is_err());
+        assert!(
+            GeoSearchResult::from_owned_valkey_value(ValkeyValue::Array(vec![
+                bulk("Palermo"),
+                ValkeyValue::Array(vec![]),
+                ValkeyValue::Int(1),
+            ]))
+            .is_err()
+        );
+        assert!(
+            GeoSearchResult::from_owned_valkey_value(ValkeyValue::Array(vec![
+                bulk("Palermo"),
+                ValkeyValue::Int(1),
+            ]))
+            .is_err()
+        );
     }
 }

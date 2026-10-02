@@ -7,7 +7,9 @@ use crate::cmd::Cmd;
 use crate::executor::CommandExecutor;
 use crate::value::FromValkeyValue;
 use crate::value::ValkeyValue;
+use crate::value::to_glide_error;
 use crate::write::ToValkeyArgs;
+use crate::write::ValkeyWrite;
 use async_trait::async_trait;
 use bytes::Bytes;
 
@@ -55,16 +57,19 @@ impl StreamTrimOptions {
             limit,
         }
     }
+}
 
-    pub(crate) fn add_to(&self, cmd: &mut Cmd) {
-        match self.strategy {
-            StreamTrimStrategy::MaxLen => cmd.arg("MAXLEN"),
-            StreamTrimStrategy::MinId => cmd.arg("MINID"),
-        };
-        cmd.arg(if self.exact { "=" } else { "~" });
-        cmd.arg(&self.threshold);
-        if let Some(l) = self.limit {
-            cmd.arg("LIMIT").arg(l);
+impl ToValkeyArgs for StreamTrimOptions {
+    fn write_valkey_args<W: ?Sized + ValkeyWrite>(&self, out: &mut W) {
+        out.write_arg(match self.strategy {
+            StreamTrimStrategy::MaxLen => b"MAXLEN".as_slice(),
+            StreamTrimStrategy::MinId => b"MINID".as_slice(),
+        });
+        out.write_arg(if self.exact { b"=" } else { b"~" });
+        out.write_arg(self.threshold.as_bytes());
+        if let Some(limit) = self.limit {
+            out.write_arg(b"LIMIT");
+            out.write_arg_fmt(limit);
         }
     }
 }
@@ -89,14 +94,12 @@ impl Default for StreamAddOptions {
     }
 }
 
-impl StreamAddOptions {
-    pub(crate) fn add_to(&self, cmd: &mut Cmd) {
+impl ToValkeyArgs for StreamAddOptions {
+    fn write_valkey_args<W: ?Sized + ValkeyWrite>(&self, out: &mut W) {
         if !self.make_stream {
-            cmd.arg("NOMKSTREAM");
+            out.write_arg(b"NOMKSTREAM");
         }
-        if let Some(t) = &self.trim {
-            t.add_to(cmd);
-        }
+        self.trim.write_valkey_args(out);
     }
 }
 
@@ -111,13 +114,15 @@ pub struct StreamReadOptions {
     pub count: Option<i64>,
 }
 
-impl StreamReadOptions {
-    pub(crate) fn add_to(&self, cmd: &mut Cmd) {
-        if let Some(b) = self.block_ms {
-            cmd.arg("BLOCK").arg(b);
+impl ToValkeyArgs for StreamReadOptions {
+    fn write_valkey_args<W: ?Sized + ValkeyWrite>(&self, out: &mut W) {
+        if let Some(block_ms) = self.block_ms {
+            out.write_arg(b"BLOCK");
+            out.write_arg_fmt(block_ms);
         }
-        if let Some(c) = self.count {
-            cmd.arg("COUNT").arg(c);
+        if let Some(count) = self.count {
+            out.write_arg(b"COUNT");
+            out.write_arg_fmt(count);
         }
     }
 }
@@ -135,16 +140,18 @@ pub struct StreamReadGroupOptions {
     pub no_ack: bool,
 }
 
-impl StreamReadGroupOptions {
-    pub(crate) fn add_to(&self, cmd: &mut Cmd) {
-        if let Some(b) = self.block_ms {
-            cmd.arg("BLOCK").arg(b);
+impl ToValkeyArgs for StreamReadGroupOptions {
+    fn write_valkey_args<W: ?Sized + ValkeyWrite>(&self, out: &mut W) {
+        if let Some(block_ms) = self.block_ms {
+            out.write_arg(b"BLOCK");
+            out.write_arg_fmt(block_ms);
         }
-        if let Some(c) = self.count {
-            cmd.arg("COUNT").arg(c);
+        if let Some(count) = self.count {
+            out.write_arg(b"COUNT");
+            out.write_arg_fmt(count);
         }
         if self.no_ack {
-            cmd.arg("NOACK");
+            out.write_arg(b"NOACK");
         }
     }
 }
@@ -160,13 +167,14 @@ pub struct StreamGroupCreateOptions {
     pub entries_read: Option<i64>,
 }
 
-impl StreamGroupCreateOptions {
-    pub(crate) fn add_to(&self, cmd: &mut Cmd) {
+impl ToValkeyArgs for StreamGroupCreateOptions {
+    fn write_valkey_args<W: ?Sized + ValkeyWrite>(&self, out: &mut W) {
         if self.make_stream {
-            cmd.arg("MKSTREAM");
+            out.write_arg(b"MKSTREAM");
         }
-        if let Some(e) = self.entries_read {
-            cmd.arg("ENTRIESREAD").arg(e);
+        if let Some(entries_read) = self.entries_read {
+            out.write_arg(b"ENTRIESREAD");
+            out.write_arg_fmt(entries_read);
         }
     }
 }
@@ -186,19 +194,22 @@ pub struct StreamClaimOptions {
     pub is_force: bool,
 }
 
-impl StreamClaimOptions {
-    pub(crate) fn add_to(&self, cmd: &mut Cmd) {
-        if let Some(i) = self.idle {
-            cmd.arg("IDLE").arg(i);
+impl ToValkeyArgs for StreamClaimOptions {
+    fn write_valkey_args<W: ?Sized + ValkeyWrite>(&self, out: &mut W) {
+        if let Some(idle) = self.idle {
+            out.write_arg(b"IDLE");
+            out.write_arg_fmt(idle);
         }
-        if let Some(t) = self.idle_unix_time {
-            cmd.arg("TIME").arg(t);
+        if let Some(idle_unix_time) = self.idle_unix_time {
+            out.write_arg(b"TIME");
+            out.write_arg_fmt(idle_unix_time);
         }
-        if let Some(r) = self.retry_count {
-            cmd.arg("RETRYCOUNT").arg(r);
+        if let Some(retry_count) = self.retry_count {
+            out.write_arg(b"RETRYCOUNT");
+            out.write_arg_fmt(retry_count);
         }
         if self.is_force {
-            cmd.arg("FORCE");
+            out.write_arg(b"FORCE");
         }
     }
 }
@@ -219,6 +230,26 @@ pub struct XPendingSummary {
     pub consumers: Vec<PendingConsumer>,
 }
 
+impl FromValkeyValue for XPendingSummary {
+    /// Decodes `[count, min, max, [[consumer, count], ...]]`, or nil as an empty summary.
+    fn from_owned_valkey_value(value: ValkeyValue) -> ValkeyResult<Self> {
+        match value {
+            ValkeyValue::Nil => Ok(Self::default()),
+            ValkeyValue::Array(items) if items.len() == 4 => {
+                let mut items = items.into_iter();
+                let mut next = || items.next().expect("checked length");
+                Ok(Self {
+                    count: i64::from_owned_valkey_value(next())?,
+                    min_id: Option::<Bytes>::from_owned_valkey_value(next())?,
+                    max_id: Option::<Bytes>::from_owned_valkey_value(next())?,
+                    consumers: Vec::<PendingConsumer>::from_owned_valkey_value(next())?,
+                })
+            }
+            other => Err(to_glide_error(other, "Unexpected XPENDING summary reply.")),
+        }
+    }
+}
+
 /// A single entry from the extended (range) form of `XPENDING`.
 #[derive(Debug, Clone)]
 pub struct XPendingEntry {
@@ -230,6 +261,25 @@ pub struct XPendingEntry {
     pub idle_ms: i64,
     /// Number of times the message was delivered.
     pub delivery_count: i64,
+}
+
+impl FromValkeyValue for XPendingEntry {
+    /// Decodes `[id, consumer, idle_ms, delivery_count]`.
+    fn from_owned_valkey_value(value: ValkeyValue) -> ValkeyResult<Self> {
+        match value {
+            ValkeyValue::Array(items) if items.len() == 4 => {
+                let mut items = items.into_iter();
+                let mut next = || items.next().expect("checked length");
+                Ok(Self {
+                    id: Bytes::from_owned_valkey_value(next())?,
+                    consumer: Bytes::from_owned_valkey_value(next())?,
+                    idle_ms: i64::from_owned_valkey_value(next())?,
+                    delivery_count: i64::from_owned_valkey_value(next())?,
+                })
+            }
+            other => Err(to_glide_error(other, "Unexpected XPENDING entry.")),
+        }
+    }
 }
 
 /// Stream commands (`XADD`, `XLEN`, `XRANGE`, `XREAD`, `XDEL`, groups, ...).
@@ -372,8 +422,7 @@ pub trait StreamCommands: CommandExecutor {
         V: ToValkeyArgs + Send + Sync,
     {
         let mut cmd = Cmd::new();
-        cmd.arg("XADD").arg(key);
-        options.add_to(&mut cmd);
+        cmd.arg("XADD").arg(key).arg(options);
         cmd.arg(id);
         for (f, v) in fields {
             cmd.arg(f).arg(v);
@@ -407,9 +456,7 @@ pub trait StreamCommands: CommandExecutor {
     ) -> ValkeyResult<Vec<(Bytes, Vec<StreamEntry>)>> {
         let mut cmd = Cmd::new();
         cmd.arg("XREAD");
-        if let Some(o) = options {
-            o.add_to(&mut cmd);
-        }
+        cmd.arg(options);
         cmd.arg("STREAMS");
         for (k, _) in keys_ids {
             cmd.arg(k);
@@ -430,9 +477,7 @@ pub trait StreamCommands: CommandExecutor {
     ) -> ValkeyResult<Vec<(Bytes, Vec<StreamEntry>)>> {
         let mut cmd = Cmd::new();
         cmd.arg("XREADGROUP").arg("GROUP").arg(group).arg(consumer);
-        if let Some(o) = options {
-            o.add_to(&mut cmd);
-        }
+        cmd.arg(options);
         cmd.arg("STREAMS");
         for (k, _) in keys_ids {
             cmd.arg(k);
@@ -463,9 +508,7 @@ pub trait StreamCommands: CommandExecutor {
         for id in ids {
             cmd.arg(*id);
         }
-        if let Some(o) = options {
-            o.add_to(&mut cmd);
-        }
+        cmd.arg(options);
         parse_entries(self.execute_command(cmd, None).await?)
     }
 
@@ -489,9 +532,7 @@ pub trait StreamCommands: CommandExecutor {
         for id in ids {
             cmd.arg(*id);
         }
-        if let Some(o) = options {
-            o.add_to(&mut cmd);
-        }
+        cmd.arg(options);
         cmd.arg("JUSTID");
         collect_strings(self.execute_command(cmd, None).await?)
     }
@@ -552,7 +593,7 @@ pub trait StreamCommands: CommandExecutor {
     ) -> ValkeyResult<XPendingSummary> {
         let mut cmd = Cmd::new();
         cmd.arg("XPENDING").arg(key).arg(group);
-        parse_xpending_summary(self.execute_command(cmd, None).await?)
+        XPendingSummary::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
     /// Extended (range) form of `XPENDING`
@@ -576,7 +617,7 @@ pub trait StreamCommands: CommandExecutor {
         if let Some(c) = consumer {
             cmd.arg(c);
         }
-        parse_xpending_range(self.execute_command(cmd, None).await?)
+        Vec::<XPendingEntry>::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
     /// Get general information about a stream (`XINFO STREAM`). Returns the raw
@@ -657,8 +698,12 @@ pub trait StreamCommands: CommandExecutor {
         options: &StreamGroupCreateOptions,
     ) -> ValkeyResult<()> {
         let mut cmd = Cmd::new();
-        cmd.arg("XGROUP").arg("CREATE").arg(key).arg(group).arg(id);
-        options.add_to(&mut cmd);
+        cmd.arg("XGROUP")
+            .arg("CREATE")
+            .arg(key)
+            .arg(group)
+            .arg(id)
+            .arg(options);
         <()>::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
@@ -735,9 +780,7 @@ fn parse_entries(v: ValkeyValue) -> ValkeyResult<Vec<StreamEntry>> {
             out
         }
         other => {
-            return Err(crate::error::GlideError::Request(format!(
-                "unexpected stream reply: {other:?}"
-            )));
+            return Err(to_glide_error(other, "Unexpected stream reply."));
         }
     };
 
@@ -819,9 +862,7 @@ fn parse_stream_read(v: ValkeyValue) -> ValkeyResult<Vec<(Bytes, Vec<StreamEntry
             out
         }
         other => {
-            return Err(crate::error::GlideError::Request(format!(
-                "unexpected XREAD reply: {other:?}"
-            )));
+            return Err(to_glide_error(other, "Unexpected XREAD reply."));
         }
     };
     let mut out = Vec::with_capacity(pairs.len());
@@ -846,9 +887,7 @@ fn parse_autoclaim(v: ValkeyValue) -> ValkeyResult<(String, Vec<StreamEntry>, Ve
             let cursor = String::from_owned_valkey_value(items.pop().unwrap())?;
             Ok((cursor, entries, deleted))
         }
-        other => Err(crate::error::GlideError::Request(format!(
-            "unexpected XAUTOCLAIM reply: {other:?}"
-        ))),
+        other => Err(to_glide_error(other, "Unexpected XAUTOCLAIM reply.")),
     }
 }
 
@@ -865,82 +904,8 @@ fn parse_autoclaim_justid(v: ValkeyValue) -> ValkeyResult<(String, Vec<String>, 
             let cursor = String::from_owned_valkey_value(items.pop().unwrap())?;
             Ok((cursor, ids, deleted))
         }
-        other => Err(crate::error::GlideError::Request(format!(
-            "unexpected XAUTOCLAIM JUSTID reply: {other:?}"
-        ))),
+        other => Err(to_glide_error(other, "Unexpected XAUTOCLAIM JUSTID reply.")),
     }
-}
-
-/// Parse the summary form of `XPENDING`: `[count, min, max, [[consumer, count], ...]]`.
-fn parse_xpending_summary(v: ValkeyValue) -> ValkeyResult<XPendingSummary> {
-    let mut items = match v {
-        ValkeyValue::Array(items) if items.len() == 4 => items,
-        ValkeyValue::Nil => return Ok(XPendingSummary::default()),
-        other => {
-            return Err(crate::error::GlideError::Request(format!(
-                "unexpected XPENDING summary reply: {other:?}"
-            )));
-        }
-    };
-    let consumers_val = items.pop().unwrap();
-    let max_val = items.pop().unwrap();
-    let min_val = items.pop().unwrap();
-    let count = i64::from_owned_valkey_value(items.pop().unwrap())?;
-    let consumers = match consumers_val {
-        ValkeyValue::Nil => Vec::new(),
-        ValkeyValue::Array(list) => {
-            let mut out = Vec::with_capacity(list.len());
-            for it in list {
-                if let ValkeyValue::Array(mut pair) = it
-                    && pair.len() == 2
-                {
-                    let cnt = i64::from_owned_valkey_value(pair.pop().unwrap())?;
-                    let name = Bytes::from_owned_valkey_value(pair.pop().unwrap())?;
-                    out.push((name, cnt));
-                }
-            }
-            out
-        }
-        _ => Vec::new(),
-    };
-    Ok(XPendingSummary {
-        count,
-        min_id: Option::<Bytes>::from_owned_valkey_value(min_val)?,
-        max_id: Option::<Bytes>::from_owned_valkey_value(max_val)?,
-        consumers,
-    })
-}
-
-/// Parse the extended (range) form of `XPENDING`: array of
-/// `[id, consumer, idle, delivery_count]`.
-fn parse_xpending_range(v: ValkeyValue) -> ValkeyResult<Vec<XPendingEntry>> {
-    let items = match v {
-        ValkeyValue::Nil => return Ok(Vec::new()),
-        ValkeyValue::Array(items) => items,
-        other => {
-            return Err(crate::error::GlideError::Request(format!(
-                "unexpected XPENDING range reply: {other:?}"
-            )));
-        }
-    };
-    let mut out = Vec::with_capacity(items.len());
-    for it in items {
-        if let ValkeyValue::Array(mut parts) = it
-            && parts.len() == 4
-        {
-            let delivery_count = i64::from_owned_valkey_value(parts.pop().unwrap())?;
-            let idle_ms = i64::from_owned_valkey_value(parts.pop().unwrap())?;
-            let consumer = Bytes::from_owned_valkey_value(parts.pop().unwrap())?;
-            let id = Bytes::from_owned_valkey_value(parts.pop().unwrap())?;
-            out.push(XPendingEntry {
-                id,
-                consumer,
-                idle_ms,
-                delivery_count,
-            });
-        }
-    }
-    Ok(out)
 }
 
 /// Parse a structured reply (RESP3 map or RESP2 flat array of alternating
@@ -960,9 +925,7 @@ fn parse_field_value_map(v: ValkeyValue) -> ValkeyResult<Vec<(Bytes, ValkeyValue
             }
             Ok(out)
         }
-        other => Err(crate::error::GlideError::Request(format!(
-            "unexpected XINFO reply: {other:?}"
-        ))),
+        other => Err(to_glide_error(other, "Unexpected XINFO reply.")),
     }
 }
 
@@ -971,42 +934,34 @@ fn parse_list_of_maps(v: ValkeyValue) -> ValkeyResult<Vec<Vec<(Bytes, ValkeyValu
     match v {
         ValkeyValue::Nil => Ok(Vec::new()),
         ValkeyValue::Array(items) => items.into_iter().map(parse_field_value_map).collect(),
-        other => Err(crate::error::GlideError::Request(format!(
-            "unexpected XINFO list reply: {other:?}"
-        ))),
+        other => Err(to_glide_error(other, "Unexpected XINFO list reply.")),
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn args_of(cmd: &Cmd) -> Vec<String> {
-        cmd.as_redis()
-            .args_iter()
-            .filter_map(|a| match a {
-                redis::Arg::Simple(bytes) => Some(String::from_utf8_lossy(bytes).into_owned()),
-                redis::Arg::Cursor => None,
-            })
-            .collect()
-    }
+    use crate::test_utils::assert_args;
+    use crate::test_utils::assert_args_empty;
 
     #[test]
     fn trim_options_maxlen_args() {
-        let mut cmd = Cmd::new();
-        StreamTrimOptions::max_len(true, 100, None).add_to(&mut cmd);
-        assert_eq!(args_of(&cmd), vec!["MAXLEN", "=", "100"]);
-
-        let mut cmd = Cmd::new();
-        StreamTrimOptions::max_len(false, 100, Some(10)).add_to(&mut cmd);
-        assert_eq!(args_of(&cmd), vec!["MAXLEN", "~", "100", "LIMIT", "10"]);
+        assert_args(
+            StreamTrimOptions::max_len(true, 100, None),
+            &["MAXLEN", "=", "100"],
+        );
+        assert_args(
+            StreamTrimOptions::max_len(false, 100, Some(10)),
+            &["MAXLEN", "~", "100", "LIMIT", "10"],
+        );
     }
 
     #[test]
     fn trim_options_minid_args() {
-        let mut cmd = Cmd::new();
-        StreamTrimOptions::min_id(false, "1526985054069-0", None).add_to(&mut cmd);
-        assert_eq!(args_of(&cmd), vec!["MINID", "~", "1526985054069-0"]);
+        assert_args(
+            StreamTrimOptions::min_id(false, "1526985054069-0", None),
+            &["MINID", "~", "1526985054069-0"],
+        );
     }
 
     #[test]
@@ -1014,48 +969,75 @@ mod tests {
         let opts = StreamAddOptions::default();
         assert!(opts.make_stream);
         assert!(opts.trim.is_none());
-
-        let mut cmd = Cmd::new();
-        opts.add_to(&mut cmd);
-        assert!(args_of(&cmd).is_empty());
+        assert_args_empty(opts);
     }
 
     #[test]
     fn add_options_args() {
-        let opts = StreamAddOptions {
-            make_stream: false,
-            trim: Some(StreamTrimOptions::max_len(true, 5, None)),
-        };
-        let mut cmd = Cmd::new();
-        opts.add_to(&mut cmd);
-        assert_eq!(args_of(&cmd), vec!["NOMKSTREAM", "MAXLEN", "=", "5"]);
+        assert_args(
+            StreamAddOptions {
+                make_stream: false,
+                trim: Some(StreamTrimOptions::max_len(true, 5, None)),
+            },
+            &["NOMKSTREAM", "MAXLEN", "=", "5"],
+        );
+    }
+
+    #[test]
+    fn read_options_args() {
+        assert_args_empty(StreamReadOptions::default());
+        assert_args(
+            StreamReadOptions {
+                block_ms: Some(500),
+                count: Some(10),
+            },
+            &["BLOCK", "500", "COUNT", "10"],
+        );
     }
 
     #[test]
     fn read_group_options_args() {
-        let opts = StreamReadGroupOptions {
-            block_ms: Some(500),
-            count: Some(10),
-            no_ack: true,
-        };
-        let mut cmd = Cmd::new();
-        opts.add_to(&mut cmd);
-        assert_eq!(args_of(&cmd), vec!["BLOCK", "500", "COUNT", "10", "NOACK"]);
+        assert_args_empty(StreamReadGroupOptions::default());
+        assert_args(
+            StreamReadGroupOptions {
+                block_ms: Some(500),
+                count: Some(10),
+                no_ack: true,
+            },
+            &["BLOCK", "500", "COUNT", "10", "NOACK"],
+        );
+    }
+
+    #[test]
+    fn group_create_options_args() {
+        assert_args_empty(StreamGroupCreateOptions::default());
+        assert_args(
+            StreamGroupCreateOptions {
+                make_stream: true,
+                entries_read: Some(7),
+            },
+            &["MKSTREAM", "ENTRIESREAD", "7"],
+        );
     }
 
     #[test]
     fn claim_options_args() {
-        let opts = StreamClaimOptions {
-            idle: Some(100),
-            idle_unix_time: None,
-            retry_count: Some(3),
-            is_force: true,
-        };
-        let mut cmd = Cmd::new();
-        opts.add_to(&mut cmd);
-        assert_eq!(
-            args_of(&cmd),
-            vec!["IDLE", "100", "RETRYCOUNT", "3", "FORCE"]
+        assert_args_empty(StreamClaimOptions::default());
+        assert_args(
+            StreamClaimOptions {
+                idle: Some(100),
+                idle_unix_time: None,
+                retry_count: Some(3),
+                is_force: true,
+            },
+            &["IDLE", "100", "RETRYCOUNT", "3", "FORCE"],
+        );
+        assert_args(
+            StreamClaimOptions {
+                idle_unix_time: Some(1_700_000_000_000),
+                ..Default::default()
+            },
+            &["TIME", "1700000000000"],
         );
     }
 }

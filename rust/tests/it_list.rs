@@ -3,39 +3,36 @@
 
 mod common;
 
-use glide::AsyncCommands;
+use glide::AsyncTypedCommands;
 use std::num::NonZeroUsize;
 
 matrix_test!(rpush_lpush_llen, c, {
     let k = common::key("l");
-    let _: i64 = c.rpush(&k, &["a", "b", "c"]).await.unwrap();
-    let _: i64 = c.lpush(&k, &["z"]).await.unwrap();
-    let len: i64 = c.llen(&k).await.unwrap();
+    c.rpush(&k, &["a", "b", "c"]).await.unwrap();
+    c.lpush(&k, &["z"]).await.unwrap();
+    let len: usize = c.llen(&k).await.unwrap();
     assert_eq!(len, 4);
 });
 
 matrix_test!(llen_missing_is_zero, c, {
-    let len: i64 = c.llen(common::key("l")).await.unwrap();
-    assert_eq!(len, 0);
+    assert_eq!(c.llen(common::key("l")).await.unwrap(), 0);
 });
 
 matrix_test!(lpushx_rpushx_require_existing, c, {
     let k = common::key("l");
     // X variants no-op on a missing key.
-    let n: i64 = c.lpush_exists(&k, "a").await.unwrap();
-    assert_eq!(n, 0);
-    let n: i64 = c.rpush_exists(&k, "a").await.unwrap();
-    assert_eq!(n, 0);
-    let _: i64 = c.rpush(&k, "x").await.unwrap();
-    let n: i64 = c.lpush_exists(&k, "y").await.unwrap();
+    assert_eq!(c.lpush_exists(&k, "a").await.unwrap(), 0);
+    assert_eq!(c.rpush_exists(&k, "a").await.unwrap(), 0);
+    c.rpush(&k, "x").await.unwrap();
+    let n: usize = c.lpush_exists(&k, "y").await.unwrap();
     assert_eq!(n, 2);
-    let n: i64 = c.rpush_exists(&k, "z").await.unwrap();
+    let n: usize = c.rpush_exists(&k, "z").await.unwrap();
     assert_eq!(n, 3);
 });
 
 matrix_test!(lrange_full_and_negative, c, {
     let k = common::key("l");
-    let _: i64 = c.rpush(&k, &["a", "b", "c", "d"]).await.unwrap();
+    c.rpush(&k, &["a", "b", "c", "d"]).await.unwrap();
     let all: Vec<String> = c.lrange(&k, 0, -1).await.unwrap();
     assert_eq!(all.len(), 4);
     let tail: Vec<String> = c.lrange(&k, -2, -1).await.unwrap();
@@ -49,7 +46,7 @@ matrix_test!(lrange_missing_empty, c, {
 
 matrix_test!(lindex, c, {
     let k = common::key("l");
-    let _: i64 = c.rpush(&k, &["a", "b", "c"]).await.unwrap();
+    c.rpush(&k, &["a", "b", "c"]).await.unwrap();
     let v: Option<String> = c.lindex(&k, 0).await.unwrap();
     assert_eq!(v.as_deref(), Some("a"));
     let v: Option<String> = c.lindex(&k, -1).await.unwrap();
@@ -61,7 +58,7 @@ matrix_test!(lindex, c, {
 
 matrix_test!(lpop_rpop, c, {
     let k = common::key("l");
-    let _: i64 = c.rpush(&k, &["a", "b", "c"]).await.unwrap();
+    c.rpush(&k, &["a", "b", "c"]).await.unwrap();
     let v: Option<String> = c.lpop(&k, None).await.unwrap();
     assert_eq!(v.as_deref(), Some("a"));
     let v: Option<String> = c.rpop(&k, None).await.unwrap();
@@ -77,7 +74,7 @@ matrix_test!(lpop_rpop_missing_none, c, {
 
 matrix_test!(lpop_rpop_count, c, {
     let k = common::key("l");
-    let _: i64 = c.rpush(&k, &["a", "b", "c", "d"]).await.unwrap();
+    c.rpush(&k, &["a", "b", "c", "d"]).await.unwrap();
     let front: Vec<String> = c
         .lpop(&k, Some(NonZeroUsize::new(2).unwrap()))
         .await
@@ -92,68 +89,68 @@ matrix_test!(lpop_rpop_count, c, {
 
 matrix_test!(lset, c, {
     let k = common::key("l");
-    let _: i64 = c.rpush(&k, &["a", "b", "c"]).await.unwrap();
-    let _: () = c.lset(&k, 1, "B").await.unwrap();
+    c.rpush(&k, &["a", "b", "c"]).await.unwrap();
+    c.lset(&k, 1, "B").await.unwrap();
     let v: Option<String> = c.lindex(&k, 1).await.unwrap();
     assert_eq!(v.as_deref(), Some("B"));
 });
 
 matrix_test!(lset_out_of_range_errors, c, {
     let k = common::key("l");
-    let _: i64 = c.rpush(&k, "a").await.unwrap();
+    c.rpush(&k, "a").await.unwrap();
     let res: glide::ValkeyResult<()> = c.lset(&k, 5, "x").await;
     assert!(res.is_err());
 });
 
 matrix_test!(ltrim, c, {
     let k = common::key("l");
-    let _: i64 = c.rpush(&k, &["a", "b", "c", "d", "e"]).await.unwrap();
-    let _: () = c.ltrim(&k, 1, 3).await.unwrap();
+    c.rpush(&k, &["a", "b", "c", "d", "e"]).await.unwrap();
+    c.ltrim(&k, 1, 3).await.unwrap();
     let remaining: Vec<String> = c.lrange(&k, 0, -1).await.unwrap();
     assert_eq!(remaining, vec!["b", "c", "d"]);
 });
 
 matrix_test!(lrem, c, {
     let k = common::key("l");
-    let _: i64 = c.rpush(&k, &["a", "b", "a", "c", "a"]).await.unwrap();
+    c.rpush(&k, &["a", "b", "a", "c", "a"]).await.unwrap();
     // Remove 2 occurrences from the head.
-    let removed: i64 = c.lrem(&k, 2, "a").await.unwrap();
+    let removed: usize = c.lrem(&k, 2, "a").await.unwrap();
     assert_eq!(removed, 2);
-    let len: i64 = c.llen(&k).await.unwrap();
+    let len: usize = c.llen(&k).await.unwrap();
     assert_eq!(len, 3);
 });
 
 matrix_test!(linsert_before, c, {
     let k = common::key("l");
-    let _: i64 = c.rpush(&k, &["a", "c"]).await.unwrap();
-    let _: i64 = c.linsert_before(&k, "c", "b").await.unwrap();
+    c.rpush(&k, &["a", "c"]).await.unwrap();
+    c.linsert_before(&k, "c", "b").await.unwrap();
     let all: Vec<String> = c.lrange(&k, 0, -1).await.unwrap();
     assert_eq!(all, vec!["a", "b", "c"]);
 });
 
 matrix_test!(linsert_missing_pivot_returns_neg1, c, {
     let k = common::key("l");
-    let _: i64 = c.rpush(&k, "a").await.unwrap();
-    let n: i64 = c.linsert_after(&k, "zzz", "x").await.unwrap();
+    c.rpush(&k, "a").await.unwrap();
+    let n: isize = c.linsert_after(&k, "zzz", "x").await.unwrap();
     assert_eq!(n, -1);
 });
 
 matrix_test!(lmove, c, {
     let src = common::tkey("ls", "src");
     let dst = common::tkey("ls", "dst");
-    let _: i64 = c.rpush(&src, &["a", "b", "c"]).await.unwrap();
-    let moved: Option<String> = c
+    c.rpush(&src, &["a", "b", "c"]).await.unwrap();
+    let moved: String = c
         .lmove(&src, &dst, glide::Direction::Left, glide::Direction::Right)
         .await
         .unwrap();
-    assert_eq!(moved.as_deref(), Some("a"));
+    assert_eq!(moved, "a");
     let dst_items: Vec<String> = c.lrange(&dst, 0, -1).await.unwrap();
     assert_eq!(dst_items[0], "a");
 });
 
 matrix_test!(lpos, c, {
     let k = common::key("l");
-    let _: i64 = c.rpush(&k, &["a", "b", "c", "b"]).await.unwrap();
+    c.rpush(&k, &["a", "b", "c", "b"]).await.unwrap();
     let pos: Option<i64> = c
         .lpos(&k, "b", glide::LposOptions::default())
         .await
@@ -168,7 +165,21 @@ matrix_test!(lpos, c, {
 
 matrix_test!(list_wrong_type_errors, c, {
     let k = common::key("wt");
-    let _: () = c.set(&k, "notalist").await.unwrap();
-    let res: glide::ValkeyResult<i64> = c.lpush(&k, "x").await;
+    c.set(&k, "notalist").await.unwrap();
+    let res: glide::ValkeyResult<usize> = c.lpush(&k, "x").await;
     assert!(res.is_err());
+});
+
+matrix_test!(lmpop, c, {
+    skip_if_version_below!(c, 7, 0, 0);
+
+    let k = common::tkey("cmd_lmpop", "l1");
+    c.rpush(&k, &["a", "b"]).await.unwrap();
+
+    let popped: Option<(String, Vec<String>)> =
+        c.lmpop(1, &k, glide::Direction::Left, 2).await.unwrap();
+
+    let (key, elements) = popped.unwrap();
+    assert_eq!(key, k);
+    assert_eq!(elements, vec!["a".to_string(), "b".to_string()]);
 });

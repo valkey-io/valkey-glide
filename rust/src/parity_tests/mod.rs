@@ -12,21 +12,139 @@ use types::Generic;
 use types::Method;
 use types::RedisParity;
 
-/// The redis-rs release GLIDE targets for parity.
-// TODO #7058: bump to "1.7.0" and retarget the guard to *upstream* redis-rs
-// (fetch `redis/src/commands/mod.rs` at the `redis-1.7.0` tag from GitHub).
-const REDIS_RS_VERSION: &str = "0.25.2";
+/// Constants for the redis-rs release that GLIDE targets for parity.
+const REDIS_RS_VERSION: &str = "1.7.0";
 
-/// The vendored redis-rs fork's command table, relative to `rust/`.
-// TODO #7058: Update once we get the command table from GitHub.
-const REDIS_COMMAND_TABLE: &str = "../glide-core/redis-rs/redis/src/commands/mod.rs";
+/// The source URL of the redis-rs command sources, with `{version}` and `{file}` placeholders.
+const REDIS_RS_SOURCE_URL: &str =
+    "https://raw.githubusercontent.com/redis-rs/redis-rs/redis-{version}/{file}";
 
-/// The vendored redis-rs fork's scan-iterator definitions, relative to `rust/`.
-// TODO #7058: Update once we get the scan definitions from GitHub.
-const REDIS_SCAN_METHODS: &str = "../glide-core/redis-rs/redis/src/commands/macros.rs";
+/// The redis-rs command table location.
+const REDIS_COMMAND_TABLE: &str = "redis/src/commands/mod.rs";
+
+/// The redis-rs scan-iterator definitions.
+const REDIS_SCAN_METHODS: &str = "redis/src/commands/macros.rs";
 
 /// The cached redis-rs parity snapshot, relative to `rust/`.
 const REDIS_PARITY_JSON: &str = "src/parity_tests/redis_parity.json";
+
+/// redis-rs methods GLIDE does not implement yet. The guard fails if any other method is
+/// missing, or if one of these is no longer missing (so remove it once implemented).
+// TODO #7060: Implement these methods and remove them from this list.
+const MISSING_METHODS: &[&str] = &[
+    "acl_cat",
+    "acl_cat_categoryname",
+    "acl_deluser",
+    "acl_dryrun",
+    "acl_genpass",
+    "acl_genpass_bits",
+    "acl_getuser",
+    "acl_help",
+    "acl_list",
+    "acl_load",
+    "acl_log",
+    "acl_log_reset",
+    "acl_save",
+    "acl_setuser",
+    "acl_setuser_rules",
+    "acl_users",
+    "acl_whoami",
+    "bf_add",
+    "bf_card",
+    "bf_exists",
+    "bf_info",
+    "bf_info_type",
+    "bf_insert",
+    "bf_insert_options",
+    "bf_loadchunk",
+    "bf_madd",
+    "bf_mexists",
+    "bf_reserve",
+    "bf_reserve_options",
+    "bf_scandump",
+    "bit_and_or",
+    "bit_diff",
+    "bit_diff1",
+    "bit_one",
+    "client_getname",
+    "client_id",
+    "client_setname",
+    // TODO #7238: Add with Valkey 9.2 `DELEX` support.
+    "del_ex",
+    "digest",
+    "expire_time",
+    "ft_create",
+    "geo_radius",
+    "geo_radius_by_member",
+    "hget_del",
+    "hmget",
+    "increx",
+    "invoke_script",
+    "load_script",
+    "mset_ex",
+    "pexpire_time",
+    "ping",
+    "ping_message",
+    "scan_options",
+    "spublish",
+    "vadd",
+    "vadd_options",
+    "vcard",
+    "vdelattr",
+    "vdim",
+    "vemb",
+    "vemb_options",
+    "vgetattr",
+    "vinfo",
+    "vlinks",
+    "vlinks_with_scores",
+    "vrandmember",
+    "vrandmember_multiple",
+    "vrem",
+    "vsetattr",
+    "vsim",
+    "vsim_options",
+    "xack",
+    "xack_del",
+    "xadd",
+    "xadd_map",
+    "xadd_maxlen",
+    "xadd_maxlen_map",
+    "xadd_options",
+    "xautoclaim_options",
+    "xcfgset",
+    "xclaim",
+    "xclaim_options",
+    "xdel",
+    "xdel_ex",
+    "xgroup_create",
+    "xgroup_create_mkstream",
+    "xgroup_createconsumer",
+    "xgroup_delconsumer",
+    "xgroup_destroy",
+    "xgroup_setid",
+    "xinfo_consumers",
+    "xinfo_groups",
+    "xinfo_stream",
+    "xinfo_stream_with_idempotency",
+    "xlen",
+    "xnack",
+    "xpending",
+    "xpending_consumer_count",
+    "xpending_count",
+    "xrange",
+    "xrange_all",
+    "xrange_count",
+    "xread",
+    "xread_options",
+    "xrevrange",
+    "xrevrange_all",
+    "xrevrange_count",
+    "xtrim",
+    "xtrim_options",
+    "zadd_multiple_options",
+    "zadd_options",
+];
 
 // --- tests --------------------------------------------------------------------------------------
 
@@ -57,17 +175,25 @@ fn run_parity_check(version: &str) -> Result<String, Vec<String>> {
     let redis_parity = load_redis_parity(manifest, version);
     let glide_src = &read(&manifest.join("src/commands/core.rs"));
 
-    let mut problems = Vec::new();
+    let glide_command_table_methods = parse_command_table_methods(glide_src);
+    let glide_scan_methods = parse_scan_methods(glide_src, GLIDE_SCAN_DEFINITIONS);
+
+    // Verify the list of missing commands.
+    let mut problems = compare_missing_methods(
+        &[
+            &redis_parity.command_table_methods,
+            &redis_parity.scan_methods,
+        ],
+        &[&glide_command_table_methods, &glide_scan_methods],
+    );
 
     // Compare command table methods.
-    let glide_command_table_methods = parse_command_table_methods(glide_src);
     problems.extend(compare_method_maps(
         &redis_parity.command_table_methods,
         &glide_command_table_methods,
     ));
 
     // Compare scan methods.
-    let glide_scan_methods = parse_scan_methods(glide_src);
     problems.extend(compare_method_maps(
         &redis_parity.scan_methods,
         &glide_scan_methods,
@@ -86,10 +212,11 @@ fn run_parity_check(version: &str) -> Result<String, Vec<String>> {
 /// builds and saves it from the redis-rs source when the data file is missing.
 ///
 /// Panics if the snapshot records a different version than the one targeted,
-/// or if the data file can't be read, parsed, serialized, or written.
+/// if the data file can't be read, parsed, serialized, or written, or if the
+/// redis-rs source can't be fetched.
 //
-// TODO #7058: the snapshot is a trusted baseline — it is not validated against the
-// vendored redis-rs source, and its `version` is stamped from `REDIS_RS_VERSION`
+// TODO #7058: the snapshot is a trusted baseline — it is not validated against
+// the redis-rs source, and its `version` is stamped from `REDIS_RS_VERSION`
 // rather than derived from the source. So a source signature change with a stale
 // snapshot still passes, and regenerating after a version bump relabels the old
 // source as the new version. Harden by re-parsing (or hash-verifying) the source
@@ -114,12 +241,12 @@ fn load_redis_parity(manifest: &Path, version: &str) -> RedisParity {
     }
 
     // Data file missing: build and save the snapshot from the redis-rs source.
-    let commands = read(&manifest.join(REDIS_COMMAND_TABLE));
-    let scan = read(&manifest.join(REDIS_SCAN_METHODS));
+    let commands_src = fetch_redis_source(REDIS_COMMAND_TABLE);
+    let scan_src = fetch_redis_source(REDIS_SCAN_METHODS);
     let redis = RedisParity {
         version: version.to_string(),
-        command_table_methods: parse_command_table_methods(&commands),
-        scan_methods: parse_scan_methods(&scan),
+        command_table_methods: parse_command_table_methods(&commands_src),
+        scan_methods: parse_scan_methods(&scan_src, REDIS_SCAN_DEFINITIONS),
     };
 
     let json = serde_json::to_string_pretty(&redis)
@@ -128,6 +255,24 @@ fn load_redis_parity(manifest: &Path, version: &str) -> RedisParity {
         .unwrap_or_else(|e| panic!("cannot write {}: {e}", data_path.display()));
 
     redis
+}
+
+/// Fetches the given redis-rs source file from GitHub.
+/// Panics if the file can't be fetched.
+fn fetch_redis_source(file: &str) -> String {
+    let url = REDIS_RS_SOURCE_URL
+        .replace("{version}", REDIS_RS_VERSION)
+        .replace("{file}", file);
+    let output = std::process::Command::new("curl")
+        .args(["--fail", "--silent", "--show-error", "--location", &url])
+        .output()
+        .unwrap_or_else(|e| panic!("cannot run curl to fetch {url}: {e}"));
+    assert!(
+        output.status.success(),
+        "cannot fetch {url}: {}",
+        String::from_utf8_lossy(&output.stderr).trim()
+    );
+    String::from_utf8(output.stdout).unwrap_or_else(|e| panic!("{url} is not UTF-8: {e}"))
 }
 
 /// Parse the command table methods from the given source, indexed by method name.
@@ -329,6 +474,7 @@ fn compare_method_maps(
     // Verify that all redis-rs methods are implemented by GLIDE.
     for (name, method) in redis {
         match glide.get(name) {
+            None if MISSING_METHODS.contains(&name.as_str()) => {}
             None => problems.push(format!("MISSING method in GLIDE: {name}")),
             Some(ours) if !compare_methods(method, ours) => problems.push(format!(
                 "SIGNATURE DIFF {name}:\n     redis-rs: {method:?}\n     GLIDE: {ours:?}"
@@ -345,6 +491,32 @@ fn compare_method_maps(
     }
 
     problems
+}
+
+/// Verifies that every missing method entry is defined by one of the redis-rs method maps
+/// and by none of the GLIDE ones, so the list can't go stale. Returns one message per problem.
+fn compare_missing_methods(
+    redis: &[&BTreeMap<String, Method>],
+    glide: &[&BTreeMap<String, Method>],
+) -> Vec<String> {
+    let defined =
+        |maps: &[&BTreeMap<String, Method>], name: &str| maps.iter().any(|m| m.contains_key(name));
+    MISSING_METHODS
+        .iter()
+        .filter_map(|name| {
+            if defined(glide, name) {
+                Some(format!(
+                    "STALE MISSING_METHODS entry (now implemented by GLIDE): {name}"
+                ))
+            } else if !defined(redis, name) {
+                Some(format!(
+                    "STALE MISSING_METHODS entry (not defined by redis-rs): {name}"
+                ))
+            } else {
+                None
+            }
+        })
+        .collect()
 }
 
 /// Normalizes scan generics so the async and blocking definitions compare equal:

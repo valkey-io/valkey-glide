@@ -3,7 +3,7 @@
 
 mod common;
 
-use glide::{AsyncCommands, StreamCommands};
+use glide::{AsyncTypedCommands, StreamCommands};
 
 matrix_test!(xadd_xlen, c, {
     let k = common::key("stream");
@@ -97,6 +97,6 @@ matrix_test!(xack, c, {
 
 matrix_test!(stream_wrong_type_errors, c, {
     let k = common::key("wt");
-    c.set::<_, _, ()>(&k, "notastream").await.unwrap();
+    c.set(&k, "notastream").await.unwrap();
     assert_request_error!(c.xlen(&k).await);
 });

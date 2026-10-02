@@ -6,7 +6,7 @@
 
 use bytes::Bytes;
 
-// ---- ValkeyWrite ----
+// --- ValkeyWrite --------------------------------------------------------------------------------
 
 /// A writer that command arguments are written into.
 ///
@@ -41,7 +41,7 @@ impl ValkeyWrite for crate::cmd::Cmd {
     }
 }
 
-// ---- ToValkeyArgs ----
+// --- ToValkeyArgs -------------------------------------------------------------------------------
 
 /// Describes how a value behaves in a numeric context.
 ///
@@ -75,6 +75,8 @@ pub enum ValkeyNumericBehavior {
 /// - tuples
 ///
 /// Implement it for your own types to pass them directly as command arguments.
+///
+/// Mirrors redis-rs's `ToRedisArgs`.
 pub trait ToValkeyArgs {
     /// Writes this value's argument encoding to `out`.
     fn write_valkey_args<W: ?Sized + ValkeyWrite>(&self, out: &mut W);
@@ -92,10 +94,20 @@ pub trait ToValkeyArgs {
         ValkeyNumericBehavior::NonNumeric
     }
 
-    /// Whether this value encodes to exactly one argument.
-    /// Defaults to `true`.
-    fn is_single_arg(&self) -> bool {
-        true
+    /// The number of command arguments this value encodes to.
+    fn num_of_args(&self) -> usize {
+        let mut counter = ArgCounter(0);
+        self.write_valkey_args(&mut counter);
+        counter.0
+    }
+
+    /// The number of command arguments a slice of `Self` encodes to.
+    #[doc(hidden)]
+    fn num_of_args_from_slice(items: &[Self]) -> usize
+    where
+        Self: Sized,
+    {
+        items.iter().map(Self::num_of_args).sum()
     }
 
     /// Writes this slice's argument encoding to `out`.
@@ -117,15 +129,6 @@ pub trait ToValkeyArgs {
         for item in items {
             item.write_valkey_args(out);
         }
-    }
-
-    /// Whether a slice of `Self` encodes to exactly one argument.
-    #[doc(hidden)]
-    fn is_single_slice_arg(items: &[Self]) -> bool
-    where
-        Self: Sized,
-    {
-        items.len() == 1 && items[0].is_single_arg()
     }
 }
 
@@ -201,8 +204,8 @@ impl ToValkeyArgs for u8 {
         out.write_arg(items);
     }
 
-    fn is_single_slice_arg(_items: &[u8]) -> bool {
-        true
+    fn num_of_args_from_slice(_items: &[u8]) -> usize {
+        1
     }
 }
 
@@ -240,8 +243,8 @@ impl<T: ToValkeyArgs> ToValkeyArgs for Vec<T> {
         T::write_valkey_args_from_slice(self, out);
     }
 
-    fn is_single_arg(&self) -> bool {
-        T::is_single_slice_arg(&self[..])
+    fn num_of_args(&self) -> usize {
+        T::num_of_args_from_slice(self)
     }
 }
 
@@ -251,8 +254,8 @@ impl<T: ToValkeyArgs> ToValkeyArgs for &[T] {
         T::write_valkey_args_from_slice(self, out);
     }
 
-    fn is_single_arg(&self) -> bool {
-        T::is_single_slice_arg(self)
+    fn num_of_args(&self) -> usize {
+        T::num_of_args_from_slice(self)
     }
 }
 
@@ -262,8 +265,8 @@ impl<T: ToValkeyArgs, const N: usize> ToValkeyArgs for &[T; N] {
         T::write_valkey_args_from_slice(self.as_slice(), out);
     }
 
-    fn is_single_arg(&self) -> bool {
-        T::is_single_slice_arg(self.as_slice())
+    fn num_of_args(&self) -> usize {
+        T::num_of_args_from_slice(self.as_slice())
     }
 }
 
@@ -282,11 +285,8 @@ impl<T: ToValkeyArgs> ToValkeyArgs for Option<T> {
         }
     }
 
-    fn is_single_arg(&self) -> bool {
-        match self {
-            Some(x) => x.is_single_arg(),
-            None => false,
-        }
+    fn num_of_args(&self) -> usize {
+        self.as_ref().map_or(0, ToValkeyArgs::num_of_args)
     }
 }
 
@@ -300,8 +300,8 @@ impl<T: ToValkeyArgs> ToValkeyArgs for &T {
         (*self).describe_numeric_behavior()
     }
 
-    fn is_single_arg(&self) -> bool {
-        (*self).is_single_arg()
+    fn num_of_args(&self) -> usize {
+        (*self).num_of_args()
     }
 }
 
@@ -312,10 +312,6 @@ impl<T: ToValkeyArgs + std::cmp::Eq + std::hash::Hash, S: std::hash::BuildHasher
     fn write_valkey_args<W: ?Sized + ValkeyWrite>(&self, out: &mut W) {
         T::write_valkey_args_from_iter(self.iter(), out);
     }
-
-    fn is_single_arg(&self) -> bool {
-        self.len() <= 1
-    }
 }
 
 /// Encodes a `BTreeSet`'s members as command arguments.
@@ -324,10 +320,6 @@ impl<T: ToValkeyArgs + std::cmp::Eq + std::hash::Hash + Ord> ToValkeyArgs
 {
     fn write_valkey_args<W: ?Sized + ValkeyWrite>(&self, out: &mut W) {
         T::write_valkey_args_from_iter(self.iter(), out);
-    }
-
-    fn is_single_arg(&self) -> bool {
-        self.len() <= 1
     }
 }
 
@@ -338,14 +330,10 @@ where
 {
     fn write_valkey_args<W: ?Sized + ValkeyWrite>(&self, out: &mut W) {
         for (key, value) in self {
-            assert!(key.is_single_arg() && value.is_single_arg());
+            assert!(key.num_of_args() == 1 && value.num_of_args() == 1);
             key.write_valkey_args(out);
             value.write_valkey_args(out);
         }
-    }
-
-    fn is_single_arg(&self) -> bool {
-        self.len() <= 1
     }
 }
 
@@ -357,14 +345,10 @@ where
 {
     fn write_valkey_args<W: ?Sized + ValkeyWrite>(&self, out: &mut W) {
         for (key, value) in self {
-            assert!(key.is_single_arg() && value.is_single_arg());
+            assert!(key.num_of_args() == 1 && value.num_of_args() == 1);
             key.write_valkey_args(out);
             value.write_valkey_args(out);
         }
-    }
-
-    fn is_single_arg(&self) -> bool {
-        self.len() <= 1
     }
 }
 
@@ -377,12 +361,6 @@ macro_rules! impl_to_valkey_args_tuple {
             fn write_valkey_args<W: ?Sized + ValkeyWrite>(&self, out: &mut W) {
                 let ($(ref $name,)*) = *self;
                 $($name.write_valkey_args(out);)*
-            }
-            #[allow(non_snake_case, unused_variables)]
-            fn is_single_arg(&self) -> bool {
-                let mut n = 0u32;
-                $(let $name = (); n += 1;)*
-                n == 1
             }
         }
     )+};
@@ -402,6 +380,83 @@ impl_to_valkey_args_tuple! {
     (T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11),
     (T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12),
 }
+
+// ---- ToSingleValkeyArg -------------------------------------------------------------------------
+
+/// Encodes a value into exactly one command argument.
+///
+/// Implemented for these standard argument types:
+/// - integers
+/// - non-zero integers
+/// - floats
+/// - byte slices
+/// - booleans
+/// - strings
+/// - bytes
+/// - references
+///
+/// Implement it for your own types to pass them directly as command arguments.
+///
+/// Mirrors redis-rs's `ToSingleRedisArg`.
+pub trait ToSingleValkeyArg: ToValkeyArgs {}
+
+macro_rules! impl_to_single_valkey_arg {
+    ($($t:ty),* $(,)?) => {$(
+        impl ToSingleValkeyArg for $t {}
+    )*};
+}
+
+impl_to_single_valkey_arg!(
+    i8,
+    i16,
+    u16,
+    i32,
+    u32,
+    i64,
+    u64,
+    isize,
+    usize,
+    core::num::NonZeroU8,
+    core::num::NonZeroI8,
+    core::num::NonZeroU16,
+    core::num::NonZeroI16,
+    core::num::NonZeroU32,
+    core::num::NonZeroI32,
+    core::num::NonZeroU64,
+    core::num::NonZeroI64,
+    core::num::NonZeroUsize,
+    core::num::NonZeroIsize,
+    f32,
+    f64,
+    u8,
+    bool,
+    String,
+    &str,
+    Bytes,
+    Vec<u8>,
+    &[u8],
+);
+
+impl<const N: usize> ToSingleValkeyArg for &[u8; N] {}
+
+impl<T: ToSingleValkeyArg> ToSingleValkeyArg for &T {}
+
+// --- ArgCounter ---------------------------------------------------------------------------------
+
+/// A [`ValkeyWrite`] that counts arguments without storing them.
+struct ArgCounter(usize);
+
+impl ValkeyWrite for ArgCounter {
+    fn write_arg(&mut self, _arg: &[u8]) {
+        self.0 += 1;
+    }
+
+    fn write_arg_fmt(&mut self, _arg: impl std::fmt::Display) {
+        self.0 += 1;
+    }
+}
+
+// --- Tests --------------------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {
@@ -444,6 +499,8 @@ mod tests {
 #[cfg(test)]
 mod to_valkey_args_tests {
     use super::*;
+    use crate::test_utils::assert_args;
+    use crate::test_utils::assert_args_empty;
     use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
     use std::sync::LazyLock;
 
@@ -586,75 +643,82 @@ mod to_valkey_args_tests {
     }
 
     #[test]
-    fn is_single_arg() {
+    fn num_of_args() {
         // Integers
-        assert!(1i8.is_single_arg());
-        assert!(1i64.is_single_arg());
-        assert!(1usize.is_single_arg());
+        assert_args(1i8, &["1"]);
+        assert_args(-1i64, &["-1"]);
+        assert_args(1usize, &["1"]);
 
         // Non-zero integers
-        assert!(core::num::NonZeroU8::new(1).unwrap().is_single_arg());
+        assert_args(core::num::NonZeroU8::new(1).unwrap(), &["1"]);
 
         // Floats
-        assert!(1.5f64.is_single_arg());
+        assert_args(1.5f64, &["1.5"]);
 
-        // Byte slices
-        assert!(b"bytes".to_vec().is_single_arg());
-        assert!(Vec::<u8>::new().is_single_arg());
-        assert!((&b"bytes"[..]).is_single_arg());
+        // Byte slices (one binary argument, even when empty)
+        assert_args(b"bytes".to_vec(), &["bytes"]);
+        assert_args(Vec::<u8>::new(), &[""]);
+        assert_args(&b"bytes"[..], &["bytes"]);
+        assert_args(b"bytes", &["bytes"]);
+        assert_args(vec![0xFFu8, 0x00], &[[0xFFu8, 0x00].as_slice()]);
 
         // Booleans
-        assert!(true.is_single_arg());
+        assert_args(true, &["1"]);
 
         // Strings
-        assert!("k".is_single_arg());
-        assert!(String::from("k").is_single_arg());
+        assert_args("k", &["k"]);
+        assert_args(String::from("k"), &["k"]);
 
         // Bytes
-        assert!(Bytes::from_static(b"b").is_single_arg());
+        assert_args(Bytes::from_static(b"b"), &["b"]);
 
         // Sequences
-        assert!(vec!["one"].is_single_arg());
-        assert!(!vec!["a", "b"].is_single_arg());
-        assert!(!Vec::<&str>::new().is_single_arg());
-        assert!((&["one"][..]).is_single_arg());
-        assert!(!(&["a", "b"][..]).is_single_arg());
-        assert!((&["one"]).is_single_arg());
-        assert!(!(&["a", "b"]).is_single_arg());
+        assert_args(vec!["one"], &["one"]);
+        assert_args(vec!["a", "b", "c"], &["a", "b", "c"]);
+        assert_args_empty(Vec::<&str>::new());
+        assert_args(&["a", "b"][..], &["a", "b"]);
+        assert_args(&["a", "b"], &["a", "b"]);
+        assert_args(vec![vec!["a", "b"], vec!["c"]], &["a", "b", "c"]);
+        assert_args(&[("f1", 1i64), ("f2", 2i64)][..], &["f1", "1", "f2", "2"]);
 
         // Options
-        assert!(!Option::<i64>::None.is_single_arg());
-        assert!(Some(1i64).is_single_arg());
+        assert_args_empty(Option::<i64>::None);
+        assert_args(Some(1i64), &["1"]);
+        assert_args(Some(vec!["a", "b"]), &["a", "b"]);
 
-        // References. The explicit `&` exercises the `ToValkeyArgs for &T` impl
-        // (method resolution binds to `&&T`), not the referent's impl — so the
-        // borrow is deliberate, not `needless_borrow`.
-        #[allow(clippy::needless_borrow)]
+        // References. The explicit `&` exercises the `ToValkeyArgs for &T` impl,
+        // so the borrow is deliberate, not `needless_borrows_for_generic_args`.
+        #[allow(clippy::needless_borrows_for_generic_args)]
         {
-            assert!((&1i64).is_single_arg());
-            assert!(!(&vec!["a", "b"]).is_single_arg());
+            assert_args(&1i64, &["1"]);
+            assert_args(&&vec!["a", "b"], &["a", "b"]);
         }
 
         // Maps and sets
-        assert!((*HASH_SET_0).is_single_arg());
-        assert!((*BTREE_SET_0).is_single_arg());
-        assert!((*HASH_MAP_0).is_single_arg());
-        assert!((*BTREE_MAP_0).is_single_arg());
+        assert_args_empty(&*HASH_SET_0);
+        assert_args_empty(&*BTREE_SET_0);
+        assert_args_empty(&*HASH_MAP_0);
+        assert_args_empty(&*BTREE_MAP_0);
 
-        assert!((*HASH_SET_1).is_single_arg());
-        assert!((*BTREE_SET_1).is_single_arg());
-        assert!((*HASH_MAP_1).is_single_arg());
-        assert!((*BTREE_MAP_1).is_single_arg());
+        assert_args(&*HASH_SET_1, &["x"]);
+        assert_args(&*BTREE_SET_1, &["x"]);
+        assert_args(&*HASH_MAP_1, &["k", "1"]);
+        assert_args(&*BTREE_MAP_1, &["k", "1"]);
 
-        assert!(!(*HASH_SET_2).is_single_arg());
-        assert!(!(*BTREE_SET_2).is_single_arg());
-        assert!(!(*HASH_MAP_2).is_single_arg());
-        assert!(!(*BTREE_MAP_2).is_single_arg());
+        assert_args(&*BTREE_SET_2, &["a", "b", "c"]);
+        assert_args(&*BTREE_MAP_2, &["f1", "1", "f2", "2"]);
+
+        // Hash-based collections have no fixed order, so only the count is checked.
+        assert_eq!(HASH_SET_2.to_valkey_args().len(), 3);
+        assert_eq!(HASH_SET_2.num_of_args(), 3);
+        assert_eq!(HASH_MAP_2.to_valkey_args().len(), 4);
+        assert_eq!(HASH_MAP_2.num_of_args(), 4);
 
         // Tuples
-        assert!((1i64,).is_single_arg());
-        assert!(!(1i64, 2i64).is_single_arg());
-        assert!(!(1i64, 2i64, 3i64).is_single_arg());
+        assert_args((1i64,), &["1"]);
+        assert_args((1i64, 2i64), &["1", "2"]);
+        assert_args(("a", 1, 2.5), &["a", "1", "2.5"]);
+        assert_args((vec!["a", "b"], "c"), &["a", "b", "c"]);
     }
 
     #[test]
@@ -741,5 +805,55 @@ mod to_valkey_args_tests {
         num!((1,), NonNumeric);
         num!((1, 2), NonNumeric);
         num!((1, 2, 3), NonNumeric);
+    }
+}
+
+#[cfg(test)]
+mod to_single_arg {
+    use super::*;
+
+    /// Compiles only if `T` implements [`ToSingleValkeyArg`].
+    fn assert_single<T: ToSingleValkeyArg>(value: T) {
+        assert_eq!(value.num_of_args(), 1);
+    }
+
+    #[test]
+    fn to_single_valkey_arg_impls_encode_one_arg() {
+        // Integers
+        assert_single(1i8);
+        assert_single(1i64);
+        assert_single(1usize);
+        assert_single(255u8);
+
+        // Non-zero integers
+        assert_single(core::num::NonZeroU64::new(1).unwrap());
+
+        // Floats
+        assert_single(1.5f32);
+        assert_single(1.5f64);
+
+        // Booleans
+        assert_single(true);
+
+        // Strings
+        assert_single("k");
+        assert_single(String::from("k"));
+
+        // Bytes
+        assert_single(Bytes::from_static(b"b"));
+
+        // Byte slices, vectors, and arrays
+        assert_single(b"raw".to_vec());
+        assert_single(&b"raw"[..]);
+        assert_single(b"raw");
+        assert_single(Vec::<u8>::new());
+
+        // References. The explicit `&` exercises the `ToSingleValkeyArg for &T` impl,
+        // so the borrow is deliberate, not `needless_borrows_for_generic_args`.
+        #[allow(clippy::needless_borrows_for_generic_args)]
+        {
+            assert_single(&"k");
+            assert_single(&&5i64);
+        }
     }
 }

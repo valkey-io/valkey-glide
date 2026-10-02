@@ -3,7 +3,7 @@
 
 mod common;
 
-use glide::{AsyncCommands, ConnectionManagementCommands};
+use glide::{AsyncTypedCommands, ConnectionManagementCommands};
 
 resp_test!(ping, c, {
     assert_eq!(c.ping().await.unwrap(), "PONG");
@@ -42,7 +42,7 @@ resp_test!(select_database, c, {
     c.select(1).await.unwrap();
     let k = common::key("k");
     let _: () = c.set(&k, "v").await.unwrap();
-    let got: Option<glide::Bytes> = c.get(&k).await.unwrap();
-    assert_eq!(got.as_deref(), Some(&b"v"[..]));
+    let got: Option<String> = c.get(&k).await.unwrap();
+    assert_eq!(got.as_deref(), Some("v"));
     c.select(0).await.unwrap();
 });

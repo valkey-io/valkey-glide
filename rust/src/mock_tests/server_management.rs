@@ -2,7 +2,6 @@
 //! Mock-executor unit tests for the server-management command family.
 use super::Mock;
 use crate::ValkeyValue;
-use crate::commands::options::FlushMode;
 use crate::commands::server_management::ServerManagementCommands;
 
 #[tokio::test]
@@ -22,24 +21,6 @@ async fn dbsize_encoding() {
     let m = Mock::int(7);
     assert_eq!(m.dbsize().await.unwrap(), 7);
     m.assert_args(&["DBSIZE"]);
-}
-
-#[tokio::test]
-async fn flushdb_default_and_modes() {
-    let m = Mock::ok();
-    m.flushdb(None).await.unwrap();
-    m.assert_args(&["FLUSHDB"]);
-
-    let m = Mock::ok();
-    m.flushdb(Some(FlushMode::Async)).await.unwrap();
-    m.assert_args(&["FLUSHDB", "ASYNC"]);
-}
-
-#[tokio::test]
-async fn flushall_with_mode() {
-    let m = Mock::ok();
-    m.flushall(Some(FlushMode::Sync)).await.unwrap();
-    m.assert_args(&["FLUSHALL", "SYNC"]);
 }
 
 #[tokio::test]

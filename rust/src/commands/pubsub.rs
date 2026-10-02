@@ -13,6 +13,7 @@ use crate::cmd::Cmd;
 use crate::executor::CommandExecutor;
 use crate::value::FromValkeyValue;
 use crate::value::ValkeyValue;
+use crate::value::to_glide_error;
 use crate::write::ToValkeyArgs;
 use async_trait::async_trait;
 use bytes::Bytes;
@@ -86,10 +87,7 @@ pub trait PubSubCommands: CommandExecutor {
         Ok(())
     }
 
-    // NOTE: no `publish` here — `PUBLISH` lives in the unified command table
-    // (`crate::AsyncCommands::publish`). Duplicating it in this trait would
-    // make `.publish(...)` ambiguous (E0034) whenever both traits are in
-    // scope, breaking `use glide::*`.
+    // NOTE: `PUBLISH` is implemented in the unified command table (`crate::AsyncCommands::publish`).
 
     /// Publish `message` to a shard `channel` (`SPUBLISH`, cluster). Returns the
     /// number of clients that received the message.
@@ -97,10 +95,10 @@ pub trait PubSubCommands: CommandExecutor {
         &self,
         channel: C,
         message: M,
-    ) -> ValkeyResult<i64> {
+    ) -> ValkeyResult<usize> {
         let mut cmd = Cmd::new();
         cmd.arg("SPUBLISH").arg(channel).arg(message);
-        i64::from_owned_valkey_value(self.execute_command(cmd, None).await?)
+        usize::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
     /// List active channels, optionally matching `pattern` (`PUBSUB CHANNELS`).
@@ -197,9 +195,7 @@ fn parse_numsub(v: ValkeyValue) -> ValkeyResult<Vec<(Bytes, i64)>> {
             }
             Ok(out)
         }
-        other => Err(crate::error::GlideError::Request(format!(
-            "unexpected PUBSUB NUMSUB reply: {other:?}"
-        ))),
+        other => Err(to_glide_error(other, "Unexpected PUBSUB NUMSUB reply.")),
     }
 }
 

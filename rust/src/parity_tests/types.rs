@@ -8,7 +8,7 @@ use std::collections::BTreeMap;
 /// A snapshot of redis-rs commands for parity tests.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct RedisParity {
-    /// The redis-rs release this snapshot describes (e.g. `0.25.2`).
+    /// The redis-rs release this snapshot describes (e.g. `1.7.0`).
     pub version: String,
     /// The command table methods, indexed by method name.
     pub command_table_methods: BTreeMap<String, Method>,

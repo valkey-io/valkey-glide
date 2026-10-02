@@ -266,7 +266,7 @@ pub trait FromValkeyValue: Sized {
 }
 
 /// Build a error for the given `ValkeyValue` and message.
-fn to_glide_error(value: ValkeyValue, msg: &str) -> GlideError {
+pub(crate) fn to_glide_error(value: ValkeyValue, msg: &str) -> GlideError {
     GlideError::Request(format!("{msg} (response was {value:?})"))
 }
 
