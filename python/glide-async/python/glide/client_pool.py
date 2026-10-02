@@ -111,6 +111,17 @@ class AsyncClientPool:
                 "Use the main client's pubsub API for subscriptions."
             )
 
+        # Reject custom IAM credential providers — pool connections cannot
+        # forward a Python callback per-connection. Use IamAuthConfig without
+        # a credential_provider to use the default AWS credential chain.
+        _creds = getattr(client_config, "credentials", None)
+        _iam = getattr(_creds, "iam_config", None) if _creds else None
+        if _iam is not None and getattr(_iam, "credential_provider", None) is not None:
+            raise ValueError(
+                "Pool clients cannot use a custom IAM credentials provider. "
+                "Configure IAM without a credential_provider to use the default AWS credential chain."
+            )
+
         ffi_instance = _ASYNC_FFI
         self._ffi = ffi_instance.ffi
         self._lib = ffi_instance.lib

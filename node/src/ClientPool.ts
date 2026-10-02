@@ -41,7 +41,6 @@ import {
     poolMetrics,
     poolDestroy,
     removeAddressResolver,
-    removeCredentialProvider,
 } from "../build-ts/native";
 
 /** Re-export the pool client type (full command set). */
@@ -96,7 +95,6 @@ export class ClientPool {
     private readonly isCluster: boolean;
     private readonly clientConfig: BaseClientConfiguration;
     private readonly resolverKey: string | undefined;
-    private readonly credentialProviderKey: string | undefined;
     private readonly activeClients = new Set<BaseClient>();
 
     private constructor(
@@ -105,14 +103,12 @@ export class ClientPool {
         isCluster: boolean,
         clientConfig: BaseClientConfiguration,
         resolverKey: string | undefined,
-        credentialProviderKey: string | undefined,
     ) {
         this.poolId = poolId;
         this.acquireTimeoutMs = acquireTimeoutMs;
         this.isCluster = isCluster;
         this.clientConfig = clientConfig;
         this.resolverKey = resolverKey;
-        this.credentialProviderKey = credentialProviderKey;
     }
 
     /**
@@ -143,16 +139,25 @@ export class ClientPool {
             );
         }
 
+        // Reject custom IAM credential providers — pool connections cannot
+        // forward a callback per-connection. Use IamAuthConfig without
+        // a credentialProvider to use the default AWS credential chain.
+        if (
+            "iamConfig" in (clientConfig.credentials ?? {}) &&
+            (clientConfig.credentials as { iamConfig?: { credentialProvider?: unknown } })
+                .iamConfig?.credentialProvider
+        ) {
+            throw new Error(
+                "Pool clients cannot use a custom IAM credentials provider. " +
+                    "Configure IAM without a credentialProvider to use the default AWS credential chain.",
+            );
+        }
+
         // Serialise the connection config into protobuf bytes using the
         // appropriate typed client without opening a network connection.
-        // serializeConfig also registers any addressResolver and
-        // credentialProvider and returns the keys so we can clean up if pool
-        // creation fails.
-        const {
-            bytes: connectionRequestBytes,
-            resolverKey,
-            credentialProviderKey,
-        } = isCluster
+        // serializeConfig also registers any addressResolver and returns the
+        // key so we can clean up if pool creation fails.
+        const { bytes: connectionRequestBytes, resolverKey } = isCluster
             ? GlideClusterClient.serializeConfig(
                   clientConfig as GlideClusterClientConfiguration,
               )
@@ -176,14 +181,9 @@ export class ClientPool {
         try {
             poolId = await createPool(connectionRequestBytes, poolConfigNapi);
         } catch (e) {
-            // Clean up the address resolver and credential provider
-            // registrations if pool creation failed.
+            // Clean up the address resolver registration if pool creation failed.
             if (resolverKey) {
                 removeAddressResolver(resolverKey);
-            }
-
-            if (credentialProviderKey) {
-                removeCredentialProvider(credentialProviderKey);
             }
 
             throw e;
@@ -195,7 +195,6 @@ export class ClientPool {
             isCluster,
             clientConfig,
             resolverKey,
-            credentialProviderKey,
         );
     }
 
@@ -340,11 +339,6 @@ export class ClientPool {
             // the pool is closed and we explicitly remove it here.
             if (this.resolverKey) {
                 removeAddressResolver(this.resolverKey);
-            }
-
-            // Clean up the credential provider registration if one was used.
-            if (this.credentialProviderKey) {
-                removeCredentialProvider(this.credentialProviderKey);
             }
         }
     }
