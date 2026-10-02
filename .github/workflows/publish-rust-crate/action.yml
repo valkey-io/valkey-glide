@@ -29,11 +29,16 @@ runs:
           env:
               CRATE: ${{ inputs.crate }}
           run: |
+              # Determine crate name.
               NAME=$(yq -p toml '.package.name' "${CRATE}/Cargo.toml")
-              VERSION=$(yq -p toml '.package.version' "${CRATE}/Cargo.toml")
+              if ! [[ "${NAME}" =~ ^[A-Za-z][A-Za-z0-9_-]*$ ]]; then
+                  echo "Crate name ${NAME} is not valid"
+                  exit 1
+              fi
 
-              # Verify that version is valid.
-              if ! echo "${VERSION}" | grep -Pq '^\d+\.\d+\.\d+(-rc\.\d+)?$'; then
+              # Determine crate version.
+              VERSION=$(yq -p toml '.package.version' "${CRATE}/Cargo.toml")
+              if ! [[ "${VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+)?$ ]]; then
                   echo "${NAME} version ${VERSION} is not valid, must be *.*.* or *.*.*-rc.*"
                   exit 1
               fi
