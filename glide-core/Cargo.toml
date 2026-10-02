@@ -46,7 +46,7 @@ strum = "0.28"
 strum_macros = "0.28"
 thiserror = "2"
 tokio = { version = "1", features = ["fs", "macros", "time"] }
-tokio-retry2 = { version = "0.6", features = ["jitter"] }
+tokio-retry2 = { version = "0.9", features = ["jitter"] }
 tokio-util = { version = "^0.7", features = ["rt"], optional = true }
 urlencoding = "2"
 uuid = { version = "1", features = ["v4", "fast-rng"] }
