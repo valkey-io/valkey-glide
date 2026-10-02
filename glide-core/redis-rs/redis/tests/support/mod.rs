@@ -381,6 +381,15 @@ pub fn get_random_available_port() -> u16 {
     listener.local_addr().unwrap().port()
 }
 
+/// The `process_id` reported by `INFO server` on `con`, so a caller can check
+/// that the port it reached belongs to the server it spawned.
+pub(crate) fn server_process_id(con: &mut redis::Connection) -> Option<u32> {
+    let info: String = redis::cmd("INFO").arg("server").query(con).ok()?;
+    info.lines()
+        .find_map(|line| line.strip_prefix("process_id:"))
+        .and_then(|pid| pid.trim().parse().ok())
+}
+
 impl Drop for RedisServer {
     fn drop(&mut self) {
         self.stop()
@@ -406,15 +415,24 @@ impl TestContext {
         Self::with_modules(&[], true)
     }
 
-    fn connect_with_retries(client: &redis::Client) {
+    fn connect_with_retries(server: &mut RedisServer, client: &redis::Client) {
         let mut con;
 
         let millisecond = Duration::from_millis(1);
         let mut retries = 0;
         loop {
+            if let Ok(Some(status)) = server.process.try_wait() {
+                panic!(
+                    "redis server at {:?} exited with {status:?} before accepting connections",
+                    server.client_addr()
+                );
+            }
             match client.get_connection(None) {
                 Err(err) => {
-                    if err.is_connection_refusal() {
+                    // A reset, not only a refusal, is expected while the port is still
+                    // settling: another test's `get_random_available_port` probe listener
+                    // can briefly hold it and drop our connection.
+                    if err.is_connection_refusal() || err.is_connection_dropped() {
                         sleep(millisecond);
                         retries += 1;
                         if retries > 100000 {
@@ -430,6 +448,14 @@ impl TestContext {
                 }
             }
         }
+        let expected = server.process.id();
+        let actual = server_process_id(&mut con);
+        assert_eq!(
+            actual,
+            Some(expected),
+            "{:?} is served by pid {actual:?}, not our redis server {expected}",
+            server.client_addr()
+        );
         redis::cmd("FLUSHDB").execute(&mut con);
     }
 
@@ -437,7 +463,7 @@ impl TestContext {
         let redis_port = get_random_available_port();
         let addr: ConnectionAddr = RedisServer::get_addr(redis_port);
 
-        let server = RedisServer::new_with_addr_tls_modules_and_spawner(
+        let mut server = RedisServer::new_with_addr_tls_modules_and_spawner(
             addr,
             None,
             Some(tls_files),
@@ -452,7 +478,7 @@ impl TestContext {
         let client =
             build_single_client(server.connection_info(), &server.tls_paths, mtls_enabled).unwrap();
 
-        Self::connect_with_retries(&client);
+        Self::connect_with_retries(&mut server, &client);
 
         TestContext {
             server,
@@ -462,12 +488,12 @@ impl TestContext {
     }
 
     pub fn with_modules(modules: &[Module], mtls_enabled: bool) -> TestContext {
-        let server = RedisServer::with_modules(modules, mtls_enabled);
+        let mut server = RedisServer::with_modules(modules, mtls_enabled);
 
         let client =
             build_single_client(server.connection_info(), &server.tls_paths, mtls_enabled).unwrap();
 
-        Self::connect_with_retries(&client);
+        Self::connect_with_retries(&mut server, &client);
 
         TestContext {
             server,
@@ -477,7 +503,7 @@ impl TestContext {
     }
 
     pub fn with_client_name(clientname: &str) -> TestContext {
-        let server = RedisServer::with_modules(&[], false);
+        let mut server = RedisServer::with_modules(&[], false);
         let con_info = redis::ConnectionInfo {
             addr: server.client_addr().clone(),
             redis: redis::RedisConnectionInfo {
@@ -488,7 +514,7 @@ impl TestContext {
 
         let client = build_single_client(con_info, &server.tls_paths, false).unwrap();
 
-        Self::connect_with_retries(&client);
+        Self::connect_with_retries(&mut server, &client);
 
         TestContext {
             server,

@@ -28,7 +28,9 @@ use tempfile::TempDir;
 
 use crate::support::{build_keys_and_certs_for_tls, Module};
 
-use super::{build_single_client, get_random_available_port, load_certs_from_file};
+use super::{
+    build_single_client, get_random_available_port, load_certs_from_file, server_process_id,
+};
 
 use super::use_protocol;
 use super::RedisServer;
@@ -492,16 +494,11 @@ impl RedisCluster {
                     "redis server on port {port} exited with {status:?} before answering INFO"
                 ));
             }
-            let info: RedisResult<String> =
-                build_single_client(server.connection_info(), tls_paths, mtls_enabled)
-                    .and_then(|client| client.get_connection(None))
-                    .and_then(|mut con| cmd("INFO").arg("server").query(&mut con));
-            match info {
-                Ok(info) => {
-                    let actual = info
-                        .lines()
-                        .find_map(|line| line.strip_prefix("process_id:"))
-                        .and_then(|pid| pid.trim().parse::<u32>().ok());
+            let con = build_single_client(server.connection_info(), tls_paths, mtls_enabled)
+                .and_then(|client| client.get_connection(None));
+            match con {
+                Ok(mut con) => {
+                    let actual = server_process_id(&mut con);
                     return if actual == Some(expected) {
                         Ok(())
                     } else {
