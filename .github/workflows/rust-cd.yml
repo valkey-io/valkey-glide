@@ -41,7 +41,7 @@ jobs:
     publish-glide-logger:
         needs: [test-glide-logger]
         runs-on: ubuntu-latest
-        # Only require workflow approval (via AWS_ACTIONS) for publishing.
+        # Only require approval (via AWS_ACTIONS) for publishing.
         environment: ${{ inputs.publish && 'AWS_ACTIONS' || '' }}
         permissions:
             contents: read
