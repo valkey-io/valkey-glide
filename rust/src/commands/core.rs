@@ -562,29 +562,30 @@ macro_rules! implement_commands {
             )*
 
             implement_scan_methods_async!();
-
-            /// `GET`, decoded as an integer.
-            #[inline]
-            fn get_int<$lifetime, K: ToSingleValkeyArg + Send + Sync + $lifetime>(
-                &$lifetime self,
-                key: K,
-            ) -> ValkeyFuture<$lifetime, Option<isize>> {
-                let cmd = Cmd::get(key);
-                Box::pin(async move { Option::<isize>::from_owned_valkey_value(self.glide_send_command(cmd).await?) })
-            }
-
-            /// `MGET`, decoded as integers.
-            #[inline]
-            fn mget_ints<$lifetime, K: ToValkeyArgs + Send + Sync + $lifetime>(
-                &$lifetime self,
-                key: K,
-            ) -> ValkeyFuture<$lifetime, Vec<Option<isize>>> {
-                let cmd = Cmd::mget(key);
-                Box::pin(async move { Vec::<Option<isize>>::from_owned_valkey_value(self.glide_send_command(cmd).await?) })
-            }
         }
 
         impl<T: AsyncCommands> AsyncTypedCommands for T {}
+
+        /// **GLIDE's typed blocking command API.**
+        ///
+        /// Blocking counterpart of [`AsyncTypedCommands`]; implemented for
+        /// every [`Commands`] type. Import only one of [`Commands`] and
+        /// [`TypedCommands`] (see [`AsyncTypedCommands`]).
+        #[cfg(feature = "sync")]
+        pub trait TypedCommands: Commands {
+            $(
+                implement_typed_command_sync! {
+                    $lifetime
+                    $(#[$attr])*
+                    fn $name<$($g: $b),*>($($arg: $ty),*) $ret
+                }
+            )*
+
+            implement_scan_methods_sync!();
+        }
+
+        #[cfg(feature = "sync")]
+        impl<T: Commands> TypedCommands for T {}
     };
 }
 
@@ -987,7 +988,7 @@ implement_commands! {
     }
 
     /// `HGETEX`.
-    fn hget_ex<K: ToSingleValkeyArg, F: ToValkeyArgs>(key: K, fields: F, expire_at: Expiry) {
+    fn hget_ex<K: ToSingleValkeyArg, F: ToValkeyArgs>(key: K, fields: F, expire_at: Expiry) -> (Vec<Option<String>>) {
         build_cmd!("HGETEX", key, expire_at, "FIELDS", fields.num_of_args(), fields)
     }
 
@@ -1194,7 +1195,7 @@ implement_commands! {
     }
 
     /// `ZPOPMAX`.
-    fn zpopmax<K: ToSingleValkeyArg>(key: K, count: isize) {
+    fn zpopmax<K: ToSingleValkeyArg>(key: K, count: isize) -> (Vec<(String, f64)>) {
         build_cmd!("ZPOPMAX", key, count)
     }
 
@@ -1204,7 +1205,7 @@ implement_commands! {
     }
 
     /// `ZPOPMIN`.
-    fn zpopmin<K: ToSingleValkeyArg>(key: K, count: isize) {
+    fn zpopmin<K: ToSingleValkeyArg>(key: K, count: isize) -> (Vec<(String, f64)>) {
         build_cmd!("ZPOPMIN", key, count)
     }
 
@@ -1354,7 +1355,7 @@ implement_commands! {
     }
 
     /// `ZMSCORE`.
-    fn zscore_multiple<K: ToSingleValkeyArg, M: ToValkeyArgs>(key: K, members: &'a [M]) {
+    fn zscore_multiple<K: ToSingleValkeyArg, M: ToValkeyArgs>(key: K, members: &'a [M]) -> (Vec<Option<f64>>) {
         build_cmd!("ZMSCORE", key, members)
     }
 
@@ -1458,17 +1459,17 @@ implement_commands! {
     }
 
     /// `GEODIST`.
-    fn geo_dist<K: ToSingleValkeyArg, M1: ToSingleValkeyArg, M2: ToSingleValkeyArg>(key: K, member1: M1, member2: M2, unit: geo::Unit) -> (Option<f64>) {
+    fn geo_dist<K: ToSingleValkeyArg, M1: ToSingleValkeyArg, M2: ToSingleValkeyArg>(key: K, member1: M1, member2: M2, unit: GeoUnit) -> (Option<f64>) {
         build_cmd!("GEODIST", key, member1, member2, unit)
     }
 
     /// `GEOHASH`.
-    fn geo_hash<K: ToSingleValkeyArg, M: ToValkeyArgs>(key: K, members: M) {
+    fn geo_hash<K: ToSingleValkeyArg, M: ToValkeyArgs>(key: K, members: M) -> (Vec<Option<String>>) {
         build_cmd!("GEOHASH", key, members)
     }
 
     /// `GEOPOS`.
-    fn geo_pos<K: ToSingleValkeyArg, M: ToValkeyArgs>(key: K, members: M) -> (Vec<Option<geo::Coord<f64>>>) {
+    fn geo_pos<K: ToSingleValkeyArg, M: ToValkeyArgs>(key: K, members: M) -> (Vec<Option<GeoCoord<f64>>>) {
         build_cmd!("GEOPOS", key, members)
     }
 

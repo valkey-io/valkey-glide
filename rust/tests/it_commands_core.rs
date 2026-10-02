@@ -17,8 +17,6 @@ use std::collections::{HashMap, HashSet};
 matrix_test!(set_get_typed, c, {
     let k = common::key("rrs");
     c.set(&k, 42).await.unwrap();
-    let as_int: Option<isize> = c.get_int(&k).await.unwrap();
-    assert_eq!(as_int, Some(42));
     let as_string: Option<String> = c.get(&k).await.unwrap();
     assert_eq!(as_string.as_deref(), Some("42"));
 });
