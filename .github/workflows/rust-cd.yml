@@ -41,7 +41,8 @@ jobs:
     publish-glide-logger:
         needs: [test-glide-logger]
         runs-on: ubuntu-latest
-        environment: AWS_ACTIONS
+        # Only require workflow approval (via AWS_ACTIONS) for publishing.
+        environment: ${{ inputs.publish && 'AWS_ACTIONS' || '' }}
         permissions:
             contents: read
             # Required for crates.io trusted publishing (OIDC).
