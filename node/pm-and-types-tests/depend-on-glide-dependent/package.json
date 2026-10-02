@@ -14,7 +14,7 @@
         "winston": "^3.17.0"
     },
     "devDependencies": {
-        "@types/node": "26.6.1",
+        "@types/node": "26.6.2",
         "ts-node": "^10.9.2",
         "typescript": "^5.0.4"
     }
