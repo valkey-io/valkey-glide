@@ -4,6 +4,7 @@
 
 ### Fixes
 
+* Python: A client created on a new event loop is answered while the loop that owns the shared response pipe is open but not running. The reader moved only once its loop was closed, so a loop left open after `run_until_complete()` stalled the clients of every other loop; a running loop now registers its own reader, pipe reads are serialized so coexisting readers cannot interleave frames, and each response is still resolved on its own client's loop ([#7122](https://github.com/valkey-io/valkey-glide/issues/7122))
 * Java: Clear jedis-compat-shared javadoc errors and deprecate substr ([#7191](https://github.com/valkey-io/valkey-glide/pull/7191))
 * Core: A scope pool no longer leaks capacity when connecting to a paused or unreachable shard. A reserved `max_total` slot is now held by an RAII guard that returns it on every creation outcome — including a creation cancelled mid-handshake, which previously leaked the slot until scopes to healthy shards could no longer be opened — and decrements saturate at zero so a give-back cannot wrap into permanent exhaustion. Concurrent retries of a single acquire are deduped to one in-flight creation, so a retry storm against a slow shard can no longer consume the whole pool, while distinct concurrent acquires each still open their own connection ([#6966](https://github.com/valkey-io/valkey-glide/issues/6966), [#7067](https://github.com/valkey-io/valkey-glide/issues/7067))
 * Core/All, Node: Fix ClientPool abandon monitor race for blocking commands ([#7063](https://github.com/valkey-io/valkey-glide/pull/7063))
