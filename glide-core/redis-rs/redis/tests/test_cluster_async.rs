@@ -905,17 +905,20 @@ mod cluster_async {
     }
 
     #[tokio::test]
+    #[serial_test::parallel(otel)]
     async fn test_routing_by_slot_to_replica_with_az_affinity_strategy_to_half_replicas() {
         test_az_affinity_helper(StrategyVariant::Replicas).await;
     }
 
     #[tokio::test]
+    #[serial_test::parallel(otel)]
     async fn test_routing_by_slot_to_replica_with_az_affinity_replicas_and_primary_strategy_to_half_replicas(
     ) {
         test_az_affinity_helper(StrategyVariant::ReplicasAndPrimary).await;
     }
 
     #[tokio::test]
+    #[serial_test::parallel(otel)]
     async fn test_routing_by_slot_to_replica_with_az_affinity_all_nodes_strategy_to_half_replicas()
     {
         test_az_affinity_helper(StrategyVariant::AllNodes).await;
@@ -1027,16 +1030,19 @@ mod cluster_async {
     }
 
     #[tokio::test]
+    #[serial_test::parallel(otel)]
     async fn test_az_affinity_strategy_to_all_replicas() {
         test_all_replicas_helper(StrategyVariant::Replicas).await;
     }
 
     #[tokio::test]
+    #[serial_test::parallel(otel)]
     async fn test_az_affinity_replicas_and_primary_to_all_replicas() {
         test_all_replicas_helper(StrategyVariant::ReplicasAndPrimary).await;
     }
 
     #[tokio::test]
+    #[serial_test::parallel(otel)]
     async fn test_az_affinity_all_nodes_to_all_nodes() {
         test_all_replicas_helper(StrategyVariant::AllNodes).await;
     }
@@ -1144,6 +1150,7 @@ mod cluster_async {
     }
 
     #[tokio::test]
+    #[serial_test::parallel(otel)]
     async fn test_az_affinity_replicas_and_primary_prefers_local_primary() {
         // Skip test if version is less than Valkey 8.0
         if engine_version_less_than("8.0").await {
@@ -1250,6 +1257,7 @@ mod cluster_async {
     }
 
     #[tokio::test]
+    #[serial_test::parallel(otel)]
     async fn test_az_affinity_all_nodes_splits_reads_between_local_primary_and_replica() {
         // Skip test if version is less than Valkey 8.0
         if engine_version_less_than("8.0").await {
@@ -1365,6 +1373,7 @@ mod cluster_async {
     }
 
     #[tokio::test]
+    #[serial_test::parallel(otel)]
     async fn test_az_affinity_all_nodes_replica_required_reads_stay_on_replicas() {
         // Skip test if version is less than Valkey 8.0
         if engine_version_less_than("8.0").await {
@@ -1492,6 +1501,7 @@ mod cluster_async {
     }
 
     #[tokio::test]
+    #[serial_test::parallel(otel)]
     async fn test_az_affinity_all_nodes_cluster_scan_stays_on_replicas() {
         // Skip test if version is less than Valkey 8.0
         if engine_version_less_than("8.0").await {
@@ -6975,6 +6985,7 @@ mod cluster_async {
     }
 
     #[tokio::test]
+    #[serial_test::serial(otel)]
     async fn test_pending_requests_channel_throughput() {
         // Validates that the lock-free channel (mpsc::UnboundedChannel) for pending_requests
         // handles high request rates without blocking the Tokio runtime.
@@ -7022,6 +7033,7 @@ mod cluster_async {
     }
 
     #[tokio::test]
+    #[serial_test::serial(otel)]
     async fn test_high_concurrency_no_runtime_blocking() {
         // Validates that under high concurrency, operations complete without Tokio runtime
         // starvation.
@@ -7074,6 +7086,7 @@ mod cluster_async {
     }
 
     #[tokio::test]
+    #[serial_test::serial(otel)]
     async fn test_cluster_params_concurrent_access() {
         // Validates that the async RwLock for cluster_params doesn't block the Tokio runtime
         // when accessed concurrently (read or write).
@@ -8829,37 +8842,54 @@ mod cluster_async {
     /// retry, mock or real, increments). They run `#[serial_test::serial(otel)]`
     /// as exclusive writers; everything else runs `#[serial_test::parallel(otel)]`
     /// as shared readers, so the two classes never overlap.
+    ///
+    /// Throughput tests that assert on wall-clock rates also run `serial(otel)`:
+    /// they need the machine to themselves.
     #[test]
     #[serial_test::parallel(otel)]
     fn every_test_declares_otel_scheduling_class() {
+        // Per-spelling floors, so a change to the matching below cannot silently
+        // exempt one kind of test attribute while the other keeps the count up.
+        const MIN_SYNC_TESTS: usize = 100;
+        const MIN_TOKIO_TESTS: usize = 10;
+
         let src = include_str!("test_cluster_async.rs");
         let lines: Vec<&str> = src.lines().collect();
         let mut missing = Vec::new();
-        let mut checked = 0usize;
+        let mut checked_sync = 0usize;
+        let mut checked_tokio = 0usize;
         for (i, line) in lines.iter().enumerate() {
-            if line.trim() != "#[test]" {
+            let attr = line.trim();
+            if attr == "#[test]" {
+                checked_sync += 1;
+            } else if attr == "#[tokio::test]" || attr.starts_with("#[tokio::test(") {
+                checked_tokio += 1;
+            } else {
                 continue;
             }
-            checked += 1;
             let next = lines.get(i + 1).map(|l| l.trim()).unwrap_or("");
             let ok = next.starts_with("#[serial_test::serial(otel)]")
                 || next.starts_with("#[serial_test::parallel(otel)]");
             if !ok {
                 let name = lines[i + 1..]
                     .iter()
-                    .find_map(|l| l.trim().strip_prefix("fn "))
+                    .find_map(|l| {
+                        let l = l.trim();
+                        l.strip_prefix("async fn ")
+                            .or_else(|| l.strip_prefix("fn "))
+                    })
                     .map(|rest| rest.split('(').next().unwrap_or(rest))
                     .unwrap_or("<unknown>");
                 missing.push(format!("line {}: {name}", i + 1));
             }
         }
         assert!(
-            checked > 0,
-            "guard found no #[test] attributes; is include_str! reading the right file?"
+            checked_sync >= MIN_SYNC_TESTS && checked_tokio >= MIN_TOKIO_TESTS,
+            "guard found {checked_sync} #[test] and {checked_tokio} #[tokio::test] attributes (expected at least {MIN_SYNC_TESTS} and {MIN_TOKIO_TESTS}); either the matching regressed or tests were removed and the floors need lowering"
         );
         assert!(
             missing.is_empty(),
-            "tests missing #[serial_test::serial(otel)] or #[serial_test::parallel(otel)] directly after #[test]:\n  {}",
+            "tests missing #[serial_test::serial(otel)] or #[serial_test::parallel(otel)] directly after #[test] / #[tokio::test]:\n  {}",
             missing.join("\n  ")
         );
     }
