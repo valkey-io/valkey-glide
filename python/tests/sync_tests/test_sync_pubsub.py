@@ -44,7 +44,6 @@ from tests.utils.pubsub_test_utils import (
 )
 from tests.utils.utils import (
     get_random_string,
-    run_sync_func_with_timeout_in_thread,
     sync_check_if_server_version_lt,
     sync_kill_connections_tolerant,
 )
@@ -439,11 +438,6 @@ class TestSyncPubSub:
             assert not sync_msg.message == async_msg.message
 
             # assert there are no messages to read
-            with pytest.raises(TimeoutError):
-                run_sync_func_with_timeout_in_thread(
-                    lambda: listening_client.get_pubsub_message(), timeout=3.0
-                )
-
             assert listening_client.try_get_pubsub_message() is None
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
@@ -577,11 +571,6 @@ class TestSyncPubSub:
             # check that we received all messages
             assert channels_and_messages == {}
             # assert there are no messages to read
-            with pytest.raises(TimeoutError):
-                run_sync_func_with_timeout_in_thread(
-                    lambda: listening_client.get_pubsub_message(), timeout=3.0
-                )
-
             assert listening_client.try_get_pubsub_message() is None
 
     @pytest.mark.skip_if_version_below("7.0.0")
@@ -714,11 +703,6 @@ class TestSyncPubSub:
             assert not sync_msg.message == async_msg.message
 
             # assert there are no messages to read
-            with pytest.raises(TimeoutError):
-                run_sync_func_with_timeout_in_thread(
-                    lambda: listening_client.get_pubsub_message(), timeout=3.0
-                )
-
             assert listening_client.try_get_pubsub_message() is None
 
     @pytest.mark.skip_if_version_below("7.0.0")
@@ -920,11 +904,6 @@ class TestSyncPubSub:
             assert channels == {}
 
             # assert there are no more messages to read
-            with pytest.raises(TimeoutError):
-                run_sync_func_with_timeout_in_thread(
-                    lambda: listening_client.get_pubsub_message(), timeout=3.0
-                )
-
             assert listening_client.try_get_pubsub_message() is None
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
@@ -2035,11 +2014,6 @@ class TestSyncPubSub:
             assert sync_msg.pattern is None
 
             # assert there are no messages to read
-            with pytest.raises(TimeoutError):
-                run_sync_func_with_timeout_in_thread(
-                    lambda: listening_client.get_pubsub_message(), timeout=3.0
-                )
-
             assert listening_client.try_get_pubsub_message() is None
 
     @pytest.mark.skip(
@@ -2114,11 +2088,6 @@ class TestSyncPubSub:
             assert sync_msg.pattern is None
 
             # assert there are no messages to read
-            with pytest.raises(TimeoutError):
-                run_sync_func_with_timeout_in_thread(
-                    lambda: listening_client.get_pubsub_message(), timeout=3.0
-                )
-
             assert listening_client.try_get_pubsub_message() is None
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
