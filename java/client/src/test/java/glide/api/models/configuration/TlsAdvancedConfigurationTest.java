@@ -387,45 +387,95 @@ public class TlsAdvancedConfigurationTest {
     //   openssl pkcs8 -topk8 -nocrypt -in k.key -outform DER | base64   # -> TEST_KEY_PKCS8_DER_B64
     // Embedding static material keeps the suite self-contained: the keystore is assembled in-process
     // with public JCA only (no JDK-internal cert generation, no keytool/openssl at runtime).
+    // A test leaf certificate (CN=glide-test) with its matching PKCS#8 RSA private key, plus the
+    // intermediate and root certificates that signed it — a real chain (leaf -> intermediate ->
+    // root), as base64-encoded DER. Generated once with OpenSSL purely for these tests, e.g.:
+    //   openssl req -x509 -newkey rsa:2048 -keyout root.key -out root.crt -days 3650 -nodes \
+    //       -subj "/CN=glide-test-root"
+    //   openssl req -newkey rsa:2048 -keyout int.key -out int.csr -nodes \
+    //       -subj "/CN=glide-test-intermediate"
+    //   openssl x509 -req -in int.csr -CA root.crt -CAkey root.key -CAcreateserial -days 3650 \
+    //       -extfile <(printf "basicConstraints=CA:TRUE") -out int.crt
+    //   openssl req -newkey rsa:2048 -keyout leaf.key -out leaf.csr -nodes -subj "/CN=glide-test"
+    //   openssl x509 -req -in leaf.csr -CA int.crt -CAkey int.key -CAcreateserial -days 3650 \
+    //       -out leaf.crt
+    //   openssl x509 -in leaf.crt -outform DER | base64                 # -> TEST_CERT_DER_B64
+    //   openssl pkcs8 -topk8 -nocrypt -in leaf.key -outform DER | base64 # -> TEST_KEY_PKCS8_DER_B64
+    //   openssl x509 -in int.crt  -outform DER | base64                 # -> TEST_INTERMEDIATE_DER_B64
+    //   openssl x509 -in root.crt -outform DER | base64                 # -> TEST_ROOT_DER_B64
+    // Embedding static material keeps the suite self-contained: the keystore is assembled in-process
+    // with public JCA only (no JDK-internal cert generation, no keytool/openssl at runtime).
     private static final String TEST_CERT_DER_B64 =
-            "MIIDCzCCAfOgAwIBAgIUFQK2et9Pudh5iYTRtZGhzw4sDD0wDQYJKoZIhvcNAQELBQAwFTETMBEG"
-                    + "A1UEAwwKZ2xpZGUtdGVzdDAeFw0yNjEwMDEyMjI3MjdaFw0zNjA5MjgyMjI3MjdaMBUxEzARBgNV"
-                    + "BAMMCmdsaWRlLXRlc3QwggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQDgnb1t8Ehycjj5"
-                    + "vJWgy+iMenZ2fyQsDLxueELNFei5Maf+R73aylg03nlbVXPy8e0l/Y+f7fidxqtKJ4L+FRak3Wy"
-                    + "EitEZA1PTBpqytdBmKrWFODGkgbef8RJMSI+mr1YA6WFiltWRhyX/RNzzK7h0Q2bHrI20Ub+eZ4"
-                    + "rV7FnxF8ATyaedjmXiGO+1m0SQ3+YeQwbF3siqYm6ZBsuCnmCPFO040iUNUjxsz82KQMLcDPmvx"
-                    + "jzrqUjy/KPBACXnAVENeImxDQm0xDidGA6sfd4lKA3bb3xpcA6GGwQ0ojK22L3K6BoAQKCleIZR"
-                    + "maDqovMBa6T+HK/cyJX7VPoq53vtAgMBAAGjUzBRMB0GA1UdDgQWBBRkKHAkdmNaG5uXO+T7B8Ru"
-                    + "AP2UyDAfBgNVHSMEGDAWgBRkKHAkdmNaG5uXO+T7B8RuAP2UyDAPBgNVHRMBAf8EBTADAQH/MA0G"
-                    + "CSqGSIb3DQEBCwUAA4IBAQB3FbtoxDMW+kmRSBYMKNNk98tEZcB3uXB2YULbDnYZbvRNC9jf2s68"
-                    + "6HRwZa66ATNTZFguPjR1bDYvjkg2SadlmrLl9hajl0jbmgy3nv/ovE0HPAmaPvmmiuuj9u9Ryph"
-                    + "oor0F+jKoVsCoiBb1hzy0OZzoie5JfExbYfMYe0XZQQJx6/qpNw6wDNETQyxbsU9JjgRW8ZBLVk"
-                    + "EDAi7ri8qp8Dr66u/uwhUmrAMZ5pFf9BfDwkT/NvbvEtSsdPyKpmXYkK4QBs3HawTG7oKAop/iU"
-                    + "rsQ2A6wQMRDd6aS60VI7bDK1T5bMPytLk3jLrFRHB0KEXnWzkRlpei1FmGI/hU9";
+            "MIIDBzCCAe+gAwIBAgIUDSY1/ZOxH2ikJrej2FQFYHUyJU8wDQYJKoZIhvcNAQELBQAwIjEgMB4G"
+                    + "A1UEAwwXZ2xpZGUtdGVzdC1pbnRlcm1lZGlhdGUwHhcNMjYxMDAyMDExODU1WhcNMzYwOTI5MDEx"
+                    + "ODU1WjAVMRMwEQYDVQQDDApnbGlkZS10ZXN0MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKC"
+                    + "AQEAtpehMS+YJRgFSapZjNKFtdUfK+iCPv6/hd54ojPHXjidjIUZRCwEHh19jsaQuGjaIBsReRXs"
+                    + "6JOKYHsAHvaR4dUzof4hx5Rnt6H4fZ6W4WNQub4K8sa+b5juh92UZBPxhlnQ/OZ5gmde8mOcxc/T"
+                    + "OR9QWqJ92sSYpShmsGAxntvf59+eqgBFpGyepq/+cE0RHK36i4MUuTGzxQS6649HsKbHnd9/lqRG"
+                    + "sZvSj6vd7dLvzZ+mjZv+BOZrZrfQtayWGuZ3K4AqgS0rPB63vlHShc7bSgaujwobXy3oy1AdM9zT"
+                    + "K5w5RPwrY1foqSoV1UnYmw/aWGI+GSy7rrl889i5xwIDAQABo0IwQDAdBgNVHQ4EFgQUePUv9+kd"
+                    + "UQKhN8Sjvmg8T/IPZzgwHwYDVR0jBBgwFoAUOonVgArccMaCkkogof94/9swgjUwDQYJKoZIhvcN"
+                    + "AQELBQADggEBAFXheqLWkq9WcWy3vmTO22j8mSIy5LjrG/G88+AfVpqGpX+/onczaWxG8pGDq2d1"
+                    + "OfdHCBjmXKvKEm7cvpnJSg2AO/ou69Uv4ZG1GyEHBny9qG61nvRobUe2KKHII6MebLQUaypr1VX8"
+                    + "3PBTbEcgspQ8KNakB8snWlRowkz1tVdCQc0ukAFA5cPe07ljNsJXHWfqkeVF6oFdNKYhYHhRP5tm"
+                    + "o9z3W/NFLoCN82F0ishen5wKVZOtTiMZNBxQRNoaIaiNwbf2hOhb0ANfc1stfy4CNbVbVfLmX8fq"
+                    + "UtEb3svPrAVJIRSug4OLlCGJQyFfGdslnP0CYVjrwWDrn3+6X3c=";
 
     private static final String TEST_KEY_PKCS8_DER_B64 =
-            "MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQDgnb1t8Ehycjj5vJWgy+iMenZ2"
-                    + "fyQsDLxueELNFei5Maf+R73aylg03nlbVXPy8e0l/Y+f7fidxqtKJ4L+FRak3WyEitEZA1PTBpq"
-                    + "ytdBmKrWFODGkgbef8RJMSI+mr1YA6WFiltWRhyX/RNzzK7h0Q2bHrI20Ub+eZ4rV7FnxF8ATya"
-                    + "edjmXiGO+1m0SQ3+YeQwbF3siqYm6ZBsuCnmCPFO040iUNUjxsz82KQMLcDPmvxjzrqUjy/KPBA"
-                    + "CXnAVENeImxDQm0xDidGA6sfd4lKA3bb3xpcA6GGwQ0ojK22L3K6BoAQKCleIZRmaDqovMBa6T+"
-                    + "HK/cyJX7VPoq53vtAgMBAAECggEAI2/PeH5Nt7ycj434n088R5l0ghpp9wclXVpc06VOu5UBd4U"
-                    + "TB2cgBmtJAydWrTAM5Y7871Log9/Zm0/jgzmJgoYqfji2Z3dWbLcghexYTh4T2Eo2zsjmUvYCGI"
-                    + "XkH/yOmYM4aYj5dcW4MW9IWpb9uV3+46auDpJNJG0agsiQog/87JUGYUYkIbyMsvariYkKEIfNA"
-                    + "o2OEVlJCFZUVjOAFoBKovK/BcXFiE3dZ7YK3WSOb08+q5ep4ev9RtL2lB8NU442ZJ+7U0QEHSxw"
-                    + "YEwPz77aMDn/Kfr1eILEDWMoe31xoXbaEF2F94pxbOfGDQEUHtQZtBztTtKutI67SsQr8QKBgQD7"
-                    + "8XF+AkT40Bzr3as/a5UUPiRKpc0zSYw/crjBU2pMCpYU3IvqeWR4smmctp66KDa4pe0TFm7Gd0p"
-                    + "CdUhem3dcpdwRAtgDYZHcAwKOoUJOV3z0X5985+UBJV1lNqpEN1rRAHc7xB1Rq7sDoV8Nu8YdGd"
-                    + "hlzpxmNDXv+XKhmRVnhQKBgQDkO6ZXYR0yGKo8evgdzQw86KDVDJsuVPsESb0uNWW3MwPmG73ne"
-                    + "O8IOSH/hDS+ebD+0p4zCPrXaxLzAnLmc+S8hSLHt3OhUapiz9Kvhs722C/izO6g0G+eupMLscp6"
-                    + "AFRQU29oFwilke0fqrcEUHhohRB6qi5JV8Ii5nof+2VLSQKBgFsh+OWVuJEv5mZDJqCoL6LE36f"
-                    + "I1bMJlZuVydLUc4zR/3vIUywbgQZPsvgm7r9zsGeWTW0sHiHYIJpthiICpmhy7mmQ18ZRUst8oz"
-                    + "4ogq2H5AEZXb12vFVvyJrF7U0DoOwc+QQ7akeSkPE9O/7hv0XjhW0+EUC+/gux9Y8SqrVpAoGBA"
-                    + "KyeDNYjpjBAhWjO3J+1eN8MVrAsI6YsMdnxZ3rueerQU8+TBdNvHOKMS5F0zWuOoHZql6ojzYxl"
-                    + "+GQBYyO3XbXTwBVrQ7IsEQFBC6kj/Z6mrbkMpCLO4s0bcaGzq18QprRGFomUej63mq+Lr3Y84oS"
-                    + "yt17/HZjtHfDFfnJ38gm5AoGBAPgtFB6z79AMrme6Dzs1dIZZExXnZ5p5lhFUblw01NxlZT4V1a"
-                    + "dh71oD6reT9/ttKSPCeBOekejmYYsNfH5Xj4iewjNn1ZlCFBBH3yRzb3LMj729ddWOoqlMTivtv"
-                    + "+zcqcoHvV9V4qBRsvYIq8VGsVNP7trFAhWIBMk+3qN+OMUa";
+            "MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQC2l6ExL5glGAVJqlmM0oW11R8r"
+                    + "6II+/r+F3niiM8deOJ2MhRlELAQeHX2OxpC4aNogGxF5Fezok4pgewAe9pHh1TOh/iHHlGe3ofh9"
+                    + "npbhY1C5vgryxr5vmO6H3ZRkE/GGWdD85nmCZ17yY5zFz9M5H1Baon3axJilKGawYDGe29/n356q"
+                    + "AEWkbJ6mr/5wTREcrfqLgxS5MbPFBLrrj0ewpsed33+WpEaxm9KPq93t0u/Nn6aNm/4E5mtmt9C1"
+                    + "rJYa5ncrgCqBLSs8Hre+UdKFzttKBq6PChtfLejLUB0z3NMrnDlE/CtjV+ipKhXVSdibD9pYYj4Z"
+                    + "LLuuuXzz2LnHAgMBAAECggEASRLd28VkalP2qciXFhiakm68juH6XiOtmnGybZezTi3yP2508id7"
+                    + "bmH3AdDN0j+ELB0pHQB9U4bYdkxDfCDJuUuN4mLGOg1WhNM5k2yIjaMlh3BbCVYomJjnvVAcNwEU"
+                    + "Q+RmExBZyKp+ARuEflXx/oZdrighng/X1yEYF7YnpZ9D0nTs7y2sVOgj8qvvjfZOTv7wy0WgxSiL"
+                    + "flpnuCwzbAyRIiTIFGksrlkBkOzNvTNHBIsZsKa6FJBurNLlPLXmKN1i+idF132H6q8YI+z6G1Kz"
+                    + "3qABag1I4v8Fqcl4qRqBedWH34dayvxam6ehCLzdbFuSTojnqN51K6CBjdzMwQKBgQDmVZdbzMjr"
+                    + "i/kvMibkCgIMrpRXkod6PpUU0FD9l9Bz5H3wk4G8NyVC86NU8dsWTsSiATkdQ1iRx+YAckLTkEwv"
+                    + "+ljT55gQ7meVDlbPCbQTWwIEfQlhtkmJy4efGYg9Dkqz+u5DAWIxObiut98XGEokw30kkFWDpowC"
+                    + "IYxm20mXDwKBgQDK8CvsJnkalm+F1ohg7i5RkJnudW0FT3UQlF3Jj60RK2I4dqaYJEG/JkZre2Vt"
+                    + "OA1xXh/jFvUxzIkStQl8RXpLgy2sZ9ezw2Kyy3FxIPKQ0jSVCmd0plKE2KNab4jWZm2Xl9a+lFku"
+                    + "9sIdUxJqh8QGXY5tsFvYdDU4uxLMomTxyQKBgGXSEl3fcjZGIzqM1gparjtC9Yqc2MzeW3Le/96K"
+                    + "vPhuWon9+wzj59Hn+Bz16V68JUpkdgYMnlubXX53BDmYAUX4Skoqh9t8OEf5FcDiTjt8MLEhQQNz"
+                    + "3KBQW7ymQcaTycw0Mh1mwCx4kr6Rw8nmz+fejzSZpWPUPPI4OGPDro1bAoGAG5itYF+a+FKct8aE"
+                    + "pSm+grj3NcYiHSbA9JA4cMBo+Hy9zo/T97x2dFfwG42cLU4CBfiWvXrRvQPjX/feYlfQWZRtEZTN"
+                    + "cFSRh17C/m9MjQUIwXu4tdQoRIhxLkscgItNO+AaA7CIsCo+G17AklwD/Bmc1K22z6h91EkcNVeg"
+                    + "AoECgYB5w/hthWK210nTASiVjeuCbAQDb8nUs5i/9ulET9jLYUBRcEighDG49WdT3mcw0NoTlC9W"
+                    + "AE+a3EzloPxGVnO2SFPzTjwzP/8As50klDwB27D0oqOjXv52CvHttS9i7DkZWeEiG2M/wN/7D7Ch"
+                    + "lsV8ak7dfShJkzniN7JjB0LldQ==";
+
+    private static final String TEST_INTERMEDIATE_DER_B64 =
+            "MIIDGjCCAgKgAwIBAgIUZNgGa2iKBcPLmPNBEbKvYmcG9howDQYJKoZIhvcNAQELBQAwGjEYMBYG"
+                    + "A1UEAwwPZ2xpZGUtdGVzdC1yb290MB4XDTI2MTAwMjAxMTg1NVoXDTM2MDkyOTAxMTg1NVowIjEg"
+                    + "MB4GA1UEAwwXZ2xpZGUtdGVzdC1pbnRlcm1lZGlhdGUwggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAw"
+                    + "ggEKAoIBAQCeyyqphnbk2W49rQaAtb2pAnhcA+dJ0wdAS8oPNmE7WzM3suJ3bdPU1U6Nm3yn2pT8"
+                    + "xMf/cSQf/qyE9bAsqGx/h7YO/OFBA9wifhb1bFm4d0VTb6iXrwFHpen2rjU6uqdXCOj+8K55yNou"
+                    + "EqSnfGUGdKdpD5UGjQCypNaDP0tgYSyZJjqCEbw4thbPqO3fvunesrVUrquh9MBTMnckDxj5THh3"
+                    + "SpEjo3MND2X598s5JN0p7sPD7EtJvWaLP0A4fNVWeCF/pu7yeAXEIG7uEpgJPNT0dL+sCtM2GWww"
+                    + "UR7E6wVB0VLZZTKqJ/EChLLR4eoNkX5hUtqzi8oQISebbTMrAgMBAAGjUDBOMAwGA1UdEwQFMAMB"
+                    + "Af8wHQYDVR0OBBYEFDqJ1YAK3HDGgpJKIKH/eP/bMII1MB8GA1UdIwQYMBaAFFXl4F1lVQ3HH+l9"
+                    + "wzkh0Ix1YqA+MA0GCSqGSIb3DQEBCwUAA4IBAQBnfsghGHFD0RaX0Yt1XWY3K8edTLdP0PmlB6dZ"
+                    + "fPX1RDLy7FNid50+m1VRoVAC6eE3bvc22Vq8RD+RBh5IIsFXnuqv0G3cLlpxEIYdcPDW070qOe4K"
+                    + "VrZS9/RoEgxt5ddMWGBB7QZ2UuBFk4egF28AmfEX0kA8tzWdhoqLbHK7NSRLMkJJM9UuUZdyH37h"
+                    + "NLLQZlOAElqczua73rnkN/gPChtaOZvbjY9G9b7iOfDwafTRF/T8mUqGZGPKF7qa76ICyDYDeWDN"
+                    + "NVSAZ8EJrh7bmc7v5O1Xg34jVxWNYDQKSm2Soz+RtC7mVLrr/uRrcJHFEz2zEb7VsZofI5tOUQiX";
+
+    private static final String TEST_ROOT_DER_B64 =
+            "MIIDFTCCAf2gAwIBAgIUJcSg7X9WnspaFLi91nKYDijnnbAwDQYJKoZIhvcNAQELBQAwGjEYMBYG"
+                    + "A1UEAwwPZ2xpZGUtdGVzdC1yb290MB4XDTI2MTAwMjAxMTg1NVoXDTM2MDkyOTAxMTg1NVowGjEY"
+                    + "MBYGA1UEAwwPZ2xpZGUtdGVzdC1yb290MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA"
+                    + "ohsN1bM84YLr9DabGgPks1thMO6XJx8bWwXN7uZ/Az2fRNfDB/7hsQbY1j01+1wu7OUsUWEi+tcp"
+                    + "hsa733Ruo8mA5h9r2NP7ty8QaPg4uttKKMaJgoXTBjlerQIJYdGLD2ExIivrFKFT6Nfs8LDF28XC"
+                    + "/nS8i2ale15xyEMZrIJGBDSxauLW3CQSvJ+J2GqxFfjrDU/5JDfxwYAvo/hIe4pC0OqK8bS5nHFf"
+                    + "xx2q70m9SvO1H+05lCE+dooWjKbuSSWL8hiFiNvIwJUqw7ihsZHtUG+pVgY6q/K91rsh2tR0PasA"
+                    + "qJvQv38/lhR+EELKIDPC4gO4g4F0+f+blhcqXQIDAQABo1MwUTAdBgNVHQ4EFgQUVeXgXWVVDccf"
+                    + "6X3DOSHQjHVioD4wHwYDVR0jBBgwFoAUVeXgXWVVDccf6X3DOSHQjHVioD4wDwYDVR0TAQH/BAUw"
+                    + "AwEB/zANBgkqhkiG9w0BAQsFAAOCAQEAHZ0oOpObMDoyyvJ9dhTgrQeGq8rHlI2iifv14zUdr8JG"
+                    + "jDCGUCPpHVjXNkVxriLj1a+DCiCcpNPNzoeUpRzvaA7DuNPmZsBX9pnQZmSmg9fPwq5e7Vd2DtTI"
+                    + "bZUSIqOsMLBoGA8qgtu3rJTyYm8vsX31kvUDCFwiSDxt0TFlwgYE5116iWa3ynQ64NOosKMBzdN1"
+                    + "jiQEtFeMakMydgj4nH5MBBhZodn3eQTbhotbjPwo8ojFVJPUjqeZY+HoZxmzMmV9SokF2G2xVsPu"
+                    + "3ncuA2xqFJ6IYam3IHDmzdmZ+cHBR/a+J6N//7zayj5Oz6qnuLLXgnZ6VhgV+v5a7VQR1A==";
 
     /**
      * Builds a keystore of the given type containing a single {@code PrivateKeyEntry} assembled from
@@ -433,24 +483,37 @@ public class TlsAdvancedConfigurationTest {
      * ({@link CertificateFactory}, {@link KeyFactory}, {@link KeyStore#setKeyEntry}), so it is
      * portable across JDKs with no internal-API dependency.
      *
-     * @param chainLength number of certificate entries in the chain (the same self-signed cert is
-     *     repeated; sufficient for asserting PEM block count).
+     * @param chainLength number of certificate entries in the chain, taken in order from the real
+     *     leaf -> intermediate -> root chain (1 = leaf only, 2 = leaf+intermediate, 3 = full chain).
+     *     A valid chain (each cert signed by the next) is required: the PKCS12 provider rejects a
+     *     chain of unrelated/duplicate certificates.
      */
     private static void writeKeyStoreWithPrivateKey(
             Path keyStorePath, char[] password, String keyStoreType, int chainLength)
             throws Exception {
         CertificateFactory cf = CertificateFactory.getInstance("X.509");
-        Certificate cert =
+        Certificate leaf =
                 cf.generateCertificate(
                         new ByteArrayInputStream(Base64.getDecoder().decode(TEST_CERT_DER_B64)));
+        Certificate intermediate =
+                cf.generateCertificate(
+                        new ByteArrayInputStream(Base64.getDecoder().decode(TEST_INTERMEDIATE_DER_B64)));
+        Certificate root =
+                cf.generateCertificate(
+                        new ByteArrayInputStream(Base64.getDecoder().decode(TEST_ROOT_DER_B64)));
 
         KeyFactory kf = KeyFactory.getInstance("RSA");
         PrivateKey privateKey =
                 kf.generatePrivate(
                         new PKCS8EncodedKeySpec(Base64.getDecoder().decode(TEST_KEY_PKCS8_DER_B64)));
 
-        Certificate[] chain = new Certificate[chainLength];
-        Arrays.fill(chain, cert);
+        // Ordered leaf -> intermediate -> root; take the requested prefix so each cert is signed by
+        // the next, which the PKCS12 provider requires.
+        Certificate[] fullChain = {leaf, intermediate, root};
+        if (chainLength < 1 || chainLength > fullChain.length) {
+            throw new IllegalArgumentException("chainLength must be 1..3, got " + chainLength);
+        }
+        Certificate[] chain = Arrays.copyOf(fullChain, chainLength);
 
         KeyStore keyStore = KeyStore.getInstance(keyStoreType);
         keyStore.load(null, password);

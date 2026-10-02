@@ -466,12 +466,17 @@ public class TlsAdvancedConfiguration {
          * Returns the alias of the first private key entry in the keystore, or {@code null} if none
          * exists. Alias iteration order is not guaranteed by the {@link KeyStore} contract, so this is
          * deterministic only for keystores holding a single private key entry.
+         *
+         * <p>Uses {@link KeyStore#entryInstanceOf} rather than {@link KeyStore#isKeyEntry}: the latter
+         * is also {@code true} for {@code SecretKeyEntry}, which a PKCS12 may contain, and would cause
+         * a secret-key alias to be selected (and later rejected) instead of continuing the scan for a
+         * usable {@code PrivateKeyEntry}.
          */
         private static String findPrivateKeyAlias(KeyStore keyStore) throws KeyStoreException {
             Enumeration<String> aliases = keyStore.aliases();
             while (aliases.hasMoreElements()) {
                 String alias = aliases.nextElement();
-                if (keyStore.isKeyEntry(alias)) {
+                if (keyStore.entryInstanceOf(alias, KeyStore.PrivateKeyEntry.class)) {
                     return alias;
                 }
             }
