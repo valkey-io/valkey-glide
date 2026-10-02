@@ -11,7 +11,7 @@ on:
 
 concurrency:
     group: rust-cd-${{ github.ref }}
-    # Never cancel an publish that is in progess.
+    # Never cancel a publish that is in progress.
     cancel-in-progress: false
 
 permissions:
