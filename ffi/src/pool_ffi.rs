@@ -1221,6 +1221,30 @@ mod adapter_ownership_tests {
         let adapter = unsafe { Arc::from_raw(ptr as *const ClientAdapter) };
         assert_eq!(Arc::strong_count(&adapter), 1);
     }
+
+    /// The last adapter reference may be released from a task on the pool
+    /// runtime (a discard of a client whose pool stopped mid-creation), so the
+    /// adapter's own runtimes must be releasable from inside another runtime.
+    #[test]
+    fn adapter_can_be_dropped_inside_a_runtime() {
+        let mut request = connection_request::ConnectionRequest::new();
+        let mut addr = connection_request::NodeAddress::new();
+        addr.host = "127.0.0.1".into();
+        addr.port = 1;
+        request.addresses.push(addr);
+        request.lazy_connect = true;
+        let bytes = request.write_to_bytes().unwrap();
+
+        let (ptr, client) =
+            create_pool_client(&bytes, ClientType::SyncClient, 1).expect("lazy client");
+        drop(client);
+        let adapter = unsafe { Arc::from_raw(ptr as *const ClientAdapter) };
+
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .build()
+            .unwrap();
+        rt.block_on(async move { drop(adapter) });
+    }
 }
 
 #[cfg(test)]
