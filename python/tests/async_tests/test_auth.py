@@ -703,24 +703,22 @@ class TestAuthCommands:
         3. Operations continue to work after token refresh
         """
         client = await create_iam_client(request, cluster_mode, protocol)
-        try:
-            # Verify connection works
-            await assert_connected(client)
 
-            # Test basic operations
-            await client.set("iam_test_key", "iam_test_value")
-            value = await client.get("iam_test_key")
-            assert value == b"iam_test_value"
+        # Verify connection works
+        await assert_connected(client)
 
-            # Test manual token refresh
-            await client.refresh_iam_token()
+        # Test basic operations
+        await client.set("iam_test_key", "iam_test_value")
+        value = await client.get("iam_test_key")
+        assert value == b"iam_test_value"
 
-            # Verify operations still work after token refresh
-            await client.set("iam_test_key2", "iam_test_value2")
-            value2 = await client.get("iam_test_key2")
-            assert value2 == b"iam_test_value2"
-        finally:
-            await client.close()
+        # Test manual token refresh
+        await client.refresh_iam_token()
+
+        # Verify operations still work after token refresh
+        await client.set("iam_test_key2", "iam_test_value2")
+        value2 = await client.get("iam_test_key2")
+        assert value2 == b"iam_test_value2"
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -736,74 +734,14 @@ class TestAuthCommands:
         client = await create_iam_client(
             request, cluster_mode, protocol, refresh_interval_seconds=2
         )
-        try:
-            # Verify initial connection
-            await assert_connected(client)
 
-            # Wait for automatic token refresh to occur
-            await anyio.sleep(3)
+        # Verify initial connection
+        await assert_connected(client)
 
-            # Verify client still works after automatic refresh
-            await client.set("iam_auto_refresh_key", "iam_auto_refresh_value")
-            value = await client.get("iam_auto_refresh_key")
-            assert value == b"iam_auto_refresh_value"
-        finally:
-            await client.close()
+        # Wait for automatic token refresh to occur
+        await anyio.sleep(3)
 
-
-# ---------------------------------------------------------------------------
-# Pool IAM test — lives outside TestAuthCommands so it doesn't inherit the
-# autouse cleanup fixture that requires protocol/cluster_mode parametrize.
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.parametrize("cluster_mode", [False])
-@pytest.mark.anyio
-async def test_iam_pool_with_custom_credentials_provider(request, cluster_mode):
-    """Pool with custom IAM credential provider: verifies the provider is invoked
-    when the pool creates clients and commands succeed."""
-    from glide.client_pool import AsyncClientPool, PoolConfig
-    from glide_shared.config import AwsCredentials
-
-    from tests.utils.utils import create_client_config
-
-    invocations = [0]  # use list for mutability in closure
-
-    def provider():
-        invocations[0] += 1
-        return AwsCredentials(
-            access_key_id="test_access_key",
-            secret_access_key="test_secret_key",
-            session_token="test_session_token",
-        )
-
-    iam_config = IamAuthConfig(
-        cluster_name=IAM_TEST_CLUSTER_NAME,
-        service=ServiceType.ELASTICACHE,
-        region=IAM_TEST_REGION_US_EAST_1,
-        refresh_interval_seconds=5,
-        credential_provider=provider,
-    )
-    credentials = ServerCredentials(username=IAM_USERNAME, iam_config=iam_config)
-    client_config = create_client_config(
-        request,
-        cluster_mode=cluster_mode,
-        credentials=credentials,
-    )
-    pool = await AsyncClientPool.create(
-        client_config, PoolConfig(max_size=3, min_idle=0)
-    )
-    try:
-        async with pool.borrow() as client:
-            await assert_connected(client)
-            await client.set(
-                "iam_pool_custom_provider_key", "iam_pool_custom_provider_value"
-            )
-            val = await client.get("iam_pool_custom_provider_key")
-            assert val == b"iam_pool_custom_provider_value"
-    finally:
-        pool.close()
-
-    assert (
-        invocations[0] > 0
-    ), "Custom credentials provider was never invoked for pool client"
+        # Verify client still works after automatic refresh
+        await client.set("iam_auto_refresh_key", "iam_auto_refresh_value")
+        value = await client.get("iam_auto_refresh_key")
+        assert value == b"iam_auto_refresh_value"

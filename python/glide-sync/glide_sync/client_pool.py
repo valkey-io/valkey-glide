@@ -23,7 +23,6 @@ Usage:
     pool.close()
 """
 
-import os
 import threading
 from dataclasses import dataclass
 from typing import Optional
@@ -31,26 +30,8 @@ from typing import Optional
 from glide_shared._glide_ffi import _GlideFFI
 from glide_shared.config import BaseClientConfiguration
 from glide_shared.connection_request import _create_sync_connection_request
-from glide_shared.ffi_helpers import create_credential_provider_callback
 
 from .glide_client import BaseClient, GlideClient
-
-# Module-level list that keeps CFFI credential-provider callbacks alive after
-# pool close() to prevent Rust IAM tasks invoking freed CFFI closures.
-_pinned_credential_callbacks: list = []
-
-
-def _clear_pinned_callbacks_after_fork() -> None:
-    """Clear inherited CFFI callbacks after fork.
-
-    After os.fork(), the child inherits the module-level callback list but
-    those CFFI objects point to the parent's Python heap and are invalid in
-    the child. Clear the list so the child starts clean.
-    """
-    _pinned_credential_callbacks.clear()
-
-
-os.register_at_fork(after_in_child=_clear_pinned_callbacks_after_fork)
 
 
 @dataclass
@@ -100,7 +81,6 @@ class ClientPool:
         "_conn_req_bytes",
         "_pool_id",
         "_cache_lock",
-        "_credential_provider_callback_ref",
     )
 
     @classmethod
@@ -159,34 +139,12 @@ class ClientPool:
         self._client_cache: dict = {}
         # Lock for _client_cache under free-threading (concurrent get_or_create_client)
         self._cache_lock = threading.Lock()
-        self._credential_provider_callback_ref = None
 
         # Serialize the connection request protobuf. Route through the shared
         # helper so pooled clients honour lib_name / client_info_tag exactly
         # like direct GlideClient.create() clients do.
         conn_req = _create_sync_connection_request(client_config)
         self._conn_req_bytes = conn_req.SerializeToString()
-
-        # Extract and wire credential provider if set.
-        _credential_provider_fn = None
-        _credentials = getattr(client_config, "credentials", None)
-        _iam_config = (
-            getattr(_credentials, "iam_config", None) if _credentials else None
-        )
-        if _iam_config is not None:
-            _credential_provider_fn = getattr(_iam_config, "credential_provider", None)
-
-        credential_provider_callback = create_credential_provider_callback(
-            self._ffi, _credential_provider_fn
-        )
-        if _credential_provider_fn is not None:
-            self._credential_provider_callback_ref = credential_provider_callback
-
-        credential_provider_ptr = (
-            self._ffi.cast("void *", credential_provider_callback)
-            if credential_provider_callback != self._ffi.NULL
-            else self._ffi.NULL
-        )
 
         # Create the Rust pool via FFI (SyncClient type)
         client_type = self._ffi.new("ClientType*")
@@ -200,8 +158,6 @@ class ClientPool:
             self._conn_req_bytes,
             len(self._conn_req_bytes),
             client_type,
-            credential_provider_ptr,
-            0,  # credential_client_id: not used (Python uses direct CFFI callback)
         )
 
         if pool_id == -1:
@@ -341,18 +297,6 @@ class ClientPool:
         if not self._closed:
             self._closed = True
             self._lib.glide_pool_destroy(self._pool_id)
-            # Keep CFFI credential-provider callbacks alive until process exit.
-            # Rust's IAM refresh task fires periodically for the lifetime of the
-            # client and may invoke the callback long after pool destruction.
-            # A test process is short-lived and production code creates very few
-            # clients with credential providers, so the accumulation is negligible.
-            callbacks = [
-                cb for cb in [self._credential_provider_callback_ref] if cb is not None
-            ]
-            if callbacks:
-                import glide_sync.client_pool as _self_module
-
-                _self_module._pinned_credential_callbacks.extend(callbacks)
             self._client_cache.clear()
 
     def __enter__(self):

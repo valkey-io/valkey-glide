@@ -64,7 +64,6 @@ from glide_shared.ffi_helpers import (
     FFIClientTypeEnum,
     convert_commands_to_c_batch_info,
     create_c_batch_options,
-    create_credential_provider_callback,
     to_c_route_ptr_and_len,
     to_c_strings,
 )
@@ -92,27 +91,6 @@ else:
 # call. `_ASYNC_FFI.ffi` is a process-wide singleton so this buffer is safe to
 # share across clients.
 _EVALSHA_SPAN_NAME = _ASYNC_FFI.ffi.new("char[]", b"EVALSHA")
-
-
-# Module-level list that keeps CFFI credential-provider callbacks alive after
-# GlideClient.close(). The Rust IAM refresh task fires periodically for the
-# entire lifetime of the client and may still invoke the callback long after
-# close_client() returns. Callbacks are kept until process exit; accumulation
-# is negligible for production workloads.
-_pinned_credential_callbacks: list = []
-
-
-def _clear_pinned_callbacks_after_fork() -> None:
-    """Clear inherited CFFI callbacks after fork.
-
-    After os.fork(), the child inherits the module-level callback list but
-    those CFFI objects point to the parent's Python heap and are invalid in
-    the child. Clear the list so the child starts clean.
-    """
-    _pinned_credential_callbacks.clear()
-
-
-os.register_at_fork(after_in_child=_clear_pinned_callbacks_after_fork)
 
 
 # ==================== Framework-Agnostic Future ====================
@@ -581,7 +559,6 @@ class BaseClient(CoreCommands):
         self._callback_id_gen = itertools.count(1)
         self._lock = threading.Lock()
         self._address_resolver_callback_ref = None
-        self._credential_provider_callback_ref = None
         self._pubsub_futures: List["TFuture"] = []
         self._pubsub_lock = threading.Lock()
         self._pending_push_notifications: List[PubSubMsg] = []
@@ -644,30 +621,12 @@ class BaseClient(CoreCommands):
         self._pipe_client_id = next(_next_client_id)
         self._create_pid = os.getpid()
 
-        # Get credential provider from IAM config if set
-        _credential_provider_fn = None
-        if (
-            self.config.credentials is not None
-            and self.config.credentials.iam_config is not None
-            and self.config.credentials.iam_config.credential_provider is not None
-        ):
-            _credential_provider_fn = (
-                self.config.credentials.iam_config.credential_provider
-            )
-
-        credential_provider_callback = create_credential_provider_callback(
-            self._ffi, _credential_provider_fn, event_loop=self._loop
-        )
-        if _credential_provider_fn is not None:
-            self._credential_provider_callback_ref = credential_provider_callback
-
         client_response_ptr = self._lib.create_client(
             conn_req_bytes,
             len(conn_req_bytes),
             client_type,
             pubsub_callback,
             address_resolver_callback,
-            credential_provider_callback,
             self._pipe_client_id,
         )
 
@@ -1204,24 +1163,6 @@ class BaseClient(CoreCommands):
             if self._core_client is not None and self._create_pid == os.getpid():
                 self._lib.close_client(self._core_client)
                 self._core_client = None
-            # Keep credential/address-resolver callbacks alive until process exit
-            # so the Rust IAM refresh task never invokes a freed CFFI trampoline.
-            # The task fires periodically for the lifetime of the client and may
-            # still be running long after close_client() returns.  A test process
-            # is short-lived; production code creates very few clients with
-            # credential providers, so the accumulation is negligible.
-            _cbs = [
-                cb
-                for cb in [
-                    getattr(self, "_credential_provider_callback_ref", None),
-                    getattr(self, "_address_resolver_callback_ref", None),
-                ]
-                if cb is not None
-            ]
-            if _cbs:
-                import glide.glide_client as _self_module
-
-                _self_module._pinned_credential_callbacks.extend(_cbs)
 
     async def aclose(self, err_message: Optional[str] = None) -> None:
         """Alias for close() for compatibility with async context managers."""
