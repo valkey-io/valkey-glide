@@ -831,8 +831,8 @@ public class TestUtilities {
 
     /**
      * Parses an RSA private key from PEM, accepting both PKCS#8 ({@code BEGIN PRIVATE KEY}) and
-     * PKCS#1 ({@code BEGIN RSA PRIVATE KEY}) encodings. PKCS#1 is wrapped into a PKCS#8
-     * {@code PrivateKeyInfo} structure so it can be loaded via {@link PKCS8EncodedKeySpec} without any
+     * PKCS#1 ({@code BEGIN RSA PRIVATE KEY}) encodings. PKCS#1 is wrapped into a PKCS#8 {@code
+     * PrivateKeyInfo} structure so it can be loaded via {@link PKCS8EncodedKeySpec} without any
      * third-party dependency.
      */
     @SneakyThrows
@@ -858,8 +858,21 @@ public class TestUtilities {
      */
     private static byte[] wrapPkcs1InPkcs8(byte[] pkcs1) {
         byte[] algId = {
-            0x30, 0x0d, 0x06, 0x09, 0x2a, (byte) 0x86, 0x48, (byte) 0x86, (byte) 0xf7, 0x0d, 0x01,
-            0x01, 0x01, 0x05, 0x00
+            0x30,
+            0x0d,
+            0x06,
+            0x09,
+            0x2a,
+            (byte) 0x86,
+            0x48,
+            (byte) 0x86,
+            (byte) 0xf7,
+            0x0d,
+            0x01,
+            0x01,
+            0x01,
+            0x05,
+            0x00
         };
         byte[] version = {0x02, 0x01, 0x00};
         byte[] octetString = derTlv((byte) 0x04, pkcs1);

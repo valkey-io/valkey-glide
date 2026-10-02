@@ -401,7 +401,8 @@ public class TlsAdvancedConfigurationTest {
     //       -out leaf.crt
     //   openssl x509 -in leaf.crt -outform DER | base64                 # -> TEST_CERT_DER_B64
     //   openssl pkcs8 -topk8 -nocrypt -in leaf.key -outform DER | base64 # -> TEST_KEY_PKCS8_DER_B64
-    //   openssl x509 -in int.crt  -outform DER | base64                 # -> TEST_INTERMEDIATE_DER_B64
+    //   openssl x509 -in int.crt  -outform DER | base64                 # ->
+    // TEST_INTERMEDIATE_DER_B64
     //   openssl x509 -in root.crt -outform DER | base64                 # -> TEST_ROOT_DER_B64
     // Embedding static material keeps the suite self-contained: the keystore is assembled in-process
     // with public JCA only (no JDK-internal cert generation, no keytool/openssl at runtime).
@@ -489,8 +490,7 @@ public class TlsAdvancedConfigurationTest {
      *     chain of unrelated/duplicate certificates.
      */
     private static void writeKeyStoreWithPrivateKey(
-            Path keyStorePath, char[] password, String keyStoreType, int chainLength)
-            throws Exception {
+            Path keyStorePath, char[] password, String keyStoreType, int chainLength) throws Exception {
         CertificateFactory cf = CertificateFactory.getInstance("X.509");
         Certificate leaf =
                 cf.generateCertificate(

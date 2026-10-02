@@ -393,13 +393,13 @@ public class TlsAdvancedConfiguration {
          * certificates from a keystore. Where {@code fromKeyStore} reads the keystore's certificate
          * entries into {@link TlsAdvancedConfiguration#rootCertificates}, this method reads the
          * keystore's first {@code PrivateKeyEntry} (the private key plus its certificate chain),
-         * serializes them to PEM in memory, and feeds them to {@link #useMutualTls(byte[], byte[])},
-         * so all existing mTLS validation applies and the material is presented statically.
+         * serializes them to PEM in memory, and feeds them to {@link #useMutualTls(byte[], byte[])}, so
+         * all existing mTLS validation applies and the material is presented statically.
          *
          * <p>Keystore loading is a JVM-native convenience; the GLIDE core only consumes PEM. If the
-         * keystore holds more than one private key entry, the first one encountered is used
-         * (keystore alias iteration order is not guaranteed to be stable, so prefer a keystore with a
-         * single private key entry).
+         * keystore holds more than one private key entry, the first one encountered is used (keystore
+         * alias iteration order is not guaranteed to be stable, so prefer a keystore with a single
+         * private key entry).
          *
          * <p>For automatic rotation of on-disk material, use {@link #useMutualTlsWithReload} with PEM
          * files instead; keystore-based mTLS is inherently static.
@@ -415,8 +415,8 @@ public class TlsAdvancedConfiguration {
          * @throws CertificateException if certificates cannot be loaded or encoded
          * @throws UnrecoverableKeyException if the private key cannot be recovered (e.g., wrong
          *     password)
-         * @throws ConfigurationError if the keystore contains no private key entry, or the entry has
-         *     no certificate chain
+         * @throws ConfigurationError if the keystore contains no private key entry, or the entry has no
+         *     certificate chain
          */
         public TlsAdvancedConfigurationBuilder useMutualTlsFromKeyStore(
                 String keyStorePath, char[] keyStorePassword, String keyStoreType)
