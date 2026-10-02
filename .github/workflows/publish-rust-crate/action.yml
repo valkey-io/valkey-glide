@@ -1,0 +1,91 @@
+name: Publish Rust crate
+description: Publish a Rust crate to crates.io
+
+inputs:
+    crate:
+        description: "Directory containing the crate"
+        required: true
+    publish:
+        description: "Whether to publish to crates.io; otherwise, perform a dry-run"
+        required: true
+
+outputs:
+    name:
+        description: "The crate name from Cargo.toml"
+        value: ${{ steps.check.outputs.name }}
+    version:
+        description: "The crate version from Cargo.toml"
+        value: ${{ steps.check.outputs.version }}
+    needs-publish:
+        description: "Whether the crate version is not yet published to crates.io"
+        value: ${{ steps.check.outputs.needs-publish }}
+
+runs:
+    using: "composite"
+    steps:
+        - name: Check whether crate version is published
+          id: check
+          shell: bash
+          env:
+              CRATE: ${{ inputs.crate }}
+          run: |
+              # Fetch crate metadata.
+              MANIFEST=$(realpath "${CRATE}/Cargo.toml")
+              METADATA=$(cargo metadata --no-deps --format-version 1 --manifest-path "${MANIFEST}")
+
+              # Select this crate from the metadata. The metadata describes every crate
+              # in the containing workspace, so match on the crate's absolute manifest path.
+              PACKAGE_JSON=$(jq -c --arg manifest "${MANIFEST}" '.packages[] | select(.manifest_path == $manifest)' <<< "${METADATA}")
+
+              # Determine crate name.
+              NAME=$(jq -r '.name' <<< "${PACKAGE_JSON}")
+              if ! [[ "${NAME}" =~ ^[A-Za-z][A-Za-z0-9_-]*$ ]]; then
+                  echo "Crate name ${NAME} is not valid"
+                  exit 1
+              fi
+
+              # Determine crate version.
+              VERSION=$(jq -r '.version' <<< "${PACKAGE_JSON}")
+              if ! [[ "${VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+)?$ ]]; then
+                  echo "${NAME} version ${VERSION} is not valid, must be *.*.* or *.*.*-rc.*"
+                  exit 1
+              fi
+
+              # Determine whether version is already published.
+              INFO_ERROR="${RUNNER_TEMP}/${NAME}-info-error.txt"
+              if cargo info "${NAME}@${VERSION}" --registry crates-io > /dev/null 2> "${INFO_ERROR}"; then
+                  echo "${NAME} ${VERSION} is already published."
+                  NEEDS_PUBLISH=false
+              elif grep -q "could not find" "${INFO_ERROR}"; then
+                  echo "${NAME} ${VERSION} is not yet published."
+                  NEEDS_PUBLISH=true
+              else
+                  echo "Failed to query crates.io for ${NAME} ${VERSION}:"
+                  cat "${INFO_ERROR}"
+                  exit 1
+              fi
+
+              echo "name=${NAME}" >> "${GITHUB_OUTPUT}"
+              echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
+              echo "needs-publish=${NEEDS_PUBLISH}" >> "${GITHUB_OUTPUT}"
+
+        # Requires the calling job to have `id-token: write` and
+        # to match the crate's trusted publisher on crates.io.
+        - name: Authenticate with crates.io
+          if: ${{ inputs.publish == 'true' && steps.check.outputs.needs-publish == 'true' }}
+          id: auth
+          uses: rust-lang/crates-io-auth-action@c6f97d42243bad5fab37ca0427f495c86d5b1a18 # v1.0.5
+
+        - name: Publish crate to crates.io
+          if: ${{ steps.check.outputs.needs-publish == 'true' }}
+          shell: bash
+          env:
+              CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
+              CRATE: ${{ inputs.crate }}
+              PUBLISH: ${{ inputs.publish }}
+          run: |
+              ARGS=(--manifest-path "${CRATE}/Cargo.toml")
+              if [[ "${PUBLISH}" != "true" ]]; then
+                  ARGS+=(--dry-run)
+              fi
+              cargo publish "${ARGS[@]}"
