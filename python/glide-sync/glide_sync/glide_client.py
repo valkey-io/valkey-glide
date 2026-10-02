@@ -192,6 +192,7 @@ class BaseClient(CoreCommands):
             client_type,
             pubsub_callback,
             address_resolver_callback,
+            self._ffi.cast("CredentialProviderCallback", self._ffi.NULL),
             0,  # client_id is not used by the Python client
         )
 
