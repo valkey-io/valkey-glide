@@ -39,7 +39,9 @@ public class BackoffStrategy {
      * Number of retry attempts that the client should perform when disconnected from the server,
      * where the time between retries increases. Once the retries have reached the maximum value, the
      * time between retries will remain constant until a reconnect attempt is successful. A negative
-     * value is rejected when the client is created.
+     * value is rejected when the client is created. If {@code numOfRetries}, {@code factor} and
+     * {@code exponentBase} are all 0, the strategy is not sent and the default reconnect strategy is
+     * used, including its jitter.
      */
     @NonNull private final Integer numOfRetries;
 
