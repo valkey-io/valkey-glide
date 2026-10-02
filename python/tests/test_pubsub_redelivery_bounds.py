@@ -187,9 +187,12 @@ def test_fan_out_publishes_each_channel_once_when_delivery_beats_the_poll(method
 @pytest.mark.parametrize("method", READ_METHODS)
 def test_fan_out_accepts_a_delayed_copy_per_republish(method):
     # Delivery slower than the poll window forces a re-publish; both copies
-    # land, and each is explained by its own PUBLISH.
+    # land, and each is explained by its own PUBLISH. The re-publish fires on
+    # the first poll after poll_timeout (0.3s), so the lag must exceed that by
+    # more than any stall a loaded host can insert between two polls, or the
+    # delivery lands first and nothing is re-published.
     channels = {f"ch{i}" for i in range(4)}
-    (received, copies, publishes), _ = _fan_out(method, 0.4, 1, channels)
+    (received, copies, publishes), _ = _fan_out(method, 1.0, 1, channels)
     assert received == channels
     assert all(copies[ch] <= publishes[ch] for ch in channels)
     assert any(publishes[ch] >= 2 for ch in channels)
