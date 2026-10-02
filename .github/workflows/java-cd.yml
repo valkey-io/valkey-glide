@@ -82,6 +82,8 @@ jobs:
         env:
             JAVA_VERSION: "11"
             RELEASE_VERSION: ${{ needs.set-release-version.outputs.RELEASE_VERSION }}
+            # Kept outside the checkout so signing never dirties the worktree.
+            SECRING_FILE: ${{ runner.temp }}/secring.gpg
         strategy:
             # Run all jobs
             fail-fast: false
@@ -140,31 +142,15 @@ jobs:
                       ${{ runner.os }}-gradle-cd-
                       ${{ runner.os }}-gradle-
 
-            - name: Create secret key ring file for all Java submodules
-              working-directory: java/client
+            - name: Create secret key ring file
               shell: bash
               run: |
-                  # Decode the provided base64 GPG key into the client module
-                  echo "$SECRING_GPG" | base64 --decode > ./secring.gpg
-
-                  # Copy the key ring file into Jedis compatibility modules that perform signing
-                  if [ -d ../jedis-compatibility ]; then
-                    cp ./secring.gpg ../jedis-compatibility/secring.gpg
-                  else
-                    echo "jedis-compatibility module directory not found" >&2
-                    exit 1
-                  fi
-                  if [ -d ../jedis-4-compatibility ]; then
-                    cp ./secring.gpg ../jedis-4-compatibility/secring.gpg
-                  fi
-                  if [ -d ../jedis-compat-shared ]; then
-                    cp ./secring.gpg ../jedis-compat-shared/secring.gpg
-                  fi
-
-                  echo "Listing key ring files to verify presence:"
-                  ls -l ./secring.gpg ../jedis-compatibility/secring.gpg
-                  if [ -f ../jedis-4-compatibility/secring.gpg ]; then ls -l ../jedis-4-compatibility/secring.gpg; fi
-                  if [ -f ../jedis-compat-shared/secring.gpg ]; then ls -l ../jedis-compat-shared/secring.gpg; fi
+                  # Decode the GPG key outside the repository so signing never leaves an
+                  # untracked secret in the worktree. Gradle resolves
+                  # signing.secretKeyRingFile via project.file(), so one absolute path
+                  # serves every module and no per-module copies are needed.
+                  echo "$SECRING_GPG" | base64 --decode > "$SECRING_FILE"
+                  ls -l "$SECRING_FILE"
               env:
                   SECRING_GPG: ${{ secrets.SECRING_GPG }}
 
@@ -183,44 +169,49 @@ jobs:
 
                   if [[ "${{ matrix.host.TARGET }}" == *"musl"* ]]; then
                     # Build and publish client first
-                    $GRADLE_CMD --build-cache :client:publishToMavenLocal -Psigning.secretKeyRingFile=secring.gpg \
+                    $GRADLE_CMD --build-cache :client:publishToMavenLocal -Psigning.secretKeyRingFile="$SECRING_FILE" \
                     -Psigning.password="${{ secrets.GPG_PASSWORD }}" -Psigning.keyId=${{ secrets.GPG_KEY_ID }} \
                     -Ptarget=${{ matrix.host.TARGET }} $EXTRA_ARGS
 
                     # Then build jedis-compat-shared (dependency of jedis compatibility artifacts)
-                    $GRADLE_CMD --build-cache :jedis-compat-shared:publishToMavenLocal -Psigning.secretKeyRingFile=secring.gpg \
+                    $GRADLE_CMD --build-cache :jedis-compat-shared:publishToMavenLocal -Psigning.secretKeyRingFile="$SECRING_FILE" \
                     -Psigning.password="${{ secrets.GPG_PASSWORD }}" -Psigning.keyId=${{ secrets.GPG_KEY_ID }} \
                     -Ptarget=${{ matrix.host.TARGET }}
 
                     # Then build jedis-compatibility
-                    $GRADLE_CMD --build-cache :jedis-compatibility:publishToMavenLocal -Psigning.secretKeyRingFile=secring.gpg \
+                    $GRADLE_CMD --build-cache :jedis-compatibility:publishToMavenLocal -Psigning.secretKeyRingFile="$SECRING_FILE" \
                     -Psigning.password="${{ secrets.GPG_PASSWORD }}" -Psigning.keyId=${{ secrets.GPG_KEY_ID }} \
                     -Ptarget=${{ matrix.host.TARGET }}
 
                     # Then build jedis-4-compatibility (when present)
                     if [ -d jedis-4-compatibility ]; then
-                      $GRADLE_CMD --build-cache :jedis-4-compatibility:publishToMavenLocal -Psigning.secretKeyRingFile=secring.gpg \
+                      $GRADLE_CMD --build-cache :jedis-4-compatibility:publishToMavenLocal -Psigning.secretKeyRingFile="$SECRING_FILE" \
                       -Psigning.password="${{ secrets.GPG_PASSWORD }}" -Psigning.keyId=${{ secrets.GPG_KEY_ID }} \
                       -Ptarget=${{ matrix.host.TARGET }}
                     fi
                   else
                     # Build and publish client first
-                    $GRADLE_CMD --build-cache :client:publishToMavenLocal -Psigning.secretKeyRingFile=secring.gpg \
+                    $GRADLE_CMD --build-cache :client:publishToMavenLocal -Psigning.secretKeyRingFile="$SECRING_FILE" \
                     -Psigning.password="${{ secrets.GPG_PASSWORD }}" -Psigning.keyId=${{ secrets.GPG_KEY_ID }} $EXTRA_ARGS
 
                     # Then build jedis-compat-shared (dependency of jedis compatibility artifacts)
-                    $GRADLE_CMD --build-cache :jedis-compat-shared:publishToMavenLocal -Psigning.secretKeyRingFile=secring.gpg \
+                    $GRADLE_CMD --build-cache :jedis-compat-shared:publishToMavenLocal -Psigning.secretKeyRingFile="$SECRING_FILE" \
                     -Psigning.password="${{ secrets.GPG_PASSWORD }}" -Psigning.keyId=${{ secrets.GPG_KEY_ID }}
 
                     # Then build jedis-compatibility
-                    $GRADLE_CMD --build-cache :jedis-compatibility:publishToMavenLocal -Psigning.secretKeyRingFile=secring.gpg \
+                    $GRADLE_CMD --build-cache :jedis-compatibility:publishToMavenLocal -Psigning.secretKeyRingFile="$SECRING_FILE" \
                     -Psigning.password="${{ secrets.GPG_PASSWORD }}" -Psigning.keyId=${{ secrets.GPG_KEY_ID }}
 
                     if [ -d jedis-4-compatibility ]; then
-                      $GRADLE_CMD --build-cache :jedis-4-compatibility:publishToMavenLocal -Psigning.secretKeyRingFile=secring.gpg \
+                      $GRADLE_CMD --build-cache :jedis-4-compatibility:publishToMavenLocal -Psigning.secretKeyRingFile="$SECRING_FILE" \
                       -Psigning.password="${{ secrets.GPG_PASSWORD }}" -Psigning.keyId=${{ secrets.GPG_KEY_ID }}
                     fi
                   fi
+
+            - name: Ensure Java publication builds leave the worktree clean
+              uses: ./.github/actions/ensure-clean-tree
+              with:
+                  context: Java native and compatibility publication builds
 
             - name: Bundle JAR
               working-directory: java
@@ -290,6 +281,11 @@ jobs:
         env:
             JAVA_VERSION: "11"
             RELEASE_VERSION: ${{ needs.set-release-version.outputs.RELEASE_VERSION }}
+            # Kept outside the checkout so signing never dirties the worktree.
+            SECRING_FILE: ${{ runner.temp }}/secring.gpg
+            # Bundle JARs are assembled here rather than in java/ so they do not
+            # show up as untracked files in the worktree check.
+            BUNDLE_DIR: ${{ runner.temp }}/bundles
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -355,20 +351,12 @@ jobs:
                       ${{ runner.os }}-gradle-cd-
                       ${{ runner.os }}-gradle-
 
-            - name: Create secret key ring file for all Java submodules
-              working-directory: java/client
+            - name: Create secret key ring file
               shell: bash
               run: |
-                  echo "$SECRING_GPG" | base64 --decode > ./secring.gpg
-                  if [ -d ../jedis-compatibility ]; then
-                    cp ./secring.gpg ../jedis-compatibility/secring.gpg
-                  fi
-                  if [ -d ../jedis-4-compatibility ]; then
-                    cp ./secring.gpg ../jedis-4-compatibility/secring.gpg
-                  fi
-                  if [ -d ../jedis-compat-shared ]; then
-                    cp ./secring.gpg ../jedis-compat-shared/secring.gpg
-                  fi
+                  # See create-binaries-to-publish: one absolute path, no per-module copies.
+                  echo "$SECRING_GPG" | base64 --decode > "$SECRING_FILE"
+                  mkdir -p "$BUNDLE_DIR"
               env:
                   SECRING_GPG: ${{ secrets.SECRING_GPG }}
 
@@ -383,7 +371,7 @@ jobs:
                   # UBER_JAR_BUILD env var signals build.gradle to use copyAllNativeLibs
                   ./gradlew --build-cache :client:publishToMavenLocal \
                   -x buildRust -x copyNativeLib \
-                  -Psigning.secretKeyRingFile=secring.gpg \
+                  -Psigning.secretKeyRingFile="$SECRING_FILE" \
                   -Psigning.password="${{ secrets.GPG_PASSWORD }}" \
                   -Psigning.keyId=${{ secrets.GPG_KEY_ID }}
 
@@ -396,7 +384,7 @@ jobs:
                   jar -cvf bundle.jar *
                   ls -ltr
                   cd -
-                  cp $src_folder/bundle.jar bundle-uber-jar.jar
+                  cp $src_folder/bundle.jar "$BUNDLE_DIR/bundle-uber-jar.jar"
 
             - name: Build jedis-compat-shared (no classifier, no natives)
               working-directory: java
@@ -407,7 +395,7 @@ jobs:
               run: |
                   ./gradlew --build-cache :jedis-compat-shared:publishToMavenLocal \
                   -x buildRust \
-                  -Psigning.secretKeyRingFile=secring.gpg \
+                  -Psigning.secretKeyRingFile="$SECRING_FILE" \
                   -Psigning.password="${{ secrets.GPG_PASSWORD }}" \
                   -Psigning.keyId=${{ secrets.GPG_KEY_ID }}
 
@@ -420,7 +408,7 @@ jobs:
               run: |
                   ./gradlew --build-cache :jedis-compatibility:publishToMavenLocal \
                   -x buildRust \
-                  -Psigning.secretKeyRingFile=secring.gpg \
+                  -Psigning.secretKeyRingFile="$SECRING_FILE" \
                   -Psigning.password="${{ secrets.GPG_PASSWORD }}" \
                   -Psigning.keyId=${{ secrets.GPG_KEY_ID }}
 
@@ -433,7 +421,7 @@ jobs:
                   jar -cvf jedis-bundle.jar *
                   ls -ltr
                   cd -
-                  cp $src_folder/jedis-bundle.jar jedis-bundle-no-classifier.jar
+                  cp $src_folder/jedis-bundle.jar "$BUNDLE_DIR/jedis-bundle-no-classifier.jar"
 
             - name: Build jedis-4-compatibility (no classifier, no natives)
               working-directory: java
@@ -444,9 +432,14 @@ jobs:
               run: |
                   ./gradlew --build-cache :jedis-4-compatibility:publishToMavenLocal \
                   -x buildRust \
-                  -Psigning.secretKeyRingFile=secring.gpg \
+                  -Psigning.secretKeyRingFile="$SECRING_FILE" \
                   -Psigning.password="${{ secrets.GPG_PASSWORD }}" \
                   -Psigning.keyId=${{ secrets.GPG_KEY_ID }}
+
+            - name: Ensure Java uber JAR builds leave the worktree clean
+              uses: ./.github/actions/ensure-clean-tree
+              with:
+                  context: Java uber JAR and compatibility publication builds
 
             - name: Bundle jedis-4-compatibility no-classifier JAR
               working-directory: java
@@ -461,14 +454,14 @@ jobs:
                   jar -cvf jedis4-bundle.jar *
                   ls -ltr
                   cd -
-                  cp $jedis4_src_folder/jedis4-bundle.jar jedis4-bundle-no-classifier.jar
+                  cp $jedis4_src_folder/jedis4-bundle.jar "$BUNDLE_DIR/jedis4-bundle-no-classifier.jar"
 
             - name: Smoke test uber JAR
               working-directory: java
               shell: bash
               run: |
                   # Extract in a temp dir so the working directory is not polluted; clean up on exit.
-                  bundle="$PWD/bundle-uber-jar.jar"
+                  bundle="$BUNDLE_DIR/bundle-uber-jar.jar"
                   tmp_dir=$(mktemp -d)
                   trap 'rm -rf "$tmp_dir"' EXIT
                   cd "$tmp_dir"
@@ -481,19 +474,19 @@ jobs:
               uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
               with:
                   name: java-uber-jar
-                  path: java/bundle-uber-jar.jar
+                  path: ${{ runner.temp }}/bundles/bundle-uber-jar.jar
 
             - name: Upload jedis no-classifier artifact
               uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
               with:
                   name: jedis-no-classifier
-                  path: java/jedis-bundle-no-classifier.jar
+                  path: ${{ runner.temp }}/bundles/jedis-bundle-no-classifier.jar
 
             - name: Upload jedis-4 no-classifier artifact
               uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
               with:
                   name: jedis-4-no-classifier
-                  path: java/jedis4-bundle-no-classifier.jar
+                  path: ${{ runner.temp }}/bundles/jedis4-bundle-no-classifier.jar
 
     publish-to-maven-central-deployment:
         if: ${{ inputs.maven_publish == true || github.event_name == 'push' }}
@@ -709,6 +702,11 @@ jobs:
                   export ORG_GRADLE_PROJECT_centralManualTestingAuthHeaderValue="Bearer $(echo -n "${{ secrets.CENTRAL_TOKEN_USERNAME }}:${{ secrets.CENTRAL_TOKEN_PASSWORD }}" | base64)"
                   export GLIDE_RELEASE_VERSION=${{ env.RELEASE_VERSION }}
                   ./gradlew --build-cache :benchmarks:run --args="--minimal --clients glide --port ${{ env.PORT }}"
+
+            - name: Ensure Java deployment test leaves the worktree clean
+              uses: ./.github/actions/ensure-clean-tree
+              with:
+                  context: Java Maven deployment smoke test
 
     publish-release-to-maven:
         if: ${{ inputs.maven_publish == true || github.event_name == 'push' }}
