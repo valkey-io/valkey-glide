@@ -19,6 +19,6 @@ tracing-appender = { version = "0.2.3", default-features = false }
 tracing-subscriber = "0.3.17"
 
 [dev-dependencies]
-rand = "0.8.5"
+rand = "0.10.3"
 test-env-helpers = "0.2.2"
 
