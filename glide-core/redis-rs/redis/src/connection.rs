@@ -1018,7 +1018,7 @@ fn effective_lib_name<'a>(
     {
         Some(lib_name) => lib_name,
         None => {
-            logger_core::log_warn(
+            glide_logger::log_warn(
                 "client_set_info",
                 "No library name available. Defaulting to 'lib-name=UnknownClient'.",
             );
@@ -1037,7 +1037,7 @@ fn effective_lib_ver<'a>(
     {
         Some(lib_ver) => lib_ver,
         None => {
-            logger_core::log_warn(
+            glide_logger::log_warn(
                 "client_set_info",
                 "No library version available. Defaulting to 'lib-ver=unknown'.",
             );

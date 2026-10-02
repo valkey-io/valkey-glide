@@ -12,7 +12,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/valkey-io/valkey-glide/go/v2/config"
 	"github.com/valkey-io/valkey-glide/go/v2/constants"
 
 	"github.com/google/uuid"
@@ -1560,6 +1559,58 @@ func (suite *GlideTestSuite) TestHGetEx_WithExpiration() {
 		assert.NoError(suite.T(), err)
 		assert.True(suite.T(), ttls2[0] > 0 && ttls2[0] <= 25)
 		assert.True(suite.T(), ttls2[1] > 0 && ttls2[1] <= 25)
+	})
+}
+
+func (suite *GlideTestSuite) TestHGetDel() {
+	suite.SkipIfServerVersionLowerThan("9.1.0", suite.T())
+
+	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
+		key := uuid.NewString()
+		fields := map[string]string{"field1": "value1", "field2": "value2", "field3": "value3"}
+
+		// First set some fields
+		result, err := client.HSet(context.Background(), key, fields)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(3), result)
+
+		// Get and delete an existing field and a non-existing field
+		values, err := client.HGetDel(context.Background(), key, []string{"field1", "nonexistent"})
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), "value1", values[0].Value())
+		assert.True(suite.T(), values[1].IsNil())
+
+		// Verify field1 was deleted while other fields remain
+		exists, err := client.HExists(context.Background(), key, "field1")
+		assert.NoError(suite.T(), err)
+		assert.False(suite.T(), exists)
+
+		remaining, err := client.HLen(context.Background(), key)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(2), remaining)
+
+		// Get and delete the remaining fields; the key should be removed automatically
+		values2, err := client.HGetDel(context.Background(), key, []string{"field2", "field3"})
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), "value2", values2[0].Value())
+		assert.Equal(suite.T(), "value3", values2[1].Value())
+
+		keyExists, err := client.Exists(context.Background(), []string{key})
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(0), keyExists)
+
+		// HGETDEL on a non-existing key returns nils for each requested field
+		missingKey := uuid.NewString()
+		values3, err := client.HGetDel(context.Background(), missingKey, []string{"field1", "field2"})
+		assert.NoError(suite.T(), err)
+		assert.True(suite.T(), values3[0].IsNil())
+		assert.True(suite.T(), values3[1].IsNil())
+
+		// HGETDEL on a key holding a non-hash value returns a WRONGTYPE error
+		stringKey := uuid.NewString()
+		suite.verifyOK(client.Set(context.Background(), stringKey, "not_a_hash"))
+		_, err = client.HGetDel(context.Background(), stringKey, []string{"field1"})
+		suite.ErrorContains(err, "WRONGTYPE")
 	})
 }
 
@@ -5582,14 +5633,10 @@ func (suite *GlideTestSuite) TestXRead() {
 		// ensure that commands doesn't time out even if timeout > request timeout
 		var testClient interfaces.BaseClientCommands
 		if _, ok := client.(interfaces.GlideClientCommands); ok {
-			testClient, err = suite.client(config.NewClientConfiguration().
-				WithAddress(&suite.standaloneHosts[0]).
-				WithUseTLS(suite.tls))
+			testClient, err = suite.client(suite.defaultClientConfig())
 			require.NoError(suite.T(), err)
 		} else {
-			testClient, err = suite.clusterClient(config.NewClusterClientConfiguration().
-				WithAddress(&suite.clusterHosts[0]).
-				WithUseTLS(suite.tls))
+			testClient, err = suite.clusterClient(suite.defaultClusterClientConfig())
 			require.NoError(suite.T(), err)
 		}
 		read, err = testClient.XReadWithOptions(

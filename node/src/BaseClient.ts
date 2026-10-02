@@ -131,6 +131,7 @@ import {
     createHGet,
     createHGetAll,
     createHGetEx,
+    createHGetDel,
     createHIncrBy,
     createHIncrByFloat,
     createHKeys,
@@ -3942,6 +3943,40 @@ export class BaseClient {
             createHGetEx(key, fields, options),
             options,
         );
+    }
+
+    /**
+     * Gets and deletes the values associated with the specified `fields` in the hash
+     * stored at `key`. This is an atomic get-and-delete operation.
+     *
+     * @param key - The key of the hash.
+     * @param fields - The fields in the hash stored at `key` to retrieve and delete.
+     * @param options - (Optional) See {@link DecoderOption}.
+     * @returns An array of values associated with the given fields, in the same order
+     *          as they are requested. For every field that does not exist in the hash,
+     *          a null value is returned. If `key` does not exist, returns an array of
+     *          null values. The key is deleted automatically when its last field is removed.
+     *
+     * @example
+     * ```typescript
+     * // Get and delete fields from a hash
+     * const values = await client.hgetdel("myHash", ["field1", "field2"]);
+     * console.log(values); // ["value1", "value2"] - the fields are now removed
+     *
+     * // Fields that do not exist return null
+     * const mixed = await client.hgetdel("myHash", ["field3", "missing"]);
+     * console.log(mixed); // ["value3", null]
+     * ```
+     *
+     * @since Valkey 9.1.0
+     * @see {@link https://valkey.io/commands/hgetdel/|valkey.io}
+     */
+    public async hgetdel(
+        key: GlideString,
+        fields: GlideString[],
+        options?: DecoderOption,
+    ): Promise<(GlideString | null)[]> {
+        return this.createWritePromise(createHGetDel(key, fields), options);
     }
 
     /**
@@ -10190,6 +10225,40 @@ export class BaseClient {
         }
 
         Logger.log("info", "Client lifetime", "disposing of client");
+    }
+
+    /**
+     * @internal
+     * Serialize a client configuration into the protobuf bytes expected by the
+     * Rust pool APIs (`createPool`, etc.).
+     *
+     * Exposed as a public static so that `ClientPool` (which is not a
+     * BaseClient subclass) can serialise connection config without making a
+     * real connection.
+     */
+    public static serializeConnectionRequest(
+        options: BaseClientConfiguration,
+        constructor: (options?: BaseClientConfiguration) => BaseClient,
+    ): { bytes: Uint8Array; resolverKey: string | undefined } {
+        const instance = constructor(options);
+        const request = instance.createClientRequest(options);
+
+        let resolverKey: string | undefined;
+
+        if (options.addressResolver) {
+            // Register the resolver so Rust can find it by key when creating
+            // pool connections. The key must be embedded in the serialised
+            // request so every new pool connection can locate the callback.
+            resolverKey = registerAddressResolver(options.addressResolver);
+            request.addressResolverKey = resolverKey;
+        }
+
+        const bytes = Buffer.from(
+            connection_request.ConnectionRequest.encode(
+                connection_request.ConnectionRequest.create(request),
+            ).finish(),
+        );
+        return { bytes, resolverKey };
     }
 
     /**

@@ -17,11 +17,11 @@ mod cluster_async {
 
     use futures::prelude::*;
     use futures_time::{future::FutureExt, task::sleep};
+    use glide_telemetry::*;
     use once_cell::sync::Lazy;
     use std::ops::Add;
     use std::path::PathBuf;
     use std::sync::OnceLock;
-    use telemetrylib::*;
     use tokio::runtime::Runtime;
 
     use redis::{

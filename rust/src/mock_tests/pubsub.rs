@@ -6,7 +6,7 @@ use crate::commands::pubsub::PubSubCommands;
 use bytes::Bytes;
 
 // `PUBLISH` is declared in (`crate::AsyncCommands`).
-// and covered by the parity guard (`it_parity_guard.rs`).
+// and covered by the parity guard (the `parity_tests` module).
 
 #[tokio::test]
 async fn spublish_encoding() {

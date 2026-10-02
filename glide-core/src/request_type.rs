@@ -155,6 +155,7 @@ pub enum RequestType {
     HPTtl = 625,
     HExpireTime = 626,
     HPExpireTime = 627,
+    HGetDel = 628,
 
     //// HyperLogLog commands
     PfAdd = 701,
@@ -557,6 +558,7 @@ impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
             ProtobufRequestType::HPTtl => RequestType::HPTtl,
             ProtobufRequestType::HExpireTime => RequestType::HExpireTime,
             ProtobufRequestType::HPExpireTime => RequestType::HPExpireTime,
+            ProtobufRequestType::HGetDel => RequestType::HGetDel,
             ProtobufRequestType::PTTL => RequestType::PTTL,
             ProtobufRequestType::ZRemRangeByRank => RequestType::ZRemRangeByRank,
             ProtobufRequestType::Persist => RequestType::Persist,
@@ -1127,6 +1129,7 @@ impl RequestType {
             RequestType::HPTtl => Some(cmd("HPTTL")),
             RequestType::HExpireTime => Some(cmd("HEXPIRETIME")),
             RequestType::HPExpireTime => Some(cmd("HPEXPIRETIME")),
+            RequestType::HGetDel => Some(cmd("HGETDEL")),
             RequestType::PTTL => Some(cmd("PTTL")),
             RequestType::ZRemRangeByRank => Some(cmd("ZREMRANGEBYRANK")),
             RequestType::Persist => Some(cmd("PERSIST")),

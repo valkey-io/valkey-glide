@@ -21,7 +21,7 @@ use futures_util::{
     sink::Sink,
     stream::{self, Stream, StreamExt, TryStreamExt as _},
 };
-use logger_core::log_error;
+use glide_logger::log_error;
 use pin_project_lite::pin_project;
 use std::collections::VecDeque;
 use std::fmt;
@@ -910,7 +910,7 @@ where
         let send_elapsed = send_start.elapsed();
         let send_warn_threshold = std::cmp::min(timeout / 4, std::time::Duration::from_millis(500));
         if send_elapsed > send_warn_threshold {
-            logger_core::log_warn_rate_limited!(
+            glide_logger::log_warn_rate_limited!(
                 "pipeline",
                 5,
                 format!(
@@ -930,7 +930,7 @@ where
         // heuristic (min(timeout/2, 5s)).
         let recv_warn_threshold = std::cmp::min(timeout / 2, std::time::Duration::from_secs(5));
         if !is_blocking && recv_elapsed > recv_warn_threshold {
-            logger_core::log_warn_rate_limited!(
+            glide_logger::log_warn_rate_limited!(
                 "pipeline",
                 5,
                 format!(

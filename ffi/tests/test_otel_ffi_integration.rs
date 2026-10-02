@@ -2,14 +2,62 @@ use glide_core::GlideSpan;
 use glide_core::request_type::RequestType;
 use glide_ffi::{
     create_batch_otel_span, create_batch_otel_span_with_parent,
-    create_batch_otel_span_with_trace_context, create_named_otel_span, create_otel_span,
-    create_otel_span_with_parent, create_otel_span_with_trace_context, drop_otel_span,
+    create_batch_otel_span_with_trace_context, create_named_otel_span,
+    create_named_otel_span_with_trace_context, create_otel_span, create_otel_span_with_parent,
+    create_otel_span_with_trace_context, drop_otel_span,
 };
+use opentelemetry_sdk::trace::{InMemorySpanExporter, SdkTracerProvider};
 use std::ffi::CString;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, OnceLock};
 use std::thread;
 use std::time::Duration;
+
+struct TraceContextTestTelemetry {
+    exporter: InMemorySpanExporter,
+    _provider: SdkTracerProvider,
+}
+
+static TRACE_CONTEXT_TEST_TELEMETRY: OnceLock<TraceContextTestTelemetry> = OnceLock::new();
+
+fn trace_context_test_exporter() -> &'static InMemorySpanExporter {
+    &TRACE_CONTEXT_TEST_TELEMETRY
+        .get_or_init(|| {
+            let exporter = InMemorySpanExporter::default();
+            let provider = SdkTracerProvider::builder()
+                .with_simple_exporter(exporter.clone())
+                .build();
+            opentelemetry::global::set_tracer_provider(provider.clone());
+            TraceContextTestTelemetry {
+                exporter,
+                _provider: provider,
+            }
+        })
+        .exporter
+}
+
+fn assert_exported_remote_parent(
+    child_span_id: &str,
+    expected_trace_id: &str,
+    expected_parent_span_id: &str,
+    expected_trace_state: &str,
+) {
+    let spans = trace_context_test_exporter()
+        .get_finished_spans()
+        .expect("test exporter should return its finished spans");
+    let child = spans
+        .iter()
+        .find(|span| span.span_context.span_id().to_string() == child_span_id)
+        .unwrap_or_else(|| panic!("expected exported child with span ID {child_span_id}"));
+
+    assert_eq!(child.span_context.trace_id().to_string(), expected_trace_id);
+    assert_eq!(child.parent_span_id.to_string(), expected_parent_span_id);
+    assert_eq!(
+        child.span_context.trace_state().header(),
+        expected_trace_state,
+        "child span should inherit the remote parent's tracestate"
+    );
+}
 
 /// Take a co-owning [`Arc<GlideSpan>`] for a span pointer returned by one of the
 /// `create_*_otel_span` FFI functions, WITHOUT consuming the reference still held by
@@ -37,7 +85,7 @@ unsafe fn co_owner(span_ptr: u64) -> Arc<GlideSpan> {
 #[test]
 fn test_create_otel_span_with_valid_inputs() {
     // Initialize logger to capture debug messages
-    logger_core::init(Some(logger_core::Level::Debug), None);
+    glide_logger::init(Some(glide_logger::Level::Debug), None);
 
     // Test creating spans with various valid request types
     let request_types = vec![
@@ -91,7 +139,8 @@ fn test_create_otel_span_with_valid_inputs() {
 
 #[test]
 fn test_create_otel_span_with_trace_context_valid_inputs() {
-    logger_core::init(Some(logger_core::Level::Debug), None);
+    glide_logger::init(Some(glide_logger::Level::Debug), None);
+    trace_context_test_exporter();
 
     let trace_id = CString::new("0af7651916cd43dd8448eb211c80319c").unwrap();
     let span_id = CString::new("b7ad6b7169203331").unwrap();
@@ -109,15 +158,22 @@ fn test_create_otel_span_with_trace_context_valid_inputs() {
 
     assert_ne!(span_ptr, 0, "valid remote context should create a span");
     assert_eq!(span_ptr % 8, 0, "span pointer should be 8-byte aligned");
+    let child_span_id = unsafe { co_owner(span_ptr) }.id();
 
     unsafe {
         drop_otel_span(span_ptr);
     }
+    assert_exported_remote_parent(
+        &child_span_id,
+        "0af7651916cd43dd8448eb211c80319c",
+        "b7ad6b7169203331",
+        "vendor=value",
+    );
 }
 
 #[test]
 fn test_create_otel_span_with_trace_context_invalid_context_falls_back() {
-    logger_core::init(Some(logger_core::Level::Debug), None);
+    glide_logger::init(Some(glide_logger::Level::Debug), None);
 
     let invalid_trace_id = CString::new("not-valid").unwrap();
     let invalid_span_id = CString::new("zzzzzzzzzzzzzzzz").unwrap();
@@ -173,10 +229,11 @@ fn test_create_otel_span_with_trace_context_invalid_context_falls_back() {
 
 #[test]
 fn test_create_batch_otel_span_with_trace_context() {
-    logger_core::init(Some(logger_core::Level::Debug), None);
+    glide_logger::init(Some(glide_logger::Level::Debug), None);
+    trace_context_test_exporter();
 
-    let trace_id = CString::new("0af7651916cd43dd8448eb211c80319c").unwrap();
-    let span_id = CString::new("b7ad6b7169203331").unwrap();
+    let trace_id = CString::new("0af7651916cd43dd8448eb211c80319d").unwrap();
+    let span_id = CString::new("b7ad6b7169203332").unwrap();
 
     let span_ptr = unsafe {
         create_batch_otel_span_with_trace_context(
@@ -192,15 +249,184 @@ fn test_create_batch_otel_span_with_trace_context() {
         "valid remote context should create a batch span"
     );
     assert_eq!(span_ptr % 8, 0, "span pointer should be 8-byte aligned");
+    let child_span_id = unsafe { co_owner(span_ptr) }.id();
 
     unsafe {
         drop_otel_span(span_ptr);
+    }
+    assert_exported_remote_parent(
+        &child_span_id,
+        "0af7651916cd43dd8448eb211c80319d",
+        "b7ad6b7169203332",
+        "",
+    );
+}
+
+#[test]
+fn test_create_named_otel_span_with_trace_context_valid_inputs() {
+    glide_logger::init(Some(glide_logger::Level::Debug), None);
+    trace_context_test_exporter();
+
+    let span_name = CString::new("Get").unwrap();
+    let trace_id = CString::new("0af7651916cd43dd8448eb211c80319e").unwrap();
+    let span_id = CString::new("b7ad6b7169203333").unwrap();
+    let trace_state = CString::new("vendor=value").unwrap();
+
+    let span_ptr = unsafe {
+        create_named_otel_span_with_trace_context(
+            span_name.as_ptr(),
+            trace_id.as_ptr(),
+            span_id.as_ptr(),
+            1,
+            trace_state.as_ptr(),
+        )
+    };
+
+    assert_ne!(span_ptr, 0, "valid remote context should create a span");
+    assert_eq!(span_ptr % 8, 0, "span pointer should be 8-byte aligned");
+    let child_span_id = unsafe { co_owner(span_ptr) }.id();
+
+    // A null trace_state is the common case (an empty W3C tracestate) and must also work.
+    let no_state_ptr = unsafe {
+        create_named_otel_span_with_trace_context(
+            span_name.as_ptr(),
+            trace_id.as_ptr(),
+            span_id.as_ptr(),
+            0,
+            std::ptr::null(),
+        )
+    };
+
+    assert_ne!(
+        no_state_ptr, 0,
+        "null trace_state should create a span with the default trace state"
+    );
+
+    unsafe {
+        drop_otel_span(span_ptr);
+        drop_otel_span(no_state_ptr);
+    }
+    assert_exported_remote_parent(
+        &child_span_id,
+        "0af7651916cd43dd8448eb211c80319e",
+        "b7ad6b7169203333",
+        "vendor=value",
+    );
+}
+
+#[test]
+fn test_create_named_otel_span_with_trace_context_invalid_context_falls_back() {
+    glide_logger::init(Some(glide_logger::Level::Debug), None);
+
+    let span_name = CString::new("EVALSHA").unwrap();
+    let invalid_trace_id = CString::new("not-valid").unwrap();
+    let invalid_span_id = CString::new("zzzzzzzzzzzzzzzz").unwrap();
+    let valid_trace_id = CString::new("0af7651916cd43dd8448eb211c80319c").unwrap();
+    let valid_span_id = CString::new("b7ad6b7169203331").unwrap();
+    let invalid_trace_state = CString::new("bad,tracestate,entry").unwrap();
+
+    let test_cases = [
+        (
+            "invalid trace ID",
+            invalid_trace_id.as_ptr(),
+            valid_span_id.as_ptr(),
+            std::ptr::null(),
+        ),
+        (
+            "invalid span ID",
+            valid_trace_id.as_ptr(),
+            invalid_span_id.as_ptr(),
+            std::ptr::null(),
+        ),
+        (
+            "invalid trace state",
+            valid_trace_id.as_ptr(),
+            valid_span_id.as_ptr(),
+            invalid_trace_state.as_ptr(),
+        ),
+        (
+            "null trace ID",
+            std::ptr::null(),
+            valid_span_id.as_ptr(),
+            std::ptr::null(),
+        ),
+        (
+            "null span ID",
+            valid_trace_id.as_ptr(),
+            std::ptr::null(),
+            std::ptr::null(),
+        ),
+    ];
+
+    for (name, trace_id, span_id, trace_state) in test_cases {
+        let span_ptr = unsafe {
+            create_named_otel_span_with_trace_context(
+                span_name.as_ptr(),
+                trace_id,
+                span_id,
+                1,
+                trace_state,
+            )
+        };
+
+        assert_ne!(span_ptr, 0, "{name} should fall back to standalone span");
+
+        unsafe {
+            drop_otel_span(span_ptr);
+        }
+    }
+}
+
+#[test]
+fn test_create_named_otel_span_with_trace_context_rejects_invalid_names() {
+    glide_logger::init(Some(glide_logger::Level::Debug), None);
+
+    let trace_id = CString::new("0af7651916cd43dd8448eb211c80319c").unwrap();
+    let span_id = CString::new("b7ad6b7169203331").unwrap();
+
+    let create = |name_ptr: *const std::os::raw::c_char| unsafe {
+        create_named_otel_span_with_trace_context(
+            name_ptr,
+            trace_id.as_ptr(),
+            span_id.as_ptr(),
+            1,
+            std::ptr::null(),
+        )
+    };
+
+    assert_eq!(create(std::ptr::null()), 0, "null name should return 0");
+
+    let too_long = CString::new("a".repeat(257)).unwrap();
+    assert_eq!(
+        create(too_long.as_ptr()),
+        0,
+        "257 character name should return 0"
+    );
+
+    let control_chars = CString::new("bad\u{7}name").unwrap();
+    assert_eq!(
+        create(control_chars.as_ptr()),
+        0,
+        "name with control characters should return 0"
+    );
+
+    let max_length = CString::new("a".repeat(256)).unwrap();
+    let max_length_ptr = create(max_length.as_ptr());
+    assert_ne!(max_length_ptr, 0, "256 character name should succeed");
+
+    let empty = CString::new("").unwrap();
+    let empty_ptr = create(empty.as_ptr());
+    assert_ne!(empty_ptr, 0, "empty name should be allowed");
+
+    unsafe {
+        drop_otel_span(max_length_ptr);
+        drop_otel_span(empty_ptr);
     }
 }
 
 #[test]
 fn test_create_otel_span_with_invalid_inputs() {
-    logger_core::init(Some(logger_core::Level::Debug), None);
+    glide_logger::init(Some(glide_logger::Level::Debug), None);
 
     // Test with invalid request types that should return 0
     let invalid_request_types = vec![
@@ -219,7 +445,7 @@ fn test_create_otel_span_with_invalid_inputs() {
 
 #[test]
 fn test_create_named_otel_span_with_valid_inputs() {
-    logger_core::init(Some(logger_core::Level::Debug), None);
+    glide_logger::init(Some(glide_logger::Level::Debug), None);
 
     let test_cases = vec![
         ("simple_span", true),
@@ -277,7 +503,7 @@ fn test_create_named_otel_span_with_valid_inputs() {
 
 #[test]
 fn test_create_named_otel_span_with_invalid_inputs() {
-    logger_core::init(Some(logger_core::Level::Debug), None);
+    glide_logger::init(Some(glide_logger::Level::Debug), None);
 
     // Test with null pointer
     let null_span_ptr = unsafe { create_named_otel_span(std::ptr::null()) };
@@ -309,7 +535,7 @@ fn test_create_named_otel_span_with_invalid_inputs() {
 
 #[test]
 fn test_create_otel_span_with_parent_valid_inputs() {
-    logger_core::init(Some(logger_core::Level::Debug), None);
+    glide_logger::init(Some(glide_logger::Level::Debug), None);
 
     // Create a parent span
     let parent_name = CString::new("parent_span").expect("CString::new failed");
@@ -372,7 +598,7 @@ fn test_create_otel_span_with_parent_valid_inputs() {
 
 #[test]
 fn test_create_otel_span_with_parent_invalid_inputs() {
-    logger_core::init(Some(logger_core::Level::Debug), None);
+    glide_logger::init(Some(glide_logger::Level::Debug), None);
 
     // Test with null parent (should fallback to independent span)
     let child_with_null_parent = unsafe { create_otel_span_with_parent(RequestType::Get, 0) };
@@ -427,7 +653,7 @@ fn test_create_otel_span_with_parent_invalid_inputs() {
 
 #[test]
 fn test_drop_otel_span_memory_safety() {
-    logger_core::init(Some(logger_core::Level::Debug), None);
+    glide_logger::init(Some(glide_logger::Level::Debug), None);
 
     // Test dropping null pointer (should not crash)
     unsafe {
@@ -461,7 +687,7 @@ fn test_drop_otel_span_memory_safety() {
 
 #[test]
 fn test_ffi_functions_concurrent_access() {
-    logger_core::init(Some(logger_core::Level::Debug), None);
+    glide_logger::init(Some(glide_logger::Level::Debug), None);
 
     let num_threads = 3; // Reduced number of threads to avoid race conditions
     let spans_per_thread = 2; // Reduced spans per thread
@@ -530,7 +756,7 @@ fn test_ffi_functions_concurrent_access() {
 
 #[test]
 fn test_span_hierarchy_creation() {
-    logger_core::init(Some(logger_core::Level::Debug), None);
+    glide_logger::init(Some(glide_logger::Level::Debug), None);
 
     // Create a multi-level span hierarchy
     let root_name = CString::new("root_span").expect("CString::new failed");
@@ -594,7 +820,7 @@ fn test_span_hierarchy_creation() {
 
 #[test]
 fn test_error_handling_and_logging() {
-    logger_core::init(Some(logger_core::Level::Debug), None);
+    glide_logger::init(Some(glide_logger::Level::Debug), None);
 
     // Test various error conditions to ensure proper logging
 
@@ -634,7 +860,7 @@ fn test_error_handling_and_logging() {
 
 #[test]
 fn test_boundary_conditions() {
-    logger_core::init(Some(logger_core::Level::Debug), None);
+    glide_logger::init(Some(glide_logger::Level::Debug), None);
 
     // Test span name length boundaries
     let boundary_cases = vec![
@@ -683,7 +909,7 @@ fn test_boundary_conditions() {
 }
 #[test]
 fn test_create_batch_otel_span() {
-    logger_core::init(Some(logger_core::Level::Debug), None);
+    glide_logger::init(Some(glide_logger::Level::Debug), None);
 
     // Test creating independent batch span
     let batch_span_ptr = create_batch_otel_span();
@@ -712,7 +938,7 @@ fn test_create_batch_otel_span() {
 
 #[test]
 fn test_create_batch_otel_span_with_parent_valid_inputs() {
-    logger_core::init(Some(logger_core::Level::Debug), None);
+    glide_logger::init(Some(glide_logger::Level::Debug), None);
 
     // Create a parent span
     let parent_name = CString::new("parent_operation").expect("CString::new failed");
@@ -756,7 +982,7 @@ fn test_create_batch_otel_span_with_parent_valid_inputs() {
 
 #[test]
 fn test_create_batch_otel_span_with_parent_invalid_inputs() {
-    logger_core::init(Some(logger_core::Level::Debug), None);
+    glide_logger::init(Some(glide_logger::Level::Debug), None);
 
     // Test with null parent (should fallback to independent batch span)
     let batch_with_null_parent = unsafe { create_batch_otel_span_with_parent(0) };
@@ -794,7 +1020,7 @@ fn test_create_batch_otel_span_with_parent_invalid_inputs() {
 
 #[test]
 fn test_batch_span_hierarchy() {
-    logger_core::init(Some(logger_core::Level::Debug), None);
+    glide_logger::init(Some(glide_logger::Level::Debug), None);
 
     // Create a root operation span
     let root_name = CString::new("user_operation").expect("CString::new failed");
@@ -843,7 +1069,7 @@ fn test_batch_span_hierarchy() {
 
 #[test]
 fn test_batch_span_concurrent_creation() {
-    logger_core::init(Some(logger_core::Level::Debug), None);
+    glide_logger::init(Some(glide_logger::Level::Debug), None);
 
     let num_threads = 3;
     let batches_per_thread = 2;
@@ -920,7 +1146,7 @@ fn test_batch_span_concurrent_creation() {
 
 #[test]
 fn test_batch_span_error_handling() {
-    logger_core::init(Some(logger_core::Level::Debug), None);
+    glide_logger::init(Some(glide_logger::Level::Debug), None);
 
     // Test batch span creation with various error conditions
 
@@ -974,7 +1200,7 @@ fn test_batch_span_error_handling() {
 
 #[test]
 fn test_custom_command_span_creation() {
-    logger_core::init(Some(logger_core::Level::Debug), None);
+    glide_logger::init(Some(glide_logger::Level::Debug), None);
 
     let span_ptr = create_otel_span(RequestType::CustomCommand);
     assert_ne!(
@@ -997,7 +1223,7 @@ fn test_custom_command_span_creation() {
 
 #[test]
 fn test_custom_command_span_with_parent() {
-    logger_core::init(Some(logger_core::Level::Debug), None);
+    glide_logger::init(Some(glide_logger::Level::Debug), None);
 
     // Create a parent span
     let parent_name = CString::new("user_operation").expect("CString::new failed");
@@ -1033,7 +1259,7 @@ fn test_custom_command_span_with_parent() {
 
 #[test]
 fn test_multiple_custom_command_spans() {
-    logger_core::init(Some(logger_core::Level::Debug), None);
+    glide_logger::init(Some(glide_logger::Level::Debug), None);
 
     let mut span_ptrs = Vec::new();
 
@@ -1074,7 +1300,7 @@ fn test_multiple_custom_command_spans() {
 
 #[test]
 fn test_custom_command_hierarchy() {
-    logger_core::init(Some(logger_core::Level::Debug), None);
+    glide_logger::init(Some(glide_logger::Level::Debug), None);
 
     // Create a root operation span
     let root_name = CString::new("script_execution").expect("CString::new failed");
@@ -1134,7 +1360,7 @@ fn test_custom_command_hierarchy() {
 
 #[test]
 fn test_mixed_command_types_in_batch() {
-    logger_core::init(Some(logger_core::Level::Debug), None);
+    glide_logger::init(Some(glide_logger::Level::Debug), None);
 
     // Create a batch span
     let batch_span_ptr = create_batch_otel_span();
@@ -1187,7 +1413,7 @@ fn test_mixed_command_types_in_batch() {
 
 #[test]
 fn test_custom_command_with_null_parent() {
-    logger_core::init(Some(logger_core::Level::Debug), None);
+    glide_logger::init(Some(glide_logger::Level::Debug), None);
 
     // Test CustomCommand span creation with null parent (should fallback to independent span)
     let span_ptr = unsafe { create_otel_span_with_parent(RequestType::CustomCommand, 0) };
@@ -1207,7 +1433,7 @@ fn test_custom_command_with_null_parent() {
 
 #[test]
 fn test_custom_command_with_invalid_parent() {
-    logger_core::init(Some(logger_core::Level::Debug), None);
+    glide_logger::init(Some(glide_logger::Level::Debug), None);
 
     // Test CustomCommand span creation with invalid parent pointers
     let invalid_parents = vec![
@@ -1239,7 +1465,7 @@ fn test_custom_command_with_invalid_parent() {
 
 #[test]
 fn test_regression_no_error_logs_for_custom_command() {
-    logger_core::init(Some(logger_core::Level::Debug), None);
+    glide_logger::init(Some(glide_logger::Level::Debug), None);
 
     let span_ptr = create_otel_span(RequestType::CustomCommand);
     assert_ne!(
@@ -1294,7 +1520,7 @@ fn test_regression_no_error_logs_for_custom_command() {
 /// `Arc` reference is gone after `drop_otel_span`, leaving only the test's co-owner.
 #[test]
 fn test_drop_otel_span_releases_native_reference() {
-    logger_core::init(Some(logger_core::Level::Debug), None);
+    glide_logger::init(Some(glide_logger::Level::Debug), None);
 
     let span_ptr = create_otel_span(RequestType::Get);
     assert_ne!(span_ptr, 0, "Span creation should succeed");
@@ -1325,17 +1551,47 @@ fn test_drop_otel_span_releases_native_reference() {
 /// the FFI boundary where the allocation actually lives.
 #[test]
 fn test_span_create_drop_loop_does_not_leak() {
-    logger_core::init(Some(logger_core::Level::Debug), None);
+    glide_logger::init(Some(glide_logger::Level::Debug), None);
 
     const ITERATIONS: usize = 1000;
     let named = CString::new("loop_named_span").expect("CString::new failed");
+    let trace_id = CString::new("0af7651916cd43dd8448eb211c80319c").unwrap();
+    let span_id = CString::new("b7ad6b7169203331").unwrap();
+    let trace_state = CString::new("vendor=value").unwrap();
 
     for i in 0..ITERATIONS {
-        // Rotate across the parentless create paths to exercise each one's into_raw/from_raw.
-        let span_ptr = match i % 3 {
+        // Rotate across the parentless create paths, including the three
+        // `_with_trace_context` entry points, to exercise each one's into_raw/from_raw.
+        let span_ptr = match i % 6 {
             0 => create_otel_span(RequestType::Get),
             1 => create_otel_span(RequestType::Set),
-            _ => unsafe { create_named_otel_span(named.as_ptr()) },
+            2 => unsafe { create_named_otel_span(named.as_ptr()) },
+            3 => unsafe {
+                create_otel_span_with_trace_context(
+                    RequestType::Get,
+                    trace_id.as_ptr(),
+                    span_id.as_ptr(),
+                    1,
+                    trace_state.as_ptr(),
+                )
+            },
+            4 => unsafe {
+                create_named_otel_span_with_trace_context(
+                    named.as_ptr(),
+                    trace_id.as_ptr(),
+                    span_id.as_ptr(),
+                    1,
+                    trace_state.as_ptr(),
+                )
+            },
+            _ => unsafe {
+                create_batch_otel_span_with_trace_context(
+                    trace_id.as_ptr(),
+                    span_id.as_ptr(),
+                    1,
+                    trace_state.as_ptr(),
+                )
+            },
         };
         assert_ne!(span_ptr, 0, "Span creation should succeed on iteration {i}");
 
@@ -1364,7 +1620,7 @@ fn test_span_create_drop_loop_does_not_leak() {
 /// dropped, including the parent reference held by its children's creation path.
 #[test]
 fn test_batch_span_hierarchy_does_not_leak() {
-    logger_core::init(Some(logger_core::Level::Debug), None);
+    glide_logger::init(Some(glide_logger::Level::Debug), None);
 
     let parent_ptr = create_batch_otel_span();
     assert_ne!(parent_ptr, 0, "Batch parent span creation should succeed");

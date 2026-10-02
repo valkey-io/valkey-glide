@@ -1,7 +1,7 @@
 # Valkey GLIDE for Rust (`glide`)
 
-[![CI](https://github.com/valkey-io/valkey-glide/actions/workflows/rust-client.yml/badge.svg)](https://github.com/valkey-io/valkey-glide/actions/workflows/rust-client.yml)
-[![Rust](https://img.shields.io/badge/rust-1.91.1%2B-orange.svg)](https://www.rust-lang.org)
+[![CI](https://github.com/valkey-io/valkey-glide/actions/workflows/rust.yml/badge.svg)](https://github.com/valkey-io/valkey-glide/actions/workflows/rust.yml)
+[![Rust](https://img.shields.io/badge/dynamic/toml?url=https%3A%2F%2Fraw.githubusercontent.com%2Fvalkey-io%2Fvalkey-glide%2Fmain%2Frust%2FCargo.toml&query=%24.package%5B%27rust-version%27%5D&label=rust&suffix=%2B&color=orange)](https://www.rust-lang.org)
 
 A first-class, native **Rust** client for [Valkey](https://valkey.io) and Redis OSS,
 built directly on the shared **`glide-core`** engine that powers the official
@@ -61,7 +61,7 @@ should work wherever `glide-core` builds, but are not exercised in CI.
 
 ### Prerequisites
 
-- **Rust 1.91.1+** (the crate and `glide-core` use edition 2024).
+- **Rust** — install via [rustup](https://rustup.rs)
 - **A monorepo checkout** — this crate lives in the `valkey-io/valkey-glide`
   monorepo under `rust/` and links `glide-core` and `redis-rs` via
   in-repo **path** dependencies (see [Status & publishing](#status--publishing)).
@@ -76,7 +76,7 @@ This crate is not yet on crates.io and links `glide-core` and its vendored
 [Status & publishing](#status--publishing)), so it is currently built from a
 checkout of the [`valkey-io/valkey-glide`](https://github.com/valkey-io/valkey-glide)
 monorepo rather than added as an external dependency. The package is named
-`glide-rust` and the library is imported as `glide`; you will also need an async
+`valkey-glide` and the library is imported as `glide`; you will also need an async
 runtime (the async client is built on Tokio):
 
 ```toml
@@ -242,13 +242,15 @@ The suite has three layers (all run in CI and are currently green):
   command family with edge/error cases (wrong-type, missing key, bounds, expiry
   conditions), **parametrized over RESP2 and RESP3**, plus suites for batches,
   scan, pub/sub, auth, TLS, and a **native multi-shard cluster** harness. Each
-  test boots its own ephemeral server and tears it down on drop; suites needing
-  unavailable infra (cluster/TLS/auth) **skip gracefully** rather than fail.
+  test boots its own ephemeral server and tears it down on drop; a test fails
+  if its server or cluster cannot be started.
 - **Doctests** — the examples in this README and the API docs are compiled.
 
 ```bash
-cargo test --lib     # fast unit + mock tests only (no server needed)
-cargo test           # everything, incl. live integration tests + doctests
+cargo unit-tests         # unit tests
+cargo doc-tests          # doctests
+cargo integration-tests  # integration tests
+cargo test               # all tests (unit, docs, and integration)
 ```
 
 Integration tests auto-discover a `valkey-server`/`redis-server` on `PATH`; point

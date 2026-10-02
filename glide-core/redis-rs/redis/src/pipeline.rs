@@ -1,6 +1,6 @@
 #![macro_use]
 
-use telemetrylib::GlideSpan;
+use glide_telemetry::GlideSpan;
 
 use crate::cmd::{cmd, cmd_len, Cmd};
 use crate::connection::ConnectionLike;

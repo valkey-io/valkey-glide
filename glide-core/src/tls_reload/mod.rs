@@ -30,7 +30,7 @@
 //!   SHA-256 fingerprint of the certificate chain DER only, mirroring the IAM
 //!   module's logging discipline.
 
-use logger_core::{log_debug, log_error, log_info, log_warn};
+use glide_logger::{log_debug, log_error, log_info, log_warn};
 use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;

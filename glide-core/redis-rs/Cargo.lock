@@ -740,6 +740,86 @@ dependencies = [
 ]
 
 [[package]]
+name = "glide-core-engine"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "arc-swap",
+ "async-trait",
+ "bytes",
+ "combine",
+ "crc16",
+ "criterion",
+ "dashmap",
+ "dispose",
+ "fnv",
+ "futures",
+ "futures-time",
+ "futures-util",
+ "glide-logger",
+ "glide-telemetry",
+ "itoa",
+ "lazy_static",
+ "lru",
+ "num-bigint",
+ "once_cell",
+ "parking_lot",
+ "partial-io",
+ "percent-encoding",
+ "pin-project-lite",
+ "quickcheck",
+ "rand 0.9.4",
+ "rustls",
+ "rustls-pki-types",
+ "rustls-platform-verifier",
+ "ryu",
+ "serde_json",
+ "serial_test",
+ "socket2",
+ "strum",
+ "strum_macros",
+ "tempfile",
+ "tokio",
+ "tokio-retry2",
+ "tokio-rustls",
+ "tokio-util",
+ "tracing",
+ "tracing-subscriber",
+ "url",
+ "versions",
+ "which",
+]
+
+[[package]]
+name = "glide-logger"
+version = "0.1.0"
+dependencies = [
+ "file-rotate",
+ "once_cell",
+ "tracing",
+ "tracing-appender",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "glide-telemetry"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "glide-logger",
+ "lazy_static",
+ "once_cell",
+ "opentelemetry",
+ "opentelemetry-otlp",
+ "opentelemetry_sdk",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tokio",
+ "url",
+]
+
+[[package]]
 name = "h2"
 version = "0.4.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1203,17 +1283,6 @@ name = "log"
 version = "0.4.29"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5e5032e24019045c762d3c0f28f5b6b8bbf38563a65908389bf7978758920897"
-
-[[package]]
-name = "logger_core"
-version = "0.1.0"
-dependencies = [
- "file-rotate",
- "once_cell",
- "tracing",
- "tracing-appender",
- "tracing-subscriber",
-]
 
 [[package]]
 name = "lru"
@@ -1774,57 +1843,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "redis"
-version = "0.25.2"
-dependencies = [
- "anyhow",
- "arc-swap",
- "async-trait",
- "bytes",
- "combine",
- "crc16",
- "criterion",
- "dashmap",
- "dispose",
- "fnv",
- "futures",
- "futures-time",
- "futures-util",
- "itoa",
- "lazy_static",
- "logger_core",
- "lru",
- "num-bigint",
- "once_cell",
- "parking_lot",
- "partial-io",
- "percent-encoding",
- "pin-project-lite",
- "quickcheck",
- "rand 0.9.4",
- "rustls",
- "rustls-pki-types",
- "rustls-platform-verifier",
- "ryu",
- "serde_json",
- "serial_test",
- "socket2",
- "strum",
- "strum_macros",
- "telemetrylib",
- "tempfile",
- "tokio",
- "tokio-retry2",
- "tokio-rustls",
- "tokio-util",
- "tracing",
- "tracing-subscriber",
- "url",
- "versions",
- "which",
-]
-
-[[package]]
 name = "redox_syscall"
 version = "0.5.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2275,21 +2293,14 @@ dependencies = [
 ]
 
 [[package]]
-name = "telemetrylib"
-version = "0.1.0"
+name = "synstructure"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "901704edd0dfe137f1987838ee4f259e4e063c31371bdb423f7ae38ec6f77f02"
 dependencies = [
- "chrono",
- "lazy_static",
- "logger_core",
- "once_cell",
- "opentelemetry",
- "opentelemetry-otlp",
- "opentelemetry_sdk",
- "serde",
- "serde_json",
- "thiserror",
- "tokio",
- "url",
+ "proc-macro2",
+ "quote",
+ "syn 3.0.2",
 ]
 
 [[package]]
@@ -3137,14 +3148,14 @@ dependencies = [
 
 [[package]]
 name = "yoke-derive"
-version = "0.8.2"
+version = "0.8.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "de844c262c8848816172cef550288e7dc6c7b7814b4ee56b3e1553f275f1858e"
+checksum = "ec8ebde2db3681e8c9980cc27822030e68752690ddfa9473e739aeb4dbde6d71"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.117",
- "synstructure",
+ "syn 3.0.2",
+ "synstructure 0.14.0",
 ]
 
 [[package]]
@@ -3185,7 +3196,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.117",
- "synstructure",
+ "synstructure 0.13.2",
 ]
 
 [[package]]

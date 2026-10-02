@@ -61,12 +61,23 @@ public class ConnectionManager {
     private boolean poolBorrowed = false;
 
     /**
-     * Constructor for pool-borrowed clients. Seeds the fields that {@code scopedConnection} reads
-     * (native handle plus the pool's serialized ConnectionRequest) so scope acquisition can proceed
-     * without going through {@link #connectToValkey}.
+     * Constructor for pool-borrowed clients. Seeds the fields the direct path sets in {@link
+     * #connectToValkey}: the native handle and serialized ConnectionRequest that {@code
+     * scopedConnection} reads, the resolved inflight/timeout values the getters report, and the
+     * credentials the IAM guards ({@code refreshIamToken}, {@code updateConnectionPassword}) read.
+     * Without the credentials a borrowed client from an IAM-configured pool would see them as null
+     * and misbehave.
      */
-    public ConnectionManager(long nativeClientHandle, byte[] connectionRequestBytes) {
+    public ConnectionManager(
+            long nativeClientHandle,
+            int maxInflightRequests,
+            int requestTimeoutMs,
+            ServerCredentials credentials,
+            byte[] connectionRequestBytes) {
         this.nativeClientHandle = nativeClientHandle;
+        this.maxInflightRequests = maxInflightRequests;
+        this.requestTimeoutMs = requestTimeoutMs;
+        this.credentials = credentials;
         this.connectionRequestBytes = connectionRequestBytes;
         this.poolBorrowed = true;
     }

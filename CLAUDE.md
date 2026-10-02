@@ -49,18 +49,18 @@ Valkey GLIDE is an official open-source client library for Valkey and Redis OSS.
 
 ## Project Structure
 
-```
+```text
+benchmarks/     # Performance benchmarks
+docs/           # Documentation
+examples/       # Usage examples for each language
+ffi/            # Foreign function interface for language bindings
 glide-core/     # Rust core driver - handles connection, protocol, clustering
-python/         # Python client wrapper
+glide-logger/    # Rust logging infrastructure
+go/             # Go client wrapper
 java/           # Java client wrapper
 node/           # Node.js client wrapper
-go/             # Go client wrapper
-ffi/            # Foreign function interface for language bindings
-logger_core/    # Rust logging infrastructure
+python/         # Python client wrapper
 utils/          # Test utilities and cluster management scripts
-benchmarks/     # Performance benchmarks
-examples/       # Usage examples for each language
-docs/           # Documentation
 ```
 
 ## Architecture: Language Bindings to Core
