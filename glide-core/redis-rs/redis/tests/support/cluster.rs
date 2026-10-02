@@ -173,11 +173,9 @@ impl RedisCluster {
         mtls_enabled: bool,
         port_policy: PortPolicy,
     ) -> RedisCluster {
-        let mut servers = vec![];
-        let mut folders = vec![];
-        let mut addrs = vec![];
-        let mut ports = vec![];
         let mut tls_paths = None;
+        // Kept apart from the node tempdirs so a node restart does not delete the certs.
+        let mut tls_folder = None;
 
         let mut is_tls = false;
 
@@ -188,14 +186,84 @@ impl RedisCluster {
                 .tempdir()
                 .expect("failed to create tempdir");
             let files = build_keys_and_certs_for_tls(&tempdir);
-            folders.push(tempdir);
+            tls_folder = Some(tempdir);
             tls_paths = Some(files);
             is_tls = true;
         }
 
         let max_attempts = 5;
+        let mut requested_ports = requested_ports;
+        let mut cur_attempts = 0;
 
-        for mut node_ports in requested_ports {
+        let cluster = loop {
+            let (servers, folders, ports) = Self::start_nodes(
+                &requested_ports,
+                replicas,
+                modules,
+                mtls_enabled,
+                &tls_paths,
+                is_tls,
+                port_policy,
+                max_attempts,
+            );
+
+            match Self::create_cluster(&ports, replicas, mtls_enabled, &tls_paths, is_tls) {
+                Ok(()) => {
+                    let mut folders = folders;
+                    folders.extend(tls_folder);
+                    break RedisCluster {
+                        servers,
+                        folders,
+                        tls_paths,
+                        ports,
+                    };
+                }
+                Err(err) => {
+                    if cur_attempts == max_attempts {
+                        panic!("{err}");
+                    }
+                    cur_attempts += 1;
+                    drop(servers);
+                    drop(folders);
+                    match port_policy {
+                        PortPolicy::Fresh => {
+                            requested_ports = requested_ports
+                                .iter()
+                                .map(|_| Self::fresh_node_ports())
+                                .collect();
+                        }
+                        PortPolicy::Fixed => sleep(Duration::from_millis(100)),
+                    }
+                    eprintln!("Retrying with new nodes on {requested_ports:?}: {err}");
+                }
+            }
+        };
+
+        if replicas > 0 {
+            cluster.wait_for_replicas(replicas, mtls_enabled);
+        }
+
+        wait_for_status_ok(&cluster);
+        cluster
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn start_nodes(
+        requested_ports: &[NodePorts],
+        replicas: u16,
+        modules: &[Module],
+        mtls_enabled: bool,
+        tls_paths: &Option<TlsFilePaths>,
+        is_tls: bool,
+        port_policy: PortPolicy,
+        max_attempts: usize,
+    ) -> (Vec<RedisServer>, Vec<TempDir>, Vec<NodePorts>) {
+        let mut servers = vec![];
+        let mut folders = vec![];
+        let mut ports = vec![];
+
+        for &requested in requested_ports {
+            let mut node_ports = requested;
             let mut cur_attempts = 0;
             let server = loop {
                 match Self::start_node(
@@ -231,11 +299,20 @@ impl RedisCluster {
                     }
                 }
             };
-            addrs.push(format!("127.0.0.1:{}", node_ports.client));
             ports.push(node_ports);
             servers.push(server);
         }
 
+        (servers, folders, ports)
+    }
+
+    fn create_cluster(
+        ports: &[NodePorts],
+        replicas: u16,
+        mtls_enabled: bool,
+        tls_paths: &Option<TlsFilePaths>,
+        is_tls: bool,
+    ) -> Result<(), String> {
         let cli_command = ["valkey-cli", "redis-cli"]
             .iter()
             .find(|cmd| which::which(cmd).is_ok())
@@ -243,10 +320,10 @@ impl RedisCluster {
             .unwrap_or_else(|| panic!("Neither valkey-cli nor redis-cli exists in the system."));
 
         let mut cmd = process::Command::new(cli_command);
-        cmd.stdout(process::Stdio::null())
-            .arg("--cluster")
-            .arg("create")
-            .args(&addrs);
+        cmd.arg("--cluster").arg("create");
+        for p in ports {
+            cmd.arg(format!("{LOCALHOST}:{}", p.client));
+        }
         if replicas > 0 {
             cmd.arg("--cluster-replicas").arg(replicas.to_string());
         }
@@ -258,7 +335,7 @@ impl RedisCluster {
                     redis_crt,
                     redis_key,
                     ca_crt,
-                }) = &tls_paths
+                }) = tls_paths
                 {
                     cmd.arg("--cert");
                     cmd.arg(redis_crt);
@@ -273,34 +350,18 @@ impl RedisCluster {
             }
         }
 
-        let mut cur_attempts = 0;
-        loop {
-            let output = cmd.output().unwrap();
-            if output.status.success() {
-                break;
-            } else {
-                let err = format!("Cluster creation failed: {output:?}");
-                if cur_attempts == max_attempts {
-                    panic!("{err}");
-                }
-                eprintln!("Retrying: {err}");
-                sleep(Duration::from_millis(50));
-                cur_attempts += 1;
-            }
+        // redis-cli reports cluster-manager errors on stdout, so keep both streams.
+        let output = cmd.output().unwrap();
+        if output.status.success() {
+            Ok(())
+        } else {
+            Err(format!(
+                "Cluster creation failed: {:?}\nstdout: {}\nstderr: {}",
+                output.status,
+                String::from_utf8_lossy(&output.stdout).trim(),
+                String::from_utf8_lossy(&output.stderr).trim()
+            ))
         }
-
-        let cluster = RedisCluster {
-            servers,
-            folders,
-            tls_paths,
-            ports,
-        };
-        if replicas > 0 {
-            cluster.wait_for_replicas(replicas, mtls_enabled);
-        }
-
-        wait_for_status_ok(&cluster);
-        cluster
     }
 
     /// Make one attempt to start a cluster node on `node_ports`. Returns `Err`
@@ -321,6 +382,7 @@ impl RedisCluster {
         } = node_ports;
         let failure: Rc<RefCell<Option<String>>> = Rc::new(RefCell::new(None));
         let failure_slot = failure.clone();
+        let tls_paths_for_probe = tls_paths.clone();
 
         let server = RedisServer::new_with_addr_tls_modules_and_spawner(
             ClusterType::build_addr(port),
@@ -399,11 +461,62 @@ impl RedisCluster {
             },
         );
 
-        let failed = failure.borrow_mut().take();
-        match failed {
-            Some(err) => Err(err),
-            None => Ok(server),
+        if let Some(err) = failure.borrow_mut().take() {
+            return Err(err);
         }
+        let mut server = server;
+        Self::verify_owner(&mut server, &tls_paths_for_probe, mtls_enabled)?;
+        Ok(server)
+    }
+
+    /// Confirm that the process answering on the node's port is the child we
+    /// spawned. `start_node`'s readiness probe is a bare connect, which any process
+    /// that grabbed the port in the window after `get_random_available_port`
+    /// released it would also satisfy.
+    fn verify_owner(
+        server: &mut RedisServer,
+        tls_paths: &Option<TlsFilePaths>,
+        mtls_enabled: bool,
+    ) -> Result<(), String> {
+        let port = match server.client_addr() {
+            redis::ConnectionAddr::Tcp(_, port) | redis::ConnectionAddr::TcpTls { port, .. } => {
+                *port
+            }
+            other => panic!("cluster nodes always listen on TCP, got {other:?}"),
+        };
+        let expected = server.process.id();
+        let mut last_err = String::new();
+        for _ in 0..20 {
+            if let Ok(Some(status)) = server.process.try_wait() {
+                return Err(format!(
+                    "redis server on port {port} exited with {status:?} before answering INFO"
+                ));
+            }
+            let info: RedisResult<String> =
+                build_single_client(server.connection_info(), tls_paths, mtls_enabled)
+                    .and_then(|client| client.get_connection(None))
+                    .and_then(|mut con| cmd("INFO").arg("server").query(&mut con));
+            match info {
+                Ok(info) => {
+                    let actual = info
+                        .lines()
+                        .find_map(|line| line.strip_prefix("process_id:"))
+                        .and_then(|pid| pid.trim().parse::<u32>().ok());
+                    return if actual == Some(expected) {
+                        Ok(())
+                    } else {
+                        Err(format!(
+                            "port {port} is served by pid {actual:?}, not our redis server {expected}"
+                        ))
+                    };
+                }
+                Err(err) => last_err = err.to_string(),
+            }
+            sleep(Duration::from_millis(50));
+        }
+        Err(format!(
+            "redis server on port {port} never answered INFO: {last_err}"
+        ))
     }
 
     // parameter `_mtls_enabled` can only be used if `feature = tls-rustls` is active
