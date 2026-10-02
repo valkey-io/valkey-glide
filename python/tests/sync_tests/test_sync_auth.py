@@ -698,22 +698,24 @@ class TestSyncAuthCommands:
         3. Operations continue to work after token refresh
         """
         client = create_iam_client(request, cluster_mode, protocol)
+        try:
+            # Verify connection works
+            assert_connected_sync(client)
 
-        # Verify connection works
-        assert_connected_sync(client)
+            # Test manual token refresh
+            client.refresh_iam_token()
 
-        # Test manual token refresh
-        client.refresh_iam_token()
+            # Test basic operations
+            client.set("iam_test_key", "iam_test_value")
+            value = client.get("iam_test_key")
+            assert value == b"iam_test_value"
 
-        # Test basic operations
-        client.set("iam_test_key", "iam_test_value")
-        value = client.get("iam_test_key")
-        assert value == b"iam_test_value"
-
-        # Verify operations still work after token refresh
-        client.set("iam_test_key2", "iam_test_value2")
-        value2 = client.get("iam_test_key2")
-        assert value2 == b"iam_test_value2"
+            # Verify operations still work after token refresh
+            client.set("iam_test_key2", "iam_test_value2")
+            value2 = client.get("iam_test_key2")
+            assert value2 == b"iam_test_value2"
+        finally:
+            client.close()
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -729,14 +731,70 @@ class TestSyncAuthCommands:
         client = create_iam_client(
             request, cluster_mode, protocol, refresh_interval_seconds=2
         )
+        try:
+            # Verify initial connection
+            assert_connected_sync(client)
 
-        # Verify initial connection
-        assert_connected_sync(client)
+            # Wait for automatic token refresh to occur
+            time.sleep(3)
 
-        # Wait for automatic token refresh to occur
-        time.sleep(3)
+            # Verify client still works after automatic refresh
+            client.set("iam_auto_refresh_key", "iam_auto_refresh_value")
+            value = client.get("iam_auto_refresh_key")
+            assert value == b"iam_auto_refresh_value"
+        finally:
+            client.close()
 
-        # Verify client still works after automatic refresh
-        client.set("iam_auto_refresh_key", "iam_auto_refresh_value")
-        value = client.get("iam_auto_refresh_key")
-        assert value == b"iam_auto_refresh_value"
+
+# ---------------------------------------------------------------------------
+# Pool IAM tests — live outside TestSyncAuthCommands so they don't inherit
+# the autouse cleanup fixture that requires protocol/cluster_mode parametrize.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("cluster_mode", [False])
+def test_iam_pool_with_custom_credentials_provider(request, cluster_mode):
+    """Sync pool with custom IAM credential provider: verifies the provider is
+    invoked when the pool creates clients and commands succeed."""
+    from glide_shared.config import AwsCredentials
+    from glide_sync.client_pool import ClientPool, PoolConfig
+
+    from tests.utils.utils import create_sync_client_config
+
+    invocations = [0]
+
+    def provider():
+        invocations[0] += 1
+        return AwsCredentials(
+            access_key_id="test_access_key",
+            secret_access_key="test_secret_key",
+            session_token="test_session_token",
+        )
+
+    iam_config = IamAuthConfig(
+        cluster_name=IAM_TEST_CLUSTER_NAME,
+        service=ServiceType.ELASTICACHE,
+        region=IAM_TEST_REGION_US_EAST_1,
+        refresh_interval_seconds=5,
+        credential_provider=provider,
+    )
+    credentials = ServerCredentials(username=IAM_USERNAME, iam_config=iam_config)
+    client_config = create_sync_client_config(
+        request,
+        cluster_mode=cluster_mode,
+        credentials=credentials,
+    )
+    pool = ClientPool(client_config, PoolConfig(max_size=3, min_idle=0))
+    try:
+        with pool.borrow() as client:
+            client.set(
+                "iam_sync_pool_custom_provider_key",
+                "iam_sync_pool_custom_provider_value",
+            )
+            val = client.get("iam_sync_pool_custom_provider_key")
+            assert val == b"iam_sync_pool_custom_provider_value"
+    finally:
+        pool.close()
+    assert (
+        invocations[0] > 0
+    ), "Custom credential provider was never invoked for sync pool client"

@@ -1,7 +1,12 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 import pytest
-from glide_shared.config import IamAuthConfig, ServerCredentials, ServiceType
+from glide_shared.config import (
+    AwsCredentials,
+    IamAuthConfig,
+    ServerCredentials,
+    ServiceType,
+)
 from glide_shared.exceptions import ConfigurationError
 
 
@@ -117,3 +122,219 @@ class TestServerCredentialsWithIam:
             ServerCredentials(username="myUser")
 
         assert "Either password or iam_config must be provided" in str(exc_info.value)
+
+
+class TestAwsCredentials:
+    def test_valid_long_term_credentials(self):
+        creds = AwsCredentials(
+            access_key_id="AKIAIOSFODNN7EXAMPLE",
+            secret_access_key="wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+        )
+        assert creds.access_key_id == "AKIAIOSFODNN7EXAMPLE"
+        assert creds.session_token is None
+        assert creds.expires_at_epoch_millis is None
+
+    def test_valid_session_credentials(self):
+        creds = AwsCredentials(
+            access_key_id="ASIA...",
+            secret_access_key="secret",
+            session_token="token",
+            expires_at_epoch_millis=9999999999000,
+        )
+        assert creds.session_token == "token"
+        assert creds.expires_at_epoch_millis == 9999999999000
+
+    def test_blank_access_key_id_raises(self):
+        with pytest.raises(ValueError, match="access_key_id"):
+            AwsCredentials(access_key_id="", secret_access_key="secret")
+
+    def test_whitespace_access_key_id_raises(self):
+        with pytest.raises(ValueError, match="access_key_id"):
+            AwsCredentials(access_key_id="   ", secret_access_key="secret")
+
+    def test_blank_secret_raises(self):
+        with pytest.raises(ValueError, match="secret_access_key"):
+            AwsCredentials(access_key_id="key", secret_access_key="")
+
+    def test_negative_expires_at_raises(self):
+        with pytest.raises(ValueError, match="expires_at_epoch_millis"):
+            AwsCredentials(
+                access_key_id="key",
+                secret_access_key="secret",
+                expires_at_epoch_millis=-1,
+            )
+
+
+class TestGlideCredentialProvider:
+    def test_valid_provider_accepted(self):
+        def my_provider() -> AwsCredentials:
+            return AwsCredentials(access_key_id="key", secret_access_key="secret")
+
+        config = IamAuthConfig(
+            cluster_name="c",
+            service=ServiceType.ELASTICACHE,
+            region="us-east-1",
+            credential_provider=my_provider,
+        )
+        assert config.credential_provider is my_provider
+
+    def test_async_provider_accepted_in_config(self):
+        """Async providers are accepted at config time; the async client bridges them."""
+
+        async def async_provider() -> AwsCredentials:
+            return AwsCredentials(access_key_id="key", secret_access_key="secret")
+
+        # Should NOT raise -- async providers are now supported in the async client
+        config = IamAuthConfig(
+            cluster_name="c",
+            service=ServiceType.ELASTICACHE,
+            region="us-east-1",
+            credential_provider=async_provider,
+        )
+        assert config.credential_provider is async_provider
+
+    def test_non_callable_raises(self):
+        with pytest.raises(ValueError, match="callable"):
+            IamAuthConfig(
+                cluster_name="c",
+                service=ServiceType.ELASTICACHE,
+                region="us-east-1",
+                credential_provider="not_a_function",  # type: ignore
+            )
+
+    def test_async_provider_rejected_by_sync_client(self):
+        """The sync glide client raises ValueError at connection time for async providers."""
+        from unittest.mock import MagicMock
+
+        from glide_shared.config import GlideClientConfiguration, NodeAddress
+        from glide_sync.glide_client import BaseClient
+
+        async def async_provider() -> AwsCredentials:
+            return AwsCredentials(access_key_id="key", secret_access_key="secret")
+
+        iam_config = IamAuthConfig(
+            cluster_name="c",
+            service=ServiceType.ELASTICACHE,
+            region="us-east-1",
+            credential_provider=async_provider,
+        )
+        credentials = ServerCredentials(username="user", iam_config=iam_config)
+
+        config = GlideClientConfiguration(
+            addresses=[NodeAddress("localhost", 6379)],
+            credentials=credentials,
+        )
+
+        # Construct a BaseClient without calling the full create() path
+        # (which would attempt a real server connection).
+        client = BaseClient.__new__(BaseClient)
+        client._config = config
+        client._is_closed = False
+        # Provide a minimal FFI mock so _create_core_client reaches the
+        # async-provider check before attempting any real FFI calls.
+        mock_ffi = MagicMock()
+        mock_ffi.NULL = None
+        mock_ffi.new.return_value = MagicMock()
+        mock_ffi.callback.return_value = MagicMock()
+        client._ffi = mock_ffi
+        client._lib = MagicMock()
+        client._pubsub_callback_ref = None
+        client._address_resolver_callback_ref = None
+        client._credential_provider_callback_ref = None
+
+        # _create_core_client must raise ValueError before reaching the FFI
+        # create_client call because the async-provider check happens first.
+        with pytest.raises(ValueError, match="async"):
+            client._create_core_client()
+
+    def test_callable_object_with_async_call_detected_as_async(self):
+        """_is_async_callable detects callable objects with async __call__."""
+        from glide_shared.config import _is_async_callable
+
+        class AsyncCallableProvider:
+            async def __call__(self) -> AwsCredentials:
+                return AwsCredentials(access_key_id="key", secret_access_key="secret")
+
+        provider_instance = AsyncCallableProvider()
+        assert _is_async_callable(
+            provider_instance
+        ), "Expected _is_async_callable to return True for object with async __call__"
+        # Should also be detected by IamAuthConfig
+        config = IamAuthConfig(
+            cluster_name="c",
+            service=ServiceType.ELASTICACHE,
+            region="us-east-1",
+            credential_provider=provider_instance,
+        )
+        assert config._credential_provider_is_async is True
+
+    def test_sync_provider_passes_create_credential_callback(self):
+        """Sync client passes non-NULL credential callback to native create_client."""
+        from unittest.mock import MagicMock
+
+        from glide_shared._glide_ffi import GlideFFI
+        from glide_shared.config import GlideClientConfiguration, NodeAddress
+        from glide_shared.ffi_helpers import create_credential_provider_callback
+        from glide_sync.glide_client import BaseClient
+
+        ffi = GlideFFI.ffi
+
+        def my_provider() -> AwsCredentials:
+            return AwsCredentials(access_key_id="AKID", secret_access_key="SECRET")
+
+        iam_config = IamAuthConfig(
+            cluster_name="c",
+            service=ServiceType.ELASTICACHE,
+            region="us-east-1",
+            credential_provider=my_provider,
+        )
+        credentials = ServerCredentials(username="user", iam_config=iam_config)
+        config = GlideClientConfiguration(
+            addresses=[NodeAddress("localhost", 6379)],
+            credentials=credentials,
+        )
+
+        # Verify create_credential_provider_callback produces a non-NULL CFFI pointer
+        callback = create_credential_provider_callback(ffi, my_provider)
+        assert callback != ffi.NULL, "Expected non-NULL CFFI callback for sync provider"
+
+        # Verify the callback is forwarded to self._lib.create_client.
+        # Construct a BaseClient without calling the full create() path.
+        client = BaseClient.__new__(BaseClient)
+        client._config = config
+        client._is_closed = False
+        client._ffi = ffi
+        mock_lib = MagicMock()
+        # Return a non-NULL ConnectionResponse so _create_core_client proceeds
+        mock_response = ffi.new(
+            "ConnectionResponse*",
+            {"conn_ptr": ffi.NULL, "connection_error_message": ffi.NULL},
+        )
+        mock_lib.create_client.return_value = mock_response
+        client._lib = mock_lib
+        client._pubsub_callback_ref = None
+        client._address_resolver_callback_ref = None
+        client._credential_provider_callback_ref = None
+
+        try:
+            client._create_core_client()
+        except Exception:
+            # Connection will fail (no real server), but create_client was called
+            pass
+
+        assert mock_lib.create_client.called, "create_client was not called"
+        # The 6th positional argument (index 5) is credential_provider
+        call_args = mock_lib.create_client.call_args
+        cred_arg = call_args[0][5]  # positional arg at index 5
+        assert (
+            cred_arg != ffi.NULL
+        ), "Expected non-NULL credential_provider passed to create_client"
+
+    def test_none_provider_returns_null_callback(self):
+        """No provider results in a NULL CFFI callback."""
+        from glide_shared._glide_ffi import GlideFFI
+        from glide_shared.ffi_helpers import create_credential_provider_callback
+
+        ffi = GlideFFI.ffi
+        callback = create_credential_provider_callback(ffi, None)
+        assert callback == ffi.NULL, "Expected NULL CFFI callback when no provider"

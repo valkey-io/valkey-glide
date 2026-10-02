@@ -59,6 +59,26 @@ _EVALSHA_SPAN_NAME = _SYNC_FFI.ffi.new("char[]", b"EVALSHA")
 
 ENCODING = "utf-8"
 
+# Module-level list that keeps CFFI credential-provider callbacks alive after
+# GlideClient.close(). The Rust IAM refresh task fires periodically for the
+# entire lifetime of the client and may still invoke the callback long after
+# close_client() returns. Callbacks are kept until process exit; accumulation
+# is negligible for production workloads.
+_pinned_credential_callbacks: list = []
+
+
+def _clear_pinned_callbacks_after_fork() -> None:
+    """Clear inherited CFFI callbacks after fork.
+
+    After os.fork(), the child inherits the module-level callback list but
+    those CFFI objects point to the parent's Python heap and are invalid in
+    the child. Clear the list so the child starts clean.
+    """
+    _pinned_credential_callbacks.clear()
+
+
+os.register_at_fork(after_in_child=_clear_pinned_callbacks_after_fork)
+
 
 # Enum values must match the Rust definition
 class FFIClientTypeEnum:
@@ -104,6 +124,8 @@ class BaseClient(CoreCommands):
         self._pubsub_lock = threading.Lock()
         self._pubsub_condition = threading.Condition(self._pubsub_lock)
         self._pubsub_callback_ref = None  # Keep callback alive
+        self._address_resolver_callback_ref = None  # Keep callback alive
+        self._credential_provider_callback_ref = None  # Keep callback alive
         # Lock protecting _core_client and _is_closed for free-threading safety.
         # Under GIL builds this is a no-op (GIL serializes access).
         # Under free-threaded builds this prevents use-after-free on concurrent close.
@@ -117,7 +139,9 @@ class BaseClient(CoreCommands):
             config, (GlideClientConfiguration, GlideClusterClientConfiguration)
         ):
             raise ConfigurationError(
-                "Configuration must be an instance of the sync version of GlideClientConfiguration or GlideClusterClientConfiguration, imported from glide_sync.config."
+                "Configuration must be an instance of the sync version of "
+                "GlideClientConfiguration or GlideClusterClientConfiguration, "
+                "imported from glide_sync.config."
             )
         self = cls(config)
         self._config = config
@@ -155,7 +179,9 @@ class BaseClient(CoreCommands):
         self._pubsub_callback_ref = pubsub_callback
 
         # Create address resolver callback if configured
-        address_resolver_callback = self._ffi.NULL
+        address_resolver_callback = self._ffi.cast(
+            "AddressResolverCallback", self._ffi.NULL
+        )
         if self._config.address_resolver is not None:
             resolver_fn = self._config.address_resolver
 
@@ -186,12 +212,47 @@ class BaseClient(CoreCommands):
             # Store reference to prevent garbage collection
             self._address_resolver_callback_ref = address_resolver_callback
 
+        # Create credential provider callback if configured in IAM config
+        credential_provider_callback = self._ffi.cast(
+            "CredentialProviderCallback", self._ffi.NULL
+        )
+        _credential_provider_fn = None
+        if (
+            self._config.credentials is not None
+            and self._config.credentials.iam_config is not None
+            and self._config.credentials.iam_config.credential_provider is not None
+        ):
+            _credential_provider_fn = (
+                self._config.credentials.iam_config.credential_provider
+            )
+
+        if _credential_provider_fn is not None:
+            # Async providers require an asyncio event loop, which the sync client
+            # does not have. Fail with a clear error at connection time.
+            if getattr(
+                self._config.credentials.iam_config,
+                "_credential_provider_is_async",
+                False,
+            ):
+                raise ValueError(
+                    "GlideCredentialProvider is an async callable but the sync glide client "
+                    "does not support async providers. Use a synchronous callable, or switch "
+                    "to the async glide client."
+                )
+            from glide_shared.ffi_helpers import create_credential_provider_callback
+
+            credential_provider_callback = create_credential_provider_callback(
+                self._ffi, _credential_provider_fn
+            )
+            self._credential_provider_callback_ref = credential_provider_callback
+
         client_response_ptr = self._lib.create_client(
             conn_req_bytes,
             len(conn_req_bytes),
             client_type,
             pubsub_callback,
             address_resolver_callback,
+            credential_provider_callback,
             0,  # client_id is not used by the Python client
         )
 
@@ -588,8 +649,9 @@ class BaseClient(CoreCommands):
             password (`Optional[str]`): The new password to use for the connection,
                 if `None` the password will be removed.
             immediate_auth (`bool`):
-                `True`: The client will authenticate immediately with the new password against all connections, Using `AUTH`
-                command. If password supplied is an empty string, auth will not be performed and warning will be returned.
+                `True`: The client will authenticate immediately with the new password
+                against all connections, Using `AUTH` command. If password supplied is
+                an empty string, auth will not be performed and warning will be returned.
                 The default is `False`.
 
         Returns:
@@ -1068,6 +1130,23 @@ class BaseClient(CoreCommands):
                 self._lib.close_client(self._core_client)
                 self._core_client = self._ffi.NULL
                 self._pubsub_callback_ref = None
+                # Keep credential/address-resolver callbacks alive until process
+                # exit so the Rust IAM refresh task (which fires periodically for
+                # the entire lifetime of the client) never invokes a freed CFFI
+                # trampoline.  A test process is short-lived; production code
+                # creates very few clients with credential providers.
+                _cbs = [
+                    cb
+                    for cb in [
+                        self._credential_provider_callback_ref,
+                        self._address_resolver_callback_ref,
+                    ]
+                    if cb is not None
+                ]
+                if _cbs:
+                    import glide_sync.glide_client as _self_module
+
+                    _self_module._pinned_credential_callbacks.extend(_cbs)
 
     def __enter__(self) -> Self:
         return self
