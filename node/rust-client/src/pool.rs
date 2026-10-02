@@ -30,18 +30,6 @@ use tokio::sync::mpsc;
 
 static POOL_RUNTIME: OnceLock<tokio::runtime::Runtime> = OnceLock::new();
 
-/// Per-pool credential providers, keyed by pool_id.
-/// Stored here after registry::remove() in create_pool warmup so that
-/// on-demand client creation (create_raw_pool_client) can also inject the provider.
-static NODE_POOL_CREDENTIAL_PROVIDERS: OnceLock<
-    dashmap::DashMap<u64, glide_core::iam::CredentialsProvider>,
-> = OnceLock::new();
-
-fn get_node_pool_credential_providers()
--> &'static dashmap::DashMap<u64, glide_core::iam::CredentialsProvider> {
-    NODE_POOL_CREDENTIAL_PROVIDERS.get_or_init(dashmap::DashMap::new)
-}
-
 fn get_pool_runtime() -> &'static tokio::runtime::Runtime {
     POOL_RUNTIME.get_or_init(|| {
         tokio::runtime::Builder::new_multi_thread()
@@ -174,33 +162,6 @@ pub fn create_pool<'a>(
     let (first_tx, first_rx) = tokio::sync::oneshot::channel::<std::result::Result<(), String>>();
 
     get_pool_runtime().spawn(async move {
-        // Resolve credential provider once before the loop to avoid consuming the
-        // registry entry on the first iteration (registry::remove is destructive).
-        let pool_credential_provider = {
-            let connection_request = match ProtobufConnectionRequest::parse_from_bytes(&conn_bytes)
-            {
-                Ok(req) => req,
-                Err(_) => {
-                    glide_logger::log_warn(
-                        "pool",
-                        "Background warmup: failed to parse connection request",
-                    );
-                    return;
-                }
-            };
-            connection_request
-                .credential_provider_key
-                .as_ref()
-                .filter(|key| !key.is_empty())
-                .and_then(|key| glide_core::credential_provider_registry::remove(key))
-        };
-
-        // Store credential provider for on-demand client creation (create_raw_pool_client).
-        // registry::remove above is destructive, so we persist it here keyed by pool_id.
-        if let Some(ref provider) = pool_credential_provider {
-            get_node_pool_credential_providers().insert(pool_id as u64, provider.clone());
-        }
-
         let mut first_tx_opt = Some(first_tx);
 
         // Always probe at least one connection for connectivity validation, even
@@ -221,8 +182,6 @@ pub fn create_pool<'a>(
                     return;
                 }
             };
-            // IAM credential provider wiring: inject into internal_req before Client::new.
-            // pool_credential_provider was resolved once above (registry::remove is destructive).
 
             // Extract address resolver key BEFORE converting to internal request,
             // because the key field exists only on the protobuf type.
@@ -242,14 +201,6 @@ pub fn create_pool<'a>(
                 && let Some(resolver) = glide_core::address_resolver_registry::get(&key)
             {
                 internal_req.address_resolver = Some(resolver);
-            }
-
-            // Wire credential provider into IAM config if present.
-            if let Some(ref provider) = pool_credential_provider
-                && let Some(auth_info) = internal_req.authentication_info.as_mut()
-                && let Some(iam_config) = auth_info.iam_config.as_mut()
-            {
-                iam_config.credentials_provider = Some(provider.clone());
             }
 
             // No push sender: pool clients do not support pub/sub.
@@ -428,10 +379,7 @@ pub fn pool_build_handle<'a>(
 /// protobuf connection-request bytes.  This is the same path as the warmup loop
 /// in `create_pool`, factored out so that `pool_try_acquire` can trigger
 /// on-demand connection creation when the pool is not yet full.
-async fn create_raw_pool_client(
-    conn_bytes: &[u8],
-    credential_provider: Option<glide_core::iam::CredentialsProvider>,
-) -> std::result::Result<Client, String> {
+async fn create_raw_pool_client(conn_bytes: &[u8]) -> std::result::Result<Client, String> {
     let connection_request =
         ProtobufConnectionRequest::parse_from_bytes(conn_bytes).map_err(|e| {
             format!("Failed to parse connection request during on-demand creation: {e}")
@@ -457,14 +405,6 @@ async fn create_raw_pool_client(
         internal_req.address_resolver = Some(resolver);
     }
 
-    // Wire credential provider into IAM config if present.
-    if let Some(ref provider) = credential_provider
-        && let Some(auth_info) = internal_req.authentication_info.as_mut()
-        && let Some(iam_config) = auth_info.iam_config.as_mut()
-    {
-        iam_config.credentials_provider = Some(provider.clone());
-    }
-
     // No push sender: pool clients do not support pub/sub.
     Client::new(internal_req, None)
         .await
@@ -477,7 +417,6 @@ async fn create_raw_pool_client(
 fn maybe_spawn_on_demand_creation(
     pool_entry: Arc<tokio::sync::Mutex<ClientPool>>,
     pool_guard: &mut ClientPool,
-    pool_id: u64,
 ) {
     if !pool_guard.should_create() {
         return;
@@ -487,12 +426,8 @@ fn maybe_spawn_on_demand_creation(
         .total_count
         .fetch_add(1, std::sync::atomic::Ordering::AcqRel);
     let bytes = pool_guard.config.connection_request.clone();
-    // Look up the credential provider stored during pool creation.
-    let on_demand_provider = get_node_pool_credential_providers()
-        .get(&pool_id)
-        .map(|e| e.value().clone());
     get_pool_runtime().spawn(async move {
-        match create_raw_pool_client(&bytes, on_demand_provider).await {
+        match create_raw_pool_client(&bytes).await {
             Ok(client) => {
                 let mut pg = pool_entry.lock().await;
                 if pg.state.load(std::sync::atomic::Ordering::Acquire) != POOL_RUNNING {
@@ -542,11 +477,7 @@ pub fn pool_try_acquire(pool_id: i64) -> Result<i64> {
         // the next pool_acquire_blocking poll (or a subsequent pool_try_acquire)
         // will hand it out.
         if result < 0 {
-            maybe_spawn_on_demand_creation(
-                pool_entry.value().clone(),
-                &mut pool_guard,
-                pool_id_u64,
-            );
+            maybe_spawn_on_demand_creation(pool_entry.value().clone(), &mut pool_guard);
         }
         result
     });
@@ -598,11 +529,7 @@ pub fn pool_acquire_blocking<'a>(
                 let r = pool_guard.try_acquire();
                 // Trigger on-demand creation when pool has capacity but no idle clients.
                 if r < 0 {
-                    maybe_spawn_on_demand_creation(
-                        pool_entry.clone(),
-                        &mut pool_guard,
-                        pool_id_u64,
-                    );
+                    maybe_spawn_on_demand_creation(pool_entry.clone(), &mut pool_guard);
                 }
                 r
             };
@@ -675,9 +602,6 @@ pub fn pool_metrics(pool_id: i64) -> Result<PoolMetrics> {
 
 #[napi]
 pub fn pool_destroy(pool_id: i64) {
-    // Remove stored credential provider for this pool.
-    get_node_pool_credential_providers().remove(&(pool_id as u64));
-
     if let Some(pool_arc) = pool::unregister_pool(pool_id as u64) {
         get_pool_runtime().block_on(async {
             let mut pool_guard = pool_arc.lock().await;

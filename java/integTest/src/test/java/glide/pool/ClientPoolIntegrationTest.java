@@ -704,15 +704,7 @@ public class ClientPoolIntegrationTest {
             assertTrue(contentionDone.await(10, TimeUnit.SECONDS), "Contention threads should stop");
 
             // Core assertion: the BLPOP client must still be in the pool's active set.
-            // Wait for contention clients to fully return to the pool (race: threads may still
-            // be inside close() when contentionDone fires). Poll until active count settles to 1.
-            long activeDeadline = System.currentTimeMillis() + 5000;
-            int active;
-            do {
-                active = pool.getActiveCount();
-                if (active == 1) break;
-                Thread.sleep(50);
-            } while (System.currentTimeMillis() < activeDeadline);
+            int active = pool.getActiveCount();
             assertEquals(
                     1, active, "Pool should have exactly 1 active client (the BLPOP holder); got " + active);
 
@@ -755,74 +747,6 @@ public class ClientPoolIntegrationTest {
                         .build();
 
         assertThrows(RuntimeException.class, () -> ClientPool.create(badConfig));
-    }
-
-    /**
-     * Test that a ClientPool with a custom IAM credential provider can create clients and execute
-     * commands. The credential provider is invoked during client creation.
-     */
-    @Test
-    public void testPoolWithCustomIamCredentialProvider() throws Exception {
-        assumeTrue(standaloneAvailable(), "No standalone endpoints configured");
-
-        AtomicInteger invocations = new AtomicInteger(0);
-
-        glide.api.models.configuration.GlideCredentialProvider countingProvider =
-                () -> {
-                    invocations.incrementAndGet();
-                    return java.util.concurrent.CompletableFuture.completedFuture(
-                            glide.api.models.configuration.AwsCredentials.builder()
-                                    .accessKeyId("test_access_key")
-                                    .secretAccessKey("test_secret_key")
-                                    .sessionToken("test_session_token")
-                                    .build());
-                };
-
-        glide.api.models.configuration.IamAuthConfig iamConfig =
-                glide.api.models.configuration.IamAuthConfig.builder()
-                        .clusterName("test-cluster")
-                        .service(glide.api.models.configuration.ServiceType.ELASTICACHE)
-                        .region("us-east-1")
-                        .refreshIntervalSeconds(5)
-                        .credentialsProvider(countingProvider)
-                        .build();
-
-        String[] parts = STANDALONE_HOSTS[0].split(":");
-        GlideClientConfiguration clientConfig =
-                GlideClientConfiguration.builder()
-                        .address(NodeAddress.builder().host(parts[0]).port(Integer.parseInt(parts[1])).build())
-                        .requestTimeout(5000)
-                        .credentials(
-                                glide.api.models.configuration.ServerCredentials.builder()
-                                        .username("default")
-                                        .iamConfig(iamConfig)
-                                        .build())
-                        .build();
-
-        ClientPoolConfig config =
-                ClientPoolConfig.builder()
-                        .maxSize(3)
-                        .minIdle(0)
-                        .acquireTimeout(Duration.ofSeconds(10))
-                        .clientConfig(clientConfig)
-                        .build();
-
-        ClientPool pool = ClientPool.create(config);
-        try {
-            try (glide.api.models.pool.PooledGlideClient client =
-                    pool.acquire().get(10, TimeUnit.SECONDS)) {
-                String key = "iam_pool_java_test_" + UUID.randomUUID().toString().substring(0, 8);
-                client.set(key, "iam_pool_java_value").get(5, TimeUnit.SECONDS);
-                assertEquals("iam_pool_java_value", client.get(key).get(5, TimeUnit.SECONDS));
-                client.del(new String[] {key}).get(5, TimeUnit.SECONDS);
-            }
-        } finally {
-            pool.close();
-        }
-
-        assertTrue(invocations.get() > 0, "Credential provider was never invoked for pool client");
-        System.out.println(
-                "testPoolWithCustomIamCredentialProvider PASSED (invocations=" + invocations.get() + ")");
     }
 
     /**
