@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import time
 from collections import Counter
-from typing import Dict, List, Optional, Set, Tuple, cast
+from typing import Callable, Dict, List, Optional, Set, Tuple, cast
 
 import pytest
 from glide_shared.commands.core_options import PubSubMsg
@@ -257,6 +257,8 @@ def _publish_until_all_received(
     deadline_sec: float = _MANY_CHANNELS_PUBLISH_DEADLINE_SEC,
     poll_timeout: float = _PUBLISH_POLL_TIMEOUT_SEC,
     poll_interval: float = _PUBLISH_POLL_INTERVAL_SEC,
+    now: Callable[[], float] = time.time,
+    sleep: Callable[[float], None] = time.sleep,
 ) -> Tuple[Set[str], Dict[str, int], Dict[str, int]]:
     """Publish ``message`` to every channel until each has delivered a copy.
 
@@ -269,6 +271,9 @@ def _publish_until_all_received(
     fan-out too: while the publishing client is recovering each publish can
     cost a full request timeout, so one uninterrupted pass over 256 channels
     would otherwise overrun the budget many times over.
+
+    ``now`` and ``sleep`` default to the wall clock; a test may pass a fake
+    clock so the poll/re-publish ordering does not depend on host scheduling.
 
     Returns ``(received_channels, copies, publishes)``, the last two keyed by
     channel.
@@ -296,30 +301,30 @@ def _publish_until_all_received(
             )
             received.add(channel)
 
-    deadline = time.time() + deadline_sec
-    while received != channels and time.time() < deadline:
+    deadline = now() + deadline_sec
+    while received != channels and now() < deadline:
         _drain()
         for channel in channels - received:
-            now = time.time()
-            if now >= deadline:
+            current = now()
+            if current >= deadline:
                 break
-            if now - last_published.get(channel, float("-inf")) < poll_timeout:
+            if current - last_published.get(channel, float("-inf")) < poll_timeout:
                 continue
             # Count before the call, as in _publish_and_wait_for_message.
             publishes[channel] += 1
-            last_published[channel] = now
+            last_published[channel] = current
             try:
                 publishing_client.publish(message, channel)
             except RequestError as error:
                 if not is_reconnect_in_progress_error(error):
                     raise
-        time.sleep(poll_interval)
+        sleep(poll_interval)
         _drain()
 
     # Let delayed copies land so the per-channel bound also covers them.
-    settle_deadline = time.time() + poll_timeout
-    while time.time() < settle_deadline:
-        time.sleep(poll_interval)
+    settle_deadline = now() + poll_timeout
+    while now() < settle_deadline:
+        sleep(poll_interval)
         _drain()
     return received, dict(copies), dict(publishes)
 
