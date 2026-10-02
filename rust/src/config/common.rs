@@ -417,7 +417,8 @@ impl IamAuthConfig {
 /// Mirrors Python `BackoffStrategy`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BackoffStrategy {
-    /// Number of retry attempts before giving up on a reconnection burst.
+    /// Number of retries over which the delay between attempts keeps growing. After that the delay
+    /// stops growing and the client keeps retrying until it reconnects.
     pub num_of_retries: u32,
     /// The multiplier that will be applied to the waiting time between retries.
     pub factor: u32,
