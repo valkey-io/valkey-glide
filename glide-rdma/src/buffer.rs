@@ -60,6 +60,11 @@ impl HostMemory {
         unsafe { self.bytes.as_ref() }
     }
 
+    /// For registering: a peer writes through the region, so no `&[u8]`-derived pointer.
+    pub(crate) fn bytes_ptr(&self) -> NonNull<[u8]> {
+        self.bytes
+    }
+
     fn bytes_mut(&mut self) -> &mut [u8] {
         // SAFETY: as in `bytes`, and `&mut self` makes this the only reference.
         unsafe { self.bytes.as_mut() }
@@ -212,7 +217,8 @@ impl RdmaBuffer {
     /// fabric's access to it ends. To use the memory for transfers again, register a
     /// new buffer.
     ///
-    /// When libfabric fails to close the region, the buffer is still registered.
+    /// A failed close is final: later revokes report the same error, and the
+    /// memory is leaked on drop rather than freed.
     pub fn revoke(&self) -> Result<(), RdmaError> {
         self.registration.revoke()
     }
@@ -225,8 +231,7 @@ impl RdmaBuffer {
     /// Resolves once this buffer is revoked.
     ///
     /// Borrows nothing so it can still be awaited after the buffer is lent. If the
-    /// buffer is dropped, it resolves once the region closes, which may be never if
-    /// closing it keeps failing.
+    /// buffer is dropped, it resolves once the region closes, never if that failed.
     pub fn revoked(&self) -> impl Future<Output = ()> + Send + 'static {
         self.registration.revoked()
     }
@@ -331,13 +336,19 @@ pub struct LentBuffer {
 impl LentBuffer {
     /// End the loan with the server's reply to the transfer command.
     ///
+    /// # Safety
+    ///
+    /// `reply` must be the server's reply to this loan's command, or the command must
+    /// never have been sent. Until the server replies it may still be writing the
+    /// window, which a reclaimed buffer exposes through a reference.
+    ///
     /// # Errors
     ///
     /// [`RdmaError::PayloadTooLarge`] when the server reports writing more than the
     /// window held. The bytes past the window may have overwritten other parts of the
     /// buffer. The buffer is still handed back, because the server has replied and so
     /// is done with the memory.
-    pub fn reclaim(
+    pub unsafe fn reclaim(
         self,
         reply: TransferReply,
     ) -> Result<(RdmaBuffer, Option<ReadReceipt>), (RdmaBuffer, RdmaError)> {
@@ -364,7 +375,7 @@ impl LentBuffer {
     /// # Errors
     ///
     /// When libfabric fails to close the region, the loan is handed back unchanged.
-    /// Retry, or drop it, which parks the memory just the same.
+    /// A failed close is final; drop the loan, which parks the memory just the same.
     pub fn recall(self) -> Result<(), (Self, RdmaError)> {
         if let Err(error) = self.buffer.revoke() {
             return Err((self, error));
@@ -408,7 +419,7 @@ impl LentBuffer {
 
 impl Drop for LentBuffer {
     /// Revoke the region and park the memory. A failed revoke changes nothing: the
-    /// memory is parked either way, and `Registration`'s drop retries the close.
+    /// memory is parked either way.
     fn drop(&mut self) {
         // SAFETY: `buffer` is taken exactly once, here.
         let buffer = unsafe { ManuallyDrop::take(&mut self.buffer) };
@@ -428,12 +439,9 @@ impl RdmaRevoker {
     /// Revoke the buffer, as [`RdmaBuffer::revoke`] does. A no-op if it is already
     /// revoked or was dropped and its region closed.
     ///
-    /// If the buffer was dropped but its region failed to close, this tries closing
-    /// it again.
-    ///
     /// # Errors
     ///
-    /// When libfabric fails to close the region.
+    /// When libfabric failed to close the region, now or earlier.
     pub fn revoke(&self) -> Result<(), RdmaError> {
         self.0.revoke()
     }
@@ -452,7 +460,7 @@ mod tests {
     use crate::config::{FabricConfig, Provider};
     use crate::error::RdmaError;
     use crate::fabric::RdmaFabric;
-    use crate::fabric::tests::fail_next_closes;
+    use crate::fabric::tests::{close_calls, fail_next_closes};
     use crate::region_ref::RegionRef;
     use std::sync::Arc;
     use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
@@ -554,7 +562,7 @@ mod tests {
             let (_, loan) = buffer
                 .lend_for_get(b"key", at, length)
                 .unwrap_or_else(|(_, error)| panic!("[{at}, +{length}) fits: {error}"));
-            buffer = loan.reclaim(TransferReply::Missing).unwrap().0;
+            buffer = unsafe { loan.reclaim(TransferReply::Missing) }.unwrap().0;
         }
     }
 
@@ -574,7 +582,8 @@ mod tests {
         let mut buffer = fabric().register(vec![0u8; 64]).unwrap();
         buffer.copy_from(b"landed").unwrap();
 
-        let (buffer, reported) = lent_for_get(buffer).reclaim(receipt(6)).expect("reclaims");
+        let (buffer, reported) =
+            unsafe { lent_for_get(buffer).reclaim(receipt(6)) }.expect("reclaims");
 
         assert_eq!(reported.map(|receipt| receipt.bytes_written), Some(6));
         assert_eq!(&buffer.as_host()[..6], b"landed");
@@ -591,7 +600,7 @@ mod tests {
 
         let (_, loan) = buffer.lend_for_get(b"key", 0, 1 << 20).unwrap();
         let moved_loan = Box::new(loan);
-        let (buffer, _) = moved_loan.reclaim(receipt(1)).unwrap();
+        let (buffer, _) = unsafe { moved_loan.reclaim(receipt(1)) }.unwrap();
 
         assert_eq!(buffer.as_host().as_ptr(), registered_at);
         assert!(size_of::<RdmaBuffer>() < 256, "the handle stays small");
@@ -601,7 +610,7 @@ mod tests {
     #[test]
     fn a_receipt_that_fills_the_window_exactly_is_accepted() {
         let buffer = fabric().register(vec![0u8; 64]).unwrap();
-        assert!(lent_for_get(buffer).reclaim(receipt(64)).is_ok());
+        assert!(unsafe { lent_for_get(buffer).reclaim(receipt(64)) }.is_ok());
     }
 
     #[test]
@@ -609,7 +618,7 @@ mod tests {
         let buffer = fabric().register(vec![0u8; 128]).unwrap();
         let (_, loan) = buffer.lend_for_get(b"key", 0, 64).unwrap();
 
-        let (buffer, error) = loan.reclaim(receipt(65)).unwrap_err();
+        let (buffer, error) = unsafe { loan.reclaim(receipt(65)) }.unwrap_err();
 
         assert_eq!(
             error,
@@ -626,20 +635,17 @@ mod tests {
         let fabric = fabric();
         let register = || fabric.register(vec![0u8; 64]).unwrap();
 
-        let (_, reported) = lent_for_get(register())
-            .reclaim(TransferReply::Missing)
+        let (_, reported) = unsafe { lent_for_get(register()).reclaim(TransferReply::Missing) }
             .expect("a missing key ends a LO.GET");
         assert_eq!(reported, None);
 
-        let (_, reported) = lent_for_set(register())
-            .reclaim(TransferReply::Stored)
+        let (_, reported) = unsafe { lent_for_set(register()).reclaim(TransferReply::Stored) }
             .expect("a store ends a LO.SET");
         assert_eq!(reported, None);
 
         for loan in [lent_for_get(register()), lent_for_set(register())] {
-            let (_, reported) = loan
-                .reclaim(TransferReply::Failed)
-                .expect("an error reply ends either");
+            let (_, reported) =
+                unsafe { loan.reclaim(TransferReply::Failed) }.expect("an error reply ends either");
             assert_eq!(reported, None);
         }
     }
@@ -682,25 +688,37 @@ mod tests {
         let fabric = fabric();
         let (memory, freed, _) = tracked();
 
-        let (buffer, _) = lent_for_get(fabric.register(memory).unwrap())
-            .reclaim(TransferReply::Missing)
-            .unwrap();
+        let loan = lent_for_get(fabric.register(memory).unwrap());
+        let (buffer, _) = unsafe { loan.reclaim(TransferReply::Missing) }.unwrap();
         drop(buffer);
 
         assert!(freed.load(Ordering::SeqCst));
         assert_eq!(fabric.parked(), 0);
     }
 
+    /// efa frees the handle even when `fi_close` fails, so it is never closed again.
     #[test]
-    fn a_failed_recall_hands_back_the_loan() {
-        let loan = lent_for_get(fabric().register(vec![0u8; 64]).unwrap());
+    fn a_failed_recall_hands_back_the_loan_and_never_closes_the_region_again() {
+        let fabric = fabric();
+        let loan = lent_for_get(fabric.register(vec![0u8; 64]).unwrap());
 
         fail_next_closes(1);
         let (loan, error) = loan.recall().unwrap_err();
-
         assert!(matches!(error, RdmaError::Fabric { .. }), "{error:?}");
         assert!(!loan.is_revoked(), "the server may still reach the memory");
-        loan.recall().expect("a retry closes the region");
+
+        let closes = close_calls();
+        let (loan, again) = loan.recall().unwrap_err();
+        assert_eq!(
+            close_calls(),
+            closes,
+            "the handle was not passed to fi_close again"
+        );
+        assert!(matches!(again, RdmaError::Fabric { .. }), "{again:?}");
+
+        drop(loan);
+        assert_eq!(close_calls(), closes, "nor on drop");
+        assert_eq!(fabric.parked(), 1, "the memory is parked, never freed");
     }
 
     /// Tcp moves no bytes unless the client polls, so the poller must run for exactly
@@ -714,7 +732,7 @@ mod tests {
         let loan = lent_for_get(buffer);
         assert_eq!(fabric.transfers_in_flight(), 1);
 
-        let (buffer, _) = loan.reclaim(TransferReply::Missing).unwrap();
+        let (buffer, _) = unsafe { loan.reclaim(TransferReply::Missing) }.unwrap();
         assert_eq!(fabric.transfers_in_flight(), 0);
 
         drop(lent_for_set(buffer));
@@ -806,7 +824,7 @@ mod tests {
         let mut buffer = fabric().register([0u8; 64]).unwrap();
         assert_eq!(buffer.copy_from(b"inline"), Some(6));
 
-        let (buffer, _) = lent_for_get(buffer).reclaim(receipt(6)).unwrap();
+        let (buffer, _) = unsafe { lent_for_get(buffer).reclaim(receipt(6)) }.unwrap();
 
         assert_eq!(&buffer.as_host()[..6], b"inline");
     }
@@ -857,7 +875,7 @@ mod tests {
         let mut buffer = fabric().register(memory).unwrap();
 
         buffer.copy_from(b"hello").unwrap();
-        let (buffer, _) = lent_for_get(buffer).reclaim(receipt(5)).unwrap();
+        let (buffer, _) = unsafe { lent_for_get(buffer).reclaim(receipt(5)) }.unwrap();
         assert_eq!(&buffer.as_host()[..5], b"hello");
 
         assert_eq!(lookups.load(Ordering::SeqCst), 1);
@@ -878,8 +896,6 @@ mod tests {
         let (memory, freed, _) = tracked();
         let buffer = fabric().register(memory).unwrap();
 
-        // One failure, so the registration's own drop still closes the region and
-        // the test leaves nothing registered behind.
         fail_next_closes(1);
         drop(buffer);
 
@@ -887,16 +903,16 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn a_region_that_fails_to_close_on_drop_stays_open_until_a_retry() {
+    async fn a_region_that_fails_to_close_on_drop_is_never_closed_again() {
         let fabric = fabric();
         let alone = fabric.holders();
         let buffer = fabric.register(vec![0u8; 64]).unwrap();
         let revoker = buffer.revoker();
         let mut revoked = tokio::spawn(buffer.revoked());
 
-        // Both the buffer's close and the registration's retry on drop fail.
-        fail_next_closes(2);
+        fail_next_closes(1);
         drop(buffer);
+        let closes = close_calls();
 
         assert!(
             !revoker.is_released(),
@@ -904,18 +920,19 @@ mod tests {
         );
         tokio::time::timeout(Duration::from_millis(50), &mut revoked)
             .await
-            .expect_err("the region is still open, so a waiter keeps waiting");
+            .expect_err("the region may still be open, so a waiter keeps waiting");
 
-        revoker.revoke().expect("a retry closes the region");
-        assert!(revoker.is_released());
-        tokio::time::timeout(Duration::from_secs(5), revoked)
-            .await
-            .expect("the waiter wakes once the region closes")
-            .unwrap();
+        let error = revoker.revoke().expect_err("a failed close is final");
+        assert!(matches!(error, RdmaError::Fabric { .. }), "{error:?}");
         assert_eq!(
-            fabric.holders(),
-            alone,
-            "the closed region no longer holds the fabric open"
+            close_calls(),
+            closes,
+            "the handle was not passed to fi_close again"
+        );
+        assert!(!revoker.is_released());
+        assert!(
+            fabric.holders() > alone,
+            "the region holds the fabric open, since the domain cannot close over it"
         );
     }
 

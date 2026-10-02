@@ -94,7 +94,7 @@ impl RdmaFabric {
         }
         // SAFETY: `host` keeps the bytes at one address until it is dropped, and the
         // returned RdmaBuffer drops it only after the region is closed.
-        let registered = unsafe { self.endpoint().register_remote(host.bytes())? };
+        let registered = unsafe { self.endpoint().register_remote(host.bytes_ptr())? };
         let registration = Registration::new(registered, self.clone());
         let region_ref = self.region_ref(&registration);
         Ok(RdmaBuffer::new(
@@ -194,7 +194,7 @@ impl RdmaFabric {
     /// Close a fid belonging to this domain, returning libfabric's result code.
     pub(crate) fn fi_close(&self, fid: *mut ofi_libfabric_sys::bindgen::fid) -> i32 {
         #[cfg(test)]
-        if tests::take_failed_close() {
+        if tests::record_close() {
             return -libc::EBUSY;
         }
         // this is the domain synchronization lock
@@ -265,6 +265,8 @@ pub(crate) mod tests {
     thread_local! {
         /// How many of this thread's next `fi_close` calls fail without closing.
         static FAILED_CLOSES: Cell<u32> = const { Cell::new(0) };
+        /// Calls to `fi_close` on this thread, failed or not.
+        static CLOSE_CALLS: Cell<u32> = const { Cell::new(0) };
     }
 
     /// Make the next `count` calls to [`RdmaFabric::fi_close`] on this thread fail.
@@ -272,8 +274,14 @@ pub(crate) mod tests {
         FAILED_CLOSES.with(|closes| closes.set(count));
     }
 
-    /// Whether this `fi_close` should fail, using up one of the failures if so.
-    pub(super) fn take_failed_close() -> bool {
+    /// How many times this thread has called [`RdmaFabric::fi_close`].
+    pub(crate) fn close_calls() -> u32 {
+        CLOSE_CALLS.with(Cell::get)
+    }
+
+    /// Count this `fi_close`; whether it should fail, using up one failure if so.
+    pub(super) fn record_close() -> bool {
+        CLOSE_CALLS.with(|calls| calls.set(calls.get() + 1));
         FAILED_CLOSES.with(|closes| {
             let left = closes.get();
             closes.set(left.saturating_sub(1));

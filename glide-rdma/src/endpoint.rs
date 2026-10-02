@@ -357,22 +357,32 @@ pub(crate) struct Registration {
 
 #[derive(Debug)]
 struct RegistrationState {
-    /// The open region, or `None` once it has been closed.
-    open: Mutex<Option<OpenRegion>>,
+    /// The region while open, then what became of it.
+    region: Mutex<RegionState>,
     /// Becomes `true` when the region is revoked for transfers waiting on it.
     revoked: watch::Sender<bool>,
+}
+
+#[derive(Debug)]
+enum RegionState {
+    Open(OpenRegion),
+    Closed,
+    /// `fi_close` failed with `code`. efa frees the handle even then, so it is never
+    /// closed again; the fabric is held because the region may still be registered.
+    Abandoned {
+        code: i32,
+        _fabric: RdmaFabric,
+    },
 }
 
 /// A region and the fabric it was registered on, held until the region closes.
 #[derive(Debug)]
 struct OpenRegion {
     memory_region: NonNull<fid_mr>,
-    /// Let go of once the region is closed, so a state leaked after a failed close
-    /// does not keep the fabric open once a retry succeeds.
     fabric: RdmaFabric,
 }
 
-// SAFETY: the region pointer is only dereferenced under `open`'s lock, to
+// SAFETY: the region pointer is only dereferenced under `region`'s lock, to
 // close it once, and `fi_close` also takes the domain lock, as `fi_mr_reg` did. So no
 // two threads ever use the pointer at once, and the close cannot overlap any other
 // call into the domain.
@@ -381,21 +391,30 @@ unsafe impl Sync for RegistrationState {}
 
 impl RegistrationState {
     fn revoke(&self) -> Result<(), RdmaError> {
-        let mut open = self.open.lock().unwrap_or_else(PoisonError::into_inner);
-        let Some(region) = open.as_ref() else {
-            return Ok(());
+        let mut region = self.region.lock().unwrap_or_else(PoisonError::into_inner);
+        match &*region {
+            RegionState::Closed => return Ok(()),
+            RegionState::Abandoned { code, .. } => return check(*code, "fi_close"),
+            RegionState::Open(_) => {}
+        }
+        let RegionState::Open(open) = std::mem::replace(&mut *region, RegionState::Closed) else {
+            unreachable!("matched as open above");
         };
         // SAFETY: the region is open, and the lock above keeps any other thread from
         // closing it while this one does.
-        let fid = unsafe { &raw mut (*region.memory_region.as_ptr()).fid };
-        // A failed close leaves the region open, so it stays recorded as open: a later
-        // revoke, or the drop, tries again.
-        check(region.fabric.fi_close(fid), "fi_close")?;
-        let closed = open.take();
+        let fid = unsafe { &raw mut (*open.memory_region.as_ptr()).fid };
+        let code = open.fabric.fi_close(fid);
+        if let Err(error) = check(code, "fi_close") {
+            *region = RegionState::Abandoned {
+                code,
+                _fabric: open.fabric,
+            };
+            return Err(error);
+        }
         self.revoked.send_replace(true);
         // Dropped after the lock, in case this is the last hold on the fabric.
+        drop(region);
         drop(open);
-        drop(closed);
         Ok(())
     }
 }
@@ -408,12 +427,13 @@ impl Registration {
             remote_key: unsafe { fi_mr_key(registered.region) },
             address: registered.address,
             state: Arc::new(RegistrationState {
-                open: Mutex::new(
-                    NonNull::new(registered.region).map(|memory_region| OpenRegion {
+                region: Mutex::new(match NonNull::new(registered.region) {
+                    Some(memory_region) => RegionState::Open(OpenRegion {
                         memory_region,
                         fabric,
                     }),
-                ),
+                    None => RegionState::Closed,
+                }),
                 revoked,
             }),
         }
@@ -461,11 +481,9 @@ impl Drop for Registration {
     ///
     /// If a revoke is under way, this waits for it to finish.
     ///
-    /// If the close fails, the region is still registered, so the state is leaked
-    /// rather than dropped. That keeps [`Self::revoked`] from resolving and
-    /// [`RevokeHandle::is_released`] from reporting it released, and it leaves the
-    /// region for a [`RevokeHandle`] to try closing again. It also keeps the fabric
-    /// open, which could not close with the region still open on it anyway.
+    /// If the close fails, the region may still be registered, so the state is leaked
+    /// rather than dropped: [`Self::revoked`] never resolves,
+    /// [`RevokeHandle::is_released`] stays false, and the fabric stays open.
     fn drop(&mut self) {
         if self.state.revoke().is_err() {
             std::mem::forget(Arc::clone(&self.state));
@@ -481,7 +499,8 @@ impl Drop for Registration {
 pub(crate) struct RevokeHandle(Weak<RegistrationState>);
 
 impl RevokeHandle {
-    /// Close the region if it is still open. A no-op once it is closed or dropped.
+    /// Close the region if it is still open. A no-op once closed or dropped; the same
+    /// error again after a failed close.
     pub(crate) fn revoke(&self) -> Result<(), RdmaError> {
         match self.0.upgrade() {
             Some(state) => state.revoke(),
@@ -699,33 +718,36 @@ impl LibfabricEndpoint {
         Ok(address)
     }
 
-    /// Register host memory for remote RMA access.
+    /// Register host memory for remote RMA access. A pointer, not a slice, because
+    /// a peer writes through it.
     ///
     /// # Safety
-    /// `buffer` must stay allocated and unmoved until the region is closed.
+    /// `memory` must be valid for reads and writes, allocated and unmoved, until the
+    /// region is closed.
     pub(crate) unsafe fn register_remote(
         &mut self,
-        buffer: &[u8],
+        memory: NonNull<[u8]>,
     ) -> Result<RegisteredMemory, RdmaError> {
-        unsafe { self.register(buffer, remote_access()) }
+        unsafe { self.register(memory, remote_access()) }
     }
 
     /// # Safety
-    /// `buffer` must stay allocated and unmoved until the region is closed.
+    /// As for [`Self::register_remote`].
     unsafe fn register(
         &mut self,
-        buffer: &[u8],
+        memory: NonNull<[u8]>,
         access: u64,
     ) -> Result<RegisteredMemory, RdmaError> {
         let requested_key = self.remote_keys.take();
         let mut memory_region: *mut fid_mr = ptr::null_mut();
+        let start: *mut u8 = memory.as_ptr().cast();
         check(
-            // SAFETY: the caller guarantees `buffer` outlives the registration.
+            // SAFETY: the caller guarantees `memory` outlives the registration.
             unsafe {
                 fi_mr_reg(
                     self.domain,
-                    buffer.as_ptr().cast(),
-                    buffer.len(),
+                    start.cast(),
+                    memory.len(),
                     access,
                     0,
                     requested_key,
@@ -738,7 +760,7 @@ impl LibfabricEndpoint {
         )?;
         Ok(RegisteredMemory {
             region: memory_region,
-            address: buffer.as_ptr() as u64,
+            address: start as u64,
         })
     }
 
@@ -843,6 +865,7 @@ pub(crate) mod tests {
         fi_threading_FI_THREAD_FID, fi_threading_FI_THREAD_SAFE, fid_mr,
     };
     use std::ptr;
+    use std::ptr::NonNull;
     use std::time::{Duration, Instant};
 
     /// Post a read from `endpoint`'s own address under a remote key that no region
@@ -853,7 +876,7 @@ pub(crate) mod tests {
     /// `into` must stay allocated and unmoved until the returned region is closed.
     pub(crate) unsafe fn post_failing_read(
         endpoint: &mut LibfabricEndpoint,
-        into: &[u8],
+        into: &mut [u8],
     ) -> *mut fid_mr {
         let own_address = endpoint
             .local_address()
@@ -870,7 +893,7 @@ pub(crate) mod tests {
     /// `into` must stay allocated and unmoved until the returned region is closed.
     pub(crate) unsafe fn post_read(
         endpoint: &mut LibfabricEndpoint,
-        into: &[u8],
+        into: &mut [u8],
         peer_address: &[u8],
         remote_address: u64,
         remote_key: u64,
@@ -879,7 +902,7 @@ pub(crate) mod tests {
             .fi_av_insert(peer_address)
             .expect("the peer address inserts");
         // SAFETY: the caller keeps `into` alive until the region is closed.
-        let region = unsafe { endpoint.register_remote(into) }
+        let region = unsafe { endpoint.register_remote(NonNull::from(&mut *into)) }
             .expect("the destination registers")
             .region;
         let deadline = Instant::now() + Duration::from_secs(5);
@@ -888,7 +911,7 @@ pub(crate) mod tests {
             let posted = unsafe {
                 fi_read(
                     endpoint.endpoint,
-                    into.as_ptr().cast_mut().cast(),
+                    into.as_mut_ptr().cast(),
                     into.len(),
                     fi_mr_desc(region),
                     peer,

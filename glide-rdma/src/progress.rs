@@ -249,6 +249,7 @@ mod tests {
     use crate::endpoint::LibfabricEndpoint;
     use crate::endpoint::tests::{post_failing_read, post_read};
     use ofi_libfabric_sys::bindgen::{fi_close, fi_cq_entry, fi_cq_read, fi_mr_key};
+    use std::ptr::NonNull;
     use std::sync::atomic::Ordering;
     use std::time::{Duration, Instant};
 
@@ -292,9 +293,9 @@ mod tests {
     fn draining_reads_off_an_error_entry() {
         let mut endpoint = LibfabricEndpoint::open(&FabricConfig::new(Provider::Tcp))
             .expect("the tcp provider should open");
-        let destination = vec![0u8; 64];
+        let mut destination = vec![0u8; 64];
         // SAFETY: `destination` outlives the region, which is closed below.
-        let region = unsafe { post_failing_read(&mut endpoint, &destination) };
+        let region = unsafe { post_failing_read(&mut endpoint, &mut destination) };
         let queue = endpoint.completion_queue();
 
         // The error completes some time after the post.
@@ -356,9 +357,9 @@ mod tests {
         let (mut target, driver) = driver();
         let mut initiator = LibfabricEndpoint::open(&FabricConfig::new(Provider::Tcp))
             .expect("the tcp provider should open");
-        let pattern: Vec<u8> = (0..1u32 << 20).map(|i| i as u8).collect();
+        let mut pattern: Vec<u8> = (0..1u32 << 20).map(|i| i as u8).collect();
         // SAFETY: `pattern` outlives the region, which is closed below.
-        let source = unsafe { target.register_remote(&pattern) }
+        let source = unsafe { target.register_remote(NonNull::from(pattern.as_mut_slice())) }
             .expect("the source registers")
             .region;
         // SAFETY: `source` is an open region.
@@ -369,15 +370,15 @@ mod tests {
             0
         };
         let target_address = target.local_address().expect("has an address");
-        let read = |initiator: &mut LibfabricEndpoint, into: &[u8]| {
+        let read = |initiator: &mut LibfabricEndpoint, into: &mut [u8]| {
             // SAFETY: each caller keeps `into` alive until it closes the region.
             unsafe { post_read(initiator, into, &target_address, remote_address, remote_key) }
         };
         let nothing_yet = -(libc::EAGAIN as isize);
 
         let guard = driver.drive();
-        let first = vec![0u8; pattern.len()];
-        let region = read(&mut initiator, &first);
+        let mut first = vec![0u8; pattern.len()];
+        let region = read(&mut initiator, &mut first);
         let deadline = Instant::now() + Duration::from_secs(5);
         assert!(wait_for_completion(&initiator, deadline) > 0);
         assert_eq!(first, pattern);
@@ -387,8 +388,8 @@ mod tests {
         // The poller parks once its current wait ends, which takes at most `WAIT_MS`.
         std::thread::sleep(Duration::from_millis(100));
 
-        let second = vec![0u8; pattern.len()];
-        let region = read(&mut initiator, &second);
+        let mut second = vec![0u8; pattern.len()];
+        let region = read(&mut initiator, &mut second);
         let deadline = Instant::now() + Duration::from_millis(200);
         assert_eq!(
             wait_for_completion(&initiator, deadline),

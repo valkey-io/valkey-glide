@@ -47,7 +47,8 @@ fn a_registered_buffer_produces_a_sendable_set_command() {
     assert!(!command.arguments().contains(&hello.arguments()[0]));
 
     // The server replied, so the buffer comes back unchanged and can be lent again.
-    let (buffer, receipt) = loan.reclaim(TransferReply::Stored).expect("reclaims");
+    // SAFETY: the command was never sent.
+    let (buffer, receipt) = unsafe { loan.reclaim(TransferReply::Stored) }.expect("reclaims");
     assert_eq!(receipt, None);
     assert_eq!(&buffer.as_host()[..payload.len()], payload);
 }
