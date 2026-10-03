@@ -13,6 +13,7 @@ const PORT_NUMBER = 4001;
 async function runTest(port) {
     const client = await GlideClient.createClient({
         addresses: [{ host: "localhost", port }],
+        requestTimeout: 5000,
     });
 
     try {
