@@ -48,6 +48,7 @@
 
 ### Changes
 
+* Java: Add `useMutualTlsFromKeyStore` to load mTLS client identity (client certificate and private key) from a JKS or PKCS12 keystore ([#7252](https://github.com/valkey-io/valkey-glide/issues/7252))
 * Java: Add `HGETDEL` command support ([#6145](https://github.com/valkey-io/valkey-glide/issues/6145))
 * Node: Add `HGETDEL` command support ([#6145](https://github.com/valkey-io/valkey-glide/issues/6145))
 * Python: Optionally propagate active OpenTelemetry parent span context to native command, batch and script spans with `enable_trace_context_propagation=True` (disabled by default) ([#7069](https://github.com/valkey-io/valkey-glide/pull/7069))
