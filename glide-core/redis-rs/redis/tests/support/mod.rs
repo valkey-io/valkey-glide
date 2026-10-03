@@ -1,10 +1,7 @@
 #![allow(dead_code)]
 
 use std::path::Path;
-use std::{
-    env, fs, io, net::SocketAddr, net::TcpListener, path::PathBuf, process, thread::sleep,
-    time::Duration,
-};
+use std::{env, fs, io, net::SocketAddr, net::TcpListener, path::PathBuf, process};
 use std::{
     fs::File,
     io::{BufReader, Read},
@@ -381,14 +378,7 @@ pub fn get_random_available_port() -> u16 {
     listener.local_addr().unwrap().port()
 }
 
-/// The `process_id` reported by `INFO server` on `con`, so a caller can check
-/// that the port it reached belongs to the server it spawned.
-pub(crate) fn server_process_id(con: &mut redis::Connection) -> Option<u32> {
-    let info: String = redis::cmd("INFO").arg("server").query(con).ok()?;
-    info.lines()
-        .find_map(|line| line.strip_prefix("process_id:"))
-        .and_then(|pid| pid.trim().parse().ok())
-}
+pub(crate) mod readiness;
 
 impl Drop for RedisServer {
     fn drop(&mut self) {
@@ -416,47 +406,13 @@ impl TestContext {
     }
 
     fn connect_with_retries(server: &mut RedisServer, client: &redis::Client) {
-        let mut con;
-
-        let millisecond = Duration::from_millis(1);
-        let mut retries = 0;
-        loop {
-            if let Ok(Some(status)) = server.process.try_wait() {
-                panic!(
-                    "redis server at {:?} exited with {status:?} before accepting connections",
-                    server.client_addr()
-                );
-            }
-            match client.get_connection(None) {
-                Err(err) => {
-                    // A reset, not only a refusal, is expected while the port is still
-                    // settling: another test's `get_random_available_port` probe listener
-                    // can briefly hold it and drop our connection.
-                    if err.is_connection_refusal() || err.is_connection_dropped() {
-                        sleep(millisecond);
-                        retries += 1;
-                        if retries > 100000 {
-                            panic!("Tried to connect too many times, last error: {err}");
-                        }
-                    } else {
-                        panic!("Could not connect: {err}");
-                    }
-                }
-                Ok(x) => {
-                    con = x;
-                    break;
-                }
-            }
-        }
-        let expected = server.process.id();
-        let actual = server_process_id(&mut con);
-        assert_eq!(
-            actual,
-            Some(expected),
-            "{:?} is served by pid {actual:?}, not our redis server {expected}",
-            server.client_addr()
-        );
-        redis::cmd("FLUSHDB").execute(&mut con);
+        readiness::wait_for_server(
+            &mut server.process,
+            client,
+            true,
+            readiness::STARTUP_TIMEOUT,
+        )
+        .unwrap_or_else(|err| panic!("{err}"));
     }
 
     pub fn with_tls(tls_files: TlsFilePaths, mtls_enabled: bool) -> TestContext {

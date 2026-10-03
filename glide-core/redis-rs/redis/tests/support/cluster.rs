@@ -29,7 +29,8 @@ use tempfile::TempDir;
 use crate::support::{build_keys_and_certs_for_tls, Module};
 
 use super::{
-    build_single_client, get_random_available_port, load_certs_from_file, server_process_id,
+    build_single_client, get_random_available_port, load_certs_from_file,
+    readiness::{wait_for_server, STARTUP_TIMEOUT},
 };
 
 use super::use_protocol;
@@ -471,49 +472,16 @@ impl RedisCluster {
         Ok(server)
     }
 
-    /// Confirm that the process answering on the node's port is the child we
-    /// spawned. `start_node`'s readiness probe is a bare connect, which any process
-    /// that grabbed the port in the window after `get_random_available_port`
-    /// released it would also satisfy.
+    /// A bare connect can reach another process that grabbed the port after
+    /// `get_random_available_port` released it, so it cannot establish ownership.
     fn verify_owner(
         server: &mut RedisServer,
         tls_paths: &Option<TlsFilePaths>,
         mtls_enabled: bool,
     ) -> Result<(), String> {
-        let port = match server.client_addr() {
-            redis::ConnectionAddr::Tcp(_, port) | redis::ConnectionAddr::TcpTls { port, .. } => {
-                *port
-            }
-            other => panic!("cluster nodes always listen on TCP, got {other:?}"),
-        };
-        let expected = server.process.id();
-        let mut last_err = String::new();
-        for _ in 0..20 {
-            if let Ok(Some(status)) = server.process.try_wait() {
-                return Err(format!(
-                    "redis server on port {port} exited with {status:?} before answering INFO"
-                ));
-            }
-            let con = build_single_client(server.connection_info(), tls_paths, mtls_enabled)
-                .and_then(|client| client.get_connection(None));
-            match con {
-                Ok(mut con) => {
-                    let actual = server_process_id(&mut con);
-                    return if actual == Some(expected) {
-                        Ok(())
-                    } else {
-                        Err(format!(
-                            "port {port} is served by pid {actual:?}, not our redis server {expected}"
-                        ))
-                    };
-                }
-                Err(err) => last_err = err.to_string(),
-            }
-            sleep(Duration::from_millis(50));
-        }
-        Err(format!(
-            "redis server on port {port} never answered INFO: {last_err}"
-        ))
+        let client = build_single_client(server.connection_info(), tls_paths, mtls_enabled)
+            .map_err(|err| format!("building ownership probe: {err}"))?;
+        wait_for_server(&mut server.process, &client, false, STARTUP_TIMEOUT)
     }
 
     // parameter `_mtls_enabled` can only be used if `feature = tls-rustls` is active
