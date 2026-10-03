@@ -1,0 +1,92 @@
+name: Rust - Continuous Deployment
+
+on:
+    workflow_dispatch:
+        inputs:
+            publish:
+                description: "Publish to crates.io"
+                required: true
+                type: boolean
+                default: false
+
+concurrency:
+    group: rust-cd-${{ github.ref }}
+    # Never cancel a publish that is in progress.
+    cancel-in-progress: false
+
+permissions:
+    contents: read
+
+# Each crate has a test job and a publish job. Each publish job:
+# - Runs in the AWS_ACTIONS environment when publishing so that approval is required.
+# - Has `id-token: write`, which crates.io trusted publishing (OIDC) requires.
+# - Depends on the publish jobs of the crates it depends on.
+#
+# TODO #7261: Replace with `cargo publish --workspace`.
+jobs:
+    validate-branch:
+        # Skips this and all dependent jobs on forks.
+        if: github.repository_owner == 'valkey-io'
+        runs-on: ubuntu-latest
+        steps:
+            - name: Validate branch
+              if: ${{ inputs.publish }}
+              run: |
+                  if [[ "${GITHUB_REF}" != refs/heads/release-* ]]; then
+                      echo "Publishing is only allowed from release-* branches, not ${GITHUB_REF}."
+                      exit 1
+                  fi
+
+    # --- glide-logger crate ----------------------------------------------------------------------
+
+    test-glide-logger:
+        needs: [validate-branch]
+        uses: ./.github/workflows/glide-logger.yml
+
+    publish-glide-logger:
+        needs: [test-glide-logger]
+        runs-on: ubuntu-latest
+        environment: ${{ inputs.publish && 'AWS_ACTIONS' || '' }}
+        permissions:
+            contents: read
+            id-token: write
+        steps:
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+              with:
+                  persist-credentials: false
+
+            - name: Install Rust toolchain
+              uses: ./.github/actions/install-rust
+
+            - name: Publish glide-logger
+              uses: ./.github/workflows/publish-rust-crate
+              with:
+                  crate: glide-logger
+                  publish: ${{ inputs.publish }}
+
+    # --- glide-telemetry crate -------------------------------------------------------------------
+
+    test-glide-telemetry:
+        needs: [validate-branch]
+        uses: ./.github/workflows/glide-telemetry.yml
+
+    publish-glide-telemetry:
+        needs: [test-glide-telemetry, publish-glide-logger]
+        runs-on: ubuntu-latest
+        environment: ${{ inputs.publish && 'AWS_ACTIONS' || '' }}
+        permissions:
+            contents: read
+            id-token: write
+        steps:
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+              with:
+                  persist-credentials: false
+
+            - name: Install Rust toolchain
+              uses: ./.github/actions/install-rust
+
+            - name: Publish glide-telemetry
+              uses: ./.github/workflows/publish-rust-crate
+              with:
+                  crate: glide-telemetry
+                  publish: ${{ inputs.publish }}
