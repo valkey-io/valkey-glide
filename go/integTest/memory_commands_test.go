@@ -306,13 +306,17 @@ func (suite *GlideTestSuite) assertMemoryStatsFields(result models.MemoryStats) 
 
 	assert.Greater(t, result.AllocatorActive, int64(0))
 	assert.Greater(t, result.AllocatorAllocated, int64(0))
-	assert.GreaterOrEqual(t, result.AllocatorFragmentationBytes, int64(0))
+	// AllocatorFragmentationBytes (active - allocated) can be transiently negative on Redis 6.2
+	// due to memory accounting race conditions.
+	assert.IsType(t, int64(0), result.AllocatorFragmentationBytes)
 	assert.Greater(t, result.AllocatorResident, int64(0))
 	assert.IsType(t, int64(0), result.AllocatorRssBytes)
 	assert.GreaterOrEqual(t, result.AofBuffer, int64(0))
 	assert.GreaterOrEqual(t, result.ClientsNormal, int64(0))
 	assert.GreaterOrEqual(t, result.ClientsSlaves, int64(0))
-	assert.GreaterOrEqual(t, result.DatasetBytes, int64(0))
+	// DatasetBytes is a derived metric (total - overhead components) that can be transiently
+	// negative on Redis 6.2 due to memory accounting race conditions.
+	assert.IsType(t, int64(0), result.DatasetBytes)
 	assert.IsType(t, int64(0), result.FragmentationBytes)
 	assert.GreaterOrEqual(t, result.KeysBytesPerKey, int64(0))
 	assert.GreaterOrEqual(t, result.KeysCount, int64(0))
