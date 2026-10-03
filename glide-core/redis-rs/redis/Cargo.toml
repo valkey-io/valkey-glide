@@ -3,6 +3,7 @@ name = "glide-core-engine"
 version = "0.1.0"
 description = "Core engine for Valkey GLIDE. This crate isn't intended to be used directly."
 authors = ["Valkey GLIDE Maintainers"]
+repository = "https://github.com/valkey-io/valkey-glide"
 license = "BSD-3-Clause"
 
 # TODO #7175: Align rust-version and edition with the Rust client.
