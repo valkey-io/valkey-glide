@@ -135,6 +135,7 @@ import {
     createHGet,
     createHGetAll,
     createHGetEx,
+    createHGetDel,
     createHIncrBy,
     createHIncrByFloat,
     createHKeys,
@@ -1224,6 +1225,25 @@ export class BaseBatch<T extends BaseBatch<T>> {
         options?: HGetExOptions,
     ): T {
         return this.addAndReturn(createHGetEx(key, fields, options));
+    }
+
+    /**
+     * Gets and deletes the values associated with the specified `fields` in the hash
+     * stored at `key`. This is an atomic get-and-delete operation.
+     *
+     * @param key - The key of the hash.
+     * @param fields - The fields in the hash stored at `key` to retrieve and delete.
+     *
+     * Command Response - An array of values associated with the given fields, in the same
+     *     order as they are requested. For every field that does not exist in the hash, a
+     *     null value is returned. If `key` does not exist, returns an array of null values.
+     *     The key is deleted automatically when its last field is removed.
+     *
+     * @since Valkey 9.1.0
+     * @see https://valkey.io/commands/hgetdel/
+     */
+    public hgetdel(key: GlideString, fields: GlideString[]): T {
+        return this.addAndReturn(createHGetDel(key, fields));
     }
 
     /**

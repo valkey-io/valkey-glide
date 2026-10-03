@@ -74,7 +74,7 @@ use tokio::task::JoinHandle;
 
 #[cfg(feature = "tokio-comp")]
 use crate::aio::DisconnectNotifier;
-use telemetrylib::{GlideOpenTelemetry, GlideSpan, Telemetry};
+use glide_telemetry::{GlideOpenTelemetry, GlideSpan, Telemetry};
 
 use crate::{
     aio::{get_socket_addrs, ConnectionLike, MultiplexedConnection, Runtime},

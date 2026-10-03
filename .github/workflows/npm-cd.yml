@@ -5,13 +5,8 @@ name: NPM - Continuous Deployment
 on:
     pull_request:
         paths:
-            - .github/workflows/npm-cd.yml
             - .github/json_matrices/**
-            - node/package.json
-            - node/npm/**
-            - node/rust-client/Cargo.toml
-            - node/rust-client/src/**
-            - node/src/**/*.ts
+            - .github/workflows/npm-cd.yml
     push:
         tags:
             - "v*.*.*" # e.g. v1.2.3, v1.2.3-rc1

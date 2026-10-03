@@ -2,13 +2,13 @@
 //! GLIDE's command API: [`AsyncCommands`] and [`Commands`].
 //!
 //! One command table (below) defines both traits via the
-//! `implement_glide_commands!` macro. Entries are source-compatible with the
+//! `implement_commands!` macro. Entries are source-compatible with the
 //! vendored redis-rs fork (v0.25.2, predating the upstream license change):
 //! same method names, generic parameter order, and argument lists, so
 //! migrated call sites (including turbofish annotations) compile unchanged.
 //! Each entry carries the command body (mirroring the redis-rs's
 //! `implement_commands!`), so the wire encoding is identical by construction;
-//! signature parity is enforced by `tests/it_parity_guard.rs`.
+//! signature parity is enforced by the `parity_tests` module (`src/parity_tests/`).
 //!
 //! The built command is handed to glide-core **by value** through
 //! [`AsyncCommands::glide_send_command`] — the same zero-extra-copy path as the
@@ -28,7 +28,7 @@
 //! Commands beyond this table (streams, geo, `FT.*`, `JSON.*`, …) live in
 //! the per-family extension traits in [`crate::commands`].
 //!
-//! Maintenance: add or adjust entries in the `implement_glide_commands!`
+//! Maintenance: add or adjust entries in the `implement_commands!`
 //! invocation at the bottom of this file; the parity-guard test will flag any
 //! divergence from the fork's table (see DEVELOPER.md).
 
@@ -51,7 +51,7 @@ use crate::ValkeyResult;
 /// Each `fn name<G: Bound>(args) { body }` entry expands to an async method
 /// (generic `RV: FromValkeyValue` return, `&self` receiver, owned-send
 /// dispatch) and its blocking counterpart.
-macro_rules! implement_glide_commands {
+macro_rules! implement_commands {
     (
         $lifetime:lifetime;
         $(
@@ -148,9 +148,9 @@ macro_rules! implement_glide_commands {
                 }
             )*
 
-    // The scan iterators are a deliberate GLIDE deviation from redis-rs:
-    // `&self` receivers returning GLIDE's own iterator type (same
-    // `next_item()` call shape), with every page dispatched by value on the
+    // The scan iterators mirror redis-rs's (same names, generics, and arguments)
+    // but deliberately deviate: `&self` receivers returning GLIDE's own iterator
+    // type (same `next_item()` call shape), with every page dispatched by value on the
     // owned-send path — no connection-object machinery, no per-page copies.
 
     /// Cursor-driven `SCAN` over the whole keyspace.
@@ -415,7 +415,7 @@ macro_rules! build_cmd {
     }};
 }
 
-implement_glide_commands! {
+implement_commands! {
     'a;
 
     // ==== Strings =======================================================

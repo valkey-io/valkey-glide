@@ -177,6 +177,50 @@ public interface HashBaseCommands {
     CompletableFuture<Long> hdel(GlideString key, GlideString[] fields);
 
     /**
+     * Gets and deletes the specified fields from the hash stored at <code>key</code>. This command
+     * atomically retrieves the values of the given fields and removes them from the hash in a single
+     * operation. When the last field is removed, the key is deleted automatically.
+     *
+     * @since Valkey 9.1.0.
+     * @see <a href="https://valkey.io/commands/hgetdel/">valkey.io</a> for details.
+     * @param key The key of the hash.
+     * @param fields The fields to get and delete from the hash stored at <code>key</code>.
+     * @return An array of values associated with the given fields, in the same order as they are
+     *     requested.<br>
+     *     For every field that does not exist in the hash, a <code>null</code> value is returned.<br>
+     *     If <code>key</code> does not exist, it is treated as an empty hash, and it returns an array
+     *     of <code>null</code> values.<br>
+     * @example
+     *     <pre>{@code
+     * String[] values = client.hgetdel("my_hash", new String[] {"field1", "field2"}).get();
+     * assert Arrays.equals(values, new String[] {"value1", "value2"}); // Values retrieved and fields deleted.
+     * }</pre>
+     */
+    CompletableFuture<String[]> hgetdel(String key, String[] fields);
+
+    /**
+     * Gets and deletes the specified fields from the hash stored at <code>key</code>. This command
+     * atomically retrieves the values of the given fields and removes them from the hash in a single
+     * operation. When the last field is removed, the key is deleted automatically.
+     *
+     * @since Valkey 9.1.0.
+     * @see <a href="https://valkey.io/commands/hgetdel/">valkey.io</a> for details.
+     * @param key The key of the hash.
+     * @param fields The fields to get and delete from the hash stored at <code>key</code>.
+     * @return An array of values associated with the given fields, in the same order as they are
+     *     requested.<br>
+     *     For every field that does not exist in the hash, a <code>null</code> value is returned.<br>
+     *     If <code>key</code> does not exist, it is treated as an empty hash, and it returns an array
+     *     of <code>null</code> values.<br>
+     * @example
+     *     <pre>{@code
+     * GlideString[] values = client.hgetdel(gs("my_hash"), new GlideString[] {gs("field1"), gs("field2")}).get();
+     * assert Arrays.equals(values, new GlideString[] {gs("value1"), gs("value2")}); // Values retrieved and fields deleted.
+     * }</pre>
+     */
+    CompletableFuture<GlideString[]> hgetdel(GlideString key, GlideString[] fields);
+
+    /**
      * Returns the number of fields contained in the hash stored at <code>key</code>.
      *
      * @see <a href="https://valkey.io/commands/hlen/">valkey.io</a> for details.

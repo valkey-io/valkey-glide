@@ -4,12 +4,12 @@ use crate::cluster_slotmap::{ReadFromReplicaStrategy, SlotMap, SlotMapValue};
 use crate::cluster_topology::TopologyHash;
 use dashmap::DashMap;
 use futures::FutureExt;
+use glide_telemetry::Telemetry;
 use rand::seq::IteratorRandom;
 use std::collections::HashMap;
 use std::net::IpAddr;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
-use telemetrylib::Telemetry;
 
 use tracing::debug;
 

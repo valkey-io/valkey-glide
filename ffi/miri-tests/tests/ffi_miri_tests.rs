@@ -1,7 +1,7 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-use glide_core::request_type::RequestType;
 use glide_core::connection_request::{ConnectionRequest, NodeAddress, TlsMode};
+use glide_core::request_type::RequestType;
 use miri_tests::{
     ClientType, ConnectionResponse, PushKind, close_client, create_client, create_client_from_uri,
     free_connection_response,
@@ -9,7 +9,8 @@ use miri_tests::{
 use miri_tests::{Level, LogResult, free_log_result, glide_log, init};
 use miri_tests::{
     create_batch_otel_span, create_batch_otel_span_with_parent, create_named_otel_span,
-    create_otel_span, create_otel_span_with_parent, drop_otel_span,
+    create_named_otel_span_with_trace_context, create_otel_span, create_otel_span_with_parent,
+    drop_otel_span,
 };
 use protobuf::Message;
 use std::ffi::{CStr, CString, c_char};
@@ -97,12 +98,8 @@ fn create_client_from_uri_test() {
     let client_type_ptr = Box::into_raw(client_type);
 
     unsafe {
-        let connection_response_ptr = create_client_from_uri(
-            uri.as_ptr(),
-            ptr::null(),
-            client_type_ptr,
-            pubsub_callback,
-        );
+        let connection_response_ptr =
+            create_client_from_uri(uri.as_ptr(), ptr::null(), client_type_ptr, pubsub_callback);
         let conn_ptr = (*connection_response_ptr).conn_ptr;
         close_client(conn_ptr);
         free_connection_response(connection_response_ptr as *mut ConnectionResponse);
@@ -177,6 +174,80 @@ fn test_create_named_otel_span_miri() {
     unsafe {
         drop_otel_span(span_ptr);
         drop_otel_span(empty_span_ptr);
+    }
+}
+
+#[test]
+fn test_create_named_otel_span_with_trace_context_miri() {
+    let span_name = CString::new("Get").expect("CString::new failed");
+    let trace_id = CString::new("0af7651916cd43dd8448eb211c80319c").expect("CString::new failed");
+    let span_id = CString::new("b7ad6b7169203331").expect("CString::new failed");
+    let trace_state = CString::new("vendor=value").expect("CString::new failed");
+
+    // All string pointers non-null
+    let span_ptr = unsafe {
+        create_named_otel_span_with_trace_context(
+            span_name.as_ptr(),
+            trace_id.as_ptr(),
+            span_id.as_ptr(),
+            1,
+            trace_state.as_ptr(),
+        )
+    };
+    assert_ne!(span_ptr, 0, "valid remote context should create a span");
+
+    // Null trace_state is the common case (empty W3C tracestate)
+    let no_state_ptr = unsafe {
+        create_named_otel_span_with_trace_context(
+            span_name.as_ptr(),
+            trace_id.as_ptr(),
+            span_id.as_ptr(),
+            0,
+            std::ptr::null(),
+        )
+    };
+    assert_ne!(no_state_ptr, 0, "null trace_state should create a span");
+
+    // Null trace_id / span_id must fall back rather than dereference null
+    let null_trace_id_ptr = unsafe {
+        create_named_otel_span_with_trace_context(
+            span_name.as_ptr(),
+            std::ptr::null(),
+            span_id.as_ptr(),
+            1,
+            std::ptr::null(),
+        )
+    };
+    assert_ne!(null_trace_id_ptr, 0, "null trace_id should fall back");
+
+    let null_span_id_ptr = unsafe {
+        create_named_otel_span_with_trace_context(
+            span_name.as_ptr(),
+            trace_id.as_ptr(),
+            std::ptr::null(),
+            1,
+            std::ptr::null(),
+        )
+    };
+    assert_ne!(null_span_id_ptr, 0, "null span_id should fall back");
+
+    // Null span name is a caller bug and returns 0 without touching the trace context
+    let null_name_ptr = unsafe {
+        create_named_otel_span_with_trace_context(
+            std::ptr::null(),
+            trace_id.as_ptr(),
+            span_id.as_ptr(),
+            1,
+            std::ptr::null(),
+        )
+    };
+    assert_eq!(null_name_ptr, 0, "null span_name should return 0");
+
+    unsafe {
+        drop_otel_span(span_ptr);
+        drop_otel_span(no_state_ptr);
+        drop_otel_span(null_trace_id_ptr);
+        drop_otel_span(null_span_id_ptr);
     }
 }
 

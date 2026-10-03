@@ -2307,6 +2307,42 @@ func (client *baseClient) HGetEx(
 	return handleStringOrNilArrayResponse(result)
 }
 
+// HGetDel gets and deletes the values of one or more fields of a given hash key. The specified fields are
+// atomically retrieved and removed from the hash. When the last field is removed, the key is deleted.
+//
+// Since:
+//
+//	Valkey 9.1 and above.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx    - The context for controlling the command execution.
+//	key    - The key of the hash.
+//	fields - The fields in the hash stored at key to retrieve and delete from the database.
+//
+// Return value:
+//
+//	An array of [models.Result[string]] values associated with the given fields, in the same order as they are requested.
+//	- For every field that does not exist in the hash, a [models.CreateNilStringResult()] is returned.
+//	- If key does not exist, returns an array of [models.CreateNilStringResult()] with the same length as fields.
+//
+// [valkey.io]: https://valkey.io/commands/hgetdel/
+func (client *baseClient) HGetDel(ctx context.Context, key string, fields []string) ([]models.Result[string], error) {
+	args, err := internal.BuildHGetDelArgs(key, fields)
+	if err != nil {
+		return nil, err
+	}
+
+	result, err := client.executeCommand(ctx, C.HGetDel, args)
+	if err != nil {
+		return nil, err
+	}
+
+	return handleStringOrNilArrayResponse(result)
+}
+
 // Sets an expiration (TTL or time to live) on one or more fields of a given hash key. You must specify at least one
 // field.
 // Field(s) will automatically be deleted from the hash key when their TTLs expire.

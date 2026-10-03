@@ -1,4 +1,4 @@
-name: Rust client tests
+name: Rust client CI
 
 permissions:
     contents: read
@@ -11,31 +11,34 @@ on:
             - v*
         paths:
             - rust/**
-            - glide-core/**
             - glide-logger/**
+            - glide-telemetry/**
+            - glide-core/**
             - deny.toml
             - utils/cluster_manager.py
             - .github/actions/install-engine/action.yml
             - .github/actions/install-rust/action.yml
             - .github/actions/install-shared-dependencies/action.yml
             - .github/workflows/lint-rust/action.yml
-            - .github/workflows/rust-client.yml
+            - .github/workflows/rust.yml
     pull_request:
         paths:
             - rust/**
-            - glide-core/**
             - glide-logger/**
+            - glide-telemetry/**
+            - glide-core/**
             - deny.toml
             - utils/cluster_manager.py
             - .github/actions/install-engine/action.yml
             - .github/actions/install-rust/action.yml
             - .github/actions/install-shared-dependencies/action.yml
             - .github/workflows/lint-rust/action.yml
-            - .github/workflows/rust-client.yml
+            - .github/workflows/rust.yml
     workflow_dispatch:
+    workflow_call:
 
 concurrency:
-    group: rust-client-${{ github.head_ref || github.ref }}
+    group: rust-${{ github.head_ref || github.ref }}
     cancel-in-progress: true
 
 env:
@@ -105,6 +108,14 @@ jobs:
                   engine-version: ${{ matrix.engine.version }}
                   github-token: ${{ secrets.GITHUB_TOKEN }}
 
-            - name: Run rust client tests
+            - name: Run unit tests
               working-directory: ./rust
-              run: cargo test --locked -- --show-output
+              run: cargo unit-tests --locked -- --show-output
+
+            - name: Run doctests
+              working-directory: ./rust
+              run: cargo doc-tests --locked -- --show-output
+
+            - name: Run integration tests
+              working-directory: ./rust
+              run: cargo integration-tests --locked -- --show-output

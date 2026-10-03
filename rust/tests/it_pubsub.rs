@@ -72,7 +72,7 @@ timed_tokio_test!(
         use glide::{GlideClient, GlideClientConfiguration};
         use std::time::Duration;
 
-        let server = server_or_skip!();
+        let server = common::TestServer::start();
         let subscriber_config =
             GlideClientConfiguration::with_address("127.0.0.1", server.port).enable_pubsub();
         let subscriber = GlideClient::connect(subscriber_config)
@@ -117,7 +117,7 @@ timed_tokio_test!(
         use glide::{GlideClient, GlideClientConfiguration, PubSubMessageKind};
         use std::time::Duration;
 
-        let server = server_or_skip!();
+        let server = common::TestServer::start();
         let subscriber_config =
             GlideClientConfiguration::with_address("127.0.0.1", server.port).enable_pubsub();
         let subscriber = GlideClient::connect(subscriber_config)
@@ -150,7 +150,7 @@ timed_tokio_test!(
         use glide::{GlideClient, GlideClientConfiguration};
         use std::time::Duration;
 
-        let server = server_or_skip!();
+        let server = common::TestServer::start();
         let subscriber_config =
             GlideClientConfiguration::with_address("127.0.0.1", server.port).enable_pubsub();
         let subscriber = GlideClient::connect(subscriber_config)

@@ -1,7 +1,9 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
+use glide_telemetry::GlideSpan;
 pub use redis::AddressResolver;
 pub use redis::{ErrorKind, ObjectType, PushKind, RedisError, RedisFuture, RedisResult, Value};
+use std::sync::Arc;
 
 #[derive(Clone, Default, PartialEq)]
 pub enum ProtocolVersion {
@@ -21,8 +23,6 @@ pub struct RedisConnectionInfo {
     pub server_assisted_cache: bool,
     pub cache: Option<std::sync::Arc<dyn std::any::Any + Send + Sync>>,
 }
-use std::sync::Arc;
-use telemetrylib::GlideSpan;
 
 pub mod cluster_routing;
 pub mod cluster_topology;
@@ -30,8 +30,8 @@ pub mod cluster_topology;
 pub use cluster_routing::*;
 pub use cluster_topology::*;
 
-pub use redis::ToRedisArgs;
 pub use redis::SHARED_ARG_INLINE_MAX;
+pub use redis::ToRedisArgs;
 
 pub struct Cmd {
     command_bytes: Vec<u8>,

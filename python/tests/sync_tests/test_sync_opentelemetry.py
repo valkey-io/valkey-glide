@@ -4,12 +4,16 @@ import gc
 import os
 import threading
 import time
-from typing import Optional
+from contextlib import contextmanager
+from typing import Iterator, Optional
 
+import glide_shared.opentelemetry
+import glide_sync.glide_client as sync_client_module
 import psutil  # type: ignore[import-untyped]
 import pytest
 from glide_shared.commands.batch import Batch, ClusterBatch
 from glide_shared.config import ProtocolVersion
+from glide_shared.logger import Level, Logger
 from glide_sync import (
     OpenTelemetryConfig,
     OpenTelemetryMetricsConfig,
@@ -17,11 +21,21 @@ from glide_sync import (
 )
 from glide_sync.opentelemetry import OpenTelemetry
 from glide_sync.sync_commands.script import Script
+from opentelemetry import trace
+from opentelemetry.trace import NonRecordingSpan, SpanContext, TraceFlags
+from opentelemetry.trace.span import TraceState
 
 from tests.otel_test_utils import (
+    NO_SPAN_POLL_INTERVAL,
+    NO_SPAN_WINDOW,
+    SPAN_FLUSH_GRACE,
+    assert_external_parent,
+    assert_root_spans,
     build_timeout_error,
+    build_unexpected_span_error,
     check_spans_ready,
     read_and_parse_span_file,
+    span_file_exists,
 )
 from tests.sync_tests.conftest import create_sync_client
 
@@ -30,6 +44,52 @@ TIMEOUT = 50  # seconds
 VALID_ENDPOINT_TRACES = "/tmp/spans.json"
 VALID_FILE_ENDPOINT_TRACES = f"file://{VALID_ENDPOINT_TRACES}"
 VALID_ENDPOINT_METRICS = "https://valid-endpoint/v1/metrics"
+
+# A fixed remote parent context, so assertions can name the exact expected IDs.
+PARENT_TRACE_ID = 0x0AF7651916CD43DD8448EB211C80319C
+PARENT_SPAN_ID = 0xB7AD6B7169203331
+PARENT_TRACE_ID_HEX = format(PARENT_TRACE_ID, "032x")
+PARENT_SPAN_ID_HEX = format(PARENT_SPAN_ID, "016x")
+
+
+@contextmanager
+def use_parent_span(
+    sampled: bool,
+    span_id: int = PARENT_SPAN_ID,
+    trace_state: Optional[TraceState] = None,
+    trace_flags: Optional[int] = None,
+) -> Iterator[None]:
+    """Make a fixed span context the active OTel span for the duration of the block."""
+    span_context = SpanContext(
+        trace_id=PARENT_TRACE_ID,
+        span_id=span_id,
+        is_remote=True,
+        trace_flags=TraceFlags(
+            trace_flags
+            if trace_flags is not None
+            else (TraceFlags.SAMPLED if sampled else TraceFlags.DEFAULT)
+        ),
+        trace_state=trace_state,
+    )
+    with trace.use_span(NonRecordingSpan(span_context), end_on_exit=False):
+        yield
+
+
+@contextmanager
+def restore_sample_percentage() -> Iterator[None]:
+    """Restore the sample percentage on exit."""
+    original = OpenTelemetry.get_sample_percentage()
+    try:
+        yield
+    finally:
+        if original is not None:
+            OpenTelemetry.set_sample_percentage(original)
+
+
+def remove_span_file() -> None:
+    """Delete the span file so a test only sees the spans it produced."""
+    if os.path.exists(VALID_ENDPOINT_TRACES):
+        os.unlink(VALID_ENDPOINT_TRACES)
 
 
 def _wait_for_spans_to_be_flushed(
@@ -70,6 +130,51 @@ def _wait_for_spans_to_be_flushed(
         time.sleep(check_interval)
 
     raise build_timeout_error(span_file_path, expected_span_names, expected_span_counts)
+
+
+def _assert_no_spans_exported(span_file_path: str = VALID_ENDPOINT_TRACES) -> None:
+    """Assert no span reaches the span file within ``NO_SPAN_WINDOW``.
+
+    A negative cannot be polled to an early success, so the window is spent in full.
+    """
+    deadline = time.time() + NO_SPAN_WINDOW
+    while True:
+        if span_file_exists(span_file_path):
+            raise build_unexpected_span_error(span_file_path)
+        if time.time() >= deadline:
+            return
+        time.sleep(NO_SPAN_POLL_INTERVAL)
+
+
+def test_sync_is_tracing_enabled(monkeypatch):
+    traces = OpenTelemetryTracesConfig(
+        endpoint=VALID_FILE_ENDPOINT_TRACES, sample_percentage=0
+    )
+    assert not traces.enable_trace_context_propagation
+
+    propagation_traces = OpenTelemetryTracesConfig(
+        endpoint=VALID_FILE_ENDPOINT_TRACES,
+        enable_trace_context_propagation=True,
+    )
+    assert propagation_traces.enable_trace_context_propagation
+
+    monkeypatch.setattr(OpenTelemetry, "_instance", None)
+    monkeypatch.setattr(OpenTelemetry, "_config", OpenTelemetryConfig(traces=traces))
+    assert not OpenTelemetry.is_tracing_enabled()
+
+    monkeypatch.setattr(OpenTelemetry, "_instance", OpenTelemetry())
+    monkeypatch.setattr(OpenTelemetry, "_config", None)
+    assert not OpenTelemetry.is_tracing_enabled()
+
+    monkeypatch.setattr(
+        OpenTelemetry,
+        "_config",
+        OpenTelemetryConfig(metrics=OpenTelemetryMetricsConfig(VALID_ENDPOINT_METRICS)),
+    )
+    assert not OpenTelemetry.is_tracing_enabled()
+
+    monkeypatch.setattr(OpenTelemetry, "_config", OpenTelemetryConfig(traces=traces))
+    assert OpenTelemetry.is_tracing_enabled()
 
 
 def test_sync_wrong_opentelemetry_config():
@@ -213,7 +318,9 @@ class TestOpenTelemetryGlideSync:
         # Initialize OpenTelemetry with 100% sampling for tests
         opentelemetry_config = OpenTelemetryConfig(
             OpenTelemetryTracesConfig(
-                endpoint=VALID_FILE_ENDPOINT_TRACES, sample_percentage=100
+                endpoint=VALID_FILE_ENDPOINT_TRACES,
+                sample_percentage=100,
+                enable_trace_context_propagation=True,
             ),
             metrics=OpenTelemetryMetricsConfig(endpoint=VALID_ENDPOINT_METRICS),
             flush_interval_ms=100,
@@ -323,8 +430,12 @@ class TestOpenTelemetryGlideSync:
         # Force garbage collection again
         gc.collect()
 
-        # Wait for spans to be flushed
-        time.sleep(1)
+        # Wait for every span this test produced to be flushed
+        _wait_for_spans_to_be_flushed(
+            VALID_ENDPOINT_TRACES,
+            expected_span_names=["Set", "Get"],
+            expected_span_counts={"Set": 3, "Get": 3},
+        )
 
         # Get final memory usage
         final_memory = process.memory_info().rss
@@ -354,8 +465,9 @@ class TestOpenTelemetryGlideSync:
         OpenTelemetry.set_sample_percentage(0)
         assert OpenTelemetry.get_sample_percentage() == 0
 
-        # Wait for any pending spans to be flushed
-        time.sleep(0.5)
+        # Let spans still in flight land before the delete, so a late write cannot
+        # recreate the file and break the "no spans were exported" check below.
+        time.sleep(SPAN_FLUSH_GRACE)
 
         # Clean up any existing files
         if os.path.exists(VALID_ENDPOINT_TRACES):
@@ -365,11 +477,8 @@ class TestOpenTelemetryGlideSync:
         for i in range(100):
             client.set("GlideClient_test_percentage_requests_config", "value")
 
-        # Wait for any spans to be flushed (though none should be created)
-        time.sleep(0.5)
-
         # Check that no spans file was created
-        assert not os.path.exists(VALID_ENDPOINT_TRACES)
+        _assert_no_spans_exported()
 
         # Set sample percentage to 100%
         OpenTelemetry.set_sample_percentage(100)
@@ -422,7 +531,9 @@ class TestOpenTelemetryGlideSync:
         client.set("GlideClient_test_otel_global_config", "value")
 
         # Wait for spans to be flushed
-        time.sleep(0.5)
+        _wait_for_spans_to_be_flushed(
+            VALID_ENDPOINT_TRACES, expected_span_names=["Set"]
+        )
 
         # Read the span file and check span names
         _, _, span_names = read_and_parse_span_file(VALID_ENDPOINT_TRACES)
@@ -537,8 +648,12 @@ class TestOpenTelemetryGlideSync:
         # Force garbage collection again
         gc.collect()
 
-        # Wait for spans to be flushed
-        time.sleep(1)
+        # Wait for every batch span this test produced to be flushed
+        _wait_for_spans_to_be_flushed(
+            VALID_ENDPOINT_TRACES,
+            expected_span_names=["Batch"],
+            expected_span_counts={"Batch": 3},
+        )
 
         # Get final memory usage
         final_memory = process.memory_info().rss
@@ -709,3 +824,363 @@ class TestOpenTelemetryGlideSync:
 
         # Give exporter a moment; assert we didn't crash and no leak surfaced.
         time.sleep(0.2)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    def test_sync_trace_context_propagation_disabled_by_default(
+        self, request, cluster_mode, monkeypatch
+    ):
+        """An active application span is ignored unless propagation is enabled."""
+        client = create_sync_client(request, cluster_mode=cluster_mode)
+        traces = OpenTelemetry._config.traces if OpenTelemetry._config else None
+        assert traces is not None
+        monkeypatch.setattr(traces, "enable_trace_context_propagation", False)
+
+        remove_span_file()
+        with use_parent_span(sampled=True):
+            client.get("GlideSync_test_propagation_disabled")
+
+        _wait_for_spans_to_be_flushed(
+            VALID_ENDPOINT_TRACES, expected_span_names=["Get"]
+        )
+        _, span_objects, _ = read_and_parse_span_file(VALID_ENDPOINT_TRACES)
+        assert_root_spans(span_objects, "Get")
+
+        client.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_sampled_parent_span_obeys_sample_percentage(
+        self, request, protocol, cluster_mode, monkeypatch
+    ):
+        """A parent cannot bypass 0% sampling, selected spans keep that parent."""
+        client = create_sync_client(
+            request, cluster_mode=cluster_mode, protocol=protocol
+        )
+
+        with restore_sample_percentage():
+            OpenTelemetry.set_sample_percentage(0)
+            # Let spans still in flight land before the delete, so a late write cannot
+            # recreate the file and break the "no spans were exported" check below.
+            time.sleep(SPAN_FLUSH_GRACE)
+            remove_span_file()
+
+            def unexpected_parent(cls):
+                pytest.fail(
+                    "Parent context must not be read when GLIDE does not sample"
+                )
+
+            with monkeypatch.context() as patch:
+                patch.setattr(
+                    OpenTelemetry,
+                    "_get_parent_span_context",
+                    classmethod(unexpected_parent),
+                )
+                with use_parent_span(sampled=True):
+                    client.set("GlideSync_test_sampled_parent", "value")
+                    client.get("GlideSync_test_sampled_parent")
+                    batch = (
+                        ClusterBatch(is_atomic=False)
+                        if cluster_mode
+                        else Batch(is_atomic=False)
+                    )
+                    batch.get("GlideSync_test_sampled_parent")
+                    client.exec(batch, raise_on_error=True)
+                    assert client.invoke_script(Script("return 'Hello'")) == b"Hello"
+
+            _assert_no_spans_exported()
+
+            OpenTelemetry.set_sample_percentage(100)
+            with use_parent_span(sampled=True):
+                client.set("GlideSync_test_sampled_parent", "value")
+                client.get("GlideSync_test_sampled_parent")
+
+            _wait_for_spans_to_be_flushed(
+                VALID_ENDPOINT_TRACES, expected_span_names=["Set", "Get"]
+            )
+
+        _, span_objects, _ = read_and_parse_span_file(VALID_ENDPOINT_TRACES)
+        for span_name in ("Set", "Get"):
+            assert_external_parent(
+                span_objects, span_name, PARENT_TRACE_ID_HEX, PARENT_SPAN_ID_HEX
+            )
+
+        client.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    def test_sync_unsampled_parent_span_obeys_sample_percentage(
+        self, request, cluster_mode, monkeypatch
+    ):
+        """Only selected spans reach an unsampled parent, the core drops them."""
+        client = create_sync_client(request, cluster_mode=cluster_mode)
+        create_command_span = sync_client_module._create_command_span
+        parented_spans = 0
+
+        def capture_parent(ffi, lib, span_name, parent):
+            nonlocal parented_spans
+            assert parent is not None
+            assert parent.trace_id == PARENT_TRACE_ID_HEX.encode()
+            assert parent.span_id == PARENT_SPAN_ID_HEX.encode()
+            assert parent.trace_flags == TraceFlags.DEFAULT
+            parented_spans += 1
+            return create_command_span(ffi, lib, span_name, parent)
+
+        monkeypatch.setattr(sync_client_module, "_create_command_span", capture_parent)
+
+        with restore_sample_percentage():
+            OpenTelemetry.set_sample_percentage(0)
+            # Let spans still in flight land before the delete, so a late write cannot
+            # recreate the file and break the "no spans were exported" check below.
+            time.sleep(SPAN_FLUSH_GRACE)
+            remove_span_file()
+
+            with use_parent_span(sampled=False):
+                client.set("GlideSync_test_unsampled_parent", "value")
+            assert parented_spans == 0
+
+            OpenTelemetry.set_sample_percentage(100)
+            with use_parent_span(sampled=False):
+                client.get("GlideSync_test_unsampled_parent")
+
+            # A synchronous post-condition of the call above, so assert it without waiting.
+            assert parented_spans == 1
+            # The core must drop the span because the parent is unsampled.
+            _assert_no_spans_exported()
+
+        client.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    def test_sync_no_active_span_creates_root_spans(self, request, cluster_mode):
+        """Without an active OTel span, spans remain independent trace roots."""
+        client = create_sync_client(request, cluster_mode=cluster_mode)
+
+        remove_span_file()
+        client.get("GlideSync_test_no_active_span")
+
+        _wait_for_spans_to_be_flushed(
+            VALID_ENDPOINT_TRACES, expected_span_names=["Get"]
+        )
+        _, span_objects, _ = read_and_parse_span_file(VALID_ENDPOINT_TRACES)
+        assert_root_spans(span_objects, "Get")
+
+        client.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    def test_sync_batch_span_uses_parent_context(self, request, cluster_mode):
+        """Batch spans are parented to the active span context."""
+        client = create_sync_client(request, cluster_mode=cluster_mode)
+
+        remove_span_file()
+        batch = (
+            ClusterBatch(is_atomic=False) if cluster_mode else Batch(is_atomic=False)
+        )
+        batch.set("GlideSync_test_batch_parent", "value")
+        batch.get("GlideSync_test_batch_parent")
+
+        with use_parent_span(sampled=True):
+            client.exec(batch, raise_on_error=True)
+
+        _wait_for_spans_to_be_flushed(
+            VALID_ENDPOINT_TRACES, expected_span_names=["Batch"]
+        )
+        _, span_objects, _ = read_and_parse_span_file(VALID_ENDPOINT_TRACES)
+        assert_external_parent(
+            span_objects, "Batch", PARENT_TRACE_ID_HEX, PARENT_SPAN_ID_HEX
+        )
+
+        client.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    def test_sync_script_span_uses_parent_context(self, request, cluster_mode):
+        """EVALSHA spans are parented to the active span context, and keep both their
+        name and the DB semantic-convention attributes the core attaches."""
+        client = create_sync_client(request, cluster_mode=cluster_mode)
+
+        remove_span_file()
+        script = Script("return 'Hello'")
+        with use_parent_span(sampled=True):
+            assert client.invoke_script(script) == b"Hello"
+
+        _wait_for_spans_to_be_flushed(
+            VALID_ENDPOINT_TRACES, expected_span_names=["EVALSHA"]
+        )
+        _, span_objects, span_names = read_and_parse_span_file(VALID_ENDPOINT_TRACES)
+
+        assert "EVALSHA" in span_names
+        assert_external_parent(
+            span_objects, "EVALSHA", PARENT_TRACE_ID_HEX, PARENT_SPAN_ID_HEX
+        )
+
+        evalsha_attrs = [
+            attr
+            for span in span_objects
+            if span.get("name") == "EVALSHA"
+            for attr in span.get("span_attributes", [])
+        ]
+        assert {"db.operation.name": "EVALSHA"} in evalsha_attrs
+
+        client.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    def test_sync_trace_state_is_propagated(self, request, cluster_mode):
+        """A non-empty W3C tracestate is accepted by the core rather than causing a
+        silent fallback to a root span."""
+        client = create_sync_client(request, cluster_mode=cluster_mode)
+
+        remove_span_file()
+        trace_state = TraceState([("vendor1", "value1"), ("vendor2", "value2")])
+        with use_parent_span(sampled=True, trace_state=trace_state):
+            client.get("GlideSync_test_trace_state")
+
+        _wait_for_spans_to_be_flushed(
+            VALID_ENDPOINT_TRACES, expected_span_names=["Get"]
+        )
+        _, span_objects, _ = read_and_parse_span_file(VALID_ENDPOINT_TRACES)
+        assert_external_parent(
+            span_objects, "Get", PARENT_TRACE_ID_HEX, PARENT_SPAN_ID_HEX
+        )
+
+        client.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    def test_sync_innermost_active_span_wins(self, request, cluster_mode):
+        """The context is read per command, so a nested span supersedes the outer one."""
+        client = create_sync_client(request, cluster_mode=cluster_mode)
+
+        remove_span_file()
+        inner_span_id = 0x00F067AA0BA902B7
+        with use_parent_span(sampled=True):
+            with use_parent_span(sampled=True, span_id=inner_span_id):
+                client.get("GlideSync_test_nested_spans")
+
+        _wait_for_spans_to_be_flushed(
+            VALID_ENDPOINT_TRACES, expected_span_names=["Get"]
+        )
+        _, span_objects, _ = read_and_parse_span_file(VALID_ENDPOINT_TRACES)
+        assert_external_parent(
+            span_objects, "Get", PARENT_TRACE_ID_HEX, format(inner_span_id, "016x")
+        )
+
+        client.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    def test_sync_parent_context_ignored_without_otel_api(
+        self, request, cluster_mode, monkeypatch
+    ):
+        """With `opentelemetry-api` unavailable, propagation is off and spans behave
+        exactly as they did before: independent trace roots, no error."""
+        client = create_sync_client(request, cluster_mode=cluster_mode)
+
+        monkeypatch.setattr(glide_shared.opentelemetry, "_otel_trace", None)
+        remove_span_file()
+
+        with use_parent_span(sampled=True):
+            client.get("GlideSync_test_no_otel_api")
+
+        _wait_for_spans_to_be_flushed(
+            VALID_ENDPOINT_TRACES, expected_span_names=["Get"]
+        )
+        _, span_objects, _ = read_and_parse_span_file(VALID_ENDPOINT_TRACES)
+        assert_root_spans(span_objects, "Get")
+
+        client.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    def test_sync_parent_context_extraction_failure_falls_back(
+        self, request, cluster_mode, monkeypatch
+    ):
+        """A misbehaving OTel SDK must never fail a command; spans fall back to roots."""
+        client = create_sync_client(request, cluster_mode=cluster_mode)
+
+        class _BrokenTrace:
+            @staticmethod
+            def get_current_span():
+                raise RuntimeError("broken instrumentation")
+
+        monkeypatch.setattr(glide_shared.opentelemetry, "_otel_trace", _BrokenTrace)
+        logged_failures = []
+        monkeypatch.setattr(
+            Logger,
+            "log",
+            lambda level, identifier, message: logged_failures.append(
+                (level, identifier, message)
+            ),
+        )
+        remove_span_file()
+
+        client.set("GlideSync_test_broken_otel_api", "value")
+        assert client.get("GlideSync_test_broken_otel_api") == b"value"
+
+        _wait_for_spans_to_be_flushed(
+            VALID_ENDPOINT_TRACES, expected_span_names=["Set", "Get"]
+        )
+        _, span_objects, _ = read_and_parse_span_file(VALID_ENDPOINT_TRACES)
+        assert_root_spans(span_objects, "Get")
+        assert (
+            logged_failures
+            == [
+                (
+                    Level.DEBUG,
+                    "GlideOpenTelemetry",
+                    "Failed to read the active span context: broken instrumentation. "
+                    "Continuing as if no span were active.",
+                )
+            ]
+            * 2
+        )
+
+        client.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("trace_flags", [-1, 256])
+    def test_sync_out_of_range_parent_trace_flags_fall_back(
+        self, request, cluster_mode, trace_flags, monkeypatch
+    ):
+        """An invalid parent flag falls back to a root without failing the command."""
+        client = create_sync_client(request, cluster_mode=cluster_mode)
+        logged_failures = []
+        monkeypatch.setattr(
+            Logger,
+            "log",
+            lambda level, identifier, message: logged_failures.append(
+                (level, identifier, message)
+            ),
+        )
+        remove_span_file()
+
+        with use_parent_span(sampled=True, trace_flags=trace_flags):
+            client.get(f"GlideSync_test_invalid_parent_flags_{trace_flags}")
+
+        _wait_for_spans_to_be_flushed(
+            VALID_ENDPOINT_TRACES, expected_span_names=["Get"]
+        )
+        _, span_objects, _ = read_and_parse_span_file(VALID_ENDPOINT_TRACES)
+        assert_root_spans(span_objects, "Get")
+        assert logged_failures == [
+            (
+                Level.DEBUG,
+                "GlideOpenTelemetry",
+                f"Failed to read the active span context: trace_flags {trace_flags} "
+                "out of range 0-255. Continuing as if no span were active.",
+            )
+        ]
+
+        client.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    def test_sync_max_parent_trace_flags_propagate(self, request, cluster_mode):
+        """The upper byte boundary remains a valid remote parent."""
+        client = create_sync_client(request, cluster_mode=cluster_mode)
+        remove_span_file()
+
+        with use_parent_span(sampled=True, trace_flags=255):
+            client.get("GlideSync_test_max_parent_flags")
+
+        _wait_for_spans_to_be_flushed(
+            VALID_ENDPOINT_TRACES, expected_span_names=["Get"]
+        )
+        _, span_objects, _ = read_and_parse_span_file(VALID_ENDPOINT_TRACES)
+        assert_external_parent(
+            span_objects, "Get", PARENT_TRACE_ID_HEX, PARENT_SPAN_ID_HEX
+        )
+
+        client.close()
