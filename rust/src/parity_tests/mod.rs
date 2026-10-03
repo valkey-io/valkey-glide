@@ -8,9 +8,12 @@ use regex::Regex;
 use std::collections::BTreeMap;
 use std::path::Path;
 use types::Argument;
+use types::Difference;
 use types::Generic;
 use types::Method;
 use types::RedisParity;
+
+// --- constants --------------------------------------------------------------------------------------
 
 /// Constants for the redis-rs release that GLIDE targets for parity.
 const REDIS_RS_VERSION: &str = "1.7.0";
@@ -28,123 +31,8 @@ const REDIS_SCAN_METHODS: &str = "redis/src/commands/macros.rs";
 /// The cached redis-rs parity snapshot, relative to `rust/`.
 const REDIS_PARITY_JSON: &str = "src/parity_tests/redis_parity.json";
 
-/// redis-rs methods GLIDE does not implement yet. The guard fails if any other method is
-/// missing, or if one of these is no longer missing (so remove it once implemented).
-// TODO #7060: Implement these methods and remove them from this list.
-const MISSING_METHODS: &[&str] = &[
-    "acl_cat",
-    "acl_cat_categoryname",
-    "acl_deluser",
-    "acl_dryrun",
-    "acl_genpass",
-    "acl_genpass_bits",
-    "acl_getuser",
-    "acl_help",
-    "acl_list",
-    "acl_load",
-    "acl_log",
-    "acl_log_reset",
-    "acl_save",
-    "acl_setuser",
-    "acl_setuser_rules",
-    "acl_users",
-    "acl_whoami",
-    "bf_add",
-    "bf_card",
-    "bf_exists",
-    "bf_info",
-    "bf_info_type",
-    "bf_insert",
-    "bf_insert_options",
-    "bf_loadchunk",
-    "bf_madd",
-    "bf_mexists",
-    "bf_reserve",
-    "bf_reserve_options",
-    "bf_scandump",
-    "bit_and_or",
-    "bit_diff",
-    "bit_diff1",
-    "bit_one",
-    "client_getname",
-    "client_id",
-    "client_setname",
-    // TODO #7238: Add with Valkey 9.2 `DELEX` support.
-    "del_ex",
-    "digest",
-    "expire_time",
-    "ft_create",
-    "geo_radius",
-    "geo_radius_by_member",
-    "hget_del",
-    "hmget",
-    "increx",
-    "invoke_script",
-    "load_script",
-    "mset_ex",
-    "pexpire_time",
-    "ping",
-    "ping_message",
-    "scan_options",
-    "spublish",
-    "vadd",
-    "vadd_options",
-    "vcard",
-    "vdelattr",
-    "vdim",
-    "vemb",
-    "vemb_options",
-    "vgetattr",
-    "vinfo",
-    "vlinks",
-    "vlinks_with_scores",
-    "vrandmember",
-    "vrandmember_multiple",
-    "vrem",
-    "vsetattr",
-    "vsim",
-    "vsim_options",
-    "xack",
-    "xack_del",
-    "xadd",
-    "xadd_map",
-    "xadd_maxlen",
-    "xadd_maxlen_map",
-    "xadd_options",
-    "xautoclaim_options",
-    "xcfgset",
-    "xclaim",
-    "xclaim_options",
-    "xdel",
-    "xdel_ex",
-    "xgroup_create",
-    "xgroup_create_mkstream",
-    "xgroup_createconsumer",
-    "xgroup_delconsumer",
-    "xgroup_destroy",
-    "xgroup_setid",
-    "xinfo_consumers",
-    "xinfo_groups",
-    "xinfo_stream",
-    "xinfo_stream_with_idempotency",
-    "xlen",
-    "xnack",
-    "xpending",
-    "xpending_consumer_count",
-    "xpending_count",
-    "xrange",
-    "xrange_all",
-    "xrange_count",
-    "xread",
-    "xread_options",
-    "xrevrange",
-    "xrevrange_all",
-    "xrevrange_count",
-    "xtrim",
-    "xtrim_options",
-    "zadd_multiple_options",
-    "zadd_options",
-];
+/// The differences from redis-rs, relative to `rust/`, indexed by method name.
+const DIFFERENCES_JSON: &str = "src/parity_tests/differences.json";
 
 // --- tests --------------------------------------------------------------------------------------
 
@@ -166,20 +54,22 @@ fn redis_parity_check() {
 
 /// Runs the parity check for the given specified redis-rs version and returns the results:
 /// - `Ok` carries a human-readable summary.
-/// - `Err` lists the command-surface divergences, one message per problem.
+/// - `Err` lists the parity problems, one message per problem.
 ///
 /// Panics if a source or data file can't be read, parsed, serialized, or written,
 /// or if the cached snapshot records a different version than the one targeted.
 fn run_parity_check(version: &str) -> Result<String, Vec<String>> {
     let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
     let redis_parity = load_redis_parity(manifest, version);
+    let differences = load_differences(manifest);
     let glide_src = &read(&manifest.join("src/commands/core.rs"));
 
     let glide_command_table_methods = parse_command_table_methods(glide_src);
     let glide_scan_methods = parse_scan_methods(glide_src, GLIDE_SCAN_DEFINITIONS);
 
-    // Verify the list of missing commands.
-    let mut problems = compare_missing_methods(
+    // Verify the list of differences.
+    let mut problems = compare_differences(
+        &differences,
         &[
             &redis_parity.command_table_methods,
             &redis_parity.scan_methods,
@@ -191,17 +81,29 @@ fn run_parity_check(version: &str) -> Result<String, Vec<String>> {
     problems.extend(compare_method_maps(
         &redis_parity.command_table_methods,
         &glide_command_table_methods,
+        &differences,
     ));
 
     // Compare scan methods.
     problems.extend(compare_method_maps(
         &redis_parity.scan_methods,
         &glide_scan_methods,
+        &differences,
     ));
 
     if problems.is_empty() {
+        let count = |redis: bool, glide: bool| {
+            differences
+                .values()
+                .filter(|d| d.redis.is_some() == redis && d.glide.is_some() == glide)
+                .count()
+        };
         Ok(format!(
-            "parity OK: GLIDE methods match redis-rs {version} exactly"
+            "parity OK: GLIDE methods match redis-rs {version}, with {} documented \
+             divergence(s), {} missing method(s) and {} extra method(s)",
+            count(true, true),
+            count(true, false),
+            count(false, true)
         ))
     } else {
         Err(problems)
@@ -255,6 +157,14 @@ fn load_redis_parity(manifest: &Path, version: &str) -> RedisParity {
         .unwrap_or_else(|e| panic!("cannot write {}: {e}", data_path.display()));
 
     redis
+}
+
+/// Loads the cached differences, indexed by method name.
+/// Panics if the data file can't be read or parsed.
+fn load_differences(manifest: &Path) -> BTreeMap<String, Difference> {
+    let data_path = manifest.join(DIFFERENCES_JSON);
+    serde_json::from_str(&read(&data_path))
+        .unwrap_or_else(|e| panic!("cannot parse {}: {e}", data_path.display()))
 }
 
 /// Fetches the given redis-rs source file from GitHub.

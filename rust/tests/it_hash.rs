@@ -19,11 +19,11 @@ const FUTURE_EXPIRY_MS: u64 = i64::MAX as u64;
 matrix_test!(hset, c, {
     let k = common::key("h");
 
-    // Returns `true` when the field is added.
-    assert!(c.hset(&k, "f", "v1").await.unwrap());
+    // Returns `1` when the field is added.
+    assert_eq!(c.hset(&k, "f", "v1").await.unwrap(), 1);
 
-    // Returns `false` when an existing field is overwritten.
-    assert!(!c.hset(&k, "f", "v2").await.unwrap());
+    // Returns `0` when an existing field is overwritten.
+    assert_eq!(c.hset(&k, "f", "v2").await.unwrap(), 0);
     let v: Option<String> = c.hget(&k, "f").await.unwrap();
     assert_eq!(v.as_deref(), Some("v2"));
 });
@@ -44,19 +44,6 @@ matrix_test!(hset_multiple, c, {
         .await
         .unwrap();
     assert_eq!(added, 1);
-    let vals = c.hmget(&k, &["f1", "f2", "f3"]).await.unwrap();
-    assert_eq!(vals[0].as_deref(), Some(&b"v1"[..]));
-    assert_eq!(vals[1].as_deref(), Some(&b"v2b"[..]));
-    assert_eq!(vals[2].as_deref(), Some(&b"v3"[..]));
-});
-
-matrix_test!(hmset, c, {
-    let k = common::key("h");
-
-    // Returns `true` whether fields are added or overwritten.
-    assert!(c.hmset(&k, &[("f1", "v1"), ("f2", "v2")]).await.unwrap());
-    assert!(c.hmset(&k, &[("f2", "v2b"), ("f3", "v3")]).await.unwrap());
-
     let vals = c.hmget(&k, &["f1", "f2", "f3"]).await.unwrap();
     assert_eq!(vals[0].as_deref(), Some(&b"v1"[..]));
     assert_eq!(vals[1].as_deref(), Some(&b"v2b"[..]));
@@ -326,14 +313,14 @@ matrix_test!(hget_ex, c, {
     c.hset(&k, "f", "v").await.unwrap();
 
     // HGETEX with EX.
-    let vals: Vec<Option<String>> = c.hget_ex(&k, "f", Expiry::EX(100)).await.unwrap();
-    assert_eq!(vals, vec![Some("v".to_string())]);
+    let vals: Vec<String> = c.hget_ex(&k, "f", Expiry::EX(100)).await.unwrap();
+    assert_eq!(vals, vec!["v".to_string()]);
     let ttl: Vec<IntegerReplyOrNoOp> = c.httl(&k, "f").await.unwrap();
     assert!(matches!(ttl[0], IntegerReplyOrNoOp::IntegerReply(1..=100)));
 
     // HGETEX with PX.
-    let vals: Vec<Option<String>> = c.hget_ex(&k, "f", Expiry::PX(100_000)).await.unwrap();
-    assert_eq!(vals, vec![Some("v".to_string())]);
+    let vals: Vec<String> = c.hget_ex(&k, "f", Expiry::PX(100_000)).await.unwrap();
+    assert_eq!(vals, vec!["v".to_string()]);
     let pttl: Vec<IntegerReplyOrNoOp> = c.hpttl(&k, "f").await.unwrap();
     assert!(matches!(
         pttl[0],
@@ -341,32 +328,59 @@ matrix_test!(hget_ex, c, {
     ));
 
     // HGETEX with EXAT.
-    let vals: Vec<Option<String>> = c
+    let vals: Vec<String> = c
         .hget_ex(&k, "f", Expiry::EXAT(FUTURE_EXPIRY_SECS))
         .await
         .unwrap();
-    assert_eq!(vals, vec![Some("v".to_string())]);
+    assert_eq!(vals, vec!["v".to_string()]);
     let et: Vec<IntegerReplyOrNoOp> = c.hexpire_time(&k, "f").await.unwrap();
     assert_eq!(et, vec![FUTURE_EXPIRY_SECS as isize]);
 
     // HGETEX with PXAT.
-    let vals: Vec<Option<String>> = c
+    let vals: Vec<String> = c
         .hget_ex(&k, "f", Expiry::PXAT(FUTURE_EXPIRY_MS))
         .await
         .unwrap();
-    assert_eq!(vals, vec![Some("v".to_string())]);
+    assert_eq!(vals, vec!["v".to_string()]);
     let pet: Vec<IntegerReplyOrNoOp> = c.hpexpire_time(&k, "f").await.unwrap();
     assert_eq!(pet, vec![FUTURE_EXPIRY_MS as isize]);
 
     // HGETEX with PERSIST.
-    let vals: Vec<Option<String>> = c
-        .hget_ex(&k, &["f", "missing"], Expiry::PERSIST)
-        .await
-        .unwrap();
-    assert_eq!(vals, vec![Some("v".to_string()), None]);
+    let vals: Vec<String> = c.hget_ex(&k, "f", Expiry::PERSIST).await.unwrap();
+    assert_eq!(vals, vec!["v".to_string()]);
     let ttl: Vec<IntegerReplyOrNoOp> = c.httl(&k, "f").await.unwrap();
-    // The field exists but has no TTL.
     assert_eq!(ttl, vec![IntegerReplyOrNoOp::ExistsButNotRelevant]);
+});
+
+// Valkey returns `nil` when a requested field does not exist.
+// Typed `hget_ex` raises an error if this happens. Callers
+// need to use the untyped version if they want to handle this
+// case. This matches redis-rs behaviour.
+
+matrix_test!(hget_ex_typed_with_nil, c, {
+    skip_if_version_below!(c, 9, 0, 0);
+
+    let k = common::key("h_getex");
+    c.hset(&k, "f", "v").await.unwrap();
+
+    assert!(
+        c.hget_ex(&k, &["f", "missing"], Expiry::PERSIST)
+            .await
+            .is_err()
+    );
+});
+
+matrix_test!(hget_ex_untyped_with_nil, c, {
+    skip_if_version_below!(c, 9, 0, 0);
+
+    let k = common::key("h_getex");
+    c.hset(&k, "f", "v").await.unwrap();
+
+    let vals: Vec<Option<String>> =
+        glide::AsyncCommands::hget_ex(&c, &k, &["f", "missing"], Expiry::PERSIST)
+            .await
+            .unwrap();
+    assert_eq!(vals, vec![Some("v".to_string()), None]);
 });
 
 matrix_test!(hset_ex, c, {

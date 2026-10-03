@@ -774,8 +774,6 @@ mod from_valkey_value_tests {
         // Non-numeric.
         assert!(i64::from_owned_valkey_value(OKAY).is_err());
         assert!(i64::from_owned_valkey_value(BULK).is_err());
-
-
     }
 
     #[test]

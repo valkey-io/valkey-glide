@@ -1,0 +1,3191 @@
+{
+  "acl_cat": {
+    "reason": "TODO #7060: not implemented yet",
+    "redis": {
+      "name": "acl_cat",
+      "generics": [],
+      "args": [],
+      "return_type": "(HashSet<String>)"
+    },
+    "glide": null
+  },
+  "acl_cat_categoryname": {
+    "reason": "TODO #7060: not implemented yet",
+    "redis": {
+      "name": "acl_cat_categoryname",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToSingleRedisArg"
+        }
+      ],
+      "args": [
+        {
+          "name": "categoryname",
+          "type_name": "K"
+        }
+      ],
+      "return_type": "(HashSet<String>)"
+    },
+    "glide": null
+  },
+  "acl_deluser": {
+    "reason": "TODO #7060: not implemented yet",
+    "redis": {
+      "name": "acl_deluser",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "usernames",
+          "type_name": "&'a [K]"
+        }
+      ],
+      "return_type": "(usize)"
+    },
+    "glide": null
+  },
+  "acl_dryrun": {
+    "reason": "TODO #7060: not implemented yet",
+    "redis": {
+      "name": "acl_dryrun",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToSingleRedisArg"
+        },
+        {
+          "name": "C",
+          "bound": "ToSingleRedisArg"
+        },
+        {
+          "name": "A",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "username",
+          "type_name": "K"
+        },
+        {
+          "name": "command",
+          "type_name": "C"
+        },
+        {
+          "name": "args",
+          "type_name": "A"
+        }
+      ],
+      "return_type": "(String)"
+    },
+    "glide": null
+  },
+  "acl_genpass": {
+    "reason": "TODO #7060: not implemented yet",
+    "redis": {
+      "name": "acl_genpass",
+      "generics": [],
+      "args": [],
+      "return_type": "(String)"
+    },
+    "glide": null
+  },
+  "acl_genpass_bits": {
+    "reason": "TODO #7060: not implemented yet",
+    "redis": {
+      "name": "acl_genpass_bits",
+      "generics": [],
+      "args": [
+        {
+          "name": "bits",
+          "type_name": "isize"
+        }
+      ],
+      "return_type": "(String)"
+    },
+    "glide": null
+  },
+  "acl_getuser": {
+    "reason": "TODO #7060: not implemented yet",
+    "redis": {
+      "name": "acl_getuser",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToSingleRedisArg"
+        }
+      ],
+      "args": [
+        {
+          "name": "username",
+          "type_name": "K"
+        }
+      ],
+      "return_type": "(Option<acl::AclInfo>)"
+    },
+    "glide": null
+  },
+  "acl_help": {
+    "reason": "TODO #7060: not implemented yet",
+    "redis": {
+      "name": "acl_help",
+      "generics": [],
+      "args": [],
+      "return_type": "(Vec<String>)"
+    },
+    "glide": null
+  },
+  "acl_list": {
+    "reason": "TODO #7060: not implemented yet",
+    "redis": {
+      "name": "acl_list",
+      "generics": [],
+      "args": [],
+      "return_type": "(Vec<String>)"
+    },
+    "glide": null
+  },
+  "acl_load": {
+    "reason": "TODO #7060: not implemented yet",
+    "redis": {
+      "name": "acl_load",
+      "generics": [],
+      "args": [],
+      "return_type": "()"
+    },
+    "glide": null
+  },
+  "acl_log": {
+    "reason": "TODO #7060: not implemented yet",
+    "redis": {
+      "name": "acl_log",
+      "generics": [],
+      "args": [
+        {
+          "name": "count",
+          "type_name": "isize"
+        }
+      ],
+      "return_type": "(Vec<String>)"
+    },
+    "glide": null
+  },
+  "acl_log_reset": {
+    "reason": "TODO #7060: not implemented yet",
+    "redis": {
+      "name": "acl_log_reset",
+      "generics": [],
+      "args": [],
+      "return_type": "()"
+    },
+    "glide": null
+  },
+  "acl_save": {
+    "reason": "TODO #7060: not implemented yet",
+    "redis": {
+      "name": "acl_save",
+      "generics": [],
+      "args": [],
+      "return_type": "()"
+    },
+    "glide": null
+  },
+  "acl_setuser": {
+    "reason": "TODO #7060: not implemented yet",
+    "redis": {
+      "name": "acl_setuser",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToSingleRedisArg"
+        }
+      ],
+      "args": [
+        {
+          "name": "username",
+          "type_name": "K"
+        }
+      ],
+      "return_type": "()"
+    },
+    "glide": null
+  },
+  "acl_setuser_rules": {
+    "reason": "TODO #7060: not implemented yet",
+    "redis": {
+      "name": "acl_setuser_rules",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToSingleRedisArg"
+        }
+      ],
+      "args": [
+        {
+          "name": "username",
+          "type_name": "K"
+        },
+        {
+          "name": "rules",
+          "type_name": "&'a [acl::Rule]"
+        }
+      ],
+      "return_type": "()"
+    },
+    "glide": null
+  },
+  "acl_users": {
+    "reason": "TODO #7060: not implemented yet",
+    "redis": {
+      "name": "acl_users",
+      "generics": [],
+      "args": [],
+      "return_type": "(Vec<String>)"
+    },
+    "glide": null
+  },
+  "acl_whoami": {
+    "reason": "TODO #7060: not implemented yet",
+    "redis": {
+      "name": "acl_whoami",
+      "generics": [],
+      "args": [],
+      "return_type": "(String)"
+    },
+    "glide": null
+  },
+  "bf_add": {
+    "reason": "TODO #7060: not implemented yet",
+    "redis": {
+      "name": "bf_add",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToSingleRedisArg"
+        },
+        {
+          "name": "V",
+          "bound": "ToSingleRedisArg"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "value",
+          "type_name": "V"
+        }
+      ],
+      "return_type": "(bool)"
+    },
+    "glide": null
+  },
+  "bf_card": {
+    "reason": "TODO #7060: not implemented yet",
+    "redis": {
+      "name": "bf_card",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToSingleRedisArg"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        }
+      ],
+      "return_type": "(usize)"
+    },
+    "glide": null
+  },
+  "bf_exists": {
+    "reason": "TODO #7060: not implemented yet",
+    "redis": {
+      "name": "bf_exists",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToSingleRedisArg"
+        },
+        {
+          "name": "V",
+          "bound": "ToSingleRedisArg"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "value",
+          "type_name": "V"
+        }
+      ],
+      "return_type": "(bool)"
+    },
+    "glide": null
+  },
+  "bf_info": {
+    "reason": "TODO #7060: not implemented yet",
+    "redis": {
+      "name": "bf_info",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToSingleRedisArg"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        }
+      ],
+      "return_type": "(std::collections::HashMap<String, crate::bloom::BloomFilterInfoTypeResponse>)"
+    },
+    "glide": null
+  },
+  "bf_info_type": {
+    "reason": "TODO #7060: not implemented yet",
+    "redis": {
+      "name": "bf_info_type",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToSingleRedisArg"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "info_type",
+          "type_name": "crate::bloom::BloomFilterInfoType"
+        }
+      ],
+      "return_type": "(crate::bloom::BloomFilterInfoTypeResponse)"
+    },
+    "glide": null
+  },
+  "bf_insert": {
+    "reason": "TODO #7060: not implemented yet",
+    "redis": {
+      "name": "bf_insert",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToSingleRedisArg"
+        },
+        {
+          "name": "V",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "items",
+          "type_name": "V"
+        }
+      ],
+      "return_type": "(Vec<bool>)"
+    },
+    "glide": null
+  },
+  "bf_insert_options": {
+    "reason": "TODO #7060: not implemented yet",
+    "redis": {
+      "name": "bf_insert_options",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToSingleRedisArg"
+        },
+        {
+          "name": "V",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "items",
+          "type_name": "V"
+        },
+        {
+          "name": "options",
+          "type_name": "crate::bloom::BloomFilterInsertOptions"
+        }
+      ],
+      "return_type": "(Vec<bool>)"
+    },
+    "glide": null
+  },
+  "bf_loadchunk": {
+    "reason": "TODO #7060: not implemented yet",
+    "redis": {
+      "name": "bf_loadchunk",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToSingleRedisArg"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "chunk",
+          "type_name": "crate::bloom::BloomFilterDumpChunk"
+        }
+      ],
+      "return_type": "(())"
+    },
+    "glide": null
+  },
+  "bf_madd": {
+    "reason": "TODO #7060: not implemented yet",
+    "redis": {
+      "name": "bf_madd",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToSingleRedisArg"
+        },
+        {
+          "name": "V",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "items",
+          "type_name": "V"
+        }
+      ],
+      "return_type": "(Vec<bool>)"
+    },
+    "glide": null
+  },
+  "bf_mexists": {
+    "reason": "TODO #7060: not implemented yet",
+    "redis": {
+      "name": "bf_mexists",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToSingleRedisArg"
+        },
+        {
+          "name": "V",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "items",
+          "type_name": "&'a [V]"
+        }
+      ],
+      "return_type": "(Vec<bool>)"
+    },
+    "glide": null
+  },
+  "bf_reserve": {
+    "reason": "TODO #7060: not implemented yet",
+    "redis": {
+      "name": "bf_reserve",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToSingleRedisArg"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "err_rate",
+          "type_name": "f64"
+        },
+        {
+          "name": "capacity",
+          "type_name": "usize"
+        }
+      ],
+      "return_type": "(())"
+    },
+    "glide": null
+  },
+  "bf_reserve_options": {
+    "reason": "TODO #7060: not implemented yet",
+    "redis": {
+      "name": "bf_reserve_options",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToSingleRedisArg"
+        },
+        {
+          "name": "E",
+          "bound": "ToSingleRedisArg"
+        },
+        {
+          "name": "C",
+          "bound": "ToSingleRedisArg"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "err_rate",
+          "type_name": "E"
+        },
+        {
+          "name": "capacity",
+          "type_name": "C"
+        },
+        {
+          "name": "options",
+          "type_name": "crate::bloom::BloomFilterScalingOptions"
+        }
+      ],
+      "return_type": "(())"
+    },
+    "glide": null
+  },
+  "bf_scandump": {
+    "reason": "TODO #7060: not implemented yet",
+    "redis": {
+      "name": "bf_scandump",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToSingleRedisArg"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "iterator",
+          "type_name": "i64"
+        }
+      ],
+      "return_type": "(crate::bloom::BloomFilterDumpChunk)"
+    },
+    "glide": null
+  },
+  "bit_and_or": {
+    "reason": "TODO #7060: not implemented yet",
+    "redis": {
+      "name": "bit_and_or",
+      "generics": [
+        {
+          "name": "D",
+          "bound": "ToSingleRedisArg"
+        },
+        {
+          "name": "S",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "dstkey",
+          "type_name": "D"
+        },
+        {
+          "name": "srckeys",
+          "type_name": "S"
+        }
+      ],
+      "return_type": "(usize)"
+    },
+    "glide": null
+  },
+  "bit_diff": {
+    "reason": "TODO #7060: not implemented yet",
+    "redis": {
+      "name": "bit_diff",
+      "generics": [
+        {
+          "name": "D",
+          "bound": "ToSingleRedisArg"
+        },
+        {
+          "name": "S",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "dstkey",
+          "type_name": "D"
+        },
+        {
+          "name": "srckeys",
+          "type_name": "S"
+        }
+      ],
+      "return_type": "(usize)"
+    },
+    "glide": null
+  },
+  "bit_diff1": {
+    "reason": "TODO #7060: not implemented yet",
+    "redis": {
+      "name": "bit_diff1",
+      "generics": [
+        {
+          "name": "D",
+          "bound": "ToSingleRedisArg"
+        },
+        {
+          "name": "S",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "dstkey",
+          "type_name": "D"
+        },
+        {
+          "name": "srckeys",
+          "type_name": "S"
+        }
+      ],
+      "return_type": "(usize)"
+    },
+    "glide": null
+  },
+  "bit_one": {
+    "reason": "TODO #7060: not implemented yet",
+    "redis": {
+      "name": "bit_one",
+      "generics": [
+        {
+          "name": "D",
+          "bound": "ToSingleRedisArg"
+        },
+        {
+          "name": "S",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "dstkey",
+          "type_name": "D"
+        },
+        {
+          "name": "srckeys",
+          "type_name": "S"
+        }
+      ],
+      "return_type": "(usize)"
+    },
+    "glide": null
+  },
+  "client_getname": {
+    "reason": "TODO #7060: not implemented yet",
+    "redis": {
+      "name": "client_getname",
+      "generics": [],
+      "args": [],
+      "return_type": "(Option<String>)"
+    },
+    "glide": null
+  },
+  "client_id": {
+    "reason": "TODO #7060: not implemented yet",
+    "redis": {
+      "name": "client_id",
+      "generics": [],
+      "args": [],
+      "return_type": "(isize)"
+    },
+    "glide": null
+  },
+  "client_setname": {
+    "reason": "TODO #7060: not implemented yet",
+    "redis": {
+      "name": "client_setname",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToSingleRedisArg"
+        }
+      ],
+      "args": [
+        {
+          "name": "connection_name",
+          "type_name": "K"
+        }
+      ],
+      "return_type": "(())"
+    },
+    "glide": null
+  },
+  "del_ex": {
+    "reason": "TODO #7238: not implemented yet",
+    "redis": {
+      "name": "del_ex",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToSingleRedisArg"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "value_comparison",
+          "type_name": "ValueComparison"
+        }
+      ],
+      "return_type": "(usize)"
+    },
+    "glide": null
+  },
+  "digest": {
+    "reason": "Valkey has no `DIGEST` command",
+    "redis": {
+      "name": "digest",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToSingleRedisArg"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        }
+      ],
+      "return_type": "(Option<String>)"
+    },
+    "glide": null
+  },
+  "expire_time": {
+    "reason": "TODO #7060: not implemented yet",
+    "redis": {
+      "name": "expire_time",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToSingleRedisArg"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        }
+      ],
+      "return_type": "(IntegerReplyOrNoOp)"
+    },
+    "glide": null
+  },
+  "ft_create": {
+    "reason": "TODO #7060: not implemented yet",
+    "redis": {
+      "name": "ft_create",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToSingleRedisArg"
+        }
+      ],
+      "args": [
+        {
+          "name": "index_name",
+          "type_name": "K"
+        },
+        {
+          "name": "options",
+          "type_name": "&'a CreateOptions"
+        },
+        {
+          "name": "schema",
+          "type_name": "&'a SearchSchema"
+        }
+      ],
+      "return_type": "(String)"
+    },
+    "glide": null
+  },
+  "geo_radius": {
+    "reason": "TODO #7060: not implemented yet",
+    "redis": {
+      "name": "geo_radius",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToSingleRedisArg"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "longitude",
+          "type_name": "f64"
+        },
+        {
+          "name": "latitude",
+          "type_name": "f64"
+        },
+        {
+          "name": "radius",
+          "type_name": "f64"
+        },
+        {
+          "name": "unit",
+          "type_name": "geo::Unit"
+        },
+        {
+          "name": "options",
+          "type_name": "geo::RadiusOptions"
+        }
+      ],
+      "return_type": "(Vec<geo::RadiusSearchResult>)"
+    },
+    "glide": null
+  },
+  "geo_radius_by_member": {
+    "reason": "TODO #7060: not implemented yet",
+    "redis": {
+      "name": "geo_radius_by_member",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToSingleRedisArg"
+        },
+        {
+          "name": "M",
+          "bound": "ToSingleRedisArg"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "member",
+          "type_name": "M"
+        },
+        {
+          "name": "radius",
+          "type_name": "f64"
+        },
+        {
+          "name": "unit",
+          "type_name": "geo::Unit"
+        },
+        {
+          "name": "options",
+          "type_name": "geo::RadiusOptions"
+        }
+      ],
+      "return_type": "(Vec<geo::RadiusSearchResult>)"
+    },
+    "glide": null
+  },
+  "hget_del": {
+    "reason": "TODO #7060: not implemented yet",
+    "redis": {
+      "name": "hget_del",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToSingleRedisArg"
+        },
+        {
+          "name": "F",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "fields",
+          "type_name": "F"
+        }
+      ],
+      "return_type": "(Vec<Option<String>>)"
+    },
+    "glide": null
+  },
+  "hmget": {
+    "reason": "TODO #7060: not implemented yet",
+    "redis": {
+      "name": "hmget",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToSingleRedisArg"
+        },
+        {
+          "name": "F",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "fields",
+          "type_name": "F"
+        }
+      ],
+      "return_type": "(Vec<String>)"
+    },
+    "glide": null
+  },
+  "hset_multiple": {
+    "reason": "`HSET` with multiple fields was introduced in Valkey 4.0.0. Unlike `HMSET` (which was marked as deprecated in Redis 4.0.0), it returns the number of fields that were newly added.",
+    "redis": {
+      "name": "hset_multiple",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToSingleRedisArg"
+        },
+        {
+          "name": "F",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "V",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "items",
+          "type_name": "&'a [(F, V)]"
+        }
+      ],
+      "return_type": "(())"
+    },
+    "glide": {
+      "name": "hset_multiple",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToSingleValkeyArg"
+        },
+        {
+          "name": "F",
+          "bound": "ToValkeyArgs"
+        },
+        {
+          "name": "V",
+          "bound": "ToValkeyArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "items",
+          "type_name": "&'a [(F, V)]"
+        }
+      ],
+      "return_type": "(usize)"
+    }
+  },
+  "increx": {
+    "reason": "TODO #7060: not implemented yet",
+    "redis": {
+      "name": "increx",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToSingleRedisArg"
+        },
+        {
+          "name": "V",
+          "bound": "ToSingleRedisArg"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "increment",
+          "type_name": "V"
+        },
+        {
+          "name": "options",
+          "type_name": "IncrexOptions<V>"
+        }
+      ],
+      "return_type": "(IncrexResult)"
+    },
+    "glide": null
+  },
+  "invoke_script": {
+    "reason": "TODO #7060: not implemented yet",
+    "redis": {
+      "name": "invoke_script",
+      "generics": [],
+      "args": [
+        {
+          "name": "invocation",
+          "type_name": "&'a crate::ScriptInvocation<'a>"
+        }
+      ],
+      "return_type": "Generic"
+    },
+    "glide": null
+  },
+  "load_script": {
+    "reason": "TODO #7060: not implemented yet",
+    "redis": {
+      "name": "load_script",
+      "generics": [],
+      "args": [
+        {
+          "name": "script",
+          "type_name": "&'a crate::Script"
+        }
+      ],
+      "return_type": "Generic"
+    },
+    "glide": null
+  },
+  "mset_ex": {
+    "reason": "TODO #7060: not implemented yet",
+    "redis": {
+      "name": "mset_ex",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "V",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "items",
+          "type_name": "&'a [(K, V)]"
+        },
+        {
+          "name": "options",
+          "type_name": "MSetOptions"
+        }
+      ],
+      "return_type": "(bool)"
+    },
+    "glide": null
+  },
+  "pexpire_time": {
+    "reason": "TODO #7060: not implemented yet",
+    "redis": {
+      "name": "pexpire_time",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToSingleRedisArg"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        }
+      ],
+      "return_type": "(IntegerReplyOrNoOp)"
+    },
+    "glide": null
+  },
+  "ping": {
+    "reason": "TODO #7060: not implemented yet",
+    "redis": {
+      "name": "ping",
+      "generics": [],
+      "args": [],
+      "return_type": "(String)"
+    },
+    "glide": null
+  },
+  "ping_message": {
+    "reason": "TODO #7060: not implemented yet",
+    "redis": {
+      "name": "ping_message",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToSingleRedisArg"
+        }
+      ],
+      "args": [
+        {
+          "name": "message",
+          "type_name": "K"
+        }
+      ],
+      "return_type": "(String)"
+    },
+    "glide": null
+  },
+  "scan_options": {
+    "reason": "TODO #7060: not implemented yet",
+    "redis": {
+      "name": "scan_options",
+      "generics": [
+        {
+          "name": "RV",
+          "bound": "FromRedisValue"
+        }
+      ],
+      "args": [
+        {
+          "name": "opts",
+          "type_name": "ScanOptions"
+        }
+      ],
+      "return_type": null
+    },
+    "glide": null
+  },
+  "spublish": {
+    "reason": "TODO #7060: not implemented yet",
+    "redis": {
+      "name": "spublish",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToSingleRedisArg"
+        },
+        {
+          "name": "E",
+          "bound": "ToSingleRedisArg"
+        }
+      ],
+      "args": [
+        {
+          "name": "channel",
+          "type_name": "K"
+        },
+        {
+          "name": "message",
+          "type_name": "E"
+        }
+      ],
+      "return_type": "(usize)"
+    },
+    "glide": null
+  },
+  "vadd": {
+    "reason": "TODO #7060: not implemented yet",
+    "redis": {
+      "name": "vadd",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "E",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "input",
+          "type_name": "vector_sets::VectorAddInput<'a>"
+        },
+        {
+          "name": "element",
+          "type_name": "E"
+        }
+      ],
+      "return_type": "(bool)"
+    },
+    "glide": null
+  },
+  "vadd_options": {
+    "reason": "TODO #7060: not implemented yet",
+    "redis": {
+      "name": "vadd_options",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "E",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "input",
+          "type_name": "vector_sets::VectorAddInput<'a>"
+        },
+        {
+          "name": "element",
+          "type_name": "E"
+        },
+        {
+          "name": "options",
+          "type_name": "&'a vector_sets::VAddOptions"
+        }
+      ],
+      "return_type": "(bool)"
+    },
+    "glide": null
+  },
+  "vcard": {
+    "reason": "TODO #7060: not implemented yet",
+    "redis": {
+      "name": "vcard",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        }
+      ],
+      "return_type": "(usize)"
+    },
+    "glide": null
+  },
+  "vdelattr": {
+    "reason": "TODO #7060: not implemented yet",
+    "redis": {
+      "name": "vdelattr",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "E",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "element",
+          "type_name": "E"
+        }
+      ],
+      "return_type": "(bool)"
+    },
+    "glide": null
+  },
+  "vdim": {
+    "reason": "TODO #7060: not implemented yet",
+    "redis": {
+      "name": "vdim",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        }
+      ],
+      "return_type": "(usize)"
+    },
+    "glide": null
+  },
+  "vemb": {
+    "reason": "TODO #7060: not implemented yet",
+    "redis": {
+      "name": "vemb",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "E",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "element",
+          "type_name": "E"
+        }
+      ],
+      "return_type": "Generic"
+    },
+    "glide": null
+  },
+  "vemb_options": {
+    "reason": "TODO #7060: not implemented yet",
+    "redis": {
+      "name": "vemb_options",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "E",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "element",
+          "type_name": "E"
+        },
+        {
+          "name": "options",
+          "type_name": "&'a vector_sets::VEmbOptions"
+        }
+      ],
+      "return_type": "Generic"
+    },
+    "glide": null
+  },
+  "vgetattr": {
+    "reason": "TODO #7060: not implemented yet",
+    "redis": {
+      "name": "vgetattr",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "E",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "element",
+          "type_name": "E"
+        }
+      ],
+      "return_type": "(Option<String>)"
+    },
+    "glide": null
+  },
+  "vinfo": {
+    "reason": "TODO #7060: not implemented yet",
+    "redis": {
+      "name": "vinfo",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        }
+      ],
+      "return_type": "(Option<std::collections::HashMap<String, Value>>)"
+    },
+    "glide": null
+  },
+  "vlinks": {
+    "reason": "TODO #7060: not implemented yet",
+    "redis": {
+      "name": "vlinks",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "E",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "element",
+          "type_name": "E"
+        }
+      ],
+      "return_type": "Generic"
+    },
+    "glide": null
+  },
+  "vlinks_with_scores": {
+    "reason": "TODO #7060: not implemented yet",
+    "redis": {
+      "name": "vlinks_with_scores",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "E",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "element",
+          "type_name": "E"
+        }
+      ],
+      "return_type": "Generic"
+    },
+    "glide": null
+  },
+  "vrandmember": {
+    "reason": "TODO #7060: not implemented yet",
+    "redis": {
+      "name": "vrandmember",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        }
+      ],
+      "return_type": "(Option<String>)"
+    },
+    "glide": null
+  },
+  "vrandmember_multiple": {
+    "reason": "TODO #7060: not implemented yet",
+    "redis": {
+      "name": "vrandmember_multiple",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "count",
+          "type_name": "usize"
+        }
+      ],
+      "return_type": "(Vec<String>)"
+    },
+    "glide": null
+  },
+  "vrem": {
+    "reason": "TODO #7060: not implemented yet",
+    "redis": {
+      "name": "vrem",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "E",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "element",
+          "type_name": "E"
+        }
+      ],
+      "return_type": "(bool)"
+    },
+    "glide": null
+  },
+  "vsetattr": {
+    "reason": "TODO #7060: not implemented yet",
+    "redis": {
+      "name": "vsetattr",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "E",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "J",
+          "bound": "Serialize"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "element",
+          "type_name": "E"
+        },
+        {
+          "name": "json_object",
+          "type_name": "&'a J"
+        }
+      ],
+      "return_type": "(bool)"
+    },
+    "glide": null
+  },
+  "vsim": {
+    "reason": "TODO #7060: not implemented yet",
+    "redis": {
+      "name": "vsim",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "input",
+          "type_name": "vector_sets::VectorSimilaritySearchInput<'a>"
+        }
+      ],
+      "return_type": "Generic"
+    },
+    "glide": null
+  },
+  "vsim_options": {
+    "reason": "TODO #7060: not implemented yet",
+    "redis": {
+      "name": "vsim_options",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "input",
+          "type_name": "vector_sets::VectorSimilaritySearchInput<'a>"
+        },
+        {
+          "name": "options",
+          "type_name": "&'a vector_sets::VSimOptions"
+        }
+      ],
+      "return_type": "Generic"
+    },
+    "glide": null
+  },
+  "xack": {
+    "reason": "TODO #7060: not implemented yet",
+    "redis": {
+      "name": "xack",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "G",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "I",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "group",
+          "type_name": "G"
+        },
+        {
+          "name": "ids",
+          "type_name": "&'a [I]"
+        }
+      ],
+      "return_type": "(usize)"
+    },
+    "glide": null
+  },
+  "xack_del": {
+    "reason": "TODO #7060: not implemented yet",
+    "redis": {
+      "name": "xack_del",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "G",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "ID",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "group",
+          "type_name": "G"
+        },
+        {
+          "name": "ids",
+          "type_name": "&'a [ID]"
+        },
+        {
+          "name": "options",
+          "type_name": "streams::StreamDeletionPolicy"
+        }
+      ],
+      "return_type": "(Vec<streams::XAckDelStatusCode>)"
+    },
+    "glide": null
+  },
+  "xadd": {
+    "reason": "TODO #7060: not implemented yet",
+    "redis": {
+      "name": "xadd",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "ID",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "F",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "V",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "id",
+          "type_name": "ID"
+        },
+        {
+          "name": "items",
+          "type_name": "&'a [(F, V)]"
+        }
+      ],
+      "return_type": "(Option<String>)"
+    },
+    "glide": null
+  },
+  "xadd_map": {
+    "reason": "TODO #7060: not implemented yet",
+    "redis": {
+      "name": "xadd_map",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "ID",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "BTM",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "id",
+          "type_name": "ID"
+        },
+        {
+          "name": "map",
+          "type_name": "BTM"
+        }
+      ],
+      "return_type": "(Option<String>)"
+    },
+    "glide": null
+  },
+  "xadd_maxlen": {
+    "reason": "TODO #7060: not implemented yet",
+    "redis": {
+      "name": "xadd_maxlen",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToSingleRedisArg"
+        },
+        {
+          "name": "ID",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "F",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "V",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "maxlen",
+          "type_name": "streams::StreamMaxlen"
+        },
+        {
+          "name": "id",
+          "type_name": "ID"
+        },
+        {
+          "name": "items",
+          "type_name": "&'a [(F, V)]"
+        }
+      ],
+      "return_type": "(Option<String>)"
+    },
+    "glide": null
+  },
+  "xadd_maxlen_map": {
+    "reason": "TODO #7060: not implemented yet",
+    "redis": {
+      "name": "xadd_maxlen_map",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToSingleRedisArg"
+        },
+        {
+          "name": "ID",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "BTM",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "maxlen",
+          "type_name": "streams::StreamMaxlen"
+        },
+        {
+          "name": "id",
+          "type_name": "ID"
+        },
+        {
+          "name": "map",
+          "type_name": "BTM"
+        }
+      ],
+      "return_type": "(Option<String>)"
+    },
+    "glide": null
+  },
+  "xadd_options": {
+    "reason": "TODO #7060: not implemented yet",
+    "redis": {
+      "name": "xadd_options",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "ID",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "I",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "id",
+          "type_name": "ID"
+        },
+        {
+          "name": "items",
+          "type_name": "I"
+        },
+        {
+          "name": "options",
+          "type_name": "&'a streams::StreamAddOptions"
+        }
+      ],
+      "return_type": "(Option<String>)"
+    },
+    "glide": null
+  },
+  "xautoclaim_options": {
+    "reason": "TODO #7060: not implemented yet",
+    "redis": {
+      "name": "xautoclaim_options",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToSingleRedisArg"
+        },
+        {
+          "name": "G",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "C",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "MIT",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "S",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "group",
+          "type_name": "G"
+        },
+        {
+          "name": "consumer",
+          "type_name": "C"
+        },
+        {
+          "name": "min_idle_time",
+          "type_name": "MIT"
+        },
+        {
+          "name": "start",
+          "type_name": "S"
+        },
+        {
+          "name": "options",
+          "type_name": "streams::StreamAutoClaimOptions"
+        }
+      ],
+      "return_type": "(streams::StreamAutoClaimReply)"
+    },
+    "glide": null
+  },
+  "xcfgset": {
+    "reason": "TODO #7060: not implemented yet",
+    "redis": {
+      "name": "xcfgset",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "options",
+          "type_name": "&'a streams::StreamConfigOptions"
+        }
+      ],
+      "return_type": "String"
+    },
+    "glide": null
+  },
+  "xclaim": {
+    "reason": "TODO #7060: not implemented yet",
+    "redis": {
+      "name": "xclaim",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToSingleRedisArg"
+        },
+        {
+          "name": "G",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "C",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "MIT",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "ID",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "group",
+          "type_name": "G"
+        },
+        {
+          "name": "consumer",
+          "type_name": "C"
+        },
+        {
+          "name": "min_idle_time",
+          "type_name": "MIT"
+        },
+        {
+          "name": "ids",
+          "type_name": "&'a [ID]"
+        }
+      ],
+      "return_type": "(streams::StreamClaimReply)"
+    },
+    "glide": null
+  },
+  "xclaim_options": {
+    "reason": "TODO #7060: not implemented yet",
+    "redis": {
+      "name": "xclaim_options",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToSingleRedisArg"
+        },
+        {
+          "name": "G",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "C",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "MIT",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "ID",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "group",
+          "type_name": "G"
+        },
+        {
+          "name": "consumer",
+          "type_name": "C"
+        },
+        {
+          "name": "min_idle_time",
+          "type_name": "MIT"
+        },
+        {
+          "name": "ids",
+          "type_name": "&'a [ID]"
+        },
+        {
+          "name": "options",
+          "type_name": "streams::StreamClaimOptions"
+        }
+      ],
+      "return_type": "Generic"
+    },
+    "glide": null
+  },
+  "xdel": {
+    "reason": "TODO #7060: not implemented yet",
+    "redis": {
+      "name": "xdel",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToSingleRedisArg"
+        },
+        {
+          "name": "ID",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "ids",
+          "type_name": "&'a [ID]"
+        }
+      ],
+      "return_type": "(usize)"
+    },
+    "glide": null
+  },
+  "xdel_ex": {
+    "reason": "TODO #7060: not implemented yet",
+    "redis": {
+      "name": "xdel_ex",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "ID",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "ids",
+          "type_name": "&'a [ID]"
+        },
+        {
+          "name": "options",
+          "type_name": "streams::StreamDeletionPolicy"
+        }
+      ],
+      "return_type": "(Vec<streams::XDelExStatusCode>)"
+    },
+    "glide": null
+  },
+  "xgroup_create": {
+    "reason": "TODO #7060: not implemented yet",
+    "redis": {
+      "name": "xgroup_create",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "G",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "ID",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "group",
+          "type_name": "G"
+        },
+        {
+          "name": "id",
+          "type_name": "ID"
+        }
+      ],
+      "return_type": "()"
+    },
+    "glide": null
+  },
+  "xgroup_create_mkstream": {
+    "reason": "TODO #7060: not implemented yet",
+    "redis": {
+      "name": "xgroup_create_mkstream",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "G",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "ID",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "group",
+          "type_name": "G"
+        },
+        {
+          "name": "id",
+          "type_name": "ID"
+        }
+      ],
+      "return_type": "()"
+    },
+    "glide": null
+  },
+  "xgroup_createconsumer": {
+    "reason": "TODO #7060: not implemented yet",
+    "redis": {
+      "name": "xgroup_createconsumer",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "G",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "C",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "group",
+          "type_name": "G"
+        },
+        {
+          "name": "consumer",
+          "type_name": "C"
+        }
+      ],
+      "return_type": "bool"
+    },
+    "glide": null
+  },
+  "xgroup_delconsumer": {
+    "reason": "TODO #7060: not implemented yet",
+    "redis": {
+      "name": "xgroup_delconsumer",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "G",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "C",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "group",
+          "type_name": "G"
+        },
+        {
+          "name": "consumer",
+          "type_name": "C"
+        }
+      ],
+      "return_type": "usize"
+    },
+    "glide": null
+  },
+  "xgroup_destroy": {
+    "reason": "TODO #7060: not implemented yet",
+    "redis": {
+      "name": "xgroup_destroy",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "G",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "group",
+          "type_name": "G"
+        }
+      ],
+      "return_type": "bool"
+    },
+    "glide": null
+  },
+  "xgroup_setid": {
+    "reason": "TODO #7060: not implemented yet",
+    "redis": {
+      "name": "xgroup_setid",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "G",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "ID",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "group",
+          "type_name": "G"
+        },
+        {
+          "name": "id",
+          "type_name": "ID"
+        }
+      ],
+      "return_type": "()"
+    },
+    "glide": null
+  },
+  "xinfo_consumers": {
+    "reason": "TODO #7060: not implemented yet",
+    "redis": {
+      "name": "xinfo_consumers",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "G",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "group",
+          "type_name": "G"
+        }
+      ],
+      "return_type": "(streams::StreamInfoConsumersReply)"
+    },
+    "glide": null
+  },
+  "xinfo_groups": {
+    "reason": "TODO #7060: not implemented yet",
+    "redis": {
+      "name": "xinfo_groups",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        }
+      ],
+      "return_type": "(streams::StreamInfoGroupsReply)"
+    },
+    "glide": null
+  },
+  "xinfo_stream": {
+    "reason": "TODO #7060: not implemented yet",
+    "redis": {
+      "name": "xinfo_stream",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        }
+      ],
+      "return_type": "(streams::StreamInfoStreamReply)"
+    },
+    "glide": null
+  },
+  "xinfo_stream_with_idempotency": {
+    "reason": "TODO #7060: not implemented yet",
+    "redis": {
+      "name": "xinfo_stream_with_idempotency",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        }
+      ],
+      "return_type": "(streams::StreamInfoStreamReplyWithIdempotency)"
+    },
+    "glide": null
+  },
+  "xlen": {
+    "reason": "TODO #7060: not implemented yet",
+    "redis": {
+      "name": "xlen",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        }
+      ],
+      "return_type": "usize"
+    },
+    "glide": null
+  },
+  "xnack": {
+    "reason": "TODO #7060: not implemented yet",
+    "redis": {
+      "name": "xnack",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToSingleRedisArg"
+        },
+        {
+          "name": "G",
+          "bound": "ToSingleRedisArg"
+        },
+        {
+          "name": "ID",
+          "bound": "ToSingleRedisArg"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "group",
+          "type_name": "G"
+        },
+        {
+          "name": "ids",
+          "type_name": "&'a [ID]"
+        },
+        {
+          "name": "options",
+          "type_name": "&'a streams::StreamNackOptions"
+        }
+      ],
+      "return_type": "(usize)"
+    },
+    "glide": null
+  },
+  "xpending": {
+    "reason": "TODO #7060: not implemented yet",
+    "redis": {
+      "name": "xpending",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "G",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "group",
+          "type_name": "G"
+        }
+      ],
+      "return_type": "(streams::StreamPendingReply)"
+    },
+    "glide": null
+  },
+  "xpending_consumer_count": {
+    "reason": "TODO #7060: not implemented yet",
+    "redis": {
+      "name": "xpending_consumer_count",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "G",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "S",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "E",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "C",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "CN",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "group",
+          "type_name": "G"
+        },
+        {
+          "name": "start",
+          "type_name": "S"
+        },
+        {
+          "name": "end",
+          "type_name": "E"
+        },
+        {
+          "name": "count",
+          "type_name": "C"
+        },
+        {
+          "name": "consumer",
+          "type_name": "CN"
+        }
+      ],
+      "return_type": "(streams::StreamPendingCountReply)"
+    },
+    "glide": null
+  },
+  "xpending_count": {
+    "reason": "TODO #7060: not implemented yet",
+    "redis": {
+      "name": "xpending_count",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "G",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "S",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "E",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "C",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "group",
+          "type_name": "G"
+        },
+        {
+          "name": "start",
+          "type_name": "S"
+        },
+        {
+          "name": "end",
+          "type_name": "E"
+        },
+        {
+          "name": "count",
+          "type_name": "C"
+        }
+      ],
+      "return_type": "(streams::StreamPendingCountReply)"
+    },
+    "glide": null
+  },
+  "xrange": {
+    "reason": "TODO #7060: not implemented yet",
+    "redis": {
+      "name": "xrange",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "S",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "E",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "start",
+          "type_name": "S"
+        },
+        {
+          "name": "end",
+          "type_name": "E"
+        }
+      ],
+      "return_type": "(streams::StreamRangeReply)"
+    },
+    "glide": null
+  },
+  "xrange_all": {
+    "reason": "TODO #7060: not implemented yet",
+    "redis": {
+      "name": "xrange_all",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        }
+      ],
+      "return_type": "(streams::StreamRangeReply)"
+    },
+    "glide": null
+  },
+  "xrange_count": {
+    "reason": "TODO #7060: not implemented yet",
+    "redis": {
+      "name": "xrange_count",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "S",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "E",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "C",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "start",
+          "type_name": "S"
+        },
+        {
+          "name": "end",
+          "type_name": "E"
+        },
+        {
+          "name": "count",
+          "type_name": "C"
+        }
+      ],
+      "return_type": "(streams::StreamRangeReply)"
+    },
+    "glide": null
+  },
+  "xread": {
+    "reason": "TODO #7060: not implemented yet",
+    "redis": {
+      "name": "xread",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "ID",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "keys",
+          "type_name": "&'a [K]"
+        },
+        {
+          "name": "ids",
+          "type_name": "&'a [ID]"
+        }
+      ],
+      "return_type": "(Option<streams::StreamReadReply>)"
+    },
+    "glide": null
+  },
+  "xread_options": {
+    "reason": "TODO #7060: not implemented yet",
+    "redis": {
+      "name": "xread_options",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "ID",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "keys",
+          "type_name": "&'a [K]"
+        },
+        {
+          "name": "ids",
+          "type_name": "&'a [ID]"
+        },
+        {
+          "name": "options",
+          "type_name": "&'a streams::StreamReadOptions"
+        }
+      ],
+      "return_type": "(Option<streams::StreamReadReply>)"
+    },
+    "glide": null
+  },
+  "xrevrange": {
+    "reason": "TODO #7060: not implemented yet",
+    "redis": {
+      "name": "xrevrange",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "E",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "S",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "end",
+          "type_name": "E"
+        },
+        {
+          "name": "start",
+          "type_name": "S"
+        }
+      ],
+      "return_type": "(streams::StreamRangeReply)"
+    },
+    "glide": null
+  },
+  "xrevrange_all": {
+    "reason": "TODO #7060: not implemented yet",
+    "redis": {
+      "name": "xrevrange_all",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        }
+      ],
+      "return_type": "(streams::StreamRangeReply)"
+    },
+    "glide": null
+  },
+  "xrevrange_count": {
+    "reason": "TODO #7060: not implemented yet",
+    "redis": {
+      "name": "xrevrange_count",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "E",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "S",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "C",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "end",
+          "type_name": "E"
+        },
+        {
+          "name": "start",
+          "type_name": "S"
+        },
+        {
+          "name": "count",
+          "type_name": "C"
+        }
+      ],
+      "return_type": "(streams::StreamRangeReply)"
+    },
+    "glide": null
+  },
+  "xtrim": {
+    "reason": "TODO #7060: not implemented yet",
+    "redis": {
+      "name": "xtrim",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "maxlen",
+          "type_name": "streams::StreamMaxlen"
+        }
+      ],
+      "return_type": "usize"
+    },
+    "glide": null
+  },
+  "xtrim_options": {
+    "reason": "TODO #7060: not implemented yet",
+    "redis": {
+      "name": "xtrim_options",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "options",
+          "type_name": "&'a streams::StreamTrimOptions"
+        }
+      ],
+      "return_type": "usize"
+    },
+    "glide": null
+  },
+  "zadd_multiple_options": {
+    "reason": "TODO #7060: not implemented yet",
+    "redis": {
+      "name": "zadd_multiple_options",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToSingleRedisArg"
+        },
+        {
+          "name": "S",
+          "bound": "ToRedisArgs"
+        },
+        {
+          "name": "M",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "items",
+          "type_name": "&'a [(S, M)]"
+        },
+        {
+          "name": "options",
+          "type_name": "&'a SortedSetAddOptions"
+        }
+      ],
+      "return_type": "(usize)"
+    },
+    "glide": null
+  },
+  "zadd_options": {
+    "reason": "TODO #7060: not implemented yet",
+    "redis": {
+      "name": "zadd_options",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToSingleRedisArg"
+        },
+        {
+          "name": "S",
+          "bound": "ToSingleRedisArg"
+        },
+        {
+          "name": "M",
+          "bound": "ToSingleRedisArg"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "member",
+          "type_name": "M"
+        },
+        {
+          "name": "score",
+          "type_name": "S"
+        },
+        {
+          "name": "options",
+          "type_name": "&'a SortedSetAddOptions"
+        }
+      ],
+      "return_type": "usize"
+    },
+    "glide": null
+  },
+  "zpopmax": {
+    "reason": "Valkey replies to `ZPOPMAX` with a flat `[member, score, …]` list in RESP2 and with nested `[member, score]` pairs in RESP3. redis-rs's typed `Vec<String>` returns the RESP2 reply as alternating member and score strings, but fails to decode a RESP3 reply. GLIDE returns `(member, score)` pairs as a `Vec<(String, f64)>` instead for both protocols.",
+    "redis": {
+      "name": "zpopmax",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToSingleRedisArg"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "count",
+          "type_name": "isize"
+        }
+      ],
+      "return_type": "(Vec<String>)"
+    },
+    "glide": {
+      "name": "zpopmax",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToSingleValkeyArg"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "count",
+          "type_name": "isize"
+        }
+      ],
+      "return_type": "(Vec<(String, f64)>)"
+    }
+  },
+  "zpopmin": {
+    "reason": "Valkey replies to `ZPOPMIN` with a flat `[member, score, …]` list in RESP2 and with nested `[member, score]` pairs in RESP3. redis-rs's typed `Vec<String>` returns the RESP2 reply as alternating member and score strings, but fails to decode a RESP3 reply. GLIDE returns `(member, score)` pairs as a `Vec<(String, f64)>` instead for both protocols.",
+    "redis": {
+      "name": "zpopmin",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToSingleRedisArg"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "count",
+          "type_name": "isize"
+        }
+      ],
+      "return_type": "(Vec<String>)"
+    },
+    "glide": {
+      "name": "zpopmin",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToSingleValkeyArg"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "count",
+          "type_name": "isize"
+        }
+      ],
+      "return_type": "(Vec<(String, f64)>)"
+    }
+  }
+}

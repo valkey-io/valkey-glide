@@ -61,7 +61,35 @@ matrix_test!(zmscore, c, {
         .zadd_multiple(&k, &[(1.0, "a"), (2.0, "b")])
         .await
         .unwrap();
-    let scores: Vec<Option<f64>> = c.zscore_multiple(&k, &["a", "x", "b"]).await.unwrap();
+    let scores: Option<Vec<f64>> = c.zscore_multiple(&k, &["a", "b"]).await.unwrap();
+    assert_eq!(scores, Some(vec![1.0, 2.0]));
+});
+
+// The Valkey server returns `nil` when a requested member does not exist.
+// Typed `zscore_multiple` raises an error if this happens. Callers need
+// to use the untyped version if they want to handle this case.
+// This matches redis-rs behaviour.
+
+matrix_test!(zmscore_typed_with_nil, c, {
+    let k = common::key("z");
+    let _: usize = c
+        .zadd_multiple(&k, &[(1.0, "a"), (2.0, "b")])
+        .await
+        .unwrap();
+
+    assert!(c.zscore_multiple(&k, &["a", "x", "b"]).await.is_err());
+});
+
+matrix_test!(zmscore_untyped_with_nil, c, {
+    let k = common::key("z");
+    let _: usize = c
+        .zadd_multiple(&k, &[(1.0, "a"), (2.0, "b")])
+        .await
+        .unwrap();
+
+    let scores: Vec<Option<f64>> = glide::AsyncCommands::zscore_multiple(&c, &k, &["a", "x", "b"])
+        .await
+        .unwrap();
     assert_eq!(scores, vec![Some(1.0), None, Some(2.0)]);
 });
 

@@ -94,7 +94,29 @@ matrix_test!(geo_hash, c, {
     let k = common::key("geo");
     c.geo_add(&k, (palermo(), "Palermo")).await.unwrap();
 
-    let hashes: Vec<Option<String>> = c.geo_hash(&k, &["Palermo", "Missing"]).await.unwrap();
+    let hashes: Vec<String> = c.geo_hash(&k, "Palermo").await.unwrap();
+    assert_eq!(hashes, vec!["sqc8b49rny0".to_string()]);
+});
+
+// The Valkey server returns `nil` when a requested member does not exist.
+// Typed `geo_hash` raises an error if this happens. Callers need
+// to use the untyped version if they want to handle this case.
+// This matches redis-rs behaviour.
+
+matrix_test!(geo_hash_typed_with_nil, c, {
+    let k = common::key("geo");
+    c.geo_add(&k, (palermo(), "Palermo")).await.unwrap();
+    assert!(c.geo_hash(&k, &["Palermo", "Missing"]).await.is_err());
+});
+
+matrix_test!(geo_hash_untyped_with_nil, c, {
+    let k = common::key("geo");
+    c.geo_add(&k, (palermo(), "Palermo")).await.unwrap();
+
+    let hashes: Vec<Option<String>> =
+        glide::AsyncCommands::geo_hash(&c, &k, &["Palermo", "Missing"])
+            .await
+            .unwrap();
     assert_eq!(hashes, vec![Some("sqc8b49rny0".to_string()), None]);
 });
 

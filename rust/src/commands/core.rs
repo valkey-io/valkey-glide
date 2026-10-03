@@ -934,7 +934,7 @@ implement_commands! {
     }
 
     /// `HSET`.
-    fn hset<K: ToSingleValkeyArg, F: ToSingleValkeyArg, V: ToSingleValkeyArg>(key: K, field: F, value: V) -> (bool) {
+    fn hset<K: ToSingleValkeyArg, F: ToSingleValkeyArg, V: ToSingleValkeyArg>(key: K, field: F, value: V) -> (usize) {
         build_cmd!("HSET", key, field, value)
     }
 
@@ -946,11 +946,6 @@ implement_commands! {
     /// `HSETNX`.
     fn hset_nx<K: ToSingleValkeyArg, F: ToSingleValkeyArg, V: ToSingleValkeyArg>(key: K, field: F, value: V) -> (bool) {
         build_cmd!("HSETNX", key, field, value)
-    }
-
-    /// `HMSET`.
-    fn hmset<K: ToSingleValkeyArg, F: ToValkeyArgs, V: ToValkeyArgs>(key: K, items: &'a [(F, V)]) -> (bool) {
-        build_cmd!("HMSET", key, items)
     }
 
     /// `HINCRBY`/`HINCRBYFLOAT`.
@@ -988,7 +983,7 @@ implement_commands! {
     }
 
     /// `HGETEX`.
-    fn hget_ex<K: ToSingleValkeyArg, F: ToValkeyArgs>(key: K, fields: F, expire_at: Expiry) -> (Vec<Option<String>>) {
+    fn hget_ex<K: ToSingleValkeyArg, F: ToValkeyArgs>(key: K, fields: F, expire_at: Expiry) -> (Vec<String>) {
         build_cmd!("HGETEX", key, expire_at, "FIELDS", fields.num_of_args(), fields)
     }
 
@@ -1355,7 +1350,7 @@ implement_commands! {
     }
 
     /// `ZMSCORE`.
-    fn zscore_multiple<K: ToSingleValkeyArg, M: ToValkeyArgs>(key: K, members: &'a [M]) -> (Vec<Option<f64>>) {
+    fn zscore_multiple<K: ToSingleValkeyArg, M: ToValkeyArgs>(key: K, members: &'a [M]) -> (Option<Vec<f64>>) {
         build_cmd!("ZMSCORE", key, members)
     }
 
@@ -1464,7 +1459,7 @@ implement_commands! {
     }
 
     /// `GEOHASH`.
-    fn geo_hash<K: ToSingleValkeyArg, M: ToValkeyArgs>(key: K, members: M) -> (Vec<Option<String>>) {
+    fn geo_hash<K: ToSingleValkeyArg, M: ToValkeyArgs>(key: K, members: M) -> (Vec<String>) {
         build_cmd!("GEOHASH", key, members)
     }
 
