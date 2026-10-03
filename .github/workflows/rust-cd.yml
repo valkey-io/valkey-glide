@@ -102,9 +102,6 @@ jobs:
         needs:
             - validate-branch
         uses: ./.github/workflows/glide-core-engine.yml
-        permissions:
-            contents: read
-            actions: write
 
     publish-glide-core-engine:
         needs:
