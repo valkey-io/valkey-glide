@@ -1,0 +1,108 @@
+name: Rust RDMA tests
+
+permissions:
+    contents: read
+
+on:
+    push:
+        branches:
+            - main
+            - release-*
+            - v*
+        paths:
+            - glide-rdma/**
+            - .github/workflows/rust-rdma.yml
+            - .github/workflows/lint-rust/action.yml
+            - .github/actions/install-rust/action.yml
+            - deny.toml
+    pull_request:
+        paths:
+            - glide-rdma/**
+            - .github/workflows/rust-rdma.yml
+            - .github/workflows/lint-rust/action.yml
+            - .github/actions/install-rust/action.yml
+            - deny.toml
+    workflow_dispatch:
+
+concurrency:
+    group: rust-rdma-${{ github.head_ref || github.ref }}
+    cancel-in-progress: true
+
+env:
+    CARGO_TERM_COLOR: always
+    # The vendored headers are libfabric 2.4, and a library older than the headers
+    # rejects every call. Ubuntu's package is 1.x, so Linux builds it from source.
+    LIBFABRIC_VERSION: 2.6.0
+    # From the release notes; update together with the version.
+    LIBFABRIC_SHA512: 4aa70dfad7d38c142c6758ce00a23fc0f2f919cb3a4acf9ea294c6bc1db182fc402e4e6578148b34a37b9bd0dad09045cf0284d118c6a5e47eea8b766c051c37
+
+jobs:
+    tests:
+        runs-on: ${{ matrix.os }}
+        timeout-minutes: 30
+        strategy:
+            fail-fast: false
+            matrix:
+                os: [ubuntu-latest, macos-latest]
+
+        steps:
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+            - name: Install Rust toolchain
+              uses: ./.github/actions/install-rust
+              with:
+                  target: ${{ runner.os == 'macOS' && 'aarch64-apple-darwin' || 'x86_64-unknown-linux-gnu' }}
+
+            - name: Cache libfabric
+              if: runner.os == 'Linux'
+              id: cache-libfabric
+              uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+              with:
+                  path: ~/libfabric
+                  key: ${{ runner.os }}-libfabric-${{ env.LIBFABRIC_VERSION }}
+
+            - name: Build libfabric (Linux)
+              if: runner.os == 'Linux' && steps.cache-libfabric.outputs.cache-hit != 'true'
+              run: |
+                  tarball="libfabric-${LIBFABRIC_VERSION}.tar.bz2"
+                  curl -fsSL -o "$tarball" "https://github.com/ofiwg/libfabric/releases/download/v${LIBFABRIC_VERSION}/${tarball}"
+                  echo "${LIBFABRIC_SHA512}  ${tarball}" | sha512sum -c -
+                  tar xjf "$tarball"
+                  cd "libfabric-${LIBFABRIC_VERSION}"
+                  # The tests only use the tcp provider.
+                  ./configure --prefix="$HOME/libfabric" --enable-only --enable-tcp
+                  make -j"$(nproc)" install
+
+            - name: Point the loader at libfabric (Linux)
+              if: runner.os == 'Linux'
+              run: echo "GLIDE_LIBFABRIC_PATH=$HOME/libfabric/lib/libfabric.so.1" >> "$GITHUB_ENV"
+
+            - name: Install libfabric (macOS)
+              if: runner.os == 'macOS'
+              run: brew install libfabric
+
+            - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+              with:
+                  path: glide-rdma/target
+                  key: ${{ runner.os }}-glide-rdma-${{ hashFiles('glide-rdma/Cargo.lock') }}
+                  restore-keys: ${{ runner.os }}-glide-rdma-
+
+            - name: Run tests
+              working-directory: ./glide-rdma
+              run: cargo test
+
+            - name: Run tests with libfabric
+              working-directory: ./glide-rdma
+              run: cargo test --features libfabric
+
+    lint:
+        runs-on: ubuntu-latest
+        timeout-minutes: 30
+        steps:
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+            - uses: ./.github/workflows/lint-rust
+              with:
+                  cargo-toml-folder: glide-rdma
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
+              name: lint glide-rdma
