@@ -4,6 +4,7 @@
 
 ### Fixes
 
+* Node: Log the "Transport disconnected, messages might be lost" warning when a connection drops. The push-notification handler matched the kind `"Disconnect"`, but the native layer reports it as `"Disconnection"`, so disconnects were logged as an `Unknown notification` error instead ([#7278](https://github.com/valkey-io/valkey-glide/issues/7278))
 * Node: Log the "Transport disconnected, messages might be lost" warning on pub/sub disconnection. The push-notification handler matched the kind `"Disconnect"`, but the native layer reports it as `"Disconnection"`, so disconnects were logged as an `Unknown notification` error instead ([#7278](https://github.com/valkey-io/valkey-glide/issues/7278))
 * Node: Log the "Transport disconnected, messages might be lost" warning on pub/sub disconnection. The push-notification handler matched the kind `"Disconnect"`, but the native layer reports it as `"Disconnection"`, so disconnects were logged as an `Unknown notification` error instead ([#7276](https://github.com/valkey-io/valkey-glide/issues/7276))
 * Java, Go: Fix `slotForKey` returning the wrong cluster slot for a key with an empty hash tag. The first `}` after the first `{` now closes the tag, and an empty tag (`{}`) hashes the whole key, so a scope pinned with a key like `{}user}:1` targets the correct primary ([#7251](https://github.com/valkey-io/valkey-glide/issues/7251))
