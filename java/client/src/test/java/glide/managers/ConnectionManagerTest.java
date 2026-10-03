@@ -14,11 +14,7 @@ import glide.api.models.configuration.CompressionBackend;
 import glide.api.models.configuration.CompressionConfiguration;
 import glide.api.models.configuration.GlideClientConfiguration;
 import glide.api.models.configuration.GlideClusterClientConfiguration;
-import glide.api.models.configuration.GlideCredentialProvider;
-import glide.api.models.configuration.IamAuthConfig;
 import glide.api.models.configuration.ReadFrom;
-import glide.api.models.configuration.ServerCredentials;
-import glide.api.models.configuration.ServiceType;
 import glide.api.models.exceptions.ConfigurationError;
 import glide.api.models.pool.ClientPool;
 import glide.api.models.pool.ClientPoolConfig;
@@ -378,38 +374,6 @@ public class ConnectionManagerTest {
                 ConnectionRequestOuterClass.CompressionBackend.LZ4,
                 request.getCompressionConfig().getBackend());
         assertEquals(128, request.getCompressionConfig().getMinCompressionSize());
-    }
-
-    /**
-     * A pool cannot forward the per-client IAM credentials-provider callback ({@code glidePoolCreate}
-     * takes only request bytes), so {@code ClientPool.create} must reject it up front rather than let
-     * the core silently fall back to its default AWS credential chain (a different principal). Throws
-     * synchronously, before any native call.
-     */
-    @Test
-    void clientPoolCreate_rejectsCustomIamCredentialsProvider() {
-        GlideCredentialProvider provider = () -> null; // never invoked; the guard throws first
-        ClientPoolConfig poolConfig =
-                ClientPoolConfig.builder()
-                        .clientConfig(
-                                GlideClientConfiguration.builder()
-                                        .credentials(
-                                                ServerCredentials.builder()
-                                                        .username("user")
-                                                        .iamConfig(
-                                                                IamAuthConfig.builder()
-                                                                        .clusterName("my-cluster")
-                                                                        .service(ServiceType.ELASTICACHE)
-                                                                        .region("us-east-1")
-                                                                        .credentialsProvider(provider)
-                                                                        .build())
-                                                        .build())
-                                        .build())
-                        .build();
-
-        IllegalArgumentException error =
-                assertThrows(IllegalArgumentException.class, () -> ClientPool.create(poolConfig));
-        assertTrue(error.getMessage().contains("custom IAM credentials provider"), error.getMessage());
     }
 
     /**

@@ -381,6 +381,7 @@ export class GlideClient extends BaseClient {
     public static serializeConfig(options: GlideClientConfiguration): {
         bytes: Uint8Array;
         resolverKey: string | undefined;
+        credentialProviderKey: string | undefined;
     } {
         return super.serializeConnectionRequest(
             options,
