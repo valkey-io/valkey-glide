@@ -46,23 +46,35 @@ pub fn block_on_all<F, V>(f: F) -> F::Output
 where
     F: Future<Output = redis::RedisResult<V>>,
 {
+    use std::cell::Cell;
     use std::panic;
-    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::Once;
 
-    static CHECK: AtomicBool = AtomicBool::new(false);
+    // Tokio's runtime silently swallows panics raised inside spawned tasks
+    // (https://users.rust-lang.org/t/tokio-runtime-what-happens-when-a-thread-panics/95819),
+    // so a panic hook records them and the driver below aborts the test. Once Tokio
+    // stabilizes `unhandled_panic` on the runtime builder this can go away.
+    //
+    // A thread-local flag is enough because `current_thread_runtime()` polls every
+    // task on the calling thread, so one test's panic is never seen by another.
+    thread_local! {
+        static PANICKED: Cell<bool> = const { Cell::new(false) };
+    }
+    static INSTALL_HOOK: Once = Once::new();
 
-    // TODO - this solution is purely single threaded, and won't work on multiple threads at the same time.
-    // This is needed because Tokio's Runtime silently ignores panics - https://users.rust-lang.org/t/tokio-runtime-what-happens-when-a-thread-panics/95819
-    // Once Tokio stabilizes the `unhandled_panic` field on the runtime builder, it should be used instead.
-    panic::set_hook(Box::new(|panic| {
-        println!("Panic: {panic}");
-        CHECK.store(true, Ordering::Relaxed);
-    }));
+    INSTALL_HOOK.call_once(|| {
+        let previous = panic::take_hook();
+        panic::set_hook(Box::new(move |info| {
+            previous(info);
+            PANICKED.with(|flag| flag.set(true));
+        }));
+    });
+    PANICKED.with(|flag| flag.set(false));
 
     // This continuously query the flag, in order to abort ASAP after a panic.
     let check_future = futures_util::FutureExt::fuse(async {
         loop {
-            if CHECK.load(Ordering::Relaxed) {
+            if PANICKED.with(|flag| flag.get()) {
                 return Err((redis::ErrorKind::IoError, "panic was caught").into());
             }
             futures_time::task::sleep(futures_time::time::Duration::from_millis(1)).await;
@@ -75,8 +87,7 @@ where
         futures::select! {res = f => res, err = check_future => err}
     });
 
-    let _ = panic::take_hook();
-    if CHECK.swap(false, Ordering::Relaxed) {
+    if PANICKED.with(|flag| flag.replace(false)) {
         panic!("Internal thread panicked");
     }
 
@@ -370,6 +381,15 @@ pub fn get_random_available_port() -> u16 {
     listener.local_addr().unwrap().port()
 }
 
+/// The `process_id` reported by `INFO server` on `con`, so a caller can check
+/// that the port it reached belongs to the server it spawned.
+pub(crate) fn server_process_id(con: &mut redis::Connection) -> Option<u32> {
+    let info: String = redis::cmd("INFO").arg("server").query(con).ok()?;
+    info.lines()
+        .find_map(|line| line.strip_prefix("process_id:"))
+        .and_then(|pid| pid.trim().parse().ok())
+}
+
 impl Drop for RedisServer {
     fn drop(&mut self) {
         self.stop()
@@ -395,15 +415,24 @@ impl TestContext {
         Self::with_modules(&[], true)
     }
 
-    fn connect_with_retries(client: &redis::Client) {
+    fn connect_with_retries(server: &mut RedisServer, client: &redis::Client) {
         let mut con;
 
         let millisecond = Duration::from_millis(1);
         let mut retries = 0;
         loop {
+            if let Ok(Some(status)) = server.process.try_wait() {
+                panic!(
+                    "redis server at {:?} exited with {status:?} before accepting connections",
+                    server.client_addr()
+                );
+            }
             match client.get_connection(None) {
                 Err(err) => {
-                    if err.is_connection_refusal() {
+                    // A reset, not only a refusal, is expected while the port is still
+                    // settling: another test's `get_random_available_port` probe listener
+                    // can briefly hold it and drop our connection.
+                    if err.is_connection_refusal() || err.is_connection_dropped() {
                         sleep(millisecond);
                         retries += 1;
                         if retries > 100000 {
@@ -419,6 +448,14 @@ impl TestContext {
                 }
             }
         }
+        let expected = server.process.id();
+        let actual = server_process_id(&mut con);
+        assert_eq!(
+            actual,
+            Some(expected),
+            "{:?} is served by pid {actual:?}, not our redis server {expected}",
+            server.client_addr()
+        );
         redis::cmd("FLUSHDB").execute(&mut con);
     }
 
@@ -426,7 +463,7 @@ impl TestContext {
         let redis_port = get_random_available_port();
         let addr: ConnectionAddr = RedisServer::get_addr(redis_port);
 
-        let server = RedisServer::new_with_addr_tls_modules_and_spawner(
+        let mut server = RedisServer::new_with_addr_tls_modules_and_spawner(
             addr,
             None,
             Some(tls_files),
@@ -441,7 +478,7 @@ impl TestContext {
         let client =
             build_single_client(server.connection_info(), &server.tls_paths, mtls_enabled).unwrap();
 
-        Self::connect_with_retries(&client);
+        Self::connect_with_retries(&mut server, &client);
 
         TestContext {
             server,
@@ -451,12 +488,12 @@ impl TestContext {
     }
 
     pub fn with_modules(modules: &[Module], mtls_enabled: bool) -> TestContext {
-        let server = RedisServer::with_modules(modules, mtls_enabled);
+        let mut server = RedisServer::with_modules(modules, mtls_enabled);
 
         let client =
             build_single_client(server.connection_info(), &server.tls_paths, mtls_enabled).unwrap();
 
-        Self::connect_with_retries(&client);
+        Self::connect_with_retries(&mut server, &client);
 
         TestContext {
             server,
@@ -466,7 +503,7 @@ impl TestContext {
     }
 
     pub fn with_client_name(clientname: &str) -> TestContext {
-        let server = RedisServer::with_modules(&[], false);
+        let mut server = RedisServer::with_modules(&[], false);
         let con_info = redis::ConnectionInfo {
             addr: server.client_addr().clone(),
             redis: redis::RedisConnectionInfo {
@@ -477,7 +514,7 @@ impl TestContext {
 
         let client = build_single_client(con_info, &server.tls_paths, false).unwrap();
 
-        Self::connect_with_retries(&client);
+        Self::connect_with_retries(&mut server, &client);
 
         TestContext {
             server,

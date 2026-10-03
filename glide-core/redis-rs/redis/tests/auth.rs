@@ -117,7 +117,6 @@ mod auth {
     }
 
     #[tokio::test]
-    #[serial_test::serial]
     async fn test_replace_password_cluster() {
         let cluster_context = TestClusterContext::new(3, 0);
 
@@ -261,7 +260,6 @@ mod auth {
     }
 
     #[tokio::test]
-    #[serial_test::serial]
     async fn test_replace_password_standalone() {
         let mut standalone_context = TestContext::new();
         standalone_context.protocol = ProtocolVersion::RESP2;

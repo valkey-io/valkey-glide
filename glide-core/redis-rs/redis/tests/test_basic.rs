@@ -19,7 +19,6 @@ mod basic {
     use crate::{assert_args, support::*};
 
     #[test]
-    #[serial_test::serial]
     fn test_parse_redis_url() {
         let redis_url = "redis://127.0.0.1:1234/0".to_string();
         redis::parse_redis_url(&redis_url).unwrap();
@@ -28,13 +27,11 @@ mod basic {
     }
 
     #[test]
-    #[serial_test::serial]
     fn test_redis_url_fromstr() {
         let _info: ConnectionInfo = "redis://127.0.0.1:1234/0".parse().unwrap();
     }
 
     #[test]
-    #[serial_test::serial]
     fn test_args() {
         let ctx = TestContext::new();
         let mut con = ctx.connection();
@@ -49,7 +46,6 @@ mod basic {
     }
 
     #[test]
-    #[serial_test::serial]
     fn test_getset() {
         let ctx = TestContext::new();
         let mut con = ctx.connection();
@@ -66,7 +62,6 @@ mod basic {
 
     //unit test for key_type function
     #[test]
-    #[serial_test::serial]
     fn test_key_type() {
         let ctx = TestContext::new();
         let mut con = ctx.connection();
@@ -112,7 +107,6 @@ mod basic {
     }
 
     #[test]
-    #[serial_test::serial]
     fn test_client_tracking_doesnt_block_execution() {
         //It checks if the library distinguish a push-type message from the others and continues its normal operation.
         let ctx = TestContext::new();
@@ -150,7 +144,6 @@ mod basic {
     }
 
     #[test]
-    #[serial_test::serial]
     fn test_incr() {
         let ctx = TestContext::new();
         let mut con = ctx.connection();
@@ -160,7 +153,6 @@ mod basic {
     }
 
     #[test]
-    #[serial_test::serial]
     fn test_getdel() {
         let ctx = TestContext::new();
         let mut con = ctx.connection();
@@ -176,7 +168,6 @@ mod basic {
     }
 
     #[test]
-    #[serial_test::serial]
     fn test_getex() {
         let ctx = TestContext::new();
         let mut con = ctx.connection();
@@ -211,7 +202,6 @@ mod basic {
     }
 
     #[test]
-    #[serial_test::serial]
     fn test_info() {
         let ctx = TestContext::new();
         let mut con = ctx.connection();
@@ -228,7 +218,6 @@ mod basic {
     }
 
     #[test]
-    #[serial_test::serial]
     fn test_hash_ops() {
         let ctx = TestContext::new();
         let mut con = ctx.connection();
@@ -259,7 +248,6 @@ mod basic {
     // Not supported with the current appveyor/windows binary deployed.
     #[cfg(not(target_os = "windows"))]
     #[test]
-    #[serial_test::serial]
     fn test_unlink() {
         let ctx = TestContext::new();
         let mut con = ctx.connection();
@@ -274,7 +262,6 @@ mod basic {
     }
 
     #[test]
-    #[serial_test::serial]
     fn test_set_ops() {
         let ctx = TestContext::new();
         let mut con = ctx.connection();
@@ -300,7 +287,6 @@ mod basic {
     }
 
     #[test]
-    #[serial_test::serial]
     fn test_scan() {
         let ctx = TestContext::new();
         let mut con = ctx.connection();
@@ -319,7 +305,6 @@ mod basic {
     }
 
     #[test]
-    #[serial_test::serial]
     fn test_optionals() {
         let ctx = TestContext::new();
         let mut con = ctx.connection();
@@ -342,7 +327,6 @@ mod basic {
     }
 
     #[test]
-    #[serial_test::serial]
     fn test_scanning() {
         let ctx = TestContext::new();
         let mut con = ctx.connection();
@@ -370,7 +354,6 @@ mod basic {
     }
 
     #[test]
-    #[serial_test::serial]
     fn test_filtered_scanning() {
         let ctx = TestContext::new();
         let mut con = ctx.connection();
@@ -397,7 +380,6 @@ mod basic {
     }
 
     #[test]
-    #[serial_test::serial]
     fn test_pipeline() {
         let ctx = TestContext::new();
         let mut con = ctx.connection();
@@ -421,7 +403,6 @@ mod basic {
     }
 
     #[test]
-    #[serial_test::serial]
     fn test_pipeline_with_err() {
         let ctx = TestContext::new();
         let mut con = ctx.connection();
@@ -459,7 +440,6 @@ mod basic {
     }
 
     #[test]
-    #[serial_test::serial]
     fn test_empty_pipeline() {
         let ctx = TestContext::new();
         let mut con = ctx.connection();
@@ -470,7 +450,6 @@ mod basic {
     }
 
     #[test]
-    #[serial_test::serial]
     fn test_pipeline_transaction() {
         let ctx = TestContext::new();
         let mut con = ctx.connection();
@@ -495,7 +474,6 @@ mod basic {
     }
 
     #[test]
-    #[serial_test::serial]
     fn test_pipeline_transaction_with_errors() {
         let ctx = TestContext::new();
         let mut con = ctx.connection();
@@ -524,7 +502,6 @@ mod basic {
     }
 
     #[test]
-    #[serial_test::serial]
     fn test_pipeline_reuse_query() {
         let ctx = TestContext::new();
         let mut con = ctx.connection();
@@ -563,7 +540,6 @@ mod basic {
     }
 
     #[test]
-    #[serial_test::serial]
     fn test_pipeline_reuse_query_clear() {
         let ctx = TestContext::new();
         let mut con = ctx.connection();
@@ -602,7 +578,6 @@ mod basic {
     }
 
     #[test]
-    #[serial_test::serial]
     fn test_real_transaction() {
         let ctx = TestContext::new();
         let mut con = ctx.connection();
@@ -637,7 +612,6 @@ mod basic {
     }
 
     #[test]
-    #[serial_test::serial]
     fn test_real_transaction_highlevel() {
         let ctx = TestContext::new();
         let mut con = ctx.connection();
@@ -661,7 +635,6 @@ mod basic {
     }
 
     #[test]
-    #[serial_test::serial]
     fn test_pubsub() {
         use std::sync::{Arc, Barrier};
         let ctx = TestContext::new();
@@ -699,7 +672,6 @@ mod basic {
     }
 
     #[test]
-    #[serial_test::serial]
     fn test_pubsub_unsubscribe() {
         let ctx = TestContext::new();
         let mut con = ctx.connection();
@@ -721,7 +693,6 @@ mod basic {
     }
 
     #[test]
-    #[serial_test::serial]
     fn test_pubsub_subscribe_while_messages_are_sent() {
         let ctx = TestContext::new();
         let mut conn_external = ctx.connection();
@@ -780,7 +751,6 @@ mod basic {
     }
 
     #[test]
-    #[serial_test::serial]
     fn test_pubsub_unsubscribe_no_subs() {
         let ctx = TestContext::new();
         if version_greater_or_equal(&ctx, "7.2.4") {
@@ -800,7 +770,6 @@ mod basic {
     }
 
     #[test]
-    #[serial_test::serial]
     fn test_pubsub_unsubscribe_one_sub() {
         let ctx = TestContext::new();
         if version_greater_or_equal(&ctx, "7.2.4") {
@@ -821,7 +790,6 @@ mod basic {
     }
 
     #[test]
-    #[serial_test::serial]
     fn test_pubsub_unsubscribe_one_sub_one_psub() {
         let ctx = TestContext::new();
         let mut con = ctx.connection();
@@ -839,7 +807,6 @@ mod basic {
     }
 
     #[test]
-    #[serial_test::serial]
     fn scoped_pubsub() {
         let ctx = TestContext::new();
         if version_greater_or_equal(&ctx, "7.2.4") {
@@ -892,7 +859,6 @@ mod basic {
     }
 
     #[test]
-    #[serial_test::serial]
     fn test_tuple_args() {
         let ctx = TestContext::new();
         let mut con = ctx.connection();
@@ -919,7 +885,6 @@ mod basic {
     }
 
     #[test]
-    #[serial_test::serial]
     fn test_nice_api() {
         let ctx = TestContext::new();
         let mut con = ctx.connection();
@@ -943,7 +908,6 @@ mod basic {
     }
 
     #[test]
-    #[serial_test::serial]
     fn test_auto_m_versions() {
         let ctx = TestContext::new();
         let mut con = ctx.connection();
@@ -955,7 +919,6 @@ mod basic {
     }
 
     #[test]
-    #[serial_test::serial]
     fn test_nice_hash_api() {
         let ctx = TestContext::new();
         let mut con = ctx.connection();
@@ -1009,7 +972,6 @@ mod basic {
     }
 
     #[test]
-    #[serial_test::serial]
     fn test_nice_list_api() {
         let ctx = TestContext::new();
         let mut con = ctx.connection();
@@ -1038,7 +1000,6 @@ mod basic {
     }
 
     #[test]
-    #[serial_test::serial]
     fn test_tuple_decoding_regression() {
         let ctx = TestContext::new();
         let mut con = ctx.connection();
@@ -1057,7 +1018,6 @@ mod basic {
     }
 
     #[test]
-    #[serial_test::serial]
     fn test_bit_operations() {
         let ctx = TestContext::new();
         let mut con = ctx.connection();
@@ -1067,7 +1027,6 @@ mod basic {
     }
 
     #[test]
-    #[serial_test::serial]
     fn test_redis_server_down() {
         let mut ctx = TestContext::new();
         let mut con = ctx.connection();
@@ -1085,7 +1044,6 @@ mod basic {
     }
 
     #[test]
-    #[serial_test::serial]
     fn test_zinterstore_weights() {
         let ctx = TestContext::new();
         let mut con = ctx.connection();
@@ -1141,7 +1099,6 @@ mod basic {
     }
 
     #[test]
-    #[serial_test::serial]
     fn test_zunionstore_weights() {
         let ctx = TestContext::new();
         let mut con = ctx.connection();
@@ -1209,7 +1166,6 @@ mod basic {
     }
 
     #[test]
-    #[serial_test::serial]
     fn test_zrembylex() {
         let ctx = TestContext::new();
         let mut con = ctx.connection();
@@ -1242,7 +1198,6 @@ mod basic {
     // Not supported with the current appveyor/windows binary deployed.
     #[cfg(not(target_os = "windows"))]
     #[test]
-    #[serial_test::serial]
     fn test_zrandmember() {
         use redis::ProtocolVersion;
 
@@ -1293,7 +1248,6 @@ mod basic {
     }
 
     #[test]
-    #[serial_test::serial]
     fn test_sismember() {
         let ctx = TestContext::new();
         let mut con = ctx.connection();
@@ -1312,7 +1266,6 @@ mod basic {
     // Not supported with the current appveyor/windows binary deployed.
     #[cfg(not(target_os = "windows"))]
     #[test]
-    #[serial_test::serial]
     fn test_smismember() {
         let ctx = TestContext::new();
         let mut con = ctx.connection();
@@ -1324,7 +1277,6 @@ mod basic {
     }
 
     #[test]
-    #[serial_test::serial]
     fn test_object_commands() {
         let ctx = TestContext::new();
         let mut con = ctx.connection();
@@ -1360,7 +1312,6 @@ mod basic {
     }
 
     #[test]
-    #[serial_test::serial]
     fn test_mget() {
         let ctx = TestContext::new();
         let mut con = ctx.connection();
@@ -1381,7 +1332,6 @@ mod basic {
     }
 
     #[test]
-    #[serial_test::serial]
     fn test_variable_length_get() {
         let ctx = TestContext::new();
         let mut con = ctx.connection();
@@ -1394,7 +1344,6 @@ mod basic {
     }
 
     #[test]
-    #[serial_test::serial]
     fn test_multi_generics() {
         let ctx = TestContext::new();
         let mut con = ctx.connection();
@@ -1406,7 +1355,6 @@ mod basic {
     }
 
     #[test]
-    #[serial_test::serial]
     fn test_set_options_with_get() {
         let ctx = TestContext::new();
         let mut con = ctx.connection();
@@ -1421,7 +1369,6 @@ mod basic {
     }
 
     #[test]
-    #[serial_test::serial]
     fn test_set_options_options() {
         let empty = SetOptions::default();
         assert_eq!(ToRedisArgs::to_redis_args(&empty).len(), 0);
@@ -1458,7 +1405,6 @@ mod basic {
     }
 
     #[test]
-    #[serial_test::serial]
     fn test_blocking_sorted_set_api() {
         let ctx = TestContext::new();
         let mut con = ctx.connection();
@@ -1515,7 +1461,6 @@ mod basic {
     }
 
     #[test]
-    #[serial_test::serial]
     fn test_set_client_name_by_config() {
         const CLIENT_NAME: &str = "TEST_CLIENT_NAME";
 
@@ -1539,7 +1484,6 @@ mod basic {
     }
 
     #[test]
-    #[serial_test::serial]
     fn test_push_manager() {
         let ctx = TestContext::new();
         if ctx.protocol == ProtocolVersion::RESP2 {
@@ -1595,7 +1539,6 @@ mod basic {
     }
 
     #[test]
-    #[serial_test::serial]
     fn test_push_manager_disconnection() {
         let ctx = TestContext::new();
         if ctx.protocol == ProtocolVersion::RESP2 {
