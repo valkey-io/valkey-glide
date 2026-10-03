@@ -276,39 +276,61 @@ class AsyncClientPool:
     def pool_id(self) -> int:
         return self._pool_id
 
-    def metrics(self) -> dict:
-        """Get pool metrics: idle, active, total counts."""
+    def _read_metrics(self) -> dict:
+        """Read pool metrics, retrying while the FFI reports lock contention.
+
+        ``glide_pool_metrics`` acquires the pool mutex with ``try_lock`` and
+        returns a non-zero code WITHOUT writing the out-pointers when the lock
+        is momentarily held (e.g. by background min_idle client creation, a
+        release state-reset, or the abandon monitor scan). Because the cffi
+        out-buffers are zero-initialized, a naive read would then report
+        ``idle=active=total=0`` — a phantom zero rather than the true state.
+
+        This poll-until-success loop re-reads while the FFI reports contention
+        (return code ``-1``), so a transient lock hold no longer surfaces as a
+        bogus 0. Contention windows are sub-millisecond (the lock is only held
+        to push an entry or read three counters), so this returns on the first
+        or second attempt in practice. A short deadline bounds the loop; if it
+        elapses (pathological contention) the last-read values are returned so
+        callers still get a best-effort snapshot rather than hanging.
+
+        ``-2`` (invalid/destroyed pool) is terminal and returns zeros
+        immediately without retrying.
+        """
+        import time
+
         idle = self._ffi.new("uint32_t*")
         active = self._ffi.new("uint32_t*")
         total = self._ffi.new("uint32_t*")
-        result = self._lib.glide_pool_metrics(self._pool_id, idle, active, total)
-        if result != 0:
-            return {"idle": 0, "active": 0, "total": 0}
-        return {"idle": idle[0], "active": active[0], "total": total[0]}
+
+        # Poll until the read succeeds (lock uncontended) or the deadline hits.
+        deadline = time.monotonic() + 2.0
+        while True:
+            result = self._lib.glide_pool_metrics(self._pool_id, idle, active, total)
+            if result == 0:
+                return {"idle": idle[0], "active": active[0], "total": total[0]}
+            if result == -2 or time.monotonic() >= deadline:
+                # Invalid pool, or pathological contention past the deadline:
+                # return a best-effort snapshot (zeros on a never-successful read).
+                return {"idle": idle[0], "active": active[0], "total": total[0]}
+            # Lock contended (-1): yield briefly and retry.
+            time.sleep(0.001)
+
+    def metrics(self) -> dict:
+        """Get pool metrics: idle, active, total counts."""
+        return self._read_metrics()
 
     @property
     def idle_count(self) -> int:
-        idle = self._ffi.new("uint32_t*")
-        self._lib.glide_pool_metrics(
-            self._pool_id, idle, self._ffi.NULL, self._ffi.NULL
-        )
-        return idle[0]
+        return self._read_metrics()["idle"]
 
     @property
     def active_count(self) -> int:
-        active = self._ffi.new("uint32_t*")
-        self._lib.glide_pool_metrics(
-            self._pool_id, self._ffi.NULL, active, self._ffi.NULL
-        )
-        return active[0]
+        return self._read_metrics()["active"]
 
     @property
     def total_count(self) -> int:
-        total = self._ffi.new("uint32_t*")
-        self._lib.glide_pool_metrics(
-            self._pool_id, self._ffi.NULL, self._ffi.NULL, total
-        )
-        return total[0]
+        return self._read_metrics()["total"]
 
     def close(self):
         if not self._closed:
