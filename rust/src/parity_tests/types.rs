@@ -10,10 +10,8 @@ use std::collections::BTreeMap;
 pub struct RedisParity {
     /// The redis-rs release this snapshot describes (e.g. `1.7.0`).
     pub version: String,
-    /// The command table methods, indexed by method name.
-    pub command_table_methods: BTreeMap<String, Method>,
-    /// The scan methods, indexed by method name.
-    pub scan_methods: BTreeMap<String, Method>,
+    /// The commands methods, indexed by method name.
+    pub methods: BTreeMap<String, Method>,
 }
 
 /// A deliberate difference from redis-rs for parity tests.

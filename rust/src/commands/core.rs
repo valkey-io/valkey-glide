@@ -60,255 +60,110 @@ use std::collections::HashSet;
 #[cfg(feature = "sync")]
 use crate::ValkeyResult;
 
-/// Expands to the async scan iterators, shared by [`AsyncCommands`] and [`AsyncTypedCommands`].
-macro_rules! implement_scan_methods_async {
-    () => {
-        // The scan iterators mirror redis-rs's (same names, generics, and arguments)
-        // but deliberately deviate: `&self` receivers returning GLIDE's own iterator
-        // type (same `next_item()` call shape), with every page dispatched by value on the
-        // owned-send path — no connection-object machinery, no per-page copies.
-
+/// Expands to the scan iterators, shared by every command trait:
+/// - `$iter` builds the iterator from the client and the command's prefix and suffix
+///   arguments (e.g. `SyncScanIter::new`).
+/// - `$ret` is the iterator's return type (e.g. `ValkeyResult<SyncScanIter<'s, Self, RV>>`),
+///   which may name each method's `'s` lifetime and `RV` result type.
+///
+/// These scan iterators mirror redis-rs's (same names and arguments, and the same generics
+/// apart from the `'s` lifetime) but deliberately deviate: `&self` receivers returning
+/// GLIDE's own iterator types (same `next_item()` call shape), with every page dispatched
+/// by value on the owned-send path.
+///
+/// Follows the structure of redis-rs's `implement_iterators!`.
+macro_rules! implement_iterators {
+    ($iter:expr, $ret:ty) => {
         /// Cursor-driven `SCAN` over the whole keyspace.
         // TODO #6872: Use `GlideClusterClient::cluster_scan` for cluster iteration.
         #[inline]
-        fn scan<'s, RV: FromValkeyValue + Send + 's>(
-            &'s self,
-        ) -> ValkeyFuture<'s, crate::commands::scan::ScanIter<'s, Self, RV>> {
-            Box::pin(crate::commands::scan::ScanIter::new(
-                self,
-                vec![b"SCAN".to_vec()],
-                Vec::new(),
-            ))
+        fn scan<'s, RV: FromValkeyValue + 's>(&'s self) -> $ret {
+            ($iter)(self, vec![b"SCAN".to_vec()], Vec::new())
         }
 
         /// Cursor-driven `SCAN` over the keyspace, filtered by a `MATCH` pattern.
         // TODO #6872: Use `GlideClusterClient::cluster_scan` for cluster iteration.
         #[inline]
-        fn scan_match<'s, P: ToSingleValkeyArg, RV: FromValkeyValue + Send + 's>(
+        fn scan_match<'s, P: ToSingleValkeyArg, RV: FromValkeyValue + 's>(
             &'s self,
             pattern: P,
-        ) -> ValkeyFuture<'s, crate::commands::scan::ScanIter<'s, Self, RV>> {
+        ) -> $ret {
             let mut suffix = vec![b"MATCH".to_vec()];
             pattern.write_valkey_args(&mut suffix);
-            Box::pin(crate::commands::scan::ScanIter::new(
-                self,
-                vec![b"SCAN".to_vec()],
-                suffix,
-            ))
+            ($iter)(self, vec![b"SCAN".to_vec()], suffix)
         }
 
         /// Cursor-driven `HSCAN` over a hash's fields and values.
         #[inline]
-        fn hscan<'s, K: ToSingleValkeyArg, RV: FromValkeyValue + Send + 's>(
-            &'s self,
-            key: K,
-        ) -> ValkeyFuture<'s, crate::commands::scan::ScanIter<'s, Self, RV>> {
+        fn hscan<'s, K: ToSingleValkeyArg, RV: FromValkeyValue + 's>(&'s self, key: K) -> $ret {
             let mut prefix = vec![b"HSCAN".to_vec()];
             key.write_valkey_args(&mut prefix);
-            Box::pin(crate::commands::scan::ScanIter::new(
-                self,
-                prefix,
-                Vec::new(),
-            ))
+            ($iter)(self, prefix, Vec::new())
         }
 
         /// Cursor-driven `HSCAN`, filtered by a field-name `MATCH` pattern.
         #[inline]
-        fn hscan_match<
-            's,
-            K: ToSingleValkeyArg,
-            P: ToSingleValkeyArg,
-            RV: FromValkeyValue + Send + 's,
-        >(
+        fn hscan_match<'s, K: ToSingleValkeyArg, P: ToSingleValkeyArg, RV: FromValkeyValue + 's>(
             &'s self,
             key: K,
             pattern: P,
-        ) -> ValkeyFuture<'s, crate::commands::scan::ScanIter<'s, Self, RV>> {
+        ) -> $ret {
             let mut prefix = vec![b"HSCAN".to_vec()];
             key.write_valkey_args(&mut prefix);
             let mut suffix = vec![b"MATCH".to_vec()];
             pattern.write_valkey_args(&mut suffix);
-            Box::pin(crate::commands::scan::ScanIter::new(self, prefix, suffix))
+            ($iter)(self, prefix, suffix)
         }
 
         /// Cursor-driven `SSCAN` over a set's members.
         #[inline]
-        fn sscan<'s, K: ToSingleValkeyArg, RV: FromValkeyValue + Send + 's>(
-            &'s self,
-            key: K,
-        ) -> ValkeyFuture<'s, crate::commands::scan::ScanIter<'s, Self, RV>> {
+        fn sscan<'s, K: ToSingleValkeyArg, RV: FromValkeyValue + 's>(&'s self, key: K) -> $ret {
             let mut prefix = vec![b"SSCAN".to_vec()];
             key.write_valkey_args(&mut prefix);
-            Box::pin(crate::commands::scan::ScanIter::new(
-                self,
-                prefix,
-                Vec::new(),
-            ))
+            ($iter)(self, prefix, Vec::new())
         }
 
         /// Cursor-driven `SSCAN`, filtered by a `MATCH` pattern.
         #[inline]
-        fn sscan_match<
-            's,
-            K: ToSingleValkeyArg,
-            P: ToSingleValkeyArg,
-            RV: FromValkeyValue + Send + 's,
-        >(
+        fn sscan_match<'s, K: ToSingleValkeyArg, P: ToSingleValkeyArg, RV: FromValkeyValue + 's>(
             &'s self,
             key: K,
             pattern: P,
-        ) -> ValkeyFuture<'s, crate::commands::scan::ScanIter<'s, Self, RV>> {
+        ) -> $ret {
             let mut prefix = vec![b"SSCAN".to_vec()];
             key.write_valkey_args(&mut prefix);
             let mut suffix = vec![b"MATCH".to_vec()];
             pattern.write_valkey_args(&mut suffix);
-            Box::pin(crate::commands::scan::ScanIter::new(self, prefix, suffix))
+            ($iter)(self, prefix, suffix)
         }
 
         /// Cursor-driven `ZSCAN` over a sorted set's members and scores.
         #[inline]
-        fn zscan<'s, K: ToSingleValkeyArg, RV: FromValkeyValue + Send + 's>(
-            &'s self,
-            key: K,
-        ) -> ValkeyFuture<'s, crate::commands::scan::ScanIter<'s, Self, RV>> {
+        fn zscan<'s, K: ToSingleValkeyArg, RV: FromValkeyValue + 's>(&'s self, key: K) -> $ret {
             let mut prefix = vec![b"ZSCAN".to_vec()];
             key.write_valkey_args(&mut prefix);
-            Box::pin(crate::commands::scan::ScanIter::new(
-                self,
-                prefix,
-                Vec::new(),
-            ))
+            ($iter)(self, prefix, Vec::new())
         }
 
         /// Cursor-driven `ZSCAN`, filtered by a `MATCH` pattern.
         #[inline]
-        fn zscan_match<
-            's,
-            K: ToSingleValkeyArg,
-            P: ToSingleValkeyArg,
-            RV: FromValkeyValue + Send + 's,
-        >(
+        fn zscan_match<'s, K: ToSingleValkeyArg, P: ToSingleValkeyArg, RV: FromValkeyValue + 's>(
             &'s self,
             key: K,
             pattern: P,
-        ) -> ValkeyFuture<'s, crate::commands::scan::ScanIter<'s, Self, RV>> {
+        ) -> $ret {
             let mut prefix = vec![b"ZSCAN".to_vec()];
             key.write_valkey_args(&mut prefix);
             let mut suffix = vec![b"MATCH".to_vec()];
             pattern.write_valkey_args(&mut suffix);
-            Box::pin(crate::commands::scan::ScanIter::new(self, prefix, suffix))
-        }
-    };
-}
-
-/// Expands to the blocking scan iterators, shared by [`Commands`] and [`TypedCommands`].
-#[cfg(feature = "sync")]
-macro_rules! implement_scan_methods_sync {
-    () => {
-        // See the async trait: GLIDE-owned iterators on the owned-send path.
-        // `SyncScanIter` implements `Iterator`, so `for` loops work as before.
-
-        /// Cursor-driven `SCAN` over the whole keyspace.
-        // TODO #6872: Use `GlideClusterClient::cluster_scan` for cluster iteration.
-        #[inline]
-        fn scan<RV: FromValkeyValue>(
-            &self,
-        ) -> ValkeyResult<crate::commands::scan::SyncScanIter<'_, Self, RV>> {
-            crate::commands::scan::SyncScanIter::new(self, vec![b"SCAN".to_vec()], Vec::new())
-        }
-
-        /// Cursor-driven `SCAN` over the keyspace, filtered by a `MATCH` pattern.
-        // TODO #6872: Use `GlideClusterClient::cluster_scan` for cluster iteration.
-        #[inline]
-        fn scan_match<P: ToSingleValkeyArg, RV: FromValkeyValue>(
-            &self,
-            pattern: P,
-        ) -> ValkeyResult<crate::commands::scan::SyncScanIter<'_, Self, RV>> {
-            let mut suffix = vec![b"MATCH".to_vec()];
-            pattern.write_valkey_args(&mut suffix);
-            crate::commands::scan::SyncScanIter::new(self, vec![b"SCAN".to_vec()], suffix)
-        }
-
-        /// Cursor-driven `HSCAN` over a hash's fields and values.
-        #[inline]
-        fn hscan<K: ToSingleValkeyArg, RV: FromValkeyValue>(
-            &self,
-            key: K,
-        ) -> ValkeyResult<crate::commands::scan::SyncScanIter<'_, Self, RV>> {
-            let mut prefix = vec![b"HSCAN".to_vec()];
-            key.write_valkey_args(&mut prefix);
-            crate::commands::scan::SyncScanIter::new(self, prefix, Vec::new())
-        }
-
-        /// Cursor-driven `HSCAN`, filtered by a field-name `MATCH` pattern.
-        #[inline]
-        fn hscan_match<K: ToSingleValkeyArg, P: ToSingleValkeyArg, RV: FromValkeyValue>(
-            &self,
-            key: K,
-            pattern: P,
-        ) -> ValkeyResult<crate::commands::scan::SyncScanIter<'_, Self, RV>> {
-            let mut prefix = vec![b"HSCAN".to_vec()];
-            key.write_valkey_args(&mut prefix);
-            let mut suffix = vec![b"MATCH".to_vec()];
-            pattern.write_valkey_args(&mut suffix);
-            crate::commands::scan::SyncScanIter::new(self, prefix, suffix)
-        }
-
-        /// Cursor-driven `SSCAN` over a set's members.
-        #[inline]
-        fn sscan<K: ToSingleValkeyArg, RV: FromValkeyValue>(
-            &self,
-            key: K,
-        ) -> ValkeyResult<crate::commands::scan::SyncScanIter<'_, Self, RV>> {
-            let mut prefix = vec![b"SSCAN".to_vec()];
-            key.write_valkey_args(&mut prefix);
-            crate::commands::scan::SyncScanIter::new(self, prefix, Vec::new())
-        }
-
-        /// Cursor-driven `SSCAN`, filtered by a `MATCH` pattern.
-        #[inline]
-        fn sscan_match<K: ToSingleValkeyArg, P: ToSingleValkeyArg, RV: FromValkeyValue>(
-            &self,
-            key: K,
-            pattern: P,
-        ) -> ValkeyResult<crate::commands::scan::SyncScanIter<'_, Self, RV>> {
-            let mut prefix = vec![b"SSCAN".to_vec()];
-            key.write_valkey_args(&mut prefix);
-            let mut suffix = vec![b"MATCH".to_vec()];
-            pattern.write_valkey_args(&mut suffix);
-            crate::commands::scan::SyncScanIter::new(self, prefix, suffix)
-        }
-
-        /// Cursor-driven `ZSCAN` over a sorted set's members and scores.
-        #[inline]
-        fn zscan<K: ToSingleValkeyArg, RV: FromValkeyValue>(
-            &self,
-            key: K,
-        ) -> ValkeyResult<crate::commands::scan::SyncScanIter<'_, Self, RV>> {
-            let mut prefix = vec![b"ZSCAN".to_vec()];
-            key.write_valkey_args(&mut prefix);
-            crate::commands::scan::SyncScanIter::new(self, prefix, Vec::new())
-        }
-
-        /// Cursor-driven `ZSCAN`, filtered by a `MATCH` pattern.
-        #[inline]
-        fn zscan_match<K: ToSingleValkeyArg, P: ToSingleValkeyArg, RV: FromValkeyValue>(
-            &self,
-            key: K,
-            pattern: P,
-        ) -> ValkeyResult<crate::commands::scan::SyncScanIter<'_, Self, RV>> {
-            let mut prefix = vec![b"ZSCAN".to_vec()];
-            key.write_valkey_args(&mut prefix);
-            let mut suffix = vec![b"MATCH".to_vec()];
-            pattern.write_valkey_args(&mut suffix);
-            crate::commands::scan::SyncScanIter::new(self, prefix, suffix)
+            ($iter)(self, prefix, suffix)
         }
     };
 }
 
 /// Expands one command table entry into an [`AsyncTypedCommands`] method.
 ///
-/// Mirrors redis-rs's `implement_command_async!`.
+/// Follows the structure of redis-rs's `implement_command_async!`.
 macro_rules! implement_typed_command_async {
     (
         $lifetime:lifetime
@@ -492,7 +347,10 @@ macro_rules! implement_commands {
                 }
             )*
 
-            implement_scan_methods_async!();
+            implement_iterators!(
+                |con, prefix, suffix| Box::pin(crate::commands::scan::ScanIter::new(con, prefix, suffix)),
+                ValkeyFuture<'s, crate::commands::scan::ScanIter<'s, Self, RV>>
+            );
         }
 
         /// **GLIDE's blocking command API.**
@@ -538,7 +396,10 @@ macro_rules! implement_commands {
                 }
             )*
 
-            implement_scan_methods_sync!();
+            implement_iterators!(
+                crate::commands::scan::SyncScanIter::new,
+                ValkeyResult<crate::commands::scan::SyncScanIter<'s, Self, RV>>
+            );
         }
 
         /// **GLIDE's typed async command API.**
@@ -561,7 +422,10 @@ macro_rules! implement_commands {
                 }
             )*
 
-            implement_scan_methods_async!();
+            implement_iterators!(
+                |con, prefix, suffix| Box::pin(crate::commands::scan::ScanIter::new(con, prefix, suffix)),
+                ValkeyFuture<'s, crate::commands::scan::ScanIter<'s, Self, RV>>
+            );
         }
 
         impl<T: AsyncCommands> AsyncTypedCommands for T {}
@@ -581,7 +445,10 @@ macro_rules! implement_commands {
                 }
             )*
 
-            implement_scan_methods_sync!();
+            implement_iterators!(
+                crate::commands::scan::SyncScanIter::new,
+                ValkeyResult<crate::commands::scan::SyncScanIter<'s, Self, RV>>
+            );
         }
 
         #[cfg(feature = "sync")]
