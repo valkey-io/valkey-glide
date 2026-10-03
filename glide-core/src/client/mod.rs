@@ -409,6 +409,9 @@ pub struct ClientShared {
     multi_active: Arc<AtomicBool>,
     // Whether this client is in cluster mode (immutable).
     is_cluster: bool,
+    /// Set by `kill()`. A lazy client checks it before connecting so a command queued
+    /// before `close()` cannot open a connection afterwards.
+    killed: AtomicBool,
 }
 
 /// Why [`Client::address_for_slot`] / [`Client::try_address_for_slot`] could not
@@ -1036,6 +1039,12 @@ impl Client {
         config.lazy_connect = false;
 
         let mut guard = self.internal_client.write().await;
+        if self.killed.load(Ordering::Acquire) {
+            return Err(RedisError::from((
+                ErrorKind::ClientError,
+                "Client was closed before the lazy connection was established",
+            )));
+        }
         let iam_manager_ref = self.iam_token_manager.as_ref();
         if let ClientWrapper::Lazy(_) = &*guard {
             // Create the appropriate client based on configuration
@@ -1093,6 +1102,24 @@ impl Client {
         // Re-acquire for the return
         let guard = self.internal_client.read().await;
         Ok(guard.clone()) // ✅ Return clone of the now-initialized wrapper
+    }
+
+    /// Closes the underlying connections immediately.
+    ///
+    /// Unlike dropping the client, this does not wait for in-flight requests: a blocking
+    /// command (`XREADGROUP ... BLOCK`, `BLPOP`, ...) is cut off and the server discards it.
+    /// Pending requests fail with a connection error. The client must not be used afterwards.
+    ///
+    /// Cluster connections are not torn down here; they close once every clone is dropped
+    /// and the in-flight requests have been answered.
+    pub async fn kill(&self) {
+        // Set first: a lazy client that has not connected yet checks this flag under the
+        // write lock in get_or_initialize_client and refuses to connect.
+        self.killed.store(true, Ordering::Release);
+        let guard = self.internal_client.read().await;
+        if let ClientWrapper::Standalone(client) = &*guard {
+            client.kill();
+        }
     }
 
     /// Internal command execution logic. Takes owned data so the returned future
@@ -2999,6 +3026,7 @@ impl Client {
                     iam_reconcile_lock: Arc::new(tokio::sync::Mutex::new(())),
                     multi_active: Arc::new(AtomicBool::new(false)),
                     is_cluster: request.cluster_mode_enabled,
+                    killed: AtomicBool::new(false),
                 }),
                 iam_token_manager: None,
                 otel_metadata: Arc::new(otel_metadata),
@@ -3400,6 +3428,7 @@ impl Client {
                 iam_reconcile_lock: Arc::new(tokio::sync::Mutex::new(())),
                 multi_active: Arc::new(AtomicBool::new(false)),
                 is_cluster: false,
+                killed: AtomicBool::new(false),
             }),
             iam_token_manager: None,
             otel_metadata: Arc::new(OTelMetadata {
@@ -3471,6 +3500,7 @@ pub fn create_test_glide_client() -> Client {
             iam_reconcile_lock: Arc::new(tokio::sync::Mutex::new(())),
             multi_active: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             is_cluster: false,
+            killed: AtomicBool::new(false),
         }),
         iam_token_manager: None,
         otel_metadata: Arc::new(OTelMetadata {
@@ -3925,6 +3955,7 @@ mod tests {
                 iam_reconcile_lock: Arc::new(tokio::sync::Mutex::new(())),
                 multi_active: Arc::new(AtomicBool::new(false)),
                 is_cluster: false,
+                killed: AtomicBool::new(false),
             }),
             iam_token_manager: None,
             otel_metadata: Arc::new(OTelMetadata {
@@ -4193,6 +4224,24 @@ mod tests {
         bracketed.cmd("MULTI").cmd("INCR").arg("a").cmd("EXEC");
         let _ = rt.block_on(client.send_pipeline(&bracketed, None, false, None, strategy));
         assert!(!client.shared.multi_active.load(Ordering::Acquire));
+    }
+
+    #[test]
+    fn kill_prevents_lazy_client_from_connecting() {
+        // A command queued before close() must not open the lazy connection after kill().
+        // Without the killed flag this would connect to 127.0.0.1:6379 (or fail with a
+        // connection error), never with ClientError.
+        let mut client = create_test_client();
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        rt.block_on(async {
+            client.kill().await;
+            let mut cmd = redis::cmd("PING");
+            let err = client.send_command(&mut cmd, None).await.unwrap_err();
+            assert!(
+                matches!(err.kind(), redis::ErrorKind::ClientError),
+                "expected ClientError, got {err}"
+            );
+        });
     }
 
     #[test]

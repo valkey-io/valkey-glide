@@ -932,7 +932,9 @@ pub(crate) async fn create_handle_for_client(
             );
         }
 
-        // Message loop has exited (channel closed by handle.close()).
+        // Message loop has exited (channel closed by handle.close() or
+        // handle.close_for_pool_release()). The Client is not killed here: a pool
+        // owns it and hands it to the next borrower.
         release_worker_pool();
     });
 
@@ -1315,6 +1317,11 @@ pub fn create_direct_client<'a>(
         }
 
         // Message loop has exited (channel closed by handle.close()).
+        // Close the sockets now. In-flight tasks still hold Client clones, and a blocking
+        // command would otherwise keep the connection attached to the server until it
+        // replies, delivering data (stream entries, list elements) to a closed client.
+        client.kill().await;
+
         release_worker_pool();
     });
 

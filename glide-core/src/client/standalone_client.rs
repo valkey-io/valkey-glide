@@ -100,21 +100,18 @@ struct DropWrapper {
 impl Drop for DropWrapper {
     fn drop(&mut self) {
         for node in self.nodes.iter() {
-            node.mark_as_dropped();
+            node.kill();
         }
+        // The last StandaloneClient clone is gone. `total_clients` is incremented once per
+        // created client, so it must be decremented here and not per clone: clones are
+        // made for every command and would drive the metric to zero while the client is open.
+        Telemetry::decr_total_clients(1);
     }
 }
 
 #[derive(Clone, Debug)]
 pub struct StandaloneClient {
     inner: Arc<DropWrapper>,
-}
-
-impl Drop for StandaloneClient {
-    fn drop(&mut self) {
-        // Client was dropped, reduce the number of clients
-        Telemetry::decr_total_clients(1);
-    }
 }
 
 pub enum StandaloneClientConnectionError {
@@ -883,8 +880,13 @@ impl StandaloneClient {
         let result = connection.send_packed_command(cmd).await;
         match result {
             Err(err) if err.is_unrecoverable_error() => {
-                log_warn("send request", format!("received disconnect error `{err}`"));
-                reconnecting_connection.reconnect(ReconnectReason::ConnectionDropped);
+                if reconnecting_connection.is_dropped() {
+                    // Expected when the client was closed while this request was in flight.
+                    log_debug("send request", format!("request cut off by close: `{err}`"));
+                } else {
+                    log_warn("send request", format!("received disconnect error `{err}`"));
+                    reconnecting_connection.reconnect(ReconnectReason::ConnectionDropped);
+                }
                 Err(err)
             }
             _ => result,
@@ -972,6 +974,14 @@ impl StandaloneClient {
     ) -> RedisResult<Value> {
         let reconnecting_connection = self.get_connection(readonly).await;
         Self::send_request(cmd, reconnecting_connection).await
+    }
+
+    /// Closes every node connection immediately, including connections with a blocking
+    /// command in flight. Pending requests fail; no reconnect is attempted afterwards.
+    pub fn kill(&self) {
+        for node in self.inner.nodes.iter() {
+            node.kill();
+        }
     }
 
     pub async fn send_command(&mut self, cmd: &redis::Cmd) -> RedisResult<Value> {
