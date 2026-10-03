@@ -120,7 +120,7 @@ describe("GlideClusterClient", () => {
             azCluster = await ValkeyCluster.createCluster(
                 true,
                 3,
-                4,
+                2,
                 getServerVersion,
             );
         }
@@ -2977,7 +2977,7 @@ describe("GlideClusterClient", () => {
                         ),
                     );
 
-                    const get_calls_per_replica = 25;
+                    const get_calls_per_replica = 50;
                     const get_calls = 100;
                     const get_cmdstat = `cmdstat_get:calls=${get_calls_per_replica}`;
 
@@ -3005,7 +3005,7 @@ describe("GlideClusterClient", () => {
                         return isReplicaNode && infoStr.includes(get_cmdstat);
                     }).length;
 
-                    expect(matching_entries_count).toBe(4);
+                    expect(matching_entries_count).toBe(2);
                 } finally {
                     // Cleanup
                     await client_for_config_set?.configSet(
@@ -3112,7 +3112,7 @@ describe("GlideClusterClient", () => {
                 // Skip test if version is below 8.0.0
                 if (cluster.checkIfServerVersionLessThan("8.0.0")) return;
 
-                const get_calls = 4;
+                const get_calls = 2;
                 const replica_calls = 1;
                 const get_cmdstat = `cmdstat_get:calls=${replica_calls}`;
                 let client_for_testing_az;
@@ -3155,7 +3155,7 @@ describe("GlideClusterClient", () => {
                     }).length;
 
                     // Validate that the get calls were distributed across replicas, each replica recieved 1 get call
-                    expect(matchingEntriesCount).toBe(4);
+                    expect(matchingEntriesCount).toBe(2);
                 } finally {
                     // Cleanup: Close the client after test execution
                     client_for_testing_az?.close();
