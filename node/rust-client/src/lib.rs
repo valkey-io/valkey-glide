@@ -2501,6 +2501,20 @@ pub fn create_leaked_bigint(big_int: BigInt) -> [u32; 2] {
 /// @internal @test
 /// This function is for tests that require a value allocated on the heap.
 /// Should NOT be used in production.
+/// Creates the empty-payload push that redis-rs emits when a connection drops.
+#[cfg(feature = "testing_utilities")]
+pub fn create_leaked_disconnection_push() -> [u32; 2] {
+    let pointer = from_mut(Box::leak(Box::new(Value::Push {
+        kind: redis::PushKind::Disconnection,
+        data: vec![],
+    })));
+    split_pointer(pointer)
+}
+
+#[napi(ts_return_type = "[number, number]")]
+/// @internal @test
+/// This function is for tests that require a value allocated on the heap.
+/// Should NOT be used in production.
 #[cfg(feature = "testing_utilities")]
 pub fn create_leaked_double(float: f64) -> [u32; 2] {
     let pointer = from_mut(Box::leak(Box::new(Value::Double(float))));
