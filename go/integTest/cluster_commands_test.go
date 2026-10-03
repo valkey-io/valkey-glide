@@ -2801,8 +2801,10 @@ func (suite *GlideTestSuite) TestScriptKillWithoutRoute() {
 func (suite *GlideTestSuite) TestScriptKillWithRoute() {
 	killClient := suite.defaultClusterClient()
 
-	// Use a longer request timeout so InvokeScript blocks until killed
-	invokeConfig := suite.defaultClusterClientConfig().WithRequestTimeout(12 * time.Second)
+	// Use a longer request timeout so InvokeScript blocks until killed.
+	// It must comfortably exceed the kill poll window below so the invocation
+	// stays blocked until the SCRIPT KILL lands.
+	invokeConfig := suite.defaultClusterClientConfig().WithRequestTimeout(20 * time.Second)
 	invokeClient, err := suite.clusterClient(invokeConfig)
 	require.NoError(suite.T(), err)
 
@@ -2817,8 +2819,12 @@ func (suite *GlideTestSuite) TestScriptKillWithRoute() {
 	assert.Error(suite.T(), err)
 	assert.True(suite.T(), strings.Contains(strings.ToLower(err.Error()), "notbusy"))
 
-	// Kill Running Code
-	code := CreateLongRunningLuaScript(10, true)
+	// Kill Running Code.
+	// The script's self-timeout (15s) is kept comfortably larger than the kill
+	// poll window (10s) below, so the script stays busy for the entire duration
+	// the test polls SCRIPT KILL. This removes the previous race where the
+	// script could self-terminate before a kill landed, leaving nothing to kill.
+	code := CreateLongRunningLuaScript(15, true)
 	script := options.NewScript(code)
 
 	// Start InvokeScript in a goroutine so it begins executing immediately
@@ -2829,13 +2835,19 @@ func (suite *GlideTestSuite) TestScriptKillWithRoute() {
 		_, invokeErr = invokeClient.InvokeScriptWithRoute(context.Background(), *script, route)
 	}()
 
-	// Poll ScriptKill on the main goroutine until the script is running and killed
+	// Poll ScriptKill on the main goroutine until the script is running and killed.
+	// A tighter poll interval gives more attempts to catch the busy window.
+	// Any transient error (NOTBUSY before the script is registered as busy, or a
+	// NoScriptError in the brief window around kill/finish) simply returns false
+	// and keeps polling; only a successful kill (killErr == nil) satisfies the
+	// condition. The 10s window is smaller than the script's 15s busy window, so
+	// a kill is guaranteed to land while the script is still running.
 	var killErr error
 	var result string
 	require.Eventually(suite.T(), func() bool {
 		result, killErr = killClient.ScriptKillWithRoute(context.Background(), route)
 		return killErr == nil
-	}, 10*time.Second, 500*time.Millisecond, "Timed out waiting for script kill to succeed")
+	}, 10*time.Second, 250*time.Millisecond, "Timed out waiting for script kill to succeed")
 
 	// Wait for invoke to complete after kill
 	<-invokeDone
