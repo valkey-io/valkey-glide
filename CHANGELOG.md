@@ -48,6 +48,7 @@
 
 ### Changes
 
+* Node: Add `JSON.MSET` command (`GlideJson.mset`, `JsonBatch.mset`) ([#7243](https://github.com/valkey-io/valkey-glide/pull/7243))
 * Java: Add `HGETDEL` command support ([#6145](https://github.com/valkey-io/valkey-glide/issues/6145))
 * Node: Add `HGETDEL` command support ([#6145](https://github.com/valkey-io/valkey-glide/issues/6145))
 * Python: Optionally propagate active OpenTelemetry parent span context to native command, batch and script spans with `enable_trace_context_propagation=True` (disabled by default) ([#7069](https://github.com/valkey-io/valkey-glide/pull/7069))
