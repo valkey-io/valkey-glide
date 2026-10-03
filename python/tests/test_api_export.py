@@ -138,6 +138,8 @@ excluded_shared_symbols = [
     "RequestType",  # Assignment
     # python/glide-shared/glide_shared/logger.py
     "Level",  # ClassDef
+    # python/glide-shared/glide_shared/{connection_request,command_request,response}_pb2.py
+    "DESCRIPTOR",  # Assignment - module-level protobuf file descriptor (protobuf >= 3.20 style)
 ]
 
 allowed_missing_re_exports_in_async = [
