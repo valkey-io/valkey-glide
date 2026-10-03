@@ -20,9 +20,9 @@ path = "src/lib.rs"
 [dependencies]
 
 # GLIDE dependencies
-glide-logger = { path = "../glide-logger", version = "0.1.0" }
-glide-core-engine = { path = "../glide-core/redis-rs/redis", version = "0.1.0", features = ["aio", "tokio-comp", "cluster", "cluster-async"] }
-glide-core = { path = "../glide-core", version = "0.1.0" }
+glide-logger = { path = "../glide-logger", version = "0.1" }
+glide-core-engine = { path = "../glide-core/redis-rs/redis", version = "0.1", features = ["aio", "tokio-comp", "cluster", "cluster-async"] }
+glide-core = { path = "../glide-core", version = "0.1" }
 
 # External dependencies
 async-trait = "0.1"
