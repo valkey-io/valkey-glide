@@ -26,8 +26,8 @@ mutex_atomic = "warn"
 [dependencies]
 
 # GLIDE dependencies
-glide-logger = { path = "../../../glide-logger", version = "0.1.0" }
-glide-telemetry = { path = "../../../glide-telemetry", version = "0.1.0" }
+glide-logger = { path = "../../../glide-logger", version = "0.1" }
+glide-telemetry = { path = "../../../glide-telemetry", version = "0.1" }
 
 # These two are generally really common simple dependencies so it does not seem
 # much of a point to optimize these, but these could in theory be removed for
