@@ -144,8 +144,11 @@ export class ClientPool {
         // a credentialProvider to use the default AWS credential chain.
         if (
             "iamConfig" in (clientConfig.credentials ?? {}) &&
-            (clientConfig.credentials as { iamConfig?: { credentialProvider?: unknown } })
-                .iamConfig?.credentialProvider
+            (
+                clientConfig.credentials as {
+                    iamConfig?: { credentialProvider?: unknown };
+                }
+            ).iamConfig?.credentialProvider
         ) {
             throw new Error(
                 "Pool clients cannot use a custom IAM credentials provider. " +
