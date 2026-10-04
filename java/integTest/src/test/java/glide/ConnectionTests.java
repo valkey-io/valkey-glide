@@ -5,8 +5,6 @@ import static glide.TestConfiguration.CLUSTER_HOSTS;
 import static glide.TestConfiguration.SERVER_VERSION;
 import static glide.TestConfiguration.STANDALONE_HOSTS;
 import static glide.TestUtilities.*;
-import static glide.TestUtilities.IAM_TEST_CLUSTER_NAME;
-import static glide.TestUtilities.IAM_TEST_REGION_US_EAST_1;
 import static glide.TestUtilities.IAM_USERNAME;
 import static glide.TestUtilities.createTestIamConfig;
 import static glide.api.BaseClient.OK;
@@ -30,12 +28,10 @@ import glide.api.models.commands.InfoOptions;
 import glide.api.models.configuration.AddressResolver;
 import glide.api.models.configuration.AdvancedGlideClientConfiguration;
 import glide.api.models.configuration.AdvancedGlideClusterClientConfiguration;
-import glide.api.models.configuration.AwsCredentials;
 import glide.api.models.configuration.BackoffStrategy;
 import glide.api.models.configuration.ClientCircuitBreakerConfiguration;
 import glide.api.models.configuration.GlideClientConfiguration;
 import glide.api.models.configuration.GlideClusterClientConfiguration;
-import glide.api.models.configuration.GlideCredentialProvider;
 import glide.api.models.configuration.IamAuthConfig;
 import glide.api.models.configuration.NodeAddress;
 import glide.api.models.configuration.PeriodicChecksManualInterval;
@@ -45,11 +41,9 @@ import glide.api.models.configuration.ReadFrom;
 import glide.api.models.configuration.RequestRoutingConfiguration;
 import glide.api.models.configuration.ResolvedAddress;
 import glide.api.models.configuration.ServerCredentials;
-import glide.api.models.configuration.ServiceType;
 import glide.api.models.configuration.TlsAdvancedConfiguration;
 import glide.api.models.exceptions.ClosingException;
 import glide.cluster.ValkeyCluster;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -1351,7 +1345,6 @@ public class ConnectionTests {
             assertEquals("iam_test_value2", client.get("iam_test_key2").get());
         }
     }
-
 
     @SneakyThrows
     private GlideClient createStandaloneClientWithIam(int refreshIntervalSeconds) {
