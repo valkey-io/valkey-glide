@@ -5,4 +5,5 @@
 
 Logging infrastructure for [Valkey GLIDE](https://glide.valkey.io/).
 
-This is an **internal crate** that isn't intended to be used directly. Its API is unstable and may change in any release.
+This is an **internal crate** that isn't intended to be used directly.
+Its API is unstable and may change in any release.
