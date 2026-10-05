@@ -31,14 +31,11 @@ connection-plumbing one: the clients are *not* `redis` connection objects
 (`ConnectionLike`), because that interop layer forced a full payload copy per
 command. The migrations that follow from this are mechanical:
 
-<!-- TODO #7058: `glide_send` and `glide_send_owned` no longer exist; the
-methods are `glide_send_command_as` and `glide_send_command`. -->
-
 | redis-rs call site              | GLIDE call site                           |
 |---------------------------------|-------------------------------------------|
 | `pipe()….query_async(&mut c)`   | `pipe()….query_async(&c)` (`PipelineExt`) |
 | sync `pipe()….query(&mut c)`    | `pipe()….query(&c)` (`sync::PipelineExt`) |
-| `cmd("X")….query_async(&mut c)` | `c.glide_send(cmd)` (typed, by value)     |
+| `cmd("X")….query_async(&mut c)` | `c.glide_send_command_as(cmd)` (typed)    |
 | `con.scan_match(pat)` iterators | same call; GLIDE-owned iterator           |
 
 GLIDE's scan iterators yield a `ValkeyResult<RV>` per item, from `next_item()`
@@ -87,9 +84,8 @@ Notes:
 - Cluster: `GlideClusterClientConfiguration::from_urls([...])` accepts
   seed-node URLs; commands are routed automatically.
 - Mutual TLS: `config.client_identity(cert_pem, key_pem)`.
-  <!-- TODO #7058: see the `glide_send` note above. -->
 - Raw commands: build a `glide::Cmd` with `glide::cmd("X")`. Send it typed with
-  `client.glide_send(cmd)`, or untyped with `glide_send_owned` /
+  `client.glide_send_command_as(cmd)`, or untyped with `glide_send_command` /
   `custom_command`. This replaces `cmd().query_async()` without the
   connection-object copy.
 - Accepted gaps: no Sentinel / unix sockets / async-std (unsupported by

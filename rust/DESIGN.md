@@ -48,17 +48,16 @@ generates the typed `glide::AsyncTypedCommands` and `glide::TypedCommands`
 traits (blanket-implemented for every `AsyncCommands` / `Commands` type).
 
 Parity is a **command-surface** contract, not a connection-plumbing one.
-<!-- TODO #7058: `glide_send` and `glide_send_owned` no longer exist; the
-methods are `glide_send_command_as` and `glide_send_command`. -->
 Deliberate deviations, all performance-motivated:
+
 - methods take `&self` (the clients are cheaply cloneable handles) and hand
-  the built command to glide-core **by value** via the `glide_send_owned`
+  the built command to glide-core **by value** via the `glide_send_command`
   required method — the native zero-extra-copy path;
 - the clients do **not** implement the `redis` crate's connection-object
   traits (`ConnectionLike`): that interop hands commands over by reference,
   which forced a full payload copy per command to bridge into glide-core's
-  owned dispatch. Raw commands go through the typed `glide_send` escape
-  hatch instead;
+  owned dispatch. Raw commands go through the typed `glide_send_command_as`
+  escape hatch instead;
 - the `scan*` methods return GLIDE-owned iterators (`src/commands/scan.rs`)
   that yield `ValkeyResult<RV>` via `next_item()` / `Iterator` (unlike redis-rs,
   which yields the bare value and swallows mid-scan errors), each page
@@ -68,14 +67,14 @@ Almost every method on [`AsyncCommands`](src/commands/core.rs) and
 [`Commands`](src/commands/core.rs) stands for one Valkey command — `get`, `set`,
 `incr`, and so on. The command table generates them all automatically.
 
-Each client writes just one method of its own: `glide_send_owned` (or
-`glide_send_owned_sync` on the blocking trait). It takes a finished command and
-sends it to glide-core, and every generated method goes through it.
+Each client writes just one method of its own: `glide_send_command` (on both
+the async and blocking traits). It takes a finished command and sends it to
+glide-core, and every generated method goes through it.
 
 For a command the table does not cover, build the command yourself and run it
-with `glide_send`, which returns the reply already decoded into the type you ask
-for. `Cmd::query_async` does the same in redis-rs's calling style, so code moving
-over from that crate keeps working.
+with `glide_send_command_as`, which returns the reply already decoded into the
+type you ask for. `Cmd::query_async` does the same in redis-rs's calling style,
+so code moving over from that crate keeps working.
 
 Commands **beyond** that table live in GLIDE **extension traits**
 (`src/commands/`): streams, geo, JSON, Pub/Sub, scripting/
