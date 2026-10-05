@@ -99,13 +99,10 @@ fn run_parity_check(version: &str) -> Result<String, Vec<String>> {
 /// if the data file can't be read, parsed, serialized, or written, or if the
 /// redis-rs source can't be fetched.
 //
-// TODO #7058: the snapshot is a trusted baseline — it is not validated against
-// the redis-rs source, and its `version` is stamped from `REDIS_RS_VERSION`
-// rather than derived from the source. So a source signature change with a stale
-// snapshot still passes, and regenerating after a version bump relabels the old
-// source as the new version. Harden by re-parsing (or hash-verifying) the source
-// each run, and make regeneration an explicit step rather than a side effect of
-// `cargo test` writing into `src/`.
+// TODO #7288: the snapshot is a trusted baseline — it is not validated against
+// the redis-rs source, so a hand-edited or stale snapshot still passes. Harden by
+// re-parsing (or hash-verifying) the source each run, and make regeneration an
+// explicit step.
 fn load_redis_parity(manifest: &Path, version: &str) -> RedisParity {
     let data_path = manifest.join(REDIS_PARITY_JSON);
 
@@ -191,7 +188,7 @@ fn parse_command_table_methods(src: &str) -> BTreeMap<String, Method> {
     let rest = &src[start..];
 
     // The macro body ends at the first line that *starts* with `}`.
-    // TODO #7058: for robust parsing (comment/string/brace-safe), tokenize with
+    // TODO #7288: for robust parsing (comment/string/brace-safe), tokenize with
     // `proc-macro2` and take the macro's brace `Group` instead of this heuristic.
     let end = rest
         .lines()
