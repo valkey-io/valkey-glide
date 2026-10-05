@@ -991,7 +991,7 @@
     "glide": null
   },
   "hset_multiple": {
-    "reason": "`HSET` with multiple fields was introduced in Valkey 4.0.0. Unlike `HMSET` (which was marked as deprecated in Redis 4.0.0), it returns the number of fields that were newly added.",
+    "reason": "`HSET` with multiple fields was introduced in Redis 4.0.0 and is supported by all Valkey versions. Unlike `HMSET` (deprecated since Redis 4.0.0), it returns the number of fields that were newly added.",
     "redis": {
       "name": "hset_multiple",
       "generics": [
