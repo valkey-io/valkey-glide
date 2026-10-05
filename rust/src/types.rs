@@ -133,6 +133,15 @@ impl IntegerReplyOrNoOp {
             Self::NotExists => -2,
         }
     }
+
+    /// Returns whether this reply equals the signed integer `other`, without truncating or wrapping.
+    fn eq_signed(&self, other: i64) -> bool {
+        match self {
+            Self::IntegerReply(s) => usize::try_from(other).is_ok_and(|o| o == *s),
+            Self::ExistsButNotRelevant => other == -1,
+            Self::NotExists => other == -2,
+        }
+    }
 }
 
 impl FromValkeyValue for IntegerReplyOrNoOp {
@@ -140,7 +149,12 @@ impl FromValkeyValue for IntegerReplyOrNoOp {
         match value {
             ValkeyValue::Int(-2) => Ok(Self::NotExists),
             ValkeyValue::Int(-1) => Ok(Self::ExistsButNotRelevant),
-            ValkeyValue::Int(s) => Ok(Self::IntegerReply(s as usize)),
+            ValkeyValue::Int(s) => usize::try_from(s).map(Self::IntegerReply).map_err(|_| {
+                to_glide_error(
+                    ValkeyValue::Int(s),
+                    "Value should be a non-negative integer, -1, or -2.",
+                )
+            }),
             other => Err(to_glide_error(other, "Value should be an integer.")),
         }
     }
@@ -148,7 +162,7 @@ impl FromValkeyValue for IntegerReplyOrNoOp {
 
 impl PartialEq<isize> for IntegerReplyOrNoOp {
     fn eq(&self, other: &isize) -> bool {
-        self.raw() == *other
+        i64::try_from(*other).is_ok_and(|o| self.eq_signed(o))
     }
 }
 
@@ -160,13 +174,13 @@ impl PartialEq<usize> for IntegerReplyOrNoOp {
 
 impl PartialEq<i32> for IntegerReplyOrNoOp {
     fn eq(&self, other: &i32) -> bool {
-        self.raw() as i32 == *other
+        self.eq_signed(i64::from(*other))
     }
 }
 
 impl PartialEq<u32> for IntegerReplyOrNoOp {
     fn eq(&self, other: &u32) -> bool {
-        matches!(self, Self::IntegerReply(s) if *s as u32 == *other)
+        matches!(self, Self::IntegerReply(s) if usize::try_from(*other).is_ok_and(|o| o == *s))
     }
 }
 
@@ -184,15 +198,39 @@ mod integer_reply_or_noop_tests {
     }
 
     #[test]
-    fn integer_reply_or_no_op_raw_and_comparisons() {
+    fn integer_reply_or_no_op_rejects_other_negatives() {
+        for i in [-3, i64::MIN] {
+            assert!(IntegerReplyOrNoOp::from_owned_valkey_value(ValkeyValue::Int(i)).is_err());
+        }
+    }
+
+    #[test]
+    fn integer_reply_or_no_op_raw() {
         assert_eq!(IntegerReplyOrNoOp::NotExists.raw(), -2);
         assert_eq!(IntegerReplyOrNoOp::ExistsButNotRelevant.raw(), -1);
         assert_eq!(IntegerReplyOrNoOp::IntegerReply(7).raw(), 7);
+    }
+
+    #[test]
+    fn integer_reply_or_no_op_comparisons() {
+        // Comparisons against each integer type.
         assert_eq!(IntegerReplyOrNoOp::NotExists, -2isize);
         assert_eq!(IntegerReplyOrNoOp::ExistsButNotRelevant, -1i32);
         assert_eq!(IntegerReplyOrNoOp::IntegerReply(7), 7usize);
         assert_eq!(IntegerReplyOrNoOp::IntegerReply(7), 7u32);
         assert_ne!(IntegerReplyOrNoOp::NotExists, 2usize);
+
+        // Comparisons do not truncate to 32 bits.
+        let large = IntegerReplyOrNoOp::IntegerReply((1usize << 32) + 7);
+        assert_ne!(large, 7u32);
+        assert_ne!(large, 7i32);
+        assert_eq!(large, (1usize << 32) + 7);
+        assert_eq!(large, (1isize << 32) + 7);
+
+        // Comparisons do not wrap large replies onto the sentinels.
+        let max = IntegerReplyOrNoOp::IntegerReply(usize::MAX);
+        assert_ne!(max, -1isize);
+        assert_ne!(max, -1i32);
     }
 
     fn decode(i: i64) -> IntegerReplyOrNoOp {
