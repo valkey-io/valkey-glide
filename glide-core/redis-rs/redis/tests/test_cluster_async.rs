@@ -5944,7 +5944,7 @@ mod cluster_async {
 
         block_on_all(async move {
             let mut connection = cluster.async_connection(None).await;
-            let ports = cluster.cluster.ports();
+            let ports = cluster.cluster.reserve_ports_for_restart();
             drop(cluster);
             let cmd = cmd("PING");
 
@@ -5997,7 +5997,7 @@ mod cluster_async {
         );
         block_on_all(async move {
             let mut connection = cluster.async_connection(None).await;
-            let ports = cluster.cluster.ports();
+            let ports = cluster.cluster.reserve_ports_for_restart();
             drop(cluster);
 
             let _cluster =

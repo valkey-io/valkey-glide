@@ -30,6 +30,7 @@ use crate::support::{build_keys_and_certs_for_tls, Module};
 
 use super::{
     build_single_client, get_random_available_port, load_certs_from_file,
+    ports::PortReservation,
     readiness::{wait_for_server, STARTUP_TIMEOUT},
 };
 
@@ -101,13 +102,17 @@ pub struct NodePorts {
     pub bus: u16,
 }
 
-/// What to do when a node fails to start on its assigned ports.
 #[derive(Clone, Copy, Debug)]
-enum PortPolicy {
-    /// Pick new random ports for the next attempt (new clusters).
+pub(crate) enum PortPolicy {
+    /// New fixtures have no clients depending on the originally chosen addresses.
     Fresh,
-    /// Keep the same ports (restarting at addresses a client already knows).
+    /// Retained clients cannot reconnect if every node moves to a new address.
     Fixed,
+}
+
+pub struct RestartPorts {
+    ports: Vec<NodePorts>,
+    reservation: PortReservation,
 }
 
 pub struct RedisCluster {
@@ -148,15 +153,17 @@ impl RedisCluster {
         Self::start(ports, replicas, modules, mtls_enabled, PortPolicy::Fresh)
     }
 
-    /// Start a cluster on exactly `ports`, for restarting at addresses a client
-    /// already holds. New clusters should use `with_modules`.
+    /// Existing clients cannot discover replacement nodes at unrelated addresses.
     pub fn with_modules_on_ports(
-        ports: Vec<NodePorts>,
+        ports: RestartPorts,
         replicas: u16,
         modules: &[Module],
         mtls_enabled: bool,
     ) -> RedisCluster {
-        Self::start(ports, replicas, modules, mtls_enabled, PortPolicy::Fixed)
+        let RestartPorts { ports, reservation } = ports;
+        let cluster = Self::start(ports, replicas, modules, mtls_enabled, PortPolicy::Fixed);
+        drop(reservation);
+        cluster
     }
 
     fn fresh_node_ports() -> NodePorts {
@@ -251,7 +258,7 @@ impl RedisCluster {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn start_nodes(
+    pub(crate) fn start_nodes(
         requested_ports: &[NodePorts],
         replicas: u16,
         modules: &[Module],
@@ -281,7 +288,10 @@ impl RedisCluster {
                     Ok(server) => break server,
                     Err(err) => {
                         if cur_attempts == max_attempts {
-                            panic!("{err}");
+                            panic!(
+                                "failed to start node on {node_ports:?} after {} attempts: {err}",
+                                cur_attempts + 1
+                            );
                         }
                         cur_attempts += 1;
                         match port_policy {
@@ -528,7 +538,15 @@ impl RedisCluster {
         self.servers.iter()
     }
 
-    /// The ports each node listens on, in node order.
+    /// The allocator's probe would itself race a restart if these ports were
+    /// eligible while the original listeners are down.
+    pub fn reserve_ports_for_restart(&self) -> RestartPorts {
+        RestartPorts {
+            ports: self.ports.clone(),
+            reservation: PortReservation::new(self.ports.iter().flat_map(|p| [p.client, p.bus])),
+        }
+    }
+
     pub fn ports(&self) -> Vec<NodePorts> {
         self.ports.clone()
     }
@@ -587,10 +605,9 @@ impl TestClusterContext {
         Self::from_cluster(cluster, initializer, mtls_enabled)
     }
 
-    /// Restart the cluster on the ports it previously used, so clients holding
-    /// the old addresses can reconnect.
+    /// The retained client still needs the old addresses after the outage.
     pub fn restart_on_ports<F>(
-        ports: Vec<NodePorts>,
+        ports: RestartPorts,
         replicas: u16,
         initializer: F,
         mtls_enabled: bool,

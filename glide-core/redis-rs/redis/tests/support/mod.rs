@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
 use std::path::Path;
-use std::{env, fs, io, net::SocketAddr, net::TcpListener, path::PathBuf, process};
+use std::{env, fs, io, path::PathBuf, process};
 use std::{
     fs::File,
     io::{BufReader, Read},
@@ -13,7 +13,6 @@ use redis::{ConnectionAddr, InfoDict, Pipeline, ProtocolVersion, RedisConnection
 
 use redis::{ClientTlsConfig, TlsCertificates};
 
-use socket2::{Domain, Socket, Type};
 use tempfile::TempDir;
 
 #[cfg(feature = "aio")]
@@ -363,20 +362,8 @@ impl RedisServer {
     }
 }
 
-/// Finds a random open port available for listening at, by spawning a TCP server with
-/// port "zero" (which prompts the OS to just use any available port). Between calling
-/// this function and trying to bind to this port, the port may be given to another
-/// process, so this must be used with care (since here we only use it for tests, it's
-/// mostly okay).
-pub fn get_random_available_port() -> u16 {
-    let addr = &"127.0.0.1:0".parse::<SocketAddr>().unwrap().into();
-    let socket = Socket::new(Domain::IPV4, Type::STREAM, None).unwrap();
-    socket.set_reuse_address(true).unwrap();
-    socket.bind(addr).unwrap();
-    socket.listen(1).unwrap();
-    let listener = TcpListener::from(socket);
-    listener.local_addr().unwrap().port()
-}
+pub(crate) mod ports;
+pub use ports::get_random_available_port;
 
 pub(crate) mod readiness;
 

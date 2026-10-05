@@ -1020,7 +1020,7 @@ mod test_cluster_scan_async {
             }
             if count == 5 {
                 // The old connection keeps retrying these addresses, so the cluster must come back on them.
-                let ports = cluster.cluster.ports();
+                let ports = cluster.cluster.reserve_ports_for_restart();
                 drop(cluster);
                 let scan_response: RedisResult<(ScanStateRC, Vec<Value>)> = connection
                     .cluster_scan(scan_state_rc.clone(), ClusterScanArgs::default())
