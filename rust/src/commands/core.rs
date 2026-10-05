@@ -1231,7 +1231,7 @@ implement_commands! {
     }
 
     /// `ZREVRANGE WITHSCORES`.
-    fn zrevrange_withscores<K: ToSingleValkeyArg>(key: K, start: isize, stop: isize) -> (Vec<String>) {
+    fn zrevrange_withscores<K: ToSingleValkeyArg>(key: K, start: isize, stop: isize) -> (Vec<(String, f64)>) {
         build_cmd!("ZREVRANGE", key, start, stop, "WITHSCORES")
     }
 
@@ -1241,7 +1241,7 @@ implement_commands! {
     }
 
     /// `ZREVRANGEBYSCORE WITHSCORES`.
-    fn zrevrangebyscore_withscores<K: ToSingleValkeyArg, MM: ToSingleValkeyArg, M: ToSingleValkeyArg>(key: K, max: MM, min: M) -> (Vec<String>) {
+    fn zrevrangebyscore_withscores<K: ToSingleValkeyArg, MM: ToSingleValkeyArg, M: ToSingleValkeyArg>(key: K, max: MM, min: M) -> (Vec<(String, f64)>) {
         build_cmd!("ZREVRANGEBYSCORE", key, max, min, "WITHSCORES")
     }
 
@@ -1251,7 +1251,7 @@ implement_commands! {
     }
 
     /// `ZREVRANGEBYSCORE WITHSCORES LIMIT`.
-    fn zrevrangebyscore_limit_withscores<K: ToSingleValkeyArg, MM: ToSingleValkeyArg, M: ToSingleValkeyArg>(key: K, max: MM, min: M, offset: isize, count: isize) -> (Vec<String>) {
+    fn zrevrangebyscore_limit_withscores<K: ToSingleValkeyArg, MM: ToSingleValkeyArg, M: ToSingleValkeyArg>(key: K, max: MM, min: M, offset: isize, count: isize) -> (Vec<(String, f64)>) {
         build_cmd!("ZREVRANGEBYSCORE", key, max, min, "WITHSCORES", "LIMIT", offset, count)
     }
 

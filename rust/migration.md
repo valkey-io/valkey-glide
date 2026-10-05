@@ -163,10 +163,11 @@ let entries = client.xreadgroup("grp", "c1", &[("s", ">")], Some(options)).await
 
 ### A few typed returns differ
 
-`zpopmin` and `zpopmax` return `Vec<(String, f64)>` instead of `Vec<String>`.
-Valkey's RESP3 reply nests each member with its score, which redis-rs's typed
-`Vec<String>` cannot decode. GLIDE returns `(member, score)` pairs for both
-RESP2 and RESP3.
+`zpopmin`, `zpopmax`, `zrevrange_withscores`, `zrevrangebyscore_withscores`, and
+`zrevrangebyscore_limit_withscores` return `Vec<(String, f64)>` instead of
+`Vec<String>`. Valkey's RESP3 reply (GLIDE's default protocol) nests each
+member with its score, which redis-rs's typed `Vec<String>` cannot decode.
+GLIDE returns `(member, score)` pairs for both RESP2 and RESP3.
 
 `blmpop` returns `Option<(String, Vec<String>)>` instead of
 `Option<[String; 2]>`, matching `lmpop`. Its reply is a key and a list of

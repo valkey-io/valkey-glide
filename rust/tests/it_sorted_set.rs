@@ -5,7 +5,7 @@ mod common;
 
 use glide::commands::options::Limit;
 use glide::commands::sorted_set::{LexBound, ScoreBound};
-use glide::{AsyncTypedCommands, GlideError, ProtocolVersion, SortedSetCommands};
+use glide::{AsyncTypedCommands, GlideError, SortedSetCommands};
 
 matrix_test!(zadd_zcard, c, {
     let k = common::key("z");
@@ -164,6 +164,7 @@ matrix_test!(zrangebyscore_withscores, c, {
 // Valkey returns non-integer scores as floats. Typed `zrangebyscore_withscores`
 // decodes scores as `usize` and raises an error if this happens. Callers need to use
 // the untyped version if they want to handle this case. This matches redis-rs behaviour.
+
 matrix_test!(zrangebyscore_withscores_typed_with_float, c, {
     let k = common::key("z");
     let _: usize = c
@@ -178,9 +179,6 @@ matrix_test!(zrangebyscore_withscores_typed_with_float, c, {
     assert!(err.message().contains("usize"));
 });
 
-// Valkey returns non-integer scores as floats. Typed `zrangebyscore_withscores`
-// decodes scores as `usize` and raises an error if this happens. Callers need to use
-// the untyped version if they want to handle this case. This matches redis-rs behaviour.
 matrix_test!(zrangebyscore_withscores_untyped_with_float, c, {
     let k = common::key("z");
     let _: usize = c
@@ -194,68 +192,24 @@ matrix_test!(zrangebyscore_withscores_untyped_with_float, c, {
     assert_eq!(r, vec![("a".to_string(), 1.0), ("b".to_string(), 2.5)]);
 });
 
-// Valkey returns `(member, score)` pairs in RESP3 rather than a flat list.
-// Typed `zrevrange_withscores` and `zrevrangebyscore_withscores` return `Vec<String>`
-// and raise an error if this happens. Callers need to use the untyped version if they
-// want to handle this case. This matches redis-rs behaviour.
-#[tokio::test]
-async fn zrevrange_withscores_typed_resp2() {
-    let server = common::TestServer::start();
-    let c = server.client_with_protocol(ProtocolVersion::RESP2).await;
+matrix_test!(zrevrange_withscores, c, {
     let k = common::key("z");
     let _: usize = c
         .zadd_multiple(&k, &[(1.0, "a"), (2.5, "b")])
         .await
         .unwrap();
-    let r: Vec<String> = c.zrevrange_withscores(&k, 0, -1).await.unwrap();
-    assert_eq!(r, vec!["b", "2.5", "a", "1"]);
-    let r: Vec<String> = c
+    let expected = vec![("b".to_string(), 2.5), ("a".to_string(), 1.0)];
+    let r: Vec<(String, f64)> = c.zrevrange_withscores(&k, 0, -1).await.unwrap();
+    assert_eq!(r, expected);
+    let r: Vec<(String, f64)> = c
         .zrevrangebyscore_withscores(&k, "+inf", "-inf")
         .await
         .unwrap();
-    assert_eq!(r, vec!["b", "2.5", "a", "1"]);
-}
-
-// Valkey returns `(member, score)` pairs in RESP3 rather than a flat list.
-// Typed `zrevrange_withscores` and `zrevrangebyscore_withscores` return `Vec<String>`
-// and raise an error if this happens. Callers need to use the untyped version if they
-// want to handle this case. This matches redis-rs behaviour.
-#[tokio::test]
-async fn zrevrange_withscores_typed_resp3() {
-    let server = common::TestServer::start();
-    let c = server.client_with_protocol(ProtocolVersion::RESP3).await;
-    let k = common::key("z");
-    let _: usize = c
-        .zadd_multiple(&k, &[(1.0, "a"), (2.5, "b")])
+    assert_eq!(r, expected);
+    let r: Vec<(String, f64)> = c
+        .zrevrangebyscore_limit_withscores(&k, "+inf", "-inf", 1, 1)
         .await
         .unwrap();
-    let err = c.zrevrange_withscores(&k, 0, -1).await.unwrap_err();
-    assert!(matches!(err, GlideError::Request(_)));
-    let err = c
-        .zrevrangebyscore_withscores(&k, "+inf", "-inf")
-        .await
-        .unwrap_err();
-    assert!(matches!(err, GlideError::Request(_)));
-}
-
-// Valkey returns `(member, score)` pairs in RESP3 rather than a flat list.
-// Typed `zrevrange_withscores` and `zrevrangebyscore_withscores` return `Vec<String>`
-// and raise an error if this happens. Callers need to use the untyped version if they
-// want to handle this case. This matches redis-rs behaviour.
-matrix_test!(zrevrange_withscores_untyped, c, {
-    let k = common::key("z");
-    let _: usize = c
-        .zadd_multiple(&k, &[(1.0, "a"), (2.5, "b")])
-        .await
-        .unwrap();
-    let r: Vec<(String, f64)> = glide::AsyncCommands::zrevrange_withscores(&c, &k, 0, -1)
-        .await
-        .unwrap();
-    assert_eq!(r, vec![("b".to_string(), 2.5), ("a".to_string(), 1.0)]);
-    let r: Vec<(String, f64)> =
-        glide::AsyncCommands::zrevrangebyscore_limit_withscores(&c, &k, "+inf", "-inf", 1, 1)
-            .await
-            .unwrap();
     assert_eq!(r, vec![("a".to_string(), 1.0)]);
 });
 

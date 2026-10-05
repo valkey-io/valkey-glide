@@ -2564,5 +2564,206 @@
       ],
       "return_type": "(Vec<(String, f64)>)"
     }
+  },
+  "zrevrange_withscores": {
+    "reason": "Valkey replies to `ZREVRANGE … WITHSCORES` with a flat `[member, score, …]` list in RESP2 and with nested `[member, score]` pairs in RESP3 (GLIDE's default protocol). redis-rs's typed `Vec<String>` returns the RESP2 reply as alternating member and score strings, but fails to decode a RESP3 reply. GLIDE returns `(member, score)` pairs as a `Vec<(String, f64)>` instead for both protocols.",
+    "redis": {
+      "name": "zrevrange_withscores",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToSingleRedisArg"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "start",
+          "type_name": "isize"
+        },
+        {
+          "name": "stop",
+          "type_name": "isize"
+        }
+      ],
+      "return_type": "(Vec<String>)"
+    },
+    "glide": {
+      "name": "zrevrange_withscores",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToSingleValkeyArg"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "start",
+          "type_name": "isize"
+        },
+        {
+          "name": "stop",
+          "type_name": "isize"
+        }
+      ],
+      "return_type": "(Vec<(String, f64)>)"
+    }
+  },
+  "zrevrangebyscore_limit_withscores": {
+    "reason": "Valkey replies to `ZREVRANGEBYSCORE … WITHSCORES` with a flat `[member, score, …]` list in RESP2 and with nested `[member, score]` pairs in RESP3 (GLIDE's default protocol). redis-rs's typed `Vec<String>` returns the RESP2 reply as alternating member and score strings, but fails to decode a RESP3 reply. GLIDE returns `(member, score)` pairs as a `Vec<(String, f64)>` instead for both protocols.",
+    "redis": {
+      "name": "zrevrangebyscore_limit_withscores",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToSingleRedisArg"
+        },
+        {
+          "name": "MM",
+          "bound": "ToSingleRedisArg"
+        },
+        {
+          "name": "M",
+          "bound": "ToSingleRedisArg"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "max",
+          "type_name": "MM"
+        },
+        {
+          "name": "min",
+          "type_name": "M"
+        },
+        {
+          "name": "offset",
+          "type_name": "isize"
+        },
+        {
+          "name": "count",
+          "type_name": "isize"
+        }
+      ],
+      "return_type": "(Vec<String>)"
+    },
+    "glide": {
+      "name": "zrevrangebyscore_limit_withscores",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToSingleValkeyArg"
+        },
+        {
+          "name": "MM",
+          "bound": "ToSingleValkeyArg"
+        },
+        {
+          "name": "M",
+          "bound": "ToSingleValkeyArg"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "max",
+          "type_name": "MM"
+        },
+        {
+          "name": "min",
+          "type_name": "M"
+        },
+        {
+          "name": "offset",
+          "type_name": "isize"
+        },
+        {
+          "name": "count",
+          "type_name": "isize"
+        }
+      ],
+      "return_type": "(Vec<(String, f64)>)"
+    }
+  },
+  "zrevrangebyscore_withscores": {
+    "reason": "Valkey replies to `ZREVRANGEBYSCORE … WITHSCORES` with a flat `[member, score, …]` list in RESP2 and with nested `[member, score]` pairs in RESP3 (GLIDE's default protocol). redis-rs's typed `Vec<String>` returns the RESP2 reply as alternating member and score strings, but fails to decode a RESP3 reply. GLIDE returns `(member, score)` pairs as a `Vec<(String, f64)>` instead for both protocols.",
+    "redis": {
+      "name": "zrevrangebyscore_withscores",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToSingleRedisArg"
+        },
+        {
+          "name": "MM",
+          "bound": "ToSingleRedisArg"
+        },
+        {
+          "name": "M",
+          "bound": "ToSingleRedisArg"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "max",
+          "type_name": "MM"
+        },
+        {
+          "name": "min",
+          "type_name": "M"
+        }
+      ],
+      "return_type": "(Vec<String>)"
+    },
+    "glide": {
+      "name": "zrevrangebyscore_withscores",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToSingleValkeyArg"
+        },
+        {
+          "name": "MM",
+          "bound": "ToSingleValkeyArg"
+        },
+        {
+          "name": "M",
+          "bound": "ToSingleValkeyArg"
+        }
+      ],
+      "args": [
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "max",
+          "type_name": "MM"
+        },
+        {
+          "name": "min",
+          "type_name": "M"
+        }
+      ],
+      "return_type": "(Vec<(String, f64)>)"
+    }
   }
 }
