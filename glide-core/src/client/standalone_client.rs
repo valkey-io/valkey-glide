@@ -210,7 +210,7 @@ impl StandaloneClient {
         let valkey_connection_info =
             get_valkey_connection_info(&connection_request, iam_token_manager).await;
         let retry_strategy = match connection_request.connection_retry_strategy {
-            Some(strategy) => RetryStrategy::new(
+            Some(strategy) => RetryStrategy::try_new(
                 strategy.exponent_base,
                 strategy.factor,
                 strategy.number_of_retries,

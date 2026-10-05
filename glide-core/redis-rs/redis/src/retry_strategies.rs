@@ -25,33 +25,46 @@ pub const MAX_JITTER_PERCENT: u32 = 100;
 impl RetryStrategy {
     /// Create RetryStrategy from given parameters.
     ///
-    /// Fails if `jitter_percent` exceeds [`MAX_JITTER_PERCENT`]. A larger jitter would make the
-    /// lower jitter bound negative, which `Duration::mul_f64` cannot represent.
+    /// A `jitter_percent` above [`MAX_JITTER_PERCENT`] is capped to it. Use [`Self::try_new`]
+    /// to reject it instead.
     pub fn new(
         exponent_base: u32,
         factor: u32,
         number_of_retries: u32,
         jitter_percent: Option<u32>,
-    ) -> RedisResult<Self> {
+    ) -> Self {
         let exponent_base = if exponent_base > 0 {
             exponent_base
         } else {
             EXPONENT_BASE
         };
         let factor = if factor > 0 { factor } else { FACTOR };
-        let jitter = jitter_percent.unwrap_or(DEFAULT_JITTER_PERCENT);
-        if jitter > MAX_JITTER_PERCENT {
+        let jitter = jitter_percent
+            .unwrap_or(DEFAULT_JITTER_PERCENT)
+            .min(MAX_JITTER_PERCENT);
+        Self::with_params(exponent_base, factor, number_of_retries, jitter)
+    }
+
+    /// Like [`Self::new`], but fails if `jitter_percent` exceeds [`MAX_JITTER_PERCENT`]. A larger
+    /// jitter would make the lower jitter bound negative, which `Duration::mul_f64` cannot represent.
+    pub fn try_new(
+        exponent_base: u32,
+        factor: u32,
+        number_of_retries: u32,
+        jitter_percent: Option<u32>,
+    ) -> RedisResult<Self> {
+        if let Some(jitter) = jitter_percent.filter(|&j| j > MAX_JITTER_PERCENT) {
             return Err(RedisError::from((
                 ErrorKind::InvalidClientConfig,
                 "invalid reconnect strategy",
-                format!("jitterPercent must be between 0 and {MAX_JITTER_PERCENT}, got {jitter}"),
+                format!("jitter_percent must be between 0 and {MAX_JITTER_PERCENT}, got {jitter}"),
             )));
         }
-        Ok(Self::with_params(
+        Ok(Self::new(
             exponent_base,
             factor,
             number_of_retries,
-            jitter,
+            jitter_percent,
         ))
     }
 
@@ -154,7 +167,7 @@ mod tests {
         let factor = 100;
         let jitter_percent = Some(20);
 
-        let strategy = RetryStrategy::new(base, factor, retries, jitter_percent).unwrap();
+        let strategy = RetryStrategy::new(base, factor, retries, jitter_percent);
         let intervals = strategy.get_bounded_backoff_dur_iterator();
 
         let jitter = 20_f64 / 100.0;
@@ -180,18 +193,24 @@ mod tests {
     #[test]
     fn test_jitter_percent_above_100_is_rejected() {
         for jitter in [MAX_JITTER_PERCENT + 1, 150, u32::MAX] {
-            let err = RetryStrategy::new(2, 100, 3, Some(jitter)).unwrap_err();
+            let err = RetryStrategy::try_new(2, 100, 3, Some(jitter)).unwrap_err();
             assert_eq!(err.kind(), ErrorKind::InvalidClientConfig);
             assert!(
-                err.to_string().contains("jitterPercent"),
+                err.to_string().contains("jitter_percent"),
                 "error does not name the field: {err}"
             );
         }
     }
 
     #[test]
+    fn test_new_caps_jitter_percent() {
+        let strategy = RetryStrategy::new(2, 100, 3, Some(u32::MAX));
+        assert_eq!(strategy.jitter_percent, MAX_JITTER_PERCENT);
+    }
+
+    #[test]
     fn test_max_jitter_percent_is_accepted() {
-        let strategy = RetryStrategy::new(2, 100, 3, Some(MAX_JITTER_PERCENT)).unwrap();
+        let strategy = RetryStrategy::new(2, 100, 3, Some(MAX_JITTER_PERCENT));
         let (lower, upper) = strategy.jitter_bounds();
         assert_eq!(lower, 0.0);
         assert_eq!(upper, 2.0);
@@ -204,7 +223,7 @@ mod tests {
 
     #[test]
     fn test_zero_retries_does_not_underflow() {
-        let strategy = RetryStrategy::new(2, 100, 0, Some(20)).unwrap();
+        let strategy = RetryStrategy::new(2, 100, 0, Some(20));
 
         assert_eq!(strategy.get_bounded_backoff_dur_iterator().count(), 0);
 
@@ -220,7 +239,7 @@ mod tests {
 
     #[test]
     fn test_zero_retries_without_jitter_yields_exact_first_delay() {
-        let strategy = RetryStrategy::new(2, 100, 0, Some(0)).unwrap();
+        let strategy = RetryStrategy::new(2, 100, 0, Some(0));
 
         // Pins the closed form itself: `factor * base^max(retries, 1)` = 200ms, no jitter to mask
         // an off-by-one in the exponent.
@@ -232,7 +251,7 @@ mod tests {
 
     #[test]
     fn test_huge_retry_count_returns_promptly() {
-        let strategy = RetryStrategy::new(2, 100, u32::MAX, Some(20)).unwrap();
+        let strategy = RetryStrategy::new(2, 100, u32::MAX, Some(20));
 
         // The infinite iterator derives its tail delay arithmetically. Walking the backoff to the
         // last attempt instead would take billions of steps on the reconnect path.
@@ -251,7 +270,7 @@ mod tests {
     #[test]
     fn test_infinite_tail_is_rejittered_when_jitter_enabled() {
         let retries = 3;
-        let strategy = RetryStrategy::new(2, 100, retries, Some(20)).unwrap();
+        let strategy = RetryStrategy::new(2, 100, retries, Some(20));
         let mut iter = strategy.get_infinite_backoff_dur_iterator();
         for _ in 0..retries {
             let _ = iter.next().unwrap();
@@ -279,7 +298,7 @@ mod tests {
     fn test_saturated_tail_with_jitter_does_not_panic() {
         // factor and base at u32::MAX saturate the closed form to u64::MAX millis. Scaling that by
         // the jitter upper bound must not overflow `Duration::mul_f64`.
-        let strategy = RetryStrategy::new(u32::MAX, u32::MAX, u32::MAX, Some(100)).unwrap();
+        let strategy = RetryStrategy::new(u32::MAX, u32::MAX, u32::MAX, Some(100));
         let mut infinite = strategy.get_infinite_backoff_dur_iterator();
         for _ in 0..10 {
             let _ = infinite.next().unwrap();
@@ -289,7 +308,7 @@ mod tests {
     #[test]
     fn test_infinite_tail_is_constant_when_jitter_disabled() {
         let retries = 3;
-        let strategy = RetryStrategy::new(2, 100, retries, Some(0)).unwrap();
+        let strategy = RetryStrategy::new(2, 100, retries, Some(0));
         let mut iter = strategy.get_infinite_backoff_dur_iterator();
         for _ in 0..retries {
             let _ = iter.next().unwrap();
@@ -306,7 +325,7 @@ mod tests {
         let base = 2;
         let factor = 100;
         let retries = 4;
-        let strategy = RetryStrategy::new(base, factor, retries, Some(0)).unwrap();
+        let strategy = RetryStrategy::new(base, factor, retries, Some(0));
 
         let bounded: Vec<_> = strategy.get_bounded_backoff_dur_iterator().collect();
         let mut infinite = strategy.get_infinite_backoff_dur_iterator();
@@ -325,7 +344,7 @@ mod tests {
         let base = 2;
         let factor = 100;
         let jitter_percent = Some(20);
-        let strategy = RetryStrategy::new(base, factor, retries, jitter_percent).unwrap();
+        let strategy = RetryStrategy::new(base, factor, retries, jitter_percent);
         let mut iter = strategy.get_infinite_backoff_dur_iterator();
 
         // First `retries` values should differ (jittered)

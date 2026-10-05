@@ -2565,7 +2565,7 @@ async fn create_cluster_client(
     }
 
     let retry_strategy = match request.connection_retry_strategy {
-        Some(strategy) => RetryStrategy::new(
+        Some(strategy) => RetryStrategy::try_new(
             strategy.exponent_base,
             strategy.factor,
             strategy.number_of_retries,
@@ -2873,7 +2873,7 @@ impl Client {
             validate_effective_lib_ver(lib_ver).map_err(ConnectionError::Configuration)?;
         }
         if let Some(strategy) = &request.connection_retry_strategy {
-            RetryStrategy::new(
+            RetryStrategy::try_new(
                 strategy.exponent_base,
                 strategy.factor,
                 strategy.number_of_retries,
@@ -3692,7 +3692,7 @@ mod tests {
                 let message = error.to_string();
                 assert!(
                     message.contains(
-                        "invalid reconnect strategy: jitterPercent must be between 0 and 100, got 101"
+                        "invalid reconnect strategy: jitter_percent must be between 0 and 100, got 101"
                     ),
                     "{message}"
                 );
