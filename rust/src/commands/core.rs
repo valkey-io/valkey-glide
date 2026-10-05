@@ -822,7 +822,6 @@ implement_commands! {
 
     /// `HSET`.
     fn hset_multiple<K: ToSingleValkeyArg, F: ToValkeyArgs, V: ToValkeyArgs>(key: K, items: &'a [(F, V)]) -> (usize) {
-        // redis-rs sends `HMSET` (see `differences.json`).
         build_cmd!("HSET", key, items)
     }
 
