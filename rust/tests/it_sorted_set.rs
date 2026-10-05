@@ -608,6 +608,192 @@ matrix_test!(zrangestore_by_lex_stores_count, c, {
     assert_eq!(card, 3);
 });
 
+matrix_test!(zunionstore_weights, c, {
+    let (z1, z2, dst) = store_sources(&c, "zunionstore_weights").await;
+    let n: usize = c
+        .zunionstore_weights(&dst, &[(&z1, 2), (&z2, 1)])
+        .await
+        .unwrap();
+    assert_eq!(n, 3);
+    let stored: Vec<(String, f64)> = c.zrange_withscores(&dst, 0, -1).await.unwrap();
+    assert_eq!(
+        stored,
+        vec![
+            ("a".to_string(), 2.0),
+            ("d".to_string(), 3.0),
+            ("b".to_string(), 14.0)
+        ]
+    );
+});
+
+matrix_test!(zunionstore_min_weights, c, {
+    let (z1, z2, dst) = store_sources(&c, "zunionstore_min_weights").await;
+    let n: usize = c
+        .zunionstore_min_weights(&dst, &[(&z1, 2), (&z2, 1)])
+        .await
+        .unwrap();
+    assert_eq!(n, 3);
+    let stored: Vec<(String, f64)> = c.zrange_withscores(&dst, 0, -1).await.unwrap();
+    assert_eq!(
+        stored,
+        vec![
+            ("a".to_string(), 2.0),
+            ("d".to_string(), 3.0),
+            ("b".to_string(), 4.0)
+        ]
+    );
+});
+
+matrix_test!(zunionstore_max_weights, c, {
+    let (z1, z2, dst) = store_sources(&c, "zunionstore_max_weights").await;
+    let n: usize = c
+        .zunionstore_max_weights(&dst, &[(&z1, 2), (&z2, 1)])
+        .await
+        .unwrap();
+    assert_eq!(n, 3);
+    let stored: Vec<(String, f64)> = c.zrange_withscores(&dst, 0, -1).await.unwrap();
+    assert_eq!(
+        stored,
+        vec![
+            ("a".to_string(), 2.0),
+            ("d".to_string(), 3.0),
+            ("b".to_string(), 10.0)
+        ]
+    );
+});
+
+matrix_test!(zinterstore_weights, c, {
+    let (z1, z2, dst) = store_sources(&c, "zinterstore_weights").await;
+    let n: usize = c
+        .zinterstore_weights(&dst, &[(&z1, 2), (&z2, 1)])
+        .await
+        .unwrap();
+    assert_eq!(n, 1);
+    let stored: Vec<(String, f64)> = c.zrange_withscores(&dst, 0, -1).await.unwrap();
+    assert_eq!(stored, vec![("b".to_string(), 14.0)]);
+});
+
+matrix_test!(zinterstore_min_weights, c, {
+    let (z1, z2, dst) = store_sources(&c, "zinterstore_min_weights").await;
+    let n: usize = c
+        .zinterstore_min_weights(&dst, &[(&z1, 2), (&z2, 1)])
+        .await
+        .unwrap();
+    assert_eq!(n, 1);
+    let stored: Vec<(String, f64)> = c.zrange_withscores(&dst, 0, -1).await.unwrap();
+    assert_eq!(stored, vec![("b".to_string(), 4.0)]);
+});
+
+matrix_test!(zinterstore_max_weights, c, {
+    let (z1, z2, dst) = store_sources(&c, "zinterstore_max_weights").await;
+    let n: usize = c
+        .zinterstore_max_weights(&dst, &[(&z1, 2), (&z2, 1)])
+        .await
+        .unwrap();
+    assert_eq!(n, 1);
+    let stored: Vec<(String, f64)> = c.zrange_withscores(&dst, 0, -1).await.unwrap();
+    assert_eq!(stored, vec![("b".to_string(), 10.0)]);
+});
+
+matrix_test!(zrandmember_withscores, c, {
+    let k = common::key("z");
+    let _: usize = c.zadd(&k, "only", 1.5).await.unwrap();
+    let v: Vec<(String, f64)> = c.zrandmember_withscores(&k, 1).await.unwrap();
+    assert_eq!(v, vec![("only".to_string(), 1.5)]);
+});
+
+matrix_test!(zrangebylex, c, {
+    let k = lex_source(&c).await;
+    let r: Vec<String> = c.zrangebylex(&k, "[b", "+").await.unwrap();
+    assert_eq!(r, vec!["b", "c", "d"]);
+});
+
+matrix_test!(zrangebylex_limit, c, {
+    let k = lex_source(&c).await;
+    let r: Vec<String> = c.zrangebylex_limit(&k, "[b", "+", 1, 1).await.unwrap();
+    assert_eq!(r, vec!["c"]);
+});
+
+matrix_test!(zrangebyscore_limit, c, {
+    let k = score_source(&c).await;
+    let r: Vec<String> = c
+        .zrangebyscore_limit(&k, "-inf", "+inf", 1, 2)
+        .await
+        .unwrap();
+    assert_eq!(r, vec!["b", "c"]);
+});
+
+matrix_test!(zrevrangebylex, c, {
+    let k = lex_source(&c).await;
+    let r: Vec<String> = c.zrevrangebylex(&k, "+", "[b").await.unwrap();
+    assert_eq!(r, vec!["d", "c", "b"]);
+});
+
+matrix_test!(zrevrangebylex_limit, c, {
+    let k = lex_source(&c).await;
+    let r: Vec<String> = c.zrevrangebylex_limit(&k, "+", "[b", 0, 2).await.unwrap();
+    assert_eq!(r, vec!["d", "c"]);
+});
+
+matrix_test!(zrevrangebyscore, c, {
+    let k = score_source(&c).await;
+    let r: Vec<String> = c.zrevrangebyscore(&k, "+inf", "2").await.unwrap();
+    assert_eq!(r, vec!["d", "c", "b"]);
+});
+
+matrix_test!(zrevrangebyscore_limit, c, {
+    let k = score_source(&c).await;
+    let r: Vec<String> = c
+        .zrevrangebyscore_limit(&k, "+inf", "2", 0, 2)
+        .await
+        .unwrap();
+    assert_eq!(r, vec!["d", "c"]);
+});
+
+matrix_test!(zrembylex, c, {
+    let k = lex_source(&c).await;
+    let n: usize = c.zrembylex(&k, "[a", "[b").await.unwrap();
+    assert_eq!(n, 2);
+    let r: Vec<String> = c.zrange(&k, 0, -1).await.unwrap();
+    assert_eq!(r, vec!["c", "d"]);
+});
+
+matrix_test!(zrembyscore, c, {
+    let k = score_source(&c).await;
+    let n: usize = c.zrembyscore(&k, "2", "3").await.unwrap();
+    assert_eq!(n, 2);
+    let r: Vec<String> = c.zrange(&k, 0, -1).await.unwrap();
+    assert_eq!(r, vec!["a", "d"]);
+});
+
+matrix_test!(zremrangebyrank, c, {
+    let k = score_source(&c).await;
+    let n: usize = c.zremrangebyrank(&k, 0, 1).await.unwrap();
+    assert_eq!(n, 2);
+    let r: Vec<String> = c.zrange(&k, 0, -1).await.unwrap();
+    assert_eq!(r, vec!["c", "d"]);
+});
+
+/// Creates `{a: 0, b: 0, c: 0, d: 0}`, returning its key.
+async fn lex_source<C: AsyncTypedCommands>(c: &C) -> String {
+    let k = common::key("z");
+    let _: usize =
+        AsyncTypedCommands::zadd_multiple(c, &k, &[(0.0, "a"), (0.0, "b"), (0.0, "c"), (0.0, "d")])
+            .await
+            .unwrap();
+    k
+}
+
+/// Creates `{a: 1, b: 2, c: 3, d: 4}`, returning its key.
+async fn score_source<C: AsyncTypedCommands>(c: &C) -> String {
+    let k = common::key("z");
+    let _: usize =
+        AsyncTypedCommands::zadd_multiple(c, &k, &[(1.0, "a"), (2.0, "b"), (3.0, "c"), (4.0, "d")])
+            .await
+            .unwrap();
+    k
+}
+
 /// Creates `z1 = {a: 1, b: 2}` and `z2 = {b: 10, d: 3}` in one slot,
 /// returning `(z1, z2, dst)`.
 async fn store_sources<C: AsyncTypedCommands>(c: &C, tag: &str) -> (String, String, String) {
