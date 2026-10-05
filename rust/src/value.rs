@@ -326,6 +326,7 @@ where
 macro_rules! decode_valkey_int {
     ($t:ty, $value:expr) => {
         match $value {
+            ValkeyValue::Boolean(b) => Ok(<$t>::from(b)),
             #[allow(clippy::unnecessary_fallible_conversions)]
             ValkeyValue::Int(v) => <$t>::try_from(v).map_err(|_| {
                 to_glide_error(
@@ -396,6 +397,7 @@ macro_rules! impl_from_valkey_float {
         impl FromValkeyValue for $t {
             fn from_owned_valkey_value(value: ValkeyValue) -> ValkeyResult<$t> {
                 match value {
+                    ValkeyValue::Boolean(b) => Ok(<$t>::from(b)),
                     ValkeyValue::Int(v) => Ok(v as $t),
                     ValkeyValue::Double(v) => Ok(v as $t),
                     ValkeyValue::SimpleString(s) => {
@@ -734,6 +736,11 @@ mod from_valkey_value_tests {
 
     #[test]
     fn from_owned_valkey_value_integer() {
+        // Boolean.
+        assert_eq!(decode::<i64>(BOOLEAN), 1);
+        assert_eq!(decode::<u8>(ValkeyValue::Boolean(false)), 0);
+        assert_eq!(decode::<usize>(BOOLEAN), 1);
+
         // Integer.
         assert_eq!(decode::<i64>(INT), 7);
         assert_eq!(decode::<u64>(INT), 7);
@@ -787,6 +794,10 @@ mod from_valkey_value_tests {
     fn from_owned_valkey_value_double() {
         let bulk = |s: &'static str| ValkeyValue::BulkString(Bytes::from_static(s.as_bytes()));
 
+        // Boolean.
+        assert_eq!(decode::<f64>(BOOLEAN), 1.0);
+        assert_eq!(decode::<f32>(ValkeyValue::Boolean(false)), 0.0);
+
         // Integer.
         assert_eq!(decode::<f64>(INT), 7.0);
         assert_eq!(
@@ -811,7 +822,6 @@ mod from_valkey_value_tests {
         // Non-numeric.
         assert!(f64::from_owned_valkey_value(NIL).is_err());
         assert!(f64::from_owned_valkey_value(OKAY).is_err());
-        assert!(f64::from_owned_valkey_value(BOOLEAN).is_err());
         assert!(f64::from_owned_valkey_value(BULK).is_err());
         assert!(f64::from_owned_valkey_value(simple()).is_err());
     }
