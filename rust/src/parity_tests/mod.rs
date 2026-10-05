@@ -384,6 +384,10 @@ fn compare_methods(
                 Some(meth) => format!("GLIDE now declares {meth:?}"),
                 None => "GLIDE no longer declares it".to_string(),
             }
+        } else if let (Some(r), Some(g)) = (redis_method, glide_method)
+            && methods_match(r, g)
+        {
+            "the redis-rs and GLIDE methods match".to_string()
         } else {
             continue;
         };
@@ -560,6 +564,21 @@ fn compare_methods_validates_differences() {
         problems.iter().any(
             |p| p.starts_with("STALE difference (neither a redis-rs nor a GLIDE method): none")
         )
+    );
+
+    // A difference whose redis-rs and GLIDE methods match.
+    let glide = methods([method("get", "(String)")]);
+    let matching = BTreeMap::from([difference(
+        "get",
+        Some(method("get", "(String)")),
+        Some(method("get", "(String)")),
+    )]);
+    let problems = compare_methods(&redis, &glide, &matching);
+    assert!(
+        problems
+            .iter()
+            .any(|p| p.starts_with("STALE difference (the redis-rs and GLIDE methods match): get")),
+        "{problems:?}"
     );
 }
 

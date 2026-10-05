@@ -194,9 +194,9 @@ which may be `null`:
   have.
 
 The guard allows exactly the pinned entries, and fails if one no longer holds
-(either side's method changed, appeared or disappeared), so update or remove the
-entry when that happens. For example, remove a method's entry once GLIDE
-implements it.
+(either side's method changed, appeared or disappeared, or the two signatures
+now match), so update or remove the entry when that happens. For example,
+remove a method's entry once GLIDE implements it.
 Commands beyond the redis-rs surface belong in the per-family extension traits
 (`src/commands/<family>.rs`), not in the table.
 
