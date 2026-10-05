@@ -26,6 +26,9 @@ pub mod sync;
 #[cfg(test)]
 mod mock_tests;
 
+#[cfg(test)]
+mod parity_tests;
+
 // Aliases
 // -------
 

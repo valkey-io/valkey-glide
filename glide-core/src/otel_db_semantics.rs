@@ -1,9 +1,9 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 use crate::client::Client;
+use glide_telemetry::GlideSpan;
 use redis::{Arg, Cmd};
 use std::borrow::Borrow;
-use telemetrylib::GlideSpan;
 
 /// Defines how command arguments are masked in `db.query.text` to prevent
 /// sensitive values from leaking into telemetry.
@@ -71,7 +71,7 @@ fn masking_pattern(cmd_name: &str) -> MaskingPattern {
         | "SORT" | "SORT_RO" | "TOUCH" | "TTL" | "TYPE" | "UNLINK" | "WAIT" | "WAITAOF"
         | "WATCH" | "UNWATCH"
         // Hash (read)
-        | "HDEL" | "HEXISTS" | "HGET" | "HGETALL" | "HINCRBY" | "HINCRBYFLOAT"
+        | "HDEL" | "HEXISTS" | "HGET" | "HGETALL" | "HGETDEL" | "HINCRBY" | "HINCRBYFLOAT"
         | "HKEYS" | "HLEN" | "HMGET" | "HRANDFIELD" | "HSCAN" | "HSTRLEN" | "HVALS"
         // List (read/structural)
         | "LINDEX" | "LLEN" | "LMOVE" | "LMPOP" | "LPOP" | "LRANGE" | "LREM" | "LTRIM"

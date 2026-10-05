@@ -9,7 +9,7 @@ use crate::types::AddressResolver;
 use crate::{cluster::TlsMode, ErrorKind, RedisError, RedisResult, Value};
 #[cfg(all(feature = "cluster-async", not(feature = "tokio-comp")))]
 use async_std::sync::RwLock;
-use logger_core::log_warn;
+use glide_logger::log_warn;
 use std::collections::{hash_map::DefaultHasher, HashMap};
 use std::hash::{Hash, Hasher};
 use std::net::IpAddr;

@@ -1,4 +1,8 @@
-# DESIGN — `glide-rust`
+# DESIGN — `valkey-glide`
+
+<!-- TODO #7205: parts of this document predate the glide- crate renames — e.g.
+     the vendored fork is now published as `glide-core-engine` (still imported
+     as `redis::` via `[lib] name`). A thorough refresh is tracked in #7205. -->
 
 ## Dependency strategy
 
@@ -34,10 +38,9 @@ additionally accepts a `Route` on command variants (via dedicated
 
 **GLIDE's command API** is source-compatible with the fork: `glide::AsyncCommands` (async)
 and `glide::Commands` (blocking) are defined by a **hand-maintained command
-table** (`src/commands/core.rs`, one `implement_glide_commands!` macro
+table** (`src/commands/core.rs`, one `implement_commands!` macro
 invocation — the same declarative pattern the fork itself uses) mirroring the vendored
-fork's `implement_commands!` table, enforced by a signature-parity guard
-(`tests/it_parity_guard.rs`, implemented in `tests/parity/`).
+fork's `implement_commands!` table, enforced by a signature-parity guard in `src/parity_tests/`.
 Method names, generic parameter order, and
 wire encoding match the fork exactly (methods delegate to its own
 `Cmd::<name>()` constructors).

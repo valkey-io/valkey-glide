@@ -618,6 +618,22 @@ export function createHGetEx(
 /**
  * @internal
  */
+export function createHGetDel(
+    key: GlideString,
+    fields: GlideString[],
+): command_request.Command {
+    const args: GlideString[] = [
+        key,
+        "FIELDS",
+        fields.length.toString(),
+        ...fields,
+    ];
+    return createCommand(RequestType.HGetDel, args);
+}
+
+/**
+ * @internal
+ */
 export function createHExpire(
     key: GlideString,
     seconds: number,

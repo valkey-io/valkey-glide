@@ -1,7 +1,8 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 #[cfg(feature = "proto")]
-include!("generated/mod.rs");
+include!(concat!(env!("OUT_DIR"), "/protobuf/mod.rs"));
+
 pub mod client;
 pub mod otel_db_semantics;
 pub mod pool;
@@ -23,7 +24,7 @@ pub mod iam;
 pub mod pubsub;
 pub mod request_type;
 pub mod tls_reload;
-pub use telemetrylib::{
+pub use glide_telemetry::{
     DEFAULT_FLUSH_SIGNAL_INTERVAL_MS, DEFAULT_TRACE_SAMPLE_PERCENTAGE, GlideOpenTelemetry,
     GlideOpenTelemetryConfigBuilder, GlideOpenTelemetrySignalsExporter, GlideSpan, Telemetry,
 };

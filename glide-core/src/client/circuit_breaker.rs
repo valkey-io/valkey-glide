@@ -14,7 +14,7 @@ use std::sync::RwLock;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
-use logger_core::{log_info, log_warn, log_warn_rate_limited};
+use glide_logger::{log_info, log_warn, log_warn_rate_limited};
 
 /// Circuit breaker phase.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

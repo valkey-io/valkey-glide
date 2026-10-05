@@ -2,7 +2,8 @@
 
 use crate::client::{ClientWrapper, PubSubCommandApplier};
 use async_trait::async_trait;
-use logger_core::{log_debug, log_error, log_warn};
+use glide_logger::{log_debug, log_error, log_warn};
+use glide_telemetry::GlideOpenTelemetry;
 use once_cell::sync::OnceCell;
 use redis::{
     Cmd, ErrorKind, PubSubChannelOrPattern, PubSubSubscriptionInfo, PubSubSubscriptionKind,
@@ -12,7 +13,6 @@ use redis::{
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex, RwLock, Weak};
 use std::time::{Duration, Instant};
-use telemetrylib::GlideOpenTelemetry;
 use tokio::sync::{Notify, RwLock as TokioRwLock};
 
 const LOCK_ERR: &str = "Lock poisoned";

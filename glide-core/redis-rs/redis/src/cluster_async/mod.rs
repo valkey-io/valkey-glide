@@ -51,9 +51,9 @@ use pipeline_routing::{
     route_for_pipeline, PipelineResponses, ResponsePoliciesMap,
 };
 
-use logger_core::log_info_rate_limited;
-use logger_core::log_warn_rate_limited;
-use logger_core::{log_debug_lazy, log_error_lazy, log_info_lazy, log_trace_lazy, log_warn_lazy};
+use glide_logger::log_info_rate_limited;
+use glide_logger::log_warn_rate_limited;
+use glide_logger::{log_debug_lazy, log_error_lazy, log_info_lazy, log_trace_lazy, log_warn_lazy};
 use rand::seq::IteratorRandom;
 
 use std::{
@@ -74,7 +74,7 @@ use tokio::task::JoinHandle;
 
 #[cfg(feature = "tokio-comp")]
 use crate::aio::DisconnectNotifier;
-use telemetrylib::{GlideOpenTelemetry, GlideSpan, Telemetry};
+use glide_telemetry::{GlideOpenTelemetry, GlideSpan, Telemetry};
 
 use crate::{
     aio::{get_socket_addrs, ConnectionLike, MultiplexedConnection, Runtime},
@@ -115,7 +115,7 @@ use tokio::sync::{
     mpsc,
     oneshot::{self, Receiver},
 };
-// tracing macros replaced by logger_core lazy macros
+// tracing macros replaced by glide-logger lazy macros
 
 use self::{
     connections_container::{ConnectionAndAddress, ConnectionType, ConnectionsMap},

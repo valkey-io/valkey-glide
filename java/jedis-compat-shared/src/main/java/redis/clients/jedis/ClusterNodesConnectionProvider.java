@@ -9,6 +9,10 @@ import java.util.Set;
  */
 public interface ClusterNodesConnectionProvider extends ConnectionProvider {
 
-    /** Seed nodes used to bootstrap the cluster topology. */
+    /**
+     * Seed nodes used to bootstrap the cluster topology.
+     *
+     * @return the configured seed nodes
+     */
     Set<HostAndPort> getNodes();
 }
