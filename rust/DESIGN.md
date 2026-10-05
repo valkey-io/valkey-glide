@@ -78,7 +78,7 @@ for. `Cmd::query_async` does the same in redis-rs's calling style, so code movin
 over from that crate keeps working.
 
 Commands **beyond** that table live in GLIDE **extension traits**
-(`src/commands/`): streams, geo, Search (`FT.*`), JSON, Pub/Sub, scripting/
+(`src/commands/`): streams, geo, JSON, Pub/Sub, scripting/
 functions, server & connection management, plus per-family extras (hash
 field-TTL, `LCS`, `SINTERCARD`, `ZRANGESTORE`, `BITFIELD`, `SORT`,
 `DUMP`/`RESTORE`, …). These keep rich concrete return types and never collide

@@ -106,7 +106,10 @@ matrix_test!(geo_hash, c, {
 matrix_test!(geo_hash_typed_with_nil, c, {
     let k = common::key("geo");
     c.geo_add(&k, (palermo(), "Palermo")).await.unwrap();
-    assert!(c.geo_hash(&k, &["Palermo", "Missing"]).await.is_err());
+
+    let err = c.geo_hash(&k, &["Palermo", "Missing"]).await.unwrap_err();
+    assert!(matches!(err, GlideError::Request(_)));
+    assert!(err.message().contains("not string compatible"));
 });
 
 matrix_test!(geo_hash_untyped_with_nil, c, {
@@ -253,8 +256,44 @@ matrix_test!(geosearchstore, c, {
         .await
         .unwrap();
     assert_eq!(stored, 1);
+    assert_eq!(c.zcard(&dst).await.unwrap(), 1);
+
     let score: Option<f64> = c.zscore(&dst, "Catania").await.unwrap();
     assert!(score.unwrap() < 0.001);
+});
+
+matrix_test!(geosearch_by_box_desc, c, {
+    let k = common::key("geosearch");
+    c.geo_add(&k, &[(palermo(), "Palermo"), (catania(), "Catania")])
+        .await
+        .unwrap();
+    let shape = GeoSearchShape::ByBox {
+        width: 400.0,
+        height: 400.0,
+        unit: GeoUnit::Kilometers,
+    };
+    let options = GeoSearchOptions {
+        order: Some(OrderBy::Desc),
+        ..Default::default()
+    };
+    let found = c
+        .geosearch_from_member(&k, "Palermo", shape, options)
+        .await
+        .unwrap();
+    let names: Vec<_> = found.iter().map(|r| r.member.as_ref()).collect();
+    assert_eq!(names, vec![b"Catania".as_slice(), b"Palermo".as_slice()]);
+
+    let narrow = GeoSearchShape::ByBox {
+        width: 10.0,
+        height: 10.0,
+        unit: GeoUnit::Kilometers,
+    };
+    let found = c
+        .geosearch_from_member(&k, "Palermo", narrow, Default::default())
+        .await
+        .unwrap();
+    assert_eq!(found.len(), 1);
+    assert_eq!(found[0].member.as_ref(), b"Palermo");
 });
 
 matrix_test!(geo_wrong_type_errors, c, {

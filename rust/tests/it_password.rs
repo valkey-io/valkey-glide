@@ -9,7 +9,7 @@
 
 mod common;
 
-use glide::{AsyncTypedCommands, ConnectionManagementCommands, ServerManagementCommands};
+use glide::{AsyncTypedCommands, ServerManagementCommands};
 
 const NEW_PASS: &str = "rotated-p4ss";
 

@@ -276,7 +276,7 @@ pub trait GeoCommands: CommandExecutor {
 /// Options for `GEOSEARCH`.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct GeoSearchOptions {
-    /// The sort order for results, or `None` for the server default (`ASC`/`DESC`).
+    /// The sort order for results (`ASC`/`DESC`), or `None` for unsorted results.
     pub order: Option<OrderBy>,
     /// The maximum number of results to return, or `None` for no limit (`COUNT`).
     pub count: Option<i64>,
@@ -374,7 +374,7 @@ impl FromValkeyValue for GeoSearchResult {
 /// Options for `GEOSEARCHSTORE`.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct GeoSearchStoreOptions {
-    /// The sort order for results, or `None` for the server default (`ASC`/`DESC`).
+    /// The sort order for results (`ASC`/`DESC`), or `None` for unsorted results.
     pub order: Option<OrderBy>,
     /// The maximum number of results to store, or `None` for no limit (`COUNT`).
     pub count: Option<i64>,
@@ -552,6 +552,37 @@ mod tests {
             GeoSearchResult::from_owned_valkey_value(hash_only).unwrap(),
             GeoSearchResult {
                 hash: Some(42),
+                ..member("Catania")
+            }
+        );
+
+        let strings = ValkeyValue::Array(vec![
+            bulk("Palermo"),
+            ValkeyValue::Array(vec![
+                bulk("190.4424"),
+                ValkeyValue::Array(vec![bulk("13.5"), bulk("38.5")]),
+            ]),
+        ]);
+        assert_eq!(
+            GeoSearchResult::from_owned_valkey_value(strings).unwrap(),
+            GeoSearchResult {
+                position: Some(GeoCoord::lon_lat(13.5, 38.5)),
+                distance: Some(190.4424),
+                ..member("Palermo")
+            }
+        );
+
+        let position_only = ValkeyValue::Array(vec![
+            bulk("Catania"),
+            ValkeyValue::Array(vec![ValkeyValue::Array(vec![
+                ValkeyValue::Double(15.0),
+                ValkeyValue::Double(37.5),
+            ])]),
+        ]);
+        assert_eq!(
+            GeoSearchResult::from_owned_valkey_value(position_only).unwrap(),
+            GeoSearchResult {
+                position: Some(GeoCoord::lon_lat(15.0, 37.5)),
                 ..member("Catania")
             }
         );

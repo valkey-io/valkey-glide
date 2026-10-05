@@ -81,7 +81,7 @@ Notes:
   types (e.g. `get` returns `Option<String>`), mirroring redis-rs's
   `AsyncTypedCommands` / `TypedCommands`. As in redis-rs, a trait and its typed
   counterpart share method names, so import only one of them.
-  Extension traits (streams, geo, Search `FT.*`, `JSON.*`, hash field-TTL, …)
+  Extension traits (streams, geo search, `JSON.*`, …)
   cover the rest of the command surface; their names never collide with the
   command traits.
 - Cluster: `GlideClusterClientConfiguration::from_urls([...])` accepts
@@ -94,7 +94,7 @@ Notes:
   connection-object copy.
 - Accepted gaps: no Sentinel / unix sockets / async-std (unsupported by
   glide-core); Pub/Sub stays client-integrated by design; generic code
-  bounded on the fork's `ConnectionLike`-based traits should re-bound on
+  bounded on redis-rs's `ConnectionLike`-based traits should re-bound on
   `glide::AsyncCommands` (performance-motivated deviation).
 
 ## Differences
@@ -120,6 +120,14 @@ Valkey has no `DIGEST` command, so redis-rs's `IFDEQ` and `IFDNE` digest
 comparisons (and `digest`) are not available. `IFNE` requires Valkey 9.2 and is
 not supported yet.
 <!-- TODO #7237: Update once `IFNE` is supported. -->
+
+### `StreamAddOptions` supports only `NOMKSTREAM` and trimming
+
+Valkey's `XADD` has no deletion policies or idempotent production, so
+redis-rs's `StreamAddOptions::set_deletion_policy`, `idmp` and `idmpauto` are
+not available; `nomkstream` and `trim` are. GLIDE's stream reply types
+(`StreamId`, `StreamRangeReply`, `StreamReadReply`, …) are at the crate root
+rather than in a `streams` module, and `StreamId::map` holds `ValkeyValue`s.
 
 ### A few typed returns differ
 
@@ -152,9 +160,9 @@ value: a non-integral double is truncated (`1.5` decoded as `u8` becomes `1`),
 an out-of-range or NaN double is clamped (`-1.0` decoded as `u64` becomes `0`),
 and an out-of-range integer wraps (`-2` decoded as `usize` becomes
 `18446744073709551614`). GLIDE instead returns an error naming the target type
-unless the response is an integer exactly within that type's range. Decode into
-a type that fits the reply (e.g. `f64` for `INCRBYFLOAT`). Float decoding
-matches redis-rs.
+unless the reply is an integer, a whole-number double, or a numeric string within
+that type's range. Decode into a type that fits the reply (e.g. `f64` for
+`INCRBYFLOAT`). Float decoding matches redis-rs.
 
 ### `ValueType` covers only the core Valkey types
 

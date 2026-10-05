@@ -169,7 +169,7 @@ The suite has three layers (all run in CI and are currently green):
   encoding, value conversion, and error mapping; plus a **command-family mock
   suite** that drives every typed command through an in-process executor to
   assert exact **request encoding** and **response decoding**.
-- **Integration tests (live server, ~900 executions across 31 files)** — real
+- **Integration tests (live server)** — real
   round-trips against a spawned `valkey-server`, one `tests/it_<family>.rs` per
   command family with edge/error cases (wrong-type, missing key, bounds, expiry
   conditions), **parametrized over RESP2 and RESP3**, plus suites for batches,

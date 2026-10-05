@@ -16,26 +16,6 @@ pub trait HashCommands: CommandExecutor {
     // TODO #7082: add a multi-field `hset` that returns the count of newly-added
     // fields, to match the other GLIDE clients.
 
-    /// Get the values of multiple fields (`HMGET`).
-    async fn hmget<K: ToValkeyArgs + Send, F: ToValkeyArgs + Send + Sync>(
-        &self,
-        key: K,
-        fields: &[F],
-    ) -> ValkeyResult<Vec<Option<Bytes>>> {
-        let mut cmd = Cmd::new();
-        cmd.arg("HMGET").arg(key);
-        for f in fields {
-            cmd.arg(f);
-        }
-        match self.execute_command(cmd, None).await? {
-            ValkeyValue::Array(items) => items
-                .into_iter()
-                .map(Option::<Bytes>::from_owned_valkey_value)
-                .collect(),
-            other => Ok(vec![Option::<Bytes>::from_owned_valkey_value(other)?]),
-        }
-    }
-
     /// Get the string length of a field's value (`HSTRLEN`).
     async fn hstrlen<K: ToValkeyArgs + Send, F: ToValkeyArgs + Send>(
         &self,

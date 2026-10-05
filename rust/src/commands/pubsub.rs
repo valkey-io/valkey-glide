@@ -89,18 +89,6 @@ pub trait PubSubCommands: CommandExecutor {
 
     // NOTE: `PUBLISH` is implemented in the unified command table (`crate::AsyncCommands::publish`).
 
-    /// Publish `message` to a shard `channel` (`SPUBLISH`, cluster). Returns the
-    /// number of clients that received the message.
-    async fn spublish<C: ToValkeyArgs + Send, M: ToValkeyArgs + Send>(
-        &self,
-        channel: C,
-        message: M,
-    ) -> ValkeyResult<usize> {
-        let mut cmd = Cmd::new();
-        cmd.arg("SPUBLISH").arg(channel).arg(message);
-        usize::from_owned_valkey_value(self.execute_command(cmd, None).await?)
-    }
-
     /// List active channels, optionally matching `pattern` (`PUBSUB CHANNELS`).
     async fn pubsub_channels(&self, pattern: Option<&[u8]>) -> ValkeyResult<Vec<Bytes>> {
         self.pubsub_channels_impl("CHANNELS", pattern).await

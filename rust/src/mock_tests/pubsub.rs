@@ -5,15 +5,8 @@ use crate::ValkeyValue;
 use crate::commands::pubsub::PubSubCommands;
 use bytes::Bytes;
 
-// `PUBLISH` is declared in (`crate::AsyncCommands`).
+// `PUBLISH` and `SPUBLISH` are declared in (`crate::AsyncCommands`).
 // and covered by the parity guard (the `parity_tests` module).
-
-#[tokio::test]
-async fn spublish_encoding() {
-    let m = Mock::int(1);
-    assert_eq!(m.spublish("sch", "hi").await.unwrap(), 1);
-    m.assert_args(&["SPUBLISH", "sch", "hi"]);
-}
 
 #[tokio::test]
 async fn pubsub_channels_with_and_without_pattern() {

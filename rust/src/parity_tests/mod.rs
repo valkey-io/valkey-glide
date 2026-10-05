@@ -367,7 +367,7 @@ fn compare_methods(
     // ----------------------
 
     // Verify that recorded differences are still accurate.
-    // This prevents `diferences.json` from becoming stale.
+    // This prevents `differences.json` from becoming stale.
     for (name, diff) in differences {
         let redis_method = redis.get(name);
         let glide_method = glide.get(name);
@@ -489,13 +489,117 @@ fn bound_from_redis_to_glide(bound: &str) -> String {
 
 /// Maps the given redis-rs type to the corresponding GLIDE type.
 fn type_from_redis_to_glide(ty: &str) -> String {
-    // GLIDE exposes redis-rs's `geo::Unit` and `geo::Coord` as `GeoUnit`
-    // and `GeoCoord` for consistency with other GLIDE types.
     ty.replace("geo::Unit", "GeoUnit")
         .replace("geo::Coord", "GeoCoord")
+        .replace("streams::", "")
 }
 
 /// Read the file at the given path and returns its contents.
 fn read(path: &Path) -> String {
     std::fs::read_to_string(path).unwrap_or_else(|e| panic!("cannot read {}: {e}", path.display()))
+}
+
+// --- tests --------------------------------------------------------------------------------------
+
+/// Verifies that the comparison reports a missing, an extra, and a mismatched method.
+#[test]
+fn compare_methods_reports_undocumented_differences() {
+    let redis = methods([method("get", "(String)"), method("set", "(())")]);
+    let glide = methods([method("get", "(usize)"), method("extra", "(())")]);
+
+    let problems = compare_methods(&redis, &glide, &BTreeMap::new());
+
+    assert_eq!(problems.len(), 3, "{problems:?}");
+    assert!(problems.iter().any(|p| p == "EXTRA method in GLIDE: extra"));
+    assert!(problems.iter().any(|p| p == "MISSING method in GLIDE: set"));
+    assert!(problems.iter().any(|p| p.starts_with("SIGNATURE DIFF get")));
+}
+
+/// Verifies that pinned differences are allowed, and reported when they go stale.
+#[test]
+fn compare_methods_validates_differences() {
+    let redis = methods([method("get", "(String)"), method("set", "(())")]);
+    let glide = methods([method("get", "(usize)"), method("extra", "(())")]);
+    let differences = BTreeMap::from([
+        difference(
+            "get",
+            Some(method("get", "(String)")),
+            Some(method("get", "(usize)")),
+        ),
+        difference("set", Some(method("set", "(())")), None),
+        difference("extra", None, Some(method("extra", "(())"))),
+    ]);
+    assert!(compare_methods(&redis, &glide, &differences).is_empty());
+
+    // A difference that no longer holds on either side, or names neither side.
+    let stale = BTreeMap::from([
+        difference(
+            "get",
+            Some(method("get", "(Vec<String>)")),
+            Some(method("get", "(usize)")),
+        ),
+        difference(
+            "set",
+            Some(method("set", "(())")),
+            Some(method("set", "(())")),
+        ),
+        difference("none", None, None),
+    ]);
+    let problems = compare_methods(&redis, &glide, &stale);
+    assert!(
+        problems
+            .iter()
+            .any(|p| p.starts_with("STALE difference (redis-rs now declares"))
+    );
+    assert!(
+        problems
+            .iter()
+            .any(|p| p.starts_with("STALE difference (GLIDE no longer declares it): set"))
+    );
+    assert!(
+        problems.iter().any(
+            |p| p.starts_with("STALE difference (neither a redis-rs nor a GLIDE method): none")
+        )
+    );
+}
+
+/// Verifies that GLIDE's scan lifetime generic and bounds are normalized away.
+#[test]
+fn parse_scan_methods_normalizes_lifetimes() {
+    let redis =
+        parse_scan_methods("fn hscan<K: ToSingleRedisArg, RV: FromRedisValue>(&mut self, key: K)");
+    let glide = parse_scan_methods(
+        "fn hscan<'s, K: ToSingleValkeyArg, RV: FromValkeyValue + 's>(&'s self, key: K)",
+    );
+    assert!(methods_match(&redis["hscan"], &glide["hscan"]));
+}
+
+// --- test helpers -------------------------------------------------------------------------------
+
+/// Returns the given methods, indexed by name.
+fn methods<const N: usize>(methods: [Method; N]) -> BTreeMap<String, Method> {
+    methods.into_iter().map(|m| (m.name.clone(), m)).collect()
+}
+
+/// Returns a method with the given name and return type, and no generics or arguments.
+fn method(name: &str, return_type: &str) -> Method {
+    Method {
+        name: name.to_string(),
+        generics: Vec::new(),
+        args: Vec::new(),
+        return_type: Some(return_type.to_string()),
+    }
+}
+
+/// Returns a named difference with the given methods.
+fn difference(name: &str, redis: Option<Method>, glide: Option<Method>) -> (String, Difference) {
+    let reason = "test".to_string();
+    (
+        name.to_string(),
+        Difference {
+            reason,
+            redis,
+            glide,
+        },
+    )
 }

@@ -7,17 +7,6 @@ use crate::commands::hash::HashCommands;
 use bytes::Bytes;
 
 #[tokio::test]
-async fn hmget_vec() {
-    let m = Mock::array(vec![
-        ValkeyValue::BulkString(b"v1".to_vec().into()),
-        ValkeyValue::Nil,
-    ]);
-    let v = m.hmget("h", &["f1", "f2"]).await.unwrap();
-    m.assert_args(&["HMGET", "h", "f1", "f2"]);
-    assert_eq!(v, vec![Some(Bytes::from_static(b"v1")), None]);
-}
-
-#[tokio::test]
 async fn hstrlen_encoding() {
     let m = Mock::int(4);
     assert_eq!(m.hstrlen("h", "f").await.unwrap(), 4);

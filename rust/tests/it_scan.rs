@@ -47,6 +47,70 @@ resp_test!(scan_empty_keyspace, c, {
     assert!(seen.is_empty());
 });
 
+matrix_test!(hscan, c, {
+    let k = common::key("hscan");
+    for i in 0..20 {
+        let _: usize = c.hset(&k, format!("keep:{i}"), i).await.unwrap();
+        let _: usize = c.hset(&k, format!("skip:{i}"), i).await.unwrap();
+    }
+
+    let all: HashSet<(String, String)> = collect(c.hscan(&k).await.unwrap()).await;
+    assert_eq!(all.len(), 40);
+    assert!(all.contains(&("keep:3".to_string(), "3".to_string())));
+
+    let kept: HashSet<(String, String)> = collect(c.hscan_match(&k, "keep:*").await.unwrap()).await;
+    assert_eq!(kept.len(), 20);
+    assert!(kept.iter().all(|(field, _)| field.starts_with("keep:")));
+});
+
+matrix_test!(sscan, c, {
+    let k = common::key("sscan");
+    for i in 0..20 {
+        let _: usize = c.sadd(&k, format!("keep:{i}")).await.unwrap();
+        let _: usize = c.sadd(&k, format!("skip:{i}")).await.unwrap();
+    }
+
+    let all: HashSet<String> = collect(c.sscan(&k).await.unwrap()).await;
+    assert_eq!(all.len(), 40);
+
+    let kept: HashSet<String> = collect(c.sscan_match(&k, "keep:*").await.unwrap()).await;
+    assert_eq!(kept.len(), 20);
+    assert!(kept.iter().all(|member| member.starts_with("keep:")));
+});
+
+matrix_test!(zscan, c, {
+    let k = common::key("zscan");
+    for i in 0..20 {
+        let _: usize = c
+            .zadd(&k, format!("keep:{i}"), i as f64 + 0.5)
+            .await
+            .unwrap();
+        let _: usize = c.zadd(&k, format!("skip:{i}"), i as f64).await.unwrap();
+    }
+
+    let all: Vec<(String, f64)> = collect(c.zscan(&k).await.unwrap()).await;
+    assert_eq!(all.len(), 40);
+    assert!(all.contains(&("keep:3".to_string(), 3.5)));
+
+    let kept: Vec<(String, f64)> = collect(c.zscan_match(&k, "keep:*").await.unwrap()).await;
+    assert_eq!(kept.len(), 20);
+    assert!(kept.iter().all(|(member, _)| member.starts_with("keep:")));
+});
+
+/// Drive a key scan to completion, collecting every returned item.
+async fn collect<C, RV, Out>(mut iter: glide::commands::scan::ScanIter<'_, C, RV>) -> Out
+where
+    C: glide::AsyncCommands,
+    RV: glide::FromValkeyValue,
+    Out: Default + Extend<RV>,
+{
+    let mut out = Out::default();
+    while let Some(item) = iter.next_item().await {
+        out.extend([item.unwrap()]);
+    }
+    out
+}
+
 /// Drive SCAN to completion, collecting every returned key.
 // TODO #7060: cover COUNT/TYPE once `scan_options` is implemented.
 async fn scan_all<C: AsyncTypedCommands>(c: &C, pattern: Option<&str>) -> HashSet<Vec<u8>> {

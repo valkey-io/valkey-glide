@@ -3,9 +3,7 @@
 
 mod common;
 
-use glide::{
-    AsyncTypedCommands, ConnectionManagementCommands, CustomCommand, FromValkeyValue, Route,
-};
+use glide::{AsyncTypedCommands, CustomCommand, FromValkeyValue, Route};
 
 #[tokio::test]
 async fn cluster_set_get_routed_by_key() {

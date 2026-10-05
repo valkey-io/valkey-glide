@@ -7,6 +7,7 @@ use glide::AsyncTypedCommands;
 use glide::ExpireOption;
 use glide::Expiry;
 use glide::FieldExistenceCheck;
+use glide::GlideError;
 use glide::HashCommands;
 use glide::HashFieldExpirationOptions;
 use glide::IntegerReplyOrNoOp;
@@ -45,9 +46,7 @@ matrix_test!(hset_multiple, c, {
         .unwrap();
     assert_eq!(added, 1);
     let vals = c.hmget(&k, &["f1", "f2", "f3"]).await.unwrap();
-    assert_eq!(vals[0].as_deref(), Some(&b"v1"[..]));
-    assert_eq!(vals[1].as_deref(), Some(&b"v2b"[..]));
-    assert_eq!(vals[2].as_deref(), Some(&b"v3"[..]));
+    assert_eq!(vals, vec!["v1", "v2b", "v3"]);
 });
 
 matrix_test!(hget_missing_field, c, {
@@ -108,10 +107,32 @@ matrix_test!(hmget, c, {
         .hset_multiple(&k, &[("f1", "v1"), ("f2", "v2")])
         .await
         .unwrap();
-    let vals = c.hmget(&k, &["f1", "missing", "f2"]).await.unwrap();
-    assert_eq!(vals[0].as_deref(), Some(&b"v1"[..]));
-    assert_eq!(vals[1], None);
-    assert_eq!(vals[2].as_deref(), Some(&b"v2"[..]));
+    let vals = c.hmget(&k, &["f1", "f2"]).await.unwrap();
+    assert_eq!(vals, vec!["v1", "v2"]);
+});
+
+// Valkey returns `nil` when a requested field does not exist.
+// Typed `hmget` raises an error if this happens. Callers
+// need to use the untyped version if they want to handle this
+// case. This matches redis-rs behaviour.
+
+matrix_test!(hmget_typed_with_nil, c, {
+    let k = common::key("h");
+    let _: usize = c.hset(&k, "f1", "v1").await.unwrap();
+
+    let err = c.hmget(&k, &["f1", "missing"]).await.unwrap_err();
+    assert!(matches!(err, GlideError::Request(_)));
+    assert!(err.message().contains("not string compatible"));
+});
+
+matrix_test!(hmget_untyped_with_nil, c, {
+    let k = common::key("h");
+    let _: usize = c.hset(&k, "f1", "v1").await.unwrap();
+
+    let vals: Vec<Option<String>> = glide::AsyncCommands::hmget(&c, &k, &["f1", "missing"])
+        .await
+        .unwrap();
+    assert_eq!(vals, vec![Some("v1".to_string()), None]);
 });
 
 matrix_test!(hexists, c, {
@@ -363,11 +384,12 @@ matrix_test!(hget_ex_typed_with_nil, c, {
     let k = common::key("h_getex");
     c.hset(&k, "f", "v").await.unwrap();
 
-    assert!(
-        c.hget_ex(&k, &["f", "missing"], Expiry::PERSIST)
-            .await
-            .is_err()
-    );
+    let err = c
+        .hget_ex(&k, &["f", "missing"], Expiry::PERSIST)
+        .await
+        .unwrap_err();
+    assert!(matches!(err, GlideError::Request(_)));
+    assert!(err.message().contains("not string compatible"));
 });
 
 matrix_test!(hget_ex_untyped_with_nil, c, {

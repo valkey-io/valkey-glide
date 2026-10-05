@@ -2,6 +2,7 @@
 //! Stream commands. Mirrors Python's stream command surface.
 #![allow(clippy::too_many_arguments, clippy::type_complexity)]
 
+use crate::GlideError;
 use crate::ValkeyResult;
 use crate::cmd::Cmd;
 use crate::executor::CommandExecutor;
@@ -12,62 +13,81 @@ use crate::write::ToValkeyArgs;
 use crate::write::ValkeyWrite;
 use async_trait::async_trait;
 use bytes::Bytes;
+use std::collections::HashMap;
 
 /// A single stream entry: its ID and its field/value pairs.
 pub type StreamEntry = (String, Vec<(Bytes, Bytes)>);
 
-/// Trim strategy for `XADD`/`XTRIM`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum StreamTrimStrategy {
-    /// Trim by maximum length (`MAXLEN`).
-    MaxLen,
-    /// Trim by minimum ID (`MINID`).
-    MinId,
-}
-
-/// Trim options for `XADD`/`XTRIM`.
+/// A stream trimming mode.
 ///
-/// Mirrors Python `StreamTrimOptions` (`TrimByMaxLen`/`TrimByMinId`).
-#[derive(Debug, Clone)]
-pub struct StreamTrimOptions {
-    strategy: StreamTrimStrategy,
-    /// Exact (`=`) vs near-exact (`~`) trimming.
-    exact: bool,
-    threshold: String,
-    limit: Option<i64>,
+/// Mirrors redis-rs's `streams::StreamTrimmingMode` type.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum StreamTrimmingMode {
+    /// Trim exactly (`=`).
+    Exact,
+    /// Trim approximately (`~`).
+    Approx,
 }
 
-impl StreamTrimOptions {
-    /// Trim by maximum length (`MAXLEN`).
-    pub fn max_len(exact: bool, threshold: i64, limit: Option<i64>) -> Self {
-        Self {
-            strategy: StreamTrimStrategy::MaxLen,
-            exact,
-            threshold: threshold.to_string(),
-            limit,
-        }
-    }
-
-    /// Trim by minimum ID (`MINID`).
-    pub fn min_id(exact: bool, threshold: impl Into<String>, limit: Option<i64>) -> Self {
-        Self {
-            strategy: StreamTrimStrategy::MinId,
-            exact,
-            threshold: threshold.into(),
-            limit,
-        }
-    }
-}
-
-impl ToValkeyArgs for StreamTrimOptions {
+impl ToValkeyArgs for StreamTrimmingMode {
     fn write_valkey_args<W: ?Sized + ValkeyWrite>(&self, out: &mut W) {
-        out.write_arg(match self.strategy {
-            StreamTrimStrategy::MaxLen => b"MAXLEN".as_slice(),
-            StreamTrimStrategy::MinId => b"MINID".as_slice(),
+        out.write_arg(match self {
+            Self::Exact => b"=",
+            Self::Approx => b"~",
         });
-        out.write_arg(if self.exact { b"=" } else { b"~" });
-        out.write_arg(self.threshold.as_bytes());
-        if let Some(limit) = self.limit {
+    }
+}
+
+/// A stream trim strategy.
+///
+/// Mirrors redis-rs's `streams::StreamTrimStrategy` type.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum StreamTrimStrategy {
+    /// Evict entries while the stream is longer than the threshold (`MAXLEN`).
+    MaxLen(StreamTrimmingMode, usize, Option<usize>),
+    /// Evict entries with IDs lower than the threshold (`MINID`).
+    MinId(StreamTrimmingMode, String, Option<usize>),
+}
+
+impl StreamTrimStrategy {
+    /// Trim to at most `max_entries` entries (`MAXLEN`).
+    pub fn maxlen(trim: StreamTrimmingMode, max_entries: usize) -> Self {
+        Self::MaxLen(trim, max_entries, None)
+    }
+
+    /// Trim entries with IDs lower than `stream_id` (`MINID`).
+    pub fn minid(trim: StreamTrimmingMode, stream_id: impl Into<String>) -> Self {
+        Self::MinId(trim, stream_id.into(), None)
+    }
+
+    /// Limit the number of entries evicted in a single operation (`LIMIT`).
+    pub fn limit(self, limit: usize) -> Self {
+        match self {
+            Self::MaxLen(mode, threshold, _) => Self::MaxLen(mode, threshold, Some(limit)),
+            Self::MinId(mode, threshold, _) => Self::MinId(mode, threshold, Some(limit)),
+        }
+    }
+}
+
+impl ToValkeyArgs for StreamTrimStrategy {
+    fn write_valkey_args<W: ?Sized + ValkeyWrite>(&self, out: &mut W) {
+        let limit = match self {
+            Self::MaxLen(mode, threshold, limit) => {
+                out.write_arg(b"MAXLEN");
+                mode.write_valkey_args(out);
+                out.write_arg_fmt(threshold);
+                limit
+            }
+            Self::MinId(mode, threshold, limit) => {
+                out.write_arg(b"MINID");
+                mode.write_valkey_args(out);
+                out.write_arg(threshold.as_bytes());
+                limit
+            }
+        };
+        if let Some(limit) = limit {
             out.write_arg(b"LIMIT");
             out.write_arg_fmt(limit);
         }
@@ -76,54 +96,33 @@ impl ToValkeyArgs for StreamTrimOptions {
 
 /// Options for `XADD`.
 ///
-/// Mirrors Python `StreamAddOptions`.
-#[derive(Debug, Clone)]
+/// Mirrors redis-rs's `streams::StreamAddOptions` type.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct StreamAddOptions {
-    /// If `false`, do not create the stream if it does not exist (`NOMKSTREAM`).
-    pub make_stream: bool,
-    /// Optional trim to apply as part of the add.
-    pub trim: Option<StreamTrimOptions>,
+    nomkstream: bool,
+    trim: Option<StreamTrimStrategy>,
 }
 
-impl Default for StreamAddOptions {
-    fn default() -> Self {
-        Self {
-            make_stream: true,
-            trim: None,
-        }
+impl StreamAddOptions {
+    /// Do not create the stream if it does not exist (`NOMKSTREAM`).
+    pub fn nomkstream(mut self) -> Self {
+        self.nomkstream = true;
+        self
+    }
+
+    /// Trim the stream as part of the add.
+    pub fn trim(mut self, trim: StreamTrimStrategy) -> Self {
+        self.trim = Some(trim);
+        self
     }
 }
 
 impl ToValkeyArgs for StreamAddOptions {
     fn write_valkey_args<W: ?Sized + ValkeyWrite>(&self, out: &mut W) {
-        if !self.make_stream {
+        if self.nomkstream {
             out.write_arg(b"NOMKSTREAM");
         }
         self.trim.write_valkey_args(out);
-    }
-}
-
-/// Options for `XREAD` (`BLOCK`/`COUNT`).
-///
-/// Mirrors Python `StreamReadOptions`.
-#[derive(Debug, Clone, Copy, Default)]
-pub struct StreamReadOptions {
-    /// Block for up to this many milliseconds waiting for entries (`BLOCK`).
-    pub block_ms: Option<i64>,
-    /// Maximum number of entries to return per stream (`COUNT`).
-    pub count: Option<i64>,
-}
-
-impl ToValkeyArgs for StreamReadOptions {
-    fn write_valkey_args<W: ?Sized + ValkeyWrite>(&self, out: &mut W) {
-        if let Some(block_ms) = self.block_ms {
-            out.write_arg(b"BLOCK");
-            out.write_arg_fmt(block_ms);
-        }
-        if let Some(count) = self.count {
-            out.write_arg(b"COUNT");
-            out.write_arg_fmt(count);
-        }
     }
 }
 
@@ -214,42 +213,6 @@ impl ToValkeyArgs for StreamClaimOptions {
     }
 }
 
-/// A pending-summary consumer entry: `(consumer_name, count)`.
-pub type PendingConsumer = (Bytes, i64);
-
-/// Summary form of the `XPENDING` reply.
-#[derive(Debug, Clone, Default)]
-pub struct XPendingSummary {
-    /// Total number of pending messages.
-    pub count: i64,
-    /// Smallest pending ID (`None` if no pending messages).
-    pub min_id: Option<Bytes>,
-    /// Largest pending ID (`None` if no pending messages).
-    pub max_id: Option<Bytes>,
-    /// Per-consumer pending counts.
-    pub consumers: Vec<PendingConsumer>,
-}
-
-impl FromValkeyValue for XPendingSummary {
-    /// Decodes `[count, min, max, [[consumer, count], ...]]`, or nil as an empty summary.
-    fn from_owned_valkey_value(value: ValkeyValue) -> ValkeyResult<Self> {
-        match value {
-            ValkeyValue::Nil => Ok(Self::default()),
-            ValkeyValue::Array(items) if items.len() == 4 => {
-                let mut items = items.into_iter();
-                let mut next = || items.next().expect("checked length");
-                Ok(Self {
-                    count: i64::from_owned_valkey_value(next())?,
-                    min_id: Option::<Bytes>::from_owned_valkey_value(next())?,
-                    max_id: Option::<Bytes>::from_owned_valkey_value(next())?,
-                    consumers: Vec::<PendingConsumer>::from_owned_valkey_value(next())?,
-                })
-            }
-            other => Err(to_glide_error(other, "Unexpected XPENDING summary reply.")),
-        }
-    }
-}
-
 /// A single entry from the extended (range) form of `XPENDING`.
 #[derive(Debug, Clone)]
 pub struct XPendingEntry {
@@ -282,47 +245,421 @@ impl FromValkeyValue for XPendingEntry {
     }
 }
 
-/// Stream commands (`XADD`, `XLEN`, `XRANGE`, `XREAD`, `XDEL`, groups, ...).
+/// A stream entry: its ID and field/value pairs.
+///
+/// Mirrors redis-rs's `streams::StreamId` type.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct StreamId {
+    /// The entry ID.
+    pub id: String,
+    /// The entry's fields, with their values.
+    pub map: HashMap<String, ValkeyValue>,
+    /// Milliseconds since the entry was last delivered to a consumer, if reported.
+    pub milliseconds_elapsed_from_delivery: Option<usize>,
+    /// The number of times the entry was delivered, if reported.
+    pub delivered_count: Option<usize>,
+}
+
+impl StreamId {
+    /// Returns the value of `key` decoded as `T`, or `None` if it is missing or
+    /// does not decode.
+    pub fn get<T: FromValkeyValue>(&self, key: &str) -> Option<T> {
+        self.map
+            .get(key)
+            .and_then(|value| T::from_owned_valkey_value(value.clone()).ok())
+    }
+
+    /// Returns `true` if the entry has the field `key`.
+    pub fn contains_key(&self, key: &str) -> bool {
+        self.map.contains_key(key)
+    }
+
+    /// Returns the number of fields in the entry.
+    pub fn len(&self) -> usize {
+        self.map.len()
+    }
+
+    /// Returns `true` if the entry has no fields.
+    pub fn is_empty(&self) -> bool {
+        self.map.is_empty()
+    }
+}
+
+/// A stream key and its entries, as returned by `XREAD`.
+///
+/// Mirrors redis-rs's `streams::StreamKey` type.
+#[derive(Debug, Clone, Default)]
+pub struct StreamKey {
+    /// The stream key.
+    pub key: String,
+    /// The stream's entries.
+    pub ids: Vec<StreamId>,
+}
+
+/// The `XREAD` reply.
+///
+/// Mirrors redis-rs's `streams::StreamReadReply` type.
+#[derive(Debug, Clone, Default)]
+pub struct StreamReadReply {
+    /// The entries of each stream read.
+    pub keys: Vec<StreamKey>,
+}
+
+impl FromValkeyValue for StreamReadReply {
+    fn from_owned_valkey_value(value: ValkeyValue) -> ValkeyResult<Self> {
+        let keys = map_pairs(value, "Unexpected XREAD reply.")?
+            .into_iter()
+            .map(|(key, entries)| {
+                Ok(StreamKey {
+                    key: String::from_owned_valkey_value(key)?,
+                    ids: parse_stream_ids(entries)?,
+                })
+            })
+            .collect::<ValkeyResult<_>>()?;
+        Ok(Self { keys })
+    }
+}
+
+/// The `XRANGE` / `XREVRANGE` reply.
+///
+/// Mirrors redis-rs's `streams::StreamRangeReply` type.
+#[derive(Debug, Clone, Default)]
+pub struct StreamRangeReply {
+    /// The entries in the range.
+    pub ids: Vec<StreamId>,
+}
+
+impl FromValkeyValue for StreamRangeReply {
+    fn from_owned_valkey_value(value: ValkeyValue) -> ValkeyResult<Self> {
+        Ok(Self {
+            ids: parse_stream_ids(value)?,
+        })
+    }
+}
+
+/// The `XCLAIM` reply.
+///
+/// Mirrors redis-rs's `streams::StreamClaimReply` type.
+#[derive(Debug, Clone, Default)]
+pub struct StreamClaimReply {
+    /// The claimed entries.
+    pub ids: Vec<StreamId>,
+}
+
+impl FromValkeyValue for StreamClaimReply {
+    fn from_owned_valkey_value(value: ValkeyValue) -> ValkeyResult<Self> {
+        Ok(Self {
+            ids: parse_stream_ids(value)?,
+        })
+    }
+}
+
+/// The summary `XPENDING` reply.
+///
+/// Mirrors redis-rs's `streams::StreamPendingReply` type.
+#[derive(Debug, Clone, Default)]
+#[non_exhaustive]
+pub enum StreamPendingReply {
+    /// No entries are pending.
+    #[default]
+    Empty,
+    /// Some entries are pending.
+    Data(StreamPendingData),
+}
+
+impl StreamPendingReply {
+    /// Returns the number of pending entries.
+    pub fn count(&self) -> usize {
+        match self {
+            Self::Empty => 0,
+            Self::Data(data) => data.count,
+        }
+    }
+}
+
+impl FromValkeyValue for StreamPendingReply {
+    /// Decodes `[count, start_id, end_id, [[consumer, count], ...]]`.
+    fn from_owned_valkey_value(value: ValkeyValue) -> ValkeyResult<Self> {
+        type Summary = (
+            usize,
+            Option<String>,
+            Option<String>,
+            Option<Vec<(String, usize)>>,
+        );
+        let (count, start_id, end_id, consumers) = Summary::from_owned_valkey_value(value)?;
+        if count == 0 {
+            return Ok(Self::Empty);
+        }
+        let (Some(start_id), Some(end_id)) = (start_id, end_id) else {
+            return Err(GlideError::Request(
+                "Non-empty XPENDING reply without start and end IDs.".into(),
+            ));
+        };
+        let consumers = consumers
+            .unwrap_or_default()
+            .into_iter()
+            .map(|(name, pending)| StreamInfoConsumer {
+                name,
+                pending,
+                idle: 0,
+            })
+            .collect();
+        Ok(Self::Data(StreamPendingData {
+            count,
+            start_id,
+            end_id,
+            consumers,
+        }))
+    }
+}
+
+/// The details of a non-empty [`StreamPendingReply`].
+///
+/// Mirrors redis-rs's `streams::StreamPendingData` type.
+#[derive(Debug, Clone, Default)]
+pub struct StreamPendingData {
+    /// The number of pending entries.
+    pub count: usize,
+    /// The smallest pending entry ID.
+    pub start_id: String,
+    /// The largest pending entry ID.
+    pub end_id: String,
+    /// Every consumer with pending entries, and how many it has (`idle` is not reported).
+    pub consumers: Vec<StreamInfoConsumer>,
+}
+
+/// The `XINFO STREAM` reply.
+///
+/// Mirrors redis-rs's `streams::StreamInfoStreamReply` type.
+#[derive(Debug, Clone, Default)]
+pub struct StreamInfoStreamReply {
+    /// The last generated ID, which may differ from the last entry's ID.
+    pub last_generated_id: String,
+    /// The number of radix tree nodes (`radix-tree-nodes`).
+    pub radix_tree_keys: usize,
+    /// The number of consumer groups.
+    pub groups: usize,
+    /// The number of entries.
+    pub length: usize,
+    /// The first entry (default if the stream is empty).
+    pub first_entry: StreamId,
+    /// The last entry (default if the stream is empty).
+    pub last_entry: StreamId,
+}
+
+impl FromValkeyValue for StreamInfoStreamReply {
+    fn from_owned_valkey_value(value: ValkeyValue) -> ValkeyResult<Self> {
+        let mut reply = Self::default();
+        for (field, value) in map_pairs(value, "Unexpected XINFO STREAM reply.")? {
+            match String::from_owned_valkey_value(field)?.as_str() {
+                "last-generated-id" => {
+                    reply.last_generated_id = FromValkeyValue::from_owned_valkey_value(value)?
+                }
+                "radix-tree-nodes" => {
+                    reply.radix_tree_keys = FromValkeyValue::from_owned_valkey_value(value)?
+                }
+                "groups" => reply.groups = FromValkeyValue::from_owned_valkey_value(value)?,
+                "length" => reply.length = FromValkeyValue::from_owned_valkey_value(value)?,
+                "first-entry" => reply.first_entry = parse_optional_stream_id(value)?,
+                "last-entry" => reply.last_entry = parse_optional_stream_id(value)?,
+                _ => {}
+            }
+        }
+        Ok(reply)
+    }
+}
+
+/// The `XINFO CONSUMERS` reply.
+///
+/// Mirrors redis-rs's `streams::StreamInfoConsumersReply` type.
+#[derive(Debug, Clone, Default)]
+pub struct StreamInfoConsumersReply {
+    /// Every consumer in the group.
+    pub consumers: Vec<StreamInfoConsumer>,
+}
+
+impl FromValkeyValue for StreamInfoConsumersReply {
+    fn from_owned_valkey_value(value: ValkeyValue) -> ValkeyResult<Self> {
+        let consumers = list_of_map_pairs(value, "Unexpected XINFO CONSUMERS reply.")?
+            .into_iter()
+            .map(|fields| {
+                let mut consumer = StreamInfoConsumer::default();
+                for (field, value) in fields {
+                    match String::from_owned_valkey_value(field)?.as_str() {
+                        "name" => consumer.name = FromValkeyValue::from_owned_valkey_value(value)?,
+                        "pending" => {
+                            consumer.pending = FromValkeyValue::from_owned_valkey_value(value)?
+                        }
+                        "idle" => consumer.idle = FromValkeyValue::from_owned_valkey_value(value)?,
+                        _ => {}
+                    }
+                }
+                Ok(consumer)
+            })
+            .collect::<ValkeyResult<_>>()?;
+        Ok(Self { consumers })
+    }
+}
+
+/// The `XINFO GROUPS` reply.
+///
+/// Mirrors redis-rs's `streams::StreamInfoGroupsReply` type.
+#[derive(Debug, Clone, Default)]
+pub struct StreamInfoGroupsReply {
+    /// Every consumer group of the stream.
+    pub groups: Vec<StreamInfoGroup>,
+}
+
+impl FromValkeyValue for StreamInfoGroupsReply {
+    fn from_owned_valkey_value(value: ValkeyValue) -> ValkeyResult<Self> {
+        let groups = list_of_map_pairs(value, "Unexpected XINFO GROUPS reply.")?
+            .into_iter()
+            .map(|fields| {
+                let mut group = StreamInfoGroup::default();
+                for (field, value) in fields {
+                    match String::from_owned_valkey_value(field)?.as_str() {
+                        "name" => group.name = FromValkeyValue::from_owned_valkey_value(value)?,
+                        "consumers" => {
+                            group.consumers = FromValkeyValue::from_owned_valkey_value(value)?
+                        }
+                        "pending" => {
+                            group.pending = FromValkeyValue::from_owned_valkey_value(value)?
+                        }
+                        "last-delivered-id" => {
+                            group.last_delivered_id =
+                                FromValkeyValue::from_owned_valkey_value(value)?
+                        }
+                        "entries-read" => {
+                            group.entries_read = FromValkeyValue::from_owned_valkey_value(value)?
+                        }
+                        "lag" => group.lag = FromValkeyValue::from_owned_valkey_value(value)?,
+                        _ => {}
+                    }
+                }
+                Ok(group)
+            })
+            .collect::<ValkeyResult<_>>()?;
+        Ok(Self { groups })
+    }
+}
+
+/// A consumer, as reported by `XINFO CONSUMERS` or `XPENDING`.
+///
+/// Mirrors redis-rs's `streams::StreamInfoConsumer` type.
+#[derive(Debug, Clone, Default)]
+pub struct StreamInfoConsumer {
+    /// The consumer name.
+    pub name: String,
+    /// The number of entries pending for the consumer.
+    pub pending: usize,
+    /// The consumer's idle time in milliseconds.
+    pub idle: usize,
+}
+
+/// A consumer group, as reported by `XINFO GROUPS`.
+///
+/// Mirrors redis-rs's `streams::StreamInfoGroup` type.
+#[derive(Debug, Clone, Default)]
+pub struct StreamInfoGroup {
+    /// The group name.
+    pub name: String,
+    /// The number of consumers in the group.
+    pub consumers: usize,
+    /// The number of entries delivered to the group but not yet acknowledged.
+    pub pending: usize,
+    /// The ID of the last entry delivered to the group.
+    pub last_delivered_id: String,
+    /// The logical read counter of the last entry delivered, if reported.
+    pub entries_read: Option<usize>,
+    /// The number of entries not yet delivered to the group, if known.
+    pub lag: Option<usize>,
+}
+
+/// Returns the pairs of a map reply, or none for nil.
+fn map_pairs(value: ValkeyValue, error: &str) -> ValkeyResult<Vec<(ValkeyValue, ValkeyValue)>> {
+    match value {
+        ValkeyValue::Nil => Ok(Vec::new()),
+        ValkeyValue::Map(pairs) => Ok(pairs),
+        other => Err(to_glide_error(other, error)),
+    }
+}
+
+/// Returns the pairs of each map in an array of maps (e.g. `XINFO GROUPS`).
+fn list_of_map_pairs(
+    value: ValkeyValue,
+    error: &str,
+) -> ValkeyResult<Vec<Vec<(ValkeyValue, ValkeyValue)>>> {
+    match value {
+        ValkeyValue::Nil => Ok(Vec::new()),
+        ValkeyValue::Array(items) => items
+            .into_iter()
+            .map(|item| map_pairs(item, error))
+            .collect(),
+        other => Err(to_glide_error(other, error)),
+    }
+}
+
+/// Decodes stream entries from a map of entry ID to `[[field, value], ...]`.
+fn parse_stream_ids(value: ValkeyValue) -> ValkeyResult<Vec<StreamId>> {
+    map_pairs(value, "Unexpected stream entries reply.")?
+        .into_iter()
+        .map(|(id, fields)| {
+            let fields = match fields {
+                ValkeyValue::Array(fields) => fields
+                    .into_iter()
+                    .map(|pair| match pair {
+                        ValkeyValue::Array(pair) if pair.len() == 2 => {
+                            let [field, value]: [ValkeyValue; 2] =
+                                pair.try_into().expect("checked length");
+                            Ok((field, value))
+                        }
+                        other => Err(to_glide_error(other, "Unexpected stream entry field.")),
+                    })
+                    .collect::<ValkeyResult<_>>()?,
+                other => return Err(to_glide_error(other, "Unexpected stream entry fields.")),
+            };
+            stream_id(id, fields)
+        })
+        .collect()
+}
+
+/// Decodes an `XINFO STREAM` entry, `[id, [field, value, ...]]`, or nil as the default entry.
+fn parse_optional_stream_id(value: ValkeyValue) -> ValkeyResult<StreamId> {
+    match value {
+        ValkeyValue::Nil => Ok(StreamId::default()),
+        ValkeyValue::Array(items) if items.len() == 2 => {
+            let [id, fields]: [ValkeyValue; 2] = items.try_into().expect("checked length");
+            let ValkeyValue::Array(fields) = fields else {
+                return Err(to_glide_error(fields, "Unexpected stream entry fields."));
+            };
+            let mut fields = fields.into_iter();
+            let mut pairs = Vec::with_capacity(fields.len() / 2);
+            while let (Some(field), Some(value)) = (fields.next(), fields.next()) {
+                pairs.push((field, value));
+            }
+            stream_id(id, pairs)
+        }
+        other => Err(to_glide_error(other, "Unexpected stream entry reply.")),
+    }
+}
+
+/// Builds a stream entry from its ID and field/value pairs.
+fn stream_id(id: ValkeyValue, fields: Vec<(ValkeyValue, ValkeyValue)>) -> ValkeyResult<StreamId> {
+    let map = fields
+        .into_iter()
+        .map(|(field, value)| Ok((String::from_owned_valkey_value(field)?, value)))
+        .collect::<ValkeyResult<_>>()?;
+    Ok(StreamId {
+        id: String::from_owned_valkey_value(id)?,
+        map,
+        milliseconds_elapsed_from_delivery: None,
+        delivered_count: None,
+    })
+}
+
+/// Stream commands beyond the command table (trimming, consumer groups, claiming, ...).
 #[async_trait]
 pub trait StreamCommands: CommandExecutor {
-    /// Append an entry to the stream at `key` (`XADD`). Pass `"*"` for an
-    /// auto-generated ID. Returns the generated entry ID.
-    async fn xadd<K, F, V>(
-        &self,
-        key: K,
-        id: &str,
-        fields: &[(F, V)],
-    ) -> ValkeyResult<Option<String>>
-    where
-        K: ToValkeyArgs + Send + Sync,
-        F: ToValkeyArgs + Send + Sync,
-        V: ToValkeyArgs + Send + Sync,
-    {
-        let mut cmd = Cmd::new();
-        cmd.arg("XADD").arg(key).arg(id);
-        for (f, v) in fields {
-            cmd.arg(f).arg(v);
-        }
-        Option::<String>::from_owned_valkey_value(self.execute_command(cmd, None).await?)
-    }
-
-    /// Get the number of entries in the stream (`XLEN`).
-    async fn xlen<K: ToValkeyArgs + Send>(&self, key: K) -> ValkeyResult<i64> {
-        let mut cmd = Cmd::new();
-        cmd.arg("XLEN").arg(key);
-        i64::from_owned_valkey_value(self.execute_command(cmd, None).await?)
-    }
-
-    /// Delete entries by ID (`XDEL`); returns the number deleted.
-    async fn xdel<K: ToValkeyArgs + Send>(&self, key: K, ids: &[&str]) -> ValkeyResult<i64> {
-        let mut cmd = Cmd::new();
-        cmd.arg("XDEL").arg(key);
-        for id in ids {
-            cmd.arg(*id);
-        }
-        i64::from_owned_valkey_value(self.execute_command(cmd, None).await?)
-    }
-
     /// Trim the stream to (approximately) `maxlen` entries (`XTRIM ... MAXLEN`).
     async fn xtrim_maxlen<K: ToValkeyArgs + Send>(
         &self,
@@ -339,97 +676,6 @@ pub trait StreamCommands: CommandExecutor {
         i64::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
-    /// Read a range of entries (`XRANGE key start end`).
-    async fn xrange<K: ToValkeyArgs + Send>(
-        &self,
-        key: K,
-        start: &str,
-        end: &str,
-    ) -> ValkeyResult<Vec<StreamEntry>> {
-        let mut cmd = Cmd::new();
-        cmd.arg("XRANGE").arg(key).arg(start).arg(end);
-        parse_entries(self.execute_command(cmd, None).await?)
-    }
-
-    /// Read a range of entries in reverse (`XREVRANGE key end start`).
-    async fn xrevrange<K: ToValkeyArgs + Send>(
-        &self,
-        key: K,
-        end: &str,
-        start: &str,
-    ) -> ValkeyResult<Vec<StreamEntry>> {
-        let mut cmd = Cmd::new();
-        cmd.arg("XREVRANGE").arg(key).arg(end).arg(start);
-        parse_entries(self.execute_command(cmd, None).await?)
-    }
-
-    /// Create a consumer group (`XGROUP CREATE`). Set `mkstream` to create the
-    /// stream if it does not exist.
-    async fn xgroup_create<K: ToValkeyArgs + Send>(
-        &self,
-        key: K,
-        group: &str,
-        id: &str,
-        mkstream: bool,
-    ) -> ValkeyResult<()> {
-        let mut cmd = Cmd::new();
-        cmd.arg("XGROUP").arg("CREATE").arg(key).arg(group).arg(id);
-        if mkstream {
-            cmd.arg("MKSTREAM");
-        }
-        <()>::from_owned_valkey_value(self.execute_command(cmd, None).await?)
-    }
-
-    /// Destroy a consumer group (`XGROUP DESTROY`). Returns whether it existed.
-    async fn xgroup_destroy<K: ToValkeyArgs + Send>(
-        &self,
-        key: K,
-        group: &str,
-    ) -> ValkeyResult<bool> {
-        let mut cmd = Cmd::new();
-        cmd.arg("XGROUP").arg("DESTROY").arg(key).arg(group);
-        bool::from_owned_valkey_value(self.execute_command(cmd, None).await?)
-    }
-
-    /// Acknowledge processed entries in a consumer group (`XACK`).
-    async fn xack<K: ToValkeyArgs + Send>(
-        &self,
-        key: K,
-        group: &str,
-        ids: &[&str],
-    ) -> ValkeyResult<i64> {
-        let mut cmd = Cmd::new();
-        cmd.arg("XACK").arg(key).arg(group);
-        for id in ids {
-            cmd.arg(*id);
-        }
-        i64::from_owned_valkey_value(self.execute_command(cmd, None).await?)
-    }
-
-    /// Append an entry to the stream with options (`XADD` with `NOMKSTREAM` /
-    /// trim). Returns the generated ID, or `None` if `NOMKSTREAM` was set and the
-    /// stream did not exist.
-    async fn xadd_options<K, F, V>(
-        &self,
-        key: K,
-        id: &str,
-        fields: &[(F, V)],
-        options: &StreamAddOptions,
-    ) -> ValkeyResult<Option<String>>
-    where
-        K: ToValkeyArgs + Send + Sync,
-        F: ToValkeyArgs + Send + Sync,
-        V: ToValkeyArgs + Send + Sync,
-    {
-        let mut cmd = Cmd::new();
-        cmd.arg("XADD").arg(key).arg(options);
-        cmd.arg(id);
-        for (f, v) in fields {
-            cmd.arg(f).arg(v);
-        }
-        Option::<String>::from_owned_valkey_value(self.execute_command(cmd, None).await?)
-    }
-
     /// Trim the stream to a minimum ID (`XTRIM ... MINID`). Returns entries removed.
     async fn xtrim_minid<K: ToValkeyArgs + Send>(
         &self,
@@ -444,27 +690,6 @@ pub trait StreamCommands: CommandExecutor {
         }
         cmd.arg(minid);
         i64::from_owned_valkey_value(self.execute_command(cmd, None).await?)
-    }
-
-    /// Read from one or more streams (`XREAD`). `keys_ids` is a list of
-    /// `(key, id)` pairs. Returns `(stream_key, entries)` per stream that
-    /// produced data.
-    async fn xread<K: ToValkeyArgs + Send + Sync>(
-        &self,
-        keys_ids: &[(K, &str)],
-        options: Option<StreamReadOptions>,
-    ) -> ValkeyResult<Vec<(Bytes, Vec<StreamEntry>)>> {
-        let mut cmd = Cmd::new();
-        cmd.arg("XREAD");
-        cmd.arg(options);
-        cmd.arg("STREAMS");
-        for (k, _) in keys_ids {
-            cmd.arg(k);
-        }
-        for (_, id) in keys_ids {
-            cmd.arg(*id);
-        }
-        parse_stream_read(self.execute_command(cmd, None).await?)
     }
 
     /// Read from streams as part of a consumer group (`XREADGROUP`).
@@ -486,30 +711,6 @@ pub trait StreamCommands: CommandExecutor {
             cmd.arg(*id);
         }
         parse_stream_read(self.execute_command(cmd, None).await?)
-    }
-
-    /// Claim ownership of pending messages (`XCLAIM`). Returns the claimed
-    /// entries with their fields.
-    async fn xclaim<K: ToValkeyArgs + Send>(
-        &self,
-        key: K,
-        group: &str,
-        consumer: &str,
-        min_idle_time_ms: i64,
-        ids: &[&str],
-        options: Option<StreamClaimOptions>,
-    ) -> ValkeyResult<Vec<StreamEntry>> {
-        let mut cmd = Cmd::new();
-        cmd.arg("XCLAIM")
-            .arg(key)
-            .arg(group)
-            .arg(consumer)
-            .arg(min_idle_time_ms);
-        for id in ids {
-            cmd.arg(*id);
-        }
-        cmd.arg(options);
-        parse_entries(self.execute_command(cmd, None).await?)
     }
 
     /// Claim ownership of pending messages, returning only their IDs
@@ -585,17 +786,6 @@ pub trait StreamCommands: CommandExecutor {
         parse_autoclaim_justid(self.execute_command(cmd, None).await?)
     }
 
-    /// Summary form of `XPENDING` (`XPENDING key group`).
-    async fn xpending<K: ToValkeyArgs + Send>(
-        &self,
-        key: K,
-        group: &str,
-    ) -> ValkeyResult<XPendingSummary> {
-        let mut cmd = Cmd::new();
-        cmd.arg("XPENDING").arg(key).arg(group);
-        XPendingSummary::from_owned_valkey_value(self.execute_command(cmd, None).await?)
-    }
-
     /// Extended (range) form of `XPENDING`
     /// (`XPENDING key group [IDLE ms] start end count [consumer]`).
     async fn xpending_range<K: ToValkeyArgs + Send>(
@@ -620,17 +810,6 @@ pub trait StreamCommands: CommandExecutor {
         Vec::<XPendingEntry>::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
-    /// Get general information about a stream (`XINFO STREAM`). Returns the raw
-    /// structured reply as a list of `(field, value)` pairs.
-    async fn xinfo_stream<K: ToValkeyArgs + Send>(
-        &self,
-        key: K,
-    ) -> ValkeyResult<Vec<(Bytes, ValkeyValue)>> {
-        let mut cmd = Cmd::new();
-        cmd.arg("XINFO").arg("STREAM").arg(key);
-        parse_field_value_map(self.execute_command(cmd, None).await?)
-    }
-
     /// Get the full state of a stream including entries and PEL
     /// (`XINFO STREAM ... FULL`). Returns the raw structured reply as
     /// `(field, value)` pairs. Pass `count` to limit returned entries/PEL.
@@ -645,28 +824,6 @@ pub trait StreamCommands: CommandExecutor {
             cmd.arg("COUNT").arg(c);
         }
         parse_field_value_map(self.execute_command(cmd, None).await?)
-    }
-
-    /// Get information about the consumer groups of a stream (`XINFO GROUPS`).
-    /// Returns one `(field, value)` map per group.
-    async fn xinfo_groups<K: ToValkeyArgs + Send>(
-        &self,
-        key: K,
-    ) -> ValkeyResult<Vec<Vec<(Bytes, ValkeyValue)>>> {
-        let mut cmd = Cmd::new();
-        cmd.arg("XINFO").arg("GROUPS").arg(key);
-        parse_list_of_maps(self.execute_command(cmd, None).await?)
-    }
-
-    /// Get information about the consumers in a group (`XINFO CONSUMERS`).
-    async fn xinfo_consumers<K: ToValkeyArgs + Send>(
-        &self,
-        key: K,
-        group: &str,
-    ) -> ValkeyResult<Vec<Vec<(Bytes, ValkeyValue)>>> {
-        let mut cmd = Cmd::new();
-        cmd.arg("XINFO").arg("CONSUMERS").arg(key).arg(group);
-        parse_list_of_maps(self.execute_command(cmd, None).await?)
     }
 
     /// Set the last-delivered ID of a stream (`XSETID`).
@@ -758,6 +915,8 @@ pub trait StreamCommands: CommandExecutor {
     }
 }
 
+impl<T: CommandExecutor + ?Sized> StreamCommands for T {}
+
 /// Parse an `XRANGE`/`XREVRANGE` reply into `(id, [(field, value), ...])` entries,
 /// handling both RESP2 (array of `[id, [f, v, ...]]`) and RESP3 (map of
 /// `id -> [[f, v], ...]`).
@@ -827,8 +986,6 @@ fn parse_fields(v: ValkeyValue) -> ValkeyResult<Vec<(Bytes, Bytes)>> {
     }
     Ok(out)
 }
-
-impl<T: CommandExecutor + ?Sized> StreamCommands for T {}
 
 /// Collect an array reply into a `Vec<String>` (used by `JUSTID` variants).
 fn collect_strings(v: ValkeyValue) -> ValkeyResult<Vec<String>> {
@@ -929,15 +1086,6 @@ fn parse_field_value_map(v: ValkeyValue) -> ValkeyResult<Vec<(Bytes, ValkeyValue
     }
 }
 
-/// Parse a list of structured maps (e.g. `XINFO GROUPS`/`CONSUMERS`).
-fn parse_list_of_maps(v: ValkeyValue) -> ValkeyResult<Vec<Vec<(Bytes, ValkeyValue)>>> {
-    match v {
-        ValkeyValue::Nil => Ok(Vec::new()),
-        ValkeyValue::Array(items) => items.into_iter().map(parse_field_value_map).collect(),
-        other => Err(to_glide_error(other, "Unexpected XINFO list reply.")),
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -945,53 +1093,29 @@ mod tests {
     use crate::test_utils::assert_args_empty;
 
     #[test]
-    fn trim_options_maxlen_args() {
+    fn trim_strategy_args() {
         assert_args(
-            StreamTrimOptions::max_len(true, 100, None),
+            StreamTrimStrategy::maxlen(StreamTrimmingMode::Exact, 100),
             &["MAXLEN", "=", "100"],
         );
         assert_args(
-            StreamTrimOptions::max_len(false, 100, Some(10)),
+            StreamTrimStrategy::maxlen(StreamTrimmingMode::Approx, 100).limit(10),
             &["MAXLEN", "~", "100", "LIMIT", "10"],
         );
-    }
-
-    #[test]
-    fn trim_options_minid_args() {
         assert_args(
-            StreamTrimOptions::min_id(false, "1526985054069-0", None),
+            StreamTrimStrategy::minid(StreamTrimmingMode::Approx, "1526985054069-0"),
             &["MINID", "~", "1526985054069-0"],
         );
     }
 
     #[test]
-    fn add_options_default() {
-        let opts = StreamAddOptions::default();
-        assert!(opts.make_stream);
-        assert!(opts.trim.is_none());
-        assert_args_empty(opts);
-    }
-
-    #[test]
     fn add_options_args() {
+        assert_args_empty(StreamAddOptions::default());
         assert_args(
-            StreamAddOptions {
-                make_stream: false,
-                trim: Some(StreamTrimOptions::max_len(true, 5, None)),
-            },
+            StreamAddOptions::default()
+                .nomkstream()
+                .trim(StreamTrimStrategy::maxlen(StreamTrimmingMode::Exact, 5)),
             &["NOMKSTREAM", "MAXLEN", "=", "5"],
-        );
-    }
-
-    #[test]
-    fn read_options_args() {
-        assert_args_empty(StreamReadOptions::default());
-        assert_args(
-            StreamReadOptions {
-                block_ms: Some(500),
-                count: Some(10),
-            },
-            &["BLOCK", "500", "COUNT", "10"],
         );
     }
 
@@ -1038,6 +1162,184 @@ mod tests {
                 ..Default::default()
             },
             &["TIME", "1700000000000"],
+        );
+    }
+
+    fn bulk(s: &str) -> ValkeyValue {
+        ValkeyValue::BulkString(Bytes::from(s.to_string()))
+    }
+
+    fn array(items: Vec<ValkeyValue>) -> ValkeyValue {
+        ValkeyValue::Array(items)
+    }
+
+    fn entry(id: &str, field: &str, value: &str) -> StreamId {
+        StreamId {
+            id: id.to_string(),
+            map: HashMap::from([(field.to_string(), bulk(value))]),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn range_reply_decoding() {
+        // glide-core: a map of entry ID to `[[field, value], ...]`.
+        let range = ValkeyValue::Map(vec![
+            (bulk("1-0"), array(vec![array(vec![bulk("f"), bulk("a")])])),
+            (bulk("2-0"), array(vec![array(vec![bulk("f"), bulk("b")])])),
+        ]);
+        let reply = StreamRangeReply::from_owned_valkey_value(range).unwrap();
+        assert_eq!(
+            reply.ids,
+            vec![entry("1-0", "f", "a"), entry("2-0", "f", "b")]
+        );
+        assert!(
+            StreamRangeReply::from_owned_valkey_value(ValkeyValue::Nil)
+                .unwrap()
+                .ids
+                .is_empty()
+        );
+
+        // The raw RESP2 shape is not accepted: glide-core always converts it.
+        let raw = array(vec![array(vec![
+            bulk("1-0"),
+            array(vec![bulk("f"), bulk("a")]),
+        ])]);
+        assert!(StreamRangeReply::from_owned_valkey_value(raw).is_err());
+
+        let claim = StreamClaimReply::from_owned_valkey_value(ValkeyValue::Map(vec![(
+            bulk("1-0"),
+            array(vec![array(vec![bulk("f"), bulk("a")])]),
+        )]))
+        .unwrap();
+        assert_eq!(claim.ids, vec![entry("1-0", "f", "a")]);
+
+        let id = entry("1-0", "f", "7");
+        assert_eq!(id.get::<i64>("f"), Some(7));
+        assert_eq!(id.get::<i64>("missing"), None);
+        assert!(id.contains_key("f"));
+        assert_eq!((id.len(), id.is_empty()), (1, false));
+    }
+
+    #[test]
+    fn read_reply_decoding() {
+        // glide-core: a map of stream key to a map of entry ID to `[[field, value], ...]`.
+        let entries = ValkeyValue::Map(vec![(
+            bulk("1-0"),
+            array(vec![array(vec![bulk("f"), bulk("a")])]),
+        )]);
+        let reply =
+            StreamReadReply::from_owned_valkey_value(ValkeyValue::Map(vec![(bulk("s"), entries)]))
+                .unwrap();
+        assert_eq!(reply.keys.len(), 1);
+        assert_eq!(reply.keys[0].key, "s");
+        assert_eq!(reply.keys[0].ids, vec![entry("1-0", "f", "a")]);
+
+        assert!(
+            Option::<StreamReadReply>::from_owned_valkey_value(ValkeyValue::Nil)
+                .unwrap()
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn pending_reply_decoding() {
+        let empty = array(vec![
+            ValkeyValue::Int(0),
+            ValkeyValue::Nil,
+            ValkeyValue::Nil,
+            ValkeyValue::Nil,
+        ]);
+        let reply = StreamPendingReply::from_owned_valkey_value(empty).unwrap();
+        assert!(matches!(reply, StreamPendingReply::Empty));
+        assert_eq!(reply.count(), 0);
+
+        let data = array(vec![
+            ValkeyValue::Int(3),
+            bulk("1-0"),
+            bulk("3-0"),
+            array(vec![array(vec![bulk("c1"), bulk("3")])]),
+        ]);
+        let reply = StreamPendingReply::from_owned_valkey_value(data).unwrap();
+        assert_eq!(reply.count(), 3);
+        let StreamPendingReply::Data(data) = reply else {
+            panic!("expected pending data");
+        };
+        assert_eq!(
+            (data.start_id.as_str(), data.end_id.as_str()),
+            ("1-0", "3-0")
+        );
+        assert_eq!(data.consumers.len(), 1);
+        assert_eq!(
+            (data.consumers[0].name.as_str(), data.consumers[0].pending),
+            ("c1", 3)
+        );
+
+        let missing_ids = array(vec![
+            ValkeyValue::Int(1),
+            ValkeyValue::Nil,
+            ValkeyValue::Nil,
+            ValkeyValue::Nil,
+        ]);
+        assert!(StreamPendingReply::from_owned_valkey_value(missing_ids).is_err());
+    }
+
+    #[test]
+    fn info_stream_reply_decoding() {
+        // glide-core: a map, whose entries keep the flat `[id, [field, value, ...]]` form.
+        let info = ValkeyValue::Map(vec![
+            (bulk("length"), ValkeyValue::Int(2)),
+            (bulk("radix-tree-nodes"), ValkeyValue::Int(1)),
+            (bulk("groups"), ValkeyValue::Int(1)),
+            (bulk("last-generated-id"), bulk("2-0")),
+            (
+                bulk("first-entry"),
+                array(vec![bulk("1-0"), array(vec![bulk("f"), bulk("a")])]),
+            ),
+            (bulk("last-entry"), ValkeyValue::Nil),
+            (bulk("entries-added"), ValkeyValue::Int(2)),
+        ]);
+        let reply = StreamInfoStreamReply::from_owned_valkey_value(info).unwrap();
+        assert_eq!(
+            (reply.length, reply.radix_tree_keys, reply.groups),
+            (2, 1, 1)
+        );
+        assert_eq!(reply.last_generated_id, "2-0");
+        assert_eq!(reply.first_entry, entry("1-0", "f", "a"));
+        assert_eq!(reply.last_entry, StreamId::default());
+    }
+
+    #[test]
+    fn info_groups_and_consumers_reply_decoding() {
+        // glide-core: an array of maps.
+        let groups = array(vec![ValkeyValue::Map(vec![
+            (bulk("name"), bulk("g")),
+            (bulk("consumers"), ValkeyValue::Int(2)),
+            (bulk("pending"), ValkeyValue::Int(3)),
+            (bulk("last-delivered-id"), bulk("3-0")),
+            (bulk("entries-read"), ValkeyValue::Int(3)),
+            (bulk("lag"), ValkeyValue::Nil),
+        ])]);
+        let reply = StreamInfoGroupsReply::from_owned_valkey_value(groups).unwrap();
+        let group = &reply.groups[0];
+        assert_eq!(
+            (group.name.as_str(), group.consumers, group.pending),
+            ("g", 2, 3)
+        );
+        assert_eq!(group.last_delivered_id, "3-0");
+        assert_eq!((group.entries_read, group.lag), (Some(3), None));
+
+        let consumers = array(vec![ValkeyValue::Map(vec![
+            (bulk("name"), bulk("c1")),
+            (bulk("pending"), ValkeyValue::Int(1)),
+            (bulk("idle"), ValkeyValue::Int(42)),
+            (bulk("inactive"), ValkeyValue::Int(42)),
+        ])]);
+        let reply = StreamInfoConsumersReply::from_owned_valkey_value(consumers).unwrap();
+        let consumer = &reply.consumers[0];
+        assert_eq!(
+            (consumer.name.as_str(), consumer.pending, consumer.idle),
+            ("c1", 1, 42)
         );
     }
 }

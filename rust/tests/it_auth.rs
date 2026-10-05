@@ -7,9 +7,7 @@
 mod common;
 
 use common::TestServer;
-use glide::{
-    AsyncTypedCommands, ConnectionManagementCommands, GlideClientConfiguration, ServerCredentials,
-};
+use glide::{AsyncTypedCommands, GlideClientConfiguration, ServerCredentials};
 
 const PASSWORD: &str = "s3cr3t-p4ss";
 

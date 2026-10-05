@@ -18,6 +18,7 @@ use glide::cmd;
 use glide::pipeline_options::PipelineOptions;
 use glide::sync::SyncGlideClient;
 use glide::sync::SyncGlideClusterClient;
+use std::collections::HashSet;
 
 #[test]
 fn sync_cmd_query() {
@@ -168,6 +169,37 @@ fn sync_cluster_commands() {
         async move { c.custom_command(&["GET", &k]).await.unwrap() }
     });
     assert_eq!(String::from_owned_valkey_value(got).unwrap(), "v");
+}
+
+#[test]
+fn sync_standalone_scan() {
+    let server = common::TestServer::start();
+    let c = sync_client(server.port);
+    let prefix = common::key("sync:scan");
+    for i in 0..20 {
+        let _: () = c.set(format!("{prefix}:keep:{i}"), "v").unwrap();
+        let _: () = c.set(format!("{prefix}:skip:{i}"), "v").unwrap();
+    }
+
+    let kept: HashSet<String> = c
+        .scan_match(format!("{prefix}:keep:*"))
+        .unwrap()
+        .map(Result::unwrap)
+        .collect();
+    assert_eq!(kept.len(), 20);
+    assert!(kept.iter().all(|k| k.contains(":keep:")));
+
+    let h = common::key("sync:hscan");
+    let _: usize = c.hset(&h, "f1", "v1").unwrap();
+    let _: usize = c.hset(&h, "f2", "v2").unwrap();
+    let fields: HashSet<(String, String)> = c.hscan(&h).unwrap().map(Result::unwrap).collect();
+    assert_eq!(
+        fields,
+        HashSet::from([
+            ("f1".to_string(), "v1".to_string()),
+            ("f2".to_string(), "v2".to_string())
+        ])
+    );
 }
 
 fn sync_client(port: u16) -> SyncGlideClient {

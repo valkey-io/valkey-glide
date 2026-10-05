@@ -12,8 +12,8 @@
 //! (a running Tokio runtime) — doing so panics with tokio's "cannot block the
 //! current thread from within a runtime".
 
+use crate::AsyncTypedCommands;
 use crate::client::{GlideClient, GlideClusterClient};
-use crate::commands::prelude::*;
 use crate::config::{GlideClientConfiguration, GlideClusterClientConfiguration};
 use crate::executor::CustomCommand;
 use crate::pipeline_options::PipelineOptions;
@@ -114,7 +114,7 @@ impl SyncGlideClient {
 
     /// Blocking `PING`.
     pub fn ping(&self) -> ValkeyResult<String> {
-        runtime().block_on(self.inner.ping())
+        runtime().block_on(AsyncTypedCommands::ping(&self.inner))
     }
 }
 
@@ -187,7 +187,7 @@ impl SyncGlideClusterClient {
 
     /// Blocking `PING`.
     pub fn ping(&self) -> ValkeyResult<String> {
-        runtime().block_on(self.inner.ping())
+        runtime().block_on(AsyncTypedCommands::ping(&self.inner))
     }
 }
 

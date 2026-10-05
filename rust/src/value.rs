@@ -774,6 +774,13 @@ mod from_valkey_value_tests {
         // Non-numeric.
         assert!(i64::from_owned_valkey_value(OKAY).is_err());
         assert!(i64::from_owned_valkey_value(BULK).is_err());
+
+        // Out-of-range or non-integral string.
+        let bulk = |s: &'static str| ValkeyValue::BulkString(Bytes::from_static(s.as_bytes()));
+        assert!(u8::from_owned_valkey_value(bulk("300")).is_err());
+        assert!(usize::from_owned_valkey_value(bulk("-1")).is_err());
+        assert!(i64::from_owned_valkey_value(bulk("1.5")).is_err());
+        assert!(u8::from_owned_valkey_value(ValkeyValue::SimpleString("256".into())).is_err());
     }
 
     #[test]

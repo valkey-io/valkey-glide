@@ -4,11 +4,11 @@
 //!
 //! One command table (below) defines all four traits via the
 //! `implement_commands!` macro. Entries are source-compatible with
-//! redis-rs command table: same method names, generic parameter
+//! redis-rs's command table: same method names, generic parameter
 //! order, bounds, and argument lists, so migrated call sites (including
 //! turbofish annotations) compile unchanged.
 //!
-//! Each entry carries the command body (mirroring the redis-rs's
+//! Each entry carries the command body (mirroring redis-rs's
 //! `implement_commands!`), so the wire encoding is identical by construction;
 //! signature parity is enforced by the `parity_tests` module (`src/parity_tests/`).
 //!
@@ -27,12 +27,12 @@
 //!   ([`crate::commands::scan`]) with the familiar `next_item()` /
 //!   `Iterator` shape, each page dispatched by value (no per-page copies).
 //!
-//! Commands beyond this table (streams, geo, `FT.*`, `JSON.*`, …) live in
+//! Commands beyond this table (streams, geo search, `JSON.*`, …) live in
 //! the per-family extension traits in [`crate::commands`].
 //!
 //! Maintenance: add or adjust entries in the `implement_commands!`
 //! invocation at the bottom of this file; the parity test will flag any
-//! divergence from redis-rs' command table (see DEVELOPER.md).
+//! divergence from redis-rs's command table (see DEVELOPER.md).
 
 use crate::ValkeyFuture;
 use crate::cmd::Cmd;
@@ -47,6 +47,14 @@ use crate::commands::options::FlushDbOptions;
 use crate::commands::options::HashFieldExpirationOptions;
 use crate::commands::options::LposOptions;
 use crate::commands::options::SetOptions;
+use crate::commands::stream::StreamAddOptions;
+use crate::commands::stream::StreamClaimReply;
+use crate::commands::stream::StreamInfoConsumersReply;
+use crate::commands::stream::StreamInfoGroupsReply;
+use crate::commands::stream::StreamInfoStreamReply;
+use crate::commands::stream::StreamPendingReply;
+use crate::commands::stream::StreamRangeReply;
+use crate::commands::stream::StreamReadReply;
 use crate::pipeline::Pipeline;
 use crate::types::IntegerReplyOrNoOp;
 use crate::value::FromValkeyValue;
@@ -378,7 +386,7 @@ macro_rules! implement_commands {
             /// decode the reply into `RV`.
             ///
             /// Prefer the typed commands (e.g. [`get`](Self::get)).
-            /// Use this method only for commands GLIDE does not implement..
+            /// Use this method only for commands GLIDE does not implement.
             #[inline]
             fn glide_send_command_as<RV: FromValkeyValue>(&self, cmd: Cmd) -> ValkeyResult<RV> {
                 RV::from_owned_valkey_value(self.glide_send_command(cmd)?)
@@ -793,6 +801,11 @@ implement_commands! {
     /// `HGET`.
     fn hget<K: ToSingleValkeyArg, F: ToSingleValkeyArg>(key: K, field: F) -> (Option<String>) {
         build_cmd!("HGET", key, field)
+    }
+
+    /// `HMGET`.
+    fn hmget<K: ToSingleValkeyArg, F: ToValkeyArgs>(key: K, fields: F) -> (Vec<String>) {
+        build_cmd!("HMGET", key, fields)
     }
 
     /// `HDEL`.
@@ -1335,6 +1348,110 @@ implement_commands! {
         build_cmd!("GEOPOS", key, members)
     }
 
+    // ==== Streams =======================================================
+
+    /// `XACK`.
+    fn xack<K: ToValkeyArgs, G: ToValkeyArgs, I: ToValkeyArgs>(key: K, group: G, ids: &'a [I]) -> (usize) {
+        build_cmd!("XACK", key, group, ids)
+    }
+
+    /// `XADD`.
+    fn xadd<K: ToValkeyArgs, ID: ToValkeyArgs, F: ToValkeyArgs, V: ToValkeyArgs>(key: K, id: ID, items: &'a [(F, V)]) -> (Option<String>) {
+        build_cmd!("XADD", key, id, items)
+    }
+
+    /// `XADD` with options.
+    fn xadd_options<K: ToValkeyArgs, ID: ToValkeyArgs, I: ToValkeyArgs>(key: K, id: ID, items: I, options: &'a StreamAddOptions) -> (Option<String>) {
+        build_cmd!("XADD", key, options, id, items)
+    }
+
+    /// `XCLAIM`.
+    fn xclaim<K: ToSingleValkeyArg, G: ToValkeyArgs, C: ToValkeyArgs, MIT: ToValkeyArgs, ID: ToValkeyArgs>(key: K, group: G, consumer: C, min_idle_time: MIT, ids: &'a [ID]) -> (StreamClaimReply) {
+        build_cmd!("XCLAIM", key, group, consumer, min_idle_time, ids)
+    }
+
+    /// `XDEL`.
+    fn xdel<K: ToSingleValkeyArg, ID: ToValkeyArgs>(key: K, ids: &'a [ID]) -> (usize) {
+        build_cmd!("XDEL", key, ids)
+    }
+
+    /// `XGROUP CREATE`.
+    fn xgroup_create<K: ToValkeyArgs, G: ToValkeyArgs, ID: ToValkeyArgs>(key: K, group: G, id: ID) -> () {
+        build_cmd!("XGROUP", "CREATE", key, group, id)
+    }
+
+    /// `XGROUP DESTROY`.
+    fn xgroup_destroy<K: ToValkeyArgs, G: ToValkeyArgs>(key: K, group: G) -> bool {
+        build_cmd!("XGROUP", "DESTROY", key, group)
+    }
+
+    /// `XINFO CONSUMERS`.
+    fn xinfo_consumers<K: ToValkeyArgs, G: ToValkeyArgs>(key: K, group: G) -> (StreamInfoConsumersReply) {
+        build_cmd!("XINFO", "CONSUMERS", key, group)
+    }
+
+    /// `XINFO GROUPS`.
+    fn xinfo_groups<K: ToValkeyArgs>(key: K) -> (StreamInfoGroupsReply) {
+        build_cmd!("XINFO", "GROUPS", key)
+    }
+
+    /// `XINFO STREAM`.
+    fn xinfo_stream<K: ToValkeyArgs>(key: K) -> (StreamInfoStreamReply) {
+        build_cmd!("XINFO", "STREAM", key)
+    }
+
+    /// `XLEN`.
+    fn xlen<K: ToValkeyArgs>(key: K) -> usize {
+        build_cmd!("XLEN", key)
+    }
+
+    /// `XPENDING`.
+    fn xpending<K: ToValkeyArgs, G: ToValkeyArgs>(key: K, group: G) -> (StreamPendingReply) {
+        build_cmd!("XPENDING", key, group)
+    }
+
+    /// `XRANGE`.
+    fn xrange<K: ToValkeyArgs, S: ToValkeyArgs, E: ToValkeyArgs>(key: K, start: S, end: E) -> (StreamRangeReply) {
+        build_cmd!("XRANGE", key, start, end)
+    }
+
+    /// `XREAD`.
+    fn xread<K: ToValkeyArgs, ID: ToValkeyArgs>(keys: &'a [K], ids: &'a [ID]) -> (Option<StreamReadReply>) {
+        build_cmd!("XREAD", "STREAMS", keys, ids)
+    }
+
+    /// `XREVRANGE`.
+    fn xrevrange<K: ToValkeyArgs, E: ToValkeyArgs, S: ToValkeyArgs>(key: K, end: E, start: S) -> (StreamRangeReply) {
+        build_cmd!("XREVRANGE", key, end, start)
+    }
+
+    // ==== Connection ====================================================
+
+    /// `PING`.
+    fn ping<>() -> (String) {
+        build_cmd!("PING")
+    }
+
+    /// `PING` with a message.
+    fn ping_message<K: ToSingleValkeyArg>(message: K) -> (String) {
+        build_cmd!("PING", message)
+    }
+
+    /// `CLIENT GETNAME`.
+    fn client_getname<>() -> (Option<String>) {
+        build_cmd!("CLIENT", "GETNAME")
+    }
+
+    /// `CLIENT ID`.
+    fn client_id<>() -> (isize) {
+        build_cmd!("CLIENT", "ID")
+    }
+
+    /// `CLIENT SETNAME`.
+    fn client_setname<K: ToSingleValkeyArg>(connection_name: K) -> (()) {
+        build_cmd!("CLIENT", "SETNAME", connection_name)
+    }
+
     // ==== Server ========================================================
 
     /// `FLUSHALL`.
@@ -1362,5 +1479,10 @@ implement_commands! {
     /// `PUBLISH`.
     fn publish<K: ToSingleValkeyArg, E: ToSingleValkeyArg>(channel: K, message: E) -> (usize) {
         build_cmd!("PUBLISH", channel, message)
+    }
+
+    /// `SPUBLISH`.
+    fn spublish<K: ToSingleValkeyArg, E: ToSingleValkeyArg>(channel: K, message: E) -> (usize) {
+        build_cmd!("SPUBLISH", channel, message)
     }
 }
