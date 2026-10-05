@@ -34,6 +34,7 @@ matrix_test!(keys, c, {
     let b = format!("{prefix}:b");
     let _: () = c.set(&a, "1").await.unwrap();
     let _: () = c.set(&b, "2").await.unwrap();
+    let _: () = c.set(common::key("other"), "3").await.unwrap();
 
     let mut found: Vec<String> = c.keys(format!("{prefix}:*")).await.unwrap();
     found.sort();
