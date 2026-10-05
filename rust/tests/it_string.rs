@@ -174,6 +174,16 @@ matrix_test!(set_nx_does_not_overwrite, c, {
     assert_eq!(v.as_deref(), Some("first"));
 });
 
+matrix_test!(set_nx, c, {
+    let k = common::key("setnx");
+    let set: bool = c.set_nx(&k, "first").await.unwrap();
+    assert!(set);
+    let set: bool = c.set_nx(&k, "second").await.unwrap();
+    assert!(!set);
+    let v: Option<String> = c.get(&k).await.unwrap();
+    assert_eq!(v.as_deref(), Some("first"));
+});
+
 matrix_test!(set_xx_only_if_exists, c, {
     let k = common::key("xx");
     let opts = SetOptions::default().conditional_set(ExistenceCheck::XX);
