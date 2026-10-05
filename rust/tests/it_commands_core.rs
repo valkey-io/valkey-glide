@@ -37,8 +37,14 @@ matrix_test!(incr_decr_typed, c, {
 matrix_test!(cmd_query_async, c, {
     let k = common::key("cmd_query_async");
     let _: () = cmd("SET").arg(&k).arg(7).query_async(&c).await.unwrap();
-    let v: i64 = cmd("GET").arg(&k).query_async(&c).await.unwrap();
+    let v = cmd("GET").arg(&k).query_async::<i64>(&c).await.unwrap();
     assert_eq!(v, 7);
+});
+
+matrix_test!(cmd_exec_async, c, {
+    let k = common::key("cmd_exec_async");
+    cmd("SET").arg(&k).arg(7).exec_async(&c).await.unwrap();
+    assert_eq!(c.get(&k).await.unwrap().as_deref(), Some("7"));
 });
 
 matrix_test!(glide_send_command_as, c, {
@@ -146,18 +152,24 @@ matrix_test!(zrange_withscores_decodes, c, {
 matrix_test!(pipeline_query_async, c, {
     let k1 = common::tkey("cmd_pipe", "k1");
     let k2 = common::tkey("cmd_pipe", "k2");
-    let (v1, v2): (String, i64) = pipe()
+    let (v1, v2) = pipe()
         .set(&k1, "hello")
         .ignore()
         .set(&k2, 7)
         .ignore()
         .get(&k1)
         .get(&k2)
-        .query_async(&c)
+        .query_async::<(String, i64)>(&c)
         .await
         .unwrap();
     assert_eq!(v1, "hello");
     assert_eq!(v2, 7);
+});
+
+matrix_test!(pipeline_exec_async, c, {
+    let k = common::key("cmd_pipe_exec");
+    pipe().incr(&k, 1).incr(&k, 1).exec_async(&c).await.unwrap();
+    assert_eq!(c.get(&k).await.unwrap().as_deref(), Some("2"));
 });
 
 matrix_test!(atomic_transaction_query_async, c, {

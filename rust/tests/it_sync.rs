@@ -26,8 +26,17 @@ fn sync_cmd_query() {
     let c = sync_client(server.port);
     let k = common::key("sync:cmd_query");
     let _: () = cmd("SET").arg(&k).arg(9).query(&c).unwrap();
-    let v: i64 = cmd("GET").arg(&k).query(&c).unwrap();
+    let v = cmd("GET").arg(&k).query::<i64>(&c).unwrap();
     assert_eq!(v, 9);
+}
+
+#[test]
+fn sync_cmd_exec() {
+    let server = common::TestServer::start();
+    let c = sync_client(server.port);
+    let k = common::key("sync:cmd_exec");
+    cmd("SET").arg(&k).arg(9).exec(&c).unwrap();
+    assert_eq!(c.get(&k).unwrap().as_deref(), Some("9"));
 }
 
 #[test]
@@ -229,16 +238,20 @@ fn sync_pipeline_and_transaction() {
 
     let k1 = common::tkey("cmd_sp", "k1");
     let k2 = common::tkey("cmd_sp", "k2");
-    let (v1, v2): (String, i64) = glide::pipe()
+    let (v1, v2) = glide::pipe()
         .set(&k1, "x")
         .ignore()
         .set(&k2, 9)
         .ignore()
         .get(&k1)
         .get(&k2)
-        .query(&c)
+        .query::<(String, i64)>(&c)
         .unwrap();
     assert_eq!((v1.as_str(), v2), ("x", 9));
+
+    let k3 = common::tkey("cmd_sp", "k3");
+    glide::pipe().incr(&k3, 1).incr(&k3, 1).exec(&c).unwrap();
+    assert_eq!(c.get(&k3).unwrap().as_deref(), Some("2"));
 
     let ctr = common::tkey("cmd_sp", "ctr");
     let (a, b): (i64, i64) = glide::pipe()

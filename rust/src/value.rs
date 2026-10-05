@@ -497,6 +497,13 @@ impl FromValkeyValue for () {
     }
 }
 
+/// Returns the `ValkeyValue` unchanged.
+impl FromValkeyValue for ValkeyValue {
+    fn from_owned_valkey_value(value: ValkeyValue) -> ValkeyResult<ValkeyValue> {
+        Ok(value)
+    }
+}
+
 /// Converts a `ValkeyValue` to an `Option<T>` value.
 impl<T: FromValkeyValue> FromValkeyValue for Option<T> {
     fn from_owned_valkey_value(value: ValkeyValue) -> ValkeyResult<Option<T>> {
@@ -942,6 +949,13 @@ mod from_valkey_value_tests {
     fn from_owned_valkey_value_unit() {
         let _: () = decode(OKAY);
         let _: () = decode(NIL);
+    }
+
+    #[test]
+    fn from_owned_valkey_value_identity() {
+        assert_eq!(decode::<ValkeyValue>(INT), INT);
+        assert_eq!(decode::<ValkeyValue>(NIL), NIL);
+        assert_eq!(decode::<ValkeyValue>(simple()), simple());
     }
 
     #[test]

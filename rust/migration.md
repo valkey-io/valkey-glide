@@ -11,16 +11,34 @@ yet; see [#7060](https://github.com/valkey-io/valkey-glide/issues/7060).
 
 GLIDE-specific equivalents replace the redis-rs types:
 
-| redis-rs           | GLIDE               |
-|--------------------|---------------------|
-| `RedisResult`      | `ValkeyResult`      |
-| `RedisError`       | `GlideError`        |
-| `Value`            | `ValkeyValue`       |
-| `ToRedisArgs`      | `ToValkeyArgs`      |
-| `ToSingleRedisArg` | `ToSingleValkeyArg` |
-| `FromRedisValue`   | `FromValkeyValue`   |
+| redis-rs           | GLIDE                   |
+|--------------------|-------------------------|
+| `RedisResult`      | `ValkeyResult`          |
+| `RedisError`       | `GlideError`            |
+| `Value`            | `ValkeyValue`           |
+| `ToRedisArgs`      | `ToValkeyArgs`          |
+| `ToSingleRedisArg` | `ToSingleValkeyArg`     |
+| `FromRedisValue`   | `FromValkeyValue`       |
+| `RedisWrite`       | `ValkeyWrite`           |
+| `NumericBehavior`  | `ValkeyNumericBehavior` |
 
-To migrate a typed call site, you only rename the type.
+Call sites that only name these types (e.g. `RedisResult<String>` in a
+signature) migrate by renaming the type. Custom trait implementations also need
+their methods renamed:
+
+- `write_redis_args` becomes `write_valkey_args`.
+- `to_redis_args` becomes `to_valkey_args`.
+- `from_redis_value(Value) -> Result<_, ParsingError>` becomes
+  `from_owned_valkey_value(ValkeyValue) -> ValkeyResult<_>`.
+
+GLIDE has no `ParsingError` (decoding errors are `GlideError::Request`) and no
+free `from_redis_value` / `from_redis_value_ref` helpers; call
+`T::from_owned_valkey_value(value)` instead.
+
+`GlideError` is an enum (`Request`, `Timeout`, `Connection`, `ExecAbort`,
+`Configuration`, `Closing`) with `class_name()` and `message()`. It has no
+`kind()` / `ErrorKind`, `is_timeout()`, or `is_connection_dropped()`: match on
+the variant instead (e.g. `matches!(err, GlideError::Timeout(_))`).
 
 ## Connections, pipelines and raw commands
 
@@ -37,6 +55,8 @@ command. The migrations that follow from this are mechanical:
 | sync `pipe()….query(&mut c)`    | `pipe()….query(&c)` (`sync::PipelineExt`) |
 | `cmd("X")….query_async(&mut c)` | `cmd("X")….query_async(&c)` (see below)   |
 | sync `cmd("X")….query(&mut c)`  | `cmd("X")….query(&c)` (see below)         |
+| `….exec_async(&mut c)`          | `….exec_async(&c)` (`Cmd`, `PipelineExt`) |
+| `Cmd::get(k)`, `add_command`    | `cmd("GET").arg(k)`, `Pipeline` builders  |
 | `con.scan_match(pat)` iterators | same call; GLIDE-owned iterator           |
 
 GLIDE's scan iterators yield a `ValkeyResult<RV>` per item, from `next_item()`
