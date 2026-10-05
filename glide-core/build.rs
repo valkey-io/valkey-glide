@@ -13,7 +13,6 @@ fn build_protobuf() {
         .input("src/protobuf/response.proto")
         .input("src/protobuf/connection_request.proto")
         .customize(customization_options)
-        .out_dir("src/generated")
         .run_from_script();
 }
 
@@ -22,7 +21,7 @@ fn main() {
     build_protobuf();
 
     // Create 'dns_tests_enabled' configuration flag.
-    // See README.md#dns-tests for setup instructions.
+    // See DEVELOPER.md#dns-tests for setup instructions.
     println!("cargo::rustc-check-cfg=cfg(dns_tests_enabled)");
     if std::env::var("VALKEY_GLIDE_DNS_TESTS_ENABLED").is_ok() {
         println!("cargo:rustc-cfg=dns_tests_enabled");
