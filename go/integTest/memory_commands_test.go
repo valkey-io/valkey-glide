@@ -306,13 +306,19 @@ func (suite *GlideTestSuite) assertMemoryStatsFields(result models.MemoryStats) 
 
 	assert.Greater(t, result.AllocatorActive, int64(0))
 	assert.Greater(t, result.AllocatorAllocated, int64(0))
-	assert.GreaterOrEqual(t, result.AllocatorFragmentationBytes, int64(0))
+	// AllocatorFragmentationBytes is a derived delta (allocator_active minus allocator_allocated) that can
+	// be transiently negative on Redis/Valkey 6.2 due to memory accounting races, so only assert its type
+	// (mirrors AllocatorRssBytes, FragmentationBytes, RssOverheadBytes below).
+	assert.IsType(t, int64(0), result.AllocatorFragmentationBytes)
 	assert.Greater(t, result.AllocatorResident, int64(0))
 	assert.IsType(t, int64(0), result.AllocatorRssBytes)
 	assert.GreaterOrEqual(t, result.AofBuffer, int64(0))
 	assert.GreaterOrEqual(t, result.ClientsNormal, int64(0))
 	assert.GreaterOrEqual(t, result.ClientsSlaves, int64(0))
-	assert.GreaterOrEqual(t, result.DatasetBytes, int64(0))
+	// DatasetBytes is a derived value (total_allocated minus startup/replication/clients/aof/lua/overhead)
+	// that can be transiently negative on Redis/Valkey 6.2 due to memory accounting races, so only assert
+	// its type (mirrors AllocatorRssBytes, FragmentationBytes, RssOverheadBytes below).
+	assert.IsType(t, int64(0), result.DatasetBytes)
 	assert.IsType(t, int64(0), result.FragmentationBytes)
 	assert.GreaterOrEqual(t, result.KeysBytesPerKey, int64(0))
 	assert.GreaterOrEqual(t, result.KeysCount, int64(0))
