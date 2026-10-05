@@ -126,9 +126,44 @@ impl ToValkeyArgs for StreamAddOptions {
     }
 }
 
-/// Options for `XREADGROUP` (`BLOCK`/`COUNT`/`NOACK`).
+/// Options for `XREAD` (`BLOCK`/`COUNT`).
 ///
-/// Mirrors Python `StreamReadGroupOptions`.
+/// Mirrors redis-rs's `streams::StreamReadOptions` type, but does not support `group` or `noack`.
+/// Use [`StreamCommands::xreadgroup`] with [`StreamReadGroupOptions`] instead.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct StreamReadOptions {
+    block: Option<usize>,
+    count: Option<usize>,
+}
+
+impl StreamReadOptions {
+    /// Block for up to `ms` milliseconds waiting for entries (`BLOCK`).
+    pub fn block(mut self, ms: usize) -> Self {
+        self.block = Some(ms);
+        self
+    }
+
+    /// Return at most `n` entries per stream (`COUNT`).
+    pub fn count(mut self, n: usize) -> Self {
+        self.count = Some(n);
+        self
+    }
+}
+
+impl ToValkeyArgs for StreamReadOptions {
+    fn write_valkey_args<W: ?Sized + ValkeyWrite>(&self, out: &mut W) {
+        if let Some(block) = self.block {
+            out.write_arg(b"BLOCK");
+            out.write_arg_fmt(block);
+        }
+        if let Some(count) = self.count {
+            out.write_arg(b"COUNT");
+            out.write_arg_fmt(count);
+        }
+    }
+}
+
+/// Options for `XREADGROUP`.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct StreamReadGroupOptions {
     /// Block for up to this many milliseconds waiting for entries (`BLOCK`).
@@ -180,17 +215,53 @@ impl ToValkeyArgs for StreamGroupCreateOptions {
 
 /// Options for `XCLAIM`.
 ///
-/// Mirrors Python `StreamClaimOptions`.
-#[derive(Debug, Clone, Copy, Default)]
+/// Mirrors redis-rs's `streams::StreamClaimOptions` type.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct StreamClaimOptions {
+    idle: Option<usize>,
+    time: Option<usize>,
+    retry: Option<usize>,
+    force: bool,
+    justid: bool,
+    lastid: Option<String>,
+}
+
+impl StreamClaimOptions {
     /// Set the idle time (ms) of the claimed messages (`IDLE`).
-    pub idle: Option<i64>,
+    pub fn idle(mut self, ms: usize) -> Self {
+        self.idle = Some(ms);
+        self
+    }
+
     /// Set the idle time to a specific Unix time in ms (`TIME`).
-    pub idle_unix_time: Option<i64>,
+    pub fn time(mut self, ms_time: usize) -> Self {
+        self.time = Some(ms_time);
+        self
+    }
+
     /// Set the retry counter (`RETRYCOUNT`).
-    pub retry_count: Option<i64>,
+    pub fn retry(mut self, count: usize) -> Self {
+        self.retry = Some(count);
+        self
+    }
+
     /// Create the PEL entry even if the message is not already pending (`FORCE`).
-    pub is_force: bool,
+    pub fn with_force(mut self) -> Self {
+        self.force = true;
+        self
+    }
+
+    /// Return only the claimed IDs (`JUSTID`). The reply type changes with this option.
+    pub fn with_justid(mut self) -> Self {
+        self.justid = true;
+        self
+    }
+
+    /// Set the group's last-delivered ID (`LASTID`).
+    pub fn with_lastid(mut self, lastid: impl Into<String>) -> Self {
+        self.lastid = Some(lastid.into());
+        self
+    }
 }
 
 impl ToValkeyArgs for StreamClaimOptions {
@@ -199,16 +270,23 @@ impl ToValkeyArgs for StreamClaimOptions {
             out.write_arg(b"IDLE");
             out.write_arg_fmt(idle);
         }
-        if let Some(idle_unix_time) = self.idle_unix_time {
+        if let Some(time) = self.time {
             out.write_arg(b"TIME");
-            out.write_arg_fmt(idle_unix_time);
+            out.write_arg_fmt(time);
         }
-        if let Some(retry_count) = self.retry_count {
+        if let Some(retry) = self.retry {
             out.write_arg(b"RETRYCOUNT");
-            out.write_arg_fmt(retry_count);
+            out.write_arg_fmt(retry);
         }
-        if self.is_force {
+        if self.force {
             out.write_arg(b"FORCE");
+        }
+        if self.justid {
+            out.write_arg(b"JUSTID");
+        }
+        if let Some(lastid) = &self.lastid {
+            out.write_arg(b"LASTID");
+            out.write_arg(lastid.as_bytes());
         }
     }
 }
@@ -714,31 +792,6 @@ pub trait StreamCommands: CommandExecutor {
         parse_stream_read(self.execute_command(cmd, None).await?)
     }
 
-    /// Claim ownership of pending messages, returning only their IDs
-    /// (`XCLAIM ... JUSTID`).
-    async fn xclaim_justid<K: ToValkeyArgs + Send>(
-        &self,
-        key: K,
-        group: &str,
-        consumer: &str,
-        min_idle_time_ms: i64,
-        ids: &[&str],
-        options: Option<StreamClaimOptions>,
-    ) -> ValkeyResult<Vec<String>> {
-        let mut cmd = Cmd::new();
-        cmd.arg("XCLAIM")
-            .arg(key)
-            .arg(group)
-            .arg(consumer)
-            .arg(min_idle_time_ms);
-        for id in ids {
-            cmd.arg(*id);
-        }
-        cmd.arg(options);
-        cmd.arg("JUSTID");
-        collect_strings(self.execute_command(cmd, None).await?)
-    }
-
     /// Automatically claim pending messages idle for at least `min_idle_time_ms`
     /// (`XAUTOCLAIM`). Returns `(next_cursor, claimed_entries, deleted_ids)`.
     async fn xautoclaim<K: ToValkeyArgs + Send>(
@@ -1149,20 +1202,35 @@ mod tests {
     fn claim_options_args() {
         assert_args_empty(StreamClaimOptions::default());
         assert_args(
-            StreamClaimOptions {
-                idle: Some(100),
-                idle_unix_time: None,
-                retry_count: Some(3),
-                is_force: true,
-            },
-            &["IDLE", "100", "RETRYCOUNT", "3", "FORCE"],
+            StreamClaimOptions::default()
+                .idle(100)
+                .retry(3)
+                .with_force()
+                .with_justid()
+                .with_lastid("5-0"),
+            &[
+                "IDLE",
+                "100",
+                "RETRYCOUNT",
+                "3",
+                "FORCE",
+                "JUSTID",
+                "LASTID",
+                "5-0",
+            ],
         );
         assert_args(
-            StreamClaimOptions {
-                idle_unix_time: Some(1_700_000_000_000),
-                ..Default::default()
-            },
+            StreamClaimOptions::default().time(1_700_000_000_000),
             &["TIME", "1700000000000"],
+        );
+    }
+
+    #[test]
+    fn read_options_args() {
+        assert_args_empty(StreamReadOptions::default());
+        assert_args(
+            StreamReadOptions::default().count(10).block(1000),
+            &["BLOCK", "1000", "COUNT", "10"],
         );
     }
 

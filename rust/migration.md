@@ -132,6 +132,33 @@ not available; `nomkstream` and `trim` are. GLIDE's stream reply types
 (`StreamId`, `StreamRangeReply`, `StreamReadReply`, …) are at the crate root
 rather than in a `streams` module, and `StreamId::map` holds `ValkeyValue`s.
 
+### `StreamReadOptions` is for `XREAD` only
+
+As in the other GLIDE clients, `xread_options` always sends `XREAD`, and
+`StreamReadOptions` has only `block` and `count`. redis-rs's `group` and
+`noack`, which switch the call to `XREADGROUP`, are not available, and neither
+is `claim` (Valkey's `XREADGROUP` has no `CLAIM`). To read as a consumer group,
+use `StreamCommands::xreadgroup` with `StreamReadGroupOptions`, which returns
+`(key, entries)` pairs rather than a `StreamReadReply`:
+
+```rust,ignore
+// redis-rs
+let options = StreamReadOptions::default()
+    .group("grp", "c1")
+    .count(10)
+    .noack();
+let reply: Option<StreamReadReply> =
+    con.xread_options(&["s"], &[">"], &options).await?;
+
+// GLIDE
+let options = StreamReadGroupOptions {
+    count: Some(10),
+    no_ack: true,
+    ..Default::default()
+};
+let entries = client.xreadgroup("grp", "c1", &[("s", ">")], Some(options)).await?;
+```
+
 ### A few typed returns differ
 
 `zpopmin` and `zpopmax` return `Vec<(String, f64)>` instead of `Vec<String>`.

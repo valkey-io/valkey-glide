@@ -50,12 +50,14 @@ use crate::commands::options::HashFieldExpirationOptions;
 use crate::commands::options::LposOptions;
 use crate::commands::options::SetOptions;
 use crate::commands::stream::StreamAddOptions;
+use crate::commands::stream::StreamClaimOptions;
 use crate::commands::stream::StreamClaimReply;
 use crate::commands::stream::StreamInfoConsumersReply;
 use crate::commands::stream::StreamInfoGroupsReply;
 use crate::commands::stream::StreamInfoStreamReply;
 use crate::commands::stream::StreamPendingReply;
 use crate::commands::stream::StreamRangeReply;
+use crate::commands::stream::StreamReadOptions;
 use crate::commands::stream::StreamReadReply;
 use crate::pipeline::Pipeline;
 use crate::types::IntegerReplyOrNoOp;
@@ -1372,6 +1374,11 @@ implement_commands! {
         build_cmd!("XCLAIM", key, group, consumer, min_idle_time, ids)
     }
 
+    /// `XCLAIM`.
+    fn xclaim_options<K: ToSingleValkeyArg, G: ToValkeyArgs, C: ToValkeyArgs, MIT: ToValkeyArgs, ID: ToValkeyArgs>(key: K, group: G, consumer: C, min_idle_time: MIT, ids: &'a [ID], options: StreamClaimOptions) -> Generic {
+        build_cmd!("XCLAIM", key, group, consumer, min_idle_time, ids, options)
+    }
+
     /// `XDEL`.
     fn xdel<K: ToSingleValkeyArg, ID: ToValkeyArgs>(key: K, ids: &'a [ID]) -> (usize) {
         build_cmd!("XDEL", key, ids)
@@ -1420,6 +1427,11 @@ implement_commands! {
     /// `XREAD`.
     fn xread<K: ToValkeyArgs, ID: ToValkeyArgs>(keys: &'a [K], ids: &'a [ID]) -> (Option<StreamReadReply>) {
         build_cmd!("XREAD", "STREAMS", keys, ids)
+    }
+
+    /// `XREAD`.
+    fn xread_options<K: ToValkeyArgs, ID: ToValkeyArgs>(keys: &'a [K], ids: &'a [ID], options: &'a StreamReadOptions) -> (Option<StreamReadReply>) {
+        build_cmd!("XREAD", options, "STREAMS", keys, ids)
     }
 
     /// `XREVRANGE`.

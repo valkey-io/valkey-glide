@@ -2,7 +2,9 @@
 //! Mock-executor unit tests for the stream command family.
 use super::Mock;
 use crate::ValkeyValue;
-use crate::commands::stream::{StreamCommands, StreamGroupCreateOptions, StreamReadGroupOptions};
+use crate::commands::stream::StreamCommands;
+use crate::commands::stream::StreamGroupCreateOptions;
+use crate::commands::stream::StreamReadGroupOptions;
 
 fn entry(id: &str, field: &str, val: &str) -> ValkeyValue {
     ValkeyValue::Array(vec![
@@ -131,17 +133,6 @@ async fn xgroup_option_variants() {
     let m = Mock::ok();
     m.xgroup_set_id("s", "g", "0", None).await.unwrap();
     m.assert_args(&["XGROUP", "SETID", "s", "g", "0"]);
-}
-
-#[tokio::test]
-async fn xclaim_justid_encoding() {
-    let m = Mock::array(vec![ValkeyValue::BulkString(b"1-0".to_vec().into())]);
-    let ids = m
-        .xclaim_justid("s", "g", "c", 0, &["1-0"], None)
-        .await
-        .unwrap();
-    m.assert_args(&["XCLAIM", "s", "g", "c", "0", "1-0", "JUSTID"]);
-    assert_eq!(ids, vec!["1-0".to_string()]);
 }
 
 #[tokio::test]

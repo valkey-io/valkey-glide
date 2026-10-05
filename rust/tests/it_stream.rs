@@ -4,8 +4,9 @@
 mod common;
 
 use glide::{
-    AsyncTypedCommands, StreamAddOptions, StreamCommands, StreamGroupCreateOptions,
-    StreamPendingReply, StreamTrimStrategy, StreamTrimmingMode,
+    AsyncTypedCommands, StreamAddOptions, StreamClaimOptions, StreamClaimReply, StreamCommands,
+    StreamGroupCreateOptions, StreamPendingReply, StreamReadOptions, StreamTrimStrategy,
+    StreamTrimmingMode,
 };
 
 matrix_test!(xadd_xlen, c, {
@@ -105,6 +106,31 @@ matrix_test!(xread, c, {
     assert!(c.xread(&[&k], &["2-1"]).await.unwrap().is_none());
 });
 
+matrix_test!(xread_options, c, {
+    let k = common::key("stream");
+    c.xadd(&k, "1-1", &[("f", "a")]).await.unwrap();
+    c.xadd(&k, "2-1", &[("f", "b")]).await.unwrap();
+
+    // COUNT limits the entries per stream.
+    let options = StreamReadOptions::default().count(1);
+    let reply = c
+        .xread_options(&[&k], &["0"], &options)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(reply.keys[0].ids.len(), 1);
+    assert_eq!(reply.keys[0].ids[0].id, "1-1");
+
+    // BLOCK times out with no reply when nothing newer arrives.
+    let options = StreamReadOptions::default().block(10);
+    assert!(
+        c.xread_options(&[&k], &["2-1"], &options)
+            .await
+            .unwrap()
+            .is_none()
+    );
+});
+
 matrix_test!(xtrim_maxlen, c, {
     let k = common::key("stream");
     for i in 1..=5 {
@@ -189,6 +215,41 @@ matrix_test!(xpending_xclaim, c, {
     assert_eq!(claimed.ids.len(), 1);
     assert_eq!(claimed.ids[0].id, "1-1");
     assert_eq!(claimed.ids[0].get::<String>("f").as_deref(), Some("a"));
+});
+
+matrix_test!(xclaim_options, c, {
+    let k = common::key("stream");
+    c.xadd(&k, "1-1", &[("f", "a")]).await.unwrap();
+    c.xadd(&k, "2-1", &[("f", "b")]).await.unwrap();
+    c.xgroup_create(&k, "grp", "0").await.unwrap();
+    c.xreadgroup("grp", "c1", &[(&k, ">")], None).await.unwrap();
+
+    // IDLE / RETRYCOUNT return the claimed entries.
+    let options = StreamClaimOptions::default().idle(0).retry(5);
+    let claimed: StreamClaimReply = c
+        .xclaim_options(&k, "grp", "c2", 0, &["1-1"], options)
+        .await
+        .unwrap();
+    assert_eq!(claimed.ids.len(), 1);
+    assert_eq!(claimed.ids[0].get::<String>("f").as_deref(), Some("a"));
+
+    // JUSTID returns only the IDs.
+    let options = StreamClaimOptions::default().with_justid();
+    let ids: Vec<String> = c
+        .xclaim_options(&k, "grp", "c2", 0, &["2-1"], options)
+        .await
+        .unwrap();
+    assert_eq!(ids, vec!["2-1"]);
+
+    // FORCE claims an ID that is not pending.
+    c.xadd(&k, "3-1", &[("f", "c")]).await.unwrap();
+    let options = StreamClaimOptions::default().with_force().with_justid();
+    let ids: Vec<String> = c
+        .xclaim_options(&k, "grp", "c2", 0, &["3-1"], options)
+        .await
+        .unwrap();
+    assert_eq!(ids, vec!["3-1"]);
+    assert_eq!(c.xpending(&k, "grp").await.unwrap().count(), 3);
 });
 
 matrix_test!(xinfo, c, {

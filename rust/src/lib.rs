@@ -160,6 +160,7 @@ pub use commands::stream::StreamPendingData;
 pub use commands::stream::StreamPendingReply;
 pub use commands::stream::StreamRangeReply;
 pub use commands::stream::StreamReadGroupOptions;
+pub use commands::stream::StreamReadOptions;
 pub use commands::stream::StreamReadReply;
 pub use commands::stream::StreamTrimStrategy;
 pub use commands::stream::StreamTrimmingMode;
