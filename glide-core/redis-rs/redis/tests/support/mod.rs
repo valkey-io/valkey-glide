@@ -183,8 +183,6 @@ impl RedisServer {
     }
 
     pub fn with_modules(modules: &[Module], mtls_enabled: bool) -> RedisServer {
-        // this is technically a race but we can't do better with
-        // the tools that redis gives us :(
         let redis_port = get_random_available_port();
         let addr = RedisServer::get_addr(redis_port);
 
@@ -383,6 +381,8 @@ pub(crate) fn is_tls_enabled() -> bool {
     true
 }
 
+pub(crate) const STARTUP_ATTEMPTS: usize = 5;
+
 impl TestContext {
     pub fn new() -> TestContext {
         TestContext::with_modules(&[], false)
@@ -392,78 +392,94 @@ impl TestContext {
         Self::with_modules(&[], true)
     }
 
-    fn connect_with_retries(server: &mut RedisServer, client: &redis::Client) {
-        readiness::wait_for_server(
-            &mut server.process,
-            client,
-            true,
-            readiness::STARTUP_TIMEOUT,
-        )
-        .unwrap_or_else(|err| panic!("{err}"));
+    /// Spawn a standalone server and wait for it to prove ownership of its
+    /// address. `get_random_available_port` releases its probe socket before the
+    /// child binds, so another process can take the port in between; each such
+    /// collision gets a fresh server on a fresh address (a new port, or a new
+    /// socket path under the Unix server type).
+    pub(crate) fn start(
+        mut spawn: impl FnMut() -> RedisServer,
+        mut client: impl FnMut(&RedisServer) -> redis::Client,
+    ) -> Result<TestContext, readiness::ReadinessError> {
+        let mut attempt = 1;
+        loop {
+            let mut server = spawn();
+            let client = client(&server);
+            match readiness::wait_for_server(
+                &mut server.process,
+                &client,
+                true,
+                readiness::STARTUP_TIMEOUT,
+            ) {
+                Ok(()) => {
+                    return Ok(TestContext {
+                        server,
+                        client,
+                        protocol: use_protocol(),
+                    })
+                }
+                Err(err)
+                    if attempt < STARTUP_ATTEMPTS
+                        && err.is_port_collision(&RedisServer::log_file(&server.tempdir)) =>
+                {
+                    eprintln!("Retrying standalone server on a fresh address: {err}");
+                    attempt += 1;
+                }
+                Err(err) => return Err(err),
+            }
+        }
     }
 
     pub fn with_tls(tls_files: TlsFilePaths, mtls_enabled: bool) -> TestContext {
-        let redis_port = get_random_available_port();
-        let addr: ConnectionAddr = RedisServer::get_addr(redis_port);
-
-        let mut server = RedisServer::new_with_addr_tls_modules_and_spawner(
-            addr,
-            None,
-            Some(tls_files),
-            mtls_enabled,
-            &[],
-            |cmd| {
-                cmd.spawn()
-                    .unwrap_or_else(|err| panic!("Failed to run {cmd:?}: {err}"))
+        Self::start(
+            || {
+                let addr = RedisServer::get_addr(get_random_available_port());
+                RedisServer::new_with_addr_tls_modules_and_spawner(
+                    addr,
+                    None,
+                    Some(tls_files.clone()),
+                    mtls_enabled,
+                    &[],
+                    |cmd| {
+                        cmd.spawn()
+                            .unwrap_or_else(|err| panic!("Failed to run {cmd:?}: {err}"))
+                    },
+                )
             },
-        );
-
-        let client =
-            build_single_client(server.connection_info(), &server.tls_paths, mtls_enabled).unwrap();
-
-        Self::connect_with_retries(&mut server, &client);
-
-        TestContext {
-            server,
-            client,
-            protocol: use_protocol(),
-        }
+            |server| {
+                build_single_client(server.connection_info(), &server.tls_paths, mtls_enabled)
+                    .unwrap()
+            },
+        )
+        .unwrap_or_else(|err| panic!("{err}"))
     }
 
     pub fn with_modules(modules: &[Module], mtls_enabled: bool) -> TestContext {
-        let mut server = RedisServer::with_modules(modules, mtls_enabled);
-
-        let client =
-            build_single_client(server.connection_info(), &server.tls_paths, mtls_enabled).unwrap();
-
-        Self::connect_with_retries(&mut server, &client);
-
-        TestContext {
-            server,
-            client,
-            protocol: use_protocol(),
-        }
+        Self::start(
+            || RedisServer::with_modules(modules, mtls_enabled),
+            |server| {
+                build_single_client(server.connection_info(), &server.tls_paths, mtls_enabled)
+                    .unwrap()
+            },
+        )
+        .unwrap_or_else(|err| panic!("{err}"))
     }
 
     pub fn with_client_name(clientname: &str) -> TestContext {
-        let mut server = RedisServer::with_modules(&[], false);
-        let con_info = redis::ConnectionInfo {
-            addr: server.client_addr().clone(),
-            redis: redis::RedisConnectionInfo {
-                client_name: Some(clientname.to_string()),
-                ..Default::default()
+        Self::start(
+            || RedisServer::with_modules(&[], false),
+            |server| {
+                let con_info = redis::ConnectionInfo {
+                    addr: server.client_addr().clone(),
+                    redis: redis::RedisConnectionInfo {
+                        client_name: Some(clientname.to_string()),
+                        ..Default::default()
+                    },
+                };
+                build_single_client(con_info, &server.tls_paths, false).unwrap()
             },
-        };
-
-        let client = build_single_client(con_info, &server.tls_paths, false).unwrap();
-
-        Self::connect_with_retries(&mut server, &client);
-
-        TestContext {
-            server,
-            client,
-            protocol: use_protocol(),
-        }
+        )
+        .unwrap_or_else(|err| panic!("{err}"))
     }
 
     pub fn connection(&self) -> redis::Connection {

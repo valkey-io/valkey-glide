@@ -175,13 +175,14 @@ fn readiness_retries_info_errors_before_flushing() {
 #[test]
 fn readiness_rejects_wrong_or_missing_pid_without_flushing() {
     for (reply, message) in [
-        (Reply::WrongPid, "server ownership mismatch"),
+        (Reply::WrongPid, "address is served by pid"),
         (Reply::MissingPid, "INFO server has no valid process_id"),
     ] {
         let mut child = TestChild::new();
         let peer = Peer::new(child.0.id(), reply);
         let err = wait_for_server(&mut child.0, &peer.client(), true, Duration::from_secs(2))
-            .unwrap_err();
+            .unwrap_err()
+            .to_string();
         assert!(err.contains(message), "{err}");
         assert_eq!(peer.infos.load(Ordering::SeqCst), 1);
         assert_eq!(peer.flushes.load(Ordering::SeqCst), 0);
@@ -209,8 +210,9 @@ fn readiness_bounds_resp2_resp3_and_tls_setup() {
         }
         let client = Client::open(info).unwrap();
         let start = Instant::now();
-        let err =
-            wait_for_server(&mut child.0, &client, false, Duration::from_millis(100)).unwrap_err();
+        let err = wait_for_server(&mut child.0, &client, false, Duration::from_millis(100))
+            .unwrap_err()
+            .to_string();
         assert!(err.contains("was not ready within"), "{err}");
         assert!(start.elapsed() < Duration::from_secs(2));
         assert_eq!(peer.flushes.load(Ordering::SeqCst), 0);
@@ -228,7 +230,8 @@ fn readiness_bounds_info() {
         true,
         Duration::from_millis(100),
     )
-    .unwrap_err();
+    .unwrap_err()
+    .to_string();
     assert!(err.contains("was not ready within"), "{err}");
     assert!(start.elapsed() < Duration::from_secs(2));
     assert_eq!(peer.infos.load(Ordering::SeqCst), 1);
@@ -241,8 +244,9 @@ fn readiness_reports_child_exit_before_connecting() {
     let peer = Peer::new(child.0.id(), Reply::Ready);
     child.0.kill().unwrap();
     child.0.wait().unwrap();
-    let err =
-        wait_for_server(&mut child.0, &peer.client(), false, Duration::from_secs(2)).unwrap_err();
+    let err = wait_for_server(&mut child.0, &peer.client(), false, Duration::from_secs(2))
+        .unwrap_err()
+        .to_string();
     assert!(err.contains("exited with"), "{err}");
     assert_eq!(peer.infos.load(Ordering::SeqCst), 0);
 }
@@ -266,7 +270,8 @@ fn readiness_retains_last_info_error_at_deadline() {
         false,
         Duration::from_millis(200),
     )
-    .unwrap_err();
+    .unwrap_err()
+    .to_string();
     assert!(err.contains("was not ready within"), "{err}");
     assert!(err.contains("still starting"), "{err}");
     assert!(peer.infos.load(Ordering::SeqCst) > 1);

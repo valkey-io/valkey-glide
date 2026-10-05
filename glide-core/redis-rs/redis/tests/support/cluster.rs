@@ -492,6 +492,7 @@ impl RedisCluster {
         let client = build_single_client(server.connection_info(), tls_paths, mtls_enabled)
             .map_err(|err| format!("building ownership probe: {err}"))?;
         wait_for_server(&mut server.process, &client, false, STARTUP_TIMEOUT)
+            .map_err(|err| err.to_string())
     }
 
     // parameter `_mtls_enabled` can only be used if `feature = tls-rustls` is active
