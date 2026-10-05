@@ -128,8 +128,9 @@ rather than in a `streams` module, and `StreamId::map` holds `ValkeyValue`s.
 ### A few typed returns differ
 
 `zpopmin` and `zpopmax` return `Vec<(String, f64)>` instead of `Vec<String>`.
-glide-core reshapes their reply into a member-to-score map, which `Vec<String>`
-cannot decode, so redis-rs's typed return would fail on every non-empty pop.
+Valkey's RESP3 reply nests each member with its score, which redis-rs's typed
+`Vec<String>` cannot decode. GLIDE returns `(member, score)` pairs for both
+RESP2 and RESP3.
 
 `blmpop` returns `Option<(String, Vec<String>)>` instead of
 `Option<[String; 2]>`, matching `lmpop`. Its reply is a key and a list of
