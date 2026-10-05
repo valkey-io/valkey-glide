@@ -35,7 +35,8 @@ command. The migrations that follow from this are mechanical:
 |---------------------------------|-------------------------------------------|
 | `pipe()….query_async(&mut c)`   | `pipe()….query_async(&c)` (`PipelineExt`) |
 | sync `pipe()….query(&mut c)`    | `pipe()….query(&c)` (`sync::PipelineExt`) |
-| `cmd("X")….query_async(&mut c)` | `c.glide_send_command_as(cmd)` (typed)    |
+| `cmd("X")….query_async(&mut c)` | `cmd("X")….query_async(&c)` (see below)   |
+| sync `cmd("X")….query(&mut c)`  | `cmd("X")….query(&c)` (see below)         |
 | `con.scan_match(pat)` iterators | same call; GLIDE-owned iterator           |
 
 GLIDE's scan iterators yield a `ValkeyResult<RV>` per item, from `next_item()`
@@ -84,10 +85,16 @@ Notes:
 - Cluster: `GlideClusterClientConfiguration::from_urls([...])` accepts
   seed-node URLs; commands are routed automatically.
 - Mutual TLS: `config.client_identity(cert_pem, key_pem)`.
-- Raw commands: build a `glide::Cmd` with `glide::cmd("X")`. Send it typed with
-  `client.glide_send_command_as(cmd)`, or untyped with `glide_send_command` /
-  `custom_command`. This replaces `cmd().query_async()` without the
-  connection-object copy.
+- Raw commands: build a `glide::Cmd` with `glide::cmd("X")` and send it with
+  one of:
+  - `cmd.query_async(&client)`, as in redis-rs. This clones the command.
+  - `client.glide_send_command_as(cmd)`, which takes the command by value and
+    decodes the reply into the requested type.
+  - `client.glide_send_command(cmd)`, which takes the command by value and
+    returns the raw `ValkeyValue`.
+
+  Without building a `Cmd`, `client.custom_command(&["X", "arg"])` sends the
+  arguments directly and returns a `ValkeyValue`.
 - Accepted gaps: no Sentinel / unix sockets / async-std (unsupported by
   glide-core); Pub/Sub stays client-integrated by design; generic code
   bounded on redis-rs's `ConnectionLike`-based traits should re-bound on
