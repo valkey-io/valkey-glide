@@ -22,9 +22,9 @@ mod test_monitor_handshake_buffering {
     /// first 10. `+OK\r\n` plus this line is 42 bytes, so it arrives whole and the
     /// decoder buffers the line entire.
     const SHORT_PACKED_LINE: &str = "+1.5 [0 1.2.3.4:1] \"GET\" \"shortkey\"\r\n";
-    /// A realistically sized line: `+OK\r\n` plus this one is 63 bytes, past the 54 the
-    /// read can take, so the handshake read stops mid-line with 49 of its 58 bytes
-    /// buffered.
+    /// A realistically sized line. The cut-line case sends only its first half with
+    /// `+OK\r\n` and the rest later, so the handshake read stops mid-line however much
+    /// room setup left in the decoder.
     const LONG_PACKED_LINE: &str =
         "+1720000000.000000 [0 127.0.0.1:55501] \"GET\" \"other_key\"\r\n";
     /// The line every scenario waits for, standing in for the command under test.
@@ -290,9 +290,10 @@ mod test_monitor_handshake_buffering {
     /// resumes but swallows the line right after it still fails here.
     #[tokio::test]
     async fn partially_packed_line_does_not_end_the_stream() {
+        let cut = LONG_PACKED_LINE.len() / 2;
         let outcome = run(
-            LONG_PACKED_LINE.to_string(),
-            format!("{CANARY_LINE}{TARGET_LINE}"),
+            LONG_PACKED_LINE[..cut].to_string(),
+            format!("{}{CANARY_LINE}{TARGET_LINE}", &LONG_PACKED_LINE[cut..]),
         )
         .await;
         assert!(
