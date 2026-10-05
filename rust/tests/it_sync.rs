@@ -31,6 +31,20 @@ fn sync_cmd_query() {
 }
 
 #[test]
+fn sync_glide_send_command_as() {
+    let server = common::TestServer::start();
+    let c = sync_client(server.port);
+    let k = common::key("sync:glide_send_command_as");
+    let mut set = cmd("SET");
+    set.arg(&k).arg(9);
+    let _: () = glide::Commands::glide_send_command_as(&c, set).unwrap();
+    let mut get = cmd("GET");
+    get.arg(&k);
+    let v: i64 = glide::Commands::glide_send_command_as(&c, get).unwrap();
+    assert_eq!(v, 9);
+}
+
+#[test]
 fn sync_standalone_common_commands() {
     let server = common::TestServer::start();
     let c = sync_client(server.port);

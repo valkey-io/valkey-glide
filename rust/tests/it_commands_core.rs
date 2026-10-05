@@ -41,6 +41,21 @@ matrix_test!(cmd_query_async, c, {
     assert_eq!(v, 7);
 });
 
+matrix_test!(glide_send_command_as, c, {
+    let k = common::key("glide_send_command_as");
+    let mut set = cmd("SET");
+    set.arg(&k).arg(7);
+    let _: () = glide::AsyncCommands::glide_send_command_as(&c, set)
+        .await
+        .unwrap();
+    let mut get = cmd("GET");
+    get.arg(&k);
+    let v: i64 = glide::AsyncCommands::glide_send_command_as(&c, get)
+        .await
+        .unwrap();
+    assert_eq!(v, 7);
+});
+
 matrix_test!(migrated_method_names_work, c, {
     // Methods whose table names differ from the old native trait names.
     let k = common::key("cmd_names");

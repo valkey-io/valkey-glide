@@ -7,6 +7,7 @@ use glide::AsyncTypedCommands;
 use glide::CopyOptions;
 use glide::GenericCommands;
 use glide::IntegerReplyOrNoOp;
+use glide::ServerManagementCommands;
 use glide::ValueType;
 use glide::commands::options::{Limit, OrderBy};
 
@@ -281,6 +282,37 @@ matrix_test!(object_encoding, c, {
     assert!(enc.is_some());
     let enc: Option<String> = c.object_encoding(common::key("nope")).await.unwrap();
     assert_eq!(enc, None);
+});
+
+matrix_test!(object_idletime, c, {
+    let k = common::key("k");
+    let _: () = c.set(&k, "v").await.unwrap();
+    let idle: Option<usize> = c.object_idletime(&k).await.unwrap();
+    assert!(idle.is_some());
+    let idle: Option<usize> = c.object_idletime(common::key("nope")).await.unwrap();
+    assert_eq!(idle, None);
+});
+
+matrix_test!(object_freq, c, {
+    // `OBJECT FREQ` requires an LFU eviction policy.
+    c.config_set("maxmemory-policy", "allkeys-lfu")
+        .await
+        .unwrap();
+    let k = common::key("k");
+    let _: () = c.set(&k, "v").await.unwrap();
+    let freq: Option<usize> = c.object_freq(&k).await.unwrap();
+    assert!(freq.is_some());
+    let freq: Option<usize> = c.object_freq(common::key("nope")).await.unwrap();
+    assert_eq!(freq, None);
+});
+
+matrix_test!(object_refcount, c, {
+    let k = common::key("k");
+    let _: () = c.set(&k, "v").await.unwrap();
+    let refcount: Option<usize> = c.object_refcount(&k).await.unwrap();
+    assert!(refcount.is_some_and(|n| n >= 1));
+    let refcount: Option<usize> = c.object_refcount(common::key("nope")).await.unwrap();
+    assert_eq!(refcount, None);
 });
 
 matrix_test!(sort_numeric, c, {
