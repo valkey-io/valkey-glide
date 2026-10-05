@@ -49,6 +49,7 @@
 
 ### Changes
 
+* Node: Add `JSON.MSET` command (`GlideJson.mset`, `JsonBatch.mset`) ([#7243](https://github.com/valkey-io/valkey-glide/pull/7243))
 * Java: Add `HGETDEL` command support ([#6145](https://github.com/valkey-io/valkey-glide/issues/6145))
 * Node: Add `HGETDEL` command support ([#6145](https://github.com/valkey-io/valkey-glide/issues/6145))
 * Python: Add `HGETDEL` command support ([#6145](https://github.com/valkey-io/valkey-glide/issues/6145))

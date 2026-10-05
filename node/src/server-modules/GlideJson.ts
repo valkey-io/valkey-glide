@@ -41,6 +41,16 @@ export interface JsonArrPopOptions {
     index?: number;
 }
 
+/** A `key`, `path` and `value` triplet to set with the {@link GlideJson.mset | JSON.MSET} command. */
+export interface JsonMsetEntry {
+    /** The key of the JSON document. */
+    key: GlideString;
+    /** The path within the JSON document where the value will be set. */
+    path: GlideString;
+    /** The value to set at the specified path, in JSON formatted bytes or str. */
+    value: GlideString;
+}
+
 /**
  * @internal
  */
@@ -72,6 +82,23 @@ function _jsonGetOptionsToArgs(options: JsonGetOptions): GlideString[] {
     }
 
     return result;
+}
+
+/**
+ * @internal
+ */
+function _jsonMsetArgs(entries: JsonMsetEntry[]): GlideString[] {
+    if (entries.length === 0) {
+        throw new Error("JSON.MSET requires at least one entry.");
+    }
+
+    const args: GlideString[] = ["JSON.MSET"];
+
+    for (const { key, path, value } of entries) {
+        args.push(key, path, value);
+    }
+
+    return args;
 }
 
 /**
@@ -241,6 +268,45 @@ export class GlideJson {
     ): Promise<ReturnTypeJson<GlideString[]>> {
         const args = ["JSON.MGET", ...keys, path];
         return _executeCommand(client, args, options);
+    }
+
+    /**
+     * Sets the JSON values at the specified `path` for multiple `key`s in a single command.
+     * The operation is atomic: either all values are set or none is set.
+     *
+     * @remarks Since valkey-json 1.0.0.
+     * @remarks When in cluster mode, if keys in `entries` map to different hash slots, the command
+     * will be split across these slots and executed separately for each. This means the command
+     * is atomic only at the slot level. If one or more slot-specific requests fail, the entire
+     * call will return the first encountered error, even though some requests may have succeeded
+     * while others did not. To keep the whole operation atomic, use keys that map to the same
+     * slot, for example with hash tags.
+     *
+     * @param client - The client to execute the command.
+     * @param entries - The `key`, `path` and `value` triplets to set. Must contain at least one entry.
+     *     See {@link JsonMsetEntry}.
+     * @returns `"OK"` if all values were set.
+     *
+     * @example
+     * ```typescript
+     * const result = await GlideJson.mset(client, [
+     *     { key: "{doc}1", path: "$", value: '{"a": 1, "b": ["one", "two"]}' },
+     *     { key: "{doc}2", path: "$", value: '{"a": 2, "c": false}' },
+     * ]);
+     * console.log(result); // Output: 'OK'
+     *
+     * await GlideJson.mset(client, [
+     *     { key: "{doc}1", path: "$.b[0]", value: '"uno"' },
+     *     { key: "{doc}2", path: ".c", value: "true" },
+     * ]);
+     * console.log(await GlideJson.mget(client, ["{doc}1", "{doc}2"], "$.a")); // Output: ["[1]", "[2]"]
+     * ```
+     */
+    static async mset(
+        client: BaseClient,
+        entries: JsonMsetEntry[],
+    ): Promise<"OK"> {
+        return _executeCommand<"OK">(client, _jsonMsetArgs(entries));
     }
 
     /**
@@ -1274,6 +1340,28 @@ export class JsonBatch {
     ): Batch | ClusterBatch {
         const args = ["JSON.MGET", ...keys, path];
         return batch.customCommand(args);
+    }
+
+    /**
+     * Sets the JSON values at the specified `path` for multiple `key`s in a single command.
+     * The operation is atomic: either all values are set or none is set.
+     *
+     * @remarks Since valkey-json 1.0.0.
+     * @remarks In cluster mode, every key in an atomic batch must map to the same slot. For a
+     * non-atomic batch with no explicit route, entries may span slots; this command is split and
+     * is atomic only within each slot.
+     *
+     * @param batch - A batch to add commands to.
+     * @param entries - The `key`, `path` and `value` triplets to set. Must contain at least one entry.
+     *     See {@link JsonMsetEntry}.
+     *
+     * Command Response - `"OK"` if all values were set.
+     */
+    static mset(
+        batch: Batch | ClusterBatch,
+        entries: JsonMsetEntry[],
+    ): Batch | ClusterBatch {
+        return batch.customCommand(_jsonMsetArgs(entries));
     }
 
     /**
