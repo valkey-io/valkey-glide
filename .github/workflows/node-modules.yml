@@ -78,7 +78,6 @@ jobs:
               with:
                   path: |
                       node/rust-client/target
-                      glide-core/src/generated
                   key: x86_64-unknown-linux-gnu-node
                   restore-keys: |
                       x86_64-unknown-linux-gnu-glide-core
@@ -128,7 +127,6 @@ jobs:
               with:
                   path: |
                       node/rust-client/target
-                      glide-core/src/generated
                   key: aarch64-unknown-linux-gnu-node
                   restore-keys: |
                       aarch64-unknown-linux-gnu-glide-core

@@ -126,3 +126,35 @@ jobs:
               with:
                   crate: glide-core/redis-rs/redis
                   publish: ${{ inputs.publish }}
+
+    # --- glide-core crate ------------------------------------------------------------------------
+
+    test-glide-core:
+        needs:
+            - validate-branch
+        uses: ./.github/workflows/glide-core.yml
+
+    publish-glide-core:
+        needs:
+            - publish-glide-logger
+            - publish-glide-telemetry
+            - publish-glide-core-engine
+            - test-glide-core
+        runs-on: ubuntu-latest
+        environment: ${{ inputs.publish && 'AWS_ACTIONS' || '' }}
+        permissions:
+            contents: read
+            id-token: write
+        steps:
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+              with:
+                  persist-credentials: false
+
+            - name: Install Rust toolchain
+              uses: ./.github/actions/install-rust
+
+            - name: Publish glide-core
+              uses: ./.github/workflows/publish-rust-crate
+              with:
+                  crate: glide-core
+                  publish: ${{ inputs.publish }}
