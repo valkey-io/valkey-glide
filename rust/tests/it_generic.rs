@@ -28,6 +28,18 @@ matrix_test!(del_missing_zero, c, {
     assert_eq!(c.del(&[common::key("nope")]).await.unwrap(), 0);
 });
 
+matrix_test!(keys, c, {
+    let prefix = common::key("keys");
+    let a = format!("{prefix}:a");
+    let b = format!("{prefix}:b");
+    let _: () = c.set(&a, "1").await.unwrap();
+    let _: () = c.set(&b, "2").await.unwrap();
+
+    let mut found: Vec<String> = c.keys(format!("{prefix}:*")).await.unwrap();
+    found.sort();
+    assert_eq!(found, vec![a, b]);
+});
+
 matrix_test!(unlink, c, {
     let a = common::key("a");
     let _: () = c.set(&a, "1").await.unwrap();
