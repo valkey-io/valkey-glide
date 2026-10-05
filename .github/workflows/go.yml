@@ -155,7 +155,6 @@ jobs:
               with:
                   path: |
                       ffi/target
-                      glide-core/src/generated
                   key: ${{ matrix.host.TARGET }}-go
                   restore-keys: |
                       ${{ matrix.host.TARGET }}-glide-core
@@ -194,8 +193,12 @@ jobs:
                   make -k opentelemetry-test
 
             - name: Run Example Tests
+              # Runs on the newest Valkey engine in the matrix so that examples for
+              # commands from any supported version (e.g. HGETDEL, added in 9.1) are
+              # exercised against a server that actually implements them. Older engines
+              # remain covered by the version-gated integration tests.
               working-directory: go
-              if: ${{ contains(matrix.engine.version, '9') && !github.event.inputs.rc-version }}
+              if: ${{ matrix.engine.type == 'valkey' && matrix.engine.version == '9.1' && !github.event.inputs.rc-version }}
               run: |
                   make -k example-test
 
@@ -237,7 +240,6 @@ jobs:
               with:
                   path: |
                       ffi/target
-                      glide-core/src/generated
                   key: x86_64-unknown-linux-gnu-go
                   restore-keys: |
                       x86_64-unknown-linux-gnu-glide-core
@@ -336,7 +338,6 @@ jobs:
               with:
                   path: |
                       ffi/target
-                      glide-core/src/generated
                   key: ${{ matrix.host.IMAGE }}-go
                   restore-keys: ${{ matrix.host.IMAGE }}
 
@@ -420,7 +421,6 @@ jobs:
               with:
                   path: |
                       ffi/target
-                      glide-core/src/generated
                   key: ${{ matrix.host.TARGET }}-go
                   restore-keys: |
                       ${{ matrix.host.TARGET }}-glide-core

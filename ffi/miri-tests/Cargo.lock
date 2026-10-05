@@ -961,7 +961,7 @@ dependencies = [
 
 [[package]]
 name = "glide-core"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "async-trait",
  "aws-config",
@@ -1003,7 +1003,7 @@ dependencies = [
 
 [[package]]
 name = "glide-core-engine"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "arc-swap",
  "async-trait",
@@ -1041,7 +1041,7 @@ dependencies = [
 
 [[package]]
 name = "glide-logger"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "file-rotate",
  "once_cell",
@@ -1052,7 +1052,7 @@ dependencies = [
 
 [[package]]
 name = "glide-telemetry"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "chrono",
  "glide-logger",

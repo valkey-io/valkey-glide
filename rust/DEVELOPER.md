@@ -174,3 +174,5 @@ upstream 1.7.0. Bumping the constant makes the committed snapshot's version
 mismatch and the guard fail until the snapshot is regenerated. Commands beyond the
 redis-rs surface belong in the per-family extension traits
 (`src/commands/<family>.rs`), not in the table.
+
+<!-- TODO #6906: Document publishing to crates.io. -->

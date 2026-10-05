@@ -871,6 +871,33 @@ class BaseBatch:
         """
         return self.append_command(RequestType.HDel, [key] + fields)
 
+    def hgetdel(self: TBatch, key: TEncodable, fields: List[TEncodable]) -> TBatch:
+        """
+        Gets and deletes the specified fields from the hash stored at `key`.
+
+        This command atomically retrieves the values of the given fields and removes them from the
+        hash in a single operation. When the last field is removed, the key is deleted automatically.
+
+        See [valkey.io](https://valkey.io/commands/hgetdel/) for more details.
+
+        Args:
+            key (TEncodable): The key of the hash.
+            fields (List[TEncodable]): The fields to get and delete from the hash stored at `key`.
+
+        Command response:
+            List[Optional[bytes]]: A list of values associated with the given fields, in the same order
+            as they are requested.
+
+            For every field that does not exist in the hash, a null value is returned.
+
+            If `key` does not exist, it is treated as an empty hash, and the function returns a list of
+            null values.
+
+        Since: Valkey 9.1.0.
+        """
+        args: List[TEncodable] = [key, "FIELDS", str(len(fields)), *fields]
+        return self.append_command(RequestType.HGetDel, args)
+
     def hvals(self: TBatch, key: TEncodable) -> TBatch:
         """
         Returns all values in the hash stored at `key`.

@@ -273,6 +273,9 @@ impl CacheCore {
 
     /// Subtracts bytes from memory tracking (saturating)
     pub fn uncharge(&self, bytes: u64) {
+        //TODO: (#7175) `fetch_update` is deprecated for `try_update` since Rust 1.99, but `try_update`
+        // needs 1.95 and the MSRV is 1.94.1.
+        #[allow(deprecated)]
         let _ = self
             .current_memory
             .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |current| {
