@@ -148,6 +148,49 @@ matrix_test!(lmove, c, {
     assert_eq!(dst_items[0], "a");
 });
 
+matrix_test!(blmove, c, {
+    let src = common::tkey("ls", "src");
+    let dst = common::tkey("ls", "dst");
+    c.rpush(&src, &["a", "b", "c"]).await.unwrap();
+    let moved: Option<String> = c
+        .blmove(
+            &src,
+            &dst,
+            glide::Direction::Left,
+            glide::Direction::Right,
+            0.1,
+        )
+        .await
+        .unwrap();
+    assert_eq!(moved.as_deref(), Some("a"));
+    let dst_items: Vec<String> = c.lrange(&dst, 0, -1).await.unwrap();
+    assert_eq!(dst_items, vec!["a".to_string()]);
+});
+
+matrix_test!(blpop, c, {
+    let k = common::key("l");
+    c.rpush(&k, &["a", "b"]).await.unwrap();
+    let popped: Option<[String; 2]> = c.blpop(&k, 0.1).await.unwrap();
+    assert_eq!(popped, Some([k.clone(), "a".to_string()]));
+});
+
+matrix_test!(brpop, c, {
+    let k = common::key("l");
+    c.rpush(&k, &["a", "b"]).await.unwrap();
+    let popped: Option<[String; 2]> = c.brpop(&k, 0.1).await.unwrap();
+    assert_eq!(popped, Some([k.clone(), "b".to_string()]));
+});
+
+matrix_test!(brpoplpush, c, {
+    let src = common::tkey("ls", "src");
+    let dst = common::tkey("ls", "dst");
+    c.rpush(&src, &["a", "b"]).await.unwrap();
+    let moved: Option<String> = c.brpoplpush(&src, &dst, 0.1).await.unwrap();
+    assert_eq!(moved.as_deref(), Some("b"));
+    let dst_items: Vec<String> = c.lrange(&dst, 0, -1).await.unwrap();
+    assert_eq!(dst_items, vec!["b".to_string()]);
+});
+
 matrix_test!(lpos, c, {
     let k = common::key("l");
     c.rpush(&k, &["a", "b", "c", "b"]).await.unwrap();
