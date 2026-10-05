@@ -443,17 +443,21 @@ where
     }
 
     /// Returns [`Stream`] of [`FromRedisValue`] values from this [`Monitor`]ing connection
-    pub fn on_message<'a, T: FromRedisValue + 'a>(&'a mut self) -> impl Stream<Item = T> + 'a {
+    pub fn on_message<T: FromRedisValue>(&mut self) -> impl Stream<Item = T> + '_ {
         // Taking the bytes leaves the decoder empty, so a later call cannot deliver a
         // line this stream already delivered.
         let leftover = self.0.take_decoder_buffer();
-        monitor_stream(&mut self.0.con, leftover)
+        framed_with_leftover(&mut self.0.con, leftover).filter_map(|value| {
+            Box::pin(async move { T::from_owned_redis_value(value.ok()?.ok()?).ok() })
+        })
     }
 
     /// Returns [`Stream`] of [`FromRedisValue`] values from this [`Monitor`]ing connection
     pub fn into_on_message<T: FromRedisValue>(mut self) -> impl Stream<Item = T> {
         let leftover = self.0.take_decoder_buffer();
-        monitor_stream(self.0.con, leftover)
+        framed_with_leftover(self.0.con, leftover).filter_map(|value| {
+            Box::pin(async move { T::from_owned_redis_value(value.ok()?.ok()?).ok() })
+        })
     }
 }
 
@@ -479,18 +483,6 @@ where
     let mut parts = FramedParts::new::<Vec<u8>>(con, ValueCodec::default());
     parts.read_buf = leftover;
     Framed::from_parts(parts)
-}
-
-/// Builds a MONITOR line [`Stream`] over `con`, seeding the framed read buffer
-/// with the `leftover` bytes the connection decoder read past the handshake.
-fn monitor_stream<C, T>(con: C, leftover: bytes::BytesMut) -> impl Stream<Item = T>
-where
-    C: AsyncRead + AsyncWrite + Unpin,
-    T: FromRedisValue,
-{
-    framed_with_leftover(con, leftover).filter_map(|value| {
-        Box::pin(async move { T::from_owned_redis_value(value.ok()?.ok()?).ok() })
-    })
 }
 
 pub(crate) async fn get_socket_addrs(
@@ -606,6 +598,14 @@ mod monitor_tests {
     // A MONITOR line as the server sends it: a RESP simple string.
     const MONITOR_LINE: &str = "+1720000000.000000 [0 127.0.0.1:6379] \"SET\" \"k\" \"v\"\r\n";
 
+    // Calls `on_message` from code that is generic over the item type. This only
+    // compiles while `on_message` puts no lifetime bound on `T`.
+    fn generic_on_message<T: FromRedisValue>(
+        monitor: &mut Monitor<DuplexStream>,
+    ) -> impl Stream<Item = T> + '_ {
+        monitor.on_message::<T>()
+    }
+
     // Wraps a `Monitor` around the client end of an in-memory duplex, matching a
     // connection that has finished setup. The decoder starts empty; each test fills
     // it by running the real `MONITOR` handshake through `monitor()`.
@@ -652,7 +652,7 @@ mod monitor_tests {
             drop(server);
         });
 
-        let mut stream = monitor.on_message::<String>();
+        let mut stream = generic_on_message::<String>(&mut monitor);
         let line = ::tokio::time::timeout(std::time::Duration::from_secs(2), stream.next())
             .await
             .expect("borrowed on_message dropped the buffered monitor line")
