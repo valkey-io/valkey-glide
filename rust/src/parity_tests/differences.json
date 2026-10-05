@@ -723,6 +723,73 @@
     },
     "glide": null
   },
+  "blmpop": {
+    "reason": "Valkey replies to `BLMPOP` with `[key, [element, …]]`, the same shape as `LMPOP`. redis-rs declares `lmpop` as `Option<(String, Vec<String>)>` but `blmpop` as `Option<[String; 2]>` (the `blpop` / `brpop` shape), which cannot hold the nested element list, so its typed call fails on every successful pop. GLIDE returns `Option<(String, Vec<String>)>`, matching `lmpop`.",
+    "redis": {
+      "name": "blmpop",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToRedisArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "timeout",
+          "type_name": "f64"
+        },
+        {
+          "name": "numkeys",
+          "type_name": "usize"
+        },
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "dir",
+          "type_name": "Direction"
+        },
+        {
+          "name": "count",
+          "type_name": "usize"
+        }
+      ],
+      "return_type": "(Option<[String; 2]>)"
+    },
+    "glide": {
+      "name": "blmpop",
+      "generics": [
+        {
+          "name": "K",
+          "bound": "ToValkeyArgs"
+        }
+      ],
+      "args": [
+        {
+          "name": "timeout",
+          "type_name": "f64"
+        },
+        {
+          "name": "numkeys",
+          "type_name": "usize"
+        },
+        {
+          "name": "key",
+          "type_name": "K"
+        },
+        {
+          "name": "dir",
+          "type_name": "Direction"
+        },
+        {
+          "name": "count",
+          "type_name": "usize"
+        }
+      ],
+      "return_type": "(Option<(String, Vec<String>)>)"
+    }
+  },
   "del_ex": {
     "reason": "TODO #7238: not implemented yet",
     "redis": {

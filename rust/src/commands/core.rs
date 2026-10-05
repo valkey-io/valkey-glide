@@ -687,7 +687,7 @@ implement_commands! {
     }
 
     /// `BLMPOP`.
-    fn blmpop<K: ToValkeyArgs>(timeout: f64, numkeys: usize, key: K, dir: Direction, count: usize) -> (Option<[String; 2]>) {
+    fn blmpop<K: ToValkeyArgs>(timeout: f64, numkeys: usize, key: K, dir: Direction, count: usize) -> (Option<(String, Vec<String>)>) {
         build_cmd!("BLMPOP", timeout, numkeys, key, dir, "COUNT", count)
     }
 

@@ -183,3 +183,26 @@ matrix_test!(lmpop, c, {
     assert_eq!(key, k);
     assert_eq!(elements, vec!["a".to_string(), "b".to_string()]);
 });
+
+matrix_test!(blmpop, c, {
+    skip_if_version_below!(c, 7, 0, 0);
+
+    let k = common::tkey("cmd_blmpop", "l1");
+    c.rpush(&k, &["a", "b", "c"]).await.unwrap();
+
+    let popped: Option<(String, Vec<String>)> = c
+        .blmpop(0.1, 1, &k, glide::Direction::Right, 2)
+        .await
+        .unwrap();
+
+    let (key, elements) = popped.unwrap();
+    assert_eq!(key, k);
+    assert_eq!(elements, vec!["c".to_string(), "b".to_string()]);
+
+    let empty = common::tkey("cmd_blmpop", "empty");
+    let popped: Option<(String, Vec<String>)> = c
+        .blmpop(0.1, 1, &empty, glide::Direction::Left, 1)
+        .await
+        .unwrap();
+    assert_eq!(popped, None);
+});

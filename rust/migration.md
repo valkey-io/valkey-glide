@@ -135,6 +135,10 @@ rather than in a `streams` module, and `StreamId::map` holds `ValkeyValue`s.
 glide-core reshapes their reply into a member-to-score map, which `Vec<String>`
 cannot decode, so redis-rs's typed return would fail on every non-empty pop.
 
+`blmpop` returns `Option<(String, Vec<String>)>` instead of
+`Option<[String; 2]>`, matching `lmpop`. Its reply is a key and a list of
+elements, which `[String; 2]` cannot decode.
+
 ### `hset_multiple` differs
 
 `hset_multiple` sends multi-field `HSET` and returns the number of fields added,

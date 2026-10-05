@@ -87,7 +87,8 @@ pub trait PubSubCommands: CommandExecutor {
         Ok(())
     }
 
-    // NOTE: `PUBLISH` is implemented in the unified command table (`crate::AsyncCommands::publish`).
+    // NOTE: `PUBLISH` and `SPUBLISH` are implemented in the
+    // unified command table (`crate::AsyncCommands::publish`).
 
     /// List active channels, optionally matching `pattern` (`PUBSUB CHANNELS`).
     async fn pubsub_channels(&self, pattern: Option<&[u8]>) -> ValkeyResult<Vec<Bytes>> {
