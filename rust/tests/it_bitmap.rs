@@ -171,3 +171,36 @@ matrix_test!(bitfield, c, {
     // SET returns the old value; the overflowing INCRBY fails under `FAIL`.
     assert_eq!(results, vec![Some(0), None, Some(200)]);
 });
+
+matrix_test!(bitfield_readonly, c, {
+    let k = common::key("bfro");
+    let encoding = BitEncoding::Unsigned(8);
+    let _ = c
+        .bitfield(
+            &k,
+            &[BitFieldSubcommand::Set {
+                encoding,
+                offset: BitFieldOffset::Bit(0),
+                value: 200,
+            }],
+        )
+        .await
+        .unwrap();
+    let results = c
+        .bitfield_readonly(
+            &k,
+            &[
+                BitFieldSubcommand::Get {
+                    encoding,
+                    offset: BitFieldOffset::Bit(0),
+                },
+                BitFieldSubcommand::Get {
+                    encoding,
+                    offset: BitFieldOffset::Multiplier(1),
+                },
+            ],
+        )
+        .await
+        .unwrap();
+    assert_eq!(results, vec![Some(200), Some(0)]);
+});
