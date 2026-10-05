@@ -1207,20 +1207,28 @@ class TestBatch:
         )
 
         if isinstance(glide_client, GlideClusterClient):
-            batch: Union[ClusterBatch, Batch] = ClusterBatch(is_atomic=False)
+            cluster_batch = ClusterBatch(is_atomic=False)
+            # HGETDEL existing and non-existing field
+            cluster_batch.hgetdel(key1, [field1, "non_existent_field"])
+            # HGETDEL remaining fields - key should be removed automatically afterwards
+            cluster_batch.hgetdel(key1, [field2, field3])
+            # HLEN to confirm the key no longer exists (empty hash -> 0)
+            cluster_batch.hlen(key1)
+            # HGETDEL on a non-existent key returns null values
+            cluster_batch.hgetdel("non_existent_key", [field1, field2])
+            result = await glide_client.exec(cluster_batch, raise_on_error=False)
         else:
-            batch = Batch(is_atomic=False)
+            standalone_batch = Batch(is_atomic=False)
+            # HGETDEL existing and non-existing field
+            standalone_batch.hgetdel(key1, [field1, "non_existent_field"])
+            # HGETDEL remaining fields - key should be removed automatically afterwards
+            standalone_batch.hgetdel(key1, [field2, field3])
+            # HLEN to confirm the key no longer exists (empty hash -> 0)
+            standalone_batch.hlen(key1)
+            # HGETDEL on a non-existent key returns null values
+            standalone_batch.hgetdel("non_existent_key", [field1, field2])
+            result = await glide_client.exec(standalone_batch, raise_on_error=False)
 
-        # HGETDEL existing and non-existing field
-        batch.hgetdel(key1, [field1, "non_existent_field"])
-        # HGETDEL remaining fields - key should be removed automatically afterwards
-        batch.hgetdel(key1, [field2, field3])
-        # HLEN to confirm the key no longer exists (empty hash -> 0)
-        batch.hlen(key1)
-        # HGETDEL on a non-existent key returns null values
-        batch.hgetdel("non_existent_key", [field1, field2])
-
-        result = await glide_client.exec(batch, raise_on_error=False)
         assert result is not None
 
         assert result[0] == [b"value1", None]  # existing + non-existing field
