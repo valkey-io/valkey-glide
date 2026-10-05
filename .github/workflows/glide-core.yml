@@ -18,6 +18,7 @@ on:
             - .github/actions/install-shared-dependencies/action.yml
             - .github/actions/install-engine/action.yml
             - .github/workflows/lint-rust/action.yml
+            - .github/actions/ensure-clean-tree/action.yml
             - .github/workflows/create-test-matrices/action.yml
             - .github/json_matrices/**
             - deny.toml
@@ -32,6 +33,7 @@ on:
             - .github/actions/install-shared-dependencies/action.yml
             - .github/actions/install-engine/action.yml
             - .github/workflows/lint-rust/action.yml
+            - .github/actions/ensure-clean-tree/action.yml
             - .github/workflows/create-test-matrices/action.yml
             - .github/json_matrices/**
             - deny.toml
@@ -153,13 +155,13 @@ jobs:
 
             - name: Run glide-core tests
               working-directory: ./glide-core
-              run: cargo test --features "proto,socket-layer,standalone_heartbeat"
+              run: cargo test --locked --features "proto,socket-layer,standalone_heartbeat"
 
             - name: Check features
               working-directory: ./glide-core
               run: |
-                  cargo check --benches --all-features
-                  cargo check --no-default-features
+                  cargo check --locked --benches --all-features
+                  cargo check --locked --no-default-features
 
             - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
               with:
@@ -174,6 +176,11 @@ jobs:
             - uses: ./.github/workflows/test-benchmark
               with:
                   language-flag: -rust
+
+            - name: Ensure Rust tests leave the worktree clean
+              uses: ./.github/actions/ensure-clean-tree
+              with:
+                  context: Rust core tests and benchmarks
 
     lint:
         runs-on: ubuntu-latest
