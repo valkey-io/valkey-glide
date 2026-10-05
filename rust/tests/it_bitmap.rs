@@ -32,7 +32,7 @@ matrix_test!(bitcount, c, {
     let _: bool = c.setbit(&k, 0, true).await.unwrap();
     let _: bool = c.setbit(&k, 1, true).await.unwrap();
     let _: bool = c.setbit(&k, 7, true).await.unwrap();
-    assert_eq!(c.bitcount(common::key(&k)).await.unwrap(), 3);
+    assert_eq!(c.bitcount(&k).await.unwrap(), 3);
 });
 
 matrix_test!(bitcount_range_byte, c, {
