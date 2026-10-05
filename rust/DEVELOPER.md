@@ -101,6 +101,9 @@ cargo doc --no-deps --document-private-items
 src/
   lib.rs          crate root + public re-exports
   error.rs        GlideError (mirrors Python exceptions)
+  cmd.rs          Cmd, GLIDE's owned command builder (cmd(), query_async)
+  pipeline.rs     Pipeline, GLIDE's owned pipeline / transaction builder
+  types.rs        typed reply types (ValueType, IntegerReplyOrNoOp)
   config/         client configuration -> glide_core ConnectionRequest
     common.rs     shared types + builder-setter macro + request lowering
     standalone.rs GlideClientConfiguration
@@ -111,12 +114,19 @@ src/
   executor.rs     CommandExecutor seam + custom_command
   client/
     mod.rs        GlideClient / GlideClusterClient (async)
-    connection.rs typed Pipeline execution (PipelineExt::query_async)
+    pipeline.rs   pipeline dispatch + typed execution (PipelineExt::query_async)
   pipeline_options.rs  Pipeline execution options (exec)
   script.rs       Script (SHA-caching EVALSHA with EVAL fallback)
   telemetry.rs    OpenTelemetry config + init
-  sync/mod.rs     blocking clients over a shared runtime
+  sync/
+    mod.rs        blocking clients over a shared runtime
+    pipeline.rs   pipeline dispatch + typed execution (sync::PipelineExt::query)
   mock_tests/     server-free encoding/decoding tests for the extensions
+  parity_tests/   redis-rs signature-parity guard
+    mod.rs        parser + comparison (the redis_parity_check test)
+    redis_parity.json  cached redis-rs command-table snapshot
+    differences.json   pinned deliberate differences
+  test_utils.rs   shared unit-test helpers (assert_args)
   commands/
     core.rs       the command table, generating Cmd constructors, Pipeline methods,
                   and AsyncCommands / Commands and their typed counterparts
