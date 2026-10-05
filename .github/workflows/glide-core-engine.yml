@@ -2,7 +2,6 @@ name: glide-core-engine CI
 
 permissions:
     contents: read
-    actions: write
 
 on:
     push:
@@ -60,6 +59,8 @@ jobs:
         steps:
             - name: Checkout repository
               uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+              with:
+                  persist-credentials: false
 
             - name: Install shared software dependencies
               uses: ./.github/actions/install-shared-dependencies

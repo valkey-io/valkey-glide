@@ -87,7 +87,6 @@ jobs:
               with:
                   path: |
                       java/target
-                      glide-core/src/generated
                   key: x86_64-unknown-linux-gnu-java
                   restore-keys: |
                       x86_64-unknown-linux-gnu-glide-core
@@ -149,7 +148,6 @@ jobs:
               with:
                   path: |
                       java/target
-                      glide-core/src/generated
                   key: aarch64-unknown-linux-gnu-java
                   restore-keys: |
                       aarch64-unknown-linux-gnu-glide-core

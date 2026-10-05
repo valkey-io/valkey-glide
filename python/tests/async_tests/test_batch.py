@@ -1192,6 +1192,50 @@ class TestBatch:
         )  # field2 should have ~8s TTL
         assert ttl_results[2] == -1  # field3 should have no expiration (PERSIST)
 
+    @pytest.mark.skip_if_version_below("9.1.0")
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_hgetdel_batch(self, glide_client: TGlideClient):
+        key1 = get_random_string(10)
+        field1 = get_random_string(5)
+        field2 = get_random_string(5)
+        field3 = get_random_string(5)
+
+        # Set up initial data
+        await glide_client.hset(
+            key1, {field1: "value1", field2: "value2", field3: "value3"}
+        )
+
+        if isinstance(glide_client, GlideClusterClient):
+            cluster_batch = ClusterBatch(is_atomic=False)
+            # HGETDEL existing and non-existing field
+            cluster_batch.hgetdel(key1, [field1, "non_existent_field"])
+            # HGETDEL remaining fields - key should be removed automatically afterwards
+            cluster_batch.hgetdel(key1, [field2, field3])
+            # HLEN to confirm the key no longer exists (empty hash -> 0)
+            cluster_batch.hlen(key1)
+            # HGETDEL on a non-existent key returns null values
+            cluster_batch.hgetdel("non_existent_key", [field1, field2])
+            result = await glide_client.exec(cluster_batch, raise_on_error=False)
+        else:
+            standalone_batch = Batch(is_atomic=False)
+            # HGETDEL existing and non-existing field
+            standalone_batch.hgetdel(key1, [field1, "non_existent_field"])
+            # HGETDEL remaining fields - key should be removed automatically afterwards
+            standalone_batch.hgetdel(key1, [field2, field3])
+            # HLEN to confirm the key no longer exists (empty hash -> 0)
+            standalone_batch.hlen(key1)
+            # HGETDEL on a non-existent key returns null values
+            standalone_batch.hgetdel("non_existent_key", [field1, field2])
+            result = await glide_client.exec(standalone_batch, raise_on_error=False)
+
+        assert result is not None
+
+        assert result[0] == [b"value1", None]  # existing + non-existing field
+        assert result[1] == [b"value2", b"value3"]  # remaining fields
+        assert result[2] == 0  # key auto-deleted after last field removed
+        assert result[3] == [None, None]  # non-existent key
+
     @pytest.mark.skip_if_version_below("9.0.0")
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])

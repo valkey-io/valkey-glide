@@ -183,7 +183,6 @@ jobs:
               with:
                   path: |
                       java/target
-                      glide-core/src/generated
                   key: ${{ matrix.host.TARGET }}-java
                   restore-keys: |
                       ${{ matrix.host.TARGET }}-glide-core
@@ -308,7 +307,6 @@ jobs:
               with:
                   path: |
                       java/target
-                      glide-core/src/generated
                   key: ${{ matrix.host.TARGET }}-java
                   restore-keys: |
                       ${{ matrix.host.TARGET }}-glide-core
@@ -550,7 +548,6 @@ jobs:
               with:
                   path: |
                       java/target
-                      glide-core/src/generated
                   key: ${{ matrix.host.IMAGE }}-java
                   restore-keys: ${{ matrix.host.IMAGE }}
 
