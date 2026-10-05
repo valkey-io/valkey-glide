@@ -172,6 +172,13 @@ unless the reply is an integer, a whole-number double, or a numeric string withi
 that type's range. Decode into a type that fits the reply (e.g. `f64` for
 `INCRBYFLOAT`). Float decoding matches redis-rs.
 
+### Map arguments require one argument per key and value
+
+Encoding a `HashMap` or `BTreeMap` as command arguments panics if a key or
+value does not encode as exactly one argument. redis-rs also accepts zero
+arguments (e.g. a `None` value), which drops that value from the command and
+pairs the remaining keys and values wrongly.
+
 ### `ValueType` covers only the core Valkey types
 
 redis-rs's variants for module types (vector sets, the Redis Stack modules, and

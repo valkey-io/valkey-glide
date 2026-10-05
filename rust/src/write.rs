@@ -324,6 +324,7 @@ impl<T: ToValkeyArgs + std::cmp::Eq + std::hash::Hash + Ord> ToValkeyArgs
 }
 
 /// Encodes a `BTreeMap` as command arguments.
+/// Panics if a key or value does not encode as exactly one argument.
 impl<K: ToValkeyArgs, V: ToValkeyArgs> ToValkeyArgs for std::collections::BTreeMap<K, V>
 where
     K: std::cmp::Eq + std::hash::Hash + Ord,
@@ -338,6 +339,7 @@ where
 }
 
 /// Encodes a `HashMap` as command arguments.
+/// Panics if a key or value does not encode as exactly one argument.
 impl<K: ToValkeyArgs, V: ToValkeyArgs, S: std::hash::BuildHasher> ToValkeyArgs
     for std::collections::HashMap<K, V, S>
 where
