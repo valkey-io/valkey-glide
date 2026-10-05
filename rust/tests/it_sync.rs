@@ -331,3 +331,31 @@ fn sync_cluster_commands_trait() {
     let v: isize = client.incr(&k, 7).unwrap();
     assert_eq!(v, 130);
 }
+
+// ---- generic command-trait bounds --------------------------------------------------------------
+
+// A bound on one command trait brings only that trait's methods into scope, so
+// calls on the type parameter are not ambiguous. Matches redis-rs's traits.
+
+#[test]
+fn sync_generic_command_trait_bounds() {
+    let server = common::TestServer::start();
+    let c = sync_client(server.port);
+    let typed = common::key("sync:typed_bound");
+    assert_eq!(typed_bound(&c, &typed).unwrap(), vec![typed]);
+    let untyped = common::key("sync:untyped_bound");
+    assert_eq!(untyped_bound(&c, &untyped).unwrap(), vec![untyped]);
+}
+
+fn typed_bound<C: TypedCommands>(c: &C, key: &str) -> glide::ValkeyResult<Vec<String>> {
+    c.set(key, "v")?;
+    assert_eq!(c.get(key)?.as_deref(), Some("v"));
+    c.scan_match(key)?.collect()
+}
+
+fn untyped_bound<C: glide::Commands>(c: &C, key: &str) -> glide::ValkeyResult<Vec<String>> {
+    let _: () = c.set(key, "v")?;
+    let value: Option<String> = c.get(key)?;
+    assert_eq!(value.as_deref(), Some("v"));
+    c.scan_match(key)?.collect()
+}

@@ -78,7 +78,9 @@ Notes:
   `glide::TypedCommands` are their typed counterparts with concrete return
   types (e.g. `get` returns `Option<String>`), mirroring redis-rs's
   `AsyncTypedCommands` / `TypedCommands`. As in redis-rs, a trait and its typed
-  counterpart share method names, so import only one of them.
+  counterpart share method names, so import only one of them. The raw-command
+  methods (`glide_send_command_as`, `glide_send_command`) are on the untyped
+  traits only; with a typed trait, use `cmd.query_async(&client)`.
   Extension traits (the remaining stream commands, geo search, `JSON.*`, …)
   cover the rest of the command surface; their names never collide with the
   command traits.

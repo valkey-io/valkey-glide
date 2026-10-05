@@ -229,3 +229,38 @@ resp_test!(scan_match_iterator, c, {
     }
     assert_eq!(found.len(), 10);
 });
+
+// ---- generic command-trait bounds --------------------------------------------------------------
+
+// A bound on one command trait brings only that trait's methods into scope, so
+// calls on the type parameter are not ambiguous. Matches redis-rs's traits.
+
+resp_test!(generic_command_trait_bounds, c, {
+    let typed = common::key("typed_bound");
+    assert_eq!(typed_bound(&c, &typed).await.unwrap(), vec![typed]);
+    let untyped = common::key("untyped_bound");
+    assert_eq!(untyped_bound(&c, &untyped).await.unwrap(), vec![untyped]);
+});
+
+async fn typed_bound<C: AsyncTypedCommands>(c: &C, key: &str) -> ValkeyResult<Vec<String>> {
+    c.set(key, "v").await?;
+    assert_eq!(c.get(key).await?.as_deref(), Some("v"));
+    let mut found = Vec::new();
+    let mut iter = c.scan_match(key).await?;
+    while let Some(item) = iter.next_item().await {
+        found.push(item?);
+    }
+    Ok(found)
+}
+
+async fn untyped_bound<C: glide::AsyncCommands>(c: &C, key: &str) -> ValkeyResult<Vec<String>> {
+    let _: () = c.set(key, "v").await?;
+    let value: Option<String> = c.get(key).await?;
+    assert_eq!(value.as_deref(), Some("v"));
+    let mut found = Vec::new();
+    let mut iter = c.scan_match(key).await?;
+    while let Some(item) = iter.next_item().await {
+        found.push(item?);
+    }
+    Ok(found)
+}

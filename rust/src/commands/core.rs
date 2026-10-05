@@ -14,9 +14,8 @@
 //! `hset_multiple` sends `HSET`, not `HMSET`); signature parity is enforced by
 //! the `parity_tests` module (`src/parity_tests/`).
 //!
-//! The built command is handed to glide-core **by value** through
-//! [`AsyncCommands::glide_send_command`] — the same zero-extra-copy path as the
-//! rest of the client. Methods take `&self` (the clients are cheaply
+//! The built command is handed to glide-core **by value** — the same
+//! zero-extra-copy path as the rest of the client. Methods take `&self` (the clients are cheaply
 //! cloneable handles); migrated `&mut` call sites still compile via
 //! auto-borrow.
 //!
@@ -190,7 +189,7 @@ macro_rules! implement_typed_command_async {
             &$lifetime self $(, $arg: $ty)*
         ) -> ValkeyFuture<$lifetime, RV> {
             let cmd = Cmd::$name($($arg),*);
-            Box::pin(async move { RV::from_owned_valkey_value(self.glide_send_command(cmd).await?) })
+            Box::pin(async move { RV::from_owned_valkey_value(self.glide_dispatch_command(cmd).await?) })
         }
     };
     (
@@ -209,7 +208,7 @@ macro_rules! implement_typed_command_async {
         ) -> ValkeyFuture<$lifetime, $ret> {
             let cmd = Cmd::$name($($arg),*);
             Box::pin(async move {
-                <$ret as FromValkeyValue>::from_owned_valkey_value(self.glide_send_command(cmd).await?)
+                <$ret as FromValkeyValue>::from_owned_valkey_value(self.glide_dispatch_command(cmd).await?)
             })
         }
     };
@@ -232,7 +231,7 @@ macro_rules! implement_typed_command_sync {
         fn $name<$lifetime, RV: FromValkeyValue, $($g: $b,)*>(
             &self $(, $arg: $ty)*
         ) -> ValkeyResult<RV> {
-            RV::from_owned_valkey_value(self.glide_send_command(Cmd::$name($($arg),*))?)
+            RV::from_owned_valkey_value(self.glide_dispatch_command(Cmd::$name($($arg),*))?)
         }
     };
     (
@@ -250,10 +249,33 @@ macro_rules! implement_typed_command_sync {
             &self $(, $arg: $ty)*
         ) -> ValkeyResult<$ret> {
             <$ret as FromValkeyValue>::from_owned_valkey_value(
-                self.glide_send_command(Cmd::$name($($arg),*))?,
+                self.glide_dispatch_command(Cmd::$name($($arg),*))?,
             )
         }
     };
+}
+
+/// Async command dispatch shared by [`AsyncCommands`] and [`AsyncTypedCommands`].
+///
+/// Both command traits extend this trait so a generic bound on one of them brings
+/// only that trait's methods into scope. Implemented by GLIDE's async clients; not
+/// implementable outside the crate.
+#[doc(hidden)]
+#[sealed::sealed(pub(crate))]
+pub trait CommandDispatch: Send + Sync + Sized {
+    /// Send an already-built command by value.
+    fn glide_dispatch_command<'a>(&'a self, cmd: Cmd) -> ValkeyFuture<'a, ValkeyValue>;
+}
+
+/// Blocking command dispatch shared by [`Commands`] and [`TypedCommands`].
+///
+/// Blocking counterpart of [`CommandDispatch`].
+#[cfg(feature = "sync")]
+#[doc(hidden)]
+#[sealed::sealed(pub(crate))]
+pub trait SyncCommandDispatch: Sized {
+    /// Send an already-built command by value.
+    fn glide_dispatch_command(&self, cmd: Cmd) -> ValkeyResult<ValkeyValue>;
 }
 
 /// Defines the [`AsyncCommands`], [`Commands`], [`AsyncTypedCommands`], and
@@ -319,17 +341,19 @@ macro_rules! implement_commands {
         /// [`crate::GlideClusterClient`] — see the [module docs](self).
         ///
         /// Deliberately **not** tied to the `redis` crate's connection-object
-        /// traits: every method dispatches through [`Self::glide_send_command`],
+        /// traits: every method hands its command to the client by value,
         /// GLIDE's zero-extra-copy path.
-        pub trait AsyncCommands: Send + Sync + Sized {
-            /// Send an already-built command **by value** (no clone). This is
-            /// the single required method; every typed command delegates to
-            /// it. Also useful directly as a zero-extra-copy escape hatch for
-            /// custom commands with large payloads.
+        pub trait AsyncCommands: CommandDispatch {
+            /// Send an already-built command **by value** (no clone). A
+            /// zero-extra-copy escape hatch for custom commands with large
+            /// payloads.
             ///
             /// Prefer the typed commands (e.g. [`get`](Self::get)).
             /// Use this method only for commands GLIDE does not implement.
-            fn glide_send_command<'a>(&'a self, cmd: Cmd) -> ValkeyFuture<'a, ValkeyValue>;
+            #[inline]
+            fn glide_send_command<'a>(&'a self, cmd: Cmd) -> ValkeyFuture<'a, ValkeyValue> {
+                self.glide_dispatch_command(cmd)
+            }
 
             /// Typed escape hatch: send an already-built [`Cmd`] by value and
             /// decode the reply into `RV`. An alternative to
@@ -355,7 +379,7 @@ macro_rules! implement_commands {
                     RV: FromValkeyValue,
                 {
                     let cmd = Cmd::$name($($arg),*);
-                    Box::pin(async move { RV::from_owned_valkey_value(self.glide_send_command(cmd).await?) })
+                    Box::pin(async move { RV::from_owned_valkey_value(self.glide_dispatch_command(cmd).await?) })
                 }
             )*
 
@@ -364,6 +388,8 @@ macro_rules! implement_commands {
                 ValkeyFuture<'s, crate::commands::scan::ScanIter<'s, Self, RV>>
             );
         }
+
+        impl<T: CommandDispatch> AsyncCommands for T {}
 
         /// **GLIDE's blocking command API.**
         ///
@@ -377,13 +403,15 @@ macro_rules! implement_commands {
         /// tokio's "cannot block the current thread from within a runtime");
         /// use [`AsyncCommands`] on the async clients there instead.
         #[cfg(feature = "sync")]
-        pub trait Commands: Sized {
-            /// Send an already-built command **by value** (no clone). This is
-            /// the single required method; every typed command delegates to it.
+        pub trait Commands: SyncCommandDispatch {
+            /// Send an already-built command **by value** (no clone).
             ///
             /// Prefer the typed commands (e.g. [`get`](Self::get)).
             /// Use this method only for commands GLIDE does not implement.
-            fn glide_send_command(&self, cmd: Cmd) -> ValkeyResult<ValkeyValue>;
+            #[inline]
+            fn glide_send_command(&self, cmd: Cmd) -> ValkeyResult<ValkeyValue> {
+                self.glide_dispatch_command(cmd)
+            }
 
             /// Typed escape hatch (blocking counterpart of the async
             /// `glide_send_command_as`): send an already-built [`Cmd`] by value and
@@ -404,7 +432,7 @@ macro_rules! implement_commands {
                 fn $name<$lifetime, $($g: $b,)* RV: FromValkeyValue>(
                     &self $(, $arg: $ty)*
                 ) -> ValkeyResult<RV> {
-                    RV::from_owned_valkey_value(self.glide_send_command(Cmd::$name($($arg),*))?)
+                    RV::from_owned_valkey_value(self.glide_dispatch_command(Cmd::$name($($arg),*))?)
                 }
             )*
 
@@ -414,6 +442,9 @@ macro_rules! implement_commands {
             );
         }
 
+        #[cfg(feature = "sync")]
+        impl<T: SyncCommandDispatch> Commands for T {}
+
         /// **GLIDE's typed async command API.**
         ///
         /// Like [`AsyncCommands`], but each method returns a concrete type
@@ -421,11 +452,12 @@ macro_rules! implement_commands {
         /// annotation is needed. To choose the return type, use
         /// [`AsyncCommands`] instead.
         ///
-        /// Implemented for every [`AsyncCommands`] type. Import only one of the
-        /// two traits: their methods share names, so calls are ambiguous when
-        /// both are in scope (as with redis-rs's `AsyncCommands` and
-        /// `AsyncTypedCommands`).
-        pub trait AsyncTypedCommands: AsyncCommands {
+        /// Implemented for every [`AsyncCommands`] type. Neither trait extends
+        /// the other, so a generic bound on one brings only its methods into
+        /// scope. Import only one of the two traits: their methods share
+        /// names, so calls are ambiguous when both are in scope (as with
+        /// redis-rs's `AsyncCommands` and `AsyncTypedCommands`).
+        pub trait AsyncTypedCommands: CommandDispatch {
             $(
                 implement_typed_command_async! {
                     $lifetime
@@ -440,7 +472,7 @@ macro_rules! implement_commands {
             );
         }
 
-        impl<T: AsyncCommands> AsyncTypedCommands for T {}
+        impl<T: CommandDispatch> AsyncTypedCommands for T {}
 
         /// **GLIDE's typed blocking command API.**
         ///
@@ -448,7 +480,7 @@ macro_rules! implement_commands {
         /// every [`Commands`] type. Import only one of [`Commands`] and
         /// [`TypedCommands`] (see [`AsyncTypedCommands`]).
         #[cfg(feature = "sync")]
-        pub trait TypedCommands: Commands {
+        pub trait TypedCommands: SyncCommandDispatch {
             $(
                 implement_typed_command_sync! {
                     $lifetime
@@ -464,7 +496,7 @@ macro_rules! implement_commands {
         }
 
         #[cfg(feature = "sync")]
-        impl<T: Commands> TypedCommands for T {}
+        impl<T: SyncCommandDispatch> TypedCommands for T {}
     };
 }
 

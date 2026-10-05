@@ -53,8 +53,8 @@ Parity is a **command-surface** contract, not a connection-plumbing one.
 Deliberate deviations, all performance-motivated:
 
 - methods take `&self` (the clients are cheaply cloneable handles) and hand
-  the built command to glide-core **by value** via the `glide_send_command`
-  required method — the native zero-extra-copy path;
+  the built command to glide-core **by value** — the native zero-extra-copy
+  path;
 - the clients do **not** implement the `redis` crate's connection-object
   traits (`ConnectionLike`): that interop hands commands over by reference,
   which forced a full payload copy per command to bridge into glide-core's
@@ -69,9 +69,12 @@ Almost every method on [`AsyncCommands`](src/commands/core.rs) and
 [`Commands`](src/commands/core.rs) stands for one Valkey command — `get`, `set`,
 `incr`, and so on. The command table generates them all automatically.
 
-Each client writes just one method of its own: `glide_send_command` (on both
-the async and blocking traits). It takes a finished command and sends it to
-glide-core, and every generated method goes through it.
+Each client implements just one method of its own, `glide_dispatch_command`,
+on a hidden, sealed base trait (`CommandDispatch` / `SyncCommandDispatch`). It
+takes a finished command and sends it to glide-core, and every generated method
+goes through it. The untyped and typed traits both extend the base trait rather
+than each other, so a generic bound on one (e.g. `C: AsyncTypedCommands`)
+brings only that trait's methods into scope, as in redis-rs.
 
 For a command the table does not cover, build the command yourself and run it
 with `glide_send_command_as`, which returns the reply already decoded into the

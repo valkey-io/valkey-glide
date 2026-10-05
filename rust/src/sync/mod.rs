@@ -195,12 +195,15 @@ impl SyncGlideClusterClient {
 
 macro_rules! impl_sync_command_dispatch {
     ($ty:ty) => {
-        impl crate::commands::core::Commands for $ty {
-            fn glide_send_command(&self, cmd: crate::cmd::Cmd) -> ValkeyResult<ValkeyValue> {
-                runtime().block_on(crate::commands::core::AsyncCommands::glide_send_command(
-                    &self.inner,
-                    cmd,
-                ))
+        #[::sealed::sealed]
+        impl crate::commands::core::SyncCommandDispatch for $ty {
+            fn glide_dispatch_command(&self, cmd: crate::cmd::Cmd) -> ValkeyResult<ValkeyValue> {
+                runtime().block_on(
+                    crate::commands::core::CommandDispatch::glide_dispatch_command(
+                        &self.inner,
+                        cmd,
+                    ),
+                )
             }
         }
     };
