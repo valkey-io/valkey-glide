@@ -3,7 +3,9 @@
 
 mod common;
 
-use glide::commands::bitmap::BitmapIndexType;
+use glide::commands::bitmap::{
+    BitEncoding, BitFieldOffset, BitFieldSubcommand, BitOverflow, BitmapIndexType,
+};
 use glide::{AsyncTypedCommands, BitmapCommands};
 
 matrix_test!(setbit_getbit, c, {
@@ -140,4 +142,32 @@ matrix_test!(bitmap_wrong_type_errors, c, {
     let _: usize = c.rpush(&k, &["x"]).await.unwrap();
     let res: glide::ValkeyResult<bool> = c.setbit(&k, 0, true).await;
     assert!(res.is_err());
+});
+
+matrix_test!(bitfield, c, {
+    let k = common::key("bf");
+    let encoding = BitEncoding::Unsigned(8);
+    let offset = BitFieldOffset::Bit(0);
+    let results = c
+        .bitfield(
+            &k,
+            &[
+                BitFieldSubcommand::Set {
+                    encoding,
+                    offset,
+                    value: 200,
+                },
+                BitFieldSubcommand::Overflow(BitOverflow::Fail),
+                BitFieldSubcommand::IncrBy {
+                    encoding,
+                    offset,
+                    increment: 100,
+                },
+                BitFieldSubcommand::Get { encoding, offset },
+            ],
+        )
+        .await
+        .unwrap();
+    // SET returns the old value; the overflowing INCRBY fails under `FAIL`.
+    assert_eq!(results, vec![Some(0), None, Some(200)]);
 });
