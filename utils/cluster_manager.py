@@ -408,7 +408,7 @@ def get_bind_addresses(host: str) -> List[str]:
 
     try:
         addr_infos = socket.getaddrinfo(host, None, proto=socket.IPPROTO_TCP)
-        resolved = [addr_info[4][0] for addr_info in addr_infos]
+        resolved = [str(addr_info[4][0]) for addr_info in addr_infos]
     except socket.gaierror:
         logging.warning(f"Could not resolve host {host}; binding it as given")
         resolved = [host]
