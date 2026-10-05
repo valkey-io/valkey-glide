@@ -41,8 +41,10 @@ and `glide::Commands` (blocking) are defined by a **hand-maintained command
 table** (`src/commands/core.rs`, one `implement_commands!` macro
 invocation — the same declarative pattern redis-rs itself uses) mirroring upstream
 redis-rs's `implement_commands!` table, enforced by a signature-parity guard in `src/parity_tests/`.
-Method names, generic parameter order, and
-wire encoding match redis-rs 1.7.0 (each entry carries the same command body).
+Method names, generic parameter order, and wire encoding match redis-rs 1.7.0
+(each entry carries the same command body), except for the deliberate
+differences pinned in `src/parity_tests/differences.json`.
+
 Each entry also declares redis-rs's return type, from which the same table
 generates the typed `glide::AsyncTypedCommands` and `glide::TypedCommands`
 traits (blanket-implemented for every `AsyncCommands` / `Commands` type).

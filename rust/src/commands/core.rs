@@ -9,8 +9,10 @@
 //! turbofish annotations) compile unchanged.
 //!
 //! Each entry carries the command body (mirroring redis-rs's
-//! `implement_commands!`), so the wire encoding is identical by construction;
-//! signature parity is enforced by the `parity_tests` module (`src/parity_tests/`).
+//! `implement_commands!`), so the wire encoding matches redis-rs's
+//! (except for the deliberate differences pinned in `differences.json` (e.g.
+//! `hset_multiple` sends `HSET`, not `HMSET`); signature parity is enforced by
+//! the `parity_tests` module (`src/parity_tests/`).
 //!
 //! The built command is handed to glide-core **by value** through
 //! [`AsyncCommands::glide_send_command`] — the same zero-extra-copy path as the
@@ -820,6 +822,7 @@ implement_commands! {
 
     /// `HSET`.
     fn hset_multiple<K: ToSingleValkeyArg, F: ToValkeyArgs, V: ToValkeyArgs>(key: K, items: &'a [(F, V)]) -> (usize) {
+        // redis-rs sends `HMSET` (see `differences.json`).
         build_cmd!("HSET", key, items)
     }
 
