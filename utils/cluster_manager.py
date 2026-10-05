@@ -389,6 +389,35 @@ def create_cluster_folder(path: str, prefix: str) -> str:
     return cluster_folder
 
 
+def get_bind_addresses(host: str) -> List[str]:
+    """
+    Returns the addresses a server should bind to for the given host.
+
+    Loopback hosts bind to both the IPv4 and IPv6 loopback addresses. Any other
+    host binds to its resolved addresses plus the IPv4 loopback, so that local
+    and remote clients can connect.
+
+    Args:
+        host (str): The host the server is started with.
+
+    Returns:
+        List[str]: The unique addresses to pass to `--bind`.
+    """
+    if host in (DEFAULT_HOST_IPV4, DEFAULT_HOST_IPV6, "localhost"):
+        return [DEFAULT_HOST_IPV4, DEFAULT_HOST_IPV6]
+
+    try:
+        addr_infos = socket.getaddrinfo(host, None, proto=socket.IPPROTO_TCP)
+        resolved = [addr_info[4][0] for addr_info in addr_infos]
+    except socket.gaierror:
+        logging.warning(f"Could not resolve host {host}; binding it as given")
+        resolved = [host]
+
+    # Remove duplicates because binding the same address
+    # twice makes the server fail with "Address already in use".
+    return list(dict.fromkeys(resolved + [DEFAULT_HOST_IPV4]))
+
+
 def start_server(
     host: str,
     port: Optional[int],
@@ -443,12 +472,7 @@ def start_server(
         "",
     ]
 
-    # Bind server to the specified host. If host is not localhost, bind to both
-    # the private IP and loopback so local and remote clients can connect.
-    if host not in (DEFAULT_HOST_IPV4, DEFAULT_HOST_IPV6, "localhost"):
-        cmd_args.extend(["--bind", host, DEFAULT_HOST_IPV4])
-    else:
-        cmd_args.extend(["--bind", DEFAULT_HOST_IPV4, DEFAULT_HOST_IPV6])
+    cmd_args.extend(["--bind", *get_bind_addresses(host)])
 
     # If host is a DNS hostname, set cluster-announce-hostname so
     # the cluster topology reports DNS names instead of IP addresses.
