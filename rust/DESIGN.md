@@ -36,16 +36,20 @@ additionally accepts a `Route` on command variants (via dedicated
 
 ## Command surface
 
-**GLIDE's command API** is source-compatible with the fork: `glide::AsyncCommands` (async)
+**GLIDE's command API** is source-compatible with redis-rs 1.7.0: `glide::AsyncCommands` (async)
 and `glide::Commands` (blocking) are defined by a **hand-maintained command
 table** (`src/commands/core.rs`, one `implement_commands!` macro
-invocation — the same declarative pattern the fork itself uses) mirroring the vendored
-fork's `implement_commands!` table, enforced by a signature-parity guard in `src/parity_tests/`.
+invocation — the same declarative pattern redis-rs itself uses) mirroring upstream
+redis-rs's `implement_commands!` table, enforced by a signature-parity guard in `src/parity_tests/`.
 Method names, generic parameter order, and
-wire encoding match the fork exactly (methods delegate to its own
-`Cmd::<name>()` constructors).
+wire encoding match redis-rs 1.7.0 (each entry carries the same command body).
+Each entry also declares redis-rs's return type, from which the same table
+generates the typed `glide::AsyncTypedCommands` and `glide::TypedCommands`
+traits (blanket-implemented for every `AsyncCommands` / `Commands` type).
 
 Parity is a **command-surface** contract, not a connection-plumbing one.
+<!-- TODO #7058: `glide_send` and `glide_send_owned` no longer exist; the
+methods are `glide_send_command_as` and `glide_send_command`. -->
 Deliberate deviations, all performance-motivated:
 - methods take `&self` (the clients are cheaply cloneable handles) and hand
   the built command to glide-core **by value** via the `glide_send_owned`

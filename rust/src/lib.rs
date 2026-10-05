@@ -33,6 +33,12 @@ mod parity_tests;
 #[cfg(test)]
 mod test_utils;
 
+/// Compiles the examples in `migration.md` as doctests.
+// TODO #7205: Review whether to keep this doctest-only hook.
+#[cfg(doctest)]
+#[doc = include_str!("../migration.md")]
+struct MigrationDoctests;
+
 // Aliases
 // -------
 

@@ -118,8 +118,11 @@ src/
   sync/mod.rs     blocking clients over a shared runtime
   mock_tests/     server-free encoding/decoding tests for the extensions
   commands/
-    core.rs       the unified command table (AsyncCommands / Commands)
-    scan.rs       GLIDE-owned scan iterators
+    core.rs       the command table, generating Cmd constructors, Pipeline methods,
+                  and AsyncCommands / Commands and their typed counterparts
+                  (including the scan methods)
+    scan.rs       GLIDE-owned scan iterators (ScanIter, SyncScanIter)
+    options.rs    option types shared across command families
     <family>.rs   extension traits (blanket impls over CommandExecutor)
 tests/
   common/         shared harness (server, cluster, timeout, pubsub, macros)
@@ -147,11 +150,14 @@ shapes there rather than in individual commands.
 
 ## Maintaining the unified command table
 
-The unified `AsyncCommands` / `Commands` traits are defined by the
+The unified `AsyncCommands` / `Commands` traits and their typed counterparts
+(`AsyncTypedCommands` / `TypedCommands`) are defined by the
 **hand-maintained** command table in `src/commands/core.rs` (one
-`implement_commands!` invocation; each `fn name<G: Bound>(args);` entry
-expands to both the async and the blocking method, delegating to the fork's
-`Cmd::<name>()` constructor for identical wire encoding).
+`implement_commands!` invocation; each `fn name<G: Bound>(args) -> (T) { body }`
+entry expands to the async and blocking methods, the typed async and blocking
+methods returning `T`, the pipeline method, and a `Cmd::<name>()` constructor).
+Copy the return annotation from redis-rs: `-> (T)` for a concrete type, or
+`-> Generic` to keep a caller-chosen `RV` in the typed traits too.
 
 To add or change an entry, edit the table directly — then run the
 signature-parity guard. It parses GLIDE's table (`src/commands/core.rs`)
@@ -163,16 +169,35 @@ cargo test --lib parity_tests
 ```
 
 The snapshot is a **trusted baseline**: the guard does not re-verify it against
-the redis-rs source on every run — it only rebuilds the snapshot from
-that source when the file is absent. So if the vendored redis-rs is edited or
-re-vendored, regenerate the snapshot (delete it and re-run) so it reflects the
-new source.
+the redis-rs source on every run — it only rebuilds the snapshot when the file
+is absent, fetching the upstream redis-rs sources for the targeted release tag
+from GitHub (via `curl`). Normal runs are offline.
 
 The targeted redis-rs version is `REDIS_RS_VERSION` in `src/parity_tests/mod.rs`
-(currently the fork's `0.25.2`); a `TODO #7058` there tracks retargeting to
-upstream 1.7.0. Bumping the constant makes the committed snapshot's version
-mismatch and the guard fail until the snapshot is regenerated. Commands beyond the
-redis-rs surface belong in the per-family extension traits
+(currently `1.7.0`). Bumping the constant makes the committed snapshot's version
+mismatch and the guard fail until the snapshot is regenerated (delete it and
+re-run).
+
+The guard is fail-closed: every redis-rs method must be implemented with a
+matching signature (including the declared return type), and GLIDE's table
+must not add methods. The only exceptions are the deliberate differences pinned
+in `src/parity_tests/differences.json`, indexed by method name. Each entry has a
+`reason` and the method as each side declares it, `redis` and `glide`, either of
+which may be `null`:
+
+- **Both set:** GLIDE declares a different signature. Usually redis-rs's
+  return type cannot decode the reply GLIDE receives (e.g. `zpopmin`, whose
+  reply glide-core normalizes to a map); `hset_multiple` differs by design (see
+  `migration.md`).
+- **Only `redis` set:** GLIDE does not implement the method yet.
+- **Only `glide` set:** GLIDE adds a command-table method redis-rs does not
+  have.
+
+The guard allows exactly the pinned entries, and fails if one no longer holds
+(either side's method changed, appeared or disappeared), so update or remove the
+entry when that happens. For example, remove a method's entry once GLIDE
+implements it.
+Commands beyond the redis-rs surface belong in the per-family extension traits
 (`src/commands/<family>.rs`), not in the table.
 
 <!-- TODO #6906: Document publishing to crates.io. -->
