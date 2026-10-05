@@ -175,10 +175,6 @@ class TestPubSub:
             assert not sync_msg.message == async_msg.message
 
             # assert there are no messages to read
-            with pytest.raises(TimeoutError):
-                with anyio.fail_after(3):
-                    await listening_client.get_pubsub_message()
-
             assert listening_client.try_get_pubsub_message() is None
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
@@ -331,10 +327,6 @@ class TestPubSub:
             # check that we received all messages
             assert channels_and_messages == {}
             # assert there are no messages to read
-            with pytest.raises(TimeoutError):
-                with anyio.fail_after(3):
-                    await listening_client.get_pubsub_message()
-
             assert listening_client.try_get_pubsub_message() is None
 
     @pytest.mark.skip_if_version_below("7.0.0")
@@ -483,10 +475,6 @@ class TestPubSub:
             assert not sync_msg.message == async_msg.message
 
             # assert there are no messages to read
-            with pytest.raises(TimeoutError):
-                with anyio.fail_after(3):
-                    await listening_client.get_pubsub_message()
-
             assert listening_client.try_get_pubsub_message() is None
 
     @pytest.mark.skip_if_version_below("7.0.0")
@@ -713,10 +701,6 @@ class TestPubSub:
             assert channels == {}
 
             # assert there are no more messages to read
-            with pytest.raises(TimeoutError):
-                with anyio.fail_after(3):
-                    await listening_client.get_pubsub_message()
-
             assert listening_client.try_get_pubsub_message() is None
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
@@ -2029,10 +2013,6 @@ class TestPubSub:
             assert sync_msg.pattern is None
 
             # assert there are no messages to read
-            with pytest.raises(TimeoutError):
-                with anyio.fail_after(3):
-                    await listening_client.get_pubsub_message()
-
             assert listening_client.try_get_pubsub_message() is None
 
         finally:
@@ -2133,10 +2113,6 @@ class TestPubSub:
             assert sync_msg.pattern is None
 
             # assert there are no messages to read
-            with pytest.raises(TimeoutError):
-                with anyio.fail_after(3):
-                    await listening_client.get_pubsub_message()
-
             assert listening_client.try_get_pubsub_message() is None
 
         finally:

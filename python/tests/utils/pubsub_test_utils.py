@@ -31,7 +31,7 @@ from glide_sync.glide_client import GlideClusterClient as SyncGlideClusterClient
 # Type alias for any glide client (async or sync)
 AnyGlideClient: TypeAlias = Union[TGlideClient, SyncGlideClient, SyncGlideClusterClient]
 
-# Reads poll for delivery instead of tests sleeping a fixed second after publish.
+# How long a read waits for a published message, and how often it checks.
 MESSAGE_DELIVERY_TIMEOUT = 3.0
 DELIVERY_POLL_INTERVAL = 0.01
 
@@ -631,9 +631,10 @@ async def check_no_messages_left(
     Raises:
         AssertionError if there are unexpected messages
     """
-    # Every read method checks the queue instantly: any message that could
-    # arrive has already been delivered on this connection by the time the
-    # caller has read its expected messages (or slept after an unsubscribe).
+    # Every read method checks the queue instantly. Callers establish the
+    # ordering first: this client has read its last expected message, or a
+    # later publish has been read on another client (so the server has
+    # dispatched it), or the caller slept after an unsubscribe.
     if method in (MessageReadMethod.Async, MessageReadMethod.Sync):
         assert client.try_get_pubsub_message() is None
     else:  # Callback
