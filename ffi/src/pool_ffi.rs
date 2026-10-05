@@ -139,9 +139,12 @@ fn create_pool_client(
     // Enable the borrow-time IAM reconcile in send_command for pooled clients.
     client.mark_pool_managed();
     let ptr = adapter_ptr as usize;
-    // `adapter_ptr` already carries the owning reference from into_raw; this
-    // temporary must give its increment back or every pooled adapter leaks.
-    drop(adapter);
+    // Deliberately keep a second strong reference. Binding wrappers cache the
+    // raw pointer and are never told when the drain releases the pool's
+    // reference, so freeing the adapter there would leave them dangling
+    // (use-after-free). Until wrappers own their own reference the adapter
+    // must outlive the pool; the cost is one leaked adapter per pooled client.
+    std::mem::forget(adapter);
 
     Ok((ptr, client))
 }
@@ -318,7 +321,9 @@ pub extern "C" fn glide_pool_try_acquire(pool_id: u64) -> i64 {
                 if let Some((_, entry)) = get_pool_clients().remove(&cid) {
                     get_pool_adapter_map().remove(&entry.adapter_ptr);
                     glide_core::scope::unregister_client(entry.adapter_ptr as u64);
-                    // Release the owning adapter reference; this drops the connection.
+                    // Release the pool's reference. The adapter itself stays
+                    // alive (see create_pool_client) because a binding wrapper
+                    // may still hold its raw pointer.
                     unsafe {
                         drop(Arc::from_raw(entry.adapter_ptr as *const ClientAdapter));
                     }
@@ -1201,27 +1206,6 @@ pub unsafe extern "C" fn glide_scope_execute(
 mod adapter_ownership_tests {
     use super::*;
 
-    /// `create_pool_client` must hand back exactly one owning reference to the
-    /// adapter: the drain and destroy paths drop one, so a second would keep
-    /// the adapter (its runtime and connection) alive forever.
-    #[test]
-    fn create_pool_client_returns_a_single_owning_reference() {
-        let mut request = connection_request::ConnectionRequest::new();
-        let mut addr = connection_request::NodeAddress::new();
-        addr.host = "127.0.0.1".into();
-        addr.port = 1;
-        request.addresses.push(addr);
-        request.lazy_connect = true;
-        let bytes = request.write_to_bytes().unwrap();
-
-        let (ptr, client) =
-            create_pool_client(&bytes, ClientType::SyncClient, 1).expect("lazy client");
-        drop(client);
-
-        let adapter = unsafe { Arc::from_raw(ptr as *const ClientAdapter) };
-        assert_eq!(Arc::strong_count(&adapter), 1);
-    }
-
     /// The last adapter reference may be released from a task on the pool
     /// runtime (a discard of a client whose pool stopped mid-creation), so the
     /// adapter's own runtimes must be releasable from inside another runtime.
@@ -1238,7 +1222,12 @@ mod adapter_ownership_tests {
         let (ptr, client) =
             create_pool_client(&bytes, ClientType::SyncClient, 1).expect("lazy client");
         drop(client);
-        let adapter = unsafe { Arc::from_raw(ptr as *const ClientAdapter) };
+        let raw = ptr as *const ClientAdapter;
+        // Give back the hold create_pool_client keeps for binding wrappers so
+        // the drop below is the one that runs ClientAdapter::drop.
+        unsafe { Arc::decrement_strong_count(raw) };
+        let adapter = unsafe { Arc::from_raw(raw) };
+        assert_eq!(Arc::strong_count(&adapter), 1);
 
         let rt = tokio::runtime::Builder::new_current_thread()
             .build()
