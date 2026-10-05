@@ -240,6 +240,19 @@ matrix_test!(set_with_expiry, c, {
     assert!(matches!(ttl, IntegerReplyOrNoOp::IntegerReply(1..=100)));
 });
 
+matrix_test!(pset_ex, c, {
+    let k = common::key("psetex");
+    c.pset_ex(&k, "v", 100_000).await.unwrap();
+    let v: Option<String> = c.get(&k).await.unwrap();
+    assert_eq!(v.as_deref(), Some("v"));
+
+    let pttl: IntegerReplyOrNoOp = c.pttl(&k).await.unwrap();
+    assert!(matches!(
+        pttl,
+        IntegerReplyOrNoOp::IntegerReply(1..=100_000)
+    ));
+});
+
 matrix_test!(get_wrong_type_errors, c, {
     // GET against a list key must be an error (WRONGTYPE).
     let k = common::key("wt");
