@@ -11,9 +11,9 @@ edition = "2024"
 [dependencies]
 
 # GLIDE dependencies
-glide-logger = { path = "../glide-logger", version = "0.1.0" }
-glide-telemetry = { path = "../glide-telemetry", version = "0.1.0" }
-glide-core-engine = { path = "./redis-rs/redis", version = "0.1.0", features = ["aio", "keep-alive", "tokio-comp", "tokio-rustls-comp", "connection-manager", "cluster", "cluster-async"] }
+glide-logger = { path = "../glide-logger", version = "0.1" }
+glide-telemetry = { path = "../glide-telemetry", version = "0.1" }
+glide-core-engine = { path = "./redis-rs/redis", version = "0.1", features = ["aio", "keep-alive", "tokio-comp", "tokio-rustls-comp", "connection-manager", "cluster", "cluster-async"] }
 
 # External dependencies
 async-trait = { version = "0.1" }
@@ -70,7 +70,7 @@ test-util = []
 [dev-dependencies]
 
 # GLIDE dependencies
-glide-core-engine = { path = "./redis-rs/redis", version = "0.1.0", features = ["tls-rustls-insecure"] }
+glide-core-engine = { path = "./redis-rs/redis", version = "0.1", features = ["tls-rustls-insecure"] }
 glide-core = { path = ".", features = ["socket-layer", "test-util"] }
 
 # External dependencies
