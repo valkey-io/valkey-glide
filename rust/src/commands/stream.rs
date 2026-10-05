@@ -629,8 +629,9 @@ fn parse_optional_stream_id(value: ValkeyValue) -> ValkeyResult<StreamId> {
         ValkeyValue::Nil => Ok(StreamId::default()),
         ValkeyValue::Array(items) if items.len() == 2 => {
             let [id, fields]: [ValkeyValue; 2] = items.try_into().expect("checked length");
-            let ValkeyValue::Array(fields) = fields else {
-                return Err(to_glide_error(fields, "Unexpected stream entry fields."));
+            let fields = match fields {
+                ValkeyValue::Array(fields) if fields.len() % 2 == 0 => fields,
+                other => return Err(to_glide_error(other, "Unexpected stream entry fields.")),
             };
             let mut fields = fields.into_iter();
             let mut pairs = Vec::with_capacity(fields.len() / 2);
@@ -1207,6 +1208,10 @@ mod tests {
         ])]);
         assert!(StreamRangeReply::from_owned_valkey_value(raw).is_err());
 
+        // A field that is not a `[field, value]` pair.
+        let unpaired = ValkeyValue::Map(vec![(bulk("1-0"), array(vec![bulk("f")]))]);
+        assert!(StreamRangeReply::from_owned_valkey_value(unpaired).is_err());
+
         let claim = StreamClaimReply::from_owned_valkey_value(ValkeyValue::Map(vec![(
             bulk("1-0"),
             array(vec![array(vec![bulk("f"), bulk("a")])]),
@@ -1307,6 +1312,16 @@ mod tests {
         assert_eq!(reply.last_generated_id, "2-0");
         assert_eq!(reply.first_entry, entry("1-0", "f", "a"));
         assert_eq!(reply.last_entry, StreamId::default());
+
+        // An entry with an odd number of field/value elements.
+        let odd = ValkeyValue::Map(vec![(
+            bulk("first-entry"),
+            array(vec![
+                bulk("1-0"),
+                array(vec![bulk("f"), bulk("a"), bulk("g")]),
+            ]),
+        )]);
+        assert!(StreamInfoStreamReply::from_owned_valkey_value(odd).is_err());
     }
 
     #[test]

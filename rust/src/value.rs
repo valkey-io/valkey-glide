@@ -746,6 +746,8 @@ mod from_valkey_value_tests {
         assert_eq!(decode::<u64>(INT), 7);
         assert_eq!(decode::<u8>(ValkeyValue::Int(255)), 255);
         assert_eq!(decode::<i128>(ValkeyValue::Int(i64::MIN)), i64::MIN as i128);
+        assert!(i128::from_owned_valkey_value(ValkeyValue::BigNumber(BigInt::from(1))).is_err());
+        assert!(u128::from_owned_valkey_value(ValkeyValue::BigNumber(BigInt::from(1))).is_err());
 
         // Out-of-range integer.
         assert!(usize::from_owned_valkey_value(ValkeyValue::Int(-2)).is_err());
@@ -756,6 +758,10 @@ mod from_valkey_value_tests {
         assert_eq!(decode::<i64>(ValkeyValue::Double(10.0)), 10);
         assert_eq!(decode::<i8>(ValkeyValue::Double(-128.0)), i8::MIN);
         assert_eq!(decode::<i8>(ValkeyValue::Double(127.0)), i8::MAX);
+        assert_eq!(
+            decode::<i64>(ValkeyValue::Double(-9223372036854775808.0)),
+            i64::MIN
+        );
 
         // Non-integral double.
         assert!(i64::from_owned_valkey_value(DOUBLE).is_err());
@@ -770,6 +776,7 @@ mod from_valkey_value_tests {
         assert!(u64::from_owned_valkey_value(ValkeyValue::Double(-1.0)).is_err());
         assert!(i8::from_owned_valkey_value(ValkeyValue::Double(128.0)).is_err());
         assert!(u64::from_owned_valkey_value(ValkeyValue::Double(18446744073709551616.0)).is_err());
+        assert!(i64::from_owned_valkey_value(ValkeyValue::Double(9223372036854775807.0)).is_err());
 
         // Numeric string.
         assert_eq!(
@@ -777,6 +784,16 @@ mod from_valkey_value_tests {
             42
         );
         assert_eq!(decode::<i64>(ValkeyValue::SimpleString("100".into())), 100);
+        assert_eq!(
+            decode::<u64>(ValkeyValue::BulkString(Bytes::from_static(
+                b"18446744073709551615"
+            ))),
+            u64::MAX
+        );
+        assert_eq!(
+            decode::<i64>(ValkeyValue::BulkString(Bytes::from_static(b"+5"))),
+            5
+        );
 
         // Non-numeric.
         assert!(i64::from_owned_valkey_value(OKAY).is_err());
@@ -787,6 +804,8 @@ mod from_valkey_value_tests {
         assert!(u8::from_owned_valkey_value(bulk("300")).is_err());
         assert!(usize::from_owned_valkey_value(bulk("-1")).is_err());
         assert!(i64::from_owned_valkey_value(bulk("1.5")).is_err());
+        assert!(i64::from_owned_valkey_value(bulk(" 5")).is_err());
+        assert!(i64::from_owned_valkey_value(bulk("1e3")).is_err());
         assert!(u8::from_owned_valkey_value(ValkeyValue::SimpleString("256".into())).is_err());
     }
 
