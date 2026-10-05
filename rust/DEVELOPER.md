@@ -141,6 +141,18 @@ tests/
 
 ## Adding a command
 
+If redis-rs's command table has the command:
+
+1. Add an entry to the `implement_commands!` table in `src/commands/core.rs`,
+   copying redis-rs's signature, typed return type, and command body.
+2. Remove its entry from `src/parity_tests/differences.json`. If GLIDE must
+   differ, update the entry's `glide` side and `reason` instead, and document
+   the difference in `migration.md`.
+3. Add an integration test in `tests/it_<family>.rs` (use the `matrix_test!`
+   macro for standalone and cluster with RESP2 and RESP3).
+
+Otherwise, add it to the family's extension trait:
+
 1. Pick the family module in `src/commands/`.
 2. Add an `async fn` to that family's trait following the template in
    `string.rs`: build a `Cmd`, call `self.execute_command(cmd, None)`,
@@ -148,7 +160,8 @@ tests/
 3. Add an integration test in the family's `tests/it_<family>.rs` (use the
    `resp_test!` macro for RESP2/RESP3 coverage), and a server-free encoding test
    in `src/mock_tests/<family>.rs`.
-4. `cargo test && cargo clippy --all-targets`.
+
+Then run `cargo test && cargo clippy --all-targets`.
 
 ## Extending value conversion
 
