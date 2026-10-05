@@ -79,7 +79,7 @@ Notes:
   types (e.g. `get` returns `Option<String>`), mirroring redis-rs's
   `AsyncTypedCommands` / `TypedCommands`. As in redis-rs, a trait and its typed
   counterpart share method names, so import only one of them.
-  Extension traits (streams, geo search, `JSON.*`, …)
+  Extension traits (the remaining stream commands, geo search, `JSON.*`, …)
   cover the rest of the command surface; their names never collide with the
   command traits.
 - Cluster: `GlideClusterClientConfiguration::from_urls([...])` accepts

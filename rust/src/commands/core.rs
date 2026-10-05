@@ -27,8 +27,8 @@
 //!   ([`crate::commands::scan`]) with the familiar `next_item()` /
 //!   `Iterator` shape, each page dispatched by value (no per-page copies).
 //!
-//! Commands beyond this table (streams, geo search, `JSON.*`, …) live in
-//! the per-family extension traits in [`crate::commands`].
+//! Commands beyond this table (the remaining stream commands, geo search,
+//! `JSON.*`, …) live in the per-family extension traits in [`crate::commands`].
 //!
 //! Maintenance: add or adjust entries in the `implement_commands!`
 //! invocation at the bottom of this file; the parity test will flag any

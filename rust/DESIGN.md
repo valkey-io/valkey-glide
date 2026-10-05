@@ -77,11 +77,12 @@ type you ask for. `Cmd::query_async` does the same in redis-rs's calling style,
 so code moving over from that crate keeps working.
 
 Commands **beyond** that table live in GLIDE **extension traits**
-(`src/commands/`): streams, geo, JSON, Pub/Sub, scripting/
-functions, server & connection management, plus per-family extras (hash
-field-TTL, `LCS`, `SINTERCARD`, `ZRANGESTORE`, `BITFIELD`, `SORT`,
-`DUMP`/`RESTORE`, …). These keep rich concrete return types and never collide
-with unified-trait names, so both can be imported together.
+(`src/commands/`): the remaining stream commands (`XREADGROUP`,
+`XAUTOCLAIM`, `XTRIM`, …), geo search, JSON, Pub/Sub, scripting/functions,
+server & connection management, plus per-family extras (`LCS`, `SINTERCARD`,
+`ZRANGESTORE`, `BITFIELD`, `SORT`, `DUMP`/`RESTORE`, …). These keep rich
+concrete return types and never collide with unified-trait names, so both can
+be imported together.
 
 - **Arguments**: generic over `glide::ToValkeyArgs` — accepts `&str`, `String`,
   `&[u8]`, `Vec<u8>`, `Bytes`, integers, floats, slices, etc.
