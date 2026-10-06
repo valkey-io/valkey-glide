@@ -66,21 +66,20 @@ jobs:
         timeout-minutes: 60
         strategy:
             fail-fast: false
+            # TODO #6997: Use the shared test matrix. The hosts are duplicated in rust-cd.yml.
             matrix:
                 host:
-                    - {
-                          arch: x64,
-                          runner: ubuntu-24.04,
-                          target: x86_64-unknown-linux-gnu,
-                      }
-                    - {
-                          arch: arm64,
-                          runner: ubuntu-24.04-arm,
-                          target: aarch64-unknown-linux-gnu,
-                      }
+                    - arch: x64
+                      runner: ubuntu-24.04
+                      target: x86_64-unknown-linux-gnu
+                    - arch: arm64
+                      runner: ubuntu-24.04-arm
+                      target: aarch64-unknown-linux-gnu
                 engine:
-                    - { type: valkey, version: "9.0" }
-                    - { type: redis, version: "6.2" }
+                    - type: valkey
+                      version: "9.0"
+                    - type: redis
+                      version: "6.2"
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
               with:
