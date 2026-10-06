@@ -441,6 +441,9 @@ pub struct ClientShared {
     // `ClientShared` exists — and for a lazy client, not until the first command,
     // behind `&self`.
     cert_material: Arc<OnceLock<InheritedCertMaterial>>,
+    // Custom address resolver, if configured. A plain field, not a cell like
+    // `cert_material`: it comes off the connection request, so it is known here.
+    address_resolver: Option<Arc<dyn AddressResolver>>,
 }
 
 /// Why [`Client::address_for_slot`] / [`Client::try_address_for_slot`] could not
@@ -3044,6 +3047,7 @@ impl Client {
                     multi_active: Arc::new(AtomicBool::new(false)),
                     is_cluster: request.cluster_mode_enabled,
                     cert_material: cert_material_cell.clone(),
+                    address_resolver: request.address_resolver.clone(),
                 }),
                 iam_token_manager: None,
                 otel_metadata: Arc::new(otel_metadata),
@@ -3176,6 +3180,12 @@ impl Client {
         self.cert_material
             .get()
             .and_then(|material| material.reload_handle.clone())
+    }
+
+    /// The configured custom address resolver, if any. Applied to a standalone
+    /// scope's seed; see `scope::build_scope_connection_addr` for the cluster case.
+    pub(crate) fn address_resolver(&self) -> Option<Arc<dyn AddressResolver>> {
+        self.address_resolver.clone()
     }
 
     /// Returns a reference to the per-client latency tracker (for watchdog diagnostics).
@@ -3468,6 +3478,7 @@ impl Client {
                 multi_active: Arc::new(AtomicBool::new(false)),
                 is_cluster: false,
                 cert_material: Arc::default(),
+                address_resolver: None,
             }),
             iam_token_manager: None,
             otel_metadata: Arc::new(OTelMetadata {
@@ -3540,6 +3551,7 @@ pub fn create_test_glide_client() -> Client {
             multi_active: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             is_cluster: false,
             cert_material: Arc::default(),
+            address_resolver: None,
         }),
         iam_token_manager: None,
         otel_metadata: Arc::new(OTelMetadata {
@@ -3995,6 +4007,7 @@ mod tests {
                 multi_active: Arc::new(AtomicBool::new(false)),
                 is_cluster: false,
                 cert_material: Arc::default(),
+                address_resolver: None,
             }),
             iam_token_manager: None,
             otel_metadata: Arc::new(OTelMetadata {

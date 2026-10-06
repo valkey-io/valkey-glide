@@ -462,9 +462,10 @@ fn parse_cluster_target(addr: &str) -> Option<(String, u16)> {
 /// parent client's certificate material so a scope off an mTLS parent presents the
 /// same client certificate and trusts the same roots.
 ///
-/// Scoped connections still do not carry the parent's `address_resolver`: a
-/// `ClusterPrimary` target is read from the parent's slot map, which the resolver
-/// already rewrote, so applying it here would resolve the address twice.
+/// Scoped connections do apply the parent's `address_resolver`, but only to a
+/// standalone seed address: a `ClusterPrimary` target is read from the parent's
+/// slot map, which the resolver already rewrote, so resolving it again here would
+/// resolve the address twice.
 #[cfg(feature = "proto")]
 fn build_scope_connection_addr(
     host: String,
@@ -527,7 +528,13 @@ async fn build_scope_connection(
             };
             // Trim brackets here too, so a configured `[::1]` standalone host works
             // like the cluster branch — redis-rs's tuple `lookup_host` wants bare `::1`.
-            (strip_host_brackets(&addr.host).to_string(), port)
+            let host = strip_host_brackets(&addr.host);
+            // The seed is still the raw configured address, resolved here the same
+            // way `client::get_connection_info` does. The cluster arm must not.
+            match client.and_then(|c| c.address_resolver()) {
+                Some(resolver) => resolver.resolve(host, port),
+                None => (host.to_string(), port),
+            }
         }
         ScopeTarget::ClusterPrimary(addr) => parse_cluster_target(addr)
             .ok_or_else(|| ScopeCreateError::InvalidClusterTarget(Arc::clone(addr)))?,
@@ -1174,6 +1181,13 @@ mod tests {
     }
 
     async fn lazy_parent(cluster: bool) -> Client {
+        lazy_parent_with_resolver(cluster, None).await
+    }
+
+    async fn lazy_parent_with_resolver(
+        cluster: bool,
+        address_resolver: Option<Arc<dyn redis::AddressResolver>>,
+    ) -> Client {
         let request = ClientRequest {
             addresses: vec![ClientAddress {
                 host: "127.0.0.1".to_string(),
@@ -1181,6 +1195,7 @@ mod tests {
             }],
             cluster_mode_enabled: cluster,
             lazy_connect: true,
+            address_resolver,
             ..Default::default()
         };
 
@@ -2343,5 +2358,131 @@ mod tests {
             }
             other => panic!("expected TcpTls, got {other:?}"),
         }
+    }
+
+    // ── Address resolution ───────────────────────────────────────────────────
+    // A standalone scope resolves its seed through the parent's resolver; a
+    // cluster scope must not, because its target left the slot map resolved.
+
+    /// Rewrites every address to a fixed one and records each call, so a test can
+    /// assert both that a branch resolved and that another never did.
+    #[derive(Debug)]
+    struct RecordingResolver {
+        rewrite_to: (String, u16),
+        calls: std::sync::Mutex<Vec<(String, u16)>>,
+    }
+
+    impl RecordingResolver {
+        fn rewriting_to(host: &str, port: u16) -> Arc<Self> {
+            Arc::new(Self {
+                rewrite_to: (host.to_string(), port),
+                calls: std::sync::Mutex::new(Vec::new()),
+            })
+        }
+
+        fn calls(&self) -> Vec<(String, u16)> {
+            self.calls.lock().expect("resolver call log").clone()
+        }
+    }
+
+    impl redis::AddressResolver for RecordingResolver {
+        fn resolve(&self, host: &str, port: u16) -> (String, u16) {
+            self.calls
+                .lock()
+                .expect("resolver call log")
+                .push((host.to_string(), port));
+            self.rewrite_to.clone()
+        }
+    }
+
+    /// Privileged and unbindable, so a connect is refused at once instead of
+    /// hanging — the dead address a resolver must move off of.
+    const UNUSED_PORT: u16 = 1;
+
+    #[tokio::test]
+    async fn standalone_scope_resolves_its_seed_through_the_parent_resolver() {
+        let (port, shutdown_sender, server) = responsive_endpoint();
+        // Only the rewrite can reach the live endpoint: the seed is a dead port.
+        let request_bytes = request_bytes("", UNUSED_PORT);
+        let pool = reserved_pool(request_bytes.clone());
+        let resolver = RecordingResolver::rewriting_to("127.0.0.1", port);
+        let parent = lazy_parent_with_resolver(
+            false,
+            Some(resolver.clone() as Arc<dyn redis::AddressResolver>),
+        )
+        .await;
+
+        let reservation = reservation_for(&pool).await;
+        create_scope_connection(
+            pool.clone(),
+            Some(&parent),
+            &request_bytes,
+            ScopeTarget::Standalone,
+            reservation,
+        )
+        .await;
+
+        assert_eq!(
+            resolver.calls(),
+            vec![("127.0.0.1".to_string(), UNUSED_PORT)],
+            "the seed address must be handed to the parent's resolver"
+        );
+        {
+            let pool = pool.lock().await;
+            assert_eq!(
+                pool.idle.len(),
+                1,
+                "the resolved address must be the one connected to"
+            );
+            assert_eq!(pool.total_count.load(Ordering::Acquire), 1);
+        }
+
+        shutdown_sender.send(()).expect("stop mock server");
+        server.join().expect("mock server exits cleanly");
+    }
+
+    /// Re-resolving a slot-map target (already resolved by redis-rs on its way in)
+    /// would move the connection off its routed primary — here, onto a dead port.
+    #[tokio::test]
+    async fn cluster_scope_does_not_re_resolve_the_slot_map_target() {
+        let (port, shutdown_sender, server) = responsive_endpoint();
+        let request_bytes = request_bytes_with_mode("", UNUSED_PORT, true);
+        let pool = reserved_pool(request_bytes.clone());
+        // Rewrites to the dead port, so a second resolve is visible as a failed
+        // connection as well as a recorded call.
+        let resolver = RecordingResolver::rewriting_to("127.0.0.1", UNUSED_PORT);
+        let parent = lazy_parent_with_resolver(
+            true,
+            Some(resolver.clone() as Arc<dyn redis::AddressResolver>),
+        )
+        .await;
+
+        let reservation = reservation_for(&pool).await;
+        create_scope_connection(
+            pool.clone(),
+            Some(&parent),
+            &request_bytes,
+            ScopeTarget::cluster_primary(format!("127.0.0.1:{port}")),
+            reservation,
+        )
+        .await;
+
+        assert!(
+            resolver.calls().is_empty(),
+            "an already-resolved slot-map target must not be resolved again, got {:?}",
+            resolver.calls()
+        );
+        {
+            let pool = pool.lock().await;
+            assert_eq!(
+                pool.idle.len(),
+                1,
+                "the connection must land on the slot-map address"
+            );
+            assert_eq!(pool.total_count.load(Ordering::Acquire), 1);
+        }
+
+        shutdown_sender.send(()).expect("stop mock server");
+        server.join().expect("mock server exits cleanly");
     }
 }
