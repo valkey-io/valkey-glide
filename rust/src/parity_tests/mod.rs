@@ -181,40 +181,16 @@ fn parse_methods(command_table_src: &str, scan_src: &str) -> BTreeMap<String, Me
 /// Parse the command table methods from the given source, indexed by method name.
 /// Panics if the command table cannot be parsed.
 fn parse_command_table_methods(src: &str) -> BTreeMap<String, Method> {
-    // Extract command table (the `implement_commands! { ... }` macro body).
-    let start = src
-        .find("implement_commands! {")
+    let implement_commands_macro = extract_macro(src, "implement_commands! {")
         .unwrap_or_else(|| panic!("command table not found"));
-    let rest = &src[start..];
 
-    // The macro body ends at the first line that *starts* with `}`.
-    // TODO #7288: for robust parsing (comment/string/brace-safe), tokenize with
-    // `proc-macro2` and take the macro's brace `Group` instead of this heuristic.
-    let end = rest
-        .lines()
-        .scan(0usize, |offset, line| {
-            let line_start = *offset;
-            *offset += line.len() + 1;
-            Some((line_start, line))
-        })
-        .find(|(off, line)| *off > 0 && line.starts_with('}'))
-        .map(|(off, _)| off)
-        .unwrap_or(rest.len());
-
-    let implement_commands_macro = &rest[..end];
-    parse_implement_commands_macro(implement_commands_macro)
-}
-
-/// Parse the command table methods from the given `implement_commands` macro,
-/// indexed by method name.
-fn parse_implement_commands_macro(body: &str) -> BTreeMap<String, Method> {
     // The optional `-> (...)`/`-> Generic` return annotation (redis-rs's typed
     // API) is captured verbatim when present; tables without it leave it empty.
     let sig_re =
         Regex::new(r"^fn\s+([a-z_0-9]+)\s*(?:<([^>]*)>)?\s*\((.*?)\)(?:\s*->\s*(.+?))?\s*\{")
             .expect("valid regex");
 
-    let lines: Vec<&str> = body.lines().collect();
+    let lines: Vec<&str> = implement_commands_macro.lines().collect();
     let mut out = BTreeMap::new();
     let mut li = 0usize;
     while li < lines.len() {
@@ -257,6 +233,26 @@ fn parse_implement_commands_macro(body: &str) -> BTreeMap<String, Method> {
         out.insert(method.name.clone(), method);
     }
     out
+}
+
+/// Returns the macro with the given name, or `None` if not found.
+/// The macro ends at the first later line that *starts* with `}`.
+//
+// TODO #7288: for robust parsing (comment/string/brace-safe), tokenize with
+// `proc-macro2` and take the macro's brace `Group` instead of this heuristic.
+fn extract_macro<'a>(src: &'a str, name: &str) -> Option<&'a str> {
+    let rest = &src[src.find(name)?..];
+    let end = rest
+        .lines()
+        .scan(0usize, |offset, line| {
+            let line_start = *offset;
+            *offset += line.len() + 1;
+            Some((line_start, line))
+        })
+        .find(|(off, line)| *off > 0 && line.starts_with('}'))
+        .map(|(off, _)| off)
+        .unwrap_or(rest.len());
+    Some(&rest[..end])
 }
 
 /// Parse a generic parameter list.
@@ -314,14 +310,17 @@ fn parse_args(args: &str) -> Vec<Argument> {
         .collect()
 }
 
-/// Parse the scan methods from the given source, indexed by method name.
+/// Parse the scan methods from the `implement_iterators` macro in the given source,
+/// indexed by method name.
 /// Panics if the scan methods cannot be parsed.
 fn parse_scan_methods(src: &str) -> BTreeMap<String, Method> {
+    let implement_iterators_macro = extract_macro(src, "macro_rules! implement_iterators {")
+        .unwrap_or_else(|| panic!("scan iterators not found"));
     let re = Regex::new(r"(?s)fn\s+([a-z_0-9]*scan[a-z_0-9]*)\s*<([^>]*)>\s*\(([^)]*)\)")
         .expect("valid regex");
 
     let mut methods = BTreeMap::new();
-    for caps in re.captures_iter(src) {
+    for caps in re.captures_iter(implement_iterators_macro) {
         let method = Method {
             name: caps[1].to_string(),
             generics: normalize_scan_generics(parse_generics(&caps[2])),
@@ -581,13 +580,14 @@ fn compare_methods_validates_differences() {
 
 /// Verifies that GLIDE's scan lifetime generic and bounds are normalized away.
 #[test]
-fn parse_scan_methods_normalizes_lifetimes() {
-    let redis =
-        parse_scan_methods("fn hscan<K: ToSingleRedisArg, RV: FromRedisValue>(&mut self, key: K)");
-    let glide = parse_scan_methods(
-        "fn hscan<'s, K: ToSingleValkeyArg, RV: FromValkeyValue + 's>(&'s self, key: K)",
+fn normalize_scan_generics_drops_lifetimes() {
+    let generics = normalize_scan_generics(parse_generics(
+        "'s, K: ToSingleValkeyArg, RV: FromValkeyValue + 's",
+    ));
+    assert_eq!(
+        generics,
+        parse_generics("K: ToSingleValkeyArg, RV: FromValkeyValue")
     );
-    assert!(methods_match(&redis["hscan"], &glide["hscan"]));
 }
 
 // --- test helpers -------------------------------------------------------------------------------
