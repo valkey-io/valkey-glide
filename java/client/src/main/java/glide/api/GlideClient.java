@@ -80,6 +80,7 @@ import glide.api.models.configuration.ServerCredentials;
 import glide.api.models.configuration.StandaloneSubscriptionConfiguration;
 import glide.api.models.scope.IsolatedScope;
 import glide.utils.ArgsBuilder;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.Optional;
@@ -253,7 +254,8 @@ public class GlideClient extends BaseClient
             return f;
         }
 
-        int routingSlot = routingKey != null ? slotForKey(routingKey.getBytes()) : 0;
+        int routingSlot =
+                routingKey != null ? slotForKey(routingKey.getBytes(StandardCharsets.UTF_8)) : 0;
         long timeoutMs = timeout.toMillis();
         long deadline = System.currentTimeMillis() + timeoutMs;
         // One logical acquire: mint a single attempt token and pass it on every
@@ -1051,10 +1053,14 @@ public class GlideClient extends BaseClient
         }
         if (start != -1) {
             for (int i = start + 1; i < key.length; i++) {
-                if (key[i] == '}' && i != start + 1) {
-                    byte[] tag = new byte[i - start - 1];
-                    System.arraycopy(key, start + 1, tag, 0, tag.length);
-                    key = tag;
+                if (key[i] == '}') {
+                    // First '}' closes the tag. Hash the tag only when it is non-empty;
+                    // an empty tag ("{}") hashes the whole key.
+                    if (i != start + 1) {
+                        byte[] tag = new byte[i - start - 1];
+                        System.arraycopy(key, start + 1, tag, 0, tag.length);
+                        key = tag;
+                    }
                     break;
                 }
             }

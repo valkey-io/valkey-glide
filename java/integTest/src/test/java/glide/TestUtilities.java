@@ -38,12 +38,22 @@ import glide.api.models.configuration.RequestRoutingConfiguration.SlotType;
 import glide.api.models.configuration.ServiceType;
 import glide.api.models.configuration.TlsAdvancedConfiguration;
 import glide.cluster.ValkeyCluster;
+import java.io.ByteArrayInputStream;
+import java.io.FileOutputStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.security.KeyFactory;
+import java.security.KeyStore;
+import java.security.PrivateKey;
 import java.security.SecureRandom;
+import java.security.cert.Certificate;
+import java.security.cert.CertificateFactory;
+import java.security.spec.PKCS8EncodedKeySpec;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Base64;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -783,6 +793,130 @@ public class TestUtilities {
                         .advancedConfiguration(advancedConfig)
                         .build();
         return config;
+    }
+
+    /**
+     * Assembles a keystore (PKCS12 or JKS) holding a single {@code PrivateKeyEntry} from PEM client
+     * certificate and private-key bytes, and writes it to {@code keyStorePath}. Uses only public JCA,
+     * mirroring the keystore-construction pattern in the TLS certificate tests. Intended for mTLS
+     * integration tests that exercise keystore-based client identity.
+     *
+     * <p>The test harness generates {@code server.key} with {@code openssl genrsa}, which may emit a
+     * PKCS#1 ({@code BEGIN RSA PRIVATE KEY}) key; this is wrapped into PKCS#8 before loading, since
+     * {@link PKCS8EncodedKeySpec} only accepts PKCS#8. PKCS#8 ({@code BEGIN PRIVATE KEY}) input is
+     * used as-is.
+     *
+     * @param keyStorePath destination file for the generated keystore
+     * @param password keystore and key-entry password
+     * @param keyStoreType keystore type, e.g. {@code "PKCS12"} or {@code "JKS"}
+     * @param certPem PEM-encoded client certificate bytes
+     * @param keyPem PEM-encoded client private-key bytes (PKCS#1 or PKCS#8)
+     */
+    @SneakyThrows
+    public static void buildClientIdentityKeyStore(
+            Path keyStorePath, char[] password, String keyStoreType, byte[] certPem, byte[] keyPem) {
+        CertificateFactory cf = CertificateFactory.getInstance("X.509");
+        Certificate cert = cf.generateCertificate(new ByteArrayInputStream(certPem));
+
+        PrivateKey privateKey = parseRsaPrivateKey(keyPem);
+
+        KeyStore keyStore = KeyStore.getInstance(keyStoreType);
+        keyStore.load(null, password);
+        keyStore.setKeyEntry("client", privateKey, password, new Certificate[] {cert});
+
+        try (FileOutputStream fos = new FileOutputStream(keyStorePath.toFile())) {
+            keyStore.store(fos, password);
+        }
+    }
+
+    /**
+     * Parses an RSA private key from PEM, accepting both PKCS#8 ({@code BEGIN PRIVATE KEY}) and
+     * PKCS#1 ({@code BEGIN RSA PRIVATE KEY}) encodings. PKCS#1 is wrapped into a PKCS#8 {@code
+     * PrivateKeyInfo} structure so it can be loaded via {@link PKCS8EncodedKeySpec} without any
+     * third-party dependency.
+     */
+    @SneakyThrows
+    private static PrivateKey parseRsaPrivateKey(byte[] keyPem) {
+        String pem = new String(keyPem, StandardCharsets.UTF_8);
+        boolean isPkcs1 = pem.contains("BEGIN RSA PRIVATE KEY");
+        String body =
+                pem.replaceAll("-----BEGIN (RSA )?PRIVATE KEY-----", "")
+                        .replaceAll("-----END (RSA )?PRIVATE KEY-----", "")
+                        .replaceAll("\\s", "");
+        byte[] der = Base64.getDecoder().decode(body);
+        if (isPkcs1) {
+            der = wrapPkcs1InPkcs8(der);
+        }
+        KeyFactory kf = KeyFactory.getInstance("RSA");
+        return kf.generatePrivate(new PKCS8EncodedKeySpec(der));
+    }
+
+    /**
+     * Wraps a PKCS#1 RSAPrivateKey DER into a PKCS#8 PrivateKeyInfo DER by prepending the standard
+     * {@code SEQUENCE { version=0, AlgorithmIdentifier(rsaEncryption, NULL), OCTET STRING(pkcs1) }}
+     * envelope. Hand-rolled DER length encoding keeps the helper dependency-free.
+     */
+    private static byte[] wrapPkcs1InPkcs8(byte[] pkcs1) {
+        byte[] algId = {
+            0x30,
+            0x0d,
+            0x06,
+            0x09,
+            0x2a,
+            (byte) 0x86,
+            0x48,
+            (byte) 0x86,
+            (byte) 0xf7,
+            0x0d,
+            0x01,
+            0x01,
+            0x01,
+            0x05,
+            0x00
+        };
+        byte[] version = {0x02, 0x01, 0x00};
+        byte[] octetString = derTlv((byte) 0x04, pkcs1);
+        byte[] inner = concatBytes(version, algId, octetString);
+        return derTlv((byte) 0x30, inner);
+    }
+
+    private static byte[] derTlv(byte tag, byte[] value) {
+        byte[] len = derLength(value.length);
+        byte[] out = new byte[1 + len.length + value.length];
+        out[0] = tag;
+        System.arraycopy(len, 0, out, 1, len.length);
+        System.arraycopy(value, 0, out, 1 + len.length, value.length);
+        return out;
+    }
+
+    private static byte[] derLength(int length) {
+        if (length < 0x80) {
+            return new byte[] {(byte) length};
+        }
+        int numBytes = 0;
+        for (int tmp = length; tmp > 0; tmp >>= 8) {
+            numBytes++;
+        }
+        byte[] out = new byte[1 + numBytes];
+        out[0] = (byte) (0x80 | numBytes);
+        for (int i = 0; i < numBytes; i++) {
+            out[1 + numBytes - 1 - i] = (byte) (length >> (8 * i));
+        }
+        return out;
+    }
+
+    private static byte[] concatBytes(byte[]... parts) {
+        int total = 0;
+        for (byte[] p : parts) {
+            total += p.length;
+        }
+        byte[] out = new byte[total];
+        int pos = 0;
+        for (byte[] p : parts) {
+            System.arraycopy(p, 0, out, pos, p.length);
+            pos += p.length;
+        }
+        return out;
     }
 
     /** Assert that the given client is connected. */
