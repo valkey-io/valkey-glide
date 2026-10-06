@@ -277,13 +277,17 @@ def _free_orphaned_frame(request_id, response_ptr, arena_or_err):
 def _release_core_client(lib, core_client, create_pid: int) -> None:
     """Close the core client of a client garbage-collected without close() (same fork guard)."""
     if create_pid == os.getpid():
-        warnings.warn(
-            "GlideClient was garbage-collected without close(); "
-            "closing its connection. Call close() or use 'async with'.",
-            ResourceWarning,
-            stacklevel=2,
-        )
-        lib.close_client(core_client)
+        # finally: under -W error::ResourceWarning the warning raises, and a
+        # finalizer does not run twice, so the connection would never close.
+        try:
+            warnings.warn(
+                "GlideClient was garbage-collected without close(); "
+                "closing its connection. Call close() or use 'async with'.",
+                ResourceWarning,
+                stacklevel=2,
+            )
+        finally:
+            lib.close_client(core_client)
 
 
 def _resolve_future(fut, result, client):
