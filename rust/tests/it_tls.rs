@@ -6,9 +6,7 @@
 mod common;
 
 use common::ClusterHarness;
-use glide::{
-    ConnectionManagementCommands, GlideClusterClient, GlideClusterClientConfiguration, TlsConfig,
-};
+use glide::{AsyncTypedCommands, GlideClusterClient, GlideClusterClientConfiguration, TlsConfig};
 
 timed_tokio_test!(
     async fn tls_cluster() {

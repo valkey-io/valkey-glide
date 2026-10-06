@@ -82,11 +82,19 @@ impl Cmd {
     ///
     /// Mirrors `redis-rs`'s `query_async`.
     #[inline]
-    pub fn query_async<'a, C: AsyncCommands, RV: FromValkeyValue>(
+    pub fn query_async<'a, RV: FromValkeyValue>(
         &self,
-        con: &'a C,
+        con: &'a impl AsyncCommands,
     ) -> ValkeyFuture<'a, RV> {
         con.glide_send_command_as(self.clone())
+    }
+
+    /// Execute this command on an async GLIDE client, discarding the reply.
+    ///
+    /// Mirrors `redis-rs`'s `exec_async`.
+    #[inline]
+    pub fn exec_async<'a>(&self, con: &'a impl AsyncCommands) -> ValkeyFuture<'a, ()> {
+        self.query_async(con)
     }
 
     /// Execute this command on a blocking GLIDE client.
@@ -102,8 +110,17 @@ impl Cmd {
     /// Mirrors `redis-rs`'s `query`.
     #[cfg(feature = "sync")]
     #[inline]
-    pub fn query<C: Commands, RV: FromValkeyValue>(&self, con: &C) -> ValkeyResult<RV> {
+    pub fn query<RV: FromValkeyValue>(&self, con: &impl Commands) -> ValkeyResult<RV> {
         con.glide_send_command_as(self.clone())
+    }
+
+    /// Execute this command on a blocking GLIDE client, discarding the reply.
+    ///
+    /// Mirrors `redis-rs`'s `exec`.
+    #[cfg(feature = "sync")]
+    #[inline]
+    pub fn exec(&self, con: &impl Commands) -> ValkeyResult<()> {
+        self.query(con)
     }
 
     /// Borrow the underlying `redis::Cmd`.

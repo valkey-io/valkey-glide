@@ -3,8 +3,9 @@
 
 mod common;
 
-use glide::commands::options::FlushMode;
-use glide::{AsyncCommands, ServerManagementCommands};
+use glide::FlushAllOptions;
+use glide::FlushDbOptions;
+use glide::{AsyncTypedCommands, ServerManagementCommands};
 
 resp_test!(info_non_empty, c, {
     let info = c.info().await.unwrap();
@@ -26,19 +27,34 @@ resp_test!(info_sections, c, {
 resp_test!(dbsize, c, {
     // Fresh server: start empty, add keys, count grows.
     let before = c.dbsize().await.unwrap();
-    c.set::<_, _, ()>(common::key("k"), "v").await.unwrap();
+    c.set(common::key("k"), "v").await.unwrap();
     assert!(c.dbsize().await.unwrap() > before);
 });
 
 resp_test!(flushdb, c, {
-    c.set::<_, _, ()>(common::key("k"), "v").await.unwrap();
-    c.flushdb(Some(FlushMode::Sync)).await.unwrap();
+    c.set(common::key("k"), "v").await.unwrap();
+    c.flushdb().await.unwrap();
+    assert_eq!(c.dbsize().await.unwrap(), 0);
+});
+
+resp_test!(flushdb_options, c, {
+    c.set(common::key("k"), "v").await.unwrap();
+    let options = FlushDbOptions::default().blocking(true);
+    c.flushdb_options(&options).await.unwrap();
     assert_eq!(c.dbsize().await.unwrap(), 0);
 });
 
 resp_test!(flushall, c, {
-    c.set::<_, _, ()>(common::key("k"), "v").await.unwrap();
-    c.flushall(None).await.unwrap();
+    c.set(common::key("k"), "v").await.unwrap();
+    c.flushall().await.unwrap();
+    assert_eq!(c.dbsize().await.unwrap(), 0);
+});
+
+resp_test!(flushall_options, c, {
+    c.set(common::key("k"), "v").await.unwrap();
+    c.flushall_options(&FlushAllOptions::default())
+        .await
+        .unwrap();
     assert_eq!(c.dbsize().await.unwrap(), 0);
 });
 

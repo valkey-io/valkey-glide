@@ -4,7 +4,7 @@
 //!
 //! Covers atomic transactions, non-atomic pipeline depth, `raise_on_error`
 //! true/false behaviour, errors inside a transaction, [`glide::PipelineOptions`]
-//! (timeout, retry policy), and WATCH/MULTI framing via `custom_command`.
+//! (timeout, retry policy), and WATCH/MULTI framing.
 //!
 //! Note: `exec` returns the **raw** per-command replies —
 //! `.ignore()` markers only affect typed decoding via `query_async`.
@@ -12,7 +12,7 @@
 mod common;
 
 use glide::{
-    AsyncCommands, Bytes, CustomCommand, FromValkeyValue, PipelineExt, PipelineOptions, pipe,
+    AsyncTypedCommands, Bytes, FromValkeyValue, GenericCommands, PipelineExt, PipelineOptions, pipe,
 };
 
 #[tokio::test]
@@ -149,8 +149,7 @@ async fn watch_multi_semantics() {
 
     // WATCH/UNWATCH are accepted (framing check). GLIDE multiplexes connections,
     // so we assert the commands succeed rather than optimistic-lock abort.
-    let watch = c.custom_command(&["WATCH", &k]).await.unwrap();
-    assert_eq!(String::from_owned_valkey_value(watch).unwrap(), "OK");
+    c.watch(&[&k]).await.unwrap();
 
     let mut p = pipe();
     p.atomic().incr(&k, 1);
@@ -159,8 +158,7 @@ async fn watch_multi_semantics() {
     assert_eq!(results.len(), 1);
     assert_eq!(i64::from_valkey_value(&results[0]).unwrap(), 2);
 
-    let unwatch = c.custom_command(&["UNWATCH"]).await.unwrap();
-    assert_eq!(String::from_owned_valkey_value(unwatch).unwrap(), "OK");
+    c.unwatch().await.unwrap();
 }
 
 #[tokio::test]
