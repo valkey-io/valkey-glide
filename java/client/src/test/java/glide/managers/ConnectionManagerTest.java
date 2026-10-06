@@ -27,8 +27,10 @@ import java.util.Arrays;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 public class ConnectionManagerTest {
 
@@ -328,43 +330,16 @@ public class ConnectionManagerTest {
         assertEquals(lazy, request.getLazyConnect(), "pooled lazy_connect");
     }
 
-    /** jitterPercent in the reconnect strategy must survive onto the pooled wire. */
-    @Test
-    void clientPoolSerialization_carriesReconnectJitterPercent() throws Exception {
-        GlideClientConfiguration clientConfig =
-                GlideClientConfiguration.builder()
-                        .reconnectStrategy(
-                                BackoffStrategy.builder()
-                                        .numOfRetries(3)
-                                        .factor(2)
-                                        .exponentBase(2)
-                                        .jitterPercent(20)
-                                        .build())
-                        .build();
-
-        ConnectionRequestOuterClass.ConnectionRequest request =
-                ConnectionRequestOuterClass.ConnectionRequest.parseFrom(poolBytes(clientConfig));
-
-        assertEquals(
-                20, request.getConnectionRetryStrategy().getJitterPercent(), "pooled jitter_percent");
-    }
-
     /**
-     * The bounds of jitterPercent must reach the pooled wire as set, matching a directly-created
-     * client, rather than falling back to the core default of 20.
+     * jitterPercent in the reconnect strategy, bounds included, must reach the pooled wire as set,
+     * matching a directly-created client, rather than falling back to the core default of 20.
      */
     @ParameterizedTest
-    @org.junit.jupiter.params.provider.ValueSource(ints = {0, 100})
-    void clientPoolSerialization_carriesReconnectJitterPercentBounds(int jitter) throws Exception {
+    @ValueSource(ints = {0, 20, 100})
+    void clientPoolSerialization_carriesReconnectJitterPercent(int jitter) throws Exception {
         GlideClientConfiguration clientConfig =
                 GlideClientConfiguration.builder()
-                        .reconnectStrategy(
-                                BackoffStrategy.builder()
-                                        .numOfRetries(3)
-                                        .factor(2)
-                                        .exponentBase(2)
-                                        .jitterPercent(jitter)
-                                        .build())
+                        .reconnectStrategy(validBackoff().jitterPercent(jitter).build())
                         .build();
 
         ConnectionRequestOuterClass.ConnectionRetryStrategy pooled =
@@ -379,30 +354,17 @@ public class ConnectionManagerTest {
                 "pooled retry strategy matches direct");
     }
 
-    static Stream<org.junit.jupiter.params.provider.Arguments> outOfRangeReconnectStrategies() {
+    private static BackoffStrategy.BackoffStrategyBuilder validBackoff() {
+        return BackoffStrategy.builder().numOfRetries(3).factor(2).exponentBase(2);
+    }
+
+    static Stream<Arguments> outOfRangeReconnectStrategies() {
         return Stream.of(
-                org.junit.jupiter.params.provider.Arguments.of(
-                        "numOfRetries",
-                        -1,
-                        BackoffStrategy.builder().numOfRetries(-1).factor(2).exponentBase(2)),
-                org.junit.jupiter.params.provider.Arguments.of(
-                        "factor", -1, BackoffStrategy.builder().numOfRetries(3).factor(-1).exponentBase(2)),
-                org.junit.jupiter.params.provider.Arguments.of(
-                        "exponentBase",
-                        -1,
-                        BackoffStrategy.builder().numOfRetries(3).factor(2).exponentBase(-1)),
-                org.junit.jupiter.params.provider.Arguments.of(
-                        "jitterPercent",
-                        -1,
-                        BackoffStrategy.builder().numOfRetries(3).factor(2).exponentBase(2).jitterPercent(-1)),
-                org.junit.jupiter.params.provider.Arguments.of(
-                        "jitterPercent",
-                        101,
-                        BackoffStrategy.builder()
-                                .numOfRetries(3)
-                                .factor(2)
-                                .exponentBase(2)
-                                .jitterPercent(101)));
+                Arguments.of("numOfRetries", -1, validBackoff().numOfRetries(-1)),
+                Arguments.of("factor", -1, validBackoff().factor(-1)),
+                Arguments.of("exponentBase", -1, validBackoff().exponentBase(-1)),
+                Arguments.of("jitterPercent", -1, validBackoff().jitterPercent(-1)),
+                Arguments.of("jitterPercent", 101, validBackoff().jitterPercent(101)));
     }
 
     /**
