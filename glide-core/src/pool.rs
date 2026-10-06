@@ -2016,6 +2016,28 @@ mod client_pool_marking_tests {
             "add_client_reserved must mark the client pool-managed"
         );
     }
+
+    /// Pooled client_ids (`ClientPool::next_id`) and the ordinary-client allocator
+    /// the bindings call (`allocate_client_id`) must draw from one sequence, so an
+    /// ordinary client can never be handed a live pooled id in the shared id-keyed
+    /// registries. Interleaving the two and checking every id is distinct proves it;
+    /// a per-binding counter would repeat ids this allocator already issued.
+    #[test]
+    fn ordinary_and_pooled_ids_share_one_sequence() {
+        use std::collections::HashSet;
+        let pool = test_pool();
+        let mut seen = HashSet::new();
+        for _ in 0..1000 {
+            assert!(
+                seen.insert(pool.next_id()),
+                "ClientPool::next_id produced a duplicate id"
+            );
+            assert!(
+                seen.insert(super::allocate_client_id()),
+                "allocate_client_id collided with a pooled id"
+            );
+        }
+    }
 }
 
 #[cfg(test)]
