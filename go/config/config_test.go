@@ -244,7 +244,7 @@ func TestBackoffStrategy_maxValues(t *testing.T) {
 	}, result)
 }
 
-func TestBackoffStrategy_negativeValues(t *testing.T) {
+func TestBackoffStrategy_outOfRangeValues(t *testing.T) {
 	runOutOfRangeCases(t, []outOfRangeCase{
 		{
 			"negative retries", NewBackoffStrategy(-1, 10, 50), "numOfRetries",
@@ -262,13 +262,7 @@ func TestBackoffStrategy_negativeValues(t *testing.T) {
 			"negative jitter", NewBackoffStrategy(5, 10, 50).WithJitterPercent(-25), "jitterPercent",
 			func(s *BackoffStrategy) uint32 { return *s.jitterPercent },
 		},
-	})
-}
-
-// TestBackoffStrategy_jitterAboveMax pins the jitter contract to the core's, which rejects a value
-// above 100 rather than capping it, so all four bindings reject the same input.
-func TestBackoffStrategy_jitterAboveMax(t *testing.T) {
-	runOutOfRangeCases(t, []outOfRangeCase{
+		// Jitter above 100 is rejected, not capped, matching the core.
 		{
 			"jitter just above max", NewBackoffStrategy(5, 10, 50).WithJitterPercent(101), "jitterPercent",
 			func(s *BackoffStrategy) uint32 { return *s.jitterPercent },
@@ -276,17 +270,6 @@ func TestBackoffStrategy_jitterAboveMax(t *testing.T) {
 		{
 			"jitter far above max", NewBackoffStrategy(5, 10, 50).WithJitterPercent(1000), "jitterPercent",
 			func(s *BackoffStrategy) uint32 { return *s.jitterPercent },
-		},
-	})
-}
-
-func TestBackoffStrategy_jitterAtMaxUint32(t *testing.T) {
-	max := maxUint32AsInt(t)
-
-	runOutOfRangeCases(t, []outOfRangeCase{
-		{
-			"jitter at max uint32", NewBackoffStrategy(5, 10, 50).WithJitterPercent(max),
-			"jitterPercent", func(s *BackoffStrategy) uint32 { return *s.jitterPercent },
 		},
 	})
 }
@@ -306,7 +289,8 @@ func TestBackoffStrategy_maxJitterIsAccepted(t *testing.T) {
 // reported error describes the current state, not the discarded one.
 func TestBackoffStrategy_correctedValueClearsError(t *testing.T) {
 	strategy := NewBackoffStrategy(5, 10, 50).WithJitterPercent(-1)
-	require.Error(t, strategy.validationError())
+	_, err := strategy.toProtobuf()
+	require.Error(t, err)
 
 	result, err := strategy.WithJitterPercent(30).toProtobuf()
 	require.NoError(t, err)
@@ -345,15 +329,17 @@ func TestBackoffStrategy_copyIsIndependent(t *testing.T) {
 	copied := *original
 	copied.WithJitterPercent(30)
 
-	require.NoError(t, copied.validationError())
-	_, err := original.toProtobuf()
+	_, err := copied.toProtobuf()
+	require.NoError(t, err)
+	_, err = original.toProtobuf()
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "jitterPercent")
 	assert.Equal(t, uint32(0), *original.jitterPercent)
 }
 
 func TestBackoffStrategy_valuesAboveMaxUint32(t *testing.T) {
-	aboveMax := maxUint32AsInt(t) + 1
+	max := maxUint32AsInt(t)
+	aboveMax := max + 1
 
 	runOutOfRangeCases(t, []outOfRangeCase{
 		{
@@ -367,6 +353,10 @@ func TestBackoffStrategy_valuesAboveMaxUint32(t *testing.T) {
 		{
 			"exponent base above max", NewBackoffStrategy(5, 10, aboveMax), "exponentBase",
 			func(s *BackoffStrategy) uint32 { return s.exponentBase },
+		},
+		{
+			"jitter at max uint32", NewBackoffStrategy(5, 10, 50).WithJitterPercent(max), "jitterPercent",
+			func(s *BackoffStrategy) uint32 { return *s.jitterPercent },
 		},
 	})
 }

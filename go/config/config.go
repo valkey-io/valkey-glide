@@ -388,10 +388,6 @@ func (config *baseClientConfiguration) toProtobuf() (*protobuf.ConnectionRequest
 //
 // If no strategy is explicitly provided, a default backoff strategy will be used.
 //
-// The retry count, factor and exponent base must be between 0 and 2^32 - 1, and the jitter percent
-// must be between 0 and 100. A value outside its range leads to an invalid configuration, reported
-// as an error when the client is created.
-//
 // A factor or exponent base of 0 is not used verbatim: the core substitutes its own default
 // (factor 100, exponent base 2). A retry count of 0 is honored as-is.
 type BackoffStrategy struct {
@@ -468,13 +464,9 @@ func (strategy *BackoffStrategy) toUint32(field int, value int, maxValue int64) 
 	return uint32(value)
 }
 
-// validationError reports every invalid field at once, in backoffFields order.
-func (strategy *BackoffStrategy) validationError() error {
-	return errors.Join(strategy.invalid[:]...)
-}
-
 func (strategy *BackoffStrategy) toProtobuf() (*protobuf.ConnectionRetryStrategy, error) {
-	if err := strategy.validationError(); err != nil {
+	// Report every invalid field at once, in backoffFields order.
+	if err := errors.Join(strategy.invalid[:]...); err != nil {
 		return nil, err
 	}
 
