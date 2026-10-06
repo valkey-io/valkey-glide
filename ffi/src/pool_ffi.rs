@@ -11,8 +11,8 @@ use glide_core::pool::{self, ClientPool, ClientState, POOL_RUNNING, PoolConfig, 
 use glide_core::scope;
 use std::sync::atomic::Ordering as AtomicOrdering;
 
-/// Drop an adapter [`Arc`] that was previously leaked via `mem::forget` inside
-/// `create_pool_client`. Must be called before any early return that occurs after
+/// Drop an adapter [`Arc`] whose owning reference `create_pool_client` handed
+/// out as a raw pointer. Must be called before any early return that occurs after
 /// `create_pool_client` succeeds but **before** `adapter_ptr` is stored in
 /// `get_pool_clients()` — at that point `glide_pool_destroy` cannot find it and
 /// it would leak forever.
@@ -23,9 +23,9 @@ use std::sync::atomic::Ordering as AtomicOrdering;
 /// is the only correct way to release the allocation.
 macro_rules! drop_orphaned_adapter {
     ($ptr:expr) => {
-        // SAFETY: $ptr was produced by Arc::into_raw (via mem::forget) in
-        // create_pool_client. Reconstructing and dropping it here is the
-        // only safe way to release the allocation.
+        // SAFETY: $ptr was produced by Arc::into_raw in create_pool_client.
+        // Reconstructing and dropping it here is the only safe way to release
+        // the allocation.
         unsafe {
             drop(std::sync::Arc::from_raw($ptr as *const ClientAdapter));
         }
@@ -140,7 +140,11 @@ fn create_pool_client(
     // Enable the borrow-time IAM reconcile in send_command for pooled clients.
     client.mark_pool_managed();
     let ptr = adapter_ptr as usize;
-    // Don't drop — the Arc is owned by the pool now
+    // Deliberately keep a second strong reference. Binding wrappers cache the
+    // raw pointer and are never told when the drain releases the pool's
+    // reference, so freeing the adapter there would leave them dangling
+    // (use-after-free). Until wrappers own their own reference the adapter
+    // must outlive the pool; the cost is one leaked adapter per pooled client.
     std::mem::forget(adapter);
 
     Ok((ptr, client))
@@ -256,10 +260,7 @@ pub unsafe extern "C" fn glide_pool_create(
                         rt.block_on(async {
                             let mut pool = pool_clone.lock().await;
                             if pool.state.load(AtomicOrdering::Acquire) != POOL_RUNNING {
-                                // Reconstruct and drop the Arc to avoid a memory leak:
-                                // create_pool_client transferred ownership into a raw pointer
-                                // via mem::forget; glide_pool_destroy cannot find this orphaned
-                                // pointer because it was never stored in get_pool_clients().
+                                // Never stored in get_pool_clients(), so glide_pool_destroy cannot reclaim it.
                                 drop_orphaned_adapter!(adapter_ptr);
                                 return;
                             }
@@ -315,15 +316,15 @@ pub extern "C" fn glide_pool_try_acquire(pool_id: u64) -> i64 {
 
     match pool_arc.try_lock() {
         Ok(mut pool) => {
-            // Clean up any clients discarded by the abandon monitor
+            // Reclaim the adapters of clients core has discarded
             let discarded = pool.drain_discarded_ids();
             for cid in discarded {
-                glide_core::pool::unregister_blocking_flag(cid);
                 if let Some((_, entry)) = get_pool_clients().remove(&cid) {
                     get_pool_adapter_map().remove(&entry.adapter_ptr);
                     glide_core::scope::unregister_client(entry.adapter_ptr as u64);
-                    // Release the adapter Arc that was kept alive via mem::forget
-                    // in create_pool_client. This drops the connection properly.
+                    // Release the pool's reference. The adapter itself stays
+                    // alive (see create_pool_client) because a binding wrapper
+                    // may still hold its raw pointer.
                     unsafe {
                         drop(Arc::from_raw(entry.adapter_ptr as *const ClientAdapter));
                     }
@@ -357,11 +358,8 @@ pub extern "C" fn glide_pool_try_acquire(pool_id: u64) -> i64 {
                             rt.spawn(async move {
                                 let mut pool = pool_clone.lock().await;
                                 if pool.state.load(AtomicOrdering::Acquire) != POOL_RUNNING {
-                                    pool.total_count.fetch_sub(1, AtomicOrdering::AcqRel);
-                                    // Reconstruct and drop the Arc to avoid a memory leak:
-                                    // create_pool_client transferred ownership into a raw pointer
-                                    // via mem::forget; glide_pool_destroy cannot find this orphaned
-                                    // pointer because it was never stored in get_pool_clients().
+                                    pool.release_reservation();
+                                    // Never stored in get_pool_clients(), so glide_pool_destroy cannot reclaim it.
                                     drop_orphaned_adapter!(adapter_ptr);
                                     return;
                                 }
@@ -399,8 +397,8 @@ pub extern "C" fn glide_pool_try_acquire(pool_id: u64) -> i64 {
                             );
                             let rt = get_pool_runtime();
                             rt.spawn(async move {
-                                let pool = pool_clone.lock().await;
-                                pool.total_count.fetch_sub(1, AtomicOrdering::AcqRel);
+                                let mut pool = pool_clone.lock().await;
+                                pool.release_reservation();
                             });
                         }
                     }
@@ -443,10 +441,9 @@ pub extern "C" fn glide_pool_acquire_blocking(pool_id: u64, timeout_ms: u64) -> 
         // Try to acquire (try_lock is synchronous on TokioMutex — no runtime needed)
         let result = match pool_arc.try_lock() {
             Ok(mut pool) => {
-                // Clean up any clients discarded by the abandon monitor
+                // Reclaim the adapters of clients core has discarded
                 let discarded = pool.drain_discarded_ids();
                 for cid in discarded {
-                    glide_core::pool::unregister_blocking_flag(cid);
                     if let Some((_, entry)) = get_pool_clients().remove(&cid) {
                         get_pool_adapter_map().remove(&entry.adapter_ptr);
                         glide_core::scope::unregister_client(entry.adapter_ptr as u64);
@@ -481,11 +478,8 @@ pub extern "C" fn glide_pool_acquire_blocking(pool_id: u64, timeout_ms: u64) -> 
                                 rt.spawn(async move {
                                     let mut p = pool_clone.lock().await;
                                     if p.state.load(AtomicOrdering::Acquire) != POOL_RUNNING {
-                                        p.total_count.fetch_sub(1, AtomicOrdering::AcqRel);
-                                        // Reconstruct and drop the Arc to avoid a memory leak:
-                                        // create_pool_client transferred ownership into a raw pointer
-                                        // via mem::forget; glide_pool_destroy cannot find this orphaned
-                                        // pointer because it was never stored in get_pool_clients().
+                                        p.release_reservation();
+                                        // Never stored in get_pool_clients(), so glide_pool_destroy cannot reclaim it.
                                         drop_orphaned_adapter!(adapter_ptr);
                                         return;
                                     }
@@ -522,8 +516,8 @@ pub extern "C" fn glide_pool_acquire_blocking(pool_id: u64, timeout_ms: u64) -> 
                             Err(_) => {
                                 let rt = get_pool_runtime();
                                 rt.spawn(async move {
-                                    let p = pool_clone.lock().await;
-                                    p.total_count.fetch_sub(1, AtomicOrdering::AcqRel);
+                                    let mut p = pool_clone.lock().await;
+                                    p.release_reservation();
                                 });
                             }
                         }
@@ -1206,6 +1200,40 @@ pub unsafe extern "C" fn glide_scope_execute(
                 arena: std::ptr::null_mut(),
             }))
         }
+    }
+}
+
+#[cfg(test)]
+mod adapter_ownership_tests {
+    use super::*;
+
+    /// The last adapter reference may be released from a task on the pool
+    /// runtime (a discard of a client whose pool stopped mid-creation), so the
+    /// adapter's own runtimes must be releasable from inside another runtime.
+    #[test]
+    fn adapter_can_be_dropped_inside_a_runtime() {
+        let mut request = connection_request::ConnectionRequest::new();
+        let mut addr = connection_request::NodeAddress::new();
+        addr.host = "127.0.0.1".into();
+        addr.port = 1;
+        request.addresses.push(addr);
+        request.lazy_connect = true;
+        let bytes = request.write_to_bytes().unwrap();
+
+        let (ptr, client) =
+            create_pool_client(&bytes, ClientType::SyncClient, 1).expect("lazy client");
+        drop(client);
+        let raw = ptr as *const ClientAdapter;
+        // Give back the hold create_pool_client keeps for binding wrappers so
+        // the drop below is the one that runs ClientAdapter::drop.
+        unsafe { Arc::decrement_strong_count(raw) };
+        let adapter = unsafe { Arc::from_raw(raw) };
+        assert_eq!(Arc::strong_count(&adapter), 1);
+
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .build()
+            .unwrap();
+        rt.block_on(async move { drop(adapter) });
     }
 }
 

@@ -68,7 +68,6 @@ mod test_cluster_scan_async {
     }
 
     #[tokio::test]
-    #[serial_test::serial]
     async fn test_async_cluster_scan() {
         let cluster = TestClusterContext::new_with_cluster_client_builder(
             3,
@@ -115,7 +114,6 @@ mod test_cluster_scan_async {
     }
 
     #[tokio::test]
-    #[serial_test::serial]
     async fn test_async_cluster_scan_with_allow_non_covered_slots() {
         let cluster = TestClusterContext::new_with_cluster_client_builder(
             3,
@@ -164,7 +162,6 @@ mod test_cluster_scan_async {
     }
 
     #[tokio::test]
-    #[serial_test::serial]
     async fn test_async_cluster_scan_with_delslots() {
         let cluster = TestClusterContext::new_with_cluster_client_builder(
             3,
@@ -214,7 +211,6 @@ mod test_cluster_scan_async {
     }
 
     #[tokio::test]
-    #[serial_test::serial] // test cluster scan with slot migration in the middle
     async fn test_async_cluster_scan_with_migration() {
         let cluster = TestClusterContext::new_with_cluster_client_builder(
             3,
@@ -295,7 +291,6 @@ mod test_cluster_scan_async {
     }
 
     #[tokio::test]
-    #[serial_test::serial] // test cluster scan with node fail in the middle
     async fn test_async_cluster_scan_with_fail() {
         let cluster = TestClusterContext::new_with_cluster_client_builder(
             3,
@@ -403,7 +398,6 @@ mod test_cluster_scan_async {
     }
 
     #[tokio::test]
-    #[serial_test::serial] // Test cluster scan with killing all masters during scan
     async fn test_async_cluster_scan_with_all_masters_down() {
         let cluster = TestClusterContext::new_with_cluster_client_builder(
             6,
@@ -558,7 +552,6 @@ mod test_cluster_scan_async {
     }
 
     #[tokio::test]
-    #[serial_test::serial]
     // Test cluster scan with killing all replicas during scan
     async fn test_async_cluster_scan_with_all_replicas_down() {
         let cluster = TestClusterContext::new_with_cluster_client_builder(
@@ -664,7 +657,6 @@ mod test_cluster_scan_async {
         assert_eq!(keys, expected_keys);
     }
     #[tokio::test]
-    #[serial_test::serial]
     // Test cluster scan with setting keys for each iteration
     async fn test_async_cluster_scan_set_in_the_middle() {
         let cluster = TestClusterContext::new(3, 0);
@@ -724,7 +716,6 @@ mod test_cluster_scan_async {
     }
 
     #[tokio::test]
-    #[serial_test::serial]
     // Test cluster scan with deleting keys for each iteration
     async fn test_async_cluster_scan_dell_in_the_middle() {
         let cluster = TestClusterContext::new(3, 0);
@@ -787,7 +778,6 @@ mod test_cluster_scan_async {
     }
 
     #[tokio::test]
-    #[serial_test::serial]
     // Testing cluster scan with Pattern option
     async fn test_async_cluster_scan_with_pattern() {
         let cluster = TestClusterContext::new(3, 0);
@@ -851,7 +841,6 @@ mod test_cluster_scan_async {
     }
 
     #[tokio::test]
-    #[serial_test::serial]
     // Testing cluster scan with TYPE option
     async fn test_async_cluster_scan_with_type() {
         let cluster = TestClusterContext::new(3, 0);
@@ -915,7 +904,6 @@ mod test_cluster_scan_async {
     }
 
     #[tokio::test]
-    #[serial_test::serial]
     // Testing cluster scan with COUNT option
     async fn test_async_cluster_scan_with_count() {
         let cluster = TestClusterContext::new(3, 0);
@@ -990,7 +978,6 @@ mod test_cluster_scan_async {
     }
 
     #[tokio::test]
-    #[serial_test::serial]
     // Testing cluster scan when connection fails in the middle and we get an error
     // then cluster up again and scanning can continue without any problem
     async fn test_async_cluster_scan_failover() {
@@ -1032,15 +1019,22 @@ mod test_cluster_scan_async {
                 break;
             }
             if count == 5 {
+                // The old connection keeps retrying these addresses, so the cluster must come back on them.
+                let ports = cluster.cluster.reserve_ports_for_restart();
                 drop(cluster);
                 let scan_response: RedisResult<(ScanStateRC, Vec<Value>)> = connection
                     .cluster_scan(scan_state_rc.clone(), ClusterScanArgs::default())
                     .await;
                 assert!(scan_response.is_err());
+                cluster = TestClusterContext::restart_on_ports(
+                    ports,
+                    0,
+                    |builder| builder.retries(1),
+                    false,
+                );
                 break;
             };
         }
-        cluster = TestClusterContext::new(3, 0);
         connection = cluster.async_connection(None).await;
         loop {
             let scan_response: RedisResult<(ScanStateRC, Vec<Value>)> = connection
@@ -1059,7 +1053,6 @@ mod test_cluster_scan_async {
     }
 
     #[tokio::test]
-    #[serial_test::serial]
     /// Test a case where a node is killed, key set into the cluster, and the client is still able to scan all keys
     async fn test_async_cluster_scan_uncovered_slots_of_missing_node() {
         // Create a cluster with 3 nodes
@@ -1145,7 +1138,6 @@ mod test_cluster_scan_async {
     }
 
     #[tokio::test]
-    #[serial_test::serial]
     /// Test scanning after killing a node and compare with "KEYS *" from remaining nodes
     async fn test_async_cluster_scan_after_node_killed() {
         // Create a cluster with 3 nodes
@@ -1241,7 +1233,6 @@ mod test_cluster_scan_async {
     }
 
     #[tokio::test]
-    #[serial_test::serial]
     /// Test scanning with allow_non_covered_slots as false after killing a node
     async fn test_async_cluster_scan_uncovered_slots_fail() {
         // Create a cluster with 3 nodes

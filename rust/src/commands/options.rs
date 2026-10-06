@@ -4,56 +4,36 @@
 //! Mirrors the Python `glide_shared.commands.core_options` and
 //! `command_args` modules.
 
-// TODO #7058: investigate whether the latest redis-rs version defines equivalents
-// for these Python-mirrored option types, to mirror redis-rs instead. (`SetExpiry`
-// already mirrors redis-rs and is exempt.)
-use crate::cmd::Cmd;
+use crate::write::ToSingleValkeyArg;
 use crate::write::ToValkeyArgs;
 use crate::write::ValkeyWrite;
 
-/// Condition under which a `SET` (or similar) should be applied.
+/// Condition for the hash-field expire commands.
 ///
-/// Mirrors Python `ConditionalChange`.
+/// Mirrors redis-rs's `ExpireOption` type.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ConditionalChange {
-    /// Only set if the key already exists (`XX`).
-    OnlyIfExists,
-    /// Only set if the key does not exist (`NX`).
-    OnlyIfDoesNotExist,
+pub enum ExpireOption {
+    /// Set the expiry regardless of the field's current expiry (no argument).
+    NONE,
+    /// Set the expiry only when the field has no expiry (`NX`).
+    NX,
+    /// Set the expiry only when the field has an existing expiry (`XX`).
+    XX,
+    /// Set the expiry only when the new expiry is greater than the current one (`GT`).
+    GT,
+    /// Set the expiry only when the new expiry is less than the current one (`LT`).
+    LT,
 }
 
-impl ConditionalChange {
-    pub(crate) fn add_to(&self, cmd: &mut Cmd) {
+impl ToValkeyArgs for ExpireOption {
+    fn write_valkey_args<W: ?Sized + ValkeyWrite>(&self, out: &mut W) {
         match self {
-            ConditionalChange::OnlyIfExists => cmd.arg("XX"),
-            ConditionalChange::OnlyIfDoesNotExist => cmd.arg("NX"),
-        };
-    }
-}
-
-/// Conditions for `EXPIRE`/`PEXPIRE`/`EXPIREAT`/`PEXPIREAT`.
-///
-/// Mirrors Python `ExpireOptions`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ExpireOptions {
-    /// Set expiry only when the key has no existing expiry (`NX`).
-    HasNoExpiry,
-    /// Set expiry only when the key has an existing expiry (`XX`).
-    HasExistingExpiry,
-    /// Set expiry only when the new expiry is greater than the current one (`GT`).
-    NewExpiryGreaterThanCurrent,
-    /// Set expiry only when the new expiry is less than the current one (`LT`).
-    NewExpiryLessThanCurrent,
-}
-
-impl ExpireOptions {
-    pub(crate) fn add_to(&self, cmd: &mut Cmd) {
-        match self {
-            ExpireOptions::HasNoExpiry => cmd.arg("NX"),
-            ExpireOptions::HasExistingExpiry => cmd.arg("XX"),
-            ExpireOptions::NewExpiryGreaterThanCurrent => cmd.arg("GT"),
-            ExpireOptions::NewExpiryLessThanCurrent => cmd.arg("LT"),
-        };
+            ExpireOption::NONE => {}
+            ExpireOption::NX => out.write_arg(b"NX"),
+            ExpireOption::XX => out.write_arg(b"XX"),
+            ExpireOption::GT => out.write_arg(b"GT"),
+            ExpireOption::LT => out.write_arg(b"LT"),
+        }
     }
 }
 
@@ -63,24 +43,20 @@ impl ExpireOptions {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SetExpiry {
     /// Expire after the given number of seconds (`EX`).
-    EX(usize),
-
+    EX(u64),
     /// Expire after the given number of milliseconds (`PX`).
-    PX(usize),
-
+    PX(u64),
     /// Expire at the given Unix time in seconds (`EXAT`).
-    EXAT(usize),
-
+    EXAT(u64),
     /// Expire at the given Unix time in milliseconds (`PXAT`).
-    PXAT(usize),
-
+    PXAT(u64),
     /// Retain the key's existing TTL (`KEEPTTL`).
     KEEPTTL,
 }
 
 impl ToValkeyArgs for SetExpiry {
     fn write_valkey_args<W: ?Sized + ValkeyWrite>(&self, out: &mut W) {
-        let mut kw = |k: &[u8], v: usize| {
+        let mut kw = |k: &[u8], v: u64| {
             out.write_arg(k);
             out.write_arg_fmt(v);
         };
@@ -92,13 +68,9 @@ impl ToValkeyArgs for SetExpiry {
             SetExpiry::KEEPTTL => out.write_arg(b"KEEPTTL"),
         }
     }
-
-    fn is_single_arg(&self) -> bool {
-        matches!(self, SetExpiry::KEEPTTL)
-    }
 }
 
-/// Existence check for `SET` — whether the key must (not) already exist.
+/// Existence check for `SET` and `GEOADD`.
 ///
 /// Mirrors redis-rs's `ExistenceCheck` type.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -109,12 +81,195 @@ pub enum ExistenceCheck {
     XX,
 }
 
-/// Options for the `SET` command (`set_options`).
+impl ToValkeyArgs for ExistenceCheck {
+    fn write_valkey_args<W: ?Sized + ValkeyWrite>(&self, out: &mut W) {
+        out.write_arg(match self {
+            ExistenceCheck::NX => b"NX".as_slice(),
+            ExistenceCheck::XX => b"XX".as_slice(),
+        });
+    }
+}
+
+/// Field existence check for `HSETEX`.
+///
+/// Mirrors redis-rs's `FieldExistenceCheck` type.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FieldExistenceCheck {
+    /// Only set the fields if none of them already exist (`FNX`).
+    FNX,
+    /// Only set the fields if all of them already exist (`FXX`).
+    FXX,
+}
+
+impl ToValkeyArgs for FieldExistenceCheck {
+    fn write_valkey_args<W: ?Sized + ValkeyWrite>(&self, out: &mut W) {
+        out.write_arg(match self {
+            FieldExistenceCheck::FNX => b"FNX".as_slice(),
+            FieldExistenceCheck::FXX => b"FXX".as_slice(),
+        });
+    }
+}
+
+/// Options for the `HSETEX` command.
+///
+/// Mirrors redis-rs's `HashFieldExpirationOptions` type.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct HashFieldExpirationOptions {
+    existence_check: Option<FieldExistenceCheck>,
+    expiration: Option<SetExpiry>,
+}
+
+impl HashFieldExpirationOptions {
+    /// Set the field existence check (`FNX`/`FXX`).
+    pub fn set_existence_check(mut self, field_existence_check: FieldExistenceCheck) -> Self {
+        self.existence_check = Some(field_existence_check);
+        self
+    }
+
+    /// Set the fields' expiry.
+    pub fn set_expiration(mut self, expiration: SetExpiry) -> Self {
+        self.expiration = Some(expiration);
+        self
+    }
+}
+
+impl ToValkeyArgs for HashFieldExpirationOptions {
+    fn write_valkey_args<W: ?Sized + ValkeyWrite>(&self, out: &mut W) {
+        if let Some(ref existence_check) = self.existence_check {
+            existence_check.write_valkey_args(out);
+        }
+        if let Some(ref expiration) = self.expiration {
+            expiration.write_valkey_args(out);
+        }
+    }
+}
+
+/// Options for the `COPY` command.
+///
+/// Mirrors redis-rs's `CopyOptions` type.
+#[derive(Debug, Clone, Copy)]
+pub struct CopyOptions<Db: ToString> {
+    db: Option<Db>,
+    replace: bool,
+}
+
+impl Default for CopyOptions<&'static str> {
+    fn default() -> Self {
+        CopyOptions {
+            db: None,
+            replace: false,
+        }
+    }
+}
+
+impl<Db: ToString> CopyOptions<Db> {
+    /// Copy into the given logical database (`DB`).
+    pub fn db<Db2: ToString>(self, db: Db2) -> CopyOptions<Db2> {
+        CopyOptions {
+            db: Some(db),
+            replace: self.replace,
+        }
+    }
+
+    /// Overwrite the destination key if it exists (`REPLACE`).
+    pub fn replace(mut self, replace: bool) -> Self {
+        self.replace = replace;
+        self
+    }
+}
+
+impl<Db: ToString> ToValkeyArgs for CopyOptions<Db> {
+    fn write_valkey_args<W: ?Sized + ValkeyWrite>(&self, out: &mut W) {
+        if let Some(ref db) = self.db {
+            out.write_arg(b"DB");
+            out.write_arg(db.to_string().as_bytes());
+        }
+        if self.replace {
+            out.write_arg(b"REPLACE");
+        }
+    }
+}
+
+/// Options for the `FLUSHALL` command.
+///
+/// Mirrors redis-rs's `FlushAllOptions` type.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct FlushAllOptions {
+    /// Flush synchronously (`SYNC`) if `true`, asynchronously (`ASYNC`) otherwise.
+    pub blocking: bool,
+}
+
+impl FlushAllOptions {
+    /// Set whether to flush synchronously (`SYNC`) or asynchronously (`ASYNC`).
+    pub fn blocking(mut self, blocking: bool) -> Self {
+        self.blocking = blocking;
+        self
+    }
+}
+
+impl ToValkeyArgs for FlushAllOptions {
+    fn write_valkey_args<W: ?Sized + ValkeyWrite>(&self, out: &mut W) {
+        out.write_arg(if self.blocking { b"SYNC" } else { b"ASYNC" });
+    }
+}
+
+/// Options for the `FLUSHDB` command.
+///
+/// Mirrors redis-rs's `FlushDbOptions` type.
+pub type FlushDbOptions = FlushAllOptions;
+
+/// Options for the `FUNCTION FLUSH` command.
+pub type FunctionFlushOptions = FlushAllOptions;
+
+/// Value comparison for `SET` — whether the key's current value must equal
+/// the given one.
+///
+/// Mirrors redis-rs's `ValueComparison` type.
+/// Only `IFEQ` is supported.
+//
+// GLIDE's `ValueComparison` diverges from redis-rs by holding a `Vec<u8>`
+// instead of a `String`: redis-rs builds that `String` lossily, silently
+// breaking comparisons of binary (non-UTF-8) values. See #5046 for a related
+// binary `IFEQ` issue in the Java client.
+//
+// TODO #7237: Add `IFNE` (and `ValueComparison::ifne`) for Valkey 9.2.
+// TODO #7238: Use for `del_ex` (`DELEX`, Valkey 9.2).
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum ValueComparison {
+    /// Only set if the current value equals the given value (`IFEQ`).
+    IFEQ(Vec<u8>),
+}
+
+impl ValueComparison {
+    /// Compare for equality with the given value (`IFEQ`).
+    pub fn ifeq(value: impl ToSingleValkeyArg) -> Self {
+        Self::IFEQ(Self::arg_to_bytes(value))
+    }
+
+    fn arg_to_bytes(value: impl ToSingleValkeyArg) -> Vec<u8> {
+        value.to_valkey_args().swap_remove(0)
+    }
+}
+
+impl ToValkeyArgs for ValueComparison {
+    fn write_valkey_args<W: ?Sized + ValkeyWrite>(&self, out: &mut W) {
+        match self {
+            ValueComparison::IFEQ(value) => {
+                out.write_arg(b"IFEQ");
+                out.write_arg(value);
+            }
+        }
+    }
+}
+
+/// Options for the `SET` command.
 ///
 /// Mirrors redis-rs's `SetOptions` type.
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Default)]
 pub struct SetOptions {
     conditional_set: Option<ExistenceCheck>,
+    value_comparison: Option<ValueComparison>,
     get: bool,
     expiration: Option<SetExpiry>,
 }
@@ -123,6 +278,13 @@ impl SetOptions {
     /// Set the existence check (`NX`/`XX`).
     pub fn conditional_set(mut self, existence_check: ExistenceCheck) -> Self {
         self.conditional_set = Some(existence_check);
+        self
+    }
+
+    /// Set the value comparison (`IFEQ`).
+    // TODO #7237: Document `IFNE` once it is supported.
+    pub fn value_comparison(mut self, value_comparison: ValueComparison) -> Self {
+        self.value_comparison = Some(value_comparison);
         self
     }
 
@@ -142,10 +304,10 @@ impl SetOptions {
 impl ToValkeyArgs for SetOptions {
     fn write_valkey_args<W: ?Sized + ValkeyWrite>(&self, out: &mut W) {
         if let Some(ref existence_check) = self.conditional_set {
-            match existence_check {
-                ExistenceCheck::NX => out.write_arg(b"NX"),
-                ExistenceCheck::XX => out.write_arg(b"XX"),
-            }
+            existence_check.write_valkey_args(out);
+        }
+        if let Some(ref value_comparison) = self.value_comparison {
+            value_comparison.write_valkey_args(out);
         }
         if self.get {
             out.write_arg(b"GET");
@@ -182,20 +344,20 @@ impl ToValkeyArgs for Direction {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Expiry {
     /// Set expiry, in seconds (`EX`).
-    EX(usize),
+    EX(u64),
     /// Set expiry, in milliseconds (`PX`).
-    PX(usize),
+    PX(u64),
     /// Set expiry at a Unix time, in seconds (`EXAT`).
-    EXAT(usize),
+    EXAT(u64),
     /// Set expiry at a Unix time, in milliseconds (`PXAT`).
-    PXAT(usize),
+    PXAT(u64),
     /// Remove the time to live (`PERSIST`).
     PERSIST,
 }
 
 impl ToValkeyArgs for Expiry {
     fn write_valkey_args<W: ?Sized + ValkeyWrite>(&self, out: &mut W) {
-        let mut kw = |k: &[u8], v: usize| {
+        let mut kw = |k: &[u8], v: u64| {
             out.write_arg(k);
             out.write_arg_fmt(v);
         };
@@ -206,10 +368,6 @@ impl ToValkeyArgs for Expiry {
             Expiry::PXAT(ts) => kw(b"PXAT", *ts),
             Expiry::PERSIST => out.write_arg(b"PERSIST"),
         }
-    }
-
-    fn is_single_arg(&self) -> bool {
-        matches!(self, Expiry::PERSIST)
     }
 }
 
@@ -258,10 +416,6 @@ impl ToValkeyArgs for LposOptions {
             out.write_arg_fmt(n);
         }
     }
-
-    fn is_single_arg(&self) -> bool {
-        false
-    }
 }
 
 /// Policy for the `FUNCTION RESTORE` command.
@@ -308,26 +462,6 @@ impl ClientPauseMode {
     }
 }
 
-/// Field-conditional change option for `HSETEX`.
-///
-/// Mirrors Python `HashFieldConditionalChange`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum HashFieldConditionalChange {
-    /// Only set the fields if all of them already exist (`FXX`).
-    OnlyIfAllExist,
-    /// Only set the fields if none of them already exist (`FNX`).
-    OnlyIfNoneExist,
-}
-
-impl HashFieldConditionalChange {
-    pub(crate) fn as_arg(&self) -> &'static str {
-        match self {
-            HashFieldConditionalChange::OnlyIfAllExist => "FXX",
-            HashFieldConditionalChange::OnlyIfNoneExist => "FNX",
-        }
-    }
-}
-
 /// Options for the `MIGRATE` command.
 ///
 /// Mirrors Python `MigrateOptions`.
@@ -354,20 +488,23 @@ impl std::fmt::Debug for MigrateOptions {
     }
 }
 
-impl MigrateOptions {
-    pub(crate) fn add_to(&self, cmd: &mut Cmd) {
+impl ToValkeyArgs for MigrateOptions {
+    fn write_valkey_args<W: ?Sized + ValkeyWrite>(&self, out: &mut W) {
         if self.copy {
-            cmd.arg("COPY");
+            out.write_arg(b"COPY");
         }
         if self.replace {
-            cmd.arg("REPLACE");
+            out.write_arg(b"REPLACE");
         }
         match (&self.username, &self.password) {
-            (Some(u), Some(p)) => {
-                cmd.arg("AUTH2").arg(u).arg(p);
+            (Some(username), Some(password)) => {
+                out.write_arg(b"AUTH2");
+                out.write_arg(username.as_bytes());
+                out.write_arg(password.as_bytes());
             }
-            (None, Some(p)) => {
-                cmd.arg("AUTH").arg(p);
+            (None, Some(password)) => {
+                out.write_arg(b"AUTH");
+                out.write_arg(password.as_bytes());
             }
             _ => {}
         }
@@ -389,19 +526,21 @@ pub struct RestoreOptions {
     pub frequency: Option<i64>,
 }
 
-impl RestoreOptions {
-    pub(crate) fn add_to(&self, cmd: &mut Cmd) {
+impl ToValkeyArgs for RestoreOptions {
+    fn write_valkey_args<W: ?Sized + ValkeyWrite>(&self, out: &mut W) {
         if self.replace {
-            cmd.arg("REPLACE");
+            out.write_arg(b"REPLACE");
         }
         if self.absttl {
-            cmd.arg("ABSTTL");
+            out.write_arg(b"ABSTTL");
         }
-        if let Some(i) = self.idletime {
-            cmd.arg("IDLETIME").arg(i);
+        if let Some(idletime) = self.idletime {
+            out.write_arg(b"IDLETIME");
+            out.write_arg_fmt(idletime);
         }
-        if let Some(f) = self.frequency {
-            cmd.arg("FREQ").arg(f);
+        if let Some(frequency) = self.frequency {
+            out.write_arg(b"FREQ");
+            out.write_arg_fmt(frequency);
         }
     }
 }
@@ -469,193 +608,166 @@ impl ObjectType {
     }
 }
 
-/// Server data-flush mode.
-///
-/// Mirrors Python `FlushMode`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum FlushMode {
-    /// Flush synchronously (`SYNC`).
-    #[default]
-    Sync,
-    /// Flush asynchronously (`ASYNC`).
-    Async,
-}
-
-impl FlushMode {
-    pub(crate) fn as_arg(&self) -> &'static str {
-        match self {
-            FlushMode::Sync => "SYNC",
-            FlushMode::Async => "ASYNC",
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    /// Collect a command's arguments as UTF-8 strings for assertions.
-    fn args_of(cmd: &Cmd) -> Vec<String> {
-        cmd.as_redis()
-            .args_iter()
-            .filter_map(|a| match a {
-                redis::Arg::Simple(bytes) => Some(String::from_utf8_lossy(bytes).into_owned()),
-                redis::Arg::Cursor => None,
-            })
-            .collect()
-    }
+    use crate::test_utils::assert_args;
+    use crate::test_utils::assert_args_empty;
 
     #[test]
-    fn conditional_change_args() {
-        let mut cmd = Cmd::new();
-        ConditionalChange::OnlyIfExists.add_to(&mut cmd);
-        assert_eq!(args_of(&cmd), vec!["XX"]);
-
-        let mut cmd = Cmd::new();
-        ConditionalChange::OnlyIfDoesNotExist.add_to(&mut cmd);
-        assert_eq!(args_of(&cmd), vec!["NX"]);
+    fn existence_check_args() {
+        assert_args(ExistenceCheck::NX, &["NX"]);
+        assert_args(ExistenceCheck::XX, &["XX"]);
     }
 
     #[test]
     fn set_expiry_args() {
-        let cases: [(SetExpiry, Vec<&str>); 5] = [
-            (SetExpiry::EX(60), vec!["EX", "60"]),
-            (SetExpiry::PX(1500), vec!["PX", "1500"]),
-            (SetExpiry::EXAT(100), vec!["EXAT", "100"]),
-            (SetExpiry::PXAT(200), vec!["PXAT", "200"]),
-            (SetExpiry::KEEPTTL, vec!["KEEPTTL"]),
-        ];
-        for (opt, expected) in cases {
-            let mut cmd = Cmd::new();
-            cmd.arg(opt);
-            assert_eq!(args_of(&cmd), expected);
-        }
+        assert_args(SetExpiry::EX(60), &["EX", "60"]);
+        assert_args(SetExpiry::PX(1500), &["PX", "1500"]);
+        assert_args(SetExpiry::EXAT(100), &["EXAT", "100"]);
+        assert_args(SetExpiry::PXAT(200), &["PXAT", "200"]);
+        assert_args(SetExpiry::KEEPTTL, &["KEEPTTL"]);
+        assert_args(SetExpiry::PXAT(u64::MAX), &["PXAT", "18446744073709551615"]);
     }
 
     #[test]
     fn direction_args() {
-        let mut cmd = Cmd::new();
-        cmd.arg(Direction::Left).arg(Direction::Right);
-        assert_eq!(args_of(&cmd), vec!["LEFT", "RIGHT"]);
+        assert_args(Direction::Left, &["LEFT"]);
+        assert_args(Direction::Right, &["RIGHT"]);
     }
 
     #[test]
     fn expiry_args() {
-        let cases: [(Expiry, Vec<&str>); 5] = [
-            (Expiry::EX(60), vec!["EX", "60"]),
-            (Expiry::PX(1500), vec!["PX", "1500"]),
-            (Expiry::EXAT(100), vec!["EXAT", "100"]),
-            (Expiry::PXAT(200), vec!["PXAT", "200"]),
-            (Expiry::PERSIST, vec!["PERSIST"]),
-        ];
-        for (opt, expected) in cases {
-            let mut cmd = Cmd::new();
-            cmd.arg(opt);
-            assert_eq!(args_of(&cmd), expected);
-        }
-        assert!(!Expiry::EX(1).is_single_arg());
-        assert!(Expiry::PERSIST.is_single_arg());
+        assert_args(Expiry::EX(60), &["EX", "60"]);
+        assert_args(Expiry::PX(1500), &["PX", "1500"]);
+        assert_args(Expiry::EXAT(100), &["EXAT", "100"]);
+        assert_args(Expiry::PXAT(200), &["PXAT", "200"]);
+        assert_args(Expiry::PERSIST, &["PERSIST"]);
+        assert_args(Expiry::EXAT(u64::MAX), &["EXAT", "18446744073709551615"]);
     }
 
     #[test]
     fn lpos_options_args() {
-        let mut cmd = Cmd::new();
-        cmd.arg(LposOptions::default());
-        assert!(args_of(&cmd).is_empty());
-
-        let mut cmd = Cmd::new();
-        cmd.arg(LposOptions::default().count(2).rank(-1).maxlen(100));
-        assert_eq!(
-            args_of(&cmd),
-            vec!["COUNT", "2", "RANK", "-1", "MAXLEN", "100"]
+        assert_args_empty(LposOptions::default());
+        assert_args(
+            LposOptions::default().count(2).rank(-1).maxlen(100),
+            &["COUNT", "2", "RANK", "-1", "MAXLEN", "100"],
         );
-        assert!(!LposOptions::default().is_single_arg());
     }
 
     #[test]
     fn set_options_args() {
-        let mut cmd = Cmd::new();
-        cmd.arg(SetOptions::default());
-        assert!(args_of(&cmd).is_empty());
-
-        let mut cmd = Cmd::new();
-        cmd.arg(
+        assert_args_empty(SetOptions::default());
+        assert_args(
             SetOptions::default()
                 .conditional_set(ExistenceCheck::NX)
                 .get(true)
                 .with_expiration(SetExpiry::EX(60)),
+            &["NX", "GET", "EX", "60"],
         );
-        assert_eq!(args_of(&cmd), vec!["NX", "GET", "EX", "60"]);
+        assert_args(
+            SetOptions::default()
+                .conditional_set(ExistenceCheck::XX)
+                .value_comparison(ValueComparison::ifeq("old"))
+                .get(true)
+                .with_expiration(SetExpiry::PX(1500)),
+            &["XX", "IFEQ", "old", "GET", "PX", "1500"],
+        );
     }
 
     #[test]
-    fn expire_options_args() {
-        let cases = [
-            (ExpireOptions::HasNoExpiry, "NX"),
-            (ExpireOptions::HasExistingExpiry, "XX"),
-            (ExpireOptions::NewExpiryGreaterThanCurrent, "GT"),
-            (ExpireOptions::NewExpiryLessThanCurrent, "LT"),
-        ];
-        for (opt, expected) in cases {
-            let mut cmd = Cmd::new();
-            opt.add_to(&mut cmd);
-            assert_eq!(args_of(&cmd), vec![expected]);
-        }
+    fn value_comparison_args() {
+        assert_args(ValueComparison::ifeq("v"), &["IFEQ", "v"]);
+        assert_args(
+            ValueComparison::IFEQ([0u8].to_vec()),
+            &[b"IFEQ".as_slice(), &[0u8]],
+        );
+
+        // TODO #7237: Add `IFNE` tests.
     }
 
     #[test]
-    fn simple_enum_args() {
+    fn expire_option_args() {
+        assert_args_empty(ExpireOption::NONE);
+        assert_args(ExpireOption::NX, &["NX"]);
+        assert_args(ExpireOption::XX, &["XX"]);
+        assert_args(ExpireOption::GT, &["GT"]);
+        assert_args(ExpireOption::LT, &["LT"]);
+    }
+
+    #[test]
+    fn hash_field_expiration_options_args() {
+        assert_args_empty(HashFieldExpirationOptions::default());
+        assert_args(
+            HashFieldExpirationOptions::default()
+                .set_existence_check(FieldExistenceCheck::FNX)
+                .set_expiration(SetExpiry::PX(1500)),
+            &["FNX", "PX", "1500"],
+        );
+        assert_args(
+            HashFieldExpirationOptions::default().set_existence_check(FieldExistenceCheck::FXX),
+            &["FXX"],
+        );
+    }
+
+    #[test]
+    fn copy_options_args() {
+        assert_args_empty(CopyOptions::default());
+        assert_args(CopyOptions::default().replace(true), &["REPLACE"]);
+        assert_args(
+            CopyOptions::default().db(2).replace(true),
+            &["DB", "2", "REPLACE"],
+        );
+    }
+
+    #[test]
+    fn flush_all_options_args() {
+        assert_args(FlushAllOptions::default(), &["ASYNC"]);
+        assert_args(FlushDbOptions::default().blocking(true), &["SYNC"]);
+        assert_args(FunctionFlushOptions::default().blocking(true), &["SYNC"]);
+    }
+
+    #[test]
+    fn order_by_args() {
         assert_eq!(OrderBy::Asc.as_arg(), "ASC");
         assert_eq!(OrderBy::Desc.as_arg(), "DESC");
-        assert_eq!(FlushMode::Sync.as_arg(), "SYNC");
-        assert_eq!(FlushMode::Async.as_arg(), "ASYNC");
     }
 
     #[test]
     fn restore_options_args() {
-        let mut cmd = Cmd::new();
-        RestoreOptions::default().add_to(&mut cmd);
-        assert!(args_of(&cmd).is_empty());
-
-        let opts = RestoreOptions {
-            replace: true,
-            absttl: true,
-            idletime: Some(100),
-            frequency: Some(5),
-        };
-        let mut cmd = Cmd::new();
-        opts.add_to(&mut cmd);
-        assert_eq!(
-            args_of(&cmd),
-            vec!["REPLACE", "ABSTTL", "IDLETIME", "100", "FREQ", "5"]
+        assert_args_empty(RestoreOptions::default());
+        assert_args(
+            RestoreOptions {
+                replace: true,
+                absttl: true,
+                idletime: Some(100),
+                frequency: Some(5),
+            },
+            &["REPLACE", "ABSTTL", "IDLETIME", "100", "FREQ", "5"],
         );
     }
 
     #[test]
     fn migrate_options_args() {
-        let mut cmd = Cmd::new();
-        MigrateOptions::default().add_to(&mut cmd);
-        assert!(args_of(&cmd).is_empty());
-
-        let opts = MigrateOptions {
-            copy: true,
-            replace: true,
-            password: Some("pw".into()),
-            username: None,
-        };
-        let mut cmd = Cmd::new();
-        opts.add_to(&mut cmd);
-        assert_eq!(args_of(&cmd), vec!["COPY", "REPLACE", "AUTH", "pw"]);
-
-        let opts = MigrateOptions {
-            copy: false,
-            replace: false,
-            password: Some("pw".into()),
-            username: Some("user".into()),
-        };
-        let mut cmd = Cmd::new();
-        opts.add_to(&mut cmd);
-        assert_eq!(args_of(&cmd), vec!["AUTH2", "user", "pw"]);
+        assert_args_empty(MigrateOptions::default());
+        assert_args(
+            MigrateOptions {
+                copy: true,
+                replace: true,
+                password: Some("pw".into()),
+                username: None,
+            },
+            &["COPY", "REPLACE", "AUTH", "pw"],
+        );
+        assert_args(
+            MigrateOptions {
+                copy: false,
+                replace: false,
+                password: Some("pw".into()),
+                username: Some("user".into()),
+            },
+            &["AUTH2", "user", "pw"],
+        );
     }
 
     #[test]
@@ -676,13 +788,15 @@ mod tests {
     }
 
     #[test]
-    fn misc_option_args() {
+    fn client_pause_mode_args() {
         assert_eq!(ClientPauseMode::All.as_arg(), "ALL");
         assert_eq!(ClientPauseMode::Write.as_arg(), "WRITE");
+    }
+
+    #[test]
+    fn function_restore_policy_args() {
         assert_eq!(FunctionRestorePolicy::Append.as_arg(), "APPEND");
         assert_eq!(FunctionRestorePolicy::Flush.as_arg(), "FLUSH");
         assert_eq!(FunctionRestorePolicy::Replace.as_arg(), "REPLACE");
-        assert_eq!(HashFieldConditionalChange::OnlyIfAllExist.as_arg(), "FXX");
-        assert_eq!(HashFieldConditionalChange::OnlyIfNoneExist.as_arg(), "FNX");
     }
 }

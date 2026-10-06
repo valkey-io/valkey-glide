@@ -1087,6 +1087,45 @@ class TestSyncBatch:
         ttl_result = glide_sync_client.httl(key2, [field1])
         assert ttl_result[0] == -1  # -1 indicates no expiration
 
+    @pytest.mark.skip_if_version_below("9.1.0")
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_hgetdel_batch(self, glide_sync_client: TGlideClient):
+        key1 = get_random_string(10)
+        field1 = get_random_string(5)
+        field2 = get_random_string(5)
+        field3 = get_random_string(5)
+
+        # Set up initial hash with fields
+        assert (
+            glide_sync_client.hset(
+                key1, {field1: "value1", field2: "value2", field3: "value3"}
+            )
+            == 3
+        )
+
+        batch = (
+            Batch(is_atomic=False)
+            if isinstance(glide_sync_client, GlideClient)
+            else ClusterBatch(is_atomic=False)
+        )
+
+        # HGETDEL existing and non-existing field
+        batch.hgetdel(key1, [field1, "non_existent_field"])
+        # HGETDEL remaining fields - key should be removed automatically afterwards
+        batch.hgetdel(key1, [field2, field3])
+        # HLEN to confirm the key no longer exists (empty hash -> 0)
+        batch.hlen(key1)
+        # HGETDEL on a non-existent key returns null values
+        batch.hgetdel("non_existent_key", [field1, field2])
+
+        result = exec_batch(glide_sync_client, batch)
+        assert result is not None
+        assert result[0] == [b"value1", None]
+        assert result[1] == [b"value2", b"value3"]
+        assert result[2] == 0
+        assert result[3] == [None, None]
+
     @pytest.mark.skip_if_version_below("9.0.0")
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])

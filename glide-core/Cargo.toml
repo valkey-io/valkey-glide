@@ -1,10 +1,17 @@
 [package]
 name = "glide-core"
-version = "0.1.0"
+version = "0.1.1"
+
+# About
 description = "Core for Valkey GLIDE. This crate isn't intended to be used directly."
 authors = ["Valkey GLIDE Maintainers"]
 license = "Apache-2.0"
 
+# References
+homepage = "https://valkey.io/valkey-glide/"
+repository = "https://github.com/valkey-io/valkey-glide"
+
+# Build
 # TODO #7175: Specify rust-version
 edition = "2024"
 

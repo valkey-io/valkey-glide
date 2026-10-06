@@ -36,16 +36,23 @@ pub trait PipelineExt {
     /// dropped before decoding, and an atomic pipeline's `EXEC` reply is unwrapped.
     ///
     /// Mirrors `redis-rs`'s `query_async`.
-    fn query_async<'a, C: PipelineDispatch, T: FromValkeyValue + Send + 'a>(
+    fn query_async<'a, T: FromValkeyValue + Send + 'a>(
         &'a self,
-        con: &C,
+        con: &impl PipelineDispatch,
     ) -> ValkeyFuture<'a, T>;
+
+    /// Execute this pipeline on a GLIDE client, discarding the replies.
+    ///
+    /// Mirrors `redis-rs`'s `exec_async`.
+    fn exec_async<'a>(&'a self, con: &impl PipelineDispatch) -> ValkeyFuture<'a, ()> {
+        self.query_async(con)
+    }
 }
 
 impl PipelineExt for Pipeline {
-    fn query_async<'a, C: PipelineDispatch, T: FromValkeyValue + Send + 'a>(
+    fn query_async<'a, T: FromValkeyValue + Send + 'a>(
         &'a self,
-        con: &C,
+        con: &impl PipelineDispatch,
     ) -> ValkeyFuture<'a, T> {
         let reply = con.glide_dispatch_pipeline(self);
         Box::pin(async move {

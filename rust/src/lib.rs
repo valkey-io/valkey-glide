@@ -17,6 +17,7 @@ pub mod pipeline_options;
 pub mod routes;
 pub mod script;
 pub mod telemetry;
+pub mod types;
 pub mod value;
 pub mod write;
 
@@ -28,6 +29,15 @@ mod mock_tests;
 
 #[cfg(test)]
 mod parity_tests;
+
+#[cfg(test)]
+mod test_utils;
+
+/// Compiles the examples in `migration.md` as doctests.
+// TODO #7205: Review whether to keep this doctest-only hook.
+#[cfg(doctest)]
+#[doc = include_str!("../migration.md")]
+struct MigrationDoctests;
 
 // Aliases
 // -------
@@ -42,9 +52,12 @@ pub type ValkeyFuture<'a, T> = futures::future::BoxFuture<'a, ValkeyResult<T>>;
 // -------------------
 
 // Values
+pub use types::IntegerReplyOrNoOp;
+pub use types::ValueType;
 pub use value::FromValkeyValue;
 pub use value::ValkeyValue;
 pub use value::ValkeyVerbatimFormat;
+pub use write::ToSingleValkeyArg;
 pub use write::ToValkeyArgs;
 pub use write::ValkeyNumericBehavior;
 pub use write::ValkeyWrite;
@@ -83,22 +96,29 @@ pub use config::TlsConfig;
 pub use cmd::Cmd;
 pub use cmd::cmd;
 pub use commands::core::AsyncCommands;
+pub use commands::core::AsyncTypedCommands;
 pub use commands::prelude::*;
 pub use executor::CustomCommand;
 
 #[cfg(feature = "sync")]
 pub use commands::core::Commands;
 
+#[cfg(feature = "sync")]
+pub use commands::core::TypedCommands;
+
 /// Shared command options.
 pub use commands::options::ClientPauseMode;
-pub use commands::options::ConditionalChange;
+pub use commands::options::CopyOptions;
 pub use commands::options::Direction;
 pub use commands::options::ExistenceCheck;
-pub use commands::options::ExpireOptions;
+pub use commands::options::ExpireOption;
 pub use commands::options::Expiry;
-pub use commands::options::FlushMode;
+pub use commands::options::FieldExistenceCheck;
+pub use commands::options::FlushAllOptions;
+pub use commands::options::FlushDbOptions;
+pub use commands::options::FunctionFlushOptions;
 pub use commands::options::FunctionRestorePolicy;
-pub use commands::options::HashFieldConditionalChange;
+pub use commands::options::HashFieldExpirationOptions;
 pub use commands::options::Limit;
 pub use commands::options::LposOptions;
 pub use commands::options::MigrateOptions;
@@ -107,6 +127,7 @@ pub use commands::options::OrderBy;
 pub use commands::options::RestoreOptions;
 pub use commands::options::SetExpiry;
 pub use commands::options::SetOptions;
+pub use commands::options::ValueComparison;
 
 /// Command group-specific options.
 pub use commands::bitmap::BitEncoding;
@@ -114,23 +135,42 @@ pub use commands::bitmap::BitFieldOffset;
 pub use commands::bitmap::BitFieldSubcommand;
 pub use commands::bitmap::BitOverflow;
 pub use commands::bitmap::BitmapIndexType;
+pub use commands::geo::GeoCoord;
+pub use commands::geo::GeoSearchOptions;
+pub use commands::geo::GeoSearchResult;
 pub use commands::geo::GeoSearchShape;
+pub use commands::geo::GeoSearchStoreOptions;
 pub use commands::geo::GeoUnit;
-pub use commands::geo::GeospatialData;
 pub use commands::sorted_set::AggregationType;
 pub use commands::sorted_set::LexBound;
 pub use commands::sorted_set::ScoreBound;
-pub use commands::stream::PendingConsumer;
 pub use commands::stream::StreamAddOptions;
+pub use commands::stream::StreamAutoClaimOptions;
+pub use commands::stream::StreamAutoClaimReply;
 pub use commands::stream::StreamClaimOptions;
+pub use commands::stream::StreamClaimReply;
 pub use commands::stream::StreamEntry;
 pub use commands::stream::StreamGroupCreateOptions;
+pub use commands::stream::StreamId;
+pub use commands::stream::StreamInfoConsumer;
+pub use commands::stream::StreamInfoConsumersReply;
+pub use commands::stream::StreamInfoGroup;
+pub use commands::stream::StreamInfoGroupsReply;
+pub use commands::stream::StreamInfoStreamReply;
+pub use commands::stream::StreamKey;
+pub use commands::stream::StreamMaxlen;
+pub use commands::stream::StreamPendingCountReply;
+pub use commands::stream::StreamPendingData;
+pub use commands::stream::StreamPendingId;
+pub use commands::stream::StreamPendingReply;
+pub use commands::stream::StreamRangeReply;
 pub use commands::stream::StreamReadGroupOptions;
 pub use commands::stream::StreamReadOptions;
+pub use commands::stream::StreamReadReply;
 pub use commands::stream::StreamTrimOptions;
 pub use commands::stream::StreamTrimStrategy;
+pub use commands::stream::StreamTrimmingMode;
 pub use commands::stream::XPendingEntry;
-pub use commands::stream::XPendingSummary;
 
 // Scan iterators
 pub use commands::scan::ScanIter;

@@ -3,8 +3,11 @@ name: Rust - Continuous Deployment
 on:
     workflow_dispatch:
         inputs:
+            # A crate's dry run fails if it depends on a version of another crate that hasn't
+            # been published yet, including the internal GLIDE crates (glide-logger,
+            # glide-telemetry, glide-core-engine, and glide-core).
             publish:
-                description: "Publish to crates.io"
+                description: "Publish to crates.io; otherwise, perform a dry run"
                 required: true
                 type: boolean
                 default: false
@@ -16,11 +19,6 @@ concurrency:
 
 permissions:
     contents: read
-
-# Each crate has a test job and a publish job. Each publish job:
-# - Runs in the AWS_ACTIONS environment when publishing so that approval is required.
-# - Has `id-token: write`, which crates.io trusted publishing (OIDC) requires.
-# - Depends on the publish jobs of the crates it depends on.
 
 # TODO #7261: Replace with `cargo publish --workspace`.
 jobs:
@@ -37,51 +35,48 @@ jobs:
                       exit 1
                   fi
 
-    # --- glide-logger crate ----------------------------------------------------------------------
-
     test-glide-logger:
         needs:
             - validate-branch
         uses: ./.github/workflows/glide-logger.yml
-
-    publish-glide-logger:
-        needs:
-            - test-glide-logger
-        runs-on: ubuntu-latest
-        environment: ${{ inputs.publish && 'AWS_ACTIONS' || '' }}
-        permissions:
-            contents: read
-            id-token: write
-        steps:
-            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-              with:
-                  persist-credentials: false
-
-            - name: Install Rust toolchain
-              uses: ./.github/actions/install-rust
-
-            - name: Publish glide-logger
-              uses: ./.github/workflows/publish-rust-crate
-              with:
-                  crate: glide-logger
-                  publish: ${{ inputs.publish }}
-
-    # --- glide-telemetry crate -------------------------------------------------------------------
 
     test-glide-telemetry:
         needs:
             - validate-branch
         uses: ./.github/workflows/glide-telemetry.yml
 
-    publish-glide-telemetry:
+    test-glide-core-engine:
         needs:
-            - publish-glide-logger
+            - validate-branch
+        uses: ./.github/workflows/glide-core-engine.yml
+
+    test-glide-core:
+        needs:
+            - validate-branch
+        uses: ./.github/workflows/glide-core.yml
+
+    test-valkey-glide:
+        needs:
+            - validate-branch
+        uses: ./.github/workflows/rust.yml
+
+    publish-crates:
+        needs:
+            - test-glide-logger
             - test-glide-telemetry
+            - test-glide-core-engine
+            - test-glide-core
+            - test-valkey-glide
         runs-on: ubuntu-latest
+        # Use AWS_ACTIONS to require maintainer approval when publishing.
         environment: ${{ inputs.publish && 'AWS_ACTIONS' || '' }}
         permissions:
             contents: read
+            # Required by crates.io trusted publishing (OIDC).
             id-token: write
+        env:
+            # Share build artifacts across crates to avoid rebuilding common dependencies.
+            CARGO_TARGET_DIR: ${{ github.workspace }}/target
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
               with:
@@ -89,6 +84,14 @@ jobs:
 
             - name: Install Rust toolchain
               uses: ./.github/actions/install-rust
+
+            # Each crate depends on those above it. If a step fails,
+            # re-run the job: already-published versions are skipped.
+            - name: Publish glide-logger
+              uses: ./.github/workflows/publish-rust-crate
+              with:
+                  crate: glide-logger
+                  publish: ${{ inputs.publish }}
 
             - name: Publish glide-telemetry
               uses: ./.github/workflows/publish-rust-crate
@@ -96,33 +99,76 @@ jobs:
                   crate: glide-telemetry
                   publish: ${{ inputs.publish }}
 
-    # --- glide-core-engine crate -----------------------------------------------------------------
-
-    test-glide-core-engine:
-        needs:
-            - validate-branch
-        uses: ./.github/workflows/glide-core-engine.yml
-
-    publish-glide-core-engine:
-        needs:
-            - publish-glide-logger
-            - publish-glide-telemetry
-            - test-glide-core-engine
-        runs-on: ubuntu-latest
-        environment: ${{ inputs.publish && 'AWS_ACTIONS' || '' }}
-        permissions:
-            contents: read
-            id-token: write
-        steps:
-            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-              with:
-                  persist-credentials: false
-
-            - name: Install Rust toolchain
-              uses: ./.github/actions/install-rust
-
             - name: Publish glide-core-engine
               uses: ./.github/workflows/publish-rust-crate
               with:
                   crate: glide-core/redis-rs/redis
                   publish: ${{ inputs.publish }}
+
+            - name: Publish glide-core
+              uses: ./.github/workflows/publish-rust-crate
+              with:
+                  crate: glide-core
+                  publish: ${{ inputs.publish }}
+
+            - name: Publish valkey-glide
+              uses: ./.github/workflows/publish-rust-crate
+              with:
+                  crate: rust
+                  publish: ${{ inputs.publish }}
+
+    # TODO #6997: Run smoke tests against the published crate once they are available.
+    test-published-crate:
+        needs:
+            - publish-crates
+        if: ${{ inputs.publish }}
+        strategy:
+            fail-fast: false
+            # TODO #6997: Use the shared test matrix instead of duplicating the hosts in rust.yml.
+            matrix:
+                host:
+                    - runner: ubuntu-24.04
+                      target: x86_64-unknown-linux-gnu
+                    - runner: ubuntu-24.04-arm
+                      target: aarch64-unknown-linux-gnu
+        runs-on: ${{ matrix.host.runner }}
+        timeout-minutes: 30
+        steps:
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+              with:
+                  persist-credentials: false
+
+            - name: Determine minimum supported Rust version (MSRV)
+              id: msrv
+              working-directory: ./rust
+              shell: bash
+              run: |
+                  # Fetch MSRV from Cargo.toml (rust-version = "X.Y.Z").
+                  msrv=$(awk -F'"' '/^rust-version/ { print $2; exit }' Cargo.toml)
+                  if [ -z "$msrv" ]; then
+                      echo "::error::rust-version not found in rust/Cargo.toml"
+                      exit 1
+                  fi
+                  echo "toolchain=$msrv" >> "$GITHUB_OUTPUT"
+
+            - name: Install Rust toolchain
+              uses: ./.github/actions/install-rust
+              with:
+                  toolchain: ${{ steps.msrv.outputs.toolchain }}
+                  target: ${{ matrix.host.target }}
+
+            - name: Build a new project that depends on the published crate
+              working-directory: ${{ runner.temp }}
+              shell: bash
+              run: |
+                  # Fetch version from Cargo.toml (version = "X.Y.Z").
+                  version=$(awk -F'"' '/^version/ { print $2; exit }' "${GITHUB_WORKSPACE}/rust/Cargo.toml")
+                  if [ -z "$version" ]; then
+                      echo "::error::version not found in rust/Cargo.toml"
+                      exit 1
+                  fi
+
+                  cargo new consume
+                  cd consume
+                  cargo add "valkey-glide@=${version}"
+                  cargo build

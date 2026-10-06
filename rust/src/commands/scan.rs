@@ -23,11 +23,11 @@
 
 use crate::ValkeyResult;
 use crate::cmd::Cmd;
-use crate::commands::core::AsyncCommands;
+use crate::commands::core::CommandDispatch;
 use crate::value::FromValkeyValue;
 
 #[cfg(feature = "sync")]
-use crate::commands::core::Commands;
+use crate::commands::core::SyncCommandDispatch;
 
 /// Argument layout of one scan page: `prefix… <cursor> suffix…`
 /// (e.g. `HSCAN key <cursor> MATCH pattern`).
@@ -69,7 +69,7 @@ pub struct ScanIter<'a, C: ?Sized, RV> {
     batch: std::vec::IntoIter<RV>,
 }
 
-impl<'a, C: AsyncCommands, RV: FromValkeyValue> ScanIter<'a, C, RV> {
+impl<'a, C: CommandDispatch, RV: FromValkeyValue> ScanIter<'a, C, RV> {
     /// Returns an iterator for the scan, or
     /// an error if fetching the first page fails.
     pub(crate) async fn new(
@@ -81,7 +81,7 @@ impl<'a, C: AsyncCommands, RV: FromValkeyValue> ScanIter<'a, C, RV> {
 
         // Fetch first page immediately.
         let (cursor, batch): (u64, Vec<RV>) = FromValkeyValue::from_owned_valkey_value(
-            con.glide_send_command(spec.to_cmd(0)).await?,
+            con.glide_dispatch_command(spec.to_cmd(0)).await?,
         )?;
         Ok(ScanIter {
             con,
@@ -119,7 +119,7 @@ impl<'a, C: AsyncCommands, RV: FromValkeyValue> ScanIter<'a, C, RV> {
     async fn fetch_page(&mut self) -> ValkeyResult<()> {
         let reply = self
             .con
-            .glide_send_command(self.spec.to_cmd(self.cursor))
+            .glide_dispatch_command(self.spec.to_cmd(self.cursor))
             .await?;
         let (cursor, batch): (u64, Vec<RV>) = FromValkeyValue::from_owned_valkey_value(reply)?;
         self.cursor = cursor;
@@ -148,7 +148,7 @@ pub struct SyncScanIter<'a, C: ?Sized, RV> {
 }
 
 #[cfg(feature = "sync")]
-impl<'a, C: Commands, RV: FromValkeyValue> SyncScanIter<'a, C, RV> {
+impl<'a, C: SyncCommandDispatch, RV: FromValkeyValue> SyncScanIter<'a, C, RV> {
     /// Returns an iterator for the scan, or
     /// an error if fetching the first page fails.
     pub(crate) fn new(
@@ -160,7 +160,7 @@ impl<'a, C: Commands, RV: FromValkeyValue> SyncScanIter<'a, C, RV> {
 
         // Fetch first page immediately.
         let (cursor, batch): (u64, Vec<RV>) =
-            FromValkeyValue::from_owned_valkey_value(con.glide_send_command(spec.to_cmd(0))?)?;
+            FromValkeyValue::from_owned_valkey_value(con.glide_dispatch_command(spec.to_cmd(0))?)?;
         Ok(SyncScanIter {
             con,
             spec,
@@ -171,7 +171,9 @@ impl<'a, C: Commands, RV: FromValkeyValue> SyncScanIter<'a, C, RV> {
 
     /// Fetch the page at the current cursor.
     fn fetch_page(&mut self) -> ValkeyResult<()> {
-        let reply = self.con.glide_send_command(self.spec.to_cmd(self.cursor))?;
+        let reply = self
+            .con
+            .glide_dispatch_command(self.spec.to_cmd(self.cursor))?;
         let (cursor, batch): (u64, Vec<RV>) = FromValkeyValue::from_owned_valkey_value(reply)?;
         self.cursor = cursor;
         self.batch = batch.into_iter();
@@ -180,7 +182,7 @@ impl<'a, C: Commands, RV: FromValkeyValue> SyncScanIter<'a, C, RV> {
 }
 
 #[cfg(feature = "sync")]
-impl<C: Commands, RV: FromValkeyValue> Iterator for SyncScanIter<'_, C, RV> {
+impl<C: SyncCommandDispatch, RV: FromValkeyValue> Iterator for SyncScanIter<'_, C, RV> {
     type Item = ValkeyResult<RV>;
 
     /// The next element, an error if fetching a page fails, or `None` if the
@@ -246,15 +248,17 @@ mod tests {
         }
     }
 
-    impl crate::commands::core::AsyncCommands for MockConnection {
-        fn glide_send_command<'a>(&'a self, _cmd: Cmd) -> ValkeyFuture<'a, ValkeyValue> {
+    #[sealed::sealed]
+    impl crate::commands::core::CommandDispatch for MockConnection {
+        fn glide_dispatch_command<'a>(&'a self, _cmd: Cmd) -> ValkeyFuture<'a, ValkeyValue> {
             Box::pin(async move { self.pop() })
         }
     }
 
     #[cfg(feature = "sync")]
-    impl crate::commands::core::Commands for MockConnection {
-        fn glide_send_command(&self, _cmd: Cmd) -> ValkeyResult<ValkeyValue> {
+    #[sealed::sealed]
+    impl crate::commands::core::SyncCommandDispatch for MockConnection {
+        fn glide_dispatch_command(&self, _cmd: Cmd) -> ValkeyResult<ValkeyValue> {
             self.pop()
         }
     }

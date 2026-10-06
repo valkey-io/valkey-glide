@@ -48,9 +48,17 @@ impl MockConnectionBehavior {
         }
     }
 
+    /// `id` must be unique per live test: it keys the process-global mock registry.
     #[must_use]
     pub fn register_new(id: &str, handler: Handler) -> RemoveHandler {
-        get_behaviors().insert(id.to_string(), Self::new(id, handler));
+        let previous = get_behaviors().insert(id.to_string(), Self::new(id, handler));
+        // The behaviors map is process-global and `RemoveHandler::drop` evicts by name,
+        // so two live tests sharing a name would tear each other's handler down.
+        assert!(
+            previous.is_none(),
+            "mock connection behavior `{id}` is already registered; use a unique name per test \
+             (e.g. the test function name)"
+        );
         RemoveHandler(vec![id.to_string()])
     }
 

@@ -3,14 +3,14 @@
 
 mod common;
 
-use glide::{AsyncCommands, ConnectionManagementCommands};
+use glide::{AsyncTypedCommands, ConnectionManagementCommands};
 
 resp_test!(ping, c, {
     assert_eq!(c.ping().await.unwrap(), "PONG");
 });
 
 resp_test!(ping_message, c, {
-    assert_eq!(c.ping_message("hello").await.unwrap().as_ref(), b"hello");
+    assert_eq!(c.ping_message("hello").await.unwrap(), "hello");
 });
 
 resp_test!(echo, c, {
@@ -30,11 +30,9 @@ resp_test!(client_id_positive, c, {
 });
 
 resp_test!(client_setname_getname, c, {
+    assert_eq!(c.client_getname().await.unwrap(), None);
     c.client_setname("myconn").await.unwrap();
-    assert_eq!(
-        c.client_getname().await.unwrap().as_deref(),
-        Some(&b"myconn"[..])
-    );
+    assert_eq!(c.client_getname().await.unwrap().as_deref(), Some("myconn"));
 });
 
 resp_test!(select_database, c, {
@@ -42,7 +40,7 @@ resp_test!(select_database, c, {
     c.select(1).await.unwrap();
     let k = common::key("k");
     let _: () = c.set(&k, "v").await.unwrap();
-    let got: Option<glide::Bytes> = c.get(&k).await.unwrap();
-    assert_eq!(got.as_deref(), Some(&b"v"[..]));
+    let got: Option<String> = c.get(&k).await.unwrap();
+    assert_eq!(got.as_deref(), Some("v"));
     c.select(0).await.unwrap();
 });
