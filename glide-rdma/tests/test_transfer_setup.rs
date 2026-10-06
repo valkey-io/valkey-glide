@@ -6,7 +6,7 @@
 
 #![cfg(feature = "libfabric")]
 
-use glide_rdma::{FabricConfig, Provider, RdmaFabric, TransferReply, encode_hex};
+use glide_rdma::{FabricConfig, Provider, RdmaFabric, encode_hex};
 
 /// The whole client-side sequence short of the transfer itself.
 #[test]
@@ -48,7 +48,6 @@ fn a_registered_buffer_produces_a_sendable_set_command() {
 
     // The server replied, so the buffer comes back unchanged and can be lent again.
     // SAFETY: the command was never sent.
-    let (buffer, receipt) = unsafe { loan.reclaim(TransferReply::Stored) }.expect("reclaims");
-    assert_eq!(receipt, None);
+    let buffer = unsafe { loan.cancel_unsent() };
     assert_eq!(&buffer.as_host()[..payload.len()], payload);
 }

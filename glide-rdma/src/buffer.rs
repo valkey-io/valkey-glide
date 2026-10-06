@@ -307,10 +307,12 @@ impl fmt::Debug for RdmaBuffer {
 /// [`RdmaBuffer::lend_for_set`].
 ///
 /// The server may be using the memory at any moment while this exists.
-/// There are three ways for a loan to end:
+/// There are four ways for a loan to end:
 ///
 /// - [`Self::reclaim`] once the server has replied. The buffer can then be read and
 ///   lent again.
+/// - [`Self::cancel_unsent`] when the command was never sent, which hands the
+///   buffer straight back.
 /// - [`Self::recall`] when no reply is coming, for example because the connection
 ///   failed or the caller gave up. This revokes the buffer and parks its memory.
 /// - Dropping the loan, for example when the future awaiting the reply is
@@ -318,7 +320,9 @@ impl fmt::Debug for RdmaBuffer {
 ///
 /// Closing a region does not stop a write the provider already accepted
 /// (`fi_mr(3)`), so memory a loan ends without a reply is parked in the fabric
-/// and freed only when the fabric closes. Register fresh memory to carry on.
+/// and freed only when the fabric closes. Parked memory only accumulates;
+/// [`RdmaFabric::parked_bytes`] reports how much, and replacing the fabric is the
+/// only way to get it back. Register fresh memory to carry on.
 ///
 /// On tcp, the fabric's progress thread keeps polling for as long as a loan exists,
 /// because that provider moves no bytes unless the client polls.
@@ -385,6 +389,15 @@ impl LentBuffer {
         fabric.park(host);
         drop(registration);
         Ok(())
+    }
+
+    /// End a loan whose command was never sent, handing the buffer straight back.
+    ///
+    /// SAFETY: The command this loan was lent for must not have been sent. Once it has, only
+    /// the server's reply proves it is done with the window.
+    pub unsafe fn cancel_unsent(self) -> RdmaBuffer {
+        let (buffer, _, _progress) = self.dismantle();
+        buffer
     }
 
     /// Whether the buffer has been revoked, for example through an [`RdmaRevoker`].
@@ -651,11 +664,13 @@ mod tests {
     }
 
     /// An accepted write can land after the region closes, so the memory must
-    /// outlive the endpoint, not the loan.
+    /// outlive the endpoint, not the loan. The cost is that parked memory is held
+    /// for the fabric's whole lifetime.
     #[test]
     fn recalling_a_loan_parks_its_memory_until_the_fabric_closes() {
         let fabric = fabric();
         let (memory, freed, _) = tracked();
+        let size = memory.bytes.len();
         let loan = lent_for_get(fabric.register(memory).unwrap());
 
         loan.recall().expect("the region closes");
@@ -665,8 +680,29 @@ mod tests {
             "recalled memory is not freed"
         );
         assert_eq!(fabric.parked(), 1);
+        assert_eq!(fabric.parked_bytes(), size);
         drop(fabric);
         assert!(freed.load(Ordering::SeqCst), "the fabric frees it on close");
+    }
+
+    /// Nothing was sent, so nothing can be in flight.
+    #[test]
+    fn cancelling_an_unsent_loan_hands_the_buffer_back() {
+        let fabric = fabric();
+        let (memory, freed, _) = tracked();
+        let loan = lent_for_get(fabric.register(memory).unwrap());
+        assert_eq!(fabric.transfers_in_flight(), 1);
+
+        let buffer = unsafe { loan.cancel_unsent() };
+
+        assert!(!buffer.is_revoked());
+        assert_eq!(fabric.transfers_in_flight(), 0);
+        assert_eq!(fabric.parked_bytes(), 0);
+        drop(buffer);
+        assert!(
+            freed.load(Ordering::SeqCst),
+            "freed as any unlent buffer is"
+        );
     }
 
     #[test]

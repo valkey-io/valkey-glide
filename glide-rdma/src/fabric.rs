@@ -173,11 +173,27 @@ impl RdmaFabric {
 
     /// Keep `host` allocated until this fabric closes; see [`crate::LentBuffer`].
     pub(crate) fn park(&self, host: HostMemory) {
+        let mut parked = self
+            .inner
+            .parked
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+        parked.push(host);
+        let total: usize = parked.iter().map(HostMemory::len).sum();
+        log::warn!(
+            "parked {} bytes of registered memory until the fabric closes, {total} in all",
+            parked.last().map_or(0, HostMemory::len)
+        );
+    }
+
+    pub fn parked_bytes(&self) -> usize {
         self.inner
             .parked
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
-            .push(host);
+            .iter()
+            .map(HostMemory::len)
+            .sum()
     }
 
     /// Whether `self` and `other` are the same open fabric, rather than two opened
