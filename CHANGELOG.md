@@ -51,6 +51,7 @@
 
 ### Changes
 
+* Java: add useMutualTlsFromKeyStore to load mTLS client identity ([#7258](https://github.com/valkey-io/valkey-glide/pull/7258))
 * Java: Add `HGETDEL` command support ([#6145](https://github.com/valkey-io/valkey-glide/issues/6145))
 * Node: Add `HGETDEL` command support ([#6145](https://github.com/valkey-io/valkey-glide/issues/6145))
 * Python: Add `HGETDEL` command support ([#6145](https://github.com/valkey-io/valkey-glide/issues/6145))
