@@ -127,7 +127,7 @@ fn create_pool_client(
         client_type,
         None, // no pubsub callback for pooled clients (managed at pool level)
         None, // no address resolver (uses the one in ConnectionRequest if any)
-        None, // no credential provider for pooled clients (pool manages credentials separately)
+        None, // custom credential providers are rejected by glide_pool_create
         client_id,
     )?;
 
@@ -204,6 +204,17 @@ pub unsafe extern "C" fn glide_pool_create(
                     "pool",
                     "Cannot create pool with pubsub subscriptions in client config. \
                      Use the main client's pubsub API instead.",
+                );
+                return POOL_ERROR_UNSUPPORTED_CONFIG;
+            }
+            if r.credential_provider_key
+                .as_ref()
+                .is_some_and(|key| !key.is_empty())
+            {
+                glide_logger::log_error(
+                    "pool",
+                    "Cannot create pool with a credential_provider_key. Custom IAM credential \
+                     providers are not supported for pools.",
                 );
                 return POOL_ERROR_UNSUPPORTED_CONFIG;
             }
@@ -1200,6 +1211,35 @@ pub unsafe extern "C" fn glide_scope_execute(
                 arena: std::ptr::null_mut(),
             }))
         }
+    }
+}
+
+#[cfg(test)]
+mod pool_config_tests {
+    use super::*;
+    use protobuf::Message;
+
+    #[test]
+    fn raw_pool_request_rejects_credential_provider_key() {
+        let mut request = connection_request::ConnectionRequest::new();
+        request.credential_provider_key = Some("custom-provider".into());
+        let bytes = request.write_to_bytes().expect("serialize request");
+        let client_type = ClientType::SyncClient;
+
+        let result = unsafe {
+            glide_pool_create(
+                1,
+                0,
+                1_000,
+                1_000,
+                0,
+                bytes.as_ptr(),
+                bytes.len(),
+                &client_type,
+            )
+        };
+
+        assert_eq!(result, POOL_ERROR_UNSUPPORTED_CONFIG);
     }
 }
 

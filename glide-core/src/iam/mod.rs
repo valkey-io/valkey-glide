@@ -47,6 +47,29 @@ pub type CredentialsProvider = Arc<
         + Sync,
 >;
 
+type CustomCredentials = (
+    String,
+    String,
+    Option<String>,
+    Option<std::time::SystemTime>,
+);
+
+fn validate_custom_credentials(
+    credentials: CustomCredentials,
+) -> Result<CustomCredentials, GlideIAMError> {
+    if credentials.0.trim().is_empty() {
+        return Err(GlideIAMError::CredentialsError(
+            "Custom credentials provider returned a blank access_key_id".to_string(),
+        ));
+    }
+    if credentials.1.trim().is_empty() {
+        return Err(GlideIAMError::CredentialsError(
+            "Custom credentials provider returned a blank secret_access_key".to_string(),
+        ));
+    }
+    Ok(credentials)
+}
+
 /// Custom error type for IAM operations in Glide
 #[derive(Debug, Error)]
 pub enum GlideIAMError {
@@ -551,22 +574,23 @@ impl IAMTokenManager {
             // refresh indefinitely.  10 seconds is generous for a network round
             // trip while still being short enough to surface the problem quickly.
             const CREDENTIALS_CALLBACK_TIMEOUT: Duration = Duration::from_secs(10);
+            let credentials = tokio::time::timeout(
+                CREDENTIALS_CALLBACK_TIMEOUT,
+                tokio::task::spawn_blocking(move || provider()),
+            )
+            .await
+            .map_err(|_| {
+                GlideIAMError::CredentialsError(format!(
+                    "Custom credentials callback did not return within {:?}. \
+                     Check your GlideCredentialProvider implementation.",
+                    CREDENTIALS_CALLBACK_TIMEOUT
+                ))
+            })?
+            .map_err(|e| {
+                GlideIAMError::CredentialsError(format!("spawn_blocking panicked: {e}"))
+            })??;
             let (access_key_id, secret_access_key, session_token, expires_at) =
-                tokio::time::timeout(
-                    CREDENTIALS_CALLBACK_TIMEOUT,
-                    tokio::task::spawn_blocking(move || provider()),
-                )
-                .await
-                .map_err(|_| {
-                    GlideIAMError::CredentialsError(format!(
-                        "Custom credentials callback did not return within {:?}. \
-                         Check your GlideCredentialProvider implementation.",
-                        CREDENTIALS_CALLBACK_TIMEOUT
-                    ))
-                })?
-                .map_err(|e| {
-                    GlideIAMError::CredentialsError(format!("spawn_blocking panicked: {e}"))
-                })??;
+                validate_custom_credentials(credentials)?;
             aws_credential_types::Credentials::new(
                 access_key_id,
                 secret_access_key,
@@ -668,6 +692,34 @@ mod tests {
     use tokio::time::{Duration, sleep};
 
     const IAM_TOKENS_JSON: &str = "/tmp/iam_tokens.json";
+
+    #[test]
+    fn custom_credentials_reject_blank_required_keys() {
+        let blank_access =
+            validate_custom_credentials((" \t ".to_string(), "secret".to_string(), None, None))
+                .expect_err("blank access key must fail");
+        assert!(blank_access.to_string().contains("access_key_id"));
+
+        let blank_secret =
+            validate_custom_credentials(("access".to_string(), "\n ".to_string(), None, None))
+                .expect_err("blank secret key must fail");
+        assert!(blank_secret.to_string().contains("secret_access_key"));
+    }
+
+    #[test]
+    fn custom_credentials_preserve_original_strings() {
+        let credentials = (
+            " access ".to_string(),
+            " secret ".to_string(),
+            Some(" token ".to_string()),
+            None,
+        );
+
+        let validated =
+            validate_custom_credentials(credentials.clone()).expect("credentials should be valid");
+
+        assert_eq!(validated, credentials);
+    }
 
     // This ensures the file is deleted once before all tests
     static INIT: Once = Once::new();

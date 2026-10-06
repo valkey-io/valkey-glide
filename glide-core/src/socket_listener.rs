@@ -899,21 +899,36 @@ pub fn close_socket(socket_path: &String) {
     let _ = std::fs::remove_file(socket_path);
 }
 
+struct CredentialProviderClaim {
+    key: String,
+    provider: crate::iam::CredentialsProvider,
+}
+
+impl CredentialProviderClaim {
+    fn restore(self) {
+        if crate::credential_provider_registry::register_if_absent(self.key.clone(), self.provider)
+            .is_err()
+        {
+            log_warn(
+                "credential_provider",
+                format!(
+                    "Did not restore credential_provider_key '{}' because a newer provider is registered",
+                    self.key
+                ),
+            );
+        }
+    }
+}
+
 fn take_credential_provider(
     credential_provider_key: Option<String>,
     conn_request: &mut crate::client::ConnectionRequest,
-) -> Result<(), ClientCreationError> {
+) -> Result<Option<CredentialProviderClaim>, ClientCreationError> {
     let Some(key) = credential_provider_key else {
-        return Ok(());
+        return Ok(None);
     };
 
-    // Atomically claim a direct client's provider exactly once. A missing key must not silently
-    // fall back to the process-wide AWS credential chain.
-    let provider = crate::credential_provider_registry::remove(&key).ok_or_else(|| {
-        ClientCreationError::ConfigurationError(format!(
-            "credential_provider_key '{key}' was not found in the registry; it may have already been consumed"
-        ))
-    })?;
+    // Validate the request before destructively claiming the registry entry.
     let iam_config = conn_request
         .authentication_info
         .as_mut()
@@ -924,8 +939,16 @@ fn take_credential_provider(
                     .to_string(),
             )
         })?;
-    iam_config.credentials_provider = Some(provider);
-    Ok(())
+
+    // Atomically claim a direct client's provider exactly once. A missing key must not silently
+    // fall back to the process-wide AWS credential chain.
+    let provider = crate::credential_provider_registry::remove(&key).ok_or_else(|| {
+        ClientCreationError::ConfigurationError(format!(
+            "credential_provider_key '{key}' was not found in the registry; it may have already been consumed"
+        ))
+    })?;
+    iam_config.credentials_provider = Some(provider.clone());
+    Ok(Some(CredentialProviderClaim { key, provider }))
 }
 
 async fn create_client(
@@ -957,11 +980,17 @@ async fn create_client(
         conn_request.address_resolver = Some(resolver);
     }
 
-    take_credential_provider(credential_provider_key, &mut conn_request)?;
+    let credential_provider_claim =
+        take_credential_provider(credential_provider_key, &mut conn_request)?;
 
     let client = match Client::new(conn_request, push_tx).await {
         Ok(client) => client,
-        Err(err) => return Err(ClientCreationError::ConnectionError(err)),
+        Err(err) => {
+            if let Some(claim) = credential_provider_claim {
+                claim.restore();
+            }
+            return Err(ClientCreationError::ConnectionError(err));
+        }
     };
     write_result(Ok(Value::Okay), 0, writer, None).await?;
     Ok(client)
@@ -1375,7 +1404,10 @@ mod credential_provider_tests {
         crate::credential_provider_registry::register(key.clone(), provider());
         let mut request = request_with_iam();
 
-        take_credential_provider(Some(key.clone()), &mut request).expect("provider should resolve");
+        let claim = take_credential_provider(Some(key.clone()), &mut request)
+            .expect("provider should resolve");
+        assert!(claim.is_some());
+        drop(claim);
 
         assert!(crate::credential_provider_registry::get(&key).is_none());
         let installed = request
@@ -1397,8 +1429,10 @@ mod credential_provider_tests {
         assert!(crate::credential_provider_registry::remove(&key).is_some());
         let mut request = request_with_iam();
 
-        let error = take_credential_provider(Some(key), &mut request)
-            .expect_err("a consumed key must fail client creation");
+        let error = match take_credential_provider(Some(key), &mut request) {
+            Err(error) => error,
+            Ok(_) => panic!("a consumed key must fail client creation"),
+        };
 
         assert!(matches!(error, ClientCreationError::ConfigurationError(_)));
         assert!(error.to_string().contains("not found in the registry"));
@@ -1413,16 +1447,36 @@ mod credential_provider_tests {
     }
 
     #[test]
-    fn credential_provider_key_without_iam_config_fails_closed_after_consumption() {
+    fn credential_provider_key_without_iam_config_fails_without_consumption() {
         let key = Uuid::new_v4().to_string();
         crate::credential_provider_registry::register(key.clone(), provider());
         let mut request = crate::client::ConnectionRequest::default();
 
-        let error = take_credential_provider(Some(key.clone()), &mut request)
-            .expect_err("a provider without IAM configuration must fail client creation");
+        let error = match take_credential_provider(Some(key.clone()), &mut request) {
+            Err(error) => error,
+            Ok(_) => panic!("a provider without IAM configuration must fail client creation"),
+        };
 
         assert!(matches!(error, ClientCreationError::ConfigurationError(_)));
         assert!(error.to_string().contains("no IAM configuration"));
+        assert!(crate::credential_provider_registry::get(&key).is_some());
+        assert!(crate::credential_provider_registry::remove(&key).is_some());
+    }
+
+    #[test]
+    fn claimed_provider_can_be_restored_after_downstream_failure() {
+        let key = Uuid::new_v4().to_string();
+        crate::credential_provider_registry::register(key.clone(), provider());
+        let mut request = request_with_iam();
+
+        let claim = take_credential_provider(Some(key.clone()), &mut request)
+            .expect("provider should resolve")
+            .expect("provider should be claimed");
         assert!(crate::credential_provider_registry::get(&key).is_none());
+
+        claim.restore();
+
+        assert!(crate::credential_provider_registry::get(&key).is_some());
+        assert!(crate::credential_provider_registry::remove(&key).is_some());
     }
 }

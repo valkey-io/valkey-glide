@@ -325,6 +325,17 @@ pub type FailureCallback = unsafe extern "C-unwind" fn(
     error_type: RequestErrorType,
 ) -> ();
 
+type NonNullPubSubCallback = unsafe extern "C-unwind" fn(
+    client_ptr: usize,
+    kind: PushKind,
+    message: *const u8,
+    message_len: i64,
+    channel: *const u8,
+    channel_len: i64,
+    pattern: *const u8,
+    pattern_len: i64,
+) -> ();
+
 /// PubSub callback that is called when a push notification is received.
 ///
 /// The PubSub callback needs to handle the push notification synchronously, since the data will be dropped by Rust once the callback returns.
@@ -344,16 +355,28 @@ pub type FailureCallback = unsafe extern "C-unwind" fn(
 /// The pointers are only valid during the callback execution and will be freed
 /// automatically when the callback returns. Any data needed beyond the callback's
 /// execution must be copied.
-pub type PubSubCallback = unsafe extern "C-unwind" fn(
-    client_ptr: usize,
-    kind: PushKind,
-    message: *const u8,
-    message_len: i64,
-    channel: *const u8,
-    channel_len: i64,
-    pattern: *const u8,
-    pattern_len: i64,
-) -> ();
+pub type PubSubCallback = Option<
+    unsafe extern "C-unwind" fn(
+        client_ptr: usize,
+        kind: PushKind,
+        message: *const u8,
+        message_len: i64,
+        channel: *const u8,
+        channel_len: i64,
+        pattern: *const u8,
+        pattern_len: i64,
+    ) -> (),
+>;
+
+type NonNullAddressResolverCallback = unsafe extern "C-unwind" fn(
+    client_id: usize,
+    host: *const u8,
+    host_len: usize,
+    port: u16,
+    resolved_host_buf: *mut u8,
+    resolved_host_buf_len: usize,
+    resolved_host_len: *mut usize,
+) -> u16;
 
 /// Address resolver callback that is called to resolve server addresses before connection.
 ///
@@ -377,19 +400,21 @@ pub type PubSubCallback = unsafe extern "C-unwind" fn(
 /// * `resolved_host_buf` must point to `resolved_host_buf_len` consecutive writable bytes.
 /// * `resolved_host_len` must be a valid pointer to a writable `usize`.
 /// * The callback must write the resolved host into `resolved_host_buf` and set `resolved_host_len`.
-pub type AddressResolverCallback = unsafe extern "C-unwind" fn(
-    client_id: usize,
-    host: *const u8,
-    host_len: usize,
-    port: u16,
-    resolved_host_buf: *mut u8,
-    resolved_host_buf_len: usize,
-    resolved_host_len: *mut usize,
-) -> u16;
+pub type AddressResolverCallback = Option<
+    unsafe extern "C-unwind" fn(
+        client_id: usize,
+        host: *const u8,
+        host_len: usize,
+        port: u16,
+        resolved_host_buf: *mut u8,
+        resolved_host_buf_len: usize,
+        resolved_host_len: *mut usize,
+    ) -> u16,
+>;
 
 /// A wrapper around an FFI address resolver callback that implements the `AddressResolver` trait.
 struct FFIAddressResolver {
-    callback: AddressResolverCallback,
+    callback: NonNullAddressResolverCallback,
     client_id: usize,
 }
 
@@ -465,11 +490,11 @@ impl redis::AddressResolver for FFIAddressResolver {
 /// * `session_token_buf` - Buffer to write the optional Session Token into (may be left empty).
 /// * `session_token_buf_len` - Capacity of `session_token_buf`.
 /// * `session_token_len` - Output: actual or required length of the Session Token. Write 0 for no token.
-/// * `expires_at_epoch_millis` - Output: optional expiry as Unix epoch milliseconds. Write 0 to indicate no expiry.
+/// * `expires_at_epoch_millis` - Output: optional expiry as Unix epoch milliseconds. Write any value less than or equal to 0 to indicate no expiry.
 ///
 /// # Safety
 /// All pointer parameters must be valid for the duration of the call.
-pub type CredentialProviderCallback = unsafe extern "C-unwind" fn(
+type NonNullCredentialProviderCallback = unsafe extern "C-unwind" fn(
     client_id: usize,
     access_key_id_buf: *mut u8,
     access_key_id_buf_len: usize,
@@ -482,6 +507,24 @@ pub type CredentialProviderCallback = unsafe extern "C-unwind" fn(
     session_token_len: *mut usize,
     expires_at_epoch_millis: *mut i64,
 ) -> u8;
+
+/// Nullable custom AWS credential-provider callback accepted by [`create_client`].
+/// Pass `None`/`NULL` to use the default AWS credential chain.
+pub type CredentialProviderCallback = Option<
+    unsafe extern "C-unwind" fn(
+        client_id: usize,
+        access_key_id_buf: *mut u8,
+        access_key_id_buf_len: usize,
+        access_key_id_len: *mut usize,
+        secret_access_key_buf: *mut u8,
+        secret_access_key_buf_len: usize,
+        secret_access_key_len: *mut usize,
+        session_token_buf: *mut u8,
+        session_token_buf_len: usize,
+        session_token_len: *mut usize,
+        expires_at_epoch_millis: *mut i64,
+    ) -> u8,
+>;
 
 const CREDENTIAL_CALLBACK_FAILURE: u8 = 0;
 const CREDENTIAL_CALLBACK_SUCCESS: u8 = 1;
@@ -507,7 +550,7 @@ struct CredentialCallbackResult {
 
 /// Wraps a C `CredentialProviderCallback` function pointer as a `glide_core::iam::CredentialsProvider`.
 struct FFICredentialsProvider {
-    callback: CredentialProviderCallback,
+    callback: NonNullCredentialProviderCallback,
     client_id: usize,
 }
 // SAFETY: The callback is a C function pointer safe to share across threads.
@@ -875,7 +918,7 @@ mod tests_ffi_credentials_provider {
         panic!("Rust callback panic")
     }
 
-    fn provider(callback: CredentialProviderCallback) -> FFICredentialsProvider {
+    fn provider(callback: NonNullCredentialProviderCallback) -> FFICredentialsProvider {
         FFICredentialsProvider {
             callback,
             client_id: 42,
@@ -1621,7 +1664,7 @@ pub struct ClientAdapter {
     /// For async/multi_thread clients this is None since the main runtime handles everything.
     background_runtime: ManuallyDrop<Option<Runtime>>,
     core: Arc<CommandExecutionCore>,
-    pubsub_callback: Arc<std::sync::RwLock<Option<PubSubCallback>>>,
+    pubsub_callback: Arc<std::sync::RwLock<Option<NonNullPubSubCallback>>>,
 }
 
 impl Drop for ClientAdapter {
@@ -2091,7 +2134,7 @@ fn extract_pubsub_data(push_msg: &redis::PushInfo) -> Option<(Vec<u8>, Vec<u8>, 
 /// - The caller must ensure client_adapter_ptr points to a valid ClientAdapter
 unsafe fn process_push_notification(
     push_msg: redis::PushInfo,
-    pubsub_callback: PubSubCallback,
+    pubsub_callback: NonNullPubSubCallback,
     client_adapter_ptr: usize,
 ) {
     let (message, channel, pattern) = if push_msg.kind == redis::PushKind::Disconnection {
@@ -2141,9 +2184,9 @@ unsafe fn process_push_notification(
 fn create_client_internal(
     connection_request_bytes: &[u8],
     client_type: ClientType,
-    pubsub_callback: Option<PubSubCallback>,
-    address_resolver: Option<AddressResolverCallback>,
-    credential_provider: Option<CredentialProviderCallback>,
+    pubsub_callback: Option<NonNullPubSubCallback>,
+    address_resolver: Option<NonNullAddressResolverCallback>,
+    credential_provider: Option<NonNullCredentialProviderCallback>,
     client_id: usize,
 ) -> Result<*const ClientAdapter, String> {
     let request = connection_request::ConnectionRequest::parse_from_bytes(connection_request_bytes)
@@ -2212,6 +2255,19 @@ fn create_client_internal(
         let create_rt = background_runtime.as_ref().unwrap_or(&runtime);
         let mut connection_request = ConnectionRequest::from(request);
 
+        if credential_provider.is_some()
+            && connection_request
+                .authentication_info
+                .as_ref()
+                .and_then(|auth_info| auth_info.iam_config.as_ref())
+                .is_none()
+        {
+            return Err(
+                "A credential_provider callback was supplied but the connection request contains no IAM configuration"
+                    .to_string(),
+            );
+        }
+
         // Set the address resolver if provided
         if let Some(resolver_callback) = address_resolver {
             connection_request.address_resolver = Some(Arc::new(FFIAddressResolver {
@@ -2228,18 +2284,12 @@ fn create_client_internal(
             };
             let provider_arc: glide_core::iam::CredentialsProvider =
                 Arc::new(move || provider.call());
-            if let Some(auth_info) = connection_request.authentication_info.as_mut()
-                && let Some(iam_config) = auth_info.iam_config.as_mut()
-            {
-                iam_config.credentials_provider = Some(provider_arc);
-            } else {
-                glide_logger::log_warn(
-                    "credential_provider",
-                    "A credential_provider callback was supplied but the connection request \
-                     contains no IAM configuration. The callback will be ignored and the \
-                     default AWS credential chain will be used.",
-                );
-            }
+            let iam_config = connection_request
+                .authentication_info
+                .as_mut()
+                .and_then(|auth_info| auth_info.iam_config.as_mut())
+                .expect("credential provider IAM configuration was validated above");
+            iam_config.credentials_provider = Some(provider_arc);
         }
 
         create_rt
@@ -2375,7 +2425,7 @@ pub unsafe extern "C-unwind" fn create_client(
     client_type: *const ClientType,
     pubsub_callback: PubSubCallback,
     address_resolver: AddressResolverCallback,
-    credential_provider: Option<CredentialProviderCallback>,
+    credential_provider: CredentialProviderCallback,
     client_id: usize,
 ) -> *const ConnectionResponse {
     assert!(!connection_request_bytes.is_null());
@@ -2383,25 +2433,11 @@ pub unsafe extern "C-unwind" fn create_client(
         unsafe { std::slice::from_raw_parts(connection_request_bytes, connection_request_len) };
     let client_type = unsafe { &*client_type };
 
-    // Convert callback pointer to Option - 0 means no callback
-    let callback_opt = if pubsub_callback as usize == 0 {
-        None
-    } else {
-        Some(pubsub_callback)
-    };
-
-    // Convert address resolver pointer to Option - 0 means no resolver
-    let resolver_opt = if address_resolver as usize == 0 {
-        None
-    } else {
-        Some(address_resolver)
-    };
-
     let response = match create_client_internal(
         request_bytes,
         client_type.clone(),
-        callback_opt,
-        resolver_opt,
+        pubsub_callback,
+        address_resolver,
         credential_provider,
         client_id,
     ) {
@@ -2566,13 +2602,8 @@ pub unsafe extern "C-unwind" fn create_client_from_uri(
     assert!(!uri_str.is_null());
     let client_type = unsafe { &*client_type };
 
-    // Convert callback pointer to Option - 0 means no callback
-    let callback_opt = if pubsub_callback as usize == 0 {
-        None
-    } else {
-        Some(pubsub_callback)
-    };
-
+    // This ABI has no credential-provider parameter. Callers that need a custom IAM provider
+    // must use `create_client`; changing this established signature would break every binding.
     let response = match create_client_from_uri_internal(uri_str, extra_options_json) {
         Err(err) => ConnectionResponse {
             conn_ptr: std::ptr::null(),
@@ -2597,7 +2628,7 @@ pub unsafe extern "C-unwind" fn create_client_from_uri(
                     match create_client_internal(
                         &bytes,
                         client_type.clone(),
-                        callback_opt,
+                        pubsub_callback,
                         None,
                         None,
                         0,
@@ -6847,6 +6878,9 @@ pub unsafe extern "C" fn register_pubsub_callback(
             .unwrap()
             .into_raw();
     }
+    let Some(pubsub_callback) = pubsub_callback else {
+        return CString::new("PubSub callback is null").unwrap().into_raw();
+    };
 
     let client_adapter = unsafe {
         Arc::increment_strong_count(client_adapter_ptr);

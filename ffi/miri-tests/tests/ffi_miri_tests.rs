@@ -80,8 +80,8 @@ fn create_client_test() {
             connection_request_ptr,
             connection_request_len,
             client_type_ptr,
-            pubsub_callback,
-            noop_address_resolver,
+            Some(pubsub_callback),
+            Some(noop_address_resolver),
             None,
             0usize,
         );
@@ -100,7 +100,7 @@ fn create_client_from_uri_test() {
 
     unsafe {
         let connection_response_ptr =
-            create_client_from_uri(uri.as_ptr(), ptr::null(), client_type_ptr, pubsub_callback);
+            create_client_from_uri(uri.as_ptr(), ptr::null(), client_type_ptr, Some(pubsub_callback));
         let conn_ptr = (*connection_response_ptr).conn_ptr;
         close_client(conn_ptr);
         free_connection_response(connection_response_ptr as *mut ConnectionResponse);

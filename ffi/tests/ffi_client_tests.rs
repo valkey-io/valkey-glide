@@ -427,31 +427,8 @@ fn test_ffi_client_command_executions(#[values(false, true)] async_client: bool)
             connection_request_ptr,
             connection_request_len,
             client_type,
-            std::mem::transmute::<
-                *mut c_void,
-                unsafe extern "C-unwind" fn(
-                    client_ptr: usize,
-                    kind: PushKind,
-                    message: *const u8,
-                    message_len: i64,
-                    channel: *const u8,
-                    channel_len: i64,
-                    pattern: *const u8,
-                    pattern_len: i64,
-                ),
-            >(std::ptr::null_mut()),
-            std::mem::transmute::<
-                *mut c_void,
-                unsafe extern "C-unwind" fn(
-                    client_ptr: usize,
-                    host: *const u8,
-                    host_len: usize,
-                    port: u16,
-                    resolved_host_buf: *mut u8,
-                    resolved_host_buf_len: usize,
-                    resolved_host_len: *mut usize,
-                ) -> u16,
-            >(std::ptr::null_mut()),
+            None,
+            None,
             None,
             0,
         );
@@ -518,8 +495,8 @@ fn test_ffi_rejects_invalid_final_lib_name_before_lazy_creation() {
             request_bytes.as_ptr(),
             request_bytes.len(),
             &client_type,
-            no_op_pubsub_callback,
-            no_op_address_resolver,
+            Some(no_op_pubsub_callback),
+            Some(no_op_address_resolver),
             None,
             0,
         );
@@ -576,6 +553,52 @@ fn test_ffi_monitor_rejects_invalid_final_lib_name_before_connection() {
             error.to_ascii_lowercase().contains("library name"),
             "{error}"
         );
+
+        free_connection_response(response_ptr as *mut ConnectionResponse);
+    }
+}
+
+#[test]
+fn test_ffi_credential_provider_without_iam_config_fails_closed() {
+    unsafe extern "C-unwind" fn credential_provider(
+        _client_id: usize,
+        _access_key_id_buf: *mut u8,
+        _access_key_id_buf_len: usize,
+        _access_key_id_len: *mut usize,
+        _secret_access_key_buf: *mut u8,
+        _secret_access_key_buf_len: usize,
+        _secret_access_key_len: *mut usize,
+        _session_token_buf: *mut u8,
+        _session_token_buf_len: usize,
+        _session_token_len: *mut usize,
+        _expires_at_epoch_millis: *mut i64,
+    ) -> u8 {
+        0
+    }
+
+    let mut request = ConnectionRequest::new();
+    request.lazy_connect = true;
+    let request_bytes = request.write_to_bytes().expect("Failed to serialize");
+    let client_type = ClientType::SyncClient;
+
+    unsafe {
+        let response_ptr = create_client(
+            request_bytes.as_ptr(),
+            request_bytes.len(),
+            &client_type,
+            None,
+            None,
+            Some(credential_provider),
+            42,
+        );
+
+        assert!(!response_ptr.is_null());
+        let response = &*response_ptr;
+        assert!(response.conn_ptr.is_null());
+        assert!(!response.connection_error_message.is_null());
+        let error = parse_error_msg(response.connection_error_message);
+        assert!(error.contains("credential_provider callback"), "{error}");
+        assert!(error.contains("no IAM configuration"), "{error}");
 
         free_connection_response(response_ptr as *mut ConnectionResponse);
     }
@@ -710,31 +733,8 @@ fn test_inflight_request_limit_sync_client() {
             connection_request_ptr,
             connection_request_len,
             client_type,
-            std::mem::transmute::<
-                *mut c_void,
-                unsafe extern "C-unwind" fn(
-                    client_ptr: usize,
-                    kind: PushKind,
-                    message: *const u8,
-                    message_len: i64,
-                    channel: *const u8,
-                    channel_len: i64,
-                    pattern: *const u8,
-                    pattern_len: i64,
-                ),
-            >(std::ptr::null_mut()),
-            std::mem::transmute::<
-                *mut c_void,
-                unsafe extern "C-unwind" fn(
-                    client_ptr: usize,
-                    host: *const u8,
-                    host_len: usize,
-                    port: u16,
-                    resolved_host_buf: *mut u8,
-                    resolved_host_buf_len: usize,
-                    resolved_host_len: *mut usize,
-                ) -> u16,
-            >(std::ptr::null_mut()),
+            None,
+            None,
             None,
             0,
         );
