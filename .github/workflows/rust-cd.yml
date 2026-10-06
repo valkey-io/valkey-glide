@@ -55,12 +55,18 @@ jobs:
             - validate-branch
         uses: ./.github/workflows/glide-core.yml
 
+    test-valkey-glide:
+        needs:
+            - validate-branch
+        uses: ./.github/workflows/rust.yml
+
     publish-crates:
         needs:
             - test-glide-logger
             - test-glide-telemetry
             - test-glide-core-engine
             - test-glide-core
+            - test-valkey-glide
         runs-on: ubuntu-latest
         # Use AWS_ACTIONS to require maintainer approval when publishing.
         environment: ${{ inputs.publish && 'AWS_ACTIONS' || '' }}
@@ -103,4 +109,10 @@ jobs:
               uses: ./.github/workflows/publish-rust-crate
               with:
                   crate: glide-core
+                  publish: ${{ inputs.publish }}
+
+            - name: Publish valkey-glide
+              uses: ./.github/workflows/publish-rust-crate
+              with:
+                  crate: rust
                   publish: ${{ inputs.publish }}

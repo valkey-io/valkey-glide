@@ -1,5 +1,7 @@
 # Valkey GLIDE for Rust (`glide`)
 
+[![crates.io](https://img.shields.io/crates/v/valkey-glide.svg)](https://crates.io/crates/valkey-glide)
+[![docs.rs](https://img.shields.io/docsrs/valkey-glide)](https://docs.rs/valkey-glide)
 [![CI](https://github.com/valkey-io/valkey-glide/actions/workflows/rust.yml/badge.svg)](https://github.com/valkey-io/valkey-glide/actions/workflows/rust.yml)
 [![Rust](https://img.shields.io/badge/dynamic/toml?url=https%3A%2F%2Fraw.githubusercontent.com%2Fvalkey-io%2Fvalkey-glide%2Fmain%2Frust%2FCargo.toml&query=%24.package%5B%27rust-version%27%5D&label=rust&suffix=%2B&color=orange)](https://www.rust-lang.org)
 
@@ -35,8 +37,8 @@ GLIDE binding.
   `get_pubsub_message`.
 - **OpenTelemetry** — export traces and metrics via the `glide::telemetry`
   module (gRPC / HTTP / file exporters).
-- **Feature parity with the Python GLIDE wrapper** as the baseline for both the
-  API surface and the test suite.
+- **Feature parity with the Python GLIDE wrapper** as the baseline for the API
+  surface.
 
 ## Documentation
 
@@ -47,61 +49,36 @@ and [OpenTelemetry](https://glide.valkey.io/concepts/client-features/open-teleme
 are shared with the official clients and documented at
 [glide.valkey.io](https://glide.valkey.io); this client is built on the same core,
 so those concepts apply here unchanged. For Rust-specific architecture see
-[DESIGN.md](./DESIGN.md).
+[DESIGN.md](https://github.com/valkey-io/valkey-glide/blob/main/rust/DESIGN.md).
 
 ## Supported Engine Versions
 
 The compatibility target matches GLIDE — see the
 [Supported Engine Versions table](https://github.com/valkey-io/valkey-glide/blob/main/README.md#supported-engine-versions).
-CI runs the full integration suite against **Valkey 8.1, 8.0, and 7.2** and
-**Redis OSS 7.2**, on Linux (x86_64 and aarch64). Other platforms (e.g. macOS)
-should work wherever `glide-core` builds, but are not exercised in CI.
+It is tested on Linux (x86_64 and aarch64). Other platforms (e.g. macOS)
+should work wherever `glide-core` builds, but are not tested yet.
 
 ## Installation
 
 ### Prerequisites
 
-- **Rust** — install via [rustup](https://rustup.rs)
-- **A monorepo checkout** — this crate lives in the `valkey-io/valkey-glide`
-  monorepo under `rust/` and links `glide-core` and `redis-rs` via
-  in-repo **path** dependencies (see [Status & publishing](#status--publishing)).
+- **Rust** 1.94.1 or later — install via [rustup](https://rustup.rs)
 - A running **Valkey** (or Redis OSS) server to connect to — e.g.
   `valkey-server` locally, `docker run -p 6379:6379 valkey/valkey`, or an
   ElastiCache/MemoryDB endpoint.
 
-### 1. Get the source
+### Add the dependency
 
-This crate is not yet on crates.io and links `glide-core` and its vendored
-`redis-rs` via in-repo **path** dependencies (see
-[Status & publishing](#status--publishing)), so it is currently built from a
-checkout of the [`valkey-io/valkey-glide`](https://github.com/valkey-io/valkey-glide)
-monorepo rather than added as an external dependency. The package is named
-`valkey-glide` and the library is imported as `glide`; you will also need an async
-runtime (the async client is built on Tokio):
-
-```toml
-# Cargo.toml
-[dependencies]
-tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
-```
-
-Once the dependency chain is published to crates.io, this section will document
-the versioned-dependency setup.
-
-### 2. Build
+The package is named `valkey-glide` and the library is imported as `glide`.
+The async client is built on Tokio, so you will also need a Tokio runtime:
 
 ```bash
-cargo build
+cargo add valkey-glide
+cargo add tokio --features rt-multi-thread,macros
 ```
 
-The first build fetches and compiles `glide-core` and its dependency tree, so it
-takes a few minutes; subsequent builds are incremental.
-
-### Contributor setup
-
-Cloning this repository to develop the client? See **[DEVELOPER.md](./DEVELOPER.md)**
-for the full workflow (build, run the unit + live integration tests — which spawn
-a `valkey-server`, set `VALKEY_SERVER_PATH` to point at your binary — lint, and coverage).
+The first build compiles `glide-core` and its dependency tree, so it takes a
+few minutes; subsequent builds are incremental.
 
 ## Quick start (async)
 
@@ -152,62 +129,12 @@ client.custom_command_with_route(&["PING"], Route::AllPrimaries).await?;
 # Ok(()) }
 ```
 
-See `DESIGN.md` for architecture, and `DEVELOPER.md` for how to build and test.
-
 ## Migrating from redis-rs
 
 GLIDE's command API **mirrors redis-rs 1.7.0**, so most call sites migrate with
-only import and type-name changes. See **[migration.md](./migration.md)** for
-more details.
-
-## Testing
-
-The suite has three layers (all run in CI and are currently green):
-
-- **Unit tests (server-free, ~260)** — pure logic with no server: config →
-  `ConnectionRequest` lowering, route → `RoutingInfo` mapping, option/argument
-  encoding, value conversion, and error mapping; plus a **command-family mock
-  suite** that drives every typed command through an in-process executor to
-  assert exact **request encoding** and **response decoding**.
-- **Integration tests (live server)** — real
-  round-trips against a spawned `valkey-server`, one `tests/it_<family>.rs` per
-  command family with edge/error cases (wrong-type, missing key, bounds, expiry
-  conditions), **parametrized over RESP2 and RESP3**, plus suites for batches,
-  scan, pub/sub, auth, TLS, and a **native multi-shard cluster** harness. Each
-  test boots its own ephemeral server and tears it down on drop; a test fails
-  if its server or cluster cannot be started.
-- **Doctests** — the examples in this README and the API docs are compiled.
-
-```bash
-cargo unit-tests         # unit tests
-cargo doc-tests          # doctests
-cargo integration-tests  # integration tests
-cargo test               # all tests (unit, docs, and integration)
-```
-
-Integration tests auto-discover a `valkey-server`/`redis-server` on `PATH`; point
-them at a specific binary with `VALKEY_SERVER_PATH=/path/to/valkey-server`. See
-`DEVELOPER.md` for coverage.
-
-## Status & publishing
-
-This crate lives in the `valkey-io/valkey-glide` monorepo and links `glide-core`
-and its vendored `redis-rs` via in-repo **path** dependencies (see
-`DEVELOPER.md`). Consequences to be aware of:
-
-- **Builds from a monorepo checkout** — the path dependencies resolve to the
-  sibling `glide-core` (and its vendored redis-rs fork) in the same tree, so no
-  network fetch is required to resolve them; you build from a checkout of the
-  monorepo.
-- **Not yet publishable to crates.io as-is** — `cargo publish` rejects **both**
-  path and git dependencies, so the crate cannot be published while it links
-  `glide-core` (and the vendored redis-rs fork) by path. The only route to
-  crates.io is to **publish `glide-core` and the redis-rs fork to crates.io and
-  switch these to versioned dependencies** (`glide-core = "x.y"`); this is
-  tracked as part of [#6519](https://github.com/valkey-io/valkey-glide/issues/6519).
-  This is an inherent consequence of the "link core directly, no FFI" design and
-  is a deliberate release-time decision.
-- `docs.rs` builds would likewise need the dependency strategy resolved first.
+only import and type-name changes. See
+**[migration.md](https://github.com/valkey-io/valkey-glide/blob/main/rust/migration.md)**
+for more details.
 
 ## Getting Help
 
@@ -219,9 +146,12 @@ and its vendored `redis-rs` via in-repo **path** dependencies (see
 ## Contributing
 
 Contributions are welcome — bug reports, feature requests, and pull requests.
-See the repo-root [Contributing Guidelines](../CONTRIBUTING.md) to get started
-and [DEVELOPER.md](./DEVELOPER.md) for the development workflow.
+See the [Contributing Guidelines](https://github.com/valkey-io/valkey-glide/blob/main/CONTRIBUTING.md)
+to get started and [DEVELOPER.md](https://github.com/valkey-io/valkey-glide/blob/main/rust/DEVELOPER.md)
+for the development workflow.
 
 ## License
 
-Licensed under the Apache License, Version 2.0. See the [`LICENSE`](../LICENSE) for the full text.
+Licensed under the Apache License, Version 2.0. See the
+[`LICENSE`](https://github.com/valkey-io/valkey-glide/blob/main/LICENSE)
+for the full text.

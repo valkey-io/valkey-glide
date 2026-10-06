@@ -3,8 +3,11 @@ name = "glide-logger"
 version = "0.1.1"
 description = "Logging for Valkey GLIDE. This crate isn't intended to be used directly."
 authors = ["Valkey GLIDE Maintainers"]
-repository = "https://github.com/valkey-io/valkey-glide"
 license = "Apache-2.0"
+
+# References
+homepage = "https://valkey.io/valkey-glide/"
+repository = "https://github.com/valkey-io/valkey-glide"
 
 # TODO #7175: Specify rust-version
 edition = "2024"

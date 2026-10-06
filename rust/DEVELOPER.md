@@ -40,7 +40,7 @@ released version, the internal dependencies are declared with **both** `path`
 and `version` in `Cargo.toml`:
 
 ```toml
-glide-core = { path = "../glide-core", version = "0.1.0" }
+glide-core = { path = "../glide-core", version = "0.1" }
 ```
 
 Cargo uses `path` when building locally, and `version` when the crate is resolved
@@ -54,6 +54,20 @@ cargo build --release  # optimized
 ```
 
 ## Test
+
+The suite has three layers, all run in CI:
+
+- **Unit tests (server-free)** — pure logic with no server: config to
+  `ConnectionRequest` lowering, route to `RoutingInfo` mapping, option/argument
+  encoding, value conversion, and error mapping; plus a **command-family mock
+  suite** that drives every typed command through an in-process executor to
+  assert exact **request encoding** and **response decoding**.
+- **Integration tests (live server)** — real round-trips against a spawned
+  `valkey-server`, one `tests/it_<family>.rs` per command family with
+  edge/error cases (wrong-type, missing key, bounds, expiry conditions),
+  **parametrized over RESP2 and RESP3**, plus suites for batches, scan,
+  pub/sub, auth, TLS, and a **native multi-shard cluster** harness.
+- **Doctests** — the examples in `README.md` and the API docs are compiled.
 
 ```bash
 cargo unit-tests         # unit tests
@@ -223,4 +237,16 @@ remove a method's entry once GLIDE implements it.
 Commands beyond the redis-rs surface belong in the per-family extension traits
 (`src/commands/<family>.rs`), not in the table.
 
-<!-- TODO #6906: Document publishing to crates.io. -->
+## Publishing to crates.io
+
+Crates are published with the **Rust - Continuous Deployment** workflow
+(`.github/workflows/rust-cd.yml`):
+
+1. Bump `version` in the `Cargo.toml` of each crate to release, and update the
+   `Cargo.lock` files that reference it. The internal crates are published
+   with `0.x` versions and marked as internal, consistent with Rust conventions.
+2. Run the workflow with `publish=false` to perform a dry run. A crate's dry run
+   fails if it depends on a version of another GLIDE crate that isn't published
+   yet.
+3. Run the workflow from a `release-*` branch with `publish=true`. Publishing
+   requires maintainer approval.
