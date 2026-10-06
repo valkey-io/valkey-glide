@@ -374,8 +374,9 @@ const SCOPE_CONNECT_TIMEOUT: std::time::Duration = std::time::Duration::from_sec
 /// Why a scoped connection could not be created and seated in the pool.
 ///
 /// Every variant releases the caller's `max_total` reservation exactly once, at the
-/// single failure exit in [`create_scope_connection`], and is logged there so a
-/// borrower's eventual "pool exhausted" timeout can be traced back to its cause.
+/// single failure exit in [`create_scope_connection`], and is logged there — once
+/// per episode, see [`ScopePool::last_create_warn`] — so a borrower's eventual
+/// "pool exhausted" timeout can be traced back to its cause.
 #[cfg(feature = "proto")]
 #[derive(Debug)]
 pub enum ScopeCreateError {
@@ -406,6 +407,25 @@ pub enum ScopeCreateError {
     InitTimedOut,
     /// The pool stopped running while the connection was being created.
     PoolClosed,
+}
+
+/// Which [`ScopeCreateError`] variant a failure was, without its payload.
+///
+/// The counterpart of [`crate::pool::ScopeTargetUnresolved::same_kind`] for
+/// creation failures, so repeats of one cause are recognized by variant. A
+/// discriminant rather than the error itself: the pool only needs equality, and
+/// retaining a `RedisError` (or the parse error) for the lifetime of the pool
+/// just to compare against would be wasteful.
+#[cfg(feature = "proto")]
+pub type ScopeCreateErrorKind = std::mem::Discriminant<ScopeCreateError>;
+
+#[cfg(feature = "proto")]
+impl ScopeCreateError {
+    /// This failure's variant, for the warn-once-per-episode record on
+    /// [`ScopePool::last_create_warn`].
+    pub fn kind(&self) -> ScopeCreateErrorKind {
+        std::mem::discriminant(self)
+    }
 }
 
 #[cfg(feature = "proto")]
@@ -754,6 +774,12 @@ pub async fn create_scope_connection(
 
     match connection {
         Ok(prepared) => {
+            if pool_guard.last_create_warn.take().is_some() {
+                glide_logger::log_debug(
+                    "create_scope_connection",
+                    format!("scoped connection to {target:?} created again"),
+                );
+            }
             let scope_id = pool_guard.next_id();
             pool_guard.idle.push_back(ScopedConnection {
                 scope_id,
@@ -774,12 +800,24 @@ pub async fn create_scope_connection(
             // The uncommitted `reservation` gives the slot back on drop. A pool
             // shutting down is expected, not a fault; everything else is worth a
             // warning because the borrower only ever sees a generic "pool
-            // exhausted" timeout.
+            // exhausted" timeout — but only the first of an episode. Bindings
+            // retry acquire every few milliseconds and each retry spawns another
+            // creation, so a cause that persists (a lazy mTLS parent, an
+            // unreachable shard) would otherwise warn tens of times a second.
+            // Same warn-once-per-kind, debug-the-repeats, clear-on-success shape
+            // as `log_unresolved_target`.
             let message = format!("scoped connection to {target:?} not created: {err}");
             if matches!(err, ScopeCreateError::PoolClosed) {
                 glide_logger::log_debug("create_scope_connection", message);
             } else {
-                glide_logger::log_warn("create_scope_connection", message);
+                let kind = err.kind();
+                let repeated = pool_guard.last_create_warn == Some(kind);
+                pool_guard.last_create_warn = Some(kind);
+                if repeated {
+                    glide_logger::log_debug("create_scope_connection", message);
+                } else {
+                    glide_logger::log_warn("create_scope_connection", message);
+                }
             }
         }
     }
@@ -1744,6 +1782,90 @@ mod tests {
 
         unregister_client(client_id);
         get_client_scope_pools().remove(&client_id);
+    }
+
+    /// Creation failures repeat as fast as the binding retries, because each retry
+    /// poll spawns another creation. `create_scope_connection` must therefore warn
+    /// once per episode and log the repeats at debug, clearing the record once a
+    /// creation succeeds — the same shape `log_unresolved_target` applies to an
+    /// unresolved target. As there, the log lines are not observable here; the
+    /// field they key on is.
+    #[tokio::test]
+    async fn create_failure_is_recorded_once_per_kind_and_cleared_on_success() {
+        let (port, shutdown_sender, server) = responsive_endpoint();
+        let good_bytes = request_bytes("", port);
+        let pool = Arc::new(TokioMutex::new(ScopePool::new(
+            ScopePoolConfig::default(),
+            good_bytes.clone(),
+            1,
+        )));
+
+        // A standalone request with no seed address, so creation fails with a
+        // different variant than the mTLS parent's and before any connect.
+        let no_seed_bytes = ConnectionRequest::new()
+            .write_to_bytes()
+            .expect("serialize scope request");
+        let mtls_bytes = mtls_request_bytes();
+        let cert_parent = lazy_mtls_parent().await;
+
+        let create = |client: Option<Client>, bytes: Vec<u8>| {
+            let pool = pool.clone();
+            async move {
+                // Each failure gives its slot back, so re-reserve before the next.
+                pool.lock().await.total_count.store(1, Ordering::Release);
+                let reservation = reservation_for(&pool).await;
+                create_scope_connection(
+                    pool.clone(),
+                    client.as_ref(),
+                    &bytes,
+                    ScopeTarget::Standalone,
+                    reservation,
+                )
+                .await;
+            }
+        };
+        let recorded =
+            |pool: Arc<TokioMutex<ScopePool>>| async move { pool.lock().await.last_create_warn };
+
+        assert_eq!(
+            recorded(pool.clone()).await,
+            None,
+            "nothing recorded before the first creation"
+        );
+
+        create(Some(cert_parent.clone()), mtls_bytes.clone()).await;
+        assert_eq!(
+            recorded(pool.clone()).await,
+            Some(ScopeCreateError::ParentCertMaterialUnavailable.kind()),
+            "the first failure of a kind is the one that warns"
+        );
+
+        // Same cause again: the record is unchanged (a repeat, logged at debug).
+        create(Some(cert_parent), mtls_bytes).await;
+        assert_eq!(
+            recorded(pool.clone()).await,
+            Some(ScopeCreateError::ParentCertMaterialUnavailable.kind()),
+        );
+
+        // A different variant is a new kind of cause, so it warns in its own right.
+        create(None, no_seed_bytes).await;
+        assert_eq!(
+            recorded(pool.clone()).await,
+            Some(ScopeCreateError::NoSeedAddress.kind()),
+        );
+        assert_ne!(
+            ScopeCreateError::NoSeedAddress.kind(),
+            ScopeCreateError::ParentCertMaterialUnavailable.kind(),
+            "the two causes must differ for this test to discriminate"
+        );
+
+        // A creation succeeding ends the episode, so the next failure warns again.
+        create(None, good_bytes).await;
+        assert_eq!(pool.lock().await.idle.len(), 1, "connection seated");
+        assert_eq!(recorded(pool.clone()).await, None);
+
+        shutdown_sender.send(()).expect("signal server shutdown");
+        server.join().expect("join server thread");
     }
 
     #[tokio::test]
