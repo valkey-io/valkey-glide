@@ -156,77 +156,9 @@ See `DESIGN.md` for architecture, and `DEVELOPER.md` for how to build and test.
 
 ## Migrating from redis-rs
 
-GLIDE's command API **mirrors the redis-rs fork (v0.25.2, before the upstream
-license change)**. Method names, signatures, and wire encoding match, with
-GLIDE-specific equivalents to redis-rs types:
-
-| redis-rs         | GLIDE              |
-|------------------|--------------------|
-| `RedisResult`    | `ValkeyResult`     |
-| `RedisError`     | `GlideError`       |
-| `Value`          | `ValkeyValue`      |
-| `ToRedisArgs`    | `ToValkeyArgs`     |
-| `FromRedisValue` | `FromValkeyValue`  |
-
-To migrate a typed call site, you only rename the type.
-
-Every command is executed by glide-core (multiplexing, cluster routing,
-reconnection, IAM auth), handed over **by value** on GLIDE's zero-extra-copy
-path. Parity is deliberately a **command-surface** contract, not a
-connection-plumbing one: the clients are *not* `redis` connection objects
-(`ConnectionLike`), because that interop layer forced a full payload copy per
-command. The migrations that follow from this are mechanical:
-
-| redis-rs call site            | GLIDE call site                          |
-|-------------------------------|------------------------------------------|
-| `pipe()….query_async(&mut c)` | `pipe()….query_async(&c)` (`PipelineExt`) |
-| sync `pipe()….query(&mut c)`  | `pipe()….query(&c)` (`sync::PipelineExt`) |
-| `cmd("X")….query_async(&mut c)` | `c.glide_send(cmd)` (typed, by value)  |
-| `con.scan_match(pat)` iterators | same call — GLIDE-owned iterator; `next_item()` / `Iterator` yield `ValkeyResult<RV>` (a `Result` per item) |
-
-```rust,no_run
-use glide::{AsyncCommands, GlideClient, GlideClientConfiguration, PipelineExt, Script, pipe};
-
-# async fn demo() -> glide::ValkeyResult<()> {
-// Standard connection-URL semantics, including rediss:// and database selection:
-let config = GlideClientConfiguration::from_url("redis://user:pass@localhost:6379/2")
-    .expect("valid URL");
-# let client = GlideClient::connect(config).await.unwrap();
-
-// Typed commands, unchanged from redis-rs call sites:
-client.set::<_, _, ()>("key", 42).await?;
-let value: i64 = client.get("key").await?;
-
-// Pipelines and transactions:
-let (a, b): (i64, i64) = pipe()
-    .atomic()
-    .incr("counter", 1)
-    .incr("counter", 1)
-    .query_async(&client)
-    .await?;
-
-// Lua scripts with EVALSHA caching:
-let script = Script::new("return tonumber(ARGV[1]) + 1");
-let n: i64 = script.arg(41).invoke_async(&client).await?;
-# Ok(()) }
-```
-
-Notes:
-- `glide::AsyncCommands` / `glide::Commands` are GLIDE's command API.
-  Extension traits (streams, geo, Search `FT.*`, `JSON.*`, hash field-TTL, …)
-  cover the rest of the command surface; names never collide, so import both
-  freely.
-- Cluster: `GlideClusterClientConfiguration::from_urls([...])` accepts
-  seed-node URLs; commands are routed automatically.
-- Mutual TLS: `config.client_identity(cert_pem, key_pem)`.
-- Raw commands: build a `glide::Cmd` with `glide::cmd("X")`. Send it typed with
-  `client.glide_send(cmd)`, or untyped with `glide_send_owned` /
-  `custom_command`. This replaces `cmd().query_async()` without the
-  connection-object copy.
-- Accepted gaps: no Sentinel / unix sockets / async-std (unsupported by
-  glide-core); Pub/Sub stays client-integrated by design; generic code
-  bounded on the fork's `ConnectionLike`-based traits should re-bound on
-  `glide::AsyncCommands` (performance-motivated deviation).
+GLIDE's command API **mirrors redis-rs 1.7.0**, so most call sites migrate with
+only import and type-name changes. See **[migration.md](./migration.md)** for
+more details.
 
 ## Testing
 
@@ -237,7 +169,7 @@ The suite has three layers (all run in CI and are currently green):
   encoding, value conversion, and error mapping; plus a **command-family mock
   suite** that drives every typed command through an in-process executor to
   assert exact **request encoding** and **response decoding**.
-- **Integration tests (live server, ~900 executions across 31 files)** — real
+- **Integration tests (live server)** — real
   round-trips against a spawned `valkey-server`, one `tests/it_<family>.rs` per
   command family with edge/error cases (wrong-type, missing key, bounds, expiry
   conditions), **parametrized over RESP2 and RESP3**, plus suites for batches,

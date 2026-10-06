@@ -8,7 +8,9 @@ use crate::commands::options::Limit;
 use crate::executor::CommandExecutor;
 use crate::value::FromValkeyValue;
 use crate::value::ValkeyValue;
+use crate::value::to_glide_error;
 use crate::write::ToValkeyArgs;
+use crate::write::ValkeyWrite;
 use async_trait::async_trait;
 use bytes::Bytes;
 
@@ -27,13 +29,13 @@ pub enum ScoreBound {
     Exclusive(f64),
 }
 
-impl ScoreBound {
-    fn to_arg(self) -> String {
+impl ToValkeyArgs for ScoreBound {
+    fn write_valkey_args<W: ?Sized + ValkeyWrite>(&self, out: &mut W) {
         match self {
-            ScoreBound::NegativeInfinity => "-inf".to_string(),
-            ScoreBound::PositiveInfinity => "+inf".to_string(),
-            ScoreBound::Inclusive(v) => v.to_string(),
-            ScoreBound::Exclusive(v) => format!("({v}"),
+            ScoreBound::NegativeInfinity => out.write_arg(b"-inf"),
+            ScoreBound::PositiveInfinity => out.write_arg(b"+inf"),
+            ScoreBound::Inclusive(v) => out.write_arg_fmt(v),
+            ScoreBound::Exclusive(v) => out.write_arg_fmt(format_args!("({v}")),
         }
     }
 }
@@ -53,21 +55,20 @@ pub enum LexBound {
     Exclusive(Vec<u8>),
 }
 
-impl LexBound {
-    fn to_arg(&self) -> Vec<u8> {
+impl ToValkeyArgs for LexBound {
+    fn write_valkey_args<W: ?Sized + ValkeyWrite>(&self, out: &mut W) {
+        // A bounded value is prefixed with `[`/`(` within the same argument.
+        let prefixed = |prefix: u8, value: &[u8]| {
+            let mut arg = Vec::with_capacity(1 + value.len());
+            arg.push(prefix);
+            arg.extend_from_slice(value);
+            arg
+        };
         match self {
-            LexBound::NegativeInfinity => b"-".to_vec(),
-            LexBound::PositiveInfinity => b"+".to_vec(),
-            LexBound::Inclusive(v) => {
-                let mut out = vec![b'['];
-                out.extend_from_slice(v);
-                out
-            }
-            LexBound::Exclusive(v) => {
-                let mut out = vec![b'('];
-                out.extend_from_slice(v);
-                out
-            }
+            LexBound::NegativeInfinity => out.write_arg(b"-"),
+            LexBound::PositiveInfinity => out.write_arg(b"+"),
+            LexBound::Inclusive(v) => out.write_arg(&prefixed(b'[', v)),
+            LexBound::Exclusive(v) => out.write_arg(&prefixed(b'(', v)),
         }
     }
 }
@@ -164,9 +165,7 @@ pub trait SortedSetCommands: CommandExecutor {
                 let key = Bytes::from_owned_valkey_value(items.pop().unwrap())?;
                 Ok(Some((key, member, score)))
             }
-            other => Err(crate::error::GlideError::Request(format!(
-                "unexpected blocking zpop reply: {other:?}"
-            ))),
+            other => Err(to_glide_error(other, "Unexpected blocking zpop reply.")),
         }
     }
 
@@ -214,8 +213,8 @@ pub trait SortedSetCommands: CommandExecutor {
         cmd.arg("ZRANGESTORE")
             .arg(destination)
             .arg(source)
-            .arg(first.to_arg())
-            .arg(second.to_arg())
+            .arg(first)
+            .arg(second)
             .arg("BYSCORE");
         if rev {
             cmd.arg("REV");
@@ -247,8 +246,8 @@ pub trait SortedSetCommands: CommandExecutor {
         cmd.arg("ZRANGESTORE")
             .arg(destination)
             .arg(source)
-            .arg(first.to_arg())
-            .arg(second.to_arg())
+            .arg(first)
+            .arg(second)
             .arg("BYLEX");
         if rev {
             cmd.arg("REV");
@@ -463,9 +462,7 @@ fn collect_member_scores(v: ValkeyValue) -> ValkeyResult<Vec<(Bytes, f64)>> {
                 Ok(out)
             }
         }
-        other => Err(crate::error::GlideError::Request(format!(
-            "unexpected sorted-set reply: {other:?}"
-        ))),
+        other => Err(to_glide_error(other, "Unexpected sorted-set reply.")),
     }
 }
 
@@ -480,20 +477,33 @@ fn parse_rank_withscore(v: ValkeyValue) -> ValkeyResult<Option<(i64, f64)>> {
             let rank = i64::from_owned_valkey_value(items.pop().unwrap())?;
             Ok(Some((rank, score)))
         }
-        other => Err(crate::error::GlideError::Request(format!(
-            "unexpected ZRANK WITHSCORE reply: {other:?}"
-        ))),
+        other => Err(to_glide_error(other, "Unexpected ZRANK WITHSCORE reply.")),
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_utils::assert_args;
 
     #[test]
-    fn score_bound_formatting() {
-        assert_eq!(ScoreBound::NegativeInfinity.to_arg(), "-inf");
-        assert_eq!(ScoreBound::PositiveInfinity.to_arg(), "+inf");
-        assert_eq!(ScoreBound::Exclusive(1.0).to_arg(), "(1");
+    fn score_bound_args() {
+        assert_args(ScoreBound::NegativeInfinity, &["-inf"]);
+        assert_args(ScoreBound::PositiveInfinity, &["+inf"]);
+        assert_args(ScoreBound::Inclusive(1.5), &["1.5"]);
+        assert_args(ScoreBound::Exclusive(1.0), &["(1"]);
+    }
+
+    #[test]
+    fn lex_bound_args() {
+        assert_args(LexBound::NegativeInfinity, &["-"]);
+        assert_args(LexBound::PositiveInfinity, &["+"]);
+        assert_args(LexBound::Inclusive(b"a".to_vec()), &["[a"]);
+        assert_args(LexBound::Exclusive(b"b".to_vec()), &["(b"]);
+        // Binary values are kept byte-for-byte after the prefix.
+        assert_args(
+            LexBound::Inclusive(vec![0xFF, 0x00]),
+            &[[b'[', 0xFF, 0x00].as_slice()],
+        );
     }
 }

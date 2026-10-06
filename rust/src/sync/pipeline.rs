@@ -41,15 +41,18 @@ pub trait PipelineExt {
     /// dropped before decoding, and an atomic pipeline's `EXEC` reply is unwrapped.
     ///
     /// Mirrors `redis-rs`'s `query`.
-    fn query<C: SyncPipelineDispatch, T: FromValkeyValue + Send>(&self, con: &C)
-    -> ValkeyResult<T>;
+    fn query<T: FromValkeyValue + Send>(&self, con: &impl SyncPipelineDispatch) -> ValkeyResult<T>;
+
+    /// Execute this pipeline on a blocking GLIDE client, discarding the replies.
+    ///
+    /// Mirrors `redis-rs`'s `exec`.
+    fn exec(&self, con: &impl SyncPipelineDispatch) -> ValkeyResult<()> {
+        self.query(con)
+    }
 }
 
 impl PipelineExt for Pipeline {
-    fn query<C: SyncPipelineDispatch, T: FromValkeyValue + Send>(
-        &self,
-        con: &C,
-    ) -> ValkeyResult<T> {
+    fn query<T: FromValkeyValue + Send>(&self, con: &impl SyncPipelineDispatch) -> ValkeyResult<T> {
         con.glide_dispatch_pipeline(self)
     }
 }

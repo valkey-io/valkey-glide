@@ -6,27 +6,34 @@ mod types;
 
 use regex::Regex;
 use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use std::path::Path;
 use types::Argument;
+use types::Difference;
 use types::Generic;
 use types::Method;
 use types::RedisParity;
 
-/// The redis-rs release GLIDE targets for parity.
-// TODO #7058: bump to "1.7.0" and retarget the guard to *upstream* redis-rs
-// (fetch `redis/src/commands/mod.rs` at the `redis-1.7.0` tag from GitHub).
-const REDIS_RS_VERSION: &str = "0.25.2";
+// --- constants --------------------------------------------------------------------------------------
 
-/// The vendored redis-rs fork's command table, relative to `rust/`.
-// TODO #7058: Update once we get the command table from GitHub.
-const REDIS_COMMAND_TABLE: &str = "../glide-core/redis-rs/redis/src/commands/mod.rs";
+/// Constants for the redis-rs release that GLIDE targets for parity.
+const REDIS_RS_VERSION: &str = "1.7.0";
 
-/// The vendored redis-rs fork's scan-iterator definitions, relative to `rust/`.
-// TODO #7058: Update once we get the scan definitions from GitHub.
-const REDIS_SCAN_METHODS: &str = "../glide-core/redis-rs/redis/src/commands/macros.rs";
+/// The source URL of the redis-rs command sources, with `{version}` and `{file}` placeholders.
+const REDIS_RS_SOURCE_URL: &str =
+    "https://raw.githubusercontent.com/redis-rs/redis-rs/redis-{version}/{file}";
+
+/// The redis-rs command table location.
+const REDIS_COMMAND_TABLE: &str = "redis/src/commands/mod.rs";
+
+/// The redis-rs scan-iterator definitions.
+const REDIS_SCAN_METHODS: &str = "redis/src/commands/macros.rs";
 
 /// The cached redis-rs parity snapshot, relative to `rust/`.
 const REDIS_PARITY_JSON: &str = "src/parity_tests/redis_parity.json";
+
+/// The differences from redis-rs, relative to `rust/`, indexed by method name.
+const DIFFERENCES_JSON: &str = "src/parity_tests/differences.json";
 
 // --- tests --------------------------------------------------------------------------------------
 
@@ -48,34 +55,37 @@ fn redis_parity_check() {
 
 /// Runs the parity check for the given specified redis-rs version and returns the results:
 /// - `Ok` carries a human-readable summary.
-/// - `Err` lists the command-surface divergences, one message per problem.
+/// - `Err` lists the parity problems, one message per problem.
 ///
 /// Panics if a source or data file can't be read, parsed, serialized, or written,
 /// or if the cached snapshot records a different version than the one targeted.
 fn run_parity_check(version: &str) -> Result<String, Vec<String>> {
+    // [1] Load data
     let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let redis_parity = load_redis_parity(manifest, version);
+    let differences = load_differences(manifest);
+
     let glide_src = &read(&manifest.join("src/commands/core.rs"));
+    let glide_methods = parse_methods(glide_src, glide_src);
 
-    let mut problems = Vec::new();
+    let redis_parity = load_redis_parity(manifest, version);
+    let redis_methods = redis_parity.methods;
 
-    // Compare command table methods.
-    let glide_command_table_methods = parse_command_table_methods(glide_src);
-    problems.extend(compare_method_maps(
-        &redis_parity.command_table_methods,
-        &glide_command_table_methods,
-    ));
-
-    // Compare scan methods.
-    let glide_scan_methods = parse_scan_methods(glide_src);
-    problems.extend(compare_method_maps(
-        &redis_parity.scan_methods,
-        &glide_scan_methods,
-    ));
+    // [2] Run parity check
+    let problems = compare_methods(&redis_methods, &glide_methods, &differences);
 
     if problems.is_empty() {
+        let count = |redis: bool, glide: bool| {
+            differences
+                .values()
+                .filter(|d| d.redis.is_some() == redis && d.glide.is_some() == glide)
+                .count()
+        };
         Ok(format!(
-            "parity OK: GLIDE methods match redis-rs {version} exactly"
+            "parity OK: GLIDE methods match redis-rs {version}, with {} documented \
+             divergence(s), {} missing method(s) and {} extra method(s)",
+            count(true, true),
+            count(true, false),
+            count(false, true)
         ))
     } else {
         Err(problems)
@@ -86,15 +96,13 @@ fn run_parity_check(version: &str) -> Result<String, Vec<String>> {
 /// builds and saves it from the redis-rs source when the data file is missing.
 ///
 /// Panics if the snapshot records a different version than the one targeted,
-/// or if the data file can't be read, parsed, serialized, or written.
+/// if the data file can't be read, parsed, serialized, or written, or if the
+/// redis-rs source can't be fetched.
 //
-// TODO #7058: the snapshot is a trusted baseline — it is not validated against the
-// vendored redis-rs source, and its `version` is stamped from `REDIS_RS_VERSION`
-// rather than derived from the source. So a source signature change with a stale
-// snapshot still passes, and regenerating after a version bump relabels the old
-// source as the new version. Harden by re-parsing (or hash-verifying) the source
-// each run, and make regeneration an explicit step rather than a side effect of
-// `cargo test` writing into `src/`.
+// TODO #7288: the snapshot is a trusted baseline — it is not validated against
+// the redis-rs source, so a hand-edited or stale snapshot still passes. Harden by
+// re-parsing (or hash-verifying) the source each run, and make regeneration an
+// explicit step.
 fn load_redis_parity(manifest: &Path, version: &str) -> RedisParity {
     let data_path = manifest.join(REDIS_PARITY_JSON);
 
@@ -114,12 +122,11 @@ fn load_redis_parity(manifest: &Path, version: &str) -> RedisParity {
     }
 
     // Data file missing: build and save the snapshot from the redis-rs source.
-    let commands = read(&manifest.join(REDIS_COMMAND_TABLE));
-    let scan = read(&manifest.join(REDIS_SCAN_METHODS));
+    let commands_src = fetch_redis_source(REDIS_COMMAND_TABLE);
+    let scan_src = fetch_redis_source(REDIS_SCAN_METHODS);
     let redis = RedisParity {
         version: version.to_string(),
-        command_table_methods: parse_command_table_methods(&commands),
-        scan_methods: parse_scan_methods(&scan),
+        methods: parse_methods(&commands_src, &scan_src),
     };
 
     let json = serde_json::to_string_pretty(&redis)
@@ -130,43 +137,60 @@ fn load_redis_parity(manifest: &Path, version: &str) -> RedisParity {
     redis
 }
 
+/// Loads the cached differences, indexed by method name.
+/// Panics if the data file can't be read or parsed.
+fn load_differences(manifest: &Path) -> BTreeMap<String, Difference> {
+    let data_path = manifest.join(DIFFERENCES_JSON);
+    serde_json::from_str(&read(&data_path))
+        .unwrap_or_else(|e| panic!("cannot parse {}: {e}", data_path.display()))
+}
+
+/// Fetches the given redis-rs source file from GitHub.
+/// Panics if the file can't be fetched.
+fn fetch_redis_source(file: &str) -> String {
+    let url = REDIS_RS_SOURCE_URL
+        .replace("{version}", REDIS_RS_VERSION)
+        .replace("{file}", file);
+    let output = std::process::Command::new("curl")
+        .args(["--fail", "--silent", "--show-error", "--location", &url])
+        .output()
+        .unwrap_or_else(|e| panic!("cannot run curl to fetch {url}: {e}"));
+    assert!(
+        output.status.success(),
+        "cannot fetch {url}: {}",
+        String::from_utf8_lossy(&output.stderr).trim()
+    );
+    String::from_utf8(output.stdout).unwrap_or_else(|e| panic!("{url} is not UTF-8: {e}"))
+}
+
+/// Parses the command methods from the given command table and scan source.
+/// Returns the parsed methods, indexed by method name.
+/// Panics if either cannot be parsed, or if a method name appears in both.
+fn parse_methods(command_table_src: &str, scan_src: &str) -> BTreeMap<String, Method> {
+    let mut methods = parse_command_table_methods(command_table_src);
+    for (name, method) in parse_scan_methods(scan_src) {
+        assert!(
+            !methods.contains_key(&name),
+            "method `{name}` is both a command-table and a scan method"
+        );
+        methods.insert(name, method);
+    }
+    methods
+}
+
 /// Parse the command table methods from the given source, indexed by method name.
 /// Panics if the command table cannot be parsed.
 fn parse_command_table_methods(src: &str) -> BTreeMap<String, Method> {
-    // Extract command table (the `implement_commands! { ... }` macro body).
-    let start = src
-        .find("implement_commands! {")
+    let implement_commands_macro = extract_macro(src, "implement_commands! {")
         .unwrap_or_else(|| panic!("command table not found"));
-    let rest = &src[start..];
 
-    // The macro body ends at the first line that *starts* with `}`.
-    // TODO #7058: for robust parsing (comment/string/brace-safe), tokenize with
-    // `proc-macro2` and take the macro's brace `Group` instead of this heuristic.
-    let end = rest
-        .lines()
-        .scan(0usize, |offset, line| {
-            let line_start = *offset;
-            *offset += line.len() + 1;
-            Some((line_start, line))
-        })
-        .find(|(off, line)| *off > 0 && line.starts_with('}'))
-        .map(|(off, _)| off)
-        .unwrap_or(rest.len());
-
-    let implement_commands_macro = &rest[..end];
-    parse_implement_commands_macro(implement_commands_macro)
-}
-
-/// Parse the command table methods from the given `implement_commands` macro,
-/// indexed by method name.
-fn parse_implement_commands_macro(body: &str) -> BTreeMap<String, Method> {
     // The optional `-> (...)`/`-> Generic` return annotation (redis-rs's typed
     // API) is captured verbatim when present; tables without it leave it empty.
     let sig_re =
         Regex::new(r"^fn\s+([a-z_0-9]+)\s*(?:<([^>]*)>)?\s*\((.*?)\)(?:\s*->\s*(.+?))?\s*\{")
             .expect("valid regex");
 
-    let lines: Vec<&str> = body.lines().collect();
+    let lines: Vec<&str> = implement_commands_macro.lines().collect();
     let mut out = BTreeMap::new();
     let mut li = 0usize;
     while li < lines.len() {
@@ -209,6 +233,26 @@ fn parse_implement_commands_macro(body: &str) -> BTreeMap<String, Method> {
         out.insert(method.name.clone(), method);
     }
     out
+}
+
+/// Returns the macro with the given name, or `None` if not found.
+/// The macro ends at the first later line that *starts* with `}`.
+//
+// TODO #7288: for robust parsing (comment/string/brace-safe), tokenize with
+// `proc-macro2` and take the macro's brace `Group` instead of this heuristic.
+fn extract_macro<'a>(src: &'a str, name: &str) -> Option<&'a str> {
+    let rest = &src[src.find(name)?..];
+    let end = rest
+        .lines()
+        .scan(0usize, |offset, line| {
+            let line_start = *offset;
+            *offset += line.len() + 1;
+            Some((line_start, line))
+        })
+        .find(|(off, line)| *off > 0 && line.starts_with('}'))
+        .map(|(off, _)| off)
+        .unwrap_or(rest.len());
+    Some(&rest[..end])
 }
 
 /// Parse a generic parameter list.
@@ -266,42 +310,30 @@ fn parse_args(args: &str) -> Vec<Argument> {
         .collect()
 }
 
-/// Parse the scan methods from the given source, indexed by method name.
+/// Parse the scan methods from the `implement_iterators` macro in the given source,
+/// indexed by method name.
 /// Panics if the scan methods cannot be parsed.
 fn parse_scan_methods(src: &str) -> BTreeMap<String, Method> {
+    let implement_iterators_macro = extract_macro(src, "macro_rules! implement_iterators {")
+        .unwrap_or_else(|| panic!("scan iterators not found"));
     let re = Regex::new(r"(?s)fn\s+([a-z_0-9]*scan[a-z_0-9]*)\s*<([^>]*)>\s*\(([^)]*)\)")
         .expect("valid regex");
 
-    // Populate map from scan method names to the corresponding async and blocking methods.
-    let mut scan_methods_map: BTreeMap<String, Vec<Method>> = BTreeMap::new();
-    for caps in re.captures_iter(src) {
-        let name = caps[1].to_string();
+    let mut methods = BTreeMap::new();
+    for caps in re.captures_iter(implement_iterators_macro) {
         let method = Method {
-            name: name.clone(),
+            name: caps[1].to_string(),
             generics: normalize_scan_generics(parse_generics(&caps[2])),
             args: parse_scan_args(&caps[3]),
             return_type: None,
         };
-        scan_methods_map.entry(name).or_default().push(method);
+        let name = method.name.clone();
+        assert!(
+            methods.insert(name.clone(), method).is_none(),
+            "scan method `{name}` is defined more than once"
+        );
     }
-
-    // Verify that each scan method is defined for both async and blocking clients.
-    // TODO #7058: this two-flavor check runs on both the redis-rs and GLIDE sources.
-    // Upstream redis-rs 1.7.0 declares each scan method once (a macro expanded into both
-    // traits), so on retarget the "both flavors present" expectation must apply to the
-    // GLIDE source only.
-    scan_methods_map
-        .into_iter()
-        .map(|(name, sigs)| {
-            assert!(
-                sigs.len() == 2 && sigs[0] == sigs[1],
-                "scan method `{name}` must have matching async and blocking definitions, \
-                 found {}: {sigs:?}",
-                sigs.len()
-            );
-            (name, sigs.into_iter().next().expect("checked non-empty"))
-        })
-        .collect()
+    methods
 }
 
 /// Parse a scan method's argument list.
@@ -318,37 +350,75 @@ fn parse_scan_args(args: &str) -> Vec<Argument> {
     parse_args(without_receiver.trim())
 }
 
-/// Compares the given redis-rs and Valkey GLIDE methods.
-/// Returns one message per problem; empty means they match.
-fn compare_method_maps(
+/// Compares the given redis-rs and Valkey GLIDE methods, allowing exactly the expected
+/// differences. Returns one message per problem; empty means they match.
+fn compare_methods(
     redis: &BTreeMap<String, Method>,
     glide: &BTreeMap<String, Method>,
+    differences: &BTreeMap<String, Difference>,
 ) -> Vec<String> {
     let mut problems = Vec::new();
 
-    // Verify that all redis-rs methods are implemented by GLIDE.
-    for (name, method) in redis {
-        match glide.get(name) {
-            None => problems.push(format!("MISSING method in GLIDE: {name}")),
-            Some(ours) if !compare_methods(method, ours) => problems.push(format!(
-                "SIGNATURE DIFF {name}:\n     redis-rs: {method:?}\n     GLIDE: {ours:?}"
-            )),
-            _ => {}
-        }
+    // [1] Verify differences
+    // ----------------------
+
+    // Verify that recorded differences are still accurate.
+    // This prevents `differences.json` from becoming stale.
+    for (name, diff) in differences {
+        let redis_method = redis.get(name);
+        let glide_method = glide.get(name);
+
+        let detail = if diff.redis.is_none() && diff.glide.is_none() {
+            "neither a redis-rs nor a GLIDE method".to_string()
+        } else if redis_method != diff.redis.as_ref() {
+            match redis_method {
+                Some(meth) => format!("redis-rs now declares {meth:?}"),
+                None => "redis-rs no longer declares it".to_string(),
+            }
+        } else if glide_method != diff.glide.as_ref() {
+            match glide_method {
+                Some(meth) => format!("GLIDE now declares {meth:?}"),
+                None => "GLIDE no longer declares it".to_string(),
+            }
+        } else if let (Some(r), Some(g)) = (redis_method, glide_method)
+            && methods_match(r, g)
+        {
+            "the redis-rs and GLIDE methods match".to_string()
+        } else {
+            continue;
+        };
+        problems.push(format!(
+            "STALE difference ({detail}): {name} — recorded reason: {}",
+            diff.reason
+        ));
     }
 
-    // Verify that GLIDE does not implement any extra methods.
-    for name in glide.keys() {
-        if !redis.contains_key(name) {
-            problems.push(format!("EXTRA method in GLIDE: {name}"));
+    // [2] Verify methods
+    // ------------------
+
+    // Verify that GLIDE implements exactly the redis-rs methods,
+    // except for those with an expected difference.
+    let names: BTreeSet<&String> = redis.keys().chain(glide.keys()).collect();
+    for name in names {
+        if differences.contains_key(name) {
+            continue;
+        }
+        match (redis.get(name), glide.get(name)) {
+            (Some(_), None) => problems.push(format!("MISSING method in GLIDE: {name}")),
+            (None, Some(_)) => problems.push(format!("EXTRA method in GLIDE: {name}")),
+            (Some(theirs), Some(ours)) if !methods_match(theirs, ours) => problems.push(format!(
+                "SIGNATURE DIFF {name}:\n     redis-rs: {theirs:?}\n     GLIDE: {ours:?}"
+            )),
+            _ => {}
         }
     }
 
     problems
 }
 
-/// Normalizes scan generics so the async and blocking definitions compare equal:
-/// drop the `'s` lifetime generic, and strip `Send` and lifetime bounds from each bound.
+/// Normalizes scan generics so GLIDE's compare equal to redis-rs's, which has neither:
+/// - drop lifetime generics (e.g. `'s` in `scan<'s, RV>`);
+/// - strip lifetime bounds (e.g. `RV: FromValkeyValue + 's` becomes `RV: FromValkeyValue`).
 fn normalize_scan_generics(generics: Vec<Generic>) -> Vec<Generic> {
     generics
         .into_iter()
@@ -358,7 +428,7 @@ fn normalize_scan_generics(generics: Vec<Generic>) -> Vec<Generic> {
             bound: g.bound.map(|b| {
                 b.split('+')
                     .map(str::trim)
-                    .filter(|part| !part.is_empty() && *part != "Send" && !part.starts_with('\''))
+                    .filter(|part| !part.is_empty() && !part.starts_with('\''))
                     .collect::<Vec<_>>()
                     .join(" + ")
             }),
@@ -368,7 +438,7 @@ fn normalize_scan_generics(generics: Vec<Generic>) -> Vec<Generic> {
 
 /// Returns `true` if the normalized redis-rs and GLIDE methods match.
 /// Fields are checked in signature declaration order (generics, name, args, return type).
-fn compare_methods(redis: &Method, glide: &Method) -> bool {
+fn methods_match(redis: &Method, glide: &Method) -> bool {
     // Verify that generics match.
     if redis.generics.len() != glide.generics.len() {
         return false;
@@ -387,17 +457,26 @@ fn compare_methods(redis: &Method, glide: &Method) -> bool {
     }
 
     // Verify that arguments match.
-    if redis.args != glide.args {
+    if redis.args.len() != glide.args.len() {
+        return false;
+    }
+
+    if !redis
+        .args
+        .iter()
+        .zip(&glide.args)
+        .all(|(r, g)| r.name == g.name && type_from_redis_to_glide(&r.type_name) == g.type_name)
+    {
         return false;
     }
 
     // Verify that return types match.
-    // TODO #7058: redis-rs 1.7.0 introduces typed return types that may need to be normalized.
-    if redis.return_type != glide.return_type {
-        return false;
-    }
-
-    true
+    redis
+        .return_type
+        .as_deref()
+        .map(type_from_redis_to_glide)
+        .as_deref()
+        == glide.return_type.as_deref()
 }
 
 /// Maps the given redis-rs bound to the corresponding GLIDE bound.
@@ -408,7 +487,135 @@ fn bound_from_redis_to_glide(bound: &str) -> String {
         .replace("ToRedisArgs", "ToValkeyArgs")
 }
 
+/// Maps the given redis-rs type to the corresponding GLIDE type.
+fn type_from_redis_to_glide(ty: &str) -> String {
+    ty.replace("geo::Unit", "GeoUnit")
+        .replace("geo::Coord", "GeoCoord")
+        .replace("streams::", "")
+}
+
 /// Read the file at the given path and returns its contents.
 fn read(path: &Path) -> String {
     std::fs::read_to_string(path).unwrap_or_else(|e| panic!("cannot read {}: {e}", path.display()))
+}
+
+// --- tests --------------------------------------------------------------------------------------
+
+/// Verifies that the comparison reports a missing, an extra, and a mismatched method.
+#[test]
+fn compare_methods_reports_undocumented_differences() {
+    let redis = methods([method("get", "(String)"), method("set", "(())")]);
+    let glide = methods([method("get", "(usize)"), method("extra", "(())")]);
+
+    let problems = compare_methods(&redis, &glide, &BTreeMap::new());
+
+    assert_eq!(problems.len(), 3, "{problems:?}");
+    assert!(problems.iter().any(|p| p == "EXTRA method in GLIDE: extra"));
+    assert!(problems.iter().any(|p| p == "MISSING method in GLIDE: set"));
+    assert!(problems.iter().any(|p| p.starts_with("SIGNATURE DIFF get")));
+}
+
+/// Verifies that pinned differences are allowed, and reported when they go stale.
+#[test]
+fn compare_methods_validates_differences() {
+    let redis = methods([method("get", "(String)"), method("set", "(())")]);
+    let glide = methods([method("get", "(usize)"), method("extra", "(())")]);
+    let differences = BTreeMap::from([
+        difference(
+            "get",
+            Some(method("get", "(String)")),
+            Some(method("get", "(usize)")),
+        ),
+        difference("set", Some(method("set", "(())")), None),
+        difference("extra", None, Some(method("extra", "(())"))),
+    ]);
+    assert!(compare_methods(&redis, &glide, &differences).is_empty());
+
+    // A difference that no longer holds on either side, or names neither side.
+    let stale = BTreeMap::from([
+        difference(
+            "get",
+            Some(method("get", "(Vec<String>)")),
+            Some(method("get", "(usize)")),
+        ),
+        difference(
+            "set",
+            Some(method("set", "(())")),
+            Some(method("set", "(())")),
+        ),
+        difference("none", None, None),
+    ]);
+    let problems = compare_methods(&redis, &glide, &stale);
+    assert!(
+        problems
+            .iter()
+            .any(|p| p.starts_with("STALE difference (redis-rs now declares"))
+    );
+    assert!(
+        problems
+            .iter()
+            .any(|p| p.starts_with("STALE difference (GLIDE no longer declares it): set"))
+    );
+    assert!(
+        problems.iter().any(
+            |p| p.starts_with("STALE difference (neither a redis-rs nor a GLIDE method): none")
+        )
+    );
+
+    // A difference whose redis-rs and GLIDE methods match.
+    let glide = methods([method("get", "(String)")]);
+    let matching = BTreeMap::from([difference(
+        "get",
+        Some(method("get", "(String)")),
+        Some(method("get", "(String)")),
+    )]);
+    let problems = compare_methods(&redis, &glide, &matching);
+    assert!(
+        problems
+            .iter()
+            .any(|p| p.starts_with("STALE difference (the redis-rs and GLIDE methods match): get")),
+        "{problems:?}"
+    );
+}
+
+/// Verifies that GLIDE's scan lifetime generic and bounds are normalized away.
+#[test]
+fn normalize_scan_generics_drops_lifetimes() {
+    let generics = normalize_scan_generics(parse_generics(
+        "'s, K: ToSingleValkeyArg, RV: FromValkeyValue + 's",
+    ));
+    assert_eq!(
+        generics,
+        parse_generics("K: ToSingleValkeyArg, RV: FromValkeyValue")
+    );
+}
+
+// --- test helpers -------------------------------------------------------------------------------
+
+/// Returns the given methods, indexed by name.
+fn methods<const N: usize>(methods: [Method; N]) -> BTreeMap<String, Method> {
+    methods.into_iter().map(|m| (m.name.clone(), m)).collect()
+}
+
+/// Returns a method with the given name and return type, and no generics or arguments.
+fn method(name: &str, return_type: &str) -> Method {
+    Method {
+        name: name.to_string(),
+        generics: Vec::new(),
+        args: Vec::new(),
+        return_type: Some(return_type.to_string()),
+    }
+}
+
+/// Returns a named difference with the given methods.
+fn difference(name: &str, redis: Option<Method>, glide: Option<Method>) -> (String, Difference) {
+    let reason = "test".to_string();
+    (
+        name.to_string(),
+        Difference {
+            reason,
+            redis,
+            glide,
+        },
+    )
 }

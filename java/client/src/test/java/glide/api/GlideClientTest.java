@@ -392,6 +392,7 @@ import glide.api.models.commands.stream.StreamTrimOptions.MaxLen;
 import glide.api.models.commands.stream.StreamTrimOptions.MinId;
 import glide.managers.CommandManager;
 import glide.utils.ArgsBuilder;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -16759,5 +16760,23 @@ public class GlideClientTest {
         // verify
         assertEquals(testResponse, response);
         assertEquals(value, response.get());
+    }
+
+    @Test
+    public void slotForKey_handles_empty_hash_tag() throws Exception {
+        java.lang.reflect.Method m = GlideClient.class.getDeclaredMethod("slotForKey", byte[].class);
+        m.setAccessible(true);
+
+        // An empty hash tag ("{}") must not consume a later '}'. The first '}' after
+        // the first '{' closes the tag; an empty tag hashes the whole key. Slot values
+        // are the server's CLUSTER KEYSLOT results.
+        assertEquals(15441, m.invoke(null, (Object) "{}user}:1".getBytes(StandardCharsets.UTF_8)));
+        assertEquals(13650, m.invoke(null, (Object) "{}{a}".getBytes(StandardCharsets.UTF_8)));
+        // Non-empty tag and no tag are unaffected.
+        assertEquals(5061, m.invoke(null, (Object) "foo{bar}baz".getBytes(StandardCharsets.UTF_8)));
+        assertEquals(8106, m.invoke(null, (Object) "{user1}".getBytes(StandardCharsets.UTF_8)));
+        // First '}' closes the tag ("{bar"); a '{' with no closing '}' hashes the whole key.
+        assertEquals(4015, m.invoke(null, (Object) "foo{{bar}}zap".getBytes(StandardCharsets.UTF_8)));
+        assertEquals(4092, m.invoke(null, (Object) "{".getBytes(StandardCharsets.UTF_8)));
     }
 }

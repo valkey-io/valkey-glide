@@ -3,10 +3,11 @@
 
 use crate::ValkeyResult;
 use crate::cmd::Cmd;
-use crate::commands::options::{ClientPauseMode, FlushMode};
+use crate::commands::options::ClientPauseMode;
 use crate::executor::CommandExecutor;
 use crate::value::FromValkeyValue;
 use crate::value::ValkeyValue;
+use crate::value::to_glide_error;
 use crate::write::ToValkeyArgs;
 use async_trait::async_trait;
 use bytes::Bytes;
@@ -40,26 +41,6 @@ pub trait ServerManagementCommands: CommandExecutor {
         let mut cmd = Cmd::new();
         cmd.arg("DBSIZE");
         i64::from_owned_valkey_value(self.execute_command(cmd, None).await?)
-    }
-
-    /// Remove all keys from the current database (`FLUSHDB`).
-    async fn flushdb(&self, mode: Option<FlushMode>) -> ValkeyResult<()> {
-        let mut cmd = Cmd::new();
-        cmd.arg("FLUSHDB");
-        if let Some(m) = mode {
-            cmd.arg(m.as_arg());
-        }
-        <()>::from_owned_valkey_value(self.execute_command(cmd, None).await?)
-    }
-
-    /// Remove all keys from all databases (`FLUSHALL`).
-    async fn flushall(&self, mode: Option<FlushMode>) -> ValkeyResult<()> {
-        let mut cmd = Cmd::new();
-        cmd.arg("FLUSHALL");
-        if let Some(m) = mode {
-            cmd.arg(m.as_arg());
-        }
-        <()>::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
     /// Get configuration parameters matching `parameter` (`CONFIG GET`).
@@ -105,9 +86,7 @@ pub trait ServerManagementCommands: CommandExecutor {
                     micros.parse().unwrap_or_default(),
                 ))
             }
-            other => Err(crate::error::GlideError::Request(format!(
-                "unexpected TIME reply: {other:?}"
-            ))),
+            other => Err(to_glide_error(other, "Unexpected TIME reply.")),
         }
     }
 

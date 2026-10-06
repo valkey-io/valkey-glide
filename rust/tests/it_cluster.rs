@@ -3,7 +3,7 @@
 
 mod common;
 
-use glide::{AsyncCommands, ConnectionManagementCommands, CustomCommand, FromValkeyValue, Route};
+use glide::{AsyncTypedCommands, CustomCommand, FromValkeyValue, Route};
 
 #[tokio::test]
 async fn cluster_set_get_routed_by_key() {
@@ -64,12 +64,12 @@ async fn cluster_del_and_exists() {
 
     let k = "cluster:delkey";
     let _: () = client.set(k, "v").await.unwrap();
-    let exists: i64 = client.exists(k).await.unwrap();
-    assert_eq!(exists, 1);
-    let deleted: i64 = client.del(k).await.unwrap();
+    let exists: bool = client.exists(k).await.unwrap();
+    assert!(exists);
+    let deleted: usize = client.del(k).await.unwrap();
     assert_eq!(deleted, 1);
-    let exists: i64 = client.exists(k).await.unwrap();
-    assert_eq!(exists, 0);
+    let exists: bool = client.exists(k).await.unwrap();
+    assert!(!exists);
 }
 
 #[tokio::test]
@@ -78,9 +78,9 @@ async fn cluster_incr() {
     let client = cluster.client().await;
 
     let k = "cluster:counter";
-    let v: i64 = client.incr(k, 1i64).await.unwrap();
+    let v: isize = client.incr(k, 1i64).await.unwrap();
     assert_eq!(v, 1);
-    let v: i64 = client.incr(k, 4i64).await.unwrap();
+    let v: isize = client.incr(k, 4i64).await.unwrap();
     assert_eq!(v, 5);
 }
 
