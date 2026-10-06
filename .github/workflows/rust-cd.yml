@@ -68,6 +68,9 @@ jobs:
             contents: read
             # Required by crates.io trusted publishing (OIDC).
             id-token: write
+        env:
+            # Share build artifacts across crates to avoid rebuilding common dependencies.
+            CARGO_TARGET_DIR: ${{ github.workspace }}/target
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
               with:
