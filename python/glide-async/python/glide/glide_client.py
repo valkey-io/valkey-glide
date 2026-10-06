@@ -229,10 +229,9 @@ _async_pipe_lock = threading.Lock()
 _async_pipe_reader_loops: "weakref.WeakSet[asyncio.AbstractEventLoop]" = (
     weakref.WeakSet()
 )
-# Serializes pipe reads so coexisting readers cannot interleave frames.
+# Serializes pipe reads so coexisting readers cannot interleave frames.  Held
+# for the read only: dispatch, and the user callbacks it can run, stay outside.
 _async_pipe_read_lock = threading.Lock()
-# Loop running the read in progress, for same-loop vs cross-loop delivery.
-_async_pipe_reading_loop: Optional[asyncio.AbstractEventLoop] = None
 _client_registry: dict = {}
 _pipe_remainder: bytes = b""
 _FRAME_STRUCT = struct.Struct("=QQQQ")  # Pre-compiled for hot path
@@ -296,7 +295,7 @@ def _resolve_future(fut, result, client):
             client._loop.call_soon_threadsafe(fut.set_exception, result)
         else:
             client._loop.call_soon_threadsafe(fut.set_result, result)
-    elif client._loop and client._loop is not _async_pipe_reading_loop:
+    elif client._loop and client._loop is not _running_loop():
         if isinstance(result, Exception):
             client._loop.call_soon_threadsafe(fut.set_exception, result)
         else:
@@ -416,6 +415,25 @@ def _handle_inline_pubsub(client, payload: bytes):
         )
 
 
+def _running_loop() -> Optional[asyncio.AbstractEventLoop]:
+    """The asyncio loop running on this thread, or None (trio reader, worker thread)."""
+    try:
+        return asyncio.get_running_loop()
+    except RuntimeError:
+        return None
+
+
+def _reset_pipe_locks_after_fork() -> None:
+    """Replace the pipe locks, which a fork can inherit held by a thread the child lost."""
+    global _async_pipe_lock, _async_pipe_read_lock
+    _async_pipe_lock = threading.Lock()
+    _async_pipe_read_lock = threading.Lock()
+
+
+if hasattr(os, "register_at_fork"):
+    os.register_at_fork(after_in_child=_reset_pipe_locks_after_fork)
+
+
 def _detect_fork_and_reset() -> None:
     """Detect if we are in a forked child and reset pipe state.
 
@@ -464,82 +482,91 @@ def _drain_stale_pipe_frames():
 
 
 def _on_async_pipe_readable() -> None:
-    global _async_pipe_reading_loop
+    """Read the frames waiting on the shared pipe and dispatch them on this loop."""
+    for frame in _collect_pipe_frames():
+        _dispatch_pipe_frame(*frame)
+
+
+def _collect_pipe_frames() -> List[Tuple[int, int, int, int, Optional[bytes]]]:
+    """Take the complete frames off the pipe, serialized against the other readers."""
+    global _pipe_remainder
+    frames: List[Tuple[int, int, int, int, Optional[bytes]]] = []
     with _async_pipe_read_lock:
         try:
-            _async_pipe_reading_loop = asyncio.get_running_loop()
-        except RuntimeError:
-            _async_pipe_reading_loop = None
-        try:
-            _read_async_pipe_frames()
-        finally:
-            _async_pipe_reading_loop = None
-
-
-def _read_async_pipe_frames() -> None:  # noqa: C901
-    """Read and dispatch pending frames. Must hold _async_pipe_read_lock."""
-    # Free-threading optimization: when GIL is disabled, dispatch response parsing
-    # to a thread pool for parallel execution across cores. With GIL enabled,
-    # parse serially on the event loop thread (thread pool overhead not worth it).
-    global _pipe_remainder
-    try:
-        data = os.read(_async_pipe_read_fd, 32 * 512)
-    except (BlockingIOError, OSError):
-        return
-    if not data:
-        return
-    if _pipe_remainder:
-        data = _pipe_remainder + data
-        _pipe_remainder = b""
-    offset = 0
-    while offset + 32 <= len(data):
-        client_id, request_id, response_ptr, arena_or_err = _FRAME_STRUCT.unpack_from(
-            data, offset
-        )
-        offset += 32
-        client = _client_registry.get(client_id)
-        if request_id == _PUBSUB_SENTINEL:
-            if arena_or_err & (1 << 63):
-                # Pointer-mode: large message delivered via heap pointer
-                payload_len = arena_or_err & 0x7FFFFFFFFFFFFFFF
-                if client is not None:
-                    _handle_pointer_pubsub(client, response_ptr, payload_len)
-                else:
-                    any_c = next(iter(_client_registry.values()), None)
-                    if any_c:
-                        any_c._lib.free_pubsub_pointer_payload(
-                            any_c._ffi.cast("uint8_t*", response_ptr), payload_len
-                        )
-            else:
+            data = os.read(_async_pipe_read_fd, 32 * 512)
+        except (BlockingIOError, OSError):
+            return frames
+        if not data:
+            return frames
+        if _pipe_remainder:
+            data = _pipe_remainder + data
+            _pipe_remainder = b""
+        offset = 0
+        while offset + 32 <= len(data):
+            client_id, request_id, response_ptr, arena_or_err = (
+                _FRAME_STRUCT.unpack_from(data, offset)
+            )
+            offset += 32
+            payload = None
+            if request_id == _PUBSUB_SENTINEL and not arena_or_err & (1 << 63):
                 # Inline pubsub: response_ptr = payload_len, data follows header
                 payload_len = response_ptr
                 if offset + payload_len > len(data):
                     # Incomplete payload — put header + remaining back
                     offset -= 32
                     break
-                if client is not None:
-                    _handle_inline_pubsub(client, data[offset : offset + payload_len])
+                payload = data[offset : offset + payload_len]
                 offset += payload_len
-            continue
-        if client is None:
-            _free_orphaned_frame(request_id, response_ptr, arena_or_err)
-            continue
-        if response_ptr != 0:
-            if _FREE_THREADED and _response_thread_pool is not None:
-                _response_thread_pool.submit(
-                    _handle_pipe_success, client, request_id, response_ptr, arena_or_err
-                )
+            frames.append((client_id, request_id, response_ptr, arena_or_err, payload))
+        if offset < len(data):
+            _pipe_remainder = data[offset:]
+    return frames
+
+
+def _dispatch_pipe_frame(
+    client_id: int,
+    request_id: int,
+    response_ptr: int,
+    arena_or_err: int,
+    payload: Optional[bytes],
+) -> None:
+    """Hand one frame to its client; runs outside the read lock."""
+    # Free-threading optimization: when GIL is disabled, dispatch response parsing
+    # to a thread pool for parallel execution across cores. With GIL enabled,
+    # parse serially on the event loop thread (thread pool overhead not worth it).
+    client = _client_registry.get(client_id)
+    if request_id == _PUBSUB_SENTINEL:
+        if arena_or_err & (1 << 63):
+            # Pointer-mode: large message delivered via heap pointer
+            payload_len = arena_or_err & 0x7FFFFFFFFFFFFFFF
+            if client is not None:
+                _handle_pointer_pubsub(client, response_ptr, payload_len)
             else:
-                _handle_pipe_success(client, request_id, response_ptr, arena_or_err)
+                any_c = next(iter(_client_registry.values()), None)
+                if any_c:
+                    any_c._lib.free_pubsub_pointer_payload(
+                        any_c._ffi.cast("uint8_t*", response_ptr), payload_len
+                    )
+        elif client is not None:
+            _handle_inline_pubsub(client, payload or b"")
+        return
+    if client is None:
+        _free_orphaned_frame(request_id, response_ptr, arena_or_err)
+        return
+    if response_ptr != 0:
+        if _FREE_THREADED and _response_thread_pool is not None:
+            _response_thread_pool.submit(
+                _handle_pipe_success, client, request_id, response_ptr, arena_or_err
+            )
         else:
-            if _FREE_THREADED and _response_thread_pool is not None:
-                _response_thread_pool.submit(
-                    _handle_pipe_error, client, request_id, arena_or_err
-                )
-            else:
-                _handle_pipe_error(client, request_id, arena_or_err)
-    if offset < len(data):
-        _pipe_remainder = data[offset:]
+            _handle_pipe_success(client, request_id, response_ptr, arena_or_err)
+    else:
+        if _FREE_THREADED and _response_thread_pool is not None:
+            _response_thread_pool.submit(
+                _handle_pipe_error, client, request_id, arena_or_err
+            )
+        else:
+            _handle_pipe_error(client, request_id, arena_or_err)
 
 
 async def _trio_pipe_reader(pipe_fd: int, token: object) -> None:
