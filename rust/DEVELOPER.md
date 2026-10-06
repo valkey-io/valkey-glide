@@ -242,13 +242,21 @@ Commands beyond the redis-rs surface belong in the per-family extension traits
 Crates are published with the **Rust - Continuous Deployment** workflow
 (`.github/workflows/rust-cd.yml`):
 
-1. Bump `version` in the `Cargo.toml` of each crate to release, and update the
-   `Cargo.lock` files that reference it. The internal crates are published
-   with `0.x` versions and marked as internal, consistent with Rust conventions.
-   If an internal crate's new version isn't semver-compatible with the previous
-   one, also raise its `version` requirement in the crates that depend on it.
+1. Bump `version` in the `Cargo.toml` of each crate to release (see
+   [versioning](#versioning) below), and update the `Cargo.lock` files that
+   reference it.
 2. Run the workflow with `publish=false` to perform a dry run. A crate's dry run
    fails if it depends on a version of another GLIDE crate that isn't published
    yet.
 3. Run the workflow from a `release-*` branch with `publish=true`. Publishing
    requires maintainer approval.
+
+### Versioning
+
+Each crate is versioned independently:
+
+- The `valkey-glide` crate follows [Semantic Versioning](https://semver.org/).
+- The internal crates are published with `0.x` versions, consistent
+  with Rust conventions. For `0.x` versions, Cargo treats a minor bump
+  (e.g. `0.1.1` to `0.2.0`) as breaking, and a patch bump (e.g. `0.1.1`
+  to `0.1.2`) as compatible.
