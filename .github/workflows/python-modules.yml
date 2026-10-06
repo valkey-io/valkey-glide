@@ -76,7 +76,6 @@ jobs:
               with:
                   path: |
                       python/target
-                      glide-core/src/generated
                   key: x86_64-unknown-linux-gnu-python
                   restore-keys: |
                       x86_64-unknown-linux-gnu-glide-core
@@ -134,7 +133,6 @@ jobs:
               with:
                   path: |
                       python/target
-                      glide-core/src/generated
                   key: aarch64-unknown-linux-gnu-python
                   restore-keys: |
                       aarch64-unknown-linux-gnu-glide-core

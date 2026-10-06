@@ -8,12 +8,23 @@ use std::collections::BTreeMap;
 /// A snapshot of redis-rs commands for parity tests.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct RedisParity {
-    /// The redis-rs release this snapshot describes (e.g. `0.25.2`).
+    /// The redis-rs release this snapshot describes (e.g. `1.7.0`).
     pub version: String,
-    /// The command table methods, indexed by method name.
-    pub command_table_methods: BTreeMap<String, Method>,
-    /// The scan methods, indexed by method name.
-    pub scan_methods: BTreeMap<String, Method>,
+    /// The commands methods, indexed by method name.
+    pub methods: BTreeMap<String, Method>,
+}
+
+/// A deliberate difference from redis-rs for parity tests.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Difference {
+    /// Why GLIDE differs from redis-rs.
+    pub reason: String,
+    /// The method as redis-rs declares it,
+    /// or `None` if redis-rs does not have it.
+    pub redis: Option<Method>,
+    /// The method as GLIDE declares it,
+    /// or `None` if GLIDE does not have it.
+    pub glide: Option<Method>,
 }
 
 /// A command-table method (e.g. `get`).

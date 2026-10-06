@@ -36,25 +36,30 @@ additionally accepts a `Route` on command variants (via dedicated
 
 ## Command surface
 
-**GLIDE's command API** is source-compatible with the fork: `glide::AsyncCommands` (async)
+**GLIDE's command API** is source-compatible with redis-rs 1.7.0: `glide::AsyncCommands` (async)
 and `glide::Commands` (blocking) are defined by a **hand-maintained command
 table** (`src/commands/core.rs`, one `implement_commands!` macro
-invocation — the same declarative pattern the fork itself uses) mirroring the vendored
-fork's `implement_commands!` table, enforced by a signature-parity guard in `src/parity_tests/`.
-Method names, generic parameter order, and
-wire encoding match the fork exactly (methods delegate to its own
-`Cmd::<name>()` constructors).
+invocation — the same declarative pattern redis-rs itself uses) mirroring upstream
+redis-rs's `implement_commands!` table, enforced by a signature-parity guard in `src/parity_tests/`.
+Method names, generic parameter order, and wire encoding match redis-rs 1.7.0
+(each entry carries the same command body), except for the deliberate
+differences pinned in `src/parity_tests/differences.json`.
+
+Each entry also declares redis-rs's return type, from which the same table
+generates the typed `glide::AsyncTypedCommands` and `glide::TypedCommands`
+traits (blanket-implemented for every `AsyncCommands` / `Commands` type).
 
 Parity is a **command-surface** contract, not a connection-plumbing one.
 Deliberate deviations, all performance-motivated:
+
 - methods take `&self` (the clients are cheaply cloneable handles) and hand
-  the built command to glide-core **by value** via the `glide_send_owned`
-  required method — the native zero-extra-copy path;
+  the built command to glide-core **by value** — the native zero-extra-copy
+  path;
 - the clients do **not** implement the `redis` crate's connection-object
   traits (`ConnectionLike`): that interop hands commands over by reference,
   which forced a full payload copy per command to bridge into glide-core's
-  owned dispatch. Raw commands go through the typed `glide_send` escape
-  hatch instead;
+  owned dispatch. Raw commands go through the typed `glide_send_command_as`
+  escape hatch instead;
 - the `scan*` methods return GLIDE-owned iterators (`src/commands/scan.rs`)
   that yield `ValkeyResult<RV>` via `next_item()` / `Iterator` (unlike redis-rs,
   which yields the bare value and swallows mid-scan errors), each page
@@ -64,21 +69,25 @@ Almost every method on [`AsyncCommands`](src/commands/core.rs) and
 [`Commands`](src/commands/core.rs) stands for one Valkey command — `get`, `set`,
 `incr`, and so on. The command table generates them all automatically.
 
-Each client writes just one method of its own: `glide_send_owned` (or
-`glide_send_owned_sync` on the blocking trait). It takes a finished command and
-sends it to glide-core, and every generated method goes through it.
+Each client implements just one method of its own, `glide_dispatch_command`,
+on a hidden, sealed base trait (`CommandDispatch` / `SyncCommandDispatch`). It
+takes a finished command and sends it to glide-core, and every generated method
+goes through it. The untyped and typed traits both extend the base trait rather
+than each other, so a generic bound on one (e.g. `C: AsyncTypedCommands`)
+brings only that trait's methods into scope, as in redis-rs.
 
 For a command the table does not cover, build the command yourself and run it
-with `glide_send`, which returns the reply already decoded into the type you ask
-for. `Cmd::query_async` does the same in redis-rs's calling style, so code moving
-over from that crate keeps working.
+with `glide_send_command_as`, which returns the reply already decoded into the
+type you ask for. `Cmd::query_async` does the same in redis-rs's calling style,
+so code moving over from that crate keeps working.
 
 Commands **beyond** that table live in GLIDE **extension traits**
-(`src/commands/`): streams, geo, Search (`FT.*`), JSON, Pub/Sub, scripting/
-functions, server & connection management, plus per-family extras (hash
-field-TTL, `LCS`, `SINTERCARD`, `ZRANGESTORE`, `BITFIELD`, `SORT`,
-`DUMP`/`RESTORE`, …). These keep rich concrete return types and never collide
-with unified-trait names, so both can be imported together.
+(`src/commands/`): the remaining stream commands (`XREADGROUP`,
+`XAUTOCLAIM`, `XTRIM`, …), geo search, JSON, Pub/Sub, scripting/functions,
+server & connection management, plus per-family extras (`LCS`, `SINTERCARD`,
+`ZRANGESTORE`, `BITFIELD`, `SORT`, `DUMP`/`RESTORE`, …). These keep rich
+concrete return types and never collide with unified-trait names, so both can
+be imported together.
 
 - **Arguments**: generic over `glide::ToValkeyArgs` — accepts `&str`, `String`,
   `&[u8]`, `Vec<u8>`, `Bytes`, integers, floats, slices, etc.

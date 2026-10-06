@@ -6,23 +6,6 @@ use crate::commands::generic::GenericCommands;
 use crate::commands::options::{Limit, OrderBy, RestoreOptions};
 
 #[tokio::test]
-async fn copy_variants() {
-    let m = Mock::int(1);
-    assert!(m.copy("src", "dst", false).await.unwrap());
-    m.assert_args(&["COPY", "src", "dst"]);
-
-    let m = Mock::int(1);
-    m.copy("src", "dst", true).await.unwrap();
-    m.assert_args(&["COPY", "src", "dst", "REPLACE"]);
-
-    let m = Mock::int(1);
-    m.copy_with_options("src", "dst", Some(2), true)
-        .await
-        .unwrap();
-    m.assert_args(&["COPY", "src", "dst", "DB", "2", "REPLACE"]);
-}
-
-#[tokio::test]
 async fn sort_and_sort_store_and_ro() {
     let m = Mock::array(vec![ValkeyValue::BulkString(b"1".to_vec().into())]);
     m.sort(

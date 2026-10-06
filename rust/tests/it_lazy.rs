@@ -6,7 +6,7 @@
 mod common;
 
 use glide::{
-    AsyncCommands, GlideClient, GlideClientConfiguration, GlideClusterClient,
+    AsyncTypedCommands, GlideClient, GlideClientConfiguration, GlideClusterClient,
     GlideClusterClientConfiguration, ProtocolVersion,
 };
 use std::time::Duration;
@@ -23,8 +23,8 @@ async fn standalone_lazy(protocol: ProtocolVersion) {
     // First command triggers the actual connection.
     let k = common::key("lazy");
     let _: () = c.set(&k, "v").await.unwrap();
-    let got: Option<glide::Bytes> = c.get(&k).await.unwrap();
-    assert_eq!(got.as_deref(), Some(&b"v"[..]));
+    let got: Option<String> = c.get(&k).await.unwrap();
+    assert_eq!(got.as_deref(), Some("v"));
 }
 
 #[tokio::test]
@@ -78,6 +78,6 @@ async fn cluster_lazy_connect() {
         .expect("lazy cluster connect");
     let k = common::key("lazy_cluster");
     let _: () = c.set(&k, "v").await.unwrap();
-    let got: Option<glide::Bytes> = c.get(&k).await.unwrap();
-    assert_eq!(got.as_deref(), Some(&b"v"[..]));
+    let got: Option<String> = c.get(&k).await.unwrap();
+    assert_eq!(got.as_deref(), Some("v"));
 }

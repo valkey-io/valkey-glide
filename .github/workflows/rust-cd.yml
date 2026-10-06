@@ -3,8 +3,11 @@ name: Rust - Continuous Deployment
 on:
     workflow_dispatch:
         inputs:
+            # A crate's dry run fails if it depends on a version of another crate that hasn't
+            # been published yet, including the internal GLIDE crates (glide-logger,
+            # glide-telemetry, glide-core-engine, and glide-core).
             publish:
-                description: "Publish to crates.io"
+                description: "Publish to crates.io; otherwise, perform a dry run"
                 required: true
                 type: boolean
                 default: false
@@ -17,11 +20,6 @@ concurrency:
 permissions:
     contents: read
 
-# Each crate has a test job and a publish job. Each publish job:
-# - Runs in the AWS_ACTIONS environment when publishing so that approval is required.
-# - Has `id-token: write`, which crates.io trusted publishing (OIDC) requires.
-# - Depends on the publish jobs of the crates it depends on.
-#
 # TODO #7261: Replace with `cargo publish --workspace`.
 jobs:
     validate-branch:
@@ -37,19 +35,42 @@ jobs:
                       exit 1
                   fi
 
-    # --- glide-logger crate ----------------------------------------------------------------------
-
     test-glide-logger:
-        needs: [validate-branch]
+        needs:
+            - validate-branch
         uses: ./.github/workflows/glide-logger.yml
 
-    publish-glide-logger:
-        needs: [test-glide-logger]
+    test-glide-telemetry:
+        needs:
+            - validate-branch
+        uses: ./.github/workflows/glide-telemetry.yml
+
+    test-glide-core-engine:
+        needs:
+            - validate-branch
+        uses: ./.github/workflows/glide-core-engine.yml
+
+    test-glide-core:
+        needs:
+            - validate-branch
+        uses: ./.github/workflows/glide-core.yml
+
+    publish-crates:
+        needs:
+            - test-glide-logger
+            - test-glide-telemetry
+            - test-glide-core-engine
+            - test-glide-core
         runs-on: ubuntu-latest
+        # Use AWS_ACTIONS to require maintainer approval when publishing.
         environment: ${{ inputs.publish && 'AWS_ACTIONS' || '' }}
         permissions:
             contents: read
+            # Required by crates.io trusted publishing (OIDC).
             id-token: write
+        env:
+            # Share build artifacts across crates to avoid rebuilding common dependencies.
+            CARGO_TARGET_DIR: ${{ github.workspace }}/target
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
               with:
@@ -58,35 +79,28 @@ jobs:
             - name: Install Rust toolchain
               uses: ./.github/actions/install-rust
 
+            # Each crate depends on those above it. If a step fails,
+            # re-run the job: already-published versions are skipped.
             - name: Publish glide-logger
               uses: ./.github/workflows/publish-rust-crate
               with:
                   crate: glide-logger
                   publish: ${{ inputs.publish }}
 
-    # --- glide-telemetry crate -------------------------------------------------------------------
-
-    test-glide-telemetry:
-        needs: [validate-branch]
-        uses: ./.github/workflows/glide-telemetry.yml
-
-    publish-glide-telemetry:
-        needs: [test-glide-telemetry, publish-glide-logger]
-        runs-on: ubuntu-latest
-        environment: ${{ inputs.publish && 'AWS_ACTIONS' || '' }}
-        permissions:
-            contents: read
-            id-token: write
-        steps:
-            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-              with:
-                  persist-credentials: false
-
-            - name: Install Rust toolchain
-              uses: ./.github/actions/install-rust
-
             - name: Publish glide-telemetry
               uses: ./.github/workflows/publish-rust-crate
               with:
                   crate: glide-telemetry
+                  publish: ${{ inputs.publish }}
+
+            - name: Publish glide-core-engine
+              uses: ./.github/workflows/publish-rust-crate
+              with:
+                  crate: glide-core/redis-rs/redis
+                  publish: ${{ inputs.publish }}
+
+            - name: Publish glide-core
+              uses: ./.github/workflows/publish-rust-crate
+              with:
+                  crate: glide-core
                   publish: ${{ inputs.publish }}

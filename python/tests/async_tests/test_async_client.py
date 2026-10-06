@@ -12138,6 +12138,52 @@ class TestScripts:
         # Test error handling for mutually exclusive options (this should be handled by ExpiryGetEx validation)
         # The ExpiryGetEx class itself validates mutually exclusive options during construction
 
+    @pytest.mark.skip_if_version_below("9.1.0")
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_hgetdel(self, glide_client: TGlideClient):
+        key = get_random_string(10)
+        field1 = get_random_string(5)
+        field2 = get_random_string(5)
+        field3 = get_random_string(5)
+        non_existent_field = get_random_string(5)
+        non_existent_key = get_random_string(10)
+
+        # Set up initial hash with fields
+        assert (
+            await glide_client.hset(
+                key, {field1: "value1", field2: "value2", field3: "value3"}
+            )
+            == 3
+        )
+
+        # Get and delete an existing field and a non-existing field
+        result = await glide_client.hgetdel(key, [field1, non_existent_field])
+        assert result == [b"value1", None]
+
+        # Verify field1 was deleted while other fields remain
+        assert await glide_client.hexists(key, field1) is False
+        assert await glide_client.hlen(key) == 2
+
+        # Get and delete the remaining fields; the key should be removed automatically
+        result = await glide_client.hgetdel(key, [field2, field3])
+        assert result == [b"value2", b"value3"]
+        assert await glide_client.exists([key]) == 0
+
+        # HGETDEL on a non-existing key returns null for each requested field
+        result = await glide_client.hgetdel(non_existent_key, [field1, field2])
+        assert result == [None, None]
+
+        # HGETDEL on a key holding a non-hash value returns a WRONGTYPE error
+        string_key = get_random_string(10)
+        assert await glide_client.set(string_key, "not_a_hash") == OK
+        with pytest.raises(RequestError, match="WRONGTYPE"):
+            await glide_client.hgetdel(string_key, [field1])
+
+        # HGETDEL with an empty fields list should raise an error
+        with pytest.raises(RequestError):
+            await glide_client.hgetdel(key, [])
+
     @pytest.mark.skip_if_version_below("9.0.0")
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])

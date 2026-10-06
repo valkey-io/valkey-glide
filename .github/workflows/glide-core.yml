@@ -97,6 +97,8 @@ jobs:
 
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+              with:
+                  persist-credentials: false
             - id: get-matrices
               uses: ./.github/workflows/create-test-matrices
               with:
@@ -130,6 +132,8 @@ jobs:
 
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+              with:
+                  persist-credentials: false
 
             - name: Install shared software dependencies
               uses: ./.github/actions/install-shared-dependencies
@@ -143,7 +147,6 @@ jobs:
               with:
                   path: |
                       glide-core/target
-                      glide-core/src/generated
                   key: ${{ matrix.host.TARGET }}-glide-core
                   restore-keys: ${{ matrix.host.TARGET }}
 
@@ -165,7 +168,6 @@ jobs:
               with:
                   path: |
                       glide-core/target
-                      glide-core/src/generated
                   key: ${{ matrix.host.TARGET }}-benchmarks/rust
                   restore-keys: |
                       ${{ matrix.host.TARGET }}-glide-core
@@ -180,6 +182,8 @@ jobs:
         timeout-minutes: 30
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+              with:
+                  persist-credentials: false
 
             - uses: ./.github/workflows/lint-rust
               with:
