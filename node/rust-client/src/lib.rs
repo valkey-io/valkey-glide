@@ -308,6 +308,9 @@ impl Drop for UnmarkOnDrop {
                 glide_core::pool::refresh_activity_by_client(client_id);
             }
             // Saturating decrement via CAS to avoid TOCTOU between load and fetch_sub.
+            //TODO: (#7175) `fetch_update` is deprecated for `try_update` since Rust 1.99, but `try_update`
+            // needs 1.95 and the MSRV is 1.94.1.
+            #[allow(deprecated)]
             let _ = arc.fetch_update(Ordering::AcqRel, Ordering::Acquire, |v| {
                 if v > 0 { Some(v - 1) } else { None }
             });

@@ -101,8 +101,6 @@ class TestPubSub:
             result = await publishing_client.publish(message, channel)
             if cluster_mode:
                 assert result == 1
-            # allow the message to propagate
-            await anyio.sleep(1)
 
             pubsub_msg = await get_message_by_method(
                 message_read_method, listening_client, callback_messages, 0
@@ -158,11 +156,10 @@ class TestPubSub:
                 if cluster_mode:
                     assert result == 1
 
-            # allow the message to propagate
-            await anyio.sleep(1)
-
             async_msg_res = await listening_client.get_pubsub_message()
-            sync_msg_res = listening_client.try_get_pubsub_message()
+            sync_msg_res = await get_message_by_method(
+                MessageReadMethod.Sync, listening_client
+            )
             assert sync_msg_res
             async_msg = decode_pubsub_msg(async_msg_res)
             sync_msg = decode_pubsub_msg(sync_msg_res)
@@ -178,10 +175,6 @@ class TestPubSub:
             assert not sync_msg.message == async_msg.message
 
             # assert there are no messages to read
-            with pytest.raises(TimeoutError):
-                with anyio.fail_after(3):
-                    await listening_client.get_pubsub_message()
-
             assert listening_client.try_get_pubsub_message() is None
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
@@ -247,9 +240,6 @@ class TestPubSub:
                 result = await publishing_client.publish(message, channel)
                 if cluster_mode:
                     assert result == 1
-
-            # Allow the messages to propagate
-            await anyio.sleep(1)
 
             # Check if all messages are received correctly
             for index in range(len(channels_and_messages)):
@@ -321,9 +311,6 @@ class TestPubSub:
                 if cluster_mode:
                     assert result == 1
 
-            # Allow the messages to propagate
-            await anyio.sleep(1)
-
             # Check if all messages are received correctly by each method
             for index in range(len(channels_and_messages)):
                 method = (
@@ -340,10 +327,6 @@ class TestPubSub:
             # check that we received all messages
             assert channels_and_messages == {}
             # assert there are no messages to read
-            with pytest.raises(TimeoutError):
-                with anyio.fail_after(3):
-                    await listening_client.get_pubsub_message()
-
             assert listening_client.try_get_pubsub_message() is None
 
     @pytest.mark.skip_if_version_below("7.0.0")
@@ -405,9 +388,6 @@ class TestPubSub:
                 )
                 == publish_response
             )
-
-            # allow the message to propagate
-            await anyio.sleep(1)
 
             pubsub_msg = await get_message_by_method(
                 method, listening_client, callback_messages, 0
@@ -476,11 +456,10 @@ class TestPubSub:
                 == 1
             )
 
-            # allow the messages to propagate
-            await anyio.sleep(1)
-
             async_msg_res = await listening_client.get_pubsub_message()
-            sync_msg_res = listening_client.try_get_pubsub_message()
+            sync_msg_res = await get_message_by_method(
+                MessageReadMethod.Sync, listening_client
+            )
             assert sync_msg_res
             async_msg = decode_pubsub_msg(async_msg_res)
             sync_msg = decode_pubsub_msg(sync_msg_res)
@@ -496,10 +475,6 @@ class TestPubSub:
             assert not sync_msg.message == async_msg.message
 
             # assert there are no messages to read
-            with pytest.raises(TimeoutError):
-                with anyio.fail_after(3):
-                    await listening_client.get_pubsub_message()
-
             assert listening_client.try_get_pubsub_message() is None
 
     @pytest.mark.skip_if_version_below("7.0.0")
@@ -569,9 +544,6 @@ class TestPubSub:
                     )
                     == publish_response
                 )
-
-            # Allow the messages to propagate
-            await anyio.sleep(1)
 
             # Check if all messages are received correctly
             for index in range(len(channels_and_messages)):
@@ -650,9 +622,6 @@ class TestPubSub:
                 if cluster_mode:
                     assert result == 1
 
-            # allow the message to propagate
-            await anyio.sleep(1)
-
             # Check if all messages are received correctly
             for index in range(len(channels)):
                 pubsub_msg = await get_message_by_method(
@@ -715,9 +684,6 @@ class TestPubSub:
                 if cluster_mode:
                     assert result == 1
 
-            # allow the message to propagate
-            await anyio.sleep(1)
-
             # Check if all messages are received correctly by each method
             for index in range(len(channels)):
                 method = (
@@ -735,10 +701,6 @@ class TestPubSub:
             assert channels == {}
 
             # assert there are no more messages to read
-            with pytest.raises(TimeoutError):
-                with anyio.fail_after(3):
-                    await listening_client.get_pubsub_message()
-
             assert listening_client.try_get_pubsub_message() is None
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
@@ -800,9 +762,6 @@ class TestPubSub:
                 result = await publishing_client.publish(message, channel)
                 if cluster_mode:
                     assert result == 1
-
-            # allow the message to propagate
-            await anyio.sleep(1)
 
             # Check if all messages are received correctly
             for index in range(len(channels)):
@@ -898,9 +857,6 @@ class TestPubSub:
                 result = await publishing_client.publish(message, channel)
                 if cluster_mode:
                     assert result == 1
-
-            # allow the message to propagate
-            await anyio.sleep(1)
 
             # Check if all messages are received correctly
             for index in range(len(all_channels_and_messages)):
@@ -1052,9 +1008,6 @@ class TestPubSub:
                 if cluster_mode:
                     assert result == 1
 
-            # allow the messages to propagate
-            await anyio.sleep(1)
-
             # Verify messages for exact PUBSUB
             for index in range(len(exact_channels_and_messages)):
                 pubsub_msg = await get_message_by_method(
@@ -1195,9 +1148,6 @@ class TestPubSub:
                     )
                     == publish_response
                 )
-
-            # allow the messages to propagate
-            await anyio.sleep(1)
 
             all_channels_and_messages: Dict[str, str] = {
                 **exact_channels_and_messages,
@@ -1376,8 +1326,6 @@ class TestPubSub:
                     )
                     == publish_response
                 )
-
-            await anyio.sleep(1)
 
             # Helper for asserting messages
             async def assert_pubsub_messages(
@@ -1596,9 +1544,6 @@ class TestPubSub:
                 == 1
             )
 
-            # allow the message to propagate
-            await anyio.sleep(1)
-
             # Verify message for exact and pattern PUBSUB
             for client, callback_list, pattern in [
                 (listening_client_exact, callback_messages_exact, None),
@@ -1750,9 +1695,6 @@ class TestPubSub:
                 result = await client_pattern.publish(msg, CHANNEL_NAME)
                 if cluster_mode:
                     assert result == 2
-
-            # allow the message to propagate
-            await anyio.sleep(1)
 
             # Verify message for exact and pattern PUBSUB
             for client, callback_list, pattern in [
@@ -1947,9 +1889,6 @@ class TestPubSub:
                 == 1
             )
 
-            # allow the message to propagate
-            await anyio.sleep(1)
-
             # Verify message for exact and pattern PUBSUB
             for client, callback_list, pattern in [
                 (client_exact, callback_messages_exact, None),
@@ -2074,10 +2013,6 @@ class TestPubSub:
             assert sync_msg.pattern is None
 
             # assert there are no messages to read
-            with pytest.raises(TimeoutError):
-                with anyio.fail_after(3):
-                    await listening_client.get_pubsub_message()
-
             assert listening_client.try_get_pubsub_message() is None
 
         finally:
@@ -2178,10 +2113,6 @@ class TestPubSub:
             assert sync_msg.pattern is None
 
             # assert there are no messages to read
-            with pytest.raises(TimeoutError):
-                with anyio.fail_after(3):
-                    await listening_client.get_pubsub_message()
-
             assert listening_client.try_get_pubsub_message() is None
 
         finally:
@@ -2904,8 +2835,6 @@ class TestPubSub:
                     message, channel, sharded=True
                 )
 
-            await anyio.sleep(1)
-
             received_messages: Dict[str, str] = {}
             for _ in range(len(channels)):
                 msg = decode_pubsub_msg(await listening_client.get_pubsub_message())
@@ -2958,7 +2887,6 @@ class TestPubSub:
             )
 
             await publishing_client.publish(message1, channel)
-            await anyio.sleep(1)
             pubsub_msg = await get_message_by_method(
                 message_read_method, listening_client, callback_messages, 0
             )
@@ -3029,7 +2957,6 @@ class TestPubSub:
             )
 
             await publishing_client.publish(message1, channel)
-            await anyio.sleep(1)
             pubsub_msg = await get_message_by_method(
                 message_read_method, listening_client, callback_messages, 0
             )
@@ -3102,7 +3029,6 @@ class TestPubSub:
             await cast(GlideClusterClient, publishing_client).publish(
                 message1, channel, sharded=True
             )
-            await anyio.sleep(1)
             pubsub_msg = await get_message_by_method(
                 message_read_method, listening_client, callback_messages, 0
             )
@@ -3500,8 +3426,6 @@ class TestPubSub:
                 else:
                     await publishing_client.publish(message, channel)
 
-            await anyio.sleep(1)
-
             # Collect all messages
             expected_count = 9 if cluster_mode else 6
             received_messages: Dict[str, str] = {}
@@ -3611,8 +3535,6 @@ class TestPubSub:
                 await cast(GlideClusterClient, publishing_client).publish(
                     message_sharded, sharded_channel, sharded=True
                 )
-
-            await anyio.sleep(1)
 
             # Determine expected message count
             expected_count = 3 if cluster_mode else 2
@@ -4045,7 +3967,6 @@ class TestPubSub:
 
             # Verify subscription works
             await publishing_client.publish(message, channel1)
-            await anyio.sleep(1)
             msg = decode_pubsub_msg(await listening_client.get_pubsub_message())
             assert msg.message == message
 
@@ -4124,9 +4045,6 @@ class TestPubSub:
             result = await publishing_client.publish(message, channel)
             if cluster_mode:
                 assert result == 1
-
-            # Allow the message to propagate
-            await anyio.sleep(1)
 
             pubsub_msg = await get_message_by_method(
                 message_read_method, listening_client, callback_messages, 0
@@ -4216,7 +4134,6 @@ class TestPubSub:
 
             # Verify subscription works before kill
             await publishing_client.publish(message_before, channel)
-            await anyio.sleep(1)
 
             msg_before = await get_message_by_method(
                 message_read_method, listening_client, callback_messages, 0
@@ -4238,7 +4155,6 @@ class TestPubSub:
 
             # Verify subscription still works after reconnection
             await publishing_client.publish(message_after, channel)
-            await anyio.sleep(1)
 
             msg_after = await get_message_by_method(
                 message_read_method, listening_client, callback_messages, 1
@@ -4302,7 +4218,6 @@ class TestPubSub:
 
             # Verify subscription works before kill
             await publishing_client.publish(message_before, channel)
-            await anyio.sleep(1)
 
             msg_before = await get_message_by_method(
                 message_read_method, listening_client, callback_messages, 0
@@ -4324,7 +4239,6 @@ class TestPubSub:
 
             # Verify subscription still works after reconnection
             await publishing_client.publish(message_after, channel)
-            await anyio.sleep(1)
 
             msg_after = await get_message_by_method(
                 message_read_method, listening_client, callback_messages, 1
@@ -4391,7 +4305,6 @@ class TestPubSub:
             await cast(GlideClusterClient, publishing_client).publish(
                 message_before, channel, sharded=True
             )
-            await anyio.sleep(1)
 
             msg_before = await get_message_by_method(
                 message_read_method, listening_client, callback_messages, 0
@@ -4414,7 +4327,6 @@ class TestPubSub:
             await cast(GlideClusterClient, publishing_client).publish(
                 message_after, channel, sharded=True
             )
-            await anyio.sleep(1)
 
             msg_after = await get_message_by_method(
                 message_read_method, listening_client, callback_messages, 1

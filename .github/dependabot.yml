@@ -177,6 +177,7 @@ updates:
 
     - package-ecosystem: "cargo"
       directories:
+          # TODO #7261: Replace the published crates' directories with the root workspace ("/").
           - "/glide-logger"
           - "/glide-telemetry"
           - "/glide-core/redis-rs"

@@ -60,6 +60,9 @@ impl Drop for UnmarkOnDrop {
         if let Some(arc) = self.0.take() {
             // Atomic CAS decrement: avoids the TOCTOU window between load and fetch_sub.
             // If count > 0, decrement atomically; if already 0, do nothing (no underflow).
+            //TODO: (#7175) `fetch_update` is deprecated for `try_update` since Rust 1.99, but `try_update`
+            // needs 1.95 and the MSRV is 1.94.1.
+            #[allow(deprecated)]
             let _ = arc.fetch_update(
                 std::sync::atomic::Ordering::AcqRel,
                 std::sync::atomic::Ordering::Acquire,
@@ -882,16 +885,44 @@ fn create_pipe_writer(pipe_write_fd: i32) -> &'static SharedPipeWriter {
 }
 
 /// A `GlideClient` adapter.
+///
+/// The runtimes are `ManuallyDrop` so that [`Drop`] can choose how to tear them
+/// down: the last `Arc<ClientAdapter>` may be released from inside another
+/// tokio runtime (a pool task discarding a client), where a plain `Runtime` drop
+/// panics.
 pub struct ClientAdapter {
-    runtime: Runtime,
+    runtime: ManuallyDrop<Runtime>,
     pipe_client_id: std::sync::atomic::AtomicU64,
     /// Background runtime for spawned tasks (connection drivers, reconnection, cluster manager).
     /// Only used by sync clients with current_thread main runtime — tokio::spawn calls during
     /// client creation are directed here via _guard so they run independently of block_on.
     /// For async/multi_thread clients this is None since the main runtime handles everything.
-    background_runtime: Option<Runtime>,
+    background_runtime: ManuallyDrop<Option<Runtime>>,
     core: Arc<CommandExecutionCore>,
     pubsub_callback: Arc<std::sync::RwLock<Option<PubSubCallback>>>,
+}
+
+impl Drop for ClientAdapter {
+    fn drop(&mut self) {
+        // SAFETY: each field is taken exactly once, here, and never read again.
+        let runtime = unsafe { ManuallyDrop::take(&mut self.runtime) };
+        let background_runtime = unsafe { ManuallyDrop::take(&mut self.background_runtime) };
+        shutdown_owned_runtime(runtime);
+        if let Some(rt) = background_runtime {
+            shutdown_owned_runtime(rt);
+        }
+    }
+}
+
+/// Dropping a `Runtime` blocks until its blocking pool drains, which tokio
+/// forbids from inside another runtime. `shutdown_background` releases it
+/// without that wait.
+fn shutdown_owned_runtime(rt: Runtime) {
+    if tokio::runtime::Handle::try_current().is_ok() {
+        rt.shutdown_background();
+    } else {
+        drop(rt);
+    }
 }
 
 struct CommandExecutionCore {
@@ -1479,9 +1510,9 @@ fn create_client_internal(
     });
     let pubsub_callback_store = Arc::new(std::sync::RwLock::new(pubsub_callback));
     let client_adapter = Arc::new(ClientAdapter {
-        runtime,
+        runtime: ManuallyDrop::new(runtime),
         pipe_client_id: std::sync::atomic::AtomicU64::new(client_id as u64),
-        background_runtime,
+        background_runtime: ManuallyDrop::new(background_runtime),
         core,
         pubsub_callback: pubsub_callback_store.clone(),
     });

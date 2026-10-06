@@ -1,3 +1,4 @@
+# TODO #7261: Remove this workspace; glide-core-engine moves to the root Rust client workspace.
 # Dummy package so ORT tool will not fail on virtual workspace
 [package]
 name = "dummy-for-ort"

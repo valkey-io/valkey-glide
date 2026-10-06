@@ -367,7 +367,7 @@ class TestAsyncClientPool:
 
         try:
             # Acquire the only client — do NOT release it
-            await pool.acquire()
+            abandoned_id = await pool.acquire()
             assert pool.active_count == 1
             assert pool.idle_count == 0
 
@@ -387,6 +387,11 @@ class TestAsyncClientPool:
             # Verify the pool can still serve new requests (creates a fresh client)
             new_client_id = await pool.acquire(timeout=5)
             assert new_client_id is not None
+
+            # That acquire drains core's discarded ids, which is when the binding
+            # must release the abandoned client's adapter entry.
+            assert pool._lib.glide_pool_get_client_ptr(abandoned_id) == 0
+            assert pool._lib.glide_pool_get_client_ptr(new_client_id) != 0
             pool.release(new_client_id)
         finally:
             pool.close()

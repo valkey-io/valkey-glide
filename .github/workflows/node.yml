@@ -152,7 +152,6 @@ jobs:
               with:
                   path: |
                       node/rust-client/target
-                      glide-core/src/generated
                   key: ${{ matrix.host.TARGET }}-node
                   restore-keys: |
                       ${{ matrix.host.TARGET }}-glide-core
@@ -226,7 +225,6 @@ jobs:
               with:
                   path: |
                       node/rust-client/target
-                      glide-core/src/generated
                   key: x86_64-unknown-linux-gnu-node-extras
                   restore-keys: |
                       x86_64-unknown-linux-gnu-glide-core
@@ -408,7 +406,6 @@ jobs:
               with:
                   path: |
                       node/rust-client/target
-                      glide-core/src/generated
                   key: ${{ matrix.host.IMAGE }}-node
                   restore-keys: ${{ matrix.host.IMAGE }}
 

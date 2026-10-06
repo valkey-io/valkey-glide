@@ -3,7 +3,7 @@
 
 use crate::ValkeyResult;
 use crate::cmd::Cmd;
-use crate::commands::options::{FlushMode, FunctionRestorePolicy};
+use crate::commands::options::{FunctionFlushOptions, FunctionRestorePolicy};
 use crate::executor::CommandExecutor;
 use crate::routes::Route;
 use crate::value::FromValkeyValue;
@@ -183,10 +183,10 @@ pub trait ScriptingCommands: CommandExecutor {
         <()>::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
-    /// Flush all function libraries with a flush mode (`FUNCTION FLUSH SYNC|ASYNC`).
-    async fn function_flush_mode(&self, mode: FlushMode) -> ValkeyResult<()> {
+    /// Flush all function libraries (`FUNCTION FLUSH SYNC|ASYNC`).
+    async fn function_flush_options(&self, options: &FunctionFlushOptions) -> ValkeyResult<()> {
         let mut cmd = Cmd::new();
-        cmd.arg("FUNCTION").arg("FLUSH").arg(mode.as_arg());
+        cmd.arg("FUNCTION").arg("FLUSH").arg(options);
         <()>::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 

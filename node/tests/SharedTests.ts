@@ -2624,6 +2624,64 @@ export function runBaseTests(config: {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `hgetdel basic functionality_%p`,
+        async (protocol) => {
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    if (cluster.checkIfServerVersionLessThan("9.1.0")) {
+                        return;
+                    }
+
+                    const key = getRandomKey();
+                    const field1 = getRandomKey();
+                    const field2 = getRandomKey();
+                    const field3 = getRandomKey();
+                    const value1 = getRandomKey();
+                    const value2 = getRandomKey();
+
+                    // Set up hash with some fields
+                    await client.hset(key, {
+                        [field1]: value1,
+                        [field2]: value2,
+                    });
+
+                    // Test HGETDEL with a mix of existing and non-existing fields
+                    const result1 = await client.hgetdel(key, [field1, field3]);
+                    expect(result1).toEqual([value1, null]);
+
+                    // field1 should now be deleted, field2 should remain
+                    expect(await client.hget(key, field1)).toEqual(null);
+                    expect(await client.hget(key, field2)).toEqual(value2);
+
+                    // Deleting the last field removes the key
+                    const result2 = await client.hgetdel(key, [field2]);
+                    expect(result2).toEqual([value2]);
+                    expect(await client.exists([key])).toEqual(0);
+
+                    // Test HGETDEL on non-existent key
+                    const nonExistentKey = getRandomKey();
+                    const result3 = await client.hgetdel(nonExistentKey, [
+                        field1,
+                        field2,
+                    ]);
+                    expect(result3).toEqual([null, null]);
+
+                    // Test HGETDEL on a key holding a non-hash value returns WRONGTYPE
+                    const stringKey = getRandomKey();
+                    expect(await client.set(stringKey, "not_a_hash")).toEqual(
+                        "OK",
+                    );
+                    await expect(
+                        client.hgetdel(stringKey, [field1]),
+                    ).rejects.toThrow(RequestError);
+                },
+                protocol,
+            );
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `hexpire basic functionality_%p`,
         async (protocol) => {
             await runTest(

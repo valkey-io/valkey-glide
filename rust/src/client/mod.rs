@@ -493,8 +493,9 @@ impl CommandExecutor for GlideClusterClient {
 
 macro_rules! impl_async_command {
     ($ty:ty) => {
-        impl crate::commands::core::AsyncCommands for $ty {
-            fn glide_send_command<'a>(&'a self, mut cmd: Cmd) -> ValkeyFuture<'a, ValkeyValue> {
+        #[::sealed::sealed]
+        impl crate::commands::core::CommandDispatch for $ty {
+            fn glide_dispatch_command<'a>(&'a self, mut cmd: Cmd) -> ValkeyFuture<'a, ValkeyValue> {
                 let mut client = self.inner.clone();
                 Box::pin(async move {
                     let value = client
