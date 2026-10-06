@@ -116,3 +116,46 @@ jobs:
               with:
                   crate: rust
                   publish: ${{ inputs.publish }}
+
+    # TODO #6997: Run smoke tests against the published crate once they are available.
+    test-published-crate:
+        needs:
+            - publish-crates
+        if: ${{ inputs.publish }}
+        strategy:
+            fail-fast: false
+            # TODO #6997: Use the shared test matrix instead of duplicating the hosts in rust.yml.
+            matrix:
+                host:
+                    - runner: ubuntu-24.04
+                      target: x86_64-unknown-linux-gnu
+                    - runner: ubuntu-24.04-arm
+                      target: aarch64-unknown-linux-gnu
+        runs-on: ${{ matrix.host.runner }}
+        steps:
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+              with:
+                  persist-credentials: false
+
+            - name: Read crate version and MSRV
+              id: crate
+              working-directory: ./rust
+              run: |
+                  echo "version=$(awk -F'"' '/^version/ { print $2; exit }' Cargo.toml)" >> "$GITHUB_OUTPUT"
+                  echo "msrv=$(awk -F'"' '/^rust-version/ { print $2; exit }' Cargo.toml)" >> "$GITHUB_OUTPUT"
+
+            - name: Install Rust toolchain
+              uses: ./.github/actions/install-rust
+              with:
+                  toolchain: ${{ steps.crate.outputs.msrv }}
+                  target: ${{ matrix.host.target }}
+
+            - name: Build a new project that depends on the published crate
+              working-directory: ${{ runner.temp }}
+              env:
+                  VERSION: ${{ steps.crate.outputs.version }}
+              run: |
+                  cargo new consume
+                  cd consume
+                  cargo add "valkey-glide@=${VERSION}"
+                  cargo build
