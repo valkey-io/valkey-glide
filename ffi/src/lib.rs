@@ -444,21 +444,27 @@ impl redis::AddressResolver for FFIAddressResolver {
 
 /// Callback type for custom AWS credential providers used with C FFI bindings (Go, Python sync/async).
 ///
-/// Called by the Rust core each time a fresh IAM token needs to be generated.
-/// The callback must write the credentials into the provided output buffers and return 1 on success,
-/// 0 on failure. All string output parameters are UTF-8 encoded.
+/// Called by the Rust core each time a fresh IAM token needs to be generated. All string output
+/// parameters are UTF-8 encoded. The callback status values are:
+///
+/// * `0` - failure; the callback will not be retried.
+/// * `1` - success; the reported lengths are the bytes written to each buffer.
+/// * `2` - buffer too small; buffer contents are ignored and all three reported lengths must be
+///   set to the exact required sizes. The callback is retried once with exactly those capacities.
+///
+/// All other status values are invalid.
 ///
 /// # Parameters
 /// * `client_id` - The client identifier passed to `create_client`.
 /// * `access_key_id_buf` - Buffer to write the AWS Access Key ID into.
 /// * `access_key_id_buf_len` - Capacity of `access_key_id_buf`.
-/// * `access_key_id_len` - Output: actual length written to `access_key_id_buf`.
+/// * `access_key_id_len` - Output: actual or required length of the AWS Access Key ID.
 /// * `secret_access_key_buf` - Buffer to write the AWS Secret Access Key into.
 /// * `secret_access_key_buf_len` - Capacity of `secret_access_key_buf`.
-/// * `secret_access_key_len` - Output: actual length written to `secret_access_key_buf`.
+/// * `secret_access_key_len` - Output: actual or required length of the AWS Secret Access Key.
 /// * `session_token_buf` - Buffer to write the optional Session Token into (may be left empty).
 /// * `session_token_buf_len` - Capacity of `session_token_buf`.
-/// * `session_token_len` - Output: actual length written to `session_token_buf`. Write 0 for no session token.
+/// * `session_token_len` - Output: actual or required length of the Session Token. Write 0 for no token.
 /// * `expires_at_epoch_millis` - Output: optional expiry as Unix epoch milliseconds. Write 0 to indicate no expiry.
 ///
 /// # Safety
@@ -475,7 +481,29 @@ pub type CredentialProviderCallback = unsafe extern "C-unwind" fn(
     session_token_buf_len: usize,
     session_token_len: *mut usize,
     expires_at_epoch_millis: *mut i64,
-) -> u8; // 1 = success, 0 = failure
+) -> u8;
+
+const CREDENTIAL_CALLBACK_FAILURE: u8 = 0;
+const CREDENTIAL_CALLBACK_SUCCESS: u8 = 1;
+const CREDENTIAL_CALLBACK_BUFFER_TOO_SMALL: u8 = 2;
+const INITIAL_CREDENTIAL_BUFFER_SIZE: usize = 2048;
+/// Maximum accepted size of any individual credential field and of all three fields combined.
+const MAX_CREDENTIALS_BUFFER_SIZE: usize = 1024 * 1024;
+const UNSET_CREDENTIAL_LENGTH: usize = usize::MAX;
+
+type FFICredentials = (
+    String,
+    String,
+    Option<String>,
+    Option<std::time::SystemTime>,
+);
+
+#[derive(Debug)]
+struct CredentialCallbackResult {
+    status: u8,
+    lengths: [usize; 3],
+    expires_at_millis: i64,
+}
 
 /// Wraps a C `CredentialProviderCallback` function pointer as a `glide_core::iam::CredentialsProvider`.
 struct FFICredentialsProvider {
@@ -487,120 +515,652 @@ unsafe impl Send for FFICredentialsProvider {}
 unsafe impl Sync for FFICredentialsProvider {}
 
 impl FFICredentialsProvider {
-    /// Invoke the callback and return the AWS credentials.
-    fn call(
-        &self,
-    ) -> Result<
-        (
-            String,
-            String,
-            Option<String>,
-            Option<std::time::SystemTime>,
-        ),
-        glide_core::iam::GlideIAMError,
-    > {
-        const BUF_LEN: usize = 2048;
-        let mut access_key_id_buf = vec![0u8; BUF_LEN];
-        let mut secret_access_key_buf = vec![0u8; BUF_LEN];
-        let mut session_token_buf = vec![0u8; BUF_LEN];
-        let mut access_key_id_len: usize = 0;
-        let mut secret_access_key_len: usize = 0;
-        let mut session_token_len: usize = 0;
-        let mut expires_at_millis: i64 = 0;
+    fn credentials_error(message: impl Into<String>) -> glide_core::iam::GlideIAMError {
+        glide_core::iam::GlideIAMError::CredentialsError(message.into())
+    }
 
-        let ok = unsafe {
+    fn allocate_buffer(
+        size: usize,
+        field: &str,
+    ) -> Result<Vec<u8>, glide_core::iam::GlideIAMError> {
+        let mut buffer = Vec::new();
+        buffer.try_reserve_exact(size).map_err(|error| {
+            Self::credentials_error(format!(
+                "Failed to allocate {size} bytes for custom credential field {field}: {error}"
+            ))
+        })?;
+        buffer.resize(size, 0);
+        Ok(buffer)
+    }
+
+    fn invoke_callback(
+        &self,
+        access_key_id_buf: &mut [u8],
+        secret_access_key_buf: &mut [u8],
+        session_token_buf: &mut [u8],
+    ) -> Result<CredentialCallbackResult, glide_core::iam::GlideIAMError> {
+        let mut lengths = [UNSET_CREDENTIAL_LENGTH; 3];
+        let mut expires_at_millis = 0;
+
+        // `C-unwind` plus `catch_unwind` lets tests and Rust-based adapters report a Rust panic as
+        // a credentials error. It does not make unwinding a foreign exception into Rust safe.
+        let status = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| unsafe {
             (self.callback)(
                 self.client_id,
                 access_key_id_buf.as_mut_ptr(),
-                BUF_LEN,
-                &mut access_key_id_len,
+                access_key_id_buf.len(),
+                &mut lengths[0],
                 secret_access_key_buf.as_mut_ptr(),
-                BUF_LEN,
-                &mut secret_access_key_len,
+                secret_access_key_buf.len(),
+                &mut lengths[1],
                 session_token_buf.as_mut_ptr(),
-                BUF_LEN,
-                &mut session_token_len,
+                session_token_buf.len(),
+                &mut lengths[2],
                 &mut expires_at_millis,
             )
-        };
+        }))
+        .map_err(|_| Self::credentials_error("Custom credentials provider callback panicked"))?;
 
-        if ok == 0 {
-            return Err(glide_core::iam::GlideIAMError::CredentialsError(
-                "Custom credentials provider callback returned failure".to_string(),
+        Ok(CredentialCallbackResult {
+            status,
+            lengths,
+            expires_at_millis,
+        })
+    }
+
+    fn validate_resize_lengths(
+        lengths: [usize; 3],
+        capacities: [usize; 3],
+    ) -> Result<(), glide_core::iam::GlideIAMError> {
+        if lengths.contains(&UNSET_CREDENTIAL_LENGTH) {
+            return Err(Self::credentials_error(
+                "Custom credentials provider returned buffer-too-small without setting all three required lengths",
             ));
         }
-
-        // Guard against a buggy or malicious callback reporting a length larger
-        // than the buffer we allocated.  An out-of-bounds slice in safe Rust would
-        // panic and terminate the process; fail with an error instead.
-        if access_key_id_len > BUF_LEN {
-            return Err(glide_core::iam::GlideIAMError::CredentialsError(format!(
-                "Custom credentials provider reported access_key_id length {access_key_id_len} \
-                 exceeding buffer size {BUF_LEN}"
-            )));
-        }
-        if secret_access_key_len > BUF_LEN {
-            return Err(glide_core::iam::GlideIAMError::CredentialsError(format!(
-                "Custom credentials provider reported secret_access_key length {secret_access_key_len} \
-                 exceeding buffer size {BUF_LEN}"
-            )));
-        }
-        if session_token_len > BUF_LEN {
-            return Err(glide_core::iam::GlideIAMError::CredentialsError(format!(
-                "Custom credentials provider reported session_token length {session_token_len} \
-                 exceeding buffer size {BUF_LEN}"
-            )));
-        }
-
-        // Reject empty required credential fields.
-        if access_key_id_len == 0 {
-            return Err(glide_core::iam::GlideIAMError::CredentialsError(
-                "Custom credentials provider returned an empty access_key_id".to_string(),
+        if lengths[0] == 0 || lengths[1] == 0 {
+            return Err(Self::credentials_error(
+                "Custom credentials provider returned buffer-too-small with an empty required credential field",
             ));
         }
-        if secret_access_key_len == 0 {
-            return Err(glide_core::iam::GlideIAMError::CredentialsError(
-                "Custom credentials provider returned an empty secret_access_key".to_string(),
+        if !lengths
+            .iter()
+            .zip(capacities)
+            .any(|(required, capacity)| *required > capacity)
+        {
+            return Err(Self::credentials_error(
+                "Custom credentials provider returned buffer-too-small without requiring a larger buffer",
             ));
         }
-
-        let access_key_id = String::from_utf8(access_key_id_buf[..access_key_id_len].to_vec())
-            .map_err(|e| {
-                glide_core::iam::GlideIAMError::CredentialsError(format!(
-                    "Invalid UTF-8 in access_key_id: {e}"
-                ))
-            })?;
-        let secret_access_key = String::from_utf8(
-            secret_access_key_buf[..secret_access_key_len].to_vec(),
-        )
-        .map_err(|e| {
-            glide_core::iam::GlideIAMError::CredentialsError(format!(
-                "Invalid UTF-8 in secret_access_key: {e}"
-            ))
+        if lengths
+            .iter()
+            .any(|length| *length > MAX_CREDENTIALS_BUFFER_SIZE)
+        {
+            return Err(Self::credentials_error(format!(
+                "Custom credentials provider required a field larger than the {MAX_CREDENTIALS_BUFFER_SIZE}-byte limit"
+            )));
+        }
+        let aggregate = lengths.iter().try_fold(0usize, |total, length| {
+            total.checked_add(*length).ok_or_else(|| {
+                Self::credentials_error("Custom credential required lengths overflowed usize")
+            })
         })?;
-        let session_token = if session_token_len > 0 {
-            Some(
-                String::from_utf8(session_token_buf[..session_token_len].to_vec()).map_err(
-                    |e| {
-                        glide_core::iam::GlideIAMError::CredentialsError(format!(
-                            "Invalid UTF-8 in session_token: {e}"
-                        ))
-                    },
-                )?,
-            )
-        } else {
-            None
+        if aggregate > MAX_CREDENTIALS_BUFFER_SIZE {
+            return Err(Self::credentials_error(format!(
+                "Custom credentials provider required {aggregate} aggregate bytes, exceeding the {MAX_CREDENTIALS_BUFFER_SIZE}-byte limit"
+            )));
+        }
+        Ok(())
+    }
+
+    fn parse_success(
+        result: CredentialCallbackResult,
+        access_key_id_buf: &[u8],
+        secret_access_key_buf: &[u8],
+        session_token_buf: &[u8],
+    ) -> Result<FFICredentials, glide_core::iam::GlideIAMError> {
+        let capacities = [
+            access_key_id_buf.len(),
+            secret_access_key_buf.len(),
+            session_token_buf.len(),
+        ];
+        let field_names = ["access_key_id", "secret_access_key", "session_token"];
+        for ((length, capacity), field) in result.lengths.iter().zip(capacities).zip(field_names) {
+            if *length > capacity {
+                return Err(Self::credentials_error(format!(
+                    "Custom credentials provider reported {field} length {length} exceeding buffer size {capacity}"
+                )));
+            }
+        }
+
+        let decode = |bytes: &[u8], field: &str| {
+            std::str::from_utf8(bytes)
+                .map(str::to_owned)
+                .map_err(|error| {
+                    Self::credentials_error(format!("Invalid UTF-8 in {field}: {error}"))
+                })
         };
-        let expires_at = if expires_at_millis > 0 {
-            Some(
-                std::time::SystemTime::UNIX_EPOCH
-                    + std::time::Duration::from_millis(expires_at_millis as u64),
-            )
+        let access_key_id = decode(&access_key_id_buf[..result.lengths[0]], "access_key_id")?;
+        let secret_access_key = decode(
+            &secret_access_key_buf[..result.lengths[1]],
+            "secret_access_key",
+        )?;
+        if access_key_id.trim().is_empty() {
+            return Err(Self::credentials_error(
+                "Custom credentials provider returned an empty access_key_id",
+            ));
+        }
+        if secret_access_key.trim().is_empty() {
+            return Err(Self::credentials_error(
+                "Custom credentials provider returned an empty secret_access_key",
+            ));
+        }
+        let session_token = if result.lengths[2] == 0 {
+            None
+        } else {
+            Some(decode(
+                &session_token_buf[..result.lengths[2]],
+                "session_token",
+            )?)
+        };
+        let expires_at = if result.expires_at_millis > 0 {
+            std::time::SystemTime::UNIX_EPOCH
+                .checked_add(std::time::Duration::from_millis(
+                    result.expires_at_millis as u64,
+                ))
+                .map(Some)
+                .ok_or_else(|| {
+                    Self::credentials_error(format!(
+                        "Custom credentials provider expiry {} milliseconds overflows SystemTime",
+                        result.expires_at_millis
+                    ))
+                })?
         } else {
             None
         };
 
         Ok((access_key_id, secret_access_key, session_token, expires_at))
+    }
+
+    /// Invoke the callback and return the AWS credentials.
+    fn call(&self) -> Result<FFICredentials, glide_core::iam::GlideIAMError> {
+        let mut access_key_id_buf =
+            Self::allocate_buffer(INITIAL_CREDENTIAL_BUFFER_SIZE, "access_key_id")?;
+        let mut secret_access_key_buf =
+            Self::allocate_buffer(INITIAL_CREDENTIAL_BUFFER_SIZE, "secret_access_key")?;
+        let mut session_token_buf =
+            Self::allocate_buffer(INITIAL_CREDENTIAL_BUFFER_SIZE, "session_token")?;
+
+        let first = self.invoke_callback(
+            &mut access_key_id_buf,
+            &mut secret_access_key_buf,
+            &mut session_token_buf,
+        )?;
+        let result = match first.status {
+            CREDENTIAL_CALLBACK_FAILURE => {
+                return Err(Self::credentials_error(
+                    "Custom credentials provider callback returned failure",
+                ));
+            }
+            CREDENTIAL_CALLBACK_SUCCESS => first,
+            CREDENTIAL_CALLBACK_BUFFER_TOO_SMALL => {
+                let capacities = [
+                    access_key_id_buf.len(),
+                    secret_access_key_buf.len(),
+                    session_token_buf.len(),
+                ];
+                Self::validate_resize_lengths(first.lengths, capacities)?;
+                access_key_id_buf = Self::allocate_buffer(first.lengths[0], "access_key_id")?;
+                secret_access_key_buf =
+                    Self::allocate_buffer(first.lengths[1], "secret_access_key")?;
+                session_token_buf = Self::allocate_buffer(first.lengths[2], "session_token")?;
+
+                let retry = self.invoke_callback(
+                    &mut access_key_id_buf,
+                    &mut secret_access_key_buf,
+                    &mut session_token_buf,
+                )?;
+                match retry.status {
+                    CREDENTIAL_CALLBACK_FAILURE => {
+                        return Err(Self::credentials_error(
+                            "Custom credentials provider callback returned failure on retry",
+                        ));
+                    }
+                    CREDENTIAL_CALLBACK_SUCCESS => retry,
+                    CREDENTIAL_CALLBACK_BUFFER_TOO_SMALL => {
+                        return Err(Self::credentials_error(
+                            "Custom credentials provider callback requested a second resize",
+                        ));
+                    }
+                    status => {
+                        return Err(Self::credentials_error(format!(
+                            "Custom credentials provider callback returned unknown status {status} on retry"
+                        )));
+                    }
+                }
+            }
+            status => {
+                return Err(Self::credentials_error(format!(
+                    "Custom credentials provider callback returned unknown status {status}"
+                )));
+            }
+        };
+
+        Self::parse_success(
+            result,
+            &access_key_id_buf,
+            &secret_access_key_buf,
+            &session_token_buf,
+        )
+    }
+}
+
+#[cfg(test)]
+mod tests_ffi_credentials_provider {
+    use super::*;
+    use std::cell::RefCell;
+    use std::collections::VecDeque;
+
+    #[derive(Clone)]
+    struct CallbackStep {
+        status: u8,
+        lengths: [Option<usize>; 3],
+        fields: [Vec<u8>; 3],
+        expires_at_millis: i64,
+    }
+
+    impl CallbackStep {
+        fn success(access_key: Vec<u8>, secret_key: Vec<u8>, session_token: Vec<u8>) -> Self {
+            let lengths = [
+                Some(access_key.len()),
+                Some(secret_key.len()),
+                Some(session_token.len()),
+            ];
+            Self {
+                status: CREDENTIAL_CALLBACK_SUCCESS,
+                lengths,
+                fields: [access_key, secret_key, session_token],
+                expires_at_millis: 0,
+            }
+        }
+
+        fn status(status: u8, lengths: [Option<usize>; 3]) -> Self {
+            Self {
+                status,
+                lengths,
+                fields: [Vec::new(), Vec::new(), Vec::new()],
+                expires_at_millis: 0,
+            }
+        }
+    }
+
+    #[derive(Default)]
+    struct CallbackState {
+        steps: VecDeque<CallbackStep>,
+        capacities: Vec<[usize; 3]>,
+    }
+
+    thread_local! {
+        static CALLBACK_STATE: RefCell<CallbackState> = RefCell::new(CallbackState::default());
+    }
+
+    fn set_steps(steps: impl IntoIterator<Item = CallbackStep>) {
+        CALLBACK_STATE.with(|state| {
+            *state.borrow_mut() = CallbackState {
+                steps: steps.into_iter().collect(),
+                capacities: Vec::new(),
+            };
+        });
+    }
+
+    fn capacities() -> Vec<[usize; 3]> {
+        CALLBACK_STATE.with(|state| state.borrow().capacities.clone())
+    }
+
+    unsafe extern "C-unwind" fn scripted_callback(
+        _client_id: usize,
+        access_key_id_buf: *mut u8,
+        access_key_id_buf_len: usize,
+        access_key_id_len: *mut usize,
+        secret_access_key_buf: *mut u8,
+        secret_access_key_buf_len: usize,
+        secret_access_key_len: *mut usize,
+        session_token_buf: *mut u8,
+        session_token_buf_len: usize,
+        session_token_len: *mut usize,
+        expires_at_epoch_millis: *mut i64,
+    ) -> u8 {
+        let capacities = [
+            access_key_id_buf_len,
+            secret_access_key_buf_len,
+            session_token_buf_len,
+        ];
+        let step = CALLBACK_STATE.with(|state| {
+            let mut state = state.borrow_mut();
+            state.capacities.push(capacities);
+            state
+                .steps
+                .pop_front()
+                .expect("unexpected callback invocation")
+        });
+        let length_ptrs = [access_key_id_len, secret_access_key_len, session_token_len];
+        for (length, output) in step.lengths.iter().zip(length_ptrs) {
+            if let Some(length) = length {
+                unsafe { *output = *length };
+            }
+        }
+        unsafe { *expires_at_epoch_millis = step.expires_at_millis };
+
+        let buffer_ptrs = [access_key_id_buf, secret_access_key_buf, session_token_buf];
+        for ((field, buffer), capacity) in step.fields.iter().zip(buffer_ptrs).zip(capacities) {
+            if !field.is_empty() && field.len() <= capacity {
+                unsafe { std::ptr::copy_nonoverlapping(field.as_ptr(), buffer, field.len()) };
+            }
+        }
+        step.status
+    }
+
+    unsafe extern "C-unwind" fn panicking_callback(
+        _client_id: usize,
+        _access_key_id_buf: *mut u8,
+        _access_key_id_buf_len: usize,
+        _access_key_id_len: *mut usize,
+        _secret_access_key_buf: *mut u8,
+        _secret_access_key_buf_len: usize,
+        _secret_access_key_len: *mut usize,
+        _session_token_buf: *mut u8,
+        _session_token_buf_len: usize,
+        _session_token_len: *mut usize,
+        _expires_at_epoch_millis: *mut i64,
+    ) -> u8 {
+        panic!("Rust callback panic")
+    }
+
+    fn provider(callback: CredentialProviderCallback) -> FFICredentialsProvider {
+        FFICredentialsProvider {
+            callback,
+            client_id: 42,
+        }
+    }
+
+    fn call_scripted() -> Result<FFICredentials, glide_core::iam::GlideIAMError> {
+        provider(scripted_callback).call()
+    }
+
+    #[test]
+    fn success_under_initial_capacity() {
+        set_steps([CallbackStep::success(
+            b"access".to_vec(),
+            b"secret".to_vec(),
+            b"token".to_vec(),
+        )]);
+
+        let credentials = call_scripted().expect("callback should succeed");
+
+        assert_eq!(credentials.0, "access");
+        assert_eq!(credentials.1, "secret");
+        assert_eq!(credentials.2.as_deref(), Some("token"));
+        assert_eq!(capacities(), vec![[INITIAL_CREDENTIAL_BUFFER_SIZE; 3]]);
+    }
+
+    #[test]
+    fn success_at_exact_initial_capacity() {
+        let access_key = vec![b'a'; INITIAL_CREDENTIAL_BUFFER_SIZE];
+        let secret_key = vec![b'b'; INITIAL_CREDENTIAL_BUFFER_SIZE];
+        let session_token = vec![b'c'; INITIAL_CREDENTIAL_BUFFER_SIZE];
+        set_steps([CallbackStep::success(
+            access_key.clone(),
+            secret_key.clone(),
+            session_token.clone(),
+        )]);
+
+        let credentials = call_scripted().expect("exact-capacity callback should succeed");
+
+        assert_eq!(credentials.0.as_bytes(), access_key);
+        assert_eq!(credentials.1.as_bytes(), secret_key);
+        assert_eq!(
+            credentials.2.as_deref().map(str::as_bytes),
+            Some(&*session_token)
+        );
+        assert_eq!(capacities().len(), 1);
+    }
+
+    #[test]
+    fn buffer_too_small_resizes_all_fields_exactly_and_retries_once() {
+        let access_key = vec![b'a'; 3000];
+        let secret_key = vec![b'b'; 2500];
+        let session_token = vec![b'c'; 2200];
+        let required = [access_key.len(), secret_key.len(), session_token.len()];
+        set_steps([
+            CallbackStep::status(CREDENTIAL_CALLBACK_BUFFER_TOO_SMALL, required.map(Some)),
+            CallbackStep::success(
+                access_key.clone(),
+                secret_key.clone(),
+                session_token.clone(),
+            ),
+        ]);
+
+        let credentials = call_scripted().expect("resized callback should succeed");
+
+        assert_eq!(credentials.0.as_bytes(), access_key);
+        assert_eq!(credentials.1.as_bytes(), secret_key);
+        assert_eq!(
+            credentials.2.as_deref().map(str::as_bytes),
+            Some(&*session_token)
+        );
+        assert_eq!(
+            capacities(),
+            vec![[INITIAL_CREDENTIAL_BUFFER_SIZE; 3], required]
+        );
+    }
+
+    #[test]
+    fn buffer_contents_from_buffer_too_small_status_are_ignored() {
+        let mut resize = CallbackStep::status(
+            CREDENTIAL_CALLBACK_BUFFER_TOO_SMALL,
+            [Some(3000), Some(6), Some(0)],
+        );
+        resize.fields = [vec![0xff; 8], vec![0xff; 6], Vec::new()];
+        set_steps([
+            resize,
+            CallbackStep::success(b"a".repeat(3000), b"secret".to_vec(), Vec::new()),
+        ]);
+
+        let credentials = call_scripted().expect("retry output should replace status-2 bytes");
+
+        assert_eq!(credentials.0, "a".repeat(3000));
+        assert_eq!(credentials.1, "secret");
+        assert_eq!(credentials.2, None);
+    }
+
+    #[test]
+    fn buffer_too_small_requires_lengths_for_all_three_fields() {
+        for missing in 0..3 {
+            let mut lengths = [Some(3000), Some(6), Some(0)];
+            lengths[missing] = None;
+            set_steps([CallbackStep::status(
+                CREDENTIAL_CALLBACK_BUFFER_TOO_SMALL,
+                lengths,
+            )]);
+
+            let error = call_scripted().expect_err("an omitted required length must fail");
+
+            assert!(error.to_string().contains("all three required lengths"));
+            assert_eq!(capacities().len(), 1);
+        }
+    }
+
+    #[test]
+    fn empty_session_token_is_optional_and_nonpositive_expiry_is_none() {
+        let mut step = CallbackStep::success(b"access".to_vec(), b"secret".to_vec(), Vec::new());
+        step.expires_at_millis = -1;
+        set_steps([step]);
+
+        let credentials = call_scripted().expect("optional fields should be accepted");
+
+        assert_eq!(credentials.2, None);
+        assert_eq!(credentials.3, None);
+    }
+
+    #[test]
+    fn failure_status_is_not_retried() {
+        set_steps([
+            CallbackStep::status(CREDENTIAL_CALLBACK_FAILURE, [None; 3]),
+            CallbackStep::success(b"unused".to_vec(), b"unused".to_vec(), Vec::new()),
+        ]);
+
+        let error = call_scripted().expect_err("failure status must fail");
+
+        assert!(error.to_string().contains("returned failure"));
+        assert_eq!(capacities().len(), 1);
+    }
+
+    #[test]
+    fn unknown_status_is_rejected_without_retry() {
+        set_steps([CallbackStep::status(9, [None; 3])]);
+
+        let error = call_scripted().expect_err("unknown status must fail");
+
+        assert!(error.to_string().contains("unknown status 9"));
+        assert_eq!(capacities().len(), 1);
+    }
+
+    #[test]
+    fn malformed_buffer_too_small_is_rejected() {
+        let malformed = [
+            [Some(0), Some(6), Some(3000)],
+            [Some(6), Some(0), Some(3000)],
+            [Some(6), Some(6), Some(6)],
+        ];
+        for lengths in malformed {
+            set_steps([CallbackStep::status(
+                CREDENTIAL_CALLBACK_BUFFER_TOO_SMALL,
+                lengths,
+            )]);
+
+            assert!(call_scripted().is_err());
+            assert_eq!(capacities().len(), 1);
+        }
+    }
+
+    #[test]
+    fn repeated_buffer_too_small_is_rejected_after_one_retry() {
+        set_steps([
+            CallbackStep::status(
+                CREDENTIAL_CALLBACK_BUFFER_TOO_SMALL,
+                [Some(3000), Some(6), Some(0)],
+            ),
+            CallbackStep::status(
+                CREDENTIAL_CALLBACK_BUFFER_TOO_SMALL,
+                [Some(4000), Some(6), Some(0)],
+            ),
+        ]);
+
+        let error = call_scripted().expect_err("a second resize request must fail");
+
+        assert!(error.to_string().contains("second resize"));
+        assert_eq!(capacities().len(), 2);
+    }
+
+    #[test]
+    fn resize_lengths_over_per_field_or_aggregate_cap_are_rejected() {
+        let over_cap = [
+            [Some(MAX_CREDENTIALS_BUFFER_SIZE + 1), Some(6), Some(0)],
+            [
+                Some(MAX_CREDENTIALS_BUFFER_SIZE / 2 + 1),
+                Some(MAX_CREDENTIALS_BUFFER_SIZE / 2 + 1),
+                Some(0),
+            ],
+        ];
+        for lengths in over_cap {
+            set_steps([CallbackStep::status(
+                CREDENTIAL_CALLBACK_BUFFER_TOO_SMALL,
+                lengths,
+            )]);
+
+            assert!(call_scripted().is_err());
+            assert_eq!(capacities().len(), 1);
+        }
+    }
+
+    #[test]
+    fn success_length_larger_than_capacity_is_rejected_before_slicing() {
+        set_steps([CallbackStep::status(
+            CREDENTIAL_CALLBACK_SUCCESS,
+            [Some(INITIAL_CREDENTIAL_BUFFER_SIZE + 1), Some(6), Some(0)],
+        )]);
+
+        let error = call_scripted().expect_err("oversized success length must fail");
+
+        assert!(error.to_string().contains("exceeding buffer size"));
+    }
+
+    #[test]
+    fn invalid_utf8_in_any_field_is_rejected() {
+        let cases = [
+            [vec![0xff], b"secret".to_vec(), Vec::new()],
+            [b"access".to_vec(), vec![0xff], Vec::new()],
+            [b"access".to_vec(), b"secret".to_vec(), vec![0xff]],
+        ];
+        for [access_key, secret_key, session_token] in cases {
+            set_steps([CallbackStep::success(access_key, secret_key, session_token)]);
+
+            let error = call_scripted().expect_err("invalid UTF-8 must fail");
+
+            assert!(error.to_string().contains("Invalid UTF-8"));
+        }
+    }
+
+    #[test]
+    fn whitespace_only_required_fields_are_rejected() {
+        let cases = [
+            (b" \t\n".to_vec(), b"secret".to_vec()),
+            (b"access".to_vec(), b" \t\n".to_vec()),
+        ];
+        for (access_key, secret_key) in cases {
+            set_steps([CallbackStep::success(access_key, secret_key, Vec::new())]);
+
+            let error = call_scripted().expect_err("whitespace-only required field must fail");
+
+            assert!(error.to_string().contains("empty"));
+        }
+    }
+
+    #[test]
+    fn surrounding_whitespace_is_preserved() {
+        set_steps([CallbackStep::success(
+            b" access ".to_vec(),
+            b"\tsecret\n".to_vec(),
+            b" token ".to_vec(),
+        )]);
+
+        let credentials = call_scripted().expect("nonempty whitespace-surrounded values are valid");
+
+        assert_eq!(credentials.0, " access ");
+        assert_eq!(credentials.1, "\tsecret\n");
+        assert_eq!(credentials.2.as_deref(), Some(" token "));
+    }
+
+    #[test]
+    fn huge_positive_expiry_does_not_panic() {
+        let mut step = CallbackStep::success(b"access".to_vec(), b"secret".to_vec(), Vec::new());
+        step.expires_at_millis = i64::MAX;
+        set_steps([step]);
+
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(call_scripted));
+
+        let credentials = result.expect("expiry conversion must not panic");
+        match credentials {
+            Ok(credentials) => assert!(credentials.3.is_some()),
+            Err(error) => assert!(error.to_string().contains("overflows SystemTime")),
+        }
+    }
+
+    #[test]
+    fn rust_callback_panic_is_returned_as_credentials_error() {
+        let result = provider(panicking_callback).call();
+
+        let error = result.expect_err("Rust callback panic must be contained");
+        assert!(error.to_string().contains("callback panicked"));
     }
 }
 
@@ -1815,7 +2375,7 @@ pub unsafe extern "C-unwind" fn create_client(
     client_type: *const ClientType,
     pubsub_callback: PubSubCallback,
     address_resolver: AddressResolverCallback,
-    credential_provider: CredentialProviderCallback,
+    credential_provider: Option<CredentialProviderCallback>,
     client_id: usize,
 ) -> *const ConnectionResponse {
     assert!(!connection_request_bytes.is_null());
@@ -1837,19 +2397,12 @@ pub unsafe extern "C-unwind" fn create_client(
         Some(address_resolver)
     };
 
-    // Convert credential provider pointer to Option - 0 means no provider
-    let credential_provider_opt = if credential_provider as usize == 0 {
-        None
-    } else {
-        Some(credential_provider)
-    };
-
     let response = match create_client_internal(
         request_bytes,
         client_type.clone(),
         callback_opt,
         resolver_opt,
-        credential_provider_opt,
+        credential_provider,
         client_id,
     ) {
         Err(err) => ConnectionResponse {

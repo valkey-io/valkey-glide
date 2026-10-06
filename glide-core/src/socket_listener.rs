@@ -899,6 +899,35 @@ pub fn close_socket(socket_path: &String) {
     let _ = std::fs::remove_file(socket_path);
 }
 
+fn take_credential_provider(
+    credential_provider_key: Option<String>,
+    conn_request: &mut crate::client::ConnectionRequest,
+) -> Result<(), ClientCreationError> {
+    let Some(key) = credential_provider_key else {
+        return Ok(());
+    };
+
+    // Atomically claim a direct client's provider exactly once. A missing key must not silently
+    // fall back to the process-wide AWS credential chain.
+    let provider = crate::credential_provider_registry::remove(&key).ok_or_else(|| {
+        ClientCreationError::ConfigurationError(format!(
+            "credential_provider_key '{key}' was not found in the registry; it may have already been consumed"
+        ))
+    })?;
+    let iam_config = conn_request
+        .authentication_info
+        .as_mut()
+        .and_then(|auth_info| auth_info.iam_config.as_mut())
+        .ok_or_else(|| {
+            ClientCreationError::ConfigurationError(
+                "credential_provider_key was set but the connection request contains no IAM configuration"
+                    .to_string(),
+            )
+        })?;
+    iam_config.credentials_provider = Some(provider);
+    Ok(())
+}
+
 async fn create_client(
     writer: &Rc<Writer>,
     request: ConnectionRequest,
@@ -928,34 +957,7 @@ async fn create_client(
         conn_request.address_resolver = Some(resolver);
     }
 
-    // Look up the credential provider from the global registry using the key
-    // provided in the connection request.
-    if let Some(key) = credential_provider_key {
-        match crate::credential_provider_registry::remove(&key) {
-            Some(provider) => {
-                if let Some(auth_info) = conn_request.authentication_info.as_mut()
-                    && let Some(iam_config) = auth_info.iam_config.as_mut()
-                {
-                    iam_config.credentials_provider = Some(provider);
-                } else {
-                    log_warn(
-                        "credential_provider",
-                        "A credential_provider_key was set in the connection request but the \
-                         request contains no IAM configuration. The credential provider will \
-                         be ignored and the default AWS credential chain will be used.",
-                    );
-                }
-            }
-            None => {
-                log_warn(
-                    "credential_provider",
-                    "credential_provider_key was set in the connection request but no provider \
-                     was found in the registry. The key may have been consumed already or was \
-                     never registered.",
-                );
-            }
-        }
-    }
+    take_credential_provider(credential_provider_key, &mut conn_request)?;
 
     let client = match Client::new(conn_request, push_tx).await {
         Ok(client) => client,
@@ -1072,6 +1074,7 @@ async fn listen_on_client_stream(socket: UnixStream) {
             return;
         }
         Err(e @ ClientCreationError::UnhandledError(_))
+        | Err(e @ ClientCreationError::ConfigurationError(_))
         | Err(e @ ClientCreationError::IO(_))
         | Err(e @ ClientCreationError::ConnectionError(_)) => {
             let err_message = e.to_string();
@@ -1131,7 +1134,10 @@ enum ClientCreationError {
     /// An error was returned during the client creation process.
     #[error("Unhandled error: {0}")]
     UnhandledError(String),
-    /// Socket listener was closed before receiving the server address.
+    /// The connection request and its registered resources are inconsistent.
+    #[error("Configuration error: {0}")]
+    ConfigurationError(String),
+    /// Socket listener was closed before receiving the connection request.
     #[error("Closing error: {0:?}")]
     SocketListenerClosed(ClosingReason),
     #[error("Connection error: {0:?}")]
@@ -1327,4 +1333,96 @@ where
     InitCallback: FnOnce(Result<String, String>) + Send + Clone + 'static,
 {
     start_socket_listener_internal(init_callback, None);
+}
+
+#[cfg(test)]
+mod credential_provider_tests {
+    use super::*;
+    use crate::client::{AuthenticationInfo, IamAuthenticationConfig};
+    use crate::iam::{CredentialsProvider, ServiceType};
+
+    fn provider() -> CredentialsProvider {
+        Arc::new(|| {
+            Ok((
+                "access-key".to_string(),
+                "secret-key".to_string(),
+                Some("session-token".to_string()),
+                None,
+            ))
+        })
+    }
+
+    fn request_with_iam() -> crate::client::ConnectionRequest {
+        crate::client::ConnectionRequest {
+            authentication_info: Some(AuthenticationInfo {
+                username: Some("iam-user".to_string()),
+                password: None,
+                iam_config: Some(IamAuthenticationConfig {
+                    cluster_name: "cluster".to_string(),
+                    region: "us-east-1".to_string(),
+                    service_type: ServiceType::ElastiCache,
+                    refresh_interval_seconds: None,
+                    credentials_provider: None,
+                }),
+            }),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn valid_credential_provider_key_is_consumed_and_installed() {
+        let key = Uuid::new_v4().to_string();
+        crate::credential_provider_registry::register(key.clone(), provider());
+        let mut request = request_with_iam();
+
+        take_credential_provider(Some(key.clone()), &mut request).expect("provider should resolve");
+
+        assert!(crate::credential_provider_registry::get(&key).is_none());
+        let installed = request
+            .authentication_info
+            .as_ref()
+            .and_then(|auth| auth.iam_config.as_ref())
+            .and_then(|iam| iam.credentials_provider.as_ref())
+            .expect("provider should be installed");
+        let credentials = installed().expect("installed provider should be callable");
+        assert_eq!(credentials.0, "access-key");
+        assert_eq!(credentials.1, "secret-key");
+        assert_eq!(credentials.2.as_deref(), Some("session-token"));
+    }
+
+    #[test]
+    fn consumed_credential_provider_key_fails_closed() {
+        let key = Uuid::new_v4().to_string();
+        crate::credential_provider_registry::register(key.clone(), provider());
+        assert!(crate::credential_provider_registry::remove(&key).is_some());
+        let mut request = request_with_iam();
+
+        let error = take_credential_provider(Some(key), &mut request)
+            .expect_err("a consumed key must fail client creation");
+
+        assert!(matches!(error, ClientCreationError::ConfigurationError(_)));
+        assert!(error.to_string().contains("not found in the registry"));
+        assert!(
+            request
+                .authentication_info
+                .as_ref()
+                .and_then(|auth| auth.iam_config.as_ref())
+                .and_then(|iam| iam.credentials_provider.as_ref())
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn credential_provider_key_without_iam_config_fails_closed_after_consumption() {
+        let key = Uuid::new_v4().to_string();
+        crate::credential_provider_registry::register(key.clone(), provider());
+        let mut request = crate::client::ConnectionRequest::default();
+
+        let error = take_credential_provider(Some(key.clone()), &mut request)
+            .expect_err("a provider without IAM configuration must fail client creation");
+
+        assert!(matches!(error, ClientCreationError::ConfigurationError(_)));
+        assert!(error.to_string().contains("no IAM configuration"));
+        assert!(crate::credential_provider_registry::get(&key).is_none());
+    }
 }
