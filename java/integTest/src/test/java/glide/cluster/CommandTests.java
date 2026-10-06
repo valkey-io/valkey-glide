@@ -4343,6 +4343,12 @@ public class CommandTests {
 
             // The error should be about connection, not about the command being unsupported
             assertNotNull(exception.getCause(), "Exception should have a cause");
+            // A client-side timeout means the server never replied, so it must not count as the
+            // expected connection error.
+            assertInstanceOf(
+                    RequestException.class,
+                    exception.getCause(),
+                    "Expected a server error but got: " + exception.getCause());
             String errorMessage = exception.getCause().getMessage();
             assertNotNull(errorMessage, "Error message should not be null");
 
