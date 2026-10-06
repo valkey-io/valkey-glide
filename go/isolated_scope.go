@@ -446,8 +446,12 @@ func slotForKey(key []byte) uint16 {
 	}
 	if start != -1 {
 		for i := start + 1; i < len(key); i++ {
-			if key[i] == '}' && i != start+1 {
-				key = key[start+1 : i]
+			if key[i] == '}' {
+				// First '}' closes the tag. Hash the tag only when it is non-empty;
+				// an empty tag ("{}") hashes the whole key.
+				if i != start+1 {
+					key = key[start+1 : i]
+				}
 				break
 			}
 		}
