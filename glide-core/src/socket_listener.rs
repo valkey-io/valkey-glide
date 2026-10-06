@@ -138,21 +138,22 @@ impl UnixStreamListener {
     }
 }
 
-async fn write_to_output(writer: &Rc<Writer>) {
+async fn write_to_output(writer: &Rc<Writer>) -> Result<(), io::Error> {
     let Ok(_guard) = writer.lock.try_lock() else {
-        return;
+        return Ok(());
     };
 
     let mut output = writer.accumulated_outputs.take();
     loop {
         if output.is_empty() {
-            return;
+            return Ok(());
         }
         let mut total_written_bytes = 0;
         while total_written_bytes < output.len() {
             if let Err(err) = writer.socket.writable().await {
-                let _res = writer.closing_sender.send(err.into()).await; // we ignore the error, because it means that the reader was dropped, which is ok.
-                return;
+                let return_error = io::Error::new(err.kind(), err.to_string());
+                let _res = writer.closing_sender.send(err.into()).await;
+                return Err(return_error);
             }
             match writer.socket.try_write(&output[total_written_bytes..]) {
                 Ok(written_bytes) => {
@@ -165,8 +166,9 @@ async fn write_to_output(writer: &Rc<Writer>) {
                     continue;
                 }
                 Err(err) => {
-                    let _res = writer.closing_sender.send(err.into()).await; // we ignore the error, because it means that the reader was dropped, which is ok.
-                    return;
+                    let return_error = io::Error::new(err.kind(), err.to_string());
+                    let _res = writer.closing_sender.send(err.into()).await;
+                    return Err(return_error);
                 }
             }
         }
@@ -275,8 +277,7 @@ async fn write_to_writer(response: Response, writer: &Rc<Writer>) -> Result<(), 
     match encode_result {
         Ok(_) => {
             writer.accumulated_outputs.set(vec);
-            write_to_output(writer).await;
-            Ok(())
+            write_to_output(writer).await
         }
         Err(err) => {
             let err_message = format!("failed to encode response: {err}");
@@ -901,12 +902,21 @@ pub fn close_socket(socket_path: &String) {
 
 struct CredentialProviderClaim {
     key: String,
-    provider: crate::iam::CredentialsProvider,
+    provider: Option<crate::iam::CredentialsProvider>,
 }
 
 impl CredentialProviderClaim {
-    fn restore(self) {
-        if crate::credential_provider_registry::register_if_absent(self.key.clone(), self.provider)
+    fn commit(&mut self) {
+        self.provider = None;
+    }
+}
+
+impl Drop for CredentialProviderClaim {
+    fn drop(&mut self) {
+        let Some(provider) = self.provider.take() else {
+            return;
+        };
+        if crate::credential_provider_registry::register_if_absent(self.key.clone(), provider)
             .is_err()
         {
             log_warn(
@@ -920,25 +930,62 @@ impl CredentialProviderClaim {
     }
 }
 
+struct AddressResolverClaim {
+    key: String,
+    resolver: Option<Arc<dyn redis::AddressResolver>>,
+}
+
+impl AddressResolverClaim {
+    fn commit(&mut self) {
+        self.resolver = None;
+    }
+}
+
+impl Drop for AddressResolverClaim {
+    fn drop(&mut self) {
+        let Some(resolver) = self.resolver.take() else {
+            return;
+        };
+        if crate::address_resolver_registry::register_if_absent(self.key.clone(), resolver).is_err()
+        {
+            log_warn(
+                "address_resolver",
+                format!(
+                    "Did not restore address_resolver_key '{}' because a newer resolver is registered",
+                    self.key
+                ),
+            );
+        }
+    }
+}
+
+fn validate_credential_provider_request(
+    credential_provider_key: Option<&String>,
+    conn_request: &crate::client::ConnectionRequest,
+) -> Result<(), ClientCreationError> {
+    if credential_provider_key.is_some()
+        && conn_request
+            .authentication_info
+            .as_ref()
+            .and_then(|auth_info| auth_info.iam_config.as_ref())
+            .is_none()
+    {
+        return Err(ClientCreationError::ConfigurationError(
+            "credential_provider_key was set but the connection request contains no IAM configuration"
+                .to_string(),
+        ));
+    }
+    Ok(())
+}
+
 fn take_credential_provider(
     credential_provider_key: Option<String>,
     conn_request: &mut crate::client::ConnectionRequest,
 ) -> Result<Option<CredentialProviderClaim>, ClientCreationError> {
+    validate_credential_provider_request(credential_provider_key.as_ref(), conn_request)?;
     let Some(key) = credential_provider_key else {
         return Ok(None);
     };
-
-    // Validate the request before destructively claiming the registry entry.
-    let iam_config = conn_request
-        .authentication_info
-        .as_mut()
-        .and_then(|auth_info| auth_info.iam_config.as_mut())
-        .ok_or_else(|| {
-            ClientCreationError::ConfigurationError(
-                "credential_provider_key was set but the connection request contains no IAM configuration"
-                    .to_string(),
-            )
-        })?;
 
     // Atomically claim a direct client's provider exactly once. A missing key must not silently
     // fall back to the process-wide AWS credential chain.
@@ -947,8 +994,66 @@ fn take_credential_provider(
             "credential_provider_key '{key}' was not found in the registry; it may have already been consumed"
         ))
     })?;
-    iam_config.credentials_provider = Some(provider.clone());
-    Ok(Some(CredentialProviderClaim { key, provider }))
+    conn_request
+        .authentication_info
+        .as_mut()
+        .and_then(|auth_info| auth_info.iam_config.as_mut())
+        .expect("IAM configuration was validated before claiming the provider")
+        .credentials_provider = Some(provider.clone());
+    Ok(Some(CredentialProviderClaim {
+        key,
+        provider: Some(provider),
+    }))
+}
+
+fn take_address_resolver(
+    resolver_key: Option<String>,
+    conn_request: &mut crate::client::ConnectionRequest,
+) -> Result<Option<AddressResolverClaim>, ClientCreationError> {
+    let Some(key) = resolver_key else {
+        return Ok(None);
+    };
+    let resolver = crate::address_resolver_registry::remove(&key).ok_or_else(|| {
+        ClientCreationError::ConfigurationError(format!(
+            "address_resolver_key '{key}' was not found in the registry; it may have already been consumed"
+        ))
+    })?;
+    conn_request.address_resolver = Some(resolver.clone());
+    Ok(Some(AddressResolverClaim {
+        key,
+        resolver: Some(resolver),
+    }))
+}
+
+struct ConnectionResourceClaims {
+    credential_provider: Option<CredentialProviderClaim>,
+    address_resolver: Option<AddressResolverClaim>,
+}
+
+impl ConnectionResourceClaims {
+    fn claim(
+        credential_provider_key: Option<String>,
+        resolver_key: Option<String>,
+        conn_request: &mut crate::client::ConnectionRequest,
+    ) -> Result<Self, ClientCreationError> {
+        // Complete every non-destructive consistency check before either registry is modified.
+        validate_credential_provider_request(credential_provider_key.as_ref(), conn_request)?;
+        let credential_provider = take_credential_provider(credential_provider_key, conn_request)?;
+        let address_resolver = take_address_resolver(resolver_key, conn_request)?;
+        Ok(Self {
+            credential_provider,
+            address_resolver,
+        })
+    }
+
+    fn commit(&mut self) {
+        if let Some(claim) = self.credential_provider.as_mut() {
+            claim.commit();
+        }
+        if let Some(claim) = self.address_resolver.as_mut() {
+            claim.commit();
+        }
+    }
 }
 
 async fn create_client(
@@ -956,14 +1061,12 @@ async fn create_client(
     request: ConnectionRequest,
     push_tx: Option<mpsc::UnboundedSender<PushInfo>>,
 ) -> Result<Client, ClientCreationError> {
-    // Extract the address resolver key before converting (protobuf field won't survive into())
+    // Extract registry keys before converting (protobuf-only fields do not survive `into()`).
     let resolver_key = request
         .address_resolver_key
         .as_ref()
         .filter(|k| !k.is_empty())
         .map(|k| k.to_string());
-
-    // Extract the credential provider key before converting (protobuf field won't survive into())
     let credential_provider_key = request
         .credential_provider_key
         .as_ref()
@@ -971,28 +1074,14 @@ async fn create_client(
         .map(|k| k.to_string());
 
     let mut conn_request: crate::client::ConnectionRequest = request.into();
+    let mut claims =
+        ConnectionResourceClaims::claim(credential_provider_key, resolver_key, &mut conn_request)?;
 
-    // Look up the address resolver from the global registry using the key
-    // provided in the connection request.
-    if let Some(key) = resolver_key
-        && let Some(resolver) = crate::address_resolver_registry::remove(&key)
-    {
-        conn_request.address_resolver = Some(resolver);
-    }
-
-    let credential_provider_claim =
-        take_credential_provider(credential_provider_key, &mut conn_request)?;
-
-    let client = match Client::new(conn_request, push_tx).await {
-        Ok(client) => client,
-        Err(err) => {
-            if let Some(claim) = credential_provider_claim {
-                claim.restore();
-            }
-            return Err(ClientCreationError::ConnectionError(err));
-        }
-    };
+    let client = Client::new(conn_request, push_tx)
+        .await
+        .map_err(ClientCreationError::ConnectionError)?;
     write_result(Ok(Value::Okay), 0, writer, None).await?;
+    claims.commit();
     Ok(client)
 }
 
@@ -1368,12 +1457,35 @@ where
 mod credential_provider_tests {
     use super::*;
     use crate::client::{AuthenticationInfo, IamAuthenticationConfig};
+    use crate::connection_request::{
+        AuthenticationInfo as ProtoAuthenticationInfo, IamCredentials,
+        NodeAddress as ProtoNodeAddress, ServiceType as ProtoServiceType,
+    };
     use crate::iam::{CredentialsProvider, ServiceType};
+    use protobuf::MessageField;
+    use std::sync::Barrier;
+
+    #[derive(Debug)]
+    struct TestResolver(&'static str);
+
+    impl redis::AddressResolver for TestResolver {
+        fn resolve(&self, _host: &str, port: u16) -> (String, u16) {
+            (self.0.to_string(), port)
+        }
+    }
+
+    fn resolver(name: &'static str) -> Arc<dyn redis::AddressResolver> {
+        Arc::new(TestResolver(name))
+    }
 
     fn provider() -> CredentialsProvider {
-        Arc::new(|| {
+        provider_named("access-key")
+    }
+
+    fn provider_named(access_key: &'static str) -> CredentialsProvider {
+        Arc::new(move || {
             Ok((
-                "access-key".to_string(),
+                access_key.to_string(),
                 "secret-key".to_string(),
                 Some("session-token".to_string()),
                 None,
@@ -1398,15 +1510,62 @@ mod credential_provider_tests {
         }
     }
 
+    fn proto_request_with_resources(
+        credential_key: &str,
+        resolver_key: &str,
+        lazy_connect: bool,
+        include_address: bool,
+    ) -> ConnectionRequest {
+        let mut request = ConnectionRequest::new();
+        request.credential_provider_key = Some(credential_key.into());
+        request.address_resolver_key = Some(resolver_key.into());
+        request.lazy_connect = lazy_connect;
+        if include_address {
+            request.addresses.push(ProtoNodeAddress {
+                host: "127.0.0.1".into(),
+                port: 1,
+                ..Default::default()
+            });
+        }
+        let mut iam = IamCredentials::new();
+        iam.cluster_name = "cluster".into();
+        iam.region = "us-east-1".into();
+        iam.service_type = ProtoServiceType::ELASTICACHE.into();
+        let mut authentication = ProtoAuthenticationInfo::new();
+        authentication.username = "iam-user".into();
+        authentication.iam_credentials = MessageField::some(iam);
+        request.authentication_info = MessageField::some(authentication);
+        request
+    }
+
+    fn test_writer() -> (Rc<Writer>, tokio::net::UnixStream) {
+        let (socket, peer) = std::os::unix::net::UnixStream::pair().unwrap();
+        socket.set_nonblocking(true).unwrap();
+        peer.set_nonblocking(true).unwrap();
+        let socket = tokio::net::UnixStream::from_std(socket).unwrap();
+        let peer = tokio::net::UnixStream::from_std(peer).unwrap();
+        let (closing_sender, _closing_receiver) = channel(1);
+        (
+            Rc::new(Writer {
+                socket: Rc::new(socket),
+                lock: Mutex::new(()),
+                accumulated_outputs: Cell::new(Vec::new()),
+                closing_sender,
+            }),
+            peer,
+        )
+    }
+
     #[test]
     fn valid_credential_provider_key_is_consumed_and_installed() {
         let key = Uuid::new_v4().to_string();
         crate::credential_provider_registry::register(key.clone(), provider());
         let mut request = request_with_iam();
 
-        let claim = take_credential_provider(Some(key.clone()), &mut request)
-            .expect("provider should resolve");
-        assert!(claim.is_some());
+        let mut claim = take_credential_provider(Some(key.clone()), &mut request)
+            .expect("provider should resolve")
+            .expect("provider should be claimed");
+        claim.commit();
         drop(claim);
 
         assert!(crate::credential_provider_registry::get(&key).is_none());
@@ -1474,9 +1633,227 @@ mod credential_provider_tests {
             .expect("provider should be claimed");
         assert!(crate::credential_provider_registry::get(&key).is_none());
 
-        claim.restore();
+        drop(claim);
 
         assert!(crate::credential_provider_registry::get(&key).is_some());
         assert!(crate::credential_provider_registry::remove(&key).is_some());
+    }
+
+    #[test]
+    fn invalid_credential_key_does_not_consume_address_resolver() {
+        let credential_key = Uuid::new_v4().to_string();
+        let resolver_key = Uuid::new_v4().to_string();
+        let original_resolver = resolver("original");
+        crate::address_resolver_registry::register(
+            resolver_key.clone(),
+            Arc::clone(&original_resolver),
+        );
+        let mut request = request_with_iam();
+
+        let error = ConnectionResourceClaims::claim(
+            Some(credential_key),
+            Some(resolver_key.clone()),
+            &mut request,
+        )
+        .err()
+        .expect("missing credential provider must fail");
+
+        assert!(error.to_string().contains("credential_provider_key"));
+        let registered = crate::address_resolver_registry::remove(&resolver_key)
+            .expect("resolver must remain registered");
+        assert!(Arc::ptr_eq(&registered, &original_resolver));
+    }
+
+    #[test]
+    fn credential_key_without_iam_consumes_neither_resource() {
+        let credential_key = Uuid::new_v4().to_string();
+        let resolver_key = Uuid::new_v4().to_string();
+        crate::credential_provider_registry::register(credential_key.clone(), provider());
+        crate::address_resolver_registry::register(resolver_key.clone(), resolver("resolver"));
+        let mut request = crate::client::ConnectionRequest::default();
+
+        let error = ConnectionResourceClaims::claim(
+            Some(credential_key.clone()),
+            Some(resolver_key.clone()),
+            &mut request,
+        )
+        .err()
+        .expect("missing IAM configuration must fail");
+
+        assert!(error.to_string().contains("no IAM configuration"));
+        assert!(crate::credential_provider_registry::remove(&credential_key).is_some());
+        assert!(crate::address_resolver_registry::remove(&resolver_key).is_some());
+    }
+
+    #[test]
+    fn downstream_failure_restores_both_claimed_resources() {
+        let credential_key = Uuid::new_v4().to_string();
+        let resolver_key = Uuid::new_v4().to_string();
+        crate::credential_provider_registry::register(credential_key.clone(), provider());
+        crate::address_resolver_registry::register(resolver_key.clone(), resolver("resolver"));
+        let mut request = request_with_iam();
+
+        let claims = ConnectionResourceClaims::claim(
+            Some(credential_key.clone()),
+            Some(resolver_key.clone()),
+            &mut request,
+        )
+        .expect("both resources should be claimed");
+        assert!(crate::credential_provider_registry::get(&credential_key).is_none());
+        assert!(crate::address_resolver_registry::get(&resolver_key).is_none());
+
+        drop(claims);
+
+        assert!(crate::credential_provider_registry::remove(&credential_key).is_some());
+        assert!(crate::address_resolver_registry::remove(&resolver_key).is_some());
+    }
+
+    #[test]
+    fn rollback_never_overwrites_newer_registrations() {
+        let credential_key = Uuid::new_v4().to_string();
+        let resolver_key = Uuid::new_v4().to_string();
+        crate::credential_provider_registry::register(
+            credential_key.clone(),
+            provider_named("original"),
+        );
+        crate::address_resolver_registry::register(resolver_key.clone(), resolver("original"));
+        let mut request = request_with_iam();
+        let claims = ConnectionResourceClaims::claim(
+            Some(credential_key.clone()),
+            Some(resolver_key.clone()),
+            &mut request,
+        )
+        .expect("both resources should be claimed");
+        let newer_provider = provider_named("newer");
+        let newer_resolver = resolver("newer");
+        crate::credential_provider_registry::register(
+            credential_key.clone(),
+            Arc::clone(&newer_provider),
+        );
+        crate::address_resolver_registry::register(
+            resolver_key.clone(),
+            Arc::clone(&newer_resolver),
+        );
+
+        drop(claims);
+
+        let registered_provider = crate::credential_provider_registry::remove(&credential_key)
+            .expect("newer provider must remain");
+        assert_eq!(registered_provider().unwrap().0, "newer");
+        let registered_resolver = crate::address_resolver_registry::remove(&resolver_key)
+            .expect("newer resolver must remain");
+        assert!(Arc::ptr_eq(&registered_resolver, &newer_resolver));
+    }
+
+    #[test]
+    fn committed_success_consumes_both_resources() {
+        let credential_key = Uuid::new_v4().to_string();
+        let resolver_key = Uuid::new_v4().to_string();
+        crate::credential_provider_registry::register(credential_key.clone(), provider());
+        crate::address_resolver_registry::register(resolver_key.clone(), resolver("resolver"));
+        let mut request = request_with_iam();
+
+        let mut claims = ConnectionResourceClaims::claim(
+            Some(credential_key.clone()),
+            Some(resolver_key.clone()),
+            &mut request,
+        )
+        .expect("both resources should be claimed");
+        claims.commit();
+        drop(claims);
+
+        assert!(crate::credential_provider_registry::get(&credential_key).is_none());
+        assert!(crate::address_resolver_registry::get(&resolver_key).is_none());
+    }
+
+    #[test]
+    fn concurrent_claim_has_exactly_one_winner() {
+        let credential_key = Uuid::new_v4().to_string();
+        let resolver_key = Uuid::new_v4().to_string();
+        crate::credential_provider_registry::register(credential_key.clone(), provider());
+        crate::address_resolver_registry::register(resolver_key.clone(), resolver("resolver"));
+        let barrier = Arc::new(Barrier::new(2));
+        let mut workers = Vec::new();
+        for _ in 0..2 {
+            let credential_key = credential_key.clone();
+            let resolver_key = resolver_key.clone();
+            let barrier = Arc::clone(&barrier);
+            workers.push(std::thread::spawn(move || {
+                let mut request = request_with_iam();
+                barrier.wait();
+                ConnectionResourceClaims::claim(
+                    Some(credential_key),
+                    Some(resolver_key),
+                    &mut request,
+                )
+                .map_err(|error| error.to_string())
+            }));
+        }
+
+        let results: Vec<_> = workers
+            .into_iter()
+            .map(|worker| worker.join().unwrap())
+            .collect();
+        assert_eq!(results.iter().filter(|result| result.is_ok()).count(), 1);
+        assert_eq!(results.iter().filter(|result| result.is_err()).count(), 1);
+        assert!(crate::credential_provider_registry::get(&credential_key).is_none());
+        assert!(crate::address_resolver_registry::get(&resolver_key).is_none());
+        drop(results);
+        assert!(crate::credential_provider_registry::remove(&credential_key).is_some());
+        assert!(crate::address_resolver_registry::remove(&resolver_key).is_some());
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn client_new_failure_restores_both_resources() {
+        let credential_key = Uuid::new_v4().to_string();
+        let resolver_key = Uuid::new_v4().to_string();
+        crate::credential_provider_registry::register(credential_key.clone(), provider());
+        crate::address_resolver_registry::register(resolver_key.clone(), resolver("resolver"));
+        let request = proto_request_with_resources(&credential_key, &resolver_key, false, false);
+        let (writer, _peer) = test_writer();
+
+        let result = create_client(&writer, request, None).await;
+
+        assert!(matches!(
+            result,
+            Err(ClientCreationError::ConnectionError(_))
+        ));
+        assert!(crate::credential_provider_registry::remove(&credential_key).is_some());
+        assert!(crate::address_resolver_registry::remove(&resolver_key).is_some());
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn acknowledgement_failure_restores_both_resources() {
+        let credential_key = Uuid::new_v4().to_string();
+        let resolver_key = Uuid::new_v4().to_string();
+        crate::credential_provider_registry::register(credential_key.clone(), provider());
+        crate::address_resolver_registry::register(resolver_key.clone(), resolver("resolver"));
+        let request = proto_request_with_resources(&credential_key, &resolver_key, true, true);
+        let (writer, peer) = test_writer();
+        drop(peer);
+
+        let result = create_client(&writer, request, None).await;
+
+        assert!(matches!(result, Err(ClientCreationError::IO(_))));
+        assert!(crate::credential_provider_registry::remove(&credential_key).is_some());
+        assert!(crate::address_resolver_registry::remove(&resolver_key).is_some());
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn successful_client_handoff_consumes_both_resources() {
+        let credential_key = Uuid::new_v4().to_string();
+        let resolver_key = Uuid::new_v4().to_string();
+        crate::credential_provider_registry::register(credential_key.clone(), provider());
+        crate::address_resolver_registry::register(resolver_key.clone(), resolver("resolver"));
+        let request = proto_request_with_resources(&credential_key, &resolver_key, true, true);
+        let (writer, _peer) = test_writer();
+
+        let client = create_client(&writer, request, None)
+            .await
+            .expect("lazy client creation and acknowledgement should succeed");
+        drop(client);
+
+        assert!(crate::credential_provider_registry::get(&credential_key).is_none());
+        assert!(crate::address_resolver_registry::get(&resolver_key).is_none());
     }
 }

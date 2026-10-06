@@ -5,9 +5,12 @@ package glide
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -42,6 +45,47 @@ func invokeCredentialCallbackForTest(
 		&expiresAt,
 	)
 	return status, storage, lengths, expiresAt
+}
+
+type fetchedCredentials struct {
+	accessKeyID     string
+	secretAccessKey string
+	sessionToken    string
+	expiresAtMillis int64
+}
+
+func fetchLogicalCredentialsForTest(clientID uintptr) (fetchedCredentials, uint8) {
+	status, storage, lengths, expiresAt := invokeCredentialCallbackForTest(
+		clientID,
+		[3]int{2048, 2048, 2048},
+		0xa5,
+	)
+	if status == credentialCallbackBufferTooSmall {
+		status, storage, lengths, expiresAt = invokeCredentialCallbackForTest(
+			clientID,
+			[3]int{int(lengths[0]), int(lengths[1]), int(lengths[2])},
+			0xa5,
+		)
+	}
+	if status != credentialCallbackSuccess {
+		return fetchedCredentials{}, status
+	}
+	return fetchedCredentials{
+		accessKeyID:     string(storage[0][1 : 1+lengths[0]]),
+		secretAccessKey: string(storage[1][1 : 1+lengths[1]]),
+		sessionToken:    string(storage[2][1 : 1+lengths[2]]),
+		expiresAtMillis: expiresAt,
+	}, status
+}
+
+func pendingCredentialsForTest(t *testing.T, clientID uintptr) *encodedCredentials {
+	t.Helper()
+	value, ok := credentialProviderRegistry.Load(clientID)
+	require.True(t, ok)
+	entry := value.(*credentialProviderEntry)
+	entry.mu.Lock()
+	defer entry.mu.Unlock()
+	return entry.pending
 }
 
 func TestRegisterAndUnregisterCredentialProvider(t *testing.T) {
@@ -151,6 +195,7 @@ func TestCredentialProviderCallbackRejectsWhitespaceOnlyRequiredKeys(t *testing.
 			[3]int{32, 32, 32},
 			0xa5,
 		)
+		assert.Nil(t, pendingCredentialsForTest(t, clientID))
 		unregisterCredentialProvider(clientID)
 
 		assert.Equal(t, credentialCallbackFailure, status)
@@ -180,6 +225,7 @@ func TestCredentialProviderCallbackReturnsFailureOnProviderErrorOrPanic(t *testi
 			[3]int{32, 32, 32},
 			0xa5,
 		)
+		assert.Nil(t, pendingCredentialsForTest(t, clientID))
 		unregisterCredentialProvider(clientID)
 
 		assert.Equal(t, credentialCallbackFailure, status)
@@ -220,6 +266,150 @@ func TestUnregisterCredentialProviderClearsPendingRetry(t *testing.T) {
 	entry.mu.Unlock()
 	status, _, _, _ = invokeCredentialCallbackForTest(clientID, [3]int{3000, 16, 0}, 0xa5)
 	assert.Equal(t, credentialCallbackFailure, status)
+}
+
+func TestCredentialProviderCallbackReentrantUnregisterDoesNotDeadlock(t *testing.T) {
+	clientID := uintptr(100400)
+	registerCredentialProvider(clientID, func() (config.AwsCredentials, error) {
+		unregisterCredentialProvider(clientID)
+		return config.AwsCredentials{
+			AccessKeyID:     strings.Repeat("a", 3000),
+			SecretAccessKey: "secret",
+		}, nil
+	})
+
+	done := make(chan [2]uint8, 1)
+	go func() {
+		first, _, lengths, _ := invokeCredentialCallbackForTest(clientID, [3]int{2048, 2048, 2048}, 0xa5)
+		retry, _, _, _ := invokeCredentialCallbackForTest(
+			clientID,
+			[3]int{int(lengths[0]), int(lengths[1]), int(lengths[2])},
+			0xa5,
+		)
+		done <- [2]uint8{first, retry}
+	}()
+
+	select {
+	case statuses := <-done:
+		assert.Equal(t, [2]uint8{credentialCallbackBufferTooSmall, credentialCallbackFailure}, statuses)
+	case <-time.After(2 * time.Second):
+		t.Fatal("reentrant unregister deadlocked")
+	}
+	_, registered := credentialProviderRegistry.Load(clientID)
+	assert.False(t, registered)
+}
+
+func TestCredentialProviderConcurrentSerializedFetchesAreCoherent(t *testing.T) {
+	clientID := uintptr(100401)
+	var calls atomic.Int32
+	registerCredentialProvider(clientID, func() (config.AwsCredentials, error) {
+		call := calls.Add(1)
+		return config.AwsCredentials{
+			AccessKeyID:          fmt.Sprintf("access-%d:%s", call, strings.Repeat("a", 3000)),
+			SecretAccessKey:      fmt.Sprintf("secret-%d", call),
+			SessionToken:         fmt.Sprintf("token-%d", call),
+			ExpiresAtEpochMillis: int64(call),
+		}, nil
+	})
+	t.Cleanup(func() { unregisterCredentialProvider(clientID) })
+
+	// This is the same full-call serialization supplied by FFICredentialsProvider.
+	var rustFullCall sync.Mutex
+	const fetches = 8
+	results := make(chan fetchedCredentials, fetches)
+	var workers sync.WaitGroup
+	for range fetches {
+		workers.Add(1)
+		go func() {
+			defer workers.Done()
+			rustFullCall.Lock()
+			credentials, status := fetchLogicalCredentialsForTest(clientID)
+			rustFullCall.Unlock()
+			require.Equal(t, credentialCallbackSuccess, status)
+			results <- credentials
+		}()
+	}
+	workers.Wait()
+	close(results)
+
+	assert.Equal(t, int32(fetches), calls.Load(), "each logical fetch must invoke the provider once")
+	seen := make(map[int64]bool, fetches)
+	for credentials := range results {
+		id := credentials.expiresAtMillis
+		assert.Equal(t, fmt.Sprintf("access-%d:%s", id, strings.Repeat("a", 3000)), credentials.accessKeyID)
+		assert.Equal(t, fmt.Sprintf("secret-%d", id), credentials.secretAccessKey)
+		assert.Equal(t, fmt.Sprintf("token-%d", id), credentials.sessionToken)
+		assert.False(t, seen[id], "duplicate credential generation %d", id)
+		seen[id] = true
+	}
+	assert.Nil(t, pendingCredentialsForTest(t, clientID))
+}
+
+func TestCredentialProviderPendingResultRecoversOnNextLogicalCall(t *testing.T) {
+	clientID := uintptr(100402)
+	var calls atomic.Int32
+	registerCredentialProvider(clientID, func() (config.AwsCredentials, error) {
+		call := calls.Add(1)
+		return config.AwsCredentials{
+			AccessKeyID:          strings.Repeat(string(rune('a'+call-1)), 3000),
+			SecretAccessKey:      fmt.Sprintf("secret-%d", call),
+			ExpiresAtEpochMillis: int64(call),
+		}, nil
+	})
+	t.Cleanup(func() { unregisterCredentialProvider(clientID) })
+
+	status, _, _, _ := invokeCredentialCallbackForTest(clientID, [3]int{2048, 2048, 2048}, 0xa5)
+	require.Equal(t, credentialCallbackBufferTooSmall, status)
+	require.NotNil(t, pendingCredentialsForTest(t, clientID))
+	assert.Equal(t, int32(1), calls.Load())
+
+	credentials, status := fetchLogicalCredentialsForTest(clientID)
+	require.Equal(t, credentialCallbackSuccess, status)
+	assert.Equal(t, strings.Repeat("a", 3000), credentials.accessKeyID)
+	assert.Equal(t, "secret-1", credentials.secretAccessKey)
+	assert.Equal(t, int32(1), calls.Load(), "the abandoned pending result must be reused")
+	assert.Nil(t, pendingCredentialsForTest(t, clientID), "successful retry must clear pending state")
+
+	credentials, status = fetchLogicalCredentialsForTest(clientID)
+	require.Equal(t, credentialCallbackSuccess, status)
+	assert.Equal(t, strings.Repeat("b", 3000), credentials.accessKeyID)
+	assert.Equal(t, "secret-2", credentials.secretAccessKey)
+	assert.Equal(t, int32(2), calls.Load())
+}
+
+func TestCredentialProviderOverCapResultsAreNeverCached(t *testing.T) {
+	tests := []config.AwsCredentials{
+		{AccessKeyID: strings.Repeat("a", maxCredentialBytes+1), SecretAccessKey: "secret"},
+		{
+			AccessKeyID:     strings.Repeat("a", maxCredentialBytes/2+1),
+			SecretAccessKey: strings.Repeat("b", maxCredentialBytes/2+1),
+		},
+	}
+	for index, credentials := range tests {
+		clientID := uintptr(100410 + index)
+		var calls atomic.Int32
+		registerCredentialProvider(clientID, func() (config.AwsCredentials, error) {
+			calls.Add(1)
+			return credentials, nil
+		})
+
+		for range 2 {
+			status, storage, lengths, expiresAt := invokeCredentialCallbackForTest(
+				clientID,
+				[3]int{2048, 2048, 2048},
+				0xa5,
+			)
+			assert.Equal(t, credentialCallbackFailure, status)
+			assert.Equal(t, [3]uintptr{uintptr(^uint(0)), uintptr(^uint(0)), uintptr(^uint(0))}, lengths)
+			assert.Equal(t, int64(-1), expiresAt)
+			for _, buffer := range storage {
+				assert.Equal(t, bytes.Repeat([]byte{0xa5}, len(buffer)), buffer)
+			}
+			assert.Nil(t, pendingCredentialsForTest(t, clientID))
+		}
+		assert.Equal(t, int32(2), calls.Load(), "invalid values must not become pending")
+		unregisterCredentialProvider(clientID)
+	}
 }
 
 func TestGetCredentialProvider(t *testing.T) {

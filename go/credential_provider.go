@@ -17,6 +17,7 @@ const (
 	credentialCallbackFailure        = uint8(0)
 	credentialCallbackSuccess        = uint8(1)
 	credentialCallbackBufferTooSmall = uint8(2)
+	maxCredentialBytes               = 1024 * 1024
 )
 
 type encodedCredentials struct {
@@ -79,6 +80,20 @@ func encodeCredentialProviderResult(provider config.GlideCredentialProvider) (*e
 		strings.TrimSpace(credentials.SecretAccessKey) == "" {
 		return nil, false
 	}
+
+	fieldLengths := [3]int{
+		len(credentials.AccessKeyID),
+		len(credentials.SecretAccessKey),
+		len(credentials.SessionToken),
+	}
+	total := 0
+	for _, length := range fieldLengths {
+		if length > maxCredentialBytes || length > maxCredentialBytes-total {
+			return nil, false
+		}
+		total += length
+	}
+
 	return &encodedCredentials{
 		accessKeyID:     []byte(credentials.AccessKeyID),
 		secretAccessKey: []byte(credentials.SecretAccessKey),
@@ -129,24 +144,69 @@ func handleCredentialProviderCallback(
 	}
 
 	entry.mu.Lock()
-	defer entry.mu.Unlock()
-
 	credentials := entry.pending
-	if credentials == nil {
-		if entry.provider == nil {
-			return credentialCallbackFailure
-		}
-		var valid bool
-		credentials, valid = encodeCredentialProviderResult(entry.provider)
-		if !valid {
-			return credentialCallbackFailure
-		}
+	provider := entry.provider
+	if credentials != nil {
+		status := writeCredentialProviderResult(
+			entry,
+			credentials,
+			accessKeyIDBuf,
+			accessKeyIDLen,
+			secretAccessKeyBuf,
+			secretAccessKeyLen,
+			sessionTokenBuf,
+			sessionTokenLen,
+			expiresAtMillis,
+		)
+		entry.mu.Unlock()
+		return status
+	}
+	entry.mu.Unlock()
+
+	// The provider may call Close/unregister recursively, so it must run without the
+	// entry mutex held. Rust serializes complete logical calls for this provider.
+	if provider == nil {
+		return credentialCallbackFailure
+	}
+	credentials, valid := encodeCredentialProviderResult(provider)
+	if !valid {
+		return credentialCallbackFailure
 	}
 
+	entry.mu.Lock()
+	defer entry.mu.Unlock()
+	current, registered := credentialProviderRegistry.Load(clientID)
+	if registered && current != entry {
+		return credentialCallbackFailure
+	}
+	return writeCredentialProviderResult(
+		entry,
+		credentials,
+		accessKeyIDBuf,
+		accessKeyIDLen,
+		secretAccessKeyBuf,
+		secretAccessKeyLen,
+		sessionTokenBuf,
+		sessionTokenLen,
+		expiresAtMillis,
+	)
+}
+
+// writeCredentialProviderResult is called with entry.mu held. It retains at most one
+// validated encoded value, and only when Rust must immediately resize and retry.
+func writeCredentialProviderResult(
+	entry *credentialProviderEntry,
+	credentials *encodedCredentials,
+	accessKeyIDBuf []byte,
+	accessKeyIDLen *uintptr,
+	secretAccessKeyBuf []byte,
+	secretAccessKeyLen *uintptr,
+	sessionTokenBuf []byte,
+	sessionTokenLen *uintptr,
+	expiresAtMillis *int64,
+) uint8 {
 	if !credentialBuffersFit(credentials, accessKeyIDBuf, secretAccessKeyBuf, sessionTokenBuf) {
 		setCredentialLengths(credentials, accessKeyIDLen, secretAccessKeyLen, sessionTokenLen)
-		// Keep exactly one encoded result per client. A retry after Rust allocation failure
-		// reuses this value, and unregister always clears it.
 		entry.pending = credentials
 		return credentialCallbackBufferTooSmall
 	}

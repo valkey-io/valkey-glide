@@ -552,6 +552,7 @@ struct CredentialCallbackResult {
 struct FFICredentialsProvider {
     callback: NonNullCredentialProviderCallback,
     client_id: usize,
+    call_lock: std::sync::Mutex<()>,
 }
 // SAFETY: The callback is a C function pointer safe to share across threads.
 unsafe impl Send for FFICredentialsProvider {}
@@ -726,6 +727,12 @@ impl FFICredentialsProvider {
 
     /// Invoke the callback and return the AWS credentials.
     fn call(&self) -> Result<FFICredentials, glide_core::iam::GlideIAMError> {
+        // One logical fetch may require a sizing callback followed by a retry. Keep that
+        // pair atomic per provider so callback adapters only need to retain one pending result.
+        let _call_guard = self.call_lock.lock().map_err(|_| {
+            Self::credentials_error("Custom credentials provider call lock was poisoned")
+        })?;
+
         let mut access_key_id_buf =
             Self::allocate_buffer(INITIAL_CREDENTIAL_BUFFER_SIZE, "access_key_id")?;
         let mut secret_access_key_buf =
@@ -802,6 +809,8 @@ mod tests_ffi_credentials_provider {
     use super::*;
     use std::cell::RefCell;
     use std::collections::VecDeque;
+    use std::sync::{Arc, Mutex, OnceLock};
+    use std::time::Duration;
 
     #[derive(Clone)]
     struct CallbackStep {
@@ -922,6 +931,7 @@ mod tests_ffi_credentials_provider {
         FFICredentialsProvider {
             callback,
             client_id: 42,
+            call_lock: std::sync::Mutex::new(()),
         }
     }
 
@@ -1204,6 +1214,82 @@ mod tests_ffi_credentials_provider {
 
         let error = result.expect_err("Rust callback panic must be contained");
         assert!(error.to_string().contains("callback panicked"));
+    }
+
+    static CONCURRENT_PHASES: OnceLock<Mutex<Vec<char>>> = OnceLock::new();
+
+    unsafe extern "C-unwind" fn concurrent_resize_callback(
+        _client_id: usize,
+        access_key_id_buf: *mut u8,
+        access_key_id_buf_len: usize,
+        access_key_id_len: *mut usize,
+        secret_access_key_buf: *mut u8,
+        _secret_access_key_buf_len: usize,
+        secret_access_key_len: *mut usize,
+        _session_token_buf: *mut u8,
+        _session_token_buf_len: usize,
+        session_token_len: *mut usize,
+        _expires_at_epoch_millis: *mut i64,
+    ) -> u8 {
+        let phases = CONCURRENT_PHASES.get_or_init(|| Mutex::new(Vec::new()));
+        if access_key_id_buf_len == INITIAL_CREDENTIAL_BUFFER_SIZE {
+            phases.lock().unwrap().push('I');
+            // Give another logical call enough time to enter its initial callback if the
+            // provider-level lock does not cover the complete sizing/retry operation.
+            std::thread::sleep(Duration::from_millis(50));
+            unsafe {
+                *access_key_id_len = 3000;
+                *secret_access_key_len = 6;
+                *session_token_len = 0;
+            }
+            CREDENTIAL_CALLBACK_BUFFER_TOO_SMALL
+        } else {
+            phases.lock().unwrap().push('R');
+            unsafe {
+                std::ptr::write_bytes(access_key_id_buf, b'a', 3000);
+                std::ptr::copy_nonoverlapping(b"secret".as_ptr(), secret_access_key_buf, 6);
+                *access_key_id_len = 3000;
+                *secret_access_key_len = 6;
+                *session_token_len = 0;
+            }
+            CREDENTIAL_CALLBACK_SUCCESS
+        }
+    }
+
+    #[test]
+    fn concurrent_logical_calls_cannot_interleave_callback_phases() {
+        let phases = CONCURRENT_PHASES.get_or_init(|| Mutex::new(Vec::new()));
+        phases.lock().unwrap().clear();
+        let provider = Arc::new(provider(concurrent_resize_callback));
+
+        let first = {
+            let provider = Arc::clone(&provider);
+            std::thread::spawn(move || provider.call())
+        };
+        let second = {
+            let provider = Arc::clone(&provider);
+            std::thread::spawn(move || provider.call())
+        };
+
+        assert!(first.join().unwrap().is_ok());
+        assert!(second.join().unwrap().is_ok());
+        assert_eq!(*phases.lock().unwrap(), vec!['I', 'R', 'I', 'R']);
+    }
+
+    #[test]
+    fn poisoned_call_lock_returns_credentials_error() {
+        let provider = Arc::new(provider(scripted_callback));
+        let poisoner = {
+            let provider = Arc::clone(&provider);
+            std::thread::spawn(move || {
+                let _guard = provider.call_lock.lock().unwrap();
+                panic!("poison provider lock");
+            })
+        };
+        assert!(poisoner.join().is_err());
+
+        let error = provider.call().expect_err("poisoning must be controlled");
+        assert!(error.to_string().contains("call lock was poisoned"));
     }
 }
 
@@ -2281,6 +2367,7 @@ fn create_client_internal(
             let provider = FFICredentialsProvider {
                 callback: cp_callback,
                 client_id,
+                call_lock: std::sync::Mutex::new(()),
             };
             let provider_arc: glide_core::iam::CredentialsProvider =
                 Arc::new(move || provider.call());
