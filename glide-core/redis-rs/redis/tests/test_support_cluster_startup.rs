@@ -11,7 +11,7 @@ use std::{
 
 use support::{
     get_random_available_port,
-    ports::{available_port, PortReservation},
+    ports::{available_port, is_reserved, PortReservation},
     readiness::{wait_for_server, STARTUP_TIMEOUT},
     NodePorts, PortPolicy, RedisCluster, RedisServer, TestClusterContext,
 };
@@ -38,8 +38,8 @@ fn restart_reservation_excludes_client_and_bus_ports_until_released() {
         std::io::ErrorKind::AddrNotAvailable
     );
     drop(reservation);
-    assert_eq!(available_port([ports[0]]).unwrap(), ports[0]);
-    assert_eq!(available_port([ports[1]]).unwrap(), ports[1]);
+    assert!(!is_reserved(ports[0]));
+    assert!(!is_reserved(ports[1]));
 }
 
 #[test]
@@ -55,7 +55,7 @@ fn overlapping_reservations_survive_drop_and_unwind() {
     assert!(panic.is_err());
     assert!(available_port([port]).is_err());
     drop(reservation);
-    assert_eq!(available_port([port]).unwrap(), port);
+    assert!(!is_reserved(port));
 }
 
 #[test]

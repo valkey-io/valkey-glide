@@ -35,6 +35,10 @@ impl Drop for PortReservation {
     }
 }
 
+pub(crate) fn is_reserved(port: u16) -> bool {
+    RESERVED.lock().unwrap().contains_key(&port)
+}
+
 pub fn get_random_available_port() -> u16 {
     const FIRST: u32 = 1024;
     const COUNT: u32 = u16::MAX as u32 + 1 - FIRST;
