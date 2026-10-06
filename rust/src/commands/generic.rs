@@ -18,20 +18,6 @@ pub trait GenericCommands: CommandExecutor {
     // TODO #7082: add `expire`/`pexpire`/`expire_at`/`pexpire_at` variants that take
     // the NX/XX/GT/LT condition options (the `ExpireOption` type already exists).
 
-    /// Get the absolute expiry Unix time in seconds (`EXPIRETIME`).
-    async fn expiretime<K: ToValkeyArgs + Send>(&self, key: K) -> ValkeyResult<i64> {
-        let mut cmd = Cmd::new();
-        cmd.arg("EXPIRETIME").arg(key);
-        i64::from_owned_valkey_value(self.execute_command(cmd, None).await?)
-    }
-
-    /// Get the absolute expiry Unix time in milliseconds (`PEXPIRETIME`).
-    async fn pexpiretime<K: ToValkeyArgs + Send>(&self, key: K) -> ValkeyResult<i64> {
-        let mut cmd = Cmd::new();
-        cmd.arg("PEXPIRETIME").arg(key);
-        i64::from_owned_valkey_value(self.execute_command(cmd, None).await?)
-    }
-
     /// Return a random key from the keyspace (`RANDOMKEY`).
     async fn randomkey(&self) -> ValkeyResult<Option<Bytes>> {
         let mut cmd = Cmd::new();

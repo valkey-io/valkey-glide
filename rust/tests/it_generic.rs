@@ -171,13 +171,30 @@ matrix_test!(expireat_pexpireat, c, {
 
     let k = common::key("k");
     let _: () = c.set(&k, "v").await.unwrap();
-    let future = 4_102_444_800i64; // year 2100 in seconds
+    let future = i64::MAX / 1000;
+
     let set: bool = c.expire_at(&k, future).await.unwrap();
     assert!(set);
-    assert!(c.expiretime(&k).await.unwrap() > 0);
+    let expire_time: IntegerReplyOrNoOp = c.expire_time(&k).await.unwrap();
+    assert_eq!(
+        expire_time,
+        IntegerReplyOrNoOp::IntegerReply(future as usize)
+    );
+
     let set: bool = c.pexpire_at(&k, future * 1000).await.unwrap();
     assert!(set);
-    assert!(c.pexpiretime(&k).await.unwrap() > 0);
+    let pexpire_time: IntegerReplyOrNoOp = c.pexpire_time(&k).await.unwrap();
+    assert_eq!(
+        pexpire_time,
+        IntegerReplyOrNoOp::IntegerReply(future as usize * 1000)
+    );
+
+    // A key without an expiry, and a missing key.
+    let _: () = c.set(&k, "v").await.unwrap();
+    let expire_time: IntegerReplyOrNoOp = c.expire_time(&k).await.unwrap();
+    assert_eq!(expire_time, IntegerReplyOrNoOp::ExistsButNotRelevant);
+    let pexpire_time: IntegerReplyOrNoOp = c.pexpire_time(common::key("missing")).await.unwrap();
+    assert_eq!(pexpire_time, IntegerReplyOrNoOp::NotExists);
 });
 
 matrix_test!(key_type, c, {

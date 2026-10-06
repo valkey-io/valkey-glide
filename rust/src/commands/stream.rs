@@ -94,6 +94,67 @@ impl ToValkeyArgs for StreamTrimStrategy {
     }
 }
 
+/// A `MAXLEN` trim threshold for `XTRIM`.
+///
+/// Mirrors redis-rs's `streams::StreamMaxlen` type.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum StreamMaxlen {
+    /// Trim to exactly this many entries (`=`).
+    Equals(usize),
+    /// Trim to approximately this many entries (`~`).
+    Approx(usize),
+}
+
+impl ToValkeyArgs for StreamMaxlen {
+    fn write_valkey_args<W: ?Sized + ValkeyWrite>(&self, out: &mut W) {
+        let (mode, threshold): (&[u8], _) = match *self {
+            Self::Equals(threshold) => (b"=", threshold),
+            Self::Approx(threshold) => (b"~", threshold),
+        };
+        out.write_arg(b"MAXLEN");
+        out.write_arg(mode);
+        out.write_arg_fmt(threshold);
+    }
+}
+
+/// Options for `XTRIM`.
+///
+/// Mirrors redis-rs's `streams::StreamTrimOptions` type, but does not support
+/// `set_deletion_policy` (Valkey's `XTRIM` has no `KEEPREF` / `DELREF` / `ACKED`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StreamTrimOptions {
+    strategy: StreamTrimStrategy,
+}
+
+impl StreamTrimOptions {
+    /// Trim to at most `max_entries` entries (`MAXLEN`).
+    pub fn maxlen(mode: StreamTrimmingMode, max_entries: usize) -> Self {
+        Self {
+            strategy: StreamTrimStrategy::maxlen(mode, max_entries),
+        }
+    }
+
+    /// Trim entries with IDs lower than `stream_id` (`MINID`).
+    pub fn minid(mode: StreamTrimmingMode, stream_id: impl Into<String>) -> Self {
+        Self {
+            strategy: StreamTrimStrategy::minid(mode, stream_id),
+        }
+    }
+
+    /// Limit the number of entries evicted in a single operation (`LIMIT`).
+    pub fn limit(mut self, limit: usize) -> Self {
+        self.strategy = self.strategy.limit(limit);
+        self
+    }
+}
+
+impl ToValkeyArgs for StreamTrimOptions {
+    fn write_valkey_args<W: ?Sized + ValkeyWrite>(&self, out: &mut W) {
+        self.strategy.write_valkey_args(out);
+    }
+}
+
 /// Options for `XADD`.
 ///
 /// Mirrors redis-rs's `streams::StreamAddOptions` type.
@@ -291,6 +352,41 @@ impl ToValkeyArgs for StreamClaimOptions {
     }
 }
 
+/// Options for `XAUTOCLAIM`.
+///
+/// Mirrors redis-rs's `streams::StreamAutoClaimOptions` type.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct StreamAutoClaimOptions {
+    count: Option<usize>,
+    justid: bool,
+}
+
+impl StreamAutoClaimOptions {
+    /// Claim at most `n` entries (`COUNT`).
+    pub fn count(mut self, n: usize) -> Self {
+        self.count = Some(n);
+        self
+    }
+
+    /// Return only the claimed IDs (`JUSTID`), leaving each claimed entry's map empty.
+    pub fn with_justid(mut self) -> Self {
+        self.justid = true;
+        self
+    }
+}
+
+impl ToValkeyArgs for StreamAutoClaimOptions {
+    fn write_valkey_args<W: ?Sized + ValkeyWrite>(&self, out: &mut W) {
+        if let Some(count) = self.count {
+            out.write_arg(b"COUNT");
+            out.write_arg_fmt(count);
+        }
+        if self.justid {
+            out.write_arg(b"JUSTID");
+        }
+    }
+}
+
 /// A single entry from the extended (range) form of `XPENDING`.
 #[derive(Debug, Clone)]
 pub struct XPendingEntry {
@@ -432,6 +528,67 @@ impl FromValkeyValue for StreamClaimReply {
     }
 }
 
+/// The `XAUTOCLAIM` reply.
+///
+/// Mirrors redis-rs's `streams::StreamAutoClaimReply` type.
+#[derive(Debug, Clone, Default)]
+pub struct StreamAutoClaimReply {
+    /// The ID to pass as `start` to the next `XAUTOCLAIM` call (`0-0` when done).
+    pub next_stream_id: String,
+    /// The claimed entries. With `JUSTID`, each entry's map is empty.
+    pub claimed: Vec<StreamId>,
+    /// The pending IDs that were deleted from the stream (empty before Valkey 7.0).
+    pub deleted_ids: Vec<String>,
+    /// Whether nil entries (deleted from the stream; Redis 6 only) were skipped.
+    /// Only detected with `JUSTID`, since glide-core drops nil full entries.
+    pub invalid_entries: bool,
+}
+
+impl FromValkeyValue for StreamAutoClaimReply {
+    /// Decodes `[next_stream_id, claimed, deleted_ids]`, where `deleted_ids` is absent
+    /// before Valkey 7.0.
+    fn from_owned_valkey_value(value: ValkeyValue) -> ValkeyResult<Self> {
+        match value {
+            ValkeyValue::Array(mut items) if items.len() == 2 || items.len() == 3 => {
+                let deleted_ids = if items.len() == 3 {
+                    Vec::<String>::from_owned_valkey_value(items.pop().expect("checked length"))?
+                } else {
+                    Vec::new()
+                };
+                let claimed = items.pop().expect("checked length");
+                let next_stream_id =
+                    String::from_owned_valkey_value(items.pop().expect("checked length"))?;
+                let (claimed, invalid_entries) = match claimed {
+                    // `JUSTID`: an array of IDs.
+                    ValkeyValue::Array(ids) => {
+                        let count = ids.len();
+                        let claimed = ids
+                            .into_iter()
+                            .filter(|id| !matches!(id, ValkeyValue::Nil))
+                            .map(|id| {
+                                Ok(StreamId {
+                                    id: String::from_owned_valkey_value(id)?,
+                                    ..Default::default()
+                                })
+                            })
+                            .collect::<ValkeyResult<Vec<_>>>()?;
+                        let invalid_entries = claimed.len() < count;
+                        (claimed, invalid_entries)
+                    }
+                    other => (parse_stream_ids(other)?, false),
+                };
+                Ok(Self {
+                    next_stream_id,
+                    claimed,
+                    deleted_ids,
+                    invalid_entries,
+                })
+            }
+            other => Err(to_glide_error(other, "Unexpected XAUTOCLAIM reply.")),
+        }
+    }
+}
+
 /// The summary `XPENDING` reply.
 ///
 /// Mirrors redis-rs's `streams::StreamPendingReply` type.
@@ -504,6 +661,47 @@ pub struct StreamPendingData {
     pub end_id: String,
     /// Every consumer with pending entries, and how many it has (`idle` is not reported).
     pub consumers: Vec<StreamInfoConsumer>,
+}
+
+/// The extended (range) `XPENDING` reply.
+///
+/// Mirrors redis-rs's `streams::StreamPendingCountReply` type.
+#[derive(Debug, Clone, Default)]
+pub struct StreamPendingCountReply {
+    /// The pending entries.
+    pub ids: Vec<StreamPendingId>,
+}
+
+impl FromValkeyValue for StreamPendingCountReply {
+    fn from_owned_valkey_value(value: ValkeyValue) -> ValkeyResult<Self> {
+        let ids = Vec::<(String, String, usize, usize)>::from_owned_valkey_value(value)?
+            .into_iter()
+            .map(
+                |(id, consumer, last_delivered_ms, times_delivered)| StreamPendingId {
+                    id,
+                    consumer,
+                    last_delivered_ms,
+                    times_delivered,
+                },
+            )
+            .collect();
+        Ok(Self { ids })
+    }
+}
+
+/// A pending entry in a [`StreamPendingCountReply`].
+///
+/// Mirrors redis-rs's `streams::StreamPendingId` type.
+#[derive(Debug, Clone, Default)]
+pub struct StreamPendingId {
+    /// The entry ID.
+    pub id: String,
+    /// The consumer that owns the entry.
+    pub consumer: String,
+    /// Milliseconds since the entry was last delivered.
+    pub last_delivered_ms: usize,
+    /// The number of times the entry was delivered.
+    pub times_delivered: usize,
 }
 
 /// The `XINFO STREAM` reply.
@@ -736,41 +934,9 @@ fn stream_id(id: ValkeyValue, fields: Vec<(ValkeyValue, ValkeyValue)>) -> Valkey
     })
 }
 
-/// Stream commands beyond the command table (trimming, consumer groups, claiming, ...).
+/// Stream commands beyond the command table (consumer-group reads, pending ranges, ...).
 #[async_trait]
 pub trait StreamCommands: CommandExecutor {
-    /// Trim the stream to (approximately) `maxlen` entries (`XTRIM ... MAXLEN`).
-    async fn xtrim_maxlen<K: ToValkeyArgs + Send>(
-        &self,
-        key: K,
-        maxlen: i64,
-        approximate: bool,
-    ) -> ValkeyResult<i64> {
-        let mut cmd = Cmd::new();
-        cmd.arg("XTRIM").arg(key).arg("MAXLEN");
-        if approximate {
-            cmd.arg("~");
-        }
-        cmd.arg(maxlen);
-        i64::from_owned_valkey_value(self.execute_command(cmd, None).await?)
-    }
-
-    /// Trim the stream to a minimum ID (`XTRIM ... MINID`). Returns entries removed.
-    async fn xtrim_minid<K: ToValkeyArgs + Send>(
-        &self,
-        key: K,
-        minid: &str,
-        approximate: bool,
-    ) -> ValkeyResult<i64> {
-        let mut cmd = Cmd::new();
-        cmd.arg("XTRIM").arg(key).arg("MINID");
-        if approximate {
-            cmd.arg("~");
-        }
-        cmd.arg(minid);
-        i64::from_owned_valkey_value(self.execute_command(cmd, None).await?)
-    }
-
     /// Read from streams as part of a consumer group (`XREADGROUP`).
     async fn xreadgroup<K: ToValkeyArgs + Send + Sync>(
         &self,
@@ -790,54 +956,6 @@ pub trait StreamCommands: CommandExecutor {
             cmd.arg(*id);
         }
         parse_stream_read(self.execute_command(cmd, None).await?)
-    }
-
-    /// Automatically claim pending messages idle for at least `min_idle_time_ms`
-    /// (`XAUTOCLAIM`). Returns `(next_cursor, claimed_entries, deleted_ids)`.
-    async fn xautoclaim<K: ToValkeyArgs + Send>(
-        &self,
-        key: K,
-        group: &str,
-        consumer: &str,
-        min_idle_time_ms: i64,
-        start: &str,
-        count: Option<i64>,
-    ) -> ValkeyResult<(String, Vec<StreamEntry>, Vec<String>)> {
-        let mut cmd = Cmd::new();
-        cmd.arg("XAUTOCLAIM")
-            .arg(key)
-            .arg(group)
-            .arg(consumer)
-            .arg(min_idle_time_ms)
-            .arg(start);
-        if let Some(c) = count {
-            cmd.arg("COUNT").arg(c);
-        }
-        parse_autoclaim(self.execute_command(cmd, None).await?)
-    }
-
-    /// Automatically claim pending messages returning only their IDs
-    async fn xautoclaim_justid<K: ToValkeyArgs + Send>(
-        &self,
-        key: K,
-        group: &str,
-        consumer: &str,
-        min_idle_time_ms: i64,
-        start: &str,
-        count: Option<i64>,
-    ) -> ValkeyResult<(String, Vec<String>, Vec<String>)> {
-        let mut cmd = Cmd::new();
-        cmd.arg("XAUTOCLAIM")
-            .arg(key)
-            .arg(group)
-            .arg(consumer)
-            .arg(min_idle_time_ms)
-            .arg(start);
-        if let Some(c) = count {
-            cmd.arg("COUNT").arg(c);
-        }
-        cmd.arg("JUSTID");
-        parse_autoclaim_justid(self.execute_command(cmd, None).await?)
     }
 
     /// Extended (range) form of `XPENDING`
@@ -916,40 +1034,6 @@ pub trait StreamCommands: CommandExecutor {
             .arg(id)
             .arg(options);
         <()>::from_owned_valkey_value(self.execute_command(cmd, None).await?)
-    }
-
-    /// Create a new consumer in a group (`XGROUP CREATECONSUMER`). Returns
-    /// whether the consumer was created.
-    async fn xgroup_create_consumer<K: ToValkeyArgs + Send>(
-        &self,
-        key: K,
-        group: &str,
-        consumer: &str,
-    ) -> ValkeyResult<bool> {
-        let mut cmd = Cmd::new();
-        cmd.arg("XGROUP")
-            .arg("CREATECONSUMER")
-            .arg(key)
-            .arg(group)
-            .arg(consumer);
-        bool::from_owned_valkey_value(self.execute_command(cmd, None).await?)
-    }
-
-    /// Delete a consumer from a group (`XGROUP DELCONSUMER`). Returns the number
-    /// of pending messages the consumer had.
-    async fn xgroup_del_consumer<K: ToValkeyArgs + Send>(
-        &self,
-        key: K,
-        group: &str,
-        consumer: &str,
-    ) -> ValkeyResult<i64> {
-        let mut cmd = Cmd::new();
-        cmd.arg("XGROUP")
-            .arg("DELCONSUMER")
-            .arg(key)
-            .arg(group)
-            .arg(consumer);
-        i64::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
     /// Set the last-delivered ID for a consumer group (`XGROUP SETID`).
@@ -1041,18 +1125,6 @@ fn parse_fields(v: ValkeyValue) -> ValkeyResult<Vec<(Bytes, Bytes)>> {
     Ok(out)
 }
 
-/// Collect an array reply into a `Vec<String>` (used by `JUSTID` variants).
-fn collect_strings(v: ValkeyValue) -> ValkeyResult<Vec<String>> {
-    match v {
-        ValkeyValue::Nil => Ok(Vec::new()),
-        ValkeyValue::Array(items) => items
-            .into_iter()
-            .map(String::from_owned_valkey_value)
-            .collect(),
-        other => Ok(vec![String::from_owned_valkey_value(other)?]),
-    }
-}
-
 /// Parse an `XREAD`/`XREADGROUP` reply (map or array of `[key, entries]`) into
 /// `(stream_key, entries)` pairs.
 fn parse_stream_read(v: ValkeyValue) -> ValkeyResult<Vec<(Bytes, Vec<StreamEntry>)>> {
@@ -1083,40 +1155,6 @@ fn parse_stream_read(v: ValkeyValue) -> ValkeyResult<Vec<(Bytes, Vec<StreamEntry
         out.push((key, entries));
     }
     Ok(out)
-}
-
-/// Parse an `XAUTOCLAIM` reply `[cursor, entries, deleted]`.
-fn parse_autoclaim(v: ValkeyValue) -> ValkeyResult<(String, Vec<StreamEntry>, Vec<String>)> {
-    match v {
-        ValkeyValue::Array(mut items) if items.len() == 2 || items.len() == 3 => {
-            let deleted = if items.len() == 3 {
-                collect_strings(items.pop().unwrap())?
-            } else {
-                Vec::new()
-            };
-            let entries = parse_entries(items.pop().unwrap())?;
-            let cursor = String::from_owned_valkey_value(items.pop().unwrap())?;
-            Ok((cursor, entries, deleted))
-        }
-        other => Err(to_glide_error(other, "Unexpected XAUTOCLAIM reply.")),
-    }
-}
-
-/// Parse an `XAUTOCLAIM ... JUSTID` reply `[cursor, ids, deleted]`.
-fn parse_autoclaim_justid(v: ValkeyValue) -> ValkeyResult<(String, Vec<String>, Vec<String>)> {
-    match v {
-        ValkeyValue::Array(mut items) if items.len() == 2 || items.len() == 3 => {
-            let deleted = if items.len() == 3 {
-                collect_strings(items.pop().unwrap())?
-            } else {
-                Vec::new()
-            };
-            let ids = collect_strings(items.pop().unwrap())?;
-            let cursor = String::from_owned_valkey_value(items.pop().unwrap())?;
-            Ok((cursor, ids, deleted))
-        }
-        other => Err(to_glide_error(other, "Unexpected XAUTOCLAIM JUSTID reply.")),
-    }
 }
 
 /// Parse a structured reply (RESP3 map or RESP2 flat array of alternating
@@ -1226,6 +1264,33 @@ mod tests {
     }
 
     #[test]
+    fn maxlen_args() {
+        assert_args(StreamMaxlen::Equals(5), &["MAXLEN", "=", "5"]);
+        assert_args(StreamMaxlen::Approx(5), &["MAXLEN", "~", "5"]);
+    }
+
+    #[test]
+    fn trim_options_args() {
+        assert_args(
+            StreamTrimOptions::maxlen(StreamTrimmingMode::Exact, 100),
+            &["MAXLEN", "=", "100"],
+        );
+        assert_args(
+            StreamTrimOptions::minid(StreamTrimmingMode::Approx, "1-0").limit(10),
+            &["MINID", "~", "1-0", "LIMIT", "10"],
+        );
+    }
+
+    #[test]
+    fn autoclaim_options_args() {
+        assert_args_empty(StreamAutoClaimOptions::default());
+        assert_args(
+            StreamAutoClaimOptions::default().count(10).with_justid(),
+            &["COUNT", "10", "JUSTID"],
+        );
+    }
+
+    #[test]
     fn read_options_args() {
         assert_args_empty(StreamReadOptions::default());
         assert_args(
@@ -1312,6 +1377,66 @@ mod tests {
             Option::<StreamReadReply>::from_owned_valkey_value(ValkeyValue::Nil)
                 .unwrap()
                 .is_none()
+        );
+    }
+
+    #[test]
+    fn autoclaim_reply_decoding() {
+        let full = array(vec![
+            bulk("2-0"),
+            ValkeyValue::Map(vec![(
+                bulk("1-0"),
+                array(vec![array(vec![bulk("f"), bulk("a")])]),
+            )]),
+            array(vec![bulk("0-1")]),
+        ]);
+        let reply = StreamAutoClaimReply::from_owned_valkey_value(full).unwrap();
+        assert_eq!(reply.next_stream_id, "2-0");
+        assert_eq!(reply.claimed, vec![entry("1-0", "f", "a")]);
+        assert_eq!(reply.deleted_ids, vec!["0-1"]);
+        assert!(!reply.invalid_entries);
+
+        // `JUSTID`, without the deleted IDs (before Valkey 7.0) and with a nil entry.
+        let justid = array(vec![
+            bulk("0-0"),
+            array(vec![bulk("1-0"), ValkeyValue::Nil]),
+        ]);
+        let reply = StreamAutoClaimReply::from_owned_valkey_value(justid).unwrap();
+        assert_eq!(reply.next_stream_id, "0-0");
+        assert_eq!(reply.claimed.len(), 1);
+        assert_eq!(reply.claimed[0].id, "1-0");
+        assert!(reply.claimed[0].is_empty());
+        assert!(reply.deleted_ids.is_empty());
+        assert!(reply.invalid_entries);
+
+        assert!(StreamAutoClaimReply::from_owned_valkey_value(array(vec![bulk("0-0")])).is_err());
+    }
+
+    #[test]
+    fn pending_count_reply_decoding() {
+        let reply = StreamPendingCountReply::from_owned_valkey_value(array(vec![array(vec![
+            bulk("1-0"),
+            bulk("c1"),
+            ValkeyValue::Int(100),
+            ValkeyValue::Int(2),
+        ])]))
+        .unwrap();
+        assert_eq!(reply.ids.len(), 1);
+        let pending = &reply.ids[0];
+        assert_eq!(
+            (pending.id.as_str(), pending.consumer.as_str()),
+            ("1-0", "c1")
+        );
+        assert_eq!(
+            (pending.last_delivered_ms, pending.times_delivered),
+            (100, 2)
+        );
+
+        assert!(
+            StreamPendingCountReply::from_owned_valkey_value(array(vec![]))
+                .unwrap()
+                .ids
+                .is_empty()
         );
     }
 

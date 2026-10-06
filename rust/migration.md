@@ -154,6 +154,12 @@ not available; `nomkstream` and `trim` are. GLIDE's stream reply types
 (`StreamId`, `StreamRangeReply`, `StreamReadReply`, …) are at the crate root
 rather than in a `streams` module, and `StreamId::map` holds `ValkeyValue`s.
 
+### `StreamTrimOptions` has no deletion policy
+
+Valkey's `XTRIM` has no deletion policies, so redis-rs's
+`StreamTrimOptions::set_deletion_policy` is not available; `maxlen`, `minid`
+and `limit` are.
+
 ### `StreamReadOptions` is for `XREAD` only
 
 As in the other GLIDE clients, `xread_options` always sends `XREAD`, and

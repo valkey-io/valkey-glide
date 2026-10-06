@@ -4,8 +4,9 @@
 mod common;
 
 use glide::{
-    AsyncTypedCommands, StreamAddOptions, StreamClaimOptions, StreamClaimReply, StreamCommands,
-    StreamGroupCreateOptions, StreamPendingReply, StreamReadOptions, StreamTrimStrategy,
+    AsyncTypedCommands, StreamAddOptions, StreamAutoClaimOptions, StreamClaimOptions,
+    StreamClaimReply, StreamCommands, StreamGroupCreateOptions, StreamMaxlen, StreamPendingReply,
+    StreamReadGroupOptions, StreamReadOptions, StreamTrimOptions, StreamTrimStrategy,
     StreamTrimmingMode,
 };
 
@@ -131,14 +132,23 @@ matrix_test!(xread_options, c, {
     );
 });
 
-matrix_test!(xtrim_maxlen, c, {
+matrix_test!(xtrim, c, {
     let k = common::key("stream");
     for i in 1..=5 {
         c.xadd(&k, format!("{i}-1"), &[("f", "v")]).await.unwrap();
     }
-    let trimmed = c.xtrim_maxlen(&k, 2, false).await.unwrap();
-    assert_eq!(trimmed, 3);
-    assert_eq!(c.xlen(&k).await.unwrap(), 2);
+    assert_eq!(c.xtrim(&k, StreamMaxlen::Equals(4)).await.unwrap(), 1);
+    assert_eq!(c.xlen(&k).await.unwrap(), 4);
+
+    // MAXLEN.
+    let options = StreamTrimOptions::maxlen(StreamTrimmingMode::Exact, 3);
+    assert_eq!(c.xtrim_options(&k, &options).await.unwrap(), 1);
+    assert_eq!(c.xlen(&k).await.unwrap(), 3);
+
+    // MINID.
+    let options = StreamTrimOptions::minid(StreamTrimmingMode::Exact, "4-1");
+    assert_eq!(c.xtrim_options(&k, &options).await.unwrap(), 1);
+    assert_eq!(c.xrange(&k, "-", "+").await.unwrap().ids[0].id, "4-1");
 });
 
 matrix_test!(xgroup_create_destroy, c, {
@@ -161,6 +171,30 @@ matrix_test!(xgroup_create_mkstream, c, {
         .await
         .unwrap();
     assert_eq!(c.xlen(&k).await.unwrap(), 0);
+
+    let k = common::key("stream");
+    c.xgroup_create_mkstream(&k, "grp", "0").await.unwrap();
+    assert_eq!(c.xlen(&k).await.unwrap(), 0);
+    assert_eq!(c.xinfo_groups(&k).await.unwrap().groups[0].name, "grp");
+});
+
+matrix_test!(xgroup_consumers_setid, c, {
+    let k = common::key("stream");
+    c.xadd(&k, "1-1", &[("f", "a")]).await.unwrap();
+    c.xadd(&k, "2-1", &[("f", "b")]).await.unwrap();
+    c.xgroup_create(&k, "grp", "0").await.unwrap();
+
+    assert!(c.xgroup_createconsumer(&k, "grp", "c1").await.unwrap());
+    assert!(!c.xgroup_createconsumer(&k, "grp", "c1").await.unwrap());
+
+    // SETID moves the group past the first entry.
+    c.xgroup_setid(&k, "grp", "1-1").await.unwrap();
+    let entries = c.xreadgroup("grp", "c1", &[(&k, ">")], None).await.unwrap();
+    assert_eq!(entries[0].1.len(), 1);
+
+    // DELCONSUMER returns the consumer's pending count.
+    assert_eq!(c.xgroup_delconsumer(&k, "grp", "c1").await.unwrap(), 1);
+    assert_eq!(c.xgroup_delconsumer(&k, "grp", "c1").await.unwrap(), 0);
 });
 
 matrix_test!(xack, c, {
@@ -215,6 +249,74 @@ matrix_test!(xpending_xclaim, c, {
     assert_eq!(claimed.ids.len(), 1);
     assert_eq!(claimed.ids[0].id, "1-1");
     assert_eq!(claimed.ids[0].get::<String>("f").as_deref(), Some("a"));
+});
+
+matrix_test!(xpending_count, c, {
+    let k = common::key("stream");
+    c.xadd(&k, "1-1", &[("f", "a")]).await.unwrap();
+    c.xadd(&k, "2-1", &[("f", "b")]).await.unwrap();
+    c.xgroup_create(&k, "grp", "0").await.unwrap();
+    c.xreadgroup(
+        "grp",
+        "c1",
+        &[(&k, ">")],
+        Some(StreamReadGroupOptions {
+            count: Some(1),
+            ..Default::default()
+        }),
+    )
+    .await
+    .unwrap();
+    c.xreadgroup("grp", "c2", &[(&k, ">")], None).await.unwrap();
+
+    let reply = c.xpending_count(&k, "grp", "-", "+", 10).await.unwrap();
+    let pending: Vec<_> = reply
+        .ids
+        .iter()
+        .map(|p| (p.id.as_str(), p.consumer.as_str(), p.times_delivered))
+        .collect();
+    assert_eq!(pending, [("1-1", "c1", 1), ("2-1", "c2", 1)]);
+
+    let reply = c
+        .xpending_consumer_count(&k, "grp", "-", "+", 10, "c2")
+        .await
+        .unwrap();
+    assert_eq!(reply.ids.len(), 1);
+    assert_eq!(reply.ids[0].id, "2-1");
+});
+
+matrix_test!(xautoclaim_options, c, {
+    skip_if_version_below!(c, 6, 2, 0);
+
+    let k = common::key("stream");
+    c.xadd(&k, "1-1", &[("f", "a")]).await.unwrap();
+    c.xadd(&k, "2-1", &[("f", "b")]).await.unwrap();
+    c.xgroup_create(&k, "grp", "0").await.unwrap();
+    c.xreadgroup("grp", "c1", &[(&k, ">")], None).await.unwrap();
+
+    // COUNT claims one entry and returns the next start ID.
+    let options = StreamAutoClaimOptions::default().count(1);
+    let reply = c
+        .xautoclaim_options(&k, "grp", "c2", 0, "0-0", options)
+        .await
+        .unwrap();
+    assert_eq!(reply.next_stream_id, "2-1");
+    assert_eq!(reply.claimed.len(), 1);
+    assert_eq!(reply.claimed[0].id, "1-1");
+    assert_eq!(reply.claimed[0].get::<String>("f").as_deref(), Some("a"));
+    assert!(reply.deleted_ids.is_empty());
+    assert!(!reply.invalid_entries);
+
+    // JUSTID returns only the IDs.
+    let options = StreamAutoClaimOptions::default().with_justid();
+    let reply = c
+        .xautoclaim_options(&k, "grp", "c2", 0, &reply.next_stream_id, options)
+        .await
+        .unwrap();
+    assert_eq!(reply.next_stream_id, "0-0");
+    assert_eq!(reply.claimed.len(), 1);
+    assert_eq!(reply.claimed[0].id, "2-1");
+    assert!(reply.claimed[0].is_empty());
 });
 
 matrix_test!(xclaim_options, c, {

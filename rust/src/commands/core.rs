@@ -49,15 +49,20 @@ use crate::commands::options::HashFieldExpirationOptions;
 use crate::commands::options::LposOptions;
 use crate::commands::options::SetOptions;
 use crate::commands::stream::StreamAddOptions;
+use crate::commands::stream::StreamAutoClaimOptions;
+use crate::commands::stream::StreamAutoClaimReply;
 use crate::commands::stream::StreamClaimOptions;
 use crate::commands::stream::StreamClaimReply;
 use crate::commands::stream::StreamInfoConsumersReply;
 use crate::commands::stream::StreamInfoGroupsReply;
 use crate::commands::stream::StreamInfoStreamReply;
+use crate::commands::stream::StreamMaxlen;
+use crate::commands::stream::StreamPendingCountReply;
 use crate::commands::stream::StreamPendingReply;
 use crate::commands::stream::StreamRangeReply;
 use crate::commands::stream::StreamReadOptions;
 use crate::commands::stream::StreamReadReply;
+use crate::commands::stream::StreamTrimOptions;
 use crate::pipeline::Pipeline;
 use crate::types::IntegerReplyOrNoOp;
 use crate::value::FromValkeyValue;
@@ -651,6 +656,11 @@ implement_commands! {
         build_cmd!("EXPIREAT", key, ts)
     }
 
+    /// `EXPIRETIME`.
+    fn expire_time<K: ToSingleValkeyArg>(key: K) -> (IntegerReplyOrNoOp) {
+        build_cmd!("EXPIRETIME", key)
+    }
+
     /// `PEXPIRE`.
     fn pexpire<K: ToSingleValkeyArg>(key: K, ms: i64) -> (bool) {
         build_cmd!("PEXPIRE", key, ms)
@@ -659,6 +669,11 @@ implement_commands! {
     /// `PEXPIREAT`.
     fn pexpire_at<K: ToSingleValkeyArg>(key: K, ts: i64) -> (bool) {
         build_cmd!("PEXPIREAT", key, ts)
+    }
+
+    /// `PEXPIRETIME`.
+    fn pexpire_time<K: ToSingleValkeyArg>(key: K) -> (IntegerReplyOrNoOp) {
+        build_cmd!("PEXPIRETIME", key)
     }
 
     /// `PERSIST`.
@@ -1402,6 +1417,11 @@ implement_commands! {
         build_cmd!("XADD", key, options, id, items)
     }
 
+    /// `XAUTOCLAIM`.
+    fn xautoclaim_options<K: ToSingleValkeyArg, G: ToValkeyArgs, C: ToValkeyArgs, MIT: ToValkeyArgs, S: ToValkeyArgs>(key: K, group: G, consumer: C, min_idle_time: MIT, start: S, options: StreamAutoClaimOptions) -> (StreamAutoClaimReply) {
+        build_cmd!("XAUTOCLAIM", key, group, consumer, min_idle_time, start, options)
+    }
+
     /// `XCLAIM`.
     fn xclaim<K: ToSingleValkeyArg, G: ToValkeyArgs, C: ToValkeyArgs, MIT: ToValkeyArgs, ID: ToValkeyArgs>(key: K, group: G, consumer: C, min_idle_time: MIT, ids: &'a [ID]) -> (StreamClaimReply) {
         build_cmd!("XCLAIM", key, group, consumer, min_idle_time, ids)
@@ -1422,9 +1442,29 @@ implement_commands! {
         build_cmd!("XGROUP", "CREATE", key, group, id)
     }
 
+    /// `XGROUP CREATE ... MKSTREAM`.
+    fn xgroup_create_mkstream<K: ToValkeyArgs, G: ToValkeyArgs, ID: ToValkeyArgs>(key: K, group: G, id: ID) -> () {
+        build_cmd!("XGROUP", "CREATE", key, group, id, "MKSTREAM")
+    }
+
+    /// `XGROUP CREATECONSUMER`.
+    fn xgroup_createconsumer<K: ToValkeyArgs, G: ToValkeyArgs, C: ToValkeyArgs>(key: K, group: G, consumer: C) -> bool {
+        build_cmd!("XGROUP", "CREATECONSUMER", key, group, consumer)
+    }
+
+    /// `XGROUP DELCONSUMER`.
+    fn xgroup_delconsumer<K: ToValkeyArgs, G: ToValkeyArgs, C: ToValkeyArgs>(key: K, group: G, consumer: C) -> usize {
+        build_cmd!("XGROUP", "DELCONSUMER", key, group, consumer)
+    }
+
     /// `XGROUP DESTROY`.
     fn xgroup_destroy<K: ToValkeyArgs, G: ToValkeyArgs>(key: K, group: G) -> bool {
         build_cmd!("XGROUP", "DESTROY", key, group)
+    }
+
+    /// `XGROUP SETID`.
+    fn xgroup_setid<K: ToValkeyArgs, G: ToValkeyArgs, ID: ToValkeyArgs>(key: K, group: G, id: ID) -> () {
+        build_cmd!("XGROUP", "SETID", key, group, id)
     }
 
     /// `XINFO CONSUMERS`.
@@ -1452,6 +1492,16 @@ implement_commands! {
         build_cmd!("XPENDING", key, group)
     }
 
+    /// `XPENDING` (extended form).
+    fn xpending_count<K: ToValkeyArgs, G: ToValkeyArgs, S: ToValkeyArgs, E: ToValkeyArgs, C: ToValkeyArgs>(key: K, group: G, start: S, end: E, count: C) -> (StreamPendingCountReply) {
+        build_cmd!("XPENDING", key, group, start, end, count)
+    }
+
+    /// `XPENDING` (extended form, filtered by consumer).
+    fn xpending_consumer_count<K: ToValkeyArgs, G: ToValkeyArgs, S: ToValkeyArgs, E: ToValkeyArgs, C: ToValkeyArgs, CN: ToValkeyArgs>(key: K, group: G, start: S, end: E, count: C, consumer: CN) -> (StreamPendingCountReply) {
+        build_cmd!("XPENDING", key, group, start, end, count, consumer)
+    }
+
     /// `XRANGE`.
     fn xrange<K: ToValkeyArgs, S: ToValkeyArgs, E: ToValkeyArgs>(key: K, start: S, end: E) -> (StreamRangeReply) {
         build_cmd!("XRANGE", key, start, end)
@@ -1470,6 +1520,16 @@ implement_commands! {
     /// `XREVRANGE`.
     fn xrevrange<K: ToValkeyArgs, E: ToValkeyArgs, S: ToValkeyArgs>(key: K, end: E, start: S) -> (StreamRangeReply) {
         build_cmd!("XREVRANGE", key, end, start)
+    }
+
+    /// `XTRIM ... MAXLEN`.
+    fn xtrim<K: ToValkeyArgs>(key: K, maxlen: StreamMaxlen) -> usize {
+        build_cmd!("XTRIM", key, maxlen)
+    }
+
+    /// `XTRIM`.
+    fn xtrim_options<K: ToValkeyArgs>(key: K, options: &'a StreamTrimOptions) -> usize {
+        build_cmd!("XTRIM", key, options)
     }
 
     // ==== Connection ====================================================
