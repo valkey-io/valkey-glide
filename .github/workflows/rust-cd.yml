@@ -132,30 +132,43 @@ jobs:
                     - runner: ubuntu-24.04-arm
                       target: aarch64-unknown-linux-gnu
         runs-on: ${{ matrix.host.runner }}
+        timeout-minutes: 30
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
               with:
                   persist-credentials: false
 
-            - name: Read crate version and MSRV
-              id: crate
+            - name: Determine minimum supported Rust version (MSRV)
+              id: msrv
               working-directory: ./rust
+              shell: bash
               run: |
-                  echo "version=$(awk -F'"' '/^version/ { print $2; exit }' Cargo.toml)" >> "$GITHUB_OUTPUT"
-                  echo "msrv=$(awk -F'"' '/^rust-version/ { print $2; exit }' Cargo.toml)" >> "$GITHUB_OUTPUT"
+                  # Fetch MSRV from Cargo.toml (rust-version = "X.Y.Z").
+                  msrv=$(awk -F'"' '/^rust-version/ { print $2; exit }' Cargo.toml)
+                  if [ -z "$msrv" ]; then
+                      echo "::error::rust-version not found in rust/Cargo.toml"
+                      exit 1
+                  fi
+                  echo "toolchain=$msrv" >> "$GITHUB_OUTPUT"
 
             - name: Install Rust toolchain
               uses: ./.github/actions/install-rust
               with:
-                  toolchain: ${{ steps.crate.outputs.msrv }}
+                  toolchain: ${{ steps.msrv.outputs.toolchain }}
                   target: ${{ matrix.host.target }}
 
             - name: Build a new project that depends on the published crate
               working-directory: ${{ runner.temp }}
-              env:
-                  VERSION: ${{ steps.crate.outputs.version }}
+              shell: bash
               run: |
+                  # Fetch version from Cargo.toml (version = "X.Y.Z").
+                  version=$(awk -F'"' '/^version/ { print $2; exit }' "${GITHUB_WORKSPACE}/rust/Cargo.toml")
+                  if [ -z "$version" ]; then
+                      echo "::error::version not found in rust/Cargo.toml"
+                      exit 1
+                  fi
+
                   cargo new consume
                   cd consume
-                  cargo add "valkey-glide@=${VERSION}"
+                  cargo add "valkey-glide@=${version}"
                   cargo build

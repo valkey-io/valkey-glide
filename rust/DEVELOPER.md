@@ -6,8 +6,8 @@
 - The crate depends on other in-repo crates via **path dependencies** (see the
   Crates & dependencies section below), so **a monorepo checkout is required** —
   it builds from a `valkey-io/valkey-glide` checkout where those crates sit
-  alongside it (this crate lives under `rust/`). No network fetch is needed to
-  resolve the dependencies.
+  alongside it (this crate lives under `rust/`). The internal crates resolve
+  from the checkout rather than from crates.io.
 - A `valkey-server` (or `redis-server`) binary for integration tests.
   The harness auto-discovers one on `PATH`; override with:
 
