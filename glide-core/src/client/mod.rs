@@ -27,7 +27,7 @@ use regex::Regex;
 pub use standalone_client::StandaloneClient;
 use std::io;
 use std::sync::atomic::{AtomicBool, AtomicIsize, AtomicU32, AtomicU64, Ordering};
-use std::sync::{Arc, LazyLock};
+use std::sync::{Arc, LazyLock, OnceLock};
 use std::thread;
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
@@ -341,6 +341,32 @@ pub(super) fn get_connection_info(
     }
 }
 
+/// The TLS certificate material a live connection was built with, kept so a
+/// scoped connection ([`crate::scope`]) can present the parent's mTLS identity
+/// and trust the parent's roots instead of falling back to system defaults.
+///
+/// Both halves are required, because the two supported certificate shapes
+/// produce different things: inline (byte-based) certificates yield static
+/// `tls_params` and no reload manager at all, while path-based certificates
+/// yield a reload handle whose rotated material has to be re-read on every
+/// (re)connect.
+#[derive(Clone, Default)]
+pub(crate) struct InheritedCertMaterial {
+    pub(crate) tls_params: Option<redis::TlsConnParams>,
+    pub(crate) reload_handle: Option<crate::tls_reload::CertReloadHandle>,
+}
+
+impl std::fmt::Debug for InheritedCertMaterial {
+    /// Presence only: `tls_params` holds private key material, which must never
+    /// reach a log.
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("InheritedCertMaterial")
+            .field("tls_params", &self.tls_params.is_some())
+            .field("reload_handle", &self.reload_handle.is_some())
+            .finish()
+    }
+}
+
 #[derive(Clone)]
 pub enum ClientWrapper {
     Standalone(StandaloneClient),
@@ -409,6 +435,12 @@ pub struct ClientShared {
     multi_active: Arc<AtomicBool>,
     // Whether this client is in cluster mode (immutable).
     is_cluster: bool,
+    // TLS certificate material the live connection was built with. Scope
+    // connections read it to inherit the parent's mTLS identity and trust roots.
+    // A shared write-once cell because the connection is built after
+    // `ClientShared` exists — and for a lazy client, not until the first command,
+    // behind `&self`.
+    cert_material: Arc<OnceLock<InheritedCertMaterial>>,
 }
 
 /// Why [`Client::address_for_slot`] / [`Client::try_address_for_slot`] could not
@@ -1041,13 +1073,14 @@ impl Client {
             // Create the appropriate client based on configuration
             let real_client = if config.cluster_mode_enabled {
                 // Create cluster client
-                let (client, cert_material_manager) = create_cluster_client(
+                let (client, cert_material_manager, cert_material) = create_cluster_client(
                     config,
                     push_sender,
                     iam_manager_ref,
                     self.pubsub_synchronizer.clone(),
                 )
                 .await?;
+                let _ = self.cert_material.set(cert_material);
                 ClientWrapper::Cluster {
                     client,
                     _cert_material_manager: cert_material_manager,
@@ -1068,6 +1101,7 @@ impl Client {
                         format!("{e:?}"),
                     ))
                 })?;
+                let _ = self.cert_material.set(client.cert_material().clone());
                 ClientWrapper::Standalone(client)
             };
 
@@ -2427,6 +2461,7 @@ async fn create_cluster_client(
 ) -> RedisResult<(
     redis::cluster_async::ClusterConnection,
     Option<Arc<crate::tls_reload::CertReloadManager>>,
+    InheritedCertMaterial,
 )> {
     let tls_mode = request.tls_mode.unwrap_or_default();
 
@@ -2494,6 +2529,12 @@ async fn create_cluster_client(
         (Some(params), Some(tls_certs))
     } else {
         (None, None)
+    };
+    // Snapshot both halves before the locals are consumed by the builder below;
+    // scoped connections inherit them from the parent `Client`.
+    let inherited_cert_material = InheritedCertMaterial {
+        tls_params: tls_params.clone(),
+        reload_handle: cert_material_handle.clone(),
     };
     let periodic_topology_checks = match request.periodic_checks {
         Some(PeriodicCheck::Disabled) => None,
@@ -2654,7 +2695,7 @@ async fn create_cluster_client(
             }
         }
     }
-    Ok((con, cert_material_manager))
+    Ok((con, cert_material_manager, inherited_cert_material))
 }
 
 #[derive(thiserror::Error)]
@@ -2947,6 +2988,9 @@ impl Client {
             // Create the Client first without IAM token manager
             let inflight_limit: isize = inflight_requests_limit.try_into().unwrap();
             let inflight_log_interval = (inflight_limit / 10).max(1);
+            // Filled in below, once the internal client has been built and its TLS
+            // certificate material is known.
+            let cert_material_cell: Arc<OnceLock<InheritedCertMaterial>> = Arc::default();
             let client = Self {
                 shared: Arc::new(ClientShared {
                     internal_client: internal_client_arc.clone(),
@@ -2999,6 +3043,7 @@ impl Client {
                     iam_reconcile_lock: Arc::new(tokio::sync::Mutex::new(())),
                     multi_active: Arc::new(AtomicBool::new(false)),
                     is_cluster: request.cluster_mode_enabled,
+                    cert_material: cert_material_cell.clone(),
                 }),
                 iam_token_manager: None,
                 otel_metadata: Arc::new(otel_metadata),
@@ -3034,7 +3079,7 @@ impl Client {
                     push_sender,
                 }))
             } else if request.cluster_mode_enabled {
-                let (client, cert_material_manager) = create_cluster_client(
+                let (client, cert_material_manager, cert_material) = create_cluster_client(
                     request,
                     push_sender,
                     iam_token_manager.as_ref(),
@@ -3042,21 +3087,22 @@ impl Client {
                 )
                 .await
                 .map_err(ConnectionError::Cluster)?;
+                let _ = cert_material_cell.set(cert_material);
                 ClientWrapper::Cluster {
                     client,
                     _cert_material_manager: cert_material_manager,
                 }
             } else {
-                ClientWrapper::Standalone(
-                    StandaloneClient::create_client(
-                        request,
-                        push_sender,
-                        iam_token_manager.as_ref(),
-                        Some(pubsub_synchronizer.clone()),
-                    )
-                    .await
-                    .map_err(ConnectionError::Standalone)?,
+                let standalone = StandaloneClient::create_client(
+                    request,
+                    push_sender,
+                    iam_token_manager.as_ref(),
+                    Some(pubsub_synchronizer.clone()),
                 )
+                .await
+                .map_err(ConnectionError::Standalone)?;
+                let _ = cert_material_cell.set(standalone.cert_material().clone());
+                ClientWrapper::Standalone(standalone)
             };
 
             // Update the internal client with the actual client
@@ -3109,6 +3155,27 @@ impl Client {
     /// the parent's current database at acquire time.
     pub fn current_database(&self) -> u32 {
         self.current_database.load(Ordering::Acquire)
+    }
+
+    /// The static TLS parameters the live connection was built with (`None` until
+    /// a lazy client connects, or when no custom certificate material is
+    /// configured). Scoped connections put these on their own `ConnectionAddr` so
+    /// they present the same client certificate and trust the same roots as the
+    /// parent.
+    pub(crate) fn tls_params(&self) -> Option<redis::TlsConnParams> {
+        self.cert_material
+            .get()
+            .and_then(|material| material.tls_params.clone())
+    }
+
+    /// The live certificate-reload handle, when path-based reload is configured.
+    /// Scoped connections share the handle rather than a snapshot of its params,
+    /// so a rotation landing after the connection was created is still adopted on
+    /// its next reconnect.
+    pub(crate) fn cert_reload_handle(&self) -> Option<crate::tls_reload::CertReloadHandle> {
+        self.cert_material
+            .get()
+            .and_then(|material| material.reload_handle.clone())
     }
 
     /// Returns a reference to the per-client latency tracker (for watchdog diagnostics).
@@ -3400,6 +3467,7 @@ impl Client {
                 iam_reconcile_lock: Arc::new(tokio::sync::Mutex::new(())),
                 multi_active: Arc::new(AtomicBool::new(false)),
                 is_cluster: false,
+                cert_material: Arc::default(),
             }),
             iam_token_manager: None,
             otel_metadata: Arc::new(OTelMetadata {
@@ -3471,6 +3539,7 @@ pub fn create_test_glide_client() -> Client {
             iam_reconcile_lock: Arc::new(tokio::sync::Mutex::new(())),
             multi_active: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             is_cluster: false,
+            cert_material: Arc::default(),
         }),
         iam_token_manager: None,
         otel_metadata: Arc::new(OTelMetadata {
@@ -3925,6 +3994,7 @@ mod tests {
                 iam_reconcile_lock: Arc::new(tokio::sync::Mutex::new(())),
                 multi_active: Arc::new(AtomicBool::new(false)),
                 is_cluster: false,
+                cert_material: Arc::default(),
             }),
             iam_token_manager: None,
             otel_metadata: Arc::new(OTelMetadata {

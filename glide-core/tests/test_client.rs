@@ -4438,6 +4438,84 @@ pub(crate) mod shared_client_tests {
         });
     }
 
+    /// A scope off an mTLS parent must connect with the parent's certificate
+    /// material. The server runs with `--tls-auth-clients yes` and a private CA,
+    /// so a scoped connection that drops the parent's `tls_params` fails the
+    /// handshake twice over: it offers no client certificate, and it verifies the
+    /// server against system roots rather than the test CA.
+    ///
+    /// Standalone only, for the same reason as `test_mtls_cert_rotation_reconnect`
+    /// (see TODO #6532): `cluster_manager.py` hard-codes `--tls-auth-clients no`.
+    #[cfg(feature = "proto")]
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
+    fn test_scope_inherits_parent_mtls_cert_material() {
+        block_on_all(async move {
+            let tempdir = tempfile::tempdir().expect("Failed to create temp dir");
+            let tls_paths = build_tls_file_paths(&tempdir);
+
+            let client_cert = tempdir.path().join("client.crt");
+            let client_key = tempdir.path().join("client.key");
+            rotate_client_cert_and_key(&tls_paths, &client_cert, &client_key);
+
+            let server = RedisServer::new_with_addr_tls_modules_and_spawner(
+                redis::ConnectionAddr::TcpTls {
+                    host: "127.0.0.1".to_string(),
+                    port: get_available_port(),
+                    insecure: false,
+                    tls_params: None,
+                },
+                Some(tls_paths.clone()),
+                &[],
+                true,
+                |cmd| cmd.spawn().expect("Failed to spawn server"),
+            );
+            let server_addr = server.get_client_addr();
+            tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+
+            let configuration = TestConfiguration {
+                use_tls: true,
+                shared_server: false,
+                client_cert_path: Some(client_cert.to_string_lossy().to_string()),
+                client_key_path: Some(client_key.to_string_lossy().to_string()),
+                root_certs: vec![tls_paths.read_ca_cert_as_bytes()],
+                cert_reload_interval_seconds: Some(1),
+                ..Default::default()
+            };
+
+            let client = Client::new(
+                create_connection_request(std::slice::from_ref(&server_addr), &configuration)
+                    .into(),
+                None,
+            )
+            .await
+            .expect("Failed to create mTLS client");
+
+            let backing = BackingServer::Standalone(Some(server));
+            let bytes = scope_request_bytes(&backing, &configuration);
+            let key = generate_random_string(10);
+            let routing_slot = glide_core::pool::slot_for_key(key.as_bytes());
+
+            let scope = ScopeHandle::setup(client, bytes, routing_slot).await;
+
+            let mut set_args = vec![key.clone().into_bytes(), b"scoped_mtls".to_vec()];
+            scope
+                .send("SET", &mut set_args)
+                .await
+                .expect("scoped SET over mTLS should succeed");
+
+            let mut get_args = vec![key.into_bytes()];
+            let value = scope
+                .send("GET", &mut get_args)
+                .await
+                .expect("scoped GET over mTLS should succeed");
+            assert_eq!(value, Value::BulkString(b"scoped_mtls".to_vec().into()));
+
+            scope.release();
+        });
+    }
+
     /// Sets fake AWS credentials so `IAMTokenManager::new` can locally sign a SigV4
     /// token without reaching real AWS. Distinct from the `iam_tests`-gated
     /// `setup_mock_aws_credentials` above: this test runs under plain `proto`

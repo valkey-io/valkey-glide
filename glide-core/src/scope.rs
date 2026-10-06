@@ -458,14 +458,19 @@ fn parse_cluster_target(addr: &str) -> Option<(String, u16)> {
 }
 
 /// Build a `redis::ConnectionAddr` from a host/port and TLS mode. Mirrors only the
-/// TLS-mode mapping of `client::get_connection_info`; scoped connections carry neither
-/// the parent's `address_resolver` nor its custom TLS certificate material, so
-/// `tls_params` is always `None`.
+/// TLS-mode mapping of `client::get_connection_info`; `tls_params` carries the
+/// parent client's certificate material so a scope off an mTLS parent presents the
+/// same client certificate and trusts the same roots.
+///
+/// Scoped connections still do not carry the parent's `address_resolver`: a
+/// `ClusterPrimary` target is read from the parent's slot map, which the resolver
+/// already rewrote, so applying it here would resolve the address twice.
 #[cfg(feature = "proto")]
 fn build_scope_connection_addr(
     host: String,
     port: u16,
     tls_mode: crate::connection_request::TlsMode,
+    tls_params: Option<redis::TlsConnParams>,
 ) -> redis::ConnectionAddr {
     use crate::connection_request::TlsMode;
     match tls_mode {
@@ -474,7 +479,7 @@ fn build_scope_connection_addr(
             host,
             port,
             insecure: tls_mode == TlsMode::InsecureTls,
-            tls_params: None,
+            tls_params,
         },
     }
 }
@@ -528,7 +533,8 @@ async fn build_scope_connection(
             .ok_or_else(|| ScopeCreateError::InvalidClusterTarget(Arc::clone(addr)))?,
     };
 
-    let connection_addr = build_scope_connection_addr(host, port, tls_mode);
+    let connection_addr =
+        build_scope_connection_addr(host, port, tls_mode, client.and_then(|c| c.tls_params()));
     let redis_client = redis::Client::open(redis::ConnectionInfo {
         addr: connection_addr,
         // The old `redis://` URL carried no `resp3` param, so redis-rs parsed it
@@ -549,7 +555,12 @@ async fn build_scope_connection(
         tcp_nodelay: true,
         pubsub_synchronizer: None,
         iam_token_provider: None,
-        cert_params_provider: None,
+        // Share the parent's live reload handle, not a snapshot: the scoped
+        // connection then re-reads the rotated material on every reconnect, the
+        // same way the parent's own nodes do.
+        cert_params_provider: client
+            .and_then(|c| c.cert_reload_handle())
+            .map(|handle| Arc::new(handle) as Arc<dyn redis::CertParamsProvider>),
     };
     let mut conn = match tokio::time::timeout(
         SCOPE_CONNECT_TIMEOUT,
@@ -2246,7 +2257,7 @@ mod tests {
     #[test]
     fn build_scope_connection_addr_ipv6_no_tls() {
         use crate::connection_request::TlsMode;
-        let addr = build_scope_connection_addr("::1".to_string(), 7801, TlsMode::NoTls);
+        let addr = build_scope_connection_addr("::1".to_string(), 7801, TlsMode::NoTls, None);
         match addr {
             redis::ConnectionAddr::Tcp(host, port) => {
                 assert_eq!(host, "::1");
@@ -2260,7 +2271,7 @@ mod tests {
     fn build_scope_connection_addr_ipv6_secure_and_insecure_tls() {
         use crate::connection_request::TlsMode;
 
-        let secure = build_scope_connection_addr("::1".to_string(), 6379, TlsMode::SecureTls);
+        let secure = build_scope_connection_addr("::1".to_string(), 6379, TlsMode::SecureTls, None);
         match secure {
             redis::ConnectionAddr::TcpTls {
                 host,
@@ -2275,13 +2286,62 @@ mod tests {
             other => panic!("expected verifying TcpTls, got {other:?}"),
         }
 
-        let insecure = build_scope_connection_addr("::1".to_string(), 6379, TlsMode::InsecureTls);
+        let insecure =
+            build_scope_connection_addr("::1".to_string(), 6379, TlsMode::InsecureTls, None);
         match insecure {
             redis::ConnectionAddr::TcpTls { host, insecure, .. } => {
                 assert_eq!(host, "::1");
                 assert!(insecure, "InsecureTls must skip verification");
             }
             other => panic!("expected insecure TcpTls, got {other:?}"),
+        }
+    }
+
+    /// The parent's certificate material has to reach the scoped connection's
+    /// address, otherwise the handshake falls back to system trust roots and sends
+    /// no client certificate.
+    #[test]
+    fn build_scope_connection_addr_carries_parent_tls_params() {
+        use crate::connection_request::TlsMode;
+
+        // The matching self-signed pair the cert-reload tests already use.
+        const CLIENT_CERT: &str = include_str!("tls_reload/test_data/cert_a.pem");
+        const CLIENT_KEY: &str = include_str!("tls_reload/test_data/key_a.pem");
+
+        let parent_params = redis::retrieve_tls_certificates(redis::TlsCertificates {
+            client_tls: Some(redis::ClientTlsConfig {
+                client_cert: CLIENT_CERT.as_bytes().to_vec(),
+                client_key: CLIENT_KEY.as_bytes().to_vec(),
+            }),
+            root_cert: Some(CLIENT_CERT.as_bytes().to_vec()),
+        })
+        .expect("test cert/key pair should parse");
+
+        let inherited = build_scope_connection_addr(
+            "127.0.0.1".to_string(),
+            6379,
+            TlsMode::SecureTls,
+            Some(parent_params),
+        );
+        match inherited {
+            redis::ConnectionAddr::TcpTls { tls_params, .. } => {
+                let params = tls_params.expect("parent tls_params must be inherited");
+                assert!(
+                    !params.client_cert_chain_der().is_empty(),
+                    "inherited params must carry the parent's client certificate"
+                );
+            }
+            other => panic!("expected TcpTls, got {other:?}"),
+        }
+
+        // No parent material configured stays `None` rather than inventing any.
+        let bare =
+            build_scope_connection_addr("127.0.0.1".to_string(), 6379, TlsMode::SecureTls, None);
+        match bare {
+            redis::ConnectionAddr::TcpTls { tls_params, .. } => {
+                assert!(tls_params.is_none(), "expected no tls_params, got Some");
+            }
+            other => panic!("expected TcpTls, got {other:?}"),
         }
     }
 }
