@@ -4,6 +4,7 @@ package glide.cluster;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+import glide.TestUtilities;
 import glide.api.GlideClusterClient;
 import glide.api.models.configuration.AdvancedGlideClusterClientConfiguration;
 import glide.api.models.configuration.GlideClusterClientConfiguration;
@@ -111,5 +112,44 @@ public class MutualTlsClusterIntegrationTest {
                 () -> {
                     GlideClusterClient.createClient(config).get();
                 });
+    }
+
+    /**
+     * Verifies that mTLS configured from a keystore (via {@link
+     * TlsAdvancedConfiguration.TlsAdvancedConfigurationBuilder#useMutualTlsFromKeyStore}) is accepted
+     * by a cluster that requires a client certificate. Keystore-based counterpart of {@link
+     * #testMTlsClientCertAcceptedByServerRequiringOne()}.
+     */
+    @Test
+    void testMTlsFromKeyStoreAcceptedByServerRequiringOne() throws Exception {
+        Path keyStorePath = Files.createTempFile("mtls-client-identity", ".p12");
+        char[] password = "testpass".toCharArray();
+
+        try {
+            TestUtilities.buildClientIdentityKeyStore(
+                    keyStorePath, password, "PKCS12", clientCert, clientKey);
+
+            TlsAdvancedConfiguration tlsConfig =
+                    TlsAdvancedConfiguration.builder()
+                            .rootCertificates(caCert)
+                            .useMutualTlsFromKeyStore(keyStorePath.toString(), password, "PKCS12")
+                            .build();
+            AdvancedGlideClusterClientConfiguration advancedConfig =
+                    AdvancedGlideClusterClientConfiguration.builder()
+                            .tlsAdvancedConfiguration(tlsConfig)
+                            .build();
+            GlideClusterClientConfiguration config =
+                    GlideClusterClientConfiguration.builder()
+                            .addresses(nodeAddrs)
+                            .useTLS(true)
+                            .advancedConfiguration(advancedConfig)
+                            .build();
+
+            try (GlideClusterClient client = GlideClusterClient.createClient(config).get()) {
+                assertEquals("PONG", client.ping().get());
+            }
+        } finally {
+            Files.deleteIfExists(keyStorePath);
+        }
     }
 }
