@@ -21,7 +21,7 @@ ofi-libfabric-sys = { path = "ofi-libfabric-sys", optional = true }
 libc = { version = "0.2", optional = true }
 # Only for `watch`, which wakes a transfer waiting on its region being revoked.
 tokio = { version = "1", default-features = false, features = ["sync"], optional = true }
-# The progress poller reports a completion-queue read it did not expect to fail.
+# Unexpected completion-queue failures and parked memory.
 log = { version = "0.4", optional = true }
 
 [dev-dependencies]

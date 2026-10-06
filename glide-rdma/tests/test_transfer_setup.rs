@@ -46,7 +46,6 @@ fn a_registered_buffer_produces_a_sendable_set_command() {
     // The client address is handshake-only: a transfer never repeats it.
     assert!(!command.arguments().contains(&hello.arguments()[0]));
 
-    // The server replied, so the buffer comes back unchanged and can be lent again.
     // SAFETY: the command was never sent.
     let buffer = unsafe { loan.cancel_unsent() };
     assert_eq!(&buffer.as_host()[..payload.len()], payload);

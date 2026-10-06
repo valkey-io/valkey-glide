@@ -10,8 +10,9 @@
 //!
 //! [`RdmaBuffer::lend_for_get`] and [`RdmaBuffer::lend_for_set`] are the only way to
 //! build a transfer command and they consume the buffer to do it. The buffer comes
-//! back from [`LentBuffer::reclaim`] once the server has replied. A loan that ends
-//! without a reply gives nothing back; its memory is parked in the fabric.
+//! back from [`LentBuffer::reclaim`] once the server has replied, or from
+//! [`LentBuffer::cancel_unsent`] if the command never went out. Any other end parks
+//! its memory in the fabric.
 
 use std::fmt;
 use std::mem::ManuallyDrop;
@@ -321,8 +322,8 @@ impl fmt::Debug for RdmaBuffer {
 /// Closing a region does not stop a write the provider already accepted
 /// (`fi_mr(3)`), so memory a loan ends without a reply is parked in the fabric
 /// and freed only when the fabric closes. Parked memory only accumulates;
-/// [`RdmaFabric::parked_bytes`] reports how much, and replacing the fabric is the
-/// only way to get it back. Register fresh memory to carry on.
+/// [`RdmaFabric::parked_bytes`] reports how much. To get it back, drop every
+/// buffer, loan, session and handle on the fabric. Register fresh memory to carry on.
 ///
 /// On tcp, the fabric's progress thread keeps polling for as long as a loan exists,
 /// because that provider moves no bytes unless the client polls.
@@ -342,9 +343,9 @@ impl LentBuffer {
     ///
     /// # Safety
     ///
-    /// `reply` must be the server's reply to this loan's command, or the command must
-    /// never have been sent. Until the server replies it may still be writing the
-    /// window, which a reclaimed buffer exposes through a reference.
+    /// `reply` must be the server's reply to this loan's command: until it replies
+    /// the server may still be writing the window. A command never sent is also
+    /// sound, though [`Self::cancel_unsent`] is the way to end that loan.
     ///
     /// # Errors
     ///
@@ -393,7 +394,11 @@ impl LentBuffer {
 
     /// End a loan whose command was never sent, handing the buffer straight back.
     ///
-    /// SAFETY: The command this loan was lent for must not have been sent. Once it has, only
+    /// If an [`RdmaRevoker`] fired meanwhile, the buffer comes back revoked.
+    ///
+    /// # Safety
+    ///
+    /// The command this loan was lent for must not have been sent. Once it has, only
     /// the server's reply proves it is done with the window.
     pub unsafe fn cancel_unsent(self) -> RdmaBuffer {
         let (buffer, _, _progress) = self.dismantle();
@@ -703,6 +708,18 @@ mod tests {
             freed.load(Ordering::SeqCst),
             "freed as any unlent buffer is"
         );
+    }
+
+    #[test]
+    fn cancelling_an_unsent_loan_after_a_revoke_hands_back_a_revoked_buffer() {
+        let loan = lent_for_get(fabric().register(vec![0u8; 64]).unwrap());
+        loan.revoker().revoke().unwrap();
+
+        let buffer = unsafe { loan.cancel_unsent() };
+
+        assert!(buffer.is_revoked());
+        let (_, error) = buffer.lend_for_get(b"key", 0, 64).unwrap_err();
+        assert!(matches!(error, RdmaError::Revoked), "{error:?}");
     }
 
     #[test]

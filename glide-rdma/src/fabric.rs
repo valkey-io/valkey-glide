@@ -1,6 +1,7 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use crate::buffer::{HostMemory, RdmaBuffer};
@@ -27,6 +28,8 @@ struct FabricInner {
     progress: Option<ProgressDriver>,
     endpoint: Mutex<LibfabricEndpoint>,
     parked: Mutex<Vec<HostMemory>>,
+    /// Total length of `parked`, readable without the lock.
+    parked_bytes: AtomicUsize,
     address: Vec<u8>,
     uses_virtual_addressing: bool,
     /// Every peer address currently in the address vector and how many sessions
@@ -72,6 +75,7 @@ impl RdmaFabric {
                 progress,
                 endpoint: Mutex::new(endpoint),
                 parked: Mutex::new(Vec::new()),
+                parked_bytes: AtomicUsize::new(0),
                 address,
                 uses_virtual_addressing,
                 peers: Mutex::new(HashMap::new()),
@@ -172,28 +176,24 @@ impl RdmaFabric {
     }
 
     /// Keep `host` allocated until this fabric closes; see [`crate::LentBuffer`].
+    /// Only the endpoint closing guarantees no accepted write can still land in it.
     pub(crate) fn park(&self, host: HostMemory) {
-        let mut parked = self
-            .inner
-            .parked
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner);
-        parked.push(host);
-        let total: usize = parked.iter().map(HostMemory::len).sum();
-        log::warn!(
-            "parked {} bytes of registered memory until the fabric closes, {total} in all",
-            parked.last().map_or(0, HostMemory::len)
-        );
-    }
-
-    pub fn parked_bytes(&self) -> usize {
+        let bytes = host.len();
         self.inner
             .parked
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
-            .iter()
-            .map(HostMemory::len)
-            .sum()
+            .push(host);
+        let total = self.inner.parked_bytes.fetch_add(bytes, Ordering::Relaxed) + bytes;
+        log::debug!(
+            "parked {bytes} bytes of registered memory until the fabric closes, {total} in all"
+        );
+    }
+
+    /// Bytes parked by loans that ended without a reply. Only grows; freed when the
+    /// last handle drops, and every buffer, loan and session on the fabric holds one.
+    pub fn parked_bytes(&self) -> usize {
+        self.inner.parked_bytes.load(Ordering::Relaxed)
     }
 
     /// Whether `self` and `other` are the same open fabric, rather than two opened
