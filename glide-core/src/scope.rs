@@ -387,6 +387,11 @@ pub enum ScopeCreateError {
     NoSeedAddress,
     /// A `ClusterPrimary` target string was not a parseable `host:port`.
     InvalidClusterTarget(Arc<String>),
+    /// The request configures custom TLS certificate material, but none is
+    /// available from the parent — a lazy parent that has not connected yet has
+    /// nothing to inherit. Connecting anyway would silently fall back to system
+    /// trust roots with no client certificate.
+    ParentCertMaterialUnavailable,
     /// `redis::Client::open` rejected the constructed `ConnectionInfo`.
     ClientOpenFailed(RedisError),
     /// The connect attempt failed.
@@ -413,6 +418,9 @@ impl std::fmt::Display for ScopeCreateError {
             Self::InvalidClusterTarget(addr) => {
                 write!(f, "cluster target is not a valid host:port: {addr}")
             }
+            Self::ParentCertMaterialUnavailable => f.write_str(
+                "parent client's TLS certificate material is not available; connect the parent client before taking a scope",
+            ),
             Self::ClientOpenFailed(e) => write!(f, "client open failed: {e}"),
             Self::ConnectFailed(e) => write!(f, "connect failed: {e}"),
             Self::ConnectTimedOut => write!(f, "connect timed out after {SCOPE_CONNECT_TIMEOUT:?}"),
@@ -485,6 +493,21 @@ fn build_scope_connection_addr(
     }
 }
 
+/// The certificate material a scope inherits from its parent.
+///
+/// The reload handle wins over the parent's `tls_params`: that snapshot is frozen
+/// at parent-connect, so it is empty for a lazy parent and stale after a rotation.
+/// A scope must present the freshest adopted material, not the certificate the
+/// parent started with. The snapshot is the fallback for inline (byte-based) cert
+/// material, which configures no reload handle.
+#[cfg(feature = "proto")]
+async fn inherited_tls_params(client: Option<&Client>) -> Option<redis::TlsConnParams> {
+    match client.and_then(|c| c.cert_reload_handle()) {
+        Some(handle) => Some(handle.current_params().await),
+        None => client.and_then(|c| c.tls_params()),
+    }
+}
+
 /// Open and initialize a connection to `target`, without touching the pool.
 ///
 /// Pure pipeline: parse request → validate lib name → build ConnectionInfo →
@@ -515,6 +538,20 @@ async fn build_scope_connection(
         .tls_mode
         .enum_value()
         .unwrap_or(crate::connection_request::TlsMode::SecureTls);
+    let tls_params = inherited_tls_params(client).await;
+    // The parent configured certificate material, but none is reachable yet (a
+    // lazy parent that has not connected). Connecting would downgrade to system
+    // trust with no client certificate, so fail the acquire instead. Read off the
+    // parent, not the scope request: a caller-supplied request need not repeat the
+    // cert fields, and the parent is the authority on what was configured.
+    if tls_mode != crate::connection_request::TlsMode::NoTls
+        && tls_params.is_none()
+        && client
+            .map(|c| c.configures_cert_material())
+            .unwrap_or(false)
+    {
+        return Err(ScopeCreateError::ParentCertMaterialUnavailable);
+    }
     let (host, port) = match target {
         ScopeTarget::Standalone => {
             let addr = proto
@@ -540,8 +577,7 @@ async fn build_scope_connection(
             .ok_or_else(|| ScopeCreateError::InvalidClusterTarget(Arc::clone(addr)))?,
     };
 
-    let connection_addr =
-        build_scope_connection_addr(host, port, tls_mode, client.and_then(|c| c.tls_params()));
+    let connection_addr = build_scope_connection_addr(host, port, tls_mode, tls_params);
     let redis_client = redis::Client::open(redis::ConnectionInfo {
         addr: connection_addr,
         // The old `redis://` URL carried no `resp3` param, so redis-rs parsed it
@@ -562,12 +598,11 @@ async fn build_scope_connection(
         tcp_nodelay: true,
         pubsub_synchronizer: None,
         iam_token_provider: None,
-        // Share the parent's live reload handle, not a snapshot: the scoped
-        // connection then re-reads the rotated material on every reconnect, the
-        // same way the parent's own nodes do.
-        cert_params_provider: client
-            .and_then(|c| c.cert_reload_handle())
-            .map(|handle| Arc::new(handle) as Arc<dyn redis::CertParamsProvider>),
+        // A plain multiplexed connection has no reconnect loop to re-read this on
+        // (the scope does not go through `ReconnectingConnection`), and only the
+        // cluster path reads the provider at all, so it is inert here either way.
+        // The scope takes the freshest material at creation via `current_params()`.
+        cert_params_provider: None,
     };
     let mut conn = match tokio::time::timeout(
         SCOPE_CONNECT_TIMEOUT,
@@ -1131,10 +1166,11 @@ mod tests {
     use protobuf::Message as _;
     use tokio::sync::Mutex as TokioMutex;
 
-    use super::{build_scope_connection_addr, parse_cluster_target, strip_host_brackets};
     use super::{
-        create_scope_connection, resolve_scope_parent, try_acquire_scope, try_resolve_scope_target,
+        ScopeCreateError, build_scope_connection, create_scope_connection, inherited_tls_params,
+        resolve_scope_parent, try_acquire_scope, try_resolve_scope_target,
     };
+    use super::{build_scope_connection_addr, parse_cluster_target, strip_host_brackets};
 
     use super::Client;
     use crate::client::{ConnectionRequest as ClientRequest, NodeAddress as ClientAddress};
@@ -1174,6 +1210,62 @@ mod tests {
         request_bytes_with_mode(lib_name, port, false)
     }
 
+    /// Re-read interval for a test reload manager. No test here starts the
+    /// background re-read task, so this only has to stay under the over-long-interval
+    /// warning.
+    const RELOAD_INTERVAL_SECS: u32 = 60;
+
+    /// The matching self-signed pairs the cert-reload tests already use.
+    const CERT_A: &str = include_str!("tls_reload/test_data/cert_a.pem");
+    const KEY_A: &str = include_str!("tls_reload/test_data/key_a.pem");
+    const CERT_B: &str = include_str!("tls_reload/test_data/cert_b.pem");
+    const KEY_B: &str = include_str!("tls_reload/test_data/key_b.pem");
+
+    fn test_tls_params(cert: &str, key: &str) -> redis::TlsConnParams {
+        redis::retrieve_tls_certificates(redis::TlsCertificates {
+            client_tls: Some(redis::ClientTlsConfig {
+                client_cert: cert.as_bytes().to_vec(),
+                client_key: key.as_bytes().to_vec(),
+            }),
+            root_cert: Some(cert.as_bytes().to_vec()),
+        })
+        .expect("test cert/key pair should parse")
+    }
+
+    /// A reload manager serving `cert`/`key` from a temp dir. The returned
+    /// `TempDir` must outlive the manager.
+    async fn test_reload_manager(
+        cert: &str,
+        key: &str,
+    ) -> (tempfile::TempDir, crate::tls_reload::CertReloadManager) {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let cert_path = dir.path().join("cert.pem");
+        let key_path = dir.path().join("key.pem");
+        std::fs::write(&cert_path, cert).expect("write cert");
+        std::fs::write(&key_path, key).expect("write key");
+        let manager = crate::tls_reload::CertReloadManager::new(
+            cert_path,
+            key_path,
+            None,
+            Some(RELOAD_INTERVAL_SECS),
+        )
+        .await
+        .expect("matching pair should load");
+        (dir, manager)
+    }
+
+    /// A TLS request whose seed port is closed.
+    fn mtls_request_bytes() -> Vec<u8> {
+        let mut request = ConnectionRequest::new();
+        request.addresses.push(NodeAddress {
+            host: "127.0.0.1".into(),
+            port: 1,
+            ..Default::default()
+        });
+        request.tls_mode = crate::connection_request::TlsMode::SecureTls.into();
+        request.write_to_bytes().expect("serialize scope request")
+    }
+
     fn reserved_pool(request_bytes: Vec<u8>) -> Arc<TokioMutex<ScopePool>> {
         let pool = ScopePool::new(ScopePoolConfig::default(), request_bytes, 1);
         pool.total_count.store(1, Ordering::Release);
@@ -1182,6 +1274,24 @@ mod tests {
 
     async fn lazy_parent(cluster: bool) -> Client {
         lazy_parent_with_resolver(cluster, None).await
+    }
+
+    /// A lazy parent that configured certificate material, so the inherit-or-fail
+    /// guard arms, but has not connected, so it has none to hand out yet.
+    async fn lazy_mtls_parent() -> Client {
+        let request = ClientRequest {
+            addresses: vec![ClientAddress {
+                host: "127.0.0.1".to_string(),
+                port: 1,
+            }],
+            lazy_connect: true,
+            root_certs: vec![CERT_A.into()],
+            ..Default::default()
+        };
+
+        Client::new(request, None)
+            .await
+            .expect("lazy client construction does not touch the network")
     }
 
     async fn lazy_parent_with_resolver(
@@ -2319,18 +2429,7 @@ mod tests {
     fn build_scope_connection_addr_carries_parent_tls_params() {
         use crate::connection_request::TlsMode;
 
-        // The matching self-signed pair the cert-reload tests already use.
-        const CLIENT_CERT: &str = include_str!("tls_reload/test_data/cert_a.pem");
-        const CLIENT_KEY: &str = include_str!("tls_reload/test_data/key_a.pem");
-
-        let parent_params = redis::retrieve_tls_certificates(redis::TlsCertificates {
-            client_tls: Some(redis::ClientTlsConfig {
-                client_cert: CLIENT_CERT.as_bytes().to_vec(),
-                client_key: CLIENT_KEY.as_bytes().to_vec(),
-            }),
-            root_cert: Some(CLIENT_CERT.as_bytes().to_vec()),
-        })
-        .expect("test cert/key pair should parse");
+        let parent_params = test_tls_params(CERT_A, KEY_A);
 
         let inherited = build_scope_connection_addr(
             "127.0.0.1".to_string(),
@@ -2358,6 +2457,118 @@ mod tests {
             }
             other => panic!("expected TcpTls, got {other:?}"),
         }
+    }
+
+    /// `build_scope_connection`'s failure, for the TLS cases below. `expect_err` is
+    /// unavailable: the success type holds a connection, which is not `Debug`.
+    async fn scope_connect_error(parent: &Client, request_bytes: &[u8]) -> ScopeCreateError {
+        match build_scope_connection(Some(parent), request_bytes, &ScopeTarget::Standalone).await {
+            Err(err) => err,
+            Ok(_) => panic!("nothing listens on the seed port, so no scope can be created"),
+        }
+    }
+
+    /// A scope must connect with the parent's *current* certificate material. The
+    /// parent's `tls_params` are a snapshot taken when it connected: empty for a
+    /// lazy parent, stale after a rotation. Resolving from that snapshot here
+    /// yields `None`, which the fail-fast guard then rejects before any connect.
+    #[tokio::test]
+    async fn scope_connection_reads_cert_material_from_the_parents_reload_handle() {
+        let (_dir, manager) = test_reload_manager(CERT_A, KEY_A).await;
+
+        let parent = lazy_mtls_parent().await;
+        // The shape a lazy parent with path-based reload has: no snapshot, live handle.
+        parent.set_cert_material_for_test(crate::client::InheritedCertMaterial {
+            tls_params: None,
+            reload_handle: Some(manager.get_handle()),
+        });
+
+        let err = scope_connect_error(&parent, &mtls_request_bytes()).await;
+
+        assert!(
+            matches!(
+                err,
+                ScopeCreateError::ConnectFailed(_) | ScopeCreateError::ConnectTimedOut
+            ),
+            "the handle's material must reach the connection attempt, got: {err}"
+        );
+    }
+
+    /// The handle must win over a *populated* snapshot, not just an empty one: a
+    /// parent that connected with cert_a and has since adopted cert_b hands a new
+    /// scope cert_b. A snapshot-first read would hand out the retired certificate,
+    /// which the server stops accepting once the rotation completes.
+    #[tokio::test]
+    async fn inherited_tls_params_prefers_the_reload_handle_over_a_stale_snapshot() {
+        let (_dir, manager) = test_reload_manager(CERT_B, KEY_B).await;
+
+        let parent = lazy_parent(false).await;
+        parent.set_cert_material_for_test(crate::client::InheritedCertMaterial {
+            tls_params: Some(test_tls_params(CERT_A, KEY_A)),
+            reload_handle: Some(manager.get_handle()),
+        });
+
+        let inherited = inherited_tls_params(Some(&parent))
+            .await
+            .expect("the parent carries material on both sources");
+
+        let adopted = test_tls_params(CERT_B, KEY_B);
+        let retired = test_tls_params(CERT_A, KEY_A);
+        assert_ne!(
+            adopted.client_cert_chain_der(),
+            retired.client_cert_chain_der(),
+            "the two test pairs must differ for this test to discriminate"
+        );
+        assert_eq!(
+            inherited.client_cert_chain_der(),
+            adopted.client_cert_chain_der(),
+            "a scope must present the adopted certificate, not the parent-connect snapshot"
+        );
+    }
+
+    /// Inline (byte-based) certificate material configures no reload handle, so
+    /// the parent's snapshot is the only source there is — the guard must not fire
+    /// and the material must still reach the connection attempt.
+    #[tokio::test]
+    async fn scope_connection_falls_back_to_the_snapshot_for_inline_cert_material() {
+        let parent = lazy_mtls_parent().await;
+        parent.set_cert_material_for_test(crate::client::InheritedCertMaterial {
+            tls_params: Some(test_tls_params(CERT_A, KEY_A)),
+            reload_handle: None,
+        });
+
+        let err = scope_connect_error(&parent, &mtls_request_bytes()).await;
+
+        assert!(
+            matches!(
+                err,
+                ScopeCreateError::ConnectFailed(_) | ScopeCreateError::ConnectTimedOut
+            ),
+            "the inline snapshot must reach the connection attempt, got: {err}"
+        );
+    }
+
+    /// An mTLS parent that has not connected yet has nothing to inherit, so the
+    /// acquire must fail rather than hand redis-rs no material — which would
+    /// connect against system trust roots with no client certificate.
+    #[tokio::test]
+    async fn scope_connection_fails_fast_when_parent_cert_material_is_unavailable() {
+        let parent = lazy_mtls_parent().await;
+
+        let err = scope_connect_error(&parent, &mtls_request_bytes()).await;
+        assert!(
+            matches!(err, ScopeCreateError::ParentCertMaterialUnavailable),
+            "expected a fail-fast, got: {err}"
+        );
+
+        // The guard must not fire under a parent that never configured material:
+        // system trust with no client certificate is the intended behaviour there.
+        let parent = lazy_parent(false).await;
+        let err = scope_connect_error(&parent, &mtls_request_bytes()).await;
+        assert!(
+            !matches!(err, ScopeCreateError::ParentCertMaterialUnavailable),
+            "system-trust TLS must still be allowed, got: {err}"
+        );
     }
 
     // ── Address resolution ───────────────────────────────────────────────────

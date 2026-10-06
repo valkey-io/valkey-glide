@@ -348,9 +348,9 @@ pub(super) fn get_connection_info(
 /// Both halves are required, because the two supported certificate shapes
 /// produce different things: inline (byte-based) certificates yield static
 /// `tls_params` and no reload manager at all, while path-based certificates
-/// yield a reload handle whose rotated material has to be re-read on every
-/// (re)connect.
-#[derive(Clone, Default)]
+/// yield a reload handle holding the freshest adopted material, which is what a
+/// scope must read — the static `tls_params` are frozen at parent-connect.
+#[derive(Clone)]
 pub(crate) struct InheritedCertMaterial {
     pub(crate) tls_params: Option<redis::TlsConnParams>,
     pub(crate) reload_handle: Option<crate::tls_reload::CertReloadHandle>,
@@ -365,6 +365,22 @@ impl std::fmt::Debug for InheritedCertMaterial {
             .field("reload_handle", &self.reload_handle.is_some())
             .finish()
     }
+}
+
+/// Whether the request configures custom TLS certificate material, in bytes or
+/// by path.
+fn request_configures_cert_material(request: &ConnectionRequest) -> bool {
+    !request.root_certs.is_empty()
+        || !request.client_cert.is_empty()
+        || !request.client_key.is_empty()
+        || request
+            .client_cert_path
+            .as_deref()
+            .is_some_and(|path| !path.is_empty())
+        || request
+            .client_key_path
+            .as_deref()
+            .is_some_and(|path| !path.is_empty())
 }
 
 #[derive(Clone)]
@@ -444,6 +460,11 @@ pub struct ClientShared {
     // Custom address resolver, if configured. A plain field, not a cell like
     // `cert_material`: it comes off the connection request, so it is known here.
     address_resolver: Option<Arc<dyn AddressResolver>>,
+    // Whether custom certificate material was configured, also straight off the
+    // request. `cert_material` only says whether material is *reachable* yet, so
+    // it cannot distinguish "nothing configured" from "configured but the parent
+    // has not connected" — the scope guard needs that distinction.
+    configures_cert_material: bool,
 }
 
 /// Why [`Client::address_for_slot`] / [`Client::try_address_for_slot`] could not
@@ -3048,6 +3069,7 @@ impl Client {
                     is_cluster: request.cluster_mode_enabled,
                     cert_material: cert_material_cell.clone(),
                     address_resolver: request.address_resolver.clone(),
+                    configures_cert_material: request_configures_cert_material(&request),
                 }),
                 iam_token_manager: None,
                 otel_metadata: Arc::new(otel_metadata),
@@ -3163,9 +3185,10 @@ impl Client {
 
     /// The static TLS parameters the live connection was built with (`None` until
     /// a lazy client connects, or when no custom certificate material is
-    /// configured). Scoped connections put these on their own `ConnectionAddr` so
-    /// they present the same client certificate and trust the same roots as the
-    /// parent.
+    /// configured). A scoped connection reads these only when no reload handle is
+    /// configured — i.e. for inline (byte-based) certificate material; with
+    /// path-based reload the handle is the source, since this snapshot goes stale
+    /// at the first rotation.
     pub(crate) fn tls_params(&self) -> Option<redis::TlsConnParams> {
         self.cert_material
             .get()
@@ -3173,19 +3196,32 @@ impl Client {
     }
 
     /// The live certificate-reload handle, when path-based reload is configured.
-    /// Scoped connections share the handle rather than a snapshot of its params,
-    /// so a rotation landing after the connection was created is still adopted on
-    /// its next reconnect.
+    /// A scoped connection reads the freshest adopted material off the handle when
+    /// it is created, rather than the `tls_params` snapshot taken at
+    /// parent-connect. A live scope does not re-handshake, so it keeps the material
+    /// it was created with until it is released.
     pub(crate) fn cert_reload_handle(&self) -> Option<crate::tls_reload::CertReloadHandle> {
         self.cert_material
             .get()
             .and_then(|material| material.reload_handle.clone())
     }
 
+    /// Seed the write-once cert-material cell the way a live connect does, so tests
+    /// can build a parent that already carries inherited material.
+    #[cfg(test)]
+    pub(crate) fn set_cert_material_for_test(&self, material: InheritedCertMaterial) {
+        let _ = self.cert_material.set(material);
+    }
+
     /// The configured custom address resolver, if any. Applied to a standalone
     /// scope's seed; see `scope::build_scope_connection_addr` for the cluster case.
     pub(crate) fn address_resolver(&self) -> Option<Arc<dyn AddressResolver>> {
         self.address_resolver.clone()
+    }
+
+    /// Whether this client configured custom certificate material (see the field).
+    pub(crate) fn configures_cert_material(&self) -> bool {
+        self.configures_cert_material
     }
 
     /// Returns a reference to the per-client latency tracker (for watchdog diagnostics).
@@ -3479,6 +3515,7 @@ impl Client {
                 is_cluster: false,
                 cert_material: Arc::default(),
                 address_resolver: None,
+                configures_cert_material: false,
             }),
             iam_token_manager: None,
             otel_metadata: Arc::new(OTelMetadata {
@@ -3552,6 +3589,7 @@ pub fn create_test_glide_client() -> Client {
             is_cluster: false,
             cert_material: Arc::default(),
             address_resolver: None,
+            configures_cert_material: false,
         }),
         iam_token_manager: None,
         otel_metadata: Arc::new(OTelMetadata {
@@ -4008,6 +4046,7 @@ mod tests {
                 is_cluster: false,
                 cert_material: Arc::default(),
                 address_resolver: None,
+                configures_cert_material: false,
             }),
             iam_token_manager: None,
             otel_metadata: Arc::new(OTelMetadata {
