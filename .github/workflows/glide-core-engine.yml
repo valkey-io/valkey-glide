@@ -76,6 +76,11 @@ jobs:
                   cache-on-failure: true
                   workspaces: ./glide-core/redis-rs/redis
 
+            - name: Install cargo-nextest
+              uses: taiki-e/install-action@f7e5d7c961414b23f5b25b2da9294395d08513ad # v2.87.26
+              with:
+                  tool: cargo-nextest@0.9.146
+
             - name: Build project
               run: cargo build --release
               working-directory: ./glide-core/redis-rs/redis/src
@@ -92,7 +97,7 @@ jobs:
             - name: Test
               run: |
                   set -o pipefail
-                  cargo test --release | tee ../test-output.log
+                  cargo nextest run --release | tee ../test-output.log
                   echo "### Tests passed :v:" >> $GITHUB_STEP_SUMMARY
               working-directory: ./glide-core/redis-rs/redis/src
 
