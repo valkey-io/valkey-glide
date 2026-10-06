@@ -187,19 +187,19 @@ describe("GlideClusterClientConfiguration", () => {
     });
 });
 
-describe("Client library identification requests", () => {
-    class TestBaseClient extends BaseClient {
-        public constructor() {
-            super();
-        }
-
-        public buildRequest(
-            options: BaseClientConfiguration,
-        ): connection_request.IConnectionRequest {
-            return this.createClientRequest(options);
-        }
+class RequestClient extends BaseClient {
+    public constructor() {
+        super();
     }
 
+    public buildRequest(
+        options: BaseClientConfiguration,
+    ): connection_request.IConnectionRequest {
+        return this.createClientRequest(options);
+    }
+}
+
+describe("Client library identification requests", () => {
     it.each([
         [undefined, undefined, "GlideJS"],
         ["custom-client", undefined, "custom-client"],
@@ -220,7 +220,7 @@ describe("Client library identification requests", () => {
                 clientInfoTag,
             };
 
-            expect(new TestBaseClient().buildRequest(config).libName).toBe(
+            expect(new RequestClient().buildRequest(config).libName).toBe(
                 expected,
             );
         },
@@ -228,18 +228,6 @@ describe("Client library identification requests", () => {
 });
 
 describe("ReadFrom strategy configuration", () => {
-    class TestBaseClient extends BaseClient {
-        public constructor() {
-            super();
-        }
-
-        public buildRequest(
-            options: BaseClientConfiguration,
-        ): connection_request.IConnectionRequest {
-            return this.createClientRequest(options);
-        }
-    }
-
     it.each([
         ["primary", connection_request.ReadFrom.Primary],
         ["preferReplica", connection_request.ReadFrom.PreferReplica],
@@ -260,7 +248,7 @@ describe("ReadFrom strategy configuration", () => {
                 clientAz: "us-east-1a",
             };
 
-            expect(new TestBaseClient().buildRequest(config).readFrom).toBe(
+            expect(new RequestClient().buildRequest(config).readFrom).toBe(
                 expected,
             );
         },
@@ -278,7 +266,7 @@ describe("ReadFrom strategy configuration", () => {
                 readFrom: readFrom as ReadFrom,
             };
 
-            expect(() => new TestBaseClient().buildRequest(config)).toThrow(
+            expect(() => new RequestClient().buildRequest(config)).toThrow(
                 ConfigurationError,
             );
         },
@@ -300,7 +288,7 @@ describe("ReadFrom strategy configuration", () => {
                 clientAz,
             };
 
-            expect(() => new TestBaseClient().buildRequest(config)).toThrow(
+            expect(() => new RequestClient().buildRequest(config)).toThrow(
                 ConfigurationError,
             );
         },
@@ -313,7 +301,7 @@ describe("ReadFrom strategy configuration", () => {
             clientAz: "  us-east-1a  ",
         };
 
-        expect(new TestBaseClient().buildRequest(config).clientAz).toBe(
+        expect(new RequestClient().buildRequest(config).clientAz).toBe(
             "us-east-1a",
         );
     });
@@ -332,7 +320,7 @@ describe("ReadFrom strategy configuration", () => {
         // value by reading the client's own strategy mapping. This mirrors the single
         // source of truth used at runtime and avoids hardcoding the list twice.
         const mapping = (
-            new TestBaseClient() as unknown as {
+            new RequestClient() as unknown as {
                 MAP_READ_FROM_STRATEGY: Record<
                     ReadFrom,
                     connection_request.ReadFrom
@@ -361,18 +349,6 @@ describe("ReadFrom strategy configuration", () => {
 });
 
 describe("Reconnect strategy validation", () => {
-    class TestBaseClient extends BaseClient {
-        public constructor() {
-            super();
-        }
-
-        public buildRequest(
-            options: BaseClientConfiguration,
-        ): connection_request.IConnectionRequest {
-            return this.createClientRequest(options);
-        }
-    }
-
     const withBackoff = (
         connectionBackoff: BaseClientConfiguration["connectionBackoff"],
     ): BaseClientConfiguration => ({
@@ -401,7 +377,7 @@ describe("Reconnect strategy validation", () => {
             [field]: value,
         });
 
-        expect(() => new TestBaseClient().buildRequest(config)).toThrow(
+        expect(() => new RequestClient().buildRequest(config)).toThrow(
             new ConfigurationError(
                 `invalid reconnect strategy: ${field} must be an integer between 0 and ${max}, got ${value}`,
             ),
@@ -421,7 +397,7 @@ describe("Reconnect strategy validation", () => {
         [{ numberOfRetries: 3, factor: 100, exponentBase: 2 }],
     ])("forwards in-range values unchanged: %j", (connectionBackoff) => {
         expect(
-            new TestBaseClient().buildRequest(withBackoff(connectionBackoff))
+            new RequestClient().buildRequest(withBackoff(connectionBackoff))
                 .connectionRetryStrategy,
         ).toEqual(connectionBackoff);
     });
