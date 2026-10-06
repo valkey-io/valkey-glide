@@ -87,6 +87,7 @@ macro_rules! implement_iterators {
     ($iter:expr, $ret:ty) => {
         /// Cursor-driven `SCAN` over the whole keyspace.
         // TODO #6872: Use `GlideClusterClient::cluster_scan` for cluster iteration.
+        // TODO #7082: Add `scan_options` (redis-rs's `ScanOptions`) for `SCAN` `COUNT` / `TYPE`.
         #[inline]
         fn scan<'s, RV: FromValkeyValue + 's>(&'s self) -> $ret {
             ($iter)(self, vec![b"SCAN".to_vec()], Vec::new())

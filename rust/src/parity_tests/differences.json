@@ -1160,7 +1160,7 @@
     "glide": null
   },
   "scan_options": {
-    "reason": "TODO #7060: not implemented yet",
+    "reason": "TODO #7082: not implemented yet",
     "redis": {
       "name": "scan_options",
       "generics": [
