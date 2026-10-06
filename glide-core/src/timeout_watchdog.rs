@@ -1029,6 +1029,7 @@ mod tests {
     // ── Fork Safety (reinit) ─────────────────────────────────────────────
 
     #[tokio::test]
+    #[serial]
     async fn reinit_global_spawns_new_working_watchdog() {
         // Ensure the global watchdog is initialized.
         let _pre = TimeoutWatchdog::global();
