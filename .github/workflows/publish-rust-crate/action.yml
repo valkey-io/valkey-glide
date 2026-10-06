@@ -9,17 +9,6 @@ inputs:
         description: "Whether to publish to crates.io; otherwise, perform a dry-run"
         required: true
 
-outputs:
-    name:
-        description: "The crate name from Cargo.toml"
-        value: ${{ steps.check.outputs.name }}
-    version:
-        description: "The crate version from Cargo.toml"
-        value: ${{ steps.check.outputs.version }}
-    needs-publish:
-        description: "Whether the crate version is not yet published to crates.io"
-        value: ${{ steps.check.outputs.needs-publish }}
-
 runs:
     using: "composite"
     steps:
@@ -65,8 +54,6 @@ runs:
                   exit 1
               fi
 
-              echo "name=${NAME}" >> "${GITHUB_OUTPUT}"
-              echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
               echo "needs-publish=${NEEDS_PUBLISH}" >> "${GITHUB_OUTPUT}"
 
         # Requires the calling job to have `id-token: write` and
