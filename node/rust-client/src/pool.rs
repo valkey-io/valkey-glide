@@ -248,11 +248,7 @@ pub fn create_pool<'a>(
                 if let Some(pool_entry) = registry.get(&(pool_id as u64)) {
                     let mut pool_guard = pool_entry.value().lock().await;
                     if let Some(entry) = pool_guard.idle.pop_back() {
-                        pool_guard
-                            .total_count
-                            .fetch_sub(1, std::sync::atomic::Ordering::AcqRel);
-                        // Clean up global registries that add_client populated.
-                        pool::unregister_blocking_flag(entry.client_id);
+                        pool_guard.discard_client(entry.client_id);
                         scope::unregister_client(entry.client_id);
                     }
                 }
@@ -431,9 +427,7 @@ fn maybe_spawn_on_demand_creation(
             Ok(client) => {
                 let mut pg = pool_entry.lock().await;
                 if pg.state.load(std::sync::atomic::Ordering::Acquire) != POOL_RUNNING {
-                    // Pool was destroyed while we were connecting; release reservation.
-                    pg.total_count
-                        .fetch_sub(1, std::sync::atomic::Ordering::AcqRel);
+                    pg.release_reservation();
                     return;
                 }
                 // add_client_reserved: total_count already incremented above.
@@ -444,10 +438,8 @@ fn maybe_spawn_on_demand_creation(
             }
             Err(e) => {
                 glide_logger::log_warn("pool", format!("On-demand pool creation failed: {e}"));
-                // Release the pre-reserved slot.
-                let pg = pool_entry.lock().await;
-                pg.total_count
-                    .fetch_sub(1, std::sync::atomic::Ordering::AcqRel);
+                let mut pg = pool_entry.lock().await;
+                pg.release_reservation();
             }
         }
     });
@@ -467,8 +459,6 @@ pub fn pool_try_acquire(pool_id: i64) -> Result<i64> {
         // Drain discarded IDs first (abandoned clients).
         let discarded = pool_guard.drain_discarded_ids();
         for cid in discarded {
-            glide_core::pool::unregister_blocking_flag(cid);
-            glide_core::pool::unregister_pool_client(cid);
             scope::unregister_client(cid);
         }
         let result = pool_guard.try_acquire();
@@ -522,8 +512,6 @@ pub fn pool_acquire_blocking<'a>(
                 // Drain discarded IDs (abandoned clients) on every poll.
                 let discarded = pool_guard.drain_discarded_ids();
                 for cid in discarded {
-                    glide_core::pool::unregister_blocking_flag(cid);
-                    glide_core::pool::unregister_pool_client(cid);
                     scope::unregister_client(cid);
                 }
                 let r = pool_guard.try_acquire();
@@ -615,12 +603,10 @@ pub fn pool_destroy(pool_id: i64) {
             for entry in pool_guard.in_use.iter() {
                 scope::unregister_client(*entry.key());
             }
-            // Discarded IDs are not tracked by ClientPool::destroy() at all, so they need
-            // full cleanup: unregister_blocking_flag, unregister_pool_client, and scope.
+            // discard_client() already unregistered the core registries for these ids;
+            // only the scope entry is ours.
             let discarded = pool_guard.drain_discarded_ids();
             for cid in discarded {
-                glide_core::pool::unregister_blocking_flag(cid);
-                glide_core::pool::unregister_pool_client(cid);
                 scope::unregister_client(cid);
             }
             pool_guard.destroy();

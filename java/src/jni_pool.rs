@@ -116,13 +116,12 @@ pub extern "system" fn Java_glide_ffi_resolvers_GlidePoolResolver_glidePoolTryAc
 
     match pool_arc.try_lock() {
         Ok(mut pool) => {
-            // Clean up any clients discarded by the abandon monitor
+            // Reclaim the Java-side handles of clients core has discarded
             let discarded = pool.drain_discarded_ids();
             for cid in discarded {
                 get_handle_table().remove(&cid);
                 glide_core::scope::unregister_client(cid);
                 get_pool_client_map().remove(&cid);
-                glide_core::pool::unregister_blocking_flag(cid);
             }
 
             let result = pool.try_acquire();
@@ -143,7 +142,7 @@ pub extern "system" fn Java_glide_ffi_resolvers_GlidePoolResolver_glidePoolTryAc
                         Ok(client) => {
                             let mut pool = pool_clone.lock().await;
                             if pool.state.load(Ordering::Acquire) != POOL_RUNNING {
-                                pool.total_count.fetch_sub(1, Ordering::AcqRel);
+                                pool.release_reservation();
                                 return;
                             }
                             let client_id = pool.add_client_reserved(client.clone());
@@ -154,8 +153,8 @@ pub extern "system" fn Java_glide_ffi_resolvers_GlidePoolResolver_glidePoolTryAc
                         }
                         Err(e) => {
                             log::error!("Pool background client creation failed: {}", e);
-                            let pool = pool_clone.lock().await;
-                            pool.total_count.fetch_sub(1, Ordering::AcqRel);
+                            let mut pool = pool_clone.lock().await;
+                            pool.release_reservation();
                         }
                     }
                 });
@@ -207,7 +206,7 @@ pub extern "system" fn Java_glide_ffi_resolvers_GlidePoolResolver_glidePoolDestr
     runtime.spawn(async move {
         let mut pool = pool_arc.lock().await;
         // Clean up JNI handle table entries for all pooled clients
-        // (includes discarded clients from the abandon monitor)
+        // (includes clients core has discarded)
         let discarded = pool.drain_discarded_ids();
         for entry in pool.idle.iter() {
             handle_table.remove(&entry.client_id);
@@ -225,7 +224,6 @@ pub extern "system" fn Java_glide_ffi_resolvers_GlidePoolResolver_glidePoolDestr
             handle_table.remove(&cid);
             glide_core::scope::unregister_client(cid);
             get_pool_client_map().remove(&cid);
-            glide_core::pool::unregister_blocking_flag(cid);
         }
         pool.destroy();
     });
