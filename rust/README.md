@@ -62,7 +62,7 @@ should work wherever `glide-core` builds, but are not tested yet.
 
 ### Prerequisites
 
-- **Rust** 1.94.1 or later — install via [rustup](https://rustup.rs)
+- **Rust** — Install via [rustup](https://rustup.rs).
 - A running **Valkey** (or Redis OSS) server to connect to — e.g.
   `valkey-server` locally, `docker run -p 6379:6379 valkey/valkey`, or an
   ElastiCache/MemoryDB endpoint.

@@ -245,6 +245,8 @@ Crates are published with the **Rust - Continuous Deployment** workflow
 1. Bump `version` in the `Cargo.toml` of each crate to release, and update the
    `Cargo.lock` files that reference it. The internal crates are published
    with `0.x` versions and marked as internal, consistent with Rust conventions.
+   If an internal crate's new version isn't semver-compatible with the previous
+   one, also raise its `version` requirement in the crates that depend on it.
 2. Run the workflow with `publish=false` to perform a dry run. A crate's dry run
    fails if it depends on a version of another GLIDE crate that isn't published
    yet.

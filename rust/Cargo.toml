@@ -1,18 +1,22 @@
 [package]
 name = "valkey-glide"
 version = "0.9.0"
-rust-version = "1.94.1"
-edition = "2024"
-license = "Apache-2.0"
-authors = ["Valkey GLIDE Maintainers"]
+
+# About
 description = "Valkey GLIDE — native Rust client for Valkey and Redis OSS, built on glide-core."
 keywords = ["valkey", "redis", "glide", "client", "database"]
 categories = ["database", "asynchronous"]
-exclude = ["/tests"]
+authors = ["Valkey GLIDE Maintainers"]
+license = "Apache-2.0"
 
 # References
 homepage = "https://valkey.io/valkey-glide/"
 repository = "https://github.com/valkey-io/valkey-glide"
+
+# Build
+rust-version = "1.94.1"
+edition = "2024"
+exclude = ["/tests"]
 
 [lib]
 name = "glide"
