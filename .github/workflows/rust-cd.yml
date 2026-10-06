@@ -3,8 +3,12 @@ name: Rust - Continuous Deployment
 on:
     workflow_dispatch:
         inputs:
+            # A crate's dry run fails if it depends on a version of another crate that hasn't
+            # been published yet, including the internal GLIDE crates (glide-logger,
+            # glide-telemetry, glide-core-engine, and glide-core).
             publish:
-                description: "Publish to crates.io"
+                description: >-
+                    Publish to crates.io; otherwise, perform a dry run.
                 required: true
                 type: boolean
                 default: false
