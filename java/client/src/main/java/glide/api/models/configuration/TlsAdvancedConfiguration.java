@@ -16,9 +16,11 @@ import java.security.PrivateKey;
 import java.security.UnrecoverableKeyException;
 import java.security.cert.Certificate;
 import java.security.cert.CertificateException;
+import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Base64.Encoder;
 import java.util.Enumeration;
+import java.util.List;
 import lombok.Builder;
 import lombok.Getter;
 
@@ -392,14 +394,30 @@ public class TlsAdvancedConfiguration {
          * TlsAdvancedConfiguration#fromKeyStore(String, char[], String)}, which loads trusted root
          * certificates from a keystore. Where {@code fromKeyStore} reads the keystore's certificate
          * entries into {@link TlsAdvancedConfiguration#rootCertificates}, this method reads the
-         * keystore's first {@code PrivateKeyEntry} (the private key plus its certificate chain),
+         * keystore's single {@code PrivateKeyEntry} (the private key plus its certificate chain),
          * serializes them to PEM in memory, and feeds them to {@link #useMutualTls(byte[], byte[])}, so
          * all existing mTLS validation applies and the material is presented statically.
          *
-         * <p>Keystore loading is a JVM-native convenience; the GLIDE core only consumes PEM. If the
-         * keystore holds more than one private key entry, the first one encountered is used (keystore
-         * alias iteration order is not guaranteed to be stable, so prefer a keystore with a single
-         * private key entry).
+         * <p>The keystore must hold exactly one private key entry; a keystore with more than one is
+         * rejected with a {@link ConfigurationError}, because the identity to present would otherwise
+         * depend on keystore type and alias ordering rather than on caller intent.
+         *
+         * <p>Keystore loading is a JVM-native convenience; the GLIDE core only consumes PEM.
+         *
+         * <p>To pair a keystore-based trust store (loaded via {@link
+         * TlsAdvancedConfiguration#fromKeyStore(String, char[], String)}) with a keystore-based client
+         * identity, feed the trusted roots through {@link
+         * TlsAdvancedConfigurationBuilder#rootCertificates(byte[])}:
+         *
+         * <pre>{@code
+         * TlsAdvancedConfiguration config =
+         *     TlsAdvancedConfiguration.builder()
+         *         .rootCertificates(
+         *             TlsAdvancedConfiguration.fromKeyStore(trustStorePath, trustStorePassword, "PKCS12")
+         *                 .getRootCertificates())
+         *         .useMutualTlsFromKeyStore(keyStorePath, keyStorePassword, "PKCS12")
+         *         .build();
+         * }</pre>
          *
          * <p>For automatic rotation of on-disk material, use {@link #useMutualTlsWithReload} with PEM
          * files instead; keystore-based mTLS is inherently static.
@@ -415,8 +433,8 @@ public class TlsAdvancedConfiguration {
          * @throws CertificateException if certificates cannot be loaded or encoded
          * @throws UnrecoverableKeyException if the private key cannot be recovered (e.g., wrong
          *     password)
-         * @throws ConfigurationError if the keystore contains no private key entry, or the entry has no
-         *     certificate chain
+         * @throws ConfigurationError if the keystore contains no private key entry, contains more than
+         *     one private key entry, or the entry has no certificate chain
          */
         public TlsAdvancedConfigurationBuilder useMutualTlsFromKeyStore(
                 String keyStorePath, char[] keyStorePassword, String keyStoreType)
@@ -431,7 +449,7 @@ public class TlsAdvancedConfiguration {
                 keyStore.load(fis, keyStorePassword);
             }
 
-            String alias = findPrivateKeyAlias(keyStore);
+            String alias = findSinglePrivateKeyAlias(keyStore);
             if (alias == null) {
                 throw new ConfigurationError(
                         "KeyStore does not contain a private key entry; mTLS client identity requires a"
@@ -463,24 +481,36 @@ public class TlsAdvancedConfiguration {
         }
 
         /**
-         * Returns the alias of the first private key entry in the keystore, or {@code null} if none
-         * exists. Alias iteration order is not guaranteed by the {@link KeyStore} contract, so this is
-         * deterministic only for keystores holding a single private key entry.
+         * Returns the alias of the keystore's single private key entry, or {@code null} if there are
+         * none. Throws a {@link ConfigurationError} naming the aliases if the keystore holds more than
+         * one private key entry, because the identity to present would otherwise depend on keystore
+         * type and alias names rather than on anything the caller specified. Callers needing a specific
+         * identity should supply a keystore containing exactly one private key entry.
          *
          * <p>Uses {@link KeyStore#entryInstanceOf} rather than {@link KeyStore#isKeyEntry}: the latter
-         * is also {@code true} for {@code SecretKeyEntry}, which a PKCS12 may contain, and would cause
-         * a secret-key alias to be selected (and later rejected) instead of continuing the scan for a
-         * usable {@code PrivateKeyEntry}.
+         * is also {@code true} for {@code SecretKeyEntry}, which a PKCS12 may contain, so a secret-key
+         * alias is correctly ignored while scanning for {@code PrivateKeyEntry} aliases.
          */
-        private static String findPrivateKeyAlias(KeyStore keyStore) throws KeyStoreException {
+        private static String findSinglePrivateKeyAlias(KeyStore keyStore) throws KeyStoreException {
+            List<String> privateKeyAliases = new ArrayList<>();
             Enumeration<String> aliases = keyStore.aliases();
             while (aliases.hasMoreElements()) {
                 String alias = aliases.nextElement();
                 if (keyStore.entryInstanceOf(alias, KeyStore.PrivateKeyEntry.class)) {
-                    return alias;
+                    privateKeyAliases.add(alias);
                 }
             }
-            return null;
+            if (privateKeyAliases.isEmpty()) {
+                return null;
+            }
+            if (privateKeyAliases.size() > 1) {
+                throw new ConfigurationError(
+                        "KeyStore contains multiple private key entries ("
+                                + String.join(", ", privateKeyAliases)
+                                + "); mTLS client identity requires exactly one. Provide a keystore with a"
+                                + " single PrivateKeyEntry so the identity presented is unambiguous.");
+            }
+            return privateKeyAliases.get(0);
         }
 
         /**

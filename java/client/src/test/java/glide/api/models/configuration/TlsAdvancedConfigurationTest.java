@@ -20,6 +20,8 @@ import java.security.cert.CertificateFactory;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.util.Arrays;
 import java.util.Base64;
+import javax.crypto.SecretKey;
+import javax.crypto.spec.SecretKeySpec;
 import org.junit.jupiter.api.Test;
 
 public class TlsAdvancedConfigurationTest {
@@ -379,14 +381,6 @@ public class TlsAdvancedConfigurationTest {
     // useMutualTlsFromKeyStore
     // ---------------------------------------------------------------------------
 
-    // A self-signed test certificate (CN=glide-test) and its matching PKCS#8 RSA private key, as
-    // base64-encoded DER. Generated once with OpenSSL purely for these tests, e.g.:
-    //   openssl req -x509 -newkey rsa:2048 -keyout k.key -out k.crt -days 3650 -nodes \
-    //       -subj "/CN=glide-test"
-    //   openssl x509 -in k.crt -outform DER | base64        # -> TEST_CERT_DER_B64
-    //   openssl pkcs8 -topk8 -nocrypt -in k.key -outform DER | base64   # -> TEST_KEY_PKCS8_DER_B64
-    // Embedding static material keeps the suite self-contained: the keystore is assembled in-process
-    // with public JCA only (no JDK-internal cert generation, no keytool/openssl at runtime).
     // A test leaf certificate (CN=glide-test) with its matching PKCS#8 RSA private key, plus the
     // intermediate and root certificates that signed it — a real chain (leaf -> intermediate ->
     // root), as base64-encoded DER. Generated once with OpenSSL purely for these tests, e.g.:
@@ -399,11 +393,10 @@ public class TlsAdvancedConfigurationTest {
     //   openssl req -newkey rsa:2048 -keyout leaf.key -out leaf.csr -nodes -subj "/CN=glide-test"
     //   openssl x509 -req -in leaf.csr -CA int.crt -CAkey int.key -CAcreateserial -days 3650 \
     //       -out leaf.crt
-    //   openssl x509 -in leaf.crt -outform DER | base64                 # -> TEST_CERT_DER_B64
-    //   openssl pkcs8 -topk8 -nocrypt -in leaf.key -outform DER | base64 # -> TEST_KEY_PKCS8_DER_B64
-    //   openssl x509 -in int.crt  -outform DER | base64                 # ->
-    // TEST_INTERMEDIATE_DER_B64
-    //   openssl x509 -in root.crt -outform DER | base64                 # -> TEST_ROOT_DER_B64
+    //   openssl x509 -in leaf.crt -outform DER | base64  # -> TEST_CERT_DER_B64
+    //   openssl pkcs8 -topk8 -nocrypt -in leaf.key -outform DER | base64  # -> TEST_KEY_PKCS8_DER_B64
+    //   openssl x509 -in int.crt -outform DER | base64  # -> TEST_INTERMEDIATE_DER_B64
+    //   openssl x509 -in root.crt -outform DER | base64  # -> TEST_ROOT_DER_B64
     // Embedding static material keeps the suite self-contained: the keystore is assembled in-process
     // with public JCA only (no JDK-internal cert generation, no keytool/openssl at runtime).
     private static final String TEST_CERT_DER_B64 =
@@ -534,6 +527,20 @@ public class TlsAdvancedConfigurationTest {
         return count;
     }
 
+    /** Loads the embedded leaf certificate. */
+    private static Certificate loadLeafCertificate() throws Exception {
+        return CertificateFactory.getInstance("X.509")
+                .generateCertificate(
+                        new ByteArrayInputStream(Base64.getDecoder().decode(TEST_CERT_DER_B64)));
+    }
+
+    /** Loads the embedded leaf private key. */
+    private static PrivateKey loadLeafPrivateKey() throws Exception {
+        return KeyFactory.getInstance("RSA")
+                .generatePrivate(
+                        new PKCS8EncodedKeySpec(Base64.getDecoder().decode(TEST_KEY_PKCS8_DER_B64)));
+    }
+
     @Test
     void testUseMutualTlsFromKeyStorePkcs12HappyPath() throws Exception {
         Path keyStorePath = Files.createTempFile("mtls-keystore", ".p12");
@@ -630,6 +637,107 @@ public class TlsAdvancedConfigurationTest {
                                             .useMutualTlsFromKeyStore(keyStorePath.toString(), password, "PKCS12")
                                             .build());
             assertTrue(error.getMessage().contains("does not contain a private key entry"));
+        } finally {
+            Files.deleteIfExists(keyStorePath);
+        }
+    }
+
+    @Test
+    void testUseMutualTlsFromKeyStoreTrustStoreOnlyThrows() throws Exception {
+        // A trust store holds only trusted certificates (no PrivateKeyEntry); it must be rejected.
+        // This is the realistic way to hit the "no private key entry" error.
+        Path keyStorePath = Files.createTempFile("mtls-truststore", ".p12");
+        char[] password = "testpass".toCharArray();
+
+        try {
+            KeyStore trustStore = KeyStore.getInstance("PKCS12");
+            trustStore.load(null, password);
+            trustStore.setCertificateEntry("ca-root", loadLeafCertificate());
+            try (FileOutputStream fos = new FileOutputStream(keyStorePath.toFile())) {
+                trustStore.store(fos, password);
+            }
+
+            ConfigurationError error =
+                    assertThrows(
+                            ConfigurationError.class,
+                            () ->
+                                    TlsAdvancedConfiguration.builder()
+                                            .useMutualTlsFromKeyStore(keyStorePath.toString(), password, "PKCS12")
+                                            .build());
+            assertTrue(error.getMessage().contains("does not contain a private key entry"));
+        } finally {
+            Files.deleteIfExists(keyStorePath);
+        }
+    }
+
+    @Test
+    void testUseMutualTlsFromKeyStoreSecretKeyBeforePrivateKeyIsSkipped() throws Exception {
+        // A PKCS12 store holding a SecretKeyEntry under an alias that sorts/lists before the
+        // PrivateKeyEntry. isKeyEntry() is true for both, so a naive scan would select the secret key
+        // and fail; entryInstanceOf(PrivateKeyEntry) must skip it and return the client identity.
+        Path keyStorePath = Files.createTempFile("mtls-mixed", ".p12");
+        char[] password = "testpass".toCharArray();
+
+        try {
+            KeyStore keyStore = KeyStore.getInstance("PKCS12");
+            keyStore.load(null, password);
+            // AES secret key under an alias that lists before the client identity.
+            SecretKey secret = new SecretKeySpec(new byte[16], "AES");
+            keyStore.setEntry(
+                    "aaa-secret",
+                    new KeyStore.SecretKeyEntry(secret),
+                    new KeyStore.PasswordProtection(password));
+            keyStore.setKeyEntry(
+                    "zzz-client", loadLeafPrivateKey(), password, new Certificate[] {loadLeafCertificate()});
+            try (FileOutputStream fos = new FileOutputStream(keyStorePath.toFile())) {
+                keyStore.store(fos, password);
+            }
+
+            TlsAdvancedConfiguration config =
+                    TlsAdvancedConfiguration.builder()
+                            .useMutualTlsFromKeyStore(keyStorePath.toString(), password, "PKCS12")
+                            .build();
+
+            // The client (leaf) certificate is returned, not an error about the secret key.
+            String certPem = new String(config.getClientCertificate(), StandardCharsets.UTF_8);
+            Certificate roundTrippedCert =
+                    CertificateFactory.getInstance("X.509")
+                            .generateCertificate(new ByteArrayInputStream(config.getClientCertificate()));
+            assertEquals(loadLeafCertificate(), roundTrippedCert);
+            assertTrue(certPem.contains("-----BEGIN CERTIFICATE-----"));
+        } finally {
+            Files.deleteIfExists(keyStorePath);
+        }
+    }
+
+    @Test
+    void testUseMutualTlsFromKeyStoreMultiplePrivateKeyEntriesThrows() throws Exception {
+        // Two private key entries make the presented identity ambiguous; the keystore must be
+        // rejected with a ConfigurationError naming the aliases rather than silently picking one.
+        Path keyStorePath = Files.createTempFile("mtls-two-keys", ".p12");
+        char[] password = "testpass".toCharArray();
+
+        try {
+            PrivateKey key = loadLeafPrivateKey();
+            Certificate[] chain = {loadLeafCertificate()};
+            KeyStore keyStore = KeyStore.getInstance("PKCS12");
+            keyStore.load(null, password);
+            keyStore.setKeyEntry("identity-a", key, password, chain);
+            keyStore.setKeyEntry("identity-b", key, password, chain);
+            try (FileOutputStream fos = new FileOutputStream(keyStorePath.toFile())) {
+                keyStore.store(fos, password);
+            }
+
+            ConfigurationError error =
+                    assertThrows(
+                            ConfigurationError.class,
+                            () ->
+                                    TlsAdvancedConfiguration.builder()
+                                            .useMutualTlsFromKeyStore(keyStorePath.toString(), password, "PKCS12")
+                                            .build());
+            assertTrue(error.getMessage().contains("multiple private key entries"));
+            assertTrue(error.getMessage().contains("identity-a"));
+            assertTrue(error.getMessage().contains("identity-b"));
         } finally {
             Files.deleteIfExists(keyStorePath);
         }
