@@ -6,7 +6,7 @@ inputs:
         description: "Directory containing the crate"
         required: true
     publish:
-        description: "Whether to publish to crates.io; otherwise, perform a dry-run"
+        description: "Whether to publish to crates.io; otherwise, perform a dry run"
         required: true
 
 runs:

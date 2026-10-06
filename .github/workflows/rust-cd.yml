@@ -7,8 +7,7 @@ on:
             # been published yet, including the internal GLIDE crates (glide-logger,
             # glide-telemetry, glide-core-engine, and glide-core).
             publish:
-                description: >-
-                    Publish to crates.io; otherwise, perform a dry run.
+                description: "Publish to crates.io; otherwise, perform a dry run"
                 required: true
                 type: boolean
                 default: false
@@ -67,6 +66,7 @@ jobs:
         environment: ${{ inputs.publish && 'AWS_ACTIONS' || '' }}
         permissions:
             contents: read
+            # Required by crates.io trusted publishing (OIDC).
             id-token: write
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -76,7 +76,8 @@ jobs:
             - name: Install Rust toolchain
               uses: ./.github/actions/install-rust
 
-            # Publish crates in dependency order.
+            # Each crate depends on those above it. If a step fails,
+            # re-run the job: already-published versions are skipped.
             - name: Publish glide-logger
               uses: ./.github/workflows/publish-rust-crate
               with:
