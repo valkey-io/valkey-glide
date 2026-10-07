@@ -14,9 +14,12 @@ import java.util.concurrent.CompletableFuture;
  * generated. Implement this interface and return a {@link CompletableFuture} that completes with an
  * {@link AwsCredentials} instance built with the {@link AwsCredentials#builder()}.
  *
- * <p>The future is resolved on a background thread ({@code spawn_blocking}) so it is safe to block
- * or perform I/O inside the provider. However, the Rust core imposes a 10-second timeout; providers
- * that do not complete within that window will cause token generation to fail.
+ * <p>The {@code getCredentials()} method body runs on a dedicated single daemon worker and should
+ * return its future promptly. The method-body invocation and completion of its returned future
+ * share a nine-second deadline. On timeout, GLIDE requests cancellation with interruption.
+ * Providers should respond to interruption; if a method body ignores it and remains blocked, later
+ * invocations for that client are rejected instead of queued. The daemon worker cannot prevent JVM
+ * shutdown.
  *
  * <pre>{@code
  * // Synchronous provider — wrap with completedFuture:
@@ -37,9 +40,10 @@ import java.util.concurrent.CompletableFuture;
  *             .build());
  * }</pre>
  *
- * <p><b>Thread safety:</b> Implementations must be thread-safe. In cluster mode, multiple
- * reconnection attempts may invoke this callback concurrently from different threads. Each
- * invocation is independent — no serialization is provided by the framework.
+ * <p><b>Thread safety:</b> A client's method-body invocations use one worker; an invocation is
+ * rejected rather than queued while that worker is blocked. The same provider instance can still be
+ * configured on multiple clients and invoked concurrently by their independent workers, so shared
+ * provider state must be thread-safe.
  *
  * @see AwsCredentials
  * @see IamAuthConfig#getCredentialsProvider()

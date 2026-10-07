@@ -1,13 +1,20 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import glide.api.models.configuration.AwsCredentials;
+import glide.api.models.configuration.GlideClientConfiguration;
+import glide.api.models.configuration.IamAuthConfig;
+import glide.api.models.configuration.ServerCredentials;
+import glide.api.models.configuration.ServiceType;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import org.junit.jupiter.api.Test;
 
 public class MonitorClientTest {
@@ -67,5 +74,60 @@ public class MonitorClientTest {
     @Test
     void monitorRejectsNullConfig() {
         assertThrows(NullPointerException.class, () -> MonitorClient.create(null));
+    }
+
+    @Test
+    void monitorRejectsIamBeforeNativeInvocation() {
+        GlideClientConfiguration config = iamConfig(null);
+
+        IllegalArgumentException error =
+                assertThrows(IllegalArgumentException.class, () -> MonitorClient.create(config));
+
+        assertTrue(error.getMessage().contains("does not support IAM authentication"));
+    }
+
+    @Test
+    void monitorRejectsCustomProviderIamBeforeNativeInvocation() {
+        GlideClientConfiguration config =
+                iamConfig(
+                        () ->
+                                CompletableFuture.completedFuture(
+                                        AwsCredentials.builder()
+                                                .accessKeyId("access")
+                                                .secretAccessKey("secret")
+                                                .build()));
+
+        IllegalArgumentException error =
+                assertThrows(IllegalArgumentException.class, () -> MonitorClient.create(config));
+
+        assertTrue(error.getMessage().contains("custom IAM credentials providers"));
+    }
+
+    @Test
+    void monitorAllowsPasswordAuthenticationConfiguration() {
+        GlideClientConfiguration config =
+                GlideClientConfiguration.builder()
+                        .credentials(
+                                ServerCredentials.builder()
+                                        .username("monitor-user")
+                                        .password("monitor-password")
+                                        .build())
+                        .build();
+
+        assertDoesNotThrow(() -> MonitorClient.validateConfiguration(config));
+    }
+
+    private static GlideClientConfiguration iamConfig(
+            glide.api.models.configuration.GlideCredentialProvider provider) {
+        IamAuthConfig iam =
+                IamAuthConfig.builder()
+                        .clusterName("monitor-cluster")
+                        .service(ServiceType.ELASTICACHE)
+                        .region("us-east-1")
+                        .credentialsProvider(provider)
+                        .build();
+        return GlideClientConfiguration.builder()
+                .credentials(ServerCredentials.builder().username("monitor-user").iamConfig(iam).build())
+                .build();
     }
 }
