@@ -185,8 +185,9 @@ impl JavaIamTokenCallback {
                 )
             })?;
 
-        // submit() only hands off to the invoker's SynchronousQueue. It never runs the provider body
-        // on this JNI thread and rejects immediately when its sole worker is occupied.
+        // submit() uses an explicit admission gate and only queues an invocation after admission. It
+        // never runs the provider body on this JNI thread and rejects immediately when its sole
+        // worker is occupied.
         // SAFETY: submit_method_id was resolved from this invoker object's class.
         let invocation_result = unsafe {
             env.call_method_unchecked(
