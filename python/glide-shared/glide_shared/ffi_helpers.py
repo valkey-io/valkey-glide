@@ -544,57 +544,125 @@ def _run_coroutine_on_asyncio_loop(coroutine, event_loop):
         raise
 
 
-def _run_coroutine_on_trio_loop(async_fn, args, trio_token):  # noqa: C901
-    """Schedule one credential task on its captured Trio run."""
+class _TrioBridgeState:
+    """Coordinate one foreign-thread callback with its owning Trio run."""
+
+    def __init__(self, bridge, abandoned_cleanup=None) -> None:
+        self.bridge = bridge
+        self.abandoned_cleanup = abandoned_cleanup
+        self.lock = threading.Lock()
+        self.cancel_scope = None
+        self.abandoned = False
+        self.provider_started = False
+        self.cleanup_done = False
+
+    def abandon(self) -> None:
+        """Mark the waiter gone before requesting owner-thread cancellation."""
+        with self.lock:
+            self.abandoned = True
+
+    def should_schedule(self) -> bool:
+        """Return whether owner-side scheduling may still create a task."""
+        with self.lock:
+            return not self.abandoned
+
+    def begin_provider(self, cancel_scope) -> bool:
+        """Transfer work to a started provider task unless already abandoned."""
+        with self.lock:
+            self.cancel_scope = cancel_scope
+            if self.abandoned:
+                return False
+            self.provider_started = True
+            return True
+
+    def cancel_on_owner(self) -> None:
+        """Cancel started work; a not-yet-started runner observes abandonment."""
+        with self.lock:
+            cancel_scope = self.cancel_scope if self.provider_started else None
+        if cancel_scope is not None:
+            cancel_scope.cancel()
+
+    def dispose_abandoned_on_owner(self) -> None:
+        """Dispose never-started awaitable input exactly once on the Trio thread."""
+        with self.lock:
+            if self.cleanup_done:
+                return
+            self.cleanup_done = True
+            cleanup = self.abandoned_cleanup
+        if cleanup is not None:
+            cleanup()
+
+    def set_result(self, result) -> None:
+        if not self.bridge.done():
+            self.bridge.set_result(result)
+
+    def set_exception(self, error) -> None:
+        if not self.bridge.done():
+            self.bridge.set_exception(error)
+
+    def cancel_bridge(self) -> None:
+        if not self.bridge.done():
+            self.bridge.cancel()
+
+
+def _run_coroutine_on_trio_loop(  # noqa: C901
+    async_fn, args, trio_token, *, abandoned_cleanup=None
+):
+    """Schedule one credential task nonblockingly on its captured Trio run."""
     import concurrent.futures
 
     import trio
 
     bridge = concurrent.futures.Future()
-    state_lock = threading.Lock()
-    state = {"cancel_scope": None, "cancel_requested": False}
+    state = _TrioBridgeState(bridge, abandoned_cleanup)
 
     async def runner():
         try:
             with trio.CancelScope() as cancel_scope:
-                with state_lock:
-                    state["cancel_scope"] = cancel_scope
-                    cancel_requested = state["cancel_requested"]
-                if cancel_requested:
-                    cancel_scope.cancel()
+                if not state.begin_provider(cancel_scope):
+                    state.dispose_abandoned_on_owner()
+                    state.cancel_bridge()
+                    return
                 result = await async_fn(*args)
             if cancel_scope.cancelled_caught:
-                bridge.cancel()
+                state.cancel_bridge()
             else:
-                bridge.set_result(result)
+                state.set_result(result)
         except BaseException as error:
-            bridge.set_exception(error)
+            state.set_exception(error)
 
     def schedule() -> None:
-        trio.lowlevel.spawn_system_task(runner)
+        # This callback executes on the Trio thread. It must never raise: Trio
+        # treats exceptions from run_sync_soon callbacks as internal failures.
+        try:
+            if not state.should_schedule():
+                state.dispose_abandoned_on_owner()
+                state.cancel_bridge()
+                return
+            trio.lowlevel.spawn_system_task(runner)
+        except BaseException as error:
+            state.dispose_abandoned_on_owner()
+            state.set_exception(error)
 
+    bridge.add_done_callback(_consume_bridge_completion)
     try:
-        trio.from_thread.run_sync(schedule, trio_token=trio_token)
+        # This returns as soon as the callback is queued and never waits for a
+        # stalled owner run to execute it.
+        trio_token.run_sync_soon(schedule)
     except BaseException as error:
         raise _AwaitableSchedulingError(
             "The credential provider could not be scheduled on its Trio run"
         ) from error
 
-    bridge.add_done_callback(_consume_bridge_completion)
     try:
         return bridge.result(timeout=_CREDENTIAL_BRIDGE_TIMEOUT_SECONDS)
     except concurrent.futures.TimeoutError:
-
-        def cancel_on_owner() -> None:
-            with state_lock:
-                cancel_scope = state["cancel_scope"]
-                state["cancel_requested"] = True
-            if cancel_scope is not None:
-                cancel_scope.cancel()
-
+        state.abandon()
         try:
-            trio_token.run_sync_soon(cancel_on_owner)
+            trio_token.run_sync_soon(state.cancel_on_owner)
         except trio.RunFinishedError:
+            # An accepted schedule callback is guaranteed to have run before
+            # Trio exits, and runner completion is observed by bridge's callback.
             pass
         raise
 
@@ -632,6 +700,7 @@ def _run_awaitable_result(awaitable, provider_owner, event_loop, trio_token):
                 _await_credential_result,
                 (awaitable, provider_owner),
                 trio_token,
+                abandoned_cleanup=lambda: _dispose_awaitable(awaitable),
             )
         except _AwaitableSchedulingError:
             _dispose_awaitable(awaitable)

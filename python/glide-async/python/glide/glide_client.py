@@ -235,6 +235,7 @@ _client_registry: "weakref.WeakValueDictionary[int, BaseClient]" = (
     weakref.WeakValueDictionary()
 )
 _pipe_remainder: bytes = b""
+_pipe_remainder_is_stale: bool = False
 _FRAME_STRUCT = struct.Struct("=QQQQ")  # Pre-compiled for hot path
 _PUBSUB_SENTINEL = 0xFFFFFFFFFFFFFFFF  # request_id sentinel for pubsub frames
 
@@ -425,7 +426,7 @@ def _detect_fork_and_reset() -> None:
     """
     global _async_pipe_read_fd, _async_pipe_write_fd
     global _async_pipe_registered, _async_pipe_loop
-    global _pipe_remainder, _trio_pipe_token
+    global _pipe_remainder, _pipe_remainder_is_stale, _trio_pipe_token
     current_pid = os.getpid()
     if (
         _async_pipe_read_fd >= 0
@@ -446,60 +447,48 @@ def _detect_fork_and_reset() -> None:
         _async_pipe_registered = False
         _async_pipe_loop = None
         _pipe_remainder = b""
+        _pipe_remainder_is_stale = False
         _trio_pipe_token = None
         _client_registry.clear()
 
 
-def _drain_stale_pipe_frames():
-    """Drain stale frames from the pipe to prevent reading freed pointers."""
-    while True:
-        try:
-            stale = os.read(_async_pipe_read_fd, 32 * 256)
-            if not stale:
-                break
-        except (BlockingIOError, OSError):
-            break
-
-
-def _on_async_pipe_readable() -> None:  # noqa: C901
-    # Free-threading optimization: when GIL is disabled, dispatch response parsing
-    # to a thread pool for parallel execution across cores. With GIL enabled,
-    # parse serially on the event loop thread (thread pool overhead not worth it).
-    global _pipe_remainder
-    try:
-        data = os.read(_async_pipe_read_fd, 32 * 512)
-    except (BlockingIOError, OSError):
-        return
-    if not data:
-        return
-    if _pipe_remainder:
-        data = _pipe_remainder + data
-        _pipe_remainder = b""
+def _consume_pipe_frames(data: bytes, *, dispatch: bool, max_frames=None):  # noqa: C901
+    """Consume complete pipe frames, optionally dispatching them to clients."""
     offset = 0
-    while offset + 32 <= len(data):
+    frames_consumed = 0
+    while offset + _FRAME_STRUCT.size <= len(data):
+        if max_frames is not None and frames_consumed >= max_frames:
+            break
+        frame_start = offset
         client_id, request_id, response_ptr, arena_or_err = _FRAME_STRUCT.unpack_from(
             data, offset
         )
-        offset += 32
+        offset += _FRAME_STRUCT.size
+        inline_payload = None
+        if request_id == _PUBSUB_SENTINEL and not arena_or_err & (1 << 63):
+            payload_len = response_ptr
+            if offset + payload_len > len(data):
+                offset = frame_start
+                break
+            inline_payload = data[offset : offset + payload_len]
+            offset += payload_len
+
+        frames_consumed += 1
+        if not dispatch:
+            _free_orphaned_frame(request_id, response_ptr, arena_or_err)
+            continue
+
         client = _client_registry.get(client_id)
         if request_id == _PUBSUB_SENTINEL:
             if arena_or_err & (1 << 63):
-                # Pointer-mode: large message delivered via heap pointer
                 payload_len = arena_or_err & 0x7FFFFFFFFFFFFFFF
                 if client is not None:
                     _handle_pointer_pubsub(client, response_ptr, payload_len)
                 else:
                     _free_orphaned_frame(request_id, response_ptr, arena_or_err)
-            else:
-                # Inline pubsub: response_ptr = payload_len, data follows header
-                payload_len = response_ptr
-                if offset + payload_len > len(data):
-                    # Incomplete payload — put header + remaining back
-                    offset -= 32
-                    break
-                if client is not None:
-                    _handle_inline_pubsub(client, data[offset : offset + payload_len])
-                offset += payload_len
+            elif client is not None:
+                assert inline_payload is not None
+                _handle_inline_pubsub(client, inline_payload)
             continue
         if client is None:
             _free_orphaned_frame(request_id, response_ptr, arena_or_err)
@@ -511,15 +500,60 @@ def _on_async_pipe_readable() -> None:  # noqa: C901
                 )
             else:
                 _handle_pipe_success(client, request_id, response_ptr, arena_or_err)
+        elif _FREE_THREADED and _response_thread_pool is not None:
+            _response_thread_pool.submit(
+                _handle_pipe_error, client, request_id, arena_or_err
+            )
         else:
-            if _FREE_THREADED and _response_thread_pool is not None:
-                _response_thread_pool.submit(
-                    _handle_pipe_error, client, request_id, arena_or_err
-                )
-            else:
-                _handle_pipe_error(client, request_id, arena_or_err)
-    if offset < len(data):
-        _pipe_remainder = data[offset:]
+            _handle_pipe_error(client, request_id, arena_or_err)
+    return data[offset:], frames_consumed
+
+
+def _drain_stale_pipe_frames():
+    """Drain stale frames without dispatch while releasing native ownership."""
+    global _pipe_remainder, _pipe_remainder_is_stale
+    data, _pipe_remainder = _pipe_remainder, b""
+    while True:
+        if data:
+            data, _ = _consume_pipe_frames(data, dispatch=False)
+        try:
+            stale = os.read(_async_pipe_read_fd, _FRAME_STRUCT.size * 256)
+        except (BlockingIOError, OSError):
+            break
+        if not stale:
+            break
+        data += stale
+    # An EAGAIN can split an inline payload or header. Preserve that prefix and
+    # mark it stale so the next reader finishes and frees/skips it without ever
+    # dispatching payload bytes as a new header.
+    _pipe_remainder = data
+    _pipe_remainder_is_stale = bool(data)
+
+
+def _on_async_pipe_readable() -> None:
+    # Free-threading optimization: when GIL is disabled, dispatch response parsing
+    # to a thread pool for parallel execution across cores. With GIL enabled,
+    # parse serially on the event loop thread (thread pool overhead not worth it).
+    global _pipe_remainder, _pipe_remainder_is_stale
+    try:
+        data = os.read(_async_pipe_read_fd, _FRAME_STRUCT.size * 512)
+    except (BlockingIOError, OSError):
+        return
+    if not data:
+        return
+    if _pipe_remainder:
+        data = _pipe_remainder + data
+        _pipe_remainder = b""
+    if _pipe_remainder_is_stale:
+        # A stale remainder contains at most one incomplete frame because the
+        # drain consumed every preceding complete frame. Finish exactly that
+        # frame without dispatch, then resume normal handling at its boundary.
+        data, consumed = _consume_pipe_frames(data, dispatch=False, max_frames=1)
+        if not consumed:
+            _pipe_remainder = data
+            return
+        _pipe_remainder_is_stale = False
+    _pipe_remainder, _ = _consume_pipe_frames(data, dispatch=True)
 
 
 async def _trio_pipe_reader(pipe_fd: int, token: object) -> None:
@@ -910,7 +944,7 @@ class BaseClient(CoreCommands):
         """Initialize and register the shared response pipe."""
         global _async_pipe_read_fd, _async_pipe_write_fd
         global _async_pipe_registered, _async_pipe_loop
-        global _pipe_remainder, _trio_pipe_token, _async_pipe_init_pid
+        global _trio_pipe_token, _async_pipe_init_pid
         # Identify the current trio.run() up front (outside the lock).  The
         # token uniquely names this run, so it both makes registration
         # idempotent within a run and tells a fresh run that a prior run's
@@ -944,7 +978,6 @@ class BaseClient(CoreCommands):
                 if _async_pipe_loop.is_closed():
                     _async_pipe_registered = False
                     _async_pipe_loop = None
-                    _pipe_remainder = b""
                     _drain_stale_pipe_frames()
             # Trio: registration belongs to exactly one trio.run().  If the
             # recorded token differs from this run's, the previous run's reader
@@ -961,7 +994,6 @@ class BaseClient(CoreCommands):
             ):
                 _async_pipe_registered = False
                 _trio_pipe_token = None
-                _pipe_remainder = b""
                 _drain_stale_pipe_frames()
             if _async_pipe_read_fd >= 0 and self._pipe_client_id:
                 _client_registry[self._pipe_client_id] = self

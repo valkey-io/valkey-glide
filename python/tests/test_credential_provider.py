@@ -982,11 +982,8 @@ def test_awaitable_is_closed_when_async_scheduling_fails(monkeypatch, scheduler)
     else:
         import trio
 
-        callback_kwargs["trio_token"] = object()
-        monkeypatch.setattr(
-            trio.from_thread,
-            "run_sync",
-            MagicMock(side_effect=trio.RunFinishedError("run finished")),
+        callback_kwargs["trio_token"] = SimpleNamespace(
+            run_sync_soon=MagicMock(side_effect=trio.RunFinishedError("run finished"))
         )
 
     callback, callback_owner = create_credential_provider_callback(
@@ -1000,6 +997,127 @@ def test_awaitable_is_closed_when_async_scheduling_fails(monkeypatch, scheduler)
 
     assert len(created) == 1
     assert inspect.getcoroutinestate(created[0]) == inspect.CORO_CLOSED
+    assert not any("was never awaited" in str(item.message) for item in caught)
+
+
+def test_trio_stalled_before_schedule_times_out_and_disposes_on_owner(monkeypatch):
+    import glide_shared.ffi_helpers as ffi_helpers
+    import trio
+
+    monkeypatch.setattr(ffi_helpers, "_CREDENTIAL_INNER_TIMEOUT_SECONDS", 1)
+    monkeypatch.setattr(ffi_helpers, "_CREDENTIAL_BRIDGE_TIMEOUT_SECONDS", 0.05)
+    callback_done = threading.Event()
+    schedule_queued = threading.Event()
+    results = []
+    observations = []
+
+    class TrackedAwaitable:
+        def __await__(self):
+            observations.append(("started", threading.get_ident()))
+            return iter(())
+
+        def close(self):
+            observations.append(("closed", threading.get_ident()))
+
+    async def run_test():
+        owner_thread = threading.get_ident()
+        token = trio.lowlevel.current_trio_token()
+
+        class ObservedToken:
+            def run_sync_soon(self, fn, *args, **kwargs):
+                schedule_queued.set()
+                token.run_sync_soon(fn, *args, **kwargs)
+
+        callback, callback_owner = create_credential_provider_callback(
+            GlideFFI.ffi,
+            TrackedAwaitable,
+            trio_token=ObservedToken(),
+            allow_async=True,
+        )
+        assert callback_owner is not None
+
+        def invoke():
+            started = time.monotonic()
+            results.append((_invoke_callback(callback)[0], time.monotonic() - started))
+            callback_done.set()
+
+        callback_thread = threading.Thread(target=invoke)
+        callback_thread.start()
+        # Deliberately block the Trio owner thread before its queued callback can
+        # run. The foreign callback must still reach its own bridge deadline.
+        assert schedule_queued.wait(timeout=1)
+        assert callback_done.wait(timeout=0.5)
+        callback_thread.join(timeout=0.1)
+        assert not callback_thread.is_alive()
+        assert observations == []
+
+        with trio.fail_after(1):
+            while not observations:
+                await trio.lowlevel.checkpoint()
+        assert observations == [("closed", owner_thread)]
+
+    trio.run(run_test)
+    assert results[0][0] == 0
+    assert results[0][1] < 0.5
+
+
+def test_trio_stalled_after_provider_start_times_out_and_cancels_on_owner(monkeypatch):
+    import glide_shared.ffi_helpers as ffi_helpers
+    import trio
+
+    monkeypatch.setattr(ffi_helpers, "_CREDENTIAL_INNER_TIMEOUT_SECONDS", 1)
+    monkeypatch.setattr(ffi_helpers, "_CREDENTIAL_BRIDGE_TIMEOUT_SECONDS", 0.05)
+    callback_done = threading.Event()
+    provider_entered = threading.Event()
+    results = []
+    final_observation = []
+
+    async def run_test():
+        owner_thread = threading.get_ident()
+        finalized = trio.Event()
+
+        async def provider():
+            provider_entered.set()
+            try:
+                await trio.sleep_forever()
+            finally:
+                final_observation.append(threading.get_ident())
+                finalized.set()
+
+        callback, callback_owner = create_credential_provider_callback(
+            GlideFFI.ffi,
+            provider,
+            trio_token=trio.lowlevel.current_trio_token(),
+            allow_async=True,
+        )
+        assert callback_owner is not None
+
+        def invoke():
+            started = time.monotonic()
+            results.append((_invoke_callback(callback)[0], time.monotonic() - started))
+            callback_done.set()
+
+        callback_thread = threading.Thread(target=invoke)
+        callback_thread.start()
+        with trio.fail_after(1):
+            while not provider_entered.is_set():
+                await trio.lowlevel.checkpoint()
+
+        # Stall after provider work starts. Timeout queues owner-side
+        # cancellation nonblockingly instead of parking this foreign thread.
+        assert callback_done.wait(timeout=0.5)
+        callback_thread.join(timeout=0.1)
+        assert not callback_thread.is_alive()
+        with trio.fail_after(1):
+            await finalized.wait()
+        assert final_observation == [owner_thread]
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        trio.run(run_test)
+        gc.collect()
+    assert results[0][0] == 0
+    assert results[0][1] < 0.5
     assert not any("was never awaited" in str(item.message) for item in caught)
 
 
@@ -1817,3 +1935,125 @@ def test_orphan_pipe_frames_free_without_any_registered_client(monkeypatch):
         ffi.cast("uint8_t*", pubsub_pointer), pubsub_length
     )
     assert async_client_module._pipe_remainder == b""
+
+
+def test_stale_pipe_drain_frees_mixed_frames_across_partial_reads(monkeypatch):
+    import glide.glide_client as async_client_module
+
+    ffi = GlideFFI.ffi
+    fake_lib = _FakeNativeLibrary(ffi, GlideFFI.lib)
+    success_arena = 0x2100
+    error_pointer = 0x3100
+    pubsub_pointer = 0x4100
+    pubsub_length = 17
+    inline_payload = b"inline-pubsub-payload"
+    frames = b"".join(
+        (
+            async_client_module._FRAME_STRUCT.pack(1, 1, 0x1100, success_arena),
+            async_client_module._FRAME_STRUCT.pack(1, 2, 0, (9 << 56) | error_pointer),
+            async_client_module._FRAME_STRUCT.pack(
+                1,
+                async_client_module._PUBSUB_SENTINEL,
+                pubsub_pointer,
+                (1 << 63) | pubsub_length,
+            ),
+            async_client_module._FRAME_STRUCT.pack(
+                1,
+                async_client_module._PUBSUB_SENTINEL,
+                len(inline_payload),
+                0,
+            ),
+            inline_payload,
+        )
+    )
+    boundaries = (5, 41, 79, 123, len(frames) - 3)
+    chunks = []
+    start = 0
+    for end in boundaries:
+        chunks.append(frames[start:end])
+        start = end
+    chunks.append(frames[start:])
+
+    def read_chunk(unused_fd, unused_size):
+        if chunks:
+            return chunks.pop(0)
+        raise BlockingIOError
+
+    monkeypatch.setattr(
+        async_client_module, "_ASYNC_FFI", SimpleNamespace(ffi=ffi, lib=fake_lib)
+    )
+    monkeypatch.setattr(async_client_module, "_async_pipe_read_fd", 123)
+    monkeypatch.setattr(async_client_module, "_pipe_remainder", b"")
+    monkeypatch.setattr(async_client_module, "_pipe_remainder_is_stale", False)
+    monkeypatch.setattr(async_client_module.os, "read", read_chunk)
+
+    async_client_module._drain_stale_pipe_frames()
+
+    fake_lib.free_response_arena.assert_called_once_with(
+        ffi.cast("void*", success_arena)
+    )
+    fake_lib.free_pipe_error_string.assert_called_once_with(
+        ffi.cast("char*", error_pointer)
+    )
+    fake_lib.free_pubsub_pointer_payload.assert_called_once_with(
+        ffi.cast("uint8_t*", pubsub_pointer), pubsub_length
+    )
+    assert async_client_module._pipe_remainder == b""
+    assert not async_client_module._pipe_remainder_is_stale
+
+
+def test_stale_inline_remainder_is_not_dispatched_or_reparsed_on_new_loop(monkeypatch):
+    import glide.glide_client as async_client_module
+
+    ffi = GlideFFI.ffi
+    fake_lib = _FakeNativeLibrary(ffi, GlideFFI.lib)
+    inline_handler = MagicMock()
+    inline_payload = b"payload-split-at-eagain"
+    stale_frame = async_client_module._FRAME_STRUCT.pack(
+        77,
+        async_client_module._PUBSUB_SENTINEL,
+        len(inline_payload),
+        0,
+    )
+    stale_prefix = stale_frame[:11]
+    drain_chunks = [stale_frame[11:] + inline_payload[:4]]
+
+    def drain_read(unused_fd, unused_size):
+        if drain_chunks:
+            return drain_chunks.pop(0)
+        raise BlockingIOError
+
+    monkeypatch.setattr(
+        async_client_module, "_ASYNC_FFI", SimpleNamespace(ffi=ffi, lib=fake_lib)
+    )
+    monkeypatch.setattr(async_client_module, "_async_pipe_read_fd", 123)
+    monkeypatch.setattr(async_client_module, "_pipe_remainder", stale_prefix)
+    monkeypatch.setattr(async_client_module, "_pipe_remainder_is_stale", False)
+    monkeypatch.setattr(async_client_module, "_client_registry", {77: object()})
+    monkeypatch.setattr(async_client_module, "_handle_inline_pubsub", inline_handler)
+    monkeypatch.setattr(async_client_module.os, "read", drain_read)
+
+    async_client_module._drain_stale_pipe_frames()
+
+    assert async_client_module._pipe_remainder == stale_frame + inline_payload[:4]
+    assert async_client_module._pipe_remainder_is_stale
+    fake_lib.free_response_arena.assert_not_called()
+    fake_lib.free_pipe_error_string.assert_not_called()
+    fake_lib.free_pubsub_pointer_payload.assert_not_called()
+
+    fresh_arena = 0x5100
+    fresh_frame = async_client_module._FRAME_STRUCT.pack(88, 3, 0x6100, fresh_arena)
+    monkeypatch.setattr(
+        async_client_module.os,
+        "read",
+        lambda unused_fd, unused_size: inline_payload[4:] + fresh_frame,
+    )
+
+    async_client_module._on_async_pipe_readable()
+
+    inline_handler.assert_not_called()
+    fake_lib.free_response_arena.assert_called_once_with(ffi.cast("void*", fresh_arena))
+    fake_lib.free_pipe_error_string.assert_not_called()
+    fake_lib.free_pubsub_pointer_payload.assert_not_called()
+    assert async_client_module._pipe_remainder == b""
+    assert not async_client_module._pipe_remainder_is_stale

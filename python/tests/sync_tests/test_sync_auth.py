@@ -778,8 +778,8 @@ def _awaitable_credentials_provider():
     return _async_credentials_result()
 
 
-@pytest.mark.parametrize("cluster_mode", [False])
-@pytest.mark.parametrize("protocol", [ProtocolVersion.RESP3])
+@pytest.mark.parametrize("cluster_mode", [True, False])
+@pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
 @pytest.mark.parametrize(
     "session_token,expiry", [(None, None), ("test_session_token", 4_000_000_000_000)]
 )
@@ -806,8 +806,8 @@ def test_sync_iam_custom_provider_initial_and_manual_refresh(
         client.close()
 
 
-@pytest.mark.parametrize("cluster_mode", [False])
-@pytest.mark.parametrize("protocol", [ProtocolVersion.RESP3])
+@pytest.mark.parametrize("cluster_mode", [True, False])
+@pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
 def test_sync_iam_custom_provider_automatic_refresh_and_large_token(
     request, cluster_mode, protocol
 ):
@@ -838,8 +838,8 @@ def test_sync_iam_custom_provider_automatic_refresh_and_large_token(
         client.close()
 
 
-@pytest.mark.parametrize("cluster_mode", [False])
-@pytest.mark.parametrize("protocol", [ProtocolVersion.RESP3])
+@pytest.mark.parametrize("cluster_mode", [True, False])
+@pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
 @pytest.mark.parametrize(
     "provider", [_failing_credentials_provider, _awaitable_credentials_provider]
 )

@@ -790,8 +790,8 @@ def _failing_credentials_provider():
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("cluster_mode", [False])
-@pytest.mark.parametrize("protocol", [ProtocolVersion.RESP3])
+@pytest.mark.parametrize("cluster_mode", [True, False])
+@pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
 @pytest.mark.parametrize(
     "session_token,expiry", [(None, None), ("test_session_token", 4_000_000_000_000)]
 )
@@ -838,8 +838,8 @@ async def test_iam_custom_async_provider_forms(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("cluster_mode", [False])
-@pytest.mark.parametrize("protocol", [ProtocolVersion.RESP3])
+@pytest.mark.parametrize("cluster_mode", [True, False])
+@pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
 async def test_iam_custom_provider_automatic_refresh_and_large_token(
     request, cluster_mode, protocol
 ):
@@ -871,8 +871,8 @@ async def test_iam_custom_provider_automatic_refresh_and_large_token(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("cluster_mode", [False])
-@pytest.mark.parametrize("protocol", [ProtocolVersion.RESP3])
+@pytest.mark.parametrize("cluster_mode", [True, False])
+@pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
 async def test_iam_custom_provider_exception_fails_direct_creation(
     request, cluster_mode, protocol
 ):
