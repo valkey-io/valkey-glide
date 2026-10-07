@@ -354,6 +354,26 @@ public class ConnectionManagerTest {
                 "pooled retry strategy matches direct");
     }
 
+    /** An all-zero strategy is sent as set, so the client makes 0 growing retries like the others. */
+    @Test
+    void buildConnectionRequest_sendsAllZeroReconnectStrategy() throws Exception {
+        GlideClientConfiguration clientConfig =
+                GlideClientConfiguration.builder()
+                        .reconnectStrategy(
+                                BackoffStrategy.builder().numOfRetries(0).factor(0).exponentBase(0).build())
+                        .build();
+
+        ConnectionRequestOuterClass.ConnectionRequest request =
+                ConnectionManager.buildConnectionRequest(clientConfig);
+
+        assertTrue(request.hasConnectionRetryStrategy(), "all-zero reconnect strategy is sent");
+        ConnectionRequestOuterClass.ConnectionRetryStrategy strategy =
+                request.getConnectionRetryStrategy();
+        assertEquals(0, strategy.getNumberOfRetries(), "number_of_retries");
+        assertEquals(0, strategy.getFactor(), "factor");
+        assertEquals(0, strategy.getExponentBase(), "exponent_base");
+    }
+
     private static BackoffStrategy.BackoffStrategyBuilder validBackoff() {
         return BackoffStrategy.builder().numOfRetries(3).factor(2).exponentBase(2);
     }

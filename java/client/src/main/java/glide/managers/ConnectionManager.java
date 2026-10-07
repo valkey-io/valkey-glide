@@ -538,7 +538,7 @@ public class ConnectionManager {
             }
         }
 
-        if (reconnectNumRetries > 0 || reconnectFactor > 0 || reconnectExponentBase > 0) {
+        if (reconnectStrategy != null) {
             ConnectionRetryStrategy.Builder retryBuilder = ConnectionRetryStrategy.newBuilder();
             retryBuilder.setNumberOfRetries(reconnectNumRetries);
             retryBuilder.setFactor(reconnectFactor);
