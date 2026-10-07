@@ -4,6 +4,7 @@
 
 ### Fixes
 
+* Node: match the "Disconnection" push kind so the disconnect warning fires ([#7277](https://github.com/valkey-io/valkey-glide/pull/7277))
 * Node: Log the "Transport disconnected, messages might be lost" warning when a connection drops. The push-notification handler matched the kind `"Disconnect"`, but the native layer reports it as `"Disconnection"`, so disconnects were logged as an `Unknown notification` error instead ([#7278](https://github.com/valkey-io/valkey-glide/issues/7278))
 * Node: Log the "Transport disconnected, messages might be lost" warning on pub/sub disconnection. The push-notification handler matched the kind `"Disconnect"`, but the native layer reports it as `"Disconnection"`, so disconnects were logged as an `Unknown notification` error instead ([#7278](https://github.com/valkey-io/valkey-glide/issues/7278))
 * Node: Log the "Transport disconnected, messages might be lost" warning on pub/sub disconnection. The push-notification handler matched the kind `"Disconnect"`, but the native layer reports it as `"Disconnection"`, so disconnects were logged as an `Unknown notification` error instead ([#7276](https://github.com/valkey-io/valkey-glide/issues/7276))
