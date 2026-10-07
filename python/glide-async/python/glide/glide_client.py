@@ -559,6 +559,9 @@ class BaseClient(CoreCommands):
         self._pending_futures: Dict[int, "TFuture"] = {}
         self._callback_id_gen = itertools.count(1)
         self._lock = threading.Lock()
+        self._close_lock = threading.Lock()
+        self._close_event: Optional[Any] = None
+        self._close_error: Optional[BaseException] = None
         self._address_resolver_callback_ref = None
         self._credential_provider_callback_ref = None
         self._pubsub_futures: List["TFuture"] = []
@@ -711,6 +714,7 @@ class BaseClient(CoreCommands):
                 except BaseException:
                     self._release_callback_references()
             else:
+                self._is_closed = True
                 self._release_callback_references()
             raise
 
@@ -1205,34 +1209,60 @@ class BaseClient(CoreCommands):
         self._credential_provider_callback_ref = None
 
     async def close(self, err_message: Optional[str] = None) -> None:
-        if not self._is_closed:
-            self._is_closed = True
-            err_message = "" if err_message is None else err_message
+        """Close once without blocking the asyncio or Trio owner runtime."""
+        with self._close_lock:
+            if self._is_closed:
+                close_event = self._close_event
+                owns_close = False
+            else:
+                self._is_closed = True
+                close_event = anyio.Event()
+                self._close_event = close_event
+                core_client, self._core_client = self._core_client, None
+                owns_close = True
 
-            with self._lock:
-                for fut in self._pending_futures.values():
-                    if not fut.done():
-                        fut.set_exception(ClosingError(err_message))
-                self._pending_futures.clear()
+        if not owns_close:
+            if close_event is not None:
+                await close_event.wait()
+            if self._close_error is not None:
+                raise self._close_error
+            return
 
-            with self._pubsub_lock:
-                for fut in self._pubsub_futures:
-                    if not fut.done():
-                        fut.set_exception(ClosingError(err_message))
-                self._pubsub_futures.clear()
+        assert close_event is not None
+        err_message = "" if err_message is None else err_message
+        with self._lock:
+            for fut in self._pending_futures.values():
+                if not fut.done():
+                    fut.set_exception(ClosingError(err_message))
+            self._pending_futures.clear()
 
-            _client_registry.pop(getattr(self, "_pipe_client_id", 0), None)
+        with self._pubsub_lock:
+            for fut in self._pubsub_futures:
+                if not fut.done():
+                    fut.set_exception(ClosingError(err_message))
+            self._pubsub_futures.clear()
 
-            core_client, self._core_client = self._core_client, None
+        _client_registry.pop(getattr(self, "_pipe_client_id", 0), None)
+
+        try:
             # Skip FFI close for a client inherited from another process (the
             # Tokio runtime does not survive fork and dropping it would hang).
             if core_client is not None and self._create_pid == os.getpid():
-                try:
-                    self._lib.close_client(core_client)
-                finally:
-                    self._release_callback_references()
-            else:
-                self._release_callback_references()
+                # Native shutdown can wait for a credential callback that must
+                # run on this owner runtime. Keep that runtime available and do
+                # not abandon pointer ownership if this task is cancelled.
+                with anyio.CancelScope(shield=True):
+                    await anyio.to_thread.run_sync(
+                        self._lib.close_client,
+                        core_client,
+                        abandon_on_cancel=False,
+                    )
+        except BaseException as error:
+            self._close_error = error
+            raise
+        finally:
+            self._release_callback_references()
+            close_event.set()
 
     async def aclose(self, err_message: Optional[str] = None) -> None:
         """Alias for close() for compatibility with async context managers."""

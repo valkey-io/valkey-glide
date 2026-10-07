@@ -259,6 +259,11 @@ class AsyncClientPool:
             client._pubsub_callback_ref = None
             client._callback_id_gen = __import__("itertools").count(1)
             client._lock = threading.Lock()
+            client._close_lock = threading.Lock()
+            client._close_event = None
+            client._close_error = None
+            client._address_resolver_callback_ref = None
+            client._credential_provider_callback_ref = None
             client._is_asyncio = True
             client._core_client = self._ffi.cast("void*", adapter_ptr)
             client._conn_req_bytes = self._conn_req_bytes

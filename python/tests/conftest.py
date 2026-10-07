@@ -216,6 +216,12 @@ def call_before_all_pytests(request):
         "asyncio",
     )
 
+    if request.session.items and all(
+        item.get_closest_marker("serverless") is not None
+        for item in request.session.items
+    ):
+        return
+
     create_clusters(tls, load_module, cluster_endpoints, standalone_endpoints)
 
 

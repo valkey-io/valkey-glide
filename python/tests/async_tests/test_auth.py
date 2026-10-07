@@ -6,6 +6,7 @@ from typing import AsyncGenerator
 import anyio
 import pytest
 from glide.glide_client import TGlideClient
+from glide_shared.commands.batch import Batch
 from glide_shared.config import (
     AwsCredentials,
     BackoffStrategy,
@@ -849,6 +850,10 @@ async def test_iam_custom_provider_automatic_refresh_and_large_token(
     )
     try:
         await assert_connected(client)
+        batch = Batch(is_atomic=False)
+        batch.set("iam-large-token-batch", "value")
+        batch.get("iam-large-token-batch")
+        assert await client.exec(batch, raise_on_error=True) == [OK, b"value"]
         assert provider.calls >= 2
         calls_after_connect = provider.calls
 
@@ -875,3 +880,58 @@ async def test_iam_custom_provider_exception_fails_direct_creation(
             protocol,
             credential_provider=_failing_credentials_provider,
         )
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("cluster_mode", [False])
+@pytest.mark.parametrize("protocol", [ProtocolVersion.RESP3])
+async def test_iam_close_during_provider_refresh_does_not_block_owner_runtime(
+    request, cluster_mode, protocol
+):
+    """Native close leaves the owner runtime free to finish provider refresh."""
+    provider_entered = anyio.Event()
+    release_provider = anyio.Event()
+    should_block = False
+
+    async def provider():
+        if should_block:
+            provider_entered.set()
+            await release_provider.wait()
+        return AwsCredentials("test_access_key", "test_secret_key")
+
+    client = await create_iam_client(
+        request, cluster_mode, protocol, credential_provider=provider
+    )
+    should_block = True
+    refresh_errors = []
+    closes_completed = []
+
+    async def refresh():
+        try:
+            await client.refresh_iam_token()
+        except ClosingError as error:
+            refresh_errors.append(error)
+
+    async def close():
+        await client.close()
+        closes_completed.append(True)
+
+    try:
+        with anyio.fail_after(5):
+            async with anyio.create_task_group() as task_group:
+                task_group.start_soon(refresh)
+                await provider_entered.wait()
+                task_group.start_soon(close)
+                task_group.start_soon(close)
+
+                async def close_started():
+                    return client._is_closed
+
+                await wait_for(close_started, "close did not start", timeout=1)
+                release_provider.set()
+    finally:
+        release_provider.set()
+        await client.close()
+
+    assert closes_completed == [True, True]
+    assert len(refresh_errors) <= 1

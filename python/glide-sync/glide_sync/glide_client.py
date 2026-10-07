@@ -3,8 +3,20 @@
 import os
 import sys
 import threading
+import weakref
+from functools import wraps
 from types import TracebackType
-from typing import TYPE_CHECKING, Any, List, Optional, Tuple, Union
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    List,
+    Optional,
+    Tuple,
+    TypeVar,
+    Union,
+    cast,
+)
 
 if TYPE_CHECKING:
     from .isolated_scope import IsolatedScope
@@ -61,6 +73,52 @@ _EVALSHA_SPAN_NAME = _SYNC_FFI.ffi.new("char[]", b"EVALSHA")
 
 ENCODING = "utf-8"
 
+_F = TypeVar("_F", bound=Callable[..., Any])
+_live_sync_clients: "weakref.WeakSet[BaseClient]" = weakref.WeakSet()
+_live_sync_clients_lock = threading.Lock()
+_fork_hook_registered = False
+
+
+def _after_fork_in_child() -> None:
+    """Recreate every live direct sync client without retaining any of them."""
+    global _live_sync_clients_lock
+    # A lock inherited from a vanished thread can never be acquired. Replace it
+    # before touching the weak registry in the single-threaded child.
+    _live_sync_clients_lock = threading.Lock()
+    for client in list(_live_sync_clients):
+        try:
+            client._recreate_core_client_after_fork()
+        except BaseException:
+            # One broken client must never prevent the others from recreating.
+            try:
+                client._fail_closed_after_fork()
+            except BaseException:
+                pass
+
+
+def _register_global_fork_hook() -> None:
+    global _fork_hook_registered
+    if hasattr(os, "register_at_fork") and not _fork_hook_registered:
+        os.register_at_fork(after_in_child=_after_fork_in_child)
+        _fork_hook_registered = True
+
+
+_register_global_fork_hook()
+
+
+def _guard_native_call(method: _F) -> _F:
+    """Keep a direct client's native pointer alive for one complete operation."""
+
+    @wraps(method)
+    def guarded(self: "BaseClient", *args: Any, **kwargs: Any) -> Any:
+        self._begin_native_call()
+        try:
+            return method(self, *args, **kwargs)
+        finally:
+            self._end_native_call()
+
+    return cast(_F, guarded)
+
 
 # Enum values must match the Rust definition
 class FFIClientTypeEnum:
@@ -110,11 +168,10 @@ class BaseClient(CoreCommands):
         self._pubsub_callback_ref = None  # Keep callback alive
         self._address_resolver_callback_ref = None
         self._credential_provider_callback_ref = None
-        self._fork_hook_registered = False
-        # Lock protecting _core_client and _is_closed for free-threading safety.
-        # Under GIL builds this is a no-op (GIL serializes access).
-        # Under free-threaded builds this prevents use-after-free on concurrent close.
         self._client_lock = threading.Lock()
+        self._client_condition = threading.Condition(self._client_lock)
+        self._active_native_calls = 0
+        self._close_complete = False
 
         self._is_closed: bool = False
 
@@ -127,14 +184,34 @@ class BaseClient(CoreCommands):
                 "Configuration must be an instance of the sync version of GlideClientConfiguration or GlideClusterClientConfiguration, imported from glide_sync.config."
             )
         self = cls(config)
-        self._create_core_client()
-        self._register_at_fork()
+        try:
+            self._create_core_client()
+        except BaseException:
+            with self._client_condition:
+                self._is_closed = True
+                self._close_complete = True
+            self._clear_callback_references()
+            raise
+        with _live_sync_clients_lock:
+            _live_sync_clients.add(self)
         return self
 
-    def _register_at_fork(self) -> None:
-        if not self._fork_hook_registered:
-            os.register_at_fork(after_in_child=self._recreate_core_client_after_fork)
-            self._fork_hook_registered = True
+    def _begin_native_call(self) -> None:
+        with self._client_condition:
+            if self._is_closed:
+                raise ClosingError(
+                    "Unable to execute requests; the client is closed. "
+                    "Please create a new client."
+                )
+            if self._core_client == self._ffi.NULL:
+                raise ValueError("Invalid client pointer.")
+            self._active_native_calls += 1
+
+    def _end_native_call(self) -> None:
+        with self._client_condition:
+            self._active_native_calls -= 1
+            if self._active_native_calls == 0:
+                self._client_condition.notify_all()
 
     def _clear_callback_references(self) -> None:
         self._pubsub_callback_ref = None
@@ -153,6 +230,9 @@ class BaseClient(CoreCommands):
         self._pubsub_lock = threading.Lock()
         self._pubsub_condition = threading.Condition(self._pubsub_lock)
         self._client_lock = threading.Lock()
+        self._client_condition = threading.Condition(self._client_lock)
+        self._active_native_calls = 0
+        self._close_complete = was_closed
         if was_closed:
             return
 
@@ -165,6 +245,20 @@ class BaseClient(CoreCommands):
             self._conn_req_bytes = b""
             self._clear_callback_references()
             self._is_closed = True
+            self._close_complete = True
+            with _live_sync_clients_lock:
+                _live_sync_clients.discard(self)
+
+    def _fail_closed_after_fork(self) -> None:
+        """Best-effort final fallback for the process-global child hook."""
+        self._core_client = self._ffi.NULL
+        self._conn_req_bytes = b""
+        self._clear_callback_references()
+        self._client_lock = threading.Lock()
+        self._client_condition = threading.Condition(self._client_lock)
+        self._active_native_calls = 0
+        self._is_closed = True
+        self._close_complete = True
 
     def _create_core_client(self) -> None:  # noqa: C901
         # A closed parent must remain closed when its at-fork hook runs.
@@ -534,21 +628,16 @@ class BaseClient(CoreCommands):
             if not mv.c_contiguous:
                 raise TypeError("response_buffers entries must be C-contiguous")
 
+    @_guard_native_call
     def _execute_command(
         self,
-        request_type: RequestType.ValueType,  # type: ignore[override]
+        request_type: int,
         args: List[TEncodable],
         route: Optional[Route] = None,
         response_buffer: Optional[memoryview] = None,
         response_buffers: Optional[List[memoryview]] = None,
     ) -> TResult:
-        if self._is_closed:
-            raise ClosingError(
-                "Unable to execute requests; the client is closed. Please create a new client."
-            )
         client_adapter_ptr = self._core_client
-        if client_adapter_ptr == self._ffi.NULL:
-            raise ValueError("Invalid client pointer.")
         if response_buffer:
             if response_buffer.readonly:
                 raise TypeError("response_buffer must be writable")
@@ -565,7 +654,7 @@ class BaseClient(CoreCommands):
         span_name_cstr = None
         if OpenTelemetry.is_tracing_enabled() and OpenTelemetry.should_sample():
             parent_ctx = OpenTelemetry._get_parent_span_context()
-            command_name = RequestType.Name(request_type)
+            command_name = RequestType.Name(cast(RequestType.ValueType, request_type))
             span_name_cstr = self._ffi.new("char[]", command_name.encode())
             span = _create_command_span(
                 self._ffi, self._lib, span_name_cstr, parent_ctx
@@ -631,6 +720,7 @@ class BaseClient(CoreCommands):
                 self._lib.drop_otel_span(span)
         return self._handle_cmd_result(result)
 
+    @_guard_native_call
     def _update_connection_password(
         self,
         password: Optional[str],
@@ -664,11 +754,7 @@ class BaseClient(CoreCommands):
             >>> client.update_connection_password("new_password", immediate_auth=True)
             'OK'
         """
-        if self._is_closed:
-            raise ClosingError("Client is closed.")
         client_adapter_ptr = self._core_client
-        if client_adapter_ptr == self._ffi.NULL:
-            raise ValueError("Invalid client pointer.")
 
         # Prepare C string for password
         c_password = (
@@ -685,12 +771,9 @@ class BaseClient(CoreCommands):
         )
         return self._handle_cmd_result(result)
 
+    @_guard_native_call
     def _refresh_iam_token(self) -> TResult:
-        if self._is_closed:
-            raise ClosingError("Client is closed.")
         client_adapter_ptr = self._core_client
-        if client_adapter_ptr == self._ffi.NULL:
-            raise ValueError("Invalid client pointer.")
 
         result = self._lib.refresh_iam_token(
             client_adapter_ptr,
@@ -698,9 +781,10 @@ class BaseClient(CoreCommands):
         )
         return self._handle_cmd_result(result)
 
+    @_guard_native_call
     def _execute_batch(
         self,
-        commands: List[Tuple[RequestType.ValueType, List[TEncodable]]],  # type: ignore[override]
+        commands: List[Tuple[int, List[TEncodable]]],
         is_atomic: bool,
         raise_on_error: bool,
         retry_server_error: bool = False,
@@ -713,14 +797,7 @@ class BaseClient(CoreCommands):
         Accepts pre-extracted parameters from exec().
         """
 
-        if self._is_closed:
-            raise ClosingError(
-                "Unable to execute requests; the client is closed. Please create a new client."
-            )
-
         client_adapter_ptr = self._core_client
-        if client_adapter_ptr == self._ffi.NULL:
-            raise ValueError("Invalid client pointer.")
 
         # Create span if OpenTelemetry is configured and sampling indicates we should trace
         from .opentelemetry import OpenTelemetry
@@ -761,7 +838,7 @@ class BaseClient(CoreCommands):
 
     def _convert_commands_to_c_batch_info(
         self,
-        commands: List[Tuple[RequestType.ValueType, List[TEncodable]]],
+        commands: List[Tuple[int, List[TEncodable]]],
         is_atomic: bool,
     ) -> Tuple[Any, List[Any]]:
         """
@@ -916,6 +993,7 @@ class BaseClient(CoreCommands):
 
         return route_info, refs + [route_info]
 
+    @_guard_native_call
     def _execute_script(
         self,
         script_hash: str,
@@ -924,14 +1002,7 @@ class BaseClient(CoreCommands):
         route: Optional[Route] = None,
     ) -> TResult:
 
-        if self._is_closed:
-            raise ClosingError(
-                "Unable to execute requests; the client is closed. Please create a new client."
-            )
-
         client_adapter_ptr = self._core_client
-        if client_adapter_ptr == self._ffi.NULL:
-            raise ValueError("Invalid client pointer.")
 
         # Default to empty lists if None provided
         if keys is None:
@@ -1111,6 +1182,7 @@ class BaseClient(CoreCommands):
             actual_subscriptions=actual_subscriptions,
         )
 
+    @_guard_native_call
     def _get_cache_metrics(self, metrics_type: int) -> TResult:
         """
         Get cache metrics.
@@ -1124,11 +1196,7 @@ class BaseClient(CoreCommands):
         Raises:
             RequestError: If client-side caching is not enabled or metrics tracking is disabled.
         """
-        if self._is_closed:
-            raise ClosingError("Client is closed.")
         client_adapter_ptr = self._core_client
-        if client_adapter_ptr == self._ffi.NULL:
-            raise ValueError("Invalid client pointer.")
 
         result = self._lib.get_cache_metrics(
             client_adapter_ptr,
@@ -1138,17 +1206,29 @@ class BaseClient(CoreCommands):
         return self._handle_cmd_result(result)
 
     def close(self) -> None:
-        with self._client_lock:
-            if not self._is_closed:
-                self._is_closed = True
-                with self._pubsub_condition:
-                    self._pubsub_condition.notify_all()
-                core_client, self._core_client = self._core_client, self._ffi.NULL
-                try:
-                    if core_client != self._ffi.NULL:
-                        self._lib.close_client(core_client)
-                finally:
-                    self._clear_callback_references()
+        with self._client_condition:
+            if self._is_closed:
+                while not self._close_complete:
+                    self._client_condition.wait()
+                return
+            self._is_closed = True
+            while self._active_native_calls:
+                self._client_condition.wait()
+            core_client, self._core_client = self._core_client, self._ffi.NULL
+
+        with _live_sync_clients_lock:
+            _live_sync_clients.discard(self)
+        with self._pubsub_condition:
+            self._pubsub_condition.notify_all()
+
+        try:
+            if core_client != self._ffi.NULL:
+                self._lib.close_client(core_client)
+        finally:
+            self._clear_callback_references()
+            with self._client_condition:
+                self._close_complete = True
+                self._client_condition.notify_all()
 
     def __enter__(self) -> Self:
         return self
@@ -1161,6 +1241,7 @@ class BaseClient(CoreCommands):
     ) -> None:
         self.close()
 
+    @_guard_native_call
     def scoped_connection(
         self, timeout: float = 5.0, routing_key: Optional[str] = None
     ) -> "IsolatedScope":
@@ -1195,9 +1276,6 @@ class BaseClient(CoreCommands):
         import time
 
         from .isolated_scope import IsolatedScope
-
-        if self._is_closed:
-            raise ClosingError("Client is closed.")
 
         # Use the pointer address as client_id for the scope pool
         client_id = int(self._ffi.cast("uintptr_t", self._core_client))
@@ -1320,6 +1398,7 @@ class GlideClusterClient(BaseClient, ClusterCommands):
 
         return args
 
+    @_guard_native_call
     def _cluster_scan(
         self,
         cursor: ClusterScanCursor,
@@ -1328,14 +1407,7 @@ class GlideClusterClient(BaseClient, ClusterCommands):
         type: Optional[ObjectType] = None,
         allow_non_covered_slots: bool = False,
     ) -> List[Union[ClusterScanCursor, List[bytes]]]:
-        if self._is_closed:
-            raise ClosingError(
-                "Unable to execute requests; the client is closed. Please create a new client."
-            )
-
         client_adapter_ptr = self._core_client
-        if client_adapter_ptr == self._ffi.NULL:
-            raise ValueError("Invalid client pointer.")
 
         # Use helper method to build args
         args = self._build_cluster_scan_args(

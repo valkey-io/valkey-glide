@@ -4,7 +4,9 @@ import asyncio
 import gc
 import inspect
 import threading
+import time
 import warnings
+import weakref
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
@@ -23,6 +25,8 @@ from glide_shared.config import (
 )
 from glide_shared.exceptions import ClosingError, ConfigurationError
 from glide_shared.ffi_helpers import create_credential_provider_callback
+
+pytestmark = pytest.mark.serverless
 
 
 def _invoke_callback(callback, capacities=(64, 64, 64), fill=0xA5):
@@ -276,6 +280,7 @@ class _FakeNativeLibrary:
         self.close_client = MagicMock()
         self.close_monitor_client = MagicMock()
         self.command_with_buffer = MagicMock()
+        self.refresh_iam_token = MagicMock()
         self._response = ffi.new(
             "ConnectionResponse*",
             {
@@ -586,12 +591,10 @@ def _patch_sync_client(monkeypatch):
 
     ffi = GlideFFI.ffi
     fake_lib = _FakeNativeLibrary(ffi, GlideFFI.lib)
-    register_at_fork = MagicMock()
     monkeypatch.setattr(
         sync_client_module, "_SYNC_FFI", SimpleNamespace(ffi=ffi, lib=fake_lib)
     )
-    monkeypatch.setattr(sync_client_module.os, "register_at_fork", register_at_fork)
-    return sync_client_module, ffi, fake_lib, register_at_fork
+    return sync_client_module, ffi, fake_lib, None
 
 
 @pytest.mark.parametrize("client_kind", ["async", "sync"])
@@ -626,10 +629,23 @@ def test_monitor_allows_iam_without_custom_provider(monkeypatch, client_kind):
     fake_lib.close_monitor_client.assert_called_once_with(fake_lib._response.conn_ptr)
 
 
-def test_sync_fork_recreation_is_transactional_and_reuses_registered_hook(monkeypatch):
-    sync_client_module, ffi, fake_lib, register_at_fork = _patch_sync_client(
-        monkeypatch
+def test_sync_registers_only_one_process_global_fork_hook(monkeypatch):
+    import glide_sync.glide_client as sync_client_module
+
+    register_at_fork = MagicMock()
+    monkeypatch.setattr(sync_client_module.os, "register_at_fork", register_at_fork)
+    monkeypatch.setattr(sync_client_module, "_fork_hook_registered", False)
+
+    sync_client_module._register_global_fork_hook()
+    sync_client_module._register_global_fork_hook()
+
+    register_at_fork.assert_called_once_with(
+        after_in_child=sync_client_module._after_fork_in_child
     )
+
+
+def test_sync_fork_recreation_is_transactional_with_global_hook(monkeypatch):
+    sync_client_module, ffi, fake_lib, _ = _patch_sync_client(monkeypatch)
 
     def provider():
         return AwsCredentials("access", "secret")
@@ -645,7 +661,7 @@ def test_sync_fork_recreation_is_transactional_and_reuses_registered_hook(monkey
         return fake_lib._response
 
     fake_lib.create_client.side_effect = recreate
-    client._recreate_core_client_after_fork()
+    sync_client_module._after_fork_in_child()
 
     assert not client._is_closed
     assert client._core_client == child_pointer
@@ -656,9 +672,8 @@ def test_sync_fork_recreation_is_transactional_and_reuses_registered_hook(monkey
     )
     assert client._credential_provider_callback_ref is not original_callback
     assert fake_lib.create_client.call_count == 2
-    register_at_fork.assert_called_once_with(
-        after_in_child=client._recreate_core_client_after_fork
-    )
+    assert not hasattr(client, "_fork_hook_registered")
+    assert not hasattr(client, "_register_at_fork")
     fake_lib.close_client.assert_not_called()
     client.close()
     fake_lib.close_client.assert_called_once_with(child_pointer)
@@ -753,7 +768,6 @@ def test_sync_creation_rejects_current_provider_after_sync_to_async_mutation(
         sync_client_module.GlideClient.create(config)
 
     fake_lib.create_client.assert_not_called()
-    register_at_fork.assert_not_called()
 
 
 @pytest.mark.parametrize("scheduler", ["asyncio", "trio"])
@@ -787,7 +801,7 @@ def test_awaitable_is_closed_when_async_scheduling_fails(monkeypatch, scheduler)
         callback_kwargs["trio_token"] = object()
         monkeypatch.setattr(
             trio.from_thread,
-            "run",
+            "run_sync",
             MagicMock(side_effect=trio.RunFinishedError("run finished")),
         )
 
@@ -802,3 +816,234 @@ def test_awaitable_is_closed_when_async_scheduling_fails(monkeypatch, scheduler)
     assert len(created) == 1
     assert inspect.getcoroutinestate(created[0]) == inspect.CORO_CLOSED
     assert not any("was never awaited" in str(item.message) for item in caught)
+
+
+def test_sync_close_waits_for_active_native_call_and_rejects_late_call(monkeypatch):
+    sync_client_module, _, fake_lib, _ = _patch_sync_client(monkeypatch)
+    client = sync_client_module.GlideClient.create(
+        _direct_client_config(lambda: AwsCredentials("access", "secret"))
+    )
+    callback_ref = client._credential_provider_callback_ref
+    native_entered = threading.Event()
+    release_native = threading.Event()
+    call_errors = []
+
+    def blocking_refresh(*args):
+        native_entered.set()
+        assert release_native.wait(timeout=5)
+        raise RuntimeError("native call released")
+
+    fake_lib.refresh_iam_token.side_effect = blocking_refresh
+
+    def call_refresh():
+        try:
+            client._refresh_iam_token()
+        except BaseException as error:
+            call_errors.append(error)
+
+    call_thread = threading.Thread(target=call_refresh)
+    close_thread = threading.Thread(target=client.close)
+    call_thread.start()
+    assert native_entered.wait(timeout=2)
+    close_thread.start()
+
+    deadline = time.monotonic() + 2
+    while not client._is_closed and time.monotonic() < deadline:
+        time.sleep(0.001)
+    assert client._is_closed
+    assert close_thread.is_alive()
+    assert client._credential_provider_callback_ref is callback_ref
+
+    with pytest.raises(ClosingError, match="client is closed"):
+        client._refresh_iam_token()
+    fake_lib.refresh_iam_token.assert_called_once()
+
+    release_native.set()
+    call_thread.join(timeout=2)
+    close_thread.join(timeout=2)
+    assert not call_thread.is_alive()
+    assert not close_thread.is_alive()
+    assert len(call_errors) == 1
+    assert isinstance(call_errors[0], RuntimeError)
+    assert client._credential_provider_callback_ref is None
+    fake_lib.close_client.assert_called_once()
+
+    client.close()
+    fake_lib.close_client.assert_called_once()
+
+
+def test_sync_close_after_failed_creation_is_safe(monkeypatch):
+    sync_client_module, ffi, fake_lib, _ = _patch_sync_client(monkeypatch)
+    fake_lib._response.conn_ptr = ffi.NULL
+    captured = []
+    original_init = sync_client_module.GlideClient.__init__
+
+    def capture_instance(self, config):
+        original_init(self, config)
+        captured.append(self)
+
+    monkeypatch.setattr(sync_client_module.GlideClient, "__init__", capture_instance)
+    with pytest.raises(ClosingError):
+        sync_client_module.GlideClient.create(_direct_client_config())
+
+    assert len(captured) == 1
+    captured[0].close()
+    captured[0].close()
+    assert captured[0]._is_closed
+    assert captured[0]._core_client == ffi.NULL
+    fake_lib.close_client.assert_not_called()
+
+
+def test_sync_fork_registry_is_weak_and_close_discards_client(monkeypatch):
+    sync_client_module, _, fake_lib, _ = _patch_sync_client(monkeypatch)
+    client = sync_client_module.GlideClient.create(_direct_client_config())
+    client_ref = weakref.ref(client)
+    assert client in sync_client_module._live_sync_clients
+
+    client.close()
+    assert client not in sync_client_module._live_sync_clients
+    fake_lib.create_client.reset_mock()
+    del client
+    gc.collect()
+    assert client_ref() is None
+
+
+def test_global_fork_hook_continues_after_one_client_fails(monkeypatch):
+    sync_client_module, _, _, _ = _patch_sync_client(monkeypatch)
+    first = sync_client_module.GlideClient.create(_direct_client_config())
+    second = sync_client_module.GlideClient.create(_direct_client_config())
+    first_recreate = MagicMock(side_effect=RuntimeError("child recreation failed"))
+    first_fail_closed = MagicMock()
+    second_recreate = MagicMock()
+    monkeypatch.setattr(first, "_recreate_core_client_after_fork", first_recreate)
+    monkeypatch.setattr(first, "_fail_closed_after_fork", first_fail_closed)
+    monkeypatch.setattr(second, "_recreate_core_client_after_fork", second_recreate)
+
+    sync_client_module._after_fork_in_child()
+
+    first_recreate.assert_called_once_with()
+    first_fail_closed.assert_called_once_with()
+    second_recreate.assert_called_once_with()
+    first.close()
+    second.close()
+
+
+async def _run_async_close_during_provider(monkeypatch):
+    import glide.glide_client as async_client_module
+
+    ffi = GlideFFI.ffi
+    fake_lib = _FakeNativeLibrary(ffi, GlideFFI.lib)
+    monkeypatch.setattr(
+        async_client_module, "_ASYNC_FFI", SimpleNamespace(ffi=ffi, lib=fake_lib)
+    )
+    monkeypatch.setattr(
+        async_client_module.BaseClient, "_setup_pipe", lambda self: None
+    )
+
+    provider_entered = anyio.Event()
+    release_provider = anyio.Event()
+
+    async def provider():
+        provider_entered.set()
+        await release_provider.wait()
+        return AwsCredentials("access", "secret")
+
+    client = await async_client_module.GlideClient.create(
+        _direct_client_config(provider)
+    )
+    callback_ref = client._credential_provider_callback_ref
+    callback = fake_lib.create_client.call_args.args[5]
+
+    def native_close(pointer):
+        assert pointer == fake_lib._response.conn_ptr
+        assert _invoke_callback(callback)[0] == 1
+
+    fake_lib.close_client.side_effect = native_close
+    close_results = []
+
+    async def close_client():
+        await client.close()
+        close_results.append(True)
+
+    with anyio.fail_after(2):
+        async with anyio.create_task_group() as task_group:
+            task_group.start_soon(close_client)
+            task_group.start_soon(close_client)
+            await provider_entered.wait()
+            assert client._credential_provider_callback_ref is callback_ref
+            release_provider.set()
+
+    assert close_results == [True, True]
+    fake_lib.close_client.assert_called_once_with(fake_lib._response.conn_ptr)
+    assert client._core_client is None
+    assert client._credential_provider_callback_ref is None
+
+
+@pytest.mark.parametrize("backend", ["asyncio", "trio"])
+def test_async_close_keeps_owner_runtime_available_for_provider(monkeypatch, backend):
+    anyio.run(_run_async_close_during_provider, monkeypatch, backend=backend)
+
+
+async def _run_post_scheduling_timeout_cleanup(monkeypatch):
+    import glide_shared.ffi_helpers as ffi_helpers
+
+    monkeypatch.setattr(ffi_helpers, "_CREDENTIAL_INNER_TIMEOUT_SECONDS", 0.05)
+    monkeypatch.setattr(ffi_helpers, "_CREDENTIAL_BRIDGE_TIMEOUT_SECONDS", 0.5)
+    owner_thread = threading.get_ident()
+    final_observation = []
+
+    async def credential_result():
+        try:
+            await anyio.sleep_forever()
+        finally:
+            final_observation.append(
+                (threading.get_ident(), sniffio.current_async_library())
+            )
+
+    def provider():
+        return credential_result()
+
+    if sniffio.current_async_library() == "asyncio":
+        event_loop = asyncio.get_running_loop()
+        trio_token = None
+        unhandled = []
+        old_handler = event_loop.get_exception_handler()
+        event_loop.set_exception_handler(
+            lambda loop, context: unhandled.append(context)
+        )
+    else:
+        import trio
+
+        event_loop = None
+        trio_token = trio.lowlevel.current_trio_token()
+        unhandled = []
+        old_handler = None
+
+    callback = create_credential_provider_callback(
+        GlideFFI.ffi,
+        provider,
+        event_loop=event_loop,
+        trio_token=trio_token,
+        allow_async=True,
+    )
+    try:
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            assert (await anyio.to_thread.run_sync(_invoke_callback, callback))[0] == 0
+            gc.collect()
+            await anyio.sleep(0)
+    finally:
+        if event_loop is not None:
+            event_loop.set_exception_handler(old_handler)
+
+    assert final_observation == [(owner_thread, sniffio.current_async_library())]
+    assert not unhandled
+    assert not any("was never awaited" in str(item.message) for item in caught)
+    assert not any(
+        "exception was never retrieved" in str(item.message) for item in caught
+    )
+
+
+@pytest.mark.parametrize("backend", ["asyncio", "trio"])
+def test_post_scheduling_timeout_finalizes_on_owner_runtime(monkeypatch, backend):
+    anyio.run(_run_post_scheduling_timeout_cleanup, monkeypatch, backend=backend)

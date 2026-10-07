@@ -5,6 +5,7 @@ import time
 from typing import Generator
 
 import pytest
+from glide_shared.commands.batch import Batch
 from glide_shared.config import (
     AwsCredentials,
     BackoffStrategy,
@@ -817,6 +818,10 @@ def test_sync_iam_custom_provider_automatic_refresh_and_large_token(
     )
     try:
         assert_connected_sync(client)
+        batch = Batch(is_atomic=False)
+        batch.set("iam-large-token-batch", "value")
+        batch.get("iam-large-token-batch")
+        assert client.exec(batch, raise_on_error=True) == [OK, b"value"]
         assert provider.calls >= 2
         calls_after_connect = provider.calls
         sync_wait_for(

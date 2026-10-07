@@ -2,6 +2,7 @@
 
 """Shared FFI helper utilities for converting Python arguments to C-compatible arrays."""
 
+import threading
 from enum import IntEnum
 
 from glide_shared._glide_ffi import GlideFFI as _GlideFFI_singleton
@@ -300,14 +301,19 @@ _CREDENTIAL_CALLBACK_FAILURE = 0
 _CREDENTIAL_CALLBACK_SUCCESS = 1
 _CREDENTIAL_CALLBACK_BUFFER_TOO_SMALL = 2
 _MAX_CREDENTIAL_BYTES = 1024 * 1024
+_CREDENTIAL_INNER_TIMEOUT_SECONDS = 8
 _CREDENTIAL_BRIDGE_TIMEOUT_SECONDS = 9
+
+
+class _AwaitableSchedulingError(RuntimeError):
+    """An owner runtime rejected work before the awaitable was scheduled."""
 
 
 async def _await_credential_result(awaitable):
     """Await one provider result with a deadline below the Rust deadline."""
     import anyio
 
-    with anyio.fail_after(_CREDENTIAL_BRIDGE_TIMEOUT_SECONDS):
+    with anyio.fail_after(_CREDENTIAL_INNER_TIMEOUT_SECONDS):
         return await awaitable
 
 
@@ -321,23 +327,97 @@ async def _call_async_credential_provider(provider):
     return await _await_credential_result(result)
 
 
+def _consume_bridge_completion(future) -> None:
+    """Retrieve a bridge result so late task failures are never unobserved."""
+    import concurrent.futures
+
+    try:
+        future.exception()
+    except concurrent.futures.CancelledError:
+        pass
+
+
 def _run_coroutine_on_asyncio_loop(coroutine, event_loop):
     """Run a coroutine from the native callback thread on an asyncio loop."""
     import asyncio
+    import concurrent.futures
 
     if event_loop is None or event_loop.is_closed():
-        coroutine.close()
-        raise RuntimeError("The credential provider's asyncio loop is unavailable")
+        _dispose_awaitable(coroutine)
+        raise _AwaitableSchedulingError(
+            "The credential provider's asyncio loop is unavailable"
+        )
 
     try:
         future = asyncio.run_coroutine_threadsafe(coroutine, event_loop)
-    except BaseException:
+    except BaseException as error:
         _dispose_awaitable(coroutine)
-        raise
+        raise _AwaitableSchedulingError(
+            "The credential provider could not be scheduled on its asyncio loop"
+        ) from error
+
+    future.add_done_callback(_consume_bridge_completion)
     try:
         return future.result(timeout=_CREDENTIAL_BRIDGE_TIMEOUT_SECONDS)
-    except BaseException:
-        future.cancel()
+    except concurrent.futures.TimeoutError:
+        # The coroutine belongs to the event loop now. Request cancellation on
+        # that loop; never cancel or close it directly from this callback thread.
+        event_loop.call_soon_threadsafe(future.cancel)
+        raise
+
+
+def _run_coroutine_on_trio_loop(async_fn, args, trio_token):  # noqa: C901
+    """Schedule one credential task on its captured Trio run."""
+    import concurrent.futures
+
+    import trio
+
+    bridge = concurrent.futures.Future()
+    state_lock = threading.Lock()
+    state = {"cancel_scope": None, "cancel_requested": False}
+
+    async def runner():
+        try:
+            with trio.CancelScope() as cancel_scope:
+                with state_lock:
+                    state["cancel_scope"] = cancel_scope
+                    cancel_requested = state["cancel_requested"]
+                if cancel_requested:
+                    cancel_scope.cancel()
+                result = await async_fn(*args)
+            if cancel_scope.cancelled_caught:
+                bridge.cancel()
+            else:
+                bridge.set_result(result)
+        except BaseException as error:
+            bridge.set_exception(error)
+
+    def schedule() -> None:
+        trio.lowlevel.spawn_system_task(runner)
+
+    try:
+        trio.from_thread.run_sync(schedule, trio_token=trio_token)
+    except BaseException as error:
+        raise _AwaitableSchedulingError(
+            "The credential provider could not be scheduled on its Trio run"
+        ) from error
+
+    bridge.add_done_callback(_consume_bridge_completion)
+    try:
+        return bridge.result(timeout=_CREDENTIAL_BRIDGE_TIMEOUT_SECONDS)
+    except concurrent.futures.TimeoutError:
+
+        def cancel_on_owner() -> None:
+            with state_lock:
+                cancel_scope = state["cancel_scope"]
+                state["cancel_requested"] = True
+            if cancel_scope is not None:
+                cancel_scope.cancel()
+
+        try:
+            trio_token.run_sync_soon(cancel_on_owner)
+        except trio.RunFinishedError:
+            pass
         raise
 
 
@@ -348,10 +428,8 @@ def _run_async_credential_provider(provider, event_loop, trio_token):
             _call_async_credential_provider(provider), event_loop
         )
     if trio_token is not None:
-        import trio
-
-        return trio.from_thread.run(
-            _call_async_credential_provider, provider, trio_token=trio_token
+        return _run_coroutine_on_trio_loop(
+            _call_async_credential_provider, (provider,), trio_token
         )
     raise RuntimeError(
         "Async credential providers require a running asyncio or Trio context"
@@ -360,20 +438,22 @@ def _run_async_credential_provider(provider, event_loop, trio_token):
 
 def _run_awaitable_result(awaitable, event_loop, trio_token):
     """Await a result returned by a nominally synchronous provider."""
-    try:
-        if event_loop is not None:
+    if event_loop is not None:
+        try:
             return _run_coroutine_on_asyncio_loop(
                 _await_credential_result(awaitable), event_loop
             )
-        if trio_token is not None:
-            import trio
-
-            return trio.from_thread.run(
-                _await_credential_result, awaitable, trio_token=trio_token
+        except _AwaitableSchedulingError:
+            _dispose_awaitable(awaitable)
+            raise
+    if trio_token is not None:
+        try:
+            return _run_coroutine_on_trio_loop(
+                _await_credential_result, (awaitable,), trio_token
             )
-    except BaseException:
-        _dispose_awaitable(awaitable)
-        raise
+        except _AwaitableSchedulingError:
+            _dispose_awaitable(awaitable)
+            raise
     _dispose_awaitable(awaitable)
     raise RuntimeError(
         "Credential provider returned an awaitable without an async client context"
@@ -381,7 +461,7 @@ def _run_awaitable_result(awaitable, event_loop, trio_token):
 
 
 def _dispose_awaitable(awaitable) -> None:
-    """Cancel or close a rejected awaitable so it cannot leak warnings."""
+    """Cancel or close an awaitable only before it belongs to an owner runtime."""
     cancel = getattr(awaitable, "cancel", None)
     if callable(cancel):
         cancel()

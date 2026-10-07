@@ -274,7 +274,12 @@ class ClientPool:
             client._pubsub_lock = threading.Lock()
             client._pubsub_condition = threading.Condition(client._pubsub_lock)
             client._pubsub_callback_ref = None
+            client._address_resolver_callback_ref = None
+            client._credential_provider_callback_ref = None
             client._client_lock = threading.Lock()
+            client._client_condition = threading.Condition(client._client_lock)
+            client._active_native_calls = 0
+            client._close_complete = False
             client._core_client = cast_ptr
             client._conn_req_bytes = self._conn_req_bytes
 
