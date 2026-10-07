@@ -27,31 +27,14 @@ type encodedCredentials struct {
 	expiresAtMillis int64
 }
 
-type credentialProviderEntry struct {
-	mu       sync.Mutex
-	provider config.GlideCredentialProvider
-	pending  *encodedCredentials
-}
-
-var credentialProviderRegistry sync.Map // map[uintptr]*credentialProviderEntry
+var credentialProviderRegistry sync.Map // map[uintptr]config.GlideCredentialProvider
 
 func registerCredentialProvider(clientID uintptr, provider config.GlideCredentialProvider) {
-	credentialProviderRegistry.Store(clientID, &credentialProviderEntry{provider: provider})
+	credentialProviderRegistry.Store(clientID, provider)
 }
 
 func unregisterCredentialProvider(clientID uintptr) {
-	value, ok := credentialProviderRegistry.LoadAndDelete(clientID)
-	if !ok {
-		return
-	}
-	entry, ok := value.(*credentialProviderEntry)
-	if !ok {
-		return
-	}
-	entry.mu.Lock()
-	entry.provider = nil
-	entry.pending = nil
-	entry.mu.Unlock()
+	credentialProviderRegistry.Delete(clientID)
 }
 
 func invokeCredentialProvider(provider config.GlideCredentialProvider) (
@@ -124,6 +107,30 @@ func setCredentialLengths(
 	*sessionTokenLen = uintptr(len(credentials.sessionToken))
 }
 
+func writeCredentialProviderResult(
+	credentials *encodedCredentials,
+	accessKeyIDBuf []byte,
+	accessKeyIDLen *uintptr,
+	secretAccessKeyBuf []byte,
+	secretAccessKeyLen *uintptr,
+	sessionTokenBuf []byte,
+	sessionTokenLen *uintptr,
+	expiresAtMillis *int64,
+) uint8 {
+	if !credentialBuffersFit(credentials, accessKeyIDBuf, secretAccessKeyBuf, sessionTokenBuf) {
+		setCredentialLengths(credentials, accessKeyIDLen, secretAccessKeyLen, sessionTokenLen)
+		return credentialCallbackBufferTooSmall
+	}
+
+	// Every capacity is validated before any output is changed.
+	copy(accessKeyIDBuf, credentials.accessKeyID)
+	copy(secretAccessKeyBuf, credentials.secretAccessKey)
+	copy(sessionTokenBuf, credentials.sessionToken)
+	setCredentialLengths(credentials, accessKeyIDLen, secretAccessKeyLen, sessionTokenLen)
+	*expiresAtMillis = credentials.expiresAtMillis
+	return credentialCallbackSuccess
+}
+
 func handleCredentialProviderCallback(
 	clientID uintptr,
 	accessKeyIDBuf []byte,
@@ -138,49 +145,18 @@ func handleCredentialProviderCallback(
 	if !ok {
 		return credentialCallbackFailure
 	}
-	entry, ok := value.(*credentialProviderEntry)
-	if !ok || entry == nil {
+	provider, ok := value.(config.GlideCredentialProvider)
+	if !ok || provider == nil {
 		return credentialCallbackFailure
 	}
 
-	entry.mu.Lock()
-	credentials := entry.pending
-	provider := entry.provider
-	if credentials != nil {
-		status := writeCredentialProviderResult(
-			entry,
-			credentials,
-			accessKeyIDBuf,
-			accessKeyIDLen,
-			secretAccessKeyBuf,
-			secretAccessKeyLen,
-			sessionTokenBuf,
-			sessionTokenLen,
-			expiresAtMillis,
-		)
-		entry.mu.Unlock()
-		return status
-	}
-	entry.mu.Unlock()
-
-	// The provider may call Close/unregister recursively, so it must run without the
-	// entry mutex held. Rust serializes complete logical calls for this provider.
-	if provider == nil {
-		return credentialCallbackFailure
-	}
+	// Invoke outside registry synchronization. If the provider unregisters itself, this
+	// invocation may finish using the already-loaded function; the next lookup will fail.
 	credentials, valid := encodeCredentialProviderResult(provider)
 	if !valid {
 		return credentialCallbackFailure
 	}
-
-	entry.mu.Lock()
-	defer entry.mu.Unlock()
-	current, registered := credentialProviderRegistry.Load(clientID)
-	if registered && current != entry {
-		return credentialCallbackFailure
-	}
 	return writeCredentialProviderResult(
-		entry,
 		credentials,
 		accessKeyIDBuf,
 		accessKeyIDLen,
@@ -190,35 +166,6 @@ func handleCredentialProviderCallback(
 		sessionTokenLen,
 		expiresAtMillis,
 	)
-}
-
-// writeCredentialProviderResult is called with entry.mu held. It retains at most one
-// validated encoded value, and only when Rust must immediately resize and retry.
-func writeCredentialProviderResult(
-	entry *credentialProviderEntry,
-	credentials *encodedCredentials,
-	accessKeyIDBuf []byte,
-	accessKeyIDLen *uintptr,
-	secretAccessKeyBuf []byte,
-	secretAccessKeyLen *uintptr,
-	sessionTokenBuf []byte,
-	sessionTokenLen *uintptr,
-	expiresAtMillis *int64,
-) uint8 {
-	if !credentialBuffersFit(credentials, accessKeyIDBuf, secretAccessKeyBuf, sessionTokenBuf) {
-		setCredentialLengths(credentials, accessKeyIDLen, secretAccessKeyLen, sessionTokenLen)
-		entry.pending = credentials
-		return credentialCallbackBufferTooSmall
-	}
-
-	// Validate every capacity before writing, then copy all fields as one logical operation.
-	copy(accessKeyIDBuf, credentials.accessKeyID)
-	copy(secretAccessKeyBuf, credentials.secretAccessKey)
-	copy(sessionTokenBuf, credentials.sessionToken)
-	setCredentialLengths(credentials, accessKeyIDLen, secretAccessKeyLen, sessionTokenLen)
-	*expiresAtMillis = credentials.expiresAtMillis
-	entry.pending = nil
-	return credentialCallbackSuccess
 }
 
 func credentialBuffer(pointer *C.uint8_t, length C.uintptr_t) []byte {

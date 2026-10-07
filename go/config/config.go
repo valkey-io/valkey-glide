@@ -71,7 +71,9 @@ type AwsCredentials struct {
 // a custom STS assume-role flow) instead of the default AWS credential chain.
 //
 // Thread safety: implementations must be safe for concurrent calls -- in cluster mode,
-// independent reconnections may invoke this callback simultaneously.
+// independent reconnections may invoke this callback simultaneously. A credential fetch may
+// also invoke the provider twice for FFI buffer negotiation, so implementations must tolerate
+// repeated invocation and must not rely on exactly-once behavior.
 //
 // Promptness: return quickly; this callback sits on the reconnect path and a slow
 // implementation directly extends failover time.

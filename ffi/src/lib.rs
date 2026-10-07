@@ -470,12 +470,15 @@ impl redis::AddressResolver for FFIAddressResolver {
 /// Callback type for custom AWS credential providers used with C FFI bindings (Go, Python sync/async).
 ///
 /// Called by the Rust core each time a fresh IAM token needs to be generated. All string output
-/// parameters are UTF-8 encoded. The callback status values are:
+/// parameters are UTF-8 encoded. Providers may be invoked twice for one credential fetch when
+/// buffer negotiation is required, so they must tolerate repeated invocation. The callback status
+/// values are:
 ///
 /// * `0` - failure; the callback will not be retried.
 /// * `1` - success; the reported lengths are the bytes written to each buffer.
 /// * `2` - buffer too small; buffer contents are ignored and all three reported lengths must be
-///   set to the exact required sizes. The callback is retried once with exactly those capacities.
+///   set to the exact required sizes. The callback is retried once with the full per-field limit
+///   for every buffer, allowing credentials to change between invocations.
 ///
 /// All other status values are invalid.
 ///
@@ -552,7 +555,6 @@ struct CredentialCallbackResult {
 struct FFICredentialsProvider {
     callback: NonNullCredentialProviderCallback,
     client_id: usize,
-    call_lock: std::sync::Mutex<()>,
 }
 // SAFETY: The callback is a C function pointer safe to share across threads.
 unsafe impl Send for FFICredentialsProvider {}
@@ -662,6 +664,17 @@ impl FFICredentialsProvider {
         secret_access_key_buf: &[u8],
         session_token_buf: &[u8],
     ) -> Result<FFICredentials, glide_core::iam::GlideIAMError> {
+        if result.lengths.contains(&UNSET_CREDENTIAL_LENGTH) {
+            return Err(Self::credentials_error(
+                "Custom credentials provider returned success without setting all three lengths",
+            ));
+        }
+        if result.lengths[0] == 0 || result.lengths[1] == 0 {
+            return Err(Self::credentials_error(
+                "Custom credentials provider returned success with an empty required credential field",
+            ));
+        }
+
         let capacities = [
             access_key_id_buf.len(),
             secret_access_key_buf.len(),
@@ -669,11 +682,26 @@ impl FFICredentialsProvider {
         ];
         let field_names = ["access_key_id", "secret_access_key", "session_token"];
         for ((length, capacity), field) in result.lengths.iter().zip(capacities).zip(field_names) {
+            if *length > MAX_CREDENTIALS_BUFFER_SIZE {
+                return Err(Self::credentials_error(format!(
+                    "Custom credentials provider reported {field} length {length} exceeding the {MAX_CREDENTIALS_BUFFER_SIZE}-byte limit"
+                )));
+            }
             if *length > capacity {
                 return Err(Self::credentials_error(format!(
                     "Custom credentials provider reported {field} length {length} exceeding buffer size {capacity}"
                 )));
             }
+        }
+        let aggregate = result.lengths.iter().try_fold(0usize, |total, length| {
+            total.checked_add(*length).ok_or_else(|| {
+                Self::credentials_error("Custom credential lengths overflowed usize")
+            })
+        })?;
+        if aggregate > MAX_CREDENTIALS_BUFFER_SIZE {
+            return Err(Self::credentials_error(format!(
+                "Custom credentials provider reported {aggregate} aggregate bytes, exceeding the {MAX_CREDENTIALS_BUFFER_SIZE}-byte limit"
+            )));
         }
 
         let decode = |bytes: &[u8], field: &str| {
@@ -727,12 +755,6 @@ impl FFICredentialsProvider {
 
     /// Invoke the callback and return the AWS credentials.
     fn call(&self) -> Result<FFICredentials, glide_core::iam::GlideIAMError> {
-        // One logical fetch may require a sizing callback followed by a retry. Keep that
-        // pair atomic per provider so callback adapters only need to retain one pending result.
-        let _call_guard = self.call_lock.lock().map_err(|_| {
-            Self::credentials_error("Custom credentials provider call lock was poisoned")
-        })?;
-
         let mut access_key_id_buf =
             Self::allocate_buffer(INITIAL_CREDENTIAL_BUFFER_SIZE, "access_key_id")?;
         let mut secret_access_key_buf =
@@ -759,10 +781,16 @@ impl FFICredentialsProvider {
                     session_token_buf.len(),
                 ];
                 Self::validate_resize_lengths(first.lengths, capacities)?;
-                access_key_id_buf = Self::allocate_buffer(first.lengths[0], "access_key_id")?;
+                // Allocate the full policy limit for every field rather than trusting the first
+                // invocation's exact sizes. A stateless provider may rotate credentials before the
+                // retry; the independently validated retry can still succeed if its coherent result
+                // remains within the per-field and aggregate policy.
+                access_key_id_buf =
+                    Self::allocate_buffer(MAX_CREDENTIALS_BUFFER_SIZE, "access_key_id")?;
                 secret_access_key_buf =
-                    Self::allocate_buffer(first.lengths[1], "secret_access_key")?;
-                session_token_buf = Self::allocate_buffer(first.lengths[2], "session_token")?;
+                    Self::allocate_buffer(MAX_CREDENTIALS_BUFFER_SIZE, "secret_access_key")?;
+                session_token_buf =
+                    Self::allocate_buffer(MAX_CREDENTIALS_BUFFER_SIZE, "session_token")?;
 
                 let retry = self.invoke_callback(
                     &mut access_key_id_buf,
@@ -809,8 +837,6 @@ mod tests_ffi_credentials_provider {
     use super::*;
     use std::cell::RefCell;
     use std::collections::VecDeque;
-    use std::sync::{Arc, Mutex, OnceLock};
-    use std::time::Duration;
 
     #[derive(Clone)]
     struct CallbackStep {
@@ -931,7 +957,6 @@ mod tests_ffi_credentials_provider {
         FFICredentialsProvider {
             callback,
             client_id: 42,
-            call_lock: std::sync::Mutex::new(()),
         }
     }
 
@@ -978,13 +1003,16 @@ mod tests_ffi_credentials_provider {
     }
 
     #[test]
-    fn buffer_too_small_resizes_all_fields_exactly_and_retries_once() {
-        let access_key = vec![b'a'; 3000];
-        let secret_key = vec![b'b'; 2500];
-        let session_token = vec![b'c'; 2200];
-        let required = [access_key.len(), secret_key.len(), session_token.len()];
+    fn buffer_too_small_retries_with_full_caps_and_accepts_changed_larger_result() {
+        let first_required = [3000, 2500, 2200];
+        let access_key = vec![b'd'; 4000];
+        let secret_key = vec![b'e'; 3500];
+        let session_token = vec![b'f'; 3000];
         set_steps([
-            CallbackStep::status(CREDENTIAL_CALLBACK_BUFFER_TOO_SMALL, required.map(Some)),
+            CallbackStep::status(
+                CREDENTIAL_CALLBACK_BUFFER_TOO_SMALL,
+                first_required.map(Some),
+            ),
             CallbackStep::success(
                 access_key.clone(),
                 secret_key.clone(),
@@ -992,7 +1020,7 @@ mod tests_ffi_credentials_provider {
             ),
         ]);
 
-        let credentials = call_scripted().expect("resized callback should succeed");
+        let credentials = call_scripted().expect("changed retry credentials should succeed");
 
         assert_eq!(credentials.0.as_bytes(), access_key);
         assert_eq!(credentials.1.as_bytes(), secret_key);
@@ -1002,7 +1030,10 @@ mod tests_ffi_credentials_provider {
         );
         assert_eq!(
             capacities(),
-            vec![[INITIAL_CREDENTIAL_BUFFER_SIZE; 3], required]
+            vec![
+                [INITIAL_CREDENTIAL_BUFFER_SIZE; 3],
+                [MAX_CREDENTIALS_BUFFER_SIZE; 3],
+            ]
         );
     }
 
@@ -1115,6 +1146,53 @@ mod tests_ffi_credentials_provider {
     }
 
     #[test]
+    fn retry_failure_and_unknown_status_are_controlled_errors() {
+        for (status, expected) in [
+            (CREDENTIAL_CALLBACK_FAILURE, "failure on retry"),
+            (9, "unknown status 9 on retry"),
+        ] {
+            set_steps([
+                CallbackStep::status(
+                    CREDENTIAL_CALLBACK_BUFFER_TOO_SMALL,
+                    [Some(3000), Some(6), Some(0)],
+                ),
+                CallbackStep::status(status, [None; 3]),
+            ]);
+
+            let error = call_scripted().expect_err("retry status must fail");
+
+            assert!(error.to_string().contains(expected));
+            assert_eq!(capacities().len(), 2);
+        }
+    }
+
+    #[test]
+    fn retry_success_lengths_are_validated_independently() {
+        let malformed = [
+            [None, Some(6), Some(0)],
+            [Some(0), Some(6), Some(0)],
+            [Some(MAX_CREDENTIALS_BUFFER_SIZE + 1), Some(6), Some(0)],
+            [
+                Some(MAX_CREDENTIALS_BUFFER_SIZE / 2 + 1),
+                Some(MAX_CREDENTIALS_BUFFER_SIZE / 2),
+                Some(0),
+            ],
+        ];
+        for lengths in malformed {
+            set_steps([
+                CallbackStep::status(
+                    CREDENTIAL_CALLBACK_BUFFER_TOO_SMALL,
+                    [Some(3000), Some(6), Some(0)],
+                ),
+                CallbackStep::status(CREDENTIAL_CALLBACK_SUCCESS, lengths),
+            ]);
+
+            assert!(call_scripted().is_err());
+            assert_eq!(capacities().len(), 2);
+        }
+    }
+
+    #[test]
     fn resize_lengths_over_per_field_or_aggregate_cap_are_rejected() {
         let over_cap = [
             [Some(MAX_CREDENTIALS_BUFFER_SIZE + 1), Some(6), Some(0)],
@@ -1214,82 +1292,6 @@ mod tests_ffi_credentials_provider {
 
         let error = result.expect_err("Rust callback panic must be contained");
         assert!(error.to_string().contains("callback panicked"));
-    }
-
-    static CONCURRENT_PHASES: OnceLock<Mutex<Vec<char>>> = OnceLock::new();
-
-    unsafe extern "C-unwind" fn concurrent_resize_callback(
-        _client_id: usize,
-        access_key_id_buf: *mut u8,
-        access_key_id_buf_len: usize,
-        access_key_id_len: *mut usize,
-        secret_access_key_buf: *mut u8,
-        _secret_access_key_buf_len: usize,
-        secret_access_key_len: *mut usize,
-        _session_token_buf: *mut u8,
-        _session_token_buf_len: usize,
-        session_token_len: *mut usize,
-        _expires_at_epoch_millis: *mut i64,
-    ) -> u8 {
-        let phases = CONCURRENT_PHASES.get_or_init(|| Mutex::new(Vec::new()));
-        if access_key_id_buf_len == INITIAL_CREDENTIAL_BUFFER_SIZE {
-            phases.lock().unwrap().push('I');
-            // Give another logical call enough time to enter its initial callback if the
-            // provider-level lock does not cover the complete sizing/retry operation.
-            std::thread::sleep(Duration::from_millis(50));
-            unsafe {
-                *access_key_id_len = 3000;
-                *secret_access_key_len = 6;
-                *session_token_len = 0;
-            }
-            CREDENTIAL_CALLBACK_BUFFER_TOO_SMALL
-        } else {
-            phases.lock().unwrap().push('R');
-            unsafe {
-                std::ptr::write_bytes(access_key_id_buf, b'a', 3000);
-                std::ptr::copy_nonoverlapping(b"secret".as_ptr(), secret_access_key_buf, 6);
-                *access_key_id_len = 3000;
-                *secret_access_key_len = 6;
-                *session_token_len = 0;
-            }
-            CREDENTIAL_CALLBACK_SUCCESS
-        }
-    }
-
-    #[test]
-    fn concurrent_logical_calls_cannot_interleave_callback_phases() {
-        let phases = CONCURRENT_PHASES.get_or_init(|| Mutex::new(Vec::new()));
-        phases.lock().unwrap().clear();
-        let provider = Arc::new(provider(concurrent_resize_callback));
-
-        let first = {
-            let provider = Arc::clone(&provider);
-            std::thread::spawn(move || provider.call())
-        };
-        let second = {
-            let provider = Arc::clone(&provider);
-            std::thread::spawn(move || provider.call())
-        };
-
-        assert!(first.join().unwrap().is_ok());
-        assert!(second.join().unwrap().is_ok());
-        assert_eq!(*phases.lock().unwrap(), vec!['I', 'R', 'I', 'R']);
-    }
-
-    #[test]
-    fn poisoned_call_lock_returns_credentials_error() {
-        let provider = Arc::new(provider(scripted_callback));
-        let poisoner = {
-            let provider = Arc::clone(&provider);
-            std::thread::spawn(move || {
-                let _guard = provider.call_lock.lock().unwrap();
-                panic!("poison provider lock");
-            })
-        };
-        assert!(poisoner.join().is_err());
-
-        let error = provider.call().expect_err("poisoning must be controlled");
-        assert!(error.to_string().contains("call lock was poisoned"));
     }
 }
 
@@ -2367,7 +2369,6 @@ fn create_client_internal(
             let provider = FFICredentialsProvider {
                 callback: cp_callback,
                 client_id,
-                call_lock: std::sync::Mutex::new(()),
             };
             let provider_arc: glide_core::iam::CredentialsProvider =
                 Arc::new(move || provider.call());
