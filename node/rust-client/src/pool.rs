@@ -111,8 +111,6 @@ pub fn create_pool<'a>(
     connection_request_bytes: Uint8Array,
     pool_config: PoolConfigNapi,
 ) -> Result<Object<'a>> {
-    let (deferred, promise) = env.create_deferred()?;
-
     let conn_req_bytes = connection_request_bytes.as_ref().to_vec();
 
     let proto_req = ProtobufConnectionRequest::parse_from_bytes(&conn_req_bytes).map_err(|e| {
@@ -121,6 +119,17 @@ pub fn create_pool<'a>(
             format!("Invalid connection request: {e}"),
         )
     })?;
+
+    if proto_req
+        .credential_provider_key
+        .as_ref()
+        .is_some_and(|key| !key.is_empty())
+    {
+        return Err(Error::new(
+            Status::InvalidArg,
+            "Pool clients cannot use a custom IAM credentials provider. Configure IAM without a credentialProvider to use the default AWS credential chain.",
+        ));
+    }
 
     if proto_req.pubsub_subscriptions.is_some() {
         return Err(Error::new(
@@ -145,6 +154,11 @@ pub fn create_pool<'a>(
 
     let pool = ClientPool::new(config)
         .map_err(|e| Error::new(Status::InvalidArg, format!("Invalid pool config: {e}")))?;
+
+    // Synchronous validation above must not leave an unsettled Deferred TSFN.
+    // Create the Promise before registering any pool so an environment failure
+    // also cannot leak a native pool entry.
+    let (deferred, promise) = env.create_deferred()?;
 
     let pool_id = pool::register_pool(pool) as i64;
 
@@ -360,6 +374,7 @@ pub fn pool_build_handle<'a>(
             wake_tsfn,
             inflight_requests_limit,
             Some(client_id_u64),
+            false,
         )
         .await
         {

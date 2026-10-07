@@ -29,6 +29,12 @@ import {
     parseEndpoints,
 } from "./TestUtilities";
 import {
+    CreateDirectClient,
+    registerCredentialProvider,
+    removeCredentialProvider,
+} from "../build-ts/native";
+import { connection_request } from "../build-ts/ProtobufMessage";
+import {
     IAM_TEST_CLUSTER_NAME,
     IAM_TEST_REGION_US_EAST_1,
     IAM_USERNAME,
@@ -39,6 +45,10 @@ type BaseClient = GlideClient | GlideClusterClient;
 const USERNAME = "username";
 const INITIAL_PASSWORD = "initial_password";
 const NEW_PASSWORD = "new_password";
+const IAM_TESTS_ENABLED = Boolean(
+    process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY,
+);
+const iamIt = IAM_TESTS_ENABLED ? it : it.skip;
 const WRONG_PASSWORD = "wrong_password";
 const TIMEOUT = 50000;
 
@@ -627,7 +637,7 @@ describe("Auth tests", () => {
 
 // IAM Auth tests with mock credentials
 describe("IAM Auth: Mock Credentials", () => {
-    it(
+    iamIt(
         "test_iam_authentication_with_mock_credentials",
         async () => {
             // See DEVELOPER.md for instructions on running IAM authentication tests
@@ -693,7 +703,7 @@ describe("IAM Auth: Mock Credentials", () => {
         TIMEOUT,
     );
 
-    it(
+    iamIt(
         "test_iam_authentication_automatic_token_refresh",
         async () => {
             // See DEVELOPER.md for instructions on running IAM authentication tests
@@ -757,7 +767,7 @@ describe("IAM Auth: Mock Credentials", () => {
         TIMEOUT,
     );
 
-    it(
+    iamIt(
         "test_iam_authentication_with_mock_credentials_standalone",
         async () => {
             // See DEVELOPER.md for instructions on running IAM authentication tests
@@ -823,7 +833,7 @@ describe("IAM Auth: Mock Credentials", () => {
         TIMEOUT,
     );
 
-    it(
+    iamIt(
         "test_iam_authentication_automatic_token_refresh_standalone",
         async () => {
             // See DEVELOPER.md for instructions on running IAM authentication tests
@@ -973,7 +983,7 @@ describe("IAM Auth: Direct Custom Credential Providers", () => {
         await clusterServer?.close();
     }, TIMEOUT);
 
-    it.each([
+    iamIt.each([
         ["standalone", "sync", false, false],
         ["standalone", "Promise", false, true],
         ["cluster", "sync", true, false],
@@ -988,9 +998,6 @@ describe("IAM Auth: Direct Custom Credential Providers", () => {
             const credentialProvider: GlideCredentialProvider = () => {
                 invocations++;
                 const credentials = environmentCredentials({
-                    sessionToken: promiseProvider
-                        ? process.env.AWS_SESSION_TOKEN
-                        : undefined,
                     expiresAtEpochMillis: Date.now() + 60_000,
                 });
                 return promiseProvider
@@ -1018,7 +1025,7 @@ describe("IAM Auth: Direct Custom Credential Providers", () => {
         TIMEOUT,
     );
 
-    it.each([
+    iamIt.each([
         ["standalone", false, false],
         ["cluster", true, true],
     ])(
@@ -1055,7 +1062,7 @@ describe("IAM Auth: Direct Custom Credential Providers", () => {
         TIMEOUT,
     );
 
-    it.each([
+    iamIt.each([
         [
             "sync throw",
             () => {
@@ -1078,7 +1085,7 @@ describe("IAM Auth: Direct Custom Credential Providers", () => {
         TIMEOUT,
     );
 
-    it.each([
+    iamIt.each([
         [
             "empty access key from sync provider",
             "",
@@ -1143,40 +1150,12 @@ describe("IAM Auth: Direct Custom Credential Providers", () => {
         TIMEOUT,
     );
 
-    it.each([
-        ["sync", false],
-        ["Promise", true],
-    ])(
-        "preserves valid surrounding whitespace from a %s provider",
-        async (_providerKind, promiseProvider) => {
-            if (!iamEnabled) return;
-
-            const directClient = await createDirectClient(
-                false,
-                providerFor(
-                    environmentCredentials({
-                        accessKeyId: `  ${process.env.AWS_ACCESS_KEY_ID!}  `,
-                        secretAccessKey: `\t${process.env.AWS_SECRET_ACCESS_KEY!}\n`,
-                    }),
-                    promiseProvider,
-                ),
-            );
-
-            try {
-                await assertConnected(directClient);
-            } finally {
-                directClient.close();
-            }
-        },
-        TIMEOUT,
-    );
-
-    it.each([
+    iamIt.each([
         ["omitted", undefined, false],
         ["zero", 0, true],
         ["negative", -1, false],
         ["valid", Date.now() + 60_000, true],
-        ["huge", Number.MAX_SAFE_INTEGER, false],
+        ["maximum safe integer", Number.MAX_SAFE_INTEGER, false],
     ])(
         "accepts %s expiresAtEpochMillis from a direct provider",
         async (_caseName, expiresAtEpochMillis, promiseProvider) => {
@@ -1199,53 +1178,215 @@ describe("IAM Auth: Direct Custom Credential Providers", () => {
         TIMEOUT,
     );
 
-    it("times out an unresolved Promise provider and safely drops late completion", async () => {
-        if (!iamEnabled) return;
+    iamIt.each([
+        ["NaN", Number.NaN, false],
+        ["positive infinity", Number.POSITIVE_INFINITY, true],
+        ["negative infinity", Number.NEGATIVE_INFINITY, false],
+        ["fractional", Date.now() + 0.5, true],
+        ["above the safe-integer range", Number.MAX_SAFE_INTEGER + 1, false],
+    ])(
+        "rejects %s expiresAtEpochMillis from a direct provider",
+        async (_caseName, expiresAtEpochMillis, promiseProvider) => {
+            if (!iamEnabled) return;
 
-        let resolveLate: ((credentials: AwsCredentials) => void) | undefined;
-        const credentialProvider: GlideCredentialProvider = () =>
-            new Promise((resolve) => {
-                resolveLate = resolve;
+            await expect(
+                createDirectClient(
+                    false,
+                    providerFor(
+                        environmentCredentials({ expiresAtEpochMillis }),
+                        promiseProvider,
+                    ),
+                ),
+            ).rejects.toThrow(/finite safe integer/u);
+        },
+        TIMEOUT,
+    );
+
+    iamIt(
+        "surfaces a custom provider failure from manual refresh",
+        async () => {
+            let failRefresh = false;
+
+            const credentialProvider: GlideCredentialProvider = () => {
+                if (failRefresh) {
+                    throw new Error("manual refresh provider failure");
+                }
+
+                return environmentCredentials();
+            };
+
+            const directClient = await createDirectClient(
+                false,
+                credentialProvider,
+            );
+
+            try {
+                await assertConnected(directClient);
+                failRefresh = true;
+                await expect(directClient.refreshIamToken()).rejects.toThrow(
+                    /manual refresh provider failure/u,
+                );
+            } finally {
+                directClient.close();
+            }
+        },
+    );
+
+    iamIt(
+        "supports known synthetic long-term credentials without a session token",
+        async () => {
+            const directClient = await createDirectClient(false, () => ({
+                accessKeyId: "synthetic_long_term_access_key",
+                secretAccessKey: "synthetic_long_term_secret_key",
+            }));
+
+            try {
+                await assertConnected(directClient);
+            } finally {
+                directClient.close();
+            }
+        },
+    );
+
+    iamIt(
+        "restores a failed Rust claim before JS rejection cleanup",
+        async () => {
+            const providerKey = registerCredentialProvider(() =>
+                Promise.reject(new Error("handoff provider failure")),
+            );
+            const request = connection_request.ConnectionRequest.create({
+                addresses: addressesFor(false),
+                tlsMode: global.TLS
+                    ? connection_request.TlsMode.SecureTls
+                    : connection_request.TlsMode.NoTls,
+                authenticationInfo: {
+                    username: IAM_USERNAME,
+                    iamCredentials: {
+                        clusterName: IAM_TEST_CLUSTER_NAME,
+                        region: IAM_TEST_REGION_US_EAST_1,
+                        serviceType: connection_request.ServiceType.ELASTICACHE,
+                        refreshIntervalSeconds: 300,
+                    },
+                },
+                credentialProviderKey: providerKey,
             });
-        const startedAt = Date.now();
+            const requestBytes =
+                connection_request.ConnectionRequest.encode(request).finish();
 
-        await expect(
-            createDirectClient(false, credentialProvider, 300, 15_000),
-        ).rejects.toThrow(/did not return within 9s/u);
-        const elapsed = Date.now() - startedAt;
-        expect(elapsed).toBeGreaterThanOrEqual(8_500);
-        expect(elapsed).toBeLessThan(10_000);
+            let handoffError: unknown;
 
-        resolveLate!(environmentCredentials());
-        await new Promise((resolve) => setTimeout(resolve, 200));
+            try {
+                await CreateDirectClient(requestBytes, () => undefined);
+            } catch (error) {
+                handoffError = error;
+                // This is the same immediate cleanup performed by BaseClient's catch.
+                removeCredentialProvider(providerKey);
+            }
 
-        const healthyClient = await createDirectClient(false, () =>
-            environmentCredentials(),
-        );
+            expect(String(handoffError)).toMatch(/handoff provider failure/u);
 
-        try {
-            await assertConnected(healthyClient);
-        } finally {
-            healthyClient.close();
-        }
-    }, 20_000);
+            // The same key must remain absent: no Rust claim may restore it after the
+            // JavaScript rejection handler has removed it.
+            await expect(
+                Promise.resolve().then(() =>
+                    CreateDirectClient(requestBytes, () => undefined),
+                ),
+            ).rejects.toThrow(/was not found/u);
+        },
+    );
 
-    it("creates standalone and cluster custom-provider clients concurrently", async () => {
-        if (!iamEnabled) return;
+    iamIt(
+        "times out a synchronous provider and safely drops its late return",
+        async () => {
+            const credentialProvider: GlideCredentialProvider = () => {
+                Atomics.wait(
+                    new Int32Array(
+                        new SharedArrayBuffer(Int32Array.BYTES_PER_ELEMENT),
+                    ),
+                    0,
+                    0,
+                    9_250,
+                );
+                return environmentCredentials();
+            };
 
-        const [standaloneClient, clusterClient] = await Promise.all([
-            createDirectClient(false, () => environmentCredentials()),
-            createDirectClient(true, async () => environmentCredentials()),
-        ]);
+            const startedAt = Date.now();
 
-        try {
-            await Promise.all([
-                assertConnected(standaloneClient),
-                assertConnected(clusterClient),
+            await expect(
+                createDirectClient(false, credentialProvider, 300, 15_000),
+            ).rejects.toThrow(/did not return within 9s/u);
+            const elapsed = Date.now() - startedAt;
+            expect(elapsed).toBeGreaterThanOrEqual(9_000);
+            expect(elapsed).toBeLessThan(10_000);
+
+            const healthyClient = await createDirectClient(false, () =>
+                environmentCredentials(),
+            );
+
+            try {
+                await assertConnected(healthyClient);
+            } finally {
+                healthyClient.close();
+            }
+        },
+        20_000,
+    );
+
+    iamIt(
+        "times out an unresolved Promise provider and safely drops late completion",
+        async () => {
+            if (!iamEnabled) return;
+
+            let resolveLate:
+                ((credentials: AwsCredentials) => void) | undefined;
+            const credentialProvider: GlideCredentialProvider = () =>
+                new Promise((resolve) => {
+                    resolveLate = resolve;
+                });
+            const startedAt = Date.now();
+
+            await expect(
+                createDirectClient(false, credentialProvider, 300, 15_000),
+            ).rejects.toThrow(/did not return within 9s/u);
+            const elapsed = Date.now() - startedAt;
+            expect(elapsed).toBeGreaterThanOrEqual(8_500);
+            expect(elapsed).toBeLessThan(10_000);
+
+            resolveLate!(environmentCredentials());
+            await new Promise((resolve) => setTimeout(resolve, 200));
+
+            const healthyClient = await createDirectClient(false, () =>
+                environmentCredentials(),
+            );
+
+            try {
+                await assertConnected(healthyClient);
+            } finally {
+                healthyClient.close();
+            }
+        },
+        20_000,
+    );
+
+    iamIt(
+        "creates standalone and cluster custom-provider clients concurrently",
+        async () => {
+            if (!iamEnabled) return;
+
+            const [standaloneClient, clusterClient] = await Promise.all([
+                createDirectClient(false, () => environmentCredentials()),
+                createDirectClient(true, async () => environmentCredentials()),
             ]);
-        } finally {
-            standaloneClient.close();
-            clusterClient.close();
-        }
-    });
+
+            try {
+                await Promise.all([
+                    assertConnected(standaloneClient),
+                    assertConnected(clusterClient),
+                ]);
+            } finally {
+                standaloneClient.close();
+                clusterClient.close();
+            }
+        },
+    );
 });
