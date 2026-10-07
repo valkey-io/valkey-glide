@@ -12,6 +12,55 @@ from typing import Any
 from glide_shared._glide_ffi import GlideFFI as _GlideFFI_singleton
 
 
+class _AddressResolverCallbackOwner:
+    """Keep a user resolver alive without making its CFFI callback own it."""
+
+    def __init__(self, resolver: Any) -> None:
+        self.resolver = resolver
+
+
+class _CredentialProviderCallbackOwner:
+    """Keep provider state alive separately from its CFFI trampoline."""
+
+    def __init__(
+        self,
+        provider: Any,
+        *,
+        event_loop: Any = None,
+        trio_token: Any = None,
+        allow_async: bool = False,
+        provider_owner: Any = None,
+    ) -> None:
+        from glide_shared.config import _is_async_callable
+
+        self.provider = provider
+        self.is_async_callable = _is_async_callable(provider)
+        self.event_loop_ref = (
+            weakref.ref(event_loop) if event_loop is not None else None
+        )
+        self.trio_token = trio_token
+        self.allow_async = allow_async
+        try:
+            self.provider_owner_ref = (
+                weakref.ref(provider_owner) if provider_owner is not None else None
+            )
+        except TypeError:
+            # Reentrancy tracking does not justify retaining a non-weakrefable
+            # owner through a native callback graph.
+            self.provider_owner_ref = None
+
+    def event_loop(self) -> Any:
+        return self.event_loop_ref() if self.event_loop_ref is not None else None
+
+    def provider_owner(self) -> Any:
+        owner = (
+            self.provider_owner_ref() if self.provider_owner_ref is not None else None
+        )
+        # Standalone helper users and a create worker whose caller disappeared
+        # can use this detached owner as their reentrancy marker.
+        return owner if owner is not None else self
+
+
 class _NativeClientOwner:
     """Own a native client pointer and its callbacks without owning its client."""
 
@@ -326,17 +375,18 @@ def create_c_batch_options(
 
 
 def create_address_resolver_callback(ffi, resolver_fn):
-    """Create an AddressResolverCallback for the FFI from a Python resolver function.
+    """Create a resolver trampoline and its separately retained callable owner.
 
-    Args:
-        ffi: The CFFI instance.
-        resolver_fn: A callable(host: str, port: int) -> (resolved_host: str, resolved_port: int).
-
-    Returns:
-        The CFFI callback object. Caller must keep a reference to prevent GC.
+    The CFFI callback captures only a weak reference to the owner. Callers must
+    keep the returned owner alive for as long as native code may call the
+    trampoline. If native close invokes it after owner collection, it safely
+    returns 0 so Rust falls back to the original address.
     """
     if resolver_fn is None:
-        return ffi.cast("AddressResolverCallback", ffi.NULL)
+        return ffi.cast("AddressResolverCallback", ffi.NULL), None
+
+    callback_owner = _AddressResolverCallbackOwner(resolver_fn)
+    callback_owner_ref = weakref.ref(callback_owner)
 
     def _address_resolver_callback(
         client_id,
@@ -347,24 +397,28 @@ def create_address_resolver_callback(ffi, resolver_fn):
         resolved_host_buf_len,
         resolved_host_len_ptr,
     ):
+        owner = callback_owner_ref()
+        if owner is None:
+            return 0
         try:
             host = ffi.buffer(host_ptr, host_len)[:].decode(ENCODING)
-            resolved_host, resolved_port = resolver_fn(host, port)
+            resolved_host, resolved_port = owner.resolver(host, port)
             encoded_host = resolved_host.encode(ENCODING)
             write_len = min(len(encoded_host), resolved_host_buf_len)
             ffi.memmove(resolved_host_buf, encoded_host, write_len)
             resolved_host_len_ptr[0] = write_len
             return resolved_port
-        except Exception as e:
+        except Exception as error:
             # Return 0 (original port) to signal failure to the Rust layer,
             # which will fall back to the original address. We cannot propagate
             # exceptions across the FFI callback boundary.
             from glide_shared.logger import Level, Logger
 
-            Logger.log(Level.WARN, "address_resolver", f"Resolver failed: {e}")
+            Logger.log(Level.WARN, "address_resolver", f"Resolver failed: {error}")
             return 0
 
-    return ffi.callback("AddressResolverCallback", _address_resolver_callback)
+    callback = ffi.callback("AddressResolverCallback", _address_resolver_callback)
+    return callback, callback_owner
 
 
 _CREDENTIAL_CALLBACK_FAILURE = 0
@@ -620,25 +674,24 @@ def create_credential_provider_callback(
     it false; rejected awaitables are closed or cancelled before failure.
 
     Returns:
-        A typed NULL callback when no provider is configured, otherwise a CFFI
-        callback that must be retained for the native client's lifetime.
+        A ``(callback, owner)`` pair. The callback is typed NULL and the owner
+        is None when no provider is configured. Otherwise callers must retain
+        the owner while native callbacks are allowed; the trampoline itself
+        retains only a weak reference to it.
     """
     if credential_provider_fn is None:
-        return ffi.cast("CredentialProviderCallback", ffi.NULL)
+        return ffi.cast("CredentialProviderCallback", ffi.NULL), None
 
     import inspect
 
-    from glide_shared.config import _is_async_callable
-
-    is_async_callable = _is_async_callable(credential_provider_fn)
-    event_loop_ref = weakref.ref(event_loop) if event_loop is not None else None
-    try:
-        provider_owner_ref = weakref.ref(provider_owner)
-    except TypeError:
-        # Non-weak-referenceable test/helper owners retain the legacy behavior;
-        # direct clients are weak-referenceable and always take the safe path.
-        def provider_owner_ref():
-            return provider_owner
+    callback_owner = _CredentialProviderCallbackOwner(
+        credential_provider_fn,
+        event_loop=event_loop,
+        trio_token=trio_token,
+        allow_async=allow_async,
+        provider_owner=provider_owner,
+    )
+    callback_owner_ref = weakref.ref(callback_owner)
 
     def _credential_provider_callback(
         client_id,
@@ -653,25 +706,29 @@ def create_credential_provider_callback(
         session_token_len_ptr,
         expires_at_millis_ptr,
     ):
-        provider_owner = provider_owner_ref()
-        _push_thread_provider_owner(provider_owner)
+        owner = callback_owner_ref()
+        if owner is None:
+            return _CREDENTIAL_CALLBACK_FAILURE
+        provider = owner.provider
+        provider_marker = owner.provider_owner()
+        _push_thread_provider_owner(provider_marker)
         try:
-            owner_loop = event_loop_ref() if event_loop_ref is not None else None
-            if is_async_callable:
-                if not allow_async:
+            owner_loop = owner.event_loop()
+            if owner.is_async_callable:
+                if not owner.allow_async:
                     raise TypeError(
                         "The sync client does not support async credential providers"
                     )
                 credentials = _run_async_credential_provider(
-                    credential_provider_fn,
-                    provider_owner,
+                    provider,
+                    provider_marker,
                     owner_loop,
-                    trio_token,
+                    owner.trio_token,
                 )
             else:
-                credentials = credential_provider_fn()
+                credentials = provider()
                 if inspect.isawaitable(credentials):
-                    if not allow_async:
+                    if not owner.allow_async:
                         _dispose_awaitable(credentials)
                         raise TypeError(
                             "The sync credential provider returned an awaitable; "
@@ -679,9 +736,9 @@ def create_credential_provider_callback(
                         )
                     credentials = _run_awaitable_result(
                         credentials,
-                        provider_owner,
+                        provider_marker,
                         owner_loop,
-                        trio_token,
+                        owner.trio_token,
                     )
 
             return _write_credentials_to_buffers(
@@ -708,7 +765,8 @@ def create_credential_provider_callback(
         finally:
             _pop_thread_provider_owner()
 
-    return ffi.callback("CredentialProviderCallback", _credential_provider_callback)
+    callback = ffi.callback("CredentialProviderCallback", _credential_provider_callback)
+    return callback, callback_owner
 
 
 def _write_credentials_to_buffers(

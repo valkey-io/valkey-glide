@@ -85,6 +85,10 @@ from .opentelemetry import OpenTelemetry
 _ASYNC_FFI = _GlideFFI()  # Async client's own FFI instance
 
 
+# Native creation has already completed when this deadline starts. A healthy
+# owner loop adopts immediately; ten seconds only accommodates severe scheduler
+# stalls while preventing a successful orphan pointer from living forever.
+_NATIVE_CREATE_ADOPTION_DECISION_TIMEOUT_SECONDS = 10.0
 if sys.version_info >= (3, 11):
     from typing import Self
 else:
@@ -252,28 +256,27 @@ if _FREE_THREADED:
 
 
 def _free_orphaned_frame(request_id, response_ptr, arena_or_err):
-    """Free resources from a pipe frame whose client has been closed."""
-    if request_id == _PUBSUB_SENTINEL:
-        if arena_or_err & (1 << 63):
-            # Pointer-mode pubsub: free the heap-allocated payload
-            payload_len = arena_or_err & 0x7FFFFFFFFFFFFFFF
-            any_c = next(iter(_client_registry.values()), None)
-            if any_c:
-                any_c._lib.free_pubsub_pointer_payload(
-                    any_c._ffi.cast("uint8_t*", response_ptr), payload_len
-                )
-        return
-    any_c = next(iter(_client_registry.values()), None)
-    if any_c is None:
-        return
+    """Free native ownership from a frame whose weak client is already gone."""
+    ffi = _ASYNC_FFI.ffi
+    lib = _ASYNC_FFI.lib
     try:
+        if request_id == _PUBSUB_SENTINEL:
+            if arena_or_err & (1 << 63):
+                # Inline pubsub frames own no native allocation. Pointer-mode
+                # frames always own exactly one heap payload.
+                payload_len = arena_or_err & 0x7FFFFFFFFFFFFFFF
+                lib.free_pubsub_pointer_payload(
+                    ffi.cast("uint8_t*", response_ptr), payload_len
+                )
+            return
         if response_ptr != 0 and arena_or_err != 0:
-            any_c._lib.free_response_arena(any_c._ffi.cast("void*", arena_or_err))
+            lib.free_response_arena(ffi.cast("void*", arena_or_err))
         elif response_ptr == 0 and arena_or_err != 0:
             err_ptr = arena_or_err & 0x00FFFFFFFFFFFFFF
             if err_ptr:
-                any_c._lib.free_pipe_error_string(any_c._ffi.cast("char*", err_ptr))
+                lib.free_pipe_error_string(ffi.cast("char*", err_ptr))
     except Exception:
+        # Pipe cleanup is best effort and must not stop later frames draining.
         pass
 
 
@@ -486,11 +489,7 @@ def _on_async_pipe_readable() -> None:  # noqa: C901
                 if client is not None:
                     _handle_pointer_pubsub(client, response_ptr, payload_len)
                 else:
-                    any_c = next(iter(_client_registry.values()), None)
-                    if any_c:
-                        any_c._lib.free_pubsub_pointer_payload(
-                            any_c._ffi.cast("uint8_t*", response_ptr), payload_len
-                        )
+                    _free_orphaned_frame(request_id, response_ptr, arena_or_err)
             else:
                 # Inline pubsub: response_ptr = payload_len, data follows header
                 payload_len = response_ptr
@@ -553,11 +552,23 @@ async def _trio_pipe_reader(pipe_fd: int, token: object) -> None:
 class _NativeCreateState:
     """Own one native create result until the caller adopts or abandons it."""
 
-    def __init__(self, ffi, lib, create_args, callback_refs) -> None:
+    def __init__(
+        self,
+        ffi,
+        lib,
+        create_args,
+        callback_refs,
+        adoption_decision_timeout_seconds: Optional[float] = None,
+    ) -> None:
         self._ffi = ffi
         self._lib = lib
         self._create_args = create_args
         self._callback_refs = callback_refs
+        self._adoption_decision_timeout_seconds = (
+            _NATIVE_CREATE_ADOPTION_DECISION_TIMEOUT_SECONDS
+            if adoption_decision_timeout_seconds is None
+            else adoption_decision_timeout_seconds
+        )
         self._lock = threading.Lock()
         self._result_ready = threading.Event()
         self._decision_ready = threading.Event()
@@ -609,7 +620,7 @@ class _NativeCreateState:
                 self._abandoned = True
         self._decision_ready.set()
 
-    def _run(self) -> None:
+    def _run(self) -> None:  # noqa: C901
         response_ptr = self._ffi.NULL
         core_client = None
         error_message = None
@@ -643,7 +654,17 @@ class _NativeCreateState:
                 self._error_message = error_message
                 self._exception = exception
             self._result_ready.set()
-            self._decision_ready.wait()
+            if core_client is not None:
+                decision_arrived = self._decision_ready.wait(
+                    self._adoption_decision_timeout_seconds
+                )
+                if not decision_arrived:
+                    # Timeout and caller adoption race under the same lock. If
+                    # adoption already won, this is a no-op; otherwise the
+                    # worker consumes ownership and performs the only close.
+                    with self._lock:
+                        if not self._adopted and not self._abandoned:
+                            self._abandoned = True
             with self._lock:
                 should_close = (
                     self._abandoned
@@ -721,7 +742,9 @@ class BaseClient(CoreCommands):
         self._native_owner: Optional[_NativeClientOwner] = None
         self._native_finalizer: Optional[weakref.finalize] = None
         self._address_resolver_callback_ref = None
+        self._address_resolver_callback_owner = None
         self._credential_provider_callback_ref = None
+        self._credential_provider_callback_owner = None
         self._pubsub_futures: List["TFuture"] = []
         self._pubsub_lock = threading.Lock()
         self._pending_push_notifications: List[PubSubMsg] = []
@@ -773,11 +796,13 @@ class BaseClient(CoreCommands):
         # Create address resolver callback if configured
         from glide_shared.ffi_helpers import create_address_resolver_callback
 
-        address_resolver_callback = create_address_resolver_callback(
-            self._ffi, self.config.address_resolver
-        )
+        (
+            address_resolver_callback,
+            address_resolver_callback_owner,
+        ) = create_address_resolver_callback(self._ffi, self.config.address_resolver)
         if self.config.address_resolver is not None:
             self._address_resolver_callback_ref = address_resolver_callback
+            self._address_resolver_callback_owner = address_resolver_callback_owner
 
         # Set pipe_client_id before create_client so Rust routes responses
         # through the pipe from the very first command — no race window.
@@ -798,7 +823,10 @@ class BaseClient(CoreCommands):
             # Capture ownership before Rust invokes the callback from a foreign
             # thread; current_trio_token() is unavailable from that thread.
             trio_token = trio.lowlevel.current_trio_token()
-        credential_provider_callback = create_credential_provider_callback(
+        (
+            credential_provider_callback,
+            credential_provider_callback_owner,
+        ) = create_credential_provider_callback(
             self._ffi,
             credential_provider,
             event_loop=self._loop,
@@ -808,6 +836,9 @@ class BaseClient(CoreCommands):
         )
         if credential_provider is not None:
             self._credential_provider_callback_ref = credential_provider_callback
+            self._credential_provider_callback_owner = (
+                credential_provider_callback_owner
+            )
 
         create_state = _NativeCreateState(
             self._ffi,
@@ -826,6 +857,8 @@ class BaseClient(CoreCommands):
                 pubsub_callback,
                 address_resolver_callback,
                 credential_provider_callback,
+                address_resolver_callback_owner,
+                credential_provider_callback_owner,
             ),
         )
         create_state._start()
@@ -1371,7 +1404,9 @@ class BaseClient(CoreCommands):
         """Release callbacks after native code can no longer invoke them."""
         self._pubsub_callback_ref = None
         self._address_resolver_callback_ref = None
+        self._address_resolver_callback_owner = None
         self._credential_provider_callback_ref = None
+        self._credential_provider_callback_owner = None
 
     async def close(self, err_message: Optional[str] = None) -> None:
         """Close exactly once; cancelled waiters leave native cleanup running.

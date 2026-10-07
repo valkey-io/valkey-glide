@@ -61,6 +61,39 @@ def _invoke_callback(callback, capacities=(64, 64, 64), fill=0xA5):
     )
 
 
+def _invoke_resolver_callback(callback, host=b"example.test", port=6379):
+    ffi = GlideFFI.ffi
+    host_buf = ffi.new("char[]", host)
+    resolved_host_buf = ffi.new("char[]", 256)
+    resolved_host_len = ffi.new("size_t*", 999)
+    resolved_port = callback(
+        17,
+        host_buf,
+        len(host),
+        port,
+        resolved_host_buf,
+        256,
+        resolved_host_len,
+    )
+    return resolved_port, resolved_host_len[0]
+
+
+class _BackReferencingProvider:
+    def __init__(self):
+        self.client = None
+
+    def __call__(self):
+        return AwsCredentials("access", "secret")
+
+
+class _BackReferencingResolver:
+    def __init__(self):
+        self.client = None
+
+    def __call__(self, host, port):
+        return host, port
+
+
 def _iam_config(provider=None):
     return IamAuthConfig(
         cluster_name="cluster",
@@ -136,7 +169,8 @@ class TestCredentialProviderConfigAndExports:
 class TestCredentialProviderCallback:
     def test_typed_null_for_missing_provider(self):
         ffi = GlideFFI.ffi
-        callback = create_credential_provider_callback(ffi, None)
+        callback, callback_owner = create_credential_provider_callback(ffi, None)
+        assert callback_owner is None
         assert callback == ffi.NULL
         assert ffi.typeof(callback) == ffi.typeof("CredentialProviderCallback")
 
@@ -144,9 +178,10 @@ class TestCredentialProviderCallback:
         credentials = AwsCredentials(
             "accéss", "secret", session_token=None, expires_at_epoch_millis=None
         )
-        callback = create_credential_provider_callback(
+        callback, callback_owner = create_credential_provider_callback(
             GlideFFI.ffi, lambda: credentials
         )
+        assert callback_owner is not None
         status, lengths, expiry, buffers = _invoke_callback(callback)
 
         assert status == 1
@@ -158,10 +193,11 @@ class TestCredentialProviderCallback:
 
     def test_insufficient_capacity_sets_lengths_without_writes_or_expiry(self):
         token = "t" * 8192
-        callback = create_credential_provider_callback(
+        callback, callback_owner = create_credential_provider_callback(
             GlideFFI.ffi,
             lambda: AwsCredentials("access", "secret", token, 123456),
         )
+        assert callback_owner is not None
         status, lengths, expiry, buffers = _invoke_callback(
             callback, capacities=(4, 5, 2048)
         )
@@ -179,7 +215,10 @@ class TestCredentialProviderCallback:
             calls += 1
             return AwsCredentials("access", "secret", "t" * 8192)
 
-        callback = create_credential_provider_callback(GlideFFI.ffi, provider)
+        callback, callback_owner = create_credential_provider_callback(
+            GlideFFI.ffi, provider
+        )
+        assert callback_owner is not None
         assert _invoke_callback(callback, capacities=(2048, 2048, 2048))[0] == 2
         status, lengths, _, buffers = _invoke_callback(
             callback, capacities=(1024 * 1024,) * 3
@@ -203,9 +242,10 @@ class TestCredentialProviderCallback:
     def test_invalid_mutated_result_fails_without_writes(self, mutator):
         credentials = AwsCredentials("access", "secret")
         mutator(credentials)
-        callback = create_credential_provider_callback(
+        callback, callback_owner = create_credential_provider_callback(
             GlideFFI.ffi, lambda: credentials
         )
+        assert callback_owner is not None
         status, lengths, expiry, buffers = _invoke_callback(callback)
         assert status == 0
         assert lengths == (777, 778, 779)
@@ -217,7 +257,10 @@ class TestCredentialProviderCallback:
             raise RuntimeError("provider unavailable")
 
         for provider in (failing_provider, lambda: object()):
-            callback = create_credential_provider_callback(GlideFFI.ffi, provider)
+            callback, callback_owner = create_credential_provider_callback(
+                GlideFFI.ffi, provider
+            )
+            assert callback_owner is not None
             assert _invoke_callback(callback)[0] == 0
 
     def test_sync_callback_disposes_awaitable_result(self):
@@ -227,7 +270,10 @@ class TestCredentialProviderCallback:
         def provider():
             return result()
 
-        callback = create_credential_provider_callback(GlideFFI.ffi, provider)
+        callback, callback_owner = create_credential_provider_callback(
+            GlideFFI.ffi, provider
+        )
+        assert callback_owner is not None
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter("always")
             assert _invoke_callback(callback)[0] == 0
@@ -255,13 +301,14 @@ async def test_async_callback_bridges_async_callable_and_nominal_sync_awaitable(
         return async_provider()
 
     for provider in (async_provider, nominally_sync_provider):
-        callback = create_credential_provider_callback(
+        callback, callback_owner = create_credential_provider_callback(
             ffi,
             provider,
             event_loop=event_loop,
             trio_token=trio_token,
             allow_async=True,
         )
+        assert callback_owner is not None
         status, lengths, _, buffers = await anyio.to_thread.run_sync(
             _invoke_callback, callback
         )
@@ -277,6 +324,9 @@ class _FakeNativeLibrary:
         self.create_client = MagicMock()
         self.create_monitor_client = MagicMock()
         self.free_connection_response = MagicMock()
+        self.free_response_arena = MagicMock()
+        self.free_pipe_error_string = MagicMock()
+        self.free_pubsub_pointer_payload = MagicMock()
         self.close_client = MagicMock()
         self.close_monitor_client = MagicMock()
         self.command_with_buffer = MagicMock()
@@ -439,6 +489,103 @@ def _direct_client_config(provider=None, address_resolver=None):
             username="user", iam_config=_iam_config(provider)
         ),
     )
+
+
+async def _run_async_callable_cycle_gc(monkeypatch):
+    async_client_module, _, fake_lib = _patch_async_client(monkeypatch)
+    provider = _BackReferencingProvider()
+    resolver = _BackReferencingResolver()
+    client = await async_client_module.GlideClient.create(
+        _direct_client_config(provider, resolver)
+    )
+    provider.client = client
+    resolver.client = client
+
+    resolver_callback = fake_lib.create_client.call_args.args[4]
+    provider_callback = fake_lib.create_client.call_args.args[5]
+    client_ref = weakref.ref(client)
+    provider_ref = weakref.ref(provider)
+    resolver_ref = weakref.ref(resolver)
+    finalizer = client._native_finalizer
+    close_callback_results = []
+
+    def native_close(pointer):
+        close_callback_results.append(
+            (
+                _invoke_callback(provider_callback)[0],
+                _invoke_resolver_callback(resolver_callback)[0],
+            )
+        )
+
+    fake_lib.close_client.side_effect = native_close
+    fake_lib.create_client.reset_mock()
+    del client, provider, resolver
+    for _ in range(100):
+        gc.collect()
+        if client_ref() is None:
+            break
+        time.sleep(0.001)
+
+    assert client_ref() is None
+    assert provider_ref() is None
+    assert resolver_ref() is None
+    assert finalizer is not None and not finalizer.alive
+    fake_lib.close_client.assert_called_once_with(fake_lib._response.conn_ptr)
+    assert close_callback_results == [(0, 0)]
+    assert _invoke_callback(provider_callback)[0] == 0
+    assert _invoke_resolver_callback(resolver_callback)[0] == 0
+
+
+@pytest.mark.parametrize("backend", ["asyncio", "trio"])
+def test_async_finalizer_trampolines_do_not_retain_callable_cycles(
+    monkeypatch, backend
+):
+    anyio.run(_run_async_callable_cycle_gc, monkeypatch, backend=backend)
+
+
+def test_sync_finalizer_trampolines_do_not_retain_callable_cycles(monkeypatch):
+    sync_client_module, _, fake_lib, _ = _patch_sync_client(monkeypatch)
+    provider = _BackReferencingProvider()
+    resolver = _BackReferencingResolver()
+    client = sync_client_module.GlideClient.create(
+        _direct_client_config(provider, resolver)
+    )
+    provider.client = client
+    resolver.client = client
+
+    resolver_callback = fake_lib.create_client.call_args.args[4]
+    provider_callback = fake_lib.create_client.call_args.args[5]
+    client_ref = weakref.ref(client)
+    provider_ref = weakref.ref(provider)
+    resolver_ref = weakref.ref(resolver)
+    finalizer = client._native_finalizer
+    close_callback_results = []
+
+    def native_close(pointer):
+        close_callback_results.append(
+            (
+                _invoke_callback(provider_callback)[0],
+                _invoke_resolver_callback(resolver_callback)[0],
+            )
+        )
+
+    fake_lib.close_client.side_effect = native_close
+    fake_lib.create_client.reset_mock()
+    del client, provider, resolver
+    for _ in range(100):
+        gc.collect()
+        if client_ref() is None:
+            break
+        time.sleep(0.001)
+
+    assert client_ref() is None
+    assert provider_ref() is None
+    assert resolver_ref() is None
+    assert finalizer is not None and not finalizer.alive
+    fake_lib.close_client.assert_called_once_with(fake_lib._response.conn_ptr)
+    assert close_callback_results == [(0, 0)]
+    assert _invoke_callback(provider_callback)[0] == 0
+    assert _invoke_resolver_callback(resolver_callback)[0] == 0
 
 
 async def _run_cancelled_async_create(monkeypatch, cancel_timing):
@@ -842,9 +989,10 @@ def test_awaitable_is_closed_when_async_scheduling_fails(monkeypatch, scheduler)
             MagicMock(side_effect=trio.RunFinishedError("run finished")),
         )
 
-    callback = create_credential_provider_callback(
+    callback, callback_owner = create_credential_provider_callback(
         GlideFFI.ffi, provider, **callback_kwargs
     )
+    assert callback_owner is not None
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
         assert _invoke_callback(callback)[0] == 0
@@ -1103,13 +1251,14 @@ async def _run_post_scheduling_timeout_cleanup(monkeypatch):
         unhandled = []
         old_handler = None
 
-    callback = create_credential_provider_callback(
+    callback, callback_owner = create_credential_provider_callback(
         GlideFFI.ffi,
         provider,
         event_loop=event_loop,
         trio_token=trio_token,
         allow_async=True,
     )
+    assert callback_owner is not None
     try:
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter("always")
@@ -1505,3 +1654,166 @@ def test_sync_refresh_provider_reentrant_close_does_not_wait_for_active_call(
 
     client.close()
     fake_lib.close_client.assert_called_once_with(fake_lib._response.conn_ptr)
+
+
+def test_async_create_worker_abandons_after_owner_loop_disappears(monkeypatch):
+    async_client_module, ffi, fake_lib = _patch_async_client(monkeypatch)
+    monkeypatch.setattr(
+        async_client_module,
+        "_NATIVE_CREATE_ADOPTION_DECISION_TIMEOUT_SECONDS",
+        0.02,
+    )
+    native_entered = threading.Event()
+    release_native = threading.Event()
+    states = []
+    callback_refs = []
+    original_state = async_client_module._NativeCreateState
+
+    class CapturingCreateState(original_state):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            states.append(self)
+
+    def native_create(*args):
+        callback_refs.append(weakref.ref(args[5]))
+        native_entered.set()
+        assert release_native.wait(timeout=2)
+        return fake_lib._response
+
+    monkeypatch.setattr(async_client_module, "_NativeCreateState", CapturingCreateState)
+    fake_lib.create_client.side_effect = native_create
+
+    async def start_create():
+        task = asyncio.create_task(
+            async_client_module.GlideClient.create(
+                _direct_client_config(lambda: AwsCredentials("access", "secret"))
+            )
+        )
+        with anyio.fail_after(2):
+            while not native_entered.is_set():
+                await anyio.sleep(0)
+        return task
+
+    loop = asyncio.new_event_loop()
+    loop.set_exception_handler(lambda unused_loop, unused_context: None)
+    try:
+        task = loop.run_until_complete(start_create())
+    finally:
+        loop.close()
+
+    release_native.set()
+    assert len(states) == 1
+    state = states[0]
+    assert state.cleanup_complete.wait(timeout=2)
+    state._thread.join(timeout=2)
+    assert not state._thread.is_alive()
+    assert state._abandoned and not state._adopted
+    assert state._callback_refs == ()
+    assert state._create_args == ()
+    fake_lib.free_connection_response.assert_called_once_with(fake_lib._response)
+    fake_lib.close_client.assert_called_once_with(fake_lib._response.conn_ptr)
+
+    # Drop the task only after proving that the worker needs no event-loop
+    # progress to make its timeout decision and release its ownership.
+    fake_lib.create_client.reset_mock()
+    assert callback_refs and callback_refs[0]() is not None
+    del task
+    gc.collect()
+
+
+def test_async_create_adoption_timeout_races_have_one_owner(monkeypatch):
+    async_client_module, ffi, fake_lib = _patch_async_client(monkeypatch)
+    delays = [0.0, 0.02] + [0.005] * 30
+
+    async def run():
+        for index, delay in enumerate(delays):
+            state = async_client_module._NativeCreateState(
+                ffi,
+                fake_lib,
+                (),
+                (object(),),
+                adoption_decision_timeout_seconds=0.005,
+            )
+            state._start()
+            if delay:
+                await anyio.sleep(delay)
+            try:
+                core_client = await state._wait_and_adopt()
+            except RuntimeError as error:
+                assert "abandoned" in str(error)
+            else:
+                # The test caller models transfer into _NativeClientOwner.
+                fake_lib.close_client(core_client)
+            with anyio.fail_after(2):
+                await anyio.to_thread.run_sync(state.cleanup_complete.wait)
+            assert state._adopted != state._abandoned
+            assert fake_lib.free_connection_response.call_count == index + 1
+            assert fake_lib.close_client.call_count == index + 1
+
+    anyio.run(run, backend="asyncio")
+    assert fake_lib.free_connection_response.call_count == len(delays)
+    assert fake_lib.close_client.call_count == len(delays)
+
+
+def test_orphan_pipe_frames_free_without_any_registered_client(monkeypatch):
+    import glide.glide_client as async_client_module
+
+    ffi = GlideFFI.ffi
+    fake_lib = _FakeNativeLibrary(ffi, GlideFFI.lib)
+    registry = weakref.WeakValueDictionary()
+
+    class LastClient:
+        pass
+
+    last_client = LastClient()
+    registry[99] = last_client
+    del last_client
+    gc.collect()
+    assert not registry
+
+    monkeypatch.setattr(async_client_module, "_client_registry", registry)
+    monkeypatch.setattr(
+        async_client_module, "_ASYNC_FFI", SimpleNamespace(ffi=ffi, lib=fake_lib)
+    )
+    monkeypatch.setattr(async_client_module, "_async_pipe_read_fd", 123)
+    monkeypatch.setattr(async_client_module, "_pipe_remainder", b"")
+
+    success_arena = 0x2000
+    error_pointer = 0x3000
+    error_frame = (7 << 56) | error_pointer
+    pubsub_pointer = 0x4000
+    pubsub_length = 11
+    inline_payload = b"inline"
+    frames = b"".join(
+        (
+            async_client_module._FRAME_STRUCT.pack(1, 1, 0x1000, success_arena),
+            async_client_module._FRAME_STRUCT.pack(1, 2, 0, error_frame),
+            async_client_module._FRAME_STRUCT.pack(
+                1,
+                async_client_module._PUBSUB_SENTINEL,
+                pubsub_pointer,
+                (1 << 63) | pubsub_length,
+            ),
+            async_client_module._FRAME_STRUCT.pack(
+                1,
+                async_client_module._PUBSUB_SENTINEL,
+                len(inline_payload),
+                0,
+            ),
+            inline_payload,
+        )
+    )
+    monkeypatch.setattr(async_client_module.os, "read", lambda fd, size: frames)
+
+    async_client_module._on_async_pipe_readable()
+
+    fake_lib.free_response_arena.assert_called_once_with(
+        ffi.cast("void*", success_arena)
+    )
+    fake_lib.free_pipe_error_string.assert_called_once_with(
+        ffi.cast("char*", error_pointer)
+    )
+    fake_lib.free_pubsub_pointer_payload.assert_called_once_with(
+        ffi.cast("uint8_t*", pubsub_pointer), pubsub_length
+    )
+    assert async_client_module._pipe_remainder == b""

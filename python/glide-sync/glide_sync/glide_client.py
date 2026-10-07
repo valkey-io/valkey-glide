@@ -42,6 +42,7 @@ from glide_shared.ffi_helpers import (
     _create_native_client_finalizer,
     _is_credential_provider_executing,
     _NativeClientOwner,
+    create_address_resolver_callback,
     create_credential_provider_callback,
 )
 from glide_shared.opentelemetry import _create_batch_span, _create_command_span
@@ -172,7 +173,9 @@ class BaseClient(CoreCommands):
         self._pubsub_condition = threading.Condition(self._pubsub_lock)
         self._pubsub_callback_ref = None  # Keep callback alive
         self._address_resolver_callback_ref = None
+        self._address_resolver_callback_owner = None
         self._credential_provider_callback_ref = None
+        self._credential_provider_callback_owner = None
         self._client_lock = threading.Lock()
         self._client_condition = threading.Condition(self._client_lock)
         self._active_native_calls = 0
@@ -239,7 +242,9 @@ class BaseClient(CoreCommands):
     def _clear_callback_references(self) -> None:
         self._pubsub_callback_ref = None
         self._address_resolver_callback_ref = None
+        self._address_resolver_callback_owner = None
         self._credential_provider_callback_ref = None
+        self._credential_provider_callback_owner = None
 
     def _recreate_core_client_after_fork(self) -> None:
         """Recreate in a child process without ever touching the parent runtime."""
@@ -319,41 +324,20 @@ class BaseClient(CoreCommands):
         python_callback = self._create_push_handle_callback()
         pubsub_callback = self._ffi.callback("PubSubCallback", python_callback)
 
-        address_resolver_callback = self._ffi.cast(
-            "AddressResolverCallback", self._ffi.NULL
+        (
+            address_resolver_callback,
+            address_resolver_callback_owner,
+        ) = create_address_resolver_callback(self._ffi, self._config.address_resolver)
+        address_resolver_callback_ref = (
+            address_resolver_callback
+            if self._config.address_resolver is not None
+            else None
         )
-        address_resolver_callback_ref = None
-        ffi = self._ffi
-        if self._config.address_resolver is not None:
-            resolver_fn = self._config.address_resolver
 
-            def _address_resolver_callback(
-                client_id,
-                host_ptr,
-                host_len,
-                port,
-                resolved_host_buf,
-                resolved_host_buf_len,
-                resolved_host_len_ptr,
-            ):
-                try:
-                    host = ffi.buffer(host_ptr, host_len)[:].decode("utf-8")
-                    resolved_host, resolved_port = resolver_fn(host, port)
-                    encoded_host = resolved_host.encode("utf-8")
-                    write_len = min(len(encoded_host), resolved_host_buf_len)
-                    ffi.memmove(resolved_host_buf, encoded_host, write_len)
-                    resolved_host_len_ptr[0] = write_len
-                    return resolved_port
-                except Exception:
-                    # On error, return 0 to signal fallback to original address.
-                    return 0
-
-            address_resolver_callback = self._ffi.callback(
-                "AddressResolverCallback", _address_resolver_callback
-            )
-            address_resolver_callback_ref = address_resolver_callback
-
-        credential_provider_callback = create_credential_provider_callback(
+        (
+            credential_provider_callback,
+            credential_provider_callback_owner,
+        ) = create_credential_provider_callback(
             self._ffi,
             credential_provider,
             provider_owner=self,
@@ -424,7 +408,9 @@ class BaseClient(CoreCommands):
         self._conn_req_bytes = conn_req_bytes
         self._pubsub_callback_ref = pubsub_callback
         self._address_resolver_callback_ref = address_resolver_callback_ref
+        self._address_resolver_callback_owner = address_resolver_callback_owner
         self._credential_provider_callback_ref = credential_provider_callback_ref
+        self._credential_provider_callback_owner = credential_provider_callback_owner
         self._core_client = core_client
         self._native_owner = native_owner
         self._native_finalizer = native_finalizer
