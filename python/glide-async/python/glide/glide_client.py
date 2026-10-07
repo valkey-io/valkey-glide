@@ -6,6 +6,7 @@ import os
 import struct
 import sys
 import threading
+import weakref
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -62,7 +63,9 @@ from glide_shared.exceptions import (
 from glide_shared.ffi_helpers import (
     ENCODING,
     FFIClientTypeEnum,
+    _create_native_client_finalizer,
     _is_credential_provider_executing,
+    _NativeClientOwner,
     convert_commands_to_c_batch_info,
     create_c_batch_options,
     create_credential_provider_callback,
@@ -224,7 +227,9 @@ _async_pipe_loop: Optional[asyncio.AbstractEventLoop] = (
 # trio raises BusyResourceError if two tasks wait on the same fd at once.
 _trio_pipe_token: Optional[object] = None
 _async_pipe_lock = threading.Lock()
-_client_registry: dict = {}
+_client_registry: "weakref.WeakValueDictionary[int, BaseClient]" = (
+    weakref.WeakValueDictionary()
+)
 _pipe_remainder: bytes = b""
 _FRAME_STRUCT = struct.Struct("=QQQQ")  # Pre-compiled for hot path
 _PUBSUB_SENTINEL = 0xFFFFFFFFFFFFFFFF  # request_id sentinel for pubsub frames
@@ -662,12 +667,10 @@ class _NativeCreateState:
 
 
 class _NativeCloseState:
-    """Own native close and callbacks independently of an async event loop."""
+    """Close a detached native owner independently of an async event loop."""
 
-    def __init__(self, lib, core_client, callback_refs, release_refs) -> None:
-        self._lib = lib
-        self._core_client = core_client
-        self._callback_refs = callback_refs
+    def __init__(self, owner: _NativeClientOwner, release_refs) -> None:
+        self._owner: Optional[_NativeClientOwner] = owner
         self._release_refs = release_refs
         self.done = threading.Event()
         self.error: Optional[BaseException] = None
@@ -678,7 +681,9 @@ class _NativeCloseState:
 
     def _run(self) -> None:
         try:
-            self._lib.close_client(self._core_client)
+            owner = self._owner
+            assert owner is not None
+            owner.close()
         except BaseException as error:
             self.error = error
         finally:
@@ -686,8 +691,7 @@ class _NativeCloseState:
             # owner loop has exited. Native close has already stopped callbacks.
             self._release_refs()
             self._release_refs = None
-            self._callback_refs = ()
-            self._core_client = None
+            self._owner = None
             self.done.set()
 
     async def wait(self) -> None:
@@ -714,6 +718,8 @@ class BaseClient(CoreCommands):
         self._lock = threading.Lock()
         self._close_lock = threading.Lock()
         self._close_state: Optional[_NativeCloseState] = None
+        self._native_owner: Optional[_NativeClientOwner] = None
+        self._native_finalizer: Optional[weakref.finalize] = None
         self._address_resolver_callback_ref = None
         self._credential_provider_callback_ref = None
         self._pubsub_futures: List["TFuture"] = []
@@ -829,6 +835,19 @@ class BaseClient(CoreCommands):
             # Cancellation only marks its result abandoned; a late successful
             # pointer is closed by that same worker without using this runtime.
             self._core_client = await create_state._wait_and_adopt()
+            self._native_owner, self._native_finalizer = (
+                _create_native_client_finalizer(
+                    self,
+                    self._lib,
+                    self._core_client,
+                    (
+                        pubsub_callback,
+                        address_resolver_callback,
+                        credential_provider_callback,
+                    ),
+                    self._create_pid,
+                )
+            )
 
             # Give pending AnyIO/Trio cancellation a delivery point before the
             # initialized client escapes. Raw asyncio cancellation is handled by
@@ -1338,6 +1357,16 @@ class BaseClient(CoreCommands):
             actual_subscriptions=actual_subscriptions,
         )
 
+    def _detach_native_owner(self) -> Optional[_NativeClientOwner]:
+        """Disarm GC cleanup and transfer its native ownership to the caller."""
+        finalizer = getattr(self, "_native_finalizer", None)
+        self._native_finalizer = None
+        owner = getattr(self, "_native_owner", None)
+        self._native_owner = None
+        if finalizer is not None:
+            finalizer.detach()
+        return owner
+
     def _release_callback_references(self) -> None:
         """Release callbacks after native code can no longer invoke them."""
         self._pubsub_callback_ref = None
@@ -1365,9 +1394,12 @@ class BaseClient(CoreCommands):
                 return
             else:
                 self._is_closed = True
+                owner = self._detach_native_owner()
                 core_client, self._core_client = self._core_client, None
-                if core_client is not None and self._create_pid == os.getpid():
-                    close_state = _NativeCloseState(
+                if owner is None and core_client is not None:
+                    # Supports partially initialized and Rust-pool wrapper shells;
+                    # successful direct clients always have a finalizer owner.
+                    owner = _NativeClientOwner(
                         self._lib,
                         core_client,
                         (
@@ -1375,6 +1407,11 @@ class BaseClient(CoreCommands):
                             self._address_resolver_callback_ref,
                             self._credential_provider_callback_ref,
                         ),
+                        self._create_pid,
+                    )
+                if owner is not None:
+                    close_state = _NativeCloseState(
+                        owner,
                         self._release_callback_references,
                     )
                     self._close_state = close_state

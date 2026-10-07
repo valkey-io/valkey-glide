@@ -39,7 +39,9 @@ from glide_shared.exceptions import (
     get_request_error_class,
 )
 from glide_shared.ffi_helpers import (
+    _create_native_client_finalizer,
     _is_credential_provider_executing,
+    _NativeClientOwner,
     create_credential_provider_callback,
 )
 from glide_shared.opentelemetry import _create_batch_span, _create_command_span
@@ -175,6 +177,8 @@ class BaseClient(CoreCommands):
         self._client_condition = threading.Condition(self._client_lock)
         self._active_native_calls = 0
         self._close_complete = False
+        self._native_owner: Optional[_NativeClientOwner] = None
+        self._native_finalizer: Optional[weakref.finalize] = None
 
         self._is_closed: bool = False
 
@@ -216,6 +220,22 @@ class BaseClient(CoreCommands):
             if self._active_native_calls == 0:
                 self._client_condition.notify_all()
 
+    def _detach_native_owner(self) -> Optional[_NativeClientOwner]:
+        """Disarm GC cleanup and transfer its native ownership to the caller."""
+        finalizer = getattr(self, "_native_finalizer", None)
+        self._native_finalizer = None
+        owner = getattr(self, "_native_owner", None)
+        self._native_owner = None
+        if finalizer is not None:
+            finalizer.detach()
+        return owner
+
+    def _disarm_native_owner(self) -> None:
+        """Discard inherited ownership without invoking the parent runtime."""
+        owner = self._detach_native_owner()
+        if owner is not None:
+            owner.disarm()
+
     def _clear_callback_references(self) -> None:
         self._pubsub_callback_ref = None
         self._address_resolver_callback_ref = None
@@ -224,6 +244,8 @@ class BaseClient(CoreCommands):
     def _recreate_core_client_after_fork(self) -> None:
         """Recreate in a child process without ever touching the parent runtime."""
         was_closed = self._is_closed
+        # Never run a parent process native destructor in the child.
+        self._disarm_native_owner()
         # The inherited Tokio runtime pointer and CFFI callback ownership are
         # invalid in the child. Invalidate them before any operation can fail.
         self._core_client = self._ffi.NULL
@@ -254,6 +276,7 @@ class BaseClient(CoreCommands):
 
     def _fail_closed_after_fork(self) -> None:
         """Best-effort final fallback for the process-global child hook."""
+        self._disarm_native_owner()
         self._core_client = self._ffi.NULL
         self._conn_req_bytes = b""
         self._clear_callback_references()
@@ -300,6 +323,7 @@ class BaseClient(CoreCommands):
             "AddressResolverCallback", self._ffi.NULL
         )
         address_resolver_callback_ref = None
+        ffi = self._ffi
         if self._config.address_resolver is not None:
             resolver_fn = self._config.address_resolver
 
@@ -313,11 +337,11 @@ class BaseClient(CoreCommands):
                 resolved_host_len_ptr,
             ):
                 try:
-                    host = self._ffi.buffer(host_ptr, host_len)[:].decode("utf-8")
+                    host = ffi.buffer(host_ptr, host_len)[:].decode("utf-8")
                     resolved_host, resolved_port = resolver_fn(host, port)
                     encoded_host = resolved_host.encode("utf-8")
                     write_len = min(len(encoded_host), resolved_host_buf_len)
-                    self._ffi.memmove(resolved_host_buf, encoded_host, write_len)
+                    ffi.memmove(resolved_host_buf, encoded_host, write_len)
                     resolved_host_len_ptr[0] = write_len
                     return resolved_port
                 except Exception:
@@ -378,17 +402,40 @@ class BaseClient(CoreCommands):
                     pass
             raise
 
+        try:
+            native_owner, native_finalizer = _create_native_client_finalizer(
+                self,
+                self._lib,
+                core_client,
+                (
+                    pubsub_callback,
+                    address_resolver_callback,
+                    credential_provider_callback,
+                ),
+                os.getpid(),
+            )
+        except BaseException:
+            try:
+                self._lib.close_client(core_client)
+            except BaseException:
+                pass
+            raise
+
         self._conn_req_bytes = conn_req_bytes
         self._pubsub_callback_ref = pubsub_callback
         self._address_resolver_callback_ref = address_resolver_callback_ref
         self._credential_provider_callback_ref = credential_provider_callback_ref
         self._core_client = core_client
+        self._native_owner = native_owner
+        self._native_finalizer = native_finalizer
 
         # Scope prewarm is deferred to first scoped_connection() call to avoid
         # extra startup connections and preserve lazy-connection semantics.
 
     def _create_push_handle_callback(self):
-        """Create the FFI pubsub callback function"""
+        """Create the FFI pubsub callback function without retaining this client."""
+        client_ref = weakref.ref(self)
+        ffi = self._ffi
 
         def _pubsub_callback(
             client_ptr,
@@ -400,13 +447,16 @@ class BaseClient(CoreCommands):
             pattern_ptr,
             pattern_len,
         ):
+            client = client_ref()
+            if client is None:
+                return
             try:
                 # Convert C pointers to Python bytes using ffi.buffer
-                message = self._ffi.buffer(message_ptr, message_len)[:]
-                channel = self._ffi.buffer(channel_ptr, channel_len)[:]
+                message = ffi.buffer(message_ptr, message_len)[:]
+                channel = ffi.buffer(channel_ptr, channel_len)[:]
                 pattern = (
-                    self._ffi.buffer(pattern_ptr, pattern_len)[:]
-                    if pattern_ptr != self._ffi.NULL
+                    ffi.buffer(pattern_ptr, pattern_len)[:]
+                    if pattern_ptr != ffi.NULL
                     else None
                 )
 
@@ -441,15 +491,15 @@ class BaseClient(CoreCommands):
                     # This aquires the underlying `_pubsub_lock` and allows for calling `notify()` on the variable
                     # If a callback is registered, call it with the message and the provided context
                     # Otherwise, append the message to the queue and notify threads that are waiting for a message.
-                    with self._pubsub_condition:
+                    with client._pubsub_condition:
                         user_callback, context = (
-                            self._config._get_pubsub_callback_and_context()
+                            client._config._get_pubsub_callback_and_context()
                         )
                         if user_callback:
                             user_callback(pubsub_msg, context)
                         else:
-                            self._pubsub_queue.append(pubsub_msg)
-                            self._pubsub_condition.notify()
+                            client._pubsub_queue.append(pubsub_msg)
+                            client._pubsub_condition.notify()
                 elif message_kind in [
                     "PSubscribe",
                     "Subscribe",
@@ -1224,7 +1274,21 @@ class BaseClient(CoreCommands):
             self._is_closed = True
             while self._active_native_calls:
                 self._client_condition.wait()
+            owner = self._detach_native_owner()
             core_client, self._core_client = self._core_client, self._ffi.NULL
+            if owner is None and core_client != self._ffi.NULL:
+                # Supports Rust-pool wrapper shells that bypass direct creation;
+                # successful direct clients always have a finalizer owner.
+                owner = _NativeClientOwner(
+                    self._lib,
+                    core_client,
+                    (
+                        self._pubsub_callback_ref,
+                        self._address_resolver_callback_ref,
+                        self._credential_provider_callback_ref,
+                    ),
+                    os.getpid(),
+                )
 
         with _live_sync_clients_lock:
             _live_sync_clients.discard(self)
@@ -1232,8 +1296,8 @@ class BaseClient(CoreCommands):
             self._pubsub_condition.notify_all()
 
         try:
-            if core_client != self._ffi.NULL:
-                self._lib.close_client(core_client)
+            if owner is not None:
+                owner.close()
         finally:
             self._clear_callback_references()
             with self._client_condition:

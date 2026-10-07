@@ -318,10 +318,19 @@ async def test_async_direct_client_passes_and_retains_callback(monkeypatch):
     callback_arg = fake_lib.create_client.call_args.args[5]
     assert callback_arg != ffi.NULL
     assert client._credential_provider_callback_ref is callback_arg
+    finalizer = client._native_finalizer
+    assert finalizer is not None and finalizer.alive
+    assert not finalizer.atexit
     fake_lib.free_connection_response.assert_called_once_with(fake_lib._response)
     await client.close()
+    assert not finalizer.alive
     fake_lib.close_client.assert_called_once_with(fake_lib._response.conn_ptr)
     assert client._credential_provider_callback_ref is None
+    client_ref = weakref.ref(client)
+    del client
+    gc.collect()
+    assert client_ref() is None
+    fake_lib.close_client.assert_called_once_with(fake_lib._response.conn_ptr)
 
 
 @pytest.mark.anyio
@@ -390,10 +399,19 @@ def test_sync_direct_passes_and_retains_callback(monkeypatch):
     callback_arg = fake_lib.create_client.call_args.args[5]
     assert callback_arg != ffi.NULL
     assert client._credential_provider_callback_ref is callback_arg
+    finalizer = client._native_finalizer
+    assert finalizer is not None and finalizer.alive
+    assert not finalizer.atexit
     fake_lib.free_connection_response.assert_called_once_with(fake_lib._response)
     client.close()
+    assert not finalizer.alive
     fake_lib.close_client.assert_called_once_with(fake_lib._response.conn_ptr)
     assert client._credential_provider_callback_ref is None
+    client_ref = weakref.ref(client)
+    del client
+    gc.collect()
+    assert client_ref() is None
+    fake_lib.close_client.assert_called_once_with(fake_lib._response.conn_ptr)
 
 
 def test_sync_direct_passes_typed_null_without_provider(monkeypatch):
@@ -413,9 +431,10 @@ def test_sync_direct_passes_typed_null_without_provider(monkeypatch):
     client.close()
 
 
-def _direct_client_config(provider=None):
+def _direct_client_config(provider=None, address_resolver=None):
     return GlideClientConfiguration(
         addresses=[NodeAddress()],
+        address_resolver=address_resolver,
         credentials=ServerCredentials(
             username="user", iam_config=_iam_config(provider)
         ),
@@ -544,6 +563,8 @@ def test_async_create_native_error_frees_response_and_callbacks(monkeypatch, bac
 
     assert len(instances) == 1
     assert instances[0]._core_client is None
+    assert instances[0]._native_owner is None
+    assert instances[0]._native_finalizer is None
     assert instances[0]._credential_provider_callback_ref is None
     fake_lib.free_connection_response.assert_called_once_with(fake_lib._response)
     fake_lib.close_client.assert_not_called()
@@ -659,6 +680,8 @@ def test_sync_fork_recreation_is_transactional_with_global_hook(monkeypatch):
     client = sync_client_module.GlideClient.create(_direct_client_config(provider))
     original_pointer = client._core_client
     original_callback = client._credential_provider_callback_ref
+    parent_finalizer = client._native_finalizer
+    assert parent_finalizer is not None and parent_finalizer.alive
     child_pointer = ffi.cast("void*", 2)
     fake_lib._response.conn_ptr = child_pointer
 
@@ -677,6 +700,9 @@ def test_sync_fork_recreation_is_transactional_with_global_hook(monkeypatch):
         is fake_lib.create_client.call_args.args[5]
     )
     assert client._credential_provider_callback_ref is not original_callback
+    assert not parent_finalizer.alive
+    assert client._native_finalizer is not parent_finalizer
+    assert client._native_finalizer is not None and client._native_finalizer.alive
     assert fake_lib.create_client.call_count == 2
     assert not hasattr(client, "_fork_hook_registered")
     assert not hasattr(client, "_register_at_fork")
@@ -689,6 +715,8 @@ def test_sync_fork_native_failure_fails_closed_without_stale_dispatch(monkeypatc
     sync_client_module, ffi, fake_lib, _ = _patch_sync_client(monkeypatch)
     client = sync_client_module.GlideClient.create(_direct_client_config())
     stale_pointer = client._core_client
+    parent_finalizer = client._native_finalizer
+    assert parent_finalizer is not None and parent_finalizer.alive
     error_message = ffi.new("char[]", b"child native failure")
     fake_lib._response.conn_ptr = ffi.NULL
     fake_lib._response.connection_error_message = error_message
@@ -700,6 +728,9 @@ def test_sync_fork_native_failure_fails_closed_without_stale_dispatch(monkeypatc
     assert client._pubsub_callback_ref is None
     assert client._address_resolver_callback_ref is None
     assert client._credential_provider_callback_ref is None
+    assert not parent_finalizer.alive
+    assert client._native_owner is None
+    assert client._native_finalizer is None
     assert stale_pointer != ffi.NULL
     fake_lib.close_client.assert_not_called()
     with pytest.raises(ClosingError, match="client is closed"):
@@ -897,17 +928,43 @@ def test_sync_close_after_failed_creation_is_safe(monkeypatch):
     captured[0].close()
     assert captured[0]._is_closed
     assert captured[0]._core_client == ffi.NULL
+    assert captured[0]._native_owner is None
+    assert captured[0]._native_finalizer is None
     fake_lib.close_client.assert_not_called()
 
 
 def test_sync_fork_registry_does_not_retain_unclosed_client(monkeypatch):
-    sync_client_module, _, fake_lib, _ = _patch_sync_client(monkeypatch)
+    sync_client_module, ffi, fake_lib, _ = _patch_sync_client(monkeypatch)
     registry = weakref.WeakSet()
     monkeypatch.setattr(sync_client_module, "_live_sync_clients", registry)
-    client = sync_client_module.GlideClient(_direct_client_config())
-    registry.add(client)
+    client = sync_client_module.GlideClient.create(
+        _direct_client_config(
+            lambda: AwsCredentials("access", "secret"),
+            lambda host, port: (host, port),
+        )
+    )
+    callback_refs = [
+        weakref.ref(callback)
+        for callback in fake_lib.create_client.call_args.args[3:6]
+        if callback != ffi.NULL
+    ]
     client_ref = weakref.ref(client)
-    assert not client._is_closed
+    finalizer = client._native_finalizer
+    close_observations = []
+
+    def native_close(pointer):
+        close_observations.append(
+            (
+                pointer,
+                client_ref() is None,
+                all(ref() is not None for ref in callback_refs),
+            )
+        )
+
+    fake_lib.close_client.side_effect = native_close
+    # MagicMock records every CFFI argument strongly; emulate native return by
+    # releasing those test-only references before dropping the application one.
+    fake_lib.create_client.reset_mock()
     assert client in registry
 
     del client
@@ -915,8 +972,11 @@ def test_sync_fork_registry_does_not_retain_unclosed_client(monkeypatch):
 
     assert client_ref() is None
     assert not registry
-    fake_lib.create_client.assert_not_called()
-    fake_lib.close_client.assert_not_called()
+    assert finalizer is not None and not finalizer.alive
+    fake_lib.close_client.assert_called_once_with(fake_lib._response.conn_ptr)
+    assert close_observations == [(fake_lib._response.conn_ptr, True, True)]
+    gc.collect()
+    assert all(ref() is None for ref in callback_refs)
 
 
 def test_sync_close_discards_client_from_fork_registry(monkeypatch):
@@ -1091,6 +1151,65 @@ def _patch_async_client(monkeypatch):
         async_client_module.BaseClient, "_setup_pipe", lambda self: None
     )
     return async_client_module, ffi, fake_lib
+
+
+async def _run_async_unclosed_client_gc(monkeypatch):
+    async_client_module, ffi, fake_lib = _patch_async_client(monkeypatch)
+    registry = weakref.WeakValueDictionary()
+    monkeypatch.setattr(async_client_module, "_client_registry", registry)
+
+    def register_only(client):
+        registry[client._pipe_client_id] = client
+
+    monkeypatch.setattr(async_client_module.BaseClient, "_setup_pipe", register_only)
+    client = await async_client_module.GlideClient.create(
+        _direct_client_config(
+            lambda: AwsCredentials("access", "secret"),
+            lambda host, port: (host, port),
+        )
+    )
+    callback_refs = [
+        weakref.ref(callback)
+        for callback in fake_lib.create_client.call_args.args[3:6]
+        if callback != ffi.NULL
+    ]
+    client_ref = weakref.ref(client)
+    finalizer = client._native_finalizer
+    client_id = client._pipe_client_id
+    close_observations = []
+
+    def native_close(pointer):
+        close_observations.append(
+            (
+                pointer,
+                client_ref() is None,
+                all(ref() is not None for ref in callback_refs),
+            )
+        )
+
+    fake_lib.close_client.side_effect = native_close
+    fake_lib.create_client.reset_mock()
+    assert registry[client_id] is client
+
+    del client
+    gc.collect()
+
+    assert client_ref() is None
+    assert client_id not in registry
+    assert finalizer is not None and not finalizer.alive
+    fake_lib.close_client.assert_called_once_with(fake_lib._response.conn_ptr)
+    assert close_observations == [(fake_lib._response.conn_ptr, True, True)]
+    for _ in range(100):
+        gc.collect()
+        if all(ref() is None for ref in callback_refs):
+            break
+        await anyio.sleep(0)
+    assert all(ref() is None for ref in callback_refs)
+
+
+@pytest.mark.parametrize("backend", ["asyncio", "trio"])
+def test_async_registry_does_not_retain_unclosed_client(monkeypatch, backend):
+    anyio.run(_run_async_unclosed_client_gc, monkeypatch, backend=backend)
 
 
 def test_raw_asyncio_task_cancel_during_create_closes_late_success(monkeypatch):

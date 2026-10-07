@@ -3,11 +3,79 @@
 """Shared FFI helper utilities for converting Python arguments to C-compatible arrays."""
 
 import contextvars
+import os
 import threading
+import weakref
 from enum import IntEnum
 from typing import Any
 
 from glide_shared._glide_ffi import GlideFFI as _GlideFFI_singleton
+
+
+class _NativeClientOwner:
+    """Own a native client pointer and its callbacks without owning its client."""
+
+    def __init__(
+        self,
+        lib: Any,
+        core_client: Any,
+        callback_refs: tuple[Any, ...],
+        creation_pid: int,
+    ) -> None:
+        self._lib = lib
+        self._core_client = core_client
+        self._callback_refs = callback_refs
+        self._creation_pid = creation_pid
+        self._lock = threading.Lock()
+
+    def close(self) -> None:
+        """Consume ownership, closing only in the process that created it."""
+        with self._lock:
+            core_client, self._core_client = self._core_client, None
+            if core_client is None:
+                return
+        try:
+            if os.getpid() == self._creation_pid:
+                self._lib.close_client(core_client)
+        finally:
+            # Keep every callback alive through native close, then release it.
+            self._callback_refs = ()
+
+    def disarm(self) -> None:
+        """Drop inherited ownership without touching the parent runtime pointer."""
+        with self._lock:
+            self._core_client = None
+            self._callback_refs = ()
+
+
+def _finalize_native_client(owner: _NativeClientOwner) -> None:
+    """Best-effort ordinary-GC cleanup; explicit close still reports errors."""
+    try:
+        owner.close()
+    except BaseException:
+        # Finalizer exceptions cannot be delivered to an application caller.
+        pass
+
+
+def _create_native_client_finalizer(
+    client: Any,
+    lib: Any,
+    core_client: Any,
+    callback_refs: tuple[Any, ...],
+    creation_pid: int,
+) -> tuple[_NativeClientOwner, weakref.finalize]:
+    """Create a native owner whose finalizer never strongly retains ``client``.
+
+    Interpreter-exit execution is disabled because Python modules and the native
+    runtime can be torn down in either order. The operating system reclaims
+    process resources at exit; ordinary garbage collection still closes the
+    native client promptly.
+    """
+    owner = _NativeClientOwner(lib, core_client, callback_refs, creation_pid)
+    finalizer = weakref.finalize(client, _finalize_native_client, owner)
+    finalizer.atexit = False  # type: ignore[misc]
+    return owner, finalizer
+
 
 ENCODING = "utf-8"
 
@@ -559,12 +627,18 @@ def create_credential_provider_callback(
         return ffi.cast("CredentialProviderCallback", ffi.NULL)
 
     import inspect
-    import weakref
 
     from glide_shared.config import _is_async_callable
 
     is_async_callable = _is_async_callable(credential_provider_fn)
     event_loop_ref = weakref.ref(event_loop) if event_loop is not None else None
+    try:
+        provider_owner_ref = weakref.ref(provider_owner)
+    except TypeError:
+        # Non-weak-referenceable test/helper owners retain the legacy behavior;
+        # direct clients are weak-referenceable and always take the safe path.
+        def provider_owner_ref():
+            return provider_owner
 
     def _credential_provider_callback(
         client_id,
@@ -579,6 +653,7 @@ def create_credential_provider_callback(
         session_token_len_ptr,
         expires_at_millis_ptr,
     ):
+        provider_owner = provider_owner_ref()
         _push_thread_provider_owner(provider_owner)
         try:
             owner_loop = event_loop_ref() if event_loop_ref is not None else None
