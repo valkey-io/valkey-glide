@@ -467,36 +467,7 @@ impl redis::AddressResolver for FFIAddressResolver {
     }
 }
 
-/// Callback type for custom AWS credential providers used with C FFI bindings (Go, Python sync/async).
-///
-/// Called by the Rust core each time a fresh IAM token needs to be generated. All string output
-/// parameters are UTF-8 encoded. Providers may be invoked twice for one credential fetch when
-/// buffer negotiation is required, so they must tolerate repeated invocation. The callback status
-/// values are:
-///
-/// * `0` - failure; the callback will not be retried.
-/// * `1` - success; the reported lengths are the bytes written to each buffer.
-/// * `2` - buffer too small; buffer contents are ignored and all three reported lengths must be
-///   set to the exact required sizes. The callback is retried once with the full per-field limit
-///   for every buffer, allowing credentials to change between invocations.
-///
-/// All other status values are invalid.
-///
-/// # Parameters
-/// * `client_id` - The client identifier passed to `create_client`.
-/// * `access_key_id_buf` - Buffer to write the AWS Access Key ID into.
-/// * `access_key_id_buf_len` - Capacity of `access_key_id_buf`.
-/// * `access_key_id_len` - Output: actual or required length of the AWS Access Key ID.
-/// * `secret_access_key_buf` - Buffer to write the AWS Secret Access Key into.
-/// * `secret_access_key_buf_len` - Capacity of `secret_access_key_buf`.
-/// * `secret_access_key_len` - Output: actual or required length of the AWS Secret Access Key.
-/// * `session_token_buf` - Buffer to write the optional Session Token into (may be left empty).
-/// * `session_token_buf_len` - Capacity of `session_token_buf`.
-/// * `session_token_len` - Output: actual or required length of the Session Token. Write 0 for no token.
-/// * `expires_at_epoch_millis` - Output: optional expiry as Unix epoch milliseconds. Write any value less than or equal to 0 to indicate no expiry.
-///
-/// # Safety
-/// All pointer parameters must be valid for the duration of the call.
+/// Internal non-null form of [`CredentialProviderCallback`].
 type NonNullCredentialProviderCallback = unsafe extern "C-unwind" fn(
     client_id: usize,
     access_key_id_buf: *mut u8,
@@ -511,8 +482,42 @@ type NonNullCredentialProviderCallback = unsafe extern "C-unwind" fn(
     expires_at_epoch_millis: *mut i64,
 ) -> u8;
 
-/// Nullable custom AWS credential-provider callback accepted by [`create_client`].
-/// Pass `None`/`NULL` to use the default AWS credential chain.
+/// Nullable custom AWS credential-provider callback accepted by [`create_client`]. Pass
+/// `None`/`NULL` to use the default AWS credential chain.
+///
+/// The Rust core invokes the callback whenever it needs fresh credentials to generate an IAM
+/// token, possibly many times while the client is active. All string outputs must be UTF-8. The
+/// provider must remain callable for the client's lifetime and produce a complete, coherent set of
+/// credentials on every invocation. Buffer negotiation may cause two invocations for one
+/// credential fetch, and credentials may change between them.
+///
+/// The callback status values are:
+///
+/// * `0` - failure; no retry is made.
+/// * `1` - success; every reported length must be the exact number of bytes written to that buffer.
+/// * `2` - buffer too small; do not write to any credential buffer. Set all three reported lengths
+///   to the exact required byte lengths. Each required length and their sum must be no greater than
+///   1,048,576 bytes. The callback is retried at most once, with the full 1,048,576-byte capacity
+///   for every credential buffer. A second `2` status fails the credential fetch.
+///
+/// All other status values are invalid.
+///
+/// # Parameters
+/// * `client_id` - The client identifier passed to `create_client`.
+/// * `access_key_id_buf` - Buffer to write the AWS Access Key ID into.
+/// * `access_key_id_buf_len` - Capacity of `access_key_id_buf`.
+/// * `access_key_id_len` - Output: actual or required byte length of the AWS Access Key ID.
+/// * `secret_access_key_buf` - Buffer to write the AWS Secret Access Key into.
+/// * `secret_access_key_buf_len` - Capacity of `secret_access_key_buf`.
+/// * `secret_access_key_len` - Output: actual or required byte length of the AWS Secret Access Key.
+/// * `session_token_buf` - Buffer to write the optional Session Token into (may be left empty).
+/// * `session_token_buf_len` - Capacity of `session_token_buf`.
+/// * `session_token_len` - Output: actual or required byte length of the Session Token. Write 0 for no token.
+/// * `expires_at_epoch_millis` - Output: optional expiry as Unix epoch milliseconds. Write any value less than or equal to 0 to indicate no expiry.
+///
+/// # Safety
+/// The callback function pointer must remain valid while the client is active. All pointer
+/// parameters passed to the callback are valid only for the duration of that invocation.
 pub type CredentialProviderCallback = Option<
     unsafe extern "C-unwind" fn(
         client_id: usize,
