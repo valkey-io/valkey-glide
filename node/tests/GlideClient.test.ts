@@ -48,6 +48,7 @@ import {
     parseEndpoints,
     socketDrainDelay,
     validateBatchResponse,
+    waitFor,
     waitForNotBusy,
 } from "./TestUtilities";
 // This timeout is used for tests like transactions and copy with DB, it should not be used for other tests
@@ -209,6 +210,57 @@ describe("GlideClient", () => {
                 );
             } finally {
                 combinedClient.close();
+            }
+        },
+        TIMEOUT,
+    );
+
+    it(
+        "disconnection_push_not_surfaced_to_js",
+        async () => {
+            client = await GlideClient.createClient(
+                getClientConfigurationOption(
+                    cluster.getAddresses(),
+                    ProtocolVersion.RESP3,
+                ),
+            );
+            const killer = await GlideClient.createClient(
+                getClientConfigurationOption(
+                    cluster.getAddresses(),
+                    ProtocolVersion.RESP3,
+                ),
+            );
+
+            try {
+                const clientId = String(
+                    await client.customCommand(["CLIENT", "ID"]),
+                );
+                // A command in flight observes the drop, which is what makes
+                // the native layer emit the Disconnection push.
+                const blocked = client.blpop([getRandomKey()], 0);
+                await waitFor(
+                    async () =>
+                        String(
+                            await killer.customCommand([
+                                "CLIENT",
+                                "LIST",
+                                "ID",
+                                clientId,
+                            ]),
+                        ).includes("cmd=blpop"),
+                    "BLPOP did not reach the server",
+                );
+                await killer.customCommand(["CLIENT", "KILL", "ID", clientId]);
+                await expect(blocked).rejects.toThrow();
+
+                // Reconnected; give a forwarded push time to reach JS.
+                expect(await client.ping()).toEqual("PONG");
+                await sleep(100);
+
+                // The push is dropped natively, so JS never queues it.
+                expect(client["pendingPushNotification"]).toHaveLength(0);
+            } finally {
+                killer.close();
             }
         },
         TIMEOUT,

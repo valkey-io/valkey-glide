@@ -22,7 +22,6 @@ import {
     MutualTls,
 } from "../build-ts";
 import {
-    createLeakedDisconnectionPush,
     createLeakedStringVec,
     freeLeakedStringVec,
     valueFromSplitPointer,
@@ -30,7 +29,6 @@ import {
 import {
     command_request,
     connection_request,
-    response,
 } from "../build-ts/ProtobufMessage";
 import { createMigrate } from "../build-ts/Commands";
 import { convertStringArrayToBuffer } from "./TestUtilities";
@@ -397,33 +395,6 @@ describe("BaseClient response handling", () => {
             "error",
             "Response handling",
             expect.stringContaining("handler failed"),
-        );
-
-        logSpy.mockRestore();
-    });
-
-    it("warns on a disconnection push notification", () => {
-        const client = new TestBaseClient();
-        const logSpy = jest
-            .spyOn(Logger, "log")
-            .mockImplementation(() => undefined);
-        const [low, high] = createLeakedDisconnectionPush();
-
-        // Same shape handleResponse builds for a native push response.
-        const msg = client.notificationToPubSubMessageSafe({
-            respPointer: { high, low },
-        } as response.Response);
-
-        expect(msg).toBeNull();
-        expect(logSpy).toHaveBeenCalledWith(
-            "warn",
-            "disconnect notification",
-            "Transport disconnected, messages might be lost",
-        );
-        expect(logSpy).not.toHaveBeenCalledWith(
-            "error",
-            "unknown notification",
-            expect.anything(),
         );
 
         logSpy.mockRestore();
