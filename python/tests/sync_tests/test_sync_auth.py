@@ -702,22 +702,24 @@ class TestSyncAuthCommands:
         3. Operations continue to work after token refresh
         """
         client = create_iam_client(request, cluster_mode, protocol)
+        try:
+            # Verify connection works
+            assert_connected_sync(client)
 
-        # Verify connection works
-        assert_connected_sync(client)
+            # Test manual token refresh
+            client.refresh_iam_token()
 
-        # Test manual token refresh
-        client.refresh_iam_token()
+            # Test basic operations
+            client.set("iam_test_key", "iam_test_value")
+            value = client.get("iam_test_key")
+            assert value == b"iam_test_value"
 
-        # Test basic operations
-        client.set("iam_test_key", "iam_test_value")
-        value = client.get("iam_test_key")
-        assert value == b"iam_test_value"
-
-        # Verify operations still work after token refresh
-        client.set("iam_test_key2", "iam_test_value2")
-        value2 = client.get("iam_test_key2")
-        assert value2 == b"iam_test_value2"
+            # Verify operations still work after token refresh
+            client.set("iam_test_key2", "iam_test_value2")
+            value2 = client.get("iam_test_key2")
+            assert value2 == b"iam_test_value2"
+        finally:
+            client.close()
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -733,17 +735,19 @@ class TestSyncAuthCommands:
         client = create_iam_client(
             request, cluster_mode, protocol, refresh_interval_seconds=2
         )
+        try:
+            # Verify initial connection
+            assert_connected_sync(client)
 
-        # Verify initial connection
-        assert_connected_sync(client)
+            # Wait for automatic token refresh to occur
+            time.sleep(3)
 
-        # Wait for automatic token refresh to occur
-        time.sleep(3)
-
-        # Verify client still works after automatic refresh
-        client.set("iam_auto_refresh_key", "iam_auto_refresh_value")
-        value = client.get("iam_auto_refresh_key")
-        assert value == b"iam_auto_refresh_value"
+            # Verify client still works after automatic refresh
+            client.set("iam_auto_refresh_key", "iam_auto_refresh_value")
+            value = client.get("iam_auto_refresh_key")
+            assert value == b"iam_auto_refresh_value"
+        finally:
+            client.close()
 
 
 class _CountingCredentialProvider:

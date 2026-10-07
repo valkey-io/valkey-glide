@@ -707,22 +707,24 @@ class TestAuthCommands:
         3. Operations continue to work after token refresh
         """
         client = await create_iam_client(request, cluster_mode, protocol)
+        try:
+            # Verify connection works
+            await assert_connected(client)
 
-        # Verify connection works
-        await assert_connected(client)
+            # Test basic operations
+            await client.set("iam_test_key", "iam_test_value")
+            value = await client.get("iam_test_key")
+            assert value == b"iam_test_value"
 
-        # Test basic operations
-        await client.set("iam_test_key", "iam_test_value")
-        value = await client.get("iam_test_key")
-        assert value == b"iam_test_value"
+            # Test manual token refresh
+            await client.refresh_iam_token()
 
-        # Test manual token refresh
-        await client.refresh_iam_token()
-
-        # Verify operations still work after token refresh
-        await client.set("iam_test_key2", "iam_test_value2")
-        value2 = await client.get("iam_test_key2")
-        assert value2 == b"iam_test_value2"
+            # Verify operations still work after token refresh
+            await client.set("iam_test_key2", "iam_test_value2")
+            value2 = await client.get("iam_test_key2")
+            assert value2 == b"iam_test_value2"
+        finally:
+            await client.close()
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -738,17 +740,19 @@ class TestAuthCommands:
         client = await create_iam_client(
             request, cluster_mode, protocol, refresh_interval_seconds=2
         )
+        try:
+            # Verify initial connection
+            await assert_connected(client)
 
-        # Verify initial connection
-        await assert_connected(client)
+            # Wait for automatic token refresh to occur
+            await anyio.sleep(3)
 
-        # Wait for automatic token refresh to occur
-        await anyio.sleep(3)
-
-        # Verify client still works after automatic refresh
-        await client.set("iam_auto_refresh_key", "iam_auto_refresh_value")
-        value = await client.get("iam_auto_refresh_key")
-        assert value == b"iam_auto_refresh_value"
+            # Verify client still works after automatic refresh
+            await client.set("iam_auto_refresh_key", "iam_auto_refresh_value")
+            value = await client.get("iam_auto_refresh_key")
+            assert value == b"iam_auto_refresh_value"
+        finally:
+            await client.close()
 
 
 class _CountingCredentialProvider:
@@ -893,41 +897,41 @@ async def test_iam_close_during_provider_refresh_does_not_block_owner_runtime(
     release_provider = anyio.Event()
     should_block = False
 
-    async def provider():
+    async def _provider():
         if should_block:
             provider_entered.set()
             await release_provider.wait()
         return AwsCredentials("test_access_key", "test_secret_key")
 
     client = await create_iam_client(
-        request, cluster_mode, protocol, credential_provider=provider
+        request, cluster_mode, protocol, credential_provider=_provider
     )
     should_block = True
     refresh_errors = []
     closes_completed = []
 
-    async def refresh():
+    async def _refresh():
         try:
             await client.refresh_iam_token()
         except ClosingError as error:
             refresh_errors.append(error)
 
-    async def close():
+    async def _close():
         await client.close()
         closes_completed.append(True)
 
     try:
         with anyio.fail_after(5):
             async with anyio.create_task_group() as task_group:
-                task_group.start_soon(refresh)
+                task_group.start_soon(_refresh)
                 await provider_entered.wait()
-                task_group.start_soon(close)
-                task_group.start_soon(close)
+                task_group.start_soon(_close)
+                task_group.start_soon(_close)
 
-                async def close_started():
+                async def _close_started():
                     return client._is_closed
 
-                await wait_for(close_started, "close did not start", timeout=1)
+                await wait_for(_close_started, "close did not start", timeout=1)
                 release_provider.set()
     finally:
         release_provider.set()

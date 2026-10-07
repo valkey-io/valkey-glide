@@ -113,14 +113,14 @@ def _guard_native_call(method: _F) -> _F:
     """Keep a direct client's native pointer alive for one complete operation."""
 
     @wraps(method)
-    def guarded(self: "BaseClient", *args: Any, **kwargs: Any) -> Any:
+    def _guarded(self: "BaseClient", *args: Any, **kwargs: Any) -> Any:
         self._begin_native_call()
         try:
             return method(self, *args, **kwargs)
         finally:
             self._end_native_call()
 
-    return cast(_F, guarded)
+    return cast(_F, _guarded)
 
 
 # Enum values must match the Rust definition

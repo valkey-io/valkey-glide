@@ -99,6 +99,9 @@ EXCLUDED_TESTS = {
         "test_pool_abandon_detection_disabled",
         # Async credential-provider forms have no sync-client equivalent.
         "test_iam_custom_async_provider_forms",
+        # Closing while an async provider is suspended exercises the async
+        # client's owner event loop; sync clients reject async providers.
+        "test_iam_close_during_provider_refresh_does_not_block_owner_runtime",
     ],
     "sync_only": [
         "test_sync_fork",

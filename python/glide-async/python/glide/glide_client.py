@@ -564,17 +564,17 @@ class _NativeCreateState:
         self._adopted = False
         self._thread = threading.Thread(target=self._run, daemon=True)
 
-    def start(self) -> None:
+    def _start(self) -> None:
         self._thread.start()
 
-    async def wait_and_adopt(self):
+    async def _wait_and_adopt(self):
         """Wait cancellably; cancellation leaves cleanup to the create worker."""
         try:
             await anyio.to_thread.run_sync(
                 self._result_ready.wait, abandon_on_cancel=True
             )
         except BaseException:
-            self.abandon()
+            self._abandon()
             raise
 
         with self._lock:
@@ -597,7 +597,7 @@ class _NativeCreateState:
             raise ClosingError("Failed to create client, response pointer is NULL.")
         return core_client
 
-    def abandon(self) -> None:
+    def _abandon(self) -> None:
         """Atomically choose worker cleanup unless the pointer was adopted."""
         with self._lock:
             if not self._adopted:
@@ -673,7 +673,7 @@ class _NativeCloseState:
         self.error: Optional[BaseException] = None
         self._thread = threading.Thread(target=self._run, daemon=True)
 
-    def start(self) -> None:
+    def _start(self) -> None:
         self._thread.start()
 
     def _run(self) -> None:
@@ -822,13 +822,13 @@ class BaseClient(CoreCommands):
                 credential_provider_callback,
             ),
         )
-        create_state.start()
+        create_state._start()
 
         try:
             # The native worker exclusively owns and frees ConnectionResponse.
             # Cancellation only marks its result abandoned; a late successful
             # pointer is closed by that same worker without using this runtime.
-            self._core_client = await create_state.wait_and_adopt()
+            self._core_client = await create_state._wait_and_adopt()
 
             # Give pending AnyIO/Trio cancellation a delivery point before the
             # initialized client escapes. Raw asyncio cancellation is handled by
@@ -841,7 +841,7 @@ class BaseClient(CoreCommands):
             self._setup_pipe()
             return self
         except BaseException:
-            create_state.abandon()
+            create_state._abandon()
             if self._core_client is not None and not self._is_closed:
                 try:
                     await self.close()
@@ -1400,7 +1400,7 @@ class BaseClient(CoreCommands):
                 # ownership to transfer.
                 self._release_callback_references()
                 return
-            close_state.start()
+            close_state._start()
 
         assert close_state is not None
         await close_state.wait()

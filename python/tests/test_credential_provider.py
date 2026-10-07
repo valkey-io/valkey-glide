@@ -900,18 +900,36 @@ def test_sync_close_after_failed_creation_is_safe(monkeypatch):
     fake_lib.close_client.assert_not_called()
 
 
-def test_sync_fork_registry_is_weak_and_close_discards_client(monkeypatch):
+def test_sync_fork_registry_does_not_retain_unclosed_client(monkeypatch):
     sync_client_module, _, fake_lib, _ = _patch_sync_client(monkeypatch)
-    client = sync_client_module.GlideClient.create(_direct_client_config())
+    registry = weakref.WeakSet()
+    monkeypatch.setattr(sync_client_module, "_live_sync_clients", registry)
+    client = sync_client_module.GlideClient(_direct_client_config())
+    registry.add(client)
     client_ref = weakref.ref(client)
-    assert client in sync_client_module._live_sync_clients
+    assert not client._is_closed
+    assert client in registry
 
-    client.close()
-    assert client not in sync_client_module._live_sync_clients
-    fake_lib.create_client.reset_mock()
     del client
     gc.collect()
+
     assert client_ref() is None
+    assert not registry
+    fake_lib.create_client.assert_not_called()
+    fake_lib.close_client.assert_not_called()
+
+
+def test_sync_close_discards_client_from_fork_registry(monkeypatch):
+    sync_client_module, _, fake_lib, _ = _patch_sync_client(monkeypatch)
+    registry = weakref.WeakSet()
+    monkeypatch.setattr(sync_client_module, "_live_sync_clients", registry)
+    client = sync_client_module.GlideClient.create(_direct_client_config())
+    assert client in registry
+
+    client.close()
+
+    assert client not in registry
+    fake_lib.close_client.assert_called_once_with(fake_lib._response.conn_ptr)
 
 
 def test_global_fork_hook_continues_after_one_client_fails(monkeypatch):
