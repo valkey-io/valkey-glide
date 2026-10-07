@@ -95,6 +95,9 @@ struct DropWrapper {
     /// configured. Held here so the task lives for the client's lifetime and is
     /// shut down when the client is dropped.
     _cert_material_manager: Option<Arc<crate::tls_reload::CertReloadManager>>,
+    /// The TLS certificate material this client connected with, so scoped
+    /// connections can inherit it (see [`super::InheritedCertMaterial`]).
+    cert_material: super::InheritedCertMaterial,
 }
 
 impl Drop for DropWrapper {
@@ -312,6 +315,13 @@ impl StandaloneClient {
             )
         } else {
             None
+        };
+
+        // Snapshot both halves before the locals are handed to the nodes; scoped
+        // connections inherit them from the parent `Client`.
+        let cert_material = super::InheritedCertMaterial {
+            tls_params: tls_params.clone(),
+            reload_handle: cert_material_handle.clone(),
         };
 
         let read_only = connection_request.read_only;
@@ -658,8 +668,15 @@ impl StandaloneClient {
                 read_from,
                 read_only,
                 _cert_material_manager: cert_material_manager,
+                cert_material,
             }),
         })
+    }
+
+    /// The TLS certificate material this client connected with. Read when a
+    /// scoped connection inherits the parent's mTLS identity and trust roots.
+    pub(super) fn cert_material(&self) -> &super::InheritedCertMaterial {
+        &self.inner.cert_material
     }
 
     fn get_primary_connection(&self) -> &ReconnectingConnection {
