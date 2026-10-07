@@ -206,7 +206,7 @@ public class IamTokenCallbackTest {
     }
 
     @Test
-    @Timeout(10)
+    @Timeout(15)
     void methodBodyAndFutureShareOneDeadline() throws Exception {
         long timeoutMillis = 3000;
         long methodBodyHoldMillis = 1000;
@@ -227,20 +227,23 @@ public class IamTokenCallbackTest {
                     return returnedFuture;
                 };
 
-        try (NativeCallback callback = new NativeCallback(provider, timeoutMillis)) {
-            Thread invocation =
-                    new Thread(
-                            () -> {
-                                try {
-                                    callback.invoke();
-                                } catch (RuntimeException exception) {
-                                    invocationError.set(exception);
-                                }
-                            },
-                            "shared-credentials-deadline-test");
-            invocation.setDaemon(true);
-            invocation.start();
+        NativeCallback callback = new NativeCallback(provider, timeoutMillis);
+        Thread invocation =
+                new Thread(
+                        () -> {
+                            try {
+                                callback.invoke();
+                            } catch (RuntimeException exception) {
+                                invocationError.set(exception);
+                            }
+                        },
+                        "shared-credentials-deadline-test");
+        invocation.setDaemon(true);
+        Throwable testFailure = null;
+        boolean invocationTerminated = false;
 
+        try {
+            invocation.start();
             assertTrue(
                     methodBodyEntered.await(1, TimeUnit.SECONDS),
                     "Credentials provider method body did not start");
@@ -252,12 +255,6 @@ public class IamTokenCallbackTest {
             boolean completedWithinSharedDeadline = !invocation.isAlive();
             long elapsedAfterMethodBodyMillis =
                     Duration.between(methodBodyReleased, Instant.now()).toMillis();
-            if (!completedWithinSharedDeadline) {
-                // Unblock an implementation that incorrectly starts a fresh future deadline before
-                // asserting, so this test does not leak its invocation thread on failure.
-                returnedFuture.complete(credentials("independent-deadline"));
-                invocation.join(1000);
-            }
 
             assertTrue(
                     completedWithinSharedDeadline,
@@ -269,8 +266,35 @@ public class IamTokenCallbackTest {
             assertTrue(error != null, "Callback unexpectedly returned credentials");
             assertTrue(error.getMessage().contains("3000 ms total"), error.getMessage());
             assertTrue(returnedFuture.isCancelled(), "Returned future was not cancelled");
+        } catch (Throwable failure) {
+            testFailure = failure;
         } finally {
             releaseMethodBody.countDown();
+            returnedFuture.complete(credentials("cleanup-release"));
+            invocationTerminated = joinWithin(invocation, 5000);
+            if (invocationTerminated) {
+                callback.close();
+            }
+        }
+
+        if (!invocationTerminated) {
+            AssertionError lifetimeFailure =
+                    new AssertionError(
+                            "Callback invocation thread did not terminate; native callback handle was"
+                                    + " intentionally leaked");
+            if (testFailure != null) {
+                lifetimeFailure.addSuppressed(testFailure);
+            }
+            throw lifetimeFailure;
+        }
+        if (testFailure instanceof Error) {
+            throw (Error) testFailure;
+        }
+        if (testFailure instanceof Exception) {
+            throw (Exception) testFailure;
+        }
+        if (testFailure != null) {
+            throw new AssertionError(testFailure);
         }
     }
 
@@ -331,6 +355,26 @@ public class IamTokenCallbackTest {
             Thread.sleep(5);
         }
         return value.get() >= expected;
+    }
+
+    private static boolean joinWithin(Thread thread, long timeoutMillis) {
+        long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMillis);
+        boolean interrupted = false;
+        while (thread.isAlive()) {
+            long remainingNanos = deadline - System.nanoTime();
+            if (remainingNanos <= 0) {
+                break;
+            }
+            try {
+                TimeUnit.NANOSECONDS.timedJoin(thread, remainingNanos);
+            } catch (InterruptedException exception) {
+                interrupted = true;
+            }
+        }
+        if (interrupted) {
+            Thread.currentThread().interrupt();
+        }
+        return !thread.isAlive();
     }
 
     private static void assertReturnsPromptly(
