@@ -6,6 +6,7 @@ from typing import Generator
 
 import pytest
 from glide_shared.config import (
+    AwsCredentials,
     BackoffStrategy,
     IamAuthConfig,
     ProtocolVersion,
@@ -173,6 +174,7 @@ def create_iam_client(
     cluster_mode: bool,
     protocol: ProtocolVersion,
     refresh_interval_seconds: int = IAM_DEFAULT_REFRESH_INTERVAL_SECONDS,
+    credential_provider=None,
 ):
     """Helper to create a sync client with IAM authentication."""
     iam_config = IamAuthConfig(
@@ -180,6 +182,7 @@ def create_iam_client(
         service=ServiceType.ELASTICACHE,
         region=IAM_TEST_REGION_US_EAST_1,
         refresh_interval_seconds=refresh_interval_seconds,
+        credential_provider=credential_provider,
     )
 
     credentials = ServerCredentials(username=IAM_USERNAME, iam_config=iam_config)
@@ -740,3 +743,93 @@ class TestSyncAuthCommands:
         client.set("iam_auto_refresh_key", "iam_auto_refresh_value")
         value = client.get("iam_auto_refresh_key")
         assert value == b"iam_auto_refresh_value"
+
+
+class _CountingCredentialProvider:
+    def __init__(self, session_token=None, expiry=None, token_size=0):
+        self.calls = 0
+        self.session_token = session_token or ("t" * token_size if token_size else None)
+        self.expiry = expiry
+
+    def __call__(self):
+        self.calls += 1
+        return AwsCredentials(
+            "test_access_key",
+            "test_secret_key",
+            self.session_token,
+            self.expiry,
+        )
+
+
+def _failing_credentials_provider():
+    raise RuntimeError("credentials unavailable")
+
+
+async def _async_credentials_result():
+    return AwsCredentials("test_access_key", "test_secret_key")
+
+
+def _awaitable_credentials_provider():
+    return _async_credentials_result()
+
+
+@pytest.mark.parametrize("cluster_mode", [False])
+@pytest.mark.parametrize("protocol", [ProtocolVersion.RESP3])
+@pytest.mark.parametrize(
+    "session_token,expiry", [(None, None), ("test_session_token", 4_000_000_000_000)]
+)
+def test_sync_iam_custom_provider_initial_and_manual_refresh(
+    request, cluster_mode, protocol, session_token, expiry
+):
+    """A direct sync client supports optional fields and manual refresh."""
+    provider = _CountingCredentialProvider(session_token, expiry)
+    client = create_iam_client(
+        request, cluster_mode, protocol, credential_provider=provider
+    )
+    try:
+        assert_connected_sync(client)
+        client.refresh_iam_token()
+        assert_connected_sync(client)
+    finally:
+        client.close()
+
+
+@pytest.mark.parametrize("cluster_mode", [False])
+@pytest.mark.parametrize("protocol", [ProtocolVersion.RESP3])
+def test_sync_iam_custom_provider_automatic_refresh_and_large_token(
+    request, cluster_mode, protocol
+):
+    """Large credentials negotiate twice and remain usable during refresh."""
+    provider = _CountingCredentialProvider(token_size=8192)
+    client = create_iam_client(
+        request,
+        cluster_mode,
+        protocol,
+        refresh_interval_seconds=1,
+        credential_provider=provider,
+    )
+    try:
+        assert_connected_sync(client)
+        assert provider.calls >= 2
+        calls_after_connect = provider.calls
+        sync_wait_for(
+            lambda: provider.calls > calls_after_connect,
+            "credential provider was not refreshed",
+            timeout=5,
+        )
+        assert_connected_sync(client)
+    finally:
+        client.close()
+
+
+@pytest.mark.parametrize("cluster_mode", [False])
+@pytest.mark.parametrize("protocol", [ProtocolVersion.RESP3])
+@pytest.mark.parametrize(
+    "provider", [_failing_credentials_provider, _awaitable_credentials_provider]
+)
+def test_sync_iam_custom_provider_exception_fails_direct_creation(
+    request, cluster_mode, protocol, provider
+):
+    """Exceptions and awaitables surface as direct-client credential errors."""
+    with pytest.raises(ClosingError, match="credential|Credential|provider|callback"):
+        create_iam_client(request, cluster_mode, protocol, credential_provider=provider)

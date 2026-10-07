@@ -25,6 +25,7 @@ from glide_shared.exceptions import (
     RequestError,
     get_request_error_class,
 )
+from glide_shared.ffi_helpers import create_credential_provider_callback
 from glide_shared.opentelemetry import _create_batch_span, _create_command_span
 from glide_shared.protobuf.command_request_pb2 import RequestType
 from glide_shared.routes import (
@@ -104,6 +105,8 @@ class BaseClient(CoreCommands):
         self._pubsub_lock = threading.Lock()
         self._pubsub_condition = threading.Condition(self._pubsub_lock)
         self._pubsub_callback_ref = None  # Keep callback alive
+        self._address_resolver_callback_ref = None
+        self._credential_provider_callback_ref = None
         # Lock protecting _core_client and _is_closed for free-threading safety.
         # Under GIL builds this is a no-op (GIL serializes access).
         # Under free-threaded builds this prevents use-after-free on concurrent close.
@@ -123,9 +126,8 @@ class BaseClient(CoreCommands):
         self._config = config
         self._is_closed = False
 
-        os.register_at_fork(after_in_child=self._create_core_client)
-
         self._create_core_client()
+        os.register_at_fork(after_in_child=self._create_core_client)
 
         return self
 
@@ -135,6 +137,19 @@ class BaseClient(CoreCommands):
         # client already closed, and recreate it anyway.
         if self._is_closed:
             return
+
+        credential_provider = None
+        iam_config = None
+        if self._config.credentials is not None:
+            iam_config = self._config.credentials.iam_config
+        if iam_config is not None:
+            credential_provider = iam_config.credential_provider
+            if iam_config._credential_provider_is_async:
+                raise ValueError(
+                    "The sync client does not support async credential providers; "
+                    "use a synchronous provider or the async client"
+                )
+
         conn_req = _create_sync_connection_request(self._config)
         conn_req_bytes = conn_req.SerializeToString()
         # Store for scoped_connection
@@ -155,7 +170,9 @@ class BaseClient(CoreCommands):
         self._pubsub_callback_ref = pubsub_callback
 
         # Create address resolver callback if configured
-        address_resolver_callback = self._ffi.NULL
+        address_resolver_callback = self._ffi.cast(
+            "AddressResolverCallback", self._ffi.NULL
+        )
         if self._config.address_resolver is not None:
             resolver_fn = self._config.address_resolver
 
@@ -186,13 +203,19 @@ class BaseClient(CoreCommands):
             # Store reference to prevent garbage collection
             self._address_resolver_callback_ref = address_resolver_callback
 
+        credential_provider_callback = create_credential_provider_callback(
+            self._ffi, credential_provider
+        )
+        if credential_provider is not None:
+            self._credential_provider_callback_ref = credential_provider_callback
+
         client_response_ptr = self._lib.create_client(
             conn_req_bytes,
             len(conn_req_bytes),
             client_type,
             pubsub_callback,
             address_resolver_callback,
-            self._ffi.cast("CredentialProviderCallback", self._ffi.NULL),
+            credential_provider_callback,
             0,  # client_id is not used by the Python client
         )
 
@@ -213,6 +236,7 @@ class BaseClient(CoreCommands):
                     if client_response.connection_error_message != self._ffi.NULL
                     else "Unknown error"
                 )
+                self._lib.free_connection_response(client_response_ptr)
                 raise ClosingError(error_message)
 
             # Free the connection response to avoid memory leaks

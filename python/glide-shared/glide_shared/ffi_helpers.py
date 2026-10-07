@@ -265,7 +265,7 @@ def create_address_resolver_callback(ffi, resolver_fn):
         The CFFI callback object. Caller must keep a reference to prevent GC.
     """
     if resolver_fn is None:
-        return ffi.NULL
+        return ffi.cast("AddressResolverCallback", ffi.NULL)
 
     def _address_resolver_callback(
         client_id,
@@ -294,6 +294,270 @@ def create_address_resolver_callback(ffi, resolver_fn):
             return 0
 
     return ffi.callback("AddressResolverCallback", _address_resolver_callback)
+
+
+_CREDENTIAL_CALLBACK_FAILURE = 0
+_CREDENTIAL_CALLBACK_SUCCESS = 1
+_CREDENTIAL_CALLBACK_BUFFER_TOO_SMALL = 2
+_MAX_CREDENTIAL_BYTES = 1024 * 1024
+_CREDENTIAL_BRIDGE_TIMEOUT_SECONDS = 9
+
+
+async def _await_credential_result(awaitable):
+    """Await one provider result with a deadline below the Rust deadline."""
+    import anyio
+
+    with anyio.fail_after(_CREDENTIAL_BRIDGE_TIMEOUT_SECONDS):
+        return await awaitable
+
+
+async def _call_async_credential_provider(provider):
+    """Call an async provider on its owning async runtime."""
+    import inspect
+
+    result = provider()
+    if not inspect.isawaitable(result):
+        return result
+    return await _await_credential_result(result)
+
+
+def _run_coroutine_on_asyncio_loop(coroutine, event_loop):
+    """Run a coroutine from the native callback thread on an asyncio loop."""
+    import asyncio
+
+    if event_loop is None or event_loop.is_closed():
+        coroutine.close()
+        raise RuntimeError("The credential provider's asyncio loop is unavailable")
+
+    future = asyncio.run_coroutine_threadsafe(coroutine, event_loop)
+    try:
+        return future.result(timeout=_CREDENTIAL_BRIDGE_TIMEOUT_SECONDS)
+    except BaseException:
+        future.cancel()
+        raise
+
+
+def _run_async_credential_provider(provider, event_loop, trio_token):
+    """Invoke a known async provider on its captured asyncio or Trio runtime."""
+    if event_loop is not None:
+        return _run_coroutine_on_asyncio_loop(
+            _call_async_credential_provider(provider), event_loop
+        )
+    if trio_token is not None:
+        import trio
+
+        return trio.from_thread.run(
+            _call_async_credential_provider, provider, trio_token=trio_token
+        )
+    raise RuntimeError(
+        "Async credential providers require a running asyncio or Trio context"
+    )
+
+
+def _run_awaitable_result(awaitable, event_loop, trio_token):
+    """Await a result returned by a nominally synchronous provider."""
+    if event_loop is not None:
+        return _run_coroutine_on_asyncio_loop(
+            _await_credential_result(awaitable), event_loop
+        )
+    if trio_token is not None:
+        import trio
+
+        return trio.from_thread.run(
+            _await_credential_result, awaitable, trio_token=trio_token
+        )
+    _dispose_awaitable(awaitable)
+    raise RuntimeError(
+        "Credential provider returned an awaitable without an async client context"
+    )
+
+
+def _dispose_awaitable(awaitable) -> None:
+    """Cancel or close a rejected awaitable so it cannot leak warnings."""
+    cancel = getattr(awaitable, "cancel", None)
+    if callable(cancel):
+        cancel()
+    close = getattr(awaitable, "close", None)
+    if callable(close):
+        close()
+
+
+def create_credential_provider_callback(
+    ffi,
+    credential_provider_fn,
+    *,
+    event_loop=None,
+    trio_token=None,
+    allow_async=False,
+):
+    """Create a native callback for a custom AWS credential provider.
+
+    The callback follows the native stateless tri-state protocol: 0 means
+    failure, 1 means success, and 2 requests larger buffers. A provider can be
+    called twice during large-value negotiation; no result is cached between
+    those calls.
+
+    Async clients must call this function in their owning async context and
+    pass the running asyncio loop or Trio token. ``allow_async`` also permits a
+    nominally synchronous provider to return an awaitable. Sync clients leave
+    it false; rejected awaitables are closed or cancelled before failure.
+
+    Returns:
+        A typed NULL callback when no provider is configured, otherwise a CFFI
+        callback that must be retained for the native client's lifetime.
+    """
+    if credential_provider_fn is None:
+        return ffi.cast("CredentialProviderCallback", ffi.NULL)
+
+    import inspect
+    import weakref
+
+    from glide_shared.config import _is_async_callable
+
+    is_async_callable = _is_async_callable(credential_provider_fn)
+    event_loop_ref = weakref.ref(event_loop) if event_loop is not None else None
+
+    def _credential_provider_callback(
+        client_id,
+        access_key_id_buf,
+        access_key_id_buf_len,
+        access_key_id_len_ptr,
+        secret_access_key_buf,
+        secret_access_key_buf_len,
+        secret_access_key_len_ptr,
+        session_token_buf,
+        session_token_buf_len,
+        session_token_len_ptr,
+        expires_at_millis_ptr,
+    ):
+        try:
+            owner_loop = event_loop_ref() if event_loop_ref is not None else None
+            if is_async_callable:
+                if not allow_async:
+                    raise TypeError(
+                        "The sync client does not support async credential providers"
+                    )
+                credentials = _run_async_credential_provider(
+                    credential_provider_fn, owner_loop, trio_token
+                )
+            else:
+                credentials = credential_provider_fn()
+                if inspect.isawaitable(credentials):
+                    if not allow_async:
+                        _dispose_awaitable(credentials)
+                        raise TypeError(
+                            "The sync credential provider returned an awaitable; "
+                            "use a synchronous provider or the async client"
+                        )
+                    credentials = _run_awaitable_result(
+                        credentials, owner_loop, trio_token
+                    )
+
+            return _write_credentials_to_buffers(
+                ffi,
+                credentials,
+                access_key_id_buf,
+                access_key_id_buf_len,
+                access_key_id_len_ptr,
+                secret_access_key_buf,
+                secret_access_key_buf_len,
+                secret_access_key_len_ptr,
+                session_token_buf,
+                session_token_buf_len,
+                session_token_len_ptr,
+                expires_at_millis_ptr,
+            )
+        except BaseException as error:
+            import logging
+
+            logging.getLogger(__name__).warning(
+                "IAM credential provider failed: %s", error
+            )
+            return _CREDENTIAL_CALLBACK_FAILURE
+
+    return ffi.callback("CredentialProviderCallback", _credential_provider_callback)
+
+
+def _write_credentials_to_buffers(
+    ffi,
+    credentials,
+    access_key_id_buf,
+    access_key_id_buf_len,
+    access_key_id_len_ptr,
+    secret_access_key_buf,
+    secret_access_key_buf_len,
+    secret_access_key_len_ptr,
+    session_token_buf,
+    session_token_buf_len,
+    session_token_len_ptr,
+    expires_at_millis_ptr,
+):
+    """Validate, pre-encode, and atomically write one credential result."""
+    from glide_shared.config import AwsCredentials
+
+    if not isinstance(credentials, AwsCredentials):
+        raise TypeError("credential_provider must return AwsCredentials")
+
+    access_key_id = credentials.access_key_id
+    secret_access_key = credentials.secret_access_key
+    session_token = credentials.session_token
+    expires_at = credentials.expires_at_epoch_millis
+
+    if not isinstance(access_key_id, str) or not access_key_id.strip():
+        raise ValueError("access_key_id must be a nonblank string")
+    if not isinstance(secret_access_key, str) or not secret_access_key.strip():
+        raise ValueError("secret_access_key must be a nonblank string")
+    if session_token is not None and not isinstance(session_token, str):
+        raise ValueError("session_token must be a string or None")
+    if expires_at is not None and (
+        not isinstance(expires_at, int)
+        or isinstance(expires_at, bool)
+        or expires_at < 0
+        or expires_at > 2**63 - 1
+    ):
+        raise ValueError(
+            "expires_at_epoch_millis must be a nonnegative signed 64-bit integer"
+        )
+
+    encoded_access_key_id = access_key_id.encode(ENCODING)
+    encoded_secret_access_key = secret_access_key.encode(ENCODING)
+    encoded_session_token = (
+        session_token.encode(ENCODING) if session_token is not None else b""
+    )
+    encoded_fields = (
+        encoded_access_key_id,
+        encoded_secret_access_key,
+        encoded_session_token,
+    )
+    lengths = tuple(len(field) for field in encoded_fields)
+
+    if any(length > _MAX_CREDENTIAL_BYTES for length in lengths):
+        raise ValueError("Each credential field must not exceed 1 MiB")
+    if sum(lengths) > _MAX_CREDENTIAL_BYTES:
+        raise ValueError("Aggregate credential fields must not exceed 1 MiB")
+
+    access_key_id_len_ptr[0] = lengths[0]
+    secret_access_key_len_ptr[0] = lengths[1]
+    session_token_len_ptr[0] = lengths[2]
+
+    capacities = (
+        access_key_id_buf_len,
+        secret_access_key_buf_len,
+        session_token_buf_len,
+    )
+    if any(required > capacity for required, capacity in zip(lengths, capacities)):
+        # Status 2 is metadata-only: do not touch credential bytes or expiry.
+        return _CREDENTIAL_CALLBACK_BUFFER_TOO_SMALL
+
+    # All validation and capacity checks completed before the first write.
+    if encoded_access_key_id:
+        ffi.memmove(access_key_id_buf, encoded_access_key_id, lengths[0])
+    if encoded_secret_access_key:
+        ffi.memmove(secret_access_key_buf, encoded_secret_access_key, lengths[1])
+    if encoded_session_token:
+        ffi.memmove(session_token_buf, encoded_session_token, lengths[2])
+    expires_at_millis_ptr[0] = expires_at or 0
+    return _CREDENTIAL_CALLBACK_SUCCESS
 
 
 def handle_command_result(ffi, lib, command_result, response_handler):

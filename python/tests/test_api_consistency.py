@@ -97,6 +97,8 @@ EXCLUDED_TESTS = {
         # Abandon detection tests — async-only (monitor runs on tokio runtime)
         "test_pool_abandon_detection",
         "test_pool_abandon_detection_disabled",
+        # Async credential-provider forms have no sync-client equivalent.
+        "test_iam_custom_async_provider_forms",
     ],
     "sync_only": [
         "test_sync_fork",

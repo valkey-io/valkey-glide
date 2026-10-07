@@ -7,6 +7,7 @@ import anyio
 import pytest
 from glide.glide_client import TGlideClient
 from glide_shared.config import (
+    AwsCredentials,
     BackoffStrategy,
     IamAuthConfig,
     ProtocolVersion,
@@ -173,6 +174,7 @@ async def create_iam_client(
     cluster_mode: bool,
     protocol: ProtocolVersion,
     refresh_interval_seconds: int = IAM_DEFAULT_REFRESH_INTERVAL_SECONDS,
+    credential_provider=None,
 ):
     """Helper to create a client with IAM authentication."""
     iam_config = IamAuthConfig(
@@ -180,6 +182,7 @@ async def create_iam_client(
         service=ServiceType.ELASTICACHE,
         region=IAM_TEST_REGION_US_EAST_1,
         refresh_interval_seconds=refresh_interval_seconds,
+        credential_provider=credential_provider,
     )
 
     credentials = ServerCredentials(username=IAM_USERNAME, iam_config=iam_config)
@@ -745,3 +748,130 @@ class TestAuthCommands:
         await client.set("iam_auto_refresh_key", "iam_auto_refresh_value")
         value = await client.get("iam_auto_refresh_key")
         assert value == b"iam_auto_refresh_value"
+
+
+class _CountingCredentialProvider:
+    def __init__(self, session_token=None, expiry=None, token_size=0):
+        self.calls = 0
+        self.session_token = session_token or ("t" * token_size if token_size else None)
+        self.expiry = expiry
+
+    def __call__(self):
+        self.calls += 1
+        return AwsCredentials(
+            "test_access_key",
+            "test_secret_key",
+            self.session_token,
+            self.expiry,
+        )
+
+
+async def _async_credentials_provider():
+    await anyio.sleep(0)
+    return AwsCredentials("test_access_key", "test_secret_key")
+
+
+class _AsyncCallableCredentialProvider:
+    async def __call__(self):
+        return await _async_credentials_provider()
+
+
+def _awaitable_credentials_provider():
+    return _async_credentials_provider()
+
+
+def _failing_credentials_provider():
+    raise RuntimeError("credentials unavailable")
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("cluster_mode", [False])
+@pytest.mark.parametrize("protocol", [ProtocolVersion.RESP3])
+@pytest.mark.parametrize(
+    "session_token,expiry", [(None, None), ("test_session_token", 4_000_000_000_000)]
+)
+async def test_iam_custom_provider_initial_and_manual_refresh(
+    request, cluster_mode, protocol, session_token, expiry
+):
+    """A direct async client supports optional fields and manual refresh."""
+    provider = _CountingCredentialProvider(session_token, expiry)
+    client = await create_iam_client(
+        request, cluster_mode, protocol, credential_provider=provider
+    )
+    try:
+        await assert_connected(client)
+        calls_before_refresh = provider.calls
+        await client.refresh_iam_token()
+        assert provider.calls > calls_before_refresh
+    finally:
+        await client.close()
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("cluster_mode", [False])
+@pytest.mark.parametrize("protocol", [ProtocolVersion.RESP3])
+@pytest.mark.parametrize("provider_kind", ["function", "object", "awaitable"])
+async def test_iam_custom_async_provider_forms(
+    request, cluster_mode, protocol, provider_kind
+):
+    """Async functions, async callable objects, and awaitable results work."""
+    providers = {
+        "function": _async_credentials_provider,
+        "object": _AsyncCallableCredentialProvider(),
+        "awaitable": _awaitable_credentials_provider,
+    }
+    client = await create_iam_client(
+        request,
+        cluster_mode,
+        protocol,
+        credential_provider=providers[provider_kind],
+    )
+    try:
+        await assert_connected(client)
+    finally:
+        await client.close()
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("cluster_mode", [False])
+@pytest.mark.parametrize("protocol", [ProtocolVersion.RESP3])
+async def test_iam_custom_provider_automatic_refresh_and_large_token(
+    request, cluster_mode, protocol
+):
+    """Large credentials negotiate twice and remain usable during refresh."""
+    provider = _CountingCredentialProvider(token_size=8192)
+    client = await create_iam_client(
+        request,
+        cluster_mode,
+        protocol,
+        refresh_interval_seconds=1,
+        credential_provider=provider,
+    )
+    try:
+        await assert_connected(client)
+        assert provider.calls >= 2
+        calls_after_connect = provider.calls
+
+        async def _refreshed():
+            return provider.calls > calls_after_connect
+
+        await wait_for(_refreshed, "credential provider was not refreshed", timeout=5)
+        await assert_connected(client)
+    finally:
+        await client.close()
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("cluster_mode", [False])
+@pytest.mark.parametrize("protocol", [ProtocolVersion.RESP3])
+async def test_iam_custom_provider_exception_fails_direct_creation(
+    request, cluster_mode, protocol
+):
+    """Provider failures surface as direct-client credential errors."""
+    with pytest.raises(ClosingError, match="credential|Credential|provider|callback"):
+        await create_iam_client(
+            request,
+            cluster_mode,
+            protocol,
+            credential_provider=_failing_credentials_provider,
+        )
