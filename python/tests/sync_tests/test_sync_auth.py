@@ -788,7 +788,14 @@ def test_sync_iam_custom_provider_initial_and_manual_refresh(
     )
     try:
         assert_connected_sync(client)
+        calls_before_refresh = provider.calls
         client.refresh_iam_token()
+        sync_wait_for(
+            lambda: provider.calls > calls_before_refresh,
+            "credential provider was not invoked after manual refresh",
+            timeout=5,
+        )
+        assert provider.calls > calls_before_refresh
         assert_connected_sync(client)
     finally:
         client.close()

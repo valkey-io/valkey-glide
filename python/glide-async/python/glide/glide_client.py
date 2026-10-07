@@ -569,7 +569,7 @@ class BaseClient(CoreCommands):
         self._is_asyncio: bool = True
 
     @classmethod
-    async def create(cls, config: BaseClientConfiguration) -> Self:
+    async def create(cls, config: BaseClientConfiguration) -> Self:  # noqa: C901
         """Creates a Glide client.
 
         Args:
@@ -647,43 +647,72 @@ class BaseClient(CoreCommands):
         if credential_provider is not None:
             self._credential_provider_callback_ref = credential_provider_callback
 
-        # Native client creation can synchronously request credentials. Run it
-        # off the owning async thread so an async provider can execute there.
-        client_response_ptr = await anyio.to_thread.run_sync(
-            self._lib.create_client,
-            conn_req_bytes,
-            len(conn_req_bytes),
-            client_type,
-            pubsub_callback,
-            address_resolver_callback,
-            credential_provider_callback,
-            self._pipe_client_id,
-        )
-
-        ClientLogger.log(LogLevel.INFO, "connection info", "new connection established")
-
-        if client_response_ptr == self._ffi.NULL:
-            raise ClosingError("Failed to create client, response pointer is NULL.")
-
-        client_response = self._ffi.cast("ConnectionResponse*", client_response_ptr)
-        if client_response.conn_ptr != self._ffi.NULL:
-            self._core_client = client_response.conn_ptr
-        else:
-            error_msg = (
-                self._ffi.string(client_response.connection_error_message).decode(
-                    ENCODING
+        try:
+            # Native creation can synchronously request credentials. Shield the
+            # ownership transfer and wait for the worker even when the caller is
+            # cancelled, so Python always receives and frees ConnectionResponse.
+            with anyio.CancelScope(shield=True):
+                client_response_ptr = await anyio.to_thread.run_sync(
+                    self._lib.create_client,
+                    conn_req_bytes,
+                    len(conn_req_bytes),
+                    client_type,
+                    pubsub_callback,
+                    address_resolver_callback,
+                    credential_provider_callback,
+                    self._pipe_client_id,
+                    abandon_on_cancel=False,
                 )
-                if client_response.connection_error_message != self._ffi.NULL
-                else "Unknown error"
+
+                if client_response_ptr == self._ffi.NULL:
+                    raise ClosingError(
+                        "Failed to create client, response pointer is NULL."
+                    )
+
+                try:
+                    client_response = self._ffi.cast(
+                        "ConnectionResponse*", client_response_ptr
+                    )
+                    if client_response.conn_ptr == self._ffi.NULL:
+                        error_msg = (
+                            self._ffi.string(
+                                client_response.connection_error_message
+                            ).decode(ENCODING)
+                            if client_response.connection_error_message
+                            != self._ffi.NULL
+                            else "Unknown error"
+                        )
+                        raise ClosingError(error_msg)
+                    self._core_client = client_response.conn_ptr
+                finally:
+                    self._lib.free_connection_response(client_response_ptr)
+
+            # Deliver cancellation only after ownership has moved out of the
+            # response. If it is pending, close the accepted native client while
+            # its callbacks are still retained, then release those references.
+            try:
+                await anyio.lowlevel.checkpoint()
+            except BaseException:
+                try:
+                    await self.close()
+                except BaseException:
+                    pass
+                raise
+
+            ClientLogger.log(
+                LogLevel.INFO, "connection info", "new connection established"
             )
-            self._lib.free_connection_response(client_response_ptr)
-            raise ClosingError(error_msg)
-
-        self._lib.free_connection_response(client_response_ptr)
-
-        self._setup_pipe()
-
-        return self
+            self._setup_pipe()
+            return self
+        except BaseException:
+            if self._core_client is not None and not self._is_closed:
+                try:
+                    await self.close()
+                except BaseException:
+                    self._release_callback_references()
+            else:
+                self._release_callback_references()
+            raise
 
     def _setup_pipe(self) -> None:
         """Initialize and register the shared response pipe."""
@@ -1169,6 +1198,12 @@ class BaseClient(CoreCommands):
             actual_subscriptions=actual_subscriptions,
         )
 
+    def _release_callback_references(self) -> None:
+        """Release callbacks after native code can no longer invoke them."""
+        self._pubsub_callback_ref = None
+        self._address_resolver_callback_ref = None
+        self._credential_provider_callback_ref = None
+
     async def close(self, err_message: Optional[str] = None) -> None:
         if not self._is_closed:
             self._is_closed = True
@@ -1188,11 +1223,16 @@ class BaseClient(CoreCommands):
 
             _client_registry.pop(getattr(self, "_pipe_client_id", 0), None)
 
-            # Skip FFI call if this client was created in a different process
-            # (the tokio Runtime doesn't survive fork; dropping it would hang).
-            if self._core_client is not None and self._create_pid == os.getpid():
-                self._lib.close_client(self._core_client)
-                self._core_client = None
+            core_client, self._core_client = self._core_client, None
+            # Skip FFI close for a client inherited from another process (the
+            # Tokio runtime does not survive fork and dropping it would hang).
+            if core_client is not None and self._create_pid == os.getpid():
+                try:
+                    self._lib.close_client(core_client)
+                finally:
+                    self._release_callback_references()
+            else:
+                self._release_callback_references()
 
     async def aclose(self, err_message: Optional[str] = None) -> None:
         """Alias for close() for compatibility with async context managers."""

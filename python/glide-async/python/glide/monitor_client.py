@@ -10,6 +10,7 @@ from glide_shared._glide_ffi import GlideFFI
 from glide_shared.commands.core_options import MonitorMsg
 from glide_shared.config import GlideClientConfiguration
 from glide_shared.connection_request import _create_async_connection_request
+from glide_shared.exceptions import ConfigurationError
 
 
 class MonitorClient:
@@ -81,7 +82,7 @@ class MonitorClient:
                 )
 
     @classmethod
-    async def create(
+    async def create(  # noqa: C901
         cls,
         config: GlideClientConfiguration,
         callback: Optional[Callable[[MonitorMsg], None]] = None,
@@ -102,6 +103,13 @@ class MonitorClient:
         if not isinstance(config, GlideClientConfiguration):
             raise TypeError(
                 "MonitorClient requires a GlideClientConfiguration (standalone only)"
+            )
+        iam_config = (
+            config.credentials.iam_config if config.credentials is not None else None
+        )
+        if iam_config is not None and iam_config.credential_provider is not None:
+            raise ConfigurationError(
+                "MonitorClient does not support custom IAM credential providers"
             )
         instance = cls()
         try:

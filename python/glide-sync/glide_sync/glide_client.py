@@ -16,6 +16,7 @@ from glide_shared.config import (
     BaseClientConfiguration,
     GlideClientConfiguration,
     GlideClusterClientConfiguration,
+    _is_async_callable,
 )
 from glide_shared.connection_request import _create_sync_connection_request
 from glide_shared.constants import OK, TEncodable, TResult
@@ -101,12 +102,15 @@ class BaseClient(CoreCommands):
         self._ffi = _glide_ffi.ffi
         self._lib = _glide_ffi.lib
         self._config: BaseClientConfiguration = config
+        self._core_client = self._ffi.NULL
+        self._conn_req_bytes: bytes = b""
         self._pubsub_queue: List[PubSubMsg] = []
         self._pubsub_lock = threading.Lock()
         self._pubsub_condition = threading.Condition(self._pubsub_lock)
         self._pubsub_callback_ref = None  # Keep callback alive
         self._address_resolver_callback_ref = None
         self._credential_provider_callback_ref = None
+        self._fork_hook_registered = False
         # Lock protecting _core_client and _is_closed for free-threading safety.
         # Under GIL builds this is a no-op (GIL serializes access).
         # Under free-threaded builds this prevents use-after-free on concurrent close.
@@ -123,18 +127,47 @@ class BaseClient(CoreCommands):
                 "Configuration must be an instance of the sync version of GlideClientConfiguration or GlideClusterClientConfiguration, imported from glide_sync.config."
             )
         self = cls(config)
-        self._config = config
-        self._is_closed = False
-
         self._create_core_client()
-        os.register_at_fork(after_in_child=self._create_core_client)
-
+        self._register_at_fork()
         return self
 
-    def _create_core_client(self):
-        # This check is needed in case a fork happens after the client already closed
-        # In that case the registered fork function will kick in even if the
-        # client already closed, and recreate it anyway.
+    def _register_at_fork(self) -> None:
+        if not self._fork_hook_registered:
+            os.register_at_fork(after_in_child=self._recreate_core_client_after_fork)
+            self._fork_hook_registered = True
+
+    def _clear_callback_references(self) -> None:
+        self._pubsub_callback_ref = None
+        self._address_resolver_callback_ref = None
+        self._credential_provider_callback_ref = None
+
+    def _recreate_core_client_after_fork(self) -> None:
+        """Recreate in a child process without ever touching the parent runtime."""
+        was_closed = self._is_closed
+        # The inherited Tokio runtime pointer and CFFI callback ownership are
+        # invalid in the child. Invalidate them before any operation can fail.
+        self._core_client = self._ffi.NULL
+        self._conn_req_bytes = b""
+        self._clear_callback_references()
+        self._pubsub_queue = []
+        self._pubsub_lock = threading.Lock()
+        self._pubsub_condition = threading.Condition(self._pubsub_lock)
+        self._client_lock = threading.Lock()
+        if was_closed:
+            return
+
+        try:
+            self._create_core_client()
+        except BaseException:
+            # CPython ignores exceptions from at-fork handlers. Catch everything
+            # and leave an explicitly unusable client instead of stale state.
+            self._core_client = self._ffi.NULL
+            self._conn_req_bytes = b""
+            self._clear_callback_references()
+            self._is_closed = True
+
+    def _create_core_client(self) -> None:  # noqa: C901
+        # A closed parent must remain closed when its at-fork hook runs.
         if self._is_closed:
             return
 
@@ -144,7 +177,9 @@ class BaseClient(CoreCommands):
             iam_config = self._config.credentials.iam_config
         if iam_config is not None:
             credential_provider = iam_config.credential_provider
-            if iam_config._credential_provider_is_async:
+            if credential_provider is not None and _is_async_callable(
+                credential_provider
+            ):
                 raise ValueError(
                     "The sync client does not support async credential providers; "
                     "use a synchronous provider or the async client"
@@ -152,8 +187,6 @@ class BaseClient(CoreCommands):
 
         conn_req = _create_sync_connection_request(self._config)
         conn_req_bytes = conn_req.SerializeToString()
-        # Store for scoped_connection
-        self._conn_req_bytes = conn_req_bytes
         client_type = self._ffi.new(
             "ClientType*",
             {
@@ -161,18 +194,15 @@ class BaseClient(CoreCommands):
             },
         )
 
-        # Always create pubsub callback to support dynamic subscriptions
-        # This ensures messages are always handled by the wrapper, whether they originate
-        # from configured subscriptions or from dynamic subscriptions added at runtime
+        # Build every callback in locals. Instance state is updated only after
+        # native creation and ConnectionResponse cleanup have both succeeded.
         python_callback = self._create_push_handle_callback()
         pubsub_callback = self._ffi.callback("PubSubCallback", python_callback)
-        # Store reference to prevent garbage collection
-        self._pubsub_callback_ref = pubsub_callback
 
-        # Create address resolver callback if configured
         address_resolver_callback = self._ffi.cast(
             "AddressResolverCallback", self._ffi.NULL
         )
+        address_resolver_callback_ref = None
         if self._config.address_resolver is not None:
             resolver_fn = self._config.address_resolver
 
@@ -194,59 +224,69 @@ class BaseClient(CoreCommands):
                     resolved_host_len_ptr[0] = write_len
                     return resolved_port
                 except Exception:
-                    # On error, return 0 to signal fallback to original address
+                    # On error, return 0 to signal fallback to original address.
                     return 0
 
             address_resolver_callback = self._ffi.callback(
                 "AddressResolverCallback", _address_resolver_callback
             )
-            # Store reference to prevent garbage collection
-            self._address_resolver_callback_ref = address_resolver_callback
+            address_resolver_callback_ref = address_resolver_callback
 
         credential_provider_callback = create_credential_provider_callback(
             self._ffi, credential_provider
         )
-        if credential_provider is not None:
-            self._credential_provider_callback_ref = credential_provider_callback
-
-        client_response_ptr = self._lib.create_client(
-            conn_req_bytes,
-            len(conn_req_bytes),
-            client_type,
-            pubsub_callback,
-            address_resolver_callback,
-            credential_provider_callback,
-            0,  # client_id is not used by the Python client
+        credential_provider_callback_ref = (
+            credential_provider_callback if credential_provider is not None else None
         )
 
-        Logger.log(Level.INFO, "connection info", "new connection established")
-
-        # Handle the connection response
-        if client_response_ptr != self._ffi.NULL:
-            client_response = self._try_ffi_cast(
-                "ConnectionResponse*", client_response_ptr
+        core_client = self._ffi.NULL
+        try:
+            client_response_ptr = self._lib.create_client(
+                conn_req_bytes,
+                len(conn_req_bytes),
+                client_type,
+                pubsub_callback,
+                address_resolver_callback,
+                credential_provider_callback,
+                0,  # client_id is not used by the Python client
             )
-            if client_response.conn_ptr != self._ffi.NULL:
-                self._core_client = client_response.conn_ptr
-            else:
-                error_message = (
-                    self._ffi.string(client_response.connection_error_message).decode(
-                        ENCODING
-                    )
-                    if client_response.connection_error_message != self._ffi.NULL
-                    else "Unknown error"
+            if client_response_ptr == self._ffi.NULL:
+                raise ClosingError("Failed to create client, response pointer is NULL.")
+
+            try:
+                client_response = self._try_ffi_cast(
+                    "ConnectionResponse*", client_response_ptr
                 )
+                if client_response.conn_ptr == self._ffi.NULL:
+                    error_message = (
+                        self._ffi.string(
+                            client_response.connection_error_message
+                        ).decode(ENCODING)
+                        if client_response.connection_error_message != self._ffi.NULL
+                        else "Unknown error"
+                    )
+                    raise ClosingError(error_message)
+                core_client = client_response.conn_ptr
+            finally:
                 self._lib.free_connection_response(client_response_ptr)
-                raise ClosingError(error_message)
 
-            # Free the connection response to avoid memory leaks
-            self._lib.free_connection_response(client_response_ptr)
+            Logger.log(Level.INFO, "connection info", "new connection established")
+        except BaseException:
+            if core_client != self._ffi.NULL:
+                try:
+                    self._lib.close_client(core_client)
+                except BaseException:
+                    pass
+            raise
 
-            # Note: scope prewarm is deferred to first scoped_connection() call
-            # to avoid creating extra connections at client startup (which breaks
-            # lazy connection tests and connection count assertions).
-        else:
-            raise ClosingError("Failed to create client, response pointer is NULL.")
+        self._conn_req_bytes = conn_req_bytes
+        self._pubsub_callback_ref = pubsub_callback
+        self._address_resolver_callback_ref = address_resolver_callback_ref
+        self._credential_provider_callback_ref = credential_provider_callback_ref
+        self._core_client = core_client
+
+        # Scope prewarm is deferred to first scoped_connection() call to avoid
+        # extra startup connections and preserve lazy-connection semantics.
 
     def _create_push_handle_callback(self):
         """Create the FFI pubsub callback function"""
@@ -642,6 +682,19 @@ class BaseClient(CoreCommands):
             0,  # Request ID (0 for sync use)
             c_password,
             immediate_auth,
+        )
+        return self._handle_cmd_result(result)
+
+    def _refresh_iam_token(self) -> TResult:
+        if self._is_closed:
+            raise ClosingError("Client is closed.")
+        client_adapter_ptr = self._core_client
+        if client_adapter_ptr == self._ffi.NULL:
+            raise ValueError("Invalid client pointer.")
+
+        result = self._lib.refresh_iam_token(
+            client_adapter_ptr,
+            0,  # Request ID (0 for sync use)
         )
         return self._handle_cmd_result(result)
 
@@ -1090,9 +1143,12 @@ class BaseClient(CoreCommands):
                 self._is_closed = True
                 with self._pubsub_condition:
                     self._pubsub_condition.notify_all()
-                self._lib.close_client(self._core_client)
-                self._core_client = self._ffi.NULL
-                self._pubsub_callback_ref = None
+                core_client, self._core_client = self._core_client, self._ffi.NULL
+                try:
+                    if core_client != self._ffi.NULL:
+                        self._lib.close_client(core_client)
+                finally:
+                    self._clear_callback_references()
 
     def __enter__(self) -> Self:
         return self

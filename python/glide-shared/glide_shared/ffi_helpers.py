@@ -329,7 +329,11 @@ def _run_coroutine_on_asyncio_loop(coroutine, event_loop):
         coroutine.close()
         raise RuntimeError("The credential provider's asyncio loop is unavailable")
 
-    future = asyncio.run_coroutine_threadsafe(coroutine, event_loop)
+    try:
+        future = asyncio.run_coroutine_threadsafe(coroutine, event_loop)
+    except BaseException:
+        _dispose_awaitable(coroutine)
+        raise
     try:
         return future.result(timeout=_CREDENTIAL_BRIDGE_TIMEOUT_SECONDS)
     except BaseException:
@@ -356,16 +360,20 @@ def _run_async_credential_provider(provider, event_loop, trio_token):
 
 def _run_awaitable_result(awaitable, event_loop, trio_token):
     """Await a result returned by a nominally synchronous provider."""
-    if event_loop is not None:
-        return _run_coroutine_on_asyncio_loop(
-            _await_credential_result(awaitable), event_loop
-        )
-    if trio_token is not None:
-        import trio
+    try:
+        if event_loop is not None:
+            return _run_coroutine_on_asyncio_loop(
+                _await_credential_result(awaitable), event_loop
+            )
+        if trio_token is not None:
+            import trio
 
-        return trio.from_thread.run(
-            _await_credential_result, awaitable, trio_token=trio_token
-        )
+            return trio.from_thread.run(
+                _await_credential_result, awaitable, trio_token=trio_token
+            )
+    except BaseException:
+        _dispose_awaitable(awaitable)
+        raise
     _dispose_awaitable(awaitable)
     raise RuntimeError(
         "Credential provider returned an awaitable without an async client context"
