@@ -773,6 +773,8 @@ class BaseClient(CoreCommands):
         self._lock = threading.Lock()
         self._close_lock = threading.Lock()
         self._close_state: Optional[_NativeCloseState] = None
+        self._owns_native_client = True
+        self._pool_lease_ptr = None
         self._native_owner: Optional[_NativeClientOwner] = None
         self._native_finalizer: Optional[weakref.finalize] = None
         self._address_resolver_callback_ref = None
@@ -1440,7 +1442,31 @@ class BaseClient(CoreCommands):
         self._credential_provider_callback_ref = None
         self._credential_provider_callback_owner = None
 
-    async def close(self, err_message: Optional[str] = None) -> None:
+    def _close_pool_wrapper(self, err_message: str = "Pool is closed") -> None:
+        """Invalidate a pool wrapper without calling ``close_client``."""
+        with self._close_lock:
+            if self._is_closed:
+                return
+            self._is_closed = True
+            self._core_client = None
+            lease_ptr, self._pool_lease_ptr = self._pool_lease_ptr, None
+
+        with self._lock:
+            for fut in self._pending_futures.values():
+                if not fut.done():
+                    fut.set_exception(ClosingError(err_message))
+            self._pending_futures.clear()
+        with self._pubsub_lock:
+            for fut in self._pubsub_futures:
+                if not fut.done():
+                    fut.set_exception(ClosingError(err_message))
+            self._pubsub_futures.clear()
+        _client_registry.pop(getattr(self, "_pipe_client_id", 0), None)
+        self._release_callback_references()
+        if lease_ptr is not None:
+            self._lib.release_client(lease_ptr)
+
+    async def close(self, err_message: Optional[str] = None) -> None:  # noqa: C901
         """Close exactly once; cancelled waiters leave native cleanup running.
 
         A caller cancelled after ownership transfer returns immediately with its
@@ -1452,6 +1478,9 @@ class BaseClient(CoreCommands):
             raise RuntimeError(
                 "Cannot close a client from its own credential provider callback"
             )
+        if not self._owns_native_client:
+            self._close_pool_wrapper("" if err_message is None else err_message)
+            return
 
         with self._close_lock:
             close_state = self._close_state

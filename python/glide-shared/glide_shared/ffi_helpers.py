@@ -128,12 +128,30 @@ def _finalize_native_client(owner: _NativeClientOwner) -> None:
         pass
 
 
+def _finalize_native_client_on_worker(owner: _NativeClientOwner) -> None:
+    """Transfer finalizer ownership away from a possible native callback thread."""
+
+    def close_owner() -> None:
+        try:
+            owner.close()
+        except BaseException:
+            pass
+
+    threading.Thread(
+        target=close_owner,
+        name="valkey-glide-native-finalizer",
+        daemon=True,
+    ).start()
+
+
 def _create_native_client_finalizer(
     client: Any,
     lib: Any,
     core_client: Any,
     callback_refs: tuple[Any, ...],
     creation_pid: int,
+    *,
+    close_on_worker: bool = False,
 ) -> tuple[_NativeClientOwner, weakref.finalize]:
     """Create a native owner whose finalizer never strongly retains ``client``.
 
@@ -143,7 +161,12 @@ def _create_native_client_finalizer(
     native client promptly.
     """
     owner = _NativeClientOwner(lib, core_client, callback_refs, creation_pid)
-    finalizer = weakref.finalize(client, _finalize_native_client, owner)
+    finalizer_callback = (
+        _finalize_native_client_on_worker
+        if close_on_worker
+        else _finalize_native_client
+    )
+    finalizer = weakref.finalize(client, finalizer_callback, owner)
     finalizer.atexit = False  # type: ignore[misc]
     return owner, finalizer
 
@@ -423,14 +446,16 @@ def create_address_resolver_callback(ffi, resolver_fn, *, native_callback_owner=
         if owner is None:
             return 0
         try:
-            host = ffi.buffer(host_ptr, host_len)[:].decode(ENCODING)
-            with _native_callback_execution(owner.native_callback_owner()):
+            with _native_callback_execution(owner.native_callback_owner()) as admitted:
+                if not admitted:
+                    return 0
+                host = ffi.buffer(host_ptr, host_len)[:].decode(ENCODING)
                 resolved_host, resolved_port = owner.resolver(host, port)
-            encoded_host = resolved_host.encode(ENCODING)
-            write_len = min(len(encoded_host), resolved_host_buf_len)
-            ffi.memmove(resolved_host_buf, encoded_host, write_len)
-            resolved_host_len_ptr[0] = write_len
-            return resolved_port
+                encoded_host = resolved_host.encode(ENCODING)
+                write_len = min(len(encoded_host), resolved_host_buf_len)
+                ffi.memmove(resolved_host_buf, encoded_host, write_len)
+                resolved_host_len_ptr[0] = write_len
+                return resolved_port
         except Exception as error:
             # Return 0 (original port) to signal failure to the Rust layer,
             # which will fall back to the original address. We cannot propagate
@@ -457,22 +482,40 @@ _credential_provider_task_state: contextvars.ContextVar[tuple[Any, ...]] = (
 
 
 @contextmanager
-def _native_callback_execution(owner: Any) -> Iterator[None]:
-    """Mark user callback execution for ``owner`` on the current thread."""
+def _native_callback_execution(owner: Any) -> Iterator[bool]:
+    """Admit and mark one native callback for ``owner`` on this thread.
+
+    Sync clients provide lifecycle hooks that reject callbacks after close and
+    count admitted callbacks until this context exits. Other owners (including
+    async clients and standalone helper users) retain the marker-only behavior.
+    """
+    begin_callback = getattr(owner, "_begin_native_callback", None)
+    end_callback = getattr(owner, "_end_native_callback", None)
+    admitted = bool(begin_callback()) if callable(begin_callback) else True
+    if not admitted:
+        yield False
+        return
+
     if owner is None:
-        yield
+        try:
+            yield True
+        finally:
+            if callable(end_callback):
+                end_callback()
         return
 
     owners = getattr(_native_callback_thread_state, "owners", ())
     _native_callback_thread_state.owners = owners + (owner,)
     try:
-        yield
+        yield True
     finally:
         current_owners = _native_callback_thread_state.owners
         if len(current_owners) == 1:
             del _native_callback_thread_state.owners
         else:
             _native_callback_thread_state.owners = current_owners[:-1]
+        if callable(end_callback):
+            end_callback()
 
 
 def _is_native_callback_executing(owner: Any) -> bool:
@@ -816,7 +859,9 @@ def create_credential_provider_callback(
         provider = owner.provider
         provider_marker = owner.provider_owner()
         try:
-            with _native_callback_execution(provider_marker):
+            with _native_callback_execution(provider_marker) as admitted:
+                if not admitted:
+                    return _CREDENTIAL_CALLBACK_FAILURE
                 owner_loop = owner.event_loop()
                 if owner.is_async_callable:
                     if not owner.allow_async:

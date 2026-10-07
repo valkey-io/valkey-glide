@@ -262,6 +262,8 @@ class _GlideFFI:
                 CredentialProviderCallback credential_provider,
                 uintptr_t client_id
             );
+            bool retain_client(const void* client_adapter_ptr);
+            void release_client(const void* client_adapter_ptr);
             void close_client(const void* client_adapter_ptr);
             void init_async_pipe(int pipe_write_fd);
             void reinit_async_pipe(int pipe_write_fd);

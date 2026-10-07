@@ -6153,6 +6153,7 @@ class TestCommands:
             },
         }
 
+    @pytest.mark.timeout(30, func_only=True)
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     def test_sync_xread_edge_cases_and_failures(
@@ -6471,6 +6472,7 @@ class TestCommands:
         with pytest.raises(RequestError):
             glide_sync_client.xgroup_del_consumer(string_key, group_name, consumer_name)
 
+    @pytest.mark.timeout(30, func_only=True)
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     def test_sync_xreadgroup_edge_cases_and_failures(

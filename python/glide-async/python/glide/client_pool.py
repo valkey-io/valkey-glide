@@ -236,6 +236,8 @@ class AsyncClientPool:
             return cached
 
         with self._cache_lock:
+            if self._closed:
+                raise RuntimeError("Pool is closed")
             cached = self._client_cache.get(client_id)
             if cached is not None:
                 return cached
@@ -245,6 +247,9 @@ class AsyncClientPool:
                 raise RuntimeError(
                     f"Pool client_id {client_id} has no associated ClientAdapter"
                 )
+            cast_ptr = self._ffi.cast("void*", adapter_ptr)
+            if not self._lib.retain_client(cast_ptr):
+                raise RuntimeError("Unable to retain pooled ClientAdapter")
 
             ClientClass = GlideClusterClient if self._is_cluster else GlideClient
             client = object.__new__(ClientClass)
@@ -261,10 +266,12 @@ class AsyncClientPool:
             client._lock = threading.Lock()
             client._close_lock = threading.Lock()
             client._close_state = None
+            client._owns_native_client = False
+            client._pool_lease_ptr = cast_ptr
             client._address_resolver_callback_ref = None
             client._credential_provider_callback_ref = None
             client._is_asyncio = True
-            client._core_client = self._ffi.cast("void*", adapter_ptr)
+            client._core_client = cast_ptr
             client._conn_req_bytes = self._conn_req_bytes
             client._create_pid = os.getpid()
 
@@ -328,12 +335,16 @@ class AsyncClientPool:
         return total[0]
 
     def close(self):
-        if not self._closed:
+        with self._cache_lock:
+            if self._closed:
+                return
             self._closed = True
-            for cid in list(self._client_cache.keys()):
-                _client_registry.pop(cid, None)
-            self._lib.glide_pool_destroy(self._pool_id)
+            cached_clients = list(self._client_cache.values())
+            for client in cached_clients:
+                client._close_pool_wrapper()
             self._client_cache.clear()
+
+        self._lib.glide_pool_destroy(self._pool_id)
 
     async def aclose(self):
         self.close()

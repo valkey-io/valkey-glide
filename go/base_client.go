@@ -252,6 +252,23 @@ func (client *baseClient) Close() {
 	client.failPendingRequests(NewClosingError("ExecuteCommand failed: the client is closed"))
 }
 
+// closePoolOwned invalidates a cached pool wrapper and returns its retained
+// lease. The caller releases that lease separately; close_client is reserved
+// for direct-client owners.
+func (client *baseClient) closePoolOwned() unsafe.Pointer {
+	client.mu.Lock()
+	defer client.mu.Unlock()
+
+	if client.coreClient == nil {
+		return nil
+	}
+	coreClient := client.coreClient
+	unregisterClient(uintptr(coreClient))
+	client.coreClient = nil
+	client.failPendingRequests(NewClosingError("ExecuteCommand failed: the pool is closed"))
+	return coreClient
+}
+
 // failPendingRequests must be called while client.mu is held.
 func (client *baseClient) failPendingRequests(err error) {
 	for requestID := range client.pending {

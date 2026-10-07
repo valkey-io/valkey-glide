@@ -182,10 +182,13 @@ class BaseClient(CoreCommands):
         self._client_condition = threading.Condition(self._client_lock)
         self._native_call_state = threading.local()
         self._active_native_calls = 0
+        self._active_native_callbacks = 0
         self._close_complete = False
-        self._clear_callbacks_when_calls_complete = False
+        self._close_error: Optional[BaseException] = None
         self._needs_recreate_after_fork = False
         self._recreating_after_fork = False
+        self._owns_native_client = True
+        self._pool_lease_ptr = None
         self._native_owner: Optional[_NativeClientOwner] = None
         self._native_finalizer: Optional[weakref.finalize] = None
 
@@ -229,6 +232,20 @@ class BaseClient(CoreCommands):
         else:
             self._native_call_state.clients = clients[:-1]
 
+    def _admit_native_call_locked(self) -> None:
+        """Retain and record one call while the lifecycle lock owns the pointer."""
+        core_client = self._core_client
+        if core_client == self._ffi.NULL:
+            raise ValueError("Invalid client pointer.")
+        if not self._lib.retain_client(core_client):
+            raise ClosingError("Unable to retain the native client.")
+        try:
+            self._pin_native_client_for_call(core_client)
+            self._active_native_calls += 1
+        except BaseException:
+            self._lib.release_client(core_client)
+            raise
+
     def _begin_native_call(self) -> None:
         while True:
             with self._client_condition:
@@ -238,10 +255,7 @@ class BaseClient(CoreCommands):
                         "Please create a new client."
                     )
                 if not self._needs_recreate_after_fork:
-                    if self._core_client == self._ffi.NULL:
-                        raise ValueError("Invalid client pointer.")
-                    self._pin_native_client_for_call(self._core_client)
-                    self._active_native_calls += 1
+                    self._admit_native_call_locked()
                     return
                 if self._recreating_after_fork:
                     if _is_native_callback_executing(self):
@@ -255,19 +269,18 @@ class BaseClient(CoreCommands):
 
             try:
                 # Provider, resolver, logger, and native creation are intentionally
-                # delayed until after the at-fork child hook has returned.
+                # delayed until after the at-fork child hook has returned. The
+                # lifecycle lock is not held while native/user callbacks run.
                 self._create_core_client()
-                if self._core_client == self._ffi.NULL:
-                    raise ClosingError("Recreated client pointer is NULL.")
             except BaseException as error:
                 with self._client_condition:
                     self._core_client = self._ffi.NULL
                     self._conn_req_bytes = b""
-                    self._clear_callback_references()
                     self._needs_recreate_after_fork = False
                     self._recreating_after_fork = False
                     self._is_closed = True
                     self._close_complete = True
+                    self._maybe_clear_callback_references_locked()
                     self._client_condition.notify_all()
                 with _live_sync_clients_lock:
                     _live_sync_clients.discard(self)
@@ -278,23 +291,48 @@ class BaseClient(CoreCommands):
             with self._client_condition:
                 self._needs_recreate_after_fork = False
                 self._recreating_after_fork = False
-                self._pin_native_client_for_call(self._core_client)
-                self._active_native_calls += 1
+                if self._is_closed:
+                    self._client_condition.notify_all()
+                    raise ClosingError("Client was closed during native recreation.")
+                self._admit_native_call_locked()
                 self._client_condition.notify_all()
                 return
 
     def _end_native_call(self) -> None:
-        self._unpin_native_client_for_call()
-        clear_callbacks = False
-        with self._client_condition:
-            self._active_native_calls -= 1
-            if self._active_native_calls == 0:
-                if self._clear_callbacks_when_calls_complete:
-                    self._clear_callbacks_when_calls_complete = False
-                    clear_callbacks = True
+        core_client = self._native_client_for_call()
+        try:
+            # Release the native lease before publishing the Python call as
+            # drained. This preserves callback references through any final
+            # ClientAdapter drop triggered by the release.
+            self._lib.release_client(core_client)
+        finally:
+            self._unpin_native_client_for_call()
+            with self._client_condition:
+                self._active_native_calls -= 1
+                self._maybe_clear_callback_references_locked()
                 self._client_condition.notify_all()
 
-        if clear_callbacks:
+    def _begin_native_callback(self) -> bool:
+        """Admit a callback unless close has already made the client unavailable."""
+        with self._client_condition:
+            if self._is_closed:
+                return False
+            self._active_native_callbacks += 1
+            return True
+
+    def _end_native_callback(self) -> None:
+        with self._client_condition:
+            self._active_native_callbacks -= 1
+            self._maybe_clear_callback_references_locked()
+            self._client_condition.notify_all()
+
+    def _maybe_clear_callback_references_locked(self) -> None:
+        if (
+            self._is_closed
+            and self._close_complete
+            and self._active_native_calls == 0
+            and self._active_native_callbacks == 0
+        ):
             self._clear_callback_references()
 
     def _detach_native_owner(self) -> Optional[_NativeClientOwner]:
@@ -346,10 +384,12 @@ class BaseClient(CoreCommands):
         self._client_condition = threading.Condition(self._client_lock)
         self._native_call_state = threading.local()
         self._active_native_calls = 0
-        self._clear_callbacks_when_calls_complete = False
+        self._active_native_callbacks = 0
         self._recreating_after_fork = False
         self._is_closed = was_closed
         self._close_complete = was_closed
+        self._close_error = None
+        self._pool_lease_ptr = None
         self._needs_recreate_after_fork = not was_closed
         BaseClient._disarm_native_owner_after_fork(self)
 
@@ -463,6 +503,7 @@ class BaseClient(CoreCommands):
                     credential_provider_callback,
                 ),
                 os.getpid(),
+                close_on_worker=True,
             )
         except BaseException:
             try:
@@ -520,68 +561,71 @@ class BaseClient(CoreCommands):
             if client is None:
                 return
             try:
-                # Convert C pointers to Python bytes using ffi.buffer
-                message = ffi.buffer(message_ptr, message_len)[:]
-                channel = ffi.buffer(channel_ptr, channel_len)[:]
-                pattern = (
-                    ffi.buffer(pattern_ptr, pattern_len)[:]
-                    if pattern_ptr != ffi.NULL
-                    else None
-                )
+                with _native_callback_execution(client) as admitted:
+                    if not admitted:
+                        return
 
-                push_kind_map = {
-                    0: "Disconnection",
-                    1: "Other",
-                    2: "Invalidate",
-                    3: "Message",
-                    4: "PMessage",
-                    5: "SMessage",
-                    6: "Unsubscribe",
-                    7: "PUnsubscribe",
-                    8: "SUnsubscribe",
-                    9: "Subscribe",
-                    10: "PSubscribe",
-                    11: "SSubscribe",
-                }
-
-                message_kind = push_kind_map.get(kind)
-
-                if message_kind == "Disconnection":
-                    Logger.log(
-                        Level.WARN,
-                        "disconnect notification",
-                        "Transport disconnected, messages might be lost",
-                    )
-                elif message_kind in ["Message", "PMessage", "SMessage"]:
-                    pubsub_msg = PubSubMsg(
-                        message=message, channel=channel, pattern=pattern
+                    # Convert C pointers to Python bytes using ffi.buffer
+                    message = ffi.buffer(message_ptr, message_len)[:]
+                    channel = ffi.buffer(channel_ptr, channel_len)[:]
+                    pattern = (
+                        ffi.buffer(pattern_ptr, pattern_len)[:]
+                        if pattern_ptr != ffi.NULL
+                        else None
                     )
 
-                    user_callback, context = (
-                        client._config._get_pubsub_callback_and_context()
-                    )
-                    if user_callback:
-                        with _native_callback_execution(client):
+                    push_kind_map = {
+                        0: "Disconnection",
+                        1: "Other",
+                        2: "Invalidate",
+                        3: "Message",
+                        4: "PMessage",
+                        5: "SMessage",
+                        6: "Unsubscribe",
+                        7: "PUnsubscribe",
+                        8: "SUnsubscribe",
+                        9: "Subscribe",
+                        10: "PSubscribe",
+                        11: "SSubscribe",
+                    }
+
+                    message_kind = push_kind_map.get(kind)
+
+                    if message_kind == "Disconnection":
+                        Logger.log(
+                            Level.WARN,
+                            "disconnect notification",
+                            "Transport disconnected, messages might be lost",
+                        )
+                    elif message_kind in ["Message", "PMessage", "SMessage"]:
+                        pubsub_msg = PubSubMsg(
+                            message=message, channel=channel, pattern=pattern
+                        )
+
+                        user_callback, context = (
+                            client._config._get_pubsub_callback_and_context()
+                        )
+                        if user_callback:
                             user_callback(pubsub_msg, context)
+                        else:
+                            with client._pubsub_condition:
+                                client._pubsub_queue.append(pubsub_msg)
+                                client._pubsub_condition.notify()
+                    elif message_kind in [
+                        "PSubscribe",
+                        "Subscribe",
+                        "SSubscribe",
+                        "Unsubscribe",
+                        "PUnsubscribe",
+                        "SUnsubscribe",
+                    ]:
+                        pass  # Ignore subscription confirmations
                     else:
-                        with client._pubsub_condition:
-                            client._pubsub_queue.append(pubsub_msg)
-                            client._pubsub_condition.notify()
-                elif message_kind in [
-                    "PSubscribe",
-                    "Subscribe",
-                    "SSubscribe",
-                    "Unsubscribe",
-                    "PUnsubscribe",
-                    "SUnsubscribe",
-                ]:
-                    pass  # Ignore subscription confirmations
-                else:
-                    Logger.log(
-                        Level.WARN,
-                        "unknown notification",
-                        f"Unknown notification message: '{message_kind}'",
-                    )
+                        Logger.log(
+                            Level.WARN,
+                            "unknown notification",
+                            f"Unknown notification message: '{message_kind}'",
+                        )
 
             except Exception as e:
                 Logger.log(
@@ -1327,24 +1371,80 @@ class BaseClient(CoreCommands):
         )
         return self._handle_cmd_result(result)
 
+    def _finish_native_close(self, owner: Optional[_NativeClientOwner]) -> None:
+        close_error: Optional[BaseException] = None
+        try:
+            if owner is not None:
+                owner.close()
+        except BaseException as error:
+            close_error = error
+        finally:
+            with self._client_condition:
+                self._close_error = close_error
+                self._close_complete = True
+                self._maybe_clear_callback_references_locked()
+                self._client_condition.notify_all()
+            with self._pubsub_condition:
+                self._pubsub_condition.notify_all()
+
+        if close_error is not None:
+            raise close_error
+
+    def _close_after_callbacks(self, owner: _NativeClientOwner) -> None:
+        """Close one transferred owner from a non-callback worker thread."""
+        with self._client_condition:
+            while self._active_native_callbacks > 0:
+                self._client_condition.wait()
+        try:
+            self._finish_native_close(owner)
+        except BaseException:
+            # The initiating close already returned because callback-thread
+            # safety required asynchronous ownership transfer. Preserve the
+            # error in `_close_error`; worker exceptions have no caller.
+            pass
+
+    def _mark_pool_wrapper_closed(self) -> None:
+        """Invalidate a Rust-pool wrapper without consuming the pool's owner."""
+        lease_ptr = None
+        with self._client_condition:
+            if self._is_closed:
+                return
+            self._is_closed = True
+            self._needs_recreate_after_fork = False
+            self._core_client = self._ffi.NULL
+            lease_ptr, self._pool_lease_ptr = self._pool_lease_ptr, None
+            self._close_complete = True
+            self._maybe_clear_callback_references_locked()
+            self._client_condition.notify_all()
+        with self._pubsub_condition:
+            self._pubsub_condition.notify_all()
+        if lease_ptr is not None:
+            self._lib.release_client(lease_ptr)
+
     def close(self) -> None:
+        if not self._owns_native_client:
+            self._mark_pool_wrapper_closed()
+            return
         owner: Optional[_NativeClientOwner] = None
-        retain_callbacks = False
+        close_on_worker = False
         with self._client_condition:
             if _is_native_callback_executing(self):
                 raise RuntimeError("Cannot close a client from its own native callback")
-            while self._recreating_after_fork and not self._is_closed:
-                self._client_condition.wait()
             if self._is_closed:
                 return
 
+            # Invalidate admission first. A concurrent create/recreate runs
+            # without this lock and will close any successful late pointer
+            # instead of installing it into this closed object.
             self._is_closed = True
             self._needs_recreate_after_fork = False
             owner = self._detach_native_owner()
             core_client, self._core_client = self._core_client, self._ffi.NULL
-            if owner is None and core_client != self._ffi.NULL:
-                # Supports Rust-pool wrapper shells that bypass direct creation;
-                # successful direct clients always have a finalizer owner.
+            if (
+                owner is None
+                and self._owns_native_client
+                and core_client != self._ffi.NULL
+            ):
                 owner = _NativeClientOwner(
                     self._lib,
                     core_client,
@@ -1356,23 +1456,28 @@ class BaseClient(CoreCommands):
                     os.getpid(),
                 )
 
-            retain_callbacks = self._active_native_calls > 0
-            self._clear_callbacks_when_calls_complete = retain_callbacks
+            close_on_worker = owner is not None and self._active_native_callbacks > 0
 
         with _live_sync_clients_lock:
             _live_sync_clients.discard(self)
 
-        try:
-            if owner is not None:
-                owner.close()
-        finally:
-            if not retain_callbacks:
-                self._clear_callback_references()
-            with self._client_condition:
-                self._close_complete = True
-                self._client_condition.notify_all()
+        if close_on_worker:
+            assert owner is not None
+            # Never consume the native owner on a runtime callback thread. The
+            # dedicated worker is independent of a user-created closing thread,
+            # so a callback may spawn, join, and discard that thread promptly.
+            worker = threading.Thread(
+                target=self._close_after_callbacks,
+                args=(owner,),
+                name="valkey-glide-sync-close",
+                daemon=True,
+            )
+            worker.start()
             with self._pubsub_condition:
                 self._pubsub_condition.notify_all()
+            return
+
+        self._finish_native_close(owner)
 
     def __enter__(self) -> Self:
         return self

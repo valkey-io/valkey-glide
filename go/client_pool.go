@@ -4,6 +4,9 @@ package glide
 
 // #include "lib.h"
 //
+// static inline bool retainPoolClient(const void *ptr) { return retain_client(ptr); }
+// static inline void releasePoolClient(const void *ptr) { release_client(ptr); }
+//
 // void successCallback(uintptr_t requestID, struct CommandResponse *message);
 // void failureCallback(uintptr_t requestID, char *errMessage, RequestErrorType errType);
 import "C"
@@ -263,6 +266,9 @@ func (p *ClientPool) GetClient(clientID int64) (*PooledClient, error) {
 	if adapterPtr == nil {
 		return nil, errors.New("client_id has no associated client")
 	}
+	if !bool(C.retainPoolClient(adapterPtr)) {
+		return nil, errors.New("failed to retain pooled client adapter")
+	}
 
 	// Create a Client wrapper pointing to the pooled adapter.
 	// The adapter is an AsyncClient type — commands via C.command() fire callbacks.
@@ -322,6 +328,11 @@ func (p *ClientPool) Close() {
 		return
 	}
 	p.closed = true
+	for _, pooled := range p.pooledCache {
+		if lease := pooled.baseClient.closePoolOwned(); lease != nil {
+			C.releasePoolClient(lease)
+		}
+	}
 	C.glide_pool_destroy(C.uint64_t(p.poolID))
 	p.pooledCache = nil
 }

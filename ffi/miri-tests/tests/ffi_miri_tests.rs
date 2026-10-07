@@ -3,8 +3,9 @@
 use glide_core::connection_request::{ConnectionRequest, NodeAddress, TlsMode};
 use glide_core::request_type::RequestType;
 use miri_tests::{
-    ClientType, ConnectionResponse, PushKind, close_client, create_client, create_client_from_uri,
-    free_connection_response,
+    ClientType, ConnectionResponse, PushKind, close_client, command, create_client,
+    create_client_from_uri, free_command_result, free_connection_response, release_client,
+    retain_client,
 };
 use miri_tests::{Level, LogResult, free_log_result, glide_log, init};
 use miri_tests::{
@@ -99,12 +100,58 @@ fn create_client_from_uri_test() {
     let client_type_ptr = Box::into_raw(client_type);
 
     unsafe {
-        let connection_response_ptr =
-            create_client_from_uri(uri.as_ptr(), ptr::null(), client_type_ptr, Some(pubsub_callback));
+        let connection_response_ptr = create_client_from_uri(
+            uri.as_ptr(),
+            ptr::null(),
+            client_type_ptr,
+            Some(pubsub_callback),
+        );
         let conn_ptr = (*connection_response_ptr).conn_ptr;
         close_client(conn_ptr);
         free_connection_response(connection_response_ptr as *mut ConnectionResponse);
         let _ = Box::from_raw(client_type_ptr);
+    }
+}
+
+#[test]
+fn client_lease_survives_owner_close_miri() {
+    let connection_request_bytes = create_connection_request(6378);
+    let client_type = ClientType::SyncClient;
+
+    unsafe {
+        let response_ptr = create_client(
+            connection_request_bytes.as_ptr(),
+            connection_request_bytes.len(),
+            &client_type,
+            None,
+            None,
+            None,
+            0,
+        );
+        let conn_ptr = (*response_ptr).conn_ptr;
+        assert!(retain_client(conn_ptr));
+        free_connection_response(response_ptr as *mut ConnectionResponse);
+        close_client(conn_ptr);
+
+        // The owner is gone, but the lease keeps the adapter valid while a
+        // command observes the close signal and returns a controlled result.
+        let result = command(
+            conn_ptr,
+            0,
+            RequestType::Get,
+            0,
+            ptr::null(),
+            ptr::null(),
+            ptr::null(),
+            0,
+            0,
+        );
+        assert!(!result.is_null());
+        free_command_result(result);
+        release_client(conn_ptr);
+
+        assert!(!retain_client(ptr::null()));
+        release_client(ptr::null());
     }
 }
 

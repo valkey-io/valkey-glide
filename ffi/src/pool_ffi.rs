@@ -11,25 +11,17 @@ use glide_core::pool::{self, ClientPool, ClientState, POOL_RUNNING, PoolConfig, 
 use glide_core::scope;
 use std::sync::atomic::Ordering as AtomicOrdering;
 
-/// Drop an adapter [`Arc`] whose owning reference `create_pool_client` handed
-/// out as a raw pointer. Must be called before any early return that occurs after
-/// `create_pool_client` succeeds but **before** `adapter_ptr` is stored in
-/// `get_pool_clients()` — at that point `glide_pool_destroy` cannot find it and
-/// it would leak forever.
+/// Signal synchronous requests and release the one adapter [`Arc`] owned by the
+/// pool. This is used for every permanent destruction path, including clients
+/// abandoned before they are inserted into the pool maps.
 ///
 /// # Safety
-/// `$ptr` must have been produced by `Arc::into_raw` (as done inside
-/// `create_pool_client`). Reconstructing the `Arc` and immediately dropping it
-/// is the only correct way to release the allocation.
-macro_rules! drop_orphaned_adapter {
-    ($ptr:expr) => {
-        // SAFETY: $ptr was produced by Arc::into_raw in create_pool_client.
-        // Reconstructing and dropping it here is the only safe way to release
-        // the allocation.
-        unsafe {
-            drop(std::sync::Arc::from_raw($ptr as *const ClientAdapter));
-        }
-    };
+/// `ptr` must represent exactly one owning reference produced by
+/// [`Arc::into_raw`] in [`create_pool_client`].
+unsafe fn close_pool_owned_adapter(ptr: usize) {
+    let adapter = unsafe { Arc::from_raw(ptr as *const ClientAdapter) };
+    adapter.sync_shutdown.close();
+    drop(adapter);
 }
 
 /// Whether the diagnostic timeout watchdog should be armed for a scoped command.
@@ -131,21 +123,14 @@ fn create_pool_client(
         client_id,
     )?;
 
-    // Extract the Client from the adapter for pool bookkeeping
-    let adapter = unsafe {
-        Arc::increment_strong_count(adapter_ptr);
-        Arc::from_raw(adapter_ptr)
-    };
+    // Temporarily reconstruct the pool's one raw owning reference for
+    // inspection, then restore that same reference. No additional strong count
+    // is created for binding wrappers; callers must take explicit leases while
+    // dispatching through the borrowed pointer.
+    let adapter = unsafe { Arc::from_raw(adapter_ptr) };
     let client = adapter.core.client.clone();
-    // Enable the borrow-time IAM reconcile in send_command for pooled clients.
     client.mark_pool_managed();
-    let ptr = adapter_ptr as usize;
-    // Deliberately keep a second strong reference. Binding wrappers cache the
-    // raw pointer and are never told when the drain releases the pool's
-    // reference, so freeing the adapter there would leave them dangling
-    // (use-after-free). Until wrappers own their own reference the adapter
-    // must outlive the pool; the cost is one leaked adapter per pooled client.
-    std::mem::forget(adapter);
+    let ptr = Arc::into_raw(adapter) as usize;
 
     Ok((ptr, client))
 }
@@ -272,7 +257,7 @@ pub unsafe extern "C" fn glide_pool_create(
                             let mut pool = pool_clone.lock().await;
                             if pool.state.load(AtomicOrdering::Acquire) != POOL_RUNNING {
                                 // Never stored in get_pool_clients(), so glide_pool_destroy cannot reclaim it.
-                                drop_orphaned_adapter!(adapter_ptr);
+                                unsafe { close_pool_owned_adapter(adapter_ptr) };
                                 return;
                             }
                             // Use pre_cid (allocated before lock) to match POOL_ADAPTER_MAP entry;
@@ -333,12 +318,10 @@ pub extern "C" fn glide_pool_try_acquire(pool_id: u64) -> i64 {
                 if let Some((_, entry)) = get_pool_clients().remove(&cid) {
                     get_pool_adapter_map().remove(&entry.adapter_ptr);
                     glide_core::scope::unregister_client(entry.adapter_ptr as u64);
-                    // Release the pool's reference. The adapter itself stays
-                    // alive (see create_pool_client) because a binding wrapper
-                    // may still hold its raw pointer.
-                    unsafe {
-                        drop(Arc::from_raw(entry.adapter_ptr as *const ClientAdapter));
-                    }
+                    // Release the pool's owner after signalling shutdown. A
+                    // binding wrapper remains valid only through an explicit
+                    // retain_client lease.
+                    unsafe { close_pool_owned_adapter(entry.adapter_ptr) };
                 }
             }
 
@@ -371,7 +354,7 @@ pub extern "C" fn glide_pool_try_acquire(pool_id: u64) -> i64 {
                                 if pool.state.load(AtomicOrdering::Acquire) != POOL_RUNNING {
                                     pool.release_reservation();
                                     // Never stored in get_pool_clients(), so glide_pool_destroy cannot reclaim it.
-                                    drop_orphaned_adapter!(adapter_ptr);
+                                    unsafe { close_pool_owned_adapter(adapter_ptr) };
                                     return;
                                 }
                                 // Use pre_cid (allocated before lock) to match POOL_ADAPTER_MAP entry;
@@ -458,9 +441,7 @@ pub extern "C" fn glide_pool_acquire_blocking(pool_id: u64, timeout_ms: u64) -> 
                     if let Some((_, entry)) = get_pool_clients().remove(&cid) {
                         get_pool_adapter_map().remove(&entry.adapter_ptr);
                         glide_core::scope::unregister_client(entry.adapter_ptr as u64);
-                        unsafe {
-                            drop(Arc::from_raw(entry.adapter_ptr as *const ClientAdapter));
-                        }
+                        unsafe { close_pool_owned_adapter(entry.adapter_ptr) };
                     }
                 }
 
@@ -491,7 +472,7 @@ pub extern "C" fn glide_pool_acquire_blocking(pool_id: u64, timeout_ms: u64) -> 
                                     if p.state.load(AtomicOrdering::Acquire) != POOL_RUNNING {
                                         p.release_reservation();
                                         // Never stored in get_pool_clients(), so glide_pool_destroy cannot reclaim it.
-                                        drop_orphaned_adapter!(adapter_ptr);
+                                        unsafe { close_pool_owned_adapter(adapter_ptr) };
                                         return;
                                     }
                                     // Use pre_cid (allocated before lock) to match POOL_ADAPTER_MAP entry;
@@ -619,9 +600,7 @@ pub extern "C" fn glide_pool_destroy(pool_id: u64) -> i32 {
                 if let Some((_, entry)) = get_pool_clients().remove(&cid) {
                     get_pool_adapter_map().remove(&entry.adapter_ptr);
                     glide_core::scope::unregister_client(entry.adapter_ptr as u64);
-                    unsafe {
-                        drop(Arc::from_raw(entry.adapter_ptr as *const ClientAdapter));
-                    }
+                    unsafe { close_pool_owned_adapter(entry.adapter_ptr) };
                 }
             }
             pool.destroy();
@@ -643,9 +622,7 @@ pub extern "C" fn glide_pool_destroy(pool_id: u64) -> i32 {
                     if let Some((_, entry)) = get_pool_clients().remove(&cid) {
                         get_pool_adapter_map().remove(&entry.adapter_ptr);
                         glide_core::scope::unregister_client(entry.adapter_ptr as u64);
-                        unsafe {
-                            drop(Arc::from_raw(entry.adapter_ptr as *const ClientAdapter));
-                        }
+                        unsafe { close_pool_owned_adapter(entry.adapter_ptr) };
                     }
                 }
                 pool.destroy();
@@ -672,20 +649,23 @@ pub extern "C" fn glide_pool_get_client_ptr(client_id: u64) -> *const c_void {
 /// for response delivery. Call this after acquire, before sending commands.
 #[unsafe(no_mangle)]
 pub extern "C" fn glide_pool_set_pipe_client_id(client_id: u64, pipe_client_id: u64) -> i32 {
-    let adapter_ptr = match get_pool_clients().get(&client_id) {
-        Some(e) => e.adapter_ptr,
+    let entry = match get_pool_clients().get(&client_id) {
+        Some(entry) => entry,
         None => return -1,
     };
+    let adapter_ptr = entry.adapter_ptr;
 
-    // Safety: adapter_ptr was created via Arc::into_raw in create_pool_client.
+    // The map guard prevents permanent removal while the pool's one raw owner
+    // is temporarily reconstructed. Restore the same owner before releasing
+    // the guard; do not manufacture a second count for inspection.
     unsafe {
-        Arc::increment_strong_count(adapter_ptr as *const ClientAdapter);
         let adapter = Arc::from_raw(adapter_ptr as *const ClientAdapter);
         adapter
             .pipe_client_id
             .store(pipe_client_id, std::sync::atomic::Ordering::Release);
-        std::mem::forget(adapter);
+        let _ = Arc::into_raw(adapter);
     }
+    drop(entry);
     0
 }
 
@@ -1264,9 +1244,6 @@ mod adapter_ownership_tests {
             create_pool_client(&bytes, ClientType::SyncClient, 1).expect("lazy client");
         drop(client);
         let raw = ptr as *const ClientAdapter;
-        // Give back the hold create_pool_client keeps for binding wrappers so
-        // the drop below is the one that runs ClientAdapter::drop.
-        unsafe { Arc::decrement_strong_count(raw) };
         let adapter = unsafe { Arc::from_raw(raw) };
         assert_eq!(Arc::strong_count(&adapter), 1);
 
@@ -1274,6 +1251,33 @@ mod adapter_ownership_tests {
             .build()
             .unwrap();
         rt.block_on(async move { drop(adapter) });
+    }
+
+    #[test]
+    fn permanent_pool_drop_signals_shutdown_and_releases_one_owner() {
+        let mut request = connection_request::ConnectionRequest::new();
+        let mut addr = connection_request::NodeAddress::new();
+        addr.host = "127.0.0.1".into();
+        addr.port = 1;
+        request.addresses.push(addr);
+        request.lazy_connect = true;
+        let bytes = request.write_to_bytes().unwrap();
+
+        let (ptr, client) =
+            create_pool_client(&bytes, ClientType::SyncClient, 2).expect("lazy client");
+        drop(client);
+        let raw = ptr as *const ClientAdapter;
+        assert!(unsafe { retain_client(raw.cast()) });
+
+        unsafe { close_pool_owned_adapter(ptr) };
+
+        // The retained lease keeps the allocation inspectable after the pool's
+        // owner is gone, and permanent destruction has already woken sync work.
+        let leased = unsafe { Arc::from_raw(raw) };
+        assert_eq!(Arc::strong_count(&leased), 1);
+        assert!(leased.sync_shutdown.closed.load(Ordering::Acquire));
+        let _ = Arc::into_raw(leased);
+        unsafe { release_client(raw.cast()) };
     }
 }
 

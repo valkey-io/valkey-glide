@@ -3741,6 +3741,55 @@ fn apply_json_options(
     Ok(())
 }
 
+/// Retains one lease on a client adapter.
+///
+/// A successful call atomically increments the strong count of the
+/// `Arc<ClientAdapter>` represented by `client_adapter_ptr`. The caller must
+/// pair every successful retain with exactly one [`release_client`] call.
+///
+/// Returns `false` for a null pointer and leaves it unchanged.
+///
+/// # Safety
+///
+/// * `client_adapter_ptr` must be null or a valid pointer returned by
+///   [`create_client`] whose owning reference has not yet been released.
+/// * The caller must synchronize this call with owner release. In particular,
+///   retain while still owning the original pointer; retaining a dangling
+///   pointer after [`close_client`] is undefined behavior.
+/// * A successful retain creates one lease only. Releasing it more than once,
+///   or otherwise using the pointer after all owner/lease counts are released,
+///   is undefined behavior.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn retain_client(client_adapter_ptr: *const c_void) -> bool {
+    if client_adapter_ptr.is_null() {
+        return false;
+    }
+
+    unsafe { Arc::increment_strong_count(client_adapter_ptr as *const ClientAdapter) };
+    true
+}
+
+/// Releases exactly one client-adapter lease created by [`retain_client`].
+///
+/// A null pointer is a no-op. This function does not signal client shutdown;
+/// [`close_client`] remains the operation that consumes the owning reference
+/// and wakes synchronous requests.
+///
+/// # Safety
+///
+/// * `client_adapter_ptr` must be null or identify one outstanding successful
+///   [`retain_client`] call.
+/// * Each successful retain must be paired with exactly one release. A double
+///   release is forbidden by contract and causes undefined behavior.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn release_client(client_adapter_ptr: *const c_void) {
+    if client_adapter_ptr.is_null() {
+        return;
+    }
+
+    unsafe { Arc::decrement_strong_count(client_adapter_ptr as *const ClientAdapter) };
+}
+
 /// Closes the given `GlideClient`, freeing it from the heap.
 ///
 /// `client_adapter_ptr` is a pointer to a valid `GlideClient` returned in the `ConnectionResponse` from [`create_client`].
@@ -7673,3 +7722,50 @@ mod tests_push_notification_safety {
 mod pool_ffi;
 #[cfg(feature = "pool-support")]
 pub use pool_ffi::*;
+
+#[cfg(test)]
+mod client_lease_tests {
+    use super::*;
+    use protobuf::Message;
+
+    fn lazy_sync_adapter() -> *const ClientAdapter {
+        let mut request = connection_request::ConnectionRequest::new();
+        let mut address = connection_request::NodeAddress::new();
+        address.host = "127.0.0.1".into();
+        address.port = 1;
+        request.addresses.push(address);
+        request.lazy_connect = true;
+        let bytes = request.write_to_bytes().expect("serialize request");
+        create_client_internal(&bytes, ClientType::SyncClient, None, None, None, 0)
+            .expect("create lazy client")
+    }
+
+    #[test]
+    fn retain_owner_close_use_and_release_is_balanced() {
+        let raw = lazy_sync_adapter();
+        let owner = unsafe { Arc::from_raw(raw) };
+        assert_eq!(Arc::strong_count(&owner), 1);
+        let raw = Arc::into_raw(owner);
+
+        assert!(unsafe { retain_client(raw.cast()) });
+        let owner = unsafe { Arc::from_raw(raw) };
+        assert_eq!(Arc::strong_count(&owner), 2);
+        let raw = Arc::into_raw(owner);
+
+        unsafe { close_client(raw.cast()) };
+
+        // Reconstruct the retained count to prove the adapter remains usable
+        // after owner close, then restore it for the paired release call.
+        let lease = unsafe { Arc::from_raw(raw) };
+        assert_eq!(Arc::strong_count(&lease), 1);
+        assert!(lease.sync_shutdown.closed.load(Ordering::Acquire));
+        let raw = Arc::into_raw(lease);
+        unsafe { release_client(raw.cast()) };
+    }
+
+    #[test]
+    fn null_lease_operations_are_controlled() {
+        assert!(!unsafe { retain_client(std::ptr::null()) });
+        unsafe { release_client(std::ptr::null()) };
+    }
+}

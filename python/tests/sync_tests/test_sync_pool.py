@@ -13,6 +13,7 @@ import time
 import uuid
 
 import pytest
+from glide_shared.commands.stream import StreamReadOptions
 from glide_shared.config import (
     AwsCredentials,
     GlideClientConfiguration,
@@ -22,6 +23,7 @@ from glide_shared.config import (
     ServerCredentials,
     ServiceType,
 )
+from glide_shared.exceptions import ClosingError, RequestError
 from glide_shared.routes import AllNodes
 from glide_sync.client_pool import ClientPool, PoolConfig
 from glide_sync.glide_client import GlideClient, GlideClusterClient
@@ -281,6 +283,67 @@ class TestClientPool:
             ), f"Fast ops took {elapsed_holder[0]:.2f}s (should be <1s)"
         finally:
             pool.close()
+
+    @pytest.mark.timeout(30, func_only=True)
+    def test_pool_close_interrupts_block_zero_and_stales_wrapper(self):
+        """Pool destruction wakes BLOCK 0 without server teardown or leaked threads."""
+        client_name = f"pool-block-close-{uuid.uuid4().hex[:8]}"
+        config = GlideClientConfiguration(
+            addresses=[_get_standalone_address()],
+            request_timeout=5000,
+            client_name=client_name,
+        )
+        pool = ClientPool(
+            config, PoolConfig(max_size=1, min_idle=1, acquire_timeout_s=10.0)
+        )
+        observer = GlideClient.create(
+            GlideClientConfiguration(addresses=[_get_standalone_address()])
+        )
+        _wait_for_pool_ready(pool, 1)
+        client_id = pool.acquire()
+        client = pool._get_or_create_client(client_id)
+        key = _make_key(False, "block-zero-close")
+        worker_started = threading.Event()
+        worker_errors = []
+
+        def blocking_worker():
+            worker_started.set()
+            try:
+                client.xread({key: "$"}, options=StreamReadOptions(block_ms=0))
+            except BaseException as error:
+                worker_errors.append(error)
+
+        worker = threading.Thread(target=blocking_worker)
+        worker.start()
+        assert worker_started.wait(timeout=2)
+
+        # Observe the actual server-side blocking command, so an immediate
+        # RequestError cannot masquerade as successful timeout coverage.
+        deadline = time.monotonic() + 5
+        observed_blocking = False
+        while time.monotonic() < deadline:
+            client_list = observer.custom_command(["CLIENT", "LIST"])
+            text = (
+                client_list.decode()
+                if isinstance(client_list, (bytes, bytearray))
+                else str(client_list)
+            )
+            if f"name={client_name}" in text and "cmd=xread" in text:
+                observed_blocking = True
+                break
+            time.sleep(0.01)
+        assert observed_blocking, "pooled XREAD never reached a blocking server state"
+
+        pool.close()
+        worker.join(timeout=5)
+        assert not worker.is_alive(), "BLOCK 0 worker survived pool close"
+        assert len(worker_errors) == 1
+        assert isinstance(worker_errors[0], (ClosingError, RequestError))
+        assert "closed" in str(worker_errors[0]).lower()
+        with pytest.raises(ClosingError, match="client is closed"):
+            client.get(key)
+
+        observer.close()
 
     @pytest.mark.parametrize("cluster_mode", [False])
     def test_scope_on_pool_borrowed_client(self, cluster_mode):

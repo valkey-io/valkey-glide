@@ -250,6 +250,8 @@ class ClientPool:
             return cached
 
         with self._cache_lock:
+            if self._closed:
+                raise RuntimeError("Pool is closed")
             # Double-check after acquiring lock
             cached = self._client_cache.get(client_id)
             if cached is not None:
@@ -262,8 +264,12 @@ class ClientPool:
                     f"Pool client_id {client_id} has no associated ClientAdapter"
                 )
 
-            # Create a GlideClient shell pointing to the pooled adapter.
+            # Create a GlideClient shell pointing to the pooled adapter. The
+            # cache owns one explicit lease so abandon/discard cleanup cannot
+            # leave externally held wrapper objects dangling.
             cast_ptr = self._ffi.cast("void*", adapter_ptr)
+            if not self._lib.retain_client(cast_ptr):
+                raise RuntimeError("Unable to retain pooled ClientAdapter")
 
             client = GlideClient.__new__(GlideClient)  # type: ignore[type-abstract]
             client._ffi = self._ffi
@@ -282,10 +288,13 @@ class ClientPool:
             client._client_condition = threading.Condition(client._client_lock)
             client._native_call_state = threading.local()
             client._active_native_calls = 0
+            client._active_native_callbacks = 0
             client._close_complete = False
-            client._clear_callbacks_when_calls_complete = False
+            client._close_error = None
             client._needs_recreate_after_fork = False
             client._recreating_after_fork = False
+            client._owns_native_client = False
+            client._pool_lease_ptr = cast_ptr
             client._native_owner = None
             client._native_finalizer = None
             client._core_client = cast_ptr
@@ -317,11 +326,20 @@ class ClientPool:
         return self.metrics()["total"]
 
     def close(self) -> None:
-        """Destroy the pool. All idle clients are closed."""
-        if not self._closed:
+        """Invalidate wrappers and destroy the Rust-owned client pool."""
+        with self._cache_lock:
+            if self._closed:
+                return
             self._closed = True
-            self._lib.glide_pool_destroy(self._pool_id)
+            cached_clients = list(self._client_cache.values())
+            for client in cached_clients:
+                client._mark_pool_wrapper_closed()
             self._client_cache.clear()
+
+        # Rust owns each pooled adapter pointer. Wrapper invalidation above is
+        # deliberately separate from BaseClient.close(), so Python never calls
+        # close_client for a pool-owned raw Arc.
+        self._lib.glide_pool_destroy(self._pool_id)
 
     def __enter__(self):
         return self

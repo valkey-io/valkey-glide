@@ -25,8 +25,11 @@ from glide_shared.config import (
     ServiceType,
     _is_async_callable,
 )
-from glide_shared.exceptions import ClosingError, ConfigurationError
+from glide_shared.exceptions import ClosingError, ConfigurationError, RequestError
 from glide_shared.ffi_helpers import create_credential_provider_callback
+from glide_shared.protobuf.command_request_pb2 import RequestType
+
+from tests.utils.utils import run_sync_func_with_timeout_in_thread
 
 pytestmark = pytest.mark.serverless
 
@@ -346,6 +349,8 @@ class _FakeNativeLibrary:
         self.free_pipe_error_string = MagicMock()
         self.free_pubsub_pointer_payload = MagicMock()
         self.close_client = MagicMock()
+        self.retain_client = MagicMock(return_value=True)
+        self.release_client = MagicMock()
         self.close_monitor_client = MagicMock()
         self.command_with_buffer = MagicMock()
         self.refresh_iam_token = MagicMock()
@@ -578,14 +583,18 @@ def test_sync_finalizer_trampolines_do_not_retain_callable_cycles(monkeypatch):
     resolver_ref = weakref.ref(resolver)
     finalizer = client._native_finalizer
     close_callback_results = []
+    native_close_done = threading.Event()
 
     def native_close(pointer):
-        close_callback_results.append(
-            (
-                _invoke_callback(provider_callback)[0],
-                _invoke_resolver_callback(resolver_callback)[0],
+        try:
+            close_callback_results.append(
+                (
+                    _invoke_callback(provider_callback)[0],
+                    _invoke_resolver_callback(resolver_callback)[0],
+                )
             )
-        )
+        finally:
+            native_close_done.set()
 
     fake_lib.close_client.side_effect = native_close
     fake_lib.create_client.reset_mock()
@@ -601,6 +610,7 @@ def test_sync_finalizer_trampolines_do_not_retain_callable_cycles(monkeypatch):
     assert resolver_ref() is None
     assert finalizer is not None and not finalizer.alive
     fake_lib.close_client.assert_called_once_with(fake_lib._response.conn_ptr)
+    assert native_close_done.wait(timeout=2)
     assert close_callback_results == [(0, 0)]
     assert _invoke_callback(provider_callback)[0] == 0
     assert _invoke_resolver_callback(resolver_callback)[0] == 0
@@ -911,7 +921,7 @@ def test_sync_child_hook_clears_closed_active_call_state(monkeypatch):
     assert client not in registry
     assert client._is_closed
     assert client._close_complete
-    assert client._clear_callbacks_when_calls_complete
+    assert client._active_native_calls == 1
     assert client._pubsub_callback_ref is callback_ref
     assert not finalizer.alive
     assert owner._core_client is None
@@ -926,7 +936,7 @@ def test_sync_child_hook_clears_closed_active_call_state(monkeypatch):
     assert client._is_closed
     assert client._close_complete
     assert client._active_native_calls == 0
-    assert not client._clear_callbacks_when_calls_complete
+    assert client._active_native_callbacks == 0
     assert client._pubsub_callback_ref is None
     fake_lib.close_client.assert_not_called()
 
@@ -1439,9 +1449,59 @@ def test_trio_stalled_after_provider_start_times_out_and_cancels_on_owner(monkey
     assert not any("was never awaited" in str(item.message) for item in caught)
 
 
-def test_sync_close_interrupts_active_native_call_and_clears_callbacks_once(
-    monkeypatch,
-):
+def test_sync_timeout_helper_rejects_immediate_request_error():
+    on_timeout = MagicMock()
+
+    def fail_immediately():
+        raise RequestError("immediate failure")
+
+    with pytest.raises(RequestError, match="immediate failure"):
+        run_sync_func_with_timeout_in_thread(
+            fail_immediately,
+            timeout=0.1,
+            on_timeout=on_timeout,
+        )
+    on_timeout.assert_not_called()
+
+
+def test_sync_timeout_helper_joins_worker_after_timeout_close():
+    release_worker = threading.Event()
+    worker_finished = threading.Event()
+
+    def block_until_close():
+        try:
+            assert release_worker.wait(timeout=2)
+        finally:
+            worker_finished.set()
+
+    with pytest.raises(TimeoutError, match="did not return"):
+        run_sync_func_with_timeout_in_thread(
+            block_until_close,
+            timeout=0.05,
+            on_timeout=release_worker.set,
+        )
+    assert worker_finished.is_set()
+
+
+def test_sync_guard_releases_lease_before_dispatch_exception(monkeypatch):
+    sync_client_module, _, fake_lib, _ = _patch_sync_client(monkeypatch)
+    client = sync_client_module.GlideClient.create(_direct_client_config())
+
+    with pytest.raises(TypeError, match="writable"):
+        client._execute_command(
+            RequestType.Get,
+            ["key"],
+            response_buffer=memoryview(b"readonly"),
+        )
+
+    fake_lib.retain_client.assert_called_once_with(fake_lib._response.conn_ptr)
+    fake_lib.release_client.assert_called_once_with(fake_lib._response.conn_ptr)
+    fake_lib.command_with_buffer.assert_not_called()
+    assert client._active_native_calls == 0
+    client.close()
+
+
+def test_sync_close_interrupts_active_native_call_and_releases_lease_once(monkeypatch):
     sync_client_module, ffi, fake_lib, _ = _patch_sync_client(monkeypatch)
     client = sync_client_module.GlideClient.create(
         _direct_client_config(lambda: AwsCredentials("access", "secret"))
@@ -1449,38 +1509,22 @@ def test_sync_close_interrupts_active_native_call_and_clears_callbacks_once(
     callback_ref = client._credential_provider_callback_ref
     finalizer = client._native_finalizer
     native_entered = threading.Event()
-    native_close_entered = threading.Event()
+    native_close_called = threading.Event()
     allow_active_return = threading.Event()
-    active_call_returning = threading.Event()
-    callbacks_cleared = threading.Event()
-    release_native_close = threading.Event()
     call_errors = []
-    clear_calls = []
-    original_clear = client._clear_callback_references
-
-    def clear_callback_references():
-        clear_calls.append(True)
-        original_clear()
-        callbacks_cleared.set()
-
-    monkeypatch.setattr(client, "_clear_callback_references", clear_callback_references)
 
     def blocking_refresh(*args):
         native_entered.set()
-        assert native_close_entered.wait(timeout=5)
+        assert native_close_called.wait(timeout=5)
         assert allow_active_return.wait(timeout=5)
         assert client._credential_provider_callback_ref is callback_ref
-        active_call_returning.set()
         raise RuntimeError("native call released")
 
-    def blocking_close(*args):
-        native_close_entered.set()
-        assert active_call_returning.wait(timeout=5)
-        assert callbacks_cleared.wait(timeout=5)
-        assert release_native_close.wait(timeout=5)
+    def native_close(*args):
+        native_close_called.set()
 
     fake_lib.refresh_iam_token.side_effect = blocking_refresh
-    fake_lib.close_client.side_effect = blocking_close
+    fake_lib.close_client.side_effect = native_close
 
     def call_refresh():
         try:
@@ -1491,43 +1535,32 @@ def test_sync_close_interrupts_active_native_call_and_clears_callbacks_once(
     call_thread = threading.Thread(target=call_refresh)
     call_thread.start()
     assert native_entered.wait(timeout=2)
+    fake_lib.retain_client.assert_called_once_with(fake_lib._response.conn_ptr)
 
-    close_thread = threading.Thread(target=client.close)
-    close_thread.start()
-    assert native_close_entered.wait(timeout=2)
+    # Owner close signals shutdown immediately even while the call holds its
+    # lease. Callback references remain until that leased call drains.
+    client.close()
+    assert native_close_called.is_set()
     assert client._is_closed
     assert client._core_client == ffi.NULL
     assert client._native_owner is None
     assert finalizer is not None and not finalizer.alive
+    assert client._close_complete
+    assert client._active_native_calls == 1
     assert client._credential_provider_callback_ref is callback_ref
-    assert client._clear_callbacks_when_calls_complete
-    fake_lib.close_client.assert_called_once_with(fake_lib._response.conn_ptr)
-    allow_active_return.set()
 
     with pytest.raises(ClosingError, match="client is closed"):
         client._refresh_iam_token()
     fake_lib.refresh_iam_token.assert_called_once()
 
+    allow_active_return.set()
     call_thread.join(timeout=2)
     assert not call_thread.is_alive()
     assert len(call_errors) == 1
     assert isinstance(call_errors[0], RuntimeError)
     assert client._active_native_calls == 0
-    assert not client._clear_callbacks_when_calls_complete
     assert client._credential_provider_callback_ref is None
-    assert clear_calls == [True]
-    assert close_thread.is_alive()
-
-    second_close = threading.Thread(target=client.close)
-    second_close.start()
-    second_close.join(timeout=1)
-    assert not second_close.is_alive()
-
-    release_native_close.set()
-    close_thread.join(timeout=2)
-    assert not close_thread.is_alive()
-    assert client._close_complete
-    assert clear_calls == [True]
+    fake_lib.release_client.assert_called_once_with(fake_lib._response.conn_ptr)
     fake_lib.close_client.assert_called_once_with(fake_lib._response.conn_ptr)
 
 
@@ -2157,12 +2190,15 @@ def test_sync_pubsub_callback_allows_unrelated_thread_close(monkeypatch):
     sync_client_module, _, fake_lib, _ = _patch_sync_client(monkeypatch)
     client_holder = []
     close_threads = []
+    native_closed = threading.Event()
+    fake_lib.close_client.side_effect = lambda pointer: native_closed.set()
 
     def user_callback(message, context):
         close_thread = threading.Thread(target=client_holder[0].close)
         close_threads.append(close_thread)
         close_thread.start()
         close_thread.join(timeout=2)
+        assert not close_thread.is_alive()
 
     config = _direct_client_config()
     config.pubsub_subscriptions = GlideClientConfiguration.PubSubSubscriptions(
@@ -2179,8 +2215,133 @@ def test_sync_pubsub_callback_allows_unrelated_thread_close(monkeypatch):
     _invoke_pubsub_callback(pubsub_callback)
 
     assert len(close_threads) == 1
-    assert not close_threads[0].is_alive()
+    assert native_closed.wait(timeout=2)
+    assert client._active_native_callbacks == 0
     assert client._is_closed
+    fake_lib.close_client.assert_called_once_with(fake_lib._response.conn_ptr)
+
+
+def test_sync_provider_callback_can_spawn_and_join_close_thread(monkeypatch):
+    sync_client_module, _, fake_lib, _ = _patch_sync_client(monkeypatch)
+    client_holder = []
+    close_threads = []
+    native_closed = threading.Event()
+    fake_lib.close_client.side_effect = lambda pointer: native_closed.set()
+
+    def provider():
+        if client_holder:
+            close_thread = threading.Thread(target=client_holder[0].close)
+            close_threads.append(close_thread)
+            close_thread.start()
+            close_thread.join(timeout=2)
+            assert not close_thread.is_alive()
+        return AwsCredentials("access", "secret")
+
+    client = sync_client_module.GlideClient.create(_direct_client_config(provider))
+    client_holder.append(client)
+    provider_callback = fake_lib.create_client.call_args.args[5]
+
+    assert _invoke_callback(provider_callback)[0] == 1
+    assert len(close_threads) == 1
+    assert native_closed.wait(timeout=2)
+    assert client._active_native_callbacks == 0
+    assert client._is_closed
+    fake_lib.close_client.assert_called_once_with(fake_lib._response.conn_ptr)
+
+
+def test_sync_resolver_callback_can_spawn_and_join_close_thread(monkeypatch):
+    sync_client_module, _, fake_lib, _ = _patch_sync_client(monkeypatch)
+    client_holder = []
+    close_threads = []
+    native_closed = threading.Event()
+    fake_lib.close_client.side_effect = lambda pointer: native_closed.set()
+
+    def resolver(host, port):
+        if client_holder:
+            close_thread = threading.Thread(target=client_holder[0].close)
+            close_threads.append(close_thread)
+            close_thread.start()
+            close_thread.join(timeout=2)
+            assert not close_thread.is_alive()
+        return host, port
+
+    client = sync_client_module.GlideClient.create(
+        _direct_client_config(address_resolver=resolver)
+    )
+    client_holder.append(client)
+    resolver_callback = fake_lib.create_client.call_args.args[4]
+
+    assert _invoke_resolver_callback(resolver_callback) == (
+        6379,
+        len(b"example.test"),
+    )
+    assert len(close_threads) == 1
+    assert native_closed.wait(timeout=2)
+    assert client._active_native_callbacks == 0
+    assert client._is_closed
+    fake_lib.close_client.assert_called_once_with(fake_lib._response.conn_ptr)
+
+
+def test_sync_close_before_callback_begin_suppresses_user_code(monkeypatch):
+    sync_client_module, _, fake_lib, _ = _patch_sync_client(monkeypatch)
+    provider = MagicMock(return_value=AwsCredentials("access", "secret"))
+    resolver = MagicMock(side_effect=lambda host, port: (host, port))
+    user_callback = MagicMock()
+    config = _direct_client_config(provider, resolver)
+    config.pubsub_subscriptions = GlideClientConfiguration.PubSubSubscriptions(
+        {GlideClientConfiguration.PubSubChannelModes.Exact: {"channel"}},
+        user_callback,
+        None,
+    )
+    client = sync_client_module.GlideClient.create(config)
+    pubsub_callback, resolver_callback, provider_callback = (
+        fake_lib.create_client.call_args.args[3:6]
+    )
+
+    client.close()
+
+    assert _invoke_callback(provider_callback)[0] == 0
+    assert _invoke_resolver_callback(resolver_callback)[0] == 0
+    _invoke_pubsub_callback(pubsub_callback)
+    provider.assert_not_called()
+    resolver.assert_not_called()
+    user_callback.assert_not_called()
+    assert client._active_native_callbacks == 0
+
+
+def test_sync_initial_resolver_close_abandons_late_native_pointer(monkeypatch):
+    sync_client_module, _, fake_lib, _ = _patch_sync_client(monkeypatch)
+    captured = []
+    close_threads = []
+    original_init = sync_client_module.GlideClient.__init__
+
+    def capture_instance(self, config):
+        original_init(self, config)
+        captured.append(self)
+
+    def resolver(host, port):
+        close_thread = threading.Thread(target=captured[0].close)
+        close_threads.append(close_thread)
+        close_thread.start()
+        close_thread.join(timeout=2)
+        assert not close_thread.is_alive()
+        return host, port
+
+    def native_create(*args):
+        assert _invoke_resolver_callback(args[4])[0] == 6379
+        return fake_lib._response
+
+    monkeypatch.setattr(sync_client_module.GlideClient, "__init__", capture_instance)
+    fake_lib.create_client.side_effect = native_create
+
+    with pytest.raises(ClosingError, match="closed during native creation"):
+        sync_client_module.GlideClient.create(
+            _direct_client_config(address_resolver=resolver)
+        )
+
+    assert len(close_threads) == 1
+    assert captured[0]._is_closed
+    assert captured[0]._core_client == captured[0]._ffi.NULL
     fake_lib.close_client.assert_called_once_with(fake_lib._response.conn_ptr)
 
 
@@ -2207,6 +2368,7 @@ def test_sync_provider_reentrant_close_fails_fast(monkeypatch, caplog):
 
     def capture_instance(self, config):
         original_init(self, config)
+
         captured.append(self)
 
     def provider():
