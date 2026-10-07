@@ -86,20 +86,19 @@ _fork_hook_registered = False
 
 
 def _after_fork_in_child() -> None:
-    """Recreate every live direct sync client without retaining any of them."""
+    """Invalidate inherited direct sync clients without running external code."""
     global _live_sync_clients_lock
     # A lock inherited from a vanished thread can never be acquired. Replace it
     # before touching the weak registry in the single-threaded child.
     _live_sync_clients_lock = threading.Lock()
     for client in list(_live_sync_clients):
         try:
-            client._recreate_core_client_after_fork()
+            # Call the implementation directly so an instance override cannot run
+            # arbitrary code from this process-global child hook.
+            BaseClient._invalidate_after_fork(client)
         except BaseException:
-            # One broken client must never prevent the others from recreating.
-            try:
-                client._fail_closed_after_fork()
-            except BaseException:
-                pass
+            # The hook must remain prompt and continue invalidating other clients.
+            pass
 
 
 def _register_global_fork_hook() -> None:
@@ -180,6 +179,8 @@ class BaseClient(CoreCommands):
         self._client_condition = threading.Condition(self._client_lock)
         self._active_native_calls = 0
         self._close_complete = False
+        self._needs_recreate_after_fork = False
+        self._recreating_after_fork = False
         self._native_owner: Optional[_NativeClientOwner] = None
         self._native_finalizer: Optional[weakref.finalize] = None
 
@@ -207,15 +208,54 @@ class BaseClient(CoreCommands):
         return self
 
     def _begin_native_call(self) -> None:
-        with self._client_condition:
-            if self._is_closed:
+        while True:
+            with self._client_condition:
+                if self._is_closed:
+                    raise ClosingError(
+                        "Unable to execute requests; the client is closed. "
+                        "Please create a new client."
+                    )
+                if not self._needs_recreate_after_fork:
+                    if self._core_client == self._ffi.NULL:
+                        raise ValueError("Invalid client pointer.")
+                    self._active_native_calls += 1
+                    return
+                if self._recreating_after_fork:
+                    if _is_credential_provider_executing(self):
+                        raise RuntimeError(
+                            "Cannot execute a client operation from its own "
+                            "credential provider callback"
+                        )
+                    self._client_condition.wait()
+                    continue
+                self._recreating_after_fork = True
+
+            try:
+                # Provider, resolver, logger, and native creation are intentionally
+                # delayed until after the at-fork child hook has returned.
+                self._create_core_client()
+                if self._core_client == self._ffi.NULL:
+                    raise ClosingError("Recreated client pointer is NULL.")
+            except BaseException as error:
+                with self._client_condition:
+                    self._core_client = self._ffi.NULL
+                    self._conn_req_bytes = b""
+                    self._clear_callback_references()
+                    self._needs_recreate_after_fork = False
+                    self._recreating_after_fork = False
+                    self._is_closed = True
+                    self._close_complete = True
+                    self._client_condition.notify_all()
+                with _live_sync_clients_lock:
+                    _live_sync_clients.discard(self)
                 raise ClosingError(
-                    "Unable to execute requests; the client is closed. "
-                    "Please create a new client."
-                )
-            if self._core_client == self._ffi.NULL:
-                raise ValueError("Invalid client pointer.")
-            self._active_native_calls += 1
+                    f"Unable to recreate client after fork: {error}"
+                ) from error
+
+            with self._client_condition:
+                self._needs_recreate_after_fork = False
+                self._recreating_after_fork = False
+                self._client_condition.notify_all()
 
     def _end_native_call(self) -> None:
         with self._client_condition:
@@ -233,11 +273,16 @@ class BaseClient(CoreCommands):
             finalizer.detach()
         return owner
 
-    def _disarm_native_owner(self) -> None:
-        """Discard inherited ownership without invoking the parent runtime."""
-        owner = self._detach_native_owner()
+    def _disarm_native_owner_after_fork(self) -> None:
+        """Detach inherited ownership without acquiring parent-process locks."""
+        finalizer = getattr(self, "_native_finalizer", None)
+        owner = getattr(self, "_native_owner", None)
+        self._native_finalizer = None
+        self._native_owner = None
         if owner is not None:
-            owner.disarm()
+            _NativeClientOwner.disarm_after_fork(owner)
+        if finalizer is not None:
+            finalizer.detach()
 
     def _clear_callback_references(self) -> None:
         self._pubsub_callback_ref = None
@@ -246,50 +291,31 @@ class BaseClient(CoreCommands):
         self._credential_provider_callback_ref = None
         self._credential_provider_callback_owner = None
 
-    def _recreate_core_client_after_fork(self) -> None:
-        """Recreate in a child process without ever touching the parent runtime."""
+    def _invalidate_after_fork(self) -> None:
+        """Invalidate inherited state; called only by the process child hook."""
         was_closed = self._is_closed
-        # Never run a parent process native destructor in the child.
-        self._disarm_native_owner()
-        # The inherited Tokio runtime pointer and CFFI callback ownership are
-        # invalid in the child. Invalidate them before any operation can fail.
+
+        # Invalidate observable state before detaching ownership. No inherited
+        # lock is acquired and no native, provider, resolver, logger, or user
+        # callback is invoked from this method.
         self._core_client = self._ffi.NULL
         self._conn_req_bytes = b""
-        self._clear_callback_references()
+        self._pubsub_callback_ref = None
+        self._address_resolver_callback_ref = None
+        self._address_resolver_callback_owner = None
+        self._credential_provider_callback_ref = None
+        self._credential_provider_callback_owner = None
         self._pubsub_queue = []
         self._pubsub_lock = threading.Lock()
         self._pubsub_condition = threading.Condition(self._pubsub_lock)
         self._client_lock = threading.Lock()
         self._client_condition = threading.Condition(self._client_lock)
         self._active_native_calls = 0
+        self._recreating_after_fork = False
+        self._is_closed = was_closed
         self._close_complete = was_closed
-        if was_closed:
-            return
-
-        try:
-            self._create_core_client()
-        except BaseException:
-            # CPython ignores exceptions from at-fork handlers. Catch everything
-            # and leave an explicitly unusable client instead of stale state.
-            self._core_client = self._ffi.NULL
-            self._conn_req_bytes = b""
-            self._clear_callback_references()
-            self._is_closed = True
-            self._close_complete = True
-            with _live_sync_clients_lock:
-                _live_sync_clients.discard(self)
-
-    def _fail_closed_after_fork(self) -> None:
-        """Best-effort final fallback for the process-global child hook."""
-        self._disarm_native_owner()
-        self._core_client = self._ffi.NULL
-        self._conn_req_bytes = b""
-        self._clear_callback_references()
-        self._client_lock = threading.Lock()
-        self._client_condition = threading.Condition(self._client_lock)
-        self._active_native_calls = 0
-        self._is_closed = True
-        self._close_complete = True
+        self._needs_recreate_after_fork = not was_closed
+        BaseClient._disarm_native_owner_after_fork(self)
 
     def _create_core_client(self) -> None:  # noqa: C901
         # A closed parent must remain closed when its at-fork hook runs.
@@ -1253,11 +1279,14 @@ class BaseClient(CoreCommands):
             )
 
         with self._client_condition:
+            while self._recreating_after_fork and not self._is_closed:
+                self._client_condition.wait()
             if self._is_closed:
                 while not self._close_complete:
                     self._client_condition.wait()
                 return
             self._is_closed = True
+            self._needs_recreate_after_fork = False
             while self._active_native_calls:
                 self._client_condition.wait()
             owner = self._detach_native_owner()

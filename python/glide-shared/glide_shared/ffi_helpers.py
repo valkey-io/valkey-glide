@@ -91,10 +91,16 @@ class _NativeClientOwner:
             self._callback_refs = ()
 
     def disarm(self) -> None:
-        """Drop inherited ownership without touching the parent runtime pointer."""
+        """Drop ownership without touching the native runtime pointer."""
         with self._lock:
             self._core_client = None
             self._callback_refs = ()
+
+    def disarm_after_fork(self) -> None:
+        """Drop inherited ownership without acquiring a possibly orphaned lock."""
+        self._core_client = None
+        self._callback_refs = ()
+        self._lock = threading.Lock()
 
 
 def _finalize_native_client(owner: _NativeClientOwner) -> None:

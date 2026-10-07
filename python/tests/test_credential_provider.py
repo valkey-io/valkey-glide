@@ -3,6 +3,8 @@
 import asyncio
 import gc
 import inspect
+import os
+import select
 import threading
 import time
 import warnings
@@ -818,59 +820,174 @@ def test_sync_registers_only_one_process_global_fork_hook(monkeypatch):
     )
 
 
-def test_sync_fork_recreation_is_transactional_with_global_hook(monkeypatch):
+def test_sync_child_hook_only_invalidates_inherited_state(monkeypatch):
     sync_client_module, ffi, fake_lib, _ = _patch_sync_client(monkeypatch)
-
-    def provider():
-        return AwsCredentials("access", "secret")
-
-    client = sync_client_module.GlideClient.create(_direct_client_config(provider))
+    registry = weakref.WeakSet()
+    monkeypatch.setattr(sync_client_module, "_live_sync_clients", registry)
+    provider = MagicMock(return_value=AwsCredentials("access", "secret"))
+    resolver = MagicMock(side_effect=lambda host, port: (host, port))
+    client = sync_client_module.GlideClient.create(
+        _direct_client_config(provider, resolver)
+    )
     original_pointer = client._core_client
-    original_callback = client._credential_provider_callback_ref
+    original_pubsub_lock = client._pubsub_lock
+    original_client_lock = client._client_lock
+    parent_owner = client._native_owner
     parent_finalizer = client._native_finalizer
+    assert parent_owner is not None
     assert parent_finalizer is not None and parent_finalizer.alive
+
+    # A vanished parent thread may have held this GLIDE-owned lock. The child
+    # path must replace rather than acquire it.
+    inherited_owner_lock = parent_owner._lock
+    inherited_owner_lock.acquire()
+    fake_lib.create_client.reset_mock()
+    try:
+        sync_client_module._after_fork_in_child()
+    finally:
+        inherited_owner_lock.release()
+
+    assert original_pointer != ffi.NULL
+    assert not client._is_closed
+    assert client._needs_recreate_after_fork
+    assert not client._recreating_after_fork
+    assert client._core_client == ffi.NULL
+    assert client._conn_req_bytes == b""
+    assert client._pubsub_callback_ref is None
+    assert client._address_resolver_callback_ref is None
+    assert client._address_resolver_callback_owner is None
+    assert client._credential_provider_callback_ref is None
+    assert client._credential_provider_callback_owner is None
+    assert client._pubsub_queue == []
+    assert client._pubsub_lock is not original_pubsub_lock
+    assert client._client_lock is not original_client_lock
+    assert client._active_native_calls == 0
+    assert client._native_owner is None
+    assert client._native_finalizer is None
+    assert not parent_finalizer.alive
+    assert parent_owner._core_client is None
+    assert parent_owner._callback_refs == ()
+    assert parent_owner._lock is not inherited_owner_lock
+    fake_lib.create_client.assert_not_called()
+    fake_lib.close_client.assert_not_called()
+    provider.assert_not_called()
+    resolver.assert_not_called()
+
+    assert client.try_get_pubsub_message() is None
+    fake_lib.create_client.assert_not_called()
+    client.close()
+
+
+def test_sync_first_child_native_call_recreates_and_dispatches(monkeypatch):
+    sync_client_module, ffi, fake_lib, _ = _patch_sync_client(monkeypatch)
+    registry = weakref.WeakSet()
+    monkeypatch.setattr(sync_client_module, "_live_sync_clients", registry)
+    provider = MagicMock(return_value=AwsCredentials("access", "secret"))
+    resolver = MagicMock(side_effect=lambda host, port: (host, port))
+    client = sync_client_module.GlideClient.create(
+        _direct_client_config(provider, resolver)
+    )
+    parent_finalizer = client._native_finalizer
+    sync_client_module._after_fork_in_child()
     child_pointer = ffi.cast("void*", 2)
     fake_lib._response.conn_ptr = child_pointer
+    fake_lib.create_client.reset_mock()
+    fake_lib.refresh_iam_token.reset_mock()
+    monkeypatch.setattr(client, "_handle_cmd_result", MagicMock(return_value="OK"))
 
     def recreate(*args):
         assert client._core_client == ffi.NULL
+        assert _invoke_resolver_callback(args[4]) == (6379, len(b"example.test"))
+        assert _invoke_callback(args[5])[0] == 1
         return fake_lib._response
 
     fake_lib.create_client.side_effect = recreate
-    sync_client_module._after_fork_in_child()
+
+    assert client._refresh_iam_token() == "OK"
 
     assert not client._is_closed
+    assert not client._needs_recreate_after_fork
     assert client._core_client == child_pointer
-    assert client._core_client != original_pointer
-    assert (
-        client._credential_provider_callback_ref
-        is fake_lib.create_client.call_args.args[5]
-    )
-    assert client._credential_provider_callback_ref is not original_callback
-    assert not parent_finalizer.alive
-    assert client._native_finalizer is not parent_finalizer
+    assert parent_finalizer is not None and not parent_finalizer.alive
     assert client._native_finalizer is not None and client._native_finalizer.alive
-    assert fake_lib.create_client.call_count == 2
-    assert not hasattr(client, "_fork_hook_registered")
-    assert not hasattr(client, "_register_at_fork")
+    fake_lib.create_client.assert_called_once()
+    provider.assert_called_once_with()
+    resolver.assert_called_once_with("example.test", 6379)
+    fake_lib.refresh_iam_token.assert_called_once_with(child_pointer, 0)
     fake_lib.close_client.assert_not_called()
     client.close()
     fake_lib.close_client.assert_called_once_with(child_pointer)
 
 
-def test_sync_fork_native_failure_fails_closed_without_stale_dispatch(monkeypatch):
+def test_sync_concurrent_first_child_calls_recreate_once(monkeypatch):
     sync_client_module, ffi, fake_lib, _ = _patch_sync_client(monkeypatch)
+    registry = weakref.WeakSet()
+    monkeypatch.setattr(sync_client_module, "_live_sync_clients", registry)
+    client = sync_client_module.GlideClient.create(_direct_client_config())
+    sync_client_module._after_fork_in_child()
+    child_pointer = ffi.cast("void*", 2)
+    fake_lib._response.conn_ptr = child_pointer
+    fake_lib.create_client.reset_mock()
+    fake_lib.refresh_iam_token.reset_mock()
+    monkeypatch.setattr(client, "_handle_cmd_result", MagicMock(return_value="OK"))
+    create_entered = threading.Event()
+    release_create = threading.Event()
+
+    def recreate(*args):
+        create_entered.set()
+        assert release_create.wait(timeout=2)
+        return fake_lib._response
+
+    fake_lib.create_client.side_effect = recreate
+    results = []
+    errors = []
+
+    def dispatch():
+        try:
+            results.append(client._refresh_iam_token())
+        except BaseException as error:
+            errors.append(error)
+
+    threads = [threading.Thread(target=dispatch) for _ in range(2)]
+    for thread in threads:
+        thread.start()
+    assert create_entered.wait(timeout=1)
+    assert fake_lib.create_client.call_count == 1
+    release_create.set()
+    for thread in threads:
+        thread.join(timeout=2)
+        assert not thread.is_alive()
+
+    assert errors == []
+    assert results == ["OK", "OK"]
+    assert fake_lib.create_client.call_count == 1
+    assert fake_lib.refresh_iam_token.call_count == 2
+    assert all(
+        call.args == (child_pointer, 0)
+        for call in fake_lib.refresh_iam_token.call_args_list
+    )
+    client.close()
+
+
+def test_sync_lazy_fork_recreation_failure_fails_closed_without_retry(monkeypatch):
+    sync_client_module, ffi, fake_lib, _ = _patch_sync_client(monkeypatch)
+    registry = weakref.WeakSet()
+    monkeypatch.setattr(sync_client_module, "_live_sync_clients", registry)
     client = sync_client_module.GlideClient.create(_direct_client_config())
     stale_pointer = client._core_client
     parent_finalizer = client._native_finalizer
     assert parent_finalizer is not None and parent_finalizer.alive
+    sync_client_module._after_fork_in_child()
     error_message = ffi.new("char[]", b"child native failure")
     fake_lib._response.conn_ptr = ffi.NULL
     fake_lib._response.connection_error_message = error_message
+    fake_lib.create_client.reset_mock()
 
-    client._recreate_core_client_after_fork()
+    with pytest.raises(ClosingError, match="Unable to recreate client after fork"):
+        client.get("key")
 
     assert client._is_closed
+    assert not client._needs_recreate_after_fork
     assert client._core_client == ffi.NULL
     assert client._pubsub_callback_ref is None
     assert client._address_resolver_callback_ref is None
@@ -879,14 +996,18 @@ def test_sync_fork_native_failure_fails_closed_without_stale_dispatch(monkeypatc
     assert client._native_owner is None
     assert client._native_finalizer is None
     assert stale_pointer != ffi.NULL
+    assert fake_lib.create_client.call_count == 1
     fake_lib.close_client.assert_not_called()
     with pytest.raises(ClosingError, match="client is closed"):
         client.get("key")
+    assert fake_lib.create_client.call_count == 1
     fake_lib.command_with_buffer.assert_not_called()
 
 
-def test_sync_fork_rejects_provider_mutated_to_async_and_fails_closed(monkeypatch):
+def test_sync_lazy_fork_rejects_provider_mutated_to_async(monkeypatch):
     sync_client_module, ffi, fake_lib, _ = _patch_sync_client(monkeypatch)
+    registry = weakref.WeakSet()
+    monkeypatch.setattr(sync_client_module, "_live_sync_clients", registry)
     iam_config = _iam_config(lambda: AwsCredentials("access", "secret"))
     client = sync_client_module.GlideClient.create(
         GlideClientConfiguration(
@@ -898,14 +1019,143 @@ def test_sync_fork_rejects_provider_mutated_to_async_and_fails_closed(monkeypatc
     async def async_provider():
         return AwsCredentials("access", "secret")
 
+    sync_client_module._after_fork_in_child()
     iam_config.credential_provider = async_provider
-    client._recreate_core_client_after_fork()
+    fake_lib.create_client.reset_mock()
+
+    with pytest.raises(ClosingError, match="does not support async"):
+        client.get("key")
 
     assert client._is_closed
     assert client._core_client == ffi.NULL
     assert client._credential_provider_callback_ref is None
-    assert fake_lib.create_client.call_count == 1
+    fake_lib.create_client.assert_not_called()
     fake_lib.close_client.assert_not_called()
+
+
+def test_sync_close_before_first_child_call_does_not_touch_native(monkeypatch):
+    sync_client_module, ffi, fake_lib, _ = _patch_sync_client(monkeypatch)
+    registry = weakref.WeakSet()
+    monkeypatch.setattr(sync_client_module, "_live_sync_clients", registry)
+    client = sync_client_module.GlideClient.create(_direct_client_config())
+    sync_client_module._after_fork_in_child()
+    fake_lib.create_client.reset_mock()
+    fake_lib.close_client.reset_mock()
+
+    client.close()
+
+    assert client._is_closed
+    assert client._close_complete
+    assert not client._needs_recreate_after_fork
+    assert client._core_client == ffi.NULL
+    fake_lib.create_client.assert_not_called()
+    fake_lib.close_client.assert_not_called()
+
+
+def test_sync_closed_inherited_client_remains_closed(monkeypatch):
+    sync_client_module, ffi, fake_lib, _ = _patch_sync_client(monkeypatch)
+    registry = weakref.WeakSet()
+    monkeypatch.setattr(sync_client_module, "_live_sync_clients", registry)
+    client = sync_client_module.GlideClient.create(_direct_client_config())
+    # Model a closed client still present in the weak registry so the child hook
+    # must preserve, rather than reopen, its lifecycle state.
+    client.close()
+    registry.add(client)
+    fake_lib.create_client.reset_mock()
+    fake_lib.close_client.reset_mock()
+
+    sync_client_module._after_fork_in_child()
+
+    assert client._is_closed
+    assert client._close_complete
+    assert not client._needs_recreate_after_fork
+    assert client._core_client == ffi.NULL
+    fake_lib.create_client.assert_not_called()
+    fake_lib.close_client.assert_not_called()
+    with pytest.raises(ClosingError, match="client is closed"):
+        client.get("key")
+
+
+@pytest.mark.skipif(not hasattr(os, "fork"), reason="requires os.fork")
+def test_sync_real_fork_hook_does_not_run_locked_provider_or_native_create(
+    monkeypatch,
+):
+    sync_client_module, ffi, fake_lib, _ = _patch_sync_client(monkeypatch)
+    registry = weakref.WeakSet()
+    monkeypatch.setattr(sync_client_module, "_live_sync_clients", registry)
+    provider_lock = threading.Lock()
+    provider_calls = 0
+    create_calls = 0
+
+    def provider():
+        nonlocal provider_calls
+        provider_calls += 1
+        with provider_lock:
+            return AwsCredentials("access", "secret")
+
+    def native_create(*args):
+        nonlocal create_calls
+        create_calls += 1
+        assert _invoke_callback(args[5])[0] == 1
+        return fake_lib._response
+
+    fake_lib.create_client.side_effect = native_create
+    client = sync_client_module.GlideClient.create(_direct_client_config(provider))
+    assert provider_calls == 1
+    assert create_calls == 1
+    lock_held = threading.Event()
+    release_lock = threading.Event()
+
+    def hold_provider_lock():
+        with provider_lock:
+            lock_held.set()
+            release_lock.wait()
+
+    holder = threading.Thread(target=hold_provider_lock)
+    holder.start()
+    assert lock_held.wait(timeout=1)
+    read_fd, write_fd = os.pipe()
+    pid = os.fork()
+    if pid == 0:
+        os.close(read_fd)
+        try:
+            state = (
+                provider_calls,
+                create_calls,
+                client._core_client == ffi.NULL,
+                client._needs_recreate_after_fork,
+            )
+            os.write(write_fd, repr(state).encode())
+        finally:
+            os.close(write_fd)
+            os._exit(0)
+
+    os.close(write_fd)
+    reaped = False
+    try:
+        ready, _, _ = select.select([read_fd], [], [], 2)
+        if not ready:
+            os.kill(pid, 9)
+            os.waitpid(pid, 0)
+            reaped = True
+            pytest.fail("fork child hook blocked on inherited provider state")
+        child_state = os.read(read_fd, 256)
+        _, status = os.waitpid(pid, 0)
+        reaped = True
+        assert os.WIFEXITED(status) and os.WEXITSTATUS(status) == 0
+        assert child_state == b"(1, 1, True, True)"
+    finally:
+        if not reaped:
+            try:
+                os.kill(pid, 9)
+            except ProcessLookupError:
+                pass
+            os.waitpid(pid, 0)
+        os.close(read_fd)
+        release_lock.set()
+        holder.join(timeout=1)
+        assert not holder.is_alive()
+        client.close()
 
 
 def test_sync_creation_uses_current_provider_after_async_to_sync_mutation(monkeypatch):
@@ -1258,22 +1508,24 @@ def test_sync_close_discards_client_from_fork_registry(monkeypatch):
     fake_lib.close_client.assert_called_once_with(fake_lib._response.conn_ptr)
 
 
-def test_global_fork_hook_continues_after_one_client_fails(monkeypatch):
-    sync_client_module, _, _, _ = _patch_sync_client(monkeypatch)
+def test_global_fork_hook_bypasses_instance_overrides(monkeypatch):
+    sync_client_module, ffi, fake_lib, _ = _patch_sync_client(monkeypatch)
+    registry = weakref.WeakSet()
+    monkeypatch.setattr(sync_client_module, "_live_sync_clients", registry)
     first = sync_client_module.GlideClient.create(_direct_client_config())
     second = sync_client_module.GlideClient.create(_direct_client_config())
-    first_recreate = MagicMock(side_effect=RuntimeError("child recreation failed"))
-    first_fail_closed = MagicMock()
-    second_recreate = MagicMock()
-    monkeypatch.setattr(first, "_recreate_core_client_after_fork", first_recreate)
-    monkeypatch.setattr(first, "_fail_closed_after_fork", first_fail_closed)
-    monkeypatch.setattr(second, "_recreate_core_client_after_fork", second_recreate)
+    instance_override = MagicMock(side_effect=RuntimeError("must not run"))
+    monkeypatch.setattr(first, "_invalidate_after_fork", instance_override)
+    fake_lib.create_client.reset_mock()
 
     sync_client_module._after_fork_in_child()
 
-    first_recreate.assert_called_once_with()
-    first_fail_closed.assert_called_once_with()
-    second_recreate.assert_called_once_with()
+    instance_override.assert_not_called()
+    assert first._core_client == ffi.NULL
+    assert second._core_client == ffi.NULL
+    assert first._needs_recreate_after_fork
+    assert second._needs_recreate_after_fork
+    fake_lib.create_client.assert_not_called()
     first.close()
     second.close()
 
