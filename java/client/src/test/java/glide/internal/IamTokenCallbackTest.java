@@ -2,6 +2,7 @@
 package glide.internal;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -36,6 +37,8 @@ public class IamTokenCallbackTest {
     private static native String invokeProvider(long callbackHandle);
 
     private static native void closeProviderCallback(long callbackHandle);
+
+    private static native void failProviderCallbackInitialization(CredentialsProviderInvoker invoker);
 
     @Test
     void completedFutureReturnsCredentials() {
@@ -169,28 +172,106 @@ public class IamTokenCallbackTest {
     }
 
     @Test
-    void methodBodyAndFutureShareOneDeadline() {
-        AtomicReference<CompletableFuture<AwsCredentials>> returnedFuture = new AtomicReference<>();
+    void postCreationInitializationFailureShutsDownInvokerWorker() throws Exception {
+        CountDownLatch workerStarted = new CountDownLatch(1);
+        AtomicReference<Thread> worker = new AtomicReference<>();
+        CredentialsProviderInvoker invoker =
+                new CredentialsProviderInvoker(
+                        () -> CompletableFuture.completedFuture(credentials("unused")),
+                        task -> {
+                            Thread thread =
+                                    new Thread(
+                                            () -> {
+                                                workerStarted.countDown();
+                                                task.run();
+                                            },
+                                            "failed-initialization-invoker-worker");
+                            thread.setDaemon(true);
+                            worker.set(thread);
+                            return thread;
+                        });
+
+        try {
+            assertTrue(workerStarted.await(1, TimeUnit.SECONDS), "Invoker worker did not start");
+            assertTrue(worker.get().isAlive(), "Invoker worker terminated before initialization");
+
+            failProviderCallbackInitialization(invoker);
+
+            assertTrue(invoker.isShutdown(), "Failed initialization did not close the invoker");
+            worker.get().join(1000);
+            assertFalse(worker.get().isAlive(), "Failed initialization leaked the invoker worker");
+        } finally {
+            invoker.close();
+        }
+    }
+
+    @Test
+    @Timeout(10)
+    void methodBodyAndFutureShareOneDeadline() throws Exception {
+        long timeoutMillis = 3000;
+        long methodBodyHoldMillis = 1000;
+        long sharedDeadlineCompletionBoundMillis = 2500;
+        CountDownLatch methodBodyEntered = new CountDownLatch(1);
+        CountDownLatch releaseMethodBody = new CountDownLatch(1);
+        CompletableFuture<AwsCredentials> returnedFuture = new CompletableFuture<>();
+        AtomicReference<RuntimeException> invocationError = new AtomicReference<>();
         GlideCredentialProvider provider =
                 () -> {
-                    sleepUnchecked(70);
-                    CompletableFuture<AwsCredentials> future = new CompletableFuture<>();
-                    returnedFuture.set(future);
-                    Thread completer =
-                            new Thread(
-                                    () -> {
-                                        sleepUnchecked(70);
-                                        future.complete(credentials("too-late"));
-                                    });
-                    completer.setDaemon(true);
-                    completer.start();
-                    return future;
+                    methodBodyEntered.countDown();
+                    try {
+                        releaseMethodBody.await();
+                    } catch (InterruptedException exception) {
+                        Thread.currentThread().interrupt();
+                        throw new IllegalStateException("Method body interrupted", exception);
+                    }
+                    return returnedFuture;
                 };
 
-        RuntimeException error = assertThrows(RuntimeException.class, () -> invokeOnce(provider, 100));
+        try (NativeCallback callback = new NativeCallback(provider, timeoutMillis)) {
+            Thread invocation =
+                    new Thread(
+                            () -> {
+                                try {
+                                    callback.invoke();
+                                } catch (RuntimeException exception) {
+                                    invocationError.set(exception);
+                                }
+                            },
+                            "shared-credentials-deadline-test");
+            invocation.setDaemon(true);
+            invocation.start();
 
-        assertTrue(error.getMessage().contains("100 ms total"), error.getMessage());
-        assertTrue(returnedFuture.get().isCancelled(), "Returned future was not cancelled");
+            assertTrue(
+                    methodBodyEntered.await(1, TimeUnit.SECONDS),
+                    "Credentials provider method body did not start");
+            sleepUnchecked(methodBodyHoldMillis);
+            Instant methodBodyReleased = Instant.now();
+            releaseMethodBody.countDown();
+
+            invocation.join(sharedDeadlineCompletionBoundMillis);
+            boolean completedWithinSharedDeadline = !invocation.isAlive();
+            long elapsedAfterMethodBodyMillis =
+                    Duration.between(methodBodyReleased, Instant.now()).toMillis();
+            if (!completedWithinSharedDeadline) {
+                // Unblock an implementation that incorrectly starts a fresh future deadline before
+                // asserting, so this test does not leak its invocation thread on failure.
+                returnedFuture.complete(credentials("independent-deadline"));
+                invocation.join(1000);
+            }
+
+            assertTrue(
+                    completedWithinSharedDeadline,
+                    "Callback was still waiting "
+                            + elapsedAfterMethodBodyMillis
+                            + " ms after the method body returned; deadlines appear independent");
+            assertFalse(invocation.isAlive(), "Callback invocation thread did not terminate");
+            RuntimeException error = invocationError.get();
+            assertTrue(error != null, "Callback unexpectedly returned credentials");
+            assertTrue(error.getMessage().contains("3000 ms total"), error.getMessage());
+            assertTrue(returnedFuture.isCancelled(), "Returned future was not cancelled");
+        } finally {
+            releaseMethodBody.countDown();
+        }
     }
 
     @Test

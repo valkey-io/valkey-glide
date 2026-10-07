@@ -80,35 +80,56 @@ impl JavaIamTokenCallback {
                 return None;
             }
         };
-        let invoker_global = match env.new_global_ref(invoker) {
-            Ok(global) => global,
-            Err(e) => {
-                clear_pending_exception(env);
-                error!(
-                    "Failed to create global reference for IAM credentials provider invoker: {e}"
-                );
-                return None;
-            }
-        };
-        let class = match env.get_object_class(invoker_global.as_obj()) {
-            Ok(class) => class,
-            Err(e) => {
-                clear_pending_exception(env);
-                error!("Failed to get IAM credentials provider invoker class: {e}");
-                return None;
-            }
-        };
-        let submit_method_id =
-            match env.get_method_id(class, "submit", "()Ljava/util/concurrent/Future;") {
-                Ok(method_id) => method_id,
-                Err(e) => {
-                    clear_pending_exception(env);
-                    error!("Failed to find submit method on IAM credentials provider invoker: {e}");
-                    return None;
-                }
-            };
+        Self::new_from_invoker_with_timeout(env, jvm, &invoker, future_timeout, "submit")
+    }
 
-        Some(Self {
+    fn new_from_invoker_with_timeout(
+        env: &mut JNIEnv,
+        jvm: Arc<JavaVM>,
+        invoker: &JObject,
+        future_timeout: Duration,
+        submit_method_name: &str,
+    ) -> Option<Self> {
+        let result = Self::try_new_from_invoker_with_timeout(
+            env,
+            jvm,
+            invoker,
+            future_timeout,
+            submit_method_name,
+        );
+        match result {
+            Ok(callback) => Some(callback),
+            Err(message) => {
+                // A failed JNI lookup may leave a pending exception, which must be cleared before
+                // close() can run. shutdown_invoker also consumes any exception thrown by close().
+                clear_pending_exception(env);
+                shutdown_invoker(env, invoker);
+                error!("{message}");
+                None
+            }
+        }
+    }
+
+    fn try_new_from_invoker_with_timeout(
+        env: &mut JNIEnv,
+        jvm: Arc<JavaVM>,
+        invoker: &JObject,
+        future_timeout: Duration,
+        submit_method_name: &str,
+    ) -> Result<Self, String> {
+        let invoker_global = env.new_global_ref(invoker).map_err(|e| {
+            format!("Failed to create global reference for IAM credentials provider invoker: {e}")
+        })?;
+        let class = env
+            .get_object_class(invoker_global.as_obj())
+            .map_err(|e| format!("Failed to get IAM credentials provider invoker class: {e}"))?;
+        let submit_method_id = env
+            .get_method_id(class, submit_method_name, "()Ljava/util/concurrent/Future;")
+            .map_err(|e| {
+                format!("Failed to find submit method on IAM credentials provider invoker: {e}")
+            })?;
+
+        Ok(Self {
             jvm,
             invoker_global,
             submit_method_id,
@@ -312,14 +333,7 @@ impl Drop for JavaIamTokenCallback {
             );
             return;
         };
-        if let Err(err) = env.call_method(self.invoker_global.as_obj(), "close", "()V", &[]) {
-            let exception = take_java_exception(&mut env, &err);
-            error!(
-                "Failed to shut down IAM credentials provider invoker: {}",
-                exception.message
-            );
-        }
-        clear_pending_exception(&mut env);
+        shutdown_invoker(&mut env, self.invoker_global.as_obj());
     }
 }
 
@@ -328,6 +342,48 @@ impl Drop for JavaIamTokenCallback {
 fn clear_pending_exception(env: &mut JNIEnv) {
     if env.exception_check().unwrap_or(false) {
         let _ = env.exception_clear();
+    }
+}
+
+fn shutdown_invoker(env: &mut JNIEnv, invoker: &JObject) {
+    clear_pending_exception(env);
+    if let Err(err) = env.call_method(invoker, "close", "()V", &[]) {
+        let exception = take_java_exception(env, &err);
+        error!(
+            "Failed to shut down IAM credentials provider invoker: {}",
+            exception.message
+        );
+    }
+    clear_pending_exception(env);
+}
+
+/// Test-only JNI seam that forces a post-creation method lookup failure. The Java test owns the
+/// invoker and verifies that failed initialization shut it down and terminated its prestarted worker.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_glide_internal_IamTokenCallbackTest_failProviderCallbackInitialization(
+    mut env: JNIEnv,
+    _class: JClass,
+    invoker: JObject,
+) {
+    let Some(jvm) = env.get_java_vm().ok().map(Arc::new) else {
+        clear_pending_exception(&mut env);
+        let _ = env.throw_new("java/lang/RuntimeException", "Failed to access Java VM");
+        return;
+    };
+
+    if let Some(callback) = JavaIamTokenCallback::new_from_invoker_with_timeout(
+        &mut env,
+        jvm,
+        &invoker,
+        CREDENTIAL_FUTURE_TIMEOUT,
+        "missingSubmitForInitializationFailureTest",
+    ) {
+        drop(callback);
+        clear_pending_exception(&mut env);
+        let _ = env.throw_new(
+            "java/lang/AssertionError",
+            "Invalid submit method unexpectedly resolved",
+        );
     }
 }
 
