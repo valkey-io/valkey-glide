@@ -107,25 +107,37 @@ pub fn deserialize_command(bytes: &[u8]) -> Option<(String, Vec<Vec<u8>>)> {
 pub fn extract_key_args<'a>(cmd_name: &str, args: &[&'a [u8]]) -> Vec<&'a [u8]> {
     match cmd_name.to_uppercase().as_str() {
         // Commands with first arg as key
-        "GET" | "SET" | "DEL" | "INCR" | "DECR" | "INCRBY" | "DECRBY" | "SETNX" | "SETEX"
-        | "PSETEX" | "GETSET" | "GETDEL" | "GETEX" | "APPEND" | "STRLEN" | "TYPE" | "EXISTS"
-        | "EXPIRE" | "EXPIREAT" | "TTL" | "PTTL" | "PERSIST" | "DUMP" | "RESTORE" | "HGET"
-        | "HSET" | "HDEL" | "HLEN" | "HGETALL" | "HGETDEL" | "HMGET" | "HMSET" | "LPUSH"
-        | "RPUSH" | "LPOP" | "RPOP" | "LLEN" | "LRANGE" | "SADD" | "SREM" | "SMEMBERS"
-        | "SCARD" | "SISMEMBER" | "ZADD" | "ZREM" | "ZRANGE" | "ZCARD" | "ZSCORE" | "SUBSCRIBE"
-        | "UNSUBSCRIBE" | "BLPOP" | "BRPOP" | "BLMOVE" => {
+        "GET" | "SET" | "INCR" | "DECR" | "INCRBY" | "DECRBY" | "SETNX" | "SETEX" | "PSETEX"
+        | "GETSET" | "GETDEL" | "GETEX" | "APPEND" | "STRLEN" | "TYPE" | "EXPIRE" | "EXPIREAT"
+        | "TTL" | "PTTL" | "PERSIST" | "DUMP" | "RESTORE" | "HGET" | "HSET" | "HDEL" | "HLEN"
+        | "HGETALL" | "HGETDEL" | "HMGET" | "HMSET" | "LPUSH" | "RPUSH" | "LPOP" | "RPOP"
+        | "LLEN" | "LRANGE" | "SADD" | "SREM" | "SMEMBERS" | "SCARD" | "SISMEMBER" | "ZADD"
+        | "ZREM" | "ZRANGE" | "ZCARD" | "ZSCORE" | "SUBSCRIBE" | "UNSUBSCRIBE" | "BLPOP"
+        | "BRPOP" | "BLMOVE" => {
             if !args.is_empty() {
                 vec![args[0]]
             } else {
                 vec![]
             }
         }
-        // WATCH can have multiple keys — all must be in same slot
-        "WATCH" => args.to_vec(),
-        // MGET: all args are keys
-        "MGET" => args.to_vec(),
+        // All args are keys (every key must hash to the same slot).
+        "WATCH" | "MGET" | "DEL" | "EXISTS" | "TOUCH" | "UNLINK" => args.to_vec(),
         // MSET: keys at even positions (key, value, key, value, ...)
         "MSET" | "MSETNX" => args.iter().step_by(2).copied().collect(),
+        // Scripts declare their key count explicitly: `EVAL script numkeys k1 k2 ...`
+        // (FCALL function numkeys ...). The script/function name is NOT a key, so the
+        // keys are the `numkeys` args after it; parse that count rather than treating
+        // args[0] as the key. A malformed or zero-key invocation yields no keys.
+        "EVAL" | "EVALSHA" | "EVAL_RO" | "EVALSHA_RO" | "FCALL" | "FCALL_RO" => {
+            let numkeys = args
+                .get(1)
+                .and_then(|n| std::str::from_utf8(n).ok())
+                .and_then(|n| n.parse::<usize>().ok())
+                .unwrap_or(0);
+            args.get(2..2 + numkeys)
+                .map(<[&[u8]]>::to_vec)
+                .unwrap_or_default()
+        }
         // Commands with no keys
         "MULTI" | "EXEC" | "DISCARD" | "UNWATCH" | "PING" | "SELECT" | "AUTH" | "CLIENT"
         | "INFO" | "DBSIZE" | "FLUSHDB" | "FLUSHALL" | "RESET" | "QUIT" | "COMMAND" | "CONFIG"
@@ -1243,8 +1255,8 @@ mod tests {
 
     use super::{
         ScopeCreateError, acquisition_slot_for, build_scope_connection, create_scope_connection,
-        execute_scope_command, get_parent_client, inherited_tls_params, resolve_scope_parent,
-        try_acquire_scope, try_resolve_scope_target,
+        execute_scope_command, extract_key_args, get_parent_client, inherited_tls_params,
+        resolve_scope_parent, try_acquire_scope, try_resolve_scope_target,
     };
     use super::{build_scope_connection_addr, parse_cluster_target, strip_host_brackets};
 
@@ -2874,6 +2886,30 @@ mod tests {
     // A cluster scope acquired for slot A must reject its very first keyed command
     // if that command hashes to a different slot, locally and before dispatch —
     // rather than accepting it unconstrained and only failing as a server MOVED.
+
+    #[test]
+    fn extract_key_args_reads_script_keys_and_all_variadic_keys() {
+        // EVAL/FCALL declare numkeys: the script/function name is not a key; the
+        // keys are the numkeys args after it.
+        let args: &[&[u8]] = &[b"return 1", b"2", b"k1", b"k2", b"arg"];
+        assert_eq!(extract_key_args("EVAL", args), vec![b"k1" as &[u8], b"k2"]);
+        assert_eq!(extract_key_args("FCALL", args), vec![b"k1" as &[u8], b"k2"]);
+        // numkeys 0 → no keys (unconstrained), never the script.
+        assert!(extract_key_args("EVAL", &[b"return 1", b"0", b"arg"]).is_empty());
+        // Malformed (missing numkeys) → no keys rather than a panic or the script.
+        assert!(extract_key_args("EVAL", &[b"return 1"]).is_empty());
+        // A numkeys larger than the args present → no out-of-bounds, no keys.
+        assert!(extract_key_args("EVAL", &[b"s", b"5", b"k1"]).is_empty());
+
+        // Variadic key commands return every key, so a cross-slot pair is caught
+        // locally instead of only at the server.
+        let del: &[&[u8]] = &[b"k1", b"k2", b"k3"];
+        assert_eq!(
+            extract_key_args("DEL", del),
+            vec![b"k1" as &[u8], b"k2", b"k3"]
+        );
+        assert_eq!(extract_key_args("EXISTS", del).len(), 3);
+    }
 
     #[test]
     fn acquisition_slot_for_only_constrains_keyed_cluster_scopes() {
