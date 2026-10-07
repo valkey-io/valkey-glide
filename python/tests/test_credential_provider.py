@@ -4,7 +4,7 @@ import asyncio
 import gc
 import inspect
 import os
-import select
+import selectors
 import threading
 import time
 import warnings
@@ -878,6 +878,41 @@ def test_sync_child_hook_only_invalidates_inherited_state(monkeypatch):
     client.close()
 
 
+def test_sync_child_hook_disarms_deferred_close_owner(monkeypatch):
+    sync_client_module, _, fake_lib, _ = _patch_sync_client(monkeypatch)
+    registry = weakref.WeakSet()
+    monkeypatch.setattr(sync_client_module, "_live_sync_clients", registry)
+    client = sync_client_module.GlideClient.create(_direct_client_config())
+    owner = client._native_owner
+    finalizer = client._native_finalizer
+    assert owner is not None
+    assert finalizer is not None and finalizer.alive
+
+    client._begin_native_call()
+    client.close()
+
+    assert client in registry
+    assert client._deferred_close_owner is owner
+    assert client._deferred_close_pending
+    assert not finalizer.alive
+    inherited_owner_lock = owner._lock
+    inherited_owner_lock.acquire()
+    try:
+        sync_client_module._after_fork_in_child()
+    finally:
+        inherited_owner_lock.release()
+
+    assert client not in registry
+    assert client._is_closed
+    assert client._close_complete
+    assert client._deferred_close_owner is None
+    assert not client._deferred_close_pending
+    assert owner._core_client is None
+    assert owner._callback_refs == ()
+    assert owner._lock is not inherited_owner_lock
+    fake_lib.close_client.assert_not_called()
+
+
 def test_sync_first_child_native_call_recreates_and_dispatches(monkeypatch):
     sync_client_module, ffi, fake_lib, _ = _patch_sync_client(monkeypatch)
     registry = weakref.WeakSet()
@@ -1115,6 +1150,19 @@ def test_sync_real_fork_hook_does_not_run_locked_provider_or_native_create(
     holder.start()
     assert lock_held.wait(timeout=1)
     read_fd, write_fd = os.pipe()
+    try:
+        import fcntl
+
+        high_read_fd = fcntl.fcntl(read_fd, fcntl.F_DUPFD, 1024)
+    except (ImportError, OSError):
+        # Some platforms cap descriptors below FD_SETSIZE. The selector path is
+        # still exercised there, while Linux CI normally takes this branch.
+        pass
+    else:
+        os.close(read_fd)
+        read_fd = high_read_fd
+        assert read_fd >= 1024
+
     pid = os.fork()
     if pid == 0:
         os.close(read_fd)
@@ -1133,7 +1181,9 @@ def test_sync_real_fork_hook_does_not_run_locked_provider_or_native_create(
     os.close(write_fd)
     reaped = False
     try:
-        ready, _, _ = select.select([read_fd], [], [], 2)
+        with selectors.DefaultSelector() as selector:
+            selector.register(read_fd, selectors.EVENT_READ)
+            ready = selector.select(timeout=2)
         if not ready:
             os.kill(pid, 9)
             os.waitpid(pid, 0)
@@ -1371,12 +1421,13 @@ def test_trio_stalled_after_provider_start_times_out_and_cancels_on_owner(monkey
     assert not any("was never awaited" in str(item.message) for item in caught)
 
 
-def test_sync_close_waits_for_active_native_call_and_rejects_late_call(monkeypatch):
-    sync_client_module, _, fake_lib, _ = _patch_sync_client(monkeypatch)
+def test_sync_close_defers_active_native_call_and_rejects_late_call(monkeypatch):
+    sync_client_module, ffi, fake_lib, _ = _patch_sync_client(monkeypatch)
     client = sync_client_module.GlideClient.create(
         _direct_client_config(lambda: AwsCredentials("access", "secret"))
     )
     callback_ref = client._credential_provider_callback_ref
+    finalizer = client._native_finalizer
     native_entered = threading.Event()
     release_native = threading.Event()
     call_errors = []
@@ -1395,17 +1446,28 @@ def test_sync_close_waits_for_active_native_call_and_rejects_late_call(monkeypat
             call_errors.append(error)
 
     call_thread = threading.Thread(target=call_refresh)
-    close_thread = threading.Thread(target=client.close)
     call_thread.start()
     assert native_entered.wait(timeout=2)
-    close_thread.start()
 
-    deadline = time.monotonic() + 2
-    while not client._is_closed and time.monotonic() < deadline:
-        time.sleep(0.001)
+    close_threads = [threading.Thread(target=client.close) for _ in range(2)]
+    started = time.monotonic()
+    for thread in close_threads:
+        thread.start()
+    for thread in close_threads:
+        thread.join(timeout=1)
+        assert not thread.is_alive()
+    assert time.monotonic() - started < 1
+
     assert client._is_closed
-    assert close_thread.is_alive()
+    assert client._core_client == ffi.NULL
+    assert client._native_owner is None
+    assert finalizer is not None and not finalizer.alive
+    assert client._deferred_close_owner is not None
+    deferred_owner = client._deferred_close_owner
+    assert client._deferred_close_pending
+    assert not client._close_complete
     assert client._credential_provider_callback_ref is callback_ref
+    fake_lib.close_client.assert_not_called()
 
     with pytest.raises(ClosingError, match="client is closed"):
         client._refresh_iam_token()
@@ -1413,16 +1475,52 @@ def test_sync_close_waits_for_active_native_call_and_rejects_late_call(monkeypat
 
     release_native.set()
     call_thread.join(timeout=2)
-    close_thread.join(timeout=2)
     assert not call_thread.is_alive()
-    assert not close_thread.is_alive()
     assert len(call_errors) == 1
     assert isinstance(call_errors[0], RuntimeError)
+    assert client._active_native_calls == 0
+    assert client._deferred_close_owner is None
+    assert not client._deferred_close_pending
+    assert client._close_complete
     assert client._credential_provider_callback_ref is None
-    fake_lib.close_client.assert_called_once()
+    assert deferred_owner._core_client is None
+    assert deferred_owner._callback_refs == ()
+    fake_lib.close_client.assert_called_once_with(fake_lib._response.conn_ptr)
 
     client.close()
-    fake_lib.close_client.assert_called_once()
+    fake_lib.close_client.assert_called_once_with(fake_lib._response.conn_ptr)
+
+
+def test_sync_concurrent_close_returns_while_native_close_finishes(monkeypatch):
+    sync_client_module, _, fake_lib, _ = _patch_sync_client(monkeypatch)
+    client = sync_client_module.GlideClient.create(_direct_client_config())
+    callback_ref = client._pubsub_callback_ref
+    native_close_entered = threading.Event()
+    release_native_close = threading.Event()
+
+    def blocking_close(*args):
+        native_close_entered.set()
+        assert release_native_close.wait(timeout=5)
+
+    fake_lib.close_client.side_effect = blocking_close
+    first_close = threading.Thread(target=client.close)
+    first_close.start()
+    assert native_close_entered.wait(timeout=2)
+
+    second_close = threading.Thread(target=client.close)
+    second_close.start()
+    second_close.join(timeout=1)
+    assert not second_close.is_alive()
+    assert first_close.is_alive()
+    assert not client._close_complete
+    assert client._pubsub_callback_ref is callback_ref
+
+    release_native_close.set()
+    first_close.join(timeout=2)
+    assert not first_close.is_alive()
+    assert client._close_complete
+    assert client._pubsub_callback_ref is None
+    fake_lib.close_client.assert_called_once_with(fake_lib._response.conn_ptr)
 
 
 def test_sync_close_after_failed_creation_is_safe(monkeypatch):

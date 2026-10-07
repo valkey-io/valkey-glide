@@ -96,6 +96,8 @@ def _after_fork_in_child() -> None:
             # Call the implementation directly so an instance override cannot run
             # arbitrary code from this process-global child hook.
             BaseClient._invalidate_after_fork(client)
+            if client._is_closed:
+                _live_sync_clients.discard(client)
         except BaseException:
             # The hook must remain prompt and continue invalidating other clients.
             pass
@@ -177,8 +179,11 @@ class BaseClient(CoreCommands):
         self._credential_provider_callback_owner = None
         self._client_lock = threading.Lock()
         self._client_condition = threading.Condition(self._client_lock)
+        self._native_call_state = threading.local()
         self._active_native_calls = 0
         self._close_complete = False
+        self._deferred_close_owner: Optional[_NativeClientOwner] = None
+        self._deferred_close_pending = False
         self._needs_recreate_after_fork = False
         self._recreating_after_fork = False
         self._native_owner: Optional[_NativeClientOwner] = None
@@ -207,6 +212,23 @@ class BaseClient(CoreCommands):
             _live_sync_clients.add(self)
         return self
 
+    def _pin_native_client_for_call(self, core_client: Any) -> None:
+        clients = getattr(self._native_call_state, "clients", ())
+        self._native_call_state.clients = clients + (core_client,)
+
+    def _native_client_for_call(self) -> Any:
+        clients = getattr(self._native_call_state, "clients", ())
+        if not clients:
+            raise RuntimeError("No native client is pinned for this call")
+        return clients[-1]
+
+    def _unpin_native_client_for_call(self) -> None:
+        clients = self._native_call_state.clients
+        if len(clients) == 1:
+            del self._native_call_state.clients
+        else:
+            self._native_call_state.clients = clients[:-1]
+
     def _begin_native_call(self) -> None:
         while True:
             with self._client_condition:
@@ -218,6 +240,7 @@ class BaseClient(CoreCommands):
                 if not self._needs_recreate_after_fork:
                     if self._core_client == self._ffi.NULL:
                         raise ValueError("Invalid client pointer.")
+                    self._pin_native_client_for_call(self._core_client)
                     self._active_native_calls += 1
                     return
                 if self._recreating_after_fork:
@@ -255,13 +278,38 @@ class BaseClient(CoreCommands):
             with self._client_condition:
                 self._needs_recreate_after_fork = False
                 self._recreating_after_fork = False
+                self._pin_native_client_for_call(self._core_client)
+                self._active_native_calls += 1
                 self._client_condition.notify_all()
+                return
 
     def _end_native_call(self) -> None:
+        self._unpin_native_client_for_call()
+        owner: Optional[_NativeClientOwner] = None
+        finish_deferred_close = False
         with self._client_condition:
             self._active_native_calls -= 1
             if self._active_native_calls == 0:
+                if self._deferred_close_pending:
+                    owner, self._deferred_close_owner = (
+                        self._deferred_close_owner,
+                        None,
+                    )
+                    finish_deferred_close = True
                 self._client_condition.notify_all()
+
+        if finish_deferred_close:
+            try:
+                if owner is not None:
+                    owner.close()
+            finally:
+                self._clear_callback_references()
+                with self._client_condition:
+                    self._deferred_close_pending = False
+                    self._close_complete = True
+                    self._client_condition.notify_all()
+                with _live_sync_clients_lock:
+                    _live_sync_clients.discard(self)
 
     def _detach_native_owner(self) -> Optional[_NativeClientOwner]:
         """Disarm GC cleanup and transfer its native ownership to the caller."""
@@ -283,6 +331,14 @@ class BaseClient(CoreCommands):
             _NativeClientOwner.disarm_after_fork(owner)
         if finalizer is not None:
             finalizer.detach()
+
+    def _disarm_deferred_close_after_fork(self) -> None:
+        """Drop deferred parent-process ownership without touching native state."""
+        owner = getattr(self, "_deferred_close_owner", None)
+        self._deferred_close_owner = None
+        self._deferred_close_pending = False
+        if owner is not None:
+            _NativeClientOwner.disarm_after_fork(owner)
 
     def _clear_callback_references(self) -> None:
         self._pubsub_callback_ref = None
@@ -310,12 +366,14 @@ class BaseClient(CoreCommands):
         self._pubsub_condition = threading.Condition(self._pubsub_lock)
         self._client_lock = threading.Lock()
         self._client_condition = threading.Condition(self._client_lock)
+        self._native_call_state = threading.local()
         self._active_native_calls = 0
         self._recreating_after_fork = False
         self._is_closed = was_closed
         self._close_complete = was_closed
         self._needs_recreate_after_fork = not was_closed
         BaseClient._disarm_native_owner_after_fork(self)
+        BaseClient._disarm_deferred_close_after_fork(self)
 
     def _create_core_client(self) -> None:  # noqa: C901
         # A closed parent must remain closed when its at-fork hook runs.
@@ -704,7 +762,7 @@ class BaseClient(CoreCommands):
         response_buffer: Optional[memoryview] = None,
         response_buffers: Optional[List[memoryview]] = None,
     ) -> TResult:
-        client_adapter_ptr = self._core_client
+        client_adapter_ptr = self._native_client_for_call()
         if response_buffer:
             if response_buffer.readonly:
                 raise TypeError("response_buffer must be writable")
@@ -821,7 +879,7 @@ class BaseClient(CoreCommands):
             >>> client.update_connection_password("new_password", immediate_auth=True)
             'OK'
         """
-        client_adapter_ptr = self._core_client
+        client_adapter_ptr = self._native_client_for_call()
 
         # Prepare C string for password
         c_password = (
@@ -840,7 +898,7 @@ class BaseClient(CoreCommands):
 
     @_guard_native_call
     def _refresh_iam_token(self) -> TResult:
-        client_adapter_ptr = self._core_client
+        client_adapter_ptr = self._native_client_for_call()
 
         result = self._lib.refresh_iam_token(
             client_adapter_ptr,
@@ -864,7 +922,7 @@ class BaseClient(CoreCommands):
         Accepts pre-extracted parameters from exec().
         """
 
-        client_adapter_ptr = self._core_client
+        client_adapter_ptr = self._native_client_for_call()
 
         # Create span if OpenTelemetry is configured and sampling indicates we should trace
         from .opentelemetry import OpenTelemetry
@@ -1069,7 +1127,7 @@ class BaseClient(CoreCommands):
         route: Optional[Route] = None,
     ) -> TResult:
 
-        client_adapter_ptr = self._core_client
+        client_adapter_ptr = self._native_client_for_call()
 
         # Default to empty lists if None provided
         if keys is None:
@@ -1263,7 +1321,7 @@ class BaseClient(CoreCommands):
         Raises:
             RequestError: If client-side caching is not enabled or metrics tracking is disabled.
         """
-        client_adapter_ptr = self._core_client
+        client_adapter_ptr = self._native_client_for_call()
 
         result = self._lib.get_cache_metrics(
             client_adapter_ptr,
@@ -1278,17 +1336,16 @@ class BaseClient(CoreCommands):
                 "Cannot close a client from its own credential provider callback"
             )
 
+        owner: Optional[_NativeClientOwner] = None
+        deferred = False
         with self._client_condition:
             while self._recreating_after_fork and not self._is_closed:
                 self._client_condition.wait()
             if self._is_closed:
-                while not self._close_complete:
-                    self._client_condition.wait()
                 return
+
             self._is_closed = True
             self._needs_recreate_after_fork = False
-            while self._active_native_calls:
-                self._client_condition.wait()
             owner = self._detach_native_owner()
             core_client, self._core_client = self._core_client, self._ffi.NULL
             if owner is None and core_client != self._ffi.NULL:
@@ -1305,10 +1362,20 @@ class BaseClient(CoreCommands):
                     os.getpid(),
                 )
 
-        with _live_sync_clients_lock:
-            _live_sync_clients.discard(self)
+            if self._active_native_calls:
+                self._deferred_close_owner = owner
+                self._deferred_close_pending = True
+                owner = None
+                deferred = True
+
+        if not deferred:
+            with _live_sync_clients_lock:
+                _live_sync_clients.discard(self)
         with self._pubsub_condition:
             self._pubsub_condition.notify_all()
+
+        if deferred:
+            return
 
         try:
             if owner is not None:
@@ -1367,7 +1434,7 @@ class BaseClient(CoreCommands):
         from .isolated_scope import IsolatedScope
 
         # Use the pointer address as client_id for the scope pool
-        client_id = int(self._ffi.cast("uintptr_t", self._core_client))
+        client_id = int(self._ffi.cast("uintptr_t", self._native_client_for_call()))
         conn_req_bytes = self._conn_req_bytes
 
         # Compute routing slot from key
@@ -1496,7 +1563,7 @@ class GlideClusterClient(BaseClient, ClusterCommands):
         type: Optional[ObjectType] = None,
         allow_non_covered_slots: bool = False,
     ) -> List[Union[ClusterScanCursor, List[bytes]]]:
-        client_adapter_ptr = self._core_client
+        client_adapter_ptr = self._native_client_for_call()
 
         # Use helper method to build args
         args = self._build_cluster_scan_args(
