@@ -257,8 +257,7 @@ public class GlideClient extends BaseClient
         // Standalone ignores routing, but the FFI signature carries presence
         // uniformly; a standalone scope is always unconstrained.
         boolean hasRoutingSlot = routingKey != null;
-        int routingSlot =
-                hasRoutingSlot ? slotForKey(routingKey.getBytes(StandardCharsets.UTF_8)) : 0;
+        int routingSlot = hasRoutingSlot ? slotForKey(routingKey.getBytes(StandardCharsets.UTF_8)) : 0;
         long timeoutMs = timeout.toMillis();
         long deadline = System.currentTimeMillis() + timeoutMs;
         // One logical acquire: mint a single attempt token and pass it on every
@@ -271,11 +270,7 @@ public class GlideClient extends BaseClient
                     while (true) {
                         long scopeId =
                                 glide.ffi.resolvers.GlideScopeResolver.glideScopeTryAcquire(
-                                        clientId,
-                                        connBytes,
-                                        hasRoutingSlot,
-                                        routingSlot,
-                                        attemptToken);
+                                        clientId, connBytes, hasRoutingSlot, routingSlot, attemptToken);
                         if (scopeId >= 0) {
                             return new IsolatedScope(scopeId, clientId);
                         }
