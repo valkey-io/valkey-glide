@@ -63,6 +63,14 @@ SERVER_KEY_PATH = f"{TLS_FOLDER}/server.key"
 # Timeout for calls to `openssl`.
 OPENSSL_TIMEOUT_SECONDS = 30
 
+# Number of attempts to create a cluster before giving up. Cluster creation can
+# fail transiently when a port chosen by `next_free_port()` is grabbed by another
+# process before the server binds it, surfacing as an "Address already in use"
+# port-allocation error or a "Failed to send CLUSTER MEET command" failure. Each
+# retry starts from a fresh cluster folder with freshly allocated ports. See
+# https://github.com/valkey-io/valkey-glide/issues/7303.
+CLUSTER_CREATION_MAX_ATTEMPTS = 3
+
 # Allowed hostname for TLS certificate.
 HOSTNAME_TLS: str = "valkey.glide.test.tls.com"
 
@@ -1310,6 +1318,104 @@ def run_remote_command(
     )
 
 
+def _stop_started_servers(args, cluster_folder: str):
+    """Best-effort teardown of the servers started during a failed cluster
+    creation attempt, freeing their ports so the next attempt can reuse them.
+
+    The cluster folder is removed as well. Failures here are swallowed so they
+    cannot mask the original cluster-creation error that triggered the cleanup.
+    """
+    try:
+        stop_cluster(
+            args.host,
+            cluster_folder,
+            args.tls,
+            args.auth,
+            args.logfile,
+            keep_folder=False,
+        )
+    except Exception:
+        logging.exception(
+            f"Failed to clean up servers in {cluster_folder} after a failed "
+            "cluster creation attempt."
+        )
+
+
+def start_cluster_with_retries(args, cluster_folder: str):
+    """Create a cluster (or standalone replication group), retrying on transient
+    failures.
+
+    Cluster creation occasionally fails because a port returned by
+    `next_free_port()` is taken by another process before the server binds it,
+    surfacing as an "Address already in use" error or a "Failed to send CLUSTER
+    MEET command" failure (issue #7303). On failure the servers started so far
+    are stopped to free their ports, and the attempt is retried from a fresh
+    cluster folder with freshly allocated ports, up to
+    `CLUSTER_CREATION_MAX_ATTEMPTS` times.
+
+    The caller-provided `cluster_folder` is used for the first attempt; each
+    subsequent attempt creates its own folder. The folder that produced the
+    successful cluster is updated on `args` via the returned value, so the
+    caller must use the returned servers together with the folder it tracks.
+
+    Returns:
+        Tuple[List[Server], str]: the started servers and the cluster folder
+        they were created in.
+    """
+    cluster_prefix = f"tls-{args.prefix}" if args.tls else args.prefix
+    attempt = 1
+    while True:
+        try:
+            servers = create_servers(
+                args.host,
+                args.shard_count,
+                args.replica_count,
+                args.ports,
+                cluster_folder,
+                args.tls,
+                args.cluster_mode,
+                args.load_module,
+                False,
+                getattr(args, 'tls_cert_file', None),
+                getattr(args, 'tls_key_file', None),
+                getattr(args, 'tls_ca_cert_file', None),
+                getattr(args, 'tls_auth_clients', False),
+            )
+            if args.cluster_mode:
+                # Create a cluster
+                create_cluster(
+                    servers,
+                    args.shard_count,
+                    args.replica_count,
+                    cluster_folder,
+                    args.tls,
+                    getattr(args, 'tls_cert_file', None),
+                    getattr(args, 'tls_key_file', None),
+                    getattr(args, 'tls_ca_cert_file', None),
+                )
+            elif args.replica_count > 0:
+                # Create a standalone replication group
+                create_standalone_replication(
+                    servers,
+                    cluster_folder,
+                    args.tls,
+                )
+            return servers, cluster_folder
+        except Exception:
+            # A user-supplied fixed port set cannot be reallocated, so retrying
+            # would just hit the same conflict; fail fast in that case.
+            if attempt >= CLUSTER_CREATION_MAX_ATTEMPTS or args.ports:
+                raise
+            logging.exception(
+                f"Cluster creation attempt {attempt} of "
+                f"{CLUSTER_CREATION_MAX_ATTEMPTS} failed; freeing started "
+                "servers and retrying with fresh ports."
+            )
+            _stop_started_servers(args, cluster_folder)
+            attempt += 1
+            # Fresh folder (and therefore freshly allocated ports) for the retry.
+            cluster_folder = create_cluster_folder(args.folder_path, cluster_prefix)
+
 
 def main():
     parser = argparse.ArgumentParser(description="Cluster manager tool")
@@ -1658,40 +1764,9 @@ def main():
         )
         init_logger(logfile)
         try:
-            servers = create_servers(
-                args.host,
-                args.shard_count,
-                args.replica_count,
-                args.ports,
-                cluster_folder,
-                args.tls,
-                args.cluster_mode,
-                args.load_module,
-                False,
-                getattr(args, 'tls_cert_file', None),
-                getattr(args, 'tls_key_file', None),
-                getattr(args, 'tls_ca_cert_file', None),
-                getattr(args, 'tls_auth_clients', False),
+            servers, cluster_folder = start_cluster_with_retries(
+                args, cluster_folder
             )
-            if args.cluster_mode:
-                # Create a cluster
-                create_cluster(
-                    servers,
-                    args.shard_count,
-                    args.replica_count,
-                    cluster_folder,
-                    args.tls,
-                    getattr(args, 'tls_cert_file', None),
-                    getattr(args, 'tls_key_file', None),
-                    getattr(args, 'tls_ca_cert_file', None),
-                )
-            elif args.replica_count > 0:
-                # Create a standalone replication group
-                create_standalone_replication(
-                    servers,
-                    cluster_folder,
-                    args.tls,
-                )
         except BaseException:
             # Cleanup on failure.
             stop_cluster(
