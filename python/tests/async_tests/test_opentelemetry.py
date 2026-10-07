@@ -46,6 +46,10 @@ VALID_ENDPOINT_TRACES = "/tmp/spans.json"
 VALID_FILE_ENDPOINT_TRACES = f"file://{VALID_ENDPOINT_TRACES}"  # noqa: E231
 VALID_ENDPOINT_METRICS = "https://valid-endpoint/v1/metrics"
 
+# Every test in this module reads and deletes VALID_ENDPOINT_TRACES, so two
+# xdist workers running it at once corrupt each other's span assertions.
+pytestmark = pytest.mark.xdist_group("opentelemetry")
+
 # A fixed remote parent context, so assertions can name the exact expected IDs.
 PARENT_TRACE_ID = 0x0AF7651916CD43DD8448EB211C80319C
 PARENT_SPAN_ID = 0xB7AD6B7169203331
