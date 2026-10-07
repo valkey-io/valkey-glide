@@ -238,19 +238,36 @@ Under TLS they attach the fixture CA only when the suite starts its own servers;
 
 #### IAM Authentication Tests
 
-To run [IAM authentication tests](integTest/auth_test.go) locally with mock credentials:
+The default-chain IAM mock tests read credentials from `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, and
+`AWS_SESSION_TOKEN`. Set them to local placeholder values when running all direct-client IAM integration tests:
 
 ```bash
-# Run from the `go/` directory
+# Run from the `go/` directory; without endpoint options, the suite starts and stops local Valkey servers.
 AWS_ACCESS_KEY_ID=test_access_key \
 AWS_SECRET_ACCESS_KEY=test_secret_key \
 AWS_SESSION_TOKEN=test_session_token \
-make integ-test test-filter=TestIamAuthentication
+make integ-test test-filter="TestIam\(Authentication\|CustomCredentialProvider\)"
 ```
 
-If any of these environment variables are not set, IAM authentication tests will be skipped.
+The filter includes all methods whose names start with `TestIamAuthentication` or
+`TestIamCustomCredentialProvider`. It currently matches:
 
-**Note:** The credential values shown above (`test_access_key`, etc.) are arbitrary placeholder strings. The AWS SDK uses them to generate an authentication token, but the local test server doesn't validate the token. These tests verify that the IAM authentication flow works correctly (token generation, connection establishment, and token refresh), not that the credentials are valid.
+- `TestIamAuthenticationWithMockCredentials`
+- `TestIamAuthenticationAutomaticTokenRefresh`
+- `TestIamAuthenticationWithMockCredentialsStandalone`
+- `TestIamAuthenticationAutomaticTokenRefreshStandalone`
+- `TestIamCustomCredentialProviderFailure`
+- `TestIamCustomCredentialProviderRejectsWhitespaceRequiredValues`
+- `TestIamCustomCredentialProviderNegotiatesLargeSessionToken`
+
+It does not include pool IAM success tests. The custom `GlideCredentialProvider` integration tests supply their own
+local placeholder credentials and do not require the three AWS environment variables; they still run against the
+local Valkey servers managed by the integration suite.
+
+**Note:** All credential values used here are arbitrary placeholders. The AWS SDK uses default-chain values to
+create an authentication token, while custom providers return their values directly. The local test servers do not
+validate either token, so these tests verify token generation, connection establishment, and token refresh rather
+than real AWS credentials.
 
 #### DNS Tests
 
