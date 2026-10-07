@@ -923,21 +923,20 @@ class TestScopeConnectionReuse:
 
     @pytest.mark.parametrize("cluster_mode", [True])
     def test_scope_rejects_cross_slot_keys(self, cluster_mode):
-        """Scope rejects commands targeting different slots in cluster mode.
+        """Scope rejects commands targeting a slot other than its acquisition slot.
 
-        When a scope is pinned to a slot, commands targeting a different slot
-        are rejected — either by client-side validation (CROSSSLOT) or by the
-        server (MOVED) since the scope's connection is to a single node.
+        The scope is acquired for key1's slot via routing_key, so every keyed
+        command — including the first — must hash to it and a mismatch fails
+        locally with CROSSSLOT before dispatch, never as a server MOVED.
         """
         client = _create_client(cluster_mode, request_timeout=5000)
         try:
             key1 = _make_key(cluster_mode, "pin")
-            with client.scoped_connection() as scope:
-                # First command pins the scope to a slot
+            with client.scoped_connection(routing_key=key1) as scope:
                 scope.set(key1, "value1")
 
-                # Second command with a DIFFERENT hash tag targets a different slot
-                with pytest.raises(Exception, match="(?i)(cross.?slot|moved)"):
+                # A DIFFERENT hash tag targets a different slot.
+                with pytest.raises(Exception, match="(?i)cross.?slot"):
                     scope.set("{other-tag}-key2", "value2")
             client.delete([key1])
         finally:

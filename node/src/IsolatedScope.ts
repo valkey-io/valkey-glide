@@ -174,8 +174,12 @@ export class IsolatedScope {
             );
         }
 
-        const routingSlot = routingKey
-            ? slotForKey(Buffer.from(routingKey))
+        // A routing key is optional; when absent, a cluster scope stays
+        // unconstrained (any primary) rather than being pinned to a slot. Presence
+        // is carried in a separate flag so slot 0 is a real value, not "unset".
+        const hasRoutingSlot = Boolean(routingKey);
+        const routingSlot = hasRoutingSlot
+            ? slotForKey(Buffer.from(routingKey!))
             : 0;
 
         let backoffMs = 10;
@@ -189,6 +193,7 @@ export class IsolatedScope {
             const scopeId = scopeTryAcquire(
                 clientId,
                 connectionRequestBytes,
+                hasRoutingSlot,
                 routingSlot,
                 attemptToken,
             );

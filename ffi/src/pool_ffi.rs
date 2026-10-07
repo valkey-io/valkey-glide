@@ -981,6 +981,12 @@ pub extern "C" fn glide_scope_next_attempt_token() -> u64 {
 /// passes the same value on every retry poll, so the core dedupes a single
 /// acquire's retries while letting distinct concurrent borrowers each dial.
 ///
+/// `routing_slot` is read only when `has_routing_slot` is true; it is then the
+/// cluster hash slot the scope's commands must target. When `has_routing_slot` is
+/// false the caller supplied no routing key and the slot is ignored (any primary is
+/// acceptable), mirroring the `has_timeout`/`has_sample_percentage` optional-field
+/// convention elsewhere in this ABI.
+///
 /// # Safety
 /// `connection_request_ptr` must point to `connection_request_len` valid bytes.
 #[unsafe(no_mangle)]
@@ -988,6 +994,7 @@ pub unsafe extern "C" fn glide_scope_try_acquire(
     client_id: u64,
     connection_request_ptr: *const u8,
     connection_request_len: usize,
+    has_routing_slot: bool,
     routing_slot: u16,
     attempt_token: u64,
 ) -> i64 {
@@ -1003,7 +1010,7 @@ pub unsafe extern "C" fn glide_scope_try_acquire(
         client_id,
         conn_bytes,
         runtime.handle(),
-        routing_slot,
+        has_routing_slot.then_some(routing_slot),
         attempt_token,
     )
 }

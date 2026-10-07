@@ -267,8 +267,12 @@ func (client *Client) ScopedConnection(ctx context.Context, timeout time.Duratio
 		}
 	}
 
-	routingSlot := uint16(0)
-	if routingKey != "" {
+	// A routing key is optional; when absent, a cluster scope stays unconstrained
+	// (any primary) rather than being pinned to a slot. Presence is carried in a
+	// separate flag so slot 0 is a real value, not "unset".
+	hasRoutingSlot := routingKey != ""
+	var routingSlot uint16
+	if hasRoutingSlot {
 		routingSlot = slotForKey([]byte(routingKey))
 	}
 
@@ -291,6 +295,7 @@ func (client *Client) ScopedConnection(ctx context.Context, timeout time.Duratio
 			C.uint64_t(clientID),
 			(*C.uint8_t)(unsafe.Pointer(&connReqBytes[0])),
 			C.uintptr_t(len(connReqBytes)),
+			C.bool(hasRoutingSlot),
 			C.uint16_t(routingSlot),
 			attemptToken,
 		)
@@ -373,8 +378,12 @@ func (client *ClusterClient) ScopedConnection(
 		}
 	}
 
-	routingSlot := uint16(0)
-	if routingKey != "" {
+	// A routing key is optional; when absent, a cluster scope stays unconstrained
+	// (any primary) rather than being pinned to a slot. Presence is carried in a
+	// separate flag so slot 0 is a real value, not "unset".
+	hasRoutingSlot := routingKey != ""
+	var routingSlot uint16
+	if hasRoutingSlot {
 		routingSlot = slotForKey([]byte(routingKey))
 	}
 	deadline := time.Now().Add(timeout)
@@ -396,6 +405,7 @@ func (client *ClusterClient) ScopedConnection(
 			C.uint64_t(clientID),
 			(*C.uint8_t)(unsafe.Pointer(&connReqBytes[0])),
 			C.uintptr_t(len(connReqBytes)),
+			C.bool(hasRoutingSlot),
 			C.uint16_t(routingSlot),
 			attemptToken,
 		)

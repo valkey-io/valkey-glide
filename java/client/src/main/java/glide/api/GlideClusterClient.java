@@ -253,8 +253,12 @@ public class GlideClusterClient extends BaseClient
             return f;
         }
 
+        // A routing key is optional; when absent, a cluster scope stays
+        // unconstrained (any primary) rather than being pinned to a slot. Presence
+        // is carried in a separate flag so slot 0 is a real value, not "unset".
+        boolean hasRoutingSlot = routingKey != null;
         int routingSlot =
-                routingKey != null ? slotForKey(routingKey.getBytes(StandardCharsets.UTF_8)) : 0;
+                hasRoutingSlot ? slotForKey(routingKey.getBytes(StandardCharsets.UTF_8)) : 0;
         long timeoutMs = timeout.toMillis();
         long deadline = System.currentTimeMillis() + timeoutMs;
         // One logical acquire: one stable attempt token across the retry loop.
@@ -265,7 +269,11 @@ public class GlideClusterClient extends BaseClient
                     while (true) {
                         long scopeId =
                                 glide.ffi.resolvers.GlideScopeResolver.glideScopeTryAcquire(
-                                        clientId, connBytes, routingSlot, attemptToken);
+                                        clientId,
+                                        connBytes,
+                                        hasRoutingSlot,
+                                        routingSlot,
+                                        attemptToken);
                         if (scopeId >= 0) {
                             return new glide.api.models.scope.IsolatedScope(scopeId, clientId);
                         }

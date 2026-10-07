@@ -1567,6 +1567,10 @@ pub(crate) mod shared_client_tests {
             let target = glide_core::scope::resolve_scope_target(Some(&client), routing_slot)
                 .await
                 .expect("slot owner resolvable against live topology");
+            let acquisition_slot = match &target {
+                glide_core::pool::ScopeTarget::Standalone => None,
+                glide_core::pool::ScopeTarget::ClusterPrimary(_) => Some(routing_slot),
+            };
             let reservation = {
                 let mut guard = pool.lock().await;
                 match guard.try_acquire(
@@ -1574,6 +1578,7 @@ pub(crate) mod shared_client_tests {
                     target.clone(),
                     client.current_database(),
                     glide_core::pool::next_scope_attempt_token(),
+                    acquisition_slot,
                 ) {
                     glide_core::pool::ScopeAcquire::Reserved(reservation) => reservation,
                     other => panic!("expected a fresh reservation from an empty pool: {other:?}"),
@@ -1595,6 +1600,7 @@ pub(crate) mod shared_client_tests {
                     target,
                     client.current_database(),
                     glide_core::pool::next_scope_attempt_token(),
+                    acquisition_slot,
                 ) {
                     glide_core::pool::ScopeAcquire::Reused(scope_id) => scope_id,
                     other => panic!("failed to acquire scope (connection not seated): {other:?}"),
@@ -1651,7 +1657,7 @@ pub(crate) mod shared_client_tests {
                 client_id,
                 bytes.to_vec(),
                 &runtime,
-                0,
+                None,
                 attempt_token,
             );
             if result >= 0 {
@@ -5057,7 +5063,7 @@ pub(crate) mod shared_client_tests {
                         client_id,
                         connection_request_bytes,
                         &runtime,
-                        0,
+                        None,
                         attempt_token,
                     );
                     if result >= 0 { Some(result) } else { None }
