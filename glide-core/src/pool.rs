@@ -1061,6 +1061,14 @@ pub struct ScopePool {
     /// attempt. The value is still the latest one, so the slot in the message is
     /// current.
     pub last_unresolved_target: Option<ScopeTargetUnresolved>,
+    /// The kind of the most recent scoped-connection creation failure the pool
+    /// warned about, or `None` once a creation succeeds. The creation-side twin
+    /// of [`Self::last_unresolved_target`]: every binding retry poll spawns
+    /// another creation, so a persistent cause (an mTLS parent that has not
+    /// connected, an unreachable shard) is warned once and then logged at debug
+    /// until it clears.
+    #[cfg(feature = "proto")]
+    pub last_create_warn: Option<crate::scope::ScopeCreateErrorKind>,
     /// In-flight creations, keyed by target then by the acquire-attempt token that
     /// spawned each one. A single acquire polls with the same token across its
     /// retries, so a repeat poll finds its own token already in flight and does not
@@ -1215,6 +1223,8 @@ impl ScopePool {
             configured_database_id,
             configured_client_name,
             last_unresolved_target: None,
+            #[cfg(feature = "proto")]
+            last_create_warn: None,
             pending: Arc::new(StdMutex::new(HashMap::new())),
         }
     }
