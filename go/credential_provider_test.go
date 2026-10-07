@@ -386,3 +386,131 @@ func TestGetCredentialProviderNil(t *testing.T) {
 	iam := config.NewIamAuthConfig("cluster", config.ElastiCache, "us-east-1")
 	assert.Nil(t, iam.GetCredentialProvider(), "default provider should be nil")
 }
+
+func TestDirectClientsRetainCredentialProviderUntilClose(t *testing.T) {
+	type factory func(config.GlideCredentialProvider) (*baseClient, error)
+	factories := map[string]factory{
+		"standalone": func(provider config.GlideCredentialProvider) (*baseClient, error) {
+			cfg := config.NewClientConfiguration().
+				WithAddress(&config.NodeAddress{Host: "127.0.0.1", Port: 1}).
+				WithAddressResolver(func(host string, port int) (string, int) { return host, port }).
+				WithCredentials(testIamCredentials(t, provider)).
+				WithLazyConnect(true)
+			client, err := NewClient(cfg)
+			if err != nil {
+				return nil, err
+			}
+			return &client.baseClient, nil
+		},
+		"cluster": func(provider config.GlideCredentialProvider) (*baseClient, error) {
+			cfg := config.NewClusterClientConfiguration().
+				WithAddress(&config.NodeAddress{Host: "127.0.0.1", Port: 1}).
+				WithAddressResolver(func(host string, port int) (string, int) { return host, port }).
+				WithCredentials(testIamCredentials(t, provider)).
+				WithLazyConnect(true)
+			client, err := NewClusterClient(cfg)
+			if err != nil {
+				return nil, err
+			}
+			return &client.baseClient, nil
+		},
+	}
+
+	for name, create := range factories {
+		t.Run(name, func(t *testing.T) {
+			var calls atomic.Int32
+			provider := func() (config.AwsCredentials, error) {
+				calls.Add(1)
+				return config.AwsCredentials{
+					AccessKeyID:          "access",
+					SecretAccessKey:      "secret",
+					SessionToken:         "token",
+					ExpiresAtEpochMillis: 1234,
+				}, nil
+			}
+			beforeID := clientIDCounter.Load()
+			client, err := create(provider)
+			require.NoError(t, err)
+
+			clientID := client.resolverID
+			assert.Equal(t, beforeID+1, clientID)
+			registered, ok := credentialProviderRegistry.Load(clientID)
+			require.True(t, ok)
+			assert.NotNil(t, registered)
+			registeredResolver, ok := resolverRegistry.Load(clientID)
+			require.True(t, ok)
+			assert.NotNil(t, registeredResolver)
+
+			status, storage, lengths, expiresAt := invokeCredentialCallbackForTest(
+				clientID,
+				[3]int{16, 16, 16},
+				0xa5,
+			)
+			require.Equal(t, credentialCallbackSuccess, status)
+			assert.Equal(t, [3]uintptr{6, 6, 5}, lengths)
+			assert.Equal(t, "access", string(storage[0][1:7]))
+			assert.Equal(t, "secret", string(storage[1][1:7]))
+			assert.Equal(t, "token", string(storage[2][1:6]))
+			assert.Equal(t, int64(1234), expiresAt)
+			assert.GreaterOrEqual(t, calls.Load(), int32(1))
+
+			client.Close()
+			_, ok = credentialProviderRegistry.Load(clientID)
+			assert.False(t, ok)
+			_, ok = resolverRegistry.Load(clientID)
+			assert.False(t, ok)
+			assert.Zero(t, client.resolverID)
+
+			status, storage, lengths, expiresAt = invokeCredentialCallbackForTest(
+				clientID,
+				[3]int{16, 16, 16},
+				0xa5,
+			)
+			assert.Equal(t, credentialCallbackFailure, status)
+			assertCredentialCallbackDidNotWrite(t, storage, 0xa5, lengths, expiresAt, false)
+
+			client.Close()
+			_, ok = credentialProviderRegistry.Load(clientID)
+			assert.False(t, ok)
+		})
+	}
+}
+
+func TestDirectClientCreationFailureUnregistersCredentialProvider(t *testing.T) {
+	providerError := errors.New("provider failed during initial authentication")
+	type constructor func(config.GlideCredentialProvider) error
+	constructors := map[string]constructor{
+		"standalone": func(provider config.GlideCredentialProvider) error {
+			cfg := config.NewClientConfiguration().
+				WithAddress(&config.NodeAddress{Host: "127.0.0.1", Port: 1}).
+				WithCredentials(testIamCredentials(t, provider))
+			_, err := NewClient(cfg)
+			return err
+		},
+		"cluster": func(provider config.GlideCredentialProvider) error {
+			cfg := config.NewClusterClientConfiguration().
+				WithAddress(&config.NodeAddress{Host: "127.0.0.1", Port: 1}).
+				WithCredentials(testIamCredentials(t, provider))
+			_, err := NewClusterClient(cfg)
+			return err
+		},
+	}
+
+	for name, create := range constructors {
+		t.Run(name, func(t *testing.T) {
+			var calls atomic.Int32
+			beforeID := clientIDCounter.Load()
+			err := create(func() (config.AwsCredentials, error) {
+				calls.Add(1)
+				return config.AwsCredentials{}, providerError
+			})
+
+			require.Error(t, err)
+			assert.Equal(t, int32(1), calls.Load())
+			clientID := beforeID + 1
+			assert.Equal(t, clientID, clientIDCounter.Load())
+			_, registered := credentialProviderRegistry.Load(clientID)
+			assert.False(t, registered)
+		})
+	}
+}

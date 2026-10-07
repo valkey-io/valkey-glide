@@ -795,6 +795,11 @@ func (config *ClientConfiguration) GetCredentialProvider() GlideCredentialProvid
 	return nil
 }
 
+// HasIamAuthentication reports whether IAM authentication is configured.
+func (config *ClientConfiguration) HasIamAuthentication() bool {
+	return config.credentials != nil && config.credentials.iamConfig != nil
+}
+
 func (config *ClientConfiguration) HasSubscription() bool {
 	return config.subscriptionConfig != nil
 }

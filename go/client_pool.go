@@ -19,6 +19,11 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+const customCredentialProviderPoolError = "pool clients cannot use a custom IAM credentials provider; " +
+	"configure IAM without a credential provider to use the default AWS credential chain"
+
+var errCustomCredentialProviderPool = errors.New(customCredentialProviderPoolError)
+
 // PoolConfig holds configuration for a client-instance pool.
 type PoolConfig struct {
 	// Maximum number of clients in the pool. Default: 10.
@@ -121,9 +126,7 @@ func NewClientPool(clientConfig *config.ClientConfiguration, poolConfig PoolConf
 	// forward a Go callback per-connection. Use IamAuthConfig without
 	// a credential provider to use the default AWS credential chain.
 	if clientConfig.GetCredentialProvider() != nil {
-		return nil, errors.New(
-			"pool clients cannot use a custom IAM credentials provider; " +
-				"configure IAM without a credential provider to use the default AWS credential chain")
+		return nil, errCustomCredentialProviderPool
 	}
 
 	// Reject a custom address resolver. It is a per-client callback registered
@@ -361,9 +364,7 @@ func NewClusterClientPool(clientConfig *config.ClusterClientConfiguration, poolC
 	// forward a Go callback per-connection. Use IamAuthConfig without
 	// a credential provider to use the default AWS credential chain.
 	if clientConfig.GetCredentialProvider() != nil {
-		return nil, errors.New(
-			"pool clients cannot use a custom IAM credentials provider; " +
-				"configure IAM without a credential provider to use the default AWS credential chain")
+		return nil, errCustomCredentialProviderPool
 	}
 
 	// Reject a custom address resolver. It is a per-client callback registered
