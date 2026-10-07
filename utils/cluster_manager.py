@@ -63,6 +63,14 @@ SERVER_KEY_PATH = f"{TLS_FOLDER}/server.key"
 # Timeout for calls to `openssl`.
 OPENSSL_TIMEOUT_SECONDS = 30
 
+# Number of attempts to create a cluster before giving up. Cluster creation can
+# fail transiently when a port chosen by `next_free_port()` is grabbed by another
+# process before the server binds it, surfacing as an "Address already in use"
+# port-allocation error or a "Failed to send CLUSTER MEET command" failure. Each
+# retry starts from a fresh cluster folder with freshly allocated ports. See
+# https://github.com/valkey-io/valkey-glide/issues/7303.
+CLUSTER_CREATION_MAX_ATTEMPTS = 3
+
 # Allowed hostname for TLS certificate.
 HOSTNAME_TLS: str = "valkey.glide.test.tls.com"
 
@@ -118,8 +126,30 @@ def get_cli_command() -> str:
 def init_logger(logfile: str):
     print(f"LOG_FILE={logfile}")
     root_logger = logging.getLogger()
-    handler = logging.FileHandler(logfile, "w", "utf-8")
-    root_logger.addHandler(handler)
+
+    # init_logger can be called multiple times in a single run (once per
+    # start/stop and once per cluster-creation retry). Remove any handler we
+    # previously attached so handlers don't accumulate (which would duplicate
+    # every log line) and so a FileHandler pointing at a now-removed folder is
+    # closed instead of lingering with a stale open file. See issue #7303.
+    for existing in list(root_logger.handlers):
+        if isinstance(existing, logging.FileHandler):
+            root_logger.removeHandler(existing)
+            existing.close()
+
+    log_dir = os.path.dirname(logfile)
+    if log_dir and not os.path.isdir(log_dir):
+        # The target directory was removed (e.g. a failed cluster-creation
+        # attempt's folder was cleaned up). Fall back to stream logging so we
+        # never crash trying to open a log file inside a missing directory,
+        # which would otherwise mask the real cluster-creation error.
+        logging.warning(
+            f"Log directory {log_dir} does not exist; "
+            f"logging to stderr instead of {logfile}"
+        )
+        return
+
+    root_logger.addHandler(logging.FileHandler(logfile, "w", "utf-8"))
 
 
 def _verify_tls_certs() -> bool:
@@ -1140,6 +1170,15 @@ def stop_cluster(
     logfile: Optional[str],
     keep_folder: bool,
 ):
+    # If the folder is already gone (e.g. a failed attempt was cleaned up, or
+    # the cluster was already stopped), there is nothing to do. Returning early
+    # avoids os.scandir() raising FileNotFoundError and masking the real error
+    # that triggered this cleanup. See issue #7303.
+    if not os.path.isdir(cluster_folder):
+        logging.debug(
+            f"## Cluster folder {cluster_folder} does not exist; nothing to stop"
+        )
+        return
     logfile = f"{cluster_folder}/cluster_manager.log" if not logfile else logfile
     init_logger(logfile)
     logging.debug(f"## Stopping cluster in path {cluster_folder}")
@@ -1309,6 +1348,139 @@ def run_remote_command(
         f"[ec2] Remote command timed out after {timeout_seconds}s"
     )
 
+
+class ClusterCreationError(Exception):
+    """Raised when cluster creation fails after exhausting all retries.
+
+    Carries the folder of the final (preserved) attempt so the caller can run
+    its cleanup against a folder that still exists, instead of the first
+    attempt's folder which may already have been torn down. The real underlying
+    error is preserved as this exception's ``__cause__`` (``raise ... from``).
+    """
+
+    def __init__(self, message: str, cluster_folder: str):
+        super().__init__(message)
+        self.cluster_folder = cluster_folder
+
+
+def _stop_started_servers(args, cluster_folder: str):
+    """Best-effort teardown of the servers started during a failed cluster
+    creation attempt, freeing their ports so the next attempt can reuse them.
+
+    The cluster folder is deliberately KEPT (``keep_folder=True``) so the
+    per-server ``server.log`` files survive for diagnosis of a genuine
+    (non-flaky) failure; only the server processes are stopped to release the
+    ports. Failures here are swallowed so they cannot mask the original
+    cluster-creation error that triggered the cleanup. See issue #7303.
+    """
+    try:
+        stop_cluster(
+            args.host,
+            cluster_folder,
+            args.tls,
+            args.auth,
+            args.logfile,
+            keep_folder=True,
+        )
+    except Exception:
+        logging.exception(
+            f"Failed to clean up servers in {cluster_folder} after a failed "
+            "cluster creation attempt."
+        )
+
+
+def start_cluster_with_retries(args, cluster_folder: str):
+    """Create a cluster (or standalone replication group), retrying on transient
+    failures.
+
+    Cluster creation occasionally fails because a port returned by
+    `next_free_port()` is taken by another process before the server binds it,
+    surfacing as an "Address already in use" error or a "Failed to send CLUSTER
+    MEET command" failure (issue #7303). On failure the servers started so far
+    are stopped to free their ports (their folder and logs are kept), and the
+    attempt is retried from a fresh cluster folder with freshly allocated ports,
+    up to `CLUSTER_CREATION_MAX_ATTEMPTS` times.
+
+    The caller-provided `cluster_folder` is used for the first attempt; each
+    subsequent attempt creates its own folder. On success the folder that
+    produced the cluster is returned. If every attempt fails, the servers of the
+    final attempt are stopped (its folder/logs are preserved) and a
+    `ClusterCreationError` is raised carrying that final folder, so the caller's
+    cleanup operates on a folder that still exists rather than a stale one.
+
+    Returns:
+        Tuple[List[Server], str]: the started servers and the cluster folder
+        they were created in.
+
+    Raises:
+        ClusterCreationError: if all attempts fail. Its `cluster_folder`
+        attribute is the final attempt's (preserved) folder and its `__cause__`
+        is the real underlying error.
+    """
+    cluster_prefix = f"tls-{args.prefix}" if args.tls else args.prefix
+    attempt = 1
+    while True:
+        try:
+            servers = create_servers(
+                args.host,
+                args.shard_count,
+                args.replica_count,
+                args.ports,
+                cluster_folder,
+                args.tls,
+                args.cluster_mode,
+                args.load_module,
+                False,
+                getattr(args, 'tls_cert_file', None),
+                getattr(args, 'tls_key_file', None),
+                getattr(args, 'tls_ca_cert_file', None),
+                getattr(args, 'tls_auth_clients', False),
+            )
+            if args.cluster_mode:
+                # Create a cluster
+                create_cluster(
+                    servers,
+                    args.shard_count,
+                    args.replica_count,
+                    cluster_folder,
+                    args.tls,
+                    getattr(args, 'tls_cert_file', None),
+                    getattr(args, 'tls_key_file', None),
+                    getattr(args, 'tls_ca_cert_file', None),
+                )
+            elif args.replica_count > 0:
+                # Create a standalone replication group
+                create_standalone_replication(
+                    servers,
+                    cluster_folder,
+                    args.tls,
+                )
+            return servers, cluster_folder
+        except Exception as exc:
+            # Always stop the servers started by this attempt to free their
+            # ports. The folder/logs are kept (see _stop_started_servers) so a
+            # genuine failure can be diagnosed.
+            _stop_started_servers(args, cluster_folder)
+
+            # A user-supplied fixed port set cannot be reallocated, so retrying
+            # would just hit the same conflict; fail fast in that case. Also
+            # stop once the attempt budget is exhausted.
+            if attempt >= CLUSTER_CREATION_MAX_ATTEMPTS or args.ports:
+                # Propagate the CURRENT folder (which still exists and holds the
+                # failing attempt's logs) to the caller, chaining the real error
+                # so it is not masked by any secondary cleanup failure.
+                raise ClusterCreationError(
+                    f"Cluster creation failed after {attempt} attempt(s): {exc}",
+                    cluster_folder,
+                ) from exc
+            logging.exception(
+                f"Cluster creation attempt {attempt} of "
+                f"{CLUSTER_CREATION_MAX_ATTEMPTS} failed; freeing started "
+                "servers and retrying with fresh ports."
+            )
+            attempt += 1
+            # Fresh folder (and therefore freshly allocated ports) for the retry.
+            cluster_folder = create_cluster_folder(args.folder_path, cluster_prefix)
 
 
 def main():
@@ -1658,45 +1830,21 @@ def main():
         )
         init_logger(logfile)
         try:
-            servers = create_servers(
-                args.host,
-                args.shard_count,
-                args.replica_count,
-                args.ports,
-                cluster_folder,
-                args.tls,
-                args.cluster_mode,
-                args.load_module,
-                False,
-                getattr(args, 'tls_cert_file', None),
-                getattr(args, 'tls_key_file', None),
-                getattr(args, 'tls_ca_cert_file', None),
-                getattr(args, 'tls_auth_clients', False),
+            servers, cluster_folder = start_cluster_with_retries(
+                args, cluster_folder
             )
-            if args.cluster_mode:
-                # Create a cluster
-                create_cluster(
-                    servers,
-                    args.shard_count,
-                    args.replica_count,
-                    cluster_folder,
-                    args.tls,
-                    getattr(args, 'tls_cert_file', None),
-                    getattr(args, 'tls_key_file', None),
-                    getattr(args, 'tls_ca_cert_file', None),
-                )
-            elif args.replica_count > 0:
-                # Create a standalone replication group
-                create_standalone_replication(
-                    servers,
-                    cluster_folder,
-                    args.tls,
-                )
-        except BaseException:
-            # Cleanup on failure.
+        except BaseException as exc:
+            # Cleanup on failure. When start_cluster_with_retries exhausts its
+            # retries it raises ClusterCreationError carrying the final (still
+            # existing) attempt's folder; use that so we don't try to clean up
+            # the first attempt's folder, which may already have been torn down.
+            # stop_cluster is a no-op for a missing folder and the servers of
+            # the failing attempt were already stopped, so this just preserves
+            # the logs (keep_folder=True) without masking the real error.
+            cleanup_folder = getattr(exc, "cluster_folder", cluster_folder)
             stop_cluster(
                 args.host,
-                cluster_folder,
+                cleanup_folder,
                 args.tls,
                 args.auth,
                 args.logfile,
