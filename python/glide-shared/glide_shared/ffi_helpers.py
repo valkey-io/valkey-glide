@@ -2,8 +2,10 @@
 
 """Shared FFI helper utilities for converting Python arguments to C-compatible arrays."""
 
+import contextvars
 import threading
 from enum import IntEnum
+from typing import Any
 
 from glide_shared._glide_ffi import GlideFFI as _GlideFFI_singleton
 
@@ -298,6 +300,51 @@ def create_address_resolver_callback(ffi, resolver_fn):
 
 
 _CREDENTIAL_CALLBACK_FAILURE = 0
+
+
+# A provider may execute synchronously on a native callback thread or
+# asynchronously on its client's owner runtime. Thread-local state identifies
+# the former without affecting other threads; ContextVar state identifies only
+# the owner task (and its children), so an unrelated owner-runtime task may
+# still close the client safely.
+_credential_provider_thread_state = threading.local()
+_credential_provider_task_state: contextvars.ContextVar[tuple[Any, ...]] = (
+    contextvars.ContextVar("glide_credential_provider_owners", default=())
+)
+
+
+def _push_thread_provider_owner(owner) -> None:
+    owners = getattr(_credential_provider_thread_state, "owners", ())
+    _credential_provider_thread_state.owners = owners + (owner,)
+
+
+def _pop_thread_provider_owner() -> None:
+    owners = _credential_provider_thread_state.owners
+    _credential_provider_thread_state.owners = owners[:-1]
+
+
+def _is_credential_provider_executing(owner) -> bool:
+    """Return whether this thread/task is inside ``owner``'s provider."""
+    thread_owners: tuple[Any, ...] = getattr(
+        _credential_provider_thread_state, "owners", ()
+    )
+    task_owners: tuple[Any, ...] = _credential_provider_task_state.get()
+    return any(item is owner for item in thread_owners) or any(
+        item is owner for item in task_owners
+    )
+
+
+async def _run_in_provider_task_context(owner, async_fn, *args):
+    """Run provider-owned awaitable work with a task-local reentrancy marker."""
+    token = _credential_provider_task_state.set(
+        _credential_provider_task_state.get() + (owner,)
+    )
+    try:
+        return await async_fn(*args)
+    finally:
+        _credential_provider_task_state.reset(token)
+
+
 _CREDENTIAL_CALLBACK_SUCCESS = 1
 _CREDENTIAL_CALLBACK_BUFFER_TOO_SMALL = 2
 _MAX_CREDENTIAL_BYTES = 1024 * 1024
@@ -309,22 +356,31 @@ class _AwaitableSchedulingError(RuntimeError):
     """An owner runtime rejected work before the awaitable was scheduled."""
 
 
-async def _await_credential_result(awaitable):
+async def _await_credential_result(awaitable, provider_owner):
     """Await one provider result with a deadline below the Rust deadline."""
     import anyio
 
-    with anyio.fail_after(_CREDENTIAL_INNER_TIMEOUT_SECONDS):
-        return await awaitable
+    async def await_result():
+        with anyio.fail_after(_CREDENTIAL_INNER_TIMEOUT_SECONDS):
+            return await awaitable
+
+    return await _run_in_provider_task_context(provider_owner, await_result)
 
 
-async def _call_async_credential_provider(provider):
+async def _call_async_credential_provider(provider, provider_owner):
     """Call an async provider on its owning async runtime."""
     import inspect
 
-    result = provider()
-    if not inspect.isawaitable(result):
-        return result
-    return await _await_credential_result(result)
+    import anyio
+
+    async def call_provider():
+        result = provider()
+        if not inspect.isawaitable(result):
+            return result
+        with anyio.fail_after(_CREDENTIAL_INNER_TIMEOUT_SECONDS):
+            return await result
+
+    return await _run_in_provider_task_context(provider_owner, call_provider)
 
 
 def _consume_bridge_completion(future) -> None:
@@ -421,27 +477,29 @@ def _run_coroutine_on_trio_loop(async_fn, args, trio_token):  # noqa: C901
         raise
 
 
-def _run_async_credential_provider(provider, event_loop, trio_token):
+def _run_async_credential_provider(provider, provider_owner, event_loop, trio_token):
     """Invoke a known async provider on its captured asyncio or Trio runtime."""
     if event_loop is not None:
         return _run_coroutine_on_asyncio_loop(
-            _call_async_credential_provider(provider), event_loop
+            _call_async_credential_provider(provider, provider_owner), event_loop
         )
     if trio_token is not None:
         return _run_coroutine_on_trio_loop(
-            _call_async_credential_provider, (provider,), trio_token
+            _call_async_credential_provider,
+            (provider, provider_owner),
+            trio_token,
         )
     raise RuntimeError(
         "Async credential providers require a running asyncio or Trio context"
     )
 
 
-def _run_awaitable_result(awaitable, event_loop, trio_token):
+def _run_awaitable_result(awaitable, provider_owner, event_loop, trio_token):
     """Await a result returned by a nominally synchronous provider."""
     if event_loop is not None:
         try:
             return _run_coroutine_on_asyncio_loop(
-                _await_credential_result(awaitable), event_loop
+                _await_credential_result(awaitable, provider_owner), event_loop
             )
         except _AwaitableSchedulingError:
             _dispose_awaitable(awaitable)
@@ -449,7 +507,9 @@ def _run_awaitable_result(awaitable, event_loop, trio_token):
     if trio_token is not None:
         try:
             return _run_coroutine_on_trio_loop(
-                _await_credential_result, (awaitable,), trio_token
+                _await_credential_result,
+                (awaitable, provider_owner),
+                trio_token,
             )
         except _AwaitableSchedulingError:
             _dispose_awaitable(awaitable)
@@ -477,6 +537,7 @@ def create_credential_provider_callback(
     event_loop=None,
     trio_token=None,
     allow_async=False,
+    provider_owner=None,
 ):
     """Create a native callback for a custom AWS credential provider.
 
@@ -518,6 +579,7 @@ def create_credential_provider_callback(
         session_token_len_ptr,
         expires_at_millis_ptr,
     ):
+        _push_thread_provider_owner(provider_owner)
         try:
             owner_loop = event_loop_ref() if event_loop_ref is not None else None
             if is_async_callable:
@@ -526,7 +588,10 @@ def create_credential_provider_callback(
                         "The sync client does not support async credential providers"
                     )
                 credentials = _run_async_credential_provider(
-                    credential_provider_fn, owner_loop, trio_token
+                    credential_provider_fn,
+                    provider_owner,
+                    owner_loop,
+                    trio_token,
                 )
             else:
                 credentials = credential_provider_fn()
@@ -538,7 +603,10 @@ def create_credential_provider_callback(
                             "use a synchronous provider or the async client"
                         )
                     credentials = _run_awaitable_result(
-                        credentials, owner_loop, trio_token
+                        credentials,
+                        provider_owner,
+                        owner_loop,
+                        trio_token,
                     )
 
             return _write_credentials_to_buffers(
@@ -562,6 +630,8 @@ def create_credential_provider_callback(
                 "IAM credential provider failed: %s", error
             )
             return _CREDENTIAL_CALLBACK_FAILURE
+        finally:
+            _pop_thread_provider_owner()
 
     return ffi.callback("CredentialProviderCallback", _credential_provider_callback)
 

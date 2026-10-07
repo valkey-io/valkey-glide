@@ -486,6 +486,12 @@ async def _run_cancelled_async_create(monkeypatch, cancel_timing):
     assert instance._core_client is None
     assert instance._credential_provider_callback_ref is None
     assert instance._address_resolver_callback_ref is None
+    with anyio.fail_after(2):
+        while (
+            fake_lib.free_connection_response.call_count != 1
+            or fake_lib.close_client.call_count != 1
+        ):
+            await anyio.sleep(0)
     fake_lib.free_connection_response.assert_called_once_with(fake_lib._response)
     fake_lib.close_client.assert_called_once_with(fake_lib._response.conn_ptr)
 
@@ -1047,3 +1053,318 @@ async def _run_post_scheduling_timeout_cleanup(monkeypatch):
 @pytest.mark.parametrize("backend", ["asyncio", "trio"])
 def test_post_scheduling_timeout_finalizes_on_owner_runtime(monkeypatch, backend):
     anyio.run(_run_post_scheduling_timeout_cleanup, monkeypatch, backend=backend)
+
+
+async def _wait_for_mock_calls(mock, count):
+    with anyio.fail_after(2):
+        while mock.call_count != count:
+            await anyio.sleep(0)
+
+
+def _patch_async_client(monkeypatch):
+    import glide.glide_client as async_client_module
+
+    ffi = GlideFFI.ffi
+    fake_lib = _FakeNativeLibrary(ffi, GlideFFI.lib)
+    monkeypatch.setattr(
+        async_client_module, "_ASYNC_FFI", SimpleNamespace(ffi=ffi, lib=fake_lib)
+    )
+    monkeypatch.setattr(
+        async_client_module.BaseClient, "_setup_pipe", lambda self: None
+    )
+    return async_client_module, ffi, fake_lib
+
+
+def test_raw_asyncio_task_cancel_during_create_closes_late_success(monkeypatch):
+    async_client_module, ffi, fake_lib = _patch_async_client(monkeypatch)
+    native_entered = threading.Event()
+    release_native = threading.Event()
+    captured_args = []
+
+    def native_create(*args):
+        captured_args.append(args)
+        native_entered.set()
+        assert release_native.wait(timeout=2)
+        return fake_lib._response
+
+    fake_lib.create_client.side_effect = native_create
+
+    async def run():
+        task = asyncio.create_task(
+            async_client_module.GlideClient.create(
+                _direct_client_config(lambda: AwsCredentials("access", "secret"))
+            )
+        )
+        with anyio.fail_after(2):
+            while not native_entered.is_set():
+                await anyio.sleep(0)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
+        # The native worker still strongly owns all callbacks after the caller
+        # has returned. Releasing create produces one response free and one
+        # abandoned-client close on that worker.
+        assert captured_args[0][5] != ffi.NULL
+        release_native.set()
+        await _wait_for_mock_calls(fake_lib.free_connection_response, 1)
+        await _wait_for_mock_calls(fake_lib.close_client, 1)
+
+    asyncio.run(run())
+    fake_lib.free_connection_response.assert_called_once_with(fake_lib._response)
+    fake_lib.close_client.assert_called_once_with(fake_lib._response.conn_ptr)
+
+
+def test_raw_asyncio_create_success_adopts_without_worker_close(monkeypatch):
+    async_client_module, _, fake_lib = _patch_async_client(monkeypatch)
+
+    async def run():
+        client = await asyncio.create_task(
+            async_client_module.GlideClient.create(_direct_client_config())
+        )
+        assert fake_lib.free_connection_response.call_count == 1
+        fake_lib.close_client.assert_not_called()
+        await client.close()
+
+    asyncio.run(run())
+    fake_lib.close_client.assert_called_once_with(fake_lib._response.conn_ptr)
+
+
+def test_raw_asyncio_create_cancel_result_races_have_one_owner(monkeypatch):
+    async_client_module, _, fake_lib = _patch_async_client(monkeypatch)
+    iterations = 20
+
+    async def run():
+        for index in range(iterations):
+            native_entered = threading.Event()
+            release_native = threading.Event()
+
+            def native_create(*args):
+                native_entered.set()
+                assert release_native.wait(timeout=2)
+                return fake_lib._response
+
+            fake_lib.create_client.side_effect = native_create
+            task = asyncio.create_task(
+                async_client_module.GlideClient.create(_direct_client_config())
+            )
+            with anyio.fail_after(2):
+                while not native_entered.is_set():
+                    await anyio.sleep(0)
+
+            loop = asyncio.get_running_loop()
+            if index % 2:
+                loop.call_soon(task.cancel)
+                loop.call_soon(release_native.set)
+            else:
+                loop.call_soon(release_native.set)
+                loop.call_soon(task.cancel)
+
+            try:
+                client = await task
+            except asyncio.CancelledError:
+                pass
+            else:
+                await client.close()
+
+            await _wait_for_mock_calls(fake_lib.free_connection_response, index + 1)
+            await _wait_for_mock_calls(fake_lib.close_client, index + 1)
+
+    asyncio.run(run())
+    assert fake_lib.free_connection_response.call_count == iterations
+    assert fake_lib.close_client.call_count == iterations
+
+
+def test_raw_asyncio_task_cancel_during_close_keeps_worker_ownership(monkeypatch):
+    async_client_module, _, fake_lib = _patch_async_client(monkeypatch)
+    native_entered = threading.Event()
+    release_native = threading.Event()
+
+    async def run():
+        client = await async_client_module.GlideClient.create(
+            _direct_client_config(lambda: AwsCredentials("access", "secret"))
+        )
+        callback_ref = client._credential_provider_callback_ref
+
+        def native_close(pointer):
+            native_entered.set()
+            assert release_native.wait(timeout=2)
+
+        fake_lib.close_client.side_effect = native_close
+        task = asyncio.create_task(client.close())
+        with anyio.fail_after(2):
+            while not native_entered.is_set():
+                await anyio.sleep(0)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        assert client._credential_provider_callback_ref is callback_ref
+
+        release_native.set()
+        await _wait_for_mock_calls(fake_lib.close_client, 1)
+        with anyio.fail_after(2):
+            while client._credential_provider_callback_ref is not None:
+                await anyio.sleep(0)
+        await client.close()
+
+    asyncio.run(run())
+    fake_lib.close_client.assert_called_once_with(fake_lib._response.conn_ptr)
+
+
+def test_async_close_worker_finishes_after_owner_loop_closes(monkeypatch):
+    async_client_module, _, fake_lib = _patch_async_client(monkeypatch)
+    native_entered = threading.Event()
+    release_native = threading.Event()
+    native_finished = threading.Event()
+
+    def native_close(pointer):
+        native_entered.set()
+        assert release_native.wait(timeout=2)
+        native_finished.set()
+
+    async def start_cancelled_close():
+        client = await async_client_module.GlideClient.create(
+            _direct_client_config(lambda: AwsCredentials("access", "secret"))
+        )
+        fake_lib.close_client.side_effect = native_close
+        task = asyncio.create_task(client.close())
+        while not native_entered.is_set():
+            await asyncio.sleep(0)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        return client
+
+    loop = asyncio.new_event_loop()
+    try:
+        client = loop.run_until_complete(start_cancelled_close())
+    finally:
+        loop.close()
+
+    assert client._credential_provider_callback_ref is not None
+    release_native.set()
+    assert native_finished.wait(timeout=2)
+    assert client._close_state.done.wait(timeout=2)
+    assert client._credential_provider_callback_ref is None
+    fake_lib.close_client.assert_called_once_with(fake_lib._response.conn_ptr)
+
+
+@pytest.mark.parametrize("backend", ["asyncio", "trio"])
+def test_async_native_close_error_is_shared_without_retry(monkeypatch, backend):
+    async_client_module, _, fake_lib = _patch_async_client(monkeypatch)
+
+    async def run():
+        client = await async_client_module.GlideClient.create(_direct_client_config())
+        fake_lib.close_client.side_effect = RuntimeError("native close failed")
+        with pytest.raises(RuntimeError, match="native close failed"):
+            await client.close()
+        with pytest.raises(RuntimeError, match="native close failed"):
+            await client.close()
+
+    anyio.run(run, backend=backend)
+    fake_lib.close_client.assert_called_once_with(fake_lib._response.conn_ptr)
+
+
+def test_sync_provider_reentrant_close_fails_fast(monkeypatch, caplog):
+    sync_client_module, _, fake_lib, _ = _patch_sync_client(monkeypatch)
+    captured = []
+    original_init = sync_client_module.GlideClient.__init__
+
+    def capture_instance(self, config):
+        original_init(self, config)
+        captured.append(self)
+
+    def provider():
+        captured[0].close()
+        return AwsCredentials("access", "secret")
+
+    def native_create(*args):
+        assert _invoke_callback(args[5])[0] == 0
+        return fake_lib._response
+
+    monkeypatch.setattr(sync_client_module.GlideClient, "__init__", capture_instance)
+    fake_lib.create_client.side_effect = native_create
+    with caplog.at_level("WARNING"):
+        client = sync_client_module.GlideClient.create(_direct_client_config(provider))
+
+    assert "Cannot close a client from its own credential provider" in caplog.text
+    assert not client._is_closed
+    client.close()
+    fake_lib.close_client.assert_called_once_with(fake_lib._response.conn_ptr)
+
+
+async def _run_async_provider_reentrant_close(monkeypatch, caplog):
+    async_client_module, _, fake_lib = _patch_async_client(monkeypatch)
+    captured = []
+    callback_status = []
+    original_init = async_client_module.GlideClient.__init__
+
+    def capture_instance(self, config):
+        original_init(self, config)
+        captured.append(self)
+
+    async def provider():
+        await anyio.sleep(0)
+        await captured[0].close()
+        return AwsCredentials("access", "secret")
+
+    def native_create(*args):
+        callback_status.append(_invoke_callback(args[5])[0])
+        return fake_lib._response
+
+    monkeypatch.setattr(async_client_module.GlideClient, "__init__", capture_instance)
+    fake_lib.create_client.side_effect = native_create
+    with caplog.at_level("WARNING"):
+        with anyio.fail_after(2):
+            client = await async_client_module.GlideClient.create(
+                _direct_client_config(provider)
+            )
+
+    assert callback_status == [0]
+    assert "Cannot close a client from its own credential provider" in caplog.text
+    assert not client._is_closed
+    await client.close()
+    fake_lib.close_client.assert_called_once_with(fake_lib._response.conn_ptr)
+
+
+@pytest.mark.parametrize("backend", ["asyncio", "trio"])
+def test_async_provider_reentrant_close_fails_fast(monkeypatch, caplog, backend):
+    anyio.run(
+        _run_async_provider_reentrant_close,
+        monkeypatch,
+        caplog,
+        backend=backend,
+    )
+
+
+def test_sync_refresh_provider_reentrant_close_does_not_wait_for_active_call(
+    monkeypatch, caplog
+):
+    sync_client_module, _, fake_lib, _ = _patch_sync_client(monkeypatch)
+    client_holder = []
+
+    def provider():
+        if client_holder:
+            client_holder[0].close()
+        return AwsCredentials("access", "secret")
+
+    client = sync_client_module.GlideClient.create(_direct_client_config(provider))
+    client_holder.append(client)
+    callback = fake_lib.create_client.call_args.args[5]
+
+    def native_refresh(*args):
+        assert _invoke_callback(callback)[0] == 0
+        raise RuntimeError("refresh stopped after provider failure")
+
+    fake_lib.refresh_iam_token.side_effect = native_refresh
+    started = time.monotonic()
+    with caplog.at_level("WARNING"):
+        with pytest.raises(RuntimeError, match="refresh stopped"):
+            client._refresh_iam_token()
+    assert time.monotonic() - started < 1
+    assert client._active_native_calls == 0
+    assert not client._is_closed
+    assert "Cannot close a client from its own credential provider" in caplog.text
+
+    client.close()
+    fake_lib.close_client.assert_called_once_with(fake_lib._response.conn_ptr)

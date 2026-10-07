@@ -260,8 +260,7 @@ class AsyncClientPool:
             client._callback_id_gen = __import__("itertools").count(1)
             client._lock = threading.Lock()
             client._close_lock = threading.Lock()
-            client._close_event = None
-            client._close_error = None
+            client._close_state = None
             client._address_resolver_callback_ref = None
             client._credential_provider_callback_ref = None
             client._is_asyncio = True

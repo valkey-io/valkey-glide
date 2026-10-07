@@ -62,6 +62,7 @@ from glide_shared.exceptions import (
 from glide_shared.ffi_helpers import (
     ENCODING,
     FFIClientTypeEnum,
+    _is_credential_provider_executing,
     convert_commands_to_c_batch_info,
     create_c_batch_options,
     create_credential_provider_callback,
@@ -544,6 +545,158 @@ async def _trio_pipe_reader(pipe_fd: int, token: object) -> None:
                 _async_pipe_registered = False
 
 
+class _NativeCreateState:
+    """Own one native create result until the caller adopts or abandons it."""
+
+    def __init__(self, ffi, lib, create_args, callback_refs) -> None:
+        self._ffi = ffi
+        self._lib = lib
+        self._create_args = create_args
+        self._callback_refs = callback_refs
+        self._lock = threading.Lock()
+        self._result_ready = threading.Event()
+        self._decision_ready = threading.Event()
+        self.cleanup_complete = threading.Event()
+        self._core_client = None
+        self._error_message: Optional[str] = None
+        self._exception: Optional[BaseException] = None
+        self._abandoned = False
+        self._adopted = False
+        self._thread = threading.Thread(target=self._run, daemon=True)
+
+    def start(self) -> None:
+        self._thread.start()
+
+    async def wait_and_adopt(self):
+        """Wait cancellably; cancellation leaves cleanup to the create worker."""
+        try:
+            await anyio.to_thread.run_sync(
+                self._result_ready.wait, abandon_on_cancel=True
+            )
+        except BaseException:
+            self.abandon()
+            raise
+
+        with self._lock:
+            if self._abandoned:
+                raise RuntimeError("Native client creation was abandoned")
+            core_client = self._core_client
+            error_message = self._error_message
+            exception = self._exception
+            if exception is None and error_message is None and core_client is not None:
+                self._adopted = True
+            else:
+                self._abandoned = True
+        self._decision_ready.set()
+
+        if exception is not None:
+            raise exception
+        if error_message is not None:
+            raise ClosingError(error_message)
+        if core_client is None:
+            raise ClosingError("Failed to create client, response pointer is NULL.")
+        return core_client
+
+    def abandon(self) -> None:
+        """Atomically choose worker cleanup unless the pointer was adopted."""
+        with self._lock:
+            if not self._adopted:
+                self._abandoned = True
+        self._decision_ready.set()
+
+    def _run(self) -> None:
+        response_ptr = self._ffi.NULL
+        core_client = None
+        error_message = None
+        exception = None
+        try:
+            try:
+                response_ptr = self._lib.create_client(*self._create_args)
+                if response_ptr == self._ffi.NULL:
+                    error_message = "Failed to create client, response pointer is NULL."
+                else:
+                    try:
+                        response = self._ffi.cast("ConnectionResponse*", response_ptr)
+                        if response.conn_ptr == self._ffi.NULL:
+                            error_message = (
+                                self._ffi.string(
+                                    response.connection_error_message
+                                ).decode(ENCODING)
+                                if response.connection_error_message != self._ffi.NULL
+                                else "Unknown error"
+                            )
+                        else:
+                            core_client = response.conn_ptr
+                    finally:
+                        # The worker is the sole owner of ConnectionResponse.
+                        self._lib.free_connection_response(response_ptr)
+            except BaseException as error:
+                exception = error
+
+            with self._lock:
+                self._core_client = core_client
+                self._error_message = error_message
+                self._exception = exception
+            self._result_ready.set()
+            self._decision_ready.wait()
+            with self._lock:
+                should_close = (
+                    self._abandoned
+                    and not self._adopted
+                    and self._core_client is not None
+                )
+                core_client = self._core_client if should_close else None
+                if should_close:
+                    self._core_client = None
+            if core_client is not None:
+                try:
+                    self._lib.close_client(core_client)
+                except BaseException:
+                    # There is no caller left to receive an abandoned-create
+                    # cleanup error; ownership has nevertheless been consumed.
+                    pass
+        finally:
+            self._callback_refs = ()
+            self._create_args = ()
+            self.cleanup_complete.set()
+
+
+class _NativeCloseState:
+    """Own native close and callbacks independently of an async event loop."""
+
+    def __init__(self, lib, core_client, callback_refs, release_refs) -> None:
+        self._lib = lib
+        self._core_client = core_client
+        self._callback_refs = callback_refs
+        self._release_refs = release_refs
+        self.done = threading.Event()
+        self.error: Optional[BaseException] = None
+        self._thread = threading.Thread(target=self._run, daemon=True)
+
+    def start(self) -> None:
+        self._thread.start()
+
+    def _run(self) -> None:
+        try:
+            self._lib.close_client(self._core_client)
+        except BaseException as error:
+            self.error = error
+        finally:
+            # This callback only mutates Python references and is safe after the
+            # owner loop has exited. Native close has already stopped callbacks.
+            self._release_refs()
+            self._release_refs = None
+            self._callback_refs = ()
+            self._core_client = None
+            self.done.set()
+
+    async def wait(self) -> None:
+        """Wait cancellably while native cleanup continues in the worker."""
+        await anyio.to_thread.run_sync(self.done.wait, abandon_on_cancel=True)
+        if self.error is not None:
+            raise self.error
+
+
 class BaseClient(CoreCommands):
     def __init__(self, config: BaseClientConfiguration):
         """To create a new client, use the `create` classmethod"""
@@ -560,8 +713,7 @@ class BaseClient(CoreCommands):
         self._callback_id_gen = itertools.count(1)
         self._lock = threading.Lock()
         self._close_lock = threading.Lock()
-        self._close_event: Optional[Any] = None
-        self._close_error: Optional[BaseException] = None
+        self._close_state: Optional[_NativeCloseState] = None
         self._address_resolver_callback_ref = None
         self._credential_provider_callback_ref = None
         self._pubsub_futures: List["TFuture"] = []
@@ -646,61 +798,42 @@ class BaseClient(CoreCommands):
             event_loop=self._loop,
             trio_token=trio_token,
             allow_async=True,
+            provider_owner=self,
         )
         if credential_provider is not None:
             self._credential_provider_callback_ref = credential_provider_callback
 
+        create_state = _NativeCreateState(
+            self._ffi,
+            self._lib,
+            (
+                conn_req_bytes,
+                len(conn_req_bytes),
+                client_type,
+                pubsub_callback,
+                address_resolver_callback,
+                credential_provider_callback,
+                self._pipe_client_id,
+            ),
+            (
+                client_type,
+                pubsub_callback,
+                address_resolver_callback,
+                credential_provider_callback,
+            ),
+        )
+        create_state.start()
+
         try:
-            # Native creation can synchronously request credentials. Shield the
-            # ownership transfer and wait for the worker even when the caller is
-            # cancelled, so Python always receives and frees ConnectionResponse.
-            with anyio.CancelScope(shield=True):
-                client_response_ptr = await anyio.to_thread.run_sync(
-                    self._lib.create_client,
-                    conn_req_bytes,
-                    len(conn_req_bytes),
-                    client_type,
-                    pubsub_callback,
-                    address_resolver_callback,
-                    credential_provider_callback,
-                    self._pipe_client_id,
-                    abandon_on_cancel=False,
-                )
+            # The native worker exclusively owns and frees ConnectionResponse.
+            # Cancellation only marks its result abandoned; a late successful
+            # pointer is closed by that same worker without using this runtime.
+            self._core_client = await create_state.wait_and_adopt()
 
-                if client_response_ptr == self._ffi.NULL:
-                    raise ClosingError(
-                        "Failed to create client, response pointer is NULL."
-                    )
-
-                try:
-                    client_response = self._ffi.cast(
-                        "ConnectionResponse*", client_response_ptr
-                    )
-                    if client_response.conn_ptr == self._ffi.NULL:
-                        error_msg = (
-                            self._ffi.string(
-                                client_response.connection_error_message
-                            ).decode(ENCODING)
-                            if client_response.connection_error_message
-                            != self._ffi.NULL
-                            else "Unknown error"
-                        )
-                        raise ClosingError(error_msg)
-                    self._core_client = client_response.conn_ptr
-                finally:
-                    self._lib.free_connection_response(client_response_ptr)
-
-            # Deliver cancellation only after ownership has moved out of the
-            # response. If it is pending, close the accepted native client while
-            # its callbacks are still retained, then release those references.
-            try:
-                await anyio.lowlevel.checkpoint()
-            except BaseException:
-                try:
-                    await self.close()
-                except BaseException:
-                    pass
-                raise
+            # Give pending AnyIO/Trio cancellation a delivery point before the
+            # initialized client escapes. Raw asyncio cancellation is handled by
+            # the same close-worker transfer in the exception path below.
+            await anyio.lowlevel.checkpoint()
 
             ClientLogger.log(
                 LogLevel.INFO, "connection info", "new connection established"
@@ -708,11 +841,14 @@ class BaseClient(CoreCommands):
             self._setup_pipe()
             return self
         except BaseException:
+            create_state.abandon()
             if self._core_client is not None and not self._is_closed:
                 try:
                     await self.close()
                 except BaseException:
-                    self._release_callback_references()
+                    # close() transfers ownership before its first await. A
+                    # cancelled waiter may return while native cleanup continues.
+                    pass
             else:
                 self._is_closed = True
                 self._release_callback_references()
@@ -1209,60 +1345,65 @@ class BaseClient(CoreCommands):
         self._credential_provider_callback_ref = None
 
     async def close(self, err_message: Optional[str] = None) -> None:
-        """Close once without blocking the asyncio or Trio owner runtime."""
+        """Close exactly once; cancelled waiters leave native cleanup running.
+
+        A caller cancelled after ownership transfer returns immediately with its
+        cancellation. The dedicated close worker still retains every callback,
+        performs native close, records any error for later close callers, and
+        releases references without requiring the owner event loop.
+        """
+        if _is_credential_provider_executing(self):
+            raise RuntimeError(
+                "Cannot close a client from its own credential provider callback"
+            )
+
         with self._close_lock:
-            if self._is_closed:
-                close_event = self._close_event
+            close_state = self._close_state
+            if close_state is not None:
                 owns_close = False
+            elif self._is_closed:
+                return
             else:
                 self._is_closed = True
-                close_event = anyio.Event()
-                self._close_event = close_event
                 core_client, self._core_client = self._core_client, None
+                if core_client is not None and self._create_pid == os.getpid():
+                    close_state = _NativeCloseState(
+                        self._lib,
+                        core_client,
+                        (
+                            self._pubsub_callback_ref,
+                            self._address_resolver_callback_ref,
+                            self._credential_provider_callback_ref,
+                        ),
+                        self._release_callback_references,
+                    )
+                    self._close_state = close_state
                 owns_close = True
 
-        if not owns_close:
-            if close_event is not None:
-                await close_event.wait()
-            if self._close_error is not None:
-                raise self._close_error
-            return
+        if owns_close:
+            err_message = "" if err_message is None else err_message
+            with self._lock:
+                for fut in self._pending_futures.values():
+                    if not fut.done():
+                        fut.set_exception(ClosingError(err_message))
+                self._pending_futures.clear()
 
-        assert close_event is not None
-        err_message = "" if err_message is None else err_message
-        with self._lock:
-            for fut in self._pending_futures.values():
-                if not fut.done():
-                    fut.set_exception(ClosingError(err_message))
-            self._pending_futures.clear()
+            with self._pubsub_lock:
+                for fut in self._pubsub_futures:
+                    if not fut.done():
+                        fut.set_exception(ClosingError(err_message))
+                self._pubsub_futures.clear()
 
-        with self._pubsub_lock:
-            for fut in self._pubsub_futures:
-                if not fut.done():
-                    fut.set_exception(ClosingError(err_message))
-            self._pubsub_futures.clear()
+            _client_registry.pop(getattr(self, "_pipe_client_id", 0), None)
+            if close_state is None:
+                # Fork-inherited or never-created clients have no native
+                # ownership to transfer.
+                self._release_callback_references()
+                return
+            close_state.start()
 
-        _client_registry.pop(getattr(self, "_pipe_client_id", 0), None)
-
-        try:
-            # Skip FFI close for a client inherited from another process (the
-            # Tokio runtime does not survive fork and dropping it would hang).
-            if core_client is not None and self._create_pid == os.getpid():
-                # Native shutdown can wait for a credential callback that must
-                # run on this owner runtime. Keep that runtime available and do
-                # not abandon pointer ownership if this task is cancelled.
-                with anyio.CancelScope(shield=True):
-                    await anyio.to_thread.run_sync(
-                        self._lib.close_client,
-                        core_client,
-                        abandon_on_cancel=False,
-                    )
-        except BaseException as error:
-            self._close_error = error
-            raise
-        finally:
-            self._release_callback_references()
-            close_event.set()
+        assert close_state is not None
+        await close_state.wait()
 
     async def aclose(self, err_message: Optional[str] = None) -> None:
         """Alias for close() for compatibility with async context managers."""

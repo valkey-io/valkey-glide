@@ -38,7 +38,10 @@ from glide_shared.exceptions import (
     RequestError,
     get_request_error_class,
 )
-from glide_shared.ffi_helpers import create_credential_provider_callback
+from glide_shared.ffi_helpers import (
+    _is_credential_provider_executing,
+    create_credential_provider_callback,
+)
 from glide_shared.opentelemetry import _create_batch_span, _create_command_span
 from glide_shared.protobuf.command_request_pb2 import RequestType
 from glide_shared.routes import (
@@ -327,7 +330,9 @@ class BaseClient(CoreCommands):
             address_resolver_callback_ref = address_resolver_callback
 
         credential_provider_callback = create_credential_provider_callback(
-            self._ffi, credential_provider
+            self._ffi,
+            credential_provider,
+            provider_owner=self,
         )
         credential_provider_callback_ref = (
             credential_provider_callback if credential_provider is not None else None
@@ -1206,6 +1211,11 @@ class BaseClient(CoreCommands):
         return self._handle_cmd_result(result)
 
     def close(self) -> None:
+        if _is_credential_provider_executing(self):
+            raise RuntimeError(
+                "Cannot close a client from its own credential provider callback"
+            )
+
         with self._client_condition:
             if self._is_closed:
                 while not self._close_complete:
