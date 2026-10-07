@@ -40,7 +40,8 @@ from glide_shared.exceptions import (
 )
 from glide_shared.ffi_helpers import (
     _create_native_client_finalizer,
-    _is_credential_provider_executing,
+    _is_native_callback_executing,
+    _native_callback_execution,
     _NativeClientOwner,
     create_address_resolver_callback,
     create_credential_provider_callback,
@@ -182,8 +183,7 @@ class BaseClient(CoreCommands):
         self._native_call_state = threading.local()
         self._active_native_calls = 0
         self._close_complete = False
-        self._deferred_close_owner: Optional[_NativeClientOwner] = None
-        self._deferred_close_pending = False
+        self._clear_callbacks_when_calls_complete = False
         self._needs_recreate_after_fork = False
         self._recreating_after_fork = False
         self._native_owner: Optional[_NativeClientOwner] = None
@@ -244,10 +244,10 @@ class BaseClient(CoreCommands):
                     self._active_native_calls += 1
                     return
                 if self._recreating_after_fork:
-                    if _is_credential_provider_executing(self):
+                    if _is_native_callback_executing(self):
                         raise RuntimeError(
                             "Cannot execute a client operation from its own "
-                            "credential provider callback"
+                            "native callback"
                         )
                     self._client_condition.wait()
                     continue
@@ -285,31 +285,17 @@ class BaseClient(CoreCommands):
 
     def _end_native_call(self) -> None:
         self._unpin_native_client_for_call()
-        owner: Optional[_NativeClientOwner] = None
-        finish_deferred_close = False
+        clear_callbacks = False
         with self._client_condition:
             self._active_native_calls -= 1
             if self._active_native_calls == 0:
-                if self._deferred_close_pending:
-                    owner, self._deferred_close_owner = (
-                        self._deferred_close_owner,
-                        None,
-                    )
-                    finish_deferred_close = True
+                if self._clear_callbacks_when_calls_complete:
+                    self._clear_callbacks_when_calls_complete = False
+                    clear_callbacks = True
                 self._client_condition.notify_all()
 
-        if finish_deferred_close:
-            try:
-                if owner is not None:
-                    owner.close()
-            finally:
-                self._clear_callback_references()
-                with self._client_condition:
-                    self._deferred_close_pending = False
-                    self._close_complete = True
-                    self._client_condition.notify_all()
-                with _live_sync_clients_lock:
-                    _live_sync_clients.discard(self)
+        if clear_callbacks:
+            self._clear_callback_references()
 
     def _detach_native_owner(self) -> Optional[_NativeClientOwner]:
         """Disarm GC cleanup and transfer its native ownership to the caller."""
@@ -331,14 +317,6 @@ class BaseClient(CoreCommands):
             _NativeClientOwner.disarm_after_fork(owner)
         if finalizer is not None:
             finalizer.detach()
-
-    def _disarm_deferred_close_after_fork(self) -> None:
-        """Drop deferred parent-process ownership without touching native state."""
-        owner = getattr(self, "_deferred_close_owner", None)
-        self._deferred_close_owner = None
-        self._deferred_close_pending = False
-        if owner is not None:
-            _NativeClientOwner.disarm_after_fork(owner)
 
     def _clear_callback_references(self) -> None:
         self._pubsub_callback_ref = None
@@ -368,12 +346,12 @@ class BaseClient(CoreCommands):
         self._client_condition = threading.Condition(self._client_lock)
         self._native_call_state = threading.local()
         self._active_native_calls = 0
+        self._clear_callbacks_when_calls_complete = False
         self._recreating_after_fork = False
         self._is_closed = was_closed
         self._close_complete = was_closed
         self._needs_recreate_after_fork = not was_closed
         BaseClient._disarm_native_owner_after_fork(self)
-        BaseClient._disarm_deferred_close_after_fork(self)
 
     def _create_core_client(self) -> None:  # noqa: C901
         # A closed parent must remain closed when its at-fork hook runs.
@@ -411,7 +389,11 @@ class BaseClient(CoreCommands):
         (
             address_resolver_callback,
             address_resolver_callback_owner,
-        ) = create_address_resolver_callback(self._ffi, self._config.address_resolver)
+        ) = create_address_resolver_callback(
+            self._ffi,
+            self._config.address_resolver,
+            native_callback_owner=self,
+        )
         address_resolver_callback_ref = (
             address_resolver_callback
             if self._config.address_resolver is not None
@@ -489,15 +471,32 @@ class BaseClient(CoreCommands):
                 pass
             raise
 
-        self._conn_req_bytes = conn_req_bytes
-        self._pubsub_callback_ref = pubsub_callback
-        self._address_resolver_callback_ref = address_resolver_callback_ref
-        self._address_resolver_callback_owner = address_resolver_callback_owner
-        self._credential_provider_callback_ref = credential_provider_callback_ref
-        self._credential_provider_callback_owner = credential_provider_callback_owner
-        self._core_client = core_client
-        self._native_owner = native_owner
-        self._native_finalizer = native_finalizer
+        with self._client_condition:
+            if self._is_closed:
+                publish_client = False
+            else:
+                self._conn_req_bytes = conn_req_bytes
+                self._pubsub_callback_ref = pubsub_callback
+                self._address_resolver_callback_ref = address_resolver_callback_ref
+                self._address_resolver_callback_owner = address_resolver_callback_owner
+                self._credential_provider_callback_ref = (
+                    credential_provider_callback_ref
+                )
+                self._credential_provider_callback_owner = (
+                    credential_provider_callback_owner
+                )
+                self._core_client = core_client
+                self._native_owner = native_owner
+                self._native_finalizer = native_finalizer
+                publish_client = True
+
+        if not publish_client:
+            native_finalizer.detach()
+            try:
+                native_owner.close()
+            except BaseException:
+                pass
+            raise ClosingError("Client was closed during native creation.")
 
         # Scope prewarm is deferred to first scoped_connection() call to avoid
         # extra startup connections and preserve lazy-connection semantics.
@@ -558,16 +557,14 @@ class BaseClient(CoreCommands):
                         message=message, channel=channel, pattern=pattern
                     )
 
-                    # This aquires the underlying `_pubsub_lock` and allows for calling `notify()` on the variable
-                    # If a callback is registered, call it with the message and the provided context
-                    # Otherwise, append the message to the queue and notify threads that are waiting for a message.
-                    with client._pubsub_condition:
-                        user_callback, context = (
-                            client._config._get_pubsub_callback_and_context()
-                        )
-                        if user_callback:
+                    user_callback, context = (
+                        client._config._get_pubsub_callback_and_context()
+                    )
+                    if user_callback:
+                        with _native_callback_execution(client):
                             user_callback(pubsub_msg, context)
-                        else:
+                    else:
+                        with client._pubsub_condition:
                             client._pubsub_queue.append(pubsub_msg)
                             client._pubsub_condition.notify()
                 elif message_kind in [
@@ -1331,14 +1328,11 @@ class BaseClient(CoreCommands):
         return self._handle_cmd_result(result)
 
     def close(self) -> None:
-        if _is_credential_provider_executing(self):
-            raise RuntimeError(
-                "Cannot close a client from its own credential provider callback"
-            )
-
         owner: Optional[_NativeClientOwner] = None
-        deferred = False
+        retain_callbacks = False
         with self._client_condition:
+            if _is_native_callback_executing(self):
+                raise RuntimeError("Cannot close a client from its own native callback")
             while self._recreating_after_fork and not self._is_closed:
                 self._client_condition.wait()
             if self._is_closed:
@@ -1362,29 +1356,23 @@ class BaseClient(CoreCommands):
                     os.getpid(),
                 )
 
-            if self._active_native_calls:
-                self._deferred_close_owner = owner
-                self._deferred_close_pending = True
-                owner = None
-                deferred = True
+            retain_callbacks = self._active_native_calls > 0
+            self._clear_callbacks_when_calls_complete = retain_callbacks
 
-        if not deferred:
-            with _live_sync_clients_lock:
-                _live_sync_clients.discard(self)
-        with self._pubsub_condition:
-            self._pubsub_condition.notify_all()
-
-        if deferred:
-            return
+        with _live_sync_clients_lock:
+            _live_sync_clients.discard(self)
 
         try:
             if owner is not None:
                 owner.close()
         finally:
-            self._clear_callback_references()
+            if not retain_callbacks:
+                self._clear_callback_references()
             with self._client_condition:
                 self._close_complete = True
                 self._client_condition.notify_all()
+            with self._pubsub_condition:
+                self._pubsub_condition.notify_all()
 
     def __enter__(self) -> Self:
         return self

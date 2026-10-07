@@ -6,8 +6,9 @@ import contextvars
 import os
 import threading
 import weakref
+from contextlib import contextmanager
 from enum import IntEnum
-from typing import Any
+from typing import Any, Iterator
 
 from glide_shared._glide_ffi import GlideFFI as _GlideFFI_singleton
 
@@ -15,8 +16,23 @@ from glide_shared._glide_ffi import GlideFFI as _GlideFFI_singleton
 class _AddressResolverCallbackOwner:
     """Keep a user resolver alive without making its CFFI callback own it."""
 
-    def __init__(self, resolver: Any) -> None:
+    def __init__(self, resolver: Any, native_callback_owner: Any = None) -> None:
         self.resolver = resolver
+        try:
+            self.native_callback_owner_ref = (
+                weakref.ref(native_callback_owner)
+                if native_callback_owner is not None
+                else None
+            )
+        except TypeError:
+            self.native_callback_owner_ref = None
+
+    def native_callback_owner(self) -> Any:
+        return (
+            self.native_callback_owner_ref()
+            if self.native_callback_owner_ref is not None
+            else None
+        )
 
 
 class _CredentialProviderCallbackOwner:
@@ -380,7 +396,7 @@ def create_c_batch_options(
     return batch_options, route_refs + [batch_options]
 
 
-def create_address_resolver_callback(ffi, resolver_fn):
+def create_address_resolver_callback(ffi, resolver_fn, *, native_callback_owner=None):
     """Create a resolver trampoline and its separately retained callable owner.
 
     The CFFI callback captures only a weak reference to the owner. Callers must
@@ -391,7 +407,7 @@ def create_address_resolver_callback(ffi, resolver_fn):
     if resolver_fn is None:
         return ffi.cast("AddressResolverCallback", ffi.NULL), None
 
-    callback_owner = _AddressResolverCallbackOwner(resolver_fn)
+    callback_owner = _AddressResolverCallbackOwner(resolver_fn, native_callback_owner)
     callback_owner_ref = weakref.ref(callback_owner)
 
     def _address_resolver_callback(
@@ -408,7 +424,8 @@ def create_address_resolver_callback(ffi, resolver_fn):
             return 0
         try:
             host = ffi.buffer(host_ptr, host_len)[:].decode(ENCODING)
-            resolved_host, resolved_port = owner.resolver(host, port)
+            with _native_callback_execution(owner.native_callback_owner()):
+                resolved_host, resolved_port = owner.resolver(host, port)
             encoded_host = resolved_host.encode(ENCODING)
             write_len = min(len(encoded_host), resolved_host_buf_len)
             ffi.memmove(resolved_host_buf, encoded_host, write_len)
@@ -430,34 +447,46 @@ def create_address_resolver_callback(ffi, resolver_fn):
 _CREDENTIAL_CALLBACK_FAILURE = 0
 
 
-# A provider may execute synchronously on a native callback thread or
-# asynchronously on its client's owner runtime. Thread-local state identifies
-# the former without affecting other threads; ContextVar state identifies only
-# the owner task (and its children), so an unrelated owner-runtime task may
-# still close the client safely.
-_credential_provider_thread_state = threading.local()
+# Native callbacks may execute synchronously on a foreign runtime thread.
+# Track the client whose user callback is executing so lifecycle operations on
+# that same client fail fast, without affecting unrelated threads or clients.
+_native_callback_thread_state = threading.local()
 _credential_provider_task_state: contextvars.ContextVar[tuple[Any, ...]] = (
     contextvars.ContextVar("glide_credential_provider_owners", default=())
 )
 
 
-def _push_thread_provider_owner(owner) -> None:
-    owners = getattr(_credential_provider_thread_state, "owners", ())
-    _credential_provider_thread_state.owners = owners + (owner,)
+@contextmanager
+def _native_callback_execution(owner: Any) -> Iterator[None]:
+    """Mark user callback execution for ``owner`` on the current thread."""
+    if owner is None:
+        yield
+        return
+
+    owners = getattr(_native_callback_thread_state, "owners", ())
+    _native_callback_thread_state.owners = owners + (owner,)
+    try:
+        yield
+    finally:
+        current_owners = _native_callback_thread_state.owners
+        if len(current_owners) == 1:
+            del _native_callback_thread_state.owners
+        else:
+            _native_callback_thread_state.owners = current_owners[:-1]
 
 
-def _pop_thread_provider_owner() -> None:
-    owners = _credential_provider_thread_state.owners
-    _credential_provider_thread_state.owners = owners[:-1]
+def _is_native_callback_executing(owner: Any) -> bool:
+    """Return whether this thread is inside ``owner``'s native callback."""
+    thread_owners: tuple[Any, ...] = getattr(
+        _native_callback_thread_state, "owners", ()
+    )
+    return any(item is owner for item in thread_owners)
 
 
 def _is_credential_provider_executing(owner) -> bool:
     """Return whether this thread/task is inside ``owner``'s provider."""
-    thread_owners: tuple[Any, ...] = getattr(
-        _credential_provider_thread_state, "owners", ()
-    )
     task_owners: tuple[Any, ...] = _credential_provider_task_state.get()
-    return any(item is owner for item in thread_owners) or any(
+    return _is_native_callback_executing(owner) or any(
         item is owner for item in task_owners
     )
 
@@ -786,50 +815,50 @@ def create_credential_provider_callback(
             return _CREDENTIAL_CALLBACK_FAILURE
         provider = owner.provider
         provider_marker = owner.provider_owner()
-        _push_thread_provider_owner(provider_marker)
         try:
-            owner_loop = owner.event_loop()
-            if owner.is_async_callable:
-                if not owner.allow_async:
-                    raise TypeError(
-                        "The sync client does not support async credential providers"
-                    )
-                credentials = _run_async_credential_provider(
-                    provider,
-                    provider_marker,
-                    owner_loop,
-                    owner.trio_token,
-                )
-            else:
-                credentials = provider()
-                if inspect.isawaitable(credentials):
+            with _native_callback_execution(provider_marker):
+                owner_loop = owner.event_loop()
+                if owner.is_async_callable:
                     if not owner.allow_async:
-                        _dispose_awaitable(credentials)
                         raise TypeError(
-                            "The sync credential provider returned an awaitable; "
-                            "use a synchronous provider or the async client"
+                            "The sync client does not support async credential providers"
                         )
-                    credentials = _run_awaitable_result(
-                        credentials,
+                    credentials = _run_async_credential_provider(
+                        provider,
                         provider_marker,
                         owner_loop,
                         owner.trio_token,
                     )
+                else:
+                    credentials = provider()
+                    if inspect.isawaitable(credentials):
+                        if not owner.allow_async:
+                            _dispose_awaitable(credentials)
+                            raise TypeError(
+                                "The sync credential provider returned an awaitable; "
+                                "use a synchronous provider or the async client"
+                            )
+                        credentials = _run_awaitable_result(
+                            credentials,
+                            provider_marker,
+                            owner_loop,
+                            owner.trio_token,
+                        )
 
-            return _write_credentials_to_buffers(
-                ffi,
-                credentials,
-                access_key_id_buf,
-                access_key_id_buf_len,
-                access_key_id_len_ptr,
-                secret_access_key_buf,
-                secret_access_key_buf_len,
-                secret_access_key_len_ptr,
-                session_token_buf,
-                session_token_buf_len,
-                session_token_len_ptr,
-                expires_at_millis_ptr,
-            )
+                return _write_credentials_to_buffers(
+                    ffi,
+                    credentials,
+                    access_key_id_buf,
+                    access_key_id_buf_len,
+                    access_key_id_len_ptr,
+                    secret_access_key_buf,
+                    secret_access_key_buf_len,
+                    secret_access_key_len_ptr,
+                    session_token_buf,
+                    session_token_buf_len,
+                    session_token_len_ptr,
+                    expires_at_millis_ptr,
+                )
         except BaseException as error:
             import logging
 
@@ -837,8 +866,6 @@ def create_credential_provider_callback(
                 "IAM credential provider failed: %s", error
             )
             return _CREDENTIAL_CALLBACK_FAILURE
-        finally:
-            _pop_thread_provider_owner()
 
     callback = ffi.callback("CredentialProviderCallback", _credential_provider_callback)
     return callback, callback_owner

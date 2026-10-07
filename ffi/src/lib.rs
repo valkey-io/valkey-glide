@@ -32,15 +32,17 @@ use redis::cluster_routing::{
 use redis::{ClusterScanArgs, RedisError};
 use redis::{Cmd, Pipeline, PipelineRetryStrategy, RedisResult, Value};
 use std::borrow::Cow;
+use std::collections::HashMap;
 use std::ffi::CStr;
-use std::future::Future;
+use std::future::{Future, poll_fn};
 use std::mem::ManuallyDrop;
+use std::pin::Pin;
 use std::slice::from_raw_parts;
 use std::str;
 use std::str::FromStr;
-use std::sync::Arc;
-use std::sync::Condvar;
-use std::sync::atomic::AtomicU32;
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
+use std::sync::{Arc, Condvar, Mutex};
+use std::task::{Context, Poll, Waker};
 use std::{
     ffi::{CString, c_void},
     os::raw::{c_char, c_double, c_long, c_ulong},
@@ -1739,7 +1741,81 @@ fn create_pipe_writer(pipe_write_fd: i32) -> &'static SharedPipeWriter {
             }
         })
         .expect("flush thread");
+
     w_ref
+}
+
+#[derive(Default)]
+struct SyncClientShutdown {
+    closed: AtomicBool,
+    next_waiter_id: AtomicU64,
+    waiters: Mutex<HashMap<u64, Waker>>,
+}
+
+impl SyncClientShutdown {
+    fn cancelled(self: &Arc<Self>) -> SyncClientShutdownFuture {
+        SyncClientShutdownFuture {
+            shutdown: self.clone(),
+            waiter_id: None,
+        }
+    }
+
+    fn close(&self) {
+        if self.closed.swap(true, Ordering::AcqRel) {
+            return;
+        }
+        let waiters = {
+            let mut waiters = self.waiters.lock().unwrap_or_else(|err| err.into_inner());
+            std::mem::take(&mut *waiters)
+        };
+        for waker in waiters.into_values() {
+            waker.wake();
+        }
+    }
+}
+
+struct SyncClientShutdownFuture {
+    shutdown: Arc<SyncClientShutdown>,
+    waiter_id: Option<u64>,
+}
+
+impl Future for SyncClientShutdownFuture {
+    type Output = ();
+
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        if self.shutdown.closed.load(Ordering::Acquire) {
+            return Poll::Ready(());
+        }
+
+        let waiter_id = self
+            .waiter_id
+            .unwrap_or_else(|| self.shutdown.next_waiter_id.fetch_add(1, Ordering::Relaxed));
+        {
+            let mut waiters = self
+                .shutdown
+                .waiters
+                .lock()
+                .unwrap_or_else(|err| err.into_inner());
+            if self.shutdown.closed.load(Ordering::Acquire) {
+                return Poll::Ready(());
+            }
+            waiters.insert(waiter_id, cx.waker().clone());
+        }
+        self.waiter_id = Some(waiter_id);
+        Poll::Pending
+    }
+}
+
+impl Drop for SyncClientShutdownFuture {
+    fn drop(&mut self) {
+        if let Some(waiter_id) = self.waiter_id {
+            self.shutdown
+                .waiters
+                .lock()
+                .unwrap_or_else(|err| err.into_inner())
+                .remove(&waiter_id);
+        }
+    }
 }
 
 /// A `GlideClient` adapter.
@@ -1751,6 +1827,8 @@ fn create_pipe_writer(pipe_write_fd: i32) -> &'static SharedPipeWriter {
 pub struct ClientAdapter {
     runtime: ManuallyDrop<Runtime>,
     pipe_client_id: std::sync::atomic::AtomicU64,
+    /// Signals active synchronous requests to stop waiting during explicit close.
+    sync_shutdown: Arc<SyncClientShutdown>,
     /// Background runtime for spawned tasks (connection drivers, reconnection, cluster manager).
     /// Only used by sync clients with current_thread main runtime — tokio::spawn calls during
     /// client creation are directed here via _guard so they run independently of block_on.
@@ -1885,9 +1963,20 @@ impl ClientAdapter {
                     .background_runtime
                     .as_ref()
                     .map(|rt| rt.handle().clone());
+                let mut shutdown = Box::pin(self.sync_shutdown.cancelled());
+                let mut request_future = Box::pin(request_future);
                 let result = self.runtime.block_on(async {
                     let _guard = bg.as_ref().map(|h| h.enter());
-                    request_future.await
+                    poll_fn(move |cx| {
+                        if shutdown.as_mut().poll(cx).is_ready() {
+                            return Poll::Ready(Err(RedisError::from((
+                                ErrorKind::ClientError,
+                                "Client closed",
+                            ))));
+                        }
+                        request_future.as_mut().poll(cx)
+                    })
+                    .await
                 });
                 Self::handle_result(result, None, None, request_id, response_buf, false)
             }
@@ -2397,9 +2486,11 @@ fn create_client_internal(
         client_type,
     });
     let pubsub_callback_store = Arc::new(std::sync::RwLock::new(pubsub_callback));
+    let sync_shutdown = Arc::new(SyncClientShutdown::default());
     let client_adapter = Arc::new(ClientAdapter {
         runtime: ManuallyDrop::new(runtime),
         pipe_client_id: std::sync::atomic::AtomicU64::new(client_id as u64),
+        sync_shutdown,
         background_runtime: ManuallyDrop::new(background_runtime),
         core,
         pubsub_callback: pubsub_callback_store.clone(),
@@ -3667,6 +3758,12 @@ fn apply_json_options(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn close_client(client_adapter_ptr: *const c_void) {
     assert!(!client_adapter_ptr.is_null());
+
+    // Wake synchronous callers before releasing the original Arc. Active FFI
+    // calls hold their own Arc and would otherwise keep both runtimes and all
+    // connections alive indefinitely for commands such as XREAD BLOCK 0.
+    let client_adapter = unsafe { &*(client_adapter_ptr as *const ClientAdapter) };
+    client_adapter.sync_shutdown.close();
 
     // Clean up scope pool and registry for this client (if any)
     #[cfg(feature = "pool-support")]

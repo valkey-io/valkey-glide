@@ -283,8 +283,7 @@ class ClientPool:
             client._native_call_state = threading.local()
             client._active_native_calls = 0
             client._close_complete = False
-            client._deferred_close_owner = None
-            client._deferred_close_pending = False
+            client._clear_callbacks_when_calls_complete = False
             client._needs_recreate_after_fork = False
             client._recreating_after_fork = False
             client._native_owner = None
