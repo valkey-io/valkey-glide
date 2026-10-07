@@ -251,9 +251,6 @@ struct WorkerPoolState {
 
 static WORKER_POOL_STATE: OnceLock<PLMutex2<WorkerPoolState>> = OnceLock::new();
 
-/// Global counter for unique client IDs (used for scope registry).
-static NEXT_CLIENT_ID: AtomicU64 = AtomicU64::new(1);
-
 fn get_worker_pool_state() -> &'static PLMutex2<WorkerPoolState> {
     WORKER_POOL_STATE.get_or_init(|| {
         PLMutex2::new(WorkerPoolState {
@@ -873,8 +870,7 @@ pub(crate) async fn create_handle_for_client(
         drop(command_tx);
 
         let inflight_counter = Arc::new(AtomicIsize::new(inflight_requests_limit));
-        let client_id =
-            provided_client_id.unwrap_or_else(|| NEXT_CLIENT_ID.fetch_add(1, Ordering::Relaxed));
+        let client_id = provided_client_id.unwrap_or_else(glide_core::pool::allocate_client_id);
 
         // Register client in the scope registry.
         glide_core::scope::register_client(client_id, client.clone());
@@ -1380,7 +1376,7 @@ pub fn create_direct_client<'a>(
         drop(command_tx);
 
         let inflight_counter = Arc::new(AtomicIsize::new(inflight_requests_limit));
-        let client_id = NEXT_CLIENT_ID.fetch_add(1, Ordering::Relaxed);
+        let client_id = glide_core::pool::allocate_client_id();
 
         // Register client in scope registry so scoped connections can find
         // their parent client for compression, timeout, IAM, and CB checks.
@@ -3640,7 +3636,7 @@ mod credential_provider_tests {
 
     #[tokio::test]
     async fn undelivered_direct_handle_drop_unregisters_client() {
-        let client_id = NEXT_CLIENT_ID.fetch_add(1, Ordering::Relaxed);
+        let client_id = glide_core::pool::allocate_client_id();
         let client = lazy_client(ConnectionRequest::default()).await;
         glide_core::scope::register_client(client_id, client);
 
@@ -3651,7 +3647,7 @@ mod credential_provider_tests {
 
     #[tokio::test]
     async fn explicit_close_then_drop_unregisters_direct_client_once() {
-        let client_id = NEXT_CLIENT_ID.fetch_add(1, Ordering::Relaxed);
+        let client_id = glide_core::pool::allocate_client_id();
         let client = lazy_client(ConnectionRequest::default()).await;
         glide_core::scope::register_client(client_id, client);
         let mut handle = test_handle(client_id, true);
@@ -3664,7 +3660,7 @@ mod credential_provider_tests {
 
     #[tokio::test]
     async fn pool_handle_drop_preserves_pool_owned_client() {
-        let client_id = NEXT_CLIENT_ID.fetch_add(1, Ordering::Relaxed);
+        let client_id = glide_core::pool::allocate_client_id();
         let client = lazy_client(ConnectionRequest::default()).await;
         glide_core::scope::register_client(client_id, client);
 
@@ -3697,7 +3693,7 @@ mod credential_provider_tests {
             .expect("provider should be claimable")
             .expect("explicit key should create a claim");
         let client = lazy_client(request).await;
-        let client_id = NEXT_CLIENT_ID.fetch_add(1, Ordering::Relaxed);
+        let client_id = glide_core::pool::allocate_client_id();
         glide_core::scope::register_client(client_id, client.clone());
         let handle = test_handle(client_id, true);
 

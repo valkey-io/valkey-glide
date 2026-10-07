@@ -10,6 +10,7 @@ import {
     ClientPool,
     GlideClient,
     GlideClientConfiguration,
+    IsolatedScope,
     ServiceType,
 } from "..";
 import * as native from "../build-ts/native";
@@ -40,6 +41,81 @@ async function waitForIdle(
 
     while (pool.idleCount < minIdle && Date.now() < deadline) {
         await new Promise((r) => setTimeout(r, 50));
+    }
+}
+
+async function verifyDirectPoolCoexistence(
+    standaloneConfig: GlideClientConfiguration,
+    poolFirst: boolean,
+): Promise<void> {
+    const key = makeKey(false, poolFirst ? "pool-first" : "direct-first");
+    const poolClientConfig: GlideClientConfiguration = {
+        ...standaloneConfig,
+        databaseId: 0,
+    };
+    const directClientConfig: GlideClientConfiguration = {
+        ...standaloneConfig,
+        databaseId: 5,
+    };
+    let pool: ClientPool | undefined;
+    let directClient: GlideClient | undefined;
+
+    try {
+        if (poolFirst) {
+            pool = await ClientPool.create(poolClientConfig, {
+                maxSize: 1,
+                minIdle: 1,
+            });
+            await waitForIdle(pool);
+            directClient = await GlideClient.createClient(directClientConfig);
+        } else {
+            directClient = await GlideClient.createClient(directClientConfig);
+            pool = await ClientPool.create(poolClientConfig, {
+                maxSize: 1,
+                minIdle: 1,
+            });
+            await waitForIdle(pool);
+        }
+
+        await directClient.set(key, "direct-db-5");
+        const pooledClient = await pool.acquire();
+
+        try {
+            expect(pooledClient.getClientId()).not.toBe(
+                directClient.getClientId(),
+            );
+            expect(await pooledClient.get(key)).toBeNull();
+            await pooledClient.set(key, "pool-db-0");
+            expect(await directClient.get(key)).toBe("direct-db-5");
+        } finally {
+            await pool.release(pooledClient);
+        }
+
+        await directClient.del([key]);
+        directClient.close();
+        directClient = undefined;
+
+        const reacquiredClient = await pool.acquire();
+
+        try {
+            expect(await reacquiredClient.get(key)).toBe("pool-db-0");
+
+            const { bytes } = GlideClient.serializeConfig(poolClientConfig);
+            const scope = await IsolatedScope.acquire(reacquiredClient, bytes);
+
+            try {
+                expect(await scope.ping()).toBe("PONG");
+            } finally {
+                scope.release();
+            }
+
+            await reacquiredClient.del([key]);
+        } finally {
+            await pool.release(reacquiredClient);
+        }
+    } finally {
+        directClient?.close();
+        pool?.close();
     }
 }
 
@@ -102,6 +178,22 @@ describe("ClientPool", () => {
 
     // Build parameterized modes dynamically inside the describe
     describe("standalone mode", () => {
+        it(
+            "keeps pool ownership when a direct client is created second",
+            async () => {
+                await verifyDirectPoolCoexistence(standaloneConfig, true);
+            },
+            TIMEOUT,
+        );
+
+        it(
+            "keeps direct ownership when a pool client is created second",
+            async () => {
+                await verifyDirectPoolCoexistence(standaloneConfig, false);
+            },
+            TIMEOUT,
+        );
+
         it(
             "create pool and warmup",
             async () => {
