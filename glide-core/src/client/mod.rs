@@ -2630,12 +2630,12 @@ async fn create_cluster_client(
     }
 
     let retry_strategy = match request.connection_retry_strategy {
-        Some(strategy) => RetryStrategy::new(
+        Some(strategy) => RetryStrategy::try_new(
             strategy.exponent_base,
             strategy.factor,
             strategy.number_of_retries,
             strategy.jitter_percent,
-        ),
+        )?,
         None => RetryStrategy::default(),
     };
     builder = builder.reconnect_retry_strategy(retry_strategy);
@@ -2936,6 +2936,20 @@ impl Client {
         }
         if let Some(lib_ver) = request.lib_ver.as_deref() {
             validate_effective_lib_ver(lib_ver).map_err(ConnectionError::Configuration)?;
+        }
+        if let Some(strategy) = &request.connection_retry_strategy {
+            RetryStrategy::try_new(
+                strategy.exponent_base,
+                strategy.factor,
+                strategy.number_of_retries,
+                strategy.jitter_percent,
+            )
+            .map_err(|err| {
+                ConnectionError::Configuration(match err.detail() {
+                    Some(detail) => format!("invalid reconnect strategy: {detail}"),
+                    None => err.to_string(),
+                })
+            })?;
         }
 
         // Add buffer to connection_timeout to allow inner connection logic to fully execute before the outer timeout triggers
@@ -3608,7 +3622,9 @@ mod tests {
 
     use redis::Cmd;
 
-    use crate::client::types::{ConnectionRequest, NodeAddress, OTelMetadata};
+    use crate::client::types::{
+        ConnectionRequest, ConnectionRetryStrategy, NodeAddress, OTelMetadata,
+    };
     use crate::client::{
         BLOCKING_CMD_TIMEOUT_EXTENSION, ClientShared, RequestTimeoutOption, TimeUnit,
         get_request_timeout, is_blocking_command, is_blocking_command_name,
@@ -3759,6 +3775,49 @@ mod tests {
 
         assert!(matches!(error, ConnectionError::Configuration(_)));
         assert!(error.to_string().contains("library version"));
+    }
+
+    #[tokio::test]
+    async fn test_new_rejects_jitter_above_max_before_client_creation() {
+        for cluster_mode_enabled in [false, true] {
+            for lazy_connect in [true, false] {
+                let request = ConnectionRequest {
+                    addresses: vec![NodeAddress {
+                        host: "127.0.0.1".to_string(),
+                        port: 1,
+                    }],
+                    cluster_mode_enabled,
+                    lazy_connect,
+                    connection_retry_strategy: Some(ConnectionRetryStrategy {
+                        exponent_base: 2,
+                        factor: 100,
+                        number_of_retries: 3,
+                        jitter_percent: Some(101),
+                    }),
+                    ..Default::default()
+                };
+
+                let error = match Client::new(request, None).await {
+                    Ok(_) => panic!(
+                        "jitter 101 should fail client creation (cluster: {cluster_mode_enabled}, lazy: {lazy_connect})"
+                    ),
+                    Err(error) => error,
+                };
+
+                assert!(
+                    matches!(error, ConnectionError::Configuration(_)),
+                    "unexpected error (cluster: {cluster_mode_enabled}, lazy: {lazy_connect}): {error:?}"
+                );
+                let message = error.to_string();
+                assert!(
+                    message.contains(
+                        "invalid reconnect strategy: jitter_percent must be between 0 and 100, got 101"
+                    ),
+                    "{message}"
+                );
+                assert!(!message.contains("InvalidClientConfig"), "{message}");
+            }
+        }
     }
 
     #[test]
