@@ -5,15 +5,14 @@
  * Parameterized over cluster/standalone for parity with Java/Python/Go.
  */
 
-import { afterAll, beforeAll, describe, expect, it } from "@jest/globals";
+import { afterAll, beforeAll, describe, expect, it, jest } from "@jest/globals";
 import {
     ClientPool,
     GlideClient,
     GlideClientConfiguration,
     ServiceType,
-    registerCredentialProvider,
-    removeCredentialProvider,
 } from "..";
+import * as native from "../build-ts/native";
 import { ValkeyCluster } from "../../utils/TestUtils.js";
 import {
     getClientConfigurationOption,
@@ -474,35 +473,54 @@ describe("ClientPool", () => {
     });
 });
 
-describe("Pool credential provider", () => {
-    it("registers and removes credential provider key", () => {
-        // registerCredentialProvider returns a UUID key string
-        const provider = () => ({
-            accessKeyId: "AKID",
-            secretAccessKey: "SECRET",
-        });
-        const key = registerCredentialProvider(provider);
-        expect(typeof key).toBe("string");
-        expect(key.length).toBeGreaterThan(0);
-        // Cleanup
-        removeCredentialProvider(key);
-    });
+describe("Pool credential provider guard", () => {
+    const expectedError =
+        "Pool clients cannot use a custom IAM credentials provider. " +
+        "Configure IAM without a credentialProvider to use the default AWS credential chain.";
 
-    it("sets credentialProviderKey on connection request when IamAuthConfig has provider", () => {
-        // Verify that the IamAuthConfig wiring holds the credential provider
-        // This is a TypeScript-level check on the IamAuthConfig structure
-        const provider = () => ({
-            accessKeyId: "AKID",
-            secretAccessKey: "SECRET",
-        });
-        const iamConfig = {
-            clusterName: "my-cluster",
-            service: ServiceType.Elasticache,
-            region: "us-east-1",
-            credentialProvider: provider,
-        };
-        // The provider is set on IamAuthConfig
-        expect(iamConfig.credentialProvider).toBeDefined();
-        expect(typeof iamConfig.credentialProvider).toBe("function");
-    });
+    it.each([
+        ["standalone", false],
+        ["cluster", true],
+    ])(
+        "rejects %s custom providers before calling native createPool",
+        async (_mode, clusterMode) => {
+            const poolClass = ClientPool as unknown as {
+                nativeCreatePool: typeof native.createPool;
+            };
+            const originalCreatePool = poolClass.nativeCreatePool;
+            const createPoolMock = jest.fn<typeof native.createPool>();
+            poolClass.nativeCreatePool = createPoolMock;
+            const config: GlideClientConfiguration = {
+                addresses: [{ host: "invalid.example", port: 1 }],
+                credentials: {
+                    username: "iam-user",
+                    iamConfig: {
+                        clusterName: "my-cluster",
+                        service: ServiceType.Elasticache,
+                        region: "us-east-1",
+                        credentialProvider: () => ({
+                            accessKeyId: "AKID",
+                            secretAccessKey: "SECRET",
+                        }),
+                    },
+                },
+            };
+
+            try {
+                let thrown: unknown;
+
+                try {
+                    await ClientPool.create(config, { clusterMode });
+                } catch (error) {
+                    thrown = error;
+                }
+
+                expect(thrown).toBeInstanceOf(Error);
+                expect((thrown as Error).message).toBe(expectedError);
+                expect(createPoolMock).not.toHaveBeenCalled();
+            } finally {
+                poolClass.nativeCreatePool = originalCreatePool;
+            }
+        },
+    );
 });

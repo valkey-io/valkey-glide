@@ -1,6 +1,6 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX-Identifier: Apache-2.0
 
-import { afterAll, beforeAll, describe, expect, it } from "@jest/globals";
+import { afterAll, beforeAll, describe, expect, it, jest } from "@jest/globals";
 import { ValkeyCluster } from "../../utils/TestUtils.js";
 import {
     BaseClientConfiguration,
@@ -8,7 +8,9 @@ import {
     GlideMonitorClient,
     MonitorLine,
     ProtocolVersion,
+    ServiceType,
 } from "../build-ts";
+import * as native from "../build-ts/native";
 import {
     getClientConfigurationOption,
     getServerVersion,
@@ -70,6 +72,50 @@ describe("GlideMonitorClient", () => {
               )
             : await ValkeyCluster.createCluster(false, 1, 1, getServerVersion);
     }, 40000);
+
+    it("rejects IAM custom providers before calling native createMonitorClient", async () => {
+        const monitorClass = GlideMonitorClient as unknown as {
+            nativeCreateMonitorClient: typeof native.createMonitorClient;
+        };
+        const originalCreateMonitorClient =
+            monitorClass.nativeCreateMonitorClient;
+        const createMonitorMock = jest.fn<typeof native.createMonitorClient>();
+        monitorClass.nativeCreateMonitorClient = createMonitorMock;
+        const expectedError =
+            "Monitor clients do not support IAM authentication or custom credential providers.";
+        const config: BaseClientConfiguration = {
+            addresses: [{ host: "invalid.example", port: 1 }],
+            credentials: {
+                username: "iam-user",
+                iamConfig: {
+                    clusterName: "my-cluster",
+                    service: ServiceType.Elasticache,
+                    region: "us-east-1",
+                    credentialProvider: () => ({
+                        accessKeyId: "AKID",
+                        secretAccessKey: "SECRET",
+                    }),
+                },
+            },
+        };
+
+        try {
+            let thrown: unknown;
+
+            try {
+                await GlideMonitorClient.create(config);
+            } catch (error) {
+                thrown = error;
+            }
+
+            expect(thrown).toBeInstanceOf(Error);
+            expect((thrown as Error).message).toBe(expectedError);
+            expect(createMonitorMock).not.toHaveBeenCalled();
+        } finally {
+            monitorClass.nativeCreateMonitorClient =
+                originalCreateMonitorClient;
+        }
+    });
 
     afterAll(async () => {
         await cluster.close();

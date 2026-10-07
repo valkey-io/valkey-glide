@@ -89,6 +89,7 @@ export interface ClientPoolMetrics {
  * `GlideClient` handles.
  */
 export class ClientPool {
+    private static nativeCreatePool = createPool;
     private closed = false;
     private readonly poolId: number;
     private readonly acquireTimeoutMs: number;
@@ -158,8 +159,9 @@ export class ClientPool {
 
         // Serialise the connection config into protobuf bytes using the
         // appropriate typed client without opening a network connection.
-        // serializeConfig also registers any addressResolver and returns the
-        // key so we can clean up if pool creation fails.
+        // serializeConfig registers any addressResolver and returns the key so
+        // we can clean it up if pool creation fails. Custom credential providers
+        // were rejected above and are never serialized into the pool request.
         const { bytes: connectionRequestBytes, resolverKey } = isCluster
             ? GlideClusterClient.serializeConfig(
                   clientConfig as GlideClusterClientConfiguration,
@@ -182,7 +184,10 @@ export class ClientPool {
         let poolId: number;
 
         try {
-            poolId = await createPool(connectionRequestBytes, poolConfigNapi);
+            poolId = await ClientPool.nativeCreatePool(
+                connectionRequestBytes,
+                poolConfigNapi,
+            );
         } catch (e) {
             // Clean up the address resolver registration if pool creation failed.
             if (resolverKey) {

@@ -817,7 +817,6 @@ export class GlideClusterClient extends BaseClient {
     public static serializeConfig(options: GlideClusterClientConfiguration): {
         bytes: Uint8Array;
         resolverKey: string | undefined;
-        credentialProviderKey: string | undefined;
     } {
         return super.serializeConnectionRequest(
             options,

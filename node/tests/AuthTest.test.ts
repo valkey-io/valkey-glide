@@ -13,8 +13,10 @@ import {
 import { ValkeyCluster } from "../../utils/TestUtils";
 import {
     BaseClientConfiguration,
+    AwsCredentials,
     GlideClient,
     GlideClusterClient,
+    GlideCredentialProvider,
     ProtocolVersion,
     RequestError,
     ServiceType,
@@ -884,4 +886,366 @@ describe("IAM Auth: Mock Credentials", () => {
         },
         TIMEOUT,
     );
+});
+
+describe("IAM Auth: Direct Custom Credential Providers", () => {
+    const iamEnabled = Boolean(
+        process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY,
+    );
+    let standaloneServer: ValkeyCluster | undefined;
+    let clusterServer: ValkeyCluster | undefined;
+
+    const environmentCredentials = (
+        overrides: Partial<AwsCredentials> = {},
+    ): AwsCredentials => ({
+        accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
+        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
+        sessionToken: process.env.AWS_SESSION_TOKEN,
+        ...overrides,
+    });
+
+    const providerFor = (
+        credentials: AwsCredentials,
+        promiseProvider: boolean,
+    ): GlideCredentialProvider =>
+        promiseProvider
+            ? async () => Promise.resolve(credentials)
+            : () => credentials;
+
+    const addressesFor = (clusterMode: boolean) =>
+        (clusterMode ? clusterServer : standaloneServer)!
+            .getAddresses()
+            .map(([host, port]) => ({ host, port }));
+
+    const createDirectClient = (
+        clusterMode: boolean,
+        credentialProvider: GlideCredentialProvider,
+        refreshIntervalSeconds = 300,
+        connectionTimeout?: number,
+    ): Promise<BaseClient> => {
+        const options: BaseClientConfiguration = {
+            addresses: addressesFor(clusterMode),
+            credentials: {
+                username: IAM_USERNAME,
+                iamConfig: {
+                    clusterName: IAM_TEST_CLUSTER_NAME,
+                    service: ServiceType.Elasticache,
+                    region: IAM_TEST_REGION_US_EAST_1,
+                    refreshIntervalSeconds,
+                    credentialProvider,
+                },
+            },
+            useTLS: global.TLS,
+        };
+
+        const advancedConfiguration =
+            connectionTimeout === undefined ? undefined : { connectionTimeout };
+
+        return clusterMode
+            ? GlideClusterClient.createClient({
+                  ...options,
+                  advancedConfiguration,
+              })
+            : GlideClient.createClient({ ...options, advancedConfiguration });
+    };
+
+    beforeAll(async () => {
+        if (!iamEnabled) return;
+
+        standaloneServer = global.STAND_ALONE_ENDPOINT
+            ? await ValkeyCluster.initFromExistingCluster(
+                  false,
+                  parseEndpoints(global.STAND_ALONE_ENDPOINT),
+                  getServerVersion,
+              )
+            : await ValkeyCluster.createCluster(false, 1, 0, getServerVersion);
+        clusterServer = global.CLUSTER_ENDPOINTS
+            ? await ValkeyCluster.initFromExistingCluster(
+                  true,
+                  parseEndpoints(global.CLUSTER_ENDPOINTS),
+                  getServerVersion,
+              )
+            : await ValkeyCluster.createCluster(true, 3, 1, getServerVersion);
+    }, TIMEOUT);
+
+    afterAll(async () => {
+        await standaloneServer?.close();
+        await clusterServer?.close();
+    }, TIMEOUT);
+
+    it.each([
+        ["standalone", "sync", false, false],
+        ["standalone", "Promise", false, true],
+        ["cluster", "sync", true, false],
+        ["cluster", "Promise", true, true],
+    ])(
+        "%s direct client authenticates and manually refreshes with a %s provider",
+        async (_mode, _providerKind, clusterMode, promiseProvider) => {
+            if (!iamEnabled) return;
+
+            let invocations = 0;
+
+            const credentialProvider: GlideCredentialProvider = () => {
+                invocations++;
+                const credentials = environmentCredentials({
+                    sessionToken: promiseProvider
+                        ? process.env.AWS_SESSION_TOKEN
+                        : undefined,
+                    expiresAtEpochMillis: Date.now() + 60_000,
+                });
+                return promiseProvider
+                    ? Promise.resolve(credentials)
+                    : credentials;
+            };
+
+            const directClient = await createDirectClient(
+                clusterMode,
+                credentialProvider,
+            );
+
+            try {
+                await assertConnected(directClient);
+                const afterInitialAuth = invocations;
+                expect(afterInitialAuth).toBeGreaterThan(0);
+
+                await directClient.refreshIamToken();
+                expect(invocations).toBeGreaterThan(afterInitialAuth);
+                await assertConnected(directClient);
+            } finally {
+                directClient.close();
+            }
+        },
+        TIMEOUT,
+    );
+
+    it.each([
+        ["standalone", false, false],
+        ["cluster", true, true],
+    ])(
+        "%s direct client automatically refreshes custom credentials",
+        async (_mode, clusterMode, promiseProvider) => {
+            if (!iamEnabled) return;
+
+            let invocations = 0;
+
+            const credentialProvider: GlideCredentialProvider = () => {
+                invocations++;
+                const credentials = environmentCredentials();
+                return promiseProvider
+                    ? Promise.resolve(credentials)
+                    : credentials;
+            };
+
+            const directClient = await createDirectClient(
+                clusterMode,
+                credentialProvider,
+                2,
+            );
+
+            try {
+                await assertConnected(directClient);
+                const afterInitialAuth = invocations;
+                await new Promise((resolve) => setTimeout(resolve, 3000));
+                expect(invocations).toBeGreaterThan(afterInitialAuth);
+                await assertConnected(directClient);
+            } finally {
+                directClient.close();
+            }
+        },
+        TIMEOUT,
+    );
+
+    it.each([
+        [
+            "sync throw",
+            () => {
+                throw new Error("sync provider failure");
+            },
+        ],
+        [
+            "Promise rejection",
+            () => Promise.reject(new Error("Promise provider failure")),
+        ],
+    ] as [string, GlideCredentialProvider][])(
+        "surfaces %s during initial direct authentication",
+        async (_caseName, credentialProvider) => {
+            if (!iamEnabled) return;
+
+            await expect(
+                createDirectClient(false, credentialProvider),
+            ).rejects.toThrow(/provider failure/u);
+        },
+        TIMEOUT,
+    );
+
+    it.each([
+        [
+            "empty access key from sync provider",
+            "",
+            "secret",
+            false,
+            "accessKeyId",
+        ],
+        [
+            "ASCII blank access key from Promise provider",
+            " \t\r\n",
+            "secret",
+            true,
+            "accessKeyId",
+        ],
+        [
+            "Unicode blank access key from sync provider",
+            "\u2003\u3000",
+            "secret",
+            false,
+            "accessKeyId",
+        ],
+        [
+            "empty secret key from Promise provider",
+            "access",
+            "",
+            true,
+            "secretAccessKey",
+        ],
+        [
+            "ASCII blank secret key from sync provider",
+            "access",
+            " \t\r\n",
+            false,
+            "secretAccessKey",
+        ],
+        [
+            "Unicode blank secret key from Promise provider",
+            "access",
+            "\u2003\u3000",
+            true,
+            "secretAccessKey",
+        ],
+    ])(
+        "rejects %s",
+        async (
+            _caseName,
+            accessKeyId,
+            secretAccessKey,
+            promiseProvider,
+            expectedField,
+        ) => {
+            if (!iamEnabled) return;
+
+            const provider = providerFor(
+                environmentCredentials({ accessKeyId, secretAccessKey }),
+                promiseProvider,
+            );
+            await expect(createDirectClient(false, provider)).rejects.toThrow(
+                new RegExp(`blank ${expectedField}`, "u"),
+            );
+        },
+        TIMEOUT,
+    );
+
+    it.each([
+        ["sync", false],
+        ["Promise", true],
+    ])(
+        "preserves valid surrounding whitespace from a %s provider",
+        async (_providerKind, promiseProvider) => {
+            if (!iamEnabled) return;
+
+            const directClient = await createDirectClient(
+                false,
+                providerFor(
+                    environmentCredentials({
+                        accessKeyId: `  ${process.env.AWS_ACCESS_KEY_ID!}  `,
+                        secretAccessKey: `\t${process.env.AWS_SECRET_ACCESS_KEY!}\n`,
+                    }),
+                    promiseProvider,
+                ),
+            );
+
+            try {
+                await assertConnected(directClient);
+            } finally {
+                directClient.close();
+            }
+        },
+        TIMEOUT,
+    );
+
+    it.each([
+        ["omitted", undefined, false],
+        ["zero", 0, true],
+        ["negative", -1, false],
+        ["valid", Date.now() + 60_000, true],
+        ["huge", Number.MAX_SAFE_INTEGER, false],
+    ])(
+        "accepts %s expiresAtEpochMillis from a direct provider",
+        async (_caseName, expiresAtEpochMillis, promiseProvider) => {
+            if (!iamEnabled) return;
+
+            const directClient = await createDirectClient(
+                false,
+                providerFor(
+                    environmentCredentials({ expiresAtEpochMillis }),
+                    promiseProvider,
+                ),
+            );
+
+            try {
+                await assertConnected(directClient);
+            } finally {
+                directClient.close();
+            }
+        },
+        TIMEOUT,
+    );
+
+    it("times out an unresolved Promise provider and safely drops late completion", async () => {
+        if (!iamEnabled) return;
+
+        let resolveLate: ((credentials: AwsCredentials) => void) | undefined;
+        const credentialProvider: GlideCredentialProvider = () =>
+            new Promise((resolve) => {
+                resolveLate = resolve;
+            });
+        const startedAt = Date.now();
+
+        await expect(
+            createDirectClient(false, credentialProvider, 300, 15_000),
+        ).rejects.toThrow(/did not return within 9s/u);
+        const elapsed = Date.now() - startedAt;
+        expect(elapsed).toBeGreaterThanOrEqual(8_500);
+        expect(elapsed).toBeLessThan(10_000);
+
+        resolveLate!(environmentCredentials());
+        await new Promise((resolve) => setTimeout(resolve, 200));
+
+        const healthyClient = await createDirectClient(false, () =>
+            environmentCredentials(),
+        );
+
+        try {
+            await assertConnected(healthyClient);
+        } finally {
+            healthyClient.close();
+        }
+    }, 20_000);
+
+    it("creates standalone and cluster custom-provider clients concurrently", async () => {
+        if (!iamEnabled) return;
+
+        const [standaloneClient, clusterClient] = await Promise.all([
+            createDirectClient(false, () => environmentCredentials()),
+            createDirectClient(true, async () => environmentCredentials()),
+        ]);
+
+        try {
+            await Promise.all([
+                assertConnected(standaloneClient),
+                assertConnected(clusterClient),
+            ]);
+        } finally {
+            standaloneClient.close();
+            clusterClient.close();
+        }
+    });
 });

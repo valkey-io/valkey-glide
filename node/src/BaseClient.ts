@@ -838,9 +838,9 @@ export interface AwsCredentials {
  * mode, independent reconnections may invoke this callback simultaneously.
  *
  * **Promptness**: return quickly; this callback sits on the reconnect path and
- * a slow implementation directly extends failover time. The Rust core imposes
- * a **10-second timeout** — providers that do not complete within that window
- * will cause token generation to fail.
+ * a slow implementation directly extends failover time. The Node callback bridge
+ * imposes a **9-second timeout**, before the Rust core's 10-second outer deadline;
+ * providers that do not complete in time cause token generation to fail.
  *
  * @example
  * ```typescript
@@ -10214,6 +10214,10 @@ export class BaseClient {
                 connectionRequestBytes,
                 this.handleResponsesAvailable,
             );
+            // The direct NAPI path consumes the provider only after the handle
+            // has been acknowledged by JavaScript. Do not retain a stale key
+            // that close() could later remove after an unrelated registration.
+            this.credentialProviderKey = undefined;
             Logger.log(
                 "info",
                 "Client lifetime",
@@ -10336,7 +10340,6 @@ export class BaseClient {
     ): {
         bytes: Uint8Array;
         resolverKey: string | undefined;
-        credentialProviderKey: string | undefined;
     } {
         const instance = constructor(options);
         const request = instance.createClientRequest(options);
@@ -10351,32 +10354,12 @@ export class BaseClient {
             request.addressResolverKey = resolverKey;
         }
 
-        // Register the credential provider so Rust can call it by key when
-        // creating pool connections. The key must be embedded in the serialised
-        // request so every new pool connection can locate the callback.
-        let credentialProviderKey: string | undefined;
-
-        if (
-            "iamConfig" in (options.credentials ?? {}) &&
-            (options.credentials as { iamConfig: IamAuthConfig }).iamConfig
-                ?.credentialProvider
-        ) {
-            const iamCreds = options.credentials as {
-                username: string;
-                iamConfig: IamAuthConfig;
-            };
-            credentialProviderKey = registerCredentialProvider(
-                iamCreds.iamConfig.credentialProvider!,
-            );
-            request.credentialProviderKey = credentialProviderKey;
-        }
-
         const bytes = Buffer.from(
             connection_request.ConnectionRequest.encode(
                 connection_request.ConnectionRequest.create(request),
             ).finish(),
         );
-        return { bytes, resolverKey, credentialProviderKey };
+        return { bytes, resolverKey };
     }
 
     /**

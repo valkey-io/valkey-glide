@@ -1151,6 +1151,102 @@ fn run_worker_message(
     }
 }
 
+struct CredentialProviderClaim {
+    key: String,
+    provider: Option<glide_core::iam::CredentialsProvider>,
+}
+
+impl CredentialProviderClaim {
+    fn commit(&mut self) {
+        self.provider = None;
+    }
+}
+
+impl Drop for CredentialProviderClaim {
+    fn drop(&mut self) {
+        let Some(provider) = self.provider.take() else {
+            return;
+        };
+
+        if glide_core::credential_provider_registry::register_if_absent(self.key.clone(), provider)
+            .is_err()
+        {
+            log_warn(
+                "credential_provider",
+                format!(
+                    "Did not restore credential_provider_key '{}' because a newer provider is registered",
+                    self.key
+                ),
+            );
+        }
+    }
+}
+
+fn claim_credential_provider(
+    credential_provider_key: Option<String>,
+    connection_request: &mut ConnectionRequest,
+) -> Result<Option<CredentialProviderClaim>> {
+    let Some(key) = credential_provider_key else {
+        return Ok(None);
+    };
+
+    if connection_request
+        .authentication_info
+        .as_ref()
+        .and_then(|auth_info| auth_info.iam_config.as_ref())
+        .is_none()
+    {
+        return Err(napi::Error::new(
+            Status::InvalidArg,
+            "credential_provider_key was set but the connection request contains no IAM configuration",
+        ));
+    }
+
+    let provider = glide_core::credential_provider_registry::remove(&key).ok_or_else(|| {
+        napi::Error::new(
+            Status::InvalidArg,
+            format!(
+                "credential_provider_key '{key}' was not found in the registry; it may have already been consumed"
+            ),
+        )
+    })?;
+
+    connection_request
+        .authentication_info
+        .as_mut()
+        .and_then(|auth_info| auth_info.iam_config.as_mut())
+        .expect("IAM configuration was validated before claiming the provider")
+        .credentials_provider = Some(provider.clone());
+
+    Ok(Some(CredentialProviderClaim {
+        key,
+        provider: Some(provider),
+    }))
+}
+
+/// Deferred result whose provider claim is committed only after napi-rs has
+/// successfully converted the client handle into a JavaScript value. If client
+/// creation, worker initialisation, environment delivery, or handle conversion
+/// fails, dropping this value restores the provider without replacing a newer
+/// registration for the same key.
+struct DirectClientResolution {
+    handle: GlideClientHandle,
+    credential_provider_claim: Option<CredentialProviderClaim>,
+}
+
+impl ToNapiValue for DirectClientResolution {
+    unsafe fn to_napi_value(
+        env: napi::sys::napi_env,
+        mut value: Self,
+    ) -> Result<napi::sys::napi_value> {
+        let js_handle = unsafe { GlideClientHandle::to_napi_value(env, value.handle) }?;
+        if let Some(claim) = value.credential_provider_claim.as_mut() {
+            claim.commit();
+        }
+        Ok(js_handle)
+    }
+}
+
 #[napi(
     js_name = "CreateDirectClient",
     ts_return_type = "Promise<GlideClientHandle>"
@@ -1198,34 +1294,12 @@ pub fn create_direct_client<'a>(
 
     // Convert protobuf ConnectionRequest to internal ConnectionRequest
     let mut connection_request: ConnectionRequest = proto_connection_request.into();
+    let credential_provider_claim =
+        claim_credential_provider(credential_provider_key, &mut connection_request)?;
     if let Some(key) = resolver_key
         && let Some(resolver) = glide_core::address_resolver_registry::remove(&key)
     {
         connection_request.address_resolver = Some(resolver);
-    }
-    if let Some(key) = credential_provider_key {
-        match glide_core::credential_provider_registry::remove(&key) {
-            Some(provider) => {
-                if let Some(auth_info) = connection_request.authentication_info.as_mut()
-                    && let Some(iam_config) = auth_info.iam_config.as_mut()
-                {
-                    iam_config.credentials_provider = Some(provider);
-                } else {
-                    log_warn(
-                        "create_direct_client",
-                        "credential_provider_key was set but the connection request contains \
-                         no IAM configuration. The credential provider will be ignored.",
-                    );
-                }
-            }
-            None => {
-                log_warn(
-                    "create_direct_client",
-                    "credential_provider_key was set but no provider was found in the registry. \
-                     The key may have been consumed already or was never registered.",
-                );
-            }
-        }
     }
 
     // Create shared response buffer
@@ -1328,8 +1402,15 @@ pub fn create_direct_client<'a>(
         });
 
         // Resolve the promise with the handle — push listener is now scheduled,
-        // so no push notifications can be missed after this point.
-        deferred.resolve(|_| Ok(handle));
+        // so no push notifications can be missed after this point. The provider
+        // claim is committed by DirectClientResolution only after the handle is
+        // successfully converted for JavaScript; every earlier failure restores it.
+        deferred.resolve(move |_| {
+            Ok(DirectClientResolution {
+                handle,
+                credential_provider_claim,
+            })
+        });
 
         // Process messages from the channel.
         // Each message spawns a local task for concurrent execution within this thread.
@@ -2878,6 +2959,63 @@ struct NodeCredentialsProvider {
     tsfn: CredentialProviderTsfn,
 }
 
+const NODE_CREDENTIALS_CALLBACK_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(9);
+
+type NodeCredentialResult = (
+    String,
+    String,
+    Option<String>,
+    Option<std::time::SystemTime>,
+);
+
+fn checked_expiry_from(
+    base: std::time::SystemTime,
+    milliseconds: i64,
+) -> std::result::Result<std::time::SystemTime, glide_core::iam::GlideIAMError> {
+    base.checked_add(std::time::Duration::from_millis(milliseconds as u64))
+        .ok_or_else(|| {
+            glide_core::iam::GlideIAMError::CredentialsError(format!(
+                "GlideCredentialProvider expiresAtEpochMillis is out of range: {milliseconds}"
+            ))
+        })
+}
+
+fn validate_and_convert_credentials(
+    credentials: JsAwsCredentials,
+) -> std::result::Result<NodeCredentialResult, glide_core::iam::GlideIAMError> {
+    if credentials.access_key_id.trim().is_empty() {
+        return Err(glide_core::iam::GlideIAMError::CredentialsError(
+            "GlideCredentialProvider returned a blank accessKeyId".to_string(),
+        ));
+    }
+    if credentials.secret_access_key.trim().is_empty() {
+        return Err(glide_core::iam::GlideIAMError::CredentialsError(
+            "GlideCredentialProvider returned a blank secretAccessKey".to_string(),
+        ));
+    }
+
+    let expires_at = match credentials.expires_at_epoch_millis {
+        Some(milliseconds) if milliseconds > 0 => {
+            checked_expiry_from(std::time::SystemTime::UNIX_EPOCH, milliseconds)?
+        }
+        _ => {
+            return Ok((
+                credentials.access_key_id,
+                credentials.secret_access_key,
+                credentials.session_token,
+                None,
+            ));
+        }
+    };
+
+    Ok((
+        credentials.access_key_id,
+        credentials.secret_access_key,
+        credentials.session_token,
+        Some(expires_at),
+    ))
+}
+
 // SAFETY: ThreadsafeFunction is designed to be called from any thread.
 unsafe impl Send for NodeCredentialsProvider {}
 unsafe impl Sync for NodeCredentialsProvider {}
@@ -3004,30 +3142,20 @@ impl NodeCredentialsProvider {
         }
 
         let creds = rx
-            .recv_timeout(std::time::Duration::from_secs(12))
-            .map_err(|e| {
+            .recv_timeout(NODE_CREDENTIALS_CALLBACK_TIMEOUT)
+            .map_err(|error| {
                 glide_core::iam::GlideIAMError::CredentialsError(format!(
-                    "GlideCredentialProvider callback timed out or channel closed: {e}"
+                    "GlideCredentialProvider callback did not return within {:?}: {error}",
+                    NODE_CREDENTIALS_CALLBACK_TIMEOUT
                 ))
             })?
-            .map_err(|e| {
+            .map_err(|error| {
                 glide_core::iam::GlideIAMError::CredentialsError(format!(
-                    "GlideCredentialProvider callback error: {e}"
+                    "GlideCredentialProvider callback error: {error}"
                 ))
             })?;
 
-        let expires_at = creds
-            .expires_at_epoch_millis
-            .filter(|&ms| ms > 0)
-            .map(|ms| {
-                std::time::SystemTime::UNIX_EPOCH + std::time::Duration::from_millis(ms as u64)
-            });
-        Ok((
-            creds.access_key_id,
-            creds.secret_access_key,
-            creds.session_token,
-            expires_at,
-        ))
+        validate_and_convert_credentials(creds)
     }
 }
 
@@ -3169,4 +3297,247 @@ pub fn close_monitor_client(env: &Env, handle_id: i64) -> Result<Object<'_>> {
         deferred.resolve(|_| Ok(()));
     });
     Ok(promise)
+}
+
+#[cfg(test)]
+mod credential_provider_tests {
+    use super::*;
+    use glide_core::client::{AuthenticationInfo, IamAuthenticationConfig};
+    use glide_core::iam::{CredentialsProvider, GlideIAMError, ServiceType};
+    use std::sync::{Arc, Barrier};
+
+    fn provider_named(access_key: &'static str) -> CredentialsProvider {
+        Arc::new(move || {
+            Ok((
+                access_key.to_string(),
+                "secret-key".to_string(),
+                Some("session-token".to_string()),
+                None,
+            ))
+        })
+    }
+
+    fn request_with_iam() -> ConnectionRequest {
+        ConnectionRequest {
+            authentication_info: Some(AuthenticationInfo {
+                username: Some("iam-user".to_string()),
+                password: None,
+                iam_config: Some(IamAuthenticationConfig {
+                    cluster_name: "cluster".to_string(),
+                    region: "us-east-1".to_string(),
+                    service_type: ServiceType::ElastiCache,
+                    refresh_interval_seconds: None,
+                    credentials_provider: None,
+                }),
+            }),
+            ..Default::default()
+        }
+    }
+
+    fn credentials(
+        access_key_id: &str,
+        secret_access_key: &str,
+        expires_at_epoch_millis: Option<i64>,
+    ) -> JsAwsCredentials {
+        JsAwsCredentials {
+            access_key_id: access_key_id.to_string(),
+            secret_access_key: secret_access_key.to_string(),
+            session_token: Some("session-token".to_string()),
+            expires_at_epoch_millis,
+        }
+    }
+
+    #[test]
+    fn missing_or_consumed_explicit_key_fails_closed() {
+        let key = uuid::Uuid::new_v4().to_string();
+        glide_core::credential_provider_registry::register(key.clone(), provider_named("first"));
+        let mut first_request = request_with_iam();
+        let mut claim = claim_credential_provider(Some(key.clone()), &mut first_request)
+            .expect("registered provider should be claimable")
+            .expect("explicit key should create a claim");
+        claim.commit();
+        drop(claim);
+
+        let mut second_request = request_with_iam();
+        let error = claim_credential_provider(Some(key.clone()), &mut second_request)
+            .err()
+            .expect("a consumed key must fail client creation");
+        assert!(error.reason.contains(&key));
+        assert!(error.reason.contains("already been consumed"));
+        assert!(glide_core::credential_provider_registry::get(&key).is_none());
+    }
+
+    #[test]
+    fn key_without_iam_fails_without_consuming_provider() {
+        let key = uuid::Uuid::new_v4().to_string();
+        glide_core::credential_provider_registry::register(key.clone(), provider_named("original"));
+        let mut request = ConnectionRequest::default();
+
+        let error = claim_credential_provider(Some(key.clone()), &mut request)
+            .err()
+            .expect("provider key without IAM must fail");
+
+        assert!(error.reason.contains("no IAM configuration"));
+        let provider = glide_core::credential_provider_registry::remove(&key)
+            .expect("validation failure must not consume the provider");
+        assert_eq!(provider().unwrap().0, "original");
+    }
+
+    #[test]
+    fn downstream_failure_restores_provider() {
+        let key = uuid::Uuid::new_v4().to_string();
+        glide_core::credential_provider_registry::register(key.clone(), provider_named("original"));
+        let mut request = request_with_iam();
+
+        let claim = claim_credential_provider(Some(key.clone()), &mut request)
+            .expect("provider should be claimable")
+            .expect("explicit key should create a claim");
+        assert!(glide_core::credential_provider_registry::get(&key).is_none());
+        drop(claim);
+
+        let provider = glide_core::credential_provider_registry::remove(&key)
+            .expect("uncommitted claim must restore the provider");
+        assert_eq!(provider().unwrap().0, "original");
+    }
+
+    #[test]
+    fn rollback_does_not_overwrite_newer_registration() {
+        let key = uuid::Uuid::new_v4().to_string();
+        glide_core::credential_provider_registry::register(key.clone(), provider_named("original"));
+        let mut request = request_with_iam();
+        let claim = claim_credential_provider(Some(key.clone()), &mut request)
+            .expect("provider should be claimable")
+            .expect("explicit key should create a claim");
+        glide_core::credential_provider_registry::register(key.clone(), provider_named("newer"));
+
+        drop(claim);
+
+        let provider = glide_core::credential_provider_registry::remove(&key)
+            .expect("newer registration must remain");
+        assert_eq!(provider().unwrap().0, "newer");
+    }
+
+    #[test]
+    fn concurrent_claim_has_exactly_one_winner() {
+        let key = uuid::Uuid::new_v4().to_string();
+        glide_core::credential_provider_registry::register(key.clone(), provider_named("winner"));
+        let barrier = Arc::new(Barrier::new(2));
+        let workers: Vec<_> = (0..2)
+            .map(|_| {
+                let key = key.clone();
+                let barrier = Arc::clone(&barrier);
+                std::thread::spawn(move || {
+                    let mut request = request_with_iam();
+                    barrier.wait();
+                    match claim_credential_provider(Some(key), &mut request) {
+                        Ok(Some(mut claim)) => {
+                            claim.commit();
+                            true
+                        }
+                        Ok(None) => unreachable!("an explicit key always creates a claim"),
+                        Err(_) => false,
+                    }
+                })
+            })
+            .collect();
+        let winners = workers
+            .into_iter()
+            .map(|worker| worker.join().unwrap())
+            .filter(|won| *won)
+            .count();
+
+        assert_eq!(winners, 1);
+        assert!(glide_core::credential_provider_registry::get(&key).is_none());
+    }
+
+    #[test]
+    fn committed_success_consumes_provider() {
+        let key = uuid::Uuid::new_v4().to_string();
+        glide_core::credential_provider_registry::register(key.clone(), provider_named("consumed"));
+        let mut request = request_with_iam();
+        let mut claim = claim_credential_provider(Some(key.clone()), &mut request)
+            .expect("provider should be claimable")
+            .expect("explicit key should create a claim");
+
+        claim.commit();
+        drop(claim);
+
+        assert!(glide_core::credential_provider_registry::get(&key).is_none());
+    }
+
+    #[test]
+    fn rejects_empty_ascii_and_unicode_blank_credentials() {
+        for access_key in ["", " \t\r\n", "\u{2003}\u{3000}"] {
+            let error = validate_and_convert_credentials(credentials(access_key, "secret", None))
+                .expect_err("blank access key must fail");
+            assert!(error.to_string().contains("blank accessKeyId"));
+        }
+        for secret_key in ["", " \t\r\n", "\u{2003}\u{3000}"] {
+            let error = validate_and_convert_credentials(credentials("access", secret_key, None))
+                .expect_err("blank secret key must fail");
+            assert!(error.to_string().contains("blank secretAccessKey"));
+        }
+    }
+
+    #[test]
+    fn preserves_nonblank_credential_values_verbatim() {
+        let converted =
+            validate_and_convert_credentials(credentials("  access-key  ", "\tsecret-key\n", None))
+                .unwrap();
+
+        assert_eq!(converted.0, "  access-key  ");
+        assert_eq!(converted.1, "\tsecret-key\n");
+        assert_eq!(converted.2.as_deref(), Some("session-token"));
+    }
+
+    #[test]
+    fn handles_valid_absent_and_huge_expiry_values() {
+        let valid_millis = 1_700_000_000_123_i64;
+        let valid =
+            validate_and_convert_credentials(credentials("access", "secret", Some(valid_millis)))
+                .unwrap();
+        assert_eq!(
+            valid
+                .3
+                .unwrap()
+                .duration_since(std::time::SystemTime::UNIX_EPOCH)
+                .unwrap(),
+            std::time::Duration::from_millis(valid_millis as u64)
+        );
+
+        for absent in [None, Some(0), Some(-1)] {
+            assert!(
+                validate_and_convert_credentials(credentials("access", "secret", absent))
+                    .unwrap()
+                    .3
+                    .is_none()
+            );
+        }
+
+        let huge =
+            validate_and_convert_credentials(credentials("access", "secret", Some(i64::MAX)))
+                .expect("the maximum i64 millisecond timestamp is representable on this platform");
+        assert!(huge.3.is_some());
+    }
+
+    #[test]
+    fn expiry_overflow_is_a_controlled_credentials_error() {
+        let near_maximum = std::time::SystemTime::UNIX_EPOCH
+            .checked_add(std::time::Duration::from_secs(i64::MAX as u64))
+            .expect("platform should represent the i64 seconds boundary");
+        let error = checked_expiry_from(near_maximum, 1_000)
+            .expect_err("adding another second must overflow SystemTime");
+
+        assert!(matches!(error, GlideIAMError::CredentialsError(_)));
+        assert!(error.to_string().contains("expiresAtEpochMillis"));
+    }
+
+    #[test]
+    fn node_callback_timeout_precedes_core_deadline() {
+        assert_eq!(
+            NODE_CREDENTIALS_CALLBACK_TIMEOUT,
+            std::time::Duration::from_secs(9)
+        );
+        assert!(NODE_CREDENTIALS_CALLBACK_TIMEOUT < std::time::Duration::from_secs(10));
+    }
 }
