@@ -2410,13 +2410,7 @@ export class BaseClient {
 
             const messageKind = nextPushNotificationValue["kind"];
 
-            if (messageKind === "Disconnect") {
-                Logger.log(
-                    "warn",
-                    "disconnect notification",
-                    "Transport disconnected, messages might be lost",
-                );
-            } else if (
+            if (
                 messageKind === "Message" ||
                 messageKind === "PMessage" ||
                 messageKind === "SMessage"

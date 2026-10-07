@@ -4,6 +4,7 @@
 
 ### Fixes
 
+* Node: Log the disconnect warning when the Disconnection push arrives ([#7277](https://github.com/valkey-io/valkey-glide/pull/7277))
 * Core, Go, Java, Node, Python, Rust: use uint32 for Go BackoffStrategy fields and harden reconnect RetryStrategy against out-of-range values; in Java an all-zero BackoffStrategy now means zero retries, matching the other clients ([#6680](https://github.com/valkey-io/valkey-glide/pull/6680))
 * Java, Go: Fix `slotForKey` returning the wrong cluster slot for a key with an empty hash tag. The first `}` after the first `{` now closes the tag, and an empty tag (`{}`) hashes the whole key, so a scope pinned with a key like `{}user}:1` targets the correct primary ([#7251](https://github.com/valkey-io/valkey-glide/issues/7251))
 * Core: Scoped connections inherit the parent client's TLS certificate material and custom address resolver instead of silently falling back to system trust with no client certificate: a scope off an mTLS, custom-root-CA, or cert-reload parent now presents the same client certificate and trusts the same roots, uses the freshest material adopted after a rotation, and resolves its seed address through the parent's resolver on the standalone path. An acquire whose parent configured certificate material but has none to inherit yet fails with the reason rather than connecting without it ([#7173](https://github.com/valkey-io/valkey-glide/issues/7173))
