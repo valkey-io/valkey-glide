@@ -4289,16 +4289,18 @@ pub(crate) mod shared_client_tests {
     #[timeout(LONG_CLUSTER_TEST_TIMEOUT)]
     fn test_mtls_cert_rotation_reconnect(#[values(false, true)] use_cluster: bool) {
         block_on_all(async move {
-            // TODO #6532: the cluster arm is skipped because cluster_manager.py
-            // hard-codes `--tls-auth-clients no`, so a cluster-through-cluster_manager
-            // cannot enforce client-cert auth. Once #6532 teaches cluster_manager.py to
-            // optionally require client certs, run the full rotation+reconnect flow here
-            // for use_cluster == true instead of returning early.
+            // TODO #6532: the cluster arm is skipped because the Rust cluster
+            // harness (tests/utilities/cluster.rs, `execute_cluster_script`) never
+            // passes `--tls-auth-clients` to cluster_manager.py, which defaults it
+            // off, so a cluster started here cannot enforce client-cert auth. Once
+            // the harness passes the flag through, run the full rotation+reconnect
+            // flow here for use_cluster == true instead of returning early.
             if use_cluster {
                 println!(
-                    "Skipping cluster arm: cluster_manager.py does not support \
-                     --tls-auth-clients yes; cluster mTLS cert rotation is exercised \
-                     in redis-rs test_cluster_async::mtls_test"
+                    "Skipping cluster arm: the Rust cluster harness does not pass \
+                     --tls-auth-clients, so this cluster does not require client \
+                     certs; cluster mTLS cert rotation is exercised in redis-rs \
+                     test_cluster_async::mtls_test"
                 );
                 return;
             }
@@ -4435,6 +4437,468 @@ pub(crate) mod shared_client_tests {
                 get_result2,
                 Value::BulkString(b"value_after_rotation".to_vec().into())
             );
+        });
+    }
+
+    /// A scope off an mTLS parent must connect with the parent's certificate
+    /// material. The server runs with `--tls-auth-clients yes` and a private CA,
+    /// so a scoped connection that drops the parent's `tls_params` fails the
+    /// handshake twice over: it offers no client certificate, and it verifies the
+    /// server against system roots rather than the test CA.
+    ///
+    /// Standalone only, for the same reason as `test_mtls_cert_rotation_reconnect`
+    /// (see TODO #6532): the Rust cluster harness never passes
+    /// `--tls-auth-clients` to `cluster_manager.py`, which defaults it off, so a
+    /// cluster started here cannot require client certificates.
+    #[cfg(feature = "proto")]
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
+    fn test_scope_inherits_parent_mtls_cert_material() {
+        block_on_all(async move {
+            let tempdir = tempfile::tempdir().expect("Failed to create temp dir");
+            let tls_paths = build_tls_file_paths(&tempdir);
+
+            let client_cert = tempdir.path().join("client.crt");
+            let client_key = tempdir.path().join("client.key");
+            rotate_client_cert_and_key(&tls_paths, &client_cert, &client_key);
+
+            let server = RedisServer::new_with_addr_tls_modules_and_spawner(
+                redis::ConnectionAddr::TcpTls {
+                    host: "127.0.0.1".to_string(),
+                    port: get_available_port(),
+                    insecure: false,
+                    tls_params: None,
+                },
+                Some(tls_paths.clone()),
+                &[],
+                true,
+                |cmd| cmd.spawn().expect("Failed to spawn server"),
+            );
+            let server_addr = server.get_client_addr();
+            tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+
+            let configuration = TestConfiguration {
+                use_tls: true,
+                shared_server: false,
+                client_cert_path: Some(client_cert.to_string_lossy().to_string()),
+                client_key_path: Some(client_key.to_string_lossy().to_string()),
+                root_certs: vec![tls_paths.read_ca_cert_as_bytes()],
+                cert_reload_interval_seconds: Some(1),
+                ..Default::default()
+            };
+
+            let client = Client::new(
+                create_connection_request(std::slice::from_ref(&server_addr), &configuration)
+                    .into(),
+                None,
+            )
+            .await
+            .expect("Failed to create mTLS client");
+
+            let backing = BackingServer::Standalone(Some(server));
+            let bytes = scope_request_bytes(&backing, &configuration);
+            let key = generate_random_string(10);
+            let routing_slot = glide_core::pool::slot_for_key(key.as_bytes());
+
+            let scope = ScopeHandle::setup(client, bytes, routing_slot).await;
+
+            let mut set_args = vec![key.clone().into_bytes(), b"scoped_mtls".to_vec()];
+            scope
+                .send("SET", &mut set_args)
+                .await
+                .expect("scoped SET over mTLS should succeed");
+
+            let mut get_args = vec![key.into_bytes()];
+            let value = scope
+                .send("GET", &mut get_args)
+                .await
+                .expect("scoped GET over mTLS should succeed");
+            assert_eq!(value, Value::BulkString(b"scoped_mtls".to_vec().into()));
+
+            scope.release();
+        });
+    }
+
+    /// `ACL WHOAMI` / `CLIENT INFO`-style single-line reply as a `String`.
+    #[cfg(feature = "proto")]
+    fn reply_as_string(value: Value) -> String {
+        match value {
+            Value::BulkString(bytes) => String::from_utf8_lossy(&bytes).to_string(),
+            Value::VerbatimString { text, .. } => text,
+            Value::SimpleString(text) => text,
+            other => panic!("expected a string reply, got: {other:?}"),
+        }
+    }
+
+    /// The ACL user the connection is authenticated as.
+    #[cfg(feature = "proto")]
+    async fn acl_whoami(client: &mut Client) -> String {
+        let mut cmd = redis::cmd("ACL");
+        cmd.arg("WHOAMI");
+        reply_as_string(
+            client
+                .send_command(&mut cmd, None)
+                .await
+                .expect("ACL WHOAMI should succeed"),
+        )
+    }
+
+    /// `ACL WHOAMI` over a scoped connection.
+    #[cfg(feature = "proto")]
+    async fn scope_acl_whoami(scope: &ScopeHandle) -> String {
+        let mut args = vec![b"WHOAMI".to_vec()];
+        reply_as_string(
+            scope
+                .send("ACL", &mut args)
+                .await
+                .expect("scoped ACL WHOAMI should succeed"),
+        )
+    }
+
+    /// A scope off a cluster parent must verify the node's certificate against the
+    /// parent's private CA. No `--tls-auth-clients` is needed to discriminate:
+    /// the cluster's server certificates are signed by the test CA, so a scope
+    /// that drops the parent's `root_certs` either fails the fail-fast guard or
+    /// verifies against system trust and fails the handshake. Covers the cluster
+    /// half of the inheritance, which the standalone mTLS test cannot reach.
+    #[cfg(feature = "proto")]
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_scope_inherits_parent_cluster_root_certs() {
+        block_on_all(async move {
+            let tempdir = tempfile::tempdir().expect("Failed to create temp dir");
+            let tls_paths = build_tls_file_paths(&tempdir);
+            let ca_cert_bytes = tls_paths.read_ca_cert_as_bytes();
+
+            let cluster = RedisCluster::new_with_tls(3, 0, Some(tls_paths));
+            let cluster_addresses = cluster.get_server_addresses();
+
+            // `root_certs` alone, no client certificate: `create_connection_request`
+            // switches the request to SecureTls, so the private CA is the only way
+            // to verify the nodes.
+            let configuration = TestConfiguration {
+                use_tls: true,
+                shared_server: false,
+                cluster_mode: ClusterMode::Enabled,
+                root_certs: vec![ca_cert_bytes],
+                ..Default::default()
+            };
+
+            let client = Client::new(
+                create_connection_request(&cluster_addresses, &configuration).into(),
+                None,
+            )
+            .await
+            .expect("Failed to create cluster client with a private CA");
+
+            let backing = BackingServer::Cluster(Some(cluster));
+            let bytes = scope_request_bytes(&backing, &configuration);
+            let key = generate_random_string(10);
+            let routing_slot = glide_core::pool::slot_for_key(key.as_bytes());
+
+            let scope = ScopeHandle::setup(client, bytes, routing_slot).await;
+
+            let mut set_args = vec![key.clone().into_bytes(), b"scoped_cluster_tls".to_vec()];
+            scope
+                .send("SET", &mut set_args)
+                .await
+                .expect("scoped SET against a private-CA cluster should succeed");
+
+            let mut get_args = vec![key.into_bytes()];
+            let value = scope
+                .send("GET", &mut get_args)
+                .await
+                .expect("scoped GET against a private-CA cluster should succeed");
+            assert_eq!(
+                value,
+                Value::BulkString(b"scoped_cluster_tls".to_vec().into())
+            );
+
+            scope.release();
+        });
+    }
+
+    /// Inline (byte-based) certificate material configures no reload handle, so a
+    /// scope can only inherit it from the parent's static `tls_params` snapshot.
+    /// The server runs `--tls-auth-clients yes`, so a scope that drops the
+    /// snapshot offers no client certificate and never connects.
+    #[cfg(feature = "proto")]
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
+    fn test_scope_inherits_parent_inline_mtls_cert_material() {
+        block_on_all(async move {
+            let tempdir = tempfile::tempdir().expect("Failed to create temp dir");
+            let tls_paths = build_tls_file_paths(&tempdir);
+
+            let client_cert = tempdir.path().join("client.crt");
+            let client_key = tempdir.path().join("client.key");
+            rotate_client_cert_and_key(&tls_paths, &client_cert, &client_key);
+
+            let server = RedisServer::new_with_addr_tls_modules_and_spawner(
+                redis::ConnectionAddr::TcpTls {
+                    host: "127.0.0.1".to_string(),
+                    port: get_available_port(),
+                    insecure: false,
+                    tls_params: None,
+                },
+                Some(tls_paths.clone()),
+                &[],
+                true,
+                |cmd| cmd.spawn().expect("Failed to spawn server"),
+            );
+            let server_addr = server.get_client_addr();
+            tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+
+            // Bytes, not paths, and no `cert_reload`: the parent ends up with a
+            // `tls_params` snapshot and no reload handle.
+            let configuration = TestConfiguration {
+                use_tls: true,
+                shared_server: false,
+                client_cert: Some(std::fs::read(&client_cert).expect("read client cert")),
+                client_key: Some(std::fs::read(&client_key).expect("read client key")),
+                root_certs: vec![tls_paths.read_ca_cert_as_bytes()],
+                ..Default::default()
+            };
+
+            let client = Client::new(
+                create_connection_request(std::slice::from_ref(&server_addr), &configuration)
+                    .into(),
+                None,
+            )
+            .await
+            .expect("Failed to create inline-mTLS client");
+
+            let backing = BackingServer::Standalone(Some(server));
+            let bytes = scope_request_bytes(&backing, &configuration);
+            let key = generate_random_string(10);
+            let routing_slot = glide_core::pool::slot_for_key(key.as_bytes());
+
+            let scope = ScopeHandle::setup(client, bytes, routing_slot).await;
+
+            let mut set_args = vec![key.clone().into_bytes(), b"scoped_inline_mtls".to_vec()];
+            scope
+                .send("SET", &mut set_args)
+                .await
+                .expect("scoped SET over inline mTLS should succeed");
+
+            let mut get_args = vec![key.into_bytes()];
+            let value = scope
+                .send("GET", &mut get_args)
+                .await
+                .expect("scoped GET over inline mTLS should succeed");
+            assert_eq!(
+                value,
+                Value::BulkString(b"scoped_inline_mtls".to_vec().into())
+            );
+
+            scope.release();
+        });
+    }
+
+    /// A lazy parent has no certificate material until its first command
+    /// connects, so the material is recorded on the lazy-initialization path
+    /// rather than at construction. Run one ordinary command, then take a scope:
+    /// the scope must inherit what that connect adopted. Both modes, because
+    /// standalone and cluster record it at different sites.
+    #[cfg(feature = "proto")]
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_scope_inherits_lazy_parent_cert_material(#[values(false, true)] use_cluster: bool) {
+        block_on_all(async move {
+            let tempdir = tempfile::tempdir().expect("Failed to create temp dir");
+            let tls_paths = build_tls_file_paths(&tempdir);
+            let ca_cert_bytes = tls_paths.read_ca_cert_as_bytes();
+
+            let (backing, addresses) = if use_cluster {
+                let cluster = RedisCluster::new_with_tls(3, 0, Some(tls_paths));
+                let addresses = cluster.get_server_addresses();
+                (BackingServer::Cluster(Some(cluster)), addresses)
+            } else {
+                let server = RedisServer::new_with_tls(true, Some(tls_paths));
+                let addresses = vec![server.get_client_addr()];
+                tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+                (BackingServer::Standalone(Some(server)), addresses)
+            };
+
+            let configuration = TestConfiguration {
+                use_tls: true,
+                shared_server: false,
+                lazy_connect: true,
+                cluster_mode: if use_cluster {
+                    ClusterMode::Enabled
+                } else {
+                    ClusterMode::Disabled
+                },
+                root_certs: vec![ca_cert_bytes],
+                ..Default::default()
+            };
+
+            let mut client = Client::new(
+                create_connection_request(&addresses, &configuration).into(),
+                None,
+            )
+            .await
+            .expect("Failed to create lazy private-CA client");
+
+            let key = generate_random_string(10);
+            let routing_slot = glide_core::pool::slot_for_key(key.as_bytes());
+
+            // The connect that records the certificate material happens here, not
+            // in `Client::new`.
+            let mut warmup = redis::cmd("GET");
+            warmup.arg(&key);
+            client
+                .send_command(&mut warmup, None)
+                .await
+                .expect("the first command connects the lazy client");
+
+            let bytes = scope_request_bytes(&backing, &configuration);
+            let scope = ScopeHandle::setup(client, bytes, routing_slot).await;
+
+            let mut set_args = vec![key.clone().into_bytes(), b"scoped_lazy_tls".to_vec()];
+            scope
+                .send("SET", &mut set_args)
+                .await
+                .expect("scoped SET off a lazily connected parent should succeed");
+
+            let mut get_args = vec![key.into_bytes()];
+            let value = scope
+                .send("GET", &mut get_args)
+                .await
+                .expect("scoped GET off a lazily connected parent should succeed");
+            assert_eq!(value, Value::BulkString(b"scoped_lazy_tls".to_vec().into()));
+
+            scope.release();
+        });
+    }
+
+    /// A scope must present the certificate the parent has *adopted*, not the one
+    /// it connected with. `tls-auth-clients-user CN` makes that observable: the
+    /// server authenticates each connection as the ACL user named by its client
+    /// certificate's Common Name, so `ACL WHOAMI` reports which certificate was
+    /// used. The parent starts as `alice`; after the files rotate to `bob` and the
+    /// reload interval elapses, a new scope must report `bob`, while the parent's
+    /// and the first scope's existing connections — which never re-handshake —
+    /// still report `alice`.
+    ///
+    /// Requires Valkey 9.0, where `tls-auth-clients-user` was added; older servers
+    /// refuse to start with the directive, so gate on the binary's version.
+    #[cfg(feature = "proto")]
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(LONG_CLUSTER_TEST_TIMEOUT)]
+    fn test_scope_adopts_rotated_parent_cert_material() {
+        block_on_all(async move {
+            match installed_server_version() {
+                Some((major, minor, _)) if (major, minor) >= (9, 0) => {}
+                other => {
+                    println!(
+                        "Skipping: tls-auth-clients-user requires Valkey 9.0, found {other:?}"
+                    );
+                    return;
+                }
+            }
+
+            let tempdir = tempfile::tempdir().expect("Failed to create temp dir");
+            let tls_paths = build_tls_file_paths(&tempdir);
+
+            let client_cert = tempdir.path().join("client.crt");
+            let client_key = tempdir.path().join("client.key");
+            rotate_client_cert_and_key_with_cn(&tls_paths, &client_cert, &client_key, "alice");
+
+            // Both ACL users must exist before the first handshake: with
+            // `tls-auth-clients-user CN` the server rejects a certificate whose CN
+            // names no user, and there is no earlier connection to create them on.
+            let server = RedisServer::new_with_addr_tls_modules_and_spawner(
+                redis::ConnectionAddr::TcpTls {
+                    host: "127.0.0.1".to_string(),
+                    port: get_available_port(),
+                    insecure: false,
+                    tls_params: None,
+                },
+                Some(tls_paths.clone()),
+                &[],
+                true,
+                |cmd| {
+                    cmd.arg("--tls-auth-clients-user").arg("CN");
+                    for user in ["alice", "bob"] {
+                        cmd.arg("--user")
+                            .arg(user)
+                            .arg("on")
+                            .arg("nopass")
+                            .arg("~*")
+                            .arg("&*")
+                            .arg("+@all");
+                    }
+                    cmd.spawn().expect("Failed to spawn server")
+                },
+            );
+            let server_addr = server.get_client_addr();
+            tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+
+            let configuration = TestConfiguration {
+                use_tls: true,
+                shared_server: false,
+                client_cert_path: Some(client_cert.to_string_lossy().to_string()),
+                client_key_path: Some(client_key.to_string_lossy().to_string()),
+                root_certs: vec![tls_paths.read_ca_cert_as_bytes()],
+                cert_reload_interval_seconds: Some(1),
+                ..Default::default()
+            };
+
+            let mut client = Client::new(
+                create_connection_request(std::slice::from_ref(&server_addr), &configuration)
+                    .into(),
+                None,
+            )
+            .await
+            .expect("Failed to create mTLS client");
+
+            assert_eq!(
+                acl_whoami(&mut client).await,
+                "alice",
+                "the server authenticates the parent as its certificate's CN"
+            );
+
+            let backing = BackingServer::Standalone(Some(server));
+            let bytes = scope_request_bytes(&backing, &configuration);
+            let key = generate_random_string(10);
+            let routing_slot = glide_core::pool::slot_for_key(key.as_bytes());
+
+            let first_scope = ScopeHandle::setup(client.clone(), bytes.clone(), routing_slot).await;
+            assert_eq!(scope_acl_whoami(&first_scope).await, "alice");
+
+            rotate_client_cert_and_key_with_cn(&tls_paths, &client_cert, &client_key, "bob");
+            // Past the 1s reload interval, so the parent's reload handle has
+            // adopted the new pair.
+            tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+
+            // `first_scope` is deliberately still borrowed, so this scope is a
+            // fresh creation reading the parent's material now.
+            let second_scope = ScopeHandle::setup(client.clone(), bytes, routing_slot).await;
+            assert_eq!(
+                scope_acl_whoami(&second_scope).await,
+                "bob",
+                "a scope created after the rotation must present the adopted certificate, \
+                 not the parent's connect-time snapshot"
+            );
+            assert_eq!(
+                acl_whoami(&mut client).await,
+                "alice",
+                "the parent's live connection does not re-handshake on rotation"
+            );
+            assert_eq!(
+                scope_acl_whoami(&first_scope).await,
+                "alice",
+                "a live scope keeps the material it was created with until released"
+            );
+
+            second_scope.release();
+            first_scope.release();
         });
     }
 

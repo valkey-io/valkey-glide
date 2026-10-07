@@ -374,8 +374,9 @@ const SCOPE_CONNECT_TIMEOUT: std::time::Duration = std::time::Duration::from_sec
 /// Why a scoped connection could not be created and seated in the pool.
 ///
 /// Every variant releases the caller's `max_total` reservation exactly once, at the
-/// single failure exit in [`create_scope_connection`], and is logged there so a
-/// borrower's eventual "pool exhausted" timeout can be traced back to its cause.
+/// single failure exit in [`create_scope_connection`], and is logged there — once
+/// per episode, see [`ScopePool::last_create_warn`] — so a borrower's eventual
+/// "pool exhausted" timeout can be traced back to its cause.
 #[cfg(feature = "proto")]
 #[derive(Debug)]
 pub enum ScopeCreateError {
@@ -387,6 +388,11 @@ pub enum ScopeCreateError {
     NoSeedAddress,
     /// A `ClusterPrimary` target string was not a parseable `host:port`.
     InvalidClusterTarget(Arc<String>),
+    /// The request configures custom TLS certificate material, but none is
+    /// available from the parent — a lazy parent that has not connected yet has
+    /// nothing to inherit. Connecting anyway would silently fall back to system
+    /// trust roots with no client certificate.
+    ParentCertMaterialUnavailable,
     /// `redis::Client::open` rejected the constructed `ConnectionInfo`.
     ClientOpenFailed(RedisError),
     /// The connect attempt failed.
@@ -403,6 +409,25 @@ pub enum ScopeCreateError {
     PoolClosed,
 }
 
+/// Which [`ScopeCreateError`] variant a failure was, without its payload.
+///
+/// The counterpart of [`crate::pool::ScopeTargetUnresolved::same_kind`] for
+/// creation failures, so repeats of one cause are recognized by variant. A
+/// discriminant rather than the error itself: the pool only needs equality, and
+/// retaining a `RedisError` (or the parse error) for the lifetime of the pool
+/// just to compare against would be wasteful.
+#[cfg(feature = "proto")]
+pub type ScopeCreateErrorKind = std::mem::Discriminant<ScopeCreateError>;
+
+#[cfg(feature = "proto")]
+impl ScopeCreateError {
+    /// This failure's variant, for the warn-once-per-episode record on
+    /// [`ScopePool::last_create_warn`].
+    pub fn kind(&self) -> ScopeCreateErrorKind {
+        std::mem::discriminant(self)
+    }
+}
+
 #[cfg(feature = "proto")]
 impl std::fmt::Display for ScopeCreateError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -413,6 +438,9 @@ impl std::fmt::Display for ScopeCreateError {
             Self::InvalidClusterTarget(addr) => {
                 write!(f, "cluster target is not a valid host:port: {addr}")
             }
+            Self::ParentCertMaterialUnavailable => f.write_str(
+                "parent client's TLS certificate material is not available; connect the parent client before taking a scope",
+            ),
             Self::ClientOpenFailed(e) => write!(f, "client open failed: {e}"),
             Self::ConnectFailed(e) => write!(f, "connect failed: {e}"),
             Self::ConnectTimedOut => write!(f, "connect timed out after {SCOPE_CONNECT_TIMEOUT:?}"),
@@ -458,14 +486,20 @@ fn parse_cluster_target(addr: &str) -> Option<(String, u16)> {
 }
 
 /// Build a `redis::ConnectionAddr` from a host/port and TLS mode. Mirrors only the
-/// TLS-mode mapping of `client::get_connection_info`; scoped connections carry neither
-/// the parent's `address_resolver` nor its custom TLS certificate material, so
-/// `tls_params` is always `None`.
+/// TLS-mode mapping of `client::get_connection_info`; `tls_params` carries the
+/// parent client's certificate material so a scope off an mTLS parent presents the
+/// same client certificate and trusts the same roots.
+///
+/// Scoped connections do apply the parent's `address_resolver`, but only to a
+/// standalone seed address: a `ClusterPrimary` target is read from the parent's
+/// slot map, which the resolver already rewrote, so resolving it again here would
+/// resolve the address twice.
 #[cfg(feature = "proto")]
 fn build_scope_connection_addr(
     host: String,
     port: u16,
     tls_mode: crate::connection_request::TlsMode,
+    tls_params: Option<redis::TlsConnParams>,
 ) -> redis::ConnectionAddr {
     use crate::connection_request::TlsMode;
     match tls_mode {
@@ -474,8 +508,23 @@ fn build_scope_connection_addr(
             host,
             port,
             insecure: tls_mode == TlsMode::InsecureTls,
-            tls_params: None,
+            tls_params,
         },
+    }
+}
+
+/// The certificate material a scope inherits from its parent.
+///
+/// The reload handle wins over the parent's `tls_params`: that snapshot is frozen
+/// at parent-connect, so it is empty for a lazy parent and stale after a rotation.
+/// A scope must present the freshest adopted material, not the certificate the
+/// parent started with. The snapshot is the fallback for inline (byte-based) cert
+/// material, which configures no reload handle.
+#[cfg(feature = "proto")]
+async fn inherited_tls_params(client: Option<&Client>) -> Option<redis::TlsConnParams> {
+    match client.and_then(|c| c.cert_reload_handle()) {
+        Some(handle) => Some(handle.current_params().await),
+        None => client.and_then(|c| c.tls_params()),
     }
 }
 
@@ -509,6 +558,20 @@ async fn build_scope_connection(
         .tls_mode
         .enum_value()
         .unwrap_or(crate::connection_request::TlsMode::SecureTls);
+    let tls_params = inherited_tls_params(client).await;
+    // The parent configured certificate material, but none is reachable yet (a
+    // lazy parent that has not connected). Connecting would downgrade to system
+    // trust with no client certificate, so fail the acquire instead. Read off the
+    // parent, not the scope request: a caller-supplied request need not repeat the
+    // cert fields, and the parent is the authority on what was configured.
+    if tls_mode != crate::connection_request::TlsMode::NoTls
+        && tls_params.is_none()
+        && client
+            .map(|c| c.configures_cert_material())
+            .unwrap_or(false)
+    {
+        return Err(ScopeCreateError::ParentCertMaterialUnavailable);
+    }
     let (host, port) = match target {
         ScopeTarget::Standalone => {
             let addr = proto
@@ -522,13 +585,19 @@ async fn build_scope_connection(
             };
             // Trim brackets here too, so a configured `[::1]` standalone host works
             // like the cluster branch — redis-rs's tuple `lookup_host` wants bare `::1`.
-            (strip_host_brackets(&addr.host).to_string(), port)
+            let host = strip_host_brackets(&addr.host);
+            // The seed is still the raw configured address, resolved here the same
+            // way `client::get_connection_info` does. The cluster arm must not.
+            match client.and_then(|c| c.address_resolver()) {
+                Some(resolver) => resolver.resolve(host, port),
+                None => (host.to_string(), port),
+            }
         }
         ScopeTarget::ClusterPrimary(addr) => parse_cluster_target(addr)
             .ok_or_else(|| ScopeCreateError::InvalidClusterTarget(Arc::clone(addr)))?,
     };
 
-    let connection_addr = build_scope_connection_addr(host, port, tls_mode);
+    let connection_addr = build_scope_connection_addr(host, port, tls_mode, tls_params);
     let redis_client = redis::Client::open(redis::ConnectionInfo {
         addr: connection_addr,
         // The old `redis://` URL carried no `resp3` param, so redis-rs parsed it
@@ -549,6 +618,10 @@ async fn build_scope_connection(
         tcp_nodelay: true,
         pubsub_synchronizer: None,
         iam_token_provider: None,
+        // A plain multiplexed connection has no reconnect loop to re-read this on
+        // (the scope does not go through `ReconnectingConnection`), and only the
+        // cluster path reads the provider at all, so it is inert here either way.
+        // The scope takes the freshest material at creation via `current_params()`.
         cert_params_provider: None,
     };
     let mut conn = match tokio::time::timeout(
@@ -701,6 +774,12 @@ pub async fn create_scope_connection(
 
     match connection {
         Ok(prepared) => {
+            if pool_guard.last_create_warn.take().is_some() {
+                glide_logger::log_debug(
+                    "create_scope_connection",
+                    format!("scoped connection to {target:?} created again"),
+                );
+            }
             let scope_id = pool_guard.next_id();
             pool_guard.idle.push_back(ScopedConnection {
                 scope_id,
@@ -721,12 +800,24 @@ pub async fn create_scope_connection(
             // The uncommitted `reservation` gives the slot back on drop. A pool
             // shutting down is expected, not a fault; everything else is worth a
             // warning because the borrower only ever sees a generic "pool
-            // exhausted" timeout.
+            // exhausted" timeout — but only the first of an episode. Bindings
+            // retry acquire every few milliseconds and each retry spawns another
+            // creation, so a cause that persists (a lazy mTLS parent, an
+            // unreachable shard) would otherwise warn tens of times a second.
+            // Same warn-once-per-kind, debug-the-repeats, clear-on-success shape
+            // as `log_unresolved_target`.
             let message = format!("scoped connection to {target:?} not created: {err}");
             if matches!(err, ScopeCreateError::PoolClosed) {
                 glide_logger::log_debug("create_scope_connection", message);
             } else {
-                glide_logger::log_warn("create_scope_connection", message);
+                let kind = err.kind();
+                let repeated = pool_guard.last_create_warn == Some(kind);
+                pool_guard.last_create_warn = Some(kind);
+                if repeated {
+                    glide_logger::log_debug("create_scope_connection", message);
+                } else {
+                    glide_logger::log_warn("create_scope_connection", message);
+                }
             }
         }
     }
@@ -1113,10 +1204,11 @@ mod tests {
     use protobuf::Message as _;
     use tokio::sync::Mutex as TokioMutex;
 
-    use super::{build_scope_connection_addr, parse_cluster_target, strip_host_brackets};
     use super::{
-        create_scope_connection, resolve_scope_parent, try_acquire_scope, try_resolve_scope_target,
+        ScopeCreateError, build_scope_connection, create_scope_connection, inherited_tls_params,
+        resolve_scope_parent, try_acquire_scope, try_resolve_scope_target,
     };
+    use super::{build_scope_connection_addr, parse_cluster_target, strip_host_brackets};
 
     use super::Client;
     use crate::client::{ConnectionRequest as ClientRequest, NodeAddress as ClientAddress};
@@ -1156,6 +1248,62 @@ mod tests {
         request_bytes_with_mode(lib_name, port, false)
     }
 
+    /// Re-read interval for a test reload manager. No test here starts the
+    /// background re-read task, so this only has to stay under the over-long-interval
+    /// warning.
+    const RELOAD_INTERVAL_SECS: u32 = 60;
+
+    /// The matching self-signed pairs the cert-reload tests already use.
+    const CERT_A: &str = include_str!("tls_reload/test_data/cert_a.pem");
+    const KEY_A: &str = include_str!("tls_reload/test_data/key_a.pem");
+    const CERT_B: &str = include_str!("tls_reload/test_data/cert_b.pem");
+    const KEY_B: &str = include_str!("tls_reload/test_data/key_b.pem");
+
+    fn test_tls_params(cert: &str, key: &str) -> redis::TlsConnParams {
+        redis::retrieve_tls_certificates(redis::TlsCertificates {
+            client_tls: Some(redis::ClientTlsConfig {
+                client_cert: cert.as_bytes().to_vec(),
+                client_key: key.as_bytes().to_vec(),
+            }),
+            root_cert: Some(cert.as_bytes().to_vec()),
+        })
+        .expect("test cert/key pair should parse")
+    }
+
+    /// A reload manager serving `cert`/`key` from a temp dir. The returned
+    /// `TempDir` must outlive the manager.
+    async fn test_reload_manager(
+        cert: &str,
+        key: &str,
+    ) -> (tempfile::TempDir, crate::tls_reload::CertReloadManager) {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let cert_path = dir.path().join("cert.pem");
+        let key_path = dir.path().join("key.pem");
+        std::fs::write(&cert_path, cert).expect("write cert");
+        std::fs::write(&key_path, key).expect("write key");
+        let manager = crate::tls_reload::CertReloadManager::new(
+            cert_path,
+            key_path,
+            None,
+            Some(RELOAD_INTERVAL_SECS),
+        )
+        .await
+        .expect("matching pair should load");
+        (dir, manager)
+    }
+
+    /// A TLS request whose seed port is closed.
+    fn mtls_request_bytes() -> Vec<u8> {
+        let mut request = ConnectionRequest::new();
+        request.addresses.push(NodeAddress {
+            host: "127.0.0.1".into(),
+            port: 1,
+            ..Default::default()
+        });
+        request.tls_mode = crate::connection_request::TlsMode::SecureTls.into();
+        request.write_to_bytes().expect("serialize scope request")
+    }
+
     fn reserved_pool(request_bytes: Vec<u8>) -> Arc<TokioMutex<ScopePool>> {
         let pool = ScopePool::new(ScopePoolConfig::default(), request_bytes, 1);
         pool.total_count.store(1, Ordering::Release);
@@ -1163,6 +1311,31 @@ mod tests {
     }
 
     async fn lazy_parent(cluster: bool) -> Client {
+        lazy_parent_with_resolver(cluster, None).await
+    }
+
+    /// A lazy parent that configured certificate material, so the inherit-or-fail
+    /// guard arms, but has not connected, so it has none to hand out yet.
+    async fn lazy_mtls_parent() -> Client {
+        let request = ClientRequest {
+            addresses: vec![ClientAddress {
+                host: "127.0.0.1".to_string(),
+                port: 1,
+            }],
+            lazy_connect: true,
+            root_certs: vec![CERT_A.into()],
+            ..Default::default()
+        };
+
+        Client::new(request, None)
+            .await
+            .expect("lazy client construction does not touch the network")
+    }
+
+    async fn lazy_parent_with_resolver(
+        cluster: bool,
+        address_resolver: Option<Arc<dyn redis::AddressResolver>>,
+    ) -> Client {
         let request = ClientRequest {
             addresses: vec![ClientAddress {
                 host: "127.0.0.1".to_string(),
@@ -1170,6 +1343,7 @@ mod tests {
             }],
             cluster_mode_enabled: cluster,
             lazy_connect: true,
+            address_resolver,
             ..Default::default()
         };
 
@@ -1608,6 +1782,90 @@ mod tests {
 
         unregister_client(client_id);
         get_client_scope_pools().remove(&client_id);
+    }
+
+    /// Creation failures repeat as fast as the binding retries, because each retry
+    /// poll spawns another creation. `create_scope_connection` must therefore warn
+    /// once per episode and log the repeats at debug, clearing the record once a
+    /// creation succeeds — the same shape `log_unresolved_target` applies to an
+    /// unresolved target. As there, the log lines are not observable here; the
+    /// field they key on is.
+    #[tokio::test]
+    async fn create_failure_is_recorded_once_per_kind_and_cleared_on_success() {
+        let (port, shutdown_sender, server) = responsive_endpoint();
+        let good_bytes = request_bytes("", port);
+        let pool = Arc::new(TokioMutex::new(ScopePool::new(
+            ScopePoolConfig::default(),
+            good_bytes.clone(),
+            1,
+        )));
+
+        // A standalone request with no seed address, so creation fails with a
+        // different variant than the mTLS parent's and before any connect.
+        let no_seed_bytes = ConnectionRequest::new()
+            .write_to_bytes()
+            .expect("serialize scope request");
+        let mtls_bytes = mtls_request_bytes();
+        let cert_parent = lazy_mtls_parent().await;
+
+        let create = |client: Option<Client>, bytes: Vec<u8>| {
+            let pool = pool.clone();
+            async move {
+                // Each failure gives its slot back, so re-reserve before the next.
+                pool.lock().await.total_count.store(1, Ordering::Release);
+                let reservation = reservation_for(&pool).await;
+                create_scope_connection(
+                    pool.clone(),
+                    client.as_ref(),
+                    &bytes,
+                    ScopeTarget::Standalone,
+                    reservation,
+                )
+                .await;
+            }
+        };
+        let recorded =
+            |pool: Arc<TokioMutex<ScopePool>>| async move { pool.lock().await.last_create_warn };
+
+        assert_eq!(
+            recorded(pool.clone()).await,
+            None,
+            "nothing recorded before the first creation"
+        );
+
+        create(Some(cert_parent.clone()), mtls_bytes.clone()).await;
+        assert_eq!(
+            recorded(pool.clone()).await,
+            Some(ScopeCreateError::ParentCertMaterialUnavailable.kind()),
+            "the first failure of a kind is the one that warns"
+        );
+
+        // Same cause again: the record is unchanged (a repeat, logged at debug).
+        create(Some(cert_parent), mtls_bytes).await;
+        assert_eq!(
+            recorded(pool.clone()).await,
+            Some(ScopeCreateError::ParentCertMaterialUnavailable.kind()),
+        );
+
+        // A different variant is a new kind of cause, so it warns in its own right.
+        create(None, no_seed_bytes).await;
+        assert_eq!(
+            recorded(pool.clone()).await,
+            Some(ScopeCreateError::NoSeedAddress.kind()),
+        );
+        assert_ne!(
+            ScopeCreateError::NoSeedAddress.kind(),
+            ScopeCreateError::ParentCertMaterialUnavailable.kind(),
+            "the two causes must differ for this test to discriminate"
+        );
+
+        // A creation succeeding ends the episode, so the next failure warns again.
+        create(None, good_bytes).await;
+        assert_eq!(pool.lock().await.idle.len(), 1, "connection seated");
+        assert_eq!(recorded(pool.clone()).await, None);
+
+        shutdown_sender.send(()).expect("signal server shutdown");
+        server.join().expect("join server thread");
     }
 
     #[tokio::test]
@@ -2246,7 +2504,7 @@ mod tests {
     #[test]
     fn build_scope_connection_addr_ipv6_no_tls() {
         use crate::connection_request::TlsMode;
-        let addr = build_scope_connection_addr("::1".to_string(), 7801, TlsMode::NoTls);
+        let addr = build_scope_connection_addr("::1".to_string(), 7801, TlsMode::NoTls, None);
         match addr {
             redis::ConnectionAddr::Tcp(host, port) => {
                 assert_eq!(host, "::1");
@@ -2260,7 +2518,7 @@ mod tests {
     fn build_scope_connection_addr_ipv6_secure_and_insecure_tls() {
         use crate::connection_request::TlsMode;
 
-        let secure = build_scope_connection_addr("::1".to_string(), 6379, TlsMode::SecureTls);
+        let secure = build_scope_connection_addr("::1".to_string(), 6379, TlsMode::SecureTls, None);
         match secure {
             redis::ConnectionAddr::TcpTls {
                 host,
@@ -2275,7 +2533,8 @@ mod tests {
             other => panic!("expected verifying TcpTls, got {other:?}"),
         }
 
-        let insecure = build_scope_connection_addr("::1".to_string(), 6379, TlsMode::InsecureTls);
+        let insecure =
+            build_scope_connection_addr("::1".to_string(), 6379, TlsMode::InsecureTls, None);
         match insecure {
             redis::ConnectionAddr::TcpTls { host, insecure, .. } => {
                 assert_eq!(host, "::1");
@@ -2283,5 +2542,280 @@ mod tests {
             }
             other => panic!("expected insecure TcpTls, got {other:?}"),
         }
+    }
+
+    /// The parent's certificate material has to reach the scoped connection's
+    /// address, otherwise the handshake falls back to system trust roots and sends
+    /// no client certificate.
+    #[test]
+    fn build_scope_connection_addr_carries_parent_tls_params() {
+        use crate::connection_request::TlsMode;
+
+        let parent_params = test_tls_params(CERT_A, KEY_A);
+
+        let inherited = build_scope_connection_addr(
+            "127.0.0.1".to_string(),
+            6379,
+            TlsMode::SecureTls,
+            Some(parent_params),
+        );
+        match inherited {
+            redis::ConnectionAddr::TcpTls { tls_params, .. } => {
+                let params = tls_params.expect("parent tls_params must be inherited");
+                assert!(
+                    !params.client_cert_chain_der().is_empty(),
+                    "inherited params must carry the parent's client certificate"
+                );
+            }
+            other => panic!("expected TcpTls, got {other:?}"),
+        }
+
+        // No parent material configured stays `None` rather than inventing any.
+        let bare =
+            build_scope_connection_addr("127.0.0.1".to_string(), 6379, TlsMode::SecureTls, None);
+        match bare {
+            redis::ConnectionAddr::TcpTls { tls_params, .. } => {
+                assert!(tls_params.is_none(), "expected no tls_params, got Some");
+            }
+            other => panic!("expected TcpTls, got {other:?}"),
+        }
+    }
+
+    /// `build_scope_connection`'s failure, for the TLS cases below. `expect_err` is
+    /// unavailable: the success type holds a connection, which is not `Debug`.
+    async fn scope_connect_error(parent: &Client, request_bytes: &[u8]) -> ScopeCreateError {
+        match build_scope_connection(Some(parent), request_bytes, &ScopeTarget::Standalone).await {
+            Err(err) => err,
+            Ok(_) => panic!("nothing listens on the seed port, so no scope can be created"),
+        }
+    }
+
+    /// A scope must connect with the parent's *current* certificate material. The
+    /// parent's `tls_params` are a snapshot taken when it connected: empty for a
+    /// lazy parent, stale after a rotation. Resolving from that snapshot here
+    /// yields `None`, which the fail-fast guard then rejects before any connect.
+    #[tokio::test]
+    async fn scope_connection_reads_cert_material_from_the_parents_reload_handle() {
+        let (_dir, manager) = test_reload_manager(CERT_A, KEY_A).await;
+
+        let parent = lazy_mtls_parent().await;
+        // The shape a lazy parent with path-based reload has: no snapshot, live handle.
+        parent.set_cert_material_for_test(crate::client::InheritedCertMaterial {
+            tls_params: None,
+            reload_handle: Some(manager.get_handle()),
+        });
+
+        let err = scope_connect_error(&parent, &mtls_request_bytes()).await;
+
+        assert!(
+            matches!(
+                err,
+                ScopeCreateError::ConnectFailed(_) | ScopeCreateError::ConnectTimedOut
+            ),
+            "the handle's material must reach the connection attempt, got: {err}"
+        );
+    }
+
+    /// The handle must win over a *populated* snapshot, not just an empty one: a
+    /// parent that connected with cert_a and has since adopted cert_b hands a new
+    /// scope cert_b. A snapshot-first read would hand out the retired certificate,
+    /// which the server stops accepting once the rotation completes.
+    #[tokio::test]
+    async fn inherited_tls_params_prefers_the_reload_handle_over_a_stale_snapshot() {
+        let (_dir, manager) = test_reload_manager(CERT_B, KEY_B).await;
+
+        let parent = lazy_parent(false).await;
+        parent.set_cert_material_for_test(crate::client::InheritedCertMaterial {
+            tls_params: Some(test_tls_params(CERT_A, KEY_A)),
+            reload_handle: Some(manager.get_handle()),
+        });
+
+        let inherited = inherited_tls_params(Some(&parent))
+            .await
+            .expect("the parent carries material on both sources");
+
+        let adopted = test_tls_params(CERT_B, KEY_B);
+        let retired = test_tls_params(CERT_A, KEY_A);
+        assert_ne!(
+            adopted.client_cert_chain_der(),
+            retired.client_cert_chain_der(),
+            "the two test pairs must differ for this test to discriminate"
+        );
+        assert_eq!(
+            inherited.client_cert_chain_der(),
+            adopted.client_cert_chain_der(),
+            "a scope must present the adopted certificate, not the parent-connect snapshot"
+        );
+    }
+
+    /// Inline (byte-based) certificate material configures no reload handle, so
+    /// the parent's snapshot is the only source there is — the guard must not fire
+    /// and the material must still reach the connection attempt.
+    #[tokio::test]
+    async fn scope_connection_falls_back_to_the_snapshot_for_inline_cert_material() {
+        let parent = lazy_mtls_parent().await;
+        parent.set_cert_material_for_test(crate::client::InheritedCertMaterial {
+            tls_params: Some(test_tls_params(CERT_A, KEY_A)),
+            reload_handle: None,
+        });
+
+        let err = scope_connect_error(&parent, &mtls_request_bytes()).await;
+
+        assert!(
+            matches!(
+                err,
+                ScopeCreateError::ConnectFailed(_) | ScopeCreateError::ConnectTimedOut
+            ),
+            "the inline snapshot must reach the connection attempt, got: {err}"
+        );
+    }
+
+    /// An mTLS parent that has not connected yet has nothing to inherit, so the
+    /// acquire must fail rather than hand redis-rs no material — which would
+    /// connect against system trust roots with no client certificate.
+    #[tokio::test]
+    async fn scope_connection_fails_fast_when_parent_cert_material_is_unavailable() {
+        let parent = lazy_mtls_parent().await;
+
+        let err = scope_connect_error(&parent, &mtls_request_bytes()).await;
+        assert!(
+            matches!(err, ScopeCreateError::ParentCertMaterialUnavailable),
+            "expected a fail-fast, got: {err}"
+        );
+
+        // The guard must not fire under a parent that never configured material:
+        // system trust with no client certificate is the intended behaviour there.
+        let parent = lazy_parent(false).await;
+        let err = scope_connect_error(&parent, &mtls_request_bytes()).await;
+        assert!(
+            !matches!(err, ScopeCreateError::ParentCertMaterialUnavailable),
+            "system-trust TLS must still be allowed, got: {err}"
+        );
+    }
+
+    // ── Address resolution ───────────────────────────────────────────────────
+    // A standalone scope resolves its seed through the parent's resolver; a
+    // cluster scope must not, because its target left the slot map resolved.
+
+    /// Rewrites every address to a fixed one and records each call, so a test can
+    /// assert both that a branch resolved and that another never did.
+    #[derive(Debug)]
+    struct RecordingResolver {
+        rewrite_to: (String, u16),
+        calls: std::sync::Mutex<Vec<(String, u16)>>,
+    }
+
+    impl RecordingResolver {
+        fn rewriting_to(host: &str, port: u16) -> Arc<Self> {
+            Arc::new(Self {
+                rewrite_to: (host.to_string(), port),
+                calls: std::sync::Mutex::new(Vec::new()),
+            })
+        }
+
+        fn calls(&self) -> Vec<(String, u16)> {
+            self.calls.lock().expect("resolver call log").clone()
+        }
+    }
+
+    impl redis::AddressResolver for RecordingResolver {
+        fn resolve(&self, host: &str, port: u16) -> (String, u16) {
+            self.calls
+                .lock()
+                .expect("resolver call log")
+                .push((host.to_string(), port));
+            self.rewrite_to.clone()
+        }
+    }
+
+    /// Privileged and unbindable, so a connect is refused at once instead of
+    /// hanging — the dead address a resolver must move off of.
+    const UNUSED_PORT: u16 = 1;
+
+    #[tokio::test]
+    async fn standalone_scope_resolves_its_seed_through_the_parent_resolver() {
+        let (port, shutdown_sender, server) = responsive_endpoint();
+        // Only the rewrite can reach the live endpoint: the seed is a dead port.
+        let request_bytes = request_bytes("", UNUSED_PORT);
+        let pool = reserved_pool(request_bytes.clone());
+        let resolver = RecordingResolver::rewriting_to("127.0.0.1", port);
+        let parent = lazy_parent_with_resolver(
+            false,
+            Some(resolver.clone() as Arc<dyn redis::AddressResolver>),
+        )
+        .await;
+
+        let reservation = reservation_for(&pool).await;
+        create_scope_connection(
+            pool.clone(),
+            Some(&parent),
+            &request_bytes,
+            ScopeTarget::Standalone,
+            reservation,
+        )
+        .await;
+
+        assert_eq!(
+            resolver.calls(),
+            vec![("127.0.0.1".to_string(), UNUSED_PORT)],
+            "the seed address must be handed to the parent's resolver"
+        );
+        {
+            let pool = pool.lock().await;
+            assert_eq!(
+                pool.idle.len(),
+                1,
+                "the resolved address must be the one connected to"
+            );
+            assert_eq!(pool.total_count.load(Ordering::Acquire), 1);
+        }
+
+        shutdown_sender.send(()).expect("stop mock server");
+        server.join().expect("mock server exits cleanly");
+    }
+
+    /// Re-resolving a slot-map target (already resolved by redis-rs on its way in)
+    /// would move the connection off its routed primary — here, onto a dead port.
+    #[tokio::test]
+    async fn cluster_scope_does_not_re_resolve_the_slot_map_target() {
+        let (port, shutdown_sender, server) = responsive_endpoint();
+        let request_bytes = request_bytes_with_mode("", UNUSED_PORT, true);
+        let pool = reserved_pool(request_bytes.clone());
+        // Rewrites to the dead port, so a second resolve is visible as a failed
+        // connection as well as a recorded call.
+        let resolver = RecordingResolver::rewriting_to("127.0.0.1", UNUSED_PORT);
+        let parent = lazy_parent_with_resolver(
+            true,
+            Some(resolver.clone() as Arc<dyn redis::AddressResolver>),
+        )
+        .await;
+
+        let reservation = reservation_for(&pool).await;
+        create_scope_connection(
+            pool.clone(),
+            Some(&parent),
+            &request_bytes,
+            ScopeTarget::cluster_primary(format!("127.0.0.1:{port}")),
+            reservation,
+        )
+        .await;
+
+        assert!(
+            resolver.calls().is_empty(),
+            "an already-resolved slot-map target must not be resolved again, got {:?}",
+            resolver.calls()
+        );
+        {
+            let pool = pool.lock().await;
+            assert_eq!(
+                pool.idle.len(),
+                1,
+                "the connection must land on the slot-map address"
+            );
+            assert_eq!(pool.total_count.load(Ordering::Acquire), 1);
+        }
+
+        shutdown_sender.send(()).expect("stop mock server");
+        server.join().expect("mock server exits cleanly");
     }
 }
