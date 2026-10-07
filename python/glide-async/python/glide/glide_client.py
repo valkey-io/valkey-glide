@@ -1220,7 +1220,7 @@ class BaseClient(CoreCommands):
         # (any primary) rather than being pinned to slot 0, which is a real slot.
         has_routing_slot = routing_key is not None
         routing_slot = (
-            _slot_for_key(routing_key.encode("utf-8")) if has_routing_slot else 0
+            _slot_for_key(routing_key.encode("utf-8")) if routing_key is not None else 0
         )
 
         loop = asyncio.get_running_loop()
