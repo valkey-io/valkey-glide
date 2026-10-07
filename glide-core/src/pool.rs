@@ -1024,6 +1024,9 @@ pub struct ScopedConnection {
     /// In cluster mode: the slot this scope is pinned to after first keyed command.
     /// None means not yet pinned (no keyed command issued).
     pub pinned_slot: Option<u16>,
+    /// The cluster routing slot this borrow was acquired for; seeds `pinned_slot`
+    /// so the first keyed command must hash to it. `None` in standalone and idle.
+    pub acquisition_slot: Option<u16>,
     /// The topology-aware destination this connection was created for.
     pub target: ScopeTarget,
     /// Last IAM token generation this connection's AUTH was applied at (see
@@ -1250,12 +1253,17 @@ impl ScopePool {
     /// same acquire (same token) dedupe to a single in-flight creation; distinct
     /// concurrent borrowers (distinct tokens) each reserve and dial, up to
     /// `max_total`.
+    ///
+    /// `acquisition_slot` is recorded on the borrowed connection so command
+    /// validation can require the first keyed command to hash to it (`None` in
+    /// standalone).
     pub fn try_acquire(
         &mut self,
         registry: &DashMap<u64, ScopeEntry>,
         target: ScopeTarget,
         runtime_db: u32,
         attempt_token: u64,
+        acquisition_slot: Option<u16>,
     ) -> ScopeAcquire {
         if self.state.load(Ordering::Acquire) != POOL_RUNNING {
             return ScopeAcquire::Exhausted;
@@ -1295,6 +1303,8 @@ impl ScopePool {
         if let Some(mut conn) = found {
             let scope_id = conn.scope_id;
             conn.borrowed_at = Some(Instant::now());
+            // Reset to None on release, so it never outlives the borrow.
+            conn.acquisition_slot = acquisition_slot;
             // Preserve the connection's actual db; reset only borrow-scoped flags.
             conn.state.begin_borrow(runtime_db);
             registry.insert(
@@ -1473,6 +1483,8 @@ impl ScopePool {
                         // than discarding it to 0.
                         state: ConnectionState::with_configured_db(conn.state.selected_db),
                         pinned_slot: None,
+                        // Idle: not borrowed, so no acquisition slot. Set per borrow.
+                        acquisition_slot: None,
                         target: conn.target.clone(),
                         last_iam_generation: AtomicU64::new(
                             conn.last_iam_generation.load(Ordering::Relaxed),
@@ -1609,6 +1621,8 @@ impl ScopePool {
                                     // so record that as its actual db, not a default.
                                     state: ConnectionState::with_configured_db(self_parent_db),
                                     pinned_slot: None,
+                                    // Idle: not borrowed, so no acquisition slot. Set per borrow.
+                                    acquisition_slot: None,
                                     target: guard.target.clone(),
                                     last_iam_generation: AtomicU64::new(
                                         guard.last_iam_generation.load(Ordering::Relaxed),
@@ -2074,6 +2088,7 @@ mod scope_pool_tests {
                     ScopeTarget::cluster_primary(format!("10.0.0.1:{slot}")),
                     0,
                     next_scope_attempt_token(),
+                    None,
                 ) {
                     ScopeAcquire::Reserved(guard) => guards.push(guard),
                     other => panic!(
@@ -2087,7 +2102,8 @@ mod scope_pool_tests {
                         &registry,
                         ScopeTarget::cluster_primary(format!("10.0.0.1:{max_total}")),
                         0,
-                        next_scope_attempt_token()
+                        next_scope_attempt_token(),
+                        None,
                     ),
                     ScopeAcquire::Exhausted
                 ),
@@ -2300,6 +2316,7 @@ mod scope_pool_tests {
                 ScopeTarget::Standalone,
                 0,
                 next_scope_attempt_token(),
+                None,
             ) {
                 ScopeAcquire::Reused(id) => id,
                 other => panic!("expected the freshly created connection to be idle: {other:?}"),
@@ -2346,6 +2363,7 @@ mod scope_pool_tests {
                 ScopeTarget::Standalone,
                 0,
                 next_scope_attempt_token(),
+                None,
             ) {
                 ScopeAcquire::Reused(id) => id,
                 other => panic!("expected the cleaned-up connection to be reused: {other:?}"),
@@ -2433,6 +2451,7 @@ mod scope_pool_tests {
                 ScopeTarget::Standalone,
                 0,
                 next_scope_attempt_token(),
+                None,
             ) {
                 ScopeAcquire::Reused(id) => id,
                 other => panic!("expected the freshly created connection to be idle: {other:?}"),
@@ -2498,6 +2517,7 @@ mod scope_pool_tests {
                 ScopeTarget::Standalone,
                 0,
                 next_scope_attempt_token(),
+                None,
             ) {
                 ScopeAcquire::Reused(id) => id,
                 other => panic!("expected the cleaned-up connection to be reused: {other:?}"),
@@ -2594,6 +2614,7 @@ mod scope_pool_tests {
                 ScopeTarget::Standalone,
                 runtime_db,
                 next_scope_attempt_token(),
+                None,
             )
         };
         assert!(
@@ -2614,6 +2635,7 @@ mod scope_pool_tests {
                 ScopeTarget::Standalone,
                 runtime_db,
                 next_scope_attempt_token(),
+                None,
             ) {
                 ScopeAcquire::Reused(id) => id,
                 other => panic!("expected the resynced connection to be reused: {other:?}"),
@@ -2655,6 +2677,7 @@ mod scope_pool_tests {
                 ScopeTarget::Standalone,
                 runtime_db,
                 next_scope_attempt_token(),
+                None,
             ) {
                 ScopeAcquire::Reused(id) => id,
                 other => {
@@ -2749,6 +2772,7 @@ mod scope_pool_tests {
                     ScopeTarget::Standalone,
                     runtime_db,
                     next_scope_attempt_token(),
+                    None,
                 )
             },
             ScopeAcquire::NeedsResync
@@ -2767,6 +2791,7 @@ mod scope_pool_tests {
                 ScopeTarget::Standalone,
                 runtime_db,
                 next_scope_attempt_token(),
+                None,
             ) {
                 ScopeAcquire::Reused(id) => id,
                 other => panic!("expected reuse on the runtime db: {other:?}"),
@@ -2811,6 +2836,7 @@ mod scope_pool_tests {
                 ScopeTarget::Standalone,
                 runtime_db,
                 next_scope_attempt_token(),
+                None,
             ) {
                 ScopeAcquire::Reused(id) => id,
                 other => panic!(
@@ -2899,6 +2925,7 @@ mod scope_pool_tests {
                     ScopeTarget::Standalone,
                     3,
                     next_scope_attempt_token(),
+                    None,
                 )
             },
             ScopeAcquire::NeedsResync
@@ -2912,6 +2939,7 @@ mod scope_pool_tests {
                 ScopeTarget::Standalone,
                 3,
                 next_scope_attempt_token(),
+                None,
             ) {
                 ScopeAcquire::Reused(id) => id,
                 other => panic!("expected reuse on db 3: {other:?}"),
@@ -2937,6 +2965,7 @@ mod scope_pool_tests {
                         ScopeTarget::Standalone,
                         5,
                         next_scope_attempt_token(),
+                        None,
                     )
                 },
                 ScopeAcquire::NeedsResync
@@ -2952,6 +2981,7 @@ mod scope_pool_tests {
                 ScopeTarget::Standalone,
                 5,
                 next_scope_attempt_token(),
+                None,
             ) {
                 ScopeAcquire::Reused(id) => id,
                 other => panic!("expected reuse on db 5 after resync: {other:?}"),
@@ -3048,6 +3078,7 @@ mod scope_pool_tests {
                 ScopeTarget::Standalone,
                 3,
                 next_scope_attempt_token(),
+                None,
             ) {
                 ScopeAcquire::Reused(id) => id,
                 other => panic!("expected to hold the db-3 connection: {other:?}"),
@@ -3092,6 +3123,7 @@ mod scope_pool_tests {
                 ScopeTarget::Standalone,
                 5,
                 next_scope_attempt_token(),
+                None,
             ) {
                 ScopeAcquire::Reused(id) => id,
                 other => {
@@ -3205,6 +3237,7 @@ mod scope_pool_tests {
                     ScopeTarget::Standalone,
                     6,
                     next_scope_attempt_token(),
+                    None,
                 )
             },
             ScopeAcquire::NeedsResync
@@ -3224,6 +3257,7 @@ mod scope_pool_tests {
                 ScopeTarget::Standalone,
                 6,
                 next_scope_attempt_token(),
+                None,
             ) {
                 ScopeAcquire::Reused(id) => id,
                 other => panic!("expected reuse on db 6: {other:?}"),
@@ -3451,6 +3485,7 @@ mod scope_pool_tests {
                 ScopeTarget::Standalone,
                 0,
                 next_scope_attempt_token(),
+                None,
             ) {
                 ScopeAcquire::Reused(id) => id,
                 other => panic!("expected a clean reuse on db 0: {other:?}"),
@@ -3580,7 +3615,7 @@ mod scope_pool_tests {
             client_id,
             connection_request_bytes.clone(),
             &handle,
-            0,
+            None,
             attempt_token,
         );
         assert_eq!(
@@ -3595,7 +3630,7 @@ mod scope_pool_tests {
                 client_id,
                 connection_request_bytes.clone(),
                 &handle,
-                0,
+                None,
                 attempt_token,
             );
             if id >= 0 {
@@ -3715,7 +3750,7 @@ mod scope_pool_tests {
         // One logical acquire — the same token on every poll.
         let token = next_scope_attempt_token();
 
-        let reservation = match pool.try_acquire(&registry, target.clone(), 0, token) {
+        let reservation = match pool.try_acquire(&registry, target.clone(), 0, token, None) {
             ScopeAcquire::Reserved(r) => r,
             other => panic!("first acquire must reserve, got {other:?}"),
         };
@@ -3724,7 +3759,7 @@ mod scope_pool_tests {
         for _ in 0..5 {
             assert!(
                 matches!(
-                    pool.try_acquire(&registry, target.clone(), 0, token),
+                    pool.try_acquire(&registry, target.clone(), 0, token, None),
                     ScopeAcquire::CreationPending
                 ),
                 "a same-token retry for an in-flight target must be CreationPending"
@@ -3737,7 +3772,7 @@ mod scope_pool_tests {
         );
 
         // A different target still reserves independently.
-        let _r2 = match pool.try_acquire(&registry, other, 0, next_scope_attempt_token()) {
+        let _r2 = match pool.try_acquire(&registry, other, 0, next_scope_attempt_token(), None) {
             ScopeAcquire::Reserved(r) => r,
             other => panic!("a different target must reserve, got {other:?}"),
         };
@@ -3748,7 +3783,7 @@ mod scope_pool_tests {
         drop(reservation);
         assert!(
             matches!(
-                pool.try_acquire(&registry, target, 0, next_scope_attempt_token()),
+                pool.try_acquire(&registry, target, 0, next_scope_attempt_token(), None),
                 ScopeAcquire::Reserved(_)
             ),
             "after the in-flight creation completes, the target reserves again"
@@ -3772,13 +3807,19 @@ mod scope_pool_tests {
         let target = ScopeTarget::cluster_primary("10.0.0.1:6379");
 
         // Borrower #1 reserves and holds its slot (its creation is in flight).
-        let _r1 = match pool.try_acquire(&registry, target.clone(), 0, next_scope_attempt_token()) {
+        let _r1 = match pool.try_acquire(
+            &registry,
+            target.clone(),
+            0,
+            next_scope_attempt_token(),
+            None,
+        ) {
             ScopeAcquire::Reserved(r) => r,
             other => panic!("borrower #1 must reserve, got {other:?}"),
         };
         // Borrower #2, a distinct acquire (different token) to the SAME target,
         // must get its own reservation, not CreationPending, with 6 slots free.
-        let _r2 = match pool.try_acquire(&registry, target, 0, next_scope_attempt_token()) {
+        let _r2 = match pool.try_acquire(&registry, target, 0, next_scope_attempt_token(), None) {
             ScopeAcquire::Reserved(r) => r,
             other => panic!(
                 "a distinct concurrent borrower of the same target must reserve \
@@ -3800,11 +3841,16 @@ mod scope_pool_tests {
         let registry: DashMap<u64, ScopeEntry> = DashMap::new();
 
         let target = ScopeTarget::cluster_primary("10.0.0.1:6379");
-        let reservation =
-            match pool.try_acquire(&registry, target.clone(), 0, next_scope_attempt_token()) {
-                ScopeAcquire::Reserved(r) => r,
-                other => panic!("expected a reservation, got {other:?}"),
-            };
+        let reservation = match pool.try_acquire(
+            &registry,
+            target.clone(),
+            0,
+            next_scope_attempt_token(),
+            None,
+        ) {
+            ScopeAcquire::Reserved(r) => r,
+            other => panic!("expected a reservation, got {other:?}"),
+        };
         let pending = pool.pending.clone();
         assert!(pending.lock().unwrap().contains_key(&target));
 
@@ -3841,6 +3887,7 @@ mod scope_pool_tests {
             ScopeTarget::cluster_primary("10.0.0.1:6379"),
             0,
             next_scope_attempt_token(),
+            None,
         ) {
             ScopeAcquire::Reserved(r) => r,
             other => panic!("expected a reservation, got {other:?}"),
@@ -3947,6 +3994,7 @@ mod scope_pool_tests {
                     ScopeTarget::Standalone,
                     0,
                     next_scope_attempt_token(),
+                    None,
                 ) {
                     ScopeAcquire::Reused(id) => id,
                     other => {

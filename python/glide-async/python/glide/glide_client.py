@@ -1215,11 +1215,13 @@ class BaseClient(CoreCommands):
         client_id = int(self._ffi.cast("uintptr_t", self._core_client))
         conn_req_bytes = self._conn_req_bytes
 
-        # Compute routing slot from key (CRC16 mod 16384)
-        if routing_key is not None:
-            routing_slot = _slot_for_key(routing_key.encode("utf-8"))
-        else:
-            routing_slot = 0
+        # Compute routing slot from key (CRC16 mod 16384). Presence is carried
+        # separately so a cluster scope with no routing key stays unconstrained
+        # (any primary) rather than being pinned to slot 0, which is a real slot.
+        has_routing_slot = routing_key is not None
+        routing_slot = (
+            _slot_for_key(routing_key.encode("utf-8")) if has_routing_slot else 0
+        )
 
         loop = asyncio.get_running_loop()
 
@@ -1237,6 +1239,7 @@ class BaseClient(CoreCommands):
                     client_id,
                     self._ffi.cast("const uint8_t*", buf),
                     len(conn_req_bytes),
+                    has_routing_slot,
                     routing_slot,
                     attempt_token,
                 )
