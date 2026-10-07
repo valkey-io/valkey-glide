@@ -3595,6 +3595,19 @@ mod credential_provider_tests {
     }
 
     #[test]
+    fn preserves_omitted_session_token() {
+        let converted = validate_and_convert_credentials(JsAwsCredentials {
+            access_key_id: "access-key".to_string(),
+            secret_access_key: "secret-key".to_string(),
+            session_token: None,
+            expires_at_epoch_millis: None,
+        })
+        .unwrap();
+
+        assert!(converted.2.is_none());
+    }
+
+    #[test]
     fn expiry_system_time_overflow_is_a_controlled_credentials_error() {
         let near_maximum = std::time::SystemTime::UNIX_EPOCH
             .checked_add(std::time::Duration::from_secs(i64::MAX as u64))

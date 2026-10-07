@@ -6,14 +6,17 @@ import {
     afterAll,
     afterEach,
     beforeAll,
+    beforeEach,
     describe,
     expect,
     it,
 } from "@jest/globals";
 import { ValkeyCluster } from "../../utils/TestUtils";
 import {
+    BaseClient as BaseClientClass,
     BaseClientConfiguration,
     AwsCredentials,
+    ConfigurationError,
     GlideClient,
     GlideClusterClient,
     GlideCredentialProvider,
@@ -898,6 +901,236 @@ describe("IAM Auth: Mock Credentials", () => {
     );
 });
 
+describe("Direct client credential registration lifecycle", () => {
+    const nativeSeams = BaseClientClass as unknown as {
+        nativeCreateDirectClient: typeof CreateDirectClient;
+        nativeRegisterAddressResolver: (
+            resolver: (host: string, port: number) => [string, number],
+        ) => string;
+        nativeRemoveAddressResolver: (key: string) => void;
+        nativeRegisterCredentialProvider: typeof registerCredentialProvider;
+        nativeRemoveCredentialProvider: typeof removeCredentialProvider;
+    };
+    const originals = {
+        createDirectClient: nativeSeams.nativeCreateDirectClient,
+        registerAddressResolver: nativeSeams.nativeRegisterAddressResolver,
+        removeAddressResolver: nativeSeams.nativeRemoveAddressResolver,
+        registerCredentialProvider:
+            nativeSeams.nativeRegisterCredentialProvider,
+        removeCredentialProvider: nativeSeams.nativeRemoveCredentialProvider,
+    };
+
+    const clientConfig = (credentialProvider: unknown) =>
+        ({
+            addresses: [{ host: "unused.example", port: 1 }],
+            addressResolver: (host: string, port: number) => [host, port],
+            credentials: {
+                username: IAM_USERNAME,
+                iamConfig: {
+                    clusterName: IAM_TEST_CLUSTER_NAME,
+                    service: ServiceType.Elasticache,
+                    region: IAM_TEST_REGION_US_EAST_1,
+                    credentialProvider,
+                },
+            },
+        }) as Parameters<typeof GlideClient.createClient>[0];
+
+    const installNativeMocks = () => {
+        const createDirectClient = jest.fn<
+            ReturnType<typeof nativeSeams.nativeCreateDirectClient>,
+            Parameters<typeof nativeSeams.nativeCreateDirectClient>
+        >();
+        const registerAddressResolver = jest.fn<
+            ReturnType<typeof nativeSeams.nativeRegisterAddressResolver>,
+            Parameters<typeof nativeSeams.nativeRegisterAddressResolver>
+        >(() => "resolver-key");
+        const removeAddressResolver = jest.fn<
+            ReturnType<typeof nativeSeams.nativeRemoveAddressResolver>,
+            Parameters<typeof nativeSeams.nativeRemoveAddressResolver>
+        >();
+        const registerCredentialProvider = jest.fn<
+            ReturnType<typeof nativeSeams.nativeRegisterCredentialProvider>,
+            Parameters<typeof nativeSeams.nativeRegisterCredentialProvider>
+        >(() => "provider-key");
+        const removeCredentialProvider = jest.fn<
+            ReturnType<typeof nativeSeams.nativeRemoveCredentialProvider>,
+            Parameters<typeof nativeSeams.nativeRemoveCredentialProvider>
+        >();
+
+        nativeSeams.nativeCreateDirectClient = createDirectClient;
+        nativeSeams.nativeRegisterAddressResolver = registerAddressResolver;
+        nativeSeams.nativeRemoveAddressResolver = removeAddressResolver;
+        nativeSeams.nativeRegisterCredentialProvider =
+            registerCredentialProvider;
+        nativeSeams.nativeRemoveCredentialProvider = removeCredentialProvider;
+
+        return {
+            createDirectClient,
+            registerAddressResolver,
+            removeAddressResolver,
+            registerCredentialProvider,
+            removeCredentialProvider,
+        };
+    };
+
+    beforeEach(() => {
+        nativeSeams.nativeCreateDirectClient = originals.createDirectClient;
+        nativeSeams.nativeRegisterAddressResolver =
+            originals.registerAddressResolver;
+        nativeSeams.nativeRemoveAddressResolver =
+            originals.removeAddressResolver;
+        nativeSeams.nativeRegisterCredentialProvider =
+            originals.registerCredentialProvider;
+        nativeSeams.nativeRemoveCredentialProvider =
+            originals.removeCredentialProvider;
+    });
+
+    afterEach(() => {
+        nativeSeams.nativeCreateDirectClient = originals.createDirectClient;
+        nativeSeams.nativeRegisterAddressResolver =
+            originals.registerAddressResolver;
+        nativeSeams.nativeRemoveAddressResolver =
+            originals.removeAddressResolver;
+        nativeSeams.nativeRegisterCredentialProvider =
+            originals.registerCredentialProvider;
+        nativeSeams.nativeRemoveCredentialProvider =
+            originals.removeCredentialProvider;
+    });
+
+    it("rejects a non-function provider before registering the resolver", async () => {
+        const mocks = installNativeMocks();
+
+        await expect(
+            GlideClient.createClient(clientConfig("not-a-function")),
+        ).rejects.toThrow(
+            new ConfigurationError(
+                "credentialProvider must be a function or undefined.",
+            ),
+        );
+
+        expect(mocks.registerAddressResolver).not.toHaveBeenCalled();
+        expect(mocks.registerCredentialProvider).not.toHaveBeenCalled();
+        expect(mocks.removeAddressResolver).not.toHaveBeenCalled();
+        expect(mocks.removeCredentialProvider).not.toHaveBeenCalled();
+        expect(mocks.createDirectClient).not.toHaveBeenCalled();
+    });
+
+    it("evaluates a throwing provider getter before registering the resolver", async () => {
+        const mocks = installNativeMocks();
+        const config = clientConfig(undefined);
+        const iamConfig = (config.credentials as { iamConfig: IamAuthConfig })
+            .iamConfig;
+        Object.defineProperty(iamConfig, "credentialProvider", {
+            get: () => {
+                throw new Error("provider getter failure");
+            },
+        });
+
+        await expect(GlideClient.createClient(config)).rejects.toThrow(
+            "provider getter failure",
+        );
+
+        expect(mocks.registerAddressResolver).not.toHaveBeenCalled();
+        expect(mocks.registerCredentialProvider).not.toHaveBeenCalled();
+        expect(mocks.removeAddressResolver).not.toHaveBeenCalled();
+        expect(mocks.removeCredentialProvider).not.toHaveBeenCalled();
+        expect(mocks.createDirectClient).not.toHaveBeenCalled();
+    });
+
+    it("cleans up the resolver when provider registration throws", async () => {
+        const mocks = installNativeMocks();
+        mocks.registerCredentialProvider.mockImplementation(() => {
+            throw new Error("provider registration failure");
+        });
+
+        await expect(
+            GlideClient.createClient(
+                clientConfig(() => ({
+                    accessKeyId: "access",
+                    secretAccessKey: "secret",
+                })),
+            ),
+        ).rejects.toThrow("provider registration failure");
+
+        expect(mocks.registerAddressResolver).toHaveBeenCalledTimes(1);
+        expect(mocks.registerCredentialProvider).toHaveBeenCalledTimes(1);
+        expect(mocks.removeAddressResolver).toHaveBeenCalledTimes(1);
+        expect(mocks.removeAddressResolver).toHaveBeenCalledWith(
+            "resolver-key",
+        );
+        expect(mocks.removeCredentialProvider).not.toHaveBeenCalled();
+        expect(mocks.createDirectClient).not.toHaveBeenCalled();
+    });
+
+    it.each(["synchronous throw", "async rejection"])(
+        "cleans up both registrations exactly once after native %s",
+        async (failureMode) => {
+            const mocks = installNativeMocks();
+
+            if (failureMode === "synchronous throw") {
+                mocks.createDirectClient.mockImplementation(() => {
+                    throw new Error("native setup failure");
+                });
+            } else {
+                mocks.createDirectClient.mockRejectedValue(
+                    new Error("native setup failure"),
+                );
+            }
+
+            await expect(
+                GlideClient.createClient(
+                    clientConfig(() => ({
+                        accessKeyId: "access",
+                        secretAccessKey: "secret",
+                    })),
+                ),
+            ).rejects.toThrow("native setup failure");
+
+            expect(mocks.createDirectClient).toHaveBeenCalledTimes(1);
+            expect(mocks.removeAddressResolver).toHaveBeenCalledTimes(1);
+            expect(mocks.removeAddressResolver).toHaveBeenCalledWith(
+                "resolver-key",
+            );
+            expect(mocks.removeCredentialProvider).toHaveBeenCalledTimes(1);
+            expect(mocks.removeCredentialProvider).toHaveBeenCalledWith(
+                "provider-key",
+            );
+        },
+    );
+
+    it("preserves successful handoff ownership and cleans the resolver on close", async () => {
+        const mocks = installNativeMocks();
+        const close = jest.fn();
+        mocks.createDirectClient.mockResolvedValue({
+            close,
+        } as unknown as Awaited<ReturnType<typeof CreateDirectClient>>);
+
+        const client = await GlideClient.createClient(
+            clientConfig(() => ({
+                accessKeyId: "access",
+                secretAccessKey: "secret",
+            })),
+        );
+
+        const request = connection_request.ConnectionRequest.decode(
+            mocks.createDirectClient.mock.calls[0][0],
+        );
+        expect(request.addressResolverKey).toBe("resolver-key");
+        expect(request.credentialProviderKey).toBe("provider-key");
+        expect(mocks.removeAddressResolver).not.toHaveBeenCalled();
+        expect(mocks.removeCredentialProvider).not.toHaveBeenCalled();
+
+        client.close();
+
+        expect(mocks.removeAddressResolver).toHaveBeenCalledTimes(1);
+        expect(mocks.removeAddressResolver).toHaveBeenCalledWith(
+            "resolver-key",
+        );
+        expect(mocks.removeCredentialProvider).not.toHaveBeenCalled();
+        expect(close).toHaveBeenCalledTimes(1);
+    });
+});
+
 describe("IAM Auth: Direct Custom Credential Providers", () => {
     const iamEnabled = Boolean(
         process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY,
@@ -1226,22 +1459,6 @@ describe("IAM Auth: Direct Custom Credential Providers", () => {
                 await expect(directClient.refreshIamToken()).rejects.toThrow(
                     /manual refresh provider failure/u,
                 );
-            } finally {
-                directClient.close();
-            }
-        },
-    );
-
-    iamIt(
-        "supports known synthetic long-term credentials without a session token",
-        async () => {
-            const directClient = await createDirectClient(false, () => ({
-                accessKeyId: "synthetic_long_term_access_key",
-                secretAccessKey: "synthetic_long_term_secret_key",
-            }));
-
-            try {
-                await assertConnected(directClient);
             } finally {
                 directClient.close();
             }

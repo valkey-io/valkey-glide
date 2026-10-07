@@ -1560,6 +1560,13 @@ type WritePromiseOptions =
  * Base client interface for GLIDE
  */
 export class BaseClient {
+    private static nativeCreateDirectClient = CreateDirectClient;
+    private static nativeRegisterAddressResolver = registerAddressResolver;
+    private static nativeRemoveAddressResolver = removeAddressResolver;
+    private static nativeRegisterCredentialProvider =
+        registerCredentialProvider;
+    private static nativeRemoveCredentialProvider = removeCredentialProvider;
+
     protected readonly promiseCallbackFunctions:
         | [PromiseFunction, ErrorFunction, Decoder | undefined][]
         | [PromiseFunction, ErrorFunction][] = [];
@@ -10179,38 +10186,51 @@ export class BaseClient {
     protected async connectToServer(
         options: BaseClientConfiguration,
     ): Promise<void> {
-        const request = this.createClientRequest(options);
-
-        if (options.addressResolver) {
-            this.addressResolverKey = registerAddressResolver(
-                options.addressResolver,
-            );
-            request.addressResolverKey = this.addressResolverKey;
-        }
-
-        if (
-            "iamConfig" in (options.credentials ?? {}) &&
-            (options.credentials as { iamConfig: IamAuthConfig }).iamConfig
-                ?.credentialProvider
-        ) {
-            const iamCreds = options.credentials as {
-                username: string;
-                iamConfig: IamAuthConfig;
-            };
-            this.credentialProviderKey = registerCredentialProvider(
-                iamCreds.iamConfig.credentialProvider!,
-            );
-            request.credentialProviderKey = this.credentialProviderKey;
-        }
-
         try {
+            const credentials = options.credentials;
+            const credentialProvider =
+                credentials && "iamConfig" in credentials
+                    ? (
+                          credentials.iamConfig as {
+                              credentialProvider?: unknown;
+                          }
+                      ).credentialProvider
+                    : undefined;
+
+            if (
+                credentialProvider !== undefined &&
+                typeof credentialProvider !== "function"
+            ) {
+                throw new ConfigurationError(
+                    "credentialProvider must be a function or undefined.",
+                );
+            }
+
+            const request = this.createClientRequest(options);
+
+            if (options.addressResolver) {
+                this.addressResolverKey =
+                    BaseClient.nativeRegisterAddressResolver(
+                        options.addressResolver,
+                    );
+                request.addressResolverKey = this.addressResolverKey;
+            }
+
+            if (credentialProvider) {
+                this.credentialProviderKey =
+                    BaseClient.nativeRegisterCredentialProvider(
+                        credentialProvider as GlideCredentialProvider,
+                    );
+                request.credentialProviderKey = this.credentialProviderKey;
+            }
+
             const connectionRequestBytes = Buffer.from(
                 connection_request.ConnectionRequest.encode(
                     connection_request.ConnectionRequest.create(request),
                 ).finish(),
             );
 
-            this.clientHandle = await CreateDirectClient(
+            this.clientHandle = await BaseClient.nativeCreateDirectClient(
                 connectionRequestBytes,
                 this.handleResponsesAvailable,
             );
@@ -10224,17 +10244,31 @@ export class BaseClient {
                 "Client connection established",
             );
         } catch (err) {
-            if (this.addressResolverKey) {
-                removeAddressResolver(this.addressResolverKey);
-                this.addressResolverKey = undefined;
-            }
-
-            if (this.credentialProviderKey) {
-                removeCredentialProvider(this.credentialProviderKey);
-                this.credentialProviderKey = undefined;
-            }
-
+            this.cleanupConnectionRegistrations();
             throw err;
+        }
+    }
+
+    /**
+     * Clears and removes connection setup registrations exactly once.
+     * @internal
+     */
+    private cleanupConnectionRegistrations(): void {
+        const addressResolverKey = this.addressResolverKey;
+        const credentialProviderKey = this.credentialProviderKey;
+        this.addressResolverKey = undefined;
+        this.credentialProviderKey = undefined;
+
+        try {
+            if (addressResolverKey) {
+                BaseClient.nativeRemoveAddressResolver(addressResolverKey);
+            }
+        } finally {
+            if (credentialProviderKey) {
+                BaseClient.nativeRemoveCredentialProvider(
+                    credentialProviderKey,
+                );
+            }
         }
     }
 
@@ -10287,19 +10321,10 @@ export class BaseClient {
             reject(new ClosingError(errorMessage || ""));
         });
 
-        // Clean up address resolver from the global registry
-        if (this.addressResolverKey) {
-            removeAddressResolver(this.addressResolverKey);
-            this.addressResolverKey = undefined;
-        }
-
-        // Remove the credential provider key from the global registry if it was
-        // not already consumed by create_direct_client (e.g. connection failed
-        // between registerCredentialProvider and CreateDirectClient being called).
-        if (this.credentialProviderKey) {
-            removeCredentialProvider(this.credentialProviderKey);
-            this.credentialProviderKey = undefined;
-        }
+        // Clean up any connection registrations still owned by JavaScript.
+        // A successful direct-client handoff clears the consumed provider key,
+        // while the resolver key remains owned until close.
+        this.cleanupConnectionRegistrations();
 
         // Clean up OTel spans for in-flight requests to prevent memory leaks
         for (const spanPtr of this.otelSpanPointers.values()) {
@@ -10449,15 +10474,16 @@ export class BaseClient {
     }
 
     /**
-     * Manually refresh the IAM token for the current connection.
+     * Manually retrieve IAM credentials, regenerate the authentication token, and cache the token.
      *
      * This method is only available if the client was created with IAM authentication.
-     * It triggers an immediate refresh of the IAM token and updates the connection.
+     * The refreshed token is used by subsequent reconnect and authentication flows.
+     * Credential-provider and token-signing failures are surfaced to the caller.
      *
      * @throws ConfigurationError if the client is not using IAM authentication.
      * @example
      * ```typescript
-     * await client.refreshToken();
+     * await client.refreshIamToken();
      * ```
      */
     public async refreshIamToken(): Promise<GlideString> {

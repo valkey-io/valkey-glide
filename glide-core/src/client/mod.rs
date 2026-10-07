@@ -2221,15 +2221,15 @@ impl Client {
         }
     }
 
-    /// Manually refresh the IAM token and update connection authentication
+    /// Manually retrieve IAM credentials, regenerate the authentication token, and cache the token.
     ///
-    /// This method generates a new IAM token using the configured IAM token manager
-    /// and immediately authenticates all connections with the new token.
+    /// The refreshed token is used by subsequent reconnect and authentication flows.
+    /// Credential-provider and token-signing failures are returned to the caller.
     ///
     /// # Returns
-    /// - `Ok(())` if the token was successfully refreshed and authentication succeeded
-    /// - `Err(RedisError)` if no IAM token manager is configured, token generation fails,
-    ///   or authentication with the new token fails.
+    /// - `Ok(())` if the token was successfully regenerated and cached
+    /// - `Err(RedisError)` if no IAM token manager is configured, credential retrieval fails,
+    ///   or token signing fails.
     pub async fn refresh_iam_token(&mut self) -> RedisResult<()> {
         // Check if IAM token manager is available
         let iam_manager = self.iam_token_manager.as_ref().ok_or_else(|| {
