@@ -6,7 +6,7 @@ import binascii
 import uuid
 
 import pytest
-from glide import GlideClusterClient, GlideClusterClientConfiguration, RequestError
+from glide import GlideClusterClient, GlideClusterClientConfiguration
 from glide_shared.routes import SlotIdRoute, SlotType
 
 from tests.utils.utils import require_cluster_addresses
@@ -100,7 +100,7 @@ async def test_scope_first_command_must_match_acquisition_slot(cluster_mode):
         )
 
         async with await client.scoped_connection(routing_key=acquisition_key) as scope:
-            with pytest.raises(RequestError, match="(?i)cross.?slot"):
+            with pytest.raises(RuntimeError, match="(?i)cross.?slot"):
                 await scope.set(other_primary_key, "wrong-slot")
             # The scope stays usable for its acquisition slot.
             assert await scope.set(acquisition_key, "right-slot") is not None
