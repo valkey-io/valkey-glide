@@ -619,7 +619,6 @@ def create_lua_lib_with_long_running_function(
 ) -> str:
     """
     Create a lua lib with a (optionally) RO function which runs an endless loop up to timeout sec.
-    Execution takes at least 5 sec regardless of the timeout configured.
     """
     code = (
         f"#!lua name={lib_name}\n"
@@ -649,7 +648,6 @@ def create_lua_lib_with_long_running_function(
 def create_long_running_lua_script(timeout: int) -> str:
     """
     Create a lua script which runs an endless loop up to timeout sec.
-    Execution takes at least 5 sec regardless of the timeout configured.
     """
     script = (
         "  local started = tonumber(redis.pcall('time')[1])\n"

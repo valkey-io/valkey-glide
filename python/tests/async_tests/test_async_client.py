@@ -8944,7 +8944,7 @@ class TestCommands:
     ):
         lib_name = f"mylib1C{get_random_string(5)}"
         func_name = f"myfunc1c{get_random_string(5)}"
-        code = create_lua_lib_with_long_running_function(lib_name, func_name, 10, True)
+        code = create_lua_lib_with_long_running_function(lib_name, func_name, 3, True)
 
         # load the library
         assert await glide_client.function_load(code, replace=True) == lib_name.encode()
@@ -9065,7 +9065,7 @@ class TestCommands:
     ):
         lib_name = f"mylib1C{get_random_string(5)}"
         func_name = f"myfunc1c{get_random_string(5)}"
-        code = create_lua_lib_with_long_running_function(lib_name, func_name, 10, True)
+        code = create_lua_lib_with_long_running_function(lib_name, func_name, 3, True)
 
         # nothing to kill
         with pytest.raises(RequestError) as e:
@@ -9120,7 +9120,7 @@ class TestCommands:
     ):
         lib_name = f"mylib1C{get_random_string(5)}"
         func_name = f"myfunc1c{get_random_string(5)}"
-        code = create_lua_lib_with_long_running_function(lib_name, func_name, 10, False)
+        code = create_lua_lib_with_long_running_function(lib_name, func_name, 3, False)
 
         # load the library on all primaries
         assert await glide_client.function_load(code, replace=True) == lib_name.encode()
@@ -11291,7 +11291,7 @@ async def script_kill_tests(
     assert "No scripts in execution right now" in str(e)
 
     # Create a long-running script
-    long_script = Script(create_long_running_lua_script(10))
+    long_script = Script(create_long_running_lua_script(3))
 
     async def run_long_script():
         with pytest.raises(RequestError) as e:
@@ -11574,7 +11574,7 @@ class TestScripts:
         writing_script = Script("""
             redis.call('SET', KEYS[1], 'value')
             local start = redis.call('TIME')[1]
-            while redis.call('TIME')[1] - start < 15 do
+            while redis.call('TIME')[1] - start < 3 do
                 redis.call('SET', KEYS[1], 'value')
             end
         """)
