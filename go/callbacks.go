@@ -163,6 +163,20 @@ func handlePubSubCallback(
 		return false
 	}
 
+	client := getClientByPtr(callbackID)
+	if client == nil {
+		log.Print("PubSub client not found")
+		return false
+	}
+	// Capture the final handler before returning to Rust. Creation failure may
+	// unregister the client immediately after the native call returns, but an
+	// already accepted push still owns this handler and must be delivered.
+	handler := client.getMessageHandler()
+	if handler == nil {
+		log.Print("PubSub handler not found")
+		return false
+	}
+
 	msg := C.GoStringN((*C.char)(message), C.int(messageLen))
 	cha := C.GoStringN((*C.char)(channel), C.int(channelLen))
 	pat := models.CreateNilStringResult()
@@ -172,14 +186,7 @@ func handlePubSubCallback(
 
 	go func() {
 		pubsubMessage := models.NewPubSubMessageWithPattern(msg, cha, pat)
-		client := getClientByPtr(callbackID)
-		if client == nil {
-			log.Print("PubSub client not found")
-			return
-		}
-		if handler := client.getMessageHandler(); handler != nil {
-			handler.handleMessage(pubsubMessage)
-		}
+		handler.handleMessage(pubsubMessage)
 	}()
 	return true
 }

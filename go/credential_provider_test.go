@@ -11,10 +11,12 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+	"unsafe"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/valkey-io/valkey-glide/go/v2/config"
+	"github.com/valkey-io/valkey-glide/go/v2/models"
 )
 
 func invokeCredentialCallbackForTest(
@@ -440,6 +442,11 @@ func TestDirectClientsRetainCredentialProviderUntilClose(t *testing.T) {
 			registeredResolver, ok := resolverRegistry.Load(clientID)
 			require.True(t, ok)
 			assert.NotNil(t, registeredResolver)
+			registeredClient := getClientByPtr(clientID)
+			require.NotNil(t, registeredClient)
+			assert.Same(t, client.messageHandler, registeredClient.messageHandler)
+			assert.Equal(t, client.coreClient, registeredClient.coreClient)
+			assert.Nil(t, getClientByPtr(uintptr(client.coreClient)))
 
 			status, storage, lengths, expiresAt := invokeCredentialCallbackForTest(
 				clientID,
@@ -459,6 +466,7 @@ func TestDirectClientsRetainCredentialProviderUntilClose(t *testing.T) {
 			assert.False(t, ok)
 			_, ok = resolverRegistry.Load(clientID)
 			assert.False(t, ok)
+			assert.Nil(t, getClientByPtr(clientID))
 			assert.Zero(t, client.resolverID)
 
 			status, storage, lengths, expiresAt = invokeCredentialCallbackForTest(
@@ -511,6 +519,105 @@ func TestDirectClientCreationFailureUnregistersCredentialProvider(t *testing.T) 
 			assert.Equal(t, clientID, clientIDCounter.Load())
 			_, registered := credentialProviderRegistry.Load(clientID)
 			assert.False(t, registered)
+		})
+	}
+}
+
+func TestDirectClientRoutesPubSubDuringNativeCreateAndRollsBackFailure(t *testing.T) {
+	// The external provider is invoked synchronously by Rust from GlideClient::new.
+	// Emitting the callback from that invocation deterministically exercises the
+	// pre-return routing window without adding a production-only native test ABI.
+	providerError := errors.New("provider failed after test push")
+	message := []byte("during-create-message")
+	channel := []byte("during-create-channel")
+
+	type constructor func(
+		config.GlideCredentialProvider,
+		config.MessageCallback,
+		config.AddressResolver,
+	) error
+	constructors := map[string]constructor{
+		"standalone": func(
+			provider config.GlideCredentialProvider,
+			callback config.MessageCallback,
+			resolver config.AddressResolver,
+		) error {
+			cfg := config.NewClientConfiguration().
+				WithAddress(&config.NodeAddress{Host: "127.0.0.1", Port: 1}).
+				WithAddressResolver(resolver).
+				WithSubscriptionConfig(
+					config.NewStandaloneSubscriptionConfig().
+						WithSubscription(config.ExactChannelMode, string(channel)).
+						WithCallback(callback, nil),
+				).
+				WithCredentials(testIamCredentials(t, provider))
+			_, err := NewClient(cfg)
+			return err
+		},
+		"cluster": func(
+			provider config.GlideCredentialProvider,
+			callback config.MessageCallback,
+			resolver config.AddressResolver,
+		) error {
+			cfg := config.NewClusterClientConfiguration().
+				WithAddress(&config.NodeAddress{Host: "127.0.0.1", Port: 1}).
+				WithAddressResolver(resolver).
+				WithSubscriptionConfig(
+					config.NewClusterSubscriptionConfig().
+						WithSubscription(config.ExactClusterChannelMode, string(channel)).
+						WithCallback(callback, nil),
+				).
+				WithCredentials(testIamCredentials(t, provider))
+			_, err := NewClusterClient(cfg)
+			return err
+		},
+	}
+
+	for name, create := range constructors {
+		t.Run(name, func(t *testing.T) {
+			beforeID := clientIDCounter.Load()
+			clientID := beforeID + 1
+			delivered := make(chan string, 1)
+			var accepted atomic.Bool
+			var pointerWasUnpublished atomic.Bool
+			provider := func() (config.AwsCredentials, error) {
+				owner := getClientByPtr(clientID)
+				pointerWasUnpublished.Store(owner != nil && owner.coreClient == nil)
+				accepted.Store(handlePubSubCallback(
+					clientID,
+					unsafe.Pointer(&message[0]),
+					int64(len(message)),
+					unsafe.Pointer(&channel[0]),
+					int64(len(channel)),
+					nil,
+					0,
+				))
+				return config.AwsCredentials{}, providerError
+			}
+			callback := func(received *models.PubSubMessage, _ any) {
+				delivered <- received.Message + ":" + received.Channel
+			}
+			resolver := func(host string, port int) (string, int) {
+				return host, port
+			}
+
+			err := create(provider, callback, resolver)
+			require.Error(t, err)
+			assert.True(t, accepted.Load(), "creation-time push was not accepted")
+			assert.True(t, pointerWasUnpublished.Load(), "native pointer was published before create returned")
+			select {
+			case received := <-delivered:
+				assert.Equal(t, "during-create-message:during-create-channel", received)
+			case <-time.After(time.Second):
+				t.Fatal("creation-time PubSub push was not delivered")
+			}
+
+			assert.Equal(t, clientID, clientIDCounter.Load())
+			assert.Nil(t, getClientByPtr(clientID))
+			_, resolverRegistered := resolverRegistry.Load(clientID)
+			assert.False(t, resolverRegistered)
+			_, providerRegistered := credentialProviderRegistry.Load(clientID)
+			assert.False(t, providerRegistered)
 		})
 	}
 }

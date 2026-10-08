@@ -25,7 +25,6 @@ from .glide_client import (
     BaseClient,
     GlideClient,
     GlideClusterClient,
-    _async_pipe_lock,
     _client_registry,
 )
 
@@ -139,31 +138,10 @@ class AsyncClientPool:
         conn_req = _create_async_connection_request(client_config)
         self._conn_req_bytes = conn_req.SerializeToString()
 
-        # Initialize the shared async pipe BEFORE creating pool clients.
-        # This ensures ASYNC_PIPE is set so pooled AsyncClient adapters
-        # write responses to the pipe (not the callback path).
-        import glide.glide_client as _gc
-
-        with _async_pipe_lock:
-            _gc._detect_fork_and_reset()
-            current_pid = os.getpid()
-
-            if _gc._async_pipe_read_fd < 0:
-                try:
-                    r, w = os.pipe()
-                    os.set_blocking(r, False)
-                    if (
-                        _gc._async_pipe_init_pid > 0
-                        and current_pid != _gc._async_pipe_init_pid
-                    ):
-                        self._lib.reinit_async_pipe(w)
-                    else:
-                        self._lib.init_async_pipe(w)
-                    _gc._async_pipe_read_fd = r
-                    _gc._async_pipe_write_fd = w
-                    _gc._async_pipe_init_pid = current_pid
-                except OSError:
-                    pass
+        # Pools reject configured PubSub, so no push can arrive during native
+        # pool creation. The probe (or first borrowed client for direct
+        # construction) establishes the shared pipe through BaseClient's
+        # transactional reader-before-writer setup before any command runs.
 
         # Create pool with AsyncClient type (no-op callbacks — pipe handles responses)
         client_type = self._ffi.new("ClientType*")

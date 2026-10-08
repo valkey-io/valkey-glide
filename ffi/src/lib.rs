@@ -344,9 +344,10 @@ type NonNullPubSubCallback = unsafe extern "C-unwind" fn(
 /// The callback should be offloaded to a separate thread in order not to exhaust the client's thread pool.
 ///
 /// # Parameters
-/// * `callback_id`: A baton-pass back to the caller language. Direct synchronous clients receive
-///   the `client_id` supplied to `create_client`; the legacy asynchronous direct-callback fallback
-///   receives the adapter address for compatibility.
+/// * `callback_id`: A baton-pass back to the caller language. Direct clients receive the
+///   nonzero `client_id` supplied to `create_client`; zero-ID URI/legacy clients receive the
+///   adapter address as a compatibility fallback. Python async clients use pipe delivery once
+///   the process-wide async pipe is initialized.
 /// * `kind`: An enum variant representing the PushKind (Message, PMessage, SMessage, etc.)
 /// * `message`: A pointer to the raw message bytes.
 /// * `message_len`: The length of the message data in bytes.
@@ -2657,7 +2658,7 @@ fn dispatch_sync_push_notification(
 }
 
 #[inline]
-fn sync_pubsub_callback_id(client_id: usize, client_adapter_ptr: usize) -> usize {
+fn direct_pubsub_callback_id(client_id: usize, client_adapter_ptr: usize) -> usize {
     if client_id == 0 {
         client_adapter_ptr
     } else {
@@ -2701,8 +2702,9 @@ fn dispatch_async_push_notification(
         && let Ok(guard) = callback_store.read()
         && let Some(callback) = *guard
     {
+        let callback_id = direct_pubsub_callback_id(pipe_client_id as usize, client_adapter_ptr);
         unsafe {
-            process_push_notification(push_msg, callback, client_adapter_ptr);
+            process_push_notification(push_msg, callback, callback_id);
         }
     }
 }
@@ -2916,7 +2918,7 @@ fn create_client_internal(
     if is_sync {
         // Protobuf-created sync clients use their explicit callback ID. URI clients have no such
         // ABI parameter, so retain their legacy adapter-pointer identity.
-        let callback_id = sync_pubsub_callback_id(client_id, client_adapter_ptr);
+        let callback_id = direct_pubsub_callback_id(client_id, client_adapter_ptr);
         spawn_runtime.spawn(run_sync_push_handler(
             push_rx,
             callback_store,
@@ -7900,7 +7902,7 @@ mod tests_push_notification_safety {
         let callback_ids: Vec<usize> = responses
             .iter()
             .map(|response| unsafe { (**response).conn_ptr.addr() })
-            .map(|adapter_ptr| sync_pubsub_callback_id(0, adapter_ptr))
+            .map(|adapter_ptr| direct_pubsub_callback_id(0, adapter_ptr))
             .collect();
         assert_ne!(callback_ids[0], callback_ids[1]);
         for (response, callback_id) in responses.into_iter().zip(callback_ids) {
@@ -8126,14 +8128,43 @@ mod tests_push_notification_safety {
     }
 
     #[test]
-    fn async_nonzero_id_without_pipe_uses_legacy_direct_callback() {
+    fn async_nonzero_id_without_pipe_uses_supplied_callback_id() {
         let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         reset_callback_count();
         let callback: NonNullPubSubCallback = counting_callback;
         let callback_store = std::sync::RwLock::new(Some(callback));
+        let client_id = usize::MAX / 2 + 302;
         let adapter_id = usize::MAX / 2 + 303;
 
-        dispatch_async_push_notification(message_push(), &callback_store, 444, adapter_id, None);
+        dispatch_async_push_notification(
+            message_push(),
+            &callback_store,
+            client_id as u64,
+            adapter_id,
+            None,
+        );
+
+        assert_eq!(CALLBACK_INVOCATIONS.load(Ordering::SeqCst), 1);
+        assert_eq!(
+            LAST_CALLBACK_DATA
+                .lock()
+                .unwrap()
+                .as_ref()
+                .unwrap()
+                .client_id,
+            client_id
+        );
+    }
+
+    #[test]
+    fn async_zero_id_without_pipe_uses_adapter_pointer_fallback() {
+        let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        reset_callback_count();
+        let callback: NonNullPubSubCallback = counting_callback;
+        let callback_store = std::sync::RwLock::new(Some(callback));
+        let adapter_id = usize::MAX / 2 + 304;
+
+        dispatch_async_push_notification(message_push(), &callback_store, 0, adapter_id, None);
 
         assert_eq!(CALLBACK_INVOCATIONS.load(Ordering::SeqCst), 1);
         assert_eq!(

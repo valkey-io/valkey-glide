@@ -782,7 +782,7 @@ async def test_async_pipe_is_initialized_before_native_creation(monkeypatch):
 
 @pytest.mark.anyio
 @pytest.mark.parametrize(
-    "failure_stage", ["pipe", "nonblocking", "init", "reinit", "registration"]
+    "failure_stage", ["pipe", "nonblocking", "init", "registration"]
 )
 async def test_async_pipe_setup_failure_rolls_back_and_retries(
     monkeypatch, failure_stage
@@ -800,14 +800,11 @@ async def test_async_pipe_setup_failure_rolls_back_and_retries(
     monkeypatch.setattr(async_client_module, "_async_pipe_read_fd", -1)
     monkeypatch.setattr(async_client_module, "_async_pipe_write_fd", -1)
     monkeypatch.setattr(async_client_module, "_async_pipe_init_pid", -1)
-    monkeypatch.setattr(
-        async_client_module,
-        "_async_pipe_native_initialized",
-        failure_stage == "reinit",
-    )
+    monkeypatch.setattr(async_client_module, "_async_pipe_needs_fork_reinit", False)
     monkeypatch.setattr(async_client_module, "_async_pipe_registered", False)
     monkeypatch.setattr(async_client_module, "_async_pipe_loop", None)
     monkeypatch.setattr(async_client_module, "_trio_pipe_token", None)
+    monkeypatch.setattr(async_client_module, "_trio_pipe_cancel_scope", None)
     monkeypatch.setattr(async_client_module, "_pipe_remainder", b"partial")
     monkeypatch.setattr(async_client_module, "_pipe_remainder_is_stale", True)
     registry = weakref.WeakValueDictionary()
@@ -839,11 +836,11 @@ async def test_async_pipe_setup_failure_rolls_back_and_retries(
 
     if failure_stage == "init":
         fake_lib.init_async_pipe.side_effect = OSError("injected init failure")
-    elif failure_stage == "reinit":
-        fake_lib.reinit_async_pipe.side_effect = OSError("injected reinit failure")
 
     loop = asyncio.get_running_loop()
     real_add_reader = loop.add_reader
+    real_remove_reader = loop.remove_reader
+    removed_readers = []
 
     def tracked_add_reader(*args, **kwargs):
         nonlocal failed
@@ -852,7 +849,12 @@ async def test_async_pipe_setup_failure_rolls_back_and_retries(
             raise OSError("injected registration failure")
         return real_add_reader(*args, **kwargs)
 
+    def tracked_remove_reader(fd):
+        removed_readers.append(fd)
+        return real_remove_reader(fd)
+
     monkeypatch.setattr(loop, "add_reader", tracked_add_reader)
+    monkeypatch.setattr(loop, "remove_reader", tracked_remove_reader)
 
     owner_registries = (
         ffi_helpers._address_resolver_owners,
@@ -868,6 +870,13 @@ async def test_async_pipe_setup_failure_rolls_back_and_retries(
         await async_client_module.GlideClient.create(config)
 
     fake_lib.create_client.assert_not_called()
+    expected_failed_init_calls = 1 if failure_stage == "init" else 0
+    assert fake_lib.init_async_pipe.call_count == expected_failed_init_calls
+    fake_lib.reinit_async_pipe.assert_not_called()
+    if failure_stage == "init":
+        assert len(removed_readers) == 1
+    else:
+        assert not removed_readers
     assert not registry
     assert (
         tuple(owner_registry.size() for owner_registry in owner_registries)
@@ -876,9 +885,11 @@ async def test_async_pipe_setup_failure_rolls_back_and_retries(
     assert async_client_module._async_pipe_read_fd == -1
     assert async_client_module._async_pipe_write_fd == -1
     assert async_client_module._async_pipe_init_pid == -1
+    assert not async_client_module._async_pipe_needs_fork_reinit
     assert not async_client_module._async_pipe_registered
     assert async_client_module._async_pipe_loop is None
     assert async_client_module._trio_pipe_token is None
+    assert async_client_module._trio_pipe_cancel_scope is None
     assert async_client_module._pipe_remainder == b""
     assert not async_client_module._pipe_remainder_is_stale
     for fd in created_fds:
@@ -893,8 +904,9 @@ async def test_async_pipe_setup_failure_rolls_back_and_retries(
     try:
         assert client._pipe_client_id in registry
         assert fake_lib.create_client.call_count == 1
-        if failure_stage == "registration":
-            fake_lib.reinit_async_pipe.assert_called_once()
+        expected_total_init_calls = 2 if failure_stage == "init" else 1
+        assert fake_lib.init_async_pipe.call_count == expected_total_init_calls
+        fake_lib.reinit_async_pipe.assert_not_called()
     finally:
         await client.close()
         read_fd = async_client_module._async_pipe_read_fd
@@ -905,11 +917,215 @@ async def test_async_pipe_setup_failure_rolls_back_and_retries(
         async_client_module._async_pipe_read_fd = -1
         async_client_module._async_pipe_write_fd = -1
         async_client_module._async_pipe_init_pid = -1
+        async_client_module._async_pipe_needs_fork_reinit = False
         async_client_module._async_pipe_registered = False
         async_client_module._async_pipe_loop = None
         async_client_module._trio_pipe_token = None
+        async_client_module._trio_pipe_cancel_scope = None
         async_client_module._pipe_remainder = b""
         async_client_module._pipe_remainder_is_stale = False
+
+
+def _new_pipe_setup_client(async_client_module, fake_lib, client_id, *, loop=None):
+    client = object.__new__(async_client_module.BaseClient)
+    client._lib = fake_lib
+    client._pipe_client_id = client_id
+    client._is_asyncio = loop is not None
+    client._loop = loop
+    return client
+
+
+def _reset_pipe_test_state(monkeypatch, async_client_module):
+    monkeypatch.setattr(async_client_module, "_async_pipe_read_fd", -1)
+    monkeypatch.setattr(async_client_module, "_async_pipe_write_fd", -1)
+    monkeypatch.setattr(async_client_module, "_async_pipe_init_pid", -1)
+    monkeypatch.setattr(async_client_module, "_async_pipe_needs_fork_reinit", False)
+    monkeypatch.setattr(async_client_module, "_async_pipe_registered", False)
+    monkeypatch.setattr(async_client_module, "_async_pipe_loop", None)
+    monkeypatch.setattr(async_client_module, "_trio_pipe_token", None)
+    monkeypatch.setattr(async_client_module, "_trio_pipe_cancel_scope", None)
+    monkeypatch.setattr(async_client_module, "_pipe_remainder", b"")
+    monkeypatch.setattr(async_client_module, "_pipe_remainder_is_stale", False)
+    monkeypatch.setattr(
+        async_client_module, "_client_registry", weakref.WeakValueDictionary()
+    )
+
+
+def test_async_pipe_reuses_writer_across_sequential_asyncio_loops(monkeypatch):
+    import glide.glide_client as async_client_module
+
+    _reset_pipe_test_state(monkeypatch, async_client_module)
+    fake_lib = SimpleNamespace(
+        init_async_pipe=MagicMock(), reinit_async_pipe=MagicMock()
+    )
+    clients = []
+
+    async def setup(client_id):
+        client = _new_pipe_setup_client(
+            async_client_module,
+            fake_lib,
+            client_id,
+            loop=asyncio.get_running_loop(),
+        )
+        clients.append(client)
+        client._setup_pipe()
+        return (
+            async_client_module._async_pipe_read_fd,
+            async_client_module._async_pipe_write_fd,
+        )
+
+    first_fds = asyncio.run(setup(7001))
+    second_fds = asyncio.run(setup(7002))
+    assert second_fds == first_fds
+    fake_lib.init_async_pipe.assert_called_once_with(first_fds[1])
+    fake_lib.reinit_async_pipe.assert_not_called()
+
+    os.close(first_fds[0])
+    os.close(first_fds[1])
+
+
+def test_async_pipe_loop_transition_failure_preserves_native_writer(monkeypatch):
+    import glide.glide_client as async_client_module
+
+    _reset_pipe_test_state(monkeypatch, async_client_module)
+    fake_lib = SimpleNamespace(
+        init_async_pipe=MagicMock(), reinit_async_pipe=MagicMock()
+    )
+    clients = []
+
+    async def setup(client_id, fail_registration=False):
+        loop = asyncio.get_running_loop()
+        if fail_registration:
+            monkeypatch.setattr(
+                loop,
+                "add_reader",
+                MagicMock(
+                    side_effect=OSError("injected transition registration failure")
+                ),
+            )
+        client = _new_pipe_setup_client(
+            async_client_module, fake_lib, client_id, loop=loop
+        )
+        clients.append(client)
+        client._setup_pipe()
+        return (
+            async_client_module._async_pipe_read_fd,
+            async_client_module._async_pipe_write_fd,
+        )
+
+    original_fds = asyncio.run(setup(7051))
+    with pytest.raises(ClosingError, match="async response pipe"):
+        asyncio.run(setup(7052, True))
+    assert (
+        async_client_module._async_pipe_read_fd,
+        async_client_module._async_pipe_write_fd,
+    ) == original_fds
+    assert not async_client_module._async_pipe_registered
+
+    retry_fds = asyncio.run(setup(7053))
+    assert retry_fds == original_fds
+    fake_lib.init_async_pipe.assert_called_once_with(original_fds[1])
+    fake_lib.reinit_async_pipe.assert_not_called()
+
+    os.close(original_fds[0])
+    os.close(original_fds[1])
+
+
+def test_async_pipe_reuses_writer_across_sequential_trio_runs(monkeypatch):
+    import glide.glide_client as async_client_module
+
+    _reset_pipe_test_state(monkeypatch, async_client_module)
+    fake_lib = SimpleNamespace(
+        init_async_pipe=MagicMock(), reinit_async_pipe=MagicMock()
+    )
+    clients = []
+
+    async def setup(client_id):
+        client = _new_pipe_setup_client(async_client_module, fake_lib, client_id)
+        clients.append(client)
+        client._setup_pipe()
+        return (
+            async_client_module._async_pipe_read_fd,
+            async_client_module._async_pipe_write_fd,
+        )
+
+    first_fds = anyio.run(setup, 7101, backend="trio")
+    second_fds = anyio.run(setup, 7102, backend="trio")
+    assert second_fds == first_fds
+    fake_lib.init_async_pipe.assert_called_once_with(first_fds[1])
+    fake_lib.reinit_async_pipe.assert_not_called()
+
+    os.close(first_fds[0])
+    os.close(first_fds[1])
+
+
+@pytest.mark.skipif(not hasattr(os, "fork"), reason="requires os.fork")
+def test_async_pipe_actual_fork_reinitializes_native_writer_once(monkeypatch):
+    import glide.glide_client as async_client_module
+
+    _reset_pipe_test_state(monkeypatch, async_client_module)
+    fake_lib = SimpleNamespace(
+        init_async_pipe=MagicMock(), reinit_async_pipe=MagicMock()
+    )
+    parent_loop = asyncio.new_event_loop()
+    parent_client = _new_pipe_setup_client(
+        async_client_module, fake_lib, 7201, loop=parent_loop
+    )
+    parent_client._setup_pipe()
+    parent_fds = (
+        async_client_module._async_pipe_read_fd,
+        async_client_module._async_pipe_write_fd,
+    )
+    report_read_fd, report_write_fd = os.pipe()
+    child_pid = os.fork()
+    if child_pid == 0:
+        try:
+            os.close(report_read_fd)
+            child_loop = asyncio.new_event_loop()
+            child_client = _new_pipe_setup_client(
+                async_client_module, fake_lib, 7202, loop=child_loop
+            )
+            child_client._setup_pipe()
+            report = (
+                f"{fake_lib.init_async_pipe.call_count},"
+                f"{fake_lib.reinit_async_pipe.call_count},"
+                f"{int(async_client_module._async_pipe_needs_fork_reinit)}"
+            ).encode()
+            os.write(report_write_fd, report)
+            child_loop.remove_reader(async_client_module._async_pipe_read_fd)
+            child_loop.close()
+            os.close(async_client_module._async_pipe_read_fd)
+            os.close(async_client_module._async_pipe_write_fd)
+            os._exit(0)
+        except BaseException:
+            os._exit(1)
+
+    os.close(report_write_fd)
+    deadline = time.monotonic() + 3
+    status = None
+    while time.monotonic() < deadline:
+        waited_pid, status = os.waitpid(child_pid, os.WNOHANG)
+        if waited_pid == child_pid:
+            break
+        time.sleep(0.01)
+    else:
+        os.kill(child_pid, 9)
+        os.waitpid(child_pid, 0)
+        pytest.fail("fork child hung during async pipe reinitialization")
+
+    report = os.read(report_read_fd, 128).decode()
+    os.close(report_read_fd)
+    assert os.waitstatus_to_exitcode(status) == 0
+    # init call count is inherited from the parent; the child adds exactly one
+    # reinit and clears the explicit fork-only state.
+    assert report == "1,1,0"
+    fake_lib.init_async_pipe.assert_called_once_with(parent_fds[1])
+    fake_lib.reinit_async_pipe.assert_not_called()
+
+    parent_loop.remove_reader(parent_fds[0])
+    parent_loop.close()
+    os.close(parent_fds[0])
+    os.close(parent_fds[1])
 
 
 @pytest.mark.anyio
