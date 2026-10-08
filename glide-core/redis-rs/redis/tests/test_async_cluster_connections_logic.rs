@@ -20,8 +20,36 @@ mod test_connect_and_check {
     use super::*;
     use crate::support::{get_mock_connection_handler, ShouldReturnConnectionError};
     use redis::cluster_async::testing::{
-        connect_and_check, ConnectAndCheckResult, ConnectionDetails,
+        connect_and_check_prepared, ConnectAndCheckResult, ConnectionDetails, ReadyToDialAddress,
     };
+
+    async fn connect_and_check_prepared_for_test<C>(
+        addr: &str,
+        params: ClusterParams,
+        socket_addr: Option<std::net::SocketAddr>,
+        conn_type: RefreshConnectionType,
+        node: Option<AsyncClusterNode<C>>,
+        glide_connection_options: GlideConnectionOptions,
+    ) -> ConnectAndCheckResult<C>
+    where
+        C: redis::aio::ConnectionLike
+            + redis::cluster_async::Connect
+            + Send
+            + Sync
+            + 'static
+            + Clone,
+    {
+        let ready = ReadyToDialAddress::new(addr.to_owned());
+        connect_and_check_prepared(
+            &ready,
+            params,
+            socket_addr,
+            conn_type,
+            node,
+            glide_connection_options,
+        )
+        .await
+    }
 
     fn assert_partial_result(
         result: ConnectAndCheckResult<MockConnection>,
@@ -66,7 +94,7 @@ mod test_connect_and_check {
             behavior.returned_ip_type = ConnectionIPReturnType::Specified(ip)
         });
 
-        let result = connect_and_check::<MockConnection>(
+        let result = connect_and_check_prepared_for_test::<MockConnection>(
             &format!("{name}:6379"),
             ClusterParams::default(),
             None,
@@ -102,7 +130,7 @@ mod test_connect_and_check {
 
         let params = ClusterParams::default();
 
-        let result = connect_and_check::<MockConnection>(
+        let result = connect_and_check_prepared_for_test::<MockConnection>(
             &format!("{name}:6379"),
             params.clone(),
             None,
@@ -120,7 +148,7 @@ mod test_connect_and_check {
                 ShouldReturnConnectionError::OnOddIdx(AtomicUsize::new(1));
         });
 
-        let result = connect_and_check::<MockConnection>(
+        let result = connect_and_check_prepared_for_test::<MockConnection>(
             &format!("{name}:6379"),
             params,
             None,
@@ -153,7 +181,7 @@ mod test_connect_and_check {
         });
 
         // The first connection will have 0.0.0.0 IP, the second 1.0.0.0
-        let result = connect_and_check::<MockConnection>(
+        let result = connect_and_check_prepared_for_test::<MockConnection>(
             &format!("{name}:6379"),
             ClusterParams::default(),
             None,
@@ -190,7 +218,7 @@ mod test_connect_and_check {
             behavior.return_connection_err = ShouldReturnConnectionError::Yes
         });
 
-        let result = connect_and_check::<MockConnection>(
+        let result = connect_and_check_prepared_for_test::<MockConnection>(
             &format!("{name}:6379"),
             ClusterParams::default(),
             None,
@@ -242,7 +270,7 @@ mod test_connect_and_check {
             None,
         );
 
-        let result = connect_and_check::<MockConnection>(
+        let result = connect_and_check_prepared_for_test::<MockConnection>(
             &format!("{name}:6379"),
             ClusterParams::default(),
             None,
@@ -290,7 +318,7 @@ mod test_connect_and_check {
             None,
         );
 
-        let result = connect_and_check::<MockConnection>(
+        let result = connect_and_check_prepared_for_test::<MockConnection>(
             &format!("{name}:6379"),
             ClusterParams::default(),
             None,
@@ -354,7 +382,7 @@ mod test_connect_and_check {
             ),
         );
 
-        let result = connect_and_check::<MockConnection>(
+        let result = connect_and_check_prepared_for_test::<MockConnection>(
             &format!("{name}:6379"),
             ClusterParams::default(),
             None,
