@@ -394,6 +394,7 @@ class TestOpenTelemetryGlideSync:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    @pytest.mark.serial_only
     def test_sync_concurrent_commands_span_lifecycle(
         self, request, protocol, cluster_mode
     ):
