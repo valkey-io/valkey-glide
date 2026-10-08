@@ -89,10 +89,8 @@ pub const DEFAULT_CONNECTION_TIMEOUT_IN_MILLISECONDS: u32 =
 #[napi]
 pub const DEFAULT_INFLIGHT_REQUESTS_LIMIT: u32 = glide_core::client::DEFAULT_MAX_INFLIGHT_REQUESTS;
 
-// ============================================================================
-// Direct NAPI Layer - Command Response Types
-// ============================================================================
-
+// =====================================================================// Direct NAPI Layer - Command Response Types
+// =====================================================================
 /// Response object passed to the JavaScript callback for command results.
 /// This replaces the protobuf-based response used in the socket IPC layer.
 #[napi(object)]
@@ -125,10 +123,8 @@ pub struct RequestErrorNapi {
     pub error_type: u32,
 }
 
-// ============================================================================
-// Response Buffer - Shared between Rust workers and JS callback
-// ============================================================================
-
+// =====================================================================// Response Buffer - Shared between Rust workers and JS callback
+// =====================================================================
 use parking_lot::Mutex as PLMutex;
 use std::sync::atomic::AtomicBool;
 
@@ -233,10 +229,8 @@ impl ResponseBuffer {
     }
 }
 
-// ============================================================================
-// Worker Pool - Thread Pinning for Concurrent Execution
-// ============================================================================
-
+// =====================================================================// Worker Pool - Thread Pinning for Concurrent Execution
+// =====================================================================
 use parking_lot::Mutex as PLMutex2;
 
 /// Global worker pool state with reference counting for clean shutdown.
@@ -397,10 +391,8 @@ struct GetCacheMetricsMessage {
     metrics_type: u32,
 }
 
-// ============================================================================
-// Helper Functions for Response Building
-// ============================================================================
-
+// =====================================================================// Helper Functions for Response Building
+// =====================================================================
 /// Build a CommandResponse from a Redis result
 fn build_response(
     callback_idx: u32,
@@ -772,10 +764,8 @@ async fn execute_batch(
     }
 }
 
-// ============================================================================
-// Direct NAPI Layer - GlideClientHandle
-// ============================================================================
-
+// =====================================================================// Direct NAPI Layer - GlideClientHandle
+// =====================================================================
 /// A handle to a Glide client that allows sending commands directly via NAPI.
 /// The client is pinned to a dedicated worker thread for thread-local command execution.
 /// Commands are sent via channel to the worker thread which executes them via spawn_local.
@@ -805,23 +795,22 @@ pub struct GlideClientHandle {
     owns_client_registration: bool,
 }
 
-/// Creates a new direct NAPI client connection with response buffering.
+/// Logs the disconnect warning for a `Disconnection` push and returns `true`,
+/// so the push listeners can drop it instead of queueing it for JS.
 ///
-/// This function creates a Client using the glide-core library and wraps it
-/// in a GlideClientHandle that can send commands directly without socket IPC.
-///
-/// Response Buffering:
-/// - Responses are accumulated in a shared buffer
-/// - A single wake-up callback notifies JS when responses are available
-/// - JS then calls drainResponses() to get all pending responses at once
-/// - This reduces ThreadsafeFunction call overhead from N to ~1 per batch
-///
-/// # Arguments
-/// * `connection_request_bytes` - Protobuf-encoded ConnectionRequest
-/// * `wake_callback` - JavaScript callback to wake up when responses available
-///
-/// # Returns
-/// A Promise that resolves to a GlideClientHandle on success
+/// Logging here, as the push arrives, means the warning fires even for clients
+/// that never read the push queue (no pub/sub callback, no `getPubSubMessage`).
+fn handle_disconnection_push(push_info: &PushInfo) -> bool {
+    if push_info.kind != redis::PushKind::Disconnection {
+        return false;
+    }
+    log_warn(
+        "disconnect notification",
+        "Transport disconnected, messages might be lost",
+    );
+    true
+}
+
 /// Wrap an already-created [`Client`] in a [`GlideClientHandle`] with a dedicated
 /// pinned worker thread, command channel, and response buffer.
 ///
@@ -894,6 +883,9 @@ pub(crate) async fn create_handle_for_client(
         // the caller receiving the handle and the listener being scheduled.
         task::spawn_local(async move {
             while let Some(push_info) = push_receiver.recv().await {
+                if handle_disconnection_push(&push_info) {
+                    continue;
+                }
                 let push_value = Value::Push {
                     kind: push_info.kind,
                     data: push_info.data,
@@ -1252,6 +1244,23 @@ impl ToNapiValue for DirectClientResolution {
     }
 }
 
+/// Creates a new direct NAPI client connection with response buffering.
+///
+/// This function creates a Client using the glide-core library and wraps it
+/// in a GlideClientHandle that can send commands directly without socket IPC.
+///
+/// Response Buffering:
+/// - Responses are accumulated in a shared buffer
+/// - A single wake-up callback notifies JS when responses are available
+/// - JS then calls drainResponses() to get all pending responses at once
+/// - This reduces ThreadsafeFunction call overhead from N to ~1 per batch
+///
+/// # Arguments
+/// * `connection_request_bytes` - Protobuf-encoded ConnectionRequest
+/// * `wake_callback` - JavaScript callback to wake up when responses available
+///
+/// # Returns
+/// A Promise that resolves to a GlideClientHandle on success
 #[napi(
     js_name = "CreateDirectClient",
     ts_return_type = "Promise<GlideClientHandle>"
@@ -1404,6 +1413,9 @@ pub fn create_direct_client<'a>(
         // scheduling.
         task::spawn_local(async move {
             while let Some(push_info) = push_receiver.recv().await {
+                if handle_disconnection_push(&push_info) {
+                    continue;
+                }
                 let push_value = Value::Push {
                     kind: push_info.kind,
                     data: push_info.data,
@@ -3738,5 +3750,32 @@ mod credential_provider_tests {
             std::time::Duration::from_secs(9)
         );
         assert!(NODE_CREDENTIALS_CALLBACK_TIMEOUT < std::time::Duration::from_secs(10));
+    }
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn push(kind: redis::PushKind) -> PushInfo {
+        PushInfo { kind, data: vec![] }
+    }
+
+    #[test]
+    fn disconnection_push_is_handled_natively() {
+        assert!(handle_disconnection_push(&push(
+            redis::PushKind::Disconnection
+        )));
+    }
+
+    #[test]
+    fn other_pushes_are_forwarded_to_js() {
+        for kind in [
+            redis::PushKind::Message,
+            redis::PushKind::PMessage,
+            redis::PushKind::SMessage,
+            redis::PushKind::Subscribe,
+            redis::PushKind::Invalidate,
+        ] {
+            assert!(!handle_disconnection_push(&push(kind)));
+        }
     }
 }
