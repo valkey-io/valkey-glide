@@ -39,7 +39,9 @@ from glide_shared.exceptions import (
     get_request_error_class,
 )
 from glide_shared.ffi_helpers import (
+    _allocate_direct_callback_id,
     _create_native_client_finalizer,
+    _create_pubsub_callback,
     _is_native_callback_executing,
     _native_callback_execution,
     _NativeClientOwner,
@@ -181,7 +183,8 @@ class BaseClient(CoreCommands):
         self._pubsub_queue: List[PubSubMsg] = []
         self._pubsub_lock = threading.Lock()
         self._pubsub_condition = threading.Condition(self._pubsub_lock)
-        self._pubsub_callback_ref = None  # Keep callback alive
+        self._pubsub_callback_ref = None  # Stable process-lifetime trampoline
+        self._pubsub_callback_owner = None
         self._address_resolver_callback_ref = None
         self._address_resolver_callback_owner = None
         self._credential_provider_callback_ref = None
@@ -198,6 +201,7 @@ class BaseClient(CoreCommands):
         self._recreating_after_fork = False
         self._native_owner: Optional[_NativeClientOwner] = None
         self._native_finalizer: Optional[weakref.finalize] = None
+        self._direct_callback_id = 0
 
         self._is_closed: bool = False
 
@@ -365,8 +369,20 @@ class BaseClient(CoreCommands):
         if finalizer is not None:
             finalizer.detach()
 
+    def _deactivate_callback_owners(self) -> None:
+        """Unregister direct callback targets before native ownership is closed."""
+        for callback_owner in (
+            getattr(self, "_pubsub_callback_owner", None),
+            getattr(self, "_address_resolver_callback_owner", None),
+            getattr(self, "_credential_provider_callback_owner", None),
+        ):
+            if callback_owner is not None:
+                callback_owner.close()
+
     def _clear_callback_references(self) -> None:
+        self._deactivate_callback_owners()
         self._pubsub_callback_ref = None
+        self._pubsub_callback_owner = None
         self._address_resolver_callback_ref = None
         self._address_resolver_callback_owner = None
         self._credential_provider_callback_ref = None
@@ -382,10 +398,12 @@ class BaseClient(CoreCommands):
         self._core_client = self._ffi.NULL
         self._conn_req_bytes = b""
         self._pubsub_callback_ref = None
+        self._pubsub_callback_owner = None
         self._address_resolver_callback_ref = None
         self._address_resolver_callback_owner = None
         self._credential_provider_callback_ref = None
         self._credential_provider_callback_owner = None
+        self._direct_callback_id = 0
         self._pubsub_queue = []
         self._pubsub_lock = threading.Lock()
         self._pubsub_condition = threading.Condition(self._pubsub_lock)
@@ -431,8 +449,11 @@ class BaseClient(CoreCommands):
 
         # Build every callback in locals. Instance state is updated only after
         # native creation and ConnectionResponse cleanup have both succeeded.
+        direct_callback_id = _allocate_direct_callback_id(self._ffi)
         python_callback = self._create_push_handle_callback()
-        pubsub_callback = self._ffi.callback("PubSubCallback", python_callback)
+        pubsub_callback, pubsub_callback_owner = _create_pubsub_callback(
+            self._ffi, python_callback
+        )
 
         (
             address_resolver_callback,
@@ -440,6 +461,7 @@ class BaseClient(CoreCommands):
         ) = create_address_resolver_callback(
             self._ffi,
             self._config.address_resolver,
+            callback_id=direct_callback_id,
             native_callback_owner=self,
         )
         address_resolver_callback_ref = (
@@ -454,6 +476,7 @@ class BaseClient(CoreCommands):
         ) = create_credential_provider_callback(
             self._ffi,
             credential_provider,
+            callback_id=direct_callback_id,
             provider_owner=self,
         )
         credential_provider_callback_ref = (
@@ -469,7 +492,7 @@ class BaseClient(CoreCommands):
                 pubsub_callback,
                 address_resolver_callback,
                 credential_provider_callback,
-                0,  # client_id is not used by the Python client
+                direct_callback_id,
             )
             if client_response_ptr == self._ffi.NULL:
                 raise ClosingError("Failed to create client, response pointer is NULL.")
@@ -488,11 +511,21 @@ class BaseClient(CoreCommands):
                     )
                     raise ClosingError(error_message)
                 core_client = client_response.conn_ptr
+                pubsub_callback_owner.adopt(
+                    int(self._ffi.cast("uintptr_t", core_client))
+                )
             finally:
                 self._lib.free_connection_response(client_response_ptr)
 
             Logger.log(Level.INFO, "connection info", "new connection established")
         except BaseException:
+            for callback_owner in (
+                pubsub_callback_owner,
+                address_resolver_callback_owner,
+                credential_provider_callback_owner,
+            ):
+                if callback_owner is not None:
+                    callback_owner.close()
             if core_client != self._ffi.NULL:
                 try:
                     self._lib.close_client(core_client)
@@ -511,9 +544,21 @@ class BaseClient(CoreCommands):
                     credential_provider_callback,
                 ),
                 os.getpid(),
+                callback_owners=(
+                    pubsub_callback_owner,
+                    address_resolver_callback_owner,
+                    credential_provider_callback_owner,
+                ),
                 close_on_worker=True,
             )
         except BaseException:
+            for callback_owner in (
+                pubsub_callback_owner,
+                address_resolver_callback_owner,
+                credential_provider_callback_owner,
+            ):
+                if callback_owner is not None:
+                    callback_owner.close()
             try:
                 self._lib.close_client(core_client)
             except BaseException:
@@ -525,7 +570,9 @@ class BaseClient(CoreCommands):
                 publish_client = False
             else:
                 self._conn_req_bytes = conn_req_bytes
+                self._direct_callback_id = direct_callback_id
                 self._pubsub_callback_ref = pubsub_callback
+                self._pubsub_callback_owner = pubsub_callback_owner
                 self._address_resolver_callback_ref = address_resolver_callback_ref
                 self._address_resolver_callback_owner = address_resolver_callback_owner
                 self._credential_provider_callback_ref = (
@@ -541,6 +588,13 @@ class BaseClient(CoreCommands):
 
         if not publish_client:
             native_finalizer.detach()
+            for callback_owner in (
+                pubsub_callback_owner,
+                address_resolver_callback_owner,
+                credential_provider_callback_owner,
+            ):
+                if callback_owner is not None:
+                    callback_owner.close()
             try:
                 native_owner.close()
             except BaseException:
@@ -1436,6 +1490,7 @@ class BaseClient(CoreCommands):
             # instead of installing it into this closed object.
             self._is_closed = True
             self._needs_recreate_after_fork = False
+            self._deactivate_callback_owners()
             owner = self._detach_native_owner()
             core_client, self._core_client = self._core_client, self._ffi.NULL
             if owner is None and core_client != self._ffi.NULL:

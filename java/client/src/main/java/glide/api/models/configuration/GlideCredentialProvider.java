@@ -14,6 +14,10 @@ import java.util.concurrent.CompletableFuture;
  * generated. Implement this interface and return a {@link CompletableFuture} that completes with an
  * {@link AwsCredentials} instance built with the {@link AwsCredentials#builder()}.
  *
+ * <p>The Java object bridge validates strings during memory-safe JNI conversion. It does not use
+ * the buffer-negotiation protocol or its 1 MiB field/aggregate cap, which applies only to the Go
+ * and Python C FFI adapters.
+ *
  * <p>The {@code getCredentials()} method body runs on a dedicated single daemon worker and should
  * return its future promptly. The method-body invocation and completion of its returned future
  * share a nine-second deadline. On timeout, GLIDE requests cancellation with interruption.

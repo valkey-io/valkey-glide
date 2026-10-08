@@ -61,9 +61,9 @@ class MonitorClient:
         iam_config = (
             config.credentials.iam_config if config.credentials is not None else None
         )
-        if iam_config is not None and iam_config.credential_provider is not None:
+        if iam_config is not None:
             raise ConfigurationError(
-                "MonitorClient does not support custom IAM credential providers"
+                "MonitorClient does not support IAM authentication"
             )
         instance = cls()
         instance._user_callback = callback

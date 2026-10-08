@@ -868,6 +868,9 @@ export interface AwsCredentials {
  * a custom STS assume-role flow) instead of the default AWS credential chain.
  *
  * Both synchronous and asynchronous (Promise-returning) providers are supported.
+ * The Node object bridge validates strings during memory-safe N-API conversion;
+ * it does not use the buffer-negotiation protocol or its 1 MiB field/aggregate
+ * cap, which applies only to the Go and Python C FFI adapters.
  *
  * **Thread safety**: implementations must be safe for concurrent calls — in cluster
  * mode, independent reconnections may invoke this callback simultaneously.

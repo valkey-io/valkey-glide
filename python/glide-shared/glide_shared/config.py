@@ -362,16 +362,16 @@ class AwsCredentials:
     """AWS credentials used to sign IAM authentication tokens.
 
     ``access_key_id`` and ``secret_access_key`` must be nonblank strings.
-    ``expires_at_epoch_millis``, when supplied, must be a nonnegative integer
-    that fits in a signed 64-bit value.
+    ``expires_at_epoch_millis``, when supplied, must be an integer that fits in
+    a signed 64-bit value. Values less than or equal to 0 mean no expiry.
 
     Attributes:
         access_key_id (str): The AWS access key ID.
         secret_access_key (str): The AWS secret access key.
         session_token (Optional[str]): An optional AWS session token.
         expires_at_epoch_millis (Optional[int]): Optional expiration time as Unix
-            epoch milliseconds. A value of 0 is treated as no expiration by the
-            core.
+            epoch milliseconds. A nonpositive value is treated as no expiration
+            by the core.
     """
 
     def __init__(
@@ -390,12 +390,10 @@ class AwsCredentials:
         if expires_at_epoch_millis is not None and (
             not isinstance(expires_at_epoch_millis, int)
             or isinstance(expires_at_epoch_millis, bool)
-            or expires_at_epoch_millis < 0
+            or expires_at_epoch_millis < -(2**63)
             or expires_at_epoch_millis > 2**63 - 1
         ):
-            raise ValueError(
-                "expires_at_epoch_millis must be a nonnegative signed 64-bit integer"
-            )
+            raise ValueError("expires_at_epoch_millis must be a signed 64-bit integer")
 
         self.access_key_id = access_key_id
         self.secret_access_key = secret_access_key

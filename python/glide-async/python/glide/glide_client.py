@@ -63,6 +63,7 @@ from glide_shared.exceptions import (
 from glide_shared.ffi_helpers import (
     ENCODING,
     FFIClientTypeEnum,
+    _allocate_direct_callback_id,
     _create_native_client_finalizer,
     _is_credential_provider_executing,
     _NativeClientOwner,
@@ -83,6 +84,32 @@ from .logger import Logger as ClientLogger
 from .opentelemetry import OpenTelemetry
 
 _ASYNC_FFI = _GlideFFI()  # Async client's own FFI instance
+
+_live_async_clients: "weakref.WeakSet[BaseClient]" = weakref.WeakSet()
+_live_async_clients_lock = threading.Lock()
+_async_fork_hook_registered = False
+
+
+def _after_fork_in_child() -> None:
+    """Invalidate inherited async clients without native or user callbacks."""
+    global _live_async_clients_lock
+    _live_async_clients_lock = threading.Lock()
+    for client in list(_live_async_clients):
+        try:
+            BaseClient._invalidate_after_fork(client)
+            _live_async_clients.discard(client)
+        except BaseException:
+            pass
+
+
+def _register_async_fork_hook() -> None:
+    global _async_fork_hook_registered
+    if hasattr(os, "register_at_fork") and not _async_fork_hook_registered:
+        os.register_at_fork(after_in_child=_after_fork_in_child)
+        _async_fork_hook_registered = True
+
+
+_register_async_fork_hook()
 
 
 # Native creation has already completed when this deadline starts. A healthy
@@ -216,7 +243,6 @@ def _slot_for_key(key: bytes) -> int:
 _async_pipe_read_fd: int = -1
 _async_pipe_write_fd: int = -1
 _async_pipe_init_pid: int = -1
-_next_client_id = itertools.count(1)
 
 
 _async_pipe_registered: bool = False
@@ -784,6 +810,7 @@ class BaseClient(CoreCommands):
         self._pubsub_lock = threading.Lock()
         self._pending_push_notifications: List[PubSubMsg] = []
         self._pipe_client_id: int = 0
+        self._direct_callback_id: int = 0
         self._create_pid: int = 0
         self._is_asyncio: bool = True
 
@@ -828,21 +855,26 @@ class BaseClient(CoreCommands):
         # Pubsub messages are delivered via the shared pipe — no callback needed.
         pubsub_callback = self._ffi.cast("PubSubCallback", 0)
 
+        # Direct callback IDs use the reserved high uintptr namespace, which is
+        # also safe in the async pipe's u64 client-id field.
+        self._direct_callback_id = _allocate_direct_callback_id(self._ffi)
+        self._pipe_client_id = self._direct_callback_id
+        self._create_pid = os.getpid()
+
         # Create address resolver callback if configured
         from glide_shared.ffi_helpers import create_address_resolver_callback
 
         (
             address_resolver_callback,
             address_resolver_callback_owner,
-        ) = create_address_resolver_callback(self._ffi, self.config.address_resolver)
+        ) = create_address_resolver_callback(
+            self._ffi,
+            self.config.address_resolver,
+            callback_id=self._direct_callback_id,
+        )
         if self.config.address_resolver is not None:
             self._address_resolver_callback_ref = address_resolver_callback
             self._address_resolver_callback_owner = address_resolver_callback_owner
-
-        # Set pipe_client_id before create_client so Rust routes responses
-        # through the pipe from the very first command — no race window.
-        self._pipe_client_id = next(_next_client_id)
-        self._create_pid = os.getpid()
 
         credential_provider = None
         if (
@@ -864,6 +896,7 @@ class BaseClient(CoreCommands):
         ) = create_credential_provider_callback(
             self._ffi,
             credential_provider,
+            callback_id=self._direct_callback_id,
             event_loop=self._loop,
             trio_token=trio_token,
             allow_async=True,
@@ -914,6 +947,10 @@ class BaseClient(CoreCommands):
                         credential_provider_callback,
                     ),
                     self._create_pid,
+                    callback_owners=(
+                        address_resolver_callback_owner,
+                        credential_provider_callback_owner,
+                    ),
                 )
             )
 
@@ -926,6 +963,8 @@ class BaseClient(CoreCommands):
                 LogLevel.INFO, "connection info", "new connection established"
             )
             self._setup_pipe()
+            with _live_async_clients_lock:
+                _live_async_clients.add(self)
             return self
         except BaseException:
             create_state._abandon()
@@ -1433,13 +1472,54 @@ class BaseClient(CoreCommands):
             finalizer.detach()
         return owner
 
+    def _deactivate_callback_owners(self) -> None:
+        """Stop new direct callbacks while retaining owners through native close."""
+        for callback_owner in (
+            getattr(self, "_address_resolver_callback_owner", None),
+            getattr(self, "_credential_provider_callback_owner", None),
+        ):
+            if callback_owner is not None:
+                callback_owner.close()
+
     def _release_callback_references(self) -> None:
-        """Release callbacks after native code can no longer invoke them."""
+        """Release callback owners after native code can no longer invoke them."""
+        self._deactivate_callback_owners()
         self._pubsub_callback_ref = None
         self._address_resolver_callback_ref = None
         self._address_resolver_callback_owner = None
         self._credential_provider_callback_ref = None
         self._credential_provider_callback_owner = None
+
+    def _invalidate_after_fork(self) -> None:
+        """Drop inherited native ownership without acquiring parent-held locks."""
+        client_id = getattr(self, "_pipe_client_id", 0)
+        _client_registry.pop(client_id, None)
+        finalizer = getattr(self, "_native_finalizer", None)
+        owner = getattr(self, "_native_owner", None)
+        self._native_finalizer = None
+        self._native_owner = None
+        if owner is not None:
+            _NativeClientOwner.disarm_after_fork(owner)
+        if finalizer is not None:
+            finalizer.detach()
+
+        # The shared callback registries were cleared by their earlier at-fork
+        # hook. Avoid owner locks here and simply drop inherited references.
+        self._core_client = None
+        self._is_closed = True
+        self._close_state = None
+        self._pipe_client_id = 0
+        self._pending_futures = {}
+        self._pubsub_futures = []
+        self._pending_push_notifications = []
+        self._pubsub_callback_ref = None
+        self._address_resolver_callback_ref = None
+        self._address_resolver_callback_owner = None
+        self._credential_provider_callback_ref = None
+        self._credential_provider_callback_owner = None
+        self._lock = threading.Lock()
+        self._pubsub_lock = threading.Lock()
+        self._close_lock = threading.Lock()
 
     async def close(self, err_message: Optional[str] = None) -> None:  # noqa: C901
         """Close exactly once; cancelled waiters leave native cleanup running.
@@ -1487,6 +1567,7 @@ class BaseClient(CoreCommands):
                 return
             else:
                 self._is_closed = True
+                self._deactivate_callback_owners()
                 owner = self._detach_native_owner()
                 core_client, self._core_client = self._core_client, None
                 if owner is None and core_client is not None:
@@ -1509,6 +1590,9 @@ class BaseClient(CoreCommands):
                     )
                     self._close_state = close_state
                 owns_close = True
+
+        with _live_async_clients_lock:
+            _live_async_clients.discard(self)
 
         if owns_close:
             err_message = "" if err_message is None else err_message

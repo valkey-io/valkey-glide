@@ -89,6 +89,8 @@
 
 ### Breaking Changes
 
+* Java: The unreleased `GlideCredentialProvider#getCredentials()` preview now returns `CompletableFuture<AwsCredentials>`. Synchronous providers should return `CompletableFuture.completedFuture(credentials)`. This is a pre-release source- and binary-incompatible adjustment; no published Valkey GLIDE release exposed the earlier signature, so published-release compatibility is unaffected.
+* Java, Node: Custom IAM credentials use object-based JNI/N-API bridges and are not subject to the 1 MiB credential buffer cap used by the Go/Python C FFI adapters. The object bridges still perform checked, memory-safe string conversion.
 * Java: An AZ-affinity read strategy configured without `clientAZ` now fails at client creation. Previously the core logged a warning and downgraded the strategy to `PreferReplica`, so reads silently went to arbitrary nodes. Affects `AZ_AFFINITY` and `AZ_AFFINITY_REPLICAS_AND_PRIMARY` as well as the new `AZ_AFFINITY_ALL_NODES`, and reaches `ClientPool.create` as well as `GlideClient`/`GlideClusterClient` ([#7059](https://github.com/valkey-io/valkey-glide/pull/7059))
 * Node: `clientAz` is now trimmed and validated for the `AZAffinity`, `AZAffinityReplicasAndPrimary`, and `AZAffinityAllNodes` read strategies. A whitespace-only `clientAz` now raises a `ConfigurationError`, and a padded value (e.g. `" us-east-1a "`) is trimmed before reaching the core so reads pin to that zone instead of falling back to all nodes ([#7104](https://github.com/valkey-io/valkey-glide/pull/7104))
 

@@ -1436,6 +1436,23 @@ describe("IAM Auth: Direct Custom Credential Providers", () => {
     );
 
     iamIt(
+        "accepts a direct-provider session token larger than 2048 bytes",
+        async () => {
+            if (!iamEnabled) return;
+
+            const directClient = await createDirectClient(false, () =>
+                environmentCredentials({ sessionToken: "t".repeat(8192) }),
+            );
+
+            try {
+                await assertConnected(directClient);
+            } finally {
+                directClient.close();
+            }
+        },
+        TIMEOUT,
+    );
+    iamIt(
         "surfaces a custom provider failure from manual refresh",
         async () => {
             let failRefresh = false;

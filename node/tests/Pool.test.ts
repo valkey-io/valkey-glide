@@ -5,7 +5,7 @@
  * Parameterized over cluster/standalone for parity with Java/Python/Go.
  */
 
-import { afterAll, beforeAll, describe, expect, it } from "@jest/globals";
+import { afterAll, beforeAll, describe, expect, it, jest } from "@jest/globals";
 import {
     ClientPool,
     GlideClient,
@@ -478,6 +478,90 @@ describe("Pool credential provider guard", () => {
     const expectedError =
         "Pool clients cannot use a custom IAM credentials provider. " +
         "Configure IAM without a credentialProvider to use the default AWS credential chain.";
+
+    it.each([
+        ["null", null],
+        ["false", false],
+        ["zero", 0],
+        ["empty string", ""],
+    ])(
+        "rejects present non-function provider value %s before serialization or native create",
+        async (_caseName, credentialProvider) => {
+            const poolClass = ClientPool as unknown as {
+                nativeCreatePool: typeof native.createPool;
+                serializeStandaloneConfig: typeof GlideClient.serializeConfig;
+            };
+            const originalCreatePool = poolClass.nativeCreatePool;
+            const originalSerialize = poolClass.serializeStandaloneConfig;
+            const createPoolMock = jest.fn<typeof native.createPool>();
+            const serializeMock = jest.fn<typeof GlideClient.serializeConfig>();
+            poolClass.nativeCreatePool = createPoolMock;
+            poolClass.serializeStandaloneConfig = serializeMock;
+
+            const config = {
+                addresses: [{ host: "invalid.example", port: 1 }],
+                credentials: {
+                    username: "iam-user",
+                    iamConfig: {
+                        clusterName: "my-cluster",
+                        service: ServiceType.Elasticache,
+                        region: "us-east-1",
+                        credentialProvider,
+                    },
+                },
+            } as unknown as GlideClientConfiguration;
+
+            try {
+                await expect(ClientPool.create(config)).rejects.toThrow(
+                    "credentialProvider must be a function when provided",
+                );
+                expect(serializeMock).not.toHaveBeenCalled();
+                expect(createPoolMock).not.toHaveBeenCalled();
+            } finally {
+                poolClass.nativeCreatePool = originalCreatePool;
+                poolClass.serializeStandaloneConfig = originalSerialize;
+            }
+        },
+    );
+
+    it("rejects a function provider before serialization or native create", async () => {
+        const poolClass = ClientPool as unknown as {
+            nativeCreatePool: typeof native.createPool;
+            serializeStandaloneConfig: typeof GlideClient.serializeConfig;
+        };
+        const originalCreatePool = poolClass.nativeCreatePool;
+        const originalSerialize = poolClass.serializeStandaloneConfig;
+        const createPoolMock = jest.fn<typeof native.createPool>();
+        const serializeMock = jest.fn<typeof GlideClient.serializeConfig>();
+        poolClass.nativeCreatePool = createPoolMock;
+        poolClass.serializeStandaloneConfig = serializeMock;
+        const config = {
+            addresses: [{ host: "invalid.example", port: 1 }],
+            credentials: {
+                username: "iam-user",
+                iamConfig: {
+                    clusterName: "my-cluster",
+                    service: ServiceType.Elasticache,
+                    region: "us-east-1",
+                    credentialProvider: () => ({
+                        accessKeyId: "AKID",
+                        secretAccessKey: "SECRET",
+                    }),
+                },
+            },
+        } as GlideClientConfiguration;
+
+        try {
+            await expect(ClientPool.create(config)).rejects.toThrow(
+                expectedError,
+            );
+            expect(serializeMock).not.toHaveBeenCalled();
+            expect(createPoolMock).not.toHaveBeenCalled();
+        } finally {
+            poolClass.nativeCreatePool = originalCreatePool;
+            poolClass.serializeStandaloneConfig = originalSerialize;
+        }
+    });
 
     it.each(["", "crafted-provider-key"])(
         "rejects a crafted raw native pool request with credential provider key %p",

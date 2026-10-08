@@ -13,10 +13,126 @@ from typing import Any, Iterator
 from glide_shared._glide_ffi import GlideFFI as _GlideFFI_singleton
 
 
-class _AddressResolverCallbackOwner:
+class _WeakCallbackOwnerRegistry:
+    """Thread-safe callback-ID to weak-owner registry."""
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._owners: dict[int, weakref.ReferenceType[Any]] = {}
+
+    def register(self, callback_id: int, owner: Any) -> None:
+        owner_ref: weakref.ReferenceType[Any]
+
+        def discard(ref: weakref.ReferenceType[Any]) -> None:
+            with self._lock:
+                if self._owners.get(callback_id) is ref:
+                    self._owners.pop(callback_id, None)
+
+        owner_ref = weakref.ref(owner, discard)
+        with self._lock:
+            if callback_id in self._owners:
+                raise RuntimeError(f"Callback ID {callback_id} is already registered")
+            self._owners[callback_id] = owner_ref
+
+    def get(self, callback_id: int) -> Any:
+        with self._lock:
+            owner_ref = self._owners.get(callback_id)
+        return owner_ref() if owner_ref is not None else None
+
+    def unregister(self, callback_id: int, owner: Any) -> None:
+        with self._lock:
+            owner_ref = self._owners.get(callback_id)
+            if owner_ref is not None and owner_ref() is owner:
+                self._owners.pop(callback_id, None)
+
+    def reset_after_fork(self) -> None:
+        # Parent threads disappear at fork, so inherited locks cannot be acquired.
+        self._lock = threading.Lock()
+        self._owners = {}
+
+    def size(self) -> int:
+        with self._lock:
+            return len(self._owners)
+
+
+class _RegisteredCallbackOwner:
+    """Base for a client-owned callback target registered only by weak reference."""
+
+    def __init__(self, callback_id: int, registry: _WeakCallbackOwnerRegistry) -> None:
+        self.callback_id = callback_id
+        self._registry = registry
+        self._state_lock = threading.Lock()
+        self._closed = False
+
+    def register(self) -> None:
+        self._registry.register(self.callback_id, self)
+
+    def is_open(self) -> bool:
+        with self._state_lock:
+            return not self._closed
+
+    def close(self) -> None:
+        with self._state_lock:
+            self._closed = True
+        self._registry.unregister(self.callback_id, self)
+
+
+_address_resolver_owners = _WeakCallbackOwnerRegistry()
+_credential_provider_owners = _WeakCallbackOwnerRegistry()
+_pubsub_owners = _WeakCallbackOwnerRegistry()
+
+# Callback IDs occupy the high half of uintptr_t. Pooled pipe IDs remain in
+# their existing low-number namespace; direct async and sync clients share this
+# allocator so configured sync callbacks never use 0 or collide with each other.
+_direct_id_lock = threading.Lock()
+_next_direct_id = 1
+
+# Each entry strongly retains its FFI object and one CFFI callback cdata object.
+# The maps grow only with distinct process-lifetime FFI instances, never clients.
+_trampoline_lock = threading.Lock()
+_address_resolver_trampolines: dict[int, tuple[Any, Any]] = {}
+_credential_provider_trampolines: dict[int, tuple[Any, Any]] = {}
+_pubsub_trampolines: dict[int, tuple[Any, Any]] = {}
+
+
+def _allocate_direct_callback_id(ffi: Any) -> int:
+    """Allocate a process-unique direct-client ID in the reserved high namespace."""
+    global _next_direct_id
+    bits = int(ffi.sizeof("uintptr_t")) * 8
+    namespace_bit = 1 << (bits - 1)
+    max_sequence = namespace_bit - 1
+    with _direct_id_lock:
+        if _next_direct_id > max_sequence:
+            raise RuntimeError("Direct callback ID namespace exhausted")
+        callback_id = namespace_bit | _next_direct_id
+        _next_direct_id += 1
+    return callback_id
+
+
+def _reset_callback_state_after_fork() -> None:
+    """Clear inherited owners and replace every potentially orphaned lock."""
+    global _direct_id_lock, _trampoline_lock
+    _direct_id_lock = threading.Lock()
+    _trampoline_lock = threading.Lock()
+    _address_resolver_owners.reset_after_fork()
+    _credential_provider_owners.reset_after_fork()
+    _pubsub_owners.reset_after_fork()
+
+
+if hasattr(os, "register_at_fork"):
+    os.register_at_fork(after_in_child=_reset_callback_state_after_fork)
+
+
+class _AddressResolverCallbackOwner(_RegisteredCallbackOwner):
     """Keep a user resolver alive without making its CFFI callback own it."""
 
-    def __init__(self, resolver: Any, native_callback_owner: Any = None) -> None:
+    def __init__(
+        self,
+        callback_id: int,
+        resolver: Any,
+        native_callback_owner: Any = None,
+    ) -> None:
+        super().__init__(callback_id, _address_resolver_owners)
         self.resolver = resolver
         try:
             self.native_callback_owner_ref = (
@@ -26,6 +142,7 @@ class _AddressResolverCallbackOwner:
             )
         except TypeError:
             self.native_callback_owner_ref = None
+        self.register()
 
     def native_callback_owner(self) -> Any:
         return (
@@ -35,11 +152,12 @@ class _AddressResolverCallbackOwner:
         )
 
 
-class _CredentialProviderCallbackOwner:
-    """Keep provider state alive separately from its CFFI trampoline."""
+class _CredentialProviderCallbackOwner(_RegisteredCallbackOwner):
+    """Keep provider state alive separately from its process-lifetime trampoline."""
 
     def __init__(
         self,
+        callback_id: int,
         provider: Any,
         *,
         event_loop: Any = None,
@@ -49,6 +167,7 @@ class _CredentialProviderCallbackOwner:
     ) -> None:
         from glide_shared.config import _is_async_callable
 
+        super().__init__(callback_id, _credential_provider_owners)
         self.provider = provider
         self.is_async_callable = _is_async_callable(provider)
         self.event_loop_ref = (
@@ -64,6 +183,7 @@ class _CredentialProviderCallbackOwner:
             # Reentrancy tracking does not justify retaining a non-weakrefable
             # owner through a native callback graph.
             self.provider_owner_ref = None
+        self.register()
 
     def event_loop(self) -> Any:
         return self.event_loop_ref() if self.event_loop_ref is not None else None
@@ -75,6 +195,23 @@ class _CredentialProviderCallbackOwner:
         # Standalone helper users and a create worker whose caller disappeared
         # can use this detached owner as their reentrancy marker.
         return owner if owner is not None else self
+
+
+class _PubSubCallbackOwner(_RegisteredCallbackOwner):
+    """Weakly target one sync client by its adopted native adapter pointer."""
+
+    def __init__(self, handler: Any) -> None:
+        # The native adapter pointer is not known until create_client returns.
+        super().__init__(0, _pubsub_owners)
+        self._handler = handler
+
+    def adopt(self, adapter_ptr: int) -> None:
+        self.callback_id = adapter_ptr
+        self.register()
+
+    def dispatch(self, *args: Any) -> None:
+        if self.is_open():
+            self._handler(*args)
 
 
 class _NativeClientOwner:
@@ -119,17 +256,35 @@ class _NativeClientOwner:
         self._lock = threading.Lock()
 
 
-def _finalize_native_client(owner: _NativeClientOwner) -> None:
+def _deactivate_weak_callback_owners(
+    callback_owner_refs: tuple[weakref.ReferenceType[Any], ...],
+) -> None:
+    """Close any callback owners still alive when client finalization begins."""
+    for callback_owner_ref in callback_owner_refs:
+        callback_owner = callback_owner_ref()
+        if callback_owner is not None:
+            callback_owner.close()
+
+
+def _finalize_native_client(
+    owner: _NativeClientOwner,
+    callback_owner_refs: tuple[weakref.ReferenceType[Any], ...],
+) -> None:
     """Best-effort ordinary-GC cleanup; explicit close still reports errors."""
     try:
+        _deactivate_weak_callback_owners(callback_owner_refs)
         owner.close()
     except BaseException:
         # Finalizer exceptions cannot be delivered to an application caller.
         pass
 
 
-def _finalize_native_client_on_worker(owner: _NativeClientOwner) -> None:
+def _finalize_native_client_on_worker(
+    owner: _NativeClientOwner,
+    callback_owner_refs: tuple[weakref.ReferenceType[Any], ...],
+) -> None:
     """Transfer finalizer ownership away from a possible native callback thread."""
+    _deactivate_weak_callback_owners(callback_owner_refs)
 
     def close_owner() -> None:
         try:
@@ -151,6 +306,7 @@ def _create_native_client_finalizer(
     callback_refs: tuple[Any, ...],
     creation_pid: int,
     *,
+    callback_owners: tuple[Any, ...] = (),
     close_on_worker: bool = False,
 ) -> tuple[_NativeClientOwner, weakref.finalize]:
     """Create a native owner whose finalizer never strongly retains ``client``.
@@ -166,7 +322,12 @@ def _create_native_client_finalizer(
         if close_on_worker
         else _finalize_native_client
     )
-    finalizer = weakref.finalize(client, finalizer_callback, owner)
+    callback_owner_refs = tuple(
+        weakref.ref(callback_owner)
+        for callback_owner in callback_owners
+        if callback_owner is not None
+    )
+    finalizer = weakref.finalize(client, finalizer_callback, owner, callback_owner_refs)
     finalizer.atexit = False  # type: ignore[misc]
     return owner, finalizer
 
@@ -419,54 +580,92 @@ def create_c_batch_options(
     return batch_options, route_refs + [batch_options]
 
 
-def create_address_resolver_callback(ffi, resolver_fn, *, native_callback_owner=None):
-    """Create a resolver trampoline and its separately retained callable owner.
+def _get_address_resolver_trampoline(ffi: Any) -> Any:
+    ffi_id = id(ffi)
+    with _trampoline_lock:
+        entry = _address_resolver_trampolines.get(ffi_id)
+        if entry is not None and entry[0] is ffi:
+            return entry[1]
 
-    The CFFI callback captures only a weak reference to the owner. Callers must
-    keep the returned owner alive for as long as native code may call the
-    trampoline. If native close invokes it after owner collection, it safely
-    returns 0 so Rust falls back to the original address.
-    """
+        def trampoline(
+            client_id,
+            host_ptr,
+            host_len,
+            port,
+            resolved_host_buf,
+            resolved_host_buf_len,
+            resolved_host_len_ptr,
+        ):
+            owner = _address_resolver_owners.get(int(client_id))
+            if owner is None or not owner.is_open():
+                return 0
+            try:
+                with _native_callback_execution(
+                    owner.native_callback_owner()
+                ) as admitted:
+                    if not admitted or not owner.is_open():
+                        return 0
+                    host = ffi.buffer(host_ptr, host_len)[:].decode(ENCODING)
+                    resolved_host, resolved_port = owner.resolver(host, port)
+                    if not owner.is_open():
+                        return 0
+                    encoded_host = resolved_host.encode(ENCODING)
+                    write_len = min(len(encoded_host), resolved_host_buf_len)
+                    ffi.memmove(resolved_host_buf, encoded_host, write_len)
+                    resolved_host_len_ptr[0] = write_len
+                    return resolved_port
+            except Exception as error:
+                # Zero asks Rust to retain the original address.
+                from glide_shared.logger import Level, Logger
+
+                Logger.log(Level.WARN, "address_resolver", f"Resolver failed: {error}")
+                return 0
+
+        callback = ffi.callback("AddressResolverCallback", trampoline)
+        _address_resolver_trampolines[ffi_id] = (ffi, callback)
+        return callback
+
+
+def create_address_resolver_callback(
+    ffi,
+    resolver_fn,
+    *,
+    callback_id=None,
+    native_callback_owner=None,
+):
+    """Register a resolver owner behind an FFI-stable weak trampoline."""
     if resolver_fn is None:
         return ffi.cast("AddressResolverCallback", ffi.NULL), None
 
-    callback_owner = _AddressResolverCallbackOwner(resolver_fn, native_callback_owner)
-    callback_owner_ref = weakref.ref(callback_owner)
+    if callback_id is None:
+        callback_id = _allocate_direct_callback_id(ffi)
+    callback_owner = _AddressResolverCallbackOwner(
+        callback_id, resolver_fn, native_callback_owner
+    )
+    return _get_address_resolver_trampoline(ffi), callback_owner
 
-    def _address_resolver_callback(
-        client_id,
-        host_ptr,
-        host_len,
-        port,
-        resolved_host_buf,
-        resolved_host_buf_len,
-        resolved_host_len_ptr,
-    ):
-        owner = callback_owner_ref()
-        if owner is None:
-            return 0
-        try:
-            with _native_callback_execution(owner.native_callback_owner()) as admitted:
-                if not admitted:
-                    return 0
-                host = ffi.buffer(host_ptr, host_len)[:].decode(ENCODING)
-                resolved_host, resolved_port = owner.resolver(host, port)
-                encoded_host = resolved_host.encode(ENCODING)
-                write_len = min(len(encoded_host), resolved_host_buf_len)
-                ffi.memmove(resolved_host_buf, encoded_host, write_len)
-                resolved_host_len_ptr[0] = write_len
-                return resolved_port
-        except Exception as error:
-            # Return 0 (original port) to signal failure to the Rust layer,
-            # which will fall back to the original address. We cannot propagate
-            # exceptions across the FFI callback boundary.
-            from glide_shared.logger import Level, Logger
 
-            Logger.log(Level.WARN, "address_resolver", f"Resolver failed: {error}")
-            return 0
+def _get_pubsub_trampoline(ffi: Any) -> Any:
+    """Return the process-lifetime sync PubSub trampoline for ``ffi``."""
+    ffi_id = id(ffi)
+    with _trampoline_lock:
+        entry = _pubsub_trampolines.get(ffi_id)
+        if entry is not None and entry[0] is ffi:
+            return entry[1]
 
-    callback = ffi.callback("AddressResolverCallback", _address_resolver_callback)
-    return callback, callback_owner
+        def trampoline(client_ptr, *args):
+            owner = _pubsub_owners.get(int(client_ptr))
+            if owner is not None:
+                owner.dispatch(client_ptr, *args)
+
+        callback = ffi.callback("PubSubCallback", trampoline)
+        _pubsub_trampolines[ffi_id] = (ffi, callback)
+        return callback
+
+
+def _create_pubsub_callback(ffi: Any, handler: Any) -> tuple[Any, Any]:
+    """Create an unadopted weak PubSub owner and return the stable trampoline."""
+    return _get_pubsub_trampoline(ffi), _PubSubCallbackOwner(handler)
 
 
 _CREDENTIAL_CALLBACK_FAILURE = 0
@@ -799,121 +998,111 @@ def _dispose_awaitable(awaitable) -> None:
         close()
 
 
+def _invoke_credential_provider_owner(ffi: Any, owner: Any, buffers: tuple[Any, ...]):
+    """Invoke one live provider owner and write its credentials."""
+    import inspect
+
+    provider = owner.provider
+    provider_marker = owner.provider_owner()
+    with _native_callback_execution(provider_marker) as admitted:
+        if not admitted or not owner.is_open():
+            return _CREDENTIAL_CALLBACK_FAILURE
+        owner_loop = owner.event_loop()
+        if owner.is_async_callable:
+            if not owner.allow_async:
+                raise TypeError(
+                    "The sync client does not support async credential providers"
+                )
+            credentials = _run_async_credential_provider(
+                provider,
+                provider_marker,
+                owner_loop,
+                owner.trio_token,
+            )
+        else:
+            credentials = provider()
+            if inspect.isawaitable(credentials):
+                if not owner.allow_async:
+                    _dispose_awaitable(credentials)
+                    raise TypeError(
+                        "The sync credential provider returned an awaitable; "
+                        "use a synchronous provider or the async client"
+                    )
+                credentials = _run_awaitable_result(
+                    credentials,
+                    provider_marker,
+                    owner_loop,
+                    owner.trio_token,
+                )
+
+        if not owner.is_open():
+            return _CREDENTIAL_CALLBACK_FAILURE
+        return _write_credentials_to_buffers(ffi, credentials, *buffers)
+
+
+def _get_credential_provider_trampoline(ffi: Any) -> Any:
+    ffi_id = id(ffi)
+    with _trampoline_lock:
+        entry = _credential_provider_trampolines.get(ffi_id)
+        if entry is not None and entry[0] is ffi:
+            return entry[1]
+
+        def trampoline(client_id, *buffers):
+            owner = _credential_provider_owners.get(int(client_id))
+            if owner is None or not owner.is_open():
+                return _CREDENTIAL_CALLBACK_FAILURE
+            try:
+                return _invoke_credential_provider_owner(ffi, owner, buffers)
+            except BaseException as error:
+                import logging
+
+                logging.getLogger(__name__).warning(
+                    "IAM credential provider failed: %s", error
+                )
+                return _CREDENTIAL_CALLBACK_FAILURE
+
+        callback = ffi.callback("CredentialProviderCallback", trampoline)
+        _credential_provider_trampolines[ffi_id] = (ffi, callback)
+        return callback
+
+
 def create_credential_provider_callback(
     ffi,
     credential_provider_fn,
     *,
+    callback_id=None,
     event_loop=None,
     trio_token=None,
     allow_async=False,
     provider_owner=None,
 ):
-    """Create a native callback for a custom AWS credential provider.
+    """Register a credential owner behind an FFI-stable weak trampoline.
 
     The callback follows the native stateless tri-state protocol: 0 means
     failure, 1 means success, and 2 requests larger buffers. A provider can be
     called twice during large-value negotiation; no result is cached between
     those calls.
 
-    Async clients must call this function in their owning async context and
-    pass the running asyncio loop or Trio token. ``allow_async`` also permits a
-    nominally synchronous provider to return an awaitable. Sync clients leave
-    it false; rejected awaitables are closed or cancelled before failure.
-
     Returns:
         A ``(callback, owner)`` pair. The callback is typed NULL and the owner
-        is None when no provider is configured. Otherwise callers must retain
-        the owner while native callbacks are allowed; the trampoline itself
-        retains only a weak reference to it.
+        is None when no provider is configured. Otherwise the caller strongly
+        owns the owner and must close it at the lifecycle transition where new
+        callbacks are no longer allowed. The module registry holds it weakly.
     """
     if credential_provider_fn is None:
         return ffi.cast("CredentialProviderCallback", ffi.NULL), None
 
-    import inspect
-
+    if callback_id is None:
+        callback_id = _allocate_direct_callback_id(ffi)
     callback_owner = _CredentialProviderCallbackOwner(
+        callback_id,
         credential_provider_fn,
         event_loop=event_loop,
         trio_token=trio_token,
         allow_async=allow_async,
         provider_owner=provider_owner,
     )
-    callback_owner_ref = weakref.ref(callback_owner)
-
-    def _credential_provider_callback(
-        client_id,
-        access_key_id_buf,
-        access_key_id_buf_len,
-        access_key_id_len_ptr,
-        secret_access_key_buf,
-        secret_access_key_buf_len,
-        secret_access_key_len_ptr,
-        session_token_buf,
-        session_token_buf_len,
-        session_token_len_ptr,
-        expires_at_millis_ptr,
-    ):
-        owner = callback_owner_ref()
-        if owner is None:
-            return _CREDENTIAL_CALLBACK_FAILURE
-        provider = owner.provider
-        provider_marker = owner.provider_owner()
-        try:
-            with _native_callback_execution(provider_marker) as admitted:
-                if not admitted:
-                    return _CREDENTIAL_CALLBACK_FAILURE
-                owner_loop = owner.event_loop()
-                if owner.is_async_callable:
-                    if not owner.allow_async:
-                        raise TypeError(
-                            "The sync client does not support async credential providers"
-                        )
-                    credentials = _run_async_credential_provider(
-                        provider,
-                        provider_marker,
-                        owner_loop,
-                        owner.trio_token,
-                    )
-                else:
-                    credentials = provider()
-                    if inspect.isawaitable(credentials):
-                        if not owner.allow_async:
-                            _dispose_awaitable(credentials)
-                            raise TypeError(
-                                "The sync credential provider returned an awaitable; "
-                                "use a synchronous provider or the async client"
-                            )
-                        credentials = _run_awaitable_result(
-                            credentials,
-                            provider_marker,
-                            owner_loop,
-                            owner.trio_token,
-                        )
-
-                return _write_credentials_to_buffers(
-                    ffi,
-                    credentials,
-                    access_key_id_buf,
-                    access_key_id_buf_len,
-                    access_key_id_len_ptr,
-                    secret_access_key_buf,
-                    secret_access_key_buf_len,
-                    secret_access_key_len_ptr,
-                    session_token_buf,
-                    session_token_buf_len,
-                    session_token_len_ptr,
-                    expires_at_millis_ptr,
-                )
-        except BaseException as error:
-            import logging
-
-            logging.getLogger(__name__).warning(
-                "IAM credential provider failed: %s", error
-            )
-            return _CREDENTIAL_CALLBACK_FAILURE
-
-    callback = ffi.callback("CredentialProviderCallback", _credential_provider_callback)
-    return callback, callback_owner
+    return _get_credential_provider_trampoline(ffi), callback_owner
 
 
 def _write_credentials_to_buffers(
@@ -950,12 +1139,10 @@ def _write_credentials_to_buffers(
     if expires_at is not None and (
         not isinstance(expires_at, int)
         or isinstance(expires_at, bool)
-        or expires_at < 0
+        or expires_at < -(2**63)
         or expires_at > 2**63 - 1
     ):
-        raise ValueError(
-            "expires_at_epoch_millis must be a nonnegative signed 64-bit integer"
-        )
+        raise ValueError("expires_at_epoch_millis must be a signed 64-bit integer")
 
     encoded_access_key_id = access_key_id.encode(ENCODING)
     encoded_secret_access_key = secret_access_key.encode(ENCODING)
@@ -994,7 +1181,9 @@ def _write_credentials_to_buffers(
         ffi.memmove(secret_access_key_buf, encoded_secret_access_key, lengths[1])
     if encoded_session_token:
         ffi.memmove(session_token_buf, encoded_session_token, lengths[2])
-    expires_at_millis_ptr[0] = expires_at or 0
+    expires_at_millis_ptr[0] = (
+        expires_at if expires_at is not None and expires_at > 0 else 0
+    )
     return _CREDENTIAL_CALLBACK_SUCCESS
 
 

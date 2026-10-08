@@ -49,6 +49,20 @@ public class IamTokenCallbackTest {
     }
 
     @Test
+    void objectBridgeAcceptsSessionTokenLargerThan2048Bytes() {
+        GlideCredentialProvider provider =
+                () ->
+                        CompletableFuture.completedFuture(
+                                AwsCredentials.builder()
+                                        .accessKeyId("large-token-access-key")
+                                        .secretAccessKey("secret-key")
+                                        .sessionToken(new String(new char[8192]).replace('\0', 't'))
+                                        .build());
+
+        assertEquals("large-token-access-key", invokeOnce(provider, SHORT_TIMEOUT_MILLIS));
+    }
+
+    @Test
     void methodBodyThrowsAndPreservesMessage() {
         GlideCredentialProvider provider =
                 () -> {
