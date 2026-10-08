@@ -1559,7 +1559,7 @@ pub(crate) mod shared_client_tests {
                 .as_nanos() as u64;
 
             glide_core::scope::register_client(client_id, client.clone());
-            let pool = glide_core::pool::get_or_create_scope_pool(client_id, bytes.clone());
+            let pool = glide_core::pool::get_or_create_scope_pool(client_id, bytes.clone()).pool;
 
             // Resolve the target, then reserve via try_acquire (the
             // reserve-before-create contract) to get the guard; seating the
@@ -1673,14 +1673,14 @@ pub(crate) mod shared_client_tests {
             glide_core::scope::register_client(client_id, test_basics.client.clone());
             glide_core::pool::get_client_scope_pools().insert(
                 client_id,
-                std::sync::Arc::new(tokio::sync::Mutex::new(glide_core::pool::ScopePool::new(
+                glide_core::pool::ScopePoolHandle::new(glide_core::pool::ScopePool::new(
                     glide_core::pool::ScopePoolConfig {
                         max_total: MAX_TOTAL,
                         ..Default::default()
                     },
                     bytes.clone(),
                     client_id,
-                ))),
+                )),
             );
 
             let mut held = Vec::new();

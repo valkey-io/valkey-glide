@@ -1072,9 +1072,10 @@ pub struct ScopePool {
     pub last_create_warn: Option<crate::scope::ScopeCreateErrorKind>,
     /// Signalled whenever a waiting acquire might now succeed: a slot or an idle
     /// connection became available, a creation or resync finished, or the pool
-    /// closed. `Arc` so a [`ScopeReservation`] can signal from its `Drop`
-    /// without the pool lock. Carries no payload; the woken acquire re-runs the
-    /// classifier under the lock to learn what changed.
+    /// closed. The same `Notify` as [`ScopePoolHandle::wakeup`]; the pool holds a
+    /// clone so code already under the lock, and a [`ScopeReservation`] in its
+    /// `Drop`, can signal without reaching back to the handle. Carries no
+    /// payload; the woken acquire re-runs the classifier to learn what changed.
     pub wakeup: Arc<Notify>,
     /// In-flight creations, keyed by target then by the acquire-attempt token that
     /// spawned each one. A single acquire polls with the same token across its
@@ -1523,7 +1524,7 @@ impl ScopePool {
 
                     let client_id = self.parent_client_id;
                     let pools = get_client_scope_pools();
-                    let pool_arc = pools.get(&client_id).map(|p| p.value().clone());
+                    let pool_arc = pools.get(&client_id).map(|p| p.value().pool.clone());
 
                     tokio::spawn(async move {
                         let mut guard = conn_arc.lock().await;
@@ -1766,14 +1767,48 @@ pub fn next_scope_attempt_token() -> u64 {
 static SCOPE_REGISTRY: OnceLock<DashMap<u64, ScopeEntry>> = OnceLock::new();
 
 /// Per-client scope pools: client_id → ScopePool.
-static CLIENT_SCOPE_POOLS: OnceLock<DashMap<u64, Arc<TokioMutex<ScopePool>>>> = OnceLock::new();
+static CLIENT_SCOPE_POOLS: OnceLock<DashMap<u64, ScopePoolHandle>> = OnceLock::new();
 
 pub fn get_scope_registry() -> &'static DashMap<u64, ScopeEntry> {
     SCOPE_REGISTRY.get_or_init(DashMap::new)
 }
 
-pub fn get_client_scope_pools() -> &'static DashMap<u64, Arc<TokioMutex<ScopePool>>> {
+pub fn get_client_scope_pools() -> &'static DashMap<u64, ScopePoolHandle> {
     CLIENT_SCOPE_POOLS.get_or_init(DashMap::new)
+}
+
+/// A scope pool and its wake signal, side by side. The signal sits outside the
+/// mutex so a path that cannot take the pool lock -- parent close, which runs
+/// synchronously and possibly off any runtime -- can still wake a waiting
+/// acquire, and so a waiter can arm it without locking.
+#[derive(Clone)]
+pub struct ScopePoolHandle {
+    pub pool: Arc<TokioMutex<ScopePool>>,
+    pub wakeup: Arc<Notify>,
+}
+
+impl ScopePoolHandle {
+    pub fn new(pool: ScopePool) -> Self {
+        Self {
+            wakeup: pool.wakeup.clone(),
+            pool: Arc::new(TokioMutex::new(pool)),
+        }
+    }
+
+    /// Test-only: wrap an already shared pool. The pool is fresh and unshared
+    /// at this point, so the `try_lock` cannot contend.
+    #[cfg(test)]
+    pub(crate) fn for_test(pool: &Arc<TokioMutex<ScopePool>>) -> Self {
+        let wakeup = pool
+            .try_lock()
+            .expect("fresh test pool is unlocked")
+            .wakeup
+            .clone();
+        Self {
+            pool: pool.clone(),
+            wakeup,
+        }
+    }
 }
 
 /// Invalidate every scope owned by `client_id` and drop its scope pool.
@@ -1796,15 +1831,8 @@ pub fn get_client_scope_pools() -> &'static DashMap<u64, Arc<TokioMutex<ScopePoo
 /// the pool's `client_id` overlaps plain clients' registry keys, so removing it would
 /// need an id that is unambiguous against them.
 pub fn destroy_client_scope_pool(client_id: u64) {
-    let removed = get_client_scope_pools().remove(&client_id);
-    // Best effort: a waiting acquire should learn the parent is gone now rather
-    // than at its next fallback poll. `try_lock` because this runs without the
-    // lock and may be called from an async context; a contended lock means an
-    // acquire is already classifying and will observe the removal itself.
-    if let Some((_, pool)) = removed
-        && let Ok(guard) = pool.try_lock()
-    {
-        guard.wakeup.notify_waiters();
+    if let Some((_, handle)) = get_client_scope_pools().remove(&client_id) {
+        handle.wakeup.notify_waiters();
     }
 
     let registry = get_scope_registry();
@@ -1824,7 +1852,7 @@ pub fn destroy_client_scope_pool(client_id: u64) {
 pub fn get_or_create_scope_pool(
     client_id: u64,
     connection_request_bytes: Vec<u8>,
-) -> Arc<TokioMutex<ScopePool>> {
+) -> ScopePoolHandle {
     let pools = get_client_scope_pools();
     // Fast path: pool already exists
     if let Some(existing) = pools.get(&client_id) {
@@ -1833,13 +1861,13 @@ pub fn get_or_create_scope_pool(
 
     // Slow path: create pool
     let config = ScopePoolConfig::default();
-    let pool = Arc::new(TokioMutex::new(ScopePool::new(
+    let handle = ScopePoolHandle::new(ScopePool::new(
         config,
         connection_request_bytes.clone(),
         client_id,
-    )));
+    ));
 
-    let inserted = pools.entry(client_id).or_insert_with(|| pool.clone());
+    let inserted = pools.entry(client_id).or_insert_with(|| handle.clone());
     inserted.value().clone()
 }
 
@@ -2059,6 +2087,7 @@ mod client_pool_marking_tests {
 
 #[cfg(test)]
 mod scope_pool_tests {
+    use super::ScopePoolHandle;
     use super::{
         Arc, AtomicU32, DashMap, Ordering, ScopeAcquire, ScopeEntry, ScopePool, ScopePoolConfig,
         ScopeReservation, ScopeTarget, next_scope_attempt_token, saturating_dec,
@@ -2288,7 +2317,8 @@ mod scope_pool_tests {
             connection_request_bytes.clone(),
             client_id,
         )));
-        crate::pool::get_client_scope_pools().insert(client_id, pool_arc.clone());
+        crate::pool::get_client_scope_pools()
+            .insert(client_id, ScopePoolHandle::for_test(&pool_arc));
         let registry = crate::pool::get_scope_registry();
 
         // Reserve a slot and create the real connection, mirroring the
@@ -2421,7 +2451,8 @@ mod scope_pool_tests {
             connection_request_bytes.clone(),
             client_id,
         )));
-        crate::pool::get_client_scope_pools().insert(client_id, pool_arc.clone());
+        crate::pool::get_client_scope_pools()
+            .insert(client_id, ScopePoolHandle::for_test(&pool_arc));
         let registry = crate::pool::get_scope_registry();
 
         // Reserve a slot and create the real connection, mirroring the
@@ -2582,7 +2613,8 @@ mod scope_pool_tests {
             connection_request_bytes.clone(),
             client_id,
         )));
-        crate::pool::get_client_scope_pools().insert(client_id, pool_arc.clone());
+        crate::pool::get_client_scope_pools()
+            .insert(client_id, ScopePoolHandle::for_test(&pool_arc));
         let registry = crate::pool::get_scope_registry();
 
         // Create the connection with no parent: it opens on the configured db (2).
@@ -2740,7 +2772,8 @@ mod scope_pool_tests {
             connection_request_bytes.clone(),
             client_id,
         )));
-        crate::pool::get_client_scope_pools().insert(client_id, pool_arc.clone());
+        crate::pool::get_client_scope_pools()
+            .insert(client_id, ScopePoolHandle::for_test(&pool_arc));
         let registry = crate::pool::get_scope_registry();
 
         let reservation = pool_arc
@@ -2889,7 +2922,8 @@ mod scope_pool_tests {
             connection_request_bytes.clone(),
             client_id,
         )));
-        crate::pool::get_client_scope_pools().insert(client_id, pool_arc.clone());
+        crate::pool::get_client_scope_pools()
+            .insert(client_id, ScopePoolHandle::for_test(&pool_arc));
         let registry = crate::pool::get_scope_registry();
 
         let reservation = pool_arc
@@ -3034,7 +3068,8 @@ mod scope_pool_tests {
             connection_request_bytes.clone(),
             client_id,
         )));
-        crate::pool::get_client_scope_pools().insert(client_id, pool_arc.clone());
+        crate::pool::get_client_scope_pools()
+            .insert(client_id, ScopePoolHandle::for_test(&pool_arc));
         let registry = crate::pool::get_scope_registry();
 
         // Seat two connections on distinct databases (3 and 5). Because
@@ -3189,7 +3224,8 @@ mod scope_pool_tests {
             connection_request_bytes.clone(),
             client_id,
         )));
-        crate::pool::get_client_scope_pools().insert(client_id, pool_arc.clone());
+        crate::pool::get_client_scope_pools()
+            .insert(client_id, ScopePoolHandle::for_test(&pool_arc));
         let registry = crate::pool::get_scope_registry();
 
         // Initialization: the connection opens on the configured db (4); the tracker must
@@ -3297,7 +3333,8 @@ mod scope_pool_tests {
             connection_request_bytes.clone(),
             client_id,
         )));
-        crate::pool::get_client_scope_pools().insert(client_id, pool_arc.clone());
+        crate::pool::get_client_scope_pools()
+            .insert(client_id, ScopePoolHandle::for_test(&pool_arc));
 
         // Seat one connection on db 0.
         let reservation = pool_arc
@@ -3377,7 +3414,8 @@ mod scope_pool_tests {
             connection_request_bytes.clone(),
             client_id,
         )));
-        crate::pool::get_client_scope_pools().insert(client_id, pool_arc.clone());
+        crate::pool::get_client_scope_pools()
+            .insert(client_id, ScopePoolHandle::for_test(&pool_arc));
 
         let reservation = pool_arc
             .lock()
@@ -3443,7 +3481,8 @@ mod scope_pool_tests {
             connection_request_bytes.clone(),
             client_id,
         )));
-        crate::pool::get_client_scope_pools().insert(client_id, pool_arc.clone());
+        crate::pool::get_client_scope_pools()
+            .insert(client_id, ScopePoolHandle::for_test(&pool_arc));
         let registry = crate::pool::get_scope_registry();
 
         let reservation = pool_arc
@@ -3570,7 +3609,8 @@ mod scope_pool_tests {
             connection_request_bytes.clone(),
             client_id,
         )));
-        crate::pool::get_client_scope_pools().insert(client_id, pool_arc.clone());
+        crate::pool::get_client_scope_pools()
+            .insert(client_id, ScopePoolHandle::for_test(&pool_arc));
 
         // Seat one idle connection on db 0 (mismatched with the parent's db 4).
         let reservation = pool_arc
@@ -3925,7 +3965,8 @@ mod scope_pool_tests {
                 connection_request_bytes.clone(),
                 client_id,
             )));
-            crate::pool::get_client_scope_pools().insert(client_id, pool_arc.clone());
+            crate::pool::get_client_scope_pools()
+                .insert(client_id, ScopePoolHandle::for_test(&pool_arc));
             let registry = crate::pool::get_scope_registry();
 
             // Reserve a slot the RAII way (#7120), then hand the guard to the creator.

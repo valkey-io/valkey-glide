@@ -29,8 +29,8 @@
 use crate::client::Client;
 use crate::errors::RequestErrorType;
 use crate::pool::{
-    ScopedConnection, get_client_scope_pools, get_scope_registry, update_state_for_command,
-    validate_scope_slot,
+    ScopePoolHandle, ScopedConnection, get_client_scope_pools, get_scope_registry,
+    update_state_for_command, validate_scope_slot,
 };
 use redis::{Cmd, RedisError, RedisResult, Value};
 
@@ -982,12 +982,12 @@ pub fn acquire_scope_outcome(
     routing_slot: u16,
     attempt_token: u64,
 ) -> ScopeAcquireOutcome {
-    let scope_pool = scope_pool_for(client_id, connection_request_bytes);
-    let Ok(pool) = scope_pool.try_lock() else {
+    let handle = scope_pool_for(client_id, connection_request_bytes);
+    let Ok(pool) = handle.pool.try_lock() else {
         return ScopeAcquireOutcome::Retry(ScopeRetryCause::Pending);
     };
     classify_acquire(
-        &scope_pool,
+        &handle.pool,
         pool,
         client_id,
         runtime,
@@ -1072,11 +1072,10 @@ impl std::fmt::Display for ScopeAcquireError {
 
 impl std::error::Error for ScopeAcquireError {}
 
-/// Upper bound on one wait between attempts. Two retry causes produce no pool
-/// event when they clear: the parent client refreshing its slot map
-/// (`TargetUnresolved`) and the parent being closed, which removes the pool
-/// without locking it. The bound keeps those cases from waiting out the whole
-/// deadline; everything else wakes on [`ScopePool::wakeup`] immediately.
+/// Upper bound on one wait between attempts. One retry cause produces no pool
+/// event when it clears: the parent client refreshing its slot map
+/// (`TargetUnresolved`). The bound keeps that case from waiting out the whole
+/// deadline; everything else wakes on [`ScopePoolHandle::wakeup`] immediately.
 #[cfg(feature = "proto")]
 const SCOPE_ACQUIRE_WAIT_CAP: Duration = Duration::from_millis(50);
 
@@ -1086,7 +1085,7 @@ const SCOPE_ACQUIRE_WAIT_CAP: Duration = Duration::from_millis(50);
 /// retry/terminal decision and the backoff exist once. Each attempt runs
 /// [`classify_acquire`] under the awaited pool lock, so lock contention is a
 /// wait rather than a retry. Between attempts the call sleeps on
-/// [`ScopePool::wakeup`], armed before the attempt so a release that lands
+/// [`ScopePoolHandle::wakeup`], armed before the attempt so a release that lands
 /// between classifying and sleeping is not missed, capped by
 /// [`SCOPE_ACQUIRE_WAIT_CAP`] and the remaining deadline. A terminal cause
 /// returns at once.
@@ -1103,8 +1102,10 @@ pub async fn acquire_scope(
     deadline: Duration,
 ) -> Result<u64, ScopeAcquireError> {
     let started = Instant::now();
-    let scope_pool = scope_pool_for(client_id, connection_request_bytes);
-    let wakeup = scope_pool.lock().await.wakeup.clone();
+    let ScopePoolHandle {
+        pool: scope_pool,
+        wakeup,
+    } = scope_pool_for(client_id, connection_request_bytes);
     // One logical acquire: the same token on every attempt, so the pool dedupes
     // this acquire's retries to one in-flight creation.
     let attempt_token = crate::pool::next_scope_attempt_token();
@@ -1141,7 +1142,7 @@ pub async fn acquire_scope(
 
 /// The client's scope pool, created on first use.
 #[cfg(feature = "proto")]
-fn scope_pool_for(client_id: u64, connection_request_bytes: Vec<u8>) -> Arc<TokioMutex<ScopePool>> {
+fn scope_pool_for(client_id: u64, connection_request_bytes: Vec<u8>) -> ScopePoolHandle {
     // Fast path: check if scope pool exists before cloning bytes
     let pools = crate::pool::get_client_scope_pools();
     match pools.get(&client_id) {
@@ -1316,7 +1317,7 @@ pub(crate) async fn resync_idle_connection_database(
 pub fn release_scope(scope_id: u64, client_id: u64, runtime: &tokio::runtime::Handle) -> i32 {
     let pools = get_client_scope_pools();
     let scope_pool = match pools.get(&client_id) {
-        Some(p) => p.value().clone(),
+        Some(p) => p.value().pool.clone(),
         None => return -1,
     };
     let registry = get_scope_registry();
@@ -1534,7 +1535,7 @@ mod tests {
 
     use crate::connection_request::{ConnectionRequest, NodeAddress};
     use crate::pool::{
-        ScopeAcquire, ScopePool, ScopePoolConfig, ScopeReservation, ScopeTarget,
+        ScopeAcquire, ScopePool, ScopePoolConfig, ScopePoolHandle, ScopeReservation, ScopeTarget,
         ScopeTargetUnresolved, get_client_scope_pools, get_scope_registry,
     };
     use crate::scope::{register_client, unregister_client};
@@ -1870,7 +1871,7 @@ mod tests {
             request_bytes.clone(),
             client_id,
         )));
-        get_client_scope_pools().insert(client_id, pool.clone());
+        get_client_scope_pools().insert(client_id, ScopePoolHandle::for_test(&pool));
 
         let parent = lazy_parent(true).await;
         register_client(client_id, parent.clone());
@@ -1945,11 +1946,7 @@ mod tests {
         };
         get_client_scope_pools().insert(
             client_id,
-            Arc::new(TokioMutex::new(ScopePool::new(
-                config,
-                request_bytes.clone(),
-                client_id,
-            ))),
+            ScopePoolHandle::new(ScopePool::new(config, request_bytes.clone(), client_id)),
         );
 
         register_client(client_id, lazy_parent(false).await);
@@ -2035,7 +2032,7 @@ mod tests {
             request_bytes.clone(),
             client_id,
         )));
-        get_client_scope_pools().insert(client_id, pool.clone());
+        get_client_scope_pools().insert(client_id, ScopePoolHandle::for_test(&pool));
         register_client(client_id, lazy_parent(true).await);
 
         let acquire = |slot: u16| {
@@ -2097,7 +2094,7 @@ mod tests {
         unregister_client(client_id);
         // unregister_client tears the pool down with the client; reseat it so the
         // remaining acquires observe the same pool instance.
-        get_client_scope_pools().insert(client_id, pool.clone());
+        get_client_scope_pools().insert(client_id, ScopePoolHandle::for_test(&pool));
         assert_eq!(
             acquire(7),
             ScopeAcquireOutcome::Fail(ScopeFailCause::ParentUnregistered)
@@ -2215,7 +2212,7 @@ mod tests {
             request_bytes.clone(),
             client_id,
         )));
-        get_client_scope_pools().insert(client_id, pool.clone());
+        get_client_scope_pools().insert(client_id, ScopePoolHandle::for_test(&pool));
         register_client(client_id, lazy_mtls_parent().await);
 
         let attempt_token = crate::pool::next_scope_attempt_token();
@@ -2276,7 +2273,7 @@ mod tests {
             .await
             .state
             .store(crate::pool::POOL_CLOSED, Ordering::Release);
-        get_client_scope_pools().insert(client_id, pool.clone());
+        get_client_scope_pools().insert(client_id, ScopePoolHandle::for_test(&pool));
         register_client(client_id, lazy_parent(false).await);
 
         let acquired = acquire_scope_outcome(
@@ -2326,7 +2323,7 @@ mod tests {
             reservation,
         )
         .await;
-        get_client_scope_pools().insert(client_id, pool.clone());
+        get_client_scope_pools().insert(client_id, ScopePoolHandle::for_test(&pool));
         register_client(client_id, lazy_parent(false).await);
 
         let held = {
@@ -2481,7 +2478,7 @@ mod tests {
             request_bytes.clone(),
             client_id,
         )));
-        get_client_scope_pools().insert(client_id, pool.clone());
+        get_client_scope_pools().insert(client_id, ScopePoolHandle::for_test(&pool));
         register_client(client_id, lazy_mtls_parent().await);
 
         let started = Instant::now();
@@ -2985,7 +2982,7 @@ mod tests {
         // reserved_pool() seats the pool under parent client id 1.
         let parent_client_id = 1;
         let pool = reserved_pool(request_bytes.clone());
-        get_client_scope_pools().insert(parent_client_id, pool.clone());
+        get_client_scope_pools().insert(parent_client_id, ScopePoolHandle::for_test(&pool));
 
         let mut parent_request = crate::client::ConnectionRequest::default();
         parent_request.addresses.push(crate::client::NodeAddress {
