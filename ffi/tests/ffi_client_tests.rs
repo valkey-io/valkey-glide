@@ -10,9 +10,10 @@ use std::ffi::{CStr, c_char, c_ulong, c_void};
 use std::net::TcpListener;
 use std::process::{Child, Command};
 use std::sync::{
-    Arc, RwLock,
+    Arc, Condvar, Mutex, OnceLock, RwLock,
     atomic::{AtomicUsize, Ordering},
 };
+use std::time::Instant;
 use tokio::runtime::Runtime;
 use tokio::time::{Duration, sleep};
 
@@ -670,6 +671,310 @@ unsafe extern "C-unwind" fn direct_credential_provider(
     }
     unsafe { *expires_at_epoch_millis = 0 };
     1
+}
+
+struct BlockingProviderGate {
+    block_on_call: usize,
+    calls: AtomicUsize,
+    progress: Mutex<(usize, usize, bool)>,
+    progress_changed: Condvar,
+}
+
+impl BlockingProviderGate {
+    fn new(block_on_call: usize) -> Self {
+        Self {
+            block_on_call,
+            calls: AtomicUsize::new(0),
+            progress: Mutex::new((0, 0, false)),
+            progress_changed: Condvar::new(),
+        }
+    }
+
+    fn wait_for_entered(&self, timeout: Duration) -> bool {
+        let progress = self.progress.lock().unwrap();
+        let (progress, _) = self
+            .progress_changed
+            .wait_timeout_while(progress, timeout, |progress| {
+                progress.0 < self.block_on_call
+            })
+            .unwrap();
+        progress.0 >= self.block_on_call
+    }
+
+    fn release(&self) {
+        let mut progress = self.progress.lock().unwrap();
+        progress.2 = true;
+        self.progress_changed.notify_all();
+    }
+
+    fn wait_for_finished(&self, timeout: Duration) -> bool {
+        let progress = self.progress.lock().unwrap();
+        let (progress, _) = self
+            .progress_changed
+            .wait_timeout_while(progress, timeout, |progress| {
+                progress.1 < self.block_on_call
+            })
+            .unwrap();
+        progress.1 >= self.block_on_call
+    }
+}
+
+static BLOCKING_PROVIDER_GATES: OnceLock<Mutex<HashMap<usize, Arc<BlockingProviderGate>>>> =
+    OnceLock::new();
+static NEXT_BLOCKING_PROVIDER_ID: AtomicUsize = AtomicUsize::new(10_000);
+
+struct InstalledBlockingProvider {
+    id: usize,
+    gate: Arc<BlockingProviderGate>,
+}
+
+impl InstalledBlockingProvider {
+    fn new(block_on_call: usize) -> Self {
+        let id = NEXT_BLOCKING_PROVIDER_ID.fetch_add(1, Ordering::Relaxed);
+        let gate = Arc::new(BlockingProviderGate::new(block_on_call));
+        BLOCKING_PROVIDER_GATES
+            .get_or_init(Default::default)
+            .lock()
+            .unwrap()
+            .insert(id, Arc::clone(&gate));
+        Self { id, gate }
+    }
+}
+
+impl Drop for InstalledBlockingProvider {
+    fn drop(&mut self) {
+        self.gate.release();
+        BLOCKING_PROVIDER_GATES
+            .get_or_init(Default::default)
+            .lock()
+            .unwrap()
+            .remove(&self.id);
+    }
+}
+
+unsafe extern "C-unwind" fn blocking_credential_provider(
+    client_id: usize,
+    access_key_id_buf: *mut u8,
+    access_key_id_buf_len: usize,
+    access_key_id_len: *mut usize,
+    secret_access_key_buf: *mut u8,
+    secret_access_key_buf_len: usize,
+    secret_access_key_len: *mut usize,
+    session_token_buf: *mut u8,
+    session_token_buf_len: usize,
+    session_token_len: *mut usize,
+    expires_at_epoch_millis: *mut i64,
+) -> u8 {
+    // Clone before entering user work, just as Go keeps its loaded provider value and Python keeps
+    // its callback owner/task alive. Removing the late-lookup registry entry after close is safe.
+    let gate = BLOCKING_PROVIDER_GATES
+        .get_or_init(Default::default)
+        .lock()
+        .unwrap()
+        .get(&client_id)
+        .cloned();
+    let Some(gate) = gate else {
+        return 0;
+    };
+
+    let call = gate.calls.fetch_add(1, Ordering::SeqCst) + 1;
+    if call >= gate.block_on_call {
+        let mut progress = gate.progress.lock().unwrap();
+        progress.0 = call;
+        gate.progress_changed.notify_all();
+        while !progress.2 {
+            progress = gate.progress_changed.wait(progress).unwrap();
+        }
+    }
+
+    let status = unsafe {
+        direct_credential_provider(
+            client_id,
+            access_key_id_buf,
+            access_key_id_buf_len,
+            access_key_id_len,
+            secret_access_key_buf,
+            secret_access_key_buf_len,
+            secret_access_key_len,
+            session_token_buf,
+            session_token_buf_len,
+            session_token_len,
+            expires_at_epoch_millis,
+        )
+    };
+    let mut progress = gate.progress.lock().unwrap();
+    progress.1 = call;
+    gate.progress_changed.notify_all();
+    status
+}
+
+fn iam_connection_request(port: u16, lazy_connect: bool) -> Vec<u8> {
+    use glide_core::connection_request::{AuthenticationInfo, IamCredentials, ServiceType};
+    use protobuf::MessageField;
+
+    let mut request = ConnectionRequest::new();
+    request.lazy_connect = lazy_connect;
+    request.connection_timeout = 15_000;
+    let mut address = NodeAddress::new();
+    address.host = "127.0.0.1".into();
+    address.port = port.into();
+    request.addresses.push(address);
+
+    let mut iam = IamCredentials::new();
+    iam.cluster_name = "test-cluster".into();
+    iam.region = "us-east-1".into();
+    iam.service_type = ServiceType::ELASTICACHE.into();
+    let mut authentication = AuthenticationInfo::new();
+    authentication.username = "default".into();
+    authentication.iam_credentials = MessageField::some(iam);
+    request.authentication_info = MessageField::some(authentication);
+    request.write_to_bytes().expect("Failed to serialize")
+}
+
+fn ffi_test_client_type(async_client: bool) -> ClientType {
+    if async_client {
+        ClientType::AsyncClient {
+            success_callback: string_success_callback,
+            failure_callback,
+            allow_stack_response: false,
+        }
+    } else {
+        ClientType::SyncClient
+    }
+}
+
+#[rstest]
+fn blocked_provider_creation_returns_after_core_deadline(
+    #[values(false, true)] async_client: bool,
+) {
+    let server = Server::new();
+    let provider = InstalledBlockingProvider::new(1);
+    let request_bytes = iam_connection_request(server.port, false);
+    let client_type = ffi_test_client_type(async_client);
+
+    let started = Instant::now();
+    let response_ptr = unsafe {
+        create_client(
+            request_bytes.as_ptr(),
+            request_bytes.len(),
+            &client_type,
+            None,
+            None,
+            Some(blocking_credential_provider),
+            provider.id,
+        )
+    };
+    let elapsed = started.elapsed();
+
+    assert!(provider.gate.wait_for_entered(Duration::from_secs(1)));
+    assert!(
+        elapsed >= Duration::from_secs(9),
+        "returned too early: {elapsed:?}"
+    );
+    assert!(
+        elapsed < Duration::from_secs(13),
+        "runtime shutdown blocked: {elapsed:?}"
+    );
+    let response = unsafe { &*response_ptr };
+    assert!(response.conn_ptr.is_null());
+    let error = parse_error_msg(response.connection_error_message);
+    assert!(error.contains("Custom credentials callback"), "{error}");
+    assert!(error.contains("10s"), "{error}");
+    unsafe { free_connection_response(response_ptr as *mut ConnectionResponse) };
+
+    BLOCKING_PROVIDER_GATES
+        .get_or_init(Default::default)
+        .lock()
+        .unwrap()
+        .remove(&provider.id);
+    provider.gate.release();
+    assert!(provider.gate.wait_for_finished(Duration::from_secs(2)));
+}
+
+#[rstest]
+fn close_does_not_wait_for_blocked_external_provider(#[values(false, true)] async_client: bool) {
+    let server = Server::new();
+    let provider = InstalledBlockingProvider::new(2);
+    let request_bytes = iam_connection_request(server.port, false);
+    let client_type = ffi_test_client_type(async_client);
+    let response_ptr = unsafe {
+        create_client(
+            request_bytes.as_ptr(),
+            request_bytes.len(),
+            &client_type,
+            None,
+            None,
+            Some(blocking_credential_provider),
+            provider.id,
+        )
+    };
+    let response = unsafe { &*response_ptr };
+    assert!(
+        response.connection_error_message.is_null(),
+        "{}",
+        if response.connection_error_message.is_null() {
+            String::new()
+        } else {
+            parse_error_msg(response.connection_error_message)
+        }
+    );
+    let client_ptr = response.conn_ptr as usize;
+    assert_ne!(client_ptr, 0);
+    unsafe { free_connection_response(response_ptr as *mut ConnectionResponse) };
+
+    let (refresh_tx, refresh_rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let result = unsafe { refresh_iam_token(client_ptr as *const c_void, 91) };
+        let error = if result.is_null() {
+            None
+        } else {
+            let command_result = unsafe { &*result };
+            let error = (!command_result.command_error.is_null()).then(|| {
+                let command_error = unsafe { &*command_result.command_error };
+                parse_error_msg(command_error.command_error_message)
+            });
+            unsafe { free_command_result(result) };
+            error
+        };
+        refresh_tx.send(error).unwrap();
+    });
+
+    assert!(provider.gate.wait_for_entered(Duration::from_secs(2)));
+    let (close_tx, close_rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        unsafe { close_client(client_ptr as *const c_void) };
+        close_tx.send(()).unwrap();
+    });
+    close_rx
+        .recv_timeout(Duration::from_secs(2))
+        .expect("close waited for the non-cancellable provider callback");
+
+    let refresh_error = refresh_rx
+        .recv_timeout(if async_client {
+            Duration::from_secs(2)
+        } else {
+            Duration::from_secs(13)
+        })
+        .expect("manual refresh remained stuck after its client-observed deadline");
+    if async_client {
+        assert!(refresh_error.is_none());
+    } else {
+        let error = refresh_error.expect("sync refresh should return a controlled error");
+        assert!(
+            error.contains("Custom credentials callback") || error.contains("Client closed"),
+            "{error}"
+        );
+    }
+
+    // Simulate wrapper unregister-after-close. The already-entered callback owns its gate locally;
+    // a new callback lookup would fail while the in-flight invocation can still finish safely.
+    BLOCKING_PROVIDER_GATES
+        .get_or_init(Default::default)
+        .lock()
+        .unwrap()
+        .remove(&provider.id);
+    provider.gate.release();
+    assert!(provider.gate.wait_for_finished(Duration::from_secs(2)));
 }
 
 fn lazy_iam_connection_request(credential_provider_key: Option<&str>) -> Vec<u8> {

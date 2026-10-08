@@ -407,8 +407,13 @@ class AwsCredentials:
 #: sync clients accept synchronous providers only. A provider may be called
 #: twice for one credential fetch when a field does not fit in the initial
 #: native buffers, so each invocation must return a complete, coherent set of
-#: credentials. Providers should return promptly; the Python async bridge times
-#: out after 9 seconds, before the Rust core's 10-second outer deadline.
+#: credentials. Providers should return promptly and cooperate with any
+#: application cancellation mechanism. The Python async bridge times out after
+#: 9 seconds, before the Rust core's 10-second outer deadline. These deadlines
+#: bound how long the client waits, but cannot forcibly stop synchronous user
+#: code; a timed-out synchronous provider may finish on a detached background
+#: worker after the request fails or the client closes. Close does not wait for
+#: or retain ownership of that worker.
 GlideCredentialProvider = Union[
     Callable[[], AwsCredentials], Callable[[], Awaitable[AwsCredentials]]
 ]

@@ -75,8 +75,11 @@ type AwsCredentials struct {
 // also invoke the provider twice for FFI buffer negotiation, so implementations must tolerate
 // repeated invocation and must not rely on exactly-once behavior.
 //
-// Promptness: return quickly; this callback sits on the reconnect path and a slow
-// implementation directly extends failover time.
+// Promptness: return quickly and cooperate with any application cancellation mechanism. The core
+// stops waiting after 10 seconds, but Go cannot forcibly stop arbitrary synchronous callback code.
+// A timed-out invocation may continue on a detached background worker after the request fails or
+// the client closes; Close does not wait for or retain ownership of that worker. Repeatedly hung
+// providers can therefore accumulate detached workers until the provider code returns.
 type GlideCredentialProvider func() (AwsCredentials, error)
 
 // IamAuthConfig represents configuration settings for IAM authentication.

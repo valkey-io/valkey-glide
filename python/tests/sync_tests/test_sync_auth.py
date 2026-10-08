@@ -1,6 +1,7 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 
+import threading
 import time
 from typing import Generator
 
@@ -803,6 +804,64 @@ def test_sync_iam_custom_provider_initial_and_manual_refresh(
         assert provider.calls > calls_before_refresh
         assert_connected_sync(client)
     finally:
+        client.close()
+
+
+class _BlockingCredentialProvider:
+    def __init__(self):
+        self.block = threading.Event()
+        self.entered = threading.Event()
+        self.release = threading.Event()
+        self.finished = threading.Event()
+
+    def __call__(self):
+        if self.block.is_set():
+            self.entered.set()
+            try:
+                assert self.release.wait(timeout=20)
+            finally:
+                self.finished.set()
+        return AwsCredentials(
+            "test_access_key", "test_secret_key", "test_session_token"
+        )
+
+
+def test_sync_hung_custom_provider_timeout_does_not_block_close(request):
+    """A timed-out synchronous callback may finish later without owning close."""
+    provider = _BlockingCredentialProvider()
+    client = create_iam_client(
+        request, False, ProtocolVersion.RESP3, credential_provider=provider
+    )
+    close_errors = []
+    try:
+        provider.block.set()
+        started = time.monotonic()
+        with pytest.raises(
+            (RequestError, ClosingError), match="credential|Credential|callback"
+        ):
+            client.refresh_iam_token()
+        elapsed = time.monotonic() - started
+        assert 9 <= elapsed < 13
+        assert provider.entered.is_set()
+
+        def close_client():
+            try:
+                client.close()
+            except BaseException as error:
+                close_errors.append(error)
+
+        close_thread = threading.Thread(target=close_client)
+        close_thread.start()
+        close_thread.join(timeout=2)
+        close_returned_promptly = not close_thread.is_alive()
+        provider.release.set()
+        close_thread.join(timeout=5)
+        assert close_returned_promptly
+        assert not close_thread.is_alive()
+        assert not close_errors
+        assert provider.finished.wait(timeout=2)
+    finally:
+        provider.release.set()
         client.close()
 
 

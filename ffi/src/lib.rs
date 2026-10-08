@@ -493,6 +493,12 @@ type NonNullCredentialProviderCallback = unsafe extern "C-unwind" fn(
 /// credentials on every invocation. Buffer negotiation may cause two invocations for one
 /// credential fetch, and credentials may change between them.
 ///
+/// Each invocation has a 10-second client-observed deadline. Tokio cannot forcibly stop arbitrary
+/// synchronous user code, so a callback that exceeds the deadline may continue on a detached
+/// blocking worker after the request fails or the client closes. Providers must return promptly or
+/// cooperate with their own cancellation mechanism. Client close does not wait for such workers,
+/// and they no longer remain owned by the closed client's runtime.
+///
 /// The callback status values are:
 ///
 /// * `0` - failure; no retry is made.
@@ -518,8 +524,10 @@ type NonNullCredentialProviderCallback = unsafe extern "C-unwind" fn(
 /// * `expires_at_epoch_millis` - Output: optional expiry as Unix epoch milliseconds. Write any value less than or equal to 0 to indicate no expiry.
 ///
 /// # Safety
-/// The callback function pointer must remain valid while the client is active. All pointer
-/// parameters passed to the callback are valid only for the duration of that invocation.
+/// The callback function pointer must remain valid while the client is active and until every
+/// already-entered invocation has returned. A timed-out invocation may still be running after
+/// `close_client`. All pointer parameters passed to the callback are valid only for the duration
+/// of that invocation.
 pub type CredentialProviderCallback = Option<
     unsafe extern "C-unwind" fn(
         client_id: usize,
@@ -1829,6 +1837,9 @@ pub struct ClientAdapter {
     pipe_client_id: std::sync::atomic::AtomicU64,
     /// Signals active direct synchronous requests to stop waiting during explicit close.
     sync_shutdown: Option<Arc<SyncClientShutdown>>,
+    /// External synchronous provider callbacks run on Tokio's non-cancellable blocking pool.
+    /// Their runtimes must never synchronously drain during close.
+    has_external_blocking_provider: bool,
     /// Background runtime for spawned tasks (connection drivers, reconnection, cluster manager).
     /// Only used by sync clients with current_thread main runtime — tokio::spawn calls during
     /// client creation are directed here via _guard so they run independently of block_on.
@@ -1843,9 +1854,16 @@ impl Drop for ClientAdapter {
         // SAFETY: each field is taken exactly once, here, and never read again.
         let runtime = unsafe { ManuallyDrop::take(&mut self.runtime) };
         let background_runtime = unsafe { ManuallyDrop::take(&mut self.background_runtime) };
-        shutdown_owned_runtime(runtime);
-        if let Some(rt) = background_runtime {
-            shutdown_owned_runtime(rt);
+        if self.has_external_blocking_provider {
+            shutdown_external_provider_runtime(runtime);
+            if let Some(rt) = background_runtime {
+                shutdown_external_provider_runtime(rt);
+            }
+        } else {
+            shutdown_owned_runtime(runtime);
+            if let Some(rt) = background_runtime {
+                shutdown_owned_runtime(rt);
+            }
         }
     }
 }
@@ -1859,6 +1877,12 @@ fn shutdown_owned_runtime(rt: Runtime) {
     } else {
         drop(rt);
     }
+}
+
+/// External synchronous callbacks cannot be cancelled after they enter user code. Detach their
+/// runtime regardless of the caller context so close and failed construction never wait for them.
+fn shutdown_external_provider_runtime(rt: Runtime) {
+    rt.shutdown_background();
 }
 
 struct CommandExecutionCore {
@@ -2390,6 +2414,21 @@ fn create_client_internal(
                 .to_string()
         });
     }
+    let has_external_blocking_provider = credential_provider.is_some();
+    let mut connection_request = ConnectionRequest::from(request);
+    if has_external_blocking_provider
+        && connection_request
+            .authentication_info
+            .as_ref()
+            .and_then(|auth_info| auth_info.iam_config.as_ref())
+            .is_none()
+    {
+        return Err(
+            "A credential_provider callback was supplied but the connection request contains no IAM configuration"
+                .to_string(),
+        );
+    }
+
     let runtime = match &client_type {
         ClientType::SyncClient => {
             // current_thread runtime: block_on drives the reactor directly on the
@@ -2452,20 +2491,6 @@ fn create_client_internal(
         // tasks (connection drivers, cluster manager) are registered there.
         // The current_thread runtime is only used for block_on in the command path.
         let create_rt = background_runtime.as_ref().unwrap_or(&runtime);
-        let mut connection_request = ConnectionRequest::from(request);
-
-        if credential_provider.is_some()
-            && connection_request
-                .authentication_info
-                .as_ref()
-                .and_then(|auth_info| auth_info.iam_config.as_ref())
-                .is_none()
-        {
-            return Err(
-                "A credential_provider callback was supplied but the connection request contains no IAM configuration"
-                    .to_string(),
-            );
-        }
 
         // Set the address resolver if provided
         if let Some(resolver_callback) = address_resolver {
@@ -2493,7 +2518,19 @@ fn create_client_internal(
 
         create_rt
             .block_on(GlideClient::new(connection_request, Some(push_tx)))
-            .map_err(|err| err.to_string())?
+            .map_err(|err| err.to_string())
+    };
+    let client = match client {
+        Ok(client) => client,
+        Err(error) => {
+            if has_external_blocking_provider {
+                shutdown_external_provider_runtime(runtime);
+                if let Some(rt) = background_runtime {
+                    shutdown_external_provider_runtime(rt);
+                }
+            }
+            return Err(error);
+        }
     };
 
     // Create the client adapter that will be returned and used as conn_ptr
@@ -2509,6 +2546,7 @@ fn create_client_internal(
         runtime: ManuallyDrop::new(runtime),
         pipe_client_id: std::sync::atomic::AtomicU64::new(client_id as u64),
         sync_shutdown,
+        has_external_blocking_provider,
         background_runtime: ManuallyDrop::new(background_runtime),
         core,
         pubsub_callback: pubsub_callback_store.clone(),
@@ -2616,7 +2654,8 @@ fn create_client_internal(
 /// * If `pubsub_callback` is non-zero, it must be a valid function pointer that lives while the client is open/active.
 /// * If `address_resolver` is non-zero, it must be a valid function pointer that lives while the client is open/active.
 /// * If `credential_provider` is non-zero, it must be a valid function pointer that lives while the client is
-///   open/active. The callback must fill the provided output buffers with valid UTF-8 credentials and set the
+///   open/active and until all already-entered invocations return; a timed-out invocation may continue after
+///   `close_client`. The callback must fill the provided output buffers with valid UTF-8 credentials and set the
 ///   corresponding length pointers. Pass 0 to use the default AWS credential chain from the connection request
 ///   IAM configuration.
 // TODO: Consider making this async
