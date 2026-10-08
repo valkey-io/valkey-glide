@@ -1490,7 +1490,7 @@ class BaseClient(CoreCommands):
                 owner = self._detach_native_owner()
                 core_client, self._core_client = self._core_client, None
                 if owner is None and core_client is not None:
-                    # Supports partially initialized and Rust-pool wrapper shells;
+                    # Supports partially initialized direct-client shells;
                     # successful direct clients always have a finalizer owner.
                     owner = _NativeClientOwner(
                         self._lib,
