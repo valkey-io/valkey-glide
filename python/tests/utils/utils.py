@@ -355,6 +355,8 @@ def sync_wait_for(
 # commands until busy-reply-threshold (default 5000 ms) elapses, so a kill or
 # stats poll against a running script cannot complete sooner than that.
 # lua-time-limit is the pre-7.0 name and remains an alias on later servers.
+# CONFIG SET is server-global; the suite starts separate servers per xdist
+# worker, so lowering it here cannot reach another worker's tests.
 _BUSY_REPLY_THRESHOLD_MS = "100"
 _DEFAULT_BUSY_REPLY_THRESHOLD_MS = "5000"
 
@@ -365,7 +367,7 @@ def _busy_reply_threshold_args(ms: str) -> List[str]:
 
 @asynccontextmanager
 async def low_busy_reply_threshold(client: TGlideClient) -> AsyncIterator[None]:
-    """Lowers busy-reply-threshold on every node for the block, then restores the default."""
+    """The pooled server outlives the test, so the default is restored on exit."""
     if isinstance(client, GlideClusterClient):
         await client.custom_command(
             _busy_reply_threshold_args(_BUSY_REPLY_THRESHOLD_MS), AllNodes()
@@ -389,7 +391,7 @@ async def low_busy_reply_threshold(client: TGlideClient) -> AsyncIterator[None]:
 
 @contextmanager
 def sync_low_busy_reply_threshold(client: TSyncGlideClient) -> Iterator[None]:
-    """Lowers busy-reply-threshold on every node for the block, then restores the default."""
+    """The pooled server outlives the test, so the default is restored on exit."""
     if isinstance(client, SyncGlideClusterClient):
         client.custom_command(
             _busy_reply_threshold_args(_BUSY_REPLY_THRESHOLD_MS), AllNodes()

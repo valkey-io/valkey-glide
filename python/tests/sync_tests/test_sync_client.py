@@ -498,7 +498,6 @@ class TestGlideClients:
             assert "timed out" in str(e).lower() or "timeout" in str(e).lower()
 
         def connect_to_client():
-            # Create a second client with a connection timeout of 10 seconds
             time.sleep(0.2)
             timeout_client = create_sync_client(
                 request,

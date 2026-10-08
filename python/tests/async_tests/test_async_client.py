@@ -504,7 +504,6 @@ class TestGlideClients:
             assert "timed out" in str(e).lower() or "timeout" in str(e).lower()
 
         async def connect_to_client():
-            # Create a second client with a connection timeout of 10 seconds
             await anyio.sleep(0.2)
             timeout_client = await create_client(
                 request,
