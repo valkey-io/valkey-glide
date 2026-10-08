@@ -444,6 +444,31 @@ public class ConnectionManagerTest {
         assertEquals(128, request.getCompressionConfig().getMinCompressionSize());
     }
 
+    @Test
+    void buildConnectionRequest_doesNotSerializeJavaCredentialProviderAsKey() {
+        GlideCredentialProvider provider = () -> null;
+        GlideClientConfiguration clientConfig =
+                GlideClientConfiguration.builder()
+                        .credentials(
+                                ServerCredentials.builder()
+                                        .username("user")
+                                        .iamConfig(
+                                                IamAuthConfig.builder()
+                                                        .clusterName("my-cluster")
+                                                        .service(ServiceType.ELASTICACHE)
+                                                        .region("us-east-1")
+                                                        .credentialsProvider(provider)
+                                                        .build())
+                                        .build())
+                        .build();
+
+        ConnectionRequestOuterClass.ConnectionRequest request =
+                ConnectionManager.buildConnectionRequest(clientConfig);
+
+        assertTrue(request.getAuthenticationInfo().hasIamCredentials());
+        assertFalse(request.hasCredentialProviderKey());
+    }
+
     /**
      * A pool cannot forward the per-client IAM credentials-provider callback ({@code glidePoolCreate}
      * takes only request bytes), so {@code ClientPool.create} must reject it up front rather than let

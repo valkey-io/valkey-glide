@@ -605,6 +605,180 @@ fn test_ffi_credential_provider_without_iam_config_fails_closed() {
 }
 
 #[test]
+fn test_ffi_direct_create_allows_absent_credential_provider_key() {
+    let mut request = ConnectionRequest::new();
+    request.lazy_connect = true;
+    let mut address = NodeAddress::new();
+    address.host = "127.0.0.1".into();
+    address.port = 1;
+    request.addresses.push(address);
+    let request_bytes = request.write_to_bytes().expect("Failed to serialize");
+    let client_type = ClientType::SyncClient;
+
+    unsafe {
+        let response_ptr = create_client(
+            request_bytes.as_ptr(),
+            request_bytes.len(),
+            &client_type,
+            None,
+            None,
+            None,
+            0,
+        );
+
+        assert!(!response_ptr.is_null());
+        let response = &*response_ptr;
+        assert!(response.connection_error_message.is_null());
+        assert!(!response.conn_ptr.is_null());
+        let client_ptr = response.conn_ptr;
+        free_connection_response(response_ptr as *mut ConnectionResponse);
+        close_client(client_ptr);
+    }
+}
+
+unsafe extern "C-unwind" fn direct_credential_provider(
+    _client_id: usize,
+    access_key_id_buf: *mut u8,
+    access_key_id_buf_len: usize,
+    access_key_id_len: *mut usize,
+    secret_access_key_buf: *mut u8,
+    secret_access_key_buf_len: usize,
+    secret_access_key_len: *mut usize,
+    session_token_buf: *mut u8,
+    session_token_buf_len: usize,
+    session_token_len: *mut usize,
+    expires_at_epoch_millis: *mut i64,
+) -> u8 {
+    let fields: [&[u8]; 3] = [b"access", b"secret", b"token"];
+    let buffers = [
+        (access_key_id_buf, access_key_id_buf_len, access_key_id_len),
+        (
+            secret_access_key_buf,
+            secret_access_key_buf_len,
+            secret_access_key_len,
+        ),
+        (session_token_buf, session_token_buf_len, session_token_len),
+    ];
+    for (field, (buffer, capacity, output_len)) in fields.into_iter().zip(buffers) {
+        if field.len() > capacity {
+            return 2;
+        }
+        unsafe {
+            std::ptr::copy_nonoverlapping(field.as_ptr(), buffer, field.len());
+            *output_len = field.len();
+        }
+    }
+    unsafe { *expires_at_epoch_millis = 0 };
+    1
+}
+
+fn lazy_iam_connection_request(credential_provider_key: Option<&str>) -> Vec<u8> {
+    use glide_core::connection_request::{AuthenticationInfo, IamCredentials, ServiceType};
+    use protobuf::MessageField;
+
+    let mut request = ConnectionRequest::new();
+    request.lazy_connect = true;
+    request.credential_provider_key = credential_provider_key.map(Into::into);
+    let mut address = NodeAddress::new();
+    address.host = "127.0.0.1".into();
+    address.port = 1;
+    request.addresses.push(address);
+
+    let mut iam = IamCredentials::new();
+    iam.cluster_name = "test-cluster".into();
+    iam.region = "us-east-1".into();
+    iam.service_type = ServiceType::ELASTICACHE.into();
+    let mut authentication = AuthenticationInfo::new();
+    authentication.username = "test-user".into();
+    authentication.iam_credentials = MessageField::some(iam);
+    request.authentication_info = MessageField::some(authentication);
+    request.write_to_bytes().expect("Failed to serialize")
+}
+
+#[test]
+fn test_ffi_direct_create_allows_callback_with_iam_and_absent_key() {
+    let request_bytes = lazy_iam_connection_request(None);
+    let client_type = ClientType::SyncClient;
+
+    unsafe {
+        let response_ptr = create_client(
+            request_bytes.as_ptr(),
+            request_bytes.len(),
+            &client_type,
+            None,
+            None,
+            Some(direct_credential_provider),
+            42,
+        );
+
+        assert!(!response_ptr.is_null());
+        let response = &*response_ptr;
+        assert!(response.connection_error_message.is_null());
+        assert!(!response.conn_ptr.is_null());
+        let client_ptr = response.conn_ptr;
+        free_connection_response(response_ptr as *mut ConnectionResponse);
+        close_client(client_ptr);
+    }
+}
+
+#[test]
+fn test_ffi_direct_create_rejects_every_present_credential_provider_key() {
+    let client_type = ClientType::SyncClient;
+
+    for key in ["", " ", "\t\n", "custom-provider"] {
+        let request_bytes = lazy_iam_connection_request(Some(key));
+        unsafe {
+            let response_ptr = create_client(
+                request_bytes.as_ptr(),
+                request_bytes.len(),
+                &client_type,
+                None,
+                None,
+                None,
+                0,
+            );
+
+            assert!(!response_ptr.is_null());
+            let response = &*response_ptr;
+            assert!(response.conn_ptr.is_null(), "key={key:?}");
+            assert!(!response.connection_error_message.is_null(), "key={key:?}");
+            let error = parse_error_msg(response.connection_error_message);
+            assert!(error.contains("credential_provider_key"), "{error}");
+            assert!(error.contains("not supported by direct C FFI"), "{error}");
+            free_connection_response(response_ptr as *mut ConnectionResponse);
+        }
+    }
+}
+
+#[test]
+fn test_ffi_direct_create_rejects_mixed_credential_provider_representations() {
+    let client_type = ClientType::SyncClient;
+
+    for key in ["", " ", "custom-provider"] {
+        let request_bytes = lazy_iam_connection_request(Some(key));
+        unsafe {
+            let response_ptr = create_client(
+                request_bytes.as_ptr(),
+                request_bytes.len(),
+                &client_type,
+                None,
+                None,
+                Some(direct_credential_provider),
+                42,
+            );
+
+            assert!(!response_ptr.is_null());
+            let response = &*response_ptr;
+            assert!(response.conn_ptr.is_null(), "key={key:?}");
+            let error = parse_error_msg(response.connection_error_message);
+            assert!(error.contains("cannot mix"), "{error}");
+            assert!(error.contains("credential_provider callback"), "{error}");
+            assert!(error.contains("credential_provider_key"), "{error}");
+            free_connection_response(response_ptr as *mut ConnectionResponse);
+        }
+    }
+}
+#[test]
 fn test_create_otel_span_with_parent() {
     // Test creating a parent span
     let parent_span_ptr = create_otel_span(RequestType::Set);

@@ -2381,6 +2381,15 @@ fn create_client_internal(
 ) -> Result<*const ClientAdapter, String> {
     let request = connection_request::ConnectionRequest::parse_from_bytes(connection_request_bytes)
         .map_err(|err| err.to_string())?;
+    if request.credential_provider_key.is_some() {
+        return Err(if credential_provider.is_some() {
+            "Direct C FFI clients cannot mix the credential_provider callback with the unsupported credential_provider_key protobuf field"
+                .to_string()
+        } else {
+            "The credential_provider_key protobuf field is not supported by direct C FFI clients; pass a credential_provider callback instead"
+                .to_string()
+        });
+    }
     let runtime = match &client_type {
         ClientType::SyncClient => {
             // current_thread runtime: block_on drives the reactor directly on the

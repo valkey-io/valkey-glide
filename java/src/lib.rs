@@ -1221,6 +1221,19 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_createClient(
             }
         };
 
+        if request.credential_provider_key.is_some() {
+            if iam_credentials_provider.is_null() {
+                log::error!(
+                    "The credential_provider_key protobuf field is not supported by direct Java JNI clients; pass a GlideCredentialProvider object instead."
+                );
+            } else {
+                log::error!(
+                    "Direct Java JNI clients cannot mix a GlideCredentialProvider object with the unsupported credential_provider_key protobuf field."
+                );
+            }
+            return Some(0);
+        }
+
         // Convert protobuf to glide_core ConnectionRequest
         let mut connection_request = glide_core::client::ConnectionRequest::from(request);
 
