@@ -1,6 +1,8 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 
+import threading
+import time
 from typing import AsyncGenerator
 
 import anyio
@@ -769,6 +771,91 @@ class _CountingCredentialProvider:
             self.session_token,
             self.expiry,
         )
+
+
+class _BlockingCredentialProvider:
+    def __init__(self):
+        self.calls = 0
+        self.active = 0
+        self.max_active = 0
+        self._lock = threading.Lock()
+        self.block = threading.Event()
+        self.entered = threading.Event()
+        self.release = threading.Event()
+        self.finished = threading.Event()
+
+    def _snapshot(self):
+        with self._lock:
+            return self.calls, self.active, self.max_active
+
+    def __call__(self):
+        with self._lock:
+            self.calls += 1
+            self.active += 1
+            self.max_active = max(self.max_active, self.active)
+        try:
+            if self.block.is_set():
+                self.entered.set()
+                try:
+                    assert self.release.wait(timeout=20)
+                finally:
+                    self.finished.set()
+            return AwsCredentials(
+                "test_access_key", "test_secret_key", "test_session_token"
+            )
+        finally:
+            with self._lock:
+                self.active -= 1
+
+
+@pytest.mark.timeout(120)
+@pytest.mark.anyio
+@pytest.mark.parametrize("cluster_mode", [False])
+@pytest.mark.parametrize("protocol", [ProtocolVersion.RESP3])
+async def test_hung_custom_provider_timeout_does_not_block_close(
+    request, cluster_mode, protocol
+):
+    """A timed-out synchronous callback may finish after async close returns."""
+    provider = _BlockingCredentialProvider()
+    client = await create_iam_client(
+        request, cluster_mode, protocol, credential_provider=provider
+    )
+    assert provider._snapshot()[0] > 0
+    try:
+        with anyio.fail_after(25):
+            provider.block.set()
+            started = time.monotonic()
+            with pytest.raises(
+                (RequestError, ClosingError), match="credential|Credential|callback"
+            ):
+                await client.refresh_iam_token()
+            elapsed = time.monotonic() - started
+            assert 9 <= elapsed < 13
+            assert provider.entered.is_set()
+            blocked_state = provider._snapshot()
+            assert blocked_state[1:] == (1, 1)
+
+            for _ in range(3):
+                started = time.monotonic()
+                with anyio.fail_after(2):
+                    with pytest.raises(
+                        (RequestError, ClosingError), match="still running"
+                    ):
+                        await client.refresh_iam_token()
+                assert time.monotonic() - started < 2
+            assert provider._snapshot() == blocked_state
+
+            started = time.monotonic()
+            with anyio.fail_after(2):
+                await client.close()
+            assert time.monotonic() - started < 2
+
+            provider.release.set()
+            assert await anyio.to_thread.run_sync(provider.finished.wait, 2)
+    finally:
+        provider.release.set()
+        with anyio.fail_after(5):
+            await client.close()
 
 
 async def _async_credentials_provider():

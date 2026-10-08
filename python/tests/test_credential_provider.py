@@ -15,7 +15,7 @@ from unittest.mock import MagicMock
 import anyio
 import pytest
 import sniffio
-from glide_shared._glide_ffi import GlideFFI
+from glide_shared._glide_ffi import GlideFFI, _GlideFFI
 from glide_shared.config import (
     AwsCredentials,
     GlideClientConfiguration,
@@ -40,10 +40,13 @@ def _latest_registered_id(registry, fallback=17):
     return max(live_ids, default=fallback)
 
 
-def _invoke_callback(callback, capacities=(64, 64, 64), fill=0xA5, client_id=None):
+def _invoke_callback(
+    callback, capacities=(64, 64, 64), fill=0xA5, client_id=None, ffi=None
+):
     import glide_shared.ffi_helpers as ffi_helpers
 
-    ffi = GlideFFI.ffi
+    if ffi is None:
+        ffi = GlideFFI.ffi
     if client_id is None:
         client_id = _latest_registered_id(ffi_helpers._credential_provider_owners)
     buffers = [ffi.new("uint8_t[]", max(capacity, 1)) for capacity in capacities]
@@ -77,11 +80,12 @@ def _invoke_callback(callback, capacities=(64, 64, 64), fill=0xA5, client_id=Non
 
 
 def _invoke_resolver_callback(
-    callback, host=b"example.test", port=6379, client_id=None
+    callback, host=b"example.test", port=6379, client_id=None, ffi=None
 ):
     import glide_shared.ffi_helpers as ffi_helpers
 
-    ffi = GlideFFI.ffi
+    if ffi is None:
+        ffi = GlideFFI.ffi
     if client_id is None:
         client_id = _latest_registered_id(ffi_helpers._address_resolver_owners)
     host_buf = ffi.new("char[]", host)
@@ -99,10 +103,11 @@ def _invoke_resolver_callback(
     return resolved_port, resolved_host_len[0]
 
 
-def _invoke_pubsub_callback(callback, client_ptr=None):
+def _invoke_pubsub_callback(callback, client_ptr=None, ffi=None):
     import glide_shared.ffi_helpers as ffi_helpers
 
-    ffi = GlideFFI.ffi
+    if ffi is None:
+        ffi = GlideFFI.ffi
     if client_ptr is None:
         client_ptr = _latest_registered_id(ffi_helpers._pubsub_owners)
     message = ffi.new("uint8_t[]", b"message")
@@ -371,34 +376,48 @@ async def test_async_callback_bridges_async_callable_and_nominal_sync_awaitable(
         assert buffers[1][: lengths[1]] == b"async-secret"
 
 
-def test_direct_callback_trampolines_are_stable_bounded_and_late_calls_fail():
+def test_direct_callback_trampolines_are_stable_bounded_and_late_calls_fail():  # noqa: C901
     import glide_shared.ffi_helpers as ffi_helpers
 
-    ffi = GlideFFI.ffi
-    initial_trampoline_counts = (
-        len(ffi_helpers._credential_provider_trampolines),
-        len(ffi_helpers._address_resolver_trampolines),
-        len(ffi_helpers._pubsub_trampolines),
+    trampoline_registries = (
+        ffi_helpers._credential_provider_trampolines,
+        ffi_helpers._address_resolver_trampolines,
+        ffi_helpers._pubsub_trampolines,
     )
-    initial_owner_counts = (
-        ffi_helpers._credential_provider_owners.size(),
-        ffi_helpers._address_resolver_owners.size(),
-        ffi_helpers._pubsub_owners.size(),
+    owner_registries = (
+        ffi_helpers._credential_provider_owners,
+        ffi_helpers._address_resolver_owners,
+        ffi_helpers._pubsub_owners,
     )
-    credential_callbacks = []
-    resolver_callbacks = []
-    pubsub_callbacks = []
+
+    def _trampoline_snapshots():
+        with ffi_helpers._trampoline_lock:
+            return tuple(dict(registry) for registry in trampoline_registries)
+
+    def _owner_keys():
+        snapshots = []
+        for registry in owner_registries:
+            with registry._lock:
+                snapshots.append(set(registry._owners))
+        return tuple(snapshots)
+
+    initial_trampolines = _trampoline_snapshots()
+    initial_owner_keys = _owner_keys()
+    ffis = (GlideFFI.ffi, _GlideFFI().ffi)
+    ffi_by_id = {id(ffi): ffi for ffi in ffis}
+    callback_addresses = {id(ffi): (set(), set(), set()) for ffi in ffis}
     callback_ids = []
-    for index in range(200):
+
+    def _exercise_callbacks(ffi, client_pointer):
         callback, owner = create_credential_provider_callback(
             ffi, lambda: AwsCredentials("access", "secret")
         )
         assert owner is not None
-        credential_callbacks.append(callback)
+        callback_addresses[id(ffi)][0].add(int(ffi.cast("uintptr_t", callback)))
         callback_ids.append(owner.callback_id)
-        assert _invoke_callback(callback, client_id=owner.callback_id)[0] == 1
+        assert _invoke_callback(callback, client_id=owner.callback_id, ffi=ffi)[0] == 1
         owner.close()
-        assert _invoke_callback(callback, client_id=owner.callback_id)[0] == 0
+        assert _invoke_callback(callback, client_id=owner.callback_id, ffi=ffi)[0] == 0
 
         resolver_callback, resolver_owner = (
             ffi_helpers.create_address_resolver_callback(
@@ -406,45 +425,65 @@ def test_direct_callback_trampolines_are_stable_bounded_and_late_calls_fail():
             )
         )
         assert resolver_owner is not None
-        resolver_callbacks.append(resolver_callback)
+        callback_addresses[id(ffi)][1].add(
+            int(ffi.cast("uintptr_t", resolver_callback))
+        )
         resolver_id = resolver_owner.callback_id
         assert (
-            _invoke_resolver_callback(resolver_callback, client_id=resolver_id)[0]
+            _invoke_resolver_callback(
+                resolver_callback, client_id=resolver_id, ffi=ffi
+            )[0]
             == 6379
         )
         resolver_owner.close()
         assert (
-            _invoke_resolver_callback(resolver_callback, client_id=resolver_id)[0] == 0
+            _invoke_resolver_callback(
+                resolver_callback, client_id=resolver_id, ffi=ffi
+            )[0]
+            == 0
         )
 
+        pubsub_calls = []
         pubsub_callback, pubsub_owner = ffi_helpers._create_pubsub_callback(
-            ffi, lambda *args: None
+            ffi, lambda *args: pubsub_calls.append(args)
         )
-        pubsub_owner.adopt(index + 1)
-        pubsub_callbacks.append(pubsub_callback)
+        callback_addresses[id(ffi)][2].add(int(ffi.cast("uintptr_t", pubsub_callback)))
+        pubsub_owner.adopt(client_pointer)
+        _invoke_pubsub_callback(pubsub_callback, client_ptr=client_pointer, ffi=ffi)
+        assert len(pubsub_calls) == 1
         pubsub_owner.close()
-        _invoke_pubsub_callback(pubsub_callback, client_ptr=index + 1)
+        _invoke_pubsub_callback(pubsub_callback, client_ptr=client_pointer, ffi=ffi)
+        assert len(pubsub_calls) == 1
 
-    for callbacks in (
-        credential_callbacks,
-        resolver_callbacks,
-        pubsub_callbacks,
-    ):
-        assert (
-            len({int(ffi.cast("uintptr_t", callback)) for callback in callbacks}) == 1
-        )
+    for index, ffi in enumerate(ffis):
+        _exercise_callbacks(ffi, index + 1)
+
+    first_use_trampolines = _trampoline_snapshots()
+    known_ffi_ids = set(ffi_by_id)
+    for initial, first_use in zip(initial_trampolines, first_use_trampolines):
+        new_ffi_ids = set(first_use) - set(initial)
+        assert new_ffi_ids <= known_ffi_ids
+        assert len(new_ffi_ids) <= len(known_ffi_ids)
+        for ffi_id, ffi in ffi_by_id.items():
+            assert ffi_id in first_use
+            assert first_use[ffi_id][0] is ffi
+
+    for index in range(1, 200):
+        for ffi_offset, ffi in enumerate(ffis):
+            _exercise_callbacks(ffi, index * len(ffis) + ffi_offset + 1)
+
+    repeated_use_trampolines = _trampoline_snapshots()
+    for first_use, repeated_use in zip(first_use_trampolines, repeated_use_trampolines):
+        assert set(repeated_use) == set(first_use)
+        for ffi_id in first_use:
+            assert repeated_use[ffi_id][0] is first_use[ffi_id][0]
+            assert repeated_use[ffi_id][1] is first_use[ffi_id][1]
+
+    for per_type_addresses in callback_addresses.values():
+        assert all(len(addresses) == 1 for addresses in per_type_addresses)
     assert len(set(callback_ids)) == len(callback_ids)
     assert min(callback_ids) > 0
-    assert (
-        ffi_helpers._credential_provider_owners.size(),
-        ffi_helpers._address_resolver_owners.size(),
-        ffi_helpers._pubsub_owners.size(),
-    ) == initial_owner_counts
-    assert (
-        len(ffi_helpers._credential_provider_trampolines),
-        len(ffi_helpers._address_resolver_trampolines),
-        len(ffi_helpers._pubsub_trampolines),
-    ) == tuple(max(1, count) for count in initial_trampoline_counts)
+    assert _owner_keys() == initial_owner_keys
 
 
 @pytest.mark.anyio

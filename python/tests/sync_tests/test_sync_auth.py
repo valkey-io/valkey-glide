@@ -818,7 +818,7 @@ class _BlockingCredentialProvider:
         self.release = threading.Event()
         self.finished = threading.Event()
 
-    def snapshot(self):
+    def _snapshot(self):
         with self._lock:
             return self.calls, self.active, self.max_active
 
@@ -849,7 +849,7 @@ def test_sync_hung_custom_provider_timeout_does_not_block_close(request):
         request, False, ProtocolVersion.RESP3, credential_provider=provider
     )
     close_errors = []
-    assert provider.snapshot()[0] > 0
+    assert provider._snapshot()[0] > 0
     try:
         provider.block.set()
         started = time.monotonic()
@@ -860,7 +860,7 @@ def test_sync_hung_custom_provider_timeout_does_not_block_close(request):
         elapsed = time.monotonic() - started
         assert 9 <= elapsed < 13
         assert provider.entered.is_set()
-        blocked_state = provider.snapshot()
+        blocked_state = provider._snapshot()
         assert blocked_state[1:] == (1, 1)
 
         for _ in range(3):
@@ -868,15 +868,15 @@ def test_sync_hung_custom_provider_timeout_does_not_block_close(request):
             with pytest.raises((RequestError, ClosingError), match="still running"):
                 client.refresh_iam_token()
             assert time.monotonic() - started < 2
-        assert provider.snapshot() == blocked_state
+        assert provider._snapshot() == blocked_state
 
-        def close_client():
+        def _close_client():
             try:
                 client.close()
             except BaseException as error:
                 close_errors.append(error)
 
-        close_thread = threading.Thread(target=close_client)
+        close_thread = threading.Thread(target=_close_client)
         close_thread.start()
         close_thread.join(timeout=2)
         close_returned_promptly = not close_thread.is_alive()
