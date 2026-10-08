@@ -59,6 +59,34 @@ const OK = "OK"
 
 var clientIDCounter atomic.Uintptr
 
+var closeClientAdapter = func(client unsafe.Pointer) {
+	C.close_client(client)
+}
+
+var dispatchCommand = func(
+	client unsafe.Pointer,
+	requestID uintptr,
+	requestType uint32,
+	argCount int,
+	args unsafe.Pointer,
+	argLengths unsafe.Pointer,
+	routeBytes unsafe.Pointer,
+	routeBytesCount uintptr,
+	spanPtr uint64,
+) {
+	C.command(
+		client,
+		C.uintptr_t(requestID),
+		requestType,
+		C.size_t(argCount),
+		(*C.uintptr_t)(args),
+		(*C.ulong)(argLengths),
+		(*C.uchar)(routeBytes),
+		C.uintptr_t(routeBytesCount),
+		C.uint64_t(spanPtr),
+	)
+}
+
 type payload struct {
 	value *C.struct_CommandResponse
 	error error
@@ -240,7 +268,7 @@ func (client *baseClient) Close() {
 
 	unregisterClient(uintptr(client.coreClient))
 
-	C.close_client(client.coreClient)
+	closeClientAdapter(client.coreClient)
 	client.coreClient = nil
 
 	if client.resolverID != 0 {
@@ -449,16 +477,16 @@ func (client *baseClient) executeCommandWithRoute(
 		return nil, NewClosingError("executeCommand failed: the client is closed")
 	}
 	requestID := client.beginRequest(resultChannel)
-	C.command(
+	dispatchCommand(
 		client.coreClient,
-		C.uintptr_t(requestID),
+		requestID,
 		uint32(requestType),
-		C.size_t(len(args)),
-		cArgsPtr,
-		argLengthsPtr,
-		routeBytesPtr,
-		routeBytesCount,
-		C.uint64_t(spanPtr),
+		len(args),
+		unsafe.Pointer(cArgsPtr),
+		unsafe.Pointer(argLengthsPtr),
+		unsafe.Pointer(routeBytesPtr),
+		uintptr(routeBytesCount),
+		spanPtr,
 	)
 	client.mu.Unlock()
 	payload, err := client.waitForResponse(ctx, requestID, resultChannel)

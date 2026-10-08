@@ -27,6 +27,21 @@ const customCredentialProviderPoolError = "pool clients cannot use a custom IAM 
 
 var errCustomCredentialProviderPool = errors.New(customCredentialProviderPoolError)
 
+var (
+	getPoolClientPointer = func(clientID int64) unsafe.Pointer {
+		return C.glide_pool_get_client_ptr(C.uint64_t(clientID))
+	}
+	retainPoolClientAdapter = func(client unsafe.Pointer) bool {
+		return bool(C.retainPoolClient(client))
+	}
+	releasePoolClientAdapter = func(client unsafe.Pointer) {
+		C.releasePoolClient(client)
+	}
+	destroyClientPool = func(poolID int64) {
+		C.glide_pool_destroy(C.uint64_t(poolID))
+	}
+)
+
 // PoolConfig holds configuration for a client-instance pool.
 type PoolConfig struct {
 	// Maximum number of clients in the pool. Default: 10.
@@ -262,11 +277,11 @@ func (p *ClientPool) GetClient(clientID int64) (*PooledClient, error) {
 		return cached, nil
 	}
 
-	adapterPtr := C.glide_pool_get_client_ptr(C.uint64_t(clientID))
+	adapterPtr := getPoolClientPointer(clientID)
 	if adapterPtr == nil {
 		return nil, errors.New("client_id has no associated client")
 	}
-	if !bool(C.retainPoolClient(adapterPtr)) {
+	if !retainPoolClientAdapter(adapterPtr) {
 		return nil, errors.New("failed to retain pooled client adapter")
 	}
 
@@ -330,10 +345,10 @@ func (p *ClientPool) Close() {
 	p.closed = true
 	for _, pooled := range p.pooledCache {
 		if lease := pooled.baseClient.closePoolOwned(); lease != nil {
-			C.releasePoolClient(lease)
+			releasePoolClientAdapter(lease)
 		}
 	}
-	C.glide_pool_destroy(C.uint64_t(p.poolID))
+	destroyClientPool(p.poolID)
 	p.pooledCache = nil
 }
 

@@ -1296,3 +1296,123 @@ func TestPoolBorrowedClientScopedConnection(t *testing.T) {
 	// Cleanup
 	client.Client.Del(ctx, []string{key})
 }
+
+func clientListShowsBlockedPoolClient(value any, clientName string) bool {
+	clientList, ok := value.(string)
+	if !ok {
+		return false
+	}
+	for _, attributes := range parseClientListEntries(clientList) {
+		if attributes["name"] == clientName && strings.EqualFold(attributes["cmd"], "blpop") {
+			return true
+		}
+	}
+	return false
+}
+
+func TestPoolCloseRacingServerObservedBlockingCommand(t *testing.T) {
+	for _, tc := range scopeModes() {
+		t.Run(tc.name, func(t *testing.T) {
+			skipMode(t, tc.cluster)
+
+			clientName := fmt.Sprintf("pool-close-race-%d", time.Now().UnixNano())
+			poolConfig := glide.PoolConfig{
+				MaxSize:        1,
+				MinIdle:        1,
+				AcquireTimeout: 10 * time.Second,
+				AbandonTimeout: -time.Second,
+			}
+
+			var pool *glide.ClientPool
+			var observerClose func()
+			var blockingCommandObserved func() bool
+			if tc.cluster {
+				var err error
+				pool, err = glide.NewClusterClientPool(clusterConfig().WithClientName(clientName), poolConfig)
+				require.NoError(t, err)
+
+				observer, err := glide.NewClusterClient(clusterConfig())
+				require.NoError(t, err)
+				observerClose = observer.Close
+				blockingCommandObserved = func() bool {
+					ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+					defer cancel()
+					result, commandErr := observer.CustomCommandWithRoute(
+						ctx,
+						[]string{"CLIENT", "LIST"},
+						config.AllNodes,
+					)
+					if commandErr != nil {
+						return false
+					}
+					if result.IsSingleValue() {
+						return clientListShowsBlockedPoolClient(result.SingleValue(), clientName)
+					}
+					for _, value := range result.MultiValue() {
+						if clientListShowsBlockedPoolClient(value, clientName) {
+							return true
+						}
+					}
+					return false
+				}
+			} else {
+				var err error
+				pool, err = glide.NewClientPool(standaloneConfig().WithClientName(clientName), poolConfig)
+				require.NoError(t, err)
+
+				observer, err := glide.NewClient(standaloneConfig())
+				require.NoError(t, err)
+				observerClose = observer.Close
+				blockingCommandObserved = func() bool {
+					ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+					defer cancel()
+					result, commandErr := observer.CustomCommand(ctx, []string{"CLIENT", "LIST"})
+					return commandErr == nil && clientListShowsBlockedPoolClient(result, clientName)
+				}
+			}
+			defer observerClose()
+			// Avoid racing the unrelated lazy OpenTelemetry singleton initialization on the first concurrent commands.
+			glide.GetOtelInstance()
+
+			waitForPoolReady(t, pool, 1)
+			clientID, err := pool.Acquire(context.Background())
+			require.NoError(t, err)
+			client, err := pool.GetClient(clientID)
+			require.NoError(t, err)
+
+			commandCtx, cancelCommand := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancelCommand()
+			commandDone := make(chan error, 1)
+			go func() {
+				_, commandErr := client.BLPop(
+					commandCtx,
+					[]string{scopeTestKey("pool-close-blocking", tc.cluster)},
+					3*time.Second,
+				)
+				commandDone <- commandErr
+			}()
+
+			require.Eventually(t, blockingCommandObserved, 5*time.Second, 25*time.Millisecond,
+				"server did not observe the pooled BLPOP")
+
+			closeDone := make(chan struct{})
+			go func() {
+				pool.Close()
+				close(closeDone)
+			}()
+
+			select {
+			case <-closeDone:
+			case <-time.After(5 * time.Second):
+				t.Fatal("pool close hung while a server-observed BLPOP was active")
+			}
+			select {
+			case commandErr := <-commandDone:
+				require.Error(t, commandErr)
+				assert.Contains(t, commandErr.Error(), "pool is closed")
+			case <-time.After(5 * time.Second):
+				t.Fatal("pooled BLPOP hung after pool close")
+			}
+		})
+	}
+}
