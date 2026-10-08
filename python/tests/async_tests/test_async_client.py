@@ -482,7 +482,7 @@ class TestGlideClients:
             """
             Run a long-running DEBUG SLEEP command.
             """
-            command = ["DEBUG", "sleep", "7"]
+            command = ["DEBUG", "sleep", "3"]
             if isinstance(client, GlideClusterClient):
                 await client.custom_command(command, AllNodes())
             else:
@@ -490,7 +490,7 @@ class TestGlideClients:
 
         async def fail_to_connect_to_client():
             # try to connect with a small timeout connection
-            await anyio.sleep(1)
+            await anyio.sleep(0.2)
             with pytest.raises(ClosingError) as e:
                 await create_client(
                     request,
@@ -499,13 +499,13 @@ class TestGlideClients:
                     connection_timeout=100,  # 100 ms
                     reconnect_strategy=BackoffStrategy(
                         1, 100, 2
-                    ),  # needs to be configured so that we wont be connected within 7 seconds bc of default retries
+                    ),  # needs to be configured so that we wont be connected within 3 seconds bc of default retries
                 )
             assert "timed out" in str(e).lower() or "timeout" in str(e).lower()
 
         async def connect_to_client():
-            # Create a second client with a connection timeout of 7 seconds
-            await anyio.sleep(1)
+            # Create a second client with a connection timeout of 10 seconds
+            await anyio.sleep(0.2)
             timeout_client = await create_client(
                 request,
                 cluster_mode,
