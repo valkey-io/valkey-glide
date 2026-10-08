@@ -1174,10 +1174,21 @@ impl Drop for CredentialProviderClaim {
     }
 }
 
+fn validate_credential_provider_key(credential_provider_key: Option<&str>) -> Result<()> {
+    if credential_provider_key.is_some_and(|key| key.trim().is_empty()) {
+        return Err(napi::Error::new(
+            Status::InvalidArg,
+            "credential_provider_key must not be empty or whitespace",
+        ));
+    }
+    Ok(())
+}
+
 fn claim_credential_provider(
     credential_provider_key: Option<String>,
     connection_request: &mut ConnectionRequest,
 ) -> Result<Option<CredentialProviderClaim>> {
+    validate_credential_provider_key(credential_provider_key.as_deref())?;
     let Some(key) = credential_provider_key else {
         return Ok(None);
     };
@@ -1287,8 +1298,8 @@ pub fn create_direct_client<'a>(
     let credential_provider_key = proto_connection_request
         .credential_provider_key
         .as_ref()
-        .filter(|key| !key.is_empty())
         .map(ToString::to_string);
+    validate_credential_provider_key(credential_provider_key.as_deref())?;
 
     // Get the inflight requests limit from the protobuf connection request
     let inflight_requests_limit = if proto_connection_request.inflight_requests_limit > 0 {

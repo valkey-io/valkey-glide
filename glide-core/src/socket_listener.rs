@@ -959,10 +959,22 @@ impl Drop for AddressResolverClaim {
     }
 }
 
+fn validate_credential_provider_key(
+    credential_provider_key: Option<&str>,
+) -> Result<(), ClientCreationError> {
+    if credential_provider_key.is_some_and(|key| key.trim().is_empty()) {
+        return Err(ClientCreationError::ConfigurationError(
+            "credential_provider_key must not be empty or whitespace".to_string(),
+        ));
+    }
+    Ok(())
+}
+
 fn validate_credential_provider_request(
     credential_provider_key: Option<&String>,
     conn_request: &crate::client::ConnectionRequest,
 ) -> Result<(), ClientCreationError> {
+    validate_credential_provider_key(credential_provider_key.map(String::as_str))?;
     if credential_provider_key.is_some()
         && conn_request
             .authentication_info
@@ -1070,8 +1082,8 @@ async fn create_client(
     let credential_provider_key = request
         .credential_provider_key
         .as_ref()
-        .filter(|k| !k.is_empty())
         .map(|k| k.to_string());
+    validate_credential_provider_key(credential_provider_key.as_deref())?;
 
     let mut conn_request: crate::client::ConnectionRequest = request.into();
     let mut claims =
@@ -1801,6 +1813,51 @@ mod credential_provider_tests {
         drop(results);
         assert!(crate::credential_provider_registry::remove(&credential_key).is_some());
         assert!(crate::address_resolver_registry::remove(&resolver_key).is_some());
+    }
+
+    #[test]
+    fn absent_credential_provider_key_does_not_install_custom_provider() {
+        let mut request = request_with_iam();
+
+        let claim = take_credential_provider(None, &mut request)
+            .expect("an absent provider key should be allowed");
+
+        assert!(claim.is_none());
+        assert!(
+            request
+                .authentication_info
+                .as_ref()
+                .and_then(|auth| auth.iam_config.as_ref())
+                .and_then(|iam| iam.credentials_provider.as_ref())
+                .is_none()
+        );
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn empty_or_whitespace_credential_key_fails_before_client_new_without_consuming_resolver()
+    {
+        for credential_key in ["", " \t\n"] {
+            let resolver_key = Uuid::new_v4().to_string();
+            let original_resolver = resolver("original");
+            crate::address_resolver_registry::register(
+                resolver_key.clone(),
+                Arc::clone(&original_resolver),
+            );
+            // No address is intentional: reaching Client::new would produce a connection error.
+            let request = proto_request_with_resources(credential_key, &resolver_key, false, false);
+            let (writer, _peer) = test_writer();
+
+            let error = match create_client(&writer, request, None).await {
+                Err(error) => error,
+                Ok(_) => panic!("a present blank provider key must fail client creation"),
+            };
+
+            assert!(matches!(error, ClientCreationError::ConfigurationError(_)));
+            assert!(error.to_string().contains("empty or whitespace"));
+            let registered = crate::address_resolver_registry::remove(&resolver_key)
+                .expect("provider-key validation must not consume the resolver");
+            assert!(Arc::ptr_eq(&registered, &original_resolver));
+        }
     }
 
     #[tokio::test(flavor = "current_thread")]
