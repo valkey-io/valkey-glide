@@ -59,34 +59,6 @@ const OK = "OK"
 
 var clientIDCounter atomic.Uintptr
 
-var closeClientAdapter = func(client unsafe.Pointer) {
-	C.close_client(client)
-}
-
-var dispatchCommand = func(
-	client unsafe.Pointer,
-	requestID uintptr,
-	requestType uint32,
-	argCount int,
-	args unsafe.Pointer,
-	argLengths unsafe.Pointer,
-	routeBytes unsafe.Pointer,
-	routeBytesCount uintptr,
-	spanPtr uint64,
-) {
-	C.command(
-		client,
-		C.uintptr_t(requestID),
-		requestType,
-		C.size_t(argCount),
-		(*C.uintptr_t)(args),
-		(*C.ulong)(argLengths),
-		(*C.uchar)(routeBytes),
-		C.uintptr_t(routeBytesCount),
-		C.uint64_t(spanPtr),
-	)
-}
-
 type payload struct {
 	value *C.struct_CommandResponse
 	error error
@@ -268,7 +240,7 @@ func (client *baseClient) Close() {
 
 	unregisterClient(uintptr(client.coreClient))
 
-	closeClientAdapter(client.coreClient)
+	C.close_client(client.coreClient)
 	client.coreClient = nil
 
 	if client.resolverID != 0 {
@@ -278,23 +250,6 @@ func (client *baseClient) Close() {
 	}
 
 	client.failPendingRequests(NewClosingError("ExecuteCommand failed: the client is closed"))
-}
-
-// closePoolOwned invalidates a cached pool wrapper and returns its retained
-// lease. The caller releases that lease separately; close_client is reserved
-// for direct-client owners.
-func (client *baseClient) closePoolOwned() unsafe.Pointer {
-	client.mu.Lock()
-	defer client.mu.Unlock()
-
-	if client.coreClient == nil {
-		return nil
-	}
-	coreClient := client.coreClient
-	unregisterClient(uintptr(coreClient))
-	client.coreClient = nil
-	client.failPendingRequests(NewClosingError("ExecuteCommand failed: the pool is closed"))
-	return coreClient
 }
 
 // failPendingRequests must be called while client.mu is held.
@@ -477,16 +432,16 @@ func (client *baseClient) executeCommandWithRoute(
 		return nil, NewClosingError("executeCommand failed: the client is closed")
 	}
 	requestID := client.beginRequest(resultChannel)
-	dispatchCommand(
+	C.command(
 		client.coreClient,
-		requestID,
+		C.uintptr_t(requestID),
 		uint32(requestType),
-		len(args),
-		unsafe.Pointer(cArgsPtr),
-		unsafe.Pointer(argLengthsPtr),
-		unsafe.Pointer(routeBytesPtr),
-		uintptr(routeBytesCount),
-		spanPtr,
+		C.size_t(len(args)),
+		cArgsPtr,
+		argLengthsPtr,
+		routeBytesPtr,
+		routeBytesCount,
+		C.uint64_t(spanPtr),
 	)
 	client.mu.Unlock()
 	payload, err := client.waitForResponse(ctx, requestID, resultChannel)

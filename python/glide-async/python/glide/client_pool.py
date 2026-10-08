@@ -111,9 +111,9 @@ class AsyncClientPool:
                 "Use the main client's pubsub API for subscriptions."
             )
 
-        # Reject custom IAM credential providers — pool connections cannot
-        # forward a Python callback per-connection. Use IamAuthConfig without
-        # a credential_provider to use the default AWS credential chain.
+        # Reject custom IAM credential providers. Pool connections cannot
+        # forward a callback per connection; ordinary IAM still uses the
+        # default AWS credential chain.
         _creds = getattr(client_config, "credentials", None)
         _iam = getattr(_creds, "iam_config", None) if _creds else None
         if _iam is not None and getattr(_iam, "credential_provider", None) is not None:
@@ -236,8 +236,6 @@ class AsyncClientPool:
             return cached
 
         with self._cache_lock:
-            if self._closed:
-                raise RuntimeError("Pool is closed")
             cached = self._client_cache.get(client_id)
             if cached is not None:
                 return cached
@@ -247,9 +245,6 @@ class AsyncClientPool:
                 raise RuntimeError(
                     f"Pool client_id {client_id} has no associated ClientAdapter"
                 )
-            cast_ptr = self._ffi.cast("void*", adapter_ptr)
-            if not self._lib.retain_client(cast_ptr):
-                raise RuntimeError("Unable to retain pooled ClientAdapter")
 
             ClientClass = GlideClusterClient if self._is_cluster else GlideClient
             client = object.__new__(ClientClass)
@@ -266,12 +261,14 @@ class AsyncClientPool:
             client._lock = threading.Lock()
             client._close_lock = threading.Lock()
             client._close_state = None
-            client._owns_native_client = False
-            client._pool_lease_ptr = cast_ptr
+            client._native_owner = None
+            client._native_finalizer = None
             client._address_resolver_callback_ref = None
+            client._address_resolver_callback_owner = None
             client._credential_provider_callback_ref = None
+            client._credential_provider_callback_owner = None
             client._is_asyncio = True
-            client._core_client = cast_ptr
+            client._core_client = self._ffi.cast("void*", adapter_ptr)
             client._conn_req_bytes = self._conn_req_bytes
             client._create_pid = os.getpid()
 
@@ -279,7 +276,6 @@ class AsyncClientPool:
             # (set in create_client_internal via the pre-assigned ID).
             # Register so the pipe reader routes responses here.
             client._pipe_client_id = client_id
-            # Ensure the Rust adapter routes async pipe responses to this client_id.
             self._lib.glide_pool_set_pipe_client_id(client_id, client_id)
             try:
                 client._loop = asyncio.get_running_loop()
@@ -335,16 +331,12 @@ class AsyncClientPool:
         return total[0]
 
     def close(self):
-        with self._cache_lock:
-            if self._closed:
-                return
+        if not self._closed:
             self._closed = True
-            cached_clients = list(self._client_cache.values())
-            for client in cached_clients:
-                client._close_pool_wrapper()
+            for cid in list(self._client_cache.keys()):
+                _client_registry.pop(cid, None)
+            self._lib.glide_pool_destroy(self._pool_id)
             self._client_cache.clear()
-
-        self._lib.glide_pool_destroy(self._pool_id)
 
     async def aclose(self):
         self.close()

@@ -155,9 +155,8 @@ pub fn create_pool<'a>(
     let pool = ClientPool::new(config)
         .map_err(|e| Error::new(Status::InvalidArg, format!("Invalid pool config: {e}")))?;
 
-    // Synchronous validation above must not leave an unsettled Deferred TSFN.
-    // Create the Promise before registering any pool so an environment failure
-    // also cannot leak a native pool entry.
+    // Validate before creating the deferred TSFN, and create the promise before
+    // registering native pool state so either synchronous failure stays leak-free.
     let (deferred, promise) = env.create_deferred()?;
 
     let pool_id = pool::register_pool(pool) as i64;

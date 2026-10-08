@@ -130,9 +130,9 @@ class ClientPool:
                 "Use the main client's pubsub API for subscriptions."
             )
 
-        # Reject custom IAM credential providers — pool connections cannot
-        # forward a Python callback per-connection. Use IamAuthConfig without
-        # a credential_provider to use the default AWS credential chain.
+        # Reject custom IAM credential providers. Pool connections cannot
+        # forward a callback per connection; ordinary IAM still uses the
+        # default AWS credential chain.
         _creds = getattr(client_config, "credentials", None)
         _iam = getattr(_creds, "iam_config", None) if _creds else None
         if _iam is not None and getattr(_iam, "credential_provider", None) is not None:
@@ -250,8 +250,6 @@ class ClientPool:
             return cached
 
         with self._cache_lock:
-            if self._closed:
-                raise RuntimeError("Pool is closed")
             # Double-check after acquiring lock
             cached = self._client_cache.get(client_id)
             if cached is not None:
@@ -264,12 +262,8 @@ class ClientPool:
                     f"Pool client_id {client_id} has no associated ClientAdapter"
                 )
 
-            # Create a GlideClient shell pointing to the pooled adapter. The
-            # cache owns one explicit lease so abandon/discard cleanup cannot
-            # leave externally held wrapper objects dangling.
+            # Create a GlideClient shell pointing to the pooled adapter.
             cast_ptr = self._ffi.cast("void*", adapter_ptr)
-            if not self._lib.retain_client(cast_ptr):
-                raise RuntimeError("Unable to retain pooled ClientAdapter")
 
             client = GlideClient.__new__(GlideClient)  # type: ignore[type-abstract]
             client._ffi = self._ffi
@@ -293,8 +287,6 @@ class ClientPool:
             client._close_error = None
             client._needs_recreate_after_fork = False
             client._recreating_after_fork = False
-            client._owns_native_client = False
-            client._pool_lease_ptr = cast_ptr
             client._native_owner = None
             client._native_finalizer = None
             client._core_client = cast_ptr
@@ -326,20 +318,11 @@ class ClientPool:
         return self.metrics()["total"]
 
     def close(self) -> None:
-        """Invalidate wrappers and destroy the Rust-owned client pool."""
-        with self._cache_lock:
-            if self._closed:
-                return
+        """Destroy the pool. All idle clients are closed."""
+        if not self._closed:
             self._closed = True
-            cached_clients = list(self._client_cache.values())
-            for client in cached_clients:
-                client._mark_pool_wrapper_closed()
+            self._lib.glide_pool_destroy(self._pool_id)
             self._client_cache.clear()
-
-        # Rust owns each pooled adapter pointer. Wrapper invalidation above is
-        # deliberately separate from BaseClient.close(), so Python never calls
-        # close_client for a pool-owned raw Arc.
-        self._lib.glide_pool_destroy(self._pool_id)
 
     def __enter__(self):
         return self

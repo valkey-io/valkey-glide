@@ -187,8 +187,6 @@ class BaseClient(CoreCommands):
         self._close_error: Optional[BaseException] = None
         self._needs_recreate_after_fork = False
         self._recreating_after_fork = False
-        self._owns_native_client = True
-        self._pool_lease_ptr = None
         self._native_owner: Optional[_NativeClientOwner] = None
         self._native_finalizer: Optional[weakref.finalize] = None
 
@@ -389,7 +387,6 @@ class BaseClient(CoreCommands):
         self._is_closed = was_closed
         self._close_complete = was_closed
         self._close_error = None
-        self._pool_lease_ptr = None
         self._needs_recreate_after_fork = not was_closed
         BaseClient._disarm_native_owner_after_fork(self)
 
@@ -1403,28 +1400,7 @@ class BaseClient(CoreCommands):
             # error in `_close_error`; worker exceptions have no caller.
             pass
 
-    def _mark_pool_wrapper_closed(self) -> None:
-        """Invalidate a Rust-pool wrapper without consuming the pool's owner."""
-        lease_ptr = None
-        with self._client_condition:
-            if self._is_closed:
-                return
-            self._is_closed = True
-            self._needs_recreate_after_fork = False
-            self._core_client = self._ffi.NULL
-            lease_ptr, self._pool_lease_ptr = self._pool_lease_ptr, None
-            self._close_complete = True
-            self._maybe_clear_callback_references_locked()
-            self._client_condition.notify_all()
-        with self._pubsub_condition:
-            self._pubsub_condition.notify_all()
-        if lease_ptr is not None:
-            self._lib.release_client(lease_ptr)
-
     def close(self) -> None:
-        if not self._owns_native_client:
-            self._mark_pool_wrapper_closed()
-            return
         owner: Optional[_NativeClientOwner] = None
         close_on_worker = False
         with self._client_condition:
@@ -1440,11 +1416,7 @@ class BaseClient(CoreCommands):
             self._needs_recreate_after_fork = False
             owner = self._detach_native_owner()
             core_client, self._core_client = self._core_client, self._ffi.NULL
-            if (
-                owner is None
-                and self._owns_native_client
-                and core_client != self._ffi.NULL
-            ):
+            if owner is None and core_client != self._ffi.NULL:
                 owner = _NativeClientOwner(
                     self._lib,
                     core_client,

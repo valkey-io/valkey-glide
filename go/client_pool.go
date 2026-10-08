@@ -4,9 +4,6 @@ package glide
 
 // #include "lib.h"
 //
-// static inline bool retainPoolClient(const void *ptr) { return retain_client(ptr); }
-// static inline void releasePoolClient(const void *ptr) { release_client(ptr); }
-//
 // void successCallback(uintptr_t requestID, struct CommandResponse *message);
 // void failureCallback(uintptr_t requestID, char *errMessage, RequestErrorType errType);
 import "C"
@@ -26,21 +23,6 @@ const customCredentialProviderPoolError = "pool clients cannot use a custom IAM 
 	"configure IAM without a credential provider to use the default AWS credential chain"
 
 var errCustomCredentialProviderPool = errors.New(customCredentialProviderPoolError)
-
-var (
-	getPoolClientPointer = func(clientID int64) unsafe.Pointer {
-		return C.glide_pool_get_client_ptr(C.uint64_t(clientID))
-	}
-	retainPoolClientAdapter = func(client unsafe.Pointer) bool {
-		return bool(C.retainPoolClient(client))
-	}
-	releasePoolClientAdapter = func(client unsafe.Pointer) {
-		C.releasePoolClient(client)
-	}
-	destroyClientPool = func(poolID int64) {
-		C.glide_pool_destroy(C.uint64_t(poolID))
-	}
-)
 
 // PoolConfig holds configuration for a client-instance pool.
 type PoolConfig struct {
@@ -140,9 +122,8 @@ func NewClientPool(clientConfig *config.ClientConfiguration, poolConfig PoolConf
 		)
 	}
 
-	// Reject custom IAM credential providers — pool connections cannot
-	// forward a Go callback per-connection. Use IamAuthConfig without
-	// a credential provider to use the default AWS credential chain.
+	// Reject custom IAM credential providers. Pool connections cannot forward a
+	// Go callback per connection; ordinary IAM still uses the default AWS chain.
 	if clientConfig.GetCredentialProvider() != nil {
 		return nil, errCustomCredentialProviderPool
 	}
@@ -277,12 +258,9 @@ func (p *ClientPool) GetClient(clientID int64) (*PooledClient, error) {
 		return cached, nil
 	}
 
-	adapterPtr := getPoolClientPointer(clientID)
+	adapterPtr := C.glide_pool_get_client_ptr(C.uint64_t(clientID))
 	if adapterPtr == nil {
 		return nil, errors.New("client_id has no associated client")
-	}
-	if !retainPoolClientAdapter(adapterPtr) {
-		return nil, errors.New("failed to retain pooled client adapter")
 	}
 
 	// Create a Client wrapper pointing to the pooled adapter.
@@ -343,12 +321,7 @@ func (p *ClientPool) Close() {
 		return
 	}
 	p.closed = true
-	for _, pooled := range p.pooledCache {
-		if lease := pooled.baseClient.closePoolOwned(); lease != nil {
-			releasePoolClientAdapter(lease)
-		}
-	}
-	destroyClientPool(p.poolID)
+	C.glide_pool_destroy(C.uint64_t(p.poolID))
 	p.pooledCache = nil
 }
 
@@ -386,9 +359,8 @@ func NewClusterClientPool(clientConfig *config.ClusterClientConfiguration, poolC
 		)
 	}
 
-	// Reject custom IAM credential providers — pool connections cannot
-	// forward a Go callback per-connection. Use IamAuthConfig without
-	// a credential provider to use the default AWS credential chain.
+	// Reject custom IAM credential providers. Pool connections cannot forward a
+	// Go callback per connection; ordinary IAM still uses the default AWS chain.
 	if clientConfig.GetCredentialProvider() != nil {
 		return nil, errCustomCredentialProviderPool
 	}
