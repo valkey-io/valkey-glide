@@ -2,12 +2,15 @@ import json
 import random
 import string
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import asynccontextmanager, contextmanager
 from datetime import datetime, timezone
 from typing import (
     Any,
+    AsyncIterator,
     Awaitable,
     Callable,
     Dict,
+    Iterator,
     List,
     Mapping,
     Optional,
@@ -346,6 +349,64 @@ def sync_wait_for(
         _time.sleep(_WAIT_FOR_INTERVAL_SEC)
 
     raise TimeoutError(failure)
+
+
+# While a script or function runs, the server does not read other clients'
+# commands until busy-reply-threshold (default 5000 ms) elapses, so a kill or
+# stats poll against a running script cannot complete sooner than that.
+# lua-time-limit is the pre-7.0 name and remains an alias on later servers.
+_BUSY_REPLY_THRESHOLD_MS = "100"
+_DEFAULT_BUSY_REPLY_THRESHOLD_MS = "5000"
+
+
+def _busy_reply_threshold_args(ms: str) -> List[str]:
+    return ["CONFIG", "SET", "lua-time-limit", ms]
+
+
+@asynccontextmanager
+async def low_busy_reply_threshold(client: TGlideClient) -> AsyncIterator[None]:
+    """Lowers busy-reply-threshold on every node for the block, then restores the default."""
+    if isinstance(client, GlideClusterClient):
+        await client.custom_command(
+            _busy_reply_threshold_args(_BUSY_REPLY_THRESHOLD_MS), AllNodes()
+        )
+    else:
+        await client.custom_command(
+            _busy_reply_threshold_args(_BUSY_REPLY_THRESHOLD_MS)
+        )
+    try:
+        yield
+    finally:
+        if isinstance(client, GlideClusterClient):
+            await client.custom_command(
+                _busy_reply_threshold_args(_DEFAULT_BUSY_REPLY_THRESHOLD_MS), AllNodes()
+            )
+        else:
+            await client.custom_command(
+                _busy_reply_threshold_args(_DEFAULT_BUSY_REPLY_THRESHOLD_MS)
+            )
+
+
+@contextmanager
+def sync_low_busy_reply_threshold(client: TSyncGlideClient) -> Iterator[None]:
+    """Lowers busy-reply-threshold on every node for the block, then restores the default."""
+    if isinstance(client, SyncGlideClusterClient):
+        client.custom_command(
+            _busy_reply_threshold_args(_BUSY_REPLY_THRESHOLD_MS), AllNodes()
+        )
+    else:
+        client.custom_command(_busy_reply_threshold_args(_BUSY_REPLY_THRESHOLD_MS))
+    try:
+        yield
+    finally:
+        if isinstance(client, SyncGlideClusterClient):
+            client.custom_command(
+                _busy_reply_threshold_args(_DEFAULT_BUSY_REPLY_THRESHOLD_MS), AllNodes()
+            )
+        else:
+            client.custom_command(
+                _busy_reply_threshold_args(_DEFAULT_BUSY_REPLY_THRESHOLD_MS)
+            )
 
 
 async def wait_for_save_not_in_progress(client: TGlideClient) -> None:

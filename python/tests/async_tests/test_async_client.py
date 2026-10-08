@@ -141,9 +141,11 @@ from tests.utils.utils import (
     get_random_string,
     get_unix_seconds,
     get_version,
+    low_busy_reply_threshold,
     parse_info_response,
     round_values,
     trigger_latency_spike,
+    wait_for,
     wait_for_save_not_in_progress,
 )
 
@@ -8960,8 +8962,11 @@ class TestCommands:
             await test_client.fcall_ro(func_name, arguments=[])
 
         async def wait_and_function_stats():
-            # it can take a few seconds for FCALL to register as running
-            await anyio.sleep(3)
+            async def fcall_is_running() -> bool:
+                result = await test_client2.function_stats()
+                return any(res.get(b"running_script") for res in result.values())
+
+            await wait_for(fcall_is_running, "FCALL never registered as running")
             result = await test_client2.function_stats()
             running_scripts = False
             for res in result.values():
@@ -8979,9 +8984,10 @@ class TestCommands:
 
             assert running_scripts
 
-        async with anyio.create_task_group() as tg:
-            tg.start_soon(endless_fcall_route_call)
-            tg.start_soon(wait_and_function_stats)
+        async with low_busy_reply_threshold(glide_client):
+            async with anyio.create_task_group() as tg:
+                tg.start_soon(endless_fcall_route_call)
+                tg.start_soon(wait_and_function_stats)
 
         await test_client.close()
         await test_client2.close()
@@ -9081,8 +9087,6 @@ class TestCommands:
             assert "Script killed by user" in str(e)
 
         async def wait_and_function_kill():
-            # it can take a few seconds for FCALL to register as running
-            await anyio.sleep(3)
             timeout = 0
             while timeout <= 5:
                 # keep trying to kill until we get an "OK"
@@ -9094,12 +9098,13 @@ class TestCommands:
                 except RequestError:
                     # a RequestError may occur if the function is not yet running
                     # sleep and try again
-                    timeout += 0.5
-                    await anyio.sleep(0.5)
+                    timeout += 0.1
+                    await anyio.sleep(0.1)
 
-        async with anyio.create_task_group() as tg:
-            tg.start_soon(endless_fcall_route_call)
-            tg.start_soon(wait_and_function_kill)
+        async with low_busy_reply_threshold(glide_client):
+            async with anyio.create_task_group() as tg:
+                tg.start_soon(endless_fcall_route_call)
+                tg.start_soon(wait_and_function_kill)
 
         # no functions running so we get notbusy error again
         with pytest.raises(RequestError) as e:
@@ -9132,8 +9137,6 @@ class TestCommands:
             await test_client.fcall(func_name, keys=[lib_name])
 
         async def wait_and_function_kill():
-            # it can take a few seconds for FCALL to register as running
-            await anyio.sleep(3)
             timeout = 0
             foundUnkillable = False
             while timeout <= 5:
@@ -9144,14 +9147,15 @@ class TestCommands:
                     if "UNKILLABLE" in str(e):
                         foundUnkillable = True
                         break
-                timeout += 0.5
-                await anyio.sleep(0.5)
+                timeout += 0.1
+                await anyio.sleep(0.1)
             # expect an unkillable error
             assert foundUnkillable
 
-        async with anyio.create_task_group() as tg:
-            tg.start_soon(endless_fcall_route_call)
-            tg.start_soon(wait_and_function_kill)
+        async with low_busy_reply_threshold(glide_client):
+            async with anyio.create_task_group() as tg:
+                tg.start_soon(endless_fcall_route_call)
+                tg.start_soon(wait_and_function_kill)
 
         await test_client.close()
 
@@ -11298,7 +11302,6 @@ async def script_kill_tests(
         assert "Script killed by user" in str(e)
 
     async def wait_and_kill_script():
-        await anyio.sleep(3)  # Give some time for the script to start
         timeout = 0
         while timeout <= 5:
             # keep trying to kill until we get an "OK"
@@ -11315,13 +11318,14 @@ async def script_kill_tests(
             except RequestError:
                 # a RequestError may occur if the script is not yet running
                 # sleep and try again
-                timeout += 0.5
-                await anyio.sleep(0.5)
+                timeout += 0.1
+                await anyio.sleep(0.1)
 
     # Run the long script and kill it
-    async with anyio.create_task_group() as tg:
-        tg.start_soon(run_long_script)
-        tg.start_soon(wait_and_kill_script)
+    async with low_busy_reply_threshold(glide_client):
+        async with anyio.create_task_group() as tg:
+            tg.start_soon(run_long_script)
+            tg.start_soon(wait_and_kill_script)
 
     # Verify that script_kill raises an error when no script is running
     with pytest.raises(RequestError) as e:
@@ -11579,7 +11583,6 @@ class TestScripts:
             await test_client.invoke_script(writing_script, keys=[get_random_string(5)])
 
         async def attempt_kill_writing_script():
-            await anyio.sleep(3)  # Give some time for the script to start
             foundUnkillable = False
             while True:
                 try:
@@ -11588,14 +11591,15 @@ class TestScripts:
                     if "UNKILLABLE" in str(e):
                         foundUnkillable = True
                         break
-                    await anyio.sleep(0.5)
+                    await anyio.sleep(0.1)
 
             assert foundUnkillable
 
         # Run the writing script and attempt to kill it
-        async with anyio.create_task_group() as tg:
-            tg.start_soon(run_writing_script)
-            tg.start_soon(attempt_kill_writing_script)
+        async with low_busy_reply_threshold(glide_client):
+            async with anyio.create_task_group() as tg:
+                tg.start_soon(run_writing_script)
+                tg.start_soon(attempt_kill_writing_script)
 
         await test_client.close()
         await test_client2.close()

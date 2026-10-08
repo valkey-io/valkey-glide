@@ -141,6 +141,8 @@ from tests.utils.utils import (
     run_sync_func_with_timeout_in_thread,
     sync_check_if_server_version_lt,
     sync_get_version,
+    sync_low_busy_reply_threshold,
+    sync_wait_for,
     sync_wait_for_save_not_in_progress,
     trigger_latency_spike_sync,
 )
@@ -9072,8 +9074,11 @@ class TestCommands:
             test_client.fcall_ro(func_name, arguments=[])
 
         def wait_and_function_stats():
-            # it can take a few seconds for FCALL to register as running
-            time.sleep(3)
+            def fcall_is_running() -> bool:
+                result = test_client2.function_stats()
+                return any(res.get(b"running_script") for res in result.values())
+
+            sync_wait_for(fcall_is_running, "FCALL never registered as running")
             result = test_client2.function_stats()
             running_scripts = False
             for res in result.values():
@@ -9094,11 +9099,12 @@ class TestCommands:
         thread1 = threading.Thread(target=endless_fcall_route_call)
         thread2 = threading.Thread(target=wait_and_function_stats)
 
-        thread1.start()
-        thread2.start()
+        with sync_low_busy_reply_threshold(glide_sync_client):
+            thread1.start()
+            thread2.start()
 
-        thread1.join()
-        thread2.join()
+            thread1.join()
+            thread2.join()
 
         test_client.close()
         test_client2.close()
@@ -9198,8 +9204,6 @@ class TestCommands:
             assert "Script killed by user" in str(e)
 
         def wait_and_function_kill():
-            # it can take a few seconds for FCALL to register as running
-            time.sleep(3)
             timeout = 0
             while timeout <= 5:
                 # keep trying to kill until we get an "OK"
@@ -9211,17 +9215,18 @@ class TestCommands:
                 except RequestError:
                     # a RequestError may occur if the function is not yet running
                     # sleep and try again
-                    timeout += 0.5
-                    time.sleep(0.5)
+                    timeout += 0.1
+                    time.sleep(0.1)
 
         thread1 = threading.Thread(target=endless_fcall_route_call)
         thread2 = threading.Thread(target=wait_and_function_kill)
 
-        thread1.start()
-        thread2.start()
+        with sync_low_busy_reply_threshold(glide_sync_client):
+            thread1.start()
+            thread2.start()
 
-        thread1.join()
-        thread2.join()
+            thread1.join()
+            thread2.join()
 
         # no functions running so we get notbusy error again
         with pytest.raises(RequestError) as e:
@@ -9254,8 +9259,6 @@ class TestCommands:
             test_client.fcall(func_name, keys=[lib_name])
 
         def wait_and_function_kill():
-            # it can take a few seconds for FCALL to register as running
-            time.sleep(3)
             timeout = 0
             foundUnkillable = False
             while timeout <= 5:
@@ -9266,19 +9269,20 @@ class TestCommands:
                     if "UNKILLABLE" in str(e):
                         foundUnkillable = True
                         break
-                timeout += 0.5
-                time.sleep(0.5)
+                timeout += 0.1
+                time.sleep(0.1)
             # expect an unkillable error
             assert foundUnkillable
 
         thread1 = threading.Thread(target=endless_fcall_route_call)
         thread2 = threading.Thread(target=wait_and_function_kill)
 
-        thread1.start()
-        thread2.start()
+        with sync_low_busy_reply_threshold(glide_sync_client):
+            thread1.start()
+            thread2.start()
 
-        thread1.join()
-        thread2.join()
+            thread1.join()
+            thread2.join()
 
         test_client.close()
 
@@ -11338,7 +11342,6 @@ def script_kill_tests(
         assert "Script killed by user" in str(e)
 
     def wait_and_kill_script():
-        time.sleep(3)  # Give some time for the script to start
         timeout = 0
         while timeout <= 5:
             # keep trying to kill until we get an "OK"
@@ -11355,18 +11358,19 @@ def script_kill_tests(
             except RequestError:
                 # a RequestError may occur if the script is not yet running
                 # sleep and try again
-                timeout += 0.5
-                time.sleep(0.5)
+                timeout += 0.1
+                time.sleep(0.1)
 
     # Run the long script and kill it
     script_thread = threading.Thread(target=run_long_script)
     kill_thread = threading.Thread(target=wait_and_kill_script)
 
-    script_thread.start()
-    kill_thread.start()
+    with sync_low_busy_reply_threshold(glide_sync_client):
+        script_thread.start()
+        kill_thread.start()
 
-    script_thread.join()
-    kill_thread.join()
+        script_thread.join()
+        kill_thread.join()
 
     # Verify that script_kill raises an error when no script is running
     with pytest.raises(RequestError) as e:
@@ -11611,7 +11615,6 @@ class TestSyncScripts:
             test_client.invoke_script(writing_script, keys=[get_random_string(5)])
 
         def attempt_kill_writing_script():
-            time.sleep(3)  # Give some time for the script to start
             foundUnkillable = False
             while True:
                 try:
@@ -11620,7 +11623,7 @@ class TestSyncScripts:
                     if "UNKILLABLE" in str(e):
                         foundUnkillable = True
                         break
-                    time.sleep(0.5)
+                    time.sleep(0.1)
 
             assert foundUnkillable
 
@@ -11628,11 +11631,12 @@ class TestSyncScripts:
         script_thread = threading.Thread(target=run_writing_script)
         kill_thread = threading.Thread(target=attempt_kill_writing_script)
 
-        script_thread.start()
-        kill_thread.start()
+        with sync_low_busy_reply_threshold(glide_sync_client):
+            script_thread.start()
+            kill_thread.start()
 
-        script_thread.join()
-        kill_thread.join()
+            script_thread.join()
+            kill_thread.join()
 
         test_client.close()
         test_client2.close()
