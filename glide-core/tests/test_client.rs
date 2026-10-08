@@ -1633,7 +1633,7 @@ pub(crate) mod shared_client_tests {
         }
     }
 
-    /// Polls `try_acquire_scope` the way the bindings do (see `GlideClient`'s
+    /// Polls `acquire_scope_outcome` the way the bindings do (see `GlideClient`'s
     /// `scopedConnection` loop), returning `None` if the deadline passes.
     #[cfg(feature = "proto")]
     async fn acquire_scope_within(
@@ -1647,15 +1647,16 @@ pub(crate) mod shared_client_tests {
         let attempt_token = glide_core::pool::next_scope_attempt_token();
         let deadline = std::time::Instant::now() + timeout;
         while std::time::Instant::now() < deadline {
-            let result = glide_core::scope::try_acquire_scope(
-                client_id,
-                bytes.to_vec(),
-                &runtime,
-                0,
-                attempt_token,
-            );
-            if result >= 0 {
-                return Some(result as u64);
+            if let glide_core::scope::ScopeAcquireOutcome::Acquired(id) =
+                glide_core::scope::acquire_scope_outcome(
+                    client_id,
+                    bytes.to_vec(),
+                    &runtime,
+                    0,
+                    attempt_token,
+                )
+            {
+                return Some(id);
             }
             tokio::time::sleep(std::time::Duration::from_millis(10)).await;
         }
@@ -5053,20 +5054,22 @@ pub(crate) mod shared_client_tests {
             let scope_id = retry(|| {
                 let connection_request_bytes = connection_request_bytes.clone();
                 async {
-                    let result = scope::try_acquire_scope(
+                    match scope::acquire_scope_outcome(
                         client_id,
                         connection_request_bytes,
                         &runtime,
                         0,
                         attempt_token,
-                    );
-                    if result >= 0 { Some(result) } else { None }
+                    ) {
+                        scope::ScopeAcquireOutcome::Acquired(id) => Some(id),
+                        _ => None,
+                    }
                 }
             })
             .await;
 
             let args: Vec<Vec<u8>> = vec![b"WHOAMI".to_vec()];
-            let response = scope::execute_scope_command(scope_id as u64, "ACL", &args, None).await;
+            let response = scope::execute_scope_command(scope_id, "ACL", &args, None).await;
 
             let value = response.expect("ACL WHOAMI through the scope should succeed");
             let whoami = match value {
@@ -5079,7 +5082,7 @@ pub(crate) mod shared_client_tests {
                 "create_scope_connection must AUTH as the IAM identity on initial connect"
             );
 
-            scope::release_scope(scope_id as u64, client_id, &runtime);
+            scope::release_scope(scope_id, client_id, &runtime);
             scope::unregister_client(client_id);
         });
     }

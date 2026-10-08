@@ -1719,7 +1719,7 @@ pub fn allocate_scope_id() -> u64 {
 }
 
 /// Monotonic source of scope-acquire attempt tokens. A binding takes one token
-/// per `acquire()` call and passes it on every retry poll of `try_acquire_scope`,
+/// per `acquire()` call and passes it on every retry poll of `acquire_scope_outcome`,
 /// so the core can tell one acquire's retries (same token — dedupe to a single
 /// in-flight creation) from distinct concurrent borrowers (different tokens — each
 /// dials its own connection up to `max_total`). Process-wide and never reused, so
@@ -2562,7 +2562,7 @@ mod scope_pool_tests {
         .await;
 
         // First acquire at runtime_db 3: the only idle connection is on db 2, so the pool
-        // signals NeedsResync. Fix it onto db 3 (mirrors try_acquire_scope's retry path),
+        // signals NeedsResync. Fix it onto db 3 (mirrors acquire_scope_outcome's retry path),
         // then acquire — now it's a clean db match.
         let first_acquire = {
             let mut pool = pool_arc.lock().await;
@@ -3472,7 +3472,7 @@ mod scope_pool_tests {
         crate::pool::get_client_scope_pools().remove(&client_id);
     }
 
-    /// End-to-end through the FFI entry `try_acquire_scope`, exercising the glue the
+    /// End-to-end through the FFI entry `acquire_scope_outcome`, exercising the glue the
     /// direct-call tests skip: that a non-zero parent `current_database()` is actually
     /// read from the client registry, that a wrong-db idle connection drives the
     /// `NeedsResync` spawn (first call returns -1), and that the FFI retry converges to
@@ -3482,7 +3482,7 @@ mod scope_pool_tests {
     /// resync spawn are indistinguishable from no-ops there. Here the parent SELECTs db 4
     /// before the scope opens on db 0, so only a working glue path yields a db-4 scope.
     #[tokio::test]
-    async fn try_acquire_scope_reads_the_parent_runtime_db_and_retries_to_reuse() {
+    async fn acquire_scope_outcome_reads_the_parent_runtime_db_and_retries_to_reuse() {
         let server = TestServer::start();
         wait_for_server_ready(server.port).await;
 
@@ -3504,7 +3504,7 @@ mod scope_pool_tests {
         };
 
         // A real, connected parent client that has SELECTed db 4, so its shared
-        // current_database() (an Arc<AtomicU32>) reports 4 to try_acquire_scope.
+        // current_database() (an Arc<AtomicU32>) reports 4 to acquire_scope_outcome.
         let mut parent = {
             let mut request = crate::client::ConnectionRequest::default();
             request.addresses.push(crate::client::NodeAddress {
@@ -3553,33 +3553,34 @@ mod scope_pool_tests {
         let handle = tokio::runtime::Handle::current();
         // One logical acquire: the same token on the first call and every retry poll.
         let attempt_token = next_scope_attempt_token();
-        let first = crate::scope::try_acquire_scope(
+        let first = crate::scope::acquire_scope_outcome(
             client_id,
             connection_request_bytes.clone(),
             &handle,
             0,
             attempt_token,
         );
-        assert_eq!(
-            first, -1,
-            "a wrong-db idle connection must defer the acquire and spawn a resync"
+        assert!(
+            matches!(first, crate::scope::ScopeAcquireOutcome::Retry(_)),
+            "a wrong-db idle connection must defer the acquire and spawn a resync: {first:?}"
         );
 
         // Retry until the spawned resync settles and the connection is reusable on db 4.
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
         let scope_id = loop {
-            let id = crate::scope::try_acquire_scope(
-                client_id,
-                connection_request_bytes.clone(),
-                &handle,
-                0,
-                attempt_token,
-            );
-            if id >= 0 {
-                break id as u64;
+            if let crate::scope::ScopeAcquireOutcome::Acquired(id) =
+                crate::scope::acquire_scope_outcome(
+                    client_id,
+                    connection_request_bytes.clone(),
+                    &handle,
+                    0,
+                    attempt_token,
+                )
+            {
+                break id;
             }
             if std::time::Instant::now() > deadline {
-                panic!("try_acquire_scope never converged to a reused scope after resync");
+                panic!("acquire_scope_outcome never converged to a reused scope after resync");
             }
             tokio::time::sleep(std::time::Duration::from_millis(20)).await;
         };
@@ -3602,7 +3603,7 @@ mod scope_pool_tests {
                 .expect("GET succeeds");
         assert!(
             matches!(on_db0, redis::Value::Nil),
-            "the key must be absent on db 0 — try_acquire_scope handed out a db-4 connection"
+            "the key must be absent on db 0 — acquire_scope_outcome handed out a db-4 connection"
         );
 
         crate::scope::unregister_client(client_id);
