@@ -2,15 +2,18 @@ use std::{
     collections::{BTreeMap, HashMap, HashSet},
     fmt::Display,
     net::IpAddr,
-    sync::{atomic::AtomicUsize, Arc},
+    sync::{atomic::AtomicUsize, Arc, RwLock},
 };
 
 use dashmap::DashMap;
 
+use crate::cluster::parse_cluster_address;
 use crate::cluster_routing::{Route, ShardAddrs, Slot, SlotAddr};
 use crate::ErrorKind;
 use crate::RedisError;
 use crate::RedisResult;
+
+type ExactIpPortIndex = RwLock<HashMap<(IpAddr, u16), Option<Arc<String>>>>;
 /// Maps node addresses to their IP address and shard information.
 pub(crate) type NodesMap = DashMap<Arc<String>, (Option<IpAddr>, Arc<ShardAddrs>)>;
 
@@ -56,6 +59,7 @@ pub enum ReadFromReplicaStrategy {
 pub struct SlotMap {
     slots: BTreeMap<u16, SlotMapValue>,
     nodes_map: NodesMap,
+    exact_ip_port_index: ExactIpPortIndex,
     read_from_replica: ReadFromReplicaStrategy,
 }
 
@@ -112,6 +116,7 @@ impl SlotMap {
         SlotMap {
             slots: BTreeMap::new(),
             nodes_map: DashMap::new(),
+            exact_ip_port_index: RwLock::new(HashMap::new()),
             read_from_replica,
         }
     }
@@ -163,6 +168,7 @@ impl SlotMap {
                 },
             );
         }
+        slot_map.rebuild_exact_ip_port_index();
         slot_map
     }
 
@@ -213,14 +219,52 @@ impl SlotMap {
             .map(|(_, slot_value)| slot_value.addrs.clone())
     }
 
-    /// Find the canonical node address for a given IP address.
-    /// Returns the node address (hostname:port) if found in the slot map.
+    /// Finds the unique canonical node address for an IP address.
+    /// Returns `None` when no node matches or when the mapping is ambiguous.
     /// Note: This is an O(n) search through all nodes.
     pub(crate) fn node_address_for_ip(&self, ip: IpAddr) -> Option<Arc<String>> {
-        self.nodes_map.iter().find_map(|entry| {
+        let mut matches = self.nodes_map.iter().filter_map(|entry| {
             let (node_ip, _shard_addrs) = entry.value();
             (*node_ip == Some(ip)).then(|| entry.key().clone())
-        })
+        });
+
+        let node_address = matches.next()?;
+        matches.next().is_none().then_some(node_address)
+    }
+
+    pub(crate) fn node_address_for_ip_and_port(
+        &self,
+        ip: IpAddr,
+        port: u16,
+    ) -> Option<Arc<String>> {
+        self.exact_ip_port_index
+            .read()
+            .unwrap()
+            .get(&(ip, port))
+            .cloned()
+            .flatten()
+    }
+
+    fn rebuild_exact_ip_port_index(&self) {
+        let mut rebuilt = HashMap::new();
+        for entry in self.nodes_map.iter() {
+            let Some(ip) = entry.value().0 else { continue };
+            let Some((_, port)) = parse_cluster_address(entry.key()) else {
+                continue;
+            };
+            let key = (ip, port);
+            match rebuilt.entry(key) {
+                std::collections::hash_map::Entry::Vacant(v) => {
+                    v.insert(Some(entry.key().clone()));
+                }
+                std::collections::hash_map::Entry::Occupied(mut o) => {
+                    if o.get().as_ref() != Some(entry.key()) {
+                        o.insert(None);
+                    }
+                }
+            }
+        }
+        *self.exact_ip_port_index.write().unwrap() = rebuilt;
     }
 
     /// Populates the IP→address reverse lookup table with freshly resolved IPs
@@ -231,6 +275,7 @@ impl SlotMap {
                 entry.0 = Some(ip);
             }
         }
+        self.rebuild_exact_ip_port_index();
     }
 
     /// Carries over IP mappings from the old slot map to the new one.
@@ -247,6 +292,7 @@ impl SlotMap {
                 }
             }
         }
+        self.rebuild_exact_ip_port_index();
     }
 
     /// Returns a set of all primary node addresses in the cluster.
@@ -347,7 +393,9 @@ impl SlotMap {
         let shard_addrs = Arc::new(ShardAddrs::new_with_primary(node_addr.clone()));
         self.nodes_map
             .insert(node_addr, (ip_addr, shard_addrs.clone()));
-        self.update_slot_range(slot, shard_addrs)
+        let result = self.update_slot_range(slot, shard_addrs);
+        self.rebuild_exact_ip_port_index();
+        result
     }
 
     fn shard_addrs_equal(shard1: &Arc<ShardAddrs>, shard2: &Arc<ShardAddrs>) -> bool {
@@ -1487,25 +1535,112 @@ mod tests_cluster_slotmap {
     fn test_node_address_for_ip() {
         let slot_map = get_slot_map_with_ip_mappings();
 
-        let result = slot_map.node_address_for_ip("10.0.0.1".parse().unwrap());
+        let result = slot_map.node_address_for_ip_and_port("10.0.0.1".parse().unwrap(), 6379);
         assert_eq!(result, Some(Arc::new("node1:6379".to_string())));
 
-        let result = slot_map.node_address_for_ip("10.0.0.3".parse().unwrap());
+        let result = slot_map.node_address_for_ip_and_port("10.0.0.3".parse().unwrap(), 6379);
         assert_eq!(result, Some(Arc::new("node2:6379".to_string())));
 
-        let result = slot_map.node_address_for_ip("10.0.0.2".parse().unwrap());
+        let result = slot_map.node_address_for_ip_and_port("10.0.0.2".parse().unwrap(), 6379);
         assert_eq!(result, Some(Arc::new("replica1:6379".to_string())));
 
-        let result = slot_map.node_address_for_ip("10.0.0.4".parse().unwrap());
+        let result = slot_map.node_address_for_ip_and_port("10.0.0.4".parse().unwrap(), 6379);
         assert_eq!(result, Some(Arc::new("replica2:6379".to_string())));
+    }
+
+    #[test]
+    fn test_node_address_for_ip_ignores_seed_port() {
+        let ip = "10.0.0.1".parse().unwrap();
+        let slot_map = SlotMap::new(
+            vec![Slot::new(0, 16383, "node1:16379".to_owned(), vec![])],
+            HashMap::from([("node1:16379".to_owned(), ip)]),
+            ReadFromReplicaStrategy::AlwaysFromPrimary,
+        );
+        assert_eq!(
+            slot_map.node_address_for_ip(ip),
+            Some(Arc::new("node1:16379".to_owned()))
+        );
+    }
+
+    #[test]
+    fn test_node_address_for_ip_and_port_is_exact_and_ambiguity_safe() {
+        let ip = "10.0.0.1".parse().unwrap();
+        let slot_map = SlotMap::new(
+            vec![
+                Slot::new(0, 8191, "node1:6379".to_owned(), vec![]),
+                Slot::new(8192, 16383, "node2:6380".to_owned(), vec![]),
+            ],
+            HashMap::from([("node1:6379".to_owned(), ip), ("node2:6380".to_owned(), ip)]),
+            ReadFromReplicaStrategy::AlwaysFromPrimary,
+        );
+        assert_eq!(
+            slot_map.node_address_for_ip_and_port(ip, 6379),
+            Some(Arc::new("node1:6379".to_owned()))
+        );
+        assert_eq!(
+            slot_map.node_address_for_ip_and_port(ip, 6380),
+            Some(Arc::new("node2:6380".to_owned()))
+        );
+    }
+
+    #[test]
+    fn test_node_address_for_ip_returns_none_for_ambiguous_ip_across_ports() {
+        let ip = "10.0.0.1".parse().unwrap();
+        let slot_map = SlotMap::new(
+            vec![
+                Slot::new(0, 8191, "node1:6379".to_owned(), vec![]),
+                Slot::new(8192, 16383, "node2:6380".to_owned(), vec![]),
+            ],
+            HashMap::from([("node1:6379".to_owned(), ip), ("node2:6380".to_owned(), ip)]),
+            ReadFromReplicaStrategy::AlwaysFromPrimary,
+        );
+        assert_eq!(slot_map.node_address_for_ip(ip), None);
     }
 
     #[test]
     fn test_node_address_for_ip_returns_none_for_unknown_ip() {
         let slot_map = get_slot_map_with_ip_mappings();
 
-        let result = slot_map.node_address_for_ip("192.168.1.1".parse().unwrap());
+        let result = slot_map.node_address_for_ip_and_port("192.168.1.1".parse().unwrap(), 6379);
         assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_node_address_for_ip_disambiguates_by_port() {
+        let ip = "10.0.0.1".parse().unwrap();
+        let slot_map = SlotMap::new(
+            vec![
+                Slot::new(0, 8191, "node1:6379".to_owned(), vec![]),
+                Slot::new(8192, 16383, "node2:6380".to_owned(), vec![]),
+            ],
+            HashMap::from([("node1:6379".to_owned(), ip), ("node2:6380".to_owned(), ip)]),
+            ReadFromReplicaStrategy::AlwaysFromPrimary,
+        );
+
+        assert_eq!(
+            slot_map.node_address_for_ip_and_port(ip, 6379),
+            Some(Arc::new("node1:6379".to_owned()))
+        );
+        assert_eq!(
+            slot_map.node_address_for_ip_and_port(ip, 6380),
+            Some(Arc::new("node2:6380".to_owned()))
+        );
+        assert_eq!(slot_map.node_address_for_ip_and_port(ip, 6381), None);
+    }
+
+    #[test]
+    fn test_node_address_for_ip_returns_none_for_ambiguous_ip_and_port() {
+        let ip = "10.0.0.1".parse().unwrap();
+        let slot_map = SlotMap::new(
+            vec![
+                Slot::new(0, 8191, "node1:6379".to_owned(), vec![]),
+                Slot::new(8192, 16383, "node2:6379".to_owned(), vec![]),
+            ],
+            HashMap::from([("node1:6379".to_owned(), ip), ("node2:6379".to_owned(), ip)]),
+            ReadFromReplicaStrategy::AlwaysFromPrimary,
+        );
+
+        assert_eq!(slot_map.node_address_for_ip_and_port(ip, 6379), None);
     }
 
     #[test]
@@ -1525,15 +1660,40 @@ mod tests_cluster_slotmap {
             ReadFromReplicaStrategy::AlwaysFromPrimary,
         );
 
-        let result = slot_map.node_address_for_ip("2001:db8::1".parse().unwrap());
+        let result = slot_map.node_address_for_ip_and_port("2001:db8::1".parse().unwrap(), 6379);
         assert_eq!(result, Some(Arc::new("node1:6379".to_string())));
 
-        let result = slot_map.node_address_for_ip("2001:db8::2".parse().unwrap());
+        let result = slot_map.node_address_for_ip_and_port("2001:db8::2".parse().unwrap(), 6379);
         assert_eq!(result, Some(Arc::new("replica1:6379".to_string())));
 
         // Unknown IPv6
-        let result = slot_map.node_address_for_ip("2001:db8::99".parse().unwrap());
+        let result = slot_map.node_address_for_ip_and_port("2001:db8::99".parse().unwrap(), 6379);
         assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_node_address_for_ip_and_port_with_bracketed_ipv6_slot_key() {
+        let ip = "2001:db8::1".parse().unwrap();
+        let slot_map = SlotMap::new(
+            vec![Slot::new(0, 16383, "[2001:db8::1]:6379".to_owned(), vec![])],
+            HashMap::from([("[2001:db8::1]:6379".to_owned(), ip)]),
+            ReadFromReplicaStrategy::AlwaysFromPrimary,
+        );
+        assert_eq!(
+            slot_map.node_address_for_ip_and_port(ip, 6379),
+            Some(Arc::new("[2001:db8::1]:6379".to_owned()))
+        );
+    }
+
+    #[test]
+    fn test_node_address_for_ip_and_port_ignores_malformed_slot_key() {
+        let ip = "10.0.0.1".parse().unwrap();
+        let slot_map = SlotMap::new(
+            vec![Slot::new(0, 16383, "malformed".to_owned(), vec![])],
+            HashMap::from([("malformed".to_owned(), ip)]),
+            ReadFromReplicaStrategy::AlwaysFromPrimary,
+        );
+        assert_eq!(slot_map.node_address_for_ip_and_port(ip, 6379), None);
     }
 
     #[test]
@@ -1564,7 +1724,7 @@ mod tests_cluster_slotmap {
 
         // node_address_for_ip should return None for any IP
         assert!(slot_map
-            .node_address_for_ip("10.0.0.1".parse().unwrap())
+            .node_address_for_ip_and_port("10.0.0.1".parse().unwrap(), 6379)
             .is_none());
     }
 
@@ -1600,7 +1760,7 @@ mod tests_cluster_slotmap {
         assert_eq!(replica1_entry.value().0, None);
 
         // Can find primary by IP
-        let result = slot_map.node_address_for_ip("10.0.0.1".parse().unwrap());
+        let result = slot_map.node_address_for_ip_and_port("10.0.0.1".parse().unwrap(), 6379);
         assert_eq!(result, Some(Arc::new("node1:6379".to_string())));
     }
 
@@ -1674,7 +1834,7 @@ mod tests_cluster_slotmap {
         assert_eq!(new_node_entry.value().0, Some(ip));
 
         // Should be findable by IP
-        let found_addr = slot_map.node_address_for_ip(ip);
+        let found_addr = slot_map.node_address_for_ip_and_port(ip, 6379);
         assert_eq!(found_addr, Some(Arc::new("new-node:6379".to_string())));
     }
 
@@ -1687,7 +1847,7 @@ mod tests_cluster_slotmap {
         );
         // Populate with empty vec — should not panic or change anything
         slot_map.populate_ips(vec![]);
-        let result = slot_map.node_address_for_ip("10.0.0.1".parse().unwrap());
+        let result = slot_map.node_address_for_ip_and_port("10.0.0.1".parse().unwrap(), 6379);
         assert!(result.is_none());
     }
 
@@ -1703,7 +1863,7 @@ mod tests_cluster_slotmap {
             "unknown-node:9999".to_string(),
             "10.0.0.99".parse().unwrap(),
         )]);
-        let result = slot_map.node_address_for_ip("10.0.0.99".parse().unwrap());
+        let result = slot_map.node_address_for_ip_and_port("10.0.0.99".parse().unwrap(), 9999);
         assert!(result.is_none());
     }
 
@@ -1727,10 +1887,10 @@ mod tests_cluster_slotmap {
         new_map.carry_over_ips_from(&old_map);
 
         // Fresh IP (10.0.0.2) should win, not the old one (10.0.0.1)
-        let result = new_map.node_address_for_ip("10.0.0.2".parse().unwrap());
+        let result = new_map.node_address_for_ip_and_port("10.0.0.2".parse().unwrap(), 6379);
         assert_eq!(result, Some(Arc::new("node1:6379".to_string())));
 
-        let old_result = new_map.node_address_for_ip("10.0.0.1".parse().unwrap());
+        let old_result = new_map.node_address_for_ip_and_port("10.0.0.1".parse().unwrap(), 6379);
         assert!(
             old_result.is_none(),
             "Old IP should not be carried over when fresh IP exists"
@@ -1765,14 +1925,14 @@ mod tests_cluster_slotmap {
         new_map.carry_over_ips_from(&old_map);
 
         // node1's IP should be carried over from old map (gap filled)
-        let node1_result = new_map.node_address_for_ip("10.0.0.1".parse().unwrap());
+        let node1_result = new_map.node_address_for_ip_and_port("10.0.0.1".parse().unwrap(), 6379);
         assert_eq!(node1_result, Some(Arc::new("node1:6379".to_string())));
 
         // node2's fresh IP should be preserved, not overwritten by stale old IP
-        let node2_fresh = new_map.node_address_for_ip("10.0.0.2".parse().unwrap());
+        let node2_fresh = new_map.node_address_for_ip_and_port("10.0.0.2".parse().unwrap(), 6380);
         assert_eq!(node2_fresh, Some(Arc::new("node2:6380".to_string())));
 
-        let node2_stale = new_map.node_address_for_ip("10.0.0.99".parse().unwrap());
+        let node2_stale = new_map.node_address_for_ip_and_port("10.0.0.99".parse().unwrap(), 6380);
         assert!(
             node2_stale.is_none(),
             "Stale IP should not override fresh IP"
