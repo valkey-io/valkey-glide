@@ -243,6 +243,10 @@ def _slot_for_key(key: bytes) -> int:
 _async_pipe_read_fd: int = -1
 _async_pipe_write_fd: int = -1
 _async_pipe_init_pid: int = -1
+# True after native code has installed a writer at least once. If Python rolls
+# back a later setup stage, the next attempt must replace that now-closed writer
+# rather than call the first-call-wins initializer again.
+_async_pipe_native_initialized: bool = False
 
 
 _async_pipe_registered: bool = False
@@ -993,11 +997,13 @@ class BaseClient(CoreCommands):
                 self._release_callback_references()
             raise
 
-    def _setup_pipe(self) -> None:
+    def _setup_pipe(self) -> None:  # noqa: C901
         """Initialize and register the shared response pipe."""
         global _async_pipe_read_fd, _async_pipe_write_fd
         global _async_pipe_registered, _async_pipe_loop
         global _trio_pipe_token, _async_pipe_init_pid
+        global _async_pipe_native_initialized
+        global _pipe_remainder, _pipe_remainder_is_stale
         # Identify the current trio.run() up front (outside the lock).  The
         # token uniquely names this run, so it both makes registration
         # idempotent within a run and tells a fresh run that a prior run's
@@ -1010,58 +1016,63 @@ class BaseClient(CoreCommands):
         with _async_pipe_lock:
             _detect_fork_and_reset()
             current_pid = os.getpid()
+            created_read_fd = -1
+            created_write_fd = -1
+            registration_loop = None
+            if _async_pipe_read_fd >= 0 or _async_pipe_init_pid > 0:
+                _async_pipe_native_initialized = True
 
-            if _async_pipe_read_fd < 0:
-                try:
-                    _async_pipe_read_fd, pw = os.pipe()
-                    os.set_blocking(_async_pipe_read_fd, False)
-                    if _async_pipe_init_pid > 0 and current_pid != _async_pipe_init_pid:
-                        self._lib.reinit_async_pipe(pw)
+            try:
+                if _async_pipe_read_fd < 0:
+                    created_read_fd, created_write_fd = os.pipe()
+                    os.set_blocking(created_read_fd, False)
+                    if _async_pipe_native_initialized:
+                        self._lib.reinit_async_pipe(created_write_fd)
                     else:
-                        self._lib.init_async_pipe(pw)
-                    _async_pipe_write_fd = pw
+                        self._lib.init_async_pipe(created_write_fd)
+                    _async_pipe_native_initialized = True
+                    _async_pipe_read_fd = created_read_fd
+                    _async_pipe_write_fd = created_write_fd
                     _async_pipe_init_pid = current_pid
-                except OSError:
-                    _async_pipe_read_fd = -1
-                    self._pipe_client_id = 0
-            # Detect stale registration: the loop that originally called
-            # add_reader has been closed/destroyed (e.g. between anyio.run()
-            # calls in benchmarks).  Reset so we re-register below.
-            if _async_pipe_registered and _async_pipe_loop is not None:
-                if _async_pipe_loop.is_closed():
+
+                # Detect stale registration: the loop that originally called
+                # add_reader has been closed/destroyed (e.g. between anyio.run()
+                # calls in benchmarks).  Reset so we re-register below.
+                if _async_pipe_registered and _async_pipe_loop is not None:
+                    if _async_pipe_loop.is_closed():
+                        _async_pipe_registered = False
+                        _async_pipe_loop = None
+                        _drain_stale_pipe_frames()
+                # Trio: registration belongs to exactly one trio.run().  If the
+                # recorded token differs from this run's, the previous run's reader
+                # is gone (trio.run() cancels its system tasks before returning), so
+                # re-register for this run. Keying on the token instead of a
+                # lazily-set liveness flag prevents duplicate readers.
+                if (
+                    not self._is_asyncio
+                    and _async_pipe_registered
+                    and _async_pipe_loop is None
+                    and _trio_pipe_token is not trio_token
+                ):
                     _async_pipe_registered = False
-                    _async_pipe_loop = None
+                    _trio_pipe_token = None
                     _drain_stale_pipe_frames()
-            # Trio: registration belongs to exactly one trio.run().  If the
-            # recorded token differs from this run's, the previous run's reader
-            # is gone (trio.run() cancels its system tasks before returning), so
-            # re-register for this run.  Keying on the token instead of a
-            # lazily-set liveness flag prevents a second client in the same run
-            # from spawning a duplicate reader on the shared fd, which is what
-            # triggered BusyResourceError.
-            if (
-                not self._is_asyncio
-                and _async_pipe_registered
-                and _async_pipe_loop is None
-                and _trio_pipe_token is not trio_token
-            ):
-                _async_pipe_registered = False
-                _trio_pipe_token = None
-                _drain_stale_pipe_frames()
-            if _async_pipe_read_fd >= 0 and self._pipe_client_id:
+
+                if _async_pipe_read_fd < 0 or not self._pipe_client_id:
+                    raise RuntimeError("Async response pipe is unavailable")
+
                 _client_registry[self._pipe_client_id] = self
                 if not _async_pipe_registered:
                     if self._is_asyncio:
                         assert self._loop is not None
+                        registration_loop = self._loop
                         self._loop.add_reader(
                             _async_pipe_read_fd, _on_async_pipe_readable
                         )
                         _async_pipe_loop = self._loop
                     else:
-                        # For trio: spawn a background task that polls the pipe.
-                        # Record the token before spawning (still under the
-                        # lock) so a concurrent _setup_pipe in this same run
-                        # sees us as registered and does not spawn a second
+                        # Record the token before spawning (still under the lock)
+                        # so another client in this run cannot spawn a duplicate
                         # reader on the same fd.
                         import trio
 
@@ -1070,6 +1081,47 @@ class BaseClient(CoreCommands):
                             _trio_pipe_reader, _async_pipe_read_fd, trio_token
                         )
                     _async_pipe_registered = True
+            except BaseException as error:
+                _client_registry.pop(self._pipe_client_id, None)
+                if registration_loop is not None:
+                    try:
+                        registration_loop.remove_reader(_async_pipe_read_fd)
+                    except BaseException:
+                        pass
+
+                # Close both ends even if only one setup stage completed. Once
+                # native init returned, closing the write end invalidates its
+                # writer; _async_pipe_native_initialized makes the retry use the
+                # replacement initializer.
+                fds = {
+                    fd
+                    for fd in (
+                        created_read_fd,
+                        created_write_fd,
+                        _async_pipe_read_fd,
+                        _async_pipe_write_fd,
+                    )
+                    if fd >= 0
+                }
+                for fd in fds:
+                    try:
+                        os.close(fd)
+                    except OSError:
+                        pass
+                _async_pipe_read_fd = -1
+                _async_pipe_write_fd = -1
+                _async_pipe_init_pid = -1
+                _async_pipe_registered = False
+                _async_pipe_loop = None
+                _trio_pipe_token = None
+                _pipe_remainder = b""
+                _pipe_remainder_is_stale = False
+
+                if isinstance(error, Exception):
+                    raise ClosingError(
+                        "Failed to initialize the async response pipe"
+                    ) from error
+                raise
 
     # ==================== Callback Handling ====================
 

@@ -781,6 +781,138 @@ async def test_async_pipe_is_initialized_before_native_creation(monkeypatch):
 
 
 @pytest.mark.anyio
+@pytest.mark.parametrize(
+    "failure_stage", ["pipe", "nonblocking", "init", "reinit", "registration"]
+)
+async def test_async_pipe_setup_failure_rolls_back_and_retries(
+    monkeypatch, failure_stage
+):
+    import glide.glide_client as async_client_module
+    import glide_shared.ffi_helpers as ffi_helpers
+
+    ffi = GlideFFI.ffi
+    fake_lib = _FakeNativeLibrary(ffi, GlideFFI.lib)
+    fake_lib.init_async_pipe = MagicMock()
+    fake_lib.reinit_async_pipe = MagicMock()
+    monkeypatch.setattr(
+        async_client_module, "_ASYNC_FFI", SimpleNamespace(ffi=ffi, lib=fake_lib)
+    )
+    monkeypatch.setattr(async_client_module, "_async_pipe_read_fd", -1)
+    monkeypatch.setattr(async_client_module, "_async_pipe_write_fd", -1)
+    monkeypatch.setattr(async_client_module, "_async_pipe_init_pid", -1)
+    monkeypatch.setattr(
+        async_client_module,
+        "_async_pipe_native_initialized",
+        failure_stage == "reinit",
+    )
+    monkeypatch.setattr(async_client_module, "_async_pipe_registered", False)
+    monkeypatch.setattr(async_client_module, "_async_pipe_loop", None)
+    monkeypatch.setattr(async_client_module, "_trio_pipe_token", None)
+    monkeypatch.setattr(async_client_module, "_pipe_remainder", b"partial")
+    monkeypatch.setattr(async_client_module, "_pipe_remainder_is_stale", True)
+    registry = weakref.WeakValueDictionary()
+    monkeypatch.setattr(async_client_module, "_client_registry", registry)
+
+    real_pipe = os.pipe
+    real_set_blocking = os.set_blocking
+    created_fds = []
+    failed = False
+
+    def tracked_pipe():
+        nonlocal failed
+        if failure_stage == "pipe" and not failed:
+            failed = True
+            raise OSError("injected pipe failure")
+        pair = real_pipe()
+        created_fds.extend(pair)
+        return pair
+
+    def tracked_set_blocking(fd, blocking):
+        nonlocal failed
+        if failure_stage == "nonblocking" and not failed:
+            failed = True
+            raise OSError("injected nonblocking failure")
+        return real_set_blocking(fd, blocking)
+
+    monkeypatch.setattr(async_client_module.os, "pipe", tracked_pipe)
+    monkeypatch.setattr(async_client_module.os, "set_blocking", tracked_set_blocking)
+
+    if failure_stage == "init":
+        fake_lib.init_async_pipe.side_effect = OSError("injected init failure")
+    elif failure_stage == "reinit":
+        fake_lib.reinit_async_pipe.side_effect = OSError("injected reinit failure")
+
+    loop = asyncio.get_running_loop()
+    real_add_reader = loop.add_reader
+
+    def tracked_add_reader(*args, **kwargs):
+        nonlocal failed
+        if failure_stage == "registration" and not failed:
+            failed = True
+            raise OSError("injected registration failure")
+        return real_add_reader(*args, **kwargs)
+
+    monkeypatch.setattr(loop, "add_reader", tracked_add_reader)
+
+    owner_registries = (
+        ffi_helpers._address_resolver_owners,
+        ffi_helpers._credential_provider_owners,
+    )
+    owner_sizes = tuple(owner_registry.size() for owner_registry in owner_registries)
+    config = _direct_client_config(
+        lambda: AwsCredentials("access", "secret"),
+        lambda host, port: (host, port),
+    )
+
+    with pytest.raises(ClosingError, match="async response pipe"):
+        await async_client_module.GlideClient.create(config)
+
+    fake_lib.create_client.assert_not_called()
+    assert not registry
+    assert (
+        tuple(owner_registry.size() for owner_registry in owner_registries)
+        == owner_sizes
+    )
+    assert async_client_module._async_pipe_read_fd == -1
+    assert async_client_module._async_pipe_write_fd == -1
+    assert async_client_module._async_pipe_init_pid == -1
+    assert not async_client_module._async_pipe_registered
+    assert async_client_module._async_pipe_loop is None
+    assert async_client_module._trio_pipe_token is None
+    assert async_client_module._pipe_remainder == b""
+    assert not async_client_module._pipe_remainder_is_stale
+    for fd in created_fds:
+        with pytest.raises(OSError):
+            os.fstat(fd)
+
+    # Restore the failed stage and prove that the process-wide transport can be
+    # established by a later creation attempt.
+    fake_lib.init_async_pipe.side_effect = None
+    fake_lib.reinit_async_pipe.side_effect = None
+    client = await async_client_module.GlideClient.create(config)
+    try:
+        assert client._pipe_client_id in registry
+        assert fake_lib.create_client.call_count == 1
+        if failure_stage == "registration":
+            fake_lib.reinit_async_pipe.assert_called_once()
+    finally:
+        await client.close()
+        read_fd = async_client_module._async_pipe_read_fd
+        write_fd = async_client_module._async_pipe_write_fd
+        loop.remove_reader(read_fd)
+        os.close(read_fd)
+        os.close(write_fd)
+        async_client_module._async_pipe_read_fd = -1
+        async_client_module._async_pipe_write_fd = -1
+        async_client_module._async_pipe_init_pid = -1
+        async_client_module._async_pipe_registered = False
+        async_client_module._async_pipe_loop = None
+        async_client_module._trio_pipe_token = None
+        async_client_module._pipe_remainder = b""
+        async_client_module._pipe_remainder_is_stale = False
+
+
+@pytest.mark.anyio
 async def test_async_direct_client_passes_and_retains_callback(monkeypatch):
     import glide.glide_client as async_client_module
 

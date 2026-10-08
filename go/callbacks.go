@@ -2,7 +2,9 @@
 
 package glide
 
+// #include <limits.h>
 // #include "lib.h"
+// #define GLIDE_GO_STRING_N_MAX INT_MAX
 import "C"
 
 import (
@@ -14,7 +16,10 @@ import (
 	"github.com/valkey-io/valkey-glide/go/v2/models"
 )
 
-const requestRegistryShardCount = 64
+const (
+	requestRegistryShardCount = 64
+	maxGoStringNLength        = int64(C.GLIDE_GO_STRING_N_MAX)
+)
 
 type requestRegistryShard struct {
 	mu       sync.Mutex
@@ -133,46 +138,70 @@ func deliverFailure(requestID uintptr, cErrorMessage *C.char, cErrorType C.Reque
 	resultChannel <- payload{value: nil, error: GoError(uint32(cErrorType), msg)}
 }
 
-//
-//export pubSubCallback
-func pubSubCallback(
-	clientPtr unsafe.Pointer,
-	pushKind C.PushKind,
+// handlePubSubCallback validates every borrowed field before copying it. Rust
+// retains ownership of the payload and frees it after the exported callback
+// returns, so all C.GoStringN calls must remain synchronous.
+func handlePubSubCallback(
+	callbackID uintptr,
 	message unsafe.Pointer,
-	message_len C.int,
+	messageLen int64,
 	channel unsafe.Pointer,
-	channel_len C.int,
+	channelLen int64,
 	pattern unsafe.Pointer,
-	pattern_len C.int,
-) {
-	if clientPtr == nil {
-		return
+	patternLen int64,
+) bool {
+	validField := func(data unsafe.Pointer, length int64) bool {
+		return length >= 0 && length <= maxGoStringNLength && (length == 0 || data != nil)
+	}
+	if callbackID == 0 ||
+		!validField(message, messageLen) ||
+		!validField(channel, channelLen) ||
+		!validField(pattern, patternLen) {
+		// Never log borrowed PubSub data or length values: either may be
+		// controlled by an application and contain sensitive information.
+		log.Print("invalid PubSub callback payload")
+		return false
 	}
 
-	msg := C.GoStringN((*C.char)(message), message_len)
-	cha := C.GoStringN((*C.char)(channel), channel_len)
+	msg := C.GoStringN((*C.char)(message), C.int(messageLen))
+	cha := C.GoStringN((*C.char)(channel), C.int(channelLen))
 	pat := models.CreateNilStringResult()
-	if pattern_len > 0 && pattern != nil {
-		pat = models.CreateStringResult(C.GoStringN((*C.char)(pattern), pattern_len))
+	if patternLen > 0 {
+		pat = models.CreateStringResult(C.GoStringN((*C.char)(pattern), C.int(patternLen)))
 	}
 
 	go func() {
-		// Process different types of push messages
-		message := models.NewPubSubMessageWithPattern(msg, cha, pat)
-
-		if clientPtr != nil {
-			// Look up the client in our registry using the pointer address
-			ptrValue := uintptr(clientPtr)
-			client := getClientByPtr(ptrValue)
-
-			if client != nil {
-				// If the client has a message handler, use it
-				if handler := client.getMessageHandler(); handler != nil {
-					handler.handleMessage(message)
-				}
-			} else {
-				log.Printf("Client not found for pointer: %v\n", ptrValue)
-			}
+		pubsubMessage := models.NewPubSubMessageWithPattern(msg, cha, pat)
+		client := getClientByPtr(callbackID)
+		if client == nil {
+			log.Print("PubSub client not found")
+			return
+		}
+		if handler := client.getMessageHandler(); handler != nil {
+			handler.handleMessage(pubsubMessage)
 		}
 	}()
+	return true
+}
+
+//export pubSubCallback
+func pubSubCallback(
+	callbackID C.uintptr_t,
+	_ C.PushKind,
+	message unsafe.Pointer,
+	messageLen C.int64_t,
+	channel unsafe.Pointer,
+	channelLen C.int64_t,
+	pattern unsafe.Pointer,
+	patternLen C.int64_t,
+) {
+	handlePubSubCallback(
+		uintptr(callbackID),
+		message,
+		int64(messageLen),
+		channel,
+		int64(channelLen),
+		pattern,
+		int64(patternLen),
+	)
 }

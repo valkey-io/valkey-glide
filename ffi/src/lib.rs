@@ -552,8 +552,16 @@ const CREDENTIAL_CALLBACK_FAILURE: u8 = 0;
 const CREDENTIAL_CALLBACK_SUCCESS: u8 = 1;
 const CREDENTIAL_CALLBACK_BUFFER_TOO_SMALL: u8 = 2;
 const INITIAL_CREDENTIAL_BUFFER_SIZE: usize = 2048;
-/// Maximum accepted size of any individual credential field and of all three fields combined.
-const MAX_CREDENTIALS_BUFFER_SIZE: usize = 1024 * 1024;
+/// Production maximum for any individual credential field and all fields combined.
+#[cfg_attr(miri, allow(dead_code))]
+const PRODUCTION_MAX_CREDENTIALS_BUFFER_SIZE: usize = 1024 * 1024;
+/// Smaller interpreter-only bound that still exercises the sizing retry above 2048 bytes.
+#[cfg(miri)]
+const MIRI_MAX_CREDENTIALS_BUFFER_SIZE: usize = 16 * 1024;
+#[cfg(miri)]
+const MAX_CREDENTIALS_BUFFER_SIZE: usize = MIRI_MAX_CREDENTIALS_BUFFER_SIZE;
+#[cfg(not(miri))]
+const MAX_CREDENTIALS_BUFFER_SIZE: usize = PRODUCTION_MAX_CREDENTIALS_BUFFER_SIZE;
 const UNSET_CREDENTIAL_LENGTH: usize = usize::MAX;
 
 type FFICredentials = (
@@ -1049,6 +1057,22 @@ mod tests_ffi_credentials_provider {
 
     fn call_scripted() -> Result<FFICredentials, glide_core::iam::GlideIAMError> {
         provider(scripted_callback).call()
+    }
+
+    #[test]
+    fn credential_buffer_limits_match_the_build_mode() {
+        assert_eq!(PRODUCTION_MAX_CREDENTIALS_BUFFER_SIZE, 1024 * 1024);
+        #[cfg(not(miri))]
+        assert_eq!(MAX_CREDENTIALS_BUFFER_SIZE, 1024 * 1024);
+        #[cfg(miri)]
+        {
+            assert_eq!(
+                MAX_CREDENTIALS_BUFFER_SIZE,
+                MIRI_MAX_CREDENTIALS_BUFFER_SIZE
+            );
+            assert_eq!(MIRI_MAX_CREDENTIALS_BUFFER_SIZE, 16 * 1024);
+            assert!(MIRI_MAX_CREDENTIALS_BUFFER_SIZE > INITIAL_CREDENTIAL_BUFFER_SIZE);
+        }
     }
 
     #[test]

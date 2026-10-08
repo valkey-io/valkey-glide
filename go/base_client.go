@@ -16,10 +16,14 @@ package glide
 //
 // void successCallback(uintptr_t requestID, struct CommandResponse *message);
 // void failureCallback(uintptr_t requestID, char *errMessage, RequestErrorType errType);
-// void pubSubCallback(void *clientPtr, enum PushKind kind,
+// void pubSubCallback(uintptr_t callbackID, enum PushKind kind,
 //                     const uint8_t *message, int64_t message_len,
 //                     const uint8_t *channel, int64_t channel_len,
 //                     const uint8_t *pattern, int64_t pattern_len);
+// static inline PubSubCallback glide_pubsub_callback(void) {
+//     PubSubCallback callback = pubSubCallback;
+//     return callback;
+// }
 // uint16_t addressResolverCallback(uintptr_t client_id, const uint8_t *host, uintptr_t host_len,
 //                                  uint16_t port,
 //                                  uint8_t *resolved_host_buf, uintptr_t resolved_host_buf_len,
@@ -202,7 +206,7 @@ func createClient(cfg clientConfiguration) (*baseClient, error) {
 			(*C.uchar)(requestBytes),
 			C.uintptr_t(byteCount),
 			&clientType,
-			C.PubSubCallback(unsafe.Pointer(C.pubSubCallback)),
+			C.glide_pubsub_callback(),
 			resolverCallback,
 			credProviderCallback,
 			C.uintptr_t(clientID),
@@ -223,7 +227,7 @@ func createClient(cfg clientConfiguration) (*baseClient, error) {
 	client.coreClient = cResponse.conn_ptr
 	client.resolverID = clientID
 
-	// Register the client in our registry using the pointer value from C
+	// AsyncClient PubSub fallback passes the adapter address as an integer ID.
 	registerClient(client, uintptr(cResponse.conn_ptr))
 
 	return client, nil
