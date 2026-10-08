@@ -495,9 +495,11 @@ type NonNullCredentialProviderCallback = unsafe extern "C-unwind" fn(
 ///
 /// Each invocation has a 10-second client-observed deadline. Tokio cannot forcibly stop arbitrary
 /// synchronous user code, so a callback that exceeds the deadline may continue on a detached
-/// blocking worker after the request fails or the client closes. Providers must return promptly or
-/// cooperate with their own cancellation mechanism. Client close does not wait for such workers,
-/// and they no longer remain owned by the closed client's runtime.
+/// blocking worker after the request fails or the client closes. While that invocation is still
+/// running, this provider rejects new logical fetches immediately instead of invoking or queueing
+/// another callback; callback admission resumes only after the timed-out invocation returns.
+/// Providers must return promptly or cooperate with their own cancellation mechanism. Client close
+/// does not wait for such workers, and they no longer remain owned by the closed client's runtime.
 ///
 /// The callback status values are:
 ///
@@ -570,10 +572,23 @@ struct CredentialCallbackResult {
 struct FFICredentialsProvider {
     callback: NonNullCredentialProviderCallback,
     client_id: usize,
+    invocation_in_progress: Arc<AtomicBool>,
 }
-// SAFETY: The callback is a C function pointer safe to share across threads.
+// SAFETY: The callback is a C function pointer safe to share across threads. The only mutable
+// provider state is synchronized through `invocation_in_progress`.
 unsafe impl Send for FFICredentialsProvider {}
 unsafe impl Sync for FFICredentialsProvider {}
+
+/// Releases one provider's nonblocking admission gate only after the actual callback call returns
+/// or unwinds. If foreign code never returns, this guard remains on its detached worker's stack and
+/// later logical fetches continue to fail fast.
+struct CredentialProviderInvocationGuard(Arc<AtomicBool>);
+
+impl Drop for CredentialProviderInvocationGuard {
+    fn drop(&mut self) {
+        self.0.store(false, Ordering::Release);
+    }
+}
 
 impl FFICredentialsProvider {
     fn credentials_error(message: impl Into<String>) -> glide_core::iam::GlideIAMError {
@@ -770,6 +785,20 @@ impl FFICredentialsProvider {
 
     /// Invoke the callback and return the AWS credentials.
     fn call(&self) -> Result<FFICredentials, glide_core::iam::GlideIAMError> {
+        if self
+            .invocation_in_progress
+            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+            .is_err()
+        {
+            return Err(Self::credentials_error(
+                "Previous credential provider invocation is still running",
+            ));
+        }
+        // Admission intentionally spans the complete logical fetch so a status-2 sizing retry can
+        // invoke the foreign callback a second time without interacting with this gate.
+        let _invocation_guard =
+            CredentialProviderInvocationGuard(Arc::clone(&self.invocation_in_progress));
+
         let mut access_key_id_buf =
             Self::allocate_buffer(INITIAL_CREDENTIAL_BUFFER_SIZE, "access_key_id")?;
         let mut secret_access_key_buf =
@@ -968,15 +997,134 @@ mod tests_ffi_credentials_provider {
         panic!("Rust callback panic")
     }
 
+    static BLOCKING_CALLBACK_ENTERED: AtomicBool = AtomicBool::new(false);
+    static BLOCKING_CALLBACK_RELEASED: AtomicBool = AtomicBool::new(false);
+    static BLOCKING_CALLBACK_CALLS: std::sync::atomic::AtomicUsize =
+        std::sync::atomic::AtomicUsize::new(0);
+
+    unsafe extern "C-unwind" fn blocking_callback(
+        _client_id: usize,
+        access_key_id_buf: *mut u8,
+        access_key_id_buf_len: usize,
+        access_key_id_len: *mut usize,
+        secret_access_key_buf: *mut u8,
+        secret_access_key_buf_len: usize,
+        secret_access_key_len: *mut usize,
+        _session_token_buf: *mut u8,
+        _session_token_buf_len: usize,
+        session_token_len: *mut usize,
+        expires_at_epoch_millis: *mut i64,
+    ) -> u8 {
+        BLOCKING_CALLBACK_CALLS.fetch_add(1, Ordering::SeqCst);
+        BLOCKING_CALLBACK_ENTERED.store(true, Ordering::Release);
+        while !BLOCKING_CALLBACK_RELEASED.load(Ordering::Acquire) {
+            std::thread::park_timeout(std::time::Duration::from_millis(1));
+        }
+
+        let access = b"access";
+        let secret = b"secret";
+        if access.len() > access_key_id_buf_len || secret.len() > secret_access_key_buf_len {
+            return CREDENTIAL_CALLBACK_FAILURE;
+        }
+        unsafe {
+            std::ptr::copy_nonoverlapping(access.as_ptr(), access_key_id_buf, access.len());
+            std::ptr::copy_nonoverlapping(secret.as_ptr(), secret_access_key_buf, secret.len());
+            *access_key_id_len = access.len();
+            *secret_access_key_len = secret.len();
+            *session_token_len = 0;
+            *expires_at_epoch_millis = 0;
+        }
+        CREDENTIAL_CALLBACK_SUCCESS
+    }
+
     fn provider(callback: NonNullCredentialProviderCallback) -> FFICredentialsProvider {
         FFICredentialsProvider {
             callback,
             client_id: 42,
+            invocation_in_progress: Arc::new(AtomicBool::new(false)),
         }
     }
 
     fn call_scripted() -> Result<FFICredentials, glide_core::iam::GlideIAMError> {
         provider(scripted_callback).call()
+    }
+
+    #[test]
+    fn single_flight_fails_fast_recovers_and_is_isolated_per_provider() {
+        const CONTENDERS: usize = 8;
+        BLOCKING_CALLBACK_ENTERED.store(false, Ordering::Release);
+        BLOCKING_CALLBACK_RELEASED.store(false, Ordering::Release);
+        BLOCKING_CALLBACK_CALLS.store(0, Ordering::SeqCst);
+
+        let contended_provider = Arc::new(provider(blocking_callback));
+        let start = Arc::new(std::sync::Barrier::new(CONTENDERS + 1));
+        let (results_tx, results_rx) = std::sync::mpsc::channel();
+        let mut threads = Vec::new();
+        for _ in 0..CONTENDERS {
+            let provider = Arc::clone(&contended_provider);
+            let start = Arc::clone(&start);
+            let results_tx = results_tx.clone();
+            threads.push(std::thread::spawn(move || {
+                start.wait();
+                results_tx.send(provider.call()).unwrap();
+            }));
+        }
+        drop(results_tx);
+        start.wait();
+
+        let entered_deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+        while !BLOCKING_CALLBACK_ENTERED.load(Ordering::Acquire) {
+            assert!(
+                std::time::Instant::now() < entered_deadline,
+                "no contender entered the callback"
+            );
+            std::thread::yield_now();
+        }
+        for _ in 0..CONTENDERS - 1 {
+            let error = results_rx
+                .recv_timeout(std::time::Duration::from_secs(30))
+                .expect("contending provider call did not fail fast")
+                .expect_err("only one logical fetch may enter the callback");
+            assert!(error.to_string().contains("still running"), "{error}");
+        }
+        assert_eq!(BLOCKING_CALLBACK_CALLS.load(Ordering::SeqCst), 1);
+
+        BLOCKING_CALLBACK_RELEASED.store(true, Ordering::Release);
+        let credentials = results_rx
+            .recv_timeout(std::time::Duration::from_secs(30))
+            .expect("admitted callback did not finish after release")
+            .expect("admitted callback should succeed");
+        assert_eq!(credentials.0, "access");
+        assert_eq!(credentials.1, "secret");
+        for thread in threads {
+            thread.join().unwrap();
+        }
+
+        // The RAII guard releases admission after the actual callback returns.
+        contended_provider
+            .call()
+            .expect("the next logical fetch should be admitted");
+        assert_eq!(BLOCKING_CALLBACK_CALLS.load(Ordering::SeqCst), 2);
+
+        // Distinct direct clients/providers own distinct gates and can enter concurrently.
+        BLOCKING_CALLBACK_ENTERED.store(false, Ordering::Release);
+        BLOCKING_CALLBACK_RELEASED.store(false, Ordering::Release);
+        BLOCKING_CALLBACK_CALLS.store(0, Ordering::SeqCst);
+        let first = Arc::new(provider(blocking_callback));
+        let second = Arc::new(provider(blocking_callback));
+        let first_thread = std::thread::spawn(move || first.call());
+        let second_thread = std::thread::spawn(move || second.call());
+        let entered_deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+        while BLOCKING_CALLBACK_CALLS.load(Ordering::SeqCst) < 2 {
+            assert!(
+                std::time::Instant::now() < entered_deadline,
+                "separate providers did not enter concurrently"
+            );
+            std::thread::yield_now();
+        }
+        BLOCKING_CALLBACK_RELEASED.store(true, Ordering::Release);
+        first_thread.join().unwrap().unwrap();
+        second_thread.join().unwrap().unwrap();
     }
 
     #[test]
@@ -1101,16 +1249,24 @@ mod tests_ffi_credentials_provider {
     }
 
     #[test]
-    fn failure_status_is_not_retried() {
+    fn failure_status_resets_admission_without_retrying_that_fetch() {
         set_steps([
             CallbackStep::status(CREDENTIAL_CALLBACK_FAILURE, [None; 3]),
-            CallbackStep::success(b"unused".to_vec(), b"unused".to_vec(), Vec::new()),
+            CallbackStep::success(b"access".to_vec(), b"secret".to_vec(), Vec::new()),
         ]);
+        let provider = provider(scripted_callback);
 
-        let error = call_scripted().expect_err("failure status must fail");
-
+        let error = provider.call().expect_err("failure status must fail");
         assert!(error.to_string().contains("returned failure"));
-        assert_eq!(capacities().len(), 1);
+
+        let credentials = provider
+            .call()
+            .expect("a provider error must release admission for the next fetch");
+        assert_eq!(
+            (credentials.0.as_str(), credentials.1.as_str()),
+            ("access", "secret")
+        );
+        assert_eq!(capacities().len(), 2);
     }
 
     #[test]
@@ -1302,11 +1458,15 @@ mod tests_ffi_credentials_provider {
     }
 
     #[test]
-    fn rust_callback_panic_is_returned_as_credentials_error() {
-        let result = provider(panicking_callback).call();
+    fn rust_callback_panic_is_controlled_and_resets_admission() {
+        let provider = provider(panicking_callback);
 
-        let error = result.expect_err("Rust callback panic must be contained");
-        assert!(error.to_string().contains("callback panicked"));
+        for _ in 0..2 {
+            let error = provider
+                .call()
+                .expect_err("Rust callback panic must be contained");
+            assert!(error.to_string().contains("callback panicked"), "{error}");
+        }
     }
 }
 
@@ -2505,6 +2665,7 @@ fn create_client_internal(
             let provider = FFICredentialsProvider {
                 callback: cp_callback,
                 client_id,
+                invocation_in_progress: Arc::new(AtomicBool::new(false)),
             };
             let provider_arc: glide_core::iam::CredentialsProvider =
                 Arc::new(move || provider.call());

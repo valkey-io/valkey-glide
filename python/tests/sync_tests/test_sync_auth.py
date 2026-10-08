@@ -809,21 +809,37 @@ def test_sync_iam_custom_provider_initial_and_manual_refresh(
 
 class _BlockingCredentialProvider:
     def __init__(self):
+        self.calls = 0
+        self.active = 0
+        self.max_active = 0
+        self._lock = threading.Lock()
         self.block = threading.Event()
         self.entered = threading.Event()
         self.release = threading.Event()
         self.finished = threading.Event()
 
+    def snapshot(self):
+        with self._lock:
+            return self.calls, self.active, self.max_active
+
     def __call__(self):
-        if self.block.is_set():
-            self.entered.set()
-            try:
-                assert self.release.wait(timeout=20)
-            finally:
-                self.finished.set()
-        return AwsCredentials(
-            "test_access_key", "test_secret_key", "test_session_token"
-        )
+        with self._lock:
+            self.calls += 1
+            self.active += 1
+            self.max_active = max(self.max_active, self.active)
+        try:
+            if self.block.is_set():
+                self.entered.set()
+                try:
+                    assert self.release.wait(timeout=20)
+                finally:
+                    self.finished.set()
+            return AwsCredentials(
+                "test_access_key", "test_secret_key", "test_session_token"
+            )
+        finally:
+            with self._lock:
+                self.active -= 1
 
 
 def test_sync_hung_custom_provider_timeout_does_not_block_close(request):
@@ -833,6 +849,7 @@ def test_sync_hung_custom_provider_timeout_does_not_block_close(request):
         request, False, ProtocolVersion.RESP3, credential_provider=provider
     )
     close_errors = []
+    assert provider.snapshot()[0] > 0
     try:
         provider.block.set()
         started = time.monotonic()
@@ -843,6 +860,15 @@ def test_sync_hung_custom_provider_timeout_does_not_block_close(request):
         elapsed = time.monotonic() - started
         assert 9 <= elapsed < 13
         assert provider.entered.is_set()
+        blocked_state = provider.snapshot()
+        assert blocked_state[1:] == (1, 1)
+
+        for _ in range(3):
+            started = time.monotonic()
+            with pytest.raises((RequestError, ClosingError), match="still running"):
+                client.refresh_iam_token()
+            assert time.monotonic() - started < 2
+        assert provider.snapshot() == blocked_state
 
         def close_client():
             try:

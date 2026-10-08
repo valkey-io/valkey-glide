@@ -70,16 +70,17 @@ type AwsCredentials struct {
 // Assign a function of this type when credentials come from a custom source (e.g. HashiCorp Vault,
 // a custom STS assume-role flow) instead of the default AWS credential chain.
 //
-// Thread safety: implementations must be safe for concurrent calls -- in cluster mode,
-// independent reconnections may invoke this callback simultaneously. A credential fetch may
-// also invoke the provider twice for FFI buffer negotiation, so implementations must tolerate
-// repeated invocation and must not rely on exactly-once behavior.
+// Concurrency: the core admits at most one logical credential fetch per direct client/provider.
+// A large credential may still invoke this callback twice sequentially within that one fetch for
+// FFI buffer negotiation, so implementations must tolerate repeated invocation and must not rely
+// on exactly-once behavior. Separate clients/providers have independent admission.
 //
 // Promptness: return quickly and cooperate with any application cancellation mechanism. The core
 // stops waiting after 10 seconds, but Go cannot forcibly stop arbitrary synchronous callback code.
 // A timed-out invocation may continue on a detached background worker after the request fails or
-// the client closes; Close does not wait for or retain ownership of that worker. Repeatedly hung
-// providers can therefore accumulate detached workers until the provider code returns.
+// the client closes; Close does not wait for or retain ownership of that worker. Until that actual
+// callback invocation returns, later fetches for the same direct provider fail immediately rather
+// than queueing or starting more callback workers.
 type GlideCredentialProvider func() (AwsCredentials, error)
 
 // IamAuthConfig represents configuration settings for IAM authentication.
