@@ -34,6 +34,27 @@ from tests.utils.utils import run_sync_func_with_timeout_in_thread
 pytestmark = pytest.mark.serverless
 
 
+@pytest.fixture(autouse=True)
+def _restore_callback_owner_registries():
+    import glide_shared.ffi_helpers as ffi_helpers
+
+    registries = (
+        ffi_helpers._credential_provider_owners,
+        ffi_helpers._address_resolver_owners,
+        ffi_helpers._pubsub_owners,
+    )
+    snapshots = []
+    for registry in registries:
+        with registry._lock:
+            snapshots.append(dict(registry._owners))
+    try:
+        yield
+    finally:
+        for registry, snapshot in zip(registries, snapshots):
+            with registry._lock:
+                registry._owners = snapshot
+
+
 def _latest_registered_id(registry, fallback=17):
     with registry._lock:
         live_ids = [key for key, owner_ref in registry._owners.items() if owner_ref()]
@@ -103,17 +124,13 @@ def _invoke_resolver_callback(
     return resolved_port, resolved_host_len[0]
 
 
-def _invoke_pubsub_callback(callback, client_ptr=None, ffi=None):
-    import glide_shared.ffi_helpers as ffi_helpers
-
+def _invoke_pubsub_callback(callback, client_id, ffi=None):
     if ffi is None:
         ffi = GlideFFI.ffi
-    if client_ptr is None:
-        client_ptr = _latest_registered_id(ffi_helpers._pubsub_owners)
     message = ffi.new("uint8_t[]", b"message")
     channel = ffi.new("uint8_t[]", b"channel")
     callback(
-        client_ptr,
+        client_id,
         3,
         message,
         len(b"message"),
@@ -321,6 +338,39 @@ class TestCredentialProviderCallback:
             )
             assert callback_owner is not None
             assert _invoke_callback(callback)[0] == 0
+            callback_owner.close()
+
+    def test_provider_failure_logging_is_generic_and_redacted(self, caplog):
+        sentinels = (
+            "SECRET_ACCESS_SENTINEL",
+            "ACCESS_KEY_SENTINEL",
+            "SESSION_TOKEN_SENTINEL",
+            "https://credentials.invalid/private",
+            "USER_DERIVED_PROVIDER_FAILURE",
+        )
+        provider_error = type(sentinels[-1], (RuntimeError,), {})
+
+        def failing_provider():
+            raise provider_error(" ".join(sentinels[:-1]))
+
+        callback, callback_owner = create_credential_provider_callback(
+            GlideFFI.ffi, failing_provider
+        )
+        assert callback_owner is not None
+        try:
+            caplog.clear()
+            with caplog.at_level("WARNING"):
+                assert (
+                    _invoke_callback(callback, client_id=callback_owner.callback_id)[0]
+                    == 0
+                )
+            assert [record.getMessage() for record in caplog.records] == [
+                "IAM credential provider failed"
+            ]
+            assert all(record.exc_info is None for record in caplog.records)
+            assert not any(sentinel in caplog.text for sentinel in sentinels)
+        finally:
+            callback_owner.close()
 
     def test_sync_callback_disposes_awaitable_result(self):
         async def result():
@@ -445,14 +495,15 @@ def test_direct_callback_trampolines_are_stable_bounded_and_late_calls_fail():  
 
         pubsub_calls = []
         pubsub_callback, pubsub_owner = ffi_helpers._create_pubsub_callback(
-            ffi, lambda *args: pubsub_calls.append(args)
+            ffi,
+            lambda *args: pubsub_calls.append(args),
+            callback_id=client_pointer,
         )
         callback_addresses[id(ffi)][2].add(int(ffi.cast("uintptr_t", pubsub_callback)))
-        pubsub_owner.adopt(client_pointer)
-        _invoke_pubsub_callback(pubsub_callback, client_ptr=client_pointer, ffi=ffi)
+        _invoke_pubsub_callback(pubsub_callback, client_pointer, ffi=ffi)
         assert len(pubsub_calls) == 1
         pubsub_owner.close()
-        _invoke_pubsub_callback(pubsub_callback, client_ptr=client_pointer, ffi=ffi)
+        _invoke_pubsub_callback(pubsub_callback, client_pointer, ffi=ffi)
         assert len(pubsub_calls) == 1
 
     for index, ffi in enumerate(ffis):
@@ -565,6 +616,19 @@ def test_async_fork_hook_replaces_parent_held_close_and_owner_locks(monkeypatch)
 
 
 class _FakeNativeLibrary:
+    _pointer_lock = threading.Lock()
+    _next_pointer = 1
+
+    @classmethod
+    def _allocate_conn_ptr(cls, ffi):
+        max_pointer = (1 << (ffi.sizeof("uintptr_t") * 8)) - 1
+        with cls._pointer_lock:
+            if cls._next_pointer > max_pointer:
+                raise RuntimeError("Fake native pointer namespace exhausted")
+            pointer = cls._next_pointer
+            cls._next_pointer += 1
+        return ffi.cast("void*", pointer)
+
     def __init__(self, ffi, native_library):
         self.noop_success_callback = native_library.noop_success_callback
         self.noop_failure_callback = native_library.noop_failure_callback
@@ -583,7 +647,7 @@ class _FakeNativeLibrary:
         self._response = ffi.new(
             "ConnectionResponse*",
             {
-                "conn_ptr": ffi.cast("void*", 1),
+                "conn_ptr": self._allocate_conn_ptr(ffi),
                 "connection_error_message": ffi.NULL,
             },
         )
@@ -696,8 +760,12 @@ def test_sync_direct_passes_and_retains_callback(monkeypatch):
     )
     client = sync_client_module.GlideClient.create(config)
     callback_arg = fake_lib.create_client.call_args.args[5]
+    callback_id = fake_lib.create_client.call_args.args[6]
     assert callback_arg != ffi.NULL
     assert client._credential_provider_callback_ref is callback_arg
+    assert client._direct_callback_id == callback_id
+    assert client._pubsub_callback_owner.callback_id == callback_id
+    assert callback_id != int(ffi.cast("uintptr_t", client._core_client))
     finalizer = client._native_finalizer
     assert finalizer is not None and finalizer.alive
     assert not finalizer.atexit
@@ -728,6 +796,57 @@ def test_sync_direct_passes_typed_null_without_provider(monkeypatch):
     assert callback_arg == ffi.NULL
     assert ffi.typeof(callback_arg) == ffi.typeof("CredentialProviderCallback")
     client.close()
+
+
+def test_sync_pubsub_ids_isolate_reused_native_adapter_address(monkeypatch):
+    import glide_sync.glide_client as sync_client_module
+
+    ffi = GlideFFI.ffi
+    fake_lib = _FakeNativeLibrary(ffi, GlideFFI.lib)
+    monkeypatch.setattr(
+        sync_client_module, "_SYNC_FFI", SimpleNamespace(ffi=ffi, lib=fake_lib)
+    )
+    received = ([], [])
+    clients = []
+
+    def config_for(index):
+        config = GlideClientConfiguration(addresses=[NodeAddress()])
+        config.pubsub_subscriptions = GlideClientConfiguration.PubSubSubscriptions(
+            {GlideClientConfiguration.PubSubChannelModes.Exact: {"channel"}},
+            lambda message, context: context.append(message.message),
+            received[index],
+        )
+        return config
+
+    try:
+        first = sync_client_module.GlideClient.create(config_for(0))
+        clients.append(first)
+        first_callback = fake_lib.create_client.call_args.args[3]
+        first_id = fake_lib.create_client.call_args.args[6]
+
+        second = sync_client_module.GlideClient.create(config_for(1))
+        clients.append(second)
+        second_callback = fake_lib.create_client.call_args.args[3]
+        second_id = fake_lib.create_client.call_args.args[6]
+
+        assert first._core_client == second._core_client
+        assert first_id != second_id
+        for iteration in range(40):
+            ordered = (
+                ((first_callback, first_id), (second_callback, second_id))
+                if iteration % 2 == 0
+                else ((second_callback, second_id), (first_callback, first_id))
+            )
+            for callback, callback_id in ordered:
+                _invoke_pubsub_callback(callback, callback_id)
+
+        assert received == ([b"message"] * 40, [b"message"] * 40)
+        first.close()
+        _invoke_pubsub_callback(second_callback, second_id)
+        assert received[1] == [b"message"] * 41
+    finally:
+        for client in clients:
+            client.close()
 
 
 def test_sync_pool_shell_uses_legacy_raw_pointer_command_and_close(monkeypatch):
@@ -868,6 +987,18 @@ def test_async_finalizer_trampolines_do_not_retain_callable_cycles(
 
 
 def test_sync_finalizer_trampolines_do_not_retain_callable_cycles(monkeypatch):
+    import glide_shared.ffi_helpers as ffi_helpers
+
+    real_thread = threading.Thread
+    finalizer_workers = []
+
+    def tracked_thread(*args, **kwargs):
+        worker = real_thread(*args, **kwargs)
+        if kwargs.get("name") == "valkey-glide-native-finalizer":
+            finalizer_workers.append(worker)
+        return worker
+
+    monkeypatch.setattr(ffi_helpers.threading, "Thread", tracked_thread)
     sync_client_module, _, fake_lib, _ = _patch_sync_client(monkeypatch)
     provider = _BackReferencingProvider()
     resolver = _BackReferencingResolver()
@@ -903,18 +1034,21 @@ def test_sync_finalizer_trampolines_do_not_retain_callable_cycles(monkeypatch):
     fake_lib.close_client.side_effect = native_close
     fake_lib.create_client.reset_mock()
     del client, provider, resolver
-    for _ in range(100):
-        gc.collect()
-        if client_ref() is None:
-            break
-        time.sleep(0.001)
+    gc.collect()
 
     assert client_ref() is None
     assert provider_ref() is None
     assert resolver_ref() is None
     assert finalizer is not None and not finalizer.alive
+    assert len(finalizer_workers) == 1
+    finalizer_workers[0].join(timeout=10)
+    if finalizer_workers[0].is_alive():
+        pytest.fail(
+            "native finalizer close worker did not terminate; native ownership "
+            "was intentionally left with the worker"
+        )
+    assert native_close_done.is_set()
     fake_lib.close_client.assert_called_once_with(fake_lib._response.conn_ptr)
-    assert native_close_done.wait(timeout=2)
     assert close_callback_results == [(0, 0)]
     assert _invoke_callback(provider_callback, client_id=callback_id)[0] == 0
     assert _invoke_resolver_callback(resolver_callback, client_id=callback_id)[0] == 0
@@ -2482,12 +2616,14 @@ def test_sync_pubsub_callback_reentrant_close_fails_fast(monkeypatch):
     client = sync_client_module.GlideClient.create(config)
     client_holder.append(client)
     pubsub_callback = fake_lib.create_client.call_args.args[3]
+    callback_id = fake_lib.create_client.call_args.args[6]
 
-    _invoke_pubsub_callback(pubsub_callback)
-
-    assert close_errors == ["Cannot close a client from its own native callback"]
-    assert not client._is_closed
-    client.close()
+    try:
+        _invoke_pubsub_callback(pubsub_callback, callback_id)
+        assert close_errors == ["Cannot close a client from its own native callback"]
+        assert not client._is_closed
+    finally:
+        client.close()
     fake_lib.close_client.assert_called_once_with(fake_lib._response.conn_ptr)
 
 
@@ -2516,13 +2652,18 @@ def test_sync_pubsub_callback_allows_unrelated_thread_close(monkeypatch):
     client = sync_client_module.GlideClient.create(config)
     client_holder.append(client)
     pubsub_callback = fake_lib.create_client.call_args.args[3]
+    callback_id = fake_lib.create_client.call_args.args[6]
 
-    _invoke_pubsub_callback(pubsub_callback)
-
-    assert len(close_threads) == 1
-    assert native_closed.wait(timeout=2)
-    assert client._active_native_callbacks == 0
-    assert client._is_closed
+    try:
+        _invoke_pubsub_callback(pubsub_callback, callback_id)
+        assert len(close_threads) == 1
+        assert native_closed.wait(timeout=5)
+        close_threads[0].join(timeout=5)
+        assert not close_threads[0].is_alive()
+        assert client._active_native_callbacks == 0
+        assert client._is_closed
+    finally:
+        client.close()
     fake_lib.close_client.assert_called_once_with(fake_lib._response.conn_ptr)
 
 
@@ -2605,7 +2746,7 @@ def test_sync_close_before_callback_begin_suppresses_user_code(monkeypatch):
 
     assert _invoke_callback(provider_callback, client_id=callback_id)[0] == 0
     assert _invoke_resolver_callback(resolver_callback, client_id=callback_id)[0] == 0
-    _invoke_pubsub_callback(pubsub_callback)
+    _invoke_pubsub_callback(pubsub_callback, callback_id)
     provider.assert_not_called()
     resolver.assert_not_called()
     user_callback.assert_not_called()
@@ -2687,7 +2828,7 @@ def test_sync_provider_reentrant_close_fails_fast(monkeypatch, caplog):
     with caplog.at_level("WARNING"):
         client = sync_client_module.GlideClient.create(_direct_client_config(provider))
 
-    assert "Cannot close a client from its own native callback" in caplog.text
+    assert "IAM credential provider failed" in caplog.text
     assert not client._is_closed
     client.close()
     fake_lib.close_client.assert_called_once_with(fake_lib._response.conn_ptr)
@@ -2721,7 +2862,7 @@ async def _run_async_provider_reentrant_close(monkeypatch, caplog):
             )
 
     assert callback_status == [0]
-    assert "Cannot close a client from its own credential provider" in caplog.text
+    assert "IAM credential provider failed" in caplog.text
     assert not client._is_closed
     await client.close()
     fake_lib.close_client.assert_called_once_with(fake_lib._response.conn_ptr)
@@ -2764,7 +2905,7 @@ def test_sync_refresh_provider_reentrant_close_does_not_wait_for_active_call(
     assert time.monotonic() - started < 1
     assert client._active_native_calls == 0
     assert not client._is_closed
-    assert "Cannot close a client from its own native callback" in caplog.text
+    assert "IAM credential provider failed" in caplog.text
 
     client.close()
     fake_lib.close_client.assert_called_once_with(fake_lib._response.conn_ptr)

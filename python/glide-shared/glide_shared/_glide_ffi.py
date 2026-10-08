@@ -203,7 +203,7 @@ class _GlideFFI:
             void noop_failure_callback(uintptr_t index_ptr, const char* error_message, int error_type);
 
             typedef void (*PubSubCallback)(
-                uintptr_t client_ptr,
+                uintptr_t callback_id,
                 int kind,
                 const uint8_t* message,
                 int64_t message_len,

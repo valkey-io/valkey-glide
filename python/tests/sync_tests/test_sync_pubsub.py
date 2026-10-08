@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import threading
 import time
 from collections import Counter
 from typing import Callable, Dict, List, Optional, Set, Tuple, cast
@@ -3209,6 +3210,80 @@ class TestSyncPubSub:
         finally:
             if client:
                 client.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    def test_sync_pubsub_publish_vs_close_churn(
+        self,
+        request,
+        cluster_mode: bool,
+    ):
+        channel = f"publish-close-{get_random_string(8)}"
+        publisher = create_sync_client(request, cluster_mode)
+        listeners = []
+        try:
+            for iteration in range(3):
+                callback_entered = threading.Event()
+                release_callback = threading.Event()
+                stop_publishing = threading.Event()
+                callback_lock = threading.Lock()
+                callback_count = 0
+                publish_errors = []
+
+                def callback(message, context):
+                    nonlocal callback_count
+                    with callback_lock:
+                        callback_count += 1
+                    callback_entered.set()
+                    release_callback.wait()
+
+                listener = create_sync_pubsub_client(
+                    request,
+                    cluster_mode,
+                    channels={channel},
+                    callback=callback,
+                    context=None,
+                )
+                listeners.append(listener)
+                sync_wait_for_subscription_state(
+                    listener, expected_channels={channel}, timeout_sec=5
+                )
+
+                def publish_until_stopped():
+                    while not stop_publishing.is_set():
+                        try:
+                            publisher.publish(f"message-{iteration}", channel)
+                        except BaseException as error:
+                            publish_errors.append(error)
+                            return
+                        time.sleep(0.001)
+
+                publish_thread = threading.Thread(target=publish_until_stopped)
+                publish_thread.start()
+                try:
+                    assert callback_entered.wait(
+                        timeout=5
+                    ), "PubSub callback did not start"
+                    listener.close()
+                    release_callback.set()
+                    deadline = time.monotonic() + 10
+                    while not listener._close_complete and time.monotonic() < deadline:
+                        time.sleep(0.001)
+                    assert listener._close_complete, "native PubSub close did not drain"
+                    with callback_lock:
+                        count_after_close = callback_count
+                    time.sleep(0.05)
+                    with callback_lock:
+                        assert callback_count == count_after_close
+                finally:
+                    release_callback.set()
+                    stop_publishing.set()
+                    publish_thread.join(timeout=10)
+                    assert not publish_thread.is_alive()
+                assert not publish_errors
+        finally:
+            for listener in listeners:
+                listener.close()
+            publisher.close()
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     def test_sync_pubsub_callback_only_raises_error_on_get_methods(

@@ -198,15 +198,11 @@ class _CredentialProviderCallbackOwner(_RegisteredCallbackOwner):
 
 
 class _PubSubCallbackOwner(_RegisteredCallbackOwner):
-    """Weakly target one sync client by its adopted native adapter pointer."""
+    """Weakly target one sync client by its unique direct-client ID."""
 
-    def __init__(self, handler: Any) -> None:
-        # The native adapter pointer is not known until create_client returns.
-        super().__init__(0, _pubsub_owners)
+    def __init__(self, callback_id: int, handler: Any) -> None:
+        super().__init__(callback_id, _pubsub_owners)
         self._handler = handler
-
-    def adopt(self, adapter_ptr: int) -> None:
-        self.callback_id = adapter_ptr
         self.register()
 
     def dispatch(self, *args: Any) -> None:
@@ -653,19 +649,23 @@ def _get_pubsub_trampoline(ffi: Any) -> Any:
         if entry is not None and entry[0] is ffi:
             return entry[1]
 
-        def trampoline(client_ptr, *args):
-            owner = _pubsub_owners.get(int(client_ptr))
+        def trampoline(client_id, *args):
+            owner = _pubsub_owners.get(int(client_id))
             if owner is not None:
-                owner.dispatch(client_ptr, *args)
+                owner.dispatch(client_id, *args)
 
         callback = ffi.callback("PubSubCallback", trampoline)
         _pubsub_trampolines[ffi_id] = (ffi, callback)
         return callback
 
 
-def _create_pubsub_callback(ffi: Any, handler: Any) -> tuple[Any, Any]:
-    """Create an unadopted weak PubSub owner and return the stable trampoline."""
-    return _get_pubsub_trampoline(ffi), _PubSubCallbackOwner(handler)
+def _create_pubsub_callback(
+    ffi: Any, handler: Any, *, callback_id: Any = None
+) -> tuple[Any, Any]:
+    """Register a weak PubSub owner and return the stable trampoline."""
+    if callback_id is None:
+        callback_id = _allocate_direct_callback_id(ffi)
+    return _get_pubsub_trampoline(ffi), _PubSubCallbackOwner(callback_id, handler)
 
 
 _CREDENTIAL_CALLBACK_FAILURE = 0
@@ -1053,12 +1053,10 @@ def _get_credential_provider_trampoline(ffi: Any) -> Any:
                 return _CREDENTIAL_CALLBACK_FAILURE
             try:
                 return _invoke_credential_provider_owner(ffi, owner, buffers)
-            except BaseException as error:
+            except BaseException:
                 import logging
 
-                logging.getLogger(__name__).warning(
-                    "IAM credential provider failed: %s", error
-                )
+                logging.getLogger(__name__).warning("IAM credential provider failed")
                 return _CREDENTIAL_CALLBACK_FAILURE
 
         callback = ffi.callback("CredentialProviderCallback", trampoline)

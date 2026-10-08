@@ -452,7 +452,9 @@ class BaseClient(CoreCommands):
         direct_callback_id = _allocate_direct_callback_id(self._ffi)
         python_callback = self._create_push_handle_callback()
         pubsub_callback, pubsub_callback_owner = _create_pubsub_callback(
-            self._ffi, python_callback
+            self._ffi,
+            python_callback,
+            callback_id=direct_callback_id,
         )
 
         (
@@ -511,9 +513,6 @@ class BaseClient(CoreCommands):
                     )
                     raise ClosingError(error_message)
                 core_client = client_response.conn_ptr
-                pubsub_callback_owner.adopt(
-                    int(self._ffi.cast("uintptr_t", core_client))
-                )
             finally:
                 self._lib.free_connection_response(client_response_ptr)
 

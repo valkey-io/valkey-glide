@@ -328,7 +328,7 @@ pub type FailureCallback = unsafe extern "C-unwind" fn(
 ) -> ();
 
 type NonNullPubSubCallback = unsafe extern "C-unwind" fn(
-    client_ptr: usize,
+    callback_id: usize,
     kind: PushKind,
     message: *const u8,
     message_len: i64,
@@ -344,7 +344,9 @@ type NonNullPubSubCallback = unsafe extern "C-unwind" fn(
 /// The callback should be offloaded to a separate thread in order not to exhaust the client's thread pool.
 ///
 /// # Parameters
-/// * `client_ptr`: A baton-pass back to the caller language to uniquely identify the client.
+/// * `callback_id`: A baton-pass back to the caller language. Direct synchronous clients receive
+///   the `client_id` supplied to `create_client`; the legacy asynchronous direct-callback fallback
+///   receives the adapter address for compatibility.
 /// * `kind`: An enum variant representing the PushKind (Message, PMessage, SMessage, etc.)
 /// * `message`: A pointer to the raw message bytes.
 /// * `message_len`: The length of the message data in bytes.
@@ -359,7 +361,7 @@ type NonNullPubSubCallback = unsafe extern "C-unwind" fn(
 /// execution must be copied.
 pub type PubSubCallback = Option<
     unsafe extern "C-unwind" fn(
-        client_ptr: usize,
+        callback_id: usize,
         kind: PushKind,
         message: *const u8,
         message_len: i64,
@@ -1918,6 +1920,8 @@ struct SyncClientShutdown {
     closed: AtomicBool,
     next_waiter_id: AtomicU64,
     waiters: Mutex<HashMap<u64, Waker>>,
+    push_task_active: Mutex<bool>,
+    push_task_finished: Condvar,
 }
 
 impl SyncClientShutdown {
@@ -1928,8 +1932,31 @@ impl SyncClientShutdown {
         }
     }
 
+    fn begin_push_task(self: &Arc<Self>) -> Option<SyncPushTaskGuard> {
+        let mut active = self
+            .push_task_active
+            .lock()
+            .unwrap_or_else(|err| err.into_inner());
+        if self.closed.load(Ordering::Acquire) {
+            return None;
+        }
+        debug_assert!(!*active, "only one direct sync push task is supported");
+        *active = true;
+        Some(SyncPushTaskGuard {
+            shutdown: self.clone(),
+        })
+    }
+
     fn close(&self) {
-        if self.closed.swap(true, Ordering::AcqRel) {
+        // Serialize task admission with shutdown. A task that has not started by
+        // this point observes `closed` and can never enter the C callback.
+        let active = self
+            .push_task_active
+            .lock()
+            .unwrap_or_else(|err| err.into_inner());
+        let first_close = !self.closed.swap(true, Ordering::AcqRel);
+        drop(active);
+        if !first_close {
             return;
         }
         let waiters = {
@@ -1939,6 +1966,35 @@ impl SyncClientShutdown {
         for waker in waiters.into_values() {
             waker.wake();
         }
+    }
+
+    fn wait_for_push_task(&self) {
+        let mut active = self
+            .push_task_active
+            .lock()
+            .unwrap_or_else(|err| err.into_inner());
+        while *active {
+            active = self
+                .push_task_finished
+                .wait(active)
+                .unwrap_or_else(|err| err.into_inner());
+        }
+    }
+}
+
+struct SyncPushTaskGuard {
+    shutdown: Arc<SyncClientShutdown>,
+}
+
+impl Drop for SyncPushTaskGuard {
+    fn drop(&mut self) {
+        let mut active = self
+            .shutdown
+            .push_task_active
+            .lock()
+            .unwrap_or_else(|err| err.into_inner());
+        *active = false;
+        self.shutdown.push_task_finished.notify_all();
     }
 }
 
@@ -2461,7 +2517,7 @@ impl From<redis::PushKind> for PushKind {
 /// # Parameters
 /// - `push_msg`: The push notification message to process.
 /// - `pubsub_callback`: The callback function to invoke with the processed notification.
-/// - `client_adapter_ptr`: A pointer to the client adapter to pass to the callback.
+/// - `client_id`: The stable identifier supplied by the binding for callback dispatch.
 ///
 /// # Returns
 /// - `true` if the message was successfully processed and the callback was called.
@@ -2501,14 +2557,12 @@ fn extract_pubsub_data(push_msg: &redis::PushInfo) -> Option<(Vec<u8>, Vec<u8>, 
 ///
 /// # Safety
 /// This function is unsafe because it:
-/// - Dereferences raw pointers (the callback and client_adapter_ptr)
-/// - Calls an extern C function pointer (pubsub_callback)
-/// - Passes raw pointers that must remain valid for the callback duration
-/// - The caller must ensure client_adapter_ptr points to a valid ClientAdapter
+/// - Calls an extern C function pointer (`pubsub_callback`)
+/// - Passes raw payload pointers that must remain valid for the callback duration
 unsafe fn process_push_notification(
     push_msg: redis::PushInfo,
     pubsub_callback: NonNullPubSubCallback,
-    client_adapter_ptr: usize,
+    callback_id: usize,
 ) {
     let (message, channel, pattern) = if push_msg.kind == redis::PushKind::Disconnection {
         (vec![], vec![], None)
@@ -2528,7 +2582,7 @@ unsafe fn process_push_notification(
 
     unsafe {
         pubsub_callback(
-            client_adapter_ptr,
+            callback_id,
             push_msg.kind.into(),
             message_ptr,
             message_len,
@@ -2550,6 +2604,73 @@ unsafe fn process_push_notification(
                 pattern_ptr,
                 pattern_len as usize,
             ));
+        }
+    }
+}
+
+fn dispatch_sync_push_notification(
+    push_msg: redis::PushInfo,
+    callback_store: &std::sync::RwLock<Option<NonNullPubSubCallback>>,
+    callback_id: usize,
+    shutdown: Option<&SyncClientShutdown>,
+) {
+    if push_msg.kind != redis::PushKind::Message
+        && push_msg.kind != redis::PushKind::PMessage
+        && push_msg.kind != redis::PushKind::SMessage
+    {
+        return;
+    }
+    if shutdown.is_some_and(|state| state.closed.load(Ordering::Acquire)) {
+        return;
+    }
+    let Ok(guard) = callback_store.read() else {
+        return;
+    };
+    let Some(callback) = *guard else {
+        return;
+    };
+    if shutdown.is_some_and(|state| state.closed.load(Ordering::Acquire)) {
+        return;
+    }
+    unsafe {
+        process_push_notification(push_msg, callback, callback_id);
+    }
+}
+
+async fn run_sync_push_handler(
+    mut push_rx: tokio::sync::mpsc::UnboundedReceiver<redis::PushInfo>,
+    callback_store: Arc<std::sync::RwLock<Option<NonNullPubSubCallback>>>,
+    callback_id: usize,
+    shutdown: Option<Arc<SyncClientShutdown>>,
+) {
+    if let Some(shutdown) = shutdown {
+        let Some(_task_guard) = shutdown.begin_push_task() else {
+            return;
+        };
+        loop {
+            let mut cancelled = Box::pin(shutdown.cancelled());
+            let push_msg = poll_fn(|cx| {
+                if cancelled.as_mut().poll(cx).is_ready() {
+                    return Poll::Ready(None);
+                }
+                push_rx.poll_recv(cx)
+            })
+            .await;
+            let Some(push_msg) = push_msg else {
+                break;
+            };
+            dispatch_sync_push_notification(
+                push_msg,
+                &callback_store,
+                callback_id,
+                Some(&shutdown),
+            );
+        }
+    } else {
+        // Pooled sync adapters deliberately retain the existing receive loop;
+        // they do not participate in direct-client shutdown or callback drain.
+        while let Some(push_msg) = push_rx.recv().await {
+            dispatch_sync_push_notification(push_msg, &callback_store, callback_id, None);
         }
     }
 }
@@ -2723,21 +2844,14 @@ fn create_client_internal(
     let callback_store = pubsub_callback_store.clone();
     let pipe_cid = client_id as u64;
     if is_sync {
-        // Sync clients: direct callback (CFFI acquires GIL automatically).
-        spawn_runtime.spawn(async move {
-            while let Some(push_msg) = push_rx.recv().await {
-                if (push_msg.kind == redis::PushKind::Message
-                    || push_msg.kind == redis::PushKind::PMessage
-                    || push_msg.kind == redis::PushKind::SMessage)
-                    && let Ok(guard) = callback_store.read()
-                    && let Some(callback) = *guard
-                {
-                    unsafe {
-                        process_push_notification(push_msg, callback, client_adapter_ptr);
-                    }
-                }
-            }
-        });
+        // Direct sync clients receive their stable supplied client ID. Pooled
+        // adapters pass no callback and no shutdown state, retaining legacy behavior.
+        spawn_runtime.spawn(run_sync_push_handler(
+            push_rx,
+            callback_store,
+            client_id,
+            client_adapter.sync_shutdown.clone(),
+        ));
     } else {
         // Async clients: route through ASYNC_PIPE.
         spawn_runtime.spawn(async move {
@@ -4034,6 +4148,7 @@ pub unsafe extern "C" fn close_client(client_adapter_ptr: *const c_void) {
     let client_adapter = unsafe { &*(client_adapter_ptr as *const ClientAdapter) };
     if let Some(sync_shutdown) = &client_adapter.sync_shutdown {
         sync_shutdown.close();
+        sync_shutdown.wait_for_push_task();
     }
 
     // Clean up scope pool and registry for this client (if any)
@@ -7680,13 +7795,14 @@ mod tests_push_notification_safety {
     static LAST_CALLBACK_DATA: Mutex<Option<CallbackCapture>> = Mutex::new(None);
 
     struct CallbackCapture {
+        client_id: usize,
         message: Vec<u8>,
         channel: Vec<u8>,
         pattern: Option<Vec<u8>>,
     }
 
     unsafe extern "C-unwind" fn counting_callback(
-        _client_ptr: usize,
+        client_id: usize,
         _kind: PushKind,
         message: *const u8,
         message_len: i64,
@@ -7705,6 +7821,7 @@ mod tests_push_notification_safety {
                 Some(std::slice::from_raw_parts(pattern, pattern_len as usize).to_vec())
             };
             *LAST_CALLBACK_DATA.lock().unwrap() = Some(CallbackCapture {
+                client_id,
                 message: msg,
                 channel: ch,
                 pattern: pat,
@@ -7715,6 +7832,170 @@ mod tests_push_notification_safety {
     fn reset_callback_count() {
         CALLBACK_INVOCATIONS.store(0, Ordering::SeqCst);
         *LAST_CALLBACK_DATA.lock().unwrap() = None;
+    }
+
+    fn message_push() -> redis::PushInfo {
+        redis::PushInfo {
+            kind: redis::PushKind::Message,
+            data: vec![
+                Value::BulkString(b"channel".to_vec().into()),
+                Value::BulkString(b"message".to_vec().into()),
+            ],
+        }
+    }
+
+    #[test]
+    fn direct_sync_push_handler_forwards_supplied_client_id() {
+        let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        reset_callback_count();
+        let runtime = Builder::new_current_thread().enable_all().build().unwrap();
+        let (push_tx, push_rx) = tokio::sync::mpsc::unbounded_channel();
+        let callback: NonNullPubSubCallback = counting_callback;
+        let callback_store = Arc::new(std::sync::RwLock::new(Some(callback)));
+        let shutdown = Arc::new(SyncClientShutdown::default());
+        let client_id = usize::MAX / 2 + 71;
+        push_tx.send(message_push()).unwrap();
+        drop(push_tx);
+        runtime.block_on(run_sync_push_handler(
+            push_rx,
+            callback_store,
+            client_id,
+            Some(shutdown.clone()),
+        ));
+        shutdown.wait_for_push_task();
+
+        assert_eq!(CALLBACK_INVOCATIONS.load(Ordering::SeqCst), 1);
+        assert_eq!(
+            LAST_CALLBACK_DATA
+                .lock()
+                .unwrap()
+                .as_ref()
+                .expect("callback capture")
+                .client_id,
+            client_id
+        );
+    }
+
+    #[test]
+    fn direct_sync_shutdown_wins_over_queued_push_and_is_idempotent() {
+        let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        reset_callback_count();
+        let runtime = Builder::new_current_thread().enable_all().build().unwrap();
+        let (push_tx, push_rx) = tokio::sync::mpsc::unbounded_channel();
+        let callback: NonNullPubSubCallback = counting_callback;
+        let callback_store = Arc::new(std::sync::RwLock::new(Some(callback)));
+        let shutdown = Arc::new(SyncClientShutdown::default());
+        push_tx.send(message_push()).unwrap();
+
+        shutdown.close();
+        shutdown.close();
+        shutdown.wait_for_push_task();
+        shutdown.wait_for_push_task();
+        runtime.block_on(run_sync_push_handler(
+            push_rx,
+            callback_store,
+            91,
+            Some(shutdown.clone()),
+        ));
+
+        assert_eq!(CALLBACK_INVOCATIONS.load(Ordering::SeqCst), 0);
+        assert!(push_tx.send(message_push()).is_err());
+    }
+
+    #[cfg(not(miri))]
+    static BLOCKING_CALLBACK_STATE: Mutex<(bool, bool)> = Mutex::new((false, false));
+    #[cfg(not(miri))]
+    static BLOCKING_CALLBACK_CONDITION: Condvar = Condvar::new();
+
+    #[cfg(not(miri))]
+    unsafe extern "C-unwind" fn blocking_callback(
+        _client_id: usize,
+        _kind: PushKind,
+        _message: *const u8,
+        _message_len: i64,
+        _channel: *const u8,
+        _channel_len: i64,
+        _pattern: *const u8,
+        _pattern_len: i64,
+    ) {
+        let mut state = BLOCKING_CALLBACK_STATE
+            .lock()
+            .unwrap_or_else(|err| err.into_inner());
+        state.0 = true;
+        BLOCKING_CALLBACK_CONDITION.notify_all();
+        while !state.1 {
+            state = BLOCKING_CALLBACK_CONDITION
+                .wait(state)
+                .unwrap_or_else(|err| err.into_inner());
+        }
+        CALLBACK_INVOCATIONS.fetch_add(1, Ordering::SeqCst);
+    }
+
+    #[cfg(not(miri))]
+    #[test]
+    fn direct_sync_close_waits_for_callback_and_prevents_late_callbacks() {
+        let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        reset_callback_count();
+        *BLOCKING_CALLBACK_STATE
+            .lock()
+            .unwrap_or_else(|err| err.into_inner()) = (false, false);
+        let runtime = Builder::new_multi_thread()
+            .worker_threads(1)
+            .enable_all()
+            .build()
+            .unwrap();
+        let (push_tx, push_rx) = tokio::sync::mpsc::unbounded_channel();
+        let callback: NonNullPubSubCallback = blocking_callback;
+        let callback_store = Arc::new(std::sync::RwLock::new(Some(callback)));
+        let shutdown = Arc::new(SyncClientShutdown::default());
+        let task = runtime.spawn(run_sync_push_handler(
+            push_rx,
+            callback_store,
+            101,
+            Some(shutdown.clone()),
+        ));
+        push_tx.send(message_push()).unwrap();
+
+        let mut state = BLOCKING_CALLBACK_STATE
+            .lock()
+            .unwrap_or_else(|err| err.into_inner());
+        while !state.0 {
+            let (next, timeout) = BLOCKING_CALLBACK_CONDITION
+                .wait_timeout(state, std::time::Duration::from_secs(5))
+                .unwrap_or_else(|err| err.into_inner());
+            assert!(!timeout.timed_out(), "callback did not start");
+            state = next;
+        }
+        drop(state);
+
+        let (close_done_tx, close_done_rx) = std::sync::mpsc::channel();
+        let close_shutdown = shutdown.clone();
+        let close_thread = std::thread::spawn(move || {
+            close_shutdown.close();
+            close_shutdown.wait_for_push_task();
+            close_done_tx.send(()).unwrap();
+        });
+        assert!(
+            close_done_rx
+                .recv_timeout(std::time::Duration::from_millis(100))
+                .is_err(),
+            "close returned while the callback was still executing"
+        );
+
+        let mut state = BLOCKING_CALLBACK_STATE
+            .lock()
+            .unwrap_or_else(|err| err.into_inner());
+        state.1 = true;
+        BLOCKING_CALLBACK_CONDITION.notify_all();
+        drop(state);
+        close_done_rx
+            .recv_timeout(std::time::Duration::from_secs(5))
+            .expect("close did not drain the push task");
+        close_thread.join().unwrap();
+        runtime.block_on(task).unwrap();
+
+        assert_eq!(CALLBACK_INVOCATIONS.load(Ordering::SeqCst), 1);
+        assert!(push_tx.send(message_push()).is_err());
     }
 
     #[test]
