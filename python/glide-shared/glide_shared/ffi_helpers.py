@@ -610,11 +610,12 @@ def _get_address_resolver_trampoline(ffi: Any) -> Any:
                     ffi.memmove(resolved_host_buf, encoded_host, write_len)
                     resolved_host_len_ptr[0] = write_len
                     return resolved_port
-            except Exception as error:
-                # Zero asks Rust to retain the original address.
-                from glide_shared.logger import Level, Logger
+            except BaseException:
+                # Zero asks Rust to retain the original address. Never include resolver-controlled
+                # exception text, which may contain a URI, token, or other connection secret.
+                import logging
 
-                Logger.log(Level.WARN, "address_resolver", f"Resolver failed: {error}")
+                logging.getLogger(__name__).warning("Address resolver callback failed")
                 return 0
 
         callback = ffi.callback("AddressResolverCallback", trampoline)

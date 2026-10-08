@@ -397,10 +397,11 @@ def _handle_pointer_pubsub(client, ptr_val: int, payload_len: int):
         buf_ptr = ffi.cast("uint8_t*", ptr_val)
         payload = bytes(ffi.buffer(buf_ptr, payload_len))
         _handle_inline_pubsub(client, payload)
-    except Exception as e:
-        ClientLogger.log(
-            LogLevel.ERROR, "pubsub_pipe", f"Error handling pointer pubsub: {e}"
-        )
+    except BaseException:
+        # Never include callback exceptions or PubSub payloads in logs.
+        import logging
+
+        logging.getLogger(__name__).error("PubSub pointer notification failed")
     finally:
         client._lib.free_pubsub_pointer_payload(
             client._ffi.cast("uint8_t*", ptr_val), payload_len
@@ -434,12 +435,14 @@ def _handle_inline_pubsub(client, payload: bytes):
             ClientLogger.log(
                 LogLevel.WARN,
                 "pubsub_pipe",
-                f"Unknown push notification kind received: {payload[:4]!r}",
+                "Unknown PubSub notification kind",
             )
-    except Exception as e:
-        ClientLogger.log(
-            LogLevel.ERROR, "pubsub_pipe", f"Error handling pubsub frame: {e}"
-        )
+    except BaseException:
+        # Python callback trampolines must contain every user exception, including
+        # BaseException subclasses, without logging exception text or payload bytes.
+        import logging
+
+        logging.getLogger(__name__).error("PubSub notification failed")
 
 
 def _detect_fork_and_reset() -> None:
@@ -908,6 +911,16 @@ class BaseClient(CoreCommands):
                 credential_provider_callback_owner
             )
 
+        # Install the shared pipe before native creation. Preconfigured subscriptions can emit
+        # pushes as soon as the core connects, so post-create initialization is too late.
+        try:
+            self._setup_pipe()
+        except BaseException:
+            self._is_closed = True
+            _client_registry.pop(self._pipe_client_id, None)
+            self._release_callback_references()
+            raise
+
         create_state = _NativeCreateState(
             self._ffi,
             self._lib,
@@ -962,12 +975,12 @@ class BaseClient(CoreCommands):
             ClientLogger.log(
                 LogLevel.INFO, "connection info", "new connection established"
             )
-            self._setup_pipe()
             with _live_async_clients_lock:
                 _live_async_clients.add(self)
             return self
         except BaseException:
             create_state._abandon()
+            _client_registry.pop(self._pipe_client_id, None)
             if self._core_client is not None and not self._is_closed:
                 try:
                     await self.close()

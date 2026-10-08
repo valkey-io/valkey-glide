@@ -3212,7 +3212,7 @@ class TestSyncPubSub:
                 client.close()
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
-    def test_sync_pubsub_publish_vs_close_churn(
+    def test_sync_pubsub_publish_vs_close_churn(  # noqa: C901
         self,
         request,
         cluster_mode: bool,
@@ -3259,27 +3259,51 @@ class TestSyncPubSub:
 
                 publish_thread = threading.Thread(target=publish_until_stopped)
                 publish_thread.start()
+                close_started = threading.Event()
+                close_done = threading.Event()
+                close_errors = []
+                close_thread = None
+
+                def close_listener():
+                    close_started.set()
+                    try:
+                        listener.close()
+                    except BaseException as error:
+                        close_errors.append(error)
+                    finally:
+                        close_done.set()
+
                 try:
                     assert callback_entered.wait(
                         timeout=5
                     ), "PubSub callback did not start"
-                    listener.close()
-                    release_callback.set()
-                    deadline = time.monotonic() + 10
-                    while not listener._close_complete and time.monotonic() < deadline:
-                        time.sleep(0.001)
-                    assert listener._close_complete, "native PubSub close did not drain"
-                    with callback_lock:
-                        count_after_close = callback_count
-                    time.sleep(0.05)
-                    with callback_lock:
-                        assert callback_count == count_after_close
+                    close_thread = threading.Thread(target=close_listener)
+                    close_thread.start()
+                    assert close_started.wait(timeout=1), "close worker did not start"
                 finally:
+                    # Always unblock native callback drain before waiting for close.
                     release_callback.set()
+                    if close_thread is not None:
+                        close_thread.join(timeout=10)
                     stop_publishing.set()
                     publish_thread.join(timeout=10)
-                    assert not publish_thread.is_alive()
+
+                assert close_thread is not None and not close_thread.is_alive()
+                assert close_done.is_set(), "close worker exceeded 10 seconds"
+                assert not close_errors
+                deadline = time.monotonic() + 10
+                while not listener._close_complete and time.monotonic() < deadline:
+                    time.sleep(0.001)
+                assert (
+                    listener._close_complete
+                ), "native PubSub close exceeded 10 seconds"
+                assert not publish_thread.is_alive()
                 assert not publish_errors
+                with callback_lock:
+                    count_after_close = callback_count
+                time.sleep(0.05)
+                with callback_lock:
+                    assert callback_count == count_after_close
         finally:
             for listener in listeners:
                 listener.close()

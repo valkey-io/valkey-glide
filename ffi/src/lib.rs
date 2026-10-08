@@ -2573,38 +2573,33 @@ unsafe fn process_push_notification(
         data
     };
 
-    let (message_ptr, message_len) = convert_vec_to_pointer(message);
-    let (channel_ptr, channel_len) = convert_vec_to_pointer(channel);
-    let (pattern_ptr, pattern_len) = match pattern {
-        Some(p) => convert_vec_to_pointer(p),
-        None => (std::ptr::null_mut::<u8>(), 0),
-    };
+    // Keep every allocation under ordinary Rust ownership across the callback. This guarantees
+    // exactly-once cleanup if a Rust callback unwinds and avoids reconstructing Boxes from raw
+    // pointers after foreign code returns.
+    let message = message.into_boxed_slice();
+    let channel = channel.into_boxed_slice();
+    let pattern = pattern.map(Vec::into_boxed_slice);
+    let pattern_ptr = pattern
+        .as_ref()
+        .map_or(std::ptr::null(), |value| value.as_ptr());
+    let pattern_len = pattern.as_ref().map_or(0, |value| value.len() as i64);
 
-    unsafe {
+    // `C-unwind` permits containing panics from Rust test callbacks and Rust-based adapters.
+    // Foreign callbacks remain contractually required not to unwind into Rust.
+    let callback_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| unsafe {
         pubsub_callback(
             callback_id,
             push_msg.kind.into(),
-            message_ptr,
-            message_len,
-            channel_ptr,
-            channel_len,
+            message.as_ptr(),
+            message.len() as i64,
+            channel.as_ptr(),
+            channel.len() as i64,
             pattern_ptr,
             pattern_len,
         );
-        let _ = Box::from_raw(std::ptr::slice_from_raw_parts_mut(
-            message_ptr,
-            message_len as usize,
-        ));
-        let _ = Box::from_raw(std::ptr::slice_from_raw_parts_mut(
-            channel_ptr,
-            channel_len as usize,
-        ));
-        if !pattern_ptr.is_null() {
-            let _ = Box::from_raw(std::ptr::slice_from_raw_parts_mut(
-                pattern_ptr,
-                pattern_len as usize,
-            ));
-        }
+    }));
+    if callback_result.is_err() {
+        glide_logger::log_error_lazy!("pubsub_callback", "PubSub callback panicked");
     }
 }
 
@@ -2634,6 +2629,57 @@ fn dispatch_sync_push_notification(
     }
     unsafe {
         process_push_notification(push_msg, callback, callback_id);
+    }
+}
+
+#[inline]
+fn sync_pubsub_callback_id(client_id: usize, client_adapter_ptr: usize) -> usize {
+    if client_id == 0 {
+        client_adapter_ptr
+    } else {
+        client_id
+    }
+}
+
+fn dispatch_async_push_notification(
+    push_msg: redis::PushInfo,
+    callback_store: &std::sync::RwLock<Option<NonNullPubSubCallback>>,
+    pipe_client_id: u64,
+    client_adapter_ptr: usize,
+    pipe: Option<&SharedPipeWriter>,
+) {
+    if let Some(pipe) = pipe.filter(|_| pipe_client_id != 0) {
+        if push_msg.kind == redis::PushKind::Disconnection {
+            let kind: i32 = PushKind::from(push_msg.kind) as i32;
+            pipe.push_pubsub_inline(pipe_client_id, kind, &[], &[], &[]);
+        } else if (push_msg.kind == redis::PushKind::Message
+            || push_msg.kind == redis::PushKind::PMessage
+            || push_msg.kind == redis::PushKind::SMessage)
+            && let Some((message, channel, pattern)) = extract_pubsub_data(&push_msg)
+        {
+            let kind: i32 = PushKind::from(push_msg.kind) as i32;
+            let pattern = pattern.as_deref().unwrap_or(&[]);
+            let total_len = message.len() + channel.len() + pattern.len();
+            if total_len > MAX_INLINE_PUBSUB {
+                pipe.push_pubsub_pointer(pipe_client_id, kind, &message, &channel, pattern);
+            } else {
+                pipe.push_pubsub_inline(pipe_client_id, kind, &message, &channel, pattern);
+            }
+        }
+        return;
+    }
+
+    // Legacy direct mode is selected by the absence of an initialized async pipe, not by the
+    // caller's client ID. Go and other bindings use nonzero IDs for unrelated registries.
+    if (push_msg.kind == redis::PushKind::Message
+        || push_msg.kind == redis::PushKind::PMessage
+        || push_msg.kind == redis::PushKind::SMessage)
+        && let Ok(guard) = callback_store.read()
+        && let Some(callback) = *guard
+    {
+        unsafe {
+            process_push_notification(push_msg, callback, client_adapter_ptr);
+        }
     }
 }
 
@@ -2844,56 +2890,25 @@ fn create_client_internal(
     let callback_store = pubsub_callback_store.clone();
     let pipe_cid = client_id as u64;
     if is_sync {
-        // Direct sync clients receive their stable supplied client ID. Pooled
-        // adapters pass no callback and no shutdown state, retaining legacy behavior.
+        // Protobuf-created sync clients use their explicit callback ID. URI clients have no such
+        // ABI parameter, so retain their legacy adapter-pointer identity.
+        let callback_id = sync_pubsub_callback_id(client_id, client_adapter_ptr);
         spawn_runtime.spawn(run_sync_push_handler(
             push_rx,
             callback_store,
-            client_id,
+            callback_id,
             client_adapter.sync_shutdown.clone(),
         ));
     } else {
-        // Async clients: route through ASYNC_PIPE.
         spawn_runtime.spawn(async move {
             while let Some(push_msg) = push_rx.recv().await {
-                if pipe_cid != 0 {
-                    // Wait for ASYNC_PIPE if not yet initialized (brief spin during startup)
-                    let w = loop {
-                        if let Some(w) = get_async_pipe() {
-                            break w;
-                        }
-                        std::hint::spin_loop();
-                    };
-                    if push_msg.kind == redis::PushKind::Disconnection {
-                        let kind: i32 = PushKind::from(push_msg.kind) as i32;
-                        w.push_pubsub_inline(pipe_cid, kind, &[], &[], &[]);
-                    } else if (push_msg.kind == redis::PushKind::Message
-                        || push_msg.kind == redis::PushKind::PMessage
-                        || push_msg.kind == redis::PushKind::SMessage)
-                        && let Some((message, channel, pattern)) = extract_pubsub_data(&push_msg)
-                    {
-                        let kind: i32 = PushKind::from(push_msg.kind) as i32;
-                        let pat_slice = pattern.as_deref().unwrap_or(&[]);
-                        let total_len = message.len() + channel.len() + pat_slice.len();
-                        if total_len > MAX_INLINE_PUBSUB {
-                            w.push_pubsub_pointer(pipe_cid, kind, &message, &channel, pat_slice);
-                        } else {
-                            w.push_pubsub_inline(pipe_cid, kind, &message, &channel, pat_slice);
-                        }
-                    }
-                    continue;
-                }
-                // Fallback: direct callback (Go/other languages)
-                if (push_msg.kind == redis::PushKind::Message
-                    || push_msg.kind == redis::PushKind::PMessage
-                    || push_msg.kind == redis::PushKind::SMessage)
-                    && let Ok(guard) = callback_store.read()
-                    && let Some(callback) = *guard
-                {
-                    unsafe {
-                        process_push_notification(push_msg, callback, client_adapter_ptr);
-                    }
-                }
+                dispatch_async_push_notification(
+                    push_msg,
+                    &callback_store,
+                    pipe_cid,
+                    client_adapter_ptr,
+                    get_async_pipe(),
+                );
             }
         });
     }
@@ -4295,14 +4310,6 @@ unsafe fn convert_double_pointer_to_vec<'a>(
         result.push(slice);
     }
     result
-}
-
-fn convert_vec_to_pointer<T>(vec: Vec<T>) -> (*mut T, c_long) {
-    // into_boxed_slice guarantees capacity == len (unlike shrink_to_fit which is a hint).
-    // This is critical because from_raw_parts later uses len as capacity for dealloc.
-    let len = vec.len() as c_long;
-    let ptr = Box::into_raw(vec.into_boxed_slice()) as *mut T;
-    (ptr, len)
 }
 
 // ==================== Arena-based response builder ====================
@@ -7845,6 +7852,44 @@ mod tests_push_notification_safety {
     }
 
     #[test]
+    fn sync_uri_clients_use_distinct_adapter_pointer_callback_ids() {
+        let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let uri = CString::new("redis://127.0.0.1:1").unwrap();
+        let options = CString::new(r#"{"lazy_connect":true}"#).unwrap();
+        let client_type = ClientType::SyncClient;
+        let mut responses = Vec::new();
+
+        for _ in 0..2 {
+            let response = unsafe {
+                create_client_from_uri(
+                    uri.as_ptr(),
+                    options.as_ptr(),
+                    &client_type,
+                    Some(counting_callback),
+                )
+            };
+            assert!(!response.is_null());
+            assert!(unsafe { (*response).connection_error_message.is_null() });
+            responses.push(response);
+        }
+
+        let callback_ids: Vec<usize> = responses
+            .iter()
+            .map(|response| unsafe { (**response).conn_ptr.addr() })
+            .map(|adapter_ptr| sync_pubsub_callback_id(0, adapter_ptr))
+            .collect();
+        assert_ne!(callback_ids[0], callback_ids[1]);
+        for (response, callback_id) in responses.into_iter().zip(callback_ids) {
+            let adapter_ptr = unsafe { (*response).conn_ptr };
+            assert_eq!(callback_id, adapter_ptr.addr());
+            unsafe {
+                close_client(adapter_ptr);
+                free_connection_response(response.cast_mut());
+            }
+        }
+    }
+
+    #[test]
     fn direct_sync_push_handler_forwards_supplied_client_id() {
         let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         reset_callback_count();
@@ -7996,6 +8041,106 @@ mod tests_push_notification_safety {
 
         assert_eq!(CALLBACK_INVOCATIONS.load(Ordering::SeqCst), 1);
         assert!(push_tx.send(message_push()).is_err());
+    }
+
+    static PANIC_THEN_DELIVER_CALLS: AtomicUsize = AtomicUsize::new(0);
+
+    unsafe extern "C-unwind" fn panic_then_deliver_callback(
+        client_id: usize,
+        kind: PushKind,
+        message: *const u8,
+        message_len: i64,
+        channel: *const u8,
+        channel_len: i64,
+        pattern: *const u8,
+        pattern_len: i64,
+    ) {
+        if PANIC_THEN_DELIVER_CALLS.fetch_add(1, Ordering::SeqCst) == 0 {
+            panic!("intentional PubSub callback panic");
+        }
+        unsafe {
+            counting_callback(
+                client_id,
+                kind,
+                message,
+                message_len,
+                channel,
+                channel_len,
+                pattern,
+                pattern_len,
+            );
+        }
+    }
+
+    #[test]
+    fn panicking_rust_callback_keeps_push_task_alive_and_close_drains() {
+        let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        reset_callback_count();
+        PANIC_THEN_DELIVER_CALLS.store(0, Ordering::SeqCst);
+        let runtime = Builder::new_current_thread().enable_all().build().unwrap();
+        let (push_tx, push_rx) = tokio::sync::mpsc::unbounded_channel();
+        let callback: NonNullPubSubCallback = panic_then_deliver_callback;
+        let callback_store = Arc::new(std::sync::RwLock::new(Some(callback)));
+        let shutdown = Arc::new(SyncClientShutdown::default());
+        push_tx.send(message_push()).unwrap();
+        push_tx.send(message_push()).unwrap();
+        drop(push_tx);
+
+        runtime.block_on(run_sync_push_handler(
+            push_rx,
+            callback_store,
+            303,
+            Some(shutdown.clone()),
+        ));
+        shutdown.close();
+        shutdown.wait_for_push_task();
+
+        assert_eq!(PANIC_THEN_DELIVER_CALLS.load(Ordering::SeqCst), 2);
+        assert_eq!(CALLBACK_INVOCATIONS.load(Ordering::SeqCst), 1);
+        let capture = LAST_CALLBACK_DATA.lock().unwrap();
+        assert_eq!(capture.as_ref().unwrap().message, b"message");
+    }
+
+    #[test]
+    fn async_nonzero_id_without_pipe_uses_legacy_direct_callback() {
+        let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        reset_callback_count();
+        let callback: NonNullPubSubCallback = counting_callback;
+        let callback_store = std::sync::RwLock::new(Some(callback));
+        let adapter_id = usize::MAX / 2 + 303;
+
+        dispatch_async_push_notification(message_push(), &callback_store, 444, adapter_id, None);
+
+        assert_eq!(CALLBACK_INVOCATIONS.load(Ordering::SeqCst), 1);
+        assert_eq!(
+            LAST_CALLBACK_DATA
+                .lock()
+                .unwrap()
+                .as_ref()
+                .unwrap()
+                .client_id,
+            adapter_id
+        );
+    }
+
+    #[test]
+    fn async_initialized_pipe_path_does_not_invoke_direct_callback() {
+        let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        reset_callback_count();
+        let callback: NonNullPubSubCallback = counting_callback;
+        let callback_store = std::sync::RwLock::new(Some(callback));
+        let pipe = SharedPipeWriter {
+            buffer: std::sync::Mutex::new(Vec::new()),
+            condvar: Condvar::new(),
+            pipe_fd: -1,
+        };
+
+        dispatch_async_push_notification(message_push(), &callback_store, 555, 666, Some(&pipe));
+
+        assert_eq!(CALLBACK_INVOCATIONS.load(Ordering::SeqCst), 0);
+        let frame = pipe.buffer.lock().unwrap();
+        assert_eq!(&frame[..8], &555u64.to_ne_bytes());
+        assert_eq!(&frame[8..16], &u64::MAX.to_ne_bytes());
     }
 
     #[test]

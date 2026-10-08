@@ -688,10 +688,11 @@ class BaseClient(CoreCommands):
                             f"Unknown notification message: '{message_kind}'",
                         )
 
-            except Exception as e:
-                Logger.log(
-                    Level.ERROR, "pubsub_callback", f"Error in pubsub callback: {e}"
-                )
+            except BaseException:
+                # User exceptions can contain message payloads or other secrets.
+                import logging
+
+                logging.getLogger(__name__).error("PubSub callback failed")
 
         return _pubsub_callback
 
