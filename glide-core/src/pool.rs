@@ -41,6 +41,7 @@ use std::sync::atomic::{AtomicU8, AtomicU32, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex as StdMutex, OnceLock};
 use std::time::{Duration, Instant};
 use tokio::sync::Mutex as TokioMutex;
+use tokio::sync::Notify;
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // POOL STATES
@@ -1055,7 +1056,7 @@ pub struct ScopePool {
     /// if unconfigured.
     pub configured_client_name: String,
     /// The most recent reason an acquire could not resolve its target, or `None`
-    /// once resolution succeeds again. Bindings retry acquire every few
+    /// once resolution succeeds again. A waiting acquire re-attempts every few
     /// milliseconds, so the acquire path warns only when the kind of cause
     /// changes (see [`ScopeTargetUnresolved::same_kind`]) rather than on every
     /// attempt. The value is still the latest one, so the slot in the message is
@@ -1063,12 +1064,18 @@ pub struct ScopePool {
     pub last_unresolved_target: Option<ScopeTargetUnresolved>,
     /// The kind of the most recent scoped-connection creation failure the pool
     /// warned about, or `None` once a creation succeeds. The creation-side twin
-    /// of [`Self::last_unresolved_target`]: every binding retry poll spawns
-    /// another creation, so a persistent cause (an mTLS parent that has not
+    /// of [`Self::last_unresolved_target`]: every re-attempt of a waiting acquire
+    /// spawns another creation, so a persistent cause (an mTLS parent that has not
     /// connected, an unreachable shard) is warned once and then logged at debug
     /// until it clears.
     #[cfg(feature = "proto")]
     pub last_create_warn: Option<crate::scope::ScopeCreateErrorKind>,
+    /// Signalled whenever a waiting acquire might now succeed: a slot or an idle
+    /// connection became available, a creation or resync finished, or the pool
+    /// closed. `Arc` so a [`ScopeReservation`] can signal from its `Drop`
+    /// without the pool lock. Carries no payload; the woken acquire re-runs the
+    /// classifier under the lock to learn what changed.
+    pub wakeup: Arc<Notify>,
     /// In-flight creations, keyed by target then by the acquire-attempt token that
     /// spawned each one. A single acquire polls with the same token across its
     /// retries, so a repeat poll finds its own token already in flight and does not
@@ -1104,6 +1111,9 @@ fn saturating_dec(total_count: &AtomicU32) {
 pub struct ScopeReservation {
     total_count: Arc<AtomicU32>,
     committed: bool,
+    /// Signalled on `Drop`, committed or not: either way the pool changed in a
+    /// way a waiting acquire must re-examine. `None` only for test guards.
+    wakeup: Option<Arc<Notify>>,
     /// `(pending map, target, attempt token)` to clear on `Drop`; `None` when no
     /// creation is tracked (the prewarm path and test guards).
     pending: Option<(ScopePendingMap, ScopeTarget, u64)>,
@@ -1121,10 +1131,11 @@ impl ScopeReservation {
     /// off-lock: `commit()` on success (the connection returns to idle, slot kept),
     /// `Drop` otherwise (the connection is discarded, slot reclaimed).
     #[cfg(feature = "proto")]
-    pub(crate) fn for_slot(total_count: Arc<AtomicU32>) -> Self {
+    pub(crate) fn for_slot(total_count: Arc<AtomicU32>, wakeup: Arc<Notify>) -> Self {
         Self {
             total_count,
             committed: false,
+            wakeup: Some(wakeup),
             pending: None,
         }
     }
@@ -1135,6 +1146,7 @@ impl ScopeReservation {
         Self {
             total_count,
             committed: false,
+            wakeup: None,
             pending: None,
         }
     }
@@ -1162,6 +1174,11 @@ impl Drop for ScopeReservation {
                     map.remove(target);
                 }
             }
+        }
+        // After the slot and token are settled, so a woken acquire sees the
+        // final state rather than the half-released one described above.
+        if let Some(wakeup) = &self.wakeup {
+            wakeup.notify_waiters();
         }
     }
 }
@@ -1225,6 +1242,7 @@ impl ScopePool {
             last_unresolved_target: None,
             #[cfg(feature = "proto")]
             last_create_warn: None,
+            wakeup: Arc::new(Notify::new()),
             pending: Arc::new(StdMutex::new(HashMap::new())),
         }
     }
@@ -1389,6 +1407,7 @@ impl ScopePool {
             Some(ScopeReservation {
                 total_count: self.total_count.clone(),
                 committed: false,
+                wakeup: Some(self.wakeup.clone()),
                 pending: None,
             })
         } else {
@@ -1442,8 +1461,16 @@ impl ScopePool {
     /// must not block; an armed blocking waiter or a failed re-auth discards,
     /// because no cleanup command can undo either; anything else dirty runs the
     /// cleanup pipeline and discards if it fails.
-    #[allow(clippy::needless_borrow)]
     pub fn release(&mut self, scope_id: u64, registry: &DashMap<u64, ScopeEntry>) -> bool {
+        let released = self.release_inner(scope_id, registry);
+        if released {
+            self.wakeup.notify_waiters();
+        }
+        released
+    }
+
+    #[allow(clippy::needless_borrow)]
+    fn release_inner(&mut self, scope_id: u64, registry: &DashMap<u64, ScopeEntry>) -> bool {
         if self.in_use.remove(&scope_id).is_none() {
             return false;
         }
@@ -1619,6 +1646,7 @@ impl ScopePool {
                                 } else {
                                     saturating_dec(&pool.total_count);
                                 }
+                                pool.wakeup.notify_waiters();
                             } else {
                                 drop(guard);
                             }
@@ -1633,6 +1661,7 @@ impl ScopePool {
                             if let Some(pool_arc) = pool_arc {
                                 let pool = pool_arc.lock().await;
                                 saturating_dec(&pool.total_count);
+                                pool.wakeup.notify_waiters();
                             }
                         }
                     });
@@ -1682,6 +1711,7 @@ impl ScopePool {
             let mut pending = self.pending.lock().unwrap_or_else(|e| e.into_inner());
             pending.clear();
         }
+        self.wakeup.notify_waiters();
     }
 }
 
@@ -1766,7 +1796,16 @@ pub fn get_client_scope_pools() -> &'static DashMap<u64, Arc<TokioMutex<ScopePoo
 /// the pool's `client_id` overlaps plain clients' registry keys, so removing it would
 /// need an id that is unambiguous against them.
 pub fn destroy_client_scope_pool(client_id: u64) {
-    get_client_scope_pools().remove(&client_id);
+    let removed = get_client_scope_pools().remove(&client_id);
+    // Best effort: a waiting acquire should learn the parent is gone now rather
+    // than at its next fallback poll. `try_lock` because this runs without the
+    // lock and may be called from an async context; a contended lock means an
+    // acquire is already classifying and will observe the removal itself.
+    if let Some((_, pool)) = removed
+        && let Ok(guard) = pool.try_lock()
+    {
+        guard.wakeup.notify_waiters();
+    }
 
     let registry = get_scope_registry();
     // Collect before removing: mutating a DashMap while holding an iterator can deadlock.
@@ -3551,39 +3590,27 @@ mod scope_pool_tests {
         // First FFI acquire: the only idle connection is on db 0 while the parent is on
         // db 4, so the glue must read db 4, return -1, and spawn the resync.
         let handle = tokio::runtime::Handle::current();
-        // One logical acquire: the same token on the first call and every retry poll.
-        let attempt_token = next_scope_attempt_token();
         let first = crate::scope::acquire_scope_outcome(
             client_id,
             connection_request_bytes.clone(),
             &handle,
             0,
-            attempt_token,
+            next_scope_attempt_token(),
         );
         assert!(
             matches!(first, crate::scope::ScopeAcquireOutcome::Retry(_)),
             "a wrong-db idle connection must defer the acquire and spawn a resync: {first:?}"
         );
 
-        // Retry until the spawned resync settles and the connection is reusable on db 4.
-        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
-        let scope_id = loop {
-            if let crate::scope::ScopeAcquireOutcome::Acquired(id) =
-                crate::scope::acquire_scope_outcome(
-                    client_id,
-                    connection_request_bytes.clone(),
-                    &handle,
-                    0,
-                    attempt_token,
-                )
-            {
-                break id;
-            }
-            if std::time::Instant::now() > deadline {
-                panic!("acquire_scope_outcome never converged to a reused scope after resync");
-            }
-            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
-        };
+        let scope_id = crate::scope::acquire_scope(
+            client_id,
+            connection_request_bytes.clone(),
+            &handle,
+            0,
+            std::time::Duration::from_secs(5),
+        )
+        .await
+        .expect("acquire converges to a reused scope after resync");
 
         // The reused connection must really be on db 4: a key set here is absent on db 0.
         crate::scope::execute_scope_command(

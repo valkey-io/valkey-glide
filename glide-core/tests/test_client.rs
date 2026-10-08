@@ -1633,34 +1633,22 @@ pub(crate) mod shared_client_tests {
         }
     }
 
-    /// Polls `acquire_scope_outcome` the way the bindings do (see `GlideClient`'s
-    /// `scopedConnection` loop), returning `None` if the deadline passes.
+    /// One core-owned acquire, `None` if the deadline passes.
     #[cfg(feature = "proto")]
     async fn acquire_scope_within(
         client_id: u64,
         bytes: &[u8],
         timeout: std::time::Duration,
     ) -> Option<u64> {
-        let runtime = tokio::runtime::Handle::current();
-        // One logical acquire — mint the token once and reuse it on every poll,
-        // as a production binding's acquire() does.
-        let attempt_token = glide_core::pool::next_scope_attempt_token();
-        let deadline = std::time::Instant::now() + timeout;
-        while std::time::Instant::now() < deadline {
-            if let glide_core::scope::ScopeAcquireOutcome::Acquired(id) =
-                glide_core::scope::acquire_scope_outcome(
-                    client_id,
-                    bytes.to_vec(),
-                    &runtime,
-                    0,
-                    attempt_token,
-                )
-            {
-                return Some(id);
-            }
-            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
-        }
-        None
+        glide_core::scope::acquire_scope(
+            client_id,
+            bytes.to_vec(),
+            &tokio::runtime::Handle::current(),
+            0,
+            timeout,
+        )
+        .await
+        .ok()
     }
 
     /// `max_total = N` must permit exactly N concurrent scopes, with N+1 the first
@@ -5049,24 +5037,15 @@ pub(crate) mod shared_client_tests {
             scope::register_client(client_id, client.clone());
 
             let runtime = tokio::runtime::Handle::current();
-            // One logical acquire — one stable token across the retry loop.
-            let attempt_token = glide_core::pool::next_scope_attempt_token();
-            let scope_id = retry(|| {
-                let connection_request_bytes = connection_request_bytes.clone();
-                async {
-                    match scope::acquire_scope_outcome(
-                        client_id,
-                        connection_request_bytes,
-                        &runtime,
-                        0,
-                        attempt_token,
-                    ) {
-                        scope::ScopeAcquireOutcome::Acquired(id) => Some(id),
-                        _ => None,
-                    }
-                }
-            })
-            .await;
+            let scope_id = scope::acquire_scope(
+                client_id,
+                connection_request_bytes.clone(),
+                &runtime,
+                0,
+                std::time::Duration::from_secs(10),
+            )
+            .await
+            .expect("scope acquire with IAM credentials");
 
             let args: Vec<Vec<u8>> = vec![b"WHOAMI".to_vec()];
             let response = scope::execute_scope_command(scope_id, "ACL", &args, None).await;
