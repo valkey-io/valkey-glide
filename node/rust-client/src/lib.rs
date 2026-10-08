@@ -789,10 +789,9 @@ pub struct GlideClientHandle {
     /// Unique client ID registered in the glide-core scope registry.
     /// Used for scope operations (try_acquire, execute, release).
     client_id: u64,
-    /// Whether this wrapper owns removal of `client_id` from the scope registry.
-    /// Direct handles own their registration; pool handles only borrow a
-    /// pool-owned registration that must survive wrapper close/drop.
-    owns_client_registration: bool,
+    /// The pool-owned client ID when this handle wraps a pooled client.
+    /// `None` identifies a direct handle that owns its scope registration.
+    pool_client_id: Option<u64>,
 }
 
 /// Logs the disconnect warning for a `Disconnection` push and returns `true`,
@@ -831,7 +830,6 @@ pub(crate) async fn create_handle_for_client(
     wake_tsfn: Arc<ThreadsafeFunction<(), (), (), Status, false>>,
     inflight_requests_limit: isize,
     provided_client_id: Option<u64>,
-    owns_client_registration: bool,
 ) -> std::result::Result<GlideClientHandle, napi::Error> {
     // Shared response buffer for this handle.
     let response_buffer = Arc::new(ResponseBuffer::new());
@@ -870,7 +868,7 @@ pub(crate) async fn create_handle_for_client(
             response_buffer: Arc::clone(&response_buffer_worker),
             wake_callback: Some(Arc::clone(&wake_tsfn)),
             client_id,
-            owns_client_registration,
+            pool_client_id: provided_client_id,
         };
 
         // Store worker-local references to avoid Arc::clone per command.
@@ -1397,7 +1395,7 @@ pub fn create_direct_client<'a>(
             response_buffer: Arc::clone(&response_buffer_worker),
             wake_callback: Some(Arc::clone(&wake_tsfn)),
             client_id,
-            owns_client_registration: true,
+            pool_client_id: None,
         };
 
         // Store worker-local references to avoid Arc::clone per command.
@@ -1470,10 +1468,13 @@ pub fn create_direct_client<'a>(
 }
 
 impl GlideClientHandle {
-    /// Release the scope/client registration exactly once when this wrapper owns it.
-    /// Pool handles carry `false` because their registration belongs to the pool.
-    fn unregister_owned_client(&mut self) {
-        if std::mem::take(&mut self.owns_client_registration) {
+    fn is_direct_client(&self) -> bool {
+        self.pool_client_id.is_none()
+    }
+
+    /// Remove direct registrations while leaving pool-owned registrations intact.
+    fn unregister_direct_client(&self) {
+        if self.is_direct_client() {
             glide_core::scope::unregister_client(self.client_id);
         }
     }
@@ -1657,9 +1658,8 @@ impl GlideClientHandle {
         // This prevents segfaults when the ThreadsafeFunction is dropped while tasks are running
         self.response_buffer.mark_closed();
 
-        // Direct handles unregister exactly once. Pool handles do not own the
-        // pool's registration, so this is intentionally a no-op for them.
-        self.unregister_owned_client();
+        // Only direct handles have no pool client ID and own their registration.
+        self.unregister_direct_client();
 
         // Free any leaked Value pointers in pending responses that were never consumed by JS
         self.response_buffer.free_leaked_values();
@@ -2183,9 +2183,9 @@ impl Drop for GlideClientHandle {
     fn drop(&mut self) {
         // A JavaScript object created by ToNapiValue owns a direct registration
         // even if napi_resolve_deferred subsequently fails and the object is never
-        // delivered. Its finalizer reaches this Drop path. Pool wrappers carry no
-        // registration ownership and therefore preserve their pool-owned client.
-        self.unregister_owned_client();
+        // delivered. Its finalizer reaches this Drop path. A present pool client
+        // ID identifies a pool-owned registration and preserves main's pool behavior.
+        self.unregister_direct_client();
 
         // Ensure cleanup happens even if close() was never called.
         // mark_closed() is idempotent (uses AtomicBool), so calling it again is safe.
@@ -3631,7 +3631,7 @@ mod credential_provider_tests {
         assert!(error.to_string().contains("expiresAtEpochMillis"));
     }
 
-    fn test_handle(client_id: u64, owns_client_registration: bool) -> GlideClientHandle {
+    fn test_handle(client_id: u64, pool_client_id: Option<u64>) -> GlideClientHandle {
         let (command_tx, _command_rx) = mpsc::unbounded_channel::<WorkerMessage>();
         GlideClientHandle {
             command_tx: Some(command_tx),
@@ -3639,7 +3639,7 @@ mod credential_provider_tests {
             response_buffer: Arc::new(ResponseBuffer::new()),
             wake_callback: None,
             client_id,
-            owns_client_registration,
+            pool_client_id,
         }
     }
 
@@ -3659,40 +3659,36 @@ mod credential_provider_tests {
         .expect("lazy client construction must not connect")
     }
 
+    #[test]
+    fn pool_client_id_marker_identifies_registration_owner() {
+        let direct_id = glide_core::pool::allocate_client_id();
+        let pool_id = glide_core::pool::allocate_client_id();
+        assert!(test_handle(direct_id, None).is_direct_client());
+        assert!(!test_handle(pool_id, Some(pool_id)).is_direct_client());
+    }
+
     #[tokio::test]
     async fn undelivered_direct_handle_drop_unregisters_client() {
         let client_id = glide_core::pool::allocate_client_id();
         let client = lazy_client(ConnectionRequest::default()).await;
         glide_core::scope::register_client(client_id, client);
 
-        drop(test_handle(client_id, true));
+        drop(test_handle(client_id, None));
 
         assert!(glide_core::scope::get_parent_client(client_id).is_none());
     }
 
     #[tokio::test]
-    async fn explicit_close_then_drop_unregisters_direct_client_once() {
+    async fn explicit_close_then_drop_leaves_direct_client_unregistered() {
         let client_id = glide_core::pool::allocate_client_id();
         let client = lazy_client(ConnectionRequest::default()).await;
         glide_core::scope::register_client(client_id, client);
-        let mut handle = test_handle(client_id, true);
+        let mut handle = test_handle(client_id, None);
 
         handle.close().unwrap();
         assert!(glide_core::scope::get_parent_client(client_id).is_none());
         drop(handle);
         assert!(glide_core::scope::get_parent_client(client_id).is_none());
-    }
-
-    #[tokio::test]
-    async fn pool_handle_drop_preserves_pool_owned_client() {
-        let client_id = glide_core::pool::allocate_client_id();
-        let client = lazy_client(ConnectionRequest::default()).await;
-        glide_core::scope::register_client(client_id, client);
-
-        drop(test_handle(client_id, false));
-
-        assert!(glide_core::scope::get_parent_client(client_id).is_some());
-        glide_core::scope::unregister_client(client_id);
     }
 
     #[tokio::test]
@@ -3720,7 +3716,7 @@ mod credential_provider_tests {
         let client = lazy_client(request).await;
         let client_id = glide_core::pool::allocate_client_id();
         glide_core::scope::register_client(client_id, client.clone());
-        let handle = test_handle(client_id, true);
+        let handle = test_handle(client_id, None);
 
         // This is the state immediately after GlideClientHandle::to_napi_value:
         // the claim is consumed and the JS object's finalizer owns the handle.
@@ -3751,6 +3747,8 @@ mod credential_provider_tests {
         );
         assert!(NODE_CREDENTIALS_CALLBACK_TIMEOUT < std::time::Duration::from_secs(10));
     }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

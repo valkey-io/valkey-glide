@@ -771,6 +771,7 @@ class BaseClient(CoreCommands):
         self._pending_futures: Dict[int, "TFuture"] = {}
         self._callback_id_gen = itertools.count(1)
         self._lock = threading.Lock()
+        self._use_direct_lifecycle = True
         self._close_lock = threading.Lock()
         self._close_state: Optional[_NativeCloseState] = None
         self._native_owner: Optional[_NativeClientOwner] = None
@@ -1448,6 +1449,32 @@ class BaseClient(CoreCommands):
         performs native close, records any error for later close callers, and
         releases references without requiring the owner event loop.
         """
+        if not self._use_direct_lifecycle:
+            if not self._is_closed:
+                self._is_closed = True
+                err_message = "" if err_message is None else err_message
+
+                with self._lock:
+                    for fut in self._pending_futures.values():
+                        if not fut.done():
+                            fut.set_exception(ClosingError(err_message))
+                    self._pending_futures.clear()
+
+                with self._pubsub_lock:
+                    for fut in self._pubsub_futures:
+                        if not fut.done():
+                            fut.set_exception(ClosingError(err_message))
+                    self._pubsub_futures.clear()
+
+                _client_registry.pop(getattr(self, "_pipe_client_id", 0), None)
+
+                # Skip FFI call if this client was created in a different process
+                # (the tokio Runtime doesn't survive fork; dropping it would hang).
+                if self._core_client is not None and self._create_pid == os.getpid():
+                    self._lib.close_client(self._core_client)
+                    self._core_client = None
+            return
+
         if _is_credential_provider_executing(self):
             raise RuntimeError(
                 "Cannot close a client from its own credential provider callback"

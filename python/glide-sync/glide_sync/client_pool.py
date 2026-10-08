@@ -274,21 +274,8 @@ class ClientPool:
             client._pubsub_lock = threading.Lock()
             client._pubsub_condition = threading.Condition(client._pubsub_lock)
             client._pubsub_callback_ref = None
-            client._address_resolver_callback_ref = None
-            client._address_resolver_callback_owner = None
-            client._credential_provider_callback_ref = None
-            client._credential_provider_callback_owner = None
             client._client_lock = threading.Lock()
-            client._client_condition = threading.Condition(client._client_lock)
-            client._native_call_state = threading.local()
-            client._active_native_calls = 0
-            client._active_native_callbacks = 0
-            client._close_complete = False
-            client._close_error = None
-            client._needs_recreate_after_fork = False
-            client._recreating_after_fork = False
-            client._native_owner = None
-            client._native_finalizer = None
+            client._use_direct_lifecycle = False
             client._core_client = cast_ptr
             client._conn_req_bytes = self._conn_req_bytes
 

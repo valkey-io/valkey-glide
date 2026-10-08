@@ -1827,8 +1827,8 @@ impl Drop for SyncClientShutdownFuture {
 pub struct ClientAdapter {
     runtime: ManuallyDrop<Runtime>,
     pipe_client_id: std::sync::atomic::AtomicU64,
-    /// Signals active synchronous requests to stop waiting during explicit close.
-    sync_shutdown: Arc<SyncClientShutdown>,
+    /// Signals active direct synchronous requests to stop waiting during explicit close.
+    sync_shutdown: Option<Arc<SyncClientShutdown>>,
     /// Background runtime for spawned tasks (connection drivers, reconnection, cluster manager).
     /// Only used by sync clients with current_thread main runtime — tokio::spawn calls during
     /// client creation are directed here via _guard so they run independently of block_on.
@@ -1963,21 +1963,28 @@ impl ClientAdapter {
                     .background_runtime
                     .as_ref()
                     .map(|rt| rt.handle().clone());
-                let mut shutdown = Box::pin(self.sync_shutdown.cancelled());
-                let mut request_future = Box::pin(request_future);
-                let result = self.runtime.block_on(async {
-                    let _guard = bg.as_ref().map(|h| h.enter());
-                    poll_fn(move |cx| {
-                        if shutdown.as_mut().poll(cx).is_ready() {
-                            return Poll::Ready(Err(RedisError::from((
-                                ErrorKind::ClientError,
-                                "Client closed",
-                            ))));
-                        }
-                        request_future.as_mut().poll(cx)
+                let result = if let Some(sync_shutdown) = &self.sync_shutdown {
+                    let mut shutdown = Box::pin(sync_shutdown.cancelled());
+                    let mut request_future = Box::pin(request_future);
+                    self.runtime.block_on(async {
+                        let _guard = bg.as_ref().map(|h| h.enter());
+                        poll_fn(move |cx| {
+                            if shutdown.as_mut().poll(cx).is_ready() {
+                                return Poll::Ready(Err(RedisError::from((
+                                    ErrorKind::ClientError,
+                                    "Client closed",
+                                ))));
+                            }
+                            request_future.as_mut().poll(cx)
+                        })
+                        .await
                     })
-                    .await
-                });
+                } else {
+                    self.runtime.block_on(async {
+                        let _guard = bg.as_ref().map(|h| h.enter());
+                        request_future.await
+                    })
+                };
                 Self::handle_result(result, None, None, request_id, response_buf, false)
             }
         }
@@ -2370,6 +2377,7 @@ fn create_client_internal(
     address_resolver: Option<NonNullAddressResolverCallback>,
     credential_provider: Option<NonNullCredentialProviderCallback>,
     client_id: usize,
+    enable_sync_shutdown: bool,
 ) -> Result<*const ClientAdapter, String> {
     let request = connection_request::ConnectionRequest::parse_from_bytes(connection_request_bytes)
         .map_err(|err| err.to_string())?;
@@ -2486,7 +2494,8 @@ fn create_client_internal(
         client_type,
     });
     let pubsub_callback_store = Arc::new(std::sync::RwLock::new(pubsub_callback));
-    let sync_shutdown = Arc::new(SyncClientShutdown::default());
+    let sync_shutdown =
+        (is_sync && enable_sync_shutdown).then(|| Arc::new(SyncClientShutdown::default()));
     let client_adapter = Arc::new(ClientAdapter {
         runtime: ManuallyDrop::new(runtime),
         pipe_client_id: std::sync::atomic::AtomicU64::new(client_id as u64),
@@ -2624,6 +2633,7 @@ pub unsafe extern "C-unwind" fn create_client(
         address_resolver,
         credential_provider,
         client_id,
+        matches!(client_type, ClientType::SyncClient),
     ) {
         Err(err) => ConnectionResponse {
             conn_ptr: std::ptr::null(),
@@ -2816,6 +2826,7 @@ pub unsafe extern "C-unwind" fn create_client_from_uri(
                         None,
                         None,
                         0,
+                        matches!(client_type, ClientType::SyncClient),
                     ) {
                         Err(err) => ConnectionResponse {
                             conn_ptr: std::ptr::null(),
@@ -3812,7 +3823,9 @@ pub unsafe extern "C" fn close_client(client_adapter_ptr: *const c_void) {
     // calls hold their own Arc and would otherwise keep both runtimes and all
     // connections alive indefinitely for commands such as XREAD BLOCK 0.
     let client_adapter = unsafe { &*(client_adapter_ptr as *const ClientAdapter) };
-    client_adapter.sync_shutdown.close();
+    if let Some(sync_shutdown) = &client_adapter.sync_shutdown {
+        sync_shutdown.close();
+    }
 
     // Clean up scope pool and registry for this client (if any)
     #[cfg(feature = "pool-support")]
@@ -7736,7 +7749,7 @@ mod client_lease_tests {
         request.addresses.push(address);
         request.lazy_connect = true;
         let bytes = request.write_to_bytes().expect("serialize request");
-        create_client_internal(&bytes, ClientType::SyncClient, None, None, None, 0)
+        create_client_internal(&bytes, ClientType::SyncClient, None, None, None, 0, true)
             .expect("create lazy client")
     }
 
@@ -7758,7 +7771,14 @@ mod client_lease_tests {
         // after owner close, then restore it for the paired release call.
         let lease = unsafe { Arc::from_raw(raw) };
         assert_eq!(Arc::strong_count(&lease), 1);
-        assert!(lease.sync_shutdown.closed.load(Ordering::Acquire));
+        assert!(
+            lease
+                .sync_shutdown
+                .as_ref()
+                .expect("direct sync shutdown")
+                .closed
+                .load(Ordering::Acquire)
+        );
         let raw = Arc::into_raw(lease);
         unsafe { release_client(raw.cast()) };
     }

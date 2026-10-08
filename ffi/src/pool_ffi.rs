@@ -129,6 +129,7 @@ fn create_pool_client(
         None, // no address resolver (uses the one in ConnectionRequest if any)
         None, // custom credential providers are rejected by glide_pool_create
         client_id,
+        false, // pooled sync adapters retain the legacy blocking/close lifecycle
     )?;
 
     // Extract the Client from the adapter for pool bookkeeping
@@ -207,10 +208,7 @@ pub unsafe extern "C" fn glide_pool_create(
                 );
                 return POOL_ERROR_UNSUPPORTED_CONFIG;
             }
-            if r.credential_provider_key
-                .as_ref()
-                .is_some_and(|key| !key.is_empty())
-            {
+            if r.credential_provider_key.is_some() {
                 glide_logger::log_error(
                     "pool",
                     "Cannot create pool with a credential_provider_key. Custom IAM credential \
@@ -1220,26 +1218,29 @@ mod pool_config_tests {
     use protobuf::Message;
 
     #[test]
-    fn raw_pool_request_rejects_credential_provider_key() {
-        let mut request = connection_request::ConnectionRequest::new();
-        request.credential_provider_key = Some("custom-provider".into());
-        let bytes = request.write_to_bytes().expect("serialize request");
+    fn raw_pool_request_rejects_empty_and_nonempty_credential_provider_keys() {
         let client_type = ClientType::SyncClient;
 
-        let result = unsafe {
-            glide_pool_create(
-                1,
-                0,
-                1_000,
-                1_000,
-                0,
-                bytes.as_ptr(),
-                bytes.len(),
-                &client_type,
-            )
-        };
+        for key in ["", "custom-provider"] {
+            let mut request = connection_request::ConnectionRequest::new();
+            request.credential_provider_key = Some(key.into());
+            let bytes = request.write_to_bytes().expect("serialize request");
 
-        assert_eq!(result, POOL_ERROR_UNSUPPORTED_CONFIG);
+            let result = unsafe {
+                glide_pool_create(
+                    1,
+                    0,
+                    1_000,
+                    1_000,
+                    0,
+                    bytes.as_ptr(),
+                    bytes.len(),
+                    &client_type,
+                )
+            };
+
+            assert_eq!(result, POOL_ERROR_UNSUPPORTED_CONFIG, "key={key:?}");
+        }
     }
 }
 
@@ -1269,6 +1270,7 @@ mod adapter_ownership_tests {
         unsafe { Arc::decrement_strong_count(raw) };
         let adapter = unsafe { Arc::from_raw(raw) };
         assert_eq!(Arc::strong_count(&adapter), 1);
+        assert!(adapter.sync_shutdown.is_none());
 
         let rt = tokio::runtime::Builder::new_current_thread()
             .build()

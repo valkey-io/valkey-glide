@@ -119,6 +119,14 @@ def _guard_native_call(method: _F) -> _F:
 
     @wraps(method)
     def _guarded(self: "BaseClient", *args: Any, **kwargs: Any) -> Any:
+        if not self._use_direct_lifecycle:
+            if self._is_closed:
+                raise ClosingError(
+                    "Unable to execute requests; the client is closed. "
+                    "Please create a new client."
+                )
+            return method(self, *args, **kwargs)
+
         self._begin_native_call()
         try:
             return method(self, *args, **kwargs)
@@ -179,6 +187,7 @@ class BaseClient(CoreCommands):
         self._credential_provider_callback_ref = None
         self._credential_provider_callback_owner = None
         self._client_lock = threading.Lock()
+        self._use_direct_lifecycle = True
         self._client_condition = threading.Condition(self._client_lock)
         self._native_call_state = threading.local()
         self._active_native_calls = 0
@@ -218,6 +227,8 @@ class BaseClient(CoreCommands):
         self._native_call_state.clients = clients + (core_client,)
 
     def _native_client_for_call(self) -> Any:
+        if not self._use_direct_lifecycle:
+            return self._core_client
         clients = getattr(self._native_call_state, "clients", ())
         if not clients:
             raise RuntimeError("No native client is pinned for this call")
@@ -1401,6 +1412,17 @@ class BaseClient(CoreCommands):
             pass
 
     def close(self) -> None:
+        if not self._use_direct_lifecycle:
+            with self._client_lock:
+                if not self._is_closed:
+                    self._is_closed = True
+                    with self._pubsub_condition:
+                        self._pubsub_condition.notify_all()
+                    self._lib.close_client(self._core_client)
+                    self._core_client = self._ffi.NULL
+                    self._pubsub_callback_ref = None
+            return
+
         owner: Optional[_NativeClientOwner] = None
         close_on_worker = False
         with self._client_condition:

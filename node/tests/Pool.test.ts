@@ -479,26 +479,29 @@ describe("Pool credential provider guard", () => {
         "Pool clients cannot use a custom IAM credentials provider. " +
         "Configure IAM without a credentialProvider to use the default AWS credential chain.";
 
-    it("rejects a crafted raw native pool request with a credential provider key", async () => {
-        const request = connection_request.ConnectionRequest.create({
-            addresses: [{ host: "invalid.example", port: 1 }],
-            credentialProviderKey: "crafted-provider-key",
-        });
-        const bytes =
-            connection_request.ConnectionRequest.encode(request).finish();
+    it.each(["", "crafted-provider-key"])(
+        "rejects a crafted raw native pool request with credential provider key %p",
+        async (credentialProviderKey) => {
+            const request = connection_request.ConnectionRequest.create({
+                addresses: [{ host: "invalid.example", port: 1 }],
+                credentialProviderKey,
+            });
+            const bytes =
+                connection_request.ConnectionRequest.encode(request).finish();
 
-        await expect(
-            Promise.resolve().then(() =>
-                native.createPool(bytes, {
-                    maxSize: 1,
-                    minIdle: 0,
-                    idleTimeoutMs: 30_000,
-                    requestTimeoutMs: 5_000,
-                    abandonTimeoutMs: 300_000,
-                }),
-            ),
-        ).rejects.toThrow(expectedError);
-    });
+            await expect(
+                Promise.resolve().then(() =>
+                    native.createPool(bytes, {
+                        maxSize: 1,
+                        minIdle: 0,
+                        idleTimeoutMs: 30_000,
+                        requestTimeoutMs: 5_000,
+                        abandonTimeoutMs: 300_000,
+                    }),
+                ),
+            ).rejects.toThrow(expectedError);
+        },
+    );
 
     it.each([
         ["standalone", false],

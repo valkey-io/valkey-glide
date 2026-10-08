@@ -259,14 +259,7 @@ class AsyncClientPool:
             client._pubsub_callback_ref = None
             client._callback_id_gen = __import__("itertools").count(1)
             client._lock = threading.Lock()
-            client._close_lock = threading.Lock()
-            client._close_state = None
-            client._native_owner = None
-            client._native_finalizer = None
-            client._address_resolver_callback_ref = None
-            client._address_resolver_callback_owner = None
-            client._credential_provider_callback_ref = None
-            client._credential_provider_callback_owner = None
+            client._use_direct_lifecycle = False
             client._is_asyncio = True
             client._core_client = self._ffi.cast("void*", adapter_ptr)
             client._conn_req_bytes = self._conn_req_bytes
@@ -276,7 +269,6 @@ class AsyncClientPool:
             # (set in create_client_internal via the pre-assigned ID).
             # Register so the pipe reader routes responses here.
             client._pipe_client_id = client_id
-            self._lib.glide_pool_set_pipe_client_id(client_id, client_id)
             try:
                 client._loop = asyncio.get_running_loop()
             except RuntimeError:

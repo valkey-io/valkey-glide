@@ -120,11 +120,7 @@ pub fn create_pool<'a>(
         )
     })?;
 
-    if proto_req
-        .credential_provider_key
-        .as_ref()
-        .is_some_and(|key| !key.is_empty())
-    {
+    if proto_req.credential_provider_key.is_some() {
         return Err(Error::new(
             Status::InvalidArg,
             "Pool clients cannot use a custom IAM credentials provider. Configure IAM without a credentialProvider to use the default AWS credential chain.",
@@ -373,7 +369,6 @@ pub fn pool_build_handle<'a>(
             wake_tsfn,
             inflight_requests_limit,
             Some(client_id_u64),
-            false,
         )
         .await
         {

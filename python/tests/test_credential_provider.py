@@ -504,6 +504,80 @@ def test_sync_direct_passes_typed_null_without_provider(monkeypatch):
     client.close()
 
 
+def test_sync_pool_shell_uses_legacy_raw_pointer_command_and_close(monkeypatch):
+    import glide_sync.glide_client as sync_client_module
+
+    ffi = GlideFFI.ffi
+    fake_lib = _FakeNativeLibrary(ffi, GlideFFI.lib)
+    native_result = object()
+    fake_lib.refresh_iam_token.return_value = native_result
+    monkeypatch.setattr(
+        sync_client_module.BaseClient,
+        "_handle_cmd_result",
+        lambda self, result: result,
+    )
+
+    client = sync_client_module.GlideClient.__new__(sync_client_module.GlideClient)
+    client._ffi = ffi
+    client._lib = fake_lib
+    client._is_closed = False
+    client._pubsub_lock = threading.Lock()
+    client._pubsub_condition = threading.Condition(client._pubsub_lock)
+    client._pubsub_callback_ref = object()
+    client._client_lock = threading.Lock()
+    client._use_direct_lifecycle = False
+    client._core_client = fake_lib._response.conn_ptr
+
+    assert client._refresh_iam_token() is native_result
+    fake_lib.refresh_iam_token.assert_called_once_with(fake_lib._response.conn_ptr, 0)
+    fake_lib.retain_client.assert_not_called()
+    fake_lib.release_client.assert_not_called()
+
+    client.close()
+    assert client._is_closed
+    assert client._core_client == ffi.NULL
+    assert client._pubsub_callback_ref is None
+    fake_lib.close_client.assert_called_once_with(fake_lib._response.conn_ptr)
+    client.close()
+    fake_lib.close_client.assert_called_once_with(fake_lib._response.conn_ptr)
+    assert not hasattr(client, "_native_owner")
+    assert not hasattr(client, "_client_condition")
+
+
+@pytest.mark.anyio
+async def test_async_pool_shell_uses_legacy_close_without_direct_owner(monkeypatch):
+    import glide.glide_client as async_client_module
+
+    ffi = GlideFFI.ffi
+    fake_lib = _FakeNativeLibrary(ffi, GlideFFI.lib)
+    client = async_client_module.GlideClient.__new__(async_client_module.GlideClient)
+    client._ffi = ffi
+    client._lib = fake_lib
+    client._is_closed = False
+    client._pending_futures = {}
+    client._pubsub_futures = []
+    client._lock = threading.Lock()
+    client._pubsub_lock = threading.Lock()
+    client._use_direct_lifecycle = False
+    client._core_client = fake_lib._response.conn_ptr
+    client._pipe_client_id = 123
+    client._create_pid = os.getpid()
+    monkeypatch.setattr(async_client_module, "_client_registry", {123: client})
+
+    await client.close("pool close")
+
+    assert client._is_closed
+    assert client._core_client is None
+    assert 123 not in async_client_module._client_registry
+    fake_lib.close_client.assert_called_once_with(fake_lib._response.conn_ptr)
+    fake_lib.retain_client.assert_not_called()
+    fake_lib.release_client.assert_not_called()
+    await client.close()
+    fake_lib.close_client.assert_called_once_with(fake_lib._response.conn_ptr)
+    assert not hasattr(client, "_native_owner")
+    assert not hasattr(client, "_close_state")
+
+
 def _direct_client_config(provider=None, address_resolver=None):
     return GlideClientConfiguration(
         addresses=[NodeAddress()],
