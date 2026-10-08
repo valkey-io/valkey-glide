@@ -138,10 +138,20 @@ pub fn extract_key_args<'a>(cmd_name: &str, args: &[&'a [u8]]) -> Vec<&'a [u8]> 
                 .map(<[&[u8]]>::to_vec)
                 .unwrap_or_default()
         }
+        // Container commands whose key-bearing subcommands carry the key at args[1]
+        // (`OBJECT ENCODING <key>`, `MEMORY USAGE <key>`). Keyless subcommands
+        // (`OBJECT HELP`, `MEMORY STATS`) have no args[1] and yield no keys.
+        "OBJECT" | "MEMORY" => {
+            if args.len() > 1 {
+                vec![args[1]]
+            } else {
+                vec![]
+            }
+        }
         // Commands with no keys
         "MULTI" | "EXEC" | "DISCARD" | "UNWATCH" | "PING" | "SELECT" | "AUTH" | "CLIENT"
         | "INFO" | "DBSIZE" | "FLUSHDB" | "FLUSHALL" | "RESET" | "QUIT" | "COMMAND" | "CONFIG"
-        | "CLUSTER" | "TIME" | "WAIT" | "OBJECT" | "DEBUG" | "SLOWLOG" | "LATENCY" | "MEMORY" => {
+        | "CLUSTER" | "TIME" | "WAIT" | "DEBUG" | "SLOWLOG" | "LATENCY" => {
             vec![]
         }
         // Default: assume first arg is a key (safe approximation for unknown commands)
@@ -2909,6 +2919,19 @@ mod tests {
             vec![b"k1" as &[u8], b"k2", b"k3"]
         );
         assert_eq!(extract_key_args("EXISTS", del).len(), 3);
+
+        // OBJECT/MEMORY key-bearing subcommands carry the key at args[1]; keyless
+        // subcommands have no args[1] and yield no keys.
+        assert_eq!(
+            extract_key_args("OBJECT", &[b"ENCODING", b"k1"]),
+            vec![b"k1" as &[u8]]
+        );
+        assert_eq!(
+            extract_key_args("MEMORY", &[b"USAGE", b"k1"]),
+            vec![b"k1" as &[u8]]
+        );
+        assert!(extract_key_args("OBJECT", &[b"HELP"]).is_empty());
+        assert!(extract_key_args("MEMORY", &[b"STATS"]).is_empty());
     }
 
     #[test]
