@@ -33,6 +33,7 @@ import { GlideClient } from "./GlideClient";
 import type { GlideClientConfiguration } from "./GlideClient";
 import { GlideClusterClient } from "./GlideClusterClient";
 import type { GlideClusterClientConfiguration } from "./GlideClusterClient";
+import { clearScopeConnectionRequest } from "./ScopeInternal";
 import {
     createPool,
     poolTryAcquire,
@@ -95,6 +96,7 @@ export class ClientPool {
     private readonly isCluster: boolean;
     private readonly clientConfig: BaseClientConfiguration;
     private readonly resolverKey: string | undefined;
+    private readonly connectionRequestBytes: Uint8Array;
     private readonly activeClients = new Set<BaseClient>();
 
     private constructor(
@@ -103,12 +105,14 @@ export class ClientPool {
         isCluster: boolean,
         clientConfig: BaseClientConfiguration,
         resolverKey: string | undefined,
+        connectionRequestBytes: Uint8Array,
     ) {
         this.poolId = poolId;
         this.acquireTimeoutMs = acquireTimeoutMs;
         this.isCluster = isCluster;
         this.clientConfig = clientConfig;
         this.resolverKey = resolverKey;
+        this.connectionRequestBytes = connectionRequestBytes;
     }
 
     /**
@@ -181,6 +185,7 @@ export class ClientPool {
             isCluster,
             clientConfig,
             resolverKey,
+            connectionRequestBytes,
         );
     }
 
@@ -268,6 +273,7 @@ export class ClientPool {
 
         // Null out the handle to prevent use-after-release.
         (client as unknown as { clientHandle: null }).clientHandle = null;
+        clearScopeConnectionRequest(client);
 
         // Rust state reset + return to idle.
         await poolRelease(this.poolId, clientId);
@@ -345,10 +351,12 @@ export class ClientPool {
             ? await GlideClusterClient.fromPoolClientId(
                   clientId,
                   this.clientConfig as GlideClusterClientConfiguration,
+                  this.connectionRequestBytes,
               )
             : await GlideClient.fromPoolClientId(
                   clientId,
                   this.clientConfig as GlideClientConfiguration,
+                  this.connectionRequestBytes,
               );
 
         // Override close() so that callers who call client.close() directly

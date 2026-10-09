@@ -16,10 +16,10 @@ import {
     scopeExecute,
     scopeNextAttemptToken,
     scopeRelease,
-    scopeTryAcquire,
 } from "../build-ts/native";
 import type { GlideString } from "./BaseClient";
 import type { BaseClient } from "./BaseClient";
+import { tryAcquireScope } from "./ScopeInternal.js";
 
 // ─── Wire Format Serialization ───────────────────────────────────────────────
 
@@ -133,17 +133,11 @@ function slotForKey(key: Buffer): number {
 export class IsolatedScope {
     private scopeId: number;
     private clientId: number;
-    private connectionRequestBytes: Uint8Array;
     private released = false;
 
-    private constructor(
-        scopeId: number,
-        clientId: number,
-        connectionRequestBytes: Uint8Array,
-    ) {
+    private constructor(scopeId: number, clientId: number) {
         this.scopeId = scopeId;
         this.clientId = clientId;
-        this.connectionRequestBytes = connectionRequestBytes;
     }
 
     /**
@@ -152,8 +146,26 @@ export class IsolatedScope {
      * Uses `glide_core::scope::try_acquire_scope` with exponential backoff.
      * Creates new scope connections in the background if the pool is empty.
      *
+     * The connection request is taken from the client, whether it was created
+     * directly or borrowed from a `ClientPool`.
+     *
+     * Prefer {@link BaseClient.scopedConnection} for the common case.
+     *
      * @param client - A GlideClient or GlideClusterClient instance.
-     * @param connectionRequestBytes - Serialized connection request (from pool or client config).
+     * @param routingKey - In cluster mode, the key whose hash slot determines which node the scope connects to.
+     * @param maxRetries - Maximum retries with backoff. Default: 10.
+     * @returns A new IsolatedScope.
+     */
+    static async acquire(
+        client: BaseClient,
+        routingKey?: string,
+        maxRetries?: number,
+    ): Promise<IsolatedScope>;
+    /**
+     * Acquire an isolated scope for a client using an explicit connection request.
+     *
+     * @param client - A GlideClient or GlideClusterClient instance.
+     * @param connectionRequestBytes - Serialized connection request to use for the scope's connection.
      * @param routingKey - In cluster mode, the key whose hash slot determines which node the scope connects to.
      * @param maxRetries - Maximum retries with backoff. Default: 10.
      * @returns A new IsolatedScope.
@@ -162,15 +174,39 @@ export class IsolatedScope {
         client: BaseClient,
         connectionRequestBytes: Uint8Array,
         routingKey?: string,
+        maxRetries?: number,
+    ): Promise<IsolatedScope>;
+    static async acquire(
+        client: BaseClient,
+        bytesOrRoutingKey?: Uint8Array | string,
+        routingKeyOrMaxRetries?: string | number,
         maxRetries = 10,
     ): Promise<IsolatedScope> {
-        // Get the client_id from the handle (registered in Rust scope registry)
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const clientId = (client as any).clientHandle?.clientId;
+        // Normalize the overloaded arguments. When the second argument is a
+        // Uint8Array it is an explicit connection request; otherwise it is the
+        // routing key and the bytes are derived from the client.
+        let explicitBytes: Uint8Array | undefined;
+        let routingKey: string | undefined;
 
-        if (clientId === undefined || clientId === null) {
+        if (bytesOrRoutingKey instanceof Uint8Array) {
+            // acquire(client, bytes, routingKey?, maxRetries?)
+            explicitBytes = bytesOrRoutingKey;
+            routingKey = routingKeyOrMaxRetries as string | undefined;
+        } else {
+            // acquire(client, routingKey?, maxRetries?)
+            routingKey = bytesOrRoutingKey;
+
+            if (typeof routingKeyOrMaxRetries === "number") {
+                maxRetries = routingKeyOrMaxRetries;
+            }
+        }
+
+        // Get the client_id from the handle (registered in Rust scope registry)
+        const clientId = client.getClientId();
+
+        if (clientId < 0) {
             throw new Error(
-                "Client does not have a valid handle. Ensure it was created via GlideClient.createClient().",
+                "Client does not have a valid handle. Ensure it was created via createClient() or borrowed from a ClientPool, and is still open.",
             );
         }
 
@@ -186,19 +222,16 @@ export class IsolatedScope {
         const attemptToken = scopeNextAttemptToken();
 
         for (let i = 0; i < maxRetries; i++) {
-            const scopeId = scopeTryAcquire(
+            const scopeId = tryAcquireScope(
+                client,
                 clientId,
-                connectionRequestBytes,
                 routingSlot,
                 attemptToken,
+                explicitBytes,
             );
 
             if (scopeId >= 0) {
-                return new IsolatedScope(
-                    scopeId,
-                    clientId,
-                    connectionRequestBytes,
-                );
+                return new IsolatedScope(scopeId, clientId);
             }
 
             // Exponential backoff
