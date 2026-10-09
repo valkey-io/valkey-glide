@@ -12,15 +12,19 @@ This is the Valkey GLIDE mono-repository containing a Rust core (`glide-core`) a
 
 - `glide-core/` - Core Rust implementation with async client logic
 - `ffi/` - Foreign Function Interface layer for language interoperability
+- `rust/` - Rust client (the `valkey-glide` crate), built directly on `glide-core`
 - `java/` - Java client bindings with Gradle build system
 - `python/` - Python async/sync client bindings
 - `node/` - Node.js/TypeScript client bindings with npm
 - `go/` - Go client bindings
 - `glide-logger/` - Shared logging infrastructure
+- `glide-telemetry/` - Shared OpenTelemetry infrastructure
 - `utils/` - Shared utilities and cluster management tools
 - `benchmarks/` - Performance benchmarks across languages
 - `examples/` - Usage examples for each language binding
 - `docs/` - Documentation and MkDocs configuration
+
+Each language directory has its own `AGENTS.md` with binding-specific build, test and style rules (`rust/DEVELOPER.md` for Rust). Read the one for the binding you are changing after this file. `CLAUDE.md` at the repository root holds additional hard constraints and applies alongside this file.
 
 ## Architecture Quick Facts
 
@@ -28,36 +32,13 @@ This is the Valkey GLIDE mono-repository containing a Rust core (`glide-core`) a
 **Design Constraints:** Async-first APIs, cluster-aware routing, batching support, cross-AZ affinity
 **Key Features:** Multi-slot command handling, PubSub auto-reconnection, cluster scan, OpenTelemetry integration
 
-### Python Free-Threading (3.14t) Concurrency Rules
-
-The Python async client (`python/glide-async/python/glide/glide_client.py`) supports free-threaded CPython (`3.14t`, GIL disabled). The module declares `#[pymodule(gil_used = false)]` in `glide-async/src/lib.rs` and the `_FREE_THREADED` flag dispatches response parsing to a `ThreadPoolExecutor` so completions can arrive on a non-event-loop thread.
-
-Cross-thread wakeups are the sharp edge here. Under trio, `_CompatFuture` wraps a `trio.Event`, and trio synchronization primitives are **not thread-safe**: calling `.set()` from a foreign thread marks the event set but never reschedules the parked waiter, so the `await` hangs forever with no timeout firing (the main thread is stuck in native code where Python signal handlers, including pytest-timeout's, cannot run). Any object completed from the response thread pool must hop back to its owning loop/run: asyncio uses `loop.call_soon_threadsafe`, trio uses the `trio.lowlevel.TrioToken.run_sync_soon` captured at future-creation time. When touching future/event completion, verify the wake path for both asyncio and trio.
-
-To build and run the suite against free-threaded Python locally (fast iteration beats CI):
-
-```bash
-# Install the free-threaded interpreter (Homebrew: python-freethreading -> python3.14t)
-python3.14t -m venv python/.env   # dev.py reuses an existing python/.env
-cd python && python3 dev.py build
-python3 dev.py test --args tests/async_tests/test_async_client.py --async-backend=trio -k ""
-# Confirm no-GIL: .env/bin/python -c "import sys; print(sys._is_gil_enabled())"  # -> False
-```
-
-Reproduce a suspected hang with a stack dump: `kill -ABRT <pid>` (faulthandler prints the parked Python stack) since py-spy needs root on macOS.
-
 ### RESP2/RESP3 Response Normalization
 
 Valkey supports two wire protocols (RESP2 and RESP3) that may return structurally different responses for the same commands. For example, RESP2 returns flat arrays where RESP3 returns maps, and RESP2 returns bulk strings where RESP3 returns typed doubles.
 
 The Rust core normalizes these differences in `glide-core/src/client/value_conversion.rs` so that language bindings receive a consistent data structure regardless of protocol version; language bindings should *not* need to handle RESP2/RESP3 differences themselves. When adding a new command whose RESP2 and RESP3 responses differ, add or reuse an `ExpectedReturnType` variant and implement the conversion logic in `convert_to_expected_type`.
 
-**Supported Engine Versions:**
-
-| Engine Type | 6.2 | 7.0 | 7.1 | 7.2 | 8.0 | 8.1 |
-|-------------|-----|-----|-----|-----|-----|-----|
-| Valkey      | -   | -   | -   | ✓   | ✓   | ✓   |
-| Redis       | ✓   | ✓   | ✓   | ✓   | -   | -   |
+**Supported Engine Versions:** see the table in [README.md](./README.md#supported-engine-versions); the CI matrix lives in `.github/json_matrices/engine-matrix.json`. Do not duplicate the table here.
 
 ## Build and Test Rules (Agents)
 
@@ -85,20 +66,25 @@ make python-lint   # Run Python linters via dev.py
 make node-lint     # Run Node.js linters
 make go-lint       # Run Go linters
 
+# Formatting (Markdown/YAML/JSON via prettier)
+make prettier-check
+make prettier-fix
+
 # Utilities
-make clean         # Remove .build/ directory
-make help          # List available targets
+make check-valkey-server  # Verify valkey-server (or redis-server) is on PATH; tests need one
+make clean                # Remove .build/ directory
+make help                 # List available targets
 ```
 
 ### Raw Equivalents Per Stack
 
-**Rust (glide-core):**
+**Rust (`glide-core`, `ffi`, `rust`, `glide-logger`, `glide-telemetry` are separate crates, no top-level Make target):**
 
 ```bash
-cd glide-core
+cd glide-core   # or ffi, rust, glide-logger, glide-telemetry
 cargo build --release
 cargo test
-cargo bench
+cargo bench     # glide-core only
 cargo clippy
 cargo fmt
 ```
@@ -117,7 +103,7 @@ cd java
 # Unit tests
 ./gradlew :client:test                             # Run all unit tests
 ./gradlew :client:test --tests 'BatchTests'        # Run unit tests from a class
-./gradlew :client:test --tests '*.latencyHistory'  # Run unit tests with a pattern
+./gradlew :client:test --tests '*.latencyHistory*' # Run unit tests with a pattern
 
 # Integration tests
 ./gradlew :integTest:test                               # Run all integration tests
@@ -172,10 +158,10 @@ npm test -- --testPathPattern='GlideClient'  # Run tests from a specific file
 ```bash
 cd go
 make build
-make test
+make unit-test
+make integ-test
 make lint
 go build ./...
-go test ./...
 ```
 
 **Benchmarks:**
@@ -235,7 +221,6 @@ Use conventional commit format for all commit messages:
 - `target/` - Rust build artifacts
 - `node_modules/` - Node.js dependencies
 - `.build/` - Make build cache
-- `debug/` - Debug builds
 - `generated/` - Generated protobuf files
 - `benchmarks/results/` - Benchmark output
 - `python/.env*` - Python virtual environments
@@ -250,7 +235,7 @@ Use conventional commit format for all commit messages:
 ### Security & Code Quality
 
 - Never commit secrets, credentials, or API keys
-- Follow SECURITY.md for vulnerability reporting
+- Follow the organization-level [SECURITY.md](https://github.com/valkey-io/.github/blob/main/SECURITY.md) for vulnerability reporting (there is no repository-level copy)
 - Run lint/format targets before committing
 - Maintain compatibility with supported engine versions
 - Do not modify vendored or third-party code
@@ -266,19 +251,21 @@ valkey-glide/
 ├── ffi/                 # Foreign Function Interface layer
 ├── glide-core/          # Core Rust implementation
 ├── glide-logger/        # Shared logging infrastructure
+├── glide-telemetry/     # Shared OpenTelemetry infrastructure
 ├── go/                  # Go client bindings
 ├── java/                # Java client bindings (Gradle)
 ├── node/                # Node.js/TypeScript bindings (npm)
 ├── python/              # Python async/sync bindings
+├── rust/                # Rust client (valkey-glide crate)
 ├── utils/               # Cluster management and utilities
 └── Makefile            # Top-level build orchestration
 ```
 
 ## Quality Gates (Agent Checklist)
 
-- [ ] Build passes: `make all` succeeds
-- [ ] Lint passes: `make *-lint` targets succeed
-- [ ] Tests pass: `make *-test` targets succeed
+- [ ] Build passes for every binding you touched (`make <lang>`; `cargo build` for Rust crates)
+- [ ] Lint passes for every binding you touched (`make <lang>-lint`; `cargo clippy` + `cargo fmt --check` for Rust crates)
+- [ ] Tests pass for every binding you touched (`make <lang>-test`; `cargo test` for Rust crates)
 - [ ] No generated outputs committed (check `.gitignore`)
 - [ ] DCO signoff present: `git log --format="%B" -n 1 | grep "Signed-off-by"`
 - [ ] Conventional commit format used
@@ -287,7 +274,7 @@ valkey-glide/
 
 ## Quick Facts for Reasoners
 
-**Engines Supported:** Valkey 7.2, 8.0, 8.1, 9.0+ | Redis 6.2, 7.0, 7.1, 7.2
+**Engines Supported:** see [README.md](./README.md#supported-engine-versions)
 **Key Features:** AZ Affinity, PubSub auto-reconnection, sharded PubSub, cluster-aware multi-key commands, cluster scan, batching (pipeline/transaction), OpenTelemetry integration
 **Architecture:** Rust core with FFI bindings, async-first design, cluster and standalone support
 **Performance:** Optimized for high throughput and low latency with connection pooling
@@ -295,12 +282,16 @@ valkey-glide/
 ## If You Need More
 
 - **Getting Started:** [README.md](./README.md)
-- **Contributing:** [CONTRIBUTING.md](./CONTRIBUTING.md)
+- **Contributing:** [CONTRIBUTING.md](./CONTRIBUTING.md), [PICKING_UP_ISSUES.md](./PICKING_UP_ISSUES.md), [SUBMITTING_PRS.md](./SUBMITTING_PRS.md), [REVIEWING_PRS.md](./REVIEWING_PRS.md)
+- **Issues:** [CREATING_ISSUES.md](./CREATING_ISSUES.md), [TRIAGING_ISSUES.md](./TRIAGING_ISSUES.md)
+- **Agent constraints:** [CLAUDE.md](./CLAUDE.md)
 - **Security:** [SECURITY.md](https://github.com/valkey-io/.github/blob/main/SECURITY.md)
 - **Documentation:** [docs/README.md](./docs/README.md)
 - **Examples:** [examples/](./examples/)
 - **Language-Specific Guides:**
-  - [Java Developer Guide](./java/DEVELOPER.md)
-  - [Python Developer Guide](./python/DEVELOPER.md)
-  - [Node.js Developer Guide](./node/DEVELOPER.md)
-  - [Go Developer Guide](./go/DEVELOPER.md)
+  - Rust: [rust/DEVELOPER.md](./rust/DEVELOPER.md), [rust/DESIGN.md](./rust/DESIGN.md)
+  - Java: [java/AGENTS.md](./java/AGENTS.md), [java/DEVELOPER.md](./java/DEVELOPER.md)
+  - Python: [python/AGENTS.md](./python/AGENTS.md), [python/DEVELOPER.md](./python/DEVELOPER.md)
+  - Node.js: [node/AGENTS.md](./node/AGENTS.md), [node/DEVELOPER.md](./node/DEVELOPER.md)
+  - Go: [go/AGENTS.md](./go/AGENTS.md), [go/DEVELOPER.md](./go/DEVELOPER.md)
+  - FFI: [ffi/DEVELOPER.md](./ffi/DEVELOPER.md)
