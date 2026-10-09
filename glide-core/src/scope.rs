@@ -949,11 +949,11 @@ enum Classified {
     Creating(tokio::task::JoinHandle<Result<(), ScopeCreateErrorKind>>),
 }
 
-/// One acquire attempt. Never waits: it runs on the caller's thread under the
-/// pool's `try_lock`, so a cause that needs time to clear is reported as
-/// [`ScopeAcquireOutcome::Retry`] for the caller to wait on.
-///
-/// If the pool is exhausted but below max capacity, spawns background connection creation.
+/// Test-only single attempt: one pass of the classifier under `try_lock`, so a
+/// cause that needs time to clear is reported as [`ScopeAcquireOutcome::Retry`]
+/// instead of waited on. Lets a test observe what one attempt sees (for example
+/// the first attempt reporting `NeedsResync`) without the wait that
+/// [`acquire_scope`] adds. Not an entry point: no native interface calls it.
 ///
 /// `routing_slot` determines which cluster node the scope connects to. In cluster mode,
 /// pass the hash slot of the key(s) the scope will operate on. In standalone mode, this
@@ -1197,9 +1197,9 @@ fn scope_pool_for(client_id: u64, connection_request_bytes: Vec<u8>) -> ScopePoo
     }
 }
 
-/// The classification step shared by [`acquire_scope_outcome`] (which `try_lock`s)
-/// and [`acquire_scope`] (which awaits the lock). Takes the guard by value because
-/// the `NeedsResync` arm releases it before spawning.
+/// The classification step behind [`acquire_scope`] (and the test-only single
+/// attempt `acquire_scope_outcome`). Takes the guard by value because the
+/// `NeedsResync` arm releases it before spawning.
 #[cfg(feature = "proto")]
 fn classify_acquire(
     scope_pool: &Arc<TokioMutex<ScopePool>>,
@@ -1295,7 +1295,7 @@ fn classify_acquire(
 
 /// Re-`SELECT` one slot-matching idle connection that is on the wrong database onto
 /// `runtime_db`, off the pool lock, then return it to idle. Backs the
-/// [`ScopeAcquire::NeedsResync`] retry path in [`acquire_scope_outcome`]. If the
+/// [`ScopeAcquire::NeedsResync`] retry path in [`acquire_scope`]. If the
 /// SELECT fails, the connection is discarded (its slot reclaimed).
 #[cfg(feature = "proto")]
 pub(crate) async fn resync_idle_connection_database(
