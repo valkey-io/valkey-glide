@@ -67,11 +67,10 @@ matrix_test!(bitcount_range_bit, c, {
     let count: i64 = glide::AsyncCommands::glide_send_command_as(
         &c,
         glide::cmd("BITCOUNT")
-            .arg(&k)
-            .arg(0i64)
-            .arg(7i64)
-            .arg("BIT")
-            .clone(),
+            .with_arg(&k)
+            .with_arg(0i64)
+            .with_arg(7i64)
+            .with_arg("BIT"),
     )
     .await
     .unwrap();

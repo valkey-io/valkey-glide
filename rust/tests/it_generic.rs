@@ -96,7 +96,10 @@ matrix_test!(expire_nx_xx, c, {
     // NX sets only when no expiry exists — use raw cmd for EXPIRE with options.
     let nx_set: bool = glide::AsyncCommands::glide_send_command_as(
         &c,
-        glide::cmd("EXPIRE").arg(&k).arg(100).arg("NX").clone(),
+        glide::cmd("EXPIRE")
+            .with_arg(&k)
+            .with_arg(100)
+            .with_arg("NX"),
     )
     .await
     .unwrap();
@@ -105,7 +108,10 @@ matrix_test!(expire_nx_xx, c, {
     // NX again fails since an expiry now exists.
     let nx_set2: bool = glide::AsyncCommands::glide_send_command_as(
         &c,
-        glide::cmd("EXPIRE").arg(&k).arg(200).arg("NX").clone(),
+        glide::cmd("EXPIRE")
+            .with_arg(&k)
+            .with_arg(200)
+            .with_arg("NX"),
     )
     .await
     .unwrap();
@@ -114,7 +120,10 @@ matrix_test!(expire_nx_xx, c, {
     // XX succeeds since an expiry exists.
     let xx_set: bool = glide::AsyncCommands::glide_send_command_as(
         &c,
-        glide::cmd("EXPIRE").arg(&k).arg(200).arg("XX").clone(),
+        glide::cmd("EXPIRE")
+            .with_arg(&k)
+            .with_arg(200)
+            .with_arg("XX"),
     )
     .await
     .unwrap();
@@ -133,7 +142,10 @@ matrix_test!(expire_gt_lt, c, {
     // GT only applies when new > current.
     let gt_set: bool = glide::AsyncCommands::glide_send_command_as(
         &c,
-        glide::cmd("EXPIRE").arg(&k).arg(200).arg("GT").clone(),
+        glide::cmd("EXPIRE")
+            .with_arg(&k)
+            .with_arg(200)
+            .with_arg("GT"),
     )
     .await
     .unwrap();
@@ -141,7 +153,10 @@ matrix_test!(expire_gt_lt, c, {
 
     let gt_fail: bool = glide::AsyncCommands::glide_send_command_as(
         &c,
-        glide::cmd("EXPIRE").arg(&k).arg(50).arg("GT").clone(),
+        glide::cmd("EXPIRE")
+            .with_arg(&k)
+            .with_arg(50)
+            .with_arg("GT"),
     )
     .await
     .unwrap();
@@ -150,7 +165,10 @@ matrix_test!(expire_gt_lt, c, {
     // LT only applies when new < current.
     let lt_set: bool = glide::AsyncCommands::glide_send_command_as(
         &c,
-        glide::cmd("EXPIRE").arg(&k).arg(10).arg("LT").clone(),
+        glide::cmd("EXPIRE")
+            .with_arg(&k)
+            .with_arg(10)
+            .with_arg("LT"),
     )
     .await
     .unwrap();

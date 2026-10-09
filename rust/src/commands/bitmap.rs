@@ -2,7 +2,7 @@
 //! Bitmap commands. Mirrors Python's bitmap command surface.
 
 use crate::ValkeyResult;
-use crate::cmd::Cmd;
+use crate::cmd::cmd;
 use crate::executor::CommandExecutor;
 use crate::value::FromValkeyValue;
 use crate::value::ValkeyValue;
@@ -171,8 +171,7 @@ pub trait BitmapCommands: CommandExecutor {
 
     /// Find the position of the first bit set to `bit` (`BITPOS`).
     async fn bitpos<K: ToValkeyArgs + Send>(&self, key: K, bit: u8) -> ValkeyResult<i64> {
-        let mut cmd = Cmd::new();
-        cmd.arg("BITPOS").arg(key).arg(bit);
+        let cmd = cmd("BITPOS").with_arg(key).with_arg(bit);
         i64::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
@@ -186,11 +185,12 @@ pub trait BitmapCommands: CommandExecutor {
         end: i64,
         index_type: Option<BitmapIndexType>,
     ) -> ValkeyResult<i64> {
-        let mut cmd = Cmd::new();
-        cmd.arg("BITPOS").arg(key).arg(bit).arg(start).arg(end);
-        if let Some(it) = index_type {
-            cmd.arg(it.as_arg());
-        }
+        let cmd = cmd("BITPOS")
+            .with_arg(key)
+            .with_arg(bit)
+            .with_arg(start)
+            .with_arg(end)
+            .with_arg(index_type.map(|it| it.as_arg()));
         i64::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
@@ -201,9 +201,7 @@ pub trait BitmapCommands: CommandExecutor {
         key: K,
         subcommands: &[BitFieldSubcommand],
     ) -> ValkeyResult<Vec<Option<i64>>> {
-        let mut cmd = Cmd::new();
-        cmd.arg("BITFIELD").arg(key);
-        cmd.arg(subcommands);
+        let cmd = cmd("BITFIELD").with_arg(key).with_arg(subcommands);
         parse_bitfield(self.execute_command(cmd, None).await?)
     }
 
@@ -214,9 +212,7 @@ pub trait BitmapCommands: CommandExecutor {
         key: K,
         subcommands: &[BitFieldSubcommand],
     ) -> ValkeyResult<Vec<Option<i64>>> {
-        let mut cmd = Cmd::new();
-        cmd.arg("BITFIELD_RO").arg(key);
-        cmd.arg(subcommands);
+        let cmd = cmd("BITFIELD_RO").with_arg(key).with_arg(subcommands);
         parse_bitfield(self.execute_command(cmd, None).await?)
     }
 }

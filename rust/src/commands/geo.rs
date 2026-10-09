@@ -5,7 +5,7 @@
 
 use crate::GlideError;
 use crate::ValkeyResult;
-use crate::cmd::Cmd;
+use crate::cmd::cmd;
 use crate::commands::options::{ExistenceCheck, OrderBy};
 use crate::executor::CommandExecutor;
 use crate::value::FromValkeyValue;
@@ -147,14 +147,13 @@ pub trait GeoCommands: CommandExecutor {
         radius: f64,
         unit: GeoUnit,
     ) -> ValkeyResult<Vec<Bytes>> {
-        let mut cmd = Cmd::new();
-        cmd.arg("GEOSEARCH")
-            .arg(key)
-            .arg("FROMMEMBER")
-            .arg(member)
-            .arg("BYRADIUS")
-            .arg(radius)
-            .arg(unit);
+        let cmd = cmd("GEOSEARCH")
+            .with_arg(key)
+            .with_arg("FROMMEMBER")
+            .with_arg(member)
+            .with_arg("BYRADIUS")
+            .with_arg(radius)
+            .with_arg(unit);
         match self.execute_command(cmd, None).await? {
             ValkeyValue::Array(items) => items
                 .into_iter()
@@ -174,15 +173,11 @@ pub trait GeoCommands: CommandExecutor {
         existence_check: Option<ExistenceCheck>,
         changed: bool,
     ) -> ValkeyResult<i64> {
-        let mut cmd = Cmd::new();
-        cmd.arg("GEOADD").arg(key);
-        if let Some(c) = existence_check {
-            cmd.arg(c);
-        }
-        if changed {
-            cmd.arg("CH");
-        }
-        cmd.arg(members);
+        let cmd = cmd("GEOADD")
+            .with_arg(key)
+            .with_arg(existence_check)
+            .with_arg(changed.then_some("CH"))
+            .with_arg(members);
         i64::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
@@ -195,13 +190,12 @@ pub trait GeoCommands: CommandExecutor {
         shape: GeoSearchShape,
         options: GeoSearchOptions,
     ) -> ValkeyResult<Vec<GeoSearchResult>> {
-        let mut cmd = Cmd::new();
-        cmd.arg("GEOSEARCH")
-            .arg(key)
-            .arg("FROMMEMBER")
-            .arg(member)
-            .arg(shape)
-            .arg(options);
+        let cmd = cmd("GEOSEARCH")
+            .with_arg(key)
+            .with_arg("FROMMEMBER")
+            .with_arg(member)
+            .with_arg(shape)
+            .with_arg(options);
         Vec::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
@@ -214,14 +208,13 @@ pub trait GeoCommands: CommandExecutor {
         shape: GeoSearchShape,
         options: GeoSearchOptions,
     ) -> ValkeyResult<Vec<GeoSearchResult>> {
-        let mut cmd = Cmd::new();
-        cmd.arg("GEOSEARCH")
-            .arg(key)
-            .arg("FROMLONLAT")
-            .arg(coord.longitude)
-            .arg(coord.latitude)
-            .arg(shape)
-            .arg(options);
+        let cmd = cmd("GEOSEARCH")
+            .with_arg(key)
+            .with_arg("FROMLONLAT")
+            .with_arg(coord.longitude)
+            .with_arg(coord.latitude)
+            .with_arg(shape)
+            .with_arg(options);
         Vec::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
@@ -239,14 +232,13 @@ pub trait GeoCommands: CommandExecutor {
         shape: GeoSearchShape,
         options: GeoSearchStoreOptions,
     ) -> ValkeyResult<i64> {
-        let mut cmd = Cmd::new();
-        cmd.arg("GEOSEARCHSTORE")
-            .arg(destination)
-            .arg(source)
-            .arg("FROMMEMBER")
-            .arg(member)
-            .arg(shape)
-            .arg(options);
+        let cmd = cmd("GEOSEARCHSTORE")
+            .with_arg(destination)
+            .with_arg(source)
+            .with_arg("FROMMEMBER")
+            .with_arg(member)
+            .with_arg(shape)
+            .with_arg(options);
         i64::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
@@ -260,15 +252,14 @@ pub trait GeoCommands: CommandExecutor {
         shape: GeoSearchShape,
         options: GeoSearchStoreOptions,
     ) -> ValkeyResult<i64> {
-        let mut cmd = Cmd::new();
-        cmd.arg("GEOSEARCHSTORE")
-            .arg(destination)
-            .arg(source)
-            .arg("FROMLONLAT")
-            .arg(coord.longitude)
-            .arg(coord.latitude)
-            .arg(shape)
-            .arg(options);
+        let cmd = cmd("GEOSEARCHSTORE")
+            .with_arg(destination)
+            .with_arg(source)
+            .with_arg("FROMLONLAT")
+            .with_arg(coord.longitude)
+            .with_arg(coord.latitude)
+            .with_arg(shape)
+            .with_arg(options);
         i64::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 }
