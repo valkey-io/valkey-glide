@@ -1443,3 +1443,6 @@ class TestSyncBatch:
         result = exec_batch(glide_sync_client, batch, raise_on_error=True)
         assert result is not None
         assert result[0] == b"RESET"
+        # RESET downgrades the glide client to RESP2 for the rest of its life
+        # (glide-core stores RESP2 for reconnects too); keep it out of the pool.
+        glide_sync_client.close()
