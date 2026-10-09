@@ -11,11 +11,11 @@ on:
             - v*
         paths:
             - glide-core/**
+            - benchmarks/rust/**
 
             # Rust dependencies
             - glide-telemetry/**
             - glide-logger/**
-            - benchmarks/rust/**
             - deny.toml
 
             # GitHub workflows
@@ -30,15 +30,17 @@ on:
             - .github/workflows/lint-rust/action.yml
             - .github/workflows/test-benchmark/action.yml
             - .github/json_matrices/**
+            - benchmarks/install_and_test.sh
+            - benchmarks/utilities/**
             - utils/cluster_manager.py
     pull_request:
         paths:
             - glide-core/**
+            - benchmarks/rust/**
 
             # Rust dependencies
             - glide-telemetry/**
             - glide-logger/**
-            - benchmarks/rust/**
             - deny.toml
 
             # GitHub workflows
@@ -53,6 +55,8 @@ on:
             - .github/workflows/lint-rust/action.yml
             - .github/workflows/test-benchmark/action.yml
             - .github/json_matrices/**
+            - benchmarks/install_and_test.sh
+            - benchmarks/utilities/**
             - utils/cluster_manager.py
     workflow_dispatch:
         inputs:
