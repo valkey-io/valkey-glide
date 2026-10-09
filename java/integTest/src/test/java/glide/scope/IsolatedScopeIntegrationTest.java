@@ -5,13 +5,24 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import glide.TestConfiguration;
 import glide.api.GlideClient;
+import glide.api.models.configuration.AdvancedGlideClientConfiguration;
 import glide.api.models.configuration.GlideClientConfiguration;
 import glide.api.models.configuration.NodeAddress;
+import glide.api.models.configuration.TlsAdvancedConfiguration;
+import glide.api.models.exceptions.ClosingException;
+import glide.api.models.exceptions.RequestException;
+import glide.api.models.exceptions.TimeoutException;
 import glide.api.models.scope.IsolatedScope;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
@@ -304,5 +315,112 @@ public class IsolatedScopeIntegrationTest {
                         + "/"
                         + numThreads
                         + " threads succeeded with unique scopes.");
+    }
+
+    // ---- Acquire fails fast -------------------------------------------------
+    //
+    // An acquire stops as soon as its outcome is known: the exception class names
+    // the cause, and a cause that waiting cannot fix is reported without waiting.
+
+    /**
+     * The scope pool holds at most this many connections per client (glide-core
+     * ScopePoolConfig::default().max_total). Not configurable from Java.
+     */
+    private static final int SCOPE_POOL_MAX_TOTAL = 64;
+
+    private static List<IsolatedScope> holdWholeScopePool(GlideClient client) throws Exception {
+        List<IsolatedScope> held = new ArrayList<>(SCOPE_POOL_MAX_TOTAL);
+        for (int i = 0; i < SCOPE_POOL_MAX_TOTAL; i++) {
+            held.add(client.scopedConnection(Duration.ofSeconds(10)).get(10, TimeUnit.SECONDS));
+        }
+        return held;
+    }
+
+    private static Throwable acquireFailure(CompletableFuture<IsolatedScope> acquire)
+            throws Exception {
+        ExecutionException wrapped =
+                assertThrows(ExecutionException.class, () -> acquire.get(10, TimeUnit.SECONDS));
+        return wrapped.getCause();
+    }
+
+    @Test
+    public void exhaustedPoolTimesOutNamingTheCause() throws Exception {
+        try (GlideClient client =
+                GlideClient.createClient(getTestClientConfig()).get(10, TimeUnit.SECONDS)) {
+            List<IsolatedScope> held = holdWholeScopePool(client);
+            try {
+                long started = System.nanoTime();
+                Throwable cause = acquireFailure(client.scopedConnection(Duration.ofMillis(500)));
+                long elapsedMs = (System.nanoTime() - started) / 1_000_000;
+
+                assertInstanceOf(TimeoutException.class, cause);
+                assertTrue(cause.getMessage().contains("pool exhausted"), cause.getMessage());
+                assertTrue(elapsedMs >= 400 && elapsedMs < 2000, "elapsed " + elapsedMs + "ms");
+            } finally {
+                held.forEach(IsolatedScope::close);
+            }
+        }
+    }
+
+    @Test
+    public void closingTheClientEndsAWaitingAcquire() throws Exception {
+        GlideClient client = GlideClient.createClient(getTestClientConfig()).get(10, TimeUnit.SECONDS);
+        holdWholeScopePool(client);
+
+        CompletableFuture<Void> closer =
+                CompletableFuture.runAsync(
+                        () -> {
+                            try {
+                                Thread.sleep(200);
+                                client.close();
+                            } catch (InterruptedException e) {
+                                Thread.currentThread().interrupt();
+                            } catch (ExecutionException e) {
+                                throw new IllegalStateException(e);
+                            }
+                        });
+        long started = System.nanoTime();
+        Throwable cause = acquireFailure(client.scopedConnection(Duration.ofSeconds(5)));
+        long elapsedMs = (System.nanoTime() - started) / 1_000_000;
+
+        assertInstanceOf(ClosingException.class, cause);
+        assertTrue(elapsedMs < 2000, "waited " + elapsedMs + "ms past the close for a 5s deadline");
+        closer.get(5, TimeUnit.SECONDS);
+    }
+
+    @Test
+    public void lazyMtlsParentFailsWithoutWaiting() throws Exception {
+        byte[] caCert =
+                Files.readAllBytes(
+                        Paths.get(System.getProperty("user.dir"))
+                                .getParent()
+                                .getParent()
+                                .resolve("utils")
+                                .resolve("tls_crts")
+                                .resolve("ca.crt"));
+        // A lazily connected client with TLS material never dials, so there is
+        // nothing for a scoped connection to inherit.
+        GlideClientConfiguration config =
+                GlideClientConfiguration.builder()
+                        .address(NodeAddress.builder().host("127.0.0.1").port(1).build())
+                        .useTLS(true)
+                        .lazyConnect(true)
+                        .requestTimeout(5000)
+                        .advancedConfiguration(
+                                AdvancedGlideClientConfiguration.builder()
+                                        .tlsAdvancedConfiguration(
+                                                TlsAdvancedConfiguration.builder().rootCertificates(caCert).build())
+                                        .build())
+                        .build();
+
+        try (GlideClient client = GlideClient.createClient(config).get(10, TimeUnit.SECONDS)) {
+            long started = System.nanoTime();
+            Throwable cause = acquireFailure(client.scopedConnection(Duration.ofSeconds(5)));
+            long elapsedMs = (System.nanoTime() - started) / 1_000_000;
+
+            assertInstanceOf(RequestException.class, cause);
+            assertTrue(cause.getMessage().contains("certificate material"), cause.getMessage());
+            assertTrue(elapsedMs < 2000, "elapsed " + elapsedMs + "ms");
+        }
     }
 }
