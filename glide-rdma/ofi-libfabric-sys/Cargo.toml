@@ -1,0 +1,50 @@
+# Libfabric Rust Bindings — vendored into valkey-glide.
+#
+# Upstream: https://github.com/ofiwg/libfabric, bindings/rust, rev 6953579a5035.
+# Vendored so that GLIDE owns `build.rs` for dynamic linking changes.
+#
+# Divergence from upstream:
+#   1. The crate's metadata is inlined rather than inherited from libfabric's workspace.
+#   2. No hard reference to libfabric; glide-rdma resolves the few libfabric
+#      symbols it needs at run time.
+#   3. libfabric's public headers are vendored under `include/` and the bindgen
+#      output is generated once and kept as `src/bindings.rs`. Together these mean
+#      a build needs neither libfabric nor libclang on the machine.
+#   4. Upstream's `asan` feature and its tests are removed.
+#
+# This software is available to you under a choice of one of two
+# licenses. You may choose to be licensed under the terms of the BSD
+# license or the GNU General Public License (GPL) Version 2.
+#
+# See COPYING file for full license details. Valkey GLIDE uses this crate, and the
+# vendored headers, under the BSD-2-Clause option.
+
+[package]
+name = "ofi-libfabric-sys"
+links = "libfabric"
+build = "build.rs"
+readme = "README.md"
+version = "0.1.0"
+edition = "2024"
+description = "The official distribution of lightweight Rust bindings for Libfabric - a communication API for high-performance parallel and distributed applications, by the OFI Working Group."
+authors = ["Libfabric Developers <libfabric-users@lists.openfabrics.org>"]
+license = "BSD-2-Clause OR GPL-2.0-only"
+license-file = "COPYING"
+homepage = "https://ofiwg.github.io/libfabric/"
+repository = "https://github.com/ofiwg/libfabric.git"
+documentation = "https://ofiwg.github.io/libfabric/"
+keywords = ["libfabric", "hpc", "networking", "rdma", "ffi"]
+categories = ["network-programming", "api-bindings"]
+
+[features]
+# Re-run bindgen and update `src/bindings.rs` in the tree. Needs libclang.
+# Off by default so that ordinary builds, including every release builder, do not.
+regenerate-bindings = ["dep:bindgen"]
+
+[dependencies]
+libc = "0.2"
+
+[build-dependencies]
+# Only used by `regenerate-bindings`; the generated file is kept in the tree.
+bindgen = { version = "0.72.0", optional = true }
+cc = "1.2.26"

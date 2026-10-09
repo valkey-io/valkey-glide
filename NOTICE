@@ -2,3 +2,4 @@ Valkey General Language Independent Driver for the Enterprise (GLIDE), is an ope
 
 Copyright 2023 Amazon.com, Inc. or its affiliates. All Rights Reserved.
 redis-rs code copyright 2022 by redis-rs contributors.
+libfabric headers and Rust bindings copyright libfabric contributors, used under the BSD-2-Clause license.
