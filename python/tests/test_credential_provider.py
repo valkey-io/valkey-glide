@@ -784,7 +784,7 @@ async def test_async_pipe_is_initialized_before_native_creation(monkeypatch):
 @pytest.mark.parametrize(
     "failure_stage", ["pipe", "nonblocking", "init", "registration"]
 )
-async def test_async_pipe_setup_failure_rolls_back_and_retries(
+async def test_async_pipe_setup_failure_rolls_back_and_retries(  # noqa: C901
     monkeypatch, failure_stage
 ):
     import glide.glide_client as async_client_module
@@ -837,24 +837,63 @@ async def test_async_pipe_setup_failure_rolls_back_and_retries(
     if failure_stage == "init":
         fake_lib.init_async_pipe.side_effect = OSError("injected init failure")
 
-    loop = asyncio.get_running_loop()
-    real_add_reader = loop.add_reader
-    real_remove_reader = loop.remove_reader
+    is_asyncio = sniffio.current_async_library() == "asyncio"
+    loop = asyncio.get_running_loop() if is_asyncio else None
     removed_readers = []
+    trio_cancel_scopes = []
+    trio_reader_completions = []
 
-    def tracked_add_reader(*args, **kwargs):
-        nonlocal failed
-        if failure_stage == "registration" and not failed:
-            failed = True
-            raise OSError("injected registration failure")
-        return real_add_reader(*args, **kwargs)
+    if is_asyncio:
+        assert loop is not None
+        real_add_reader = loop.add_reader
+        real_remove_reader = loop.remove_reader
 
-    def tracked_remove_reader(fd):
-        removed_readers.append(fd)
-        return real_remove_reader(fd)
+        def tracked_add_reader(*args, **kwargs):
+            nonlocal failed
+            if failure_stage == "registration" and not failed:
+                failed = True
+                raise OSError("injected registration failure")
+            return real_add_reader(*args, **kwargs)
 
-    monkeypatch.setattr(loop, "add_reader", tracked_add_reader)
-    monkeypatch.setattr(loop, "remove_reader", tracked_remove_reader)
+        def tracked_remove_reader(fd):
+            removed_readers.append(fd)
+            return real_remove_reader(fd)
+
+        monkeypatch.setattr(loop, "add_reader", tracked_add_reader)
+        monkeypatch.setattr(loop, "remove_reader", tracked_remove_reader)
+    else:
+        import trio
+
+        real_spawn_system_task = trio.lowlevel.spawn_system_task
+
+        def tracked_spawn_system_task(async_fn, *args, **kwargs):
+            nonlocal failed
+            if async_fn is not async_client_module._trio_pipe_reader:
+                return real_spawn_system_task(async_fn, *args, **kwargs)
+
+            cancel_scope = args[2]
+            trio_cancel_scopes.append(cancel_scope)
+            if failure_stage == "registration" and not failed:
+                failed = True
+                raise OSError("injected registration failure")
+
+            completion = trio.Event()
+            trio_reader_completions.append(completion)
+
+            async def tracked_pipe_reader():
+                try:
+                    await async_fn(*args)
+                except OSError:
+                    if not cancel_scope.cancel_called:
+                        raise
+                finally:
+                    completion.set()
+
+            return real_spawn_system_task(tracked_pipe_reader, **kwargs)
+
+        monkeypatch.setattr(
+            trio.lowlevel, "spawn_system_task", tracked_spawn_system_task
+        )
 
     owner_registries = (
         ffi_helpers._address_resolver_owners,
@@ -866,16 +905,26 @@ async def test_async_pipe_setup_failure_rolls_back_and_retries(
         lambda host, port: (host, port),
     )
 
-    with pytest.raises(ClosingError, match="async response pipe"):
+    with pytest.raises(ClosingError, match="async response pipe") as exc_info:
         await async_client_module.GlideClient.create(config)
 
+    assert str(exc_info.value.__cause__) == f"injected {failure_stage} failure"
     fake_lib.create_client.assert_not_called()
     expected_failed_init_calls = 1 if failure_stage == "init" else 0
     assert fake_lib.init_async_pipe.call_count == expected_failed_init_calls
     fake_lib.reinit_async_pipe.assert_not_called()
-    if failure_stage == "init":
-        assert len(removed_readers) == 1
+    if is_asyncio:
+        if failure_stage == "init":
+            assert len(removed_readers) == 1
+        else:
+            assert not removed_readers
     else:
+        expected_registration_attempts = (
+            1 if failure_stage in ("init", "registration") else 0
+        )
+        assert len(trio_cancel_scopes) == expected_registration_attempts
+        if failure_stage == "init":
+            assert trio_cancel_scopes[0].cancel_called
         assert not removed_readers
     assert not registry
     assert (
@@ -896,6 +945,10 @@ async def test_async_pipe_setup_failure_rolls_back_and_retries(
         with pytest.raises(OSError):
             os.fstat(fd)
 
+    if not is_asyncio and failure_stage == "init":
+        with trio.fail_after(1):
+            await trio_reader_completions[0].wait()
+
     # Restore the failed stage and prove that the process-wide transport can be
     # established by a later creation attempt.
     fake_lib.init_async_pipe.side_effect = None
@@ -911,7 +964,15 @@ async def test_async_pipe_setup_failure_rolls_back_and_retries(
         await client.close()
         read_fd = async_client_module._async_pipe_read_fd
         write_fd = async_client_module._async_pipe_write_fd
-        loop.remove_reader(read_fd)
+        if is_asyncio:
+            assert loop is not None
+            loop.remove_reader(read_fd)
+        else:
+            cancel_scope = async_client_module._trio_pipe_cancel_scope
+            assert cancel_scope is not None
+            cancel_scope.cancel()
+            with trio.fail_after(1):
+                await trio_reader_completions[-1].wait()
         os.close(read_fd)
         os.close(write_fd)
         async_client_module._async_pipe_read_fd = -1
