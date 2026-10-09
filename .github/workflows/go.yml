@@ -194,11 +194,12 @@ jobs:
 
             - name: Run Example Tests
               # Runs on the newest Valkey engine in the matrix so that examples for
-              # commands from any supported version (e.g. HGETDEL, added in 9.1) are
-              # exercised against a server that actually implements them. Older engines
-              # remain covered by the version-gated integration tests.
+              # commands from any supported version are exercised against a server
+              # that actually implements them. Older engines remain covered by the
+              # version-gated integration tests.
               working-directory: go
-              if: ${{ matrix.engine.type == 'valkey' && matrix.engine.version == '9.1' && !github.event.inputs.rc-version }}
+              # TODO #7312: Bump to 9.2.0 once released
+              if: ${{ matrix.engine.type == 'valkey' && matrix.engine.version == '9.2.0-rc1' && !github.event.inputs.rc-version }}
               run: |
                   make -k example-test
 

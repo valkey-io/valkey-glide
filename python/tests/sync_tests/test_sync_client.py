@@ -8390,10 +8390,15 @@ class TestCommands:
         assert glide_sync_client.object_encoding(string_key) == "embstr".encode()
 
         assert glide_sync_client.lpush(list_key, ["1"]) == 1
-        if sync_check_if_server_version_lt(glide_sync_client, "7.2.0"):
-            assert glide_sync_client.object_encoding(list_key) == "quicklist".encode()
-        else:
-            assert glide_sync_client.object_encoding(list_key) == "listpack".encode()
+        expected_list_encoding = (
+            "quicklist"
+            if sync_check_if_server_version_lt(glide_sync_client, "7.2.0")
+            else "listpack"
+        )
+        assert (
+            glide_sync_client.object_encoding(list_key)
+            == expected_list_encoding.encode()
+        )
 
         # The default value of set-max-intset-entries is 512
         for i in range(0, 513):
@@ -8404,16 +8409,15 @@ class TestCommands:
         assert glide_sync_client.object_encoding(intset_key) == "intset".encode()
 
         assert glide_sync_client.sadd(set_listpack_key, ["foo"]) == 1
-        if sync_check_if_server_version_lt(glide_sync_client, "7.2.0"):
-            assert (
-                glide_sync_client.object_encoding(set_listpack_key)
-                == "hashtable".encode()
-            )
-        else:
-            assert (
-                glide_sync_client.object_encoding(set_listpack_key)
-                == "listpack".encode()
-            )
+        expected_small_set_encoding = (
+            "hashtable"
+            if sync_check_if_server_version_lt(glide_sync_client, "7.2.0")
+            else "listpack"
+        )
+        assert (
+            glide_sync_client.object_encoding(set_listpack_key)
+            == expected_small_set_encoding.encode()
+        )
 
         # The default value of hash-max-listpack-entries is 512
         for i in range(0, 513):
@@ -8424,33 +8428,39 @@ class TestCommands:
         )
 
         assert glide_sync_client.hset(hash_listpack_key, {"1": "2"}) == 1
-        if sync_check_if_server_version_lt(glide_sync_client, "7.0.0"):
-            assert (
-                glide_sync_client.object_encoding(hash_listpack_key)
-                == "ziplist".encode()
-            )
-        else:
-            assert (
-                glide_sync_client.object_encoding(hash_listpack_key)
-                == "listpack".encode()
-            )
+        expected_small_hash_encoding = (
+            "ziplist"
+            if sync_check_if_server_version_lt(glide_sync_client, "7.0.0")
+            else "listpack"
+        )
+        assert (
+            glide_sync_client.object_encoding(hash_listpack_key)
+            == expected_small_hash_encoding.encode()
+        )
 
         # The default value of zset-max-listpack-entries is 128
         for i in range(0, 129):
             assert glide_sync_client.zadd(skiplist_key, {str(i): 2.0}) == 1
-        assert glide_sync_client.object_encoding(skiplist_key) == "skiplist".encode()
+        expected_sorted_set_encoding = (
+            "skiplist"
+            if sync_check_if_server_version_lt(glide_sync_client, "9.2.0")
+            else "btree"
+        )
+        assert (
+            glide_sync_client.object_encoding(skiplist_key)
+            == expected_sorted_set_encoding.encode()
+        )
 
         assert glide_sync_client.zadd(zset_listpack_key, {"1": 2.0}) == 1
-        if sync_check_if_server_version_lt(glide_sync_client, "7.0.0"):
-            assert (
-                glide_sync_client.object_encoding(zset_listpack_key)
-                == "ziplist".encode()
-            )
-        else:
-            assert (
-                glide_sync_client.object_encoding(zset_listpack_key)
-                == "listpack".encode()
-            )
+        expected_small_sorted_set_encoding = (
+            "ziplist"
+            if sync_check_if_server_version_lt(glide_sync_client, "7.0.0")
+            else "listpack"
+        )
+        assert (
+            glide_sync_client.object_encoding(zset_listpack_key)
+            == expected_small_sorted_set_encoding.encode()
+        )
 
         assert glide_sync_client.xadd(stream_key, [("field", "value")]) is not None
         assert glide_sync_client.object_encoding(stream_key) == "stream".encode()
