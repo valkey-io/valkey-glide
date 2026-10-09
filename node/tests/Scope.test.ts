@@ -693,9 +693,7 @@ describe("IsolatedScope (cluster)", () => {
     // Keys in distinct hash tags land on different slots (and, across three
     // shards, different nodes), so a scope routed to the wrong node fails
     // with MOVED.
-    const routedKeys = ["{a}scope", "{b}scope", "{c}scope"].map(
-        (tag) => `${tag}-${Math.random().toString(36).slice(2, 10)}`,
-    );
+    const routedKeys = ["{a}", "{b}", "{c}"].map((tag) => makeKey(tag));
 
     it(
         "scopedConnection(routingKey) routes on a cluster client",

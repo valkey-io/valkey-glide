@@ -18,7 +18,7 @@ import type { BaseClient } from "./BaseClient";
 /** client -> serialized ConnectionRequest captured at connect time. */
 const connectionRequests = new WeakMap<BaseClient, Uint8Array>();
 
-/** Store the connection request captured when the client connected. */
+/** Store the connection request a client connected with (or the pool's, for a borrowed client). */
 export function setScopeConnectionRequest(
     client: BaseClient,
     bytes: Uint8Array,
@@ -26,14 +26,9 @@ export function setScopeConnectionRequest(
     connectionRequests.set(client, bytes);
 }
 
-/** Drop the stored request when the client closes. */
+/** Drop the stored request when the client closes or is released to its pool. */
 export function clearScopeConnectionRequest(client: BaseClient): void {
     connectionRequests.delete(client);
-}
-
-/** Whether a connection request is cached for this client. */
-export function hasScopeConnectionRequest(client: BaseClient): boolean {
-    return connectionRequests.has(client);
 }
 
 /**

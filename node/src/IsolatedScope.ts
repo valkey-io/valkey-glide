@@ -19,7 +19,7 @@ import {
 } from "../build-ts/native";
 import type { GlideString } from "./BaseClient";
 import type { BaseClient } from "./BaseClient";
-import { hasScopeConnectionRequest, tryAcquireScope } from "./ScopeInternal.js";
+import { tryAcquireScope } from "./ScopeInternal.js";
 
 // ─── Wire Format Serialization ───────────────────────────────────────────────
 
@@ -146,11 +146,8 @@ export class IsolatedScope {
      * Uses `glide_core::scope::try_acquire_scope` with exponential backoff.
      * Creates new scope connections in the background if the pool is empty.
      *
-     * The connection request is taken from the client (captured when it
-     * connected), so the one-argument form `IsolatedScope.acquire(client)`
-     * works on both a standalone client and a pool-borrowed client. Passing
-     * `connectionRequestBytes` explicitly is still supported and overrides the
-     * client's captured request.
+     * The connection request is taken from the client, whether it was created
+     * directly or borrowed from a `ClientPool`.
      *
      * Prefer {@link BaseClient.scopedConnection} for the common case.
      *
@@ -204,21 +201,10 @@ export class IsolatedScope {
             }
         }
 
-        // Without explicit bytes, the scope reuses the client's cached request.
-        // It lives in module-private storage, so acquisition happens through a
-        // helper that never hands the bytes back here.
-        if (!explicitBytes && !hasScopeConnectionRequest(client)) {
-            throw new Error(
-                "Client has no connection request available for a scope. " +
-                    "Ensure it was created via createClient() or borrowed from a ClientPool, and is still open.",
-            );
-        }
-
         // Get the client_id from the handle (registered in Rust scope registry)
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const clientId = (client as any).clientHandle?.clientId;
+        const clientId = client.getClientId();
 
-        if (clientId === undefined || clientId === null) {
+        if (clientId < 0) {
             throw new Error(
                 "Client does not have a valid handle. Ensure it was created via createClient() or borrowed from a ClientPool, and is still open.",
             );

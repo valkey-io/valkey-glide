@@ -94,6 +94,7 @@ import {
     createUnWatch,
     parseClientTrackingInfoResponse,
 } from "./Commands";
+import { setScopeConnectionRequest } from "./ScopeInternal";
 
 /**
  * Constant representing all sharded channels.
@@ -791,6 +792,7 @@ export class GlideClusterClient extends BaseClient {
     public static async fromPoolClientId(
         clientId: number,
         options: GlideClusterClientConfiguration,
+        connectionRequestBytes: Uint8Array,
     ): Promise<GlideClusterClient> {
         const { poolBuildHandle } = await import("../build-ts/native");
         // Create the client instance whose handleResponsesAvailable will be stored
@@ -806,6 +808,9 @@ export class GlideClusterClient extends BaseClient {
         // Inject the handle into the SAME instance whose callback was registered.
         (client as unknown as { clientHandle: typeof handle }).clientHandle =
             handle;
+        // The client never runs connectToServer, so give it the pool's
+        // connection request for scopedConnection().
+        setScopeConnectionRequest(client, connectionRequestBytes);
         return client;
     }
 

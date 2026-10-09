@@ -33,10 +33,7 @@ import { GlideClient } from "./GlideClient";
 import type { GlideClientConfiguration } from "./GlideClient";
 import { GlideClusterClient } from "./GlideClusterClient";
 import type { GlideClusterClientConfiguration } from "./GlideClusterClient";
-import {
-    clearScopeConnectionRequest,
-    setScopeConnectionRequest,
-} from "./ScopeInternal";
+import { clearScopeConnectionRequest } from "./ScopeInternal";
 import {
     createPool,
     poolTryAcquire,
@@ -354,15 +351,13 @@ export class ClientPool {
             ? await GlideClusterClient.fromPoolClientId(
                   clientId,
                   this.clientConfig as GlideClusterClientConfiguration,
+                  this.connectionRequestBytes,
               )
             : await GlideClient.fromPoolClientId(
                   clientId,
                   this.clientConfig as GlideClientConfiguration,
+                  this.connectionRequestBytes,
               );
-
-        // Borrowed clients never run connectToServer, so give them the pool's
-        // connection request; scopedConnection() opens scopes from it.
-        setScopeConnectionRequest(client, this.connectionRequestBytes);
 
         // Override close() so that callers who call client.close() directly
         // (instead of pool.release(client)) still release the pool slot.

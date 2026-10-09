@@ -1836,6 +1836,20 @@ export class BaseClient {
     }
 
     /**
+     * Like {@link ensureClientIsOpen}, but also rejects a client with no native
+     * handle, such as one released back to a `ClientPool`.
+     */
+    private ensureClientIsUsable() {
+        this.ensureClientIsOpen();
+
+        if (!this.clientHandle) {
+            throw new ClosingError(
+                "Client handle not initialized. Please create a new client.",
+            );
+        }
+    }
+
+    /**
      * @internal
      *
      * Creates a promise that resolves or rejects based on the result of a command request.
@@ -1855,13 +1869,7 @@ export class BaseClient {
 
         raiseOnError = false,
     ): Promise<T> {
-        this.ensureClientIsOpen();
-
-        if (!this.clientHandle) {
-            throw new ClosingError(
-                "Client handle not initialized. Please create a new client.",
-            );
-        }
+        this.ensureClientIsUsable();
 
         if (!Array.isArray(command)) {
             return this.sendCommand<T>(command, options);
@@ -10167,10 +10175,7 @@ export class BaseClient {
                 ).finish(),
             );
 
-            // Keep the exact bytes used to connect so a scope can reopen an
-            // identical connection through glide-core. They stay in
-            // module-private storage, off this instance and its prototype, so
-            // the password or mTLS key they carry cannot be read back.
+            // Keep the exact bytes used to connect for scopedConnection().
             setScopeConnectionRequest(this, connectionRequestBytes);
 
             this.clientHandle = await CreateDirectClient(
@@ -10263,18 +10268,7 @@ export class BaseClient {
         routingKey?: string,
         maxRetries = 10,
     ): Promise<IsolatedScope> {
-        // Reject on a closed client with ClosingError, like every command path,
-        // instead of the generic handle error the scope loop would raise.
-        this.ensureClientIsOpen();
-
-        // A client released back to a ClientPool is not marked closed, but its
-        // handle is gone; reject it the same way the command path does.
-        if (!this.clientHandle) {
-            throw new ClosingError(
-                "Client handle not initialized. Please create a new client.",
-            );
-        }
-
+        this.ensureClientIsUsable();
         return IsolatedScope.acquire(this, routingKey, maxRetries);
     }
 
