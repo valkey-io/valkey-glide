@@ -97,6 +97,10 @@ EXCLUDED_TESTS = {
         # Abandon detection tests — async-only (monitor runs on tokio runtime)
         "test_pool_abandon_detection",
         "test_pool_abandon_detection_disabled",
+        # Async-only: the client registry and its finalizer are part of the
+        # event-loop pipe transport, which the sync client does not have.
+        "test_unreferenced_client_releases_connection",
+        "dropped_client_gone",
     ],
     "sync_only": [
         "test_sync_fork",
