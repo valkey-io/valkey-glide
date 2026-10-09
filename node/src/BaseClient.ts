@@ -10266,6 +10266,15 @@ export class BaseClient {
         // Reject on a closed client with ClosingError, like every command path,
         // instead of the generic handle error the scope loop would raise.
         this.ensureClientIsOpen();
+
+        // A client released back to a ClientPool is not marked closed, but its
+        // handle is gone; reject it the same way the command path does.
+        if (!this.clientHandle) {
+            throw new ClosingError(
+                "Client handle not initialized. Please create a new client.",
+            );
+        }
+
         return IsolatedScope.acquire(this, routingKey, maxRetries);
     }
 

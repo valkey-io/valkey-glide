@@ -210,7 +210,7 @@ export class IsolatedScope {
         if (!explicitBytes && !hasScopeConnectionRequest(client)) {
             throw new Error(
                 "Client has no connection request available for a scope. " +
-                    "Ensure it was created via GlideClient.createClient() (or GlideClusterClient.createClient()) and is connected.",
+                    "Ensure it was created via createClient() or borrowed from a ClientPool, and is still open.",
             );
         }
 
@@ -220,7 +220,7 @@ export class IsolatedScope {
 
         if (clientId === undefined || clientId === null) {
             throw new Error(
-                "Client does not have a valid handle. Ensure it was created via GlideClient.createClient().",
+                "Client does not have a valid handle. Ensure it was created via createClient() or borrowed from a ClientPool, and is still open.",
             );
         }
 

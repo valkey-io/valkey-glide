@@ -58,7 +58,7 @@ export function tryAcquireScope(
     if (!bytes) {
         throw new Error(
             "Client has no connection request available for a scope. " +
-                "Ensure it was created via GlideClient.createClient() (or GlideClusterClient.createClient()) and is connected.",
+                "Ensure it was created via createClient() or borrowed from a ClientPool, and is still open.",
         );
     }
 
