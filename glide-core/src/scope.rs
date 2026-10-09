@@ -1101,6 +1101,29 @@ pub async fn acquire_scope(
     routing_slot: u16,
     deadline: Duration,
 ) -> Result<u64, ScopeAcquireError> {
+    acquire_scope_with_wait_cap(
+        client_id,
+        connection_request_bytes,
+        runtime,
+        routing_slot,
+        deadline,
+        SCOPE_ACQUIRE_WAIT_CAP,
+    )
+    .await
+}
+
+/// [`acquire_scope`] with the wait cap as a parameter. Tests pass a cap longer
+/// than the deadline so that returning before the deadline proves a wakeup
+/// fired; with the production cap the timer alone would satisfy the same assert.
+#[cfg(feature = "proto")]
+async fn acquire_scope_with_wait_cap(
+    client_id: u64,
+    connection_request_bytes: Vec<u8>,
+    runtime: &tokio::runtime::Handle,
+    routing_slot: u16,
+    deadline: Duration,
+    wait_cap: Duration,
+) -> Result<u64, ScopeAcquireError> {
     let started = Instant::now();
     let ScopePoolHandle {
         pool: scope_pool,
@@ -1135,7 +1158,7 @@ pub async fn acquire_scope(
         }
         tokio::select! {
             _ = &mut notified => {}
-            _ = tokio::time::sleep(remaining.min(SCOPE_ACQUIRE_WAIT_CAP)) => {}
+            _ = tokio::time::sleep(remaining.min(wait_cap)) => {}
         }
     }
 }
@@ -2343,6 +2366,10 @@ mod tests {
         server.join().expect("join server thread");
     }
 
+    /// Wait cap for the wake tests: longer than their deadline, so the timer arm
+    /// of the wait can never fire and only a `Notify` can end the wait early.
+    const NO_TIMER_WAKE: Duration = Duration::from_secs(60);
+
     /// The waiting acquire is woken by the release itself, not by a timer: the
     /// borrower gets the connection in roughly the time the other holder kept it,
     /// nowhere near the deadline.
@@ -2364,12 +2391,13 @@ mod tests {
         };
 
         let started = Instant::now();
-        let acquired = super::acquire_scope(
+        let acquired = super::acquire_scope_with_wait_cap(
             client_id,
             request_bytes,
             &tokio::runtime::Handle::current(),
             0,
             Duration::from_secs(5),
+            NO_TIMER_WAKE,
         )
         .await;
         let elapsed = started.elapsed();
@@ -2426,8 +2454,8 @@ mod tests {
     }
 
     /// Closing the parent while an acquire is waiting ends the wait with the
-    /// closed-parent cause, not a timeout at the deadline. The close removes the
-    /// pool without a pool event, so this also exercises the wait cap.
+    /// closed-parent cause, not a timeout at the deadline. The close runs outside
+    /// the pool lock, so the wake has to come from the handle's `Notify`.
     #[tokio::test]
     async fn acquire_scope_stops_when_parent_closes_mid_wait() {
         let client_id = 67_950_007_u64;
@@ -2439,12 +2467,13 @@ mod tests {
         });
 
         let started = Instant::now();
-        let acquired = super::acquire_scope(
+        let acquired = super::acquire_scope_with_wait_cap(
             client_id,
             request_bytes,
             &tokio::runtime::Handle::current(),
             0,
             Duration::from_secs(5),
+            NO_TIMER_WAKE,
         )
         .await;
         let elapsed = started.elapsed();
