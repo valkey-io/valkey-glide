@@ -1203,9 +1203,12 @@ class BaseClient(CoreCommands):
 
         Raises:
             TimeoutError: If no scope is available within the timeout.
-            ClosingError: If the client is closed.
+            ConnectionError: If the client is closed while waiting.
+            ConfigurationError: If the client's configuration cannot produce a
+                scoped connection.
+            ClosingError: If the client is already closed.
         """
-        import time
+        from glide_shared.ffi_helpers import handle_command_result
 
         from .isolated_scope import AsyncIsolatedScope
 
@@ -1223,32 +1226,18 @@ class BaseClient(CoreCommands):
 
         loop = asyncio.get_running_loop()
 
-        # One logical acquire: mint a single attempt token and pass it on every
-        # retry poll, so the core dedupes this acquire's retries to one in-flight
-        # creation while distinct concurrent acquires each dial their own.
-        attempt_token = self._lib.glide_scope_next_attempt_token()
-
         def _acquire_sync():
-            deadline = time.monotonic() + timeout
-            backoff = 0.001
-            while True:
-                buf = self._ffi.from_buffer(conn_req_bytes)
-                scope_id = self._lib.glide_scope_try_acquire(
-                    client_id,
-                    self._ffi.cast("const uint8_t*", buf),
-                    len(conn_req_bytes),
-                    routing_slot,
-                    attempt_token,
-                )
-                if scope_id >= 0:
-                    return scope_id
-                remaining = deadline - time.monotonic()
-                if remaining <= 0:
-                    raise TimeoutError(
-                        "Timed out waiting for isolated scope (pool exhausted)"
-                    )
-                time.sleep(min(backoff, remaining))
-                backoff = min(backoff * 2, 0.05)
+            buf = self._ffi.from_buffer(conn_req_bytes)
+            result = self._lib.glide_scope_acquire_blocking(
+                client_id,
+                self._ffi.cast("const uint8_t*", buf),
+                len(conn_req_bytes),
+                routing_slot,
+                int(timeout * 1000),
+            )
+            return handle_command_result(
+                self._ffi, self._lib, result, lambda resp: resp.int_value
+            )
 
         scope_id = await loop.run_in_executor(None, _acquire_sync)
 
