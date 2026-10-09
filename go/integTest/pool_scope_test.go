@@ -4,6 +4,7 @@ package integTest
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -1295,4 +1296,100 @@ func TestPoolBorrowedClientScopedConnection(t *testing.T) {
 
 	// Cleanup
 	client.Client.Del(ctx, []string{key})
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Acquire fails fast
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// The scope pool holds at most this many connections per client (glide-core
+// ScopePoolConfig::default().max_total). Not configurable from Go.
+const scopePoolMaxTotal = 64
+
+func holdWholeScopePool(t *testing.T, client scopeTestClient) []*glide.IsolatedScope {
+	t.Helper()
+	held := make([]*glide.IsolatedScope, 0, scopePoolMaxTotal)
+	for i := 0; i < scopePoolMaxTotal; i++ {
+		scope, err := client.ScopedConnection(context.Background(), 10*time.Second, "")
+		require.NoError(t, err)
+		held = append(held, scope)
+	}
+	return held
+}
+
+// An acquire stops as soon as its outcome is known: the error type names the
+// cause, and a cause that waiting cannot fix is reported without waiting.
+func TestScopeAcquireExhaustedPoolTimesOutNamingTheCause(t *testing.T) {
+	skipMode(t, false)
+	client := newScopeClient(t, false)
+	defer client.Close()
+
+	held := holdWholeScopePool(t, client)
+	defer func() {
+		for _, s := range held {
+			s.Close()
+		}
+	}()
+
+	started := time.Now()
+	_, err := client.ScopedConnection(context.Background(), 500*time.Millisecond, "")
+	elapsed := time.Since(started)
+
+	var timeoutErr *glide.TimeoutError
+	require.ErrorAs(t, err, &timeoutErr)
+	assert.Contains(t, err.Error(), "pool exhausted")
+	assert.GreaterOrEqual(t, elapsed, 400*time.Millisecond)
+	assert.Less(t, elapsed, 2*time.Second)
+}
+
+func TestScopeAcquireEndsWhenClientClosesMidWait(t *testing.T) {
+	skipMode(t, false)
+	client, err := glide.NewClient(standaloneConfig())
+	require.NoError(t, err)
+	holdWholeScopePool(t, client)
+
+	go func() {
+		time.Sleep(200 * time.Millisecond)
+		client.Close()
+	}()
+	started := time.Now()
+	_, err = client.ScopedConnection(context.Background(), 5*time.Second, "")
+	elapsed := time.Since(started)
+
+	var disconnect *glide.DisconnectError
+	require.ErrorAs(t, err, &disconnect)
+	assert.Less(t, elapsed, 2*time.Second, "waited %v past the close for a 5s deadline", elapsed)
+}
+
+func TestScopeAcquireLazyMtlsParentFailsWithoutWaiting(t *testing.T) {
+	caCert, err := getCaCertificate()
+	require.NoError(t, err)
+
+	// A lazily connected client with TLS material never dials, so there is
+	// nothing for a scoped connection to inherit.
+	cfg := config.NewClientConfiguration().
+		WithAddress(&config.NodeAddress{Host: "127.0.0.1", Port: 1}).
+		WithUseTLS(true).
+		WithLazyConnect(true).
+		WithRequestTimeout(5 * time.Second).
+		WithAdvancedConfiguration(
+			config.NewAdvancedClientConfiguration().WithTlsConfiguration(
+				config.NewTlsConfiguration().WithRootCertificates(caCert),
+			),
+		)
+	client, err := glide.NewClient(cfg)
+	require.NoError(t, err)
+	defer client.Close()
+
+	started := time.Now()
+	_, err = client.ScopedConnection(context.Background(), 5*time.Second, "")
+	elapsed := time.Since(started)
+
+	// Go maps an Unspecified error type to a plain error, so the cause is
+	// visible only in the message; what matters is that it is not a timeout.
+	require.Error(t, err)
+	var timeoutErr *glide.TimeoutError
+	assert.False(t, errors.As(err, &timeoutErr), "a terminal cause must not surface as a timeout")
+	assert.Contains(t, err.Error(), "certificate material")
+	assert.Less(t, elapsed, 2*time.Second)
 }
