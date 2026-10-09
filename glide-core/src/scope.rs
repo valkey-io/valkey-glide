@@ -959,10 +959,10 @@ impl ScopeAcquireOutcome {
 /// pass the hash slot of the key(s) the scope will operate on. In standalone mode, this
 /// parameter is ignored (all slots route to the same node).
 ///
-/// `attempt_token` identifies one logical acquire. The binding generates it once per
-/// `acquire()` call and passes the same value on every retry poll, so the core dedupes
-/// a single acquire's retries to one in-flight creation while still letting distinct
-/// concurrent borrowers each dial their own connection up to `max_total`.
+/// `attempt_token` identifies one logical acquire. [`acquire_scope`] mints it once and
+/// passes the same value on every attempt, so the pool dedupes one acquire to one
+/// in-flight creation while distinct concurrent borrowers each dial their own
+/// connection up to `max_total`.
 ///
 /// A creation failure happens in the spawned task, after the poll that reserved
 /// the slot has already returned. The next poll consults the pool's recorded
@@ -975,7 +975,7 @@ impl ScopeAcquireOutcome {
 /// spawned alongside a terminal report, so the record self-heals: once the cause
 /// is fixed, that creation succeeds, clears the record and seats a connection.
 #[cfg(feature = "proto")]
-pub fn acquire_scope_outcome(
+pub(crate) fn acquire_scope_outcome(
     client_id: u64,
     connection_request_bytes: Vec<u8>,
     runtime: &tokio::runtime::Handle,

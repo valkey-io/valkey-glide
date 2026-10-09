@@ -1261,9 +1261,9 @@ impl ScopePool {
     /// [`ScopeAcquire::NeedsResync`] is returned so the caller re-`SELECT`s it before a
     /// borrower can see it.
     ///
-    /// `attempt_token` identifies the logical acquire: a binding generates one
-    /// token per `acquire()` call and passes it on every retry poll. Retries of the
-    /// same acquire (same token) dedupe to a single in-flight creation; distinct
+    /// `attempt_token` identifies the logical acquire: `scope::acquire_scope` mints
+    /// one and passes it on every attempt of its wait loop. Attempts of the same
+    /// acquire (same token) dedupe to a single in-flight creation; distinct
     /// concurrent borrowers (distinct tokens) each reserve and dial, up to
     /// `max_total`.
     pub fn try_acquire(
@@ -1749,9 +1749,8 @@ pub fn allocate_scope_id() -> u64 {
     NEXT_SCOPE_ID.fetch_add(1, Ordering::Relaxed)
 }
 
-/// Monotonic source of scope-acquire attempt tokens. A binding takes one token
-/// per `acquire()` call and passes it on every retry poll of `acquire_scope_outcome`,
-/// so the core can tell one acquire's retries (same token — dedupe to a single
+/// Monotonic source of scope-acquire attempt tokens. `scope::acquire_scope` mints
+/// one per call and passes it on every attempt of its wait loop, so the pool can tell one acquire's retries (same token — dedupe to a single
 /// in-flight creation) from distinct concurrent borrowers (different tokens — each
 /// dials its own connection up to `max_total`). Process-wide and never reused, so
 /// tokens are unique across clients and pools; the value is opaque.
