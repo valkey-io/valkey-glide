@@ -1573,13 +1573,12 @@ pub(crate) mod shared_client_tests {
                     glide_core::pool::get_scope_registry(),
                     target.clone(),
                     client.current_database(),
-                    glide_core::pool::next_scope_attempt_token(),
                 ) {
                     glide_core::pool::ScopeAcquire::Reserved(reservation) => reservation,
                     other => panic!("expected a fresh reservation from an empty pool: {other:?}"),
                 }
             };
-            glide_core::scope::create_scope_connection(
+            let _ = glide_core::scope::create_scope_connection(
                 pool.clone(),
                 Some(&client),
                 &bytes,
@@ -1594,7 +1593,6 @@ pub(crate) mod shared_client_tests {
                     glide_core::pool::get_scope_registry(),
                     target,
                     client.current_database(),
-                    glide_core::pool::next_scope_attempt_token(),
                 ) {
                     glide_core::pool::ScopeAcquire::Reused(scope_id) => scope_id,
                     other => panic!("failed to acquire scope (connection not seated): {other:?}"),
