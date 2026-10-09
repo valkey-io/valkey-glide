@@ -6,8 +6,14 @@
  */
 
 import { describe, expect, it, beforeAll, afterAll } from "@jest/globals";
-import { ClientPool, ClosingError, GlideClient, IsolatedScope } from "..";
-import { GlideClientConfiguration } from "..";
+import {
+    ClientPool,
+    ClosingError,
+    GlideClient,
+    GlideClusterClient,
+    IsolatedScope,
+} from "..";
+import { GlideClientConfiguration, GlideClusterClientConfiguration } from "..";
 import { connection_request } from "../build-ts/ProtobufMessage";
 import { ValkeyCluster } from "../../utils/TestUtils.js";
 import {
@@ -576,6 +582,164 @@ describe("IsolatedScope", () => {
 
                 expect(result).toBe("from-pool-scope");
                 await client.del([key]);
+            } finally {
+                pool.close();
+            }
+        },
+        TIMEOUT,
+    );
+
+    it(
+        "scopedConnection() works after a pool client is released and re-borrowed",
+        async () => {
+            // maxSize 1 forces the second acquire onto the same pooled
+            // connection, which is rebuilt via fromPoolClientId.
+            const pool = await ClientPool.create(config, {
+                maxSize: 1,
+                minIdle: 1,
+            });
+
+            try {
+                const key = makeKey("pool-reborrow");
+
+                const first = await pool.acquire();
+                const firstClientId = first.getClientId();
+
+                try {
+                    const firstScope = await first.scopedConnection();
+
+                    try {
+                        await firstScope.set(key, "first-borrow");
+                    } finally {
+                        firstScope.release();
+                    }
+                } finally {
+                    await pool.release(first);
+                }
+
+                const second = await pool.acquire();
+
+                try {
+                    expect(second.getClientId()).toBe(firstClientId);
+                    const secondScope = await second.scopedConnection();
+
+                    try {
+                        expect(await secondScope.get(key)).toBe("first-borrow");
+                    } finally {
+                        secondScope.release();
+                    }
+                } finally {
+                    await pool.release(second);
+                }
+
+                await client.del([key]);
+            } finally {
+                pool.close();
+            }
+        },
+        TIMEOUT,
+    );
+
+    it(
+        "scopedConnection() on a released pool client rejects with ClosingError",
+        async () => {
+            const pool = await ClientPool.create(config, {
+                maxSize: 1,
+                minIdle: 1,
+            });
+
+            try {
+                const borrowed = await pool.acquire();
+                await pool.release(borrowed);
+
+                await expect(borrowed.scopedConnection()).rejects.toThrow(
+                    ClosingError,
+                );
+            } finally {
+                pool.close();
+            }
+        },
+        TIMEOUT,
+    );
+});
+
+describe("IsolatedScope (cluster)", () => {
+    let cluster: ValkeyCluster;
+    let client: GlideClusterClient;
+    let config: GlideClusterClientConfiguration;
+
+    beforeAll(async () => {
+        const clusterAddresses = global.CLUSTER_ENDPOINTS as string;
+        cluster = clusterAddresses
+            ? await ValkeyCluster.initFromExistingCluster(
+                  true,
+                  parseEndpoints(clusterAddresses),
+                  getServerVersion,
+              )
+            : await ValkeyCluster.createCluster(true, 3, 1, getServerVersion);
+
+        config = getClientConfigurationOption(cluster.getAddresses(), 0, {
+            requestTimeout: 5000,
+        }) as GlideClusterClientConfiguration;
+
+        client = await GlideClusterClient.createClient(config);
+    }, 120_000);
+
+    afterAll(async () => {
+        client?.close();
+        await cluster?.close();
+    }, TIMEOUT);
+
+    // Keys in distinct hash tags land on different slots (and, across three
+    // shards, different nodes), so a scope routed to the wrong node fails
+    // with MOVED.
+    const routedKeys = ["{a}scope", "{b}scope", "{c}scope"].map(
+        (tag) => `${tag}-${Math.random().toString(36).slice(2, 10)}`,
+    );
+
+    it(
+        "scopedConnection(routingKey) routes on a cluster client",
+        async () => {
+            for (const key of routedKeys) {
+                const scope = await client.scopedConnection(key);
+
+                try {
+                    await scope.set(key, "direct");
+                    expect(await scope.get(key)).toBe("direct");
+                } finally {
+                    scope.release();
+                }
+            }
+
+            await Promise.all(routedKeys.map((key) => client.del([key])));
+        },
+        TIMEOUT,
+    );
+
+    it(
+        "scopedConnection(routingKey) routes on a pool-borrowed cluster client",
+        async () => {
+            const pool = await ClientPool.create(config, {
+                maxSize: 2,
+                minIdle: 1,
+                clusterMode: true,
+            });
+
+            try {
+                await pool.borrow(async (borrowed) => {
+                    for (const key of routedKeys) {
+                        const scope = await borrowed.scopedConnection(key);
+
+                        try {
+                            await scope.set(key, "pooled");
+                            expect(await scope.get(key)).toBe("pooled");
+                        } finally {
+                            scope.release();
+                        }
+                    }
+                });
+
+                await Promise.all(routedKeys.map((key) => client.del([key])));
             } finally {
                 pool.close();
             }
