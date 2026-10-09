@@ -102,11 +102,19 @@ function slotForKey(key: Buffer): number {
 
 /**
  * The native `scopeAcquire` rejection carries the core's `RequestErrorType`
- * name as a `Name: ` prefix on the message (napi has no error code field).
- * Strip it and pick the error class every other command path uses for it.
+ * name as a `Name: ` prefix on the message (the napi promise path pins the
+ * error's `code` to a napi status, so it cannot carry ours). Strip it and pick
+ * the error class every other command path uses for it.
+ *
+ * Reads `.message` by shape rather than `instanceof Error`: the rejection is
+ * created in the addon's realm, so `instanceof` can be false under test runners
+ * that isolate realms.
  */
 function toAcquireError(e: unknown): Error {
-    const message = e instanceof Error ? e.message : String(e);
+    const message =
+        typeof e === "object" && e !== null && "message" in e
+            ? String((e as { message: unknown }).message)
+            : String(e);
     const sep = message.indexOf(": ");
 
     if (sep < 0) {
