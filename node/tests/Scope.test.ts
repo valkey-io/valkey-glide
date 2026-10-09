@@ -406,7 +406,7 @@ describe("IsolatedScope", () => {
                     ).rejects.toThrow(TimeoutError);
                     const elapsed = Date.now() - started;
                     expect(elapsed).toBeGreaterThanOrEqual(400);
-                    expect(elapsed).toBeLessThan(2000);
+                    expect(elapsed).toBeLessThan(1000);
 
                     await expect(
                         IsolatedScope.acquire(

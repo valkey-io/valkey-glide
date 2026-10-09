@@ -1339,7 +1339,7 @@ func TestScopeAcquireExhaustedPoolTimesOutNamingTheCause(t *testing.T) {
 	require.ErrorAs(t, err, &timeoutErr)
 	assert.Contains(t, err.Error(), "pool exhausted")
 	assert.GreaterOrEqual(t, elapsed, 400*time.Millisecond)
-	assert.Less(t, elapsed, 2*time.Second)
+	assert.Less(t, elapsed, time.Second)
 }
 
 func TestScopeAcquireEndsWhenClientClosesMidWait(t *testing.T) {

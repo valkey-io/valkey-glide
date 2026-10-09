@@ -355,7 +355,7 @@ public class IsolatedScopeIntegrationTest {
 
                 assertInstanceOf(TimeoutException.class, cause);
                 assertTrue(cause.getMessage().contains("pool exhausted"), cause.getMessage());
-                assertTrue(elapsedMs >= 400 && elapsedMs < 2000, "elapsed " + elapsedMs + "ms");
+                assertTrue(elapsedMs >= 400 && elapsedMs < 1000, "elapsed " + elapsedMs + "ms");
             } finally {
                 held.forEach(IsolatedScope::close);
             }
