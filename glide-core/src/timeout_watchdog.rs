@@ -1031,6 +1031,9 @@ mod tests {
     #[tokio::test]
     #[serial]
     async fn reinit_global_spawns_new_working_watchdog() {
+        // #[serial] keeps this away from tests that read PUBLISHED_PENDING:
+        // reinit_global() resets it and starts a second publishing thread.
+
         // Ensure the global watchdog is initialized.
         let _pre = TimeoutWatchdog::global();
 
