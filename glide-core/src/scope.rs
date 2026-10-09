@@ -1103,11 +1103,11 @@ const SCOPE_ACQUIRE_WAIT_CAP: Duration = Duration::from_millis(50);
 ///
 /// One call, one result: the wait lives here, not in the caller, so the
 /// retry/terminal decision and the backoff exist once. Each attempt runs
-/// [`classify_acquire`] under the awaited pool lock, so lock contention is a
+/// `classify_acquire` under the awaited pool lock, so lock contention is a
 /// wait rather than a retry. Between attempts the call sleeps on
 /// [`ScopePoolHandle::wakeup`], armed before the attempt so a release that lands
 /// between classifying and sleeping is not missed, capped by
-/// [`SCOPE_ACQUIRE_WAIT_CAP`] and the remaining deadline. A terminal cause
+/// `SCOPE_ACQUIRE_WAIT_CAP` and the remaining deadline. A terminal cause
 /// returns at once.
 ///
 /// Cancel-safe: dropping the future between attempts leaks nothing, and a
