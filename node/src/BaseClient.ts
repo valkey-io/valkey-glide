@@ -301,7 +301,6 @@ import { resolveClientLibraryName } from "./ClientLibraryNameResolver.js";
 import { IsolatedScope } from "./IsolatedScope.js";
 import {
     clearScopeConnectionRequest,
-    refreshScopeConnectionPassword,
     setScopeConnectionRequest,
 } from "./ScopeInternal.js";
 /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
@@ -10427,22 +10426,14 @@ export class BaseClient {
             updateConnectionPassword,
         );
 
-        if (response === "OK") {
-            // Refresh the cached request so a later scope authenticates with
-            // the new credential rather than the stale one. glide-core picks
-            // up the new bytes on the next acquire and rebuilds scope
-            // connections with the new credential.
-            refreshScopeConnectionPassword(this, password);
-
-            if (!this.config?.credentials) {
-                this.config = {
-                    ...this.config!,
-                    credentials: {
-                        ...this.config!.credentials,
-                        password: password ? password : "",
-                    },
-                };
-            }
+        if (response === "OK" && !this.config?.credentials) {
+            this.config = {
+                ...this.config!,
+                credentials: {
+                    ...this.config!.credentials,
+                    password: password ? password : "",
+                },
+            };
         }
 
         return response;

@@ -13,7 +13,6 @@
  */
 
 import { scopeTryAcquire } from "../build-ts/native";
-import { connection_request } from "../build-ts/ProtobufMessage";
 import type { BaseClient } from "./BaseClient";
 
 /** client -> serialized ConnectionRequest captured at connect time. */
@@ -35,29 +34,6 @@ export function clearScopeConnectionRequest(client: BaseClient): void {
 /** Whether a connection request is cached for this client. */
 export function hasScopeConnectionRequest(client: BaseClient): boolean {
     return connectionRequests.has(client);
-}
-
-/**
- * Rewrite the password in the cached request so scopes opened after a password
- * update authenticate with the new credential. No-op if nothing is cached.
- */
-export function refreshScopeConnectionPassword(
-    client: BaseClient,
-    password: string | null,
-): void {
-    const bytes = connectionRequests.get(client);
-    if (!bytes) return;
-
-    const request = connection_request.ConnectionRequest.decode(bytes);
-    const authenticationInfo =
-        request.authenticationInfo ??
-        connection_request.AuthenticationInfo.create({});
-    authenticationInfo.password = password ?? "";
-    request.authenticationInfo = authenticationInfo;
-    connectionRequests.set(
-        client,
-        connection_request.ConnectionRequest.encode(request).finish(),
-    );
 }
 
 /**
