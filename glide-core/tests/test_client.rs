@@ -1559,7 +1559,7 @@ pub(crate) mod shared_client_tests {
                 .as_nanos() as u64;
 
             glide_core::scope::register_client(client_id, client.clone());
-            let pool = glide_core::pool::get_or_create_scope_pool(client_id, bytes.clone());
+            let pool = glide_core::pool::get_or_create_scope_pool(client_id, bytes.clone()).pool;
 
             // Resolve the target, then reserve via try_acquire (the
             // reserve-before-create contract) to get the guard; seating the
@@ -1573,13 +1573,12 @@ pub(crate) mod shared_client_tests {
                     glide_core::pool::get_scope_registry(),
                     target.clone(),
                     client.current_database(),
-                    glide_core::pool::next_scope_attempt_token(),
                 ) {
                     glide_core::pool::ScopeAcquire::Reserved(reservation) => reservation,
                     other => panic!("expected a fresh reservation from an empty pool: {other:?}"),
                 }
             };
-            glide_core::scope::create_scope_connection(
+            let _ = glide_core::scope::create_scope_connection(
                 pool.clone(),
                 Some(&client),
                 &bytes,
@@ -1594,7 +1593,6 @@ pub(crate) mod shared_client_tests {
                     glide_core::pool::get_scope_registry(),
                     target,
                     client.current_database(),
-                    glide_core::pool::next_scope_attempt_token(),
                 ) {
                     glide_core::pool::ScopeAcquire::Reused(scope_id) => scope_id,
                     other => panic!("failed to acquire scope (connection not seated): {other:?}"),
@@ -1633,33 +1631,22 @@ pub(crate) mod shared_client_tests {
         }
     }
 
-    /// Polls `try_acquire_scope` the way the bindings do (see `GlideClient`'s
-    /// `scopedConnection` loop), returning `None` if the deadline passes.
+    /// One core-owned acquire, `None` if the deadline passes.
     #[cfg(feature = "proto")]
     async fn acquire_scope_within(
         client_id: u64,
         bytes: &[u8],
         timeout: std::time::Duration,
     ) -> Option<u64> {
-        let runtime = tokio::runtime::Handle::current();
-        // One logical acquire — mint the token once and reuse it on every poll,
-        // as a production binding's acquire() does.
-        let attempt_token = glide_core::pool::next_scope_attempt_token();
-        let deadline = std::time::Instant::now() + timeout;
-        while std::time::Instant::now() < deadline {
-            let result = glide_core::scope::try_acquire_scope(
-                client_id,
-                bytes.to_vec(),
-                &runtime,
-                0,
-                attempt_token,
-            );
-            if result >= 0 {
-                return Some(result as u64);
-            }
-            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
-        }
-        None
+        glide_core::scope::acquire_scope(
+            client_id,
+            bytes.to_vec(),
+            &tokio::runtime::Handle::current(),
+            0,
+            timeout,
+        )
+        .await
+        .ok()
     }
 
     /// `max_total = N` must permit exactly N concurrent scopes, with N+1 the first
@@ -1684,14 +1671,14 @@ pub(crate) mod shared_client_tests {
             glide_core::scope::register_client(client_id, test_basics.client.clone());
             glide_core::pool::get_client_scope_pools().insert(
                 client_id,
-                std::sync::Arc::new(tokio::sync::Mutex::new(glide_core::pool::ScopePool::new(
+                glide_core::pool::ScopePoolHandle::new(glide_core::pool::ScopePool::new(
                     glide_core::pool::ScopePoolConfig {
                         max_total: MAX_TOTAL,
                         ..Default::default()
                     },
                     bytes.clone(),
                     client_id,
-                ))),
+                )),
             );
 
             let mut held = Vec::new();
@@ -5048,25 +5035,18 @@ pub(crate) mod shared_client_tests {
             scope::register_client(client_id, client.clone());
 
             let runtime = tokio::runtime::Handle::current();
-            // One logical acquire — one stable token across the retry loop.
-            let attempt_token = glide_core::pool::next_scope_attempt_token();
-            let scope_id = retry(|| {
-                let connection_request_bytes = connection_request_bytes.clone();
-                async {
-                    let result = scope::try_acquire_scope(
-                        client_id,
-                        connection_request_bytes,
-                        &runtime,
-                        0,
-                        attempt_token,
-                    );
-                    if result >= 0 { Some(result) } else { None }
-                }
-            })
-            .await;
+            let scope_id = scope::acquire_scope(
+                client_id,
+                connection_request_bytes.clone(),
+                &runtime,
+                0,
+                std::time::Duration::from_secs(10),
+            )
+            .await
+            .expect("scope acquire with IAM credentials");
 
             let args: Vec<Vec<u8>> = vec![b"WHOAMI".to_vec()];
-            let response = scope::execute_scope_command(scope_id as u64, "ACL", &args, None).await;
+            let response = scope::execute_scope_command(scope_id, "ACL", &args, None).await;
 
             let value = response.expect("ACL WHOAMI through the scope should succeed");
             let whoami = match value {
@@ -5079,7 +5059,7 @@ pub(crate) mod shared_client_tests {
                 "create_scope_connection must AUTH as the IAM identity on initial connect"
             );
 
-            scope::release_scope(scope_id as u64, client_id, &runtime);
+            scope::release_scope(scope_id, client_id, &runtime);
             scope::unregister_client(client_id);
         });
     }

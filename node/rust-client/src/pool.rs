@@ -618,42 +618,42 @@ pub fn pool_destroy(pool_id: i64) {
 // SCOPE FUNCTIONS — deferred Promise pattern
 // ═══════════════════════════════════════════════════════════════════════════════
 
-#[napi]
-pub fn scope_try_acquire(
+/// Acquire a scope from the client's scope pool. Returns `Promise<number>` resolving
+/// to the scope id. The rejection message is prefixed with the `RequestErrorType`
+/// name from `ScopeAcquireError::request_error_type` followed by `: `, so the
+/// binding can pick its error class; napi offers no custom `code` field for that.
+#[napi(ts_return_type = "Promise<number>")]
+pub fn scope_acquire<'a>(
+    env: &'a Env,
     client_id: i64,
     connection_request_bytes: Uint8Array,
     routing_slot: u16,
-    attempt_token: BigInt,
-) -> Result<i64> {
+    timeout_ms: u32,
+) -> Result<Object<'a>> {
+    let (deferred, promise) = env.create_deferred()?;
     let conn_bytes = connection_request_bytes.as_ref().to_vec();
     let runtime = get_pool_runtime();
-    // scope_next_attempt_token mints the token, but this export is public, so a JS
-    // caller can pass any BigInt. Reject a negative or >u64 value rather than
-    // silently narrowing it (which could collide with a live token and wrongly
-    // report CreationPending).
-    let (signed, token, lossless) = attempt_token.get_u64();
-    if signed || !lossless {
-        return Err(Error::new(
-            Status::InvalidArg,
-            "attempt_token must be a non-negative u64",
-        ));
-    }
-    let result = scope::try_acquire_scope(
-        client_id as u64,
-        conn_bytes,
-        runtime.handle(),
-        routing_slot,
-        token,
-    );
-    Ok(result)
-}
+    let handle = runtime.handle().clone();
 
-/// Allocate a unique scope-acquire attempt token. The caller mints one per
-/// `acquire()` and passes it on every retry poll of `scope_try_acquire`, so the
-/// core dedupes a single acquire's retries without serializing distinct borrowers.
-#[napi]
-pub fn scope_next_attempt_token() -> BigInt {
-    BigInt::from(glide_core::pool::next_scope_attempt_token())
+    runtime.spawn(async move {
+        let result = scope::acquire_scope(
+            client_id as u64,
+            conn_bytes,
+            &handle,
+            routing_slot,
+            std::time::Duration::from_millis(u64::from(timeout_ms)),
+        )
+        .await;
+        match result {
+            Ok(scope_id) => deferred.resolve(move |_| Ok(scope_id as i64)),
+            Err(err) => {
+                let code = format!("{:?}", err.request_error_type());
+                deferred.reject(Error::new(Status::GenericFailure, format!("{code}: {err}")));
+            }
+        }
+    });
+
+    Ok(promise)
 }
 
 /// Execute a command on a scoped connection. Returns `Promise<string | null>`.

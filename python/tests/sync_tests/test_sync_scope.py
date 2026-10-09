@@ -8,11 +8,22 @@ Requires a running Valkey server (standalone).
 """
 
 import threading
+import time
 import uuid
 
 import pytest
-from glide_sync import GlideClient, GlideClientConfiguration
+from glide_sync import (
+    AdvancedGlideClientConfiguration,
+    ConnectionError,
+    GlideClient,
+    GlideClientConfiguration,
+    NodeAddress,
+    RequestError,
+    TimeoutError,
+    TlsAdvancedConfiguration,
+)
 
+from tests.utils.utils import get_ca_certificate
 from tests.utils.utils import get_standalone_address as _get_standalone_address
 
 
@@ -189,3 +200,66 @@ class TestIsolatedScopePoolReuse:
 
         scope1.close()
         scope2.close()
+
+
+# The scope pool holds at most this many connections per client (glide-core
+# ScopePoolConfig::default().max_total). Not configurable from Python.
+_SCOPE_POOL_MAX_TOTAL = 64
+
+
+class TestIsolatedScopeAcquireFailsFast:
+    """An acquire stops as soon as its outcome is known: the error class names the
+    cause, and a cause that waiting cannot fix is reported without waiting."""
+
+    def test_exhausted_pool_times_out_naming_the_cause(self, client):
+        held = [client.scoped_connection() for _ in range(_SCOPE_POOL_MAX_TOTAL)]
+        try:
+            started = time.monotonic()
+            with pytest.raises(TimeoutError, match="pool exhausted"):
+                client.scoped_connection(timeout=0.5)
+            elapsed = time.monotonic() - started
+            assert 0.4 <= elapsed < 1.0, elapsed
+        finally:
+            for scope in held:
+                scope.close()
+
+    def test_closing_the_client_ends_a_waiting_acquire(self):
+        config = GlideClientConfiguration(
+            addresses=[_get_standalone_address()], request_timeout=5000
+        )
+        client = GlideClient.create(config)
+        held = [client.scoped_connection() for _ in range(_SCOPE_POOL_MAX_TOTAL)]
+
+        closer = threading.Timer(0.2, client.close)
+        closer.start()
+        started = time.monotonic()
+        with pytest.raises(ConnectionError):
+            client.scoped_connection(timeout=5.0)
+        elapsed = time.monotonic() - started
+        assert elapsed < 2.0, f"waited {elapsed:.2f}s past the close for a 5s deadline"
+        closer.join()
+        del held
+
+    def test_lazy_mtls_parent_fails_without_waiting(self):
+        # A lazily connected client with TLS material never dials, so there is
+        # nothing for a scoped connection to inherit; no amount of waiting fixes
+        # that, so the acquire must not run out its 5 s deadline.
+        config = GlideClientConfiguration(
+            addresses=[NodeAddress("127.0.0.1", 1)],
+            use_tls=True,
+            lazy_connect=True,
+            request_timeout=5000,
+            advanced_config=AdvancedGlideClientConfiguration(
+                tls_config=TlsAdvancedConfiguration(
+                    root_pem_cacerts=get_ca_certificate()
+                )
+            ),
+        )
+        client = GlideClient.create(config)
+        try:
+            started = time.monotonic()
+            with pytest.raises(RequestError, match="certificate material"):
+                client.scoped_connection(timeout=5.0)
+            assert time.monotonic() - started < 2.0
+        finally:
+            client.close()

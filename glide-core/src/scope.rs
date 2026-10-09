@@ -27,9 +27,10 @@
 //! subscription connections.
 
 use crate::client::Client;
+use crate::errors::RequestErrorType;
 use crate::pool::{
-    ScopedConnection, get_client_scope_pools, get_scope_registry, update_state_for_command,
-    validate_scope_slot,
+    ScopePoolHandle, ScopedConnection, get_client_scope_pools, get_scope_registry,
+    update_state_for_command, validate_scope_slot,
 };
 use redis::{Cmd, RedisError, RedisResult, Value};
 
@@ -46,7 +47,7 @@ use std::sync::Arc;
 #[cfg(feature = "proto")]
 use std::sync::atomic::Ordering;
 #[cfg(feature = "proto")]
-use std::time::Instant;
+use std::time::{Duration, Instant};
 #[cfg(feature = "proto")]
 use tokio::sync::Mutex as TokioMutex;
 
@@ -374,9 +375,10 @@ const SCOPE_CONNECT_TIMEOUT: std::time::Duration = std::time::Duration::from_sec
 /// Why a scoped connection could not be created and seated in the pool.
 ///
 /// Every variant releases the caller's `max_total` reservation exactly once, at the
-/// single failure exit in [`create_scope_connection`], and is logged there — once
-/// per episode, see [`ScopePool::last_create_warn`] — so a borrower's eventual
-/// "pool exhausted" timeout can be traced back to its cause.
+/// single failure exit in [`create_scope_connection`], is logged there (once per
+/// episode, see [`ScopePool::last_create_warn`]), and is returned as its
+/// [`ScopeCreateErrorKind`] so the acquire that reserved the slot can stop or dial
+/// again.
 #[cfg(feature = "proto")]
 #[derive(Debug)]
 pub enum ScopeCreateError {
@@ -409,22 +411,77 @@ pub enum ScopeCreateError {
     PoolClosed,
 }
 
-/// Which [`ScopeCreateError`] variant a failure was, without its payload.
-///
 /// The counterpart of [`crate::pool::ScopeTargetUnresolved::same_kind`] for
 /// creation failures, so repeats of one cause are recognized by variant. A
-/// discriminant rather than the error itself: the pool only needs equality, and
-/// retaining a `RedisError` (or the parse error) for the lifetime of the pool
-/// just to compare against would be wasteful.
-#[cfg(feature = "proto")]
-pub type ScopeCreateErrorKind = std::mem::Discriminant<ScopeCreateError>;
+/// payload-free copy rather than the error itself: the pool only needs equality
+/// for the warn-once record, and the acquire needs classification
+/// ([`Self::fail_cause`]) and a name; retaining a `RedisError` (or the parse
+/// error) for either would be wasteful.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ScopeCreateErrorKind {
+    InvalidConnectionRequest,
+    InvalidLibName,
+    NoSeedAddress,
+    InvalidClusterTarget,
+    ParentCertMaterialUnavailable,
+    ClientOpenFailed,
+    ConnectFailed,
+    ConnectTimedOut,
+    IamTokenUnavailable,
+    InitFailed,
+    InitTimedOut,
+    PoolClosed,
+}
+
+impl ScopeCreateErrorKind {
+    /// The terminal cause this kind reports to the borrower, or `None` when
+    /// retrying may change the outcome.
+    ///
+    /// Terminal kinds are properties of the parent's configuration or the pool's
+    /// lifecycle, so no later dial can succeed until something outside the acquire
+    /// changes. Network and server-side failures are transient: the next dial may
+    /// succeed.
+    pub fn fail_cause(self) -> Option<ScopeFailCause> {
+        match self {
+            Self::InvalidConnectionRequest
+            | Self::InvalidLibName
+            | Self::NoSeedAddress
+            | Self::InvalidClusterTarget => Some(ScopeFailCause::InvalidConfiguration),
+            Self::ParentCertMaterialUnavailable => {
+                Some(ScopeFailCause::ParentCertMaterialUnavailable)
+            }
+            Self::PoolClosed => Some(ScopeFailCause::PoolClosed),
+            Self::ClientOpenFailed
+            | Self::ConnectFailed
+            | Self::ConnectTimedOut
+            | Self::IamTokenUnavailable
+            | Self::InitFailed
+            | Self::InitTimedOut => None,
+        }
+    }
+}
 
 #[cfg(feature = "proto")]
 impl ScopeCreateError {
     /// This failure's variant, for the warn-once-per-episode record on
     /// [`ScopePool::last_create_warn`].
     pub fn kind(&self) -> ScopeCreateErrorKind {
-        std::mem::discriminant(self)
+        match self {
+            Self::InvalidConnectionRequest(_) => ScopeCreateErrorKind::InvalidConnectionRequest,
+            Self::InvalidLibName => ScopeCreateErrorKind::InvalidLibName,
+            Self::NoSeedAddress => ScopeCreateErrorKind::NoSeedAddress,
+            Self::InvalidClusterTarget(_) => ScopeCreateErrorKind::InvalidClusterTarget,
+            Self::ParentCertMaterialUnavailable => {
+                ScopeCreateErrorKind::ParentCertMaterialUnavailable
+            }
+            Self::ClientOpenFailed(_) => ScopeCreateErrorKind::ClientOpenFailed,
+            Self::ConnectFailed(_) => ScopeCreateErrorKind::ConnectFailed,
+            Self::ConnectTimedOut => ScopeCreateErrorKind::ConnectTimedOut,
+            Self::IamTokenUnavailable => ScopeCreateErrorKind::IamTokenUnavailable,
+            Self::InitFailed(_) => ScopeCreateErrorKind::InitFailed,
+            Self::InitTimedOut => ScopeCreateErrorKind::InitTimedOut,
+            Self::PoolClosed => ScopeCreateErrorKind::PoolClosed,
+        }
     }
 }
 
@@ -745,7 +802,8 @@ async fn build_scope_connection(
 /// [`ScopeAcquire::Reserved`]). On success it is committed as the seated
 /// connection; on any failure — including a cancel or panic mid-await — the
 /// guard's `Drop` gives the slot back. Failures are logged once, naming the
-/// target and the cause.
+/// target and the cause, and returned so the acquire that reserved the slot
+/// can stop waiting on a cause that will not clear.
 ///
 /// # Arguments
 /// - `pool`: Arc to the scope pool (locked async)
@@ -760,7 +818,7 @@ pub async fn create_scope_connection(
     connection_request_bytes: &[u8],
     target: ScopeTarget,
     reservation: crate::pool::ScopeReservation,
-) {
+) -> Result<(), ScopeCreateErrorKind> {
     let connection = build_scope_connection(client, connection_request_bytes, &target).await;
 
     let mut pool_guard = pool.lock().await;
@@ -795,22 +853,20 @@ pub async fn create_scope_connection(
                 ),
             });
             reservation.commit();
+            Ok(())
         }
         Err(err) => {
             // The uncommitted `reservation` gives the slot back on drop. A pool
-            // shutting down is expected, not a fault; everything else is worth a
-            // warning because the borrower only ever sees a generic "pool
-            // exhausted" timeout — but only the first of an episode. Bindings
-            // retry acquire every few milliseconds and each retry spawns another
-            // creation, so a cause that persists (a lazy mTLS parent, an
-            // unreachable shard) would otherwise warn tens of times a second.
-            // Same warn-once-per-kind, debug-the-repeats, clear-on-success shape
-            // as `log_unresolved_target`.
+            // shutting down is expected, not a fault. Everything else warns once
+            // per kind and logs the repeats at debug, since an acquire that keeps
+            // retrying a persistent cause (a lazy mTLS parent, an unreachable
+            // shard) would otherwise warn on every attempt. Same shape as
+            // `log_unresolved_target`.
             let message = format!("scoped connection to {target:?} not created: {err}");
+            let kind = err.kind();
             if matches!(err, ScopeCreateError::PoolClosed) {
                 glide_logger::log_debug("create_scope_connection", message);
             } else {
-                let kind = err.kind();
                 let repeated = pool_guard.last_create_warn == Some(kind);
                 pool_guard.last_create_warn = Some(kind);
                 if repeated {
@@ -819,6 +875,7 @@ pub async fn create_scope_connection(
                     glide_logger::log_warn("create_scope_connection", message);
                 }
             }
+            Err(kind)
         }
     }
 }
@@ -827,121 +884,406 @@ pub async fn create_scope_connection(
 // SCOPE ACQUIRE / RELEASE (NON-BLOCKING WRAPPERS)
 // ═══════════════════════════════════════════════════════════════════════════════
 
-/// Non-blocking scope acquire. Returns scope_id >= 0, -1 if exhausted, -2 if invalid.
-///
-/// If the pool is exhausted but below max capacity, spawns background connection creation.
-/// Language bindings should call this from their FFI layer, passing the client_id,
-/// serialized ConnectionRequest bytes, and a tokio runtime handle for async spawning.
+/// Why one acquire poll did not hand out a scope but a later poll may.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ScopeRetryCause {
+    /// Work this acquire is waiting on is in progress: its connection is being
+    /// created, an idle connection is being re-`SELECT`ed, or another acquire
+    /// briefly holds the pool lock.
+    Pending,
+    Exhausted,
+    /// The routing slot has no mapped primary yet, or the topology is being
+    /// refreshed.
+    TargetUnresolved,
+    /// This acquire's own creation failed for a reason that may not recur; the
+    /// next attempt reserves and dials again.
+    CreateFailed(ScopeCreateErrorKind),
+}
+
+/// Why no poll of this acquire can succeed until something outside the retry
+/// loop changes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, strum_macros::EnumIter)]
+pub enum ScopeFailCause {
+    /// The binding has not registered the parent client, or has closed it.
+    ParentUnregistered,
+    /// The parent is configured with custom TLS certificate material but has not
+    /// connected yet, so there is nothing for a scoped connection to inherit.
+    ParentCertMaterialUnavailable,
+    /// The stored connection request cannot produce a scoped connection
+    /// (unparseable, no seed address, invalid `lib_name` or cluster target).
+    InvalidConfiguration,
+    /// The pool is closing or closed; it will not serve again.
+    PoolClosed,
+}
+
+/// Result of one acquire attempt, split by what the caller should do next.
+/// Every cause the acquire path can hit is classified here, in one place, so
+/// the retry decision and the error name cannot drift apart.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ScopeAcquireOutcome {
+    Acquired(u64),
+    Retry(ScopeRetryCause),
+    Fail(ScopeFailCause),
+}
+
+/// What one classification produced: a plain outcome, or a creation this
+/// acquire reserved the slot for and must wait on. Kept apart from
+/// [`ScopeAcquireOutcome`] because a [`tokio::task::JoinHandle`] is neither
+/// `Copy` nor comparable, and only the waiting path needs it.
+#[cfg(feature = "proto")]
+enum Classified {
+    Outcome(ScopeAcquireOutcome),
+    /// The slot is reserved and `create_scope_connection` is running in this
+    /// task; its result says whether to re-check idle or stop.
+    Creating(tokio::task::JoinHandle<Result<(), ScopeCreateErrorKind>>),
+}
+
+/// Test-only single attempt: one pass of the classifier under `try_lock`, so a
+/// cause that needs time to clear is reported as [`ScopeAcquireOutcome::Retry`]
+/// instead of waited on. Lets a test observe what one attempt sees (for example
+/// the first attempt reporting `NeedsResync`) without the wait that
+/// [`acquire_scope`] adds. Not an entry point: no native interface calls it.
 ///
 /// `routing_slot` determines which cluster node the scope connects to. In cluster mode,
 /// pass the hash slot of the key(s) the scope will operate on. In standalone mode, this
 /// parameter is ignored (all slots route to the same node).
 ///
-/// `attempt_token` identifies one logical acquire. The binding generates it once per
-/// `acquire()` call and passes the same value on every retry poll, so the core dedupes
-/// a single acquire's retries to one in-flight creation while still letting distinct
-/// concurrent borrowers each dial their own connection up to `max_total`.
-#[cfg(feature = "proto")]
-pub fn try_acquire_scope(
+/// A creation this attempt reserved a slot for keeps running after the attempt
+/// returns [`ScopeRetryCause::Pending`]; it seats its connection in idle for
+/// the next attempt (or another borrower) to reuse. Only [`acquire_scope`]
+/// waits on the creation itself.
+#[cfg(all(test, feature = "proto"))]
+pub(crate) fn acquire_scope_outcome(
     client_id: u64,
     connection_request_bytes: Vec<u8>,
     runtime: &tokio::runtime::Handle,
     routing_slot: u16,
-    attempt_token: u64,
-) -> i64 {
-    // Fast path: check if scope pool exists before cloning bytes
-    let scope_pool = {
-        let pools = crate::pool::get_client_scope_pools();
-        match pools.get(&client_id) {
-            Some(existing) => existing.value().clone(),
-            None => crate::pool::get_or_create_scope_pool(client_id, connection_request_bytes),
-        }
+) -> ScopeAcquireOutcome {
+    let handle = scope_pool_for(client_id, connection_request_bytes);
+    let Ok(pool) = handle.pool.try_lock() else {
+        return ScopeAcquireOutcome::Retry(ScopeRetryCause::Pending);
     };
-    let registry = get_scope_registry();
+    match classify_acquire(&handle.pool, pool, client_id, runtime, routing_slot) {
+        Classified::Outcome(outcome) => outcome,
+        Classified::Creating(_) => ScopeAcquireOutcome::Retry(ScopeRetryCause::Pending),
+    }
+}
 
-    match scope_pool.try_lock() {
-        Ok(mut pool) => {
-            // Resolve the slot's current primary before touching the pool so a
-            // stale or unmapped slot never matches (or creates) a connection to the
-            // wrong node. Unresolved never means "use the seed"; whether it means
-            // "retry" depends on the cause (see `ScopeTargetUnresolved`).
-            let client = get_parent_client(pool.parent_client_id);
-            let target = match try_resolve_scope_target(client.as_ref(), routing_slot) {
-                Ok(target) => {
-                    if let Some(cleared) = pool.last_unresolved_target.take() {
-                        glide_logger::log_debug(
-                            "try_acquire_scope",
-                            format!(
-                                "client {client_id}: scope target resolves again \
-                                 (was: {cleared})"
-                            ),
-                        );
-                    }
-                    target
-                }
-                Err(cause) => {
-                    log_unresolved_target(&mut pool, client_id, routing_slot, cause);
-                    return -1;
-                }
-            };
+/// Why `acquire_scope` returned no scope. Owns the message text and the
+/// [`RequestErrorType`] a binding turns into its exception class, so neither is
+/// written per language.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ScopeAcquireError {
+    /// The deadline passed while every attempt was retryable; `last` is the
+    /// cause of the final attempt, which is the one worth reporting.
+    DeadlineExceeded { last: ScopeRetryCause },
+    /// An attempt hit a cause no amount of waiting clears.
+    Terminal(ScopeFailCause),
+}
 
-            // The database the borrowed connection must be on: the parent client's
-            // current runtime database (updated by runtime SELECT). Derived from the
-            // resolved parent so it fails closed — an unresolvable parent yields no
-            // scope rather than silently defaulting to db 0. Target resolution above
-            // already guarantees the parent is registered.
-            let Some(runtime_db) = client.as_ref().map(|c| c.current_database()) else {
-                return -1;
-            };
-            match pool.try_acquire(registry, target.clone(), runtime_db, attempt_token) {
-                ScopeAcquire::Reused(scope_id) => {
-                    let _ = glide_telemetry::GlideOpenTelemetry::record_scope_acquire();
-                    scope_id as i64
-                }
-                ScopeAcquire::Reserved(reservation) => {
-                    // Fill the slot with the same normalized target used for idle
-                    // matching; the caller retries and picks the connection up once
-                    // it lands in idle. The guard moves into the creation task, so
-                    // an early return, cancel, or panic there gives the slot back.
-                    let pool_clone = scope_pool.clone();
-                    let conn_bytes = pool.connection_request_bytes.clone();
-                    runtime.spawn(async move {
-                        create_scope_connection(
-                            pool_clone,
-                            client.as_ref(),
-                            &conn_bytes,
-                            target,
-                            reservation,
-                        )
-                        .await;
-                    });
-                    -1
-                }
-                ScopeAcquire::NeedsResync => {
-                    // The only reusable connection for this target is on a different
-                    // database. Re-SELECT it onto the runtime database off-lock, then
-                    // retry — the borrower never sees a connection on the wrong database.
-                    let pool_clone = scope_pool.clone();
-                    drop(pool);
-                    runtime.spawn(async move {
-                        resync_idle_connection_database(pool_clone, target, runtime_db).await;
-                    });
-                    -1
-                }
-                ScopeAcquire::CreationPending => {
-                    // This acquire's own creation is already in flight; retry, don't spawn.
-                    -1
-                }
-                ScopeAcquire::Exhausted => -1,
+impl ScopeAcquireError {
+    /// `Timeout` for the deadline. Terminal causes are `Disconnect` when the
+    /// parent or pool is gone (every binding maps that to its closed-client
+    /// error) and `Unspecified` for a configuration problem (the generic request
+    /// error, whose message carries the specifics). No new variant is added to
+    /// the `#[repr(C)]` enum, so the native interfaces are unchanged here.
+    pub fn request_error_type(self) -> RequestErrorType {
+        match self {
+            Self::DeadlineExceeded { .. } => RequestErrorType::Timeout,
+            Self::Terminal(ScopeFailCause::ParentUnregistered | ScopeFailCause::PoolClosed) => {
+                RequestErrorType::Disconnect
+            }
+            Self::Terminal(
+                ScopeFailCause::ParentCertMaterialUnavailable
+                | ScopeFailCause::InvalidConfiguration,
+            ) => RequestErrorType::Unspecified,
+        }
+    }
+}
+
+/// The native interfaces deliver every command failure as a `RedisError` run
+/// through [`crate::errors::error_type`], so the acquire error travels the same
+/// way rather than growing a second delivery path per language. The `io` kinds
+/// are chosen so `error_type` lands on the same [`RequestErrorType`] as
+/// [`ScopeAcquireError::request_error_type`]; a test pins the two together.
+impl From<ScopeAcquireError> for RedisError {
+    fn from(err: ScopeAcquireError) -> Self {
+        let message = err.to_string();
+        match err.request_error_type() {
+            RequestErrorType::Timeout => {
+                std::io::Error::new(std::io::ErrorKind::TimedOut, message).into()
+            }
+            RequestErrorType::Disconnect => {
+                std::io::Error::new(std::io::ErrorKind::NotConnected, message).into()
+            }
+            _ => RedisError::from((redis::ErrorKind::ClientError, "scope acquire", message)),
+        }
+    }
+}
+
+impl std::fmt::Display for ScopeRetryCause {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Pending => f.write_str("scoped connection still being prepared"),
+            Self::Exhausted => f.write_str("pool exhausted"),
+            Self::TargetUnresolved => {
+                f.write_str("routing slot has no mapped primary or the topology is refreshing")
+            }
+            Self::CreateFailed(kind) => {
+                write!(f, "last scoped connection attempt failed: {kind:?}")
             }
         }
-        Err(_) => -1,
+    }
+}
+
+impl std::fmt::Display for ScopeFailCause {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::ParentUnregistered => f.write_str("parent client is closed or not registered"),
+            Self::ParentCertMaterialUnavailable => f.write_str(
+                "parent client's TLS certificate material is not available; \
+                 connect the parent client before taking a scope",
+            ),
+            Self::InvalidConfiguration => {
+                f.write_str("connection configuration cannot produce a scoped connection")
+            }
+            Self::PoolClosed => f.write_str("scope pool is closed"),
+        }
+    }
+}
+
+impl std::fmt::Display for ScopeAcquireError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::DeadlineExceeded { last } => {
+                write!(f, "timed out waiting for isolated scope ({last})")
+            }
+            Self::Terminal(cause) => write!(f, "cannot acquire isolated scope: {cause}"),
+        }
+    }
+}
+
+impl std::error::Error for ScopeAcquireError {}
+
+/// Upper bound on one wait between attempts. One retry cause produces no pool
+/// event when it clears: the parent client refreshing its slot map
+/// (`TargetUnresolved`). The bound keeps that case from waiting out the whole
+/// deadline; everything else wakes on [`ScopePoolHandle::wakeup`] immediately.
+#[cfg(feature = "proto")]
+const SCOPE_ACQUIRE_WAIT_CAP: Duration = Duration::from_millis(50);
+
+/// Acquire a scope, waiting up to `deadline` for a retryable cause to clear.
+///
+/// One call, one result: the wait lives here, not in the caller, so the
+/// retry/terminal decision and the backoff exist once. Each attempt runs
+/// `classify_acquire` under the awaited pool lock, so lock contention is a
+/// wait rather than a retry. Between attempts the call sleeps on
+/// [`ScopePoolHandle::wakeup`], armed before the attempt so a release that lands
+/// between classifying and sleeping is not missed, capped by
+/// `SCOPE_ACQUIRE_WAIT_CAP` and the remaining deadline. A terminal cause
+/// returns at once.
+///
+/// Cancel-safe: dropping the future between attempts leaks nothing, and a
+/// creation spawned by an earlier attempt finishes on its own and seats its
+/// connection in idle for the next borrower.
+#[cfg(feature = "proto")]
+pub async fn acquire_scope(
+    client_id: u64,
+    connection_request_bytes: Vec<u8>,
+    runtime: &tokio::runtime::Handle,
+    routing_slot: u16,
+    deadline: Duration,
+) -> Result<u64, ScopeAcquireError> {
+    acquire_scope_with_wait_cap(
+        client_id,
+        connection_request_bytes,
+        runtime,
+        routing_slot,
+        deadline,
+        SCOPE_ACQUIRE_WAIT_CAP,
+    )
+    .await
+}
+
+/// [`acquire_scope`] with the wait cap as a parameter. Tests pass a cap longer
+/// than the deadline so that returning before the deadline proves a wakeup
+/// fired; with the production cap the timer alone would satisfy the same assert.
+#[cfg(feature = "proto")]
+async fn acquire_scope_with_wait_cap(
+    client_id: u64,
+    connection_request_bytes: Vec<u8>,
+    runtime: &tokio::runtime::Handle,
+    routing_slot: u16,
+    deadline: Duration,
+    wait_cap: Duration,
+) -> Result<u64, ScopeAcquireError> {
+    let started = Instant::now();
+    let ScopePoolHandle {
+        pool: scope_pool,
+        wakeup,
+    } = scope_pool_for(client_id, connection_request_bytes);
+
+    loop {
+        let notified = wakeup.notified();
+        tokio::pin!(notified);
+        notified.as_mut().enable();
+
+        let pool = scope_pool.lock().await;
+        let remaining = deadline.saturating_sub(started.elapsed());
+        match classify_acquire(&scope_pool, pool, client_id, runtime, routing_slot) {
+            Classified::Outcome(ScopeAcquireOutcome::Acquired(scope_id)) => return Ok(scope_id),
+            Classified::Outcome(ScopeAcquireOutcome::Fail(cause)) => {
+                return Err(ScopeAcquireError::Terminal(cause));
+            }
+            Classified::Outcome(ScopeAcquireOutcome::Retry(last)) => {
+                if remaining.is_zero() {
+                    return Err(ScopeAcquireError::DeadlineExceeded { last });
+                }
+                tokio::select! {
+                    _ = &mut notified => {}
+                    _ = tokio::time::sleep(remaining.min(wait_cap)) => {}
+                }
+            }
+            Classified::Creating(creation) => {
+                // This acquire owns the reserved slot, so it waits on its own
+                // creation rather than re-checking the pool: one acquire, one
+                // dial. On the deadline the task keeps running and seats its
+                // connection for the next borrower.
+                let created = tokio::select! {
+                    created = creation => created,
+                    _ = tokio::time::sleep(remaining) => {
+                        return Err(ScopeAcquireError::DeadlineExceeded {
+                            last: ScopeRetryCause::Pending,
+                        });
+                    }
+                };
+                // A seated connection, or a panicked task whose guard gave the
+                // slot back, both leave the next attempt to read the pool.
+                if let Ok(Err(kind)) = created {
+                    match kind.fail_cause() {
+                        Some(cause) => return Err(ScopeAcquireError::Terminal(cause)),
+                        None if deadline.saturating_sub(started.elapsed()).is_zero() => {
+                            return Err(ScopeAcquireError::DeadlineExceeded {
+                                last: ScopeRetryCause::CreateFailed(kind),
+                            });
+                        }
+                        None => {}
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[cfg(feature = "proto")]
+fn scope_pool_for(client_id: u64, connection_request_bytes: Vec<u8>) -> ScopePoolHandle {
+    // Fast path: check if scope pool exists before cloning bytes
+    let pools = crate::pool::get_client_scope_pools();
+    match pools.get(&client_id) {
+        Some(existing) => existing.value().clone(),
+        None => crate::pool::get_or_create_scope_pool(client_id, connection_request_bytes),
+    }
+}
+
+/// The classification step behind [`acquire_scope`] (and the test-only single
+/// attempt `acquire_scope_outcome`). Takes the guard by value because the
+/// `NeedsResync` arm releases it before spawning.
+#[cfg(feature = "proto")]
+fn classify_acquire(
+    scope_pool: &Arc<TokioMutex<ScopePool>>,
+    mut pool: tokio::sync::MutexGuard<'_, ScopePool>,
+    client_id: u64,
+    runtime: &tokio::runtime::Handle,
+    routing_slot: u16,
+) -> Classified {
+    use Classified::{Creating, Outcome};
+    use ScopeAcquireOutcome::{Acquired, Fail, Retry};
+
+    let registry = get_scope_registry();
+
+    if pool.state.load(Ordering::Acquire) != crate::pool::POOL_RUNNING {
+        return Outcome(Fail(ScopeFailCause::PoolClosed));
+    }
+
+    // Resolve the slot's current primary before touching the pool so a
+    // stale or unmapped slot never matches (or creates) a connection to the
+    // wrong node. Unresolved never means "use the seed"; whether it means
+    // "retry" depends on the cause (see `ScopeTargetUnresolved`).
+    let client = get_parent_client(pool.parent_client_id);
+    let target = match try_resolve_scope_target(client.as_ref(), routing_slot) {
+        Ok(target) => {
+            if let Some(cleared) = pool.last_unresolved_target.take() {
+                glide_logger::log_debug(
+                    "acquire_scope_outcome",
+                    format!(
+                        "client {client_id}: scope target resolves again \
+                         (was: {cleared})"
+                    ),
+                );
+            }
+            target
+        }
+        Err(cause) => {
+            log_unresolved_target(&mut pool, client_id, routing_slot, cause);
+            return Outcome(match cause {
+                ScopeTargetUnresolved::ParentUnregistered => {
+                    Fail(ScopeFailCause::ParentUnregistered)
+                }
+                ScopeTargetUnresolved::SlotUnmapped(_) | ScopeTargetUnresolved::TopologyLocked => {
+                    Retry(ScopeRetryCause::TargetUnresolved)
+                }
+            });
+        }
+    };
+
+    // The database the borrowed connection must be on: the parent client's
+    // current runtime database (updated by runtime SELECT). Derived from the
+    // resolved parent so it fails closed — an unresolvable parent yields no
+    // scope rather than silently defaulting to db 0. Target resolution above
+    // already guarantees the parent is registered; `client` is the same local,
+    // so this arm is a fail-closed guard, not a reachable path.
+    let Some(runtime_db) = client.as_ref().map(|c| c.current_database()) else {
+        return Outcome(Fail(ScopeFailCause::ParentUnregistered));
+    };
+    match pool.try_acquire(registry, target.clone(), runtime_db) {
+        ScopeAcquire::Reused(scope_id) => {
+            let _ = glide_telemetry::GlideOpenTelemetry::record_scope_acquire();
+            Outcome(Acquired(scope_id))
+        }
+        ScopeAcquire::Reserved(reservation) => {
+            // The guard moves into the creation task, so an early return,
+            // cancel, or panic there gives the slot back.
+            let pool_clone = scope_pool.clone();
+            let conn_bytes = pool.connection_request_bytes.clone();
+            Creating(runtime.spawn(async move {
+                create_scope_connection(
+                    pool_clone,
+                    client.as_ref(),
+                    &conn_bytes,
+                    target,
+                    reservation,
+                )
+                .await
+            }))
+        }
+        ScopeAcquire::NeedsResync => {
+            // The only reusable connection for this target is on a different
+            // database. Re-SELECT it onto the runtime database off-lock, then
+            // retry — the borrower never sees a connection on the wrong database.
+            let pool_clone = scope_pool.clone();
+            drop(pool);
+            runtime.spawn(async move {
+                resync_idle_connection_database(pool_clone, target, runtime_db).await;
+            });
+            Outcome(Retry(ScopeRetryCause::Pending))
+        }
+        ScopeAcquire::Exhausted => Outcome(Retry(ScopeRetryCause::Exhausted)),
     }
 }
 
 /// Re-`SELECT` one slot-matching idle connection that is on the wrong database onto
 /// `runtime_db`, off the pool lock, then return it to idle. Backs the
-/// [`ScopeAcquire::NeedsResync`] retry path in [`try_acquire_scope`]. If the
+/// [`ScopeAcquire::NeedsResync`] retry path in [`acquire_scope`]. If the
 /// SELECT fails, the connection is discarded (its slot reclaimed).
 #[cfg(feature = "proto")]
 pub(crate) async fn resync_idle_connection_database(
@@ -960,8 +1302,10 @@ pub(crate) async fn resync_idle_connection_database(
         let mut guard = pool.lock().await;
         match guard.take_idle_for_resync(target, runtime_db) {
             Some(c) => {
-                let reservation =
-                    crate::pool::ScopeReservation::for_slot(guard.total_count.clone());
+                let reservation = crate::pool::ScopeReservation::for_slot(
+                    guard.total_count.clone(),
+                    guard.wakeup.clone(),
+                );
                 (c, guard.config.request_timeout, reservation)
             }
             // Another acquire raced us and took or fixed it; nothing to do.
@@ -998,7 +1342,7 @@ pub(crate) async fn resync_idle_connection_database(
 pub fn release_scope(scope_id: u64, client_id: u64, runtime: &tokio::runtime::Handle) -> i32 {
     let pools = get_client_scope_pools();
     let scope_pool = match pools.get(&client_id) {
-        Some(p) => p.value().clone(),
+        Some(p) => p.value().pool.clone(),
         None => return -1,
     };
     let registry = get_scope_registry();
@@ -1042,9 +1386,9 @@ pub fn get_parent_client(client_id: u64) -> Option<Client> {
 
 /// Report an unresolved scope target without flooding the log.
 ///
-/// Bindings retry `try_acquire_scope` on a 1-50 ms backoff until their acquire
-/// timeout, so an outage of a few seconds would otherwise produce hundreds of
-/// identical warnings per caller. The pool remembers the last cause it reported:
+/// A waiting acquire re-attempts every few milliseconds until its deadline, so an
+/// outage of a few seconds would otherwise produce hundreds of identical warnings
+/// per caller. The pool remembers the last cause it reported:
 /// a cause of a new kind is a warning, a repeat of the same kind is a debug line,
 /// and the acquire path clears the memory (with one debug line) once resolution
 /// succeeds again. Kind, not value: concurrent acquires for different unmapped
@@ -1065,7 +1409,7 @@ fn log_unresolved_target(
     pool.last_unresolved_target = Some(cause);
     if repeated {
         glide_logger::log_debug(
-            "try_acquire_scope",
+            "acquire_scope_outcome",
             format!(
                 "client {client_id}: scope target for slot {routing_slot} still unresolved: {cause}"
             ),
@@ -1081,7 +1425,7 @@ fn log_unresolved_target(
         }
     };
     glide_logger::log_warn(
-        "try_acquire_scope",
+        "acquire_scope_outcome",
         format!(
             "client {client_id}: cannot resolve scope target for slot {routing_slot}: \
              {cause}; {outlook}"
@@ -1205,8 +1549,9 @@ mod tests {
     use tokio::sync::Mutex as TokioMutex;
 
     use super::{
-        ScopeCreateError, build_scope_connection, create_scope_connection, inherited_tls_params,
-        resolve_scope_parent, try_acquire_scope, try_resolve_scope_target,
+        ScopeAcquireOutcome, ScopeCreateError, ScopeFailCause, ScopeRetryCause,
+        acquire_scope_outcome, build_scope_connection, create_scope_connection,
+        inherited_tls_params, resolve_scope_parent, try_resolve_scope_target,
     };
     use super::{build_scope_connection_addr, parse_cluster_target, strip_host_brackets};
 
@@ -1215,10 +1560,44 @@ mod tests {
 
     use crate::connection_request::{ConnectionRequest, NodeAddress};
     use crate::pool::{
-        ScopeAcquire, ScopePool, ScopePoolConfig, ScopeReservation, ScopeTarget,
+        ScopeAcquire, ScopePool, ScopePoolConfig, ScopePoolHandle, ScopeReservation, ScopeTarget,
         ScopeTargetUnresolved, get_client_scope_pools, get_scope_registry,
     };
     use crate::scope::{register_client, unregister_client};
+
+    /// A binding classifies the acquire error by `error_type` of the converted
+    /// `RedisError`, so that must agree with `request_error_type` for every
+    /// variant; the message text survives the conversion as well.
+    #[test]
+    fn scope_acquire_error_keeps_its_request_error_type_through_redis_error() {
+        use super::{ScopeAcquireError, ScopeCreateErrorKind};
+        use strum::IntoEnumIterator;
+        // Every terminal cause by iteration, so a variant added later is covered
+        // without anyone remembering this list; the deadline cases by hand, since
+        // `CreateFailed` carries a payload.
+        let errors = ScopeFailCause::iter()
+            .map(ScopeAcquireError::Terminal)
+            .chain([
+                ScopeAcquireError::DeadlineExceeded {
+                    last: ScopeRetryCause::Exhausted,
+                },
+                ScopeAcquireError::DeadlineExceeded {
+                    last: ScopeRetryCause::CreateFailed(ScopeCreateErrorKind::ConnectFailed),
+                },
+            ]);
+        for err in errors {
+            let converted = redis::RedisError::from(err);
+            assert_eq!(
+                crate::errors::error_type(&converted),
+                err.request_error_type(),
+                "{err}"
+            );
+            assert!(
+                converted.to_string().contains(&err.to_string()),
+                "message lost: {converted}"
+            );
+        }
+    }
 
     const DEFAULT_ROUTING_SLOT: u16 = 0;
     const MAX_CLUSTER_SLOT: u16 = 16_383;
@@ -1373,7 +1752,7 @@ mod tests {
         let pool = reserved_pool(request_bytes.clone());
 
         let reservation = reservation_for(&pool).await;
-        create_scope_connection(
+        let _ = create_scope_connection(
             pool.clone(),
             None,
             &request_bytes,
@@ -1397,13 +1776,13 @@ mod tests {
     }
 
     /// The defect's layer: `create_scope_connection` runs in a detached task and
-    /// can be cancelled mid-connect. Reserve through the real `try_acquire` (so the
-    /// guard also carries the pending marker), spawn creation against an endpoint
-    /// that accepts TCP but never completes the handshake — so the task parks —
-    /// then abort it. The guard's `Drop` must reclaim the slot AND clear the marker;
-    /// pre-guard code left both leaked because no give-back path ran on cancel.
+    /// can be cancelled mid-connect. Reserve through the real `try_acquire`, spawn
+    /// creation against an endpoint that accepts TCP but never completes the
+    /// handshake — so the task parks — then abort it. The guard's `Drop` must
+    /// reclaim the slot; pre-guard code leaked it because no give-back path ran on
+    /// cancel.
     #[tokio::test]
-    async fn cancelled_create_scope_connection_reclaims_slot_and_marker() {
+    async fn cancelled_create_scope_connection_reclaims_slot() {
         // Accept-only listener: the client's TCP connect succeeds at the kernel,
         // but the redis handshake never gets a response, so build_scope_connection
         // parks on its connect/init await (well within SCOPE_CONNECT_TIMEOUT).
@@ -1420,29 +1799,16 @@ mod tests {
 
         let reservation = {
             let mut guard = pool.lock().await;
-            match guard.try_acquire(
-                registry,
-                ScopeTarget::Standalone,
-                0,
-                crate::pool::next_scope_attempt_token(),
-            ) {
+            match guard.try_acquire(registry, ScopeTarget::Standalone, 0) {
                 ScopeAcquire::Reserved(r) => r,
                 other => panic!("expected a reservation, got {other:?}"),
             }
         };
         assert_eq!(pool.lock().await.total_count.load(Ordering::Acquire), 1);
-        assert!(
-            pool.lock()
-                .await
-                .pending
-                .lock()
-                .unwrap()
-                .contains_key(&ScopeTarget::Standalone)
-        );
 
         let pool_clone = pool.clone();
         let handle = tokio::spawn(async move {
-            create_scope_connection(
+            let _ = create_scope_connection(
                 pool_clone,
                 None,
                 &request_bytes,
@@ -1460,10 +1826,6 @@ mod tests {
             pool.total_count.load(Ordering::Acquire),
             0,
             "a cancelled create must give the reserved slot back, not leak it"
-        );
-        assert!(
-            pool.pending.lock().unwrap().is_empty(),
-            "a cancelled create must clear its pending marker"
         );
         assert!(pool.idle.is_empty());
     }
@@ -1506,7 +1868,7 @@ mod tests {
             let pool = reserved_pool(request_bytes.clone());
 
             let reservation = reservation_for(&pool).await;
-            create_scope_connection(
+            let _ = create_scope_connection(
                 pool.clone(),
                 None,
                 &request_bytes,
@@ -1551,7 +1913,7 @@ mod tests {
             request_bytes.clone(),
             client_id,
         )));
-        get_client_scope_pools().insert(client_id, pool.clone());
+        get_client_scope_pools().insert(client_id, ScopePoolHandle::for_test(&pool));
 
         let parent = lazy_parent(true).await;
         register_client(client_id, parent.clone());
@@ -1561,18 +1923,20 @@ mod tests {
             try_resolve_scope_target(Some(&parent), 42),
             Err(ScopeTargetUnresolved::SlotUnmapped(42))
         );
-        let acquired = try_acquire_scope(
+        let acquired = acquire_scope_outcome(
             client_id,
             request_bytes.clone(),
             &tokio::runtime::Handle::current(),
             42,
-            crate::pool::next_scope_attempt_token(),
         );
         get_client_scope_pools().remove(&client_id);
 
         unregister_client(client_id);
 
-        assert_eq!(acquired, -1);
+        assert_eq!(
+            acquired,
+            ScopeAcquireOutcome::Retry(ScopeRetryCause::TargetUnresolved)
+        );
         {
             let pool = pool.lock().await;
             assert_eq!(pool.total_count.load(Ordering::Acquire), 0);
@@ -1623,21 +1987,16 @@ mod tests {
         };
         get_client_scope_pools().insert(
             client_id,
-            Arc::new(TokioMutex::new(ScopePool::new(
-                config,
-                request_bytes.clone(),
-                client_id,
-            ))),
+            ScopePoolHandle::new(ScopePool::new(config, request_bytes.clone(), client_id)),
         );
 
         register_client(client_id, lazy_parent(false).await);
 
-        let acquired = try_acquire_scope(
+        let acquired = acquire_scope_outcome(
             client_id,
             request_bytes.clone(),
             &tokio::runtime::Handle::current(),
             0,
-            crate::pool::next_scope_attempt_token(),
         );
 
         unregister_client(client_id);
@@ -1645,7 +2004,8 @@ mod tests {
         get_client_scope_pools().remove(&client_id);
 
         assert_eq!(
-            acquired, -1,
+            acquired,
+            ScopeAcquireOutcome::Retry(ScopeRetryCause::Pending),
             "no idle connection yet, so the caller retries"
         );
         assert!(
@@ -1712,16 +2072,15 @@ mod tests {
             request_bytes.clone(),
             client_id,
         )));
-        get_client_scope_pools().insert(client_id, pool.clone());
+        get_client_scope_pools().insert(client_id, ScopePoolHandle::for_test(&pool));
         register_client(client_id, lazy_parent(true).await);
 
         let acquire = |slot: u16| {
-            try_acquire_scope(
+            acquire_scope_outcome(
                 client_id,
                 request_bytes.clone(),
                 &tokio::runtime::Handle::current(),
                 slot,
-                crate::pool::next_scope_attempt_token(),
             )
         };
         let recorded = || {
@@ -1736,16 +2095,25 @@ mod tests {
             "nothing recorded before the first acquire"
         );
 
-        assert_eq!(acquire(42), -1);
+        assert_eq!(
+            acquire(42),
+            ScopeAcquireOutcome::Retry(ScopeRetryCause::TargetUnresolved)
+        );
         assert_eq!(recorded(), Some(ScopeTargetUnresolved::SlotUnmapped(42)));
 
         // Same cause again: the record is unchanged (a repeat, logged at debug).
-        assert_eq!(acquire(42), -1);
+        assert_eq!(
+            acquire(42),
+            ScopeAcquireOutcome::Retry(ScopeRetryCause::TargetUnresolved)
+        );
         assert_eq!(recorded(), Some(ScopeTargetUnresolved::SlotUnmapped(42)));
 
         // A different unmapped slot updates the recorded value (so the message
         // names the current slot) but is the same kind, so it counts as a repeat.
-        assert_eq!(acquire(7), -1);
+        assert_eq!(
+            acquire(7),
+            ScopeAcquireOutcome::Retry(ScopeRetryCause::TargetUnresolved)
+        );
         let after_other_slot = recorded();
         assert_eq!(
             after_other_slot,
@@ -1765,8 +2133,11 @@ mod tests {
         unregister_client(client_id);
         // unregister_client tears the pool down with the client; reseat it so the
         // remaining acquires observe the same pool instance.
-        get_client_scope_pools().insert(client_id, pool.clone());
-        assert_eq!(acquire(7), -1);
+        get_client_scope_pools().insert(client_id, ScopePoolHandle::for_test(&pool));
+        assert_eq!(
+            acquire(7),
+            ScopeAcquireOutcome::Fail(ScopeFailCause::ParentUnregistered)
+        );
         assert_eq!(recorded(), Some(ScopeTargetUnresolved::ParentUnregistered));
 
         // Resolution succeeding clears the record. The standalone parent resolves
@@ -1775,7 +2146,7 @@ mod tests {
         register_client(client_id, lazy_parent(false).await);
         assert_eq!(
             acquire(7),
-            -1,
+            ScopeAcquireOutcome::Retry(ScopeRetryCause::Pending),
             "no idle connection yet, so the caller retries"
         );
         assert_eq!(recorded(), None);
@@ -1814,7 +2185,7 @@ mod tests {
                 // Each failure gives its slot back, so re-reserve before the next.
                 pool.lock().await.total_count.store(1, Ordering::Release);
                 let reservation = reservation_for(&pool).await;
-                create_scope_connection(
+                let _ = create_scope_connection(
                     pool.clone(),
                     client.as_ref(),
                     &bytes,
@@ -1867,6 +2238,258 @@ mod tests {
         shutdown_sender.send(()).expect("signal server shutdown");
         server.join().expect("join server thread");
     }
+    /// A closed pool cannot hand out a scope, so it is a terminal outcome, not the
+    /// generic retry that `ScopePool::try_acquire` reports as `Exhausted`.
+    #[tokio::test]
+    async fn acquire_on_a_closed_pool_fails_instead_of_retrying() {
+        let client_id = 67_950_004_u64;
+        let request_bytes = request_bytes("", 1);
+        let pool = Arc::new(TokioMutex::new(ScopePool::new(
+            ScopePoolConfig::default(),
+            request_bytes.clone(),
+            client_id,
+        )));
+        pool.lock()
+            .await
+            .state
+            .store(crate::pool::POOL_CLOSED, Ordering::Release);
+        get_client_scope_pools().insert(client_id, ScopePoolHandle::for_test(&pool));
+        register_client(client_id, lazy_parent(false).await);
+
+        let acquired = acquire_scope_outcome(
+            client_id,
+            request_bytes,
+            &tokio::runtime::Handle::current(),
+            0,
+        );
+
+        unregister_client(client_id);
+        get_client_scope_pools().remove(&client_id);
+        assert_eq!(
+            acquired,
+            ScopeAcquireOutcome::Fail(ScopeFailCause::PoolClosed)
+        );
+    }
+
+    /// Seat one connection in a `max_total = 1` pool, register the parent, and hand
+    /// back `(pool, scope_id of the held connection, request bytes, server)`.
+    async fn held_single_slot_pool(
+        client_id: u64,
+    ) -> (
+        Arc<TokioMutex<ScopePool>>,
+        u64,
+        Vec<u8>,
+        (Sender<()>, JoinHandle<()>),
+    ) {
+        let (port, shutdown_sender, server) = responsive_endpoint();
+        let request_bytes = request_bytes("", port);
+        let config = ScopePoolConfig {
+            max_total: 1,
+            ..ScopePoolConfig::default()
+        };
+        let pool = Arc::new(TokioMutex::new(ScopePool::new(
+            config,
+            request_bytes.clone(),
+            client_id,
+        )));
+        pool.lock().await.total_count.store(1, Ordering::Release);
+        let reservation = reservation_for(&pool).await;
+        let _ = create_scope_connection(
+            pool.clone(),
+            None,
+            &request_bytes,
+            ScopeTarget::Standalone,
+            reservation,
+        )
+        .await;
+        get_client_scope_pools().insert(client_id, ScopePoolHandle::for_test(&pool));
+        register_client(client_id, lazy_parent(false).await);
+
+        let held = {
+            let mut guard = pool.lock().await;
+            reused_scope_id(guard.try_acquire(
+                crate::pool::get_scope_registry(),
+                ScopeTarget::Standalone,
+                0,
+            ))
+        };
+        (pool, held, request_bytes, (shutdown_sender, server))
+    }
+
+    fn stop_endpoint((shutdown_sender, server): (Sender<()>, JoinHandle<()>)) {
+        shutdown_sender.send(()).expect("signal server shutdown");
+        server.join().expect("join server thread");
+    }
+
+    /// Wait cap for the wake tests: longer than their deadline, so the timer arm
+    /// of the wait can never fire and only a `Notify` can end the wait early.
+    const NO_TIMER_WAKE: Duration = Duration::from_secs(60);
+
+    /// The waiting acquire is woken by the release itself, not by a timer: the
+    /// borrower gets the connection in roughly the time the other holder kept it,
+    /// nowhere near the deadline.
+    #[tokio::test]
+    async fn acquire_scope_wakes_when_another_borrower_releases() {
+        let client_id = 67_950_005_u64;
+        let (pool, held, request_bytes, endpoint) = held_single_slot_pool(client_id).await;
+
+        let releaser = {
+            let pool = pool.clone();
+            tokio::spawn(async move {
+                tokio::time::sleep(Duration::from_millis(150)).await;
+                assert!(
+                    pool.lock()
+                        .await
+                        .release(held, crate::pool::get_scope_registry())
+                );
+            })
+        };
+
+        let started = Instant::now();
+        let acquired = super::acquire_scope_with_wait_cap(
+            client_id,
+            request_bytes,
+            &tokio::runtime::Handle::current(),
+            0,
+            Duration::from_secs(5),
+            NO_TIMER_WAKE,
+        )
+        .await;
+        let elapsed = started.elapsed();
+        releaser.await.expect("releaser task");
+
+        unregister_client(client_id);
+        get_client_scope_pools().remove(&client_id);
+        stop_endpoint(endpoint);
+
+        assert_eq!(acquired, Ok(held), "the released connection is reused");
+        assert!(
+            elapsed < Duration::from_secs(2),
+            "woke {elapsed:?} after start; the release was at 150 ms"
+        );
+    }
+
+    /// When nothing frees up, the error names the cause of the final attempt so
+    /// the caller learns it was exhaustion, not some other retryable condition.
+    #[tokio::test]
+    async fn acquire_scope_deadline_names_the_last_retry_cause() {
+        let client_id = 67_950_006_u64;
+        let (pool, held, request_bytes, endpoint) = held_single_slot_pool(client_id).await;
+
+        let started = Instant::now();
+        let acquired = super::acquire_scope(
+            client_id,
+            request_bytes,
+            &tokio::runtime::Handle::current(),
+            0,
+            Duration::from_millis(100),
+        )
+        .await;
+        let elapsed = started.elapsed();
+
+        assert!(
+            pool.lock()
+                .await
+                .release(held, crate::pool::get_scope_registry())
+        );
+        unregister_client(client_id);
+        get_client_scope_pools().remove(&client_id);
+        stop_endpoint(endpoint);
+
+        assert_eq!(
+            acquired,
+            Err(super::ScopeAcquireError::DeadlineExceeded {
+                last: ScopeRetryCause::Exhausted,
+            })
+        );
+        assert!(
+            elapsed >= Duration::from_millis(100) && elapsed < Duration::from_secs(2),
+            "deadline honoured: {elapsed:?}"
+        );
+    }
+
+    /// Closing the parent while an acquire is waiting ends the wait with the
+    /// closed-parent cause, not a timeout at the deadline. The close runs outside
+    /// the pool lock, so the wake has to come from the handle's `Notify`.
+    #[tokio::test]
+    async fn acquire_scope_stops_when_parent_closes_mid_wait() {
+        let client_id = 67_950_007_u64;
+        let (pool, held, request_bytes, endpoint) = held_single_slot_pool(client_id).await;
+
+        let closer = tokio::spawn(async move {
+            tokio::time::sleep(Duration::from_millis(150)).await;
+            unregister_client(client_id);
+        });
+
+        let started = Instant::now();
+        let acquired = super::acquire_scope_with_wait_cap(
+            client_id,
+            request_bytes,
+            &tokio::runtime::Handle::current(),
+            0,
+            Duration::from_secs(5),
+            NO_TIMER_WAKE,
+        )
+        .await;
+        let elapsed = started.elapsed();
+        closer.await.expect("closer task");
+
+        // Reclaim what the test seated; the registry entry went with the client.
+        pool.lock().await.in_use.remove(&held);
+        get_client_scope_pools().remove(&client_id);
+        stop_endpoint(endpoint);
+
+        assert_eq!(
+            acquired,
+            Err(super::ScopeAcquireError::Terminal(
+                ScopeFailCause::ParentUnregistered
+            ))
+        );
+        assert!(
+            elapsed < Duration::from_secs(2),
+            "stopped {elapsed:?} after start; the close was at 150 ms"
+        );
+    }
+
+    /// A creation failure that no wait can clear ends the acquire as soon as the
+    /// failed task has recorded it, instead of respawning until the deadline.
+    #[tokio::test]
+    async fn acquire_scope_returns_terminal_create_failure_promptly() {
+        let client_id = 67_950_008_u64;
+        let request_bytes = mtls_request_bytes();
+        let pool = Arc::new(TokioMutex::new(ScopePool::new(
+            ScopePoolConfig::default(),
+            request_bytes.clone(),
+            client_id,
+        )));
+        get_client_scope_pools().insert(client_id, ScopePoolHandle::for_test(&pool));
+        register_client(client_id, lazy_mtls_parent().await);
+
+        let started = Instant::now();
+        let acquired = super::acquire_scope(
+            client_id,
+            request_bytes,
+            &tokio::runtime::Handle::current(),
+            0,
+            Duration::from_secs(5),
+        )
+        .await;
+        let elapsed = started.elapsed();
+
+        unregister_client(client_id);
+        get_client_scope_pools().remove(&client_id);
+
+        assert_eq!(
+            acquired,
+            Err(super::ScopeAcquireError::Terminal(
+                ScopeFailCause::ParentCertMaterialUnavailable
+            ))
+        );
+        assert!(
+            elapsed < Duration::from_secs(2),
+            "terminal cause reported {elapsed:?} after start"
+        );
+    }
 
     #[tokio::test]
     async fn standalone_reuses_released_connection_across_ignored_routing_slots() {
@@ -1885,7 +2508,7 @@ mod tests {
             .expect("standalone always resolves");
         assert_eq!(initial_target, ScopeTarget::Standalone);
         let reservation = reservation_for(&pool).await;
-        create_scope_connection(
+        let _ = create_scope_connection(
             pool.clone(),
             None,
             &request_bytes,
@@ -1900,12 +2523,7 @@ mod tests {
             assert_eq!(pool.idle.len(), 1);
             let target = try_resolve_scope_target(Some(&parent), DEFAULT_ROUTING_SLOT)
                 .expect("standalone always resolves");
-            reused_scope_id(pool.try_acquire(
-                registry,
-                target,
-                0,
-                crate::pool::next_scope_attempt_token(),
-            ))
+            reused_scope_id(pool.try_acquire(registry, target, 0))
         };
 
         {
@@ -1920,12 +2538,7 @@ mod tests {
             let alternate_target = try_resolve_scope_target(Some(&parent), MAX_CLUSTER_SLOT)
                 .expect("standalone always resolves");
             assert_eq!(alternate_target, ScopeTarget::Standalone);
-            reused_scope_id(pool.try_acquire(
-                registry,
-                alternate_target,
-                0,
-                crate::pool::next_scope_attempt_token(),
-            ))
+            reused_scope_id(pool.try_acquire(registry, alternate_target, 0))
         };
         assert_eq!(second_scope_id, first_scope_id);
 
@@ -1958,7 +2571,7 @@ mod tests {
         let request_bytes = request_bytes("", port);
         let pool = reserved_pool(request_bytes.clone());
         let reservation = reservation_for(&pool).await;
-        create_scope_connection(
+        let _ = create_scope_connection(
             pool.clone(),
             None,
             &request_bytes,
@@ -1972,12 +2585,7 @@ mod tests {
         let first_scope_id = {
             let mut pool = pool.lock().await;
             pool.idle[0].target = target.clone();
-            reused_scope_id(pool.try_acquire(
-                registry,
-                target.clone(),
-                0,
-                crate::pool::next_scope_attempt_token(),
-            ))
+            reused_scope_id(pool.try_acquire(registry, target.clone(), 0))
         };
 
         {
@@ -1992,12 +2600,7 @@ mod tests {
         // would produce) is equal by address, not by Arc identity.
         let second_scope_id = {
             let mut pool = pool.lock().await;
-            reused_scope_id(pool.try_acquire(
-                registry,
-                ScopeTarget::cluster_primary(PRIMARY_A),
-                0,
-                crate::pool::next_scope_attempt_token(),
-            ))
+            reused_scope_id(pool.try_acquire(registry, ScopeTarget::cluster_primary(PRIMARY_A), 0))
         };
         assert_eq!(second_scope_id, first_scope_id);
 
@@ -2019,7 +2622,7 @@ mod tests {
         let request_bytes = request_bytes("", port);
         let pool = reserved_pool(request_bytes.clone());
         let reservation = reservation_for(&pool).await;
-        create_scope_connection(
+        let _ = create_scope_connection(
             pool.clone(),
             None,
             &request_bytes,
@@ -2038,39 +2641,26 @@ mod tests {
             pool.idle[0].target = ScopeTarget::cluster_primary(PRIMARY_A);
             // Hold each reserved guard: in production the creation task holds it
             // and commits on seat. Dropping it here would reclaim the slot.
-            let reservation_b = match pool.try_acquire(
-                registry,
-                ScopeTarget::cluster_primary(PRIMARY_B),
-                0,
-                crate::pool::next_scope_attempt_token(),
-            ) {
-                ScopeAcquire::Reserved(reservation) => reservation,
-                other => panic!("expected a reservation, got {other:?}"),
-            };
+            let reservation_b =
+                match pool.try_acquire(registry, ScopeTarget::cluster_primary(PRIMARY_B), 0) {
+                    ScopeAcquire::Reserved(reservation) => reservation,
+                    other => panic!("expected a reservation, got {other:?}"),
+                };
             assert_eq!(pool.idle.len(), 1);
             assert_eq!(pool.total_count.load(Ordering::Acquire), 2);
 
             pool.idle[0].target = ScopeTarget::cluster_primary(PRIMARY_B);
-            let reservation_a = match pool.try_acquire(
-                registry,
-                ScopeTarget::cluster_primary(PRIMARY_A),
-                0,
-                crate::pool::next_scope_attempt_token(),
-            ) {
-                ScopeAcquire::Reserved(reservation) => reservation,
-                other => panic!("expected a reservation, got {other:?}"),
-            };
+            let reservation_a =
+                match pool.try_acquire(registry, ScopeTarget::cluster_primary(PRIMARY_A), 0) {
+                    ScopeAcquire::Reserved(reservation) => reservation,
+                    other => panic!("expected a reservation, got {other:?}"),
+                };
             assert_eq!(pool.idle.len(), 1);
             assert_eq!(pool.total_count.load(Ordering::Acquire), 3);
 
             // Reuse consumes no additional capacity.
             pool.idle[0].target = ScopeTarget::Standalone;
-            let reused = reused_scope_id(pool.try_acquire(
-                registry,
-                ScopeTarget::Standalone,
-                0,
-                crate::pool::next_scope_attempt_token(),
-            ));
+            let reused = reused_scope_id(pool.try_acquire(registry, ScopeTarget::Standalone, 0));
             assert_eq!(pool.total_count.load(Ordering::Acquire), 3);
             // Keep the two held reservations counted, as their in-flight creations
             // would; they are the two slots the running total above accounts for.
@@ -2112,7 +2702,7 @@ mod tests {
 
         // Seat two idle connections; the first seated is the oldest (front).
         let reservation_a = reservation_for(&pool).await;
-        create_scope_connection(
+        let _ = create_scope_connection(
             pool.clone(),
             None,
             &request_bytes("", port_a),
@@ -2121,7 +2711,7 @@ mod tests {
         )
         .await;
         let reservation_b = reservation_for(&pool).await;
-        create_scope_connection(
+        let _ = create_scope_connection(
             pool.clone(),
             None,
             &request_bytes("", port_b),
@@ -2147,7 +2737,6 @@ mod tests {
                 registry,
                 ScopeTarget::cluster_primary("10.0.0.3:6379"),
                 0,
-                crate::pool::next_scope_attempt_token(),
             ) {
                 ScopeAcquire::Reserved(reservation) => reservation,
                 other => panic!("expected a reservation, got {other:?}"),
@@ -2170,7 +2759,6 @@ mod tests {
                 registry,
                 ScopeTarget::cluster_primary(PRIMARY_B),
                 0,
-                crate::pool::next_scope_attempt_token(),
             ));
             assert_eq!(reused, newest_id);
             assert!(pool.idle.is_empty());
@@ -2178,12 +2766,7 @@ mod tests {
 
             // Full with nothing idle: genuinely exhausted, and no reservation leaks.
             assert!(matches!(
-                pool.try_acquire(
-                    registry,
-                    ScopeTarget::cluster_primary(PRIMARY_A),
-                    0,
-                    crate::pool::next_scope_attempt_token()
-                ),
+                pool.try_acquire(registry, ScopeTarget::cluster_primary(PRIMARY_A), 0,),
                 ScopeAcquire::Exhausted
             ));
             assert_eq!(pool.total_count.load(Ordering::Acquire), 2);
@@ -2197,76 +2780,6 @@ mod tests {
         shutdown_b.send(()).expect("stop mock server b");
         server_a.join().expect("mock server a exits cleanly");
         server_b.join().expect("mock server b exits cleanly");
-    }
-
-    /// A retry for an in-flight target must dedupe BEFORE the full-pool eviction:
-    /// it must return `CreationPending` and NOT destroy a healthy idle connection
-    /// to another primary for a slot it will never use. This is the churn a
-    /// dedupe-after-evict order would cause under the exact #6966 retry storm.
-    #[tokio::test]
-    async fn creation_pending_retry_does_not_evict_idle() {
-        let (port, shutdown, server) = responsive_endpoint();
-        let config = ScopePoolConfig {
-            max_total: 2,
-            ..ScopePoolConfig::default()
-        };
-        let pool = ScopePool::new(config, request_bytes("", port), 1);
-        // Pre-count the slot the seated idle connection occupies (reservation_for
-        // binds a for_test guard to the counter without incrementing it, matching
-        // full_pool_evicts).
-        pool.total_count.store(1, Ordering::Release);
-        let pool = Arc::new(TokioMutex::new(pool));
-
-        let registry = crate::pool::get_scope_registry();
-        let in_flight = ScopeTarget::cluster_primary(PRIMARY_A);
-
-        // Seat one real idle connection to a DIFFERENT primary.
-        let reservation_b = reservation_for(&pool).await;
-        create_scope_connection(
-            pool.clone(),
-            None,
-            &request_bytes("", port),
-            ScopeTarget::Standalone,
-            reservation_b,
-        )
-        .await;
-
-        // Reserve the in-flight target (increments to 2, marks it pending, holds
-        // the slot as its creation task would). This fills the pool. The retry
-        // below carries the SAME attempt token, so it dedupes to this creation.
-        let token = crate::pool::next_scope_attempt_token();
-        let held = {
-            let mut pool = pool.lock().await;
-            match pool.try_acquire(registry, in_flight.clone(), 0, token) {
-                ScopeAcquire::Reserved(r) => r,
-                other => panic!("expected a reservation, got {other:?}"),
-            }
-        };
-        {
-            let mut pool = pool.lock().await;
-            assert_eq!(pool.idle.len(), 1);
-            pool.idle[0].target = ScopeTarget::cluster_primary(PRIMARY_B);
-            assert_eq!(pool.total_count.load(Ordering::Acquire), 2, "pool is full");
-
-            // Retry the in-flight target with the SAME token: full pool + mismatched
-            // idle. A dedupe-after-evict order would evict the idle B connection here.
-            assert!(
-                matches!(
-                    pool.try_acquire(registry, in_flight, 0, token),
-                    ScopeAcquire::CreationPending
-                ),
-                "retry for an in-flight target must be CreationPending"
-            );
-            assert_eq!(
-                pool.idle.len(),
-                1,
-                "a CreationPending retry must NOT evict the idle connection"
-            );
-        }
-
-        held.commit();
-        shutdown.send(()).expect("stop mock server");
-        server.join().expect("mock server exits cleanly");
     }
 
     /// Holding the pool lock reproduces the contention that made the old
@@ -2292,7 +2805,7 @@ mod tests {
         register_client(parent_client_id, parent);
 
         let reservation = reservation_for(&pool).await;
-        create_scope_connection(
+        let _ = create_scope_connection(
             pool.clone(),
             None,
             &request_bytes,
@@ -2302,12 +2815,7 @@ mod tests {
         .await;
         let acquired = {
             let mut pool = pool.lock().await;
-            pool.try_acquire(
-                get_scope_registry(),
-                ScopeTarget::Standalone,
-                0,
-                crate::pool::next_scope_attempt_token(),
-            )
+            pool.try_acquire(get_scope_registry(), ScopeTarget::Standalone, 0)
         };
 
         let resolved = if let ScopeAcquire::Reused(scope_id) = acquired {
@@ -2343,7 +2851,7 @@ mod tests {
         // reserved_pool() seats the pool under parent client id 1.
         let parent_client_id = 1;
         let pool = reserved_pool(request_bytes.clone());
-        get_client_scope_pools().insert(parent_client_id, pool.clone());
+        get_client_scope_pools().insert(parent_client_id, ScopePoolHandle::for_test(&pool));
 
         let mut parent_request = crate::client::ConnectionRequest::default();
         parent_request.addresses.push(crate::client::NodeAddress {
@@ -2357,7 +2865,7 @@ mod tests {
         register_client(parent_client_id, parent);
 
         let reservation = reservation_for(&pool).await;
-        create_scope_connection(
+        let _ = create_scope_connection(
             pool.clone(),
             None,
             &request_bytes,
@@ -2367,12 +2875,7 @@ mod tests {
         .await;
         let acquired = {
             let mut pool = pool.lock().await;
-            pool.try_acquire(
-                get_scope_registry(),
-                ScopeTarget::Standalone,
-                0,
-                crate::pool::next_scope_attempt_token(),
-            )
+            pool.try_acquire(get_scope_registry(), ScopeTarget::Standalone, 0)
         };
 
         let observed = if let ScopeAcquire::Reused(scope_id) = acquired {
@@ -2746,7 +3249,7 @@ mod tests {
         .await;
 
         let reservation = reservation_for(&pool).await;
-        create_scope_connection(
+        let _ = create_scope_connection(
             pool.clone(),
             Some(&parent),
             &request_bytes,
@@ -2791,7 +3294,7 @@ mod tests {
         .await;
 
         let reservation = reservation_for(&pool).await;
-        create_scope_connection(
+        let _ = create_scope_connection(
             pool.clone(),
             Some(&parent),
             &request_bytes,
