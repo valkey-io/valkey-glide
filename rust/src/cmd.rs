@@ -20,9 +20,9 @@ use crate::{ValkeyResult, commands::core::Commands};
 /// glide::cmd("PING");
 /// ```
 pub fn cmd(name: &str) -> Cmd {
-    let mut command = Cmd::new();
-    command.arg(name);
-    command
+    Cmd {
+        inner: redis::cmd(name),
+    }
 }
 
 /// A command to send to the server.
@@ -37,10 +37,10 @@ pub fn cmd(name: &str) -> Cmd {
 /// ```rust,no_run
 /// use glide::AsyncCommands;
 /// # async fn demo(client: glide::GlideClient) -> glide::ValkeyResult<()> {
-/// let set = glide::cmd("SET").arg("my_key").arg(42).clone();
+/// let set = glide::cmd("SET").with_arg("my_key").with_arg(42);
 /// let _: () = client.glide_send_command_as(set).await?;
 ///
-/// let get = glide::cmd("GET").arg("my_key").clone();
+/// let get = glide::cmd("GET").with_arg("my_key");
 /// let value: i64 = client.glide_send_command_as(get).await?;
 ///
 /// # assert_eq!(value, 42);
@@ -59,15 +59,28 @@ impl Cmd {
     /// It is recommended to use [`cmd`] instead
     /// to explicitly specify the command keyword.
     pub fn new() -> Self {
-        Cmd {
-            inner: redis::Cmd::new(),
-        }
+        Self::default()
     }
 
     /// Append an argument and return `&mut self` for chaining.
     #[inline]
     pub fn arg<A: ToValkeyArgs>(&mut self, arg: A) -> &mut Self {
         arg.write_valkey_args(self);
+        self
+    }
+
+    /// Append an argument and return `self` by value for chaining.
+    ///
+    /// ```
+    /// let cmd = glide::cmd("SET")
+    ///     .with_arg("key")
+    ///     .with_arg("value");
+    /// ```
+    ///
+    /// Extends redis-rs's `Cmd` interface.
+    #[inline]
+    pub fn with_arg<A: ToValkeyArgs>(mut self, arg: A) -> Self {
+        self.arg(arg);
         self
     }
 
@@ -145,23 +158,35 @@ mod tests {
 
     #[test]
     fn matches_redis_cmd_single_arg() {
-        let mut v = Cmd::new();
-        v.arg("SET").arg("key").arg(42i64);
-
-        let mut r = redis::Cmd::new();
-        r.arg("SET").arg("key").arg(42i64);
-
+        let v = cmd("SET").with_arg("key").with_arg(42i64);
+        let r = redis::cmd("SET").arg("key").arg(42i64).clone();
         assert_eq!(v.as_redis().get_packed_command(), r.get_packed_command());
     }
 
     #[test]
     fn matches_redis_cmd_multi_arg() {
-        let mut v = Cmd::new();
-        v.arg("MGET").arg(&["a", "b", "c"][..]);
-
-        let mut r = redis::Cmd::new();
-        r.arg("MGET").arg(&["a", "b", "c"][..]);
-
+        let v = cmd("MGET").with_arg(&["a", "b", "c"][..]);
+        let r = redis::cmd("MGET").arg(&["a", "b", "c"][..]).clone();
         assert_eq!(v.as_redis().get_packed_command(), r.get_packed_command());
+    }
+
+    #[test]
+    fn with_arg_matches_arg() {
+        let none: Option<i64> = None;
+
+        let v = cmd("SET")
+            .with_arg("key")
+            .with_arg(&b"value"[..])
+            .with_arg(none.map(|s| ("EX", s)))
+            .with_arg(Some(("PX", 5)))
+            .with_arg(true.then_some("GET"));
+
+        let mut a = cmd("SET");
+        a.arg("key").arg(&b"value"[..]).arg("PX").arg(5).arg("GET");
+
+        assert_eq!(
+            v.as_redis().get_packed_command(),
+            a.as_redis().get_packed_command()
+        );
     }
 }
