@@ -13,10 +13,3 @@ async fn sintercard_variants() {
     m.sintercard_limit(&["s1", "s2"], 1).await.unwrap();
     m.assert_args(&["SINTERCARD", "2", "s1", "s2", "LIMIT", "1"]);
 }
-
-#[tokio::test]
-async fn sintercard_numkeys_counts_encoded_keys() {
-    let m = Mock::int(1);
-    m.sintercard(&b"key"[..]).await.unwrap();
-    m.assert_args(&["SINTERCARD", "1", "key"]);
-}

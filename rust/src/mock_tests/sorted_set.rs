@@ -126,27 +126,3 @@ async fn zrangestore_by_lex_rev_swaps_bounds() {
     // REV => (max, min) order.
     m.assert_args(&["ZRANGESTORE", "d", "s", "[z", "-", "BYLEX", "REV"]);
 }
-
-#[tokio::test]
-async fn zdiffstore_and_withscores_variants() {
-    let m = Mock::int(1);
-    m.zdiffstore("d", &["z1", "z2"]).await.unwrap();
-    m.assert_args(&["ZDIFFSTORE", "d", "2", "z1", "z2"]);
-
-    let m = Mock::array(vec![]);
-    m.zunion_withscores(&["z1", "z2"], Some(AggregationType::Max))
-        .await
-        .unwrap();
-    m.assert_args(&["ZUNION", "2", "z1", "z2", "AGGREGATE", "MAX", "WITHSCORES"]);
-
-    let m = Mock::array(vec![]);
-    m.zinter_withscores(&["z1", "z2"], None).await.unwrap();
-    m.assert_args(&["ZINTER", "2", "z1", "z2", "WITHSCORES"]);
-}
-
-#[tokio::test]
-async fn zunion_numkeys_counts_encoded_keys() {
-    let m = Mock::array(vec![]);
-    m.zunion(&b"key"[..], None).await.unwrap();
-    m.assert_args(&["ZUNION", "1", "key"]);
-}

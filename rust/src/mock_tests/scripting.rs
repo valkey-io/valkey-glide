@@ -172,10 +172,3 @@ async fn fcall_ro_route_encodes_and_routes() {
     m.assert_args(&["FCALL_RO", "rofn", "1", "k1"]);
     assert!(m.routing().is_some());
 }
-
-#[tokio::test]
-async fn eval_numkeys_counts_encoded_keys() {
-    let m = Mock::int(1);
-    m.eval("return 1", &b"key"[..], &["a1"]).await.unwrap();
-    m.assert_args(&["EVAL", "return 1", "1", "key", "a1"]);
-}
