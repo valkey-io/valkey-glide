@@ -675,9 +675,11 @@ class TestBatch:
         # Wait for sleep to finish
         time.sleep(0.5)
 
-        # Execute the same batch again with a longer timeout, should succeed now
+        # Execute the same batch again with a longer timeout, should succeed now.
+        # The first DEBUG SLEEP may still be running on a loaded server, so the
+        # budget must cover its remainder plus this batch's own 0.5 s.
         result = await exec_batch(
-            glide_client, batch, raise_on_error=True, timeout=1000
+            glide_client, batch, raise_on_error=True, timeout=5000
         )
         assert result is not None
         assert len(result) == 1  # Should contain only the result of DEBUG SLEEP
