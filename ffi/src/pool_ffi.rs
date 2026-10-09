@@ -938,18 +938,12 @@ pub unsafe extern "C" fn glide_scope_prewarm(
                     return;
                 }
             };
-            // Reserve respecting max_total; skip if full or closed. Unique token per
-            // prewarm task so they do not dedupe against each other.
-            let token = glide_core::pool::next_scope_attempt_token();
-            let reservation = match pool_clone
-                .lock()
-                .await
-                .reserve_slot_for(target.clone(), token)
-            {
+            // Reserve respecting max_total; skip if full or closed.
+            let reservation = match pool_clone.lock().await.reserve_slot() {
                 Some(reservation) => reservation,
                 None => return,
             };
-            scope::create_scope_connection(
+            let _ = scope::create_scope_connection(
                 pool_clone,
                 client.as_ref(),
                 &bytes,
