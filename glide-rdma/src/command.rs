@@ -40,9 +40,10 @@ impl ReadReceipt {
 
 /// The server's reply to a `LO.GET` or `LO.SET`.
 ///
-/// The server finishes moving bytes to or from the client's memory before it
-/// replies, so any reply means it is done with that memory. Passing a reply
-/// to `LentBuffer::reclaim` is how a caller gets its buffer back.
+/// The protocol requires the server to reply only once its transfer has completed
+/// with delivery guaranteed (`FI_DELIVERY_COMPLETE`), so a reply means it is done
+/// with the client's memory. This crate trusts that; it has no signal of its own.
+/// Passing a reply to `LentBuffer::reclaim` is how a caller gets its buffer back.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TransferReply {
     /// `LO.GET` wrote the stored object into the window.

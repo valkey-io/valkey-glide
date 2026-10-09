@@ -1,4 +1,4 @@
-name: Rust RDMA tests
+name: glide-rdma CI
 
 permissions:
     contents: read
@@ -11,21 +11,31 @@ on:
             - v*
         paths:
             - glide-rdma/**
-            - .github/workflows/rust-rdma.yml
-            - .github/workflows/lint-rust/action.yml
-            - .github/actions/install-rust/action.yml
+
+            # Rust dependencies
             - deny.toml
+
+            # GitHub workflows
+            - .github/workflows/glide-rdma.yml
+            - .github/actions/install-protoc/action.yml
+            - .github/actions/install-rust/action.yml
+            - .github/workflows/lint-rust/action.yml
     pull_request:
         paths:
             - glide-rdma/**
-            - .github/workflows/rust-rdma.yml
-            - .github/workflows/lint-rust/action.yml
-            - .github/actions/install-rust/action.yml
+
+            # Rust dependencies
             - deny.toml
+
+            # GitHub workflows
+            - .github/workflows/glide-rdma.yml
+            - .github/actions/install-protoc/action.yml
+            - .github/actions/install-rust/action.yml
+            - .github/workflows/lint-rust/action.yml
     workflow_dispatch:
 
 concurrency:
-    group: rust-rdma-${{ github.head_ref || github.ref }}
+    group: glide-rdma-${{ github.head_ref || github.ref }}
     cancel-in-progress: true
 
 env:

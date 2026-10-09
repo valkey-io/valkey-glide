@@ -351,8 +351,8 @@ impl LentBuffer {
     ///
     /// [`RdmaError::PayloadTooLarge`] when the server reports writing more than the
     /// window held. The bytes past the window may have overwritten other parts of the
-    /// buffer. The buffer is still handed back, because the server has replied and so
-    /// is done with the memory.
+    /// buffer. The buffer is still handed back, because a reply means the server is
+    /// done with the memory; see [`TransferReply`].
     pub unsafe fn reclaim(
         self,
         reply: TransferReply,
@@ -399,7 +399,7 @@ impl LentBuffer {
     /// # Safety
     ///
     /// The command this loan was lent for must not have been sent. Once it has, only
-    /// the server's reply proves it is done with the window.
+    /// the server's reply says it is done with the window.
     pub unsafe fn cancel_unsent(self) -> RdmaBuffer {
         let (buffer, _, _progress) = self.dismantle();
         buffer
@@ -735,7 +735,7 @@ mod tests {
         assert!(freed.load(Ordering::SeqCst));
     }
 
-    /// A reply proves the server is done, so a reclaimed buffer frees as usual.
+    /// A reply means the server is done, so a reclaimed buffer frees as usual.
     #[test]
     fn reclaiming_a_loan_hands_the_memory_back_unparked() {
         let fabric = fabric();
