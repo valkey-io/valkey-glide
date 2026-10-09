@@ -271,52 +271,57 @@ func (client *Client) ScopedConnection(ctx context.Context, timeout time.Duratio
 	if routingKey != "" {
 		routingSlot = slotForKey([]byte(routingKey))
 	}
+	return acquireScope(ctx, clientID, connReqBytes, routingSlot, timeout)
+}
 
-	deadline := time.Now().Add(timeout)
-	backoff := 10 * time.Millisecond
+// acquireScope asks the core for a scope and waits for its answer. The core owns
+// the wait: it returns once a connection is available, the deadline passes, or a
+// cause that no amount of waiting can fix is found, and reports which through the
+// same callback path scope commands use, so the error type is the core's.
+func acquireScope(
+	ctx context.Context,
+	clientID uint64,
+	connReqBytes []byte,
+	routingSlot uint16,
+	timeout time.Duration,
+) (*IsolatedScope, error) {
+	resultChannel := make(chan payload, 1)
+	requestID := registerRequest(resultChannel)
 
-	// One logical acquire: mint a single attempt token and pass it on every retry
-	// poll, so the core dedupes this acquire's retries to one in-flight creation
-	// while distinct concurrent acquires each dial their own.
-	attemptToken := C.glide_scope_next_attempt_token()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		default:
-		}
-
-		scopeID := C.glide_scope_try_acquire(
-			C.uint64_t(clientID),
-			(*C.uint8_t)(unsafe.Pointer(&connReqBytes[0])),
-			C.uintptr_t(len(connReqBytes)),
-			C.uint16_t(routingSlot),
-			attemptToken,
-		)
-
-		if scopeID >= 0 {
-			return &IsolatedScope{
-				scopeID:  int64(scopeID),
-				clientID: clientID,
-			}, nil
-		}
-
-		remaining := time.Until(deadline)
-		if remaining <= 0 {
-			return nil, errors.New("timed out waiting for isolated scope (pool exhausted)")
-		}
-
-		sleep := backoff
-		if sleep > remaining {
-			sleep = remaining
-		}
-		time.Sleep(sleep)
-		backoff *= 2
-		if backoff > 500*time.Millisecond {
-			backoff = 500 * time.Millisecond
-		}
+	rc := C.glide_scope_acquire_async(
+		C.uint64_t(clientID),
+		(*C.uint8_t)(unsafe.Pointer(&connReqBytes[0])),
+		C.uintptr_t(len(connReqBytes)),
+		C.uint16_t(routingSlot),
+		C.uint64_t(timeout.Milliseconds()),
+		C.uintptr_t(requestID),
+		C.SuccessCallback(unsafe.Pointer(C.successCallback)),
+		C.FailureCallback(unsafe.Pointer(C.failureCallback)),
+	)
+	if rc != 0 {
+		takeRequest(requestID)
+		return nil, fmt.Errorf("scope acquire failed: invalid arguments (code %d)", rc)
 	}
+
+	var result payload
+	select {
+	case <-ctx.Done():
+		if _, claimed := takeRequest(requestID); !claimed {
+			go discardResponse(resultChannel)
+		}
+		return nil, ctx.Err()
+	case result = <-resultChannel:
+	}
+	if result.error != nil {
+		return nil, result.error
+	}
+
+	resp := result.value
+	defer C.free_command_response(resp)
+	return &IsolatedScope{
+		scopeID:  int64(resp.int_value),
+		clientID: clientID,
+	}, nil
 }
 
 // getConnectionRequest returns the protobuf ConnectionRequest for this client's config.
@@ -377,51 +382,7 @@ func (client *ClusterClient) ScopedConnection(
 	if routingKey != "" {
 		routingSlot = slotForKey([]byte(routingKey))
 	}
-	deadline := time.Now().Add(timeout)
-	backoff := 10 * time.Millisecond
-
-	// One logical acquire: mint a single attempt token and pass it on every retry
-	// poll, so the core dedupes this acquire's retries to one in-flight creation
-	// while distinct concurrent acquires each dial their own.
-	attemptToken := C.glide_scope_next_attempt_token()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		default:
-		}
-
-		scopeID := C.glide_scope_try_acquire(
-			C.uint64_t(clientID),
-			(*C.uint8_t)(unsafe.Pointer(&connReqBytes[0])),
-			C.uintptr_t(len(connReqBytes)),
-			C.uint16_t(routingSlot),
-			attemptToken,
-		)
-
-		if scopeID >= 0 {
-			return &IsolatedScope{
-				scopeID:  int64(scopeID),
-				clientID: clientID,
-			}, nil
-		}
-
-		remaining := time.Until(deadline)
-		if remaining <= 0 {
-			return nil, errors.New("timed out waiting for isolated scope (pool exhausted)")
-		}
-
-		sleep := backoff
-		if sleep > remaining {
-			sleep = remaining
-		}
-		time.Sleep(sleep)
-		backoff *= 2
-		if backoff > 500*time.Millisecond {
-			backoff = 500 * time.Millisecond
-		}
-	}
+	return acquireScope(ctx, clientID, connReqBytes, routingSlot, timeout)
 }
 
 // getConnectionRequest returns the protobuf ConnectionRequest for this cluster client's config.
