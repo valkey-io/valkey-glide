@@ -1028,6 +1028,26 @@ impl ScopeAcquireError {
     }
 }
 
+/// The native interfaces deliver every command failure as a `RedisError` run
+/// through [`crate::errors::error_type`], so the acquire error travels the same
+/// way rather than growing a second delivery path per language. The `io` kinds
+/// are chosen so `error_type` lands on the same [`RequestErrorType`] as
+/// [`ScopeAcquireError::request_error_type`]; a test pins the two together.
+impl From<ScopeAcquireError> for RedisError {
+    fn from(err: ScopeAcquireError) -> Self {
+        let message = err.to_string();
+        match err.request_error_type() {
+            RequestErrorType::Timeout => {
+                std::io::Error::new(std::io::ErrorKind::TimedOut, message).into()
+            }
+            RequestErrorType::Disconnect => {
+                std::io::Error::new(std::io::ErrorKind::NotConnected, message).into()
+            }
+            _ => RedisError::from((redis::ErrorKind::ClientError, "scope acquire", message)),
+        }
+    }
+}
+
 impl std::fmt::Display for ScopeRetryCause {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -1562,6 +1582,38 @@ mod tests {
         ScopeTargetUnresolved, get_client_scope_pools, get_scope_registry,
     };
     use crate::scope::{register_client, unregister_client};
+
+    /// A binding classifies the acquire error by `error_type` of the converted
+    /// `RedisError`, so that must agree with `request_error_type` for every
+    /// variant; the message text survives the conversion as well.
+    #[test]
+    fn scope_acquire_error_keeps_its_request_error_type_through_redis_error() {
+        use super::{ScopeAcquireError, ScopeCreateErrorKind};
+        let errors = [
+            ScopeAcquireError::DeadlineExceeded {
+                last: ScopeRetryCause::Exhausted,
+            },
+            ScopeAcquireError::DeadlineExceeded {
+                last: ScopeRetryCause::CreateFailed(ScopeCreateErrorKind::ConnectFailed),
+            },
+            ScopeAcquireError::Terminal(ScopeFailCause::ParentUnregistered),
+            ScopeAcquireError::Terminal(ScopeFailCause::PoolClosed),
+            ScopeAcquireError::Terminal(ScopeFailCause::ParentCertMaterialUnavailable),
+            ScopeAcquireError::Terminal(ScopeFailCause::InvalidConfiguration),
+        ];
+        for err in errors {
+            let converted = redis::RedisError::from(err);
+            assert_eq!(
+                crate::errors::error_type(&converted),
+                err.request_error_type(),
+                "{err}"
+            );
+            assert!(
+                converted.to_string().contains(&err.to_string()),
+                "message lost: {converted}"
+            );
+        }
+    }
 
     const DEFAULT_ROUTING_SLOT: u16 = 0;
     const MAX_CLUSTER_SLOT: u16 = 16_383;

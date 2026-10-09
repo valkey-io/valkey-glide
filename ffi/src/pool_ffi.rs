@@ -909,7 +909,7 @@ pub unsafe extern "C" fn glide_scope_prewarm(
     let runtime = get_pool_runtime();
 
     // Create the scope pool (registers it if not exists)
-    let pool = glide_core::pool::get_or_create_scope_pool(client_id, conn_bytes.clone());
+    let pool = glide_core::pool::get_or_create_scope_pool(client_id, conn_bytes.clone()).pool;
 
     // Spawn min_idle background creation tasks. Each resolves slot 0 through the
     // parent client's current topology first, then reserves a slot against
@@ -961,51 +961,132 @@ pub unsafe extern "C" fn glide_scope_prewarm(
     }
 }
 
-/// Allocate a unique scope-acquire attempt token.
-///
-/// A binding calls this once per `acquire()` and passes the returned value as the
-/// `attempt_token` argument on every retry poll of [`glide_scope_try_acquire`], so
-/// the core dedupes that acquire's retries to a single in-flight creation without
-/// serializing distinct concurrent borrowers. The value is opaque and never reused.
-#[unsafe(no_mangle)]
-pub extern "C" fn glide_scope_next_attempt_token() -> u64 {
-    glide_core::pool::next_scope_attempt_token()
+/// `CommandResponse` carrying a scope id, the success value of both acquire entry
+/// points. Heap-allocated like the Ok/Nil fast paths; freed by the binding through
+/// `free_command_response`.
+fn scope_id_response(scope_id: u64) -> *mut CommandResponse {
+    Box::into_raw(Box::new(CommandResponse {
+        response_type: ResponseType::Int,
+        int_value: scope_id as i64,
+        float_value: 0.0,
+        bool_value: false,
+        string_value: std::ptr::null_mut(),
+        string_value_len: 0,
+        array_value: std::ptr::null_mut(),
+        array_value_len: 0,
+        map_key: std::ptr::null_mut(),
+        map_value: std::ptr::null_mut(),
+        sets_value: std::ptr::null_mut(),
+        sets_value_len: 0,
+        arena_ptr: std::ptr::null_mut(),
+    }))
 }
 
-/// Acquire a scope from the client's internal scope pool.
+/// Acquire a scope from the client's scope pool (async — non-blocking, fires callback).
 ///
-/// Returns scope_id >= 0 on success, -1 if pool exhausted, -2 on error.
+/// Waits inside the core for up to `timeout_ms` for a retryable condition (pool
+/// exhausted, connection still being created, slot unmapped) to clear, then calls
+/// `success_callback(request_id, response)` with an `Int` response holding the
+/// scope id, or `failure_callback(request_id, error, type)`. The error type is
+/// `Timeout` when the deadline passes, `Disconnect` when the parent client is
+/// closed, `Unspecified` for a configuration problem the message describes.
 ///
-/// `attempt_token` identifies one logical acquire. The binding generates it once
-/// per `acquire()` call (via [`glide_core::pool::next_scope_attempt_token`]) and
-/// passes the same value on every retry poll, so the core dedupes a single
-/// acquire's retries while letting distinct concurrent borrowers each dial.
+/// Returns 0 once the acquire is queued; -2 if the arguments are invalid, in which
+/// case no callback fires.
 ///
 /// # Safety
 /// `connection_request_ptr` must point to `connection_request_len` valid bytes.
+/// `success_callback` and `failure_callback` must be valid function pointers.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn glide_scope_try_acquire(
+pub unsafe extern "C" fn glide_scope_acquire_async(
     client_id: u64,
     connection_request_ptr: *const u8,
     connection_request_len: usize,
     routing_slot: u16,
-    attempt_token: u64,
-) -> i64 {
-    let conn_bytes = if connection_request_ptr.is_null() || connection_request_len == 0 {
-        Vec::new()
-    } else {
+    timeout_ms: u64,
+    request_id: usize,
+    success_callback: SuccessCallback,
+    failure_callback: FailureCallback,
+) -> i32 {
+    if connection_request_ptr.is_null() || connection_request_len == 0 {
+        return -2;
+    }
+    let conn_bytes =
         unsafe { std::slice::from_raw_parts(connection_request_ptr, connection_request_len) }
-            .to_vec()
-    };
+            .to_vec();
 
     let runtime = get_pool_runtime();
-    scope::try_acquire_scope(
+    let handle = runtime.handle().clone();
+    runtime.spawn(async move {
+        let result = scope::acquire_scope(
+            client_id,
+            conn_bytes,
+            &handle,
+            routing_slot,
+            std::time::Duration::from_millis(timeout_ms),
+        )
+        .await;
+        match result {
+            Ok(scope_id) => unsafe {
+                success_callback(request_id, scope_id_response(scope_id));
+            },
+            Err(err) => {
+                let (c_msg, error_type) = to_c_error(RedisError::from(err));
+                unsafe {
+                    failure_callback(request_id, c_msg, error_type);
+                    drop(CString::from_raw(c_msg as *mut c_char));
+                }
+            }
+        }
+    });
+
+    0
+}
+
+/// Acquire a scope from the client's scope pool (synchronous — blocks until result).
+///
+/// Same semantics as [`glide_scope_acquire_async`], returned as a `CommandResult`
+/// whose `response` is an `Int` holding the scope id, or whose `command_error`
+/// carries the failure. Used by Python, which runs blocking FFI calls on an
+/// executor thread, the same way it calls `glide_scope_execute`.
+///
+/// # Safety
+/// `connection_request_ptr` must point to `connection_request_len` valid bytes.
+/// The returned pointer must be freed by the caller via `free_command_result`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn glide_scope_acquire_blocking(
+    client_id: u64,
+    connection_request_ptr: *const u8,
+    connection_request_len: usize,
+    routing_slot: u16,
+    timeout_ms: u64,
+) -> *mut CommandResult {
+    if connection_request_ptr.is_null() || connection_request_len == 0 {
+        return create_error_result_with_custom_error(
+            "connection request bytes are required".to_owned(),
+            RequestErrorType::Unspecified,
+        );
+    }
+    let conn_bytes =
+        unsafe { std::slice::from_raw_parts(connection_request_ptr, connection_request_len) }
+            .to_vec();
+
+    let runtime = get_pool_runtime();
+    let result = runtime.block_on(scope::acquire_scope(
         client_id,
         conn_bytes,
         runtime.handle(),
         routing_slot,
-        attempt_token,
-    )
+        std::time::Duration::from_millis(timeout_ms),
+    ));
+    match result {
+        Ok(scope_id) => Box::into_raw(Box::new(CommandResult {
+            response: scope_id_response(scope_id),
+            command_error: std::ptr::null_mut(),
+            arena: std::ptr::null_mut(),
+        })),
+        Err(err) => create_error_result_with_redis_error(RedisError::from(err)),
+    }
 }
 
 /// Release a scope back to the pool. Fire-and-forget.
