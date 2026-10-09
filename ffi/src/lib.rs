@@ -1676,12 +1676,13 @@ pub unsafe extern "C-unwind" fn create_client(
 /// # Parameters
 ///
 /// * `uri_str`: A null-terminated C string containing the connection URI.
-///   Preferred format: `valkey://` (or `valkey+unix://` for Unix sockets) and `valkeys://` for TLS. `redis://`, `redis+unix://`, and `rediss://` are accepted for compatibility.
+///   Preferred format: `valkey://` (or `valkey+unix://` for Unix sockets) and `valkeys://` for TLS. `redis://`, `redis+unix://`, `unix://`, and `rediss://` are accepted for compatibility.
 ///   Examples:
 ///   - `valkey://localhost:6379`
 ///   - `valkeys://:password@example.com:6380/0`
 ///   - `valkey://user:pass@localhost:6379/1`
 ///   - `redis://localhost:6379` (Redis-compatible alias)
+///   - `valkey+unix:///run/valkey/valkey.sock?db=1&user=name&pass=secret` (Unix domain socket, standalone only)
 ///
 /// * `extra_options_json`: Optional null-terminated C string containing additional connection options as JSON.
 ///   Can be null if no extra options are needed. Supported options include:
@@ -1893,24 +1894,11 @@ fn decode_uri_str(encoded: &str, component: &str) -> Result<Option<String>, Stri
         .map_err(|_| format!("{component} in URI is not valid UTF-8"))
 }
 
-/// Internal function to parse URI and JSON options into a ConnectionRequest protobuf message.
-fn create_client_from_uri_internal(
-    uri_str: *const c_char,
-    extra_options_json: *const c_char,
-) -> Result<connection_request::ConnectionRequest, String> {
-    // Parse URI string
-    let uri_string = unsafe {
-        CStr::from_ptr(uri_str)
-            .to_str()
-            .map_err(|e| format!("Invalid UTF-8 in URI: {}", e))?
-    };
-
-    let url =
-        parse_connection_url(uri_string).ok_or_else(|| "Invalid connection URI".to_string())?;
-
-    // Build base ConnectionRequest from URI
-    let mut request = connection_request::ConnectionRequest::new();
-
+/// Fills in the address, credentials and database of a TCP connection URI.
+fn apply_tcp_uri(
+    url: &url::Url,
+    request: &mut connection_request::ConnectionRequest,
+) -> Result<(), String> {
     // Extract host and port.
     let host = match url.host() {
         Some(url::Host::Domain(domain)) => domain.to_string(),
@@ -1945,6 +1933,98 @@ fn create_client_from_uri_internal(
             .parse::<u32>()
             .map_err(|e| format!("Invalid database ID '{}': {}", db_str, e))?;
         request.database_id = db_id;
+    }
+    Ok(())
+}
+
+/// Fills in the address, database and credentials of a Unix domain socket URI such as
+/// `valkey+unix:///run/valkey/valkey.sock?db=1&user=name&pass=secret`. Query values are
+/// percent-decoded like URI userinfo, so `+` stays `+`.
+fn apply_unix_socket_uri(
+    url: &url::Url,
+    request: &mut connection_request::ConnectionRequest,
+) -> Result<(), String> {
+    // Reject an authority instead of silently dropping its credentials.
+    if !url.username().is_empty() || url.password().is_some() {
+        return Err(
+            "Unix socket URI must pass credentials as `user` and `pass` query parameters"
+                .to_string(),
+        );
+    }
+    if url.host_str().is_some_and(|host| !host.is_empty()) {
+        return Err("Unix socket URI must not contain a host".to_string());
+    }
+    // An unencoded `#` in a query value would otherwise silently truncate it.
+    if url.fragment().is_some() {
+        return Err("Unix socket URI must not contain a fragment; encode `#` as `%23`".to_string());
+    }
+    let path = url
+        .to_file_path()
+        .map_err(|_| "Invalid Unix socket path in URI".to_string())?;
+    let path = path
+        .to_str()
+        .ok_or_else(|| "Unix socket path in URI is not valid UTF-8".to_string())?;
+    let mut node_address = connection_request::NodeAddress::new();
+    node_address.unix_socket_path = Some(path.into());
+    request.addresses.push(node_address);
+
+    let (mut username, mut password) = (None, None);
+    for pair in url.query().unwrap_or_default().split('&') {
+        if pair.is_empty() {
+            continue;
+        }
+        // Errors never echo a key or value: a mistyped separator such as
+        // `?db=0?pass=secret` would put the password inside one.
+        let (key, value) = pair.split_once('=').unwrap_or((pair, ""));
+        match key {
+            "db" => {
+                let db = decode_uri_str(value, "Query parameter `db`")?.unwrap_or_default();
+                request.database_id = db
+                    .parse::<u32>()
+                    .map_err(|e| format!("Invalid database ID in query parameter `db`: {e}"))?;
+            }
+            "user" => username = decode_uri_str(value, "Query parameter `user`")?,
+            "pass" => password = decode_uri_str(value, "Query parameter `pass`")?,
+            _ => {
+                return Err(
+                    "Unsupported query parameter in Unix socket URI; use `db`, `user` or `pass`"
+                        .to_string(),
+                );
+            }
+        }
+    }
+    // As in TCP URIs, either part alone is valid.
+    if username.is_some() || password.is_some() {
+        let mut auth_info = connection_request::AuthenticationInfo::new();
+        auth_info.username = username.unwrap_or_default().into();
+        auth_info.password = password.unwrap_or_default().into();
+        request.authentication_info = ::protobuf::MessageField::some(auth_info);
+    }
+    Ok(())
+}
+
+/// Internal function to parse URI and JSON options into a ConnectionRequest protobuf message.
+fn create_client_from_uri_internal(
+    uri_str: *const c_char,
+    extra_options_json: *const c_char,
+) -> Result<connection_request::ConnectionRequest, String> {
+    // Parse URI string
+    let uri_string = unsafe {
+        CStr::from_ptr(uri_str)
+            .to_str()
+            .map_err(|e| format!("Invalid UTF-8 in URI: {}", e))?
+    };
+
+    let url =
+        parse_connection_url(uri_string).ok_or_else(|| "Invalid connection URI".to_string())?;
+
+    // Build base ConnectionRequest from URI
+    let mut request = connection_request::ConnectionRequest::new();
+
+    if matches!(url.scheme(), "unix" | "redis+unix") {
+        apply_unix_socket_uri(&url, &mut request)?;
+    } else {
+        apply_tcp_uri(&url, &mut request)?;
     }
 
     // Set TLS mode based on scheme (valkeys:// is normalized to rediss:// before parsing)
@@ -2217,6 +2297,127 @@ mod tests_create_client_from_uri_internal {
             err.contains("refresh_interval_seconds must be a positive integer"),
             "unexpected error: {err}"
         );
+    }
+
+    #[test]
+    fn unix_socket_uris_set_unix_socket_path() {
+        for uri in [
+            "valkey+unix:///run/valkey/valkey.sock",
+            "VALKEY+UNIX:///run/valkey/valkey.sock",
+            "redis+unix:///run/valkey/valkey.sock",
+            "unix:///run/valkey/valkey.sock",
+        ] {
+            let req = parse_uri(uri);
+            assert_eq!(req.addresses.len(), 1, "{uri}");
+            let addr = &req.addresses[0];
+            assert_eq!(
+                addr.unix_socket_path.as_deref(),
+                Some("/run/valkey/valkey.sock"),
+                "{uri}"
+            );
+            assert_eq!(&*addr.host, "", "{uri}");
+            assert_eq!(addr.port, 0, "{uri}");
+            assert_eq!(req.database_id, 0, "{uri}");
+            assert_eq!(
+                req.tls_mode.enum_value_or_default(),
+                connection_request::TlsMode::NoTls,
+                "{uri}"
+            );
+            assert!(req.authentication_info.is_none(), "{uri}");
+        }
+    }
+
+    #[test]
+    fn unix_socket_uri_reads_db_and_credentials_from_query() {
+        // Same query parameters as redis-rs's Unix socket URLs.
+        let req = parse_uri("valkey+unix:///tmp/valkey.sock?db=2&user=alice&pass=s%40cret");
+        assert_eq!(
+            req.addresses[0].unix_socket_path.as_deref(),
+            Some("/tmp/valkey.sock")
+        );
+        assert_eq!(req.database_id, 2);
+        let auth = req.authentication_info.as_ref().expect("auth info missing");
+        assert_eq!(&*auth.username, "alice");
+        assert_eq!(&*auth.password, "s@cret");
+    }
+
+    #[test]
+    fn unix_socket_uri_username_only_keeps_username() {
+        let req = parse_uri("valkey+unix:///tmp/valkey.sock?user=iam-user");
+        let auth = req.authentication_info.as_ref().expect("auth info missing");
+        assert_eq!(&*auth.username, "iam-user");
+        assert_eq!(&*auth.password, "");
+    }
+
+    fn unix_uri_error(uri: &str) -> String {
+        let c_uri = CString::new(uri).unwrap();
+        create_client_from_uri_internal(c_uri.as_ptr(), std::ptr::null())
+            .expect_err(&format!("expected {uri} to be rejected"))
+    }
+
+    #[test]
+    fn unix_socket_uri_percent_decodes_path_and_credentials() {
+        // `+` stays literal in query values, as in URI userinfo; `%20` is a space.
+        let req = parse_uri("unix:///tmp/my%20dir/valkey.sock?pass=a+b%20c");
+        assert_eq!(
+            req.addresses[0].unix_socket_path.as_deref(),
+            Some("/tmp/my dir/valkey.sock")
+        );
+        let auth = req.authentication_info.as_ref().expect("auth info missing");
+        assert_eq!(&*auth.username, "");
+        assert_eq!(&*auth.password, "a+b c");
+    }
+
+    #[test]
+    fn unix_socket_uri_rejects_invalid_forms() {
+        for (uri, expected) in [
+            (
+                "redis+unix://example.com/tmp/valkey.sock",
+                "must not contain a host",
+            ),
+            (
+                "redis+unix://localhost/tmp/valkey.sock",
+                "must not contain a host",
+            ),
+            (
+                "valkey+unix://alice:secret@localhost/tmp/valkey.sock",
+                "`user` and `pass` query parameters",
+            ),
+            ("unix:valkey.sock", "Invalid Unix socket path"),
+            (
+                "valkey+unix:///tmp/valkey.sock?database=1",
+                "Unsupported query parameter",
+            ),
+            ("valkey+unix:///tmp/valkey.sock?pass=%FF", "not valid UTF-8"),
+            (
+                "valkey+unix:///tmp/valkey.sock?db=abc",
+                "Invalid database ID",
+            ),
+            (
+                "valkey+unix:///tmp/valkey.sock?pass=ab#cd",
+                "must not contain a fragment",
+            ),
+        ] {
+            let err = unix_uri_error(uri);
+            assert!(err.contains(expected), "{uri}: unexpected error: {err}");
+        }
+    }
+
+    #[test]
+    fn unix_socket_uri_errors_do_not_echo_query_text() {
+        // A mistyped separator puts the password inside another key or value.
+        for uri in [
+            "valkey+unix:///tmp/valkey.sock?db=0?pass=hunter2",
+            "valkey+unix:///tmp/valkey.sock?db=0;pass=hunter2",
+            "valkey+unix:///tmp/valkey.sock?pass:hunter2",
+            "valkey+unix:///tmp/valkey.sock?pass:hunter2=%FF",
+        ] {
+            let err = unix_uri_error(uri);
+            assert!(
+                !err.contains("hunter2"),
+                "{uri}: error leaks the password: {err}"
+            );
+        }
     }
 }
 
@@ -6218,6 +6419,10 @@ pub unsafe extern "C-unwind" fn create_monitor_client(
     let address = NodeAddress {
         host: proto_addr.host.to_string(),
         port: proto_addr.port as u16,
+        unix_socket_path: proto_addr
+            .unix_socket_path
+            .as_deref()
+            .map(std::path::PathBuf::from),
     };
     let tls_mode = match connection_request.tls_mode.enum_value_or_default() {
         glide_core::connection_request::TlsMode::NoTls => glide_core::client::TlsMode::NoTls,

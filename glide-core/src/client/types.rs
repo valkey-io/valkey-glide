@@ -6,6 +6,7 @@ use redis::AddressResolver;
 use redis::cache::EvictionPolicy;
 #[allow(unused_imports)]
 use std::collections::HashSet;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -198,18 +199,51 @@ pub enum PeriodicCheck {
 pub struct NodeAddress {
     pub host: String,
     pub port: u16,
+    /// Unix domain socket to connect through instead of `host` and `port`, which must be unset.
+    pub unix_socket_path: Option<PathBuf>,
+}
+
+impl NodeAddress {
+    /// Returns `host:port`, or `unix:<path>` for a Unix domain socket address.
+    pub(crate) fn endpoint(&self) -> String {
+        match &self.unix_socket_path {
+            Some(path) => format!("unix:{}", path.display()),
+            None => format!("{}:{}", self.host, self.port),
+        }
+    }
 }
 
 impl ::std::fmt::Display for NodeAddress {
     fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
-        write!(f, "Host: `{}`, Port: {}", self.host, self.port)
+        match &self.unix_socket_path {
+            Some(path) => write!(f, "Unix socket: `{}`", path.display()),
+            None => write!(f, "Host: `{}`, Port: {}", self.host, self.port),
+        }
+    }
+}
+
+/// Keeps an empty `unix_socket_path` so client creation rejects it.
+#[cfg(feature = "proto")]
+impl From<&protobuf::NodeAddress> for NodeAddress {
+    fn from(value: &protobuf::NodeAddress) -> Self {
+        NodeAddress {
+            host: value.host.to_string(),
+            port: value.port as u16,
+            unix_socket_path: value
+                .unix_socket_path
+                .as_ref()
+                .map(|path| PathBuf::from(&**path)),
+        }
     }
 }
 
 /// Initial connection metadata used as default OTel span attributes.
 #[derive(Clone, Debug)]
 pub struct OTelMetadata {
-    pub address: NodeAddress,
+    /// Host of the first configured address, or its Unix domain socket path.
+    pub server_address: String,
+    /// Port of the first configured address; `None` for a Unix domain socket.
+    pub server_port: Option<u16>,
     pub db_namespace: String,
 }
 
@@ -368,14 +402,7 @@ impl From<protobuf::ConnectionRequest> for ConnectionRequest {
             protobuf::TlsMode::InsecureTls => TlsMode::InsecureTls,
         });
 
-        let addresses = value
-            .addresses
-            .into_iter()
-            .map(|addr| NodeAddress {
-                host: addr.host.to_string(),
-                port: addr.port as u16,
-            })
-            .collect();
+        let addresses = value.addresses.iter().map(NodeAddress::from).collect();
         let cluster_mode_enabled = value.cluster_mode_enabled;
         let request_timeout = none_if_zero(value.request_timeout);
         let connection_timeout = none_if_zero(value.connection_timeout);
@@ -581,6 +608,27 @@ impl From<protobuf::ConnectionRequest> for ConnectionRequest {
 }
 #[cfg(test)]
 mod tests {
+    use super::NodeAddress;
+
+    #[test]
+    fn test_node_address_display_and_endpoint() {
+        let tcp = NodeAddress {
+            host: "10.0.0.1".to_string(),
+            port: 6380,
+            unix_socket_path: None,
+        };
+        assert_eq!(tcp.to_string(), "Host: `10.0.0.1`, Port: 6380");
+        assert_eq!(tcp.endpoint(), "10.0.0.1:6380");
+
+        let unix = NodeAddress {
+            host: String::new(),
+            port: 0,
+            unix_socket_path: Some("/run/valkey/valkey.sock".into()),
+        };
+        assert_eq!(unix.to_string(), "Unix socket: `/run/valkey/valkey.sock`");
+        assert_eq!(unix.endpoint(), "unix:/run/valkey/valkey.sock");
+    }
+
     mod protobuf_conversion_tests {
         use crate::ConnectionRequest;
         use crate::compression::CompressionBackendType;
@@ -602,6 +650,32 @@ mod tests {
             let request: ConnectionRequest = proto_request.into();
             assert_eq!(request.lib_name.as_deref(), Some(name));
             assert_eq!(request.lib_ver, None);
+        }
+
+        #[test]
+        fn test_node_address_conversion() {
+            let tcp = protobuf::NodeAddress {
+                host: "10.0.0.1".into(),
+                port: 6380,
+                ..Default::default()
+            };
+            let address = crate::client::NodeAddress::from(&tcp);
+            assert_eq!((address.host.as_str(), address.port), ("10.0.0.1", 6380));
+            assert!(address.unix_socket_path.is_none());
+
+            // An explicitly empty path is kept (not turned into a TCP address) so that
+            // client creation rejects it.
+            for path in ["/tmp/valkey.sock", ""] {
+                let unix = protobuf::NodeAddress {
+                    unix_socket_path: Some(path.into()),
+                    ..Default::default()
+                };
+                let address = crate::client::NodeAddress::from(&unix);
+                assert_eq!(
+                    address.unix_socket_path.as_deref(),
+                    Some(std::path::Path::new(path))
+                );
+            }
         }
 
         #[test]

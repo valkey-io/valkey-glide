@@ -2877,10 +2877,7 @@ pub fn create_monitor_client<'a>(
         .addresses
         .first()
         .ok_or_else(|| napi::Error::new(Status::InvalidArg, "No addresses provided"))?;
-    let address = NodeAddress {
-        host: proto_addr.host.to_string(),
-        port: proto_addr.port as u16,
-    };
+    let address = NodeAddress::from(proto_addr);
     let tls_mode = match conn_req.tls_mode.enum_value_or_default() {
         connection_request::TlsMode::NoTls => TlsMode::NoTls,
         connection_request::TlsMode::SecureTls => TlsMode::SecureTls,
