@@ -375,9 +375,10 @@ const SCOPE_CONNECT_TIMEOUT: std::time::Duration = std::time::Duration::from_sec
 /// Why a scoped connection could not be created and seated in the pool.
 ///
 /// Every variant releases the caller's `max_total` reservation exactly once, at the
-/// single failure exit in [`create_scope_connection`], and is logged there — once
-/// per episode, see [`ScopePool::last_create_warn`] — so a borrower's eventual
-/// "pool exhausted" timeout can be traced back to its cause.
+/// single failure exit in [`create_scope_connection`], is logged there (once per
+/// episode, see [`ScopePool::last_create_warn`]), and is returned as its
+/// [`ScopeCreateErrorKind`] so the acquire that reserved the slot can stop or dial
+/// again.
 #[cfg(feature = "proto")]
 #[derive(Debug)]
 pub enum ScopeCreateError {
@@ -415,10 +416,9 @@ pub enum ScopeCreateError {
 /// The counterpart of [`crate::pool::ScopeTargetUnresolved::same_kind`] for
 /// creation failures, so repeats of one cause are recognized by variant. A
 /// payload-free copy rather than the error itself: the pool only needs equality
-/// and classification, and retaining a `RedisError` (or the parse error) for the
-/// lifetime of the pool just to compare against would be wasteful. A hand-written
-/// enum rather than `std::mem::Discriminant` so the acquire path can classify
-/// the recorded failure ([`Self::is_terminal`]) and name it.
+/// for the warn-once record, and the acquire needs classification
+/// ([`Self::fail_cause`]) and a name; retaining a `RedisError` (or the parse
+/// error) for either would be wasteful.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ScopeCreateErrorKind {
     InvalidConnectionRequest,
@@ -436,18 +436,13 @@ pub enum ScopeCreateErrorKind {
 }
 
 impl ScopeCreateErrorKind {
-    /// Whether retrying the acquire cannot change the outcome.
+    /// The terminal cause this kind reports to the borrower, or `None` when
+    /// retrying may change the outcome.
     ///
     /// Terminal kinds are properties of the parent's configuration or the pool's
-    /// lifecycle, identical for every borrower of the pool, so a recorded one
-    /// may be reported to any later acquire. Network and server-side failures
-    /// are transient: the next creation may succeed.
-    pub fn is_terminal(self) -> bool {
-        self.fail_cause().is_some()
-    }
-
-    /// The terminal cause this kind reports to the borrower, or `None` for a
-    /// transient kind.
+    /// lifecycle, so no later dial can succeed until something outside the acquire
+    /// changes. Network and server-side failures are transient: the next dial may
+    /// succeed.
     pub fn fail_cause(self) -> Option<ScopeFailCause> {
         match self {
             Self::InvalidConnectionRequest

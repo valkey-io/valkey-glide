@@ -1057,10 +1057,10 @@ pub struct ScopePool {
     pub last_unresolved_target: Option<ScopeTargetUnresolved>,
     /// The kind of the most recent scoped-connection creation failure the pool
     /// warned about, or `None` once a creation succeeds. The creation-side twin
-    /// of [`Self::last_unresolved_target`]: every re-attempt of a waiting acquire
-    /// spawns another creation, so a persistent cause (an mTLS parent that has not
-    /// connected, an unreachable shard) is warned once and then logged at debug
-    /// until it clears.
+    /// of [`Self::last_unresolved_target`]: an acquire that keeps dialing a
+    /// persistent transient cause (an unreachable shard) would otherwise warn on
+    /// every dial, so the cause is warned once and then logged at debug until it
+    /// clears. Logging only; the acquire decision reads the creation result directly.
     #[cfg(feature = "proto")]
     pub last_create_warn: Option<crate::scope::ScopeCreateErrorKind>,
     /// Signalled whenever a waiting acquire might now succeed: a slot or an idle
