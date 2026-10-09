@@ -218,7 +218,7 @@ class TestIsolatedScopeAcquireFailsFast:
             with pytest.raises(TimeoutError, match="pool exhausted"):
                 client.scoped_connection(timeout=0.5)
             elapsed = time.monotonic() - started
-            assert 0.4 <= elapsed < 2.0, elapsed
+            assert 0.4 <= elapsed < 1.0, elapsed
         finally:
             for scope in held:
                 scope.close()
