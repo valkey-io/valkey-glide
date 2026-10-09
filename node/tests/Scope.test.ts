@@ -6,17 +6,28 @@
  */
 
 import { describe, expect, it, beforeAll, afterAll } from "@jest/globals";
-import { GlideClient, IsolatedScope } from "..";
+import {
+    ConnectionError,
+    GlideClient,
+    IsolatedScope,
+    RequestError,
+    TimeoutError,
+} from "..";
 import { GlideClientConfiguration } from "..";
 import { connection_request } from "../build-ts/ProtobufMessage";
 import { ValkeyCluster } from "../../utils/TestUtils.js";
 import {
+    getCaCertificateData,
     getClientConfigurationOption,
     getServerVersion,
     parseEndpoints,
 } from "./TestUtilities";
 
 const TIMEOUT = 30_000;
+
+// The scope pool holds at most this many connections per client (glide-core
+// ScopePoolConfig::default().max_total). Not configurable from Node.
+const SCOPE_POOL_MAX_TOTAL = 64;
 
 function makeKey(prefix: string): string {
     return `scope-test-${prefix}-${Math.random().toString(36).slice(2, 10)}`;
@@ -364,4 +375,113 @@ describe("IsolatedScope", () => {
         },
         TIMEOUT,
     );
+
+    // An acquire stops as soon as its outcome is known: the error class names
+    // the cause, and a cause that waiting cannot fix is reported without waiting.
+    describe("acquire fails fast", () => {
+        async function holdWholePool(c: GlideClient): Promise<IsolatedScope[]> {
+            const held: IsolatedScope[] = [];
+
+            for (let i = 0; i < SCOPE_POOL_MAX_TOTAL; i++) {
+                held.push(await IsolatedScope.acquire(c, connReqBytes));
+            }
+
+            return held;
+        }
+
+        it(
+            "exhausted pool times out naming the cause",
+            async () => {
+                const held = await holdWholePool(client);
+
+                try {
+                    const started = Date.now();
+                    await expect(
+                        IsolatedScope.acquire(
+                            client,
+                            connReqBytes,
+                            undefined,
+                            500,
+                        ),
+                    ).rejects.toThrow(TimeoutError);
+                    const elapsed = Date.now() - started;
+                    expect(elapsed).toBeGreaterThanOrEqual(400);
+                    expect(elapsed).toBeLessThan(2000);
+
+                    await expect(
+                        IsolatedScope.acquire(
+                            client,
+                            connReqBytes,
+                            undefined,
+                            500,
+                        ),
+                    ).rejects.toThrow("pool exhausted");
+                } finally {
+                    held.forEach((s) => s.release());
+                }
+            },
+            TIMEOUT,
+        );
+
+        it(
+            "closing the client ends a waiting acquire",
+            async () => {
+                const c = await GlideClient.createClient(config);
+                await holdWholePool(c);
+
+                setTimeout(() => c.close(), 200);
+                const started = Date.now();
+                await expect(
+                    IsolatedScope.acquire(c, connReqBytes, undefined, 5000),
+                ).rejects.toThrow(ConnectionError);
+                expect(Date.now() - started).toBeLessThan(2000);
+            },
+            TIMEOUT,
+        );
+
+        it(
+            "lazy mTLS parent fails without waiting",
+            async () => {
+                // A lazily connected client with TLS material never dials, so
+                // there is nothing for a scoped connection to inherit.
+                const lazy = await GlideClient.createClient({
+                    addresses: [{ host: "127.0.0.1", port: 1 }],
+                    useTLS: true,
+                    lazyConnect: true,
+                    requestTimeout: 5000,
+                    advancedConfiguration: {
+                        tlsAdvancedConfiguration: {
+                            rootCertificates: getCaCertificateData(),
+                        },
+                    },
+                });
+                const req = connection_request.ConnectionRequest.create({
+                    addresses: [{ host: "127.0.0.1", port: 1 }],
+                    requestTimeout: 5000,
+                    tlsMode: connection_request.TlsMode.SecureTls,
+                    rootCerts: [getCaCertificateData()],
+                });
+                const bytes =
+                    connection_request.ConnectionRequest.encode(req).finish();
+
+                try {
+                    const started = Date.now();
+                    const attempt = IsolatedScope.acquire(
+                        lazy,
+                        bytes,
+                        undefined,
+                        5000,
+                    );
+                    await expect(attempt).rejects.toThrow(RequestError);
+                    await expect(attempt).rejects.toThrow(
+                        "certificate material",
+                    );
+                    expect(Date.now() - started).toBeLessThan(2000);
+                } finally {
+                    lazy.close();
+                }
+            },
+            TIMEOUT,
+        );
+    });
 });
