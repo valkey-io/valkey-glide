@@ -902,7 +902,7 @@ pub enum ScopeRetryCause {
 
 /// Why no poll of this acquire can succeed until something outside the retry
 /// loop changes.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, strum_macros::EnumIter)]
 pub enum ScopeFailCause {
     /// The binding has not registered the parent client, or has closed it.
     ParentUnregistered,
@@ -1571,18 +1571,20 @@ mod tests {
     #[test]
     fn scope_acquire_error_keeps_its_request_error_type_through_redis_error() {
         use super::{ScopeAcquireError, ScopeCreateErrorKind};
-        let errors = [
-            ScopeAcquireError::DeadlineExceeded {
-                last: ScopeRetryCause::Exhausted,
-            },
-            ScopeAcquireError::DeadlineExceeded {
-                last: ScopeRetryCause::CreateFailed(ScopeCreateErrorKind::ConnectFailed),
-            },
-            ScopeAcquireError::Terminal(ScopeFailCause::ParentUnregistered),
-            ScopeAcquireError::Terminal(ScopeFailCause::PoolClosed),
-            ScopeAcquireError::Terminal(ScopeFailCause::ParentCertMaterialUnavailable),
-            ScopeAcquireError::Terminal(ScopeFailCause::InvalidConfiguration),
-        ];
+        use strum::IntoEnumIterator;
+        // Every terminal cause by iteration, so a variant added later is covered
+        // without anyone remembering this list; the deadline cases by hand, since
+        // `CreateFailed` carries a payload.
+        let errors = ScopeFailCause::iter()
+            .map(ScopeAcquireError::Terminal)
+            .chain([
+                ScopeAcquireError::DeadlineExceeded {
+                    last: ScopeRetryCause::Exhausted,
+                },
+                ScopeAcquireError::DeadlineExceeded {
+                    last: ScopeRetryCause::CreateFailed(ScopeCreateErrorKind::ConnectFailed),
+                },
+            ]);
         for err in errors {
             let converted = redis::RedisError::from(err);
             assert_eq!(
