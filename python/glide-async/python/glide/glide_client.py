@@ -1030,7 +1030,7 @@ class BaseClient(CoreCommands):
             created_transport = False
             registered_here = False
 
-            def detach_reader() -> None:
+            def _detach_reader() -> None:
                 """Best-effort detach of the current Python reader owner."""
                 nonlocal registered_here
                 global _async_pipe_registered, _async_pipe_loop
@@ -1072,7 +1072,7 @@ class BaseClient(CoreCommands):
                     and _trio_pipe_token is trio_token
                 )
                 if _async_pipe_registered and not same_owner:
-                    detach_reader()
+                    _detach_reader()
                     _drain_stale_pipe_frames()
 
                 _client_registry[self._pipe_client_id] = self
@@ -1115,7 +1115,7 @@ class BaseClient(CoreCommands):
             except BaseException as error:
                 _client_registry.pop(self._pipe_client_id, None)
                 if registered_here:
-                    detach_reader()
+                    _detach_reader()
 
                 # A failed same-process ownership move must preserve the
                 # established FDs/native writer for a later registration retry.

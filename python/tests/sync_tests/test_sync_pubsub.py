@@ -3229,7 +3229,7 @@ class TestSyncPubSub:
                 callback_count = 0
                 publish_errors = []
 
-                def callback(message, context):
+                def _callback(message, context):
                     nonlocal callback_count
                     with callback_lock:
                         callback_count += 1
@@ -3240,7 +3240,7 @@ class TestSyncPubSub:
                     request,
                     cluster_mode,
                     channels={channel},
-                    callback=callback,
+                    callback=_callback,
                     context=None,
                 )
                 listeners.append(listener)
@@ -3248,7 +3248,7 @@ class TestSyncPubSub:
                     listener, expected_channels={channel}, timeout_sec=5
                 )
 
-                def publish_until_stopped():
+                def _publish_until_stopped():
                     while not stop_publishing.is_set():
                         try:
                             publisher.publish(f"message-{iteration}", channel)
@@ -3257,14 +3257,14 @@ class TestSyncPubSub:
                             return
                         time.sleep(0.001)
 
-                publish_thread = threading.Thread(target=publish_until_stopped)
+                publish_thread = threading.Thread(target=_publish_until_stopped)
                 publish_thread.start()
                 close_started = threading.Event()
                 close_done = threading.Event()
                 close_errors = []
                 close_thread = None
 
-                def close_listener():
+                def _close_listener():
                     close_started.set()
                     try:
                         listener.close()
@@ -3277,7 +3277,7 @@ class TestSyncPubSub:
                     assert callback_entered.wait(
                         timeout=5
                     ), "PubSub callback did not start"
-                    close_thread = threading.Thread(target=close_listener)
+                    close_thread = threading.Thread(target=_close_listener)
                     close_thread.start()
                     assert close_started.wait(timeout=1), "close worker did not start"
                 finally:
