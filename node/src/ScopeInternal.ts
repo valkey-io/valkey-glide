@@ -65,6 +65,7 @@ export function refreshScopeConnectionPassword(
  * straight to the native layer. The bytes never leave this module, so a caller
  * holding the client or the returned scope cannot read the password or mTLS key
  * they carry. Pass `explicitBytes` to use a caller-supplied request instead.
+ * `attemptToken` identifies one logical acquire across its retry polls.
  *
  * Returns the native scope id (>= 0), or a negative value when the pool is
  * exhausted or the request is invalid.
@@ -73,6 +74,7 @@ export function tryAcquireScope(
     client: BaseClient,
     clientId: number,
     routingSlot: number,
+    attemptToken: bigint,
     explicitBytes?: Uint8Array,
 ): number {
     const bytes = explicitBytes ?? connectionRequests.get(client);
@@ -84,5 +86,5 @@ export function tryAcquireScope(
         );
     }
 
-    return scopeTryAcquire(clientId, bytes, routingSlot);
+    return scopeTryAcquire(clientId, bytes, routingSlot, attemptToken);
 }
