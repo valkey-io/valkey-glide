@@ -11,10 +11,8 @@ use jni::objects::{JByteArray, JClass};
 use jni::sys::{jint, jlong};
 
 /// Acquire a scope from the client's scope pool, completing the Java future for
-/// `callback_id` with the scope id as a `Long`, or exceptionally with the error type
-/// and message the core produced (`Timeout` at the deadline, `Disconnect` for a
-/// closed parent, `Unspecified` for a configuration problem). Waiting happens in
-/// the core, so the caller makes one call per acquire.
+/// `callback_id` with the scope id as a `Long`, or exceptionally with the message
+/// and error type from `ScopeAcquireError::request_error_type`.
 ///
 /// Returns 0 once the acquire is queued; -2 if the byte array cannot be read, in
 /// which case the future is not touched.
