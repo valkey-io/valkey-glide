@@ -237,8 +237,7 @@ impl ToValkeyArgs for Bytes {
     }
 }
 
-/// Encodes a `Vec` as command arguments: one per element,
-/// except `Vec<u8>`, which encodes as a single binary argument.
+/// Encodes a `Vec` as command arguments.
 impl<T: ToValkeyArgs> ToValkeyArgs for Vec<T> {
     fn write_valkey_args<W: ?Sized + ValkeyWrite>(&self, out: &mut W) {
         T::write_valkey_args_from_slice(self, out);
@@ -249,8 +248,7 @@ impl<T: ToValkeyArgs> ToValkeyArgs for Vec<T> {
     }
 }
 
-/// Encodes a slice as command arguments: one per element,
-/// except `&[u8]`, which encodes as a single binary argument.
+/// Encodes a slice as command arguments.
 impl<T: ToValkeyArgs> ToValkeyArgs for &[T] {
     fn write_valkey_args<W: ?Sized + ValkeyWrite>(&self, out: &mut W) {
         T::write_valkey_args_from_slice(self, out);
@@ -261,8 +259,7 @@ impl<T: ToValkeyArgs> ToValkeyArgs for &[T] {
     }
 }
 
-/// Encodes a fixed-size array as command arguments: one per element,
-/// except `&[u8; N]`, which encodes as a single binary argument.
+/// Encodes a fixed-size array as command arguments.
 impl<T: ToValkeyArgs, const N: usize> ToValkeyArgs for &[T; N] {
     fn write_valkey_args<W: ?Sized + ValkeyWrite>(&self, out: &mut W) {
         T::write_valkey_args_from_slice(self.as_slice(), out);
