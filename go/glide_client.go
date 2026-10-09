@@ -63,13 +63,6 @@ func NewClient(config *config.ClientConfiguration) (*Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	if config.HasSubscription() {
-		subConfig := config.GetSubscription()
-		client.setMessageHandler(NewMessageHandler(subConfig.GetCallback(), subConfig.GetContext()))
-	} else {
-		client.setMessageHandler(NewMessageHandler(nil, nil))
-	}
-
 	return &Client{baseClient: *client, clientConfig: config}, nil
 }
 

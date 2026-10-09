@@ -52,12 +52,9 @@ func NewMessageHandler(callback config.MessageCallback, context any) *MessageHan
 func (handler *MessageHandler) handleMessage(message *models.PubSubMessage) error {
 	if handler.callback != nil {
 		defer func() {
-			if r := recover(); r != nil {
-				err, ok := r.(error)
-				if !ok {
-					err = fmt.Errorf("%v", r)
-				}
-				log.Println("panic in message callback", err.Error())
+			if recover() != nil {
+				// Panic values can contain PubSub payloads or application secrets.
+				log.Println("panic in message callback")
 			}
 		}()
 

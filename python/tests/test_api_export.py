@@ -132,12 +132,15 @@ excluded_shared_symbols = [
     "convert_commands_to_c_batch_info",  # FunctionDef
     "create_c_batch_options",  # FunctionDef
     "create_address_resolver_callback",  # FunctionDef
+    "create_credential_provider_callback",  # FunctionDef
     "handle_command_result",  # FunctionDef
     "parse_inline_pubsub",  # FunctionDef
     # python/glide-shared/glide_shared/request_type.py
     "RequestType",  # Assignment
     # python/glide-shared/glide_shared/logger.py
     "Level",  # ClassDef
+    # python/glide-shared/glide_shared/{connection_request,command_request,response}_pb2.py
+    "DESCRIPTOR",  # Assignment - module-level protobuf file descriptor (protobuf >= 3.20 style)
 ]
 
 allowed_missing_re_exports_in_async = [

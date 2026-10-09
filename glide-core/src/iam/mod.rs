@@ -47,6 +47,29 @@ pub type CredentialsProvider = Arc<
         + Sync,
 >;
 
+type CustomCredentials = (
+    String,
+    String,
+    Option<String>,
+    Option<std::time::SystemTime>,
+);
+
+fn validate_custom_credentials(
+    credentials: CustomCredentials,
+) -> Result<CustomCredentials, GlideIAMError> {
+    if credentials.0.trim().is_empty() {
+        return Err(GlideIAMError::CredentialsError(
+            "Custom credentials provider returned a blank access_key_id".to_string(),
+        ));
+    }
+    if credentials.1.trim().is_empty() {
+        return Err(GlideIAMError::CredentialsError(
+            "Custom credentials provider returned a blank secret_access_key".to_string(),
+        ));
+    }
+    Ok(credentials)
+}
+
 /// Custom error type for IAM operations in Glide
 #[derive(Debug, Error)]
 pub enum GlideIAMError {
@@ -366,9 +389,30 @@ impl IAMTokenManager {
         }
     }
 
-    /// Refresh cached token with backoff + jitter.
-    /// On success: update token + set atomic flag + bump generation counter.
-    /// On failure: log error, keep old token.
+    /// Generate and publish a fresh cached token.
+    ///
+    /// The cache and generation are changed only after token generation succeeds,
+    /// so callers can choose how to report failure without invalidating the token
+    /// that existing connections are still using.
+    async fn refresh_cached_token(
+        iam_token_state: &IamTokenState,
+        cached_token: &Arc<RwLock<String>>,
+        token_created_at: &Arc<RwLock<tokio::time::Instant>>,
+        token_changed: &Arc<AtomicBool>,
+        token_generation: &Arc<AtomicU64>,
+    ) -> Result<(), GlideIAMError> {
+        let new_token = Self::generate_token_with_backoff(iam_token_state).await?;
+        Self::set_cached_token_static(cached_token, new_token).await;
+        {
+            let mut ts = token_created_at.write().await;
+            *ts = tokio::time::Instant::now();
+        }
+        token_changed.store(true, Ordering::Release);
+        token_generation.fetch_add(1, Ordering::AcqRel);
+        Ok(())
+    }
+
+    /// Automatic refresh keeps the cached token usable when its provider fails.
     async fn handle_token_refresh(
         iam_token_state: &IamTokenState,
         cached_token: &Arc<RwLock<String>>,
@@ -376,25 +420,22 @@ impl IAMTokenManager {
         token_changed: &Arc<AtomicBool>,
         token_generation: &Arc<AtomicU64>,
     ) {
-        match Self::generate_token_with_backoff(iam_token_state).await {
-            Ok(new_token) => {
-                Self::set_cached_token_static(cached_token, new_token.clone()).await;
-                {
-                    let mut ts = token_created_at.write().await;
-                    *ts = tokio::time::Instant::now();
-                }
-                token_changed.store(true, Ordering::Release);
-                token_generation.fetch_add(1, Ordering::AcqRel);
-            }
-            Err(_err) => {
-                // Backoff routine has already logged the failure details.
-                // Do not re-log here to avoid double-logging credential-related
-                // error messages.
-                log_error(
-                    "IAM token refresh failed",
-                    "Could not refresh token after backoff. Check your GlideCredentialProvider implementation.",
-                );
-            }
+        if Self::refresh_cached_token(
+            iam_token_state,
+            cached_token,
+            token_created_at,
+            token_changed,
+            token_generation,
+        )
+        .await
+        .is_err()
+        {
+            // Backoff routine has already logged the failure details.
+            // Do not re-log credentials to avoid exposing provider data.
+            log_error(
+                "IAM token refresh failed",
+                "Could not refresh token after backoff. Check your GlideCredentialProvider implementation.",
+            );
         }
     }
 
@@ -465,18 +506,20 @@ impl IAMTokenManager {
         }
     }
 
-    /// Force refresh the token immediately
+    /// Force refresh the token immediately.
     ///
-    /// - Never returns errors; all failures are logged only
-    pub async fn refresh_token(&self) {
-        Self::handle_token_refresh(
+    /// Unlike the background refresh loop, explicit refresh reports provider or
+    /// signing failures to its caller. A failure leaves the cached token and its
+    /// generation unchanged.
+    pub async fn refresh_token(&self) -> Result<(), GlideIAMError> {
+        Self::refresh_cached_token(
             &self.iam_token_state,
             &self.cached_token,
             &self.token_created_at,
             &self.token_changed,
             &self.token_generation,
         )
-        .await;
+        .await
     }
 
     /// Stop the background refresh task gracefully
@@ -551,22 +594,23 @@ impl IAMTokenManager {
             // refresh indefinitely.  10 seconds is generous for a network round
             // trip while still being short enough to surface the problem quickly.
             const CREDENTIALS_CALLBACK_TIMEOUT: Duration = Duration::from_secs(10);
+            let credentials = tokio::time::timeout(
+                CREDENTIALS_CALLBACK_TIMEOUT,
+                tokio::task::spawn_blocking(move || provider()),
+            )
+            .await
+            .map_err(|_| {
+                GlideIAMError::CredentialsError(format!(
+                    "Custom credentials callback did not return within {:?}. \
+                     Check your GlideCredentialProvider implementation.",
+                    CREDENTIALS_CALLBACK_TIMEOUT
+                ))
+            })?
+            .map_err(|e| {
+                GlideIAMError::CredentialsError(format!("spawn_blocking panicked: {e}"))
+            })??;
             let (access_key_id, secret_access_key, session_token, expires_at) =
-                tokio::time::timeout(
-                    CREDENTIALS_CALLBACK_TIMEOUT,
-                    tokio::task::spawn_blocking(move || provider()),
-                )
-                .await
-                .map_err(|_| {
-                    GlideIAMError::CredentialsError(format!(
-                        "Custom credentials callback did not return within {:?}. \
-                         Check your GlideCredentialProvider implementation.",
-                        CREDENTIALS_CALLBACK_TIMEOUT
-                    ))
-                })?
-                .map_err(|e| {
-                    GlideIAMError::CredentialsError(format!("spawn_blocking panicked: {e}"))
-                })??;
+                validate_custom_credentials(credentials)?;
             aws_credential_types::Credentials::new(
                 access_key_id,
                 secret_access_key,
@@ -668,6 +712,34 @@ mod tests {
     use tokio::time::{Duration, sleep};
 
     const IAM_TOKENS_JSON: &str = "/tmp/iam_tokens.json";
+
+    #[test]
+    fn custom_credentials_reject_blank_required_keys() {
+        let blank_access =
+            validate_custom_credentials((" \t ".to_string(), "secret".to_string(), None, None))
+                .expect_err("blank access key must fail");
+        assert!(blank_access.to_string().contains("access_key_id"));
+
+        let blank_secret =
+            validate_custom_credentials(("access".to_string(), "\n ".to_string(), None, None))
+                .expect_err("blank secret key must fail");
+        assert!(blank_secret.to_string().contains("secret_access_key"));
+    }
+
+    #[test]
+    fn custom_credentials_preserve_original_strings() {
+        let credentials = (
+            " access ".to_string(),
+            " secret ".to_string(),
+            Some(" token ".to_string()),
+            None,
+        );
+
+        let validated =
+            validate_custom_credentials(credentials.clone()).expect("credentials should be valid");
+
+        assert_eq!(validated, credentials);
+    }
 
     // This ensures the file is deleted once before all tests
     static INIT: Once = Once::new();
@@ -819,7 +891,7 @@ mod tests {
         assert!(!manager.token_changed(), "Flag should be false after clear");
 
         // Manually refresh the token
-        manager.refresh_token().await;
+        manager.refresh_token().await.unwrap();
 
         // Verify that the flag was set
         assert!(
@@ -934,7 +1006,7 @@ mod tests {
         // Wait at least 1 second to ensure timestamp difference in AWS SigV4 signing
         sleep(Duration::from_secs(1)).await;
 
-        manager.refresh_token().await;
+        manager.refresh_token().await.unwrap();
 
         let new_token = manager.get_token().await;
 
@@ -1425,7 +1497,7 @@ mod tests {
         let after_new = call_count.load(std::sync::atomic::Ordering::SeqCst);
         assert!(after_new >= 1, "Callback should be invoked during new()");
 
-        manager.refresh_token().await;
+        manager.refresh_token().await.unwrap();
 
         let after_refresh = call_count.load(std::sync::atomic::Ordering::SeqCst);
         assert!(
@@ -1491,5 +1563,98 @@ mod tests {
         // Stop the background task to prevent it from racing with subsequent
         // serial tests that mutate environment variables via env::set_var.
         manager.stop_refresh_task().await;
+    }
+
+    #[tokio::test]
+    async fn manual_refresh_returns_provider_failure_without_mutating_cache() {
+        let fail = Arc::new(AtomicBool::new(false));
+        let fail_provider = Arc::clone(&fail);
+        let provider: CredentialsProvider = Arc::new(move || {
+            if fail_provider.load(Ordering::Acquire) {
+                return Err(GlideIAMError::CredentialsError(
+                    "manual refresh provider failure".to_string(),
+                ));
+            }
+            Ok((
+                "test_access_key".to_string(),
+                "test_secret_key".to_string(),
+                Some("test_session_token".to_string()),
+                None,
+            ))
+        });
+        let manager = IAMTokenManager::new(
+            "test-cluster".to_string(),
+            "test-user".to_string(),
+            "us-east-1".to_string(),
+            ServiceType::ElastiCache,
+            None,
+            Some(provider),
+        )
+        .await
+        .expect("initial credentials should create the manager");
+        let cached_token = manager.get_token().await;
+        let generation = manager.token_generation();
+        manager.clear_token_changed();
+
+        fail.store(true, Ordering::Release);
+        let error = manager
+            .refresh_token()
+            .await
+            .expect_err("manual refresh must surface a provider failure");
+
+        assert!(
+            error
+                .to_string()
+                .contains("manual refresh provider failure")
+        );
+        assert_eq!(manager.get_token().await, cached_token);
+        assert_eq!(manager.token_generation(), generation);
+        assert!(!manager.token_changed());
+    }
+
+    #[tokio::test]
+    async fn automatic_refresh_failure_retains_cached_token() {
+        let fail = Arc::new(AtomicBool::new(false));
+        let fail_provider = Arc::clone(&fail);
+        let provider: CredentialsProvider = Arc::new(move || {
+            if fail_provider.load(Ordering::Acquire) {
+                return Err(GlideIAMError::CredentialsError(
+                    "automatic refresh provider failure".to_string(),
+                ));
+            }
+            Ok((
+                "test_access_key".to_string(),
+                "test_secret_key".to_string(),
+                None,
+                None,
+            ))
+        });
+        let manager = IAMTokenManager::new(
+            "test-cluster".to_string(),
+            "test-user".to_string(),
+            "us-east-1".to_string(),
+            ServiceType::ElastiCache,
+            None,
+            Some(provider),
+        )
+        .await
+        .expect("initial credentials should create the manager");
+        let cached_token = manager.get_token().await;
+        let generation = manager.token_generation();
+        manager.clear_token_changed();
+
+        fail.store(true, Ordering::Release);
+        IAMTokenManager::handle_token_refresh(
+            &manager.iam_token_state,
+            &manager.cached_token,
+            &manager.token_created_at,
+            &manager.token_changed,
+            &manager.token_generation,
+        )
+        .await;
+
+        assert_eq!(manager.get_token().await, cached_token);
+        assert_eq!(manager.token_generation(), generation);
+        assert!(!manager.token_changed());
     }
 }

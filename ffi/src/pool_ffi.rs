@@ -127,7 +127,9 @@ fn create_pool_client(
         client_type,
         None, // no pubsub callback for pooled clients (managed at pool level)
         None, // no address resolver (uses the one in ConnectionRequest if any)
+        None, // custom credential providers are rejected by glide_pool_create
         client_id,
+        false, // pooled sync adapters retain the legacy blocking/close lifecycle
     )?;
 
     // Extract the Client from the adapter for pool bookkeeping
@@ -203,6 +205,14 @@ pub unsafe extern "C" fn glide_pool_create(
                     "pool",
                     "Cannot create pool with pubsub subscriptions in client config. \
                      Use the main client's pubsub API instead.",
+                );
+                return POOL_ERROR_UNSUPPORTED_CONFIG;
+            }
+            if r.credential_provider_key.is_some() {
+                glide_logger::log_error(
+                    "pool",
+                    "Cannot create pool with a credential_provider_key. Custom IAM credential \
+                     providers are not supported for pools.",
                 );
                 return POOL_ERROR_UNSUPPORTED_CONFIG;
             }
@@ -1203,6 +1213,38 @@ pub unsafe extern "C" fn glide_scope_execute(
 }
 
 #[cfg(test)]
+mod pool_config_tests {
+    use super::*;
+    use protobuf::Message;
+
+    #[test]
+    fn raw_pool_request_rejects_empty_and_nonempty_credential_provider_keys() {
+        let client_type = ClientType::SyncClient;
+
+        for key in ["", "custom-provider"] {
+            let mut request = connection_request::ConnectionRequest::new();
+            request.credential_provider_key = Some(key.into());
+            let bytes = request.write_to_bytes().expect("serialize request");
+
+            let result = unsafe {
+                glide_pool_create(
+                    1,
+                    0,
+                    1_000,
+                    1_000,
+                    0,
+                    bytes.as_ptr(),
+                    bytes.len(),
+                    &client_type,
+                )
+            };
+
+            assert_eq!(result, POOL_ERROR_UNSUPPORTED_CONFIG, "key={key:?}");
+        }
+    }
+}
+
+#[cfg(test)]
 mod adapter_ownership_tests {
     use super::*;
 
@@ -1228,6 +1270,7 @@ mod adapter_ownership_tests {
         unsafe { Arc::decrement_strong_count(raw) };
         let adapter = unsafe { Arc::from_raw(raw) };
         assert_eq!(Arc::strong_count(&adapter), 1);
+        assert!(adapter.sync_shutdown.is_none());
 
         let rt = tokio::runtime::Builder::new_current_thread()
             .build()

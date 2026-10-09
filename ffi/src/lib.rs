@@ -32,15 +32,17 @@ use redis::cluster_routing::{
 use redis::{ClusterScanArgs, RedisError};
 use redis::{Cmd, Pipeline, PipelineRetryStrategy, RedisResult, Value};
 use std::borrow::Cow;
+use std::collections::HashMap;
 use std::ffi::CStr;
-use std::future::Future;
+use std::future::{Future, poll_fn};
 use std::mem::ManuallyDrop;
+use std::pin::Pin;
 use std::slice::from_raw_parts;
 use std::str;
 use std::str::FromStr;
-use std::sync::Arc;
-use std::sync::Condvar;
-use std::sync::atomic::AtomicU32;
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
+use std::sync::{Arc, Condvar, Mutex};
+use std::task::{Context, Poll, Waker};
 use std::{
     ffi::{CString, c_void},
     os::raw::{c_char, c_double, c_long, c_ulong},
@@ -325,13 +327,27 @@ pub type FailureCallback = unsafe extern "C-unwind" fn(
     error_type: RequestErrorType,
 ) -> ();
 
+type NonNullPubSubCallback = unsafe extern "C-unwind" fn(
+    callback_id: usize,
+    kind: PushKind,
+    message: *const u8,
+    message_len: i64,
+    channel: *const u8,
+    channel_len: i64,
+    pattern: *const u8,
+    pattern_len: i64,
+) -> ();
+
 /// PubSub callback that is called when a push notification is received.
 ///
 /// The PubSub callback needs to handle the push notification synchronously, since the data will be dropped by Rust once the callback returns.
 /// The callback should be offloaded to a separate thread in order not to exhaust the client's thread pool.
 ///
 /// # Parameters
-/// * `client_ptr`: A baton-pass back to the caller language to uniquely identify the client.
+/// * `callback_id`: A baton-pass back to the caller language. Direct clients receive the
+///   nonzero `client_id` supplied to `create_client`; zero-ID URI/legacy clients receive the
+///   adapter address as a compatibility fallback. Python async clients use pipe delivery once
+///   the process-wide async pipe is initialized.
 /// * `kind`: An enum variant representing the PushKind (Message, PMessage, SMessage, etc.)
 /// * `message`: A pointer to the raw message bytes.
 /// * `message_len`: The length of the message data in bytes.
@@ -344,16 +360,28 @@ pub type FailureCallback = unsafe extern "C-unwind" fn(
 /// The pointers are only valid during the callback execution and will be freed
 /// automatically when the callback returns. Any data needed beyond the callback's
 /// execution must be copied.
-pub type PubSubCallback = unsafe extern "C-unwind" fn(
-    client_ptr: usize,
-    kind: PushKind,
-    message: *const u8,
-    message_len: i64,
-    channel: *const u8,
-    channel_len: i64,
-    pattern: *const u8,
-    pattern_len: i64,
-) -> ();
+pub type PubSubCallback = Option<
+    unsafe extern "C-unwind" fn(
+        callback_id: usize,
+        kind: PushKind,
+        message: *const u8,
+        message_len: i64,
+        channel: *const u8,
+        channel_len: i64,
+        pattern: *const u8,
+        pattern_len: i64,
+    ) -> (),
+>;
+
+type NonNullAddressResolverCallback = unsafe extern "C-unwind" fn(
+    client_id: usize,
+    host: *const u8,
+    host_len: usize,
+    port: u16,
+    resolved_host_buf: *mut u8,
+    resolved_host_buf_len: usize,
+    resolved_host_len: *mut usize,
+) -> u16;
 
 /// Address resolver callback that is called to resolve server addresses before connection.
 ///
@@ -377,19 +405,21 @@ pub type PubSubCallback = unsafe extern "C-unwind" fn(
 /// * `resolved_host_buf` must point to `resolved_host_buf_len` consecutive writable bytes.
 /// * `resolved_host_len` must be a valid pointer to a writable `usize`.
 /// * The callback must write the resolved host into `resolved_host_buf` and set `resolved_host_len`.
-pub type AddressResolverCallback = unsafe extern "C-unwind" fn(
-    client_id: usize,
-    host: *const u8,
-    host_len: usize,
-    port: u16,
-    resolved_host_buf: *mut u8,
-    resolved_host_buf_len: usize,
-    resolved_host_len: *mut usize,
-) -> u16;
+pub type AddressResolverCallback = Option<
+    unsafe extern "C-unwind" fn(
+        client_id: usize,
+        host: *const u8,
+        host_len: usize,
+        port: u16,
+        resolved_host_buf: *mut u8,
+        resolved_host_buf_len: usize,
+        resolved_host_len: *mut usize,
+    ) -> u16,
+>;
 
 /// A wrapper around an FFI address resolver callback that implements the `AddressResolver` trait.
 struct FFIAddressResolver {
-    callback: AddressResolverCallback,
+    callback: NonNullAddressResolverCallback,
     client_id: usize,
 }
 
@@ -438,6 +468,1031 @@ impl redis::AddressResolver for FFIAddressResolver {
                 );
                 (host.to_string(), port)
             }
+        }
+    }
+}
+
+/// Internal non-null form of [`CredentialProviderCallback`].
+type NonNullCredentialProviderCallback = unsafe extern "C-unwind" fn(
+    client_id: usize,
+    access_key_id_buf: *mut u8,
+    access_key_id_buf_len: usize,
+    access_key_id_len: *mut usize,
+    secret_access_key_buf: *mut u8,
+    secret_access_key_buf_len: usize,
+    secret_access_key_len: *mut usize,
+    session_token_buf: *mut u8,
+    session_token_buf_len: usize,
+    session_token_len: *mut usize,
+    expires_at_epoch_millis: *mut i64,
+) -> u8;
+
+/// Nullable custom AWS credential-provider callback accepted by [`create_client`]. Pass
+/// `None`/`NULL` to use the default AWS credential chain.
+///
+/// The Rust core invokes the callback whenever it needs fresh credentials to generate an IAM
+/// token, possibly many times while the client is active. All string outputs must be UTF-8. The
+/// provider must remain callable for the client's lifetime and produce a complete, coherent set of
+/// credentials on every invocation. Buffer negotiation may cause two invocations for one
+/// credential fetch, and credentials may change between them.
+///
+/// Each invocation has a 10-second client-observed deadline. Tokio cannot forcibly stop arbitrary
+/// synchronous user code, so a callback that exceeds the deadline may continue on a detached
+/// blocking worker after the request fails or the client closes. While that invocation is still
+/// running, this provider rejects new logical fetches immediately instead of invoking or queueing
+/// another callback; callback admission resumes only after the timed-out invocation returns.
+/// Providers must return promptly or cooperate with their own cancellation mechanism. Client close
+/// does not wait for such workers, and they no longer remain owned by the closed client's runtime.
+///
+/// The callback status values are:
+///
+/// * `0` - failure; no retry is made.
+/// * `1` - success; every reported length must be the exact number of bytes written to that buffer.
+/// * `2` - buffer too small; do not write to any credential buffer. Set all three reported lengths
+///   to the exact required byte lengths. Each required length and their sum must be no greater than
+///   1,048,576 bytes. The callback is retried at most once, with the full 1,048,576-byte capacity
+///   for every credential buffer. A second `2` status fails the credential fetch.
+///
+/// All other status values are invalid.
+///
+/// # Parameters
+/// * `client_id` - The client identifier passed to `create_client`.
+/// * `access_key_id_buf` - Buffer to write the AWS Access Key ID into.
+/// * `access_key_id_buf_len` - Capacity of `access_key_id_buf`.
+/// * `access_key_id_len` - Output: actual or required byte length of the AWS Access Key ID.
+/// * `secret_access_key_buf` - Buffer to write the AWS Secret Access Key into.
+/// * `secret_access_key_buf_len` - Capacity of `secret_access_key_buf`.
+/// * `secret_access_key_len` - Output: actual or required byte length of the AWS Secret Access Key.
+/// * `session_token_buf` - Buffer to write the optional Session Token into (may be left empty).
+/// * `session_token_buf_len` - Capacity of `session_token_buf`.
+/// * `session_token_len` - Output: actual or required byte length of the Session Token. Write 0 for no token.
+/// * `expires_at_epoch_millis` - Output: optional expiry as Unix epoch milliseconds. Write any value less than or equal to 0 to indicate no expiry.
+///
+/// # Safety
+/// The callback function pointer must remain valid while the client is active and until every
+/// already-entered invocation has returned. A timed-out invocation may still be running after
+/// `close_client`. All pointer parameters passed to the callback are valid only for the duration
+/// of that invocation.
+pub type CredentialProviderCallback = Option<
+    unsafe extern "C-unwind" fn(
+        client_id: usize,
+        access_key_id_buf: *mut u8,
+        access_key_id_buf_len: usize,
+        access_key_id_len: *mut usize,
+        secret_access_key_buf: *mut u8,
+        secret_access_key_buf_len: usize,
+        secret_access_key_len: *mut usize,
+        session_token_buf: *mut u8,
+        session_token_buf_len: usize,
+        session_token_len: *mut usize,
+        expires_at_epoch_millis: *mut i64,
+    ) -> u8,
+>;
+
+const CREDENTIAL_CALLBACK_FAILURE: u8 = 0;
+const CREDENTIAL_CALLBACK_SUCCESS: u8 = 1;
+const CREDENTIAL_CALLBACK_BUFFER_TOO_SMALL: u8 = 2;
+const INITIAL_CREDENTIAL_BUFFER_SIZE: usize = 2048;
+/// Production maximum for any individual credential field and all fields combined.
+#[cfg_attr(miri, allow(dead_code))]
+const PRODUCTION_MAX_CREDENTIALS_BUFFER_SIZE: usize = 1024 * 1024;
+/// Smaller interpreter-only bound that still exercises the sizing retry above 2048 bytes.
+#[cfg(miri)]
+const MIRI_MAX_CREDENTIALS_BUFFER_SIZE: usize = 16 * 1024;
+#[cfg(miri)]
+const MAX_CREDENTIALS_BUFFER_SIZE: usize = MIRI_MAX_CREDENTIALS_BUFFER_SIZE;
+#[cfg(not(miri))]
+const MAX_CREDENTIALS_BUFFER_SIZE: usize = PRODUCTION_MAX_CREDENTIALS_BUFFER_SIZE;
+const UNSET_CREDENTIAL_LENGTH: usize = usize::MAX;
+
+type FFICredentials = (
+    String,
+    String,
+    Option<String>,
+    Option<std::time::SystemTime>,
+);
+
+#[derive(Debug)]
+struct CredentialCallbackResult {
+    status: u8,
+    lengths: [usize; 3],
+    expires_at_millis: i64,
+}
+
+/// Wraps a C `CredentialProviderCallback` function pointer as a `glide_core::iam::CredentialsProvider`.
+struct FFICredentialsProvider {
+    callback: NonNullCredentialProviderCallback,
+    client_id: usize,
+    invocation_in_progress: Arc<AtomicBool>,
+}
+// SAFETY: The callback is a C function pointer safe to share across threads. The only mutable
+// provider state is synchronized through `invocation_in_progress`.
+unsafe impl Send for FFICredentialsProvider {}
+unsafe impl Sync for FFICredentialsProvider {}
+
+/// Releases one provider's nonblocking admission gate only after the actual callback call returns
+/// or unwinds. If foreign code never returns, this guard remains on its detached worker's stack and
+/// later logical fetches continue to fail fast.
+struct CredentialProviderInvocationGuard(Arc<AtomicBool>);
+
+impl Drop for CredentialProviderInvocationGuard {
+    fn drop(&mut self) {
+        self.0.store(false, Ordering::Release);
+    }
+}
+
+impl FFICredentialsProvider {
+    fn credentials_error(message: impl Into<String>) -> glide_core::iam::GlideIAMError {
+        glide_core::iam::GlideIAMError::CredentialsError(message.into())
+    }
+
+    fn allocate_buffer(
+        size: usize,
+        field: &str,
+    ) -> Result<Vec<u8>, glide_core::iam::GlideIAMError> {
+        let mut buffer = Vec::new();
+        buffer.try_reserve_exact(size).map_err(|error| {
+            Self::credentials_error(format!(
+                "Failed to allocate {size} bytes for custom credential field {field}: {error}"
+            ))
+        })?;
+        buffer.resize(size, 0);
+        Ok(buffer)
+    }
+
+    fn invoke_callback(
+        &self,
+        access_key_id_buf: &mut [u8],
+        secret_access_key_buf: &mut [u8],
+        session_token_buf: &mut [u8],
+    ) -> Result<CredentialCallbackResult, glide_core::iam::GlideIAMError> {
+        let mut lengths = [UNSET_CREDENTIAL_LENGTH; 3];
+        let mut expires_at_millis = 0;
+
+        // `C-unwind` plus `catch_unwind` lets tests and Rust-based adapters report a Rust panic as
+        // a credentials error. It does not make unwinding a foreign exception into Rust safe.
+        let status = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| unsafe {
+            (self.callback)(
+                self.client_id,
+                access_key_id_buf.as_mut_ptr(),
+                access_key_id_buf.len(),
+                &mut lengths[0],
+                secret_access_key_buf.as_mut_ptr(),
+                secret_access_key_buf.len(),
+                &mut lengths[1],
+                session_token_buf.as_mut_ptr(),
+                session_token_buf.len(),
+                &mut lengths[2],
+                &mut expires_at_millis,
+            )
+        }))
+        .map_err(|_| Self::credentials_error("Custom credentials provider callback panicked"))?;
+
+        Ok(CredentialCallbackResult {
+            status,
+            lengths,
+            expires_at_millis,
+        })
+    }
+
+    fn validate_resize_lengths(
+        lengths: [usize; 3],
+        capacities: [usize; 3],
+    ) -> Result<(), glide_core::iam::GlideIAMError> {
+        if lengths.contains(&UNSET_CREDENTIAL_LENGTH) {
+            return Err(Self::credentials_error(
+                "Custom credentials provider returned buffer-too-small without setting all three required lengths",
+            ));
+        }
+        if lengths[0] == 0 || lengths[1] == 0 {
+            return Err(Self::credentials_error(
+                "Custom credentials provider returned buffer-too-small with an empty required credential field",
+            ));
+        }
+        if !lengths
+            .iter()
+            .zip(capacities)
+            .any(|(required, capacity)| *required > capacity)
+        {
+            return Err(Self::credentials_error(
+                "Custom credentials provider returned buffer-too-small without requiring a larger buffer",
+            ));
+        }
+        if lengths
+            .iter()
+            .any(|length| *length > MAX_CREDENTIALS_BUFFER_SIZE)
+        {
+            return Err(Self::credentials_error(format!(
+                "Custom credentials provider required a field larger than the {MAX_CREDENTIALS_BUFFER_SIZE}-byte limit"
+            )));
+        }
+        let aggregate = lengths.iter().try_fold(0usize, |total, length| {
+            total.checked_add(*length).ok_or_else(|| {
+                Self::credentials_error("Custom credential required lengths overflowed usize")
+            })
+        })?;
+        if aggregate > MAX_CREDENTIALS_BUFFER_SIZE {
+            return Err(Self::credentials_error(format!(
+                "Custom credentials provider required {aggregate} aggregate bytes, exceeding the {MAX_CREDENTIALS_BUFFER_SIZE}-byte limit"
+            )));
+        }
+        Ok(())
+    }
+
+    fn parse_success(
+        result: CredentialCallbackResult,
+        access_key_id_buf: &[u8],
+        secret_access_key_buf: &[u8],
+        session_token_buf: &[u8],
+    ) -> Result<FFICredentials, glide_core::iam::GlideIAMError> {
+        if result.lengths.contains(&UNSET_CREDENTIAL_LENGTH) {
+            return Err(Self::credentials_error(
+                "Custom credentials provider returned success without setting all three lengths",
+            ));
+        }
+        if result.lengths[0] == 0 || result.lengths[1] == 0 {
+            return Err(Self::credentials_error(
+                "Custom credentials provider returned success with an empty required credential field",
+            ));
+        }
+
+        let capacities = [
+            access_key_id_buf.len(),
+            secret_access_key_buf.len(),
+            session_token_buf.len(),
+        ];
+        let field_names = ["access_key_id", "secret_access_key", "session_token"];
+        for ((length, capacity), field) in result.lengths.iter().zip(capacities).zip(field_names) {
+            if *length > MAX_CREDENTIALS_BUFFER_SIZE {
+                return Err(Self::credentials_error(format!(
+                    "Custom credentials provider reported {field} length {length} exceeding the {MAX_CREDENTIALS_BUFFER_SIZE}-byte limit"
+                )));
+            }
+            if *length > capacity {
+                return Err(Self::credentials_error(format!(
+                    "Custom credentials provider reported {field} length {length} exceeding buffer size {capacity}"
+                )));
+            }
+        }
+        let aggregate = result.lengths.iter().try_fold(0usize, |total, length| {
+            total.checked_add(*length).ok_or_else(|| {
+                Self::credentials_error("Custom credential lengths overflowed usize")
+            })
+        })?;
+        if aggregate > MAX_CREDENTIALS_BUFFER_SIZE {
+            return Err(Self::credentials_error(format!(
+                "Custom credentials provider reported {aggregate} aggregate bytes, exceeding the {MAX_CREDENTIALS_BUFFER_SIZE}-byte limit"
+            )));
+        }
+
+        let decode = |bytes: &[u8], field: &str| {
+            std::str::from_utf8(bytes)
+                .map(str::to_owned)
+                .map_err(|error| {
+                    Self::credentials_error(format!("Invalid UTF-8 in {field}: {error}"))
+                })
+        };
+        let access_key_id = decode(&access_key_id_buf[..result.lengths[0]], "access_key_id")?;
+        let secret_access_key = decode(
+            &secret_access_key_buf[..result.lengths[1]],
+            "secret_access_key",
+        )?;
+        if access_key_id.trim().is_empty() {
+            return Err(Self::credentials_error(
+                "Custom credentials provider returned an empty access_key_id",
+            ));
+        }
+        if secret_access_key.trim().is_empty() {
+            return Err(Self::credentials_error(
+                "Custom credentials provider returned an empty secret_access_key",
+            ));
+        }
+        let session_token = if result.lengths[2] == 0 {
+            None
+        } else {
+            Some(decode(
+                &session_token_buf[..result.lengths[2]],
+                "session_token",
+            )?)
+        };
+        let expires_at = if result.expires_at_millis > 0 {
+            std::time::SystemTime::UNIX_EPOCH
+                .checked_add(std::time::Duration::from_millis(
+                    result.expires_at_millis as u64,
+                ))
+                .map(Some)
+                .ok_or_else(|| {
+                    Self::credentials_error(format!(
+                        "Custom credentials provider expiry {} milliseconds overflows SystemTime",
+                        result.expires_at_millis
+                    ))
+                })?
+        } else {
+            None
+        };
+
+        Ok((access_key_id, secret_access_key, session_token, expires_at))
+    }
+
+    /// Invoke the callback and return the AWS credentials.
+    fn call(&self) -> Result<FFICredentials, glide_core::iam::GlideIAMError> {
+        if self
+            .invocation_in_progress
+            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+            .is_err()
+        {
+            return Err(Self::credentials_error(
+                "Previous credential provider invocation is still running",
+            ));
+        }
+        // Admission intentionally spans the complete logical fetch so a status-2 sizing retry can
+        // invoke the foreign callback a second time without interacting with this gate.
+        let _invocation_guard =
+            CredentialProviderInvocationGuard(Arc::clone(&self.invocation_in_progress));
+
+        let mut access_key_id_buf =
+            Self::allocate_buffer(INITIAL_CREDENTIAL_BUFFER_SIZE, "access_key_id")?;
+        let mut secret_access_key_buf =
+            Self::allocate_buffer(INITIAL_CREDENTIAL_BUFFER_SIZE, "secret_access_key")?;
+        let mut session_token_buf =
+            Self::allocate_buffer(INITIAL_CREDENTIAL_BUFFER_SIZE, "session_token")?;
+
+        let first = self.invoke_callback(
+            &mut access_key_id_buf,
+            &mut secret_access_key_buf,
+            &mut session_token_buf,
+        )?;
+        let result = match first.status {
+            CREDENTIAL_CALLBACK_FAILURE => {
+                return Err(Self::credentials_error(
+                    "Custom credentials provider callback returned failure",
+                ));
+            }
+            CREDENTIAL_CALLBACK_SUCCESS => first,
+            CREDENTIAL_CALLBACK_BUFFER_TOO_SMALL => {
+                let capacities = [
+                    access_key_id_buf.len(),
+                    secret_access_key_buf.len(),
+                    session_token_buf.len(),
+                ];
+                Self::validate_resize_lengths(first.lengths, capacities)?;
+                // Allocate the full policy limit for every field rather than trusting the first
+                // invocation's exact sizes. A stateless provider may rotate credentials before the
+                // retry; the independently validated retry can still succeed if its coherent result
+                // remains within the per-field and aggregate policy.
+                access_key_id_buf =
+                    Self::allocate_buffer(MAX_CREDENTIALS_BUFFER_SIZE, "access_key_id")?;
+                secret_access_key_buf =
+                    Self::allocate_buffer(MAX_CREDENTIALS_BUFFER_SIZE, "secret_access_key")?;
+                session_token_buf =
+                    Self::allocate_buffer(MAX_CREDENTIALS_BUFFER_SIZE, "session_token")?;
+
+                let retry = self.invoke_callback(
+                    &mut access_key_id_buf,
+                    &mut secret_access_key_buf,
+                    &mut session_token_buf,
+                )?;
+                match retry.status {
+                    CREDENTIAL_CALLBACK_FAILURE => {
+                        return Err(Self::credentials_error(
+                            "Custom credentials provider callback returned failure on retry",
+                        ));
+                    }
+                    CREDENTIAL_CALLBACK_SUCCESS => retry,
+                    CREDENTIAL_CALLBACK_BUFFER_TOO_SMALL => {
+                        return Err(Self::credentials_error(
+                            "Custom credentials provider callback requested a second resize",
+                        ));
+                    }
+                    status => {
+                        return Err(Self::credentials_error(format!(
+                            "Custom credentials provider callback returned unknown status {status} on retry"
+                        )));
+                    }
+                }
+            }
+            status => {
+                return Err(Self::credentials_error(format!(
+                    "Custom credentials provider callback returned unknown status {status}"
+                )));
+            }
+        };
+
+        Self::parse_success(
+            result,
+            &access_key_id_buf,
+            &secret_access_key_buf,
+            &session_token_buf,
+        )
+    }
+}
+
+#[cfg(test)]
+mod tests_ffi_credentials_provider {
+    use super::*;
+    use std::cell::RefCell;
+    use std::collections::VecDeque;
+
+    #[derive(Clone)]
+    struct CallbackStep {
+        status: u8,
+        lengths: [Option<usize>; 3],
+        fields: [Vec<u8>; 3],
+        expires_at_millis: i64,
+    }
+
+    impl CallbackStep {
+        fn success(access_key: Vec<u8>, secret_key: Vec<u8>, session_token: Vec<u8>) -> Self {
+            let lengths = [
+                Some(access_key.len()),
+                Some(secret_key.len()),
+                Some(session_token.len()),
+            ];
+            Self {
+                status: CREDENTIAL_CALLBACK_SUCCESS,
+                lengths,
+                fields: [access_key, secret_key, session_token],
+                expires_at_millis: 0,
+            }
+        }
+
+        fn status(status: u8, lengths: [Option<usize>; 3]) -> Self {
+            Self {
+                status,
+                lengths,
+                fields: [Vec::new(), Vec::new(), Vec::new()],
+                expires_at_millis: 0,
+            }
+        }
+    }
+
+    #[derive(Default)]
+    struct CallbackState {
+        steps: VecDeque<CallbackStep>,
+        capacities: Vec<[usize; 3]>,
+    }
+
+    thread_local! {
+        static CALLBACK_STATE: RefCell<CallbackState> = RefCell::new(CallbackState::default());
+    }
+
+    fn set_steps(steps: impl IntoIterator<Item = CallbackStep>) {
+        CALLBACK_STATE.with(|state| {
+            *state.borrow_mut() = CallbackState {
+                steps: steps.into_iter().collect(),
+                capacities: Vec::new(),
+            };
+        });
+    }
+
+    fn capacities() -> Vec<[usize; 3]> {
+        CALLBACK_STATE.with(|state| state.borrow().capacities.clone())
+    }
+
+    unsafe extern "C-unwind" fn scripted_callback(
+        _client_id: usize,
+        access_key_id_buf: *mut u8,
+        access_key_id_buf_len: usize,
+        access_key_id_len: *mut usize,
+        secret_access_key_buf: *mut u8,
+        secret_access_key_buf_len: usize,
+        secret_access_key_len: *mut usize,
+        session_token_buf: *mut u8,
+        session_token_buf_len: usize,
+        session_token_len: *mut usize,
+        expires_at_epoch_millis: *mut i64,
+    ) -> u8 {
+        let capacities = [
+            access_key_id_buf_len,
+            secret_access_key_buf_len,
+            session_token_buf_len,
+        ];
+        let step = CALLBACK_STATE.with(|state| {
+            let mut state = state.borrow_mut();
+            state.capacities.push(capacities);
+            state
+                .steps
+                .pop_front()
+                .expect("unexpected callback invocation")
+        });
+        let length_ptrs = [access_key_id_len, secret_access_key_len, session_token_len];
+        for (length, output) in step.lengths.iter().zip(length_ptrs) {
+            if let Some(length) = length {
+                unsafe { *output = *length };
+            }
+        }
+        unsafe { *expires_at_epoch_millis = step.expires_at_millis };
+
+        let buffer_ptrs = [access_key_id_buf, secret_access_key_buf, session_token_buf];
+        for ((field, buffer), capacity) in step.fields.iter().zip(buffer_ptrs).zip(capacities) {
+            if !field.is_empty() && field.len() <= capacity {
+                unsafe { std::ptr::copy_nonoverlapping(field.as_ptr(), buffer, field.len()) };
+            }
+        }
+        step.status
+    }
+
+    unsafe extern "C-unwind" fn panicking_callback(
+        _client_id: usize,
+        _access_key_id_buf: *mut u8,
+        _access_key_id_buf_len: usize,
+        _access_key_id_len: *mut usize,
+        _secret_access_key_buf: *mut u8,
+        _secret_access_key_buf_len: usize,
+        _secret_access_key_len: *mut usize,
+        _session_token_buf: *mut u8,
+        _session_token_buf_len: usize,
+        _session_token_len: *mut usize,
+        _expires_at_epoch_millis: *mut i64,
+    ) -> u8 {
+        panic!("Rust callback panic")
+    }
+
+    static BLOCKING_CALLBACK_ENTERED: AtomicBool = AtomicBool::new(false);
+    static BLOCKING_CALLBACK_RELEASED: AtomicBool = AtomicBool::new(false);
+    static BLOCKING_CALLBACK_CALLS: std::sync::atomic::AtomicUsize =
+        std::sync::atomic::AtomicUsize::new(0);
+
+    unsafe extern "C-unwind" fn blocking_callback(
+        _client_id: usize,
+        access_key_id_buf: *mut u8,
+        access_key_id_buf_len: usize,
+        access_key_id_len: *mut usize,
+        secret_access_key_buf: *mut u8,
+        secret_access_key_buf_len: usize,
+        secret_access_key_len: *mut usize,
+        _session_token_buf: *mut u8,
+        _session_token_buf_len: usize,
+        session_token_len: *mut usize,
+        expires_at_epoch_millis: *mut i64,
+    ) -> u8 {
+        BLOCKING_CALLBACK_CALLS.fetch_add(1, Ordering::SeqCst);
+        BLOCKING_CALLBACK_ENTERED.store(true, Ordering::Release);
+        while !BLOCKING_CALLBACK_RELEASED.load(Ordering::Acquire) {
+            std::thread::park_timeout(std::time::Duration::from_millis(1));
+        }
+
+        let access = b"access";
+        let secret = b"secret";
+        if access.len() > access_key_id_buf_len || secret.len() > secret_access_key_buf_len {
+            return CREDENTIAL_CALLBACK_FAILURE;
+        }
+        unsafe {
+            std::ptr::copy_nonoverlapping(access.as_ptr(), access_key_id_buf, access.len());
+            std::ptr::copy_nonoverlapping(secret.as_ptr(), secret_access_key_buf, secret.len());
+            *access_key_id_len = access.len();
+            *secret_access_key_len = secret.len();
+            *session_token_len = 0;
+            *expires_at_epoch_millis = 0;
+        }
+        CREDENTIAL_CALLBACK_SUCCESS
+    }
+
+    fn provider(callback: NonNullCredentialProviderCallback) -> FFICredentialsProvider {
+        FFICredentialsProvider {
+            callback,
+            client_id: 42,
+            invocation_in_progress: Arc::new(AtomicBool::new(false)),
+        }
+    }
+
+    fn call_scripted() -> Result<FFICredentials, glide_core::iam::GlideIAMError> {
+        provider(scripted_callback).call()
+    }
+
+    #[test]
+    fn credential_buffer_limits_match_the_build_mode() {
+        assert_eq!(PRODUCTION_MAX_CREDENTIALS_BUFFER_SIZE, 1024 * 1024);
+        #[cfg(not(miri))]
+        assert_eq!(MAX_CREDENTIALS_BUFFER_SIZE, 1024 * 1024);
+        #[cfg(miri)]
+        {
+            assert_eq!(
+                MAX_CREDENTIALS_BUFFER_SIZE,
+                MIRI_MAX_CREDENTIALS_BUFFER_SIZE
+            );
+            assert_eq!(MIRI_MAX_CREDENTIALS_BUFFER_SIZE, 16 * 1024);
+            assert!(MIRI_MAX_CREDENTIALS_BUFFER_SIZE > INITIAL_CREDENTIAL_BUFFER_SIZE);
+        }
+    }
+
+    #[test]
+    fn single_flight_fails_fast_recovers_and_is_isolated_per_provider() {
+        const CONTENDERS: usize = 8;
+        BLOCKING_CALLBACK_ENTERED.store(false, Ordering::Release);
+        BLOCKING_CALLBACK_RELEASED.store(false, Ordering::Release);
+        BLOCKING_CALLBACK_CALLS.store(0, Ordering::SeqCst);
+
+        let contended_provider = Arc::new(provider(blocking_callback));
+        let start = Arc::new(std::sync::Barrier::new(CONTENDERS + 1));
+        let (results_tx, results_rx) = std::sync::mpsc::channel();
+        let mut threads = Vec::new();
+        for _ in 0..CONTENDERS {
+            let provider = Arc::clone(&contended_provider);
+            let start = Arc::clone(&start);
+            let results_tx = results_tx.clone();
+            threads.push(std::thread::spawn(move || {
+                start.wait();
+                results_tx.send(provider.call()).unwrap();
+            }));
+        }
+        drop(results_tx);
+        start.wait();
+
+        let entered_deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+        while !BLOCKING_CALLBACK_ENTERED.load(Ordering::Acquire) {
+            assert!(
+                std::time::Instant::now() < entered_deadline,
+                "no contender entered the callback"
+            );
+            std::thread::yield_now();
+        }
+        for _ in 0..CONTENDERS - 1 {
+            let error = results_rx
+                .recv_timeout(std::time::Duration::from_secs(30))
+                .expect("contending provider call did not fail fast")
+                .expect_err("only one logical fetch may enter the callback");
+            assert!(error.to_string().contains("still running"), "{error}");
+        }
+        assert_eq!(BLOCKING_CALLBACK_CALLS.load(Ordering::SeqCst), 1);
+
+        BLOCKING_CALLBACK_RELEASED.store(true, Ordering::Release);
+        let credentials = results_rx
+            .recv_timeout(std::time::Duration::from_secs(30))
+            .expect("admitted callback did not finish after release")
+            .expect("admitted callback should succeed");
+        assert_eq!(credentials.0, "access");
+        assert_eq!(credentials.1, "secret");
+        for thread in threads {
+            thread.join().unwrap();
+        }
+
+        // The RAII guard releases admission after the actual callback returns.
+        contended_provider
+            .call()
+            .expect("the next logical fetch should be admitted");
+        assert_eq!(BLOCKING_CALLBACK_CALLS.load(Ordering::SeqCst), 2);
+
+        // Distinct direct clients/providers own distinct gates and can enter concurrently.
+        BLOCKING_CALLBACK_ENTERED.store(false, Ordering::Release);
+        BLOCKING_CALLBACK_RELEASED.store(false, Ordering::Release);
+        BLOCKING_CALLBACK_CALLS.store(0, Ordering::SeqCst);
+        let first = Arc::new(provider(blocking_callback));
+        let second = Arc::new(provider(blocking_callback));
+        let first_thread = std::thread::spawn(move || first.call());
+        let second_thread = std::thread::spawn(move || second.call());
+        let entered_deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+        while BLOCKING_CALLBACK_CALLS.load(Ordering::SeqCst) < 2 {
+            assert!(
+                std::time::Instant::now() < entered_deadline,
+                "separate providers did not enter concurrently"
+            );
+            std::thread::yield_now();
+        }
+        BLOCKING_CALLBACK_RELEASED.store(true, Ordering::Release);
+        first_thread.join().unwrap().unwrap();
+        second_thread.join().unwrap().unwrap();
+    }
+
+    #[test]
+    fn success_under_initial_capacity() {
+        set_steps([CallbackStep::success(
+            b"access".to_vec(),
+            b"secret".to_vec(),
+            b"token".to_vec(),
+        )]);
+
+        let credentials = call_scripted().expect("callback should succeed");
+
+        assert_eq!(credentials.0, "access");
+        assert_eq!(credentials.1, "secret");
+        assert_eq!(credentials.2.as_deref(), Some("token"));
+        assert_eq!(capacities(), vec![[INITIAL_CREDENTIAL_BUFFER_SIZE; 3]]);
+    }
+
+    #[test]
+    fn success_at_exact_initial_capacity() {
+        let access_key = vec![b'a'; INITIAL_CREDENTIAL_BUFFER_SIZE];
+        let secret_key = vec![b'b'; INITIAL_CREDENTIAL_BUFFER_SIZE];
+        let session_token = vec![b'c'; INITIAL_CREDENTIAL_BUFFER_SIZE];
+        set_steps([CallbackStep::success(
+            access_key.clone(),
+            secret_key.clone(),
+            session_token.clone(),
+        )]);
+
+        let credentials = call_scripted().expect("exact-capacity callback should succeed");
+
+        assert_eq!(credentials.0.as_bytes(), access_key);
+        assert_eq!(credentials.1.as_bytes(), secret_key);
+        assert_eq!(
+            credentials.2.as_deref().map(str::as_bytes),
+            Some(&*session_token)
+        );
+        assert_eq!(capacities().len(), 1);
+    }
+
+    #[test]
+    fn buffer_too_small_retries_with_full_caps_and_accepts_changed_larger_result() {
+        let first_required = [3000, 2500, 2200];
+        let access_key = vec![b'd'; 4000];
+        let secret_key = vec![b'e'; 3500];
+        let session_token = vec![b'f'; 3000];
+        set_steps([
+            CallbackStep::status(
+                CREDENTIAL_CALLBACK_BUFFER_TOO_SMALL,
+                first_required.map(Some),
+            ),
+            CallbackStep::success(
+                access_key.clone(),
+                secret_key.clone(),
+                session_token.clone(),
+            ),
+        ]);
+
+        let credentials = call_scripted().expect("changed retry credentials should succeed");
+
+        assert_eq!(credentials.0.as_bytes(), access_key);
+        assert_eq!(credentials.1.as_bytes(), secret_key);
+        assert_eq!(
+            credentials.2.as_deref().map(str::as_bytes),
+            Some(&*session_token)
+        );
+        assert_eq!(
+            capacities(),
+            vec![
+                [INITIAL_CREDENTIAL_BUFFER_SIZE; 3],
+                [MAX_CREDENTIALS_BUFFER_SIZE; 3],
+            ]
+        );
+    }
+
+    #[test]
+    fn buffer_contents_from_buffer_too_small_status_are_ignored() {
+        let mut resize = CallbackStep::status(
+            CREDENTIAL_CALLBACK_BUFFER_TOO_SMALL,
+            [Some(3000), Some(6), Some(0)],
+        );
+        resize.fields = [vec![0xff; 8], vec![0xff; 6], Vec::new()];
+        set_steps([
+            resize,
+            CallbackStep::success(b"a".repeat(3000), b"secret".to_vec(), Vec::new()),
+        ]);
+
+        let credentials = call_scripted().expect("retry output should replace status-2 bytes");
+
+        assert_eq!(credentials.0, "a".repeat(3000));
+        assert_eq!(credentials.1, "secret");
+        assert_eq!(credentials.2, None);
+    }
+
+    #[test]
+    fn buffer_too_small_requires_lengths_for_all_three_fields() {
+        for missing in 0..3 {
+            let mut lengths = [Some(3000), Some(6), Some(0)];
+            lengths[missing] = None;
+            set_steps([CallbackStep::status(
+                CREDENTIAL_CALLBACK_BUFFER_TOO_SMALL,
+                lengths,
+            )]);
+
+            let error = call_scripted().expect_err("an omitted required length must fail");
+
+            assert!(error.to_string().contains("all three required lengths"));
+            assert_eq!(capacities().len(), 1);
+        }
+    }
+
+    #[test]
+    fn empty_session_token_is_optional_and_nonpositive_expiry_is_none() {
+        let mut step = CallbackStep::success(b"access".to_vec(), b"secret".to_vec(), Vec::new());
+        step.expires_at_millis = -1;
+        set_steps([step]);
+
+        let credentials = call_scripted().expect("optional fields should be accepted");
+
+        assert_eq!(credentials.2, None);
+        assert_eq!(credentials.3, None);
+    }
+
+    #[test]
+    fn failure_status_resets_admission_without_retrying_that_fetch() {
+        set_steps([
+            CallbackStep::status(CREDENTIAL_CALLBACK_FAILURE, [None; 3]),
+            CallbackStep::success(b"access".to_vec(), b"secret".to_vec(), Vec::new()),
+        ]);
+        let provider = provider(scripted_callback);
+
+        let error = provider.call().expect_err("failure status must fail");
+        assert!(error.to_string().contains("returned failure"));
+
+        let credentials = provider
+            .call()
+            .expect("a provider error must release admission for the next fetch");
+        assert_eq!(
+            (credentials.0.as_str(), credentials.1.as_str()),
+            ("access", "secret")
+        );
+        assert_eq!(capacities().len(), 2);
+    }
+
+    #[test]
+    fn unknown_status_is_rejected_without_retry() {
+        set_steps([CallbackStep::status(9, [None; 3])]);
+
+        let error = call_scripted().expect_err("unknown status must fail");
+
+        assert!(error.to_string().contains("unknown status 9"));
+        assert_eq!(capacities().len(), 1);
+    }
+
+    #[test]
+    fn malformed_buffer_too_small_is_rejected() {
+        let malformed = [
+            [Some(0), Some(6), Some(3000)],
+            [Some(6), Some(0), Some(3000)],
+            [Some(6), Some(6), Some(6)],
+        ];
+        for lengths in malformed {
+            set_steps([CallbackStep::status(
+                CREDENTIAL_CALLBACK_BUFFER_TOO_SMALL,
+                lengths,
+            )]);
+
+            assert!(call_scripted().is_err());
+            assert_eq!(capacities().len(), 1);
+        }
+    }
+
+    #[test]
+    fn repeated_buffer_too_small_is_rejected_after_one_retry() {
+        set_steps([
+            CallbackStep::status(
+                CREDENTIAL_CALLBACK_BUFFER_TOO_SMALL,
+                [Some(3000), Some(6), Some(0)],
+            ),
+            CallbackStep::status(
+                CREDENTIAL_CALLBACK_BUFFER_TOO_SMALL,
+                [Some(4000), Some(6), Some(0)],
+            ),
+        ]);
+
+        let error = call_scripted().expect_err("a second resize request must fail");
+
+        assert!(error.to_string().contains("second resize"));
+        assert_eq!(capacities().len(), 2);
+    }
+
+    #[test]
+    fn retry_failure_and_unknown_status_are_controlled_errors() {
+        for (status, expected) in [
+            (CREDENTIAL_CALLBACK_FAILURE, "failure on retry"),
+            (9, "unknown status 9 on retry"),
+        ] {
+            set_steps([
+                CallbackStep::status(
+                    CREDENTIAL_CALLBACK_BUFFER_TOO_SMALL,
+                    [Some(3000), Some(6), Some(0)],
+                ),
+                CallbackStep::status(status, [None; 3]),
+            ]);
+
+            let error = call_scripted().expect_err("retry status must fail");
+
+            assert!(error.to_string().contains(expected));
+            assert_eq!(capacities().len(), 2);
+        }
+    }
+
+    #[test]
+    fn retry_success_lengths_are_validated_independently() {
+        let malformed = [
+            [None, Some(6), Some(0)],
+            [Some(0), Some(6), Some(0)],
+            [Some(MAX_CREDENTIALS_BUFFER_SIZE + 1), Some(6), Some(0)],
+            [
+                Some(MAX_CREDENTIALS_BUFFER_SIZE / 2 + 1),
+                Some(MAX_CREDENTIALS_BUFFER_SIZE / 2),
+                Some(0),
+            ],
+        ];
+        for lengths in malformed {
+            set_steps([
+                CallbackStep::status(
+                    CREDENTIAL_CALLBACK_BUFFER_TOO_SMALL,
+                    [Some(3000), Some(6), Some(0)],
+                ),
+                CallbackStep::status(CREDENTIAL_CALLBACK_SUCCESS, lengths),
+            ]);
+
+            assert!(call_scripted().is_err());
+            assert_eq!(capacities().len(), 2);
+        }
+    }
+
+    #[test]
+    fn resize_lengths_over_per_field_or_aggregate_cap_are_rejected() {
+        let over_cap = [
+            [Some(MAX_CREDENTIALS_BUFFER_SIZE + 1), Some(6), Some(0)],
+            [
+                Some(MAX_CREDENTIALS_BUFFER_SIZE / 2 + 1),
+                Some(MAX_CREDENTIALS_BUFFER_SIZE / 2 + 1),
+                Some(0),
+            ],
+        ];
+        for lengths in over_cap {
+            set_steps([CallbackStep::status(
+                CREDENTIAL_CALLBACK_BUFFER_TOO_SMALL,
+                lengths,
+            )]);
+
+            assert!(call_scripted().is_err());
+            assert_eq!(capacities().len(), 1);
+        }
+    }
+
+    #[test]
+    fn success_length_larger_than_capacity_is_rejected_before_slicing() {
+        set_steps([CallbackStep::status(
+            CREDENTIAL_CALLBACK_SUCCESS,
+            [Some(INITIAL_CREDENTIAL_BUFFER_SIZE + 1), Some(6), Some(0)],
+        )]);
+
+        let error = call_scripted().expect_err("oversized success length must fail");
+
+        assert!(error.to_string().contains("exceeding buffer size"));
+    }
+
+    #[test]
+    fn invalid_utf8_in_any_field_is_rejected() {
+        let cases = [
+            [vec![0xff], b"secret".to_vec(), Vec::new()],
+            [b"access".to_vec(), vec![0xff], Vec::new()],
+            [b"access".to_vec(), b"secret".to_vec(), vec![0xff]],
+        ];
+        for [access_key, secret_key, session_token] in cases {
+            set_steps([CallbackStep::success(access_key, secret_key, session_token)]);
+
+            let error = call_scripted().expect_err("invalid UTF-8 must fail");
+
+            assert!(error.to_string().contains("Invalid UTF-8"));
+        }
+    }
+
+    #[test]
+    fn whitespace_only_required_fields_are_rejected() {
+        let cases = [
+            (b" \t\n".to_vec(), b"secret".to_vec()),
+            (b"access".to_vec(), b" \t\n".to_vec()),
+        ];
+        for (access_key, secret_key) in cases {
+            set_steps([CallbackStep::success(access_key, secret_key, Vec::new())]);
+
+            let error = call_scripted().expect_err("whitespace-only required field must fail");
+
+            assert!(error.to_string().contains("empty"));
+        }
+    }
+
+    #[test]
+    fn surrounding_whitespace_is_preserved() {
+        set_steps([CallbackStep::success(
+            b" access ".to_vec(),
+            b"\tsecret\n".to_vec(),
+            b" token ".to_vec(),
+        )]);
+
+        let credentials = call_scripted().expect("nonempty whitespace-surrounded values are valid");
+
+        assert_eq!(credentials.0, " access ");
+        assert_eq!(credentials.1, "\tsecret\n");
+        assert_eq!(credentials.2.as_deref(), Some(" token "));
+    }
+
+    #[test]
+    fn huge_positive_expiry_does_not_panic() {
+        let mut step = CallbackStep::success(b"access".to_vec(), b"secret".to_vec(), Vec::new());
+        step.expires_at_millis = i64::MAX;
+        set_steps([step]);
+
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(call_scripted));
+
+        let credentials = result.expect("expiry conversion must not panic");
+        match credentials {
+            Ok(credentials) => assert!(credentials.3.is_some()),
+            Err(error) => assert!(error.to_string().contains("overflows SystemTime")),
+        }
+    }
+
+    #[test]
+    fn rust_callback_panic_is_controlled_and_resets_admission() {
+        let provider = provider(panicking_callback);
+
+        for _ in 0..2 {
+            let error = provider
+                .call()
+                .expect_err("Rust callback panic must be contained");
+            assert!(error.to_string().contains("callback panicked"), "{error}");
         }
     }
 }
@@ -881,7 +1936,135 @@ fn create_pipe_writer(pipe_write_fd: i32) -> &'static SharedPipeWriter {
             }
         })
         .expect("flush thread");
+
     w_ref
+}
+
+#[derive(Default)]
+struct SyncClientShutdown {
+    closed: AtomicBool,
+    next_waiter_id: AtomicU64,
+    waiters: Mutex<HashMap<u64, Waker>>,
+    push_task_active: Mutex<bool>,
+    push_task_finished: Condvar,
+}
+
+impl SyncClientShutdown {
+    fn cancelled(self: &Arc<Self>) -> SyncClientShutdownFuture {
+        SyncClientShutdownFuture {
+            shutdown: self.clone(),
+            waiter_id: None,
+        }
+    }
+
+    fn begin_push_task(self: &Arc<Self>) -> Option<SyncPushTaskGuard> {
+        let mut active = self
+            .push_task_active
+            .lock()
+            .unwrap_or_else(|err| err.into_inner());
+        if self.closed.load(Ordering::Acquire) {
+            return None;
+        }
+        debug_assert!(!*active, "only one direct sync push task is supported");
+        *active = true;
+        Some(SyncPushTaskGuard {
+            shutdown: self.clone(),
+        })
+    }
+
+    fn close(&self) {
+        // Serialize task admission with shutdown. A task that has not started by
+        // this point observes `closed` and can never enter the C callback.
+        let active = self
+            .push_task_active
+            .lock()
+            .unwrap_or_else(|err| err.into_inner());
+        let first_close = !self.closed.swap(true, Ordering::AcqRel);
+        drop(active);
+        if !first_close {
+            return;
+        }
+        let waiters = {
+            let mut waiters = self.waiters.lock().unwrap_or_else(|err| err.into_inner());
+            std::mem::take(&mut *waiters)
+        };
+        for waker in waiters.into_values() {
+            waker.wake();
+        }
+    }
+
+    fn wait_for_push_task(&self) {
+        let mut active = self
+            .push_task_active
+            .lock()
+            .unwrap_or_else(|err| err.into_inner());
+        while *active {
+            active = self
+                .push_task_finished
+                .wait(active)
+                .unwrap_or_else(|err| err.into_inner());
+        }
+    }
+}
+
+struct SyncPushTaskGuard {
+    shutdown: Arc<SyncClientShutdown>,
+}
+
+impl Drop for SyncPushTaskGuard {
+    fn drop(&mut self) {
+        let mut active = self
+            .shutdown
+            .push_task_active
+            .lock()
+            .unwrap_or_else(|err| err.into_inner());
+        *active = false;
+        self.shutdown.push_task_finished.notify_all();
+    }
+}
+
+struct SyncClientShutdownFuture {
+    shutdown: Arc<SyncClientShutdown>,
+    waiter_id: Option<u64>,
+}
+
+impl Future for SyncClientShutdownFuture {
+    type Output = ();
+
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        if self.shutdown.closed.load(Ordering::Acquire) {
+            return Poll::Ready(());
+        }
+
+        let waiter_id = self
+            .waiter_id
+            .unwrap_or_else(|| self.shutdown.next_waiter_id.fetch_add(1, Ordering::Relaxed));
+        {
+            let mut waiters = self
+                .shutdown
+                .waiters
+                .lock()
+                .unwrap_or_else(|err| err.into_inner());
+            if self.shutdown.closed.load(Ordering::Acquire) {
+                return Poll::Ready(());
+            }
+            waiters.insert(waiter_id, cx.waker().clone());
+        }
+        self.waiter_id = Some(waiter_id);
+        Poll::Pending
+    }
+}
+
+impl Drop for SyncClientShutdownFuture {
+    fn drop(&mut self) {
+        if let Some(waiter_id) = self.waiter_id {
+            self.shutdown
+                .waiters
+                .lock()
+                .unwrap_or_else(|err| err.into_inner())
+                .remove(&waiter_id);
+        }
+    }
 }
 
 /// A `GlideClient` adapter.
@@ -893,13 +2076,18 @@ fn create_pipe_writer(pipe_write_fd: i32) -> &'static SharedPipeWriter {
 pub struct ClientAdapter {
     runtime: ManuallyDrop<Runtime>,
     pipe_client_id: std::sync::atomic::AtomicU64,
+    /// Signals active direct synchronous requests to stop waiting during explicit close.
+    sync_shutdown: Option<Arc<SyncClientShutdown>>,
+    /// External synchronous provider callbacks run on Tokio's non-cancellable blocking pool.
+    /// Their runtimes must never synchronously drain during close.
+    has_external_blocking_provider: bool,
     /// Background runtime for spawned tasks (connection drivers, reconnection, cluster manager).
     /// Only used by sync clients with current_thread main runtime — tokio::spawn calls during
     /// client creation are directed here via _guard so they run independently of block_on.
     /// For async/multi_thread clients this is None since the main runtime handles everything.
     background_runtime: ManuallyDrop<Option<Runtime>>,
     core: Arc<CommandExecutionCore>,
-    pubsub_callback: Arc<std::sync::RwLock<Option<PubSubCallback>>>,
+    pubsub_callback: Arc<std::sync::RwLock<Option<NonNullPubSubCallback>>>,
 }
 
 impl Drop for ClientAdapter {
@@ -907,9 +2095,16 @@ impl Drop for ClientAdapter {
         // SAFETY: each field is taken exactly once, here, and never read again.
         let runtime = unsafe { ManuallyDrop::take(&mut self.runtime) };
         let background_runtime = unsafe { ManuallyDrop::take(&mut self.background_runtime) };
-        shutdown_owned_runtime(runtime);
-        if let Some(rt) = background_runtime {
-            shutdown_owned_runtime(rt);
+        if self.has_external_blocking_provider {
+            shutdown_external_provider_runtime(runtime);
+            if let Some(rt) = background_runtime {
+                shutdown_external_provider_runtime(rt);
+            }
+        } else {
+            shutdown_owned_runtime(runtime);
+            if let Some(rt) = background_runtime {
+                shutdown_owned_runtime(rt);
+            }
         }
     }
 }
@@ -923,6 +2118,12 @@ fn shutdown_owned_runtime(rt: Runtime) {
     } else {
         drop(rt);
     }
+}
+
+/// External synchronous callbacks cannot be cancelled after they enter user code. Detach their
+/// runtime regardless of the caller context so close and failed construction never wait for them.
+fn shutdown_external_provider_runtime(rt: Runtime) {
+    rt.shutdown_background();
 }
 
 struct CommandExecutionCore {
@@ -1027,10 +2228,28 @@ impl ClientAdapter {
                     .background_runtime
                     .as_ref()
                     .map(|rt| rt.handle().clone());
-                let result = self.runtime.block_on(async {
-                    let _guard = bg.as_ref().map(|h| h.enter());
-                    request_future.await
-                });
+                let result = if let Some(sync_shutdown) = &self.sync_shutdown {
+                    let mut shutdown = Box::pin(sync_shutdown.cancelled());
+                    let mut request_future = Box::pin(request_future);
+                    self.runtime.block_on(async {
+                        let _guard = bg.as_ref().map(|h| h.enter());
+                        poll_fn(move |cx| {
+                            if shutdown.as_mut().poll(cx).is_ready() {
+                                return Poll::Ready(Err(RedisError::from((
+                                    ErrorKind::ClientError,
+                                    "Client closed",
+                                ))));
+                            }
+                            request_future.as_mut().poll(cx)
+                        })
+                        .await
+                    })
+                } else {
+                    self.runtime.block_on(async {
+                        let _guard = bg.as_ref().map(|h| h.enter());
+                        request_future.await
+                    })
+                };
                 Self::handle_result(result, None, None, request_id, response_buf, false)
             }
         }
@@ -1323,7 +2542,7 @@ impl From<redis::PushKind> for PushKind {
 /// # Parameters
 /// - `push_msg`: The push notification message to process.
 /// - `pubsub_callback`: The callback function to invoke with the processed notification.
-/// - `client_adapter_ptr`: A pointer to the client adapter to pass to the callback.
+/// - `client_id`: The stable identifier supplied by the binding for callback dispatch.
 ///
 /// # Returns
 /// - `true` if the message was successfully processed and the callback was called.
@@ -1363,14 +2582,12 @@ fn extract_pubsub_data(push_msg: &redis::PushInfo) -> Option<(Vec<u8>, Vec<u8>, 
 ///
 /// # Safety
 /// This function is unsafe because it:
-/// - Dereferences raw pointers (the callback and client_adapter_ptr)
-/// - Calls an extern C function pointer (pubsub_callback)
-/// - Passes raw pointers that must remain valid for the callback duration
-/// - The caller must ensure client_adapter_ptr points to a valid ClientAdapter
+/// - Calls an extern C function pointer (`pubsub_callback`)
+/// - Passes raw payload pointers that must remain valid for the callback duration
 unsafe fn process_push_notification(
     push_msg: redis::PushInfo,
-    pubsub_callback: PubSubCallback,
-    client_adapter_ptr: usize,
+    pubsub_callback: NonNullPubSubCallback,
+    callback_id: usize,
 ) {
     let (message, channel, pattern) = if push_msg.kind == redis::PushKind::Disconnection {
         (vec![], vec![], None)
@@ -1381,37 +2598,151 @@ unsafe fn process_push_notification(
         data
     };
 
-    let (message_ptr, message_len) = convert_vec_to_pointer(message);
-    let (channel_ptr, channel_len) = convert_vec_to_pointer(channel);
-    let (pattern_ptr, pattern_len) = match pattern {
-        Some(p) => convert_vec_to_pointer(p),
-        None => (std::ptr::null_mut::<u8>(), 0),
-    };
+    // Keep every allocation under ordinary Rust ownership across the callback. This guarantees
+    // exactly-once cleanup if a Rust callback unwinds and avoids reconstructing Boxes from raw
+    // pointers after foreign code returns.
+    let message = message.into_boxed_slice();
+    let channel = channel.into_boxed_slice();
+    let pattern = pattern.map(Vec::into_boxed_slice);
+    let pattern_ptr = pattern
+        .as_ref()
+        .map_or(std::ptr::null(), |value| value.as_ptr());
+    let pattern_len = pattern.as_ref().map_or(0, |value| value.len() as i64);
 
-    unsafe {
+    // `C-unwind` permits containing panics from Rust test callbacks and Rust-based adapters.
+    // Foreign callbacks remain contractually required not to unwind into Rust.
+    let callback_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| unsafe {
         pubsub_callback(
-            client_adapter_ptr,
+            callback_id,
             push_msg.kind.into(),
-            message_ptr,
-            message_len,
-            channel_ptr,
-            channel_len,
+            message.as_ptr(),
+            message.len() as i64,
+            channel.as_ptr(),
+            channel.len() as i64,
             pattern_ptr,
             pattern_len,
         );
-        let _ = Box::from_raw(std::ptr::slice_from_raw_parts_mut(
-            message_ptr,
-            message_len as usize,
-        ));
-        let _ = Box::from_raw(std::ptr::slice_from_raw_parts_mut(
-            channel_ptr,
-            channel_len as usize,
-        ));
-        if !pattern_ptr.is_null() {
-            let _ = Box::from_raw(std::ptr::slice_from_raw_parts_mut(
-                pattern_ptr,
-                pattern_len as usize,
-            ));
+    }));
+    if callback_result.is_err() {
+        glide_logger::log_error_lazy!("pubsub_callback", "PubSub callback panicked");
+    }
+}
+
+fn dispatch_sync_push_notification(
+    push_msg: redis::PushInfo,
+    callback_store: &std::sync::RwLock<Option<NonNullPubSubCallback>>,
+    callback_id: usize,
+    shutdown: Option<&SyncClientShutdown>,
+) {
+    if push_msg.kind != redis::PushKind::Message
+        && push_msg.kind != redis::PushKind::PMessage
+        && push_msg.kind != redis::PushKind::SMessage
+    {
+        return;
+    }
+    if shutdown.is_some_and(|state| state.closed.load(Ordering::Acquire)) {
+        return;
+    }
+    let Ok(guard) = callback_store.read() else {
+        return;
+    };
+    let Some(callback) = *guard else {
+        return;
+    };
+    if shutdown.is_some_and(|state| state.closed.load(Ordering::Acquire)) {
+        return;
+    }
+    unsafe {
+        process_push_notification(push_msg, callback, callback_id);
+    }
+}
+
+#[inline]
+fn direct_pubsub_callback_id(client_id: usize, client_adapter_ptr: usize) -> usize {
+    if client_id == 0 {
+        client_adapter_ptr
+    } else {
+        client_id
+    }
+}
+
+fn dispatch_async_push_notification(
+    push_msg: redis::PushInfo,
+    callback_store: &std::sync::RwLock<Option<NonNullPubSubCallback>>,
+    pipe_client_id: u64,
+    client_adapter_ptr: usize,
+    pipe: Option<&SharedPipeWriter>,
+) {
+    if let Some(pipe) = pipe.filter(|_| pipe_client_id != 0) {
+        if push_msg.kind == redis::PushKind::Disconnection {
+            let kind: i32 = PushKind::from(push_msg.kind) as i32;
+            pipe.push_pubsub_inline(pipe_client_id, kind, &[], &[], &[]);
+        } else if (push_msg.kind == redis::PushKind::Message
+            || push_msg.kind == redis::PushKind::PMessage
+            || push_msg.kind == redis::PushKind::SMessage)
+            && let Some((message, channel, pattern)) = extract_pubsub_data(&push_msg)
+        {
+            let kind: i32 = PushKind::from(push_msg.kind) as i32;
+            let pattern = pattern.as_deref().unwrap_or(&[]);
+            let total_len = message.len() + channel.len() + pattern.len();
+            if total_len > MAX_INLINE_PUBSUB {
+                pipe.push_pubsub_pointer(pipe_client_id, kind, &message, &channel, pattern);
+            } else {
+                pipe.push_pubsub_inline(pipe_client_id, kind, &message, &channel, pattern);
+            }
+        }
+        return;
+    }
+
+    // Legacy direct mode is selected by the absence of an initialized async pipe, not by the
+    // caller's client ID. Go and other bindings use nonzero IDs for unrelated registries.
+    if (push_msg.kind == redis::PushKind::Message
+        || push_msg.kind == redis::PushKind::PMessage
+        || push_msg.kind == redis::PushKind::SMessage)
+        && let Ok(guard) = callback_store.read()
+        && let Some(callback) = *guard
+    {
+        let callback_id = direct_pubsub_callback_id(pipe_client_id as usize, client_adapter_ptr);
+        unsafe {
+            process_push_notification(push_msg, callback, callback_id);
+        }
+    }
+}
+
+async fn run_sync_push_handler(
+    mut push_rx: tokio::sync::mpsc::UnboundedReceiver<redis::PushInfo>,
+    callback_store: Arc<std::sync::RwLock<Option<NonNullPubSubCallback>>>,
+    callback_id: usize,
+    shutdown: Option<Arc<SyncClientShutdown>>,
+) {
+    if let Some(shutdown) = shutdown {
+        let Some(_task_guard) = shutdown.begin_push_task() else {
+            return;
+        };
+        loop {
+            let mut cancelled = Box::pin(shutdown.cancelled());
+            let push_msg = poll_fn(|cx| {
+                if cancelled.as_mut().poll(cx).is_ready() {
+                    return Poll::Ready(None);
+                }
+                push_rx.poll_recv(cx)
+            })
+            .await;
+            let Some(push_msg) = push_msg else {
+                break;
+            };
+            dispatch_sync_push_notification(
+                push_msg,
+                &callback_store,
+                callback_id,
+                Some(&shutdown),
+            );
+        }
+    } else {
+        // Pooled sync adapters deliberately retain the existing receive loop;
+        // they do not participate in direct-client shutdown or callback drain.
+        while let Some(push_msg) = push_rx.recv().await {
+            dispatch_sync_push_notification(push_msg, &callback_store, callback_id, None);
         }
     }
 }
@@ -1419,12 +2750,38 @@ unsafe fn process_push_notification(
 fn create_client_internal(
     connection_request_bytes: &[u8],
     client_type: ClientType,
-    pubsub_callback: Option<PubSubCallback>,
-    address_resolver: Option<AddressResolverCallback>,
+    pubsub_callback: Option<NonNullPubSubCallback>,
+    address_resolver: Option<NonNullAddressResolverCallback>,
+    credential_provider: Option<NonNullCredentialProviderCallback>,
     client_id: usize,
+    enable_sync_shutdown: bool,
 ) -> Result<*const ClientAdapter, String> {
     let request = connection_request::ConnectionRequest::parse_from_bytes(connection_request_bytes)
         .map_err(|err| err.to_string())?;
+    if request.credential_provider_key.is_some() {
+        return Err(if credential_provider.is_some() {
+            "Direct C FFI clients cannot mix the credential_provider callback with the unsupported credential_provider_key protobuf field"
+                .to_string()
+        } else {
+            "The credential_provider_key protobuf field is not supported by direct C FFI clients; pass a credential_provider callback instead"
+                .to_string()
+        });
+    }
+    let has_external_blocking_provider = credential_provider.is_some();
+    let mut connection_request = ConnectionRequest::from(request);
+    if has_external_blocking_provider
+        && connection_request
+            .authentication_info
+            .as_ref()
+            .and_then(|auth_info| auth_info.iam_config.as_ref())
+            .is_none()
+    {
+        return Err(
+            "A credential_provider callback was supplied but the connection request contains no IAM configuration"
+                .to_string(),
+        );
+    }
+
     let runtime = match &client_type {
         ClientType::SyncClient => {
             // current_thread runtime: block_on drives the reactor directly on the
@@ -1487,7 +2844,6 @@ fn create_client_internal(
         // tasks (connection drivers, cluster manager) are registered there.
         // The current_thread runtime is only used for block_on in the command path.
         let create_rt = background_runtime.as_ref().unwrap_or(&runtime);
-        let mut connection_request = ConnectionRequest::from(request);
 
         // Set the address resolver if provided
         if let Some(resolver_callback) = address_resolver {
@@ -1497,9 +2853,38 @@ fn create_client_internal(
             }));
         }
 
+        // Set the credential provider if provided
+        if let Some(cp_callback) = credential_provider {
+            let provider = FFICredentialsProvider {
+                callback: cp_callback,
+                client_id,
+                invocation_in_progress: Arc::new(AtomicBool::new(false)),
+            };
+            let provider_arc: glide_core::iam::CredentialsProvider =
+                Arc::new(move || provider.call());
+            let iam_config = connection_request
+                .authentication_info
+                .as_mut()
+                .and_then(|auth_info| auth_info.iam_config.as_mut())
+                .expect("credential provider IAM configuration was validated above");
+            iam_config.credentials_provider = Some(provider_arc);
+        }
+
         create_rt
             .block_on(GlideClient::new(connection_request, Some(push_tx)))
-            .map_err(|err| err.to_string())?
+            .map_err(|err| err.to_string())
+    };
+    let client = match client {
+        Ok(client) => client,
+        Err(error) => {
+            if has_external_blocking_provider {
+                shutdown_external_provider_runtime(runtime);
+                if let Some(rt) = background_runtime {
+                    shutdown_external_provider_runtime(rt);
+                }
+            }
+            return Err(error);
+        }
     };
 
     // Create the client adapter that will be returned and used as conn_ptr
@@ -1509,9 +2894,13 @@ fn create_client_internal(
         client_type,
     });
     let pubsub_callback_store = Arc::new(std::sync::RwLock::new(pubsub_callback));
+    let sync_shutdown =
+        (is_sync && enable_sync_shutdown).then(|| Arc::new(SyncClientShutdown::default()));
     let client_adapter = Arc::new(ClientAdapter {
         runtime: ManuallyDrop::new(runtime),
         pipe_client_id: std::sync::atomic::AtomicU64::new(client_id as u64),
+        sync_shutdown,
+        has_external_blocking_provider,
         background_runtime: ManuallyDrop::new(background_runtime),
         core,
         pubsub_callback: pubsub_callback_store.clone(),
@@ -1527,63 +2916,25 @@ fn create_client_internal(
     let callback_store = pubsub_callback_store.clone();
     let pipe_cid = client_id as u64;
     if is_sync {
-        // Sync clients: direct callback (CFFI acquires GIL automatically).
-        spawn_runtime.spawn(async move {
-            while let Some(push_msg) = push_rx.recv().await {
-                if (push_msg.kind == redis::PushKind::Message
-                    || push_msg.kind == redis::PushKind::PMessage
-                    || push_msg.kind == redis::PushKind::SMessage)
-                    && let Ok(guard) = callback_store.read()
-                    && let Some(callback) = *guard
-                {
-                    unsafe {
-                        process_push_notification(push_msg, callback, client_adapter_ptr);
-                    }
-                }
-            }
-        });
+        // Protobuf-created sync clients use their explicit callback ID. URI clients have no such
+        // ABI parameter, so retain their legacy adapter-pointer identity.
+        let callback_id = direct_pubsub_callback_id(client_id, client_adapter_ptr);
+        spawn_runtime.spawn(run_sync_push_handler(
+            push_rx,
+            callback_store,
+            callback_id,
+            client_adapter.sync_shutdown.clone(),
+        ));
     } else {
-        // Async clients: route through ASYNC_PIPE.
         spawn_runtime.spawn(async move {
             while let Some(push_msg) = push_rx.recv().await {
-                if pipe_cid != 0 {
-                    // Wait for ASYNC_PIPE if not yet initialized (brief spin during startup)
-                    let w = loop {
-                        if let Some(w) = get_async_pipe() {
-                            break w;
-                        }
-                        std::hint::spin_loop();
-                    };
-                    if push_msg.kind == redis::PushKind::Disconnection {
-                        let kind: i32 = PushKind::from(push_msg.kind) as i32;
-                        w.push_pubsub_inline(pipe_cid, kind, &[], &[], &[]);
-                    } else if (push_msg.kind == redis::PushKind::Message
-                        || push_msg.kind == redis::PushKind::PMessage
-                        || push_msg.kind == redis::PushKind::SMessage)
-                        && let Some((message, channel, pattern)) = extract_pubsub_data(&push_msg)
-                    {
-                        let kind: i32 = PushKind::from(push_msg.kind) as i32;
-                        let pat_slice = pattern.as_deref().unwrap_or(&[]);
-                        let total_len = message.len() + channel.len() + pat_slice.len();
-                        if total_len > MAX_INLINE_PUBSUB {
-                            w.push_pubsub_pointer(pipe_cid, kind, &message, &channel, pat_slice);
-                        } else {
-                            w.push_pubsub_inline(pipe_cid, kind, &message, &channel, pat_slice);
-                        }
-                    }
-                    continue;
-                }
-                // Fallback: direct callback (Go/other languages)
-                if (push_msg.kind == redis::PushKind::Message
-                    || push_msg.kind == redis::PushKind::PMessage
-                    || push_msg.kind == redis::PushKind::SMessage)
-                    && let Ok(guard) = callback_store.read()
-                    && let Some(callback) = *guard
-                {
-                    unsafe {
-                        process_push_notification(push_msg, callback, client_adapter_ptr);
-                    }
-                }
+                dispatch_async_push_notification(
+                    push_msg,
+                    &callback_store,
+                    pipe_cid,
+                    client_adapter_ptr,
+                    get_async_pipe(),
+                );
             }
         });
     }
@@ -1617,6 +2968,12 @@ fn create_client_internal(
 /// * The `connection_error_message` pointer in the returned `ConnectionResponse` must live until the returned `ConnectionResponse` pointer is passed to [`free_connection_response``].
 /// * Both the `success_callback` and `failure_callback` function pointers need to live while the client is open/active. The caller is responsible for freeing both callbacks.
 /// * If `pubsub_callback` is non-zero, it must be a valid function pointer that lives while the client is open/active.
+/// * If `address_resolver` is non-zero, it must be a valid function pointer that lives while the client is open/active.
+/// * If `credential_provider` is non-zero, it must be a valid function pointer that lives while the client is
+///   open/active and until all already-entered invocations return; a timed-out invocation may continue after
+///   `close_client`. The callback must fill the provided output buffers with valid UTF-8 credentials and set the
+///   corresponding length pointers. Pass 0 to use the default AWS credential chain from the connection request
+///   IAM configuration.
 // TODO: Consider making this async
 #[unsafe(no_mangle)]
 pub unsafe extern "C-unwind" fn create_client(
@@ -1625,6 +2982,7 @@ pub unsafe extern "C-unwind" fn create_client(
     client_type: *const ClientType,
     pubsub_callback: PubSubCallback,
     address_resolver: AddressResolverCallback,
+    credential_provider: CredentialProviderCallback,
     client_id: usize,
 ) -> *const ConnectionResponse {
     assert!(!connection_request_bytes.is_null());
@@ -1632,26 +2990,14 @@ pub unsafe extern "C-unwind" fn create_client(
         unsafe { std::slice::from_raw_parts(connection_request_bytes, connection_request_len) };
     let client_type = unsafe { &*client_type };
 
-    // Convert callback pointer to Option - 0 means no callback
-    let callback_opt = if pubsub_callback as usize == 0 {
-        None
-    } else {
-        Some(pubsub_callback)
-    };
-
-    // Convert address resolver pointer to Option - 0 means no resolver
-    let resolver_opt = if address_resolver as usize == 0 {
-        None
-    } else {
-        Some(address_resolver)
-    };
-
     let response = match create_client_internal(
         request_bytes,
         client_type.clone(),
-        callback_opt,
-        resolver_opt,
+        pubsub_callback,
+        address_resolver,
+        credential_provider,
         client_id,
+        matches!(client_type, ClientType::SyncClient),
     ) {
         Err(err) => ConnectionResponse {
             conn_ptr: std::ptr::null(),
@@ -1814,13 +3160,8 @@ pub unsafe extern "C-unwind" fn create_client_from_uri(
     assert!(!uri_str.is_null());
     let client_type = unsafe { &*client_type };
 
-    // Convert callback pointer to Option - 0 means no callback
-    let callback_opt = if pubsub_callback as usize == 0 {
-        None
-    } else {
-        Some(pubsub_callback)
-    };
-
+    // This ABI has no credential-provider parameter. Callers that need a custom IAM provider
+    // must use `create_client`; changing this established signature would break every binding.
     let response = match create_client_from_uri_internal(uri_str, extra_options_json) {
         Err(err) => ConnectionResponse {
             conn_ptr: std::ptr::null(),
@@ -1842,8 +3183,15 @@ pub unsafe extern "C-unwind" fn create_client_from_uri(
                     ),
                 },
                 Ok(bytes) => {
-                    match create_client_internal(&bytes, client_type.clone(), callback_opt, None, 0)
-                    {
+                    match create_client_internal(
+                        &bytes,
+                        client_type.clone(),
+                        pubsub_callback,
+                        None,
+                        None,
+                        0,
+                        matches!(client_type, ClientType::SyncClient),
+                    ) {
                         Err(err) => ConnectionResponse {
                             conn_ptr: std::ptr::null(),
                             connection_error_message: CString::into_raw(
@@ -2768,6 +4116,55 @@ fn apply_json_options(
     Ok(())
 }
 
+/// Retains one lease on a client adapter.
+///
+/// A successful call atomically increments the strong count of the
+/// `Arc<ClientAdapter>` represented by `client_adapter_ptr`. The caller must
+/// pair every successful retain with exactly one [`release_client`] call.
+///
+/// Returns `false` for a null pointer and leaves it unchanged.
+///
+/// # Safety
+///
+/// * `client_adapter_ptr` must be null or a valid pointer returned by
+///   [`create_client`] whose owning reference has not yet been released.
+/// * The caller must synchronize this call with owner release. In particular,
+///   retain while still owning the original pointer; retaining a dangling
+///   pointer after [`close_client`] is undefined behavior.
+/// * A successful retain creates one lease only. Releasing it more than once,
+///   or otherwise using the pointer after all owner/lease counts are released,
+///   is undefined behavior.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn retain_client(client_adapter_ptr: *const c_void) -> bool {
+    if client_adapter_ptr.is_null() {
+        return false;
+    }
+
+    unsafe { Arc::increment_strong_count(client_adapter_ptr as *const ClientAdapter) };
+    true
+}
+
+/// Releases exactly one client-adapter lease created by [`retain_client`].
+///
+/// A null pointer is a no-op. This function does not signal client shutdown;
+/// [`close_client`] remains the operation that consumes the owning reference
+/// and wakes synchronous requests.
+///
+/// # Safety
+///
+/// * `client_adapter_ptr` must be null or identify one outstanding successful
+///   [`retain_client`] call.
+/// * Each successful retain must be paired with exactly one release. A double
+///   release is forbidden by contract and causes undefined behavior.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn release_client(client_adapter_ptr: *const c_void) {
+    if client_adapter_ptr.is_null() {
+        return;
+    }
+
+    unsafe { Arc::decrement_strong_count(client_adapter_ptr as *const ClientAdapter) };
+}
+
 /// Closes the given `GlideClient`, freeing it from the heap.
 ///
 /// `client_adapter_ptr` is a pointer to a valid `GlideClient` returned in the `ConnectionResponse` from [`create_client`].
@@ -2785,6 +4182,15 @@ fn apply_json_options(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn close_client(client_adapter_ptr: *const c_void) {
     assert!(!client_adapter_ptr.is_null());
+
+    // Wake synchronous callers before releasing the original Arc. Active FFI
+    // calls hold their own Arc and would otherwise keep both runtimes and all
+    // connections alive indefinitely for commands such as XREAD BLOCK 0.
+    let client_adapter = unsafe { &*(client_adapter_ptr as *const ClientAdapter) };
+    if let Some(sync_shutdown) = &client_adapter.sync_shutdown {
+        sync_shutdown.close();
+        sync_shutdown.wait_for_push_task();
+    }
 
     // Clean up scope pool and registry for this client (if any)
     #[cfg(feature = "pool-support")]
@@ -2930,14 +4336,6 @@ unsafe fn convert_double_pointer_to_vec<'a>(
         result.push(slice);
     }
     result
-}
-
-fn convert_vec_to_pointer<T>(vec: Vec<T>) -> (*mut T, c_long) {
-    // into_boxed_slice guarantees capacity == len (unlike shrink_to_fit which is a hint).
-    // This is critical because from_raw_parts later uses len as capacity for dealloc.
-    let len = vec.len() as c_long;
-    let ptr = Box::into_raw(vec.into_boxed_slice()) as *mut T;
-    (ptr, len)
 }
 
 // ==================== Arena-based response builder ====================
@@ -6089,6 +7487,9 @@ pub unsafe extern "C" fn register_pubsub_callback(
             .unwrap()
             .into_raw();
     }
+    let Some(pubsub_callback) = pubsub_callback else {
+        return CString::new("PubSub callback is null").unwrap().into_raw();
+    };
 
     let client_adapter = unsafe {
         Arc::increment_strong_count(client_adapter_ptr);
@@ -6427,13 +7828,14 @@ mod tests_push_notification_safety {
     static LAST_CALLBACK_DATA: Mutex<Option<CallbackCapture>> = Mutex::new(None);
 
     struct CallbackCapture {
+        client_id: usize,
         message: Vec<u8>,
         channel: Vec<u8>,
         pattern: Option<Vec<u8>>,
     }
 
     unsafe extern "C-unwind" fn counting_callback(
-        _client_ptr: usize,
+        client_id: usize,
         _kind: PushKind,
         message: *const u8,
         message_len: i64,
@@ -6452,6 +7854,7 @@ mod tests_push_notification_safety {
                 Some(std::slice::from_raw_parts(pattern, pattern_len as usize).to_vec())
             };
             *LAST_CALLBACK_DATA.lock().unwrap() = Some(CallbackCapture {
+                client_id,
                 message: msg,
                 channel: ch,
                 pattern: pat,
@@ -6462,6 +7865,337 @@ mod tests_push_notification_safety {
     fn reset_callback_count() {
         CALLBACK_INVOCATIONS.store(0, Ordering::SeqCst);
         *LAST_CALLBACK_DATA.lock().unwrap() = None;
+    }
+
+    fn message_push() -> redis::PushInfo {
+        redis::PushInfo {
+            kind: redis::PushKind::Message,
+            data: vec![
+                Value::BulkString(b"channel".to_vec().into()),
+                Value::BulkString(b"message".to_vec().into()),
+            ],
+        }
+    }
+
+    #[test]
+    fn sync_uri_clients_use_distinct_adapter_pointer_callback_ids() {
+        let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let uri = CString::new("redis://127.0.0.1:1").unwrap();
+        let options = CString::new(r#"{"lazy_connect":true}"#).unwrap();
+        let client_type = ClientType::SyncClient;
+        let mut responses = Vec::new();
+
+        for _ in 0..2 {
+            let response = unsafe {
+                create_client_from_uri(
+                    uri.as_ptr(),
+                    options.as_ptr(),
+                    &client_type,
+                    Some(counting_callback),
+                )
+            };
+            assert!(!response.is_null());
+            assert!(unsafe { (*response).connection_error_message.is_null() });
+            responses.push(response);
+        }
+
+        let callback_ids: Vec<usize> = responses
+            .iter()
+            .map(|response| unsafe { (**response).conn_ptr.addr() })
+            .map(|adapter_ptr| direct_pubsub_callback_id(0, adapter_ptr))
+            .collect();
+        assert_ne!(callback_ids[0], callback_ids[1]);
+        for (response, callback_id) in responses.into_iter().zip(callback_ids) {
+            let adapter_ptr = unsafe { (*response).conn_ptr };
+            assert_eq!(callback_id, adapter_ptr.addr());
+            unsafe {
+                close_client(adapter_ptr);
+                free_connection_response(response.cast_mut());
+            }
+        }
+    }
+
+    #[test]
+    fn direct_sync_push_handler_forwards_supplied_client_id() {
+        let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        reset_callback_count();
+        let runtime = Builder::new_current_thread().enable_all().build().unwrap();
+        let (push_tx, push_rx) = tokio::sync::mpsc::unbounded_channel();
+        let callback: NonNullPubSubCallback = counting_callback;
+        let callback_store = Arc::new(std::sync::RwLock::new(Some(callback)));
+        let shutdown = Arc::new(SyncClientShutdown::default());
+        let client_id = usize::MAX / 2 + 71;
+        push_tx.send(message_push()).unwrap();
+        drop(push_tx);
+        runtime.block_on(run_sync_push_handler(
+            push_rx,
+            callback_store,
+            client_id,
+            Some(shutdown.clone()),
+        ));
+        shutdown.wait_for_push_task();
+
+        assert_eq!(CALLBACK_INVOCATIONS.load(Ordering::SeqCst), 1);
+        assert_eq!(
+            LAST_CALLBACK_DATA
+                .lock()
+                .unwrap()
+                .as_ref()
+                .expect("callback capture")
+                .client_id,
+            client_id
+        );
+    }
+
+    #[test]
+    fn direct_sync_shutdown_wins_over_queued_push_and_is_idempotent() {
+        let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        reset_callback_count();
+        let runtime = Builder::new_current_thread().enable_all().build().unwrap();
+        let (push_tx, push_rx) = tokio::sync::mpsc::unbounded_channel();
+        let callback: NonNullPubSubCallback = counting_callback;
+        let callback_store = Arc::new(std::sync::RwLock::new(Some(callback)));
+        let shutdown = Arc::new(SyncClientShutdown::default());
+        push_tx.send(message_push()).unwrap();
+
+        shutdown.close();
+        shutdown.close();
+        shutdown.wait_for_push_task();
+        shutdown.wait_for_push_task();
+        runtime.block_on(run_sync_push_handler(
+            push_rx,
+            callback_store,
+            91,
+            Some(shutdown.clone()),
+        ));
+
+        assert_eq!(CALLBACK_INVOCATIONS.load(Ordering::SeqCst), 0);
+        assert!(push_tx.send(message_push()).is_err());
+    }
+
+    #[cfg(not(miri))]
+    static BLOCKING_CALLBACK_STATE: Mutex<(bool, bool)> = Mutex::new((false, false));
+    #[cfg(not(miri))]
+    static BLOCKING_CALLBACK_CONDITION: Condvar = Condvar::new();
+
+    #[cfg(not(miri))]
+    unsafe extern "C-unwind" fn blocking_callback(
+        _client_id: usize,
+        _kind: PushKind,
+        _message: *const u8,
+        _message_len: i64,
+        _channel: *const u8,
+        _channel_len: i64,
+        _pattern: *const u8,
+        _pattern_len: i64,
+    ) {
+        let mut state = BLOCKING_CALLBACK_STATE
+            .lock()
+            .unwrap_or_else(|err| err.into_inner());
+        state.0 = true;
+        BLOCKING_CALLBACK_CONDITION.notify_all();
+        while !state.1 {
+            state = BLOCKING_CALLBACK_CONDITION
+                .wait(state)
+                .unwrap_or_else(|err| err.into_inner());
+        }
+        CALLBACK_INVOCATIONS.fetch_add(1, Ordering::SeqCst);
+    }
+
+    #[cfg(not(miri))]
+    #[test]
+    fn direct_sync_close_waits_for_callback_and_prevents_late_callbacks() {
+        let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        reset_callback_count();
+        *BLOCKING_CALLBACK_STATE
+            .lock()
+            .unwrap_or_else(|err| err.into_inner()) = (false, false);
+        let runtime = Builder::new_multi_thread()
+            .worker_threads(1)
+            .enable_all()
+            .build()
+            .unwrap();
+        let (push_tx, push_rx) = tokio::sync::mpsc::unbounded_channel();
+        let callback: NonNullPubSubCallback = blocking_callback;
+        let callback_store = Arc::new(std::sync::RwLock::new(Some(callback)));
+        let shutdown = Arc::new(SyncClientShutdown::default());
+        let task = runtime.spawn(run_sync_push_handler(
+            push_rx,
+            callback_store,
+            101,
+            Some(shutdown.clone()),
+        ));
+        push_tx.send(message_push()).unwrap();
+
+        let mut state = BLOCKING_CALLBACK_STATE
+            .lock()
+            .unwrap_or_else(|err| err.into_inner());
+        while !state.0 {
+            let (next, timeout) = BLOCKING_CALLBACK_CONDITION
+                .wait_timeout(state, std::time::Duration::from_secs(5))
+                .unwrap_or_else(|err| err.into_inner());
+            assert!(!timeout.timed_out(), "callback did not start");
+            state = next;
+        }
+        drop(state);
+
+        let (close_done_tx, close_done_rx) = std::sync::mpsc::channel();
+        let close_shutdown = shutdown.clone();
+        let close_thread = std::thread::spawn(move || {
+            close_shutdown.close();
+            close_shutdown.wait_for_push_task();
+            close_done_tx.send(()).unwrap();
+        });
+        assert!(
+            close_done_rx
+                .recv_timeout(std::time::Duration::from_millis(100))
+                .is_err(),
+            "close returned while the callback was still executing"
+        );
+
+        let mut state = BLOCKING_CALLBACK_STATE
+            .lock()
+            .unwrap_or_else(|err| err.into_inner());
+        state.1 = true;
+        BLOCKING_CALLBACK_CONDITION.notify_all();
+        drop(state);
+        close_done_rx
+            .recv_timeout(std::time::Duration::from_secs(5))
+            .expect("close did not drain the push task");
+        close_thread.join().unwrap();
+        runtime.block_on(task).unwrap();
+
+        assert_eq!(CALLBACK_INVOCATIONS.load(Ordering::SeqCst), 1);
+        assert!(push_tx.send(message_push()).is_err());
+    }
+
+    static PANIC_THEN_DELIVER_CALLS: AtomicUsize = AtomicUsize::new(0);
+
+    unsafe extern "C-unwind" fn panic_then_deliver_callback(
+        client_id: usize,
+        kind: PushKind,
+        message: *const u8,
+        message_len: i64,
+        channel: *const u8,
+        channel_len: i64,
+        pattern: *const u8,
+        pattern_len: i64,
+    ) {
+        if PANIC_THEN_DELIVER_CALLS.fetch_add(1, Ordering::SeqCst) == 0 {
+            panic!("intentional PubSub callback panic");
+        }
+        unsafe {
+            counting_callback(
+                client_id,
+                kind,
+                message,
+                message_len,
+                channel,
+                channel_len,
+                pattern,
+                pattern_len,
+            );
+        }
+    }
+
+    #[test]
+    fn panicking_rust_callback_keeps_push_task_alive_and_close_drains() {
+        let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        reset_callback_count();
+        PANIC_THEN_DELIVER_CALLS.store(0, Ordering::SeqCst);
+        let runtime = Builder::new_current_thread().enable_all().build().unwrap();
+        let (push_tx, push_rx) = tokio::sync::mpsc::unbounded_channel();
+        let callback: NonNullPubSubCallback = panic_then_deliver_callback;
+        let callback_store = Arc::new(std::sync::RwLock::new(Some(callback)));
+        let shutdown = Arc::new(SyncClientShutdown::default());
+        push_tx.send(message_push()).unwrap();
+        push_tx.send(message_push()).unwrap();
+        drop(push_tx);
+
+        runtime.block_on(run_sync_push_handler(
+            push_rx,
+            callback_store,
+            303,
+            Some(shutdown.clone()),
+        ));
+        shutdown.close();
+        shutdown.wait_for_push_task();
+
+        assert_eq!(PANIC_THEN_DELIVER_CALLS.load(Ordering::SeqCst), 2);
+        assert_eq!(CALLBACK_INVOCATIONS.load(Ordering::SeqCst), 1);
+        let capture = LAST_CALLBACK_DATA.lock().unwrap();
+        assert_eq!(capture.as_ref().unwrap().message, b"message");
+    }
+
+    #[test]
+    fn async_nonzero_id_without_pipe_uses_supplied_callback_id() {
+        let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        reset_callback_count();
+        let callback: NonNullPubSubCallback = counting_callback;
+        let callback_store = std::sync::RwLock::new(Some(callback));
+        let client_id = usize::MAX / 2 + 302;
+        let adapter_id = usize::MAX / 2 + 303;
+
+        dispatch_async_push_notification(
+            message_push(),
+            &callback_store,
+            client_id as u64,
+            adapter_id,
+            None,
+        );
+
+        assert_eq!(CALLBACK_INVOCATIONS.load(Ordering::SeqCst), 1);
+        assert_eq!(
+            LAST_CALLBACK_DATA
+                .lock()
+                .unwrap()
+                .as_ref()
+                .unwrap()
+                .client_id,
+            client_id
+        );
+    }
+
+    #[test]
+    fn async_zero_id_without_pipe_uses_adapter_pointer_fallback() {
+        let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        reset_callback_count();
+        let callback: NonNullPubSubCallback = counting_callback;
+        let callback_store = std::sync::RwLock::new(Some(callback));
+        let adapter_id = usize::MAX / 2 + 304;
+
+        dispatch_async_push_notification(message_push(), &callback_store, 0, adapter_id, None);
+
+        assert_eq!(CALLBACK_INVOCATIONS.load(Ordering::SeqCst), 1);
+        assert_eq!(
+            LAST_CALLBACK_DATA
+                .lock()
+                .unwrap()
+                .as_ref()
+                .unwrap()
+                .client_id,
+            adapter_id
+        );
+    }
+
+    #[test]
+    fn async_initialized_pipe_path_does_not_invoke_direct_callback() {
+        let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        reset_callback_count();
+        let callback: NonNullPubSubCallback = counting_callback;
+        let callback_store = std::sync::RwLock::new(Some(callback));
+        let pipe = SharedPipeWriter {
+            buffer: std::sync::Mutex::new(Vec::new()),
+            condvar: Condvar::new(),
+            pipe_fd: -1,
+        };
+
+        dispatch_async_push_notification(message_push(), &callback_store, 555, 666, Some(&pipe));
+
+        assert_eq!(CALLBACK_INVOCATIONS.load(Ordering::SeqCst), 0);
+        let frame = pipe.buffer.lock().unwrap();
+        assert_eq!(&frame[..8], &555u64.to_ne_bytes());
+        assert_eq!(&frame[8..16], &u64::MAX.to_ne_bytes());
     }
 
     #[test]
@@ -6691,3 +8425,57 @@ mod tests_push_notification_safety {
 mod pool_ffi;
 #[cfg(feature = "pool-support")]
 pub use pool_ffi::*;
+
+#[cfg(test)]
+mod client_lease_tests {
+    use super::*;
+    use protobuf::Message;
+
+    fn lazy_sync_adapter() -> *const ClientAdapter {
+        let mut request = connection_request::ConnectionRequest::new();
+        let mut address = connection_request::NodeAddress::new();
+        address.host = "127.0.0.1".into();
+        address.port = 1;
+        request.addresses.push(address);
+        request.lazy_connect = true;
+        let bytes = request.write_to_bytes().expect("serialize request");
+        create_client_internal(&bytes, ClientType::SyncClient, None, None, None, 0, true)
+            .expect("create lazy client")
+    }
+
+    #[test]
+    fn retain_owner_close_use_and_release_is_balanced() {
+        let raw = lazy_sync_adapter();
+        let owner = unsafe { Arc::from_raw(raw) };
+        assert_eq!(Arc::strong_count(&owner), 1);
+        let raw = Arc::into_raw(owner);
+
+        assert!(unsafe { retain_client(raw.cast()) });
+        let owner = unsafe { Arc::from_raw(raw) };
+        assert_eq!(Arc::strong_count(&owner), 2);
+        let raw = Arc::into_raw(owner);
+
+        unsafe { close_client(raw.cast()) };
+
+        // Reconstruct the retained count to prove the adapter remains usable
+        // after owner close, then restore it for the paired release call.
+        let lease = unsafe { Arc::from_raw(raw) };
+        assert_eq!(Arc::strong_count(&lease), 1);
+        assert!(
+            lease
+                .sync_shutdown
+                .as_ref()
+                .expect("direct sync shutdown")
+                .closed
+                .load(Ordering::Acquire)
+        );
+        let raw = Arc::into_raw(lease);
+        unsafe { release_client(raw.cast()) };
+    }
+
+    #[test]
+    fn null_lease_operations_are_controlled() {
+        assert!(!unsafe { retain_client(std::ptr::null()) });
+        unsafe { release_client(std::ptr::null()) };
+    }
+}

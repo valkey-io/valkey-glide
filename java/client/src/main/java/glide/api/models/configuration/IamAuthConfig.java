@@ -20,11 +20,12 @@ import lombok.NonNull;
  *     .build();
  *
  * // Custom credentials provider (e.g., from HashiCorp Vault):
- * GlideCredentialProvider vaultCallback = () -> AwsCredentials.builder()
- *     .accessKeyId(vaultClient.getAccessKeyId())
- *     .secretAccessKey(vaultClient.getSecretAccessKey())
- *     .sessionToken(vaultClient.getSessionToken()) // optional
- *     .build();
+ * GlideCredentialProvider vaultCallback = () -> CompletableFuture.completedFuture(
+ *     AwsCredentials.builder()
+ *         .accessKeyId(vaultClient.getAccessKeyId())
+ *         .secretAccessKey(vaultClient.getSecretAccessKey())
+ *         .sessionToken(vaultClient.getSessionToken()) // optional
+ *         .build());
  * IamAuthConfig iamConfigWithCustomProvider = IamAuthConfig.builder()
  *     .clusterName("my-cluster")
  *     .service(ServiceType.ELASTICACHE)
@@ -69,11 +70,12 @@ public class IamAuthConfig {
      * <p>Example:
      *
      * <pre>{@code
-     * GlideCredentialProvider provider = () -> AwsCredentials.builder()
-     *     .accessKeyId(myVaultClient.getAccessKeyId())
-     *     .secretAccessKey(myVaultClient.getSecretAccessKey())
-     *     .sessionToken(myVaultClient.getSessionToken())
-     *     .build();
+     * GlideCredentialProvider provider = () -> CompletableFuture.completedFuture(
+     *     AwsCredentials.builder()
+     *         .accessKeyId(myVaultClient.getAccessKeyId())
+     *         .secretAccessKey(myVaultClient.getSecretAccessKey())
+     *         .sessionToken(myVaultClient.getSessionToken())
+     *         .build());
      * IamAuthConfig iamConfig = IamAuthConfig.builder()
      *     .clusterName("my-cluster")
      *     .service(ServiceType.ELASTICACHE)

@@ -203,7 +203,7 @@ class _GlideFFI:
             void noop_failure_callback(uintptr_t index_ptr, const char* error_message, int error_type);
 
             typedef void (*PubSubCallback)(
-                uintptr_t client_ptr,
+                uintptr_t callback_id,
                 int kind,
                 const uint8_t* message,
                 int64_t message_len,
@@ -221,6 +221,20 @@ class _GlideFFI:
                 uint8_t* resolved_host_buf,
                 size_t resolved_host_buf_len,
                 size_t* resolved_host_len
+            );
+
+            typedef uint8_t (*CredentialProviderCallback)(
+                uintptr_t client_id,
+                uint8_t* access_key_id_buf,
+                size_t access_key_id_buf_len,
+                size_t* access_key_id_len,
+                uint8_t* secret_access_key_buf,
+                size_t secret_access_key_buf_len,
+                size_t* secret_access_key_len,
+                uint8_t* session_token_buf,
+                size_t session_token_buf_len,
+                size_t* session_token_len,
+                int64_t* expires_at_epoch_millis
             );
 
             typedef struct {
@@ -245,8 +259,11 @@ class _GlideFFI:
                 const ClientType* client_type,
                 PubSubCallback pubsub_callback,
                 AddressResolverCallback address_resolver,
+                CredentialProviderCallback credential_provider,
                 uintptr_t client_id
             );
+            bool retain_client(const void* client_adapter_ptr);
+            void release_client(const void* client_adapter_ptr);
             void close_client(const void* client_adapter_ptr);
             void init_async_pipe(int pipe_write_fd);
             void reinit_async_pipe(int pipe_write_fd);

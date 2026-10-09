@@ -41,6 +41,22 @@ pub extern "system" fn Java_glide_ffi_resolvers_GlidePoolResolver_glidePoolCreat
         Err(_) => return -2,
     };
 
+    use protobuf::Message as _;
+    let request = match glide_core::connection_request::ConnectionRequest::parse_from_bytes(&bytes)
+    {
+        Ok(request) => request,
+        Err(error) => {
+            log::error!("Failed to parse pool ConnectionRequest protobuf: {error}");
+            return -2;
+        }
+    };
+    if request.credential_provider_key.is_some() {
+        log::error!(
+            "The credential_provider_key protobuf field is not supported by Java JNI pools; custom IAM credential providers cannot be forwarded to pooled clients."
+        );
+        return -3;
+    }
+
     let config = PoolConfig {
         max_size: max_size as u32,
         min_idle: min_idle as u32,
@@ -49,13 +65,7 @@ pub extern "system" fn Java_glide_ffi_resolvers_GlidePoolResolver_glidePoolCreat
         test_on_borrow: false,
         connection_request: bytes.clone(),
         is_async: true,
-        configured_database_id: {
-            use protobuf::Message as _;
-            glide_core::connection_request::ConnectionRequest::parse_from_bytes(&bytes)
-                .ok()
-                .map(|req| req.database_id)
-                .unwrap_or(0)
-        },
+        configured_database_id: request.database_id,
         abandon_timeout: Duration::from_millis(abandon_timeout_ms as u64),
     };
 

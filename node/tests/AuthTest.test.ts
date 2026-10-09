@@ -6,15 +6,20 @@ import {
     afterAll,
     afterEach,
     beforeAll,
+    beforeEach,
     describe,
     expect,
     it,
 } from "@jest/globals";
 import { ValkeyCluster } from "../../utils/TestUtils";
 import {
+    BaseClient as BaseClientClass,
     BaseClientConfiguration,
+    AwsCredentials,
+    ConfigurationError,
     GlideClient,
     GlideClusterClient,
+    GlideCredentialProvider,
     ProtocolVersion,
     RequestError,
     ServiceType,
@@ -27,6 +32,12 @@ import {
     parseEndpoints,
 } from "./TestUtilities";
 import {
+    CreateDirectClient,
+    registerCredentialProvider,
+    removeCredentialProvider,
+} from "../build-ts/native";
+import { connection_request } from "../build-ts/ProtobufMessage";
+import {
     IAM_TEST_CLUSTER_NAME,
     IAM_TEST_REGION_US_EAST_1,
     IAM_USERNAME,
@@ -37,6 +48,10 @@ type BaseClient = GlideClient | GlideClusterClient;
 const USERNAME = "username";
 const INITIAL_PASSWORD = "initial_password";
 const NEW_PASSWORD = "new_password";
+const IAM_TESTS_ENABLED = Boolean(
+    process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY,
+);
+const iamIt = IAM_TESTS_ENABLED ? it : it.skip;
 const WRONG_PASSWORD = "wrong_password";
 const TIMEOUT = 50000;
 
@@ -625,7 +640,7 @@ describe("Auth tests", () => {
 
 // IAM Auth tests with mock credentials
 describe("IAM Auth: Mock Credentials", () => {
-    it(
+    iamIt(
         "test_iam_authentication_with_mock_credentials",
         async () => {
             // See DEVELOPER.md for instructions on running IAM authentication tests
@@ -691,7 +706,7 @@ describe("IAM Auth: Mock Credentials", () => {
         TIMEOUT,
     );
 
-    it(
+    iamIt(
         "test_iam_authentication_automatic_token_refresh",
         async () => {
             // See DEVELOPER.md for instructions on running IAM authentication tests
@@ -755,7 +770,7 @@ describe("IAM Auth: Mock Credentials", () => {
         TIMEOUT,
     );
 
-    it(
+    iamIt(
         "test_iam_authentication_with_mock_credentials_standalone",
         async () => {
             // See DEVELOPER.md for instructions on running IAM authentication tests
@@ -821,7 +836,7 @@ describe("IAM Auth: Mock Credentials", () => {
         TIMEOUT,
     );
 
-    it(
+    iamIt(
         "test_iam_authentication_automatic_token_refresh_standalone",
         async () => {
             // See DEVELOPER.md for instructions on running IAM authentication tests
@@ -883,5 +898,729 @@ describe("IAM Auth: Mock Credentials", () => {
             }
         },
         TIMEOUT,
+    );
+});
+
+describe("Direct client credential registration lifecycle", () => {
+    const nativeSeams = BaseClientClass as unknown as {
+        nativeCreateDirectClient: typeof CreateDirectClient;
+        nativeRegisterAddressResolver: (
+            resolver: (host: string, port: number) => [string, number],
+        ) => string;
+        nativeRemoveAddressResolver: (key: string) => void;
+        nativeRegisterCredentialProvider: typeof registerCredentialProvider;
+        nativeRemoveCredentialProvider: typeof removeCredentialProvider;
+    };
+    const originals = {
+        createDirectClient: nativeSeams.nativeCreateDirectClient,
+        registerAddressResolver: nativeSeams.nativeRegisterAddressResolver,
+        removeAddressResolver: nativeSeams.nativeRemoveAddressResolver,
+        registerCredentialProvider:
+            nativeSeams.nativeRegisterCredentialProvider,
+        removeCredentialProvider: nativeSeams.nativeRemoveCredentialProvider,
+    };
+
+    const clientConfig = (credentialProvider: unknown) =>
+        ({
+            addresses: [{ host: "unused.example", port: 1 }],
+            addressResolver: (host: string, port: number) => [host, port],
+            credentials: {
+                username: IAM_USERNAME,
+                iamConfig: {
+                    clusterName: IAM_TEST_CLUSTER_NAME,
+                    service: ServiceType.Elasticache,
+                    region: IAM_TEST_REGION_US_EAST_1,
+                    credentialProvider,
+                },
+            },
+        }) as Parameters<typeof GlideClient.createClient>[0];
+
+    const installNativeMocks = () => {
+        const createDirectClient = jest.fn<
+            ReturnType<typeof nativeSeams.nativeCreateDirectClient>,
+            Parameters<typeof nativeSeams.nativeCreateDirectClient>
+        >();
+        const registerAddressResolver = jest.fn<
+            ReturnType<typeof nativeSeams.nativeRegisterAddressResolver>,
+            Parameters<typeof nativeSeams.nativeRegisterAddressResolver>
+        >(() => "resolver-key");
+        const removeAddressResolver = jest.fn<
+            ReturnType<typeof nativeSeams.nativeRemoveAddressResolver>,
+            Parameters<typeof nativeSeams.nativeRemoveAddressResolver>
+        >();
+        const registerCredentialProvider = jest.fn<
+            ReturnType<typeof nativeSeams.nativeRegisterCredentialProvider>,
+            Parameters<typeof nativeSeams.nativeRegisterCredentialProvider>
+        >(() => "provider-key");
+        const removeCredentialProvider = jest.fn<
+            ReturnType<typeof nativeSeams.nativeRemoveCredentialProvider>,
+            Parameters<typeof nativeSeams.nativeRemoveCredentialProvider>
+        >();
+
+        nativeSeams.nativeCreateDirectClient = createDirectClient;
+        nativeSeams.nativeRegisterAddressResolver = registerAddressResolver;
+        nativeSeams.nativeRemoveAddressResolver = removeAddressResolver;
+        nativeSeams.nativeRegisterCredentialProvider =
+            registerCredentialProvider;
+        nativeSeams.nativeRemoveCredentialProvider = removeCredentialProvider;
+
+        return {
+            createDirectClient,
+            registerAddressResolver,
+            removeAddressResolver,
+            registerCredentialProvider,
+            removeCredentialProvider,
+        };
+    };
+
+    beforeEach(() => {
+        nativeSeams.nativeCreateDirectClient = originals.createDirectClient;
+        nativeSeams.nativeRegisterAddressResolver =
+            originals.registerAddressResolver;
+        nativeSeams.nativeRemoveAddressResolver =
+            originals.removeAddressResolver;
+        nativeSeams.nativeRegisterCredentialProvider =
+            originals.registerCredentialProvider;
+        nativeSeams.nativeRemoveCredentialProvider =
+            originals.removeCredentialProvider;
+    });
+
+    afterEach(() => {
+        nativeSeams.nativeCreateDirectClient = originals.createDirectClient;
+        nativeSeams.nativeRegisterAddressResolver =
+            originals.registerAddressResolver;
+        nativeSeams.nativeRemoveAddressResolver =
+            originals.removeAddressResolver;
+        nativeSeams.nativeRegisterCredentialProvider =
+            originals.registerCredentialProvider;
+        nativeSeams.nativeRemoveCredentialProvider =
+            originals.removeCredentialProvider;
+    });
+
+    it("rejects a non-function provider before registering the resolver", async () => {
+        const mocks = installNativeMocks();
+
+        await expect(
+            GlideClient.createClient(clientConfig("not-a-function")),
+        ).rejects.toThrow(
+            new ConfigurationError(
+                "credentialProvider must be a function or undefined.",
+            ),
+        );
+
+        expect(mocks.registerAddressResolver).not.toHaveBeenCalled();
+        expect(mocks.registerCredentialProvider).not.toHaveBeenCalled();
+        expect(mocks.removeAddressResolver).not.toHaveBeenCalled();
+        expect(mocks.removeCredentialProvider).not.toHaveBeenCalled();
+        expect(mocks.createDirectClient).not.toHaveBeenCalled();
+    });
+
+    it("evaluates a throwing provider getter before registering the resolver", async () => {
+        const mocks = installNativeMocks();
+        const config = clientConfig(undefined);
+        const iamConfig = (config.credentials as { iamConfig: IamAuthConfig })
+            .iamConfig;
+        Object.defineProperty(iamConfig, "credentialProvider", {
+            get: () => {
+                throw new Error("provider getter failure");
+            },
+        });
+
+        await expect(GlideClient.createClient(config)).rejects.toThrow(
+            "provider getter failure",
+        );
+
+        expect(mocks.registerAddressResolver).not.toHaveBeenCalled();
+        expect(mocks.registerCredentialProvider).not.toHaveBeenCalled();
+        expect(mocks.removeAddressResolver).not.toHaveBeenCalled();
+        expect(mocks.removeCredentialProvider).not.toHaveBeenCalled();
+        expect(mocks.createDirectClient).not.toHaveBeenCalled();
+    });
+
+    it("cleans up the resolver when provider registration throws", async () => {
+        const mocks = installNativeMocks();
+        mocks.registerCredentialProvider.mockImplementation(() => {
+            throw new Error("provider registration failure");
+        });
+
+        await expect(
+            GlideClient.createClient(
+                clientConfig(() => ({
+                    accessKeyId: "access",
+                    secretAccessKey: "secret",
+                })),
+            ),
+        ).rejects.toThrow("provider registration failure");
+
+        expect(mocks.registerAddressResolver).toHaveBeenCalledTimes(1);
+        expect(mocks.registerCredentialProvider).toHaveBeenCalledTimes(1);
+        expect(mocks.removeAddressResolver).toHaveBeenCalledTimes(1);
+        expect(mocks.removeAddressResolver).toHaveBeenCalledWith(
+            "resolver-key",
+        );
+        expect(mocks.removeCredentialProvider).not.toHaveBeenCalled();
+        expect(mocks.createDirectClient).not.toHaveBeenCalled();
+    });
+
+    it.each(["synchronous throw", "async rejection"])(
+        "cleans up both registrations exactly once after native %s",
+        async (failureMode) => {
+            const mocks = installNativeMocks();
+
+            if (failureMode === "synchronous throw") {
+                mocks.createDirectClient.mockImplementation(() => {
+                    throw new Error("native setup failure");
+                });
+            } else {
+                mocks.createDirectClient.mockRejectedValue(
+                    new Error("native setup failure"),
+                );
+            }
+
+            await expect(
+                GlideClient.createClient(
+                    clientConfig(() => ({
+                        accessKeyId: "access",
+                        secretAccessKey: "secret",
+                    })),
+                ),
+            ).rejects.toThrow("native setup failure");
+
+            expect(mocks.createDirectClient).toHaveBeenCalledTimes(1);
+            expect(mocks.removeAddressResolver).toHaveBeenCalledTimes(1);
+            expect(mocks.removeAddressResolver).toHaveBeenCalledWith(
+                "resolver-key",
+            );
+            expect(mocks.removeCredentialProvider).toHaveBeenCalledTimes(1);
+            expect(mocks.removeCredentialProvider).toHaveBeenCalledWith(
+                "provider-key",
+            );
+        },
+    );
+
+    it("preserves successful handoff ownership and cleans the resolver on close", async () => {
+        const mocks = installNativeMocks();
+        const close = jest.fn();
+        mocks.createDirectClient.mockResolvedValue({
+            close,
+        } as unknown as Awaited<ReturnType<typeof CreateDirectClient>>);
+
+        const client = await GlideClient.createClient(
+            clientConfig(() => ({
+                accessKeyId: "access",
+                secretAccessKey: "secret",
+            })),
+        );
+
+        const request = connection_request.ConnectionRequest.decode(
+            mocks.createDirectClient.mock.calls[0][0],
+        );
+        expect(request.addressResolverKey).toBe("resolver-key");
+        expect(request.credentialProviderKey).toBe("provider-key");
+        expect(mocks.removeAddressResolver).not.toHaveBeenCalled();
+        expect(mocks.removeCredentialProvider).not.toHaveBeenCalled();
+
+        client.close();
+
+        expect(mocks.removeAddressResolver).toHaveBeenCalledTimes(1);
+        expect(mocks.removeAddressResolver).toHaveBeenCalledWith(
+            "resolver-key",
+        );
+        expect(mocks.removeCredentialProvider).not.toHaveBeenCalled();
+        expect(close).toHaveBeenCalledTimes(1);
+    });
+});
+
+describe("IAM Auth: Direct Custom Credential Providers", () => {
+    const iamEnabled = Boolean(
+        process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY,
+    );
+    let standaloneServer: ValkeyCluster | undefined;
+    let clusterServer: ValkeyCluster | undefined;
+
+    const environmentCredentials = (
+        overrides: Partial<AwsCredentials> = {},
+    ): AwsCredentials => ({
+        accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
+        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
+        sessionToken: process.env.AWS_SESSION_TOKEN,
+        ...overrides,
+    });
+
+    const providerFor = (
+        credentials: AwsCredentials,
+        promiseProvider: boolean,
+    ): GlideCredentialProvider =>
+        promiseProvider
+            ? async () => Promise.resolve(credentials)
+            : () => credentials;
+
+    const addressesFor = (clusterMode: boolean) =>
+        (clusterMode ? clusterServer : standaloneServer)!
+            .getAddresses()
+            .map(([host, port]) => ({ host, port }));
+
+    const createDirectClient = (
+        clusterMode: boolean,
+        credentialProvider: GlideCredentialProvider,
+        refreshIntervalSeconds = 300,
+        connectionTimeout?: number,
+    ): Promise<BaseClient> => {
+        const options: BaseClientConfiguration = {
+            addresses: addressesFor(clusterMode),
+            credentials: {
+                username: IAM_USERNAME,
+                iamConfig: {
+                    clusterName: IAM_TEST_CLUSTER_NAME,
+                    service: ServiceType.Elasticache,
+                    region: IAM_TEST_REGION_US_EAST_1,
+                    refreshIntervalSeconds,
+                    credentialProvider,
+                },
+            },
+            useTLS: global.TLS,
+        };
+
+        const advancedConfiguration =
+            connectionTimeout === undefined ? undefined : { connectionTimeout };
+
+        return clusterMode
+            ? GlideClusterClient.createClient({
+                  ...options,
+                  advancedConfiguration,
+              })
+            : GlideClient.createClient({ ...options, advancedConfiguration });
+    };
+
+    beforeAll(async () => {
+        if (!iamEnabled) return;
+
+        standaloneServer = global.STAND_ALONE_ENDPOINT
+            ? await ValkeyCluster.initFromExistingCluster(
+                  false,
+                  parseEndpoints(global.STAND_ALONE_ENDPOINT),
+                  getServerVersion,
+              )
+            : await ValkeyCluster.createCluster(false, 1, 0, getServerVersion);
+        clusterServer = global.CLUSTER_ENDPOINTS
+            ? await ValkeyCluster.initFromExistingCluster(
+                  true,
+                  parseEndpoints(global.CLUSTER_ENDPOINTS),
+                  getServerVersion,
+              )
+            : await ValkeyCluster.createCluster(true, 3, 1, getServerVersion);
+    }, TIMEOUT);
+
+    afterAll(async () => {
+        await standaloneServer?.close();
+        await clusterServer?.close();
+    }, TIMEOUT);
+
+    iamIt.each([
+        ["standalone", "sync", false, false],
+        ["standalone", "Promise", false, true],
+        ["cluster", "sync", true, false],
+        ["cluster", "Promise", true, true],
+    ])(
+        "%s direct client authenticates and manually refreshes with a %s provider",
+        async (_mode, _providerKind, clusterMode, promiseProvider) => {
+            if (!iamEnabled) return;
+
+            let invocations = 0;
+
+            const credentialProvider: GlideCredentialProvider = () => {
+                invocations++;
+                const credentials = environmentCredentials({
+                    expiresAtEpochMillis: Date.now() + 60_000,
+                });
+                return promiseProvider
+                    ? Promise.resolve(credentials)
+                    : credentials;
+            };
+
+            const directClient = await createDirectClient(
+                clusterMode,
+                credentialProvider,
+            );
+
+            try {
+                await assertConnected(directClient);
+                const afterInitialAuth = invocations;
+                expect(afterInitialAuth).toBeGreaterThan(0);
+
+                await directClient.refreshIamToken();
+                expect(invocations).toBeGreaterThan(afterInitialAuth);
+                await assertConnected(directClient);
+            } finally {
+                directClient.close();
+            }
+        },
+        TIMEOUT,
+    );
+
+    iamIt.each([
+        ["standalone", false, false],
+        ["cluster", true, true],
+    ])(
+        "%s direct client automatically refreshes custom credentials",
+        async (_mode, clusterMode, promiseProvider) => {
+            if (!iamEnabled) return;
+
+            let invocations = 0;
+
+            const credentialProvider: GlideCredentialProvider = () => {
+                invocations++;
+                const credentials = environmentCredentials();
+                return promiseProvider
+                    ? Promise.resolve(credentials)
+                    : credentials;
+            };
+
+            const directClient = await createDirectClient(
+                clusterMode,
+                credentialProvider,
+                2,
+            );
+
+            try {
+                await assertConnected(directClient);
+                const afterInitialAuth = invocations;
+                await new Promise((resolve) => setTimeout(resolve, 3000));
+                expect(invocations).toBeGreaterThan(afterInitialAuth);
+                await assertConnected(directClient);
+            } finally {
+                directClient.close();
+            }
+        },
+        TIMEOUT,
+    );
+
+    iamIt.each([
+        [
+            "sync throw",
+            () => {
+                throw new Error("sync provider failure");
+            },
+        ],
+        [
+            "Promise rejection",
+            () => Promise.reject(new Error("Promise provider failure")),
+        ],
+    ] as [string, GlideCredentialProvider][])(
+        "surfaces %s during initial direct authentication",
+        async (_caseName, credentialProvider) => {
+            if (!iamEnabled) return;
+
+            await expect(
+                createDirectClient(false, credentialProvider),
+            ).rejects.toThrow(/provider failure/u);
+        },
+        TIMEOUT,
+    );
+
+    iamIt.each([
+        [
+            "empty access key from sync provider",
+            "",
+            "secret",
+            false,
+            "accessKeyId",
+        ],
+        [
+            "ASCII blank access key from Promise provider",
+            " \t\r\n",
+            "secret",
+            true,
+            "accessKeyId",
+        ],
+        [
+            "Unicode blank access key from sync provider",
+            "\u2003\u3000",
+            "secret",
+            false,
+            "accessKeyId",
+        ],
+        [
+            "empty secret key from Promise provider",
+            "access",
+            "",
+            true,
+            "secretAccessKey",
+        ],
+        [
+            "ASCII blank secret key from sync provider",
+            "access",
+            " \t\r\n",
+            false,
+            "secretAccessKey",
+        ],
+        [
+            "Unicode blank secret key from Promise provider",
+            "access",
+            "\u2003\u3000",
+            true,
+            "secretAccessKey",
+        ],
+    ])(
+        "rejects %s",
+        async (
+            _caseName,
+            accessKeyId,
+            secretAccessKey,
+            promiseProvider,
+            expectedField,
+        ) => {
+            if (!iamEnabled) return;
+
+            const provider = providerFor(
+                environmentCredentials({ accessKeyId, secretAccessKey }),
+                promiseProvider,
+            );
+            await expect(createDirectClient(false, provider)).rejects.toThrow(
+                new RegExp(`blank ${expectedField}`, "u"),
+            );
+        },
+        TIMEOUT,
+    );
+
+    iamIt.each([
+        ["omitted", undefined, false],
+        ["zero", 0, true],
+        ["negative", -1, false],
+        ["valid", Date.now() + 60_000, true],
+        ["maximum safe integer", Number.MAX_SAFE_INTEGER, false],
+    ])(
+        "accepts %s expiresAtEpochMillis from a direct provider",
+        async (_caseName, expiresAtEpochMillis, promiseProvider) => {
+            if (!iamEnabled) return;
+
+            const directClient = await createDirectClient(
+                false,
+                providerFor(
+                    environmentCredentials({ expiresAtEpochMillis }),
+                    promiseProvider,
+                ),
+            );
+
+            try {
+                await assertConnected(directClient);
+            } finally {
+                directClient.close();
+            }
+        },
+        TIMEOUT,
+    );
+
+    iamIt.each([
+        ["NaN", Number.NaN, false],
+        ["positive infinity", Number.POSITIVE_INFINITY, true],
+        ["negative infinity", Number.NEGATIVE_INFINITY, false],
+        ["fractional", Date.now() + 0.5, true],
+        ["above the safe-integer range", Number.MAX_SAFE_INTEGER + 1, false],
+    ])(
+        "rejects %s expiresAtEpochMillis from a direct provider",
+        async (_caseName, expiresAtEpochMillis, promiseProvider) => {
+            if (!iamEnabled) return;
+
+            await expect(
+                createDirectClient(
+                    false,
+                    providerFor(
+                        environmentCredentials({ expiresAtEpochMillis }),
+                        promiseProvider,
+                    ),
+                ),
+            ).rejects.toThrow(/finite safe integer/u);
+        },
+        TIMEOUT,
+    );
+
+    iamIt(
+        "accepts a direct-provider session token larger than 2048 bytes",
+        async () => {
+            if (!iamEnabled) return;
+
+            const directClient = await createDirectClient(false, () =>
+                environmentCredentials({ sessionToken: "t".repeat(8192) }),
+            );
+
+            try {
+                await assertConnected(directClient);
+            } finally {
+                directClient.close();
+            }
+        },
+        TIMEOUT,
+    );
+    iamIt(
+        "surfaces a custom provider failure from manual refresh",
+        async () => {
+            let failRefresh = false;
+
+            const credentialProvider: GlideCredentialProvider = () => {
+                if (failRefresh) {
+                    throw new Error("manual refresh provider failure");
+                }
+
+                return environmentCredentials();
+            };
+
+            const directClient = await createDirectClient(
+                false,
+                credentialProvider,
+            );
+
+            try {
+                await assertConnected(directClient);
+                failRefresh = true;
+                await expect(directClient.refreshIamToken()).rejects.toThrow(
+                    /manual refresh provider failure/u,
+                );
+            } finally {
+                directClient.close();
+            }
+        },
+    );
+
+    iamIt(
+        "restores a failed Rust claim before JS rejection cleanup",
+        async () => {
+            const providerKey = registerCredentialProvider(() =>
+                Promise.reject(new Error("handoff provider failure")),
+            );
+            const request = connection_request.ConnectionRequest.create({
+                addresses: addressesFor(false),
+                tlsMode: global.TLS
+                    ? connection_request.TlsMode.SecureTls
+                    : connection_request.TlsMode.NoTls,
+                authenticationInfo: {
+                    username: IAM_USERNAME,
+                    iamCredentials: {
+                        clusterName: IAM_TEST_CLUSTER_NAME,
+                        region: IAM_TEST_REGION_US_EAST_1,
+                        serviceType: connection_request.ServiceType.ELASTICACHE,
+                        refreshIntervalSeconds: 300,
+                    },
+                },
+                credentialProviderKey: providerKey,
+            });
+            const requestBytes =
+                connection_request.ConnectionRequest.encode(request).finish();
+
+            let handoffError: unknown;
+
+            try {
+                await CreateDirectClient(requestBytes, () => undefined);
+            } catch (error) {
+                handoffError = error;
+                // This is the same immediate cleanup performed by BaseClient's catch.
+                removeCredentialProvider(providerKey);
+            }
+
+            expect(String(handoffError)).toMatch(/handoff provider failure/u);
+
+            // The same key must remain absent: no Rust claim may restore it after the
+            // JavaScript rejection handler has removed it.
+            await expect(
+                Promise.resolve().then(() =>
+                    CreateDirectClient(requestBytes, () => undefined),
+                ),
+            ).rejects.toThrow(/was not found/u);
+        },
+    );
+
+    iamIt(
+        "times out a synchronous provider and safely drops its late return",
+        async () => {
+            const credentialProvider: GlideCredentialProvider = () => {
+                Atomics.wait(
+                    new Int32Array(
+                        new SharedArrayBuffer(Int32Array.BYTES_PER_ELEMENT),
+                    ),
+                    0,
+                    0,
+                    9_250,
+                );
+                return environmentCredentials();
+            };
+
+            const startedAt = Date.now();
+
+            await expect(
+                createDirectClient(false, credentialProvider, 300, 15_000),
+            ).rejects.toThrow(/did not return within 9s/u);
+            const elapsed = Date.now() - startedAt;
+            expect(elapsed).toBeGreaterThanOrEqual(9_000);
+            expect(elapsed).toBeLessThan(10_000);
+
+            const healthyClient = await createDirectClient(false, () =>
+                environmentCredentials(),
+            );
+
+            try {
+                await assertConnected(healthyClient);
+            } finally {
+                healthyClient.close();
+            }
+        },
+        20_000,
+    );
+
+    iamIt(
+        "times out an unresolved Promise provider and safely drops late completion",
+        async () => {
+            if (!iamEnabled) return;
+
+            let resolveLate:
+                ((credentials: AwsCredentials) => void) | undefined;
+            const credentialProvider: GlideCredentialProvider = () =>
+                new Promise((resolve) => {
+                    resolveLate = resolve;
+                });
+            const startedAt = Date.now();
+
+            await expect(
+                createDirectClient(false, credentialProvider, 300, 15_000),
+            ).rejects.toThrow(/did not return within 9s/u);
+            const elapsed = Date.now() - startedAt;
+            expect(elapsed).toBeGreaterThanOrEqual(8_500);
+            expect(elapsed).toBeLessThan(10_000);
+
+            resolveLate!(environmentCredentials());
+            await new Promise((resolve) => setTimeout(resolve, 200));
+
+            const healthyClient = await createDirectClient(false, () =>
+                environmentCredentials(),
+            );
+
+            try {
+                await assertConnected(healthyClient);
+            } finally {
+                healthyClient.close();
+            }
+        },
+        20_000,
+    );
+
+    iamIt(
+        "creates standalone and cluster custom-provider clients concurrently",
+        async () => {
+            if (!iamEnabled) return;
+
+            const [standaloneClient, clusterClient] = await Promise.all([
+                createDirectClient(false, () => environmentCredentials()),
+                createDirectClient(true, async () => environmentCredentials()),
+            ]);
+
+            try {
+                await Promise.all([
+                    assertConnected(standaloneClient),
+                    assertConnected(clusterClient),
+                ]);
+            } finally {
+                standaloneClient.close();
+                clusterClient.close();
+            }
+        },
     );
 });

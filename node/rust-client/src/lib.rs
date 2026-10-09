@@ -89,10 +89,8 @@ pub const DEFAULT_CONNECTION_TIMEOUT_IN_MILLISECONDS: u32 =
 #[napi]
 pub const DEFAULT_INFLIGHT_REQUESTS_LIMIT: u32 = glide_core::client::DEFAULT_MAX_INFLIGHT_REQUESTS;
 
-// ============================================================================
-// Direct NAPI Layer - Command Response Types
-// ============================================================================
-
+// =====================================================================// Direct NAPI Layer - Command Response Types
+// =====================================================================
 /// Response object passed to the JavaScript callback for command results.
 /// This replaces the protobuf-based response used in the socket IPC layer.
 #[napi(object)]
@@ -125,10 +123,8 @@ pub struct RequestErrorNapi {
     pub error_type: u32,
 }
 
-// ============================================================================
-// Response Buffer - Shared between Rust workers and JS callback
-// ============================================================================
-
+// =====================================================================// Response Buffer - Shared between Rust workers and JS callback
+// =====================================================================
 use parking_lot::Mutex as PLMutex;
 use std::sync::atomic::AtomicBool;
 
@@ -233,10 +229,8 @@ impl ResponseBuffer {
     }
 }
 
-// ============================================================================
-// Worker Pool - Thread Pinning for Concurrent Execution
-// ============================================================================
-
+// =====================================================================// Worker Pool - Thread Pinning for Concurrent Execution
+// =====================================================================
 use parking_lot::Mutex as PLMutex2;
 
 /// Global worker pool state with reference counting for clean shutdown.
@@ -250,9 +244,6 @@ struct WorkerPoolState {
 }
 
 static WORKER_POOL_STATE: OnceLock<PLMutex2<WorkerPoolState>> = OnceLock::new();
-
-/// Global counter for unique client IDs (used for scope registry).
-static NEXT_CLIENT_ID: AtomicU64 = AtomicU64::new(1);
 
 fn get_worker_pool_state() -> &'static PLMutex2<WorkerPoolState> {
     WORKER_POOL_STATE.get_or_init(|| {
@@ -400,10 +391,8 @@ struct GetCacheMetricsMessage {
     metrics_type: u32,
 }
 
-// ============================================================================
-// Helper Functions for Response Building
-// ============================================================================
-
+// =====================================================================// Helper Functions for Response Building
+// =====================================================================
 /// Build a CommandResponse from a Redis result
 fn build_response(
     callback_idx: u32,
@@ -775,10 +764,8 @@ async fn execute_batch(
     }
 }
 
-// ============================================================================
-// Direct NAPI Layer - GlideClientHandle
-// ============================================================================
-
+// =====================================================================// Direct NAPI Layer - GlideClientHandle
+// =====================================================================
 /// A handle to a Glide client that allows sending commands directly via NAPI.
 /// The client is pinned to a dedicated worker thread for thread-local command execution.
 /// Commands are sent via channel to the worker thread which executes them via spawn_local.
@@ -802,6 +789,9 @@ pub struct GlideClientHandle {
     /// Unique client ID registered in the glide-core scope registry.
     /// Used for scope operations (try_acquire, execute, release).
     client_id: u64,
+    /// The pool-owned client ID when this handle wraps a pooled client.
+    /// `None` identifies a direct handle that owns its scope registration.
+    pool_client_id: Option<u64>,
 }
 
 /// Logs the disconnect warning for a `Disconnection` push and returns `true`,
@@ -867,8 +857,7 @@ pub(crate) async fn create_handle_for_client(
         drop(command_tx);
 
         let inflight_counter = Arc::new(AtomicIsize::new(inflight_requests_limit));
-        let client_id =
-            provided_client_id.unwrap_or_else(|| NEXT_CLIENT_ID.fetch_add(1, Ordering::Relaxed));
+        let client_id = provided_client_id.unwrap_or_else(glide_core::pool::allocate_client_id);
 
         // Register client in the scope registry.
         glide_core::scope::register_client(client_id, client.clone());
@@ -879,6 +868,7 @@ pub(crate) async fn create_handle_for_client(
             response_buffer: Arc::clone(&response_buffer_worker),
             wake_callback: Some(Arc::clone(&wake_tsfn)),
             client_id,
+            pool_client_id: provided_client_id,
         };
 
         // Store worker-local references to avoid Arc::clone per command.
@@ -1153,6 +1143,116 @@ fn run_worker_message(
     }
 }
 
+struct CredentialProviderClaim {
+    key: String,
+    provider: Option<glide_core::iam::CredentialsProvider>,
+}
+
+impl CredentialProviderClaim {
+    fn commit(&mut self) {
+        self.provider = None;
+    }
+}
+
+impl Drop for CredentialProviderClaim {
+    fn drop(&mut self) {
+        let Some(provider) = self.provider.take() else {
+            return;
+        };
+
+        if glide_core::credential_provider_registry::register_if_absent(self.key.clone(), provider)
+            .is_err()
+        {
+            log_warn(
+                "credential_provider",
+                format!(
+                    "Did not restore credential_provider_key '{}' because a newer provider is registered",
+                    self.key
+                ),
+            );
+        }
+    }
+}
+
+fn validate_credential_provider_key(credential_provider_key: Option<&str>) -> Result<()> {
+    if credential_provider_key.is_some_and(|key| key.trim().is_empty()) {
+        return Err(napi::Error::new(
+            Status::InvalidArg,
+            "credential_provider_key must not be empty or whitespace",
+        ));
+    }
+    Ok(())
+}
+
+fn claim_credential_provider(
+    credential_provider_key: Option<String>,
+    connection_request: &mut ConnectionRequest,
+) -> Result<Option<CredentialProviderClaim>> {
+    validate_credential_provider_key(credential_provider_key.as_deref())?;
+    let Some(key) = credential_provider_key else {
+        return Ok(None);
+    };
+
+    if connection_request
+        .authentication_info
+        .as_ref()
+        .and_then(|auth_info| auth_info.iam_config.as_ref())
+        .is_none()
+    {
+        return Err(napi::Error::new(
+            Status::InvalidArg,
+            "credential_provider_key was set but the connection request contains no IAM configuration",
+        ));
+    }
+
+    let provider = glide_core::credential_provider_registry::remove(&key).ok_or_else(|| {
+        napi::Error::new(
+            Status::InvalidArg,
+            format!(
+                "credential_provider_key '{key}' was not found in the registry; it may have already been consumed"
+            ),
+        )
+    })?;
+
+    connection_request
+        .authentication_info
+        .as_mut()
+        .and_then(|auth_info| auth_info.iam_config.as_mut())
+        .expect("IAM configuration was validated before claiming the provider")
+        .credentials_provider = Some(provider.clone());
+
+    Ok(Some(CredentialProviderClaim {
+        key,
+        provider: Some(provider),
+    }))
+}
+
+/// Deferred result whose provider claim is committed only after napi-rs has
+/// successfully converted the client handle into a JavaScript object. That
+/// conversion is the ownership-transfer point: the JS object's native finalizer
+/// owns `GlideClientHandle` from then on. napi-rs does not report the later
+/// `napi_resolve_deferred` result to this code; if settlement fails, the
+/// unreachable object is finalized and the handle's Drop releases its direct
+/// client registration, worker channel, provider, and TSFN. Every failure before
+/// successful conversion drops this value and restores the uncommitted claim.
+struct DirectClientResolution {
+    handle: GlideClientHandle,
+    credential_provider_claim: Option<CredentialProviderClaim>,
+}
+
+impl ToNapiValue for DirectClientResolution {
+    unsafe fn to_napi_value(
+        env: napi::sys::napi_env,
+        mut value: Self,
+    ) -> Result<napi::sys::napi_value> {
+        let js_handle = unsafe { GlideClientHandle::to_napi_value(env, value.handle) }?;
+        if let Some(claim) = value.credential_provider_claim.as_mut() {
+            claim.commit();
+        }
+        Ok(js_handle)
+    }
+}
+
 /// Creates a new direct NAPI client connection with response buffering.
 ///
 /// This function creates a Client using the glide-core library and wraps it
@@ -1179,13 +1279,6 @@ pub fn create_direct_client<'a>(
     connection_request_bytes: Uint8Array,
     #[napi(ts_arg_type = "() => void")] wake_callback: Function<(), ()>,
 ) -> Result<Object<'a>> {
-    let (deferred, promise) = env.create_deferred()?;
-
-    // Create the wake-up ThreadsafeFunction
-    // This callback takes no arguments - it just signals "responses available"
-    let wake_tsfn: Arc<ThreadsafeFunction<(), (), (), Status, false>> =
-        Arc::new(wake_callback.build_threadsafe_function().build()?);
-
     // Parse the connection request protobuf
     let proto_connection_request =
         match ProtobufConnectionRequest::parse_from_bytes(&connection_request_bytes) {
@@ -1202,6 +1295,11 @@ pub fn create_direct_client<'a>(
         .as_ref()
         .filter(|key| !key.is_empty())
         .map(ToString::to_string);
+    let credential_provider_key = proto_connection_request
+        .credential_provider_key
+        .as_ref()
+        .map(ToString::to_string);
+    validate_credential_provider_key(credential_provider_key.as_deref())?;
 
     // Get the inflight requests limit from the protobuf connection request
     let inflight_requests_limit = if proto_connection_request.inflight_requests_limit > 0 {
@@ -1212,11 +1310,39 @@ pub fn create_direct_client<'a>(
 
     // Convert protobuf ConnectionRequest to internal ConnectionRequest
     let mut connection_request: ConnectionRequest = proto_connection_request.into();
+    let credential_provider_claim =
+        claim_credential_provider(credential_provider_key, &mut connection_request)?;
     if let Some(key) = resolver_key
         && let Some(resolver) = glide_core::address_resolver_registry::remove(&key)
     {
         connection_request.address_resolver = Some(resolver);
     }
+
+    type DirectClientDeferredValue = Either<DirectClientResolution, ()>;
+    type DirectClientDeferredResolver = Box<dyn FnOnce(Env) -> Result<DirectClientDeferredValue>>;
+
+    // Allocate the Promise before building the wake TSFN. If this fails,
+    // restore the provider before N-API publishes the error to JavaScript.
+    let (deferred, promise) =
+        match env.create_deferred::<DirectClientDeferredValue, DirectClientDeferredResolver>() {
+            Ok(deferred_and_promise) => deferred_and_promise,
+            Err(error) => {
+                drop(credential_provider_claim);
+                return Err(error);
+            }
+        };
+
+    // Build the wake TSFN after the Promise. If construction fails, restore the
+    // provider and settle the unreachable Promise so its internal TSFN is released.
+    let wake_tsfn: Arc<ThreadsafeFunction<(), (), (), Status, false>> =
+        match wake_callback.build_threadsafe_function().build() {
+            Ok(callback) => Arc::new(callback),
+            Err(error) => {
+                drop(credential_provider_claim);
+                deferred.resolve(Box::new(|_| Ok(Either::B(()))));
+                return Err(error);
+            }
+        };
 
     // Create shared response buffer
     let response_buffer = Arc::new(ResponseBuffer::new());
@@ -1249,6 +1375,11 @@ pub fn create_direct_client<'a>(
         let client = match Client::new(connection_request, Some(push_sender)).await {
             Ok(c) => c,
             Err(err) => {
+                // Restore the provider before publishing rejection. napi-rs queues
+                // Deferred settlement onto the JS thread, whose catch handler removes
+                // the key immediately; restoring after reject would allow a late Rust
+                // drop to recreate an entry JS already cleaned up.
+                drop(credential_provider_claim);
                 deferred.reject(napi::Error::new(
                     Status::Unknown,
                     format!("Failed to create client: {err}"),
@@ -1267,7 +1398,7 @@ pub fn create_direct_client<'a>(
         drop(command_tx);
 
         let inflight_counter = Arc::new(AtomicIsize::new(inflight_requests_limit));
-        let client_id = NEXT_CLIENT_ID.fetch_add(1, Ordering::Relaxed);
+        let client_id = glide_core::pool::allocate_client_id();
 
         // Register client in scope registry so scoped connections can find
         // their parent client for compression, timeout, IAM, and CB checks.
@@ -1279,6 +1410,7 @@ pub fn create_direct_client<'a>(
             response_buffer: Arc::clone(&response_buffer_worker),
             wake_callback: Some(Arc::clone(&wake_tsfn)),
             client_id,
+            pool_client_id: None,
         };
 
         // Store worker-local references to avoid Arc::clone per command.
@@ -1321,8 +1453,15 @@ pub fn create_direct_client<'a>(
         });
 
         // Resolve the promise with the handle — push listener is now scheduled,
-        // so no push notifications can be missed after this point.
-        deferred.resolve(|_| Ok(handle));
+        // so no push notifications can be missed after this point. The provider
+        // claim is committed by DirectClientResolution only after the handle is
+        // successfully converted for JavaScript; every earlier failure restores it.
+        deferred.resolve(Box::new(move |_| {
+            Ok(Either::A(DirectClientResolution {
+                handle,
+                credential_provider_claim,
+            }))
+        }));
 
         // Process messages from the channel.
         // Each message spawns a local task for concurrent execution within this thread.
@@ -1341,6 +1480,19 @@ pub fn create_direct_client<'a>(
     });
 
     Ok(promise)
+}
+
+impl GlideClientHandle {
+    fn is_direct_client(&self) -> bool {
+        self.pool_client_id.is_none()
+    }
+
+    /// Remove direct registrations while leaving pool-owned registrations intact.
+    fn unregister_direct_client(&self) {
+        if self.is_direct_client() {
+            glide_core::scope::unregister_client(self.client_id);
+        }
+    }
 }
 
 #[napi]
@@ -1521,8 +1673,8 @@ impl GlideClientHandle {
         // This prevents segfaults when the ThreadsafeFunction is dropped while tasks are running
         self.response_buffer.mark_closed();
 
-        // Unregister from scope registry
-        glide_core::scope::unregister_client(self.client_id);
+        // Only direct handles have no pool client ID and own their registration.
+        self.unregister_direct_client();
 
         // Free any leaked Value pointers in pending responses that were never consumed by JS
         self.response_buffer.free_leaked_values();
@@ -2044,6 +2196,12 @@ impl GlideClientHandle {
 
 impl Drop for GlideClientHandle {
     fn drop(&mut self) {
+        // A JavaScript object created by ToNapiValue owns a direct registration
+        // even if napi_resolve_deferred subsequently fails and the object is never
+        // delivered. Its finalizer reaches this Drop path. A present pool client
+        // ID identifies a pool-owned registration and preserves main's pool behavior.
+        self.unregister_direct_client();
+
         // Ensure cleanup happens even if close() was never called.
         // mark_closed() is idempotent (uses AtomicBool), so calling it again is safe.
         self.response_buffer.mark_closed();
@@ -2850,6 +3008,273 @@ pub fn remove_address_resolver(key: String) {
     glide_core::address_resolver_registry::remove(&key);
 }
 
+/// Return value from a JavaScript GlideCredentialProvider callback.
+#[napi(object)]
+pub struct JsAwsCredentials {
+    pub access_key_id: String,
+    pub secret_access_key: String,
+    pub session_token: Option<String>,
+    /// Optional expiry as Unix epoch milliseconds. Use 0 or None to indicate no expiry.
+    pub expires_at_epoch_millis: Option<f64>,
+}
+
+/// A Node.js credential provider wrapper.
+/// It holds a `ThreadsafeFunction` that invokes the JS callback and delivers
+/// the resulting `JsAwsCredentials` back to the calling thread via a channel.
+/// The callback may return either a plain `JsAwsCredentials` or a
+/// `Promise<JsAwsCredentials>`; both are handled transparently.
+type CredentialProviderTsfn = ThreadsafeFunction<(), Unknown<'static>, (), Status, false, true>;
+
+struct NodeCredentialsProvider {
+    tsfn: CredentialProviderTsfn,
+}
+
+const NODE_CREDENTIALS_CALLBACK_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(9);
+
+type NodeCredentialResult = (
+    String,
+    String,
+    Option<String>,
+    Option<std::time::SystemTime>,
+);
+
+const JS_MAX_SAFE_INTEGER: f64 = 9_007_199_254_740_991.0;
+
+fn checked_expiry_from(
+    base: std::time::SystemTime,
+    milliseconds: i64,
+) -> std::result::Result<std::time::SystemTime, glide_core::iam::GlideIAMError> {
+    base.checked_add(std::time::Duration::from_millis(milliseconds as u64))
+        .ok_or_else(|| {
+            glide_core::iam::GlideIAMError::CredentialsError(format!(
+                "GlideCredentialProvider expiresAtEpochMillis is out of range: {milliseconds}"
+            ))
+        })
+}
+
+fn convert_expiry(
+    milliseconds: f64,
+) -> std::result::Result<Option<std::time::SystemTime>, glide_core::iam::GlideIAMError> {
+    if !milliseconds.is_finite()
+        || milliseconds.fract() != 0.0
+        || milliseconds.abs() > JS_MAX_SAFE_INTEGER
+    {
+        return Err(glide_core::iam::GlideIAMError::CredentialsError(format!(
+            "GlideCredentialProvider expiresAtEpochMillis must be a finite safe integer: {milliseconds}"
+        )));
+    }
+    if milliseconds <= 0.0 {
+        return Ok(None);
+    }
+
+    let milliseconds = milliseconds as i64;
+    checked_expiry_from(std::time::SystemTime::UNIX_EPOCH, milliseconds).map(Some)
+}
+
+fn validate_and_convert_credentials(
+    credentials: JsAwsCredentials,
+) -> std::result::Result<NodeCredentialResult, glide_core::iam::GlideIAMError> {
+    if credentials.access_key_id.trim().is_empty() {
+        return Err(glide_core::iam::GlideIAMError::CredentialsError(
+            "GlideCredentialProvider returned a blank accessKeyId".to_string(),
+        ));
+    }
+    if credentials.secret_access_key.trim().is_empty() {
+        return Err(glide_core::iam::GlideIAMError::CredentialsError(
+            "GlideCredentialProvider returned a blank secretAccessKey".to_string(),
+        ));
+    }
+
+    let expires_at = credentials
+        .expires_at_epoch_millis
+        .map(convert_expiry)
+        .transpose()?
+        .flatten();
+
+    Ok((
+        credentials.access_key_id,
+        credentials.secret_access_key,
+        credentials.session_token,
+        expires_at,
+    ))
+}
+
+// SAFETY: ThreadsafeFunction is designed to be called from any thread.
+unsafe impl Send for NodeCredentialsProvider {}
+unsafe impl Sync for NodeCredentialsProvider {}
+
+impl NodeCredentialsProvider {
+    fn get_credentials(
+        &self,
+    ) -> std::result::Result<
+        (
+            String,
+            String,
+            Option<String>,
+            Option<std::time::SystemTime>,
+        ),
+        glide_core::iam::GlideIAMError,
+    > {
+        use std::sync::Arc as StdArc;
+        let (tx, rx) =
+            std::sync::mpsc::sync_channel::<std::result::Result<JsAwsCredentials, String>>(1);
+        let tx = StdArc::new(tx);
+
+        let status = self.tsfn.call_with_return_value(
+            (),
+            ThreadsafeFunctionCallMode::Blocking,
+            move |result: Result<Unknown<'static>>, _env: Env| {
+                use napi::JsValue as NapiJsValue;
+
+                let unknown = match result {
+                    Ok(u) => u,
+                    Err(e) => {
+                        let _ = tx.send(Err(format!("GlideCredentialProvider JS error: {e}")));
+                        return Ok(());
+                    }
+                };
+
+                let val = unknown.value();
+
+                // Determine whether the JS callback returned a Promise or a plain value.
+                let mut is_promise = false;
+                // SAFETY: val.env / val.value are valid napi pointers on this JS thread.
+                let np_status =
+                    unsafe { napi::sys::napi_is_promise(val.env, val.value, &mut is_promise) };
+                if np_status != napi::sys::Status::napi_ok {
+                    let _ = tx.send(Err(format!(
+                        "napi_is_promise failed with status: {np_status:?}"
+                    )));
+                    return Ok(());
+                }
+
+                if is_promise {
+                    // The JS callback returned a Promise. Attach .then() and .catch()
+                    // handlers that forward the resolved value (or rejection) over the
+                    // mpsc channel.
+                    use napi::bindgen_prelude::{FromNapiValue, PromiseRaw};
+
+                    // SAFETY: we verified this is a Promise above.
+                    let promise_raw = unsafe {
+                        PromiseRaw::<JsAwsCredentials>::from_napi_value(val.env, val.value)
+                    };
+
+                    match promise_raw {
+                        Ok(pr) => {
+                            let tx_resolve = tx.clone();
+                            let tx_reject = tx.clone();
+
+                            // Attach .then() — fires when the Promise resolves
+                            let then_result = pr.then(move |ctx| {
+                                let _ = tx_resolve.send(Ok(ctx.value));
+                                Ok(())
+                            });
+
+                            match then_result {
+                                Ok(pr2) => {
+                                    // Attach .catch() — fires when the Promise rejects
+                                    let _ = pr2.catch(
+                                        move |ctx: napi::bindgen_prelude::CallbackContext<
+                                            Unknown<'_>,
+                                        >| {
+                                            // Try to extract a useful rejection message from the
+                                            // Promise rejection value.
+                                            let reason = ctx
+                                                .value
+                                                .coerce_to_string()
+                                                .and_then(|s| s.into_utf8())
+                                                .map(|s| s.as_str().unwrap_or("").to_string())
+                                                .unwrap_or_else(|_| {
+                                                    "GlideCredentialProvider Promise rejected"
+                                                        .to_string()
+                                                });
+                                            let _ = tx_reject.send(Err(reason));
+                                            Ok(())
+                                        },
+                                    );
+                                }
+                                Err(e) => {
+                                    let _ = tx.send(Err(format!(
+                                        "Failed to attach .then() to credential Promise: {e}"
+                                    )));
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            let _ = tx.send(Err(format!(
+                                "Failed to read GlideCredentialProvider Promise: {e}"
+                            )));
+                        }
+                    }
+                } else {
+                    // Synchronous return — deserialize the Unknown directly.
+                    use napi::bindgen_prelude::FromNapiValue;
+                    // SAFETY: val.env / val.value are valid napi pointers on this JS thread.
+                    let result = unsafe { JsAwsCredentials::from_napi_value(val.env, val.value) }
+                        .map_err(|e: napi::Error| e.to_string());
+                    let _ = tx.send(result);
+                }
+                Ok(())
+            },
+        );
+
+        if status != Status::Ok {
+            return Err(glide_core::iam::GlideIAMError::CredentialsError(format!(
+                "GlideCredentialProvider callback scheduling failed: {status:?}"
+            )));
+        }
+
+        let creds = rx
+            .recv_timeout(NODE_CREDENTIALS_CALLBACK_TIMEOUT)
+            .map_err(|error| {
+                glide_core::iam::GlideIAMError::CredentialsError(format!(
+                    "GlideCredentialProvider callback did not return within {:?}: {error}",
+                    NODE_CREDENTIALS_CALLBACK_TIMEOUT
+                ))
+            })?
+            .map_err(|error| {
+                glide_core::iam::GlideIAMError::CredentialsError(format!(
+                    "GlideCredentialProvider callback error: {error}"
+                ))
+            })?;
+
+        validate_and_convert_credentials(creds)
+    }
+}
+
+/// Register a JavaScript GlideCredentialProvider callback in the global registry.
+/// Returns the registry key (UUID) that must be set in the ConnectionRequest's
+/// `credential_provider_key` field so the socket listener can look it up.
+///
+/// The JS callback signature is: `() => AwsCredentials | Promise<AwsCredentials>`
+/// Both synchronous and Promise-returning (async) callbacks are supported.
+#[napi(js_name = "registerCredentialProvider")]
+pub fn register_credential_provider(
+    #[napi(ts_arg_type = "() => JsAwsCredentials | Promise<JsAwsCredentials>")] callback: Function<
+        '_,
+        (),
+        Unknown<'static>,
+    >,
+) -> Result<String> {
+    let tsfn = callback
+        .build_threadsafe_function::<()>()
+        .callee_handled::<false>()
+        .weak::<true>()
+        .build_callback(|_ctx| Ok(()))?;
+    let provider = Arc::new(NodeCredentialsProvider { tsfn });
+    let key = uuid::Uuid::new_v4().to_string();
+    let credentials_fn: glide_core::iam::CredentialsProvider =
+        Arc::new(move || provider.get_credentials());
+    glide_core::credential_provider_registry::register(key.clone(), credentials_fn);
+    Ok(key)
+}
+
+/// Remove a credential provider from the global registry by key.
+#[napi(js_name = "removeCredentialProvider")]
+pub fn remove_credential_provider(key: String) {
+    glide_core::credential_provider_registry::remove(&key);
+}
+
 static NEXT_MONITOR_HANDLE: AtomicU64 = AtomicU64::new(1);
 
 type MonitorCallbackArgs = (f64, i64, String, String, Vec<String>);
@@ -2955,6 +3380,388 @@ pub fn close_monitor_client(env: &Env, handle_id: i64) -> Result<Object<'_>> {
         deferred.resolve(|_| Ok(()));
     });
     Ok(promise)
+}
+
+#[cfg(test)]
+mod credential_provider_tests {
+    use super::*;
+    use glide_core::client::{AuthenticationInfo, IamAuthenticationConfig, NodeAddress};
+    use glide_core::iam::{CredentialsProvider, GlideIAMError, ServiceType};
+    use std::sync::{Arc, Barrier};
+
+    fn provider_named(access_key: &'static str) -> CredentialsProvider {
+        Arc::new(move || {
+            Ok((
+                access_key.to_string(),
+                "secret-key".to_string(),
+                Some("session-token".to_string()),
+                None,
+            ))
+        })
+    }
+
+    fn request_with_iam() -> ConnectionRequest {
+        ConnectionRequest {
+            authentication_info: Some(AuthenticationInfo {
+                username: Some("iam-user".to_string()),
+                password: None,
+                iam_config: Some(IamAuthenticationConfig {
+                    cluster_name: "cluster".to_string(),
+                    region: "us-east-1".to_string(),
+                    service_type: ServiceType::ElastiCache,
+                    refresh_interval_seconds: None,
+                    credentials_provider: None,
+                }),
+            }),
+            ..Default::default()
+        }
+    }
+
+    fn credentials(
+        access_key_id: &str,
+        secret_access_key: &str,
+        expires_at_epoch_millis: Option<f64>,
+    ) -> JsAwsCredentials {
+        JsAwsCredentials {
+            access_key_id: access_key_id.to_string(),
+            secret_access_key: secret_access_key.to_string(),
+            session_token: Some("session-token".to_string()),
+            expires_at_epoch_millis,
+        }
+    }
+
+    #[test]
+    fn missing_or_consumed_explicit_key_fails_closed() {
+        let key = uuid::Uuid::new_v4().to_string();
+        glide_core::credential_provider_registry::register(key.clone(), provider_named("first"));
+        let mut first_request = request_with_iam();
+        let mut claim = claim_credential_provider(Some(key.clone()), &mut first_request)
+            .expect("registered provider should be claimable")
+            .expect("explicit key should create a claim");
+        claim.commit();
+        drop(claim);
+
+        let mut second_request = request_with_iam();
+        let error = claim_credential_provider(Some(key.clone()), &mut second_request)
+            .err()
+            .expect("a consumed key must fail client creation");
+        assert!(error.reason.contains(&key));
+        assert!(error.reason.contains("already been consumed"));
+        assert!(glide_core::credential_provider_registry::get(&key).is_none());
+    }
+
+    #[test]
+    fn key_without_iam_fails_without_consuming_provider() {
+        let key = uuid::Uuid::new_v4().to_string();
+        glide_core::credential_provider_registry::register(key.clone(), provider_named("original"));
+        let mut request = ConnectionRequest::default();
+
+        let error = claim_credential_provider(Some(key.clone()), &mut request)
+            .err()
+            .expect("provider key without IAM must fail");
+
+        assert!(error.reason.contains("no IAM configuration"));
+        let provider = glide_core::credential_provider_registry::remove(&key)
+            .expect("validation failure must not consume the provider");
+        assert_eq!(provider().unwrap().0, "original");
+    }
+
+    #[test]
+    fn downstream_failure_restores_provider() {
+        let key = uuid::Uuid::new_v4().to_string();
+        glide_core::credential_provider_registry::register(key.clone(), provider_named("original"));
+        let mut request = request_with_iam();
+
+        let claim = claim_credential_provider(Some(key.clone()), &mut request)
+            .expect("provider should be claimable")
+            .expect("explicit key should create a claim");
+        assert!(glide_core::credential_provider_registry::get(&key).is_none());
+        drop(claim);
+
+        let provider = glide_core::credential_provider_registry::remove(&key)
+            .expect("uncommitted claim must restore the provider");
+        assert_eq!(provider().unwrap().0, "original");
+    }
+
+    #[test]
+    fn rollback_does_not_overwrite_newer_registration() {
+        let key = uuid::Uuid::new_v4().to_string();
+        glide_core::credential_provider_registry::register(key.clone(), provider_named("original"));
+        let mut request = request_with_iam();
+        let claim = claim_credential_provider(Some(key.clone()), &mut request)
+            .expect("provider should be claimable")
+            .expect("explicit key should create a claim");
+        glide_core::credential_provider_registry::register(key.clone(), provider_named("newer"));
+
+        drop(claim);
+
+        let provider = glide_core::credential_provider_registry::remove(&key)
+            .expect("newer registration must remain");
+        assert_eq!(provider().unwrap().0, "newer");
+    }
+
+    #[test]
+    fn concurrent_claim_has_exactly_one_winner() {
+        let key = uuid::Uuid::new_v4().to_string();
+        glide_core::credential_provider_registry::register(key.clone(), provider_named("winner"));
+        let barrier = Arc::new(Barrier::new(2));
+        let workers: Vec<_> = (0..2)
+            .map(|_| {
+                let key = key.clone();
+                let barrier = Arc::clone(&barrier);
+                std::thread::spawn(move || {
+                    let mut request = request_with_iam();
+                    barrier.wait();
+                    match claim_credential_provider(Some(key), &mut request) {
+                        Ok(Some(mut claim)) => {
+                            claim.commit();
+                            true
+                        }
+                        Ok(None) => unreachable!("an explicit key always creates a claim"),
+                        Err(_) => false,
+                    }
+                })
+            })
+            .collect();
+        let winners = workers
+            .into_iter()
+            .map(|worker| worker.join().unwrap())
+            .filter(|won| *won)
+            .count();
+
+        assert_eq!(winners, 1);
+        assert!(glide_core::credential_provider_registry::get(&key).is_none());
+    }
+
+    #[test]
+    fn committed_success_consumes_provider() {
+        let key = uuid::Uuid::new_v4().to_string();
+        glide_core::credential_provider_registry::register(key.clone(), provider_named("consumed"));
+        let mut request = request_with_iam();
+        let mut claim = claim_credential_provider(Some(key.clone()), &mut request)
+            .expect("provider should be claimable")
+            .expect("explicit key should create a claim");
+
+        claim.commit();
+        drop(claim);
+
+        assert!(glide_core::credential_provider_registry::get(&key).is_none());
+    }
+
+    #[test]
+    fn rejects_empty_ascii_and_unicode_blank_credentials() {
+        for access_key in ["", " \t\r\n", "\u{2003}\u{3000}"] {
+            let error = validate_and_convert_credentials(credentials(access_key, "secret", None))
+                .expect_err("blank access key must fail");
+            assert!(error.to_string().contains("blank accessKeyId"));
+        }
+        for secret_key in ["", " \t\r\n", "\u{2003}\u{3000}"] {
+            let error = validate_and_convert_credentials(credentials("access", secret_key, None))
+                .expect_err("blank secret key must fail");
+            assert!(error.to_string().contains("blank secretAccessKey"));
+        }
+    }
+
+    #[test]
+    fn preserves_nonblank_credential_values_verbatim() {
+        let converted =
+            validate_and_convert_credentials(credentials("  access-key  ", "\tsecret-key\n", None))
+                .unwrap();
+
+        assert_eq!(converted.0, "  access-key  ");
+        assert_eq!(converted.1, "\tsecret-key\n");
+        assert_eq!(converted.2.as_deref(), Some("session-token"));
+    }
+
+    #[test]
+    fn validates_javascript_expiry_boundaries_before_conversion() {
+        let valid_millis = 1_700_000_000_123_f64;
+        let valid =
+            validate_and_convert_credentials(credentials("access", "secret", Some(valid_millis)))
+                .unwrap();
+        assert_eq!(
+            valid
+                .3
+                .unwrap()
+                .duration_since(std::time::SystemTime::UNIX_EPOCH)
+                .unwrap(),
+            std::time::Duration::from_millis(valid_millis as u64)
+        );
+
+        for absent in [None, Some(0.0), Some(-1.0)] {
+            assert!(
+                validate_and_convert_credentials(credentials("access", "secret", absent))
+                    .unwrap()
+                    .3
+                    .is_none()
+            );
+        }
+
+        let maximum_safe = validate_and_convert_credentials(credentials(
+            "access",
+            "secret",
+            Some(JS_MAX_SAFE_INTEGER),
+        ))
+        .expect("Number.MAX_SAFE_INTEGER is an exact integer");
+        assert!(maximum_safe.3.is_some());
+
+        for invalid in [
+            f64::NAN,
+            f64::INFINITY,
+            f64::NEG_INFINITY,
+            1.5,
+            JS_MAX_SAFE_INTEGER + 1.0,
+            -(JS_MAX_SAFE_INTEGER + 1.0),
+        ] {
+            let error =
+                validate_and_convert_credentials(credentials("access", "secret", Some(invalid)))
+                    .expect_err("invalid JavaScript numbers must be rejected");
+            assert!(matches!(error, GlideIAMError::CredentialsError(_)));
+            assert!(error.to_string().contains("finite safe integer"));
+        }
+    }
+
+    #[test]
+    fn preserves_omitted_session_token() {
+        let converted = validate_and_convert_credentials(JsAwsCredentials {
+            access_key_id: "access-key".to_string(),
+            secret_access_key: "secret-key".to_string(),
+            session_token: None,
+            expires_at_epoch_millis: None,
+        })
+        .unwrap();
+
+        assert!(converted.2.is_none());
+    }
+
+    #[test]
+    fn expiry_system_time_overflow_is_a_controlled_credentials_error() {
+        let near_maximum = std::time::SystemTime::UNIX_EPOCH
+            .checked_add(std::time::Duration::from_secs(i64::MAX as u64))
+            .expect("platform should represent the i64 seconds boundary");
+        let error = checked_expiry_from(near_maximum, JS_MAX_SAFE_INTEGER as i64)
+            .expect_err("adding Number.MAX_SAFE_INTEGER milliseconds must overflow SystemTime");
+
+        assert!(matches!(error, GlideIAMError::CredentialsError(_)));
+        assert!(error.to_string().contains("expiresAtEpochMillis"));
+    }
+
+    fn test_handle(client_id: u64, pool_client_id: Option<u64>) -> GlideClientHandle {
+        let (command_tx, _command_rx) = mpsc::unbounded_channel::<WorkerMessage>();
+        GlideClientHandle {
+            command_tx: Some(command_tx),
+            inflight_requests: Arc::new(AtomicIsize::new(1)),
+            response_buffer: Arc::new(ResponseBuffer::new()),
+            wake_callback: None,
+            client_id,
+            pool_client_id,
+        }
+    }
+
+    async fn lazy_client(request: ConnectionRequest) -> Client {
+        Client::new(
+            ConnectionRequest {
+                addresses: vec![NodeAddress {
+                    host: "127.0.0.1".to_string(),
+                    port: 1,
+                }],
+                lazy_connect: true,
+                ..request
+            },
+            None,
+        )
+        .await
+        .expect("lazy client construction must not connect")
+    }
+
+    #[test]
+    fn pool_client_id_marker_identifies_registration_owner() {
+        let direct_id = glide_core::pool::allocate_client_id();
+        let pool_id = glide_core::pool::allocate_client_id();
+        assert!(test_handle(direct_id, None).is_direct_client());
+        assert!(!test_handle(pool_id, Some(pool_id)).is_direct_client());
+    }
+
+    #[tokio::test]
+    async fn undelivered_direct_handle_drop_unregisters_client() {
+        let client_id = glide_core::pool::allocate_client_id();
+        let client = lazy_client(ConnectionRequest::default()).await;
+        glide_core::scope::register_client(client_id, client);
+
+        drop(test_handle(client_id, None));
+
+        assert!(glide_core::scope::get_parent_client(client_id).is_none());
+    }
+
+    #[tokio::test]
+    async fn explicit_close_then_drop_leaves_direct_client_unregistered() {
+        let client_id = glide_core::pool::allocate_client_id();
+        let client = lazy_client(ConnectionRequest::default()).await;
+        glide_core::scope::register_client(client_id, client);
+        let mut handle = test_handle(client_id, None);
+
+        handle.close().unwrap();
+        assert!(glide_core::scope::get_parent_client(client_id).is_none());
+        drop(handle);
+        assert!(glide_core::scope::get_parent_client(client_id).is_none());
+    }
+
+    #[tokio::test]
+    async fn post_conversion_delivery_failure_releases_direct_client_and_provider() {
+        let provider_lifetime = Arc::new(());
+        let provider_lifetime_weak = Arc::downgrade(&provider_lifetime);
+        let captured_lifetime = Arc::clone(&provider_lifetime);
+        let provider: CredentialsProvider = Arc::new(move || {
+            let _keep_provider_alive = &captured_lifetime;
+            Ok((
+                "test_access_key".to_string(),
+                "test_secret_key".to_string(),
+                Some("test_session_token".to_string()),
+                None,
+            ))
+        });
+        drop(provider_lifetime);
+
+        let key = uuid::Uuid::new_v4().to_string();
+        glide_core::credential_provider_registry::register(key.clone(), provider);
+        let mut request = request_with_iam();
+        let mut claim = claim_credential_provider(Some(key.clone()), &mut request)
+            .expect("provider should be claimable")
+            .expect("explicit key should create a claim");
+        let client = lazy_client(request).await;
+        let client_id = glide_core::pool::allocate_client_id();
+        glide_core::scope::register_client(client_id, client.clone());
+        let handle = test_handle(client_id, None);
+
+        // This is the state immediately after GlideClientHandle::to_napi_value:
+        // the claim is consumed and the JS object's finalizer owns the handle.
+        claim.commit();
+        drop(claim);
+        drop(client);
+        assert!(glide_core::credential_provider_registry::get(&key).is_none());
+
+        // Simulate napi_resolve_deferred failing: the undelivered JS object is
+        // finalized, which drops the native handle.
+        drop(handle);
+        assert!(glide_core::scope::get_parent_client(client_id).is_none());
+
+        tokio::time::timeout(std::time::Duration::from_secs(2), async {
+            while provider_lifetime_weak.upgrade().is_some() {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("client/provider refresh task should become releasable");
+    }
+
+    #[test]
+    fn node_callback_timeout_precedes_core_deadline() {
+        assert_eq!(
+            NODE_CREDENTIALS_CALLBACK_TIMEOUT,
+            std::time::Duration::from_secs(9)
+        );
+        assert!(NODE_CREDENTIALS_CALLBACK_TIMEOUT < std::time::Duration::from_secs(10));
+    }
 }
 
 #[cfg(test)]

@@ -6,6 +6,7 @@ import os
 import struct
 import sys
 import threading
+import weakref
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -62,8 +63,13 @@ from glide_shared.exceptions import (
 from glide_shared.ffi_helpers import (
     ENCODING,
     FFIClientTypeEnum,
+    _allocate_direct_callback_id,
+    _create_native_client_finalizer,
+    _is_credential_provider_executing,
+    _NativeClientOwner,
     convert_commands_to_c_batch_info,
     create_c_batch_options,
+    create_credential_provider_callback,
     to_c_route_ptr_and_len,
     to_c_strings,
 )
@@ -79,7 +85,42 @@ from .opentelemetry import OpenTelemetry
 
 _ASYNC_FFI = _GlideFFI()  # Async client's own FFI instance
 
+_live_async_clients: "weakref.WeakSet[BaseClient]" = weakref.WeakSet()
+_live_async_clients_lock = threading.Lock()
+_async_fork_hook_registered = False
 
+
+def _after_fork_in_child() -> None:
+    """Invalidate inherited async clients and the fork-unsafe pipe writer."""
+    global _live_async_clients_lock, _async_pipe_lock
+    _live_async_clients_lock = threading.Lock()
+    # A lock held by a vanished parent thread can never be released in the
+    # child. Replace it before performing the PID-mismatch reset.
+    _async_pipe_lock = threading.Lock()
+    with _async_pipe_lock:
+        _detect_fork_and_reset()
+    for client in list(_live_async_clients):
+        try:
+            BaseClient._invalidate_after_fork(client)
+            _live_async_clients.discard(client)
+        except BaseException:
+            pass
+
+
+def _register_async_fork_hook() -> None:
+    global _async_fork_hook_registered
+    if hasattr(os, "register_at_fork") and not _async_fork_hook_registered:
+        os.register_at_fork(after_in_child=_after_fork_in_child)
+        _async_fork_hook_registered = True
+
+
+_register_async_fork_hook()
+
+
+# Native creation has already completed when this deadline starts. A healthy
+# owner loop adopts immediately; ten seconds only accommodates severe scheduler
+# stalls while preventing a successful orphan pointer from living forever.
+_NATIVE_CREATE_ADOPTION_DECISION_TIMEOUT_SECONDS = 10.0
 if sys.version_info >= (3, 11):
     from typing import Self
 else:
@@ -207,23 +248,27 @@ def _slot_for_key(key: bytes) -> int:
 _async_pipe_read_fd: int = -1
 _async_pipe_write_fd: int = -1
 _async_pipe_init_pid: int = -1
-_next_client_id = itertools.count(1)
+# Only a PID mismatch may set this flag. A forked child must replace the
+# inherited native writer exactly once; every same-process setup uses init on
+# its first attempt or reuses the writer that was already installed.
+_async_pipe_needs_fork_reinit: bool = False
 
 
 _async_pipe_registered: bool = False
 _async_pipe_loop: Optional[asyncio.AbstractEventLoop] = (
-    None  # loop that owns the reader
+    None  # asyncio loop that owns the reader
 )
-# Identity of the trio.run() that owns the reader system task.  A given
-# reader lives for exactly one trio.run(); the token is set eagerly (under
-# _async_pipe_lock, before the spawned task starts) so registration is
-# idempotent within a run and re-registers cleanly across runs.  This is
-# what guarantees at most one _trio_pipe_reader ever waits on the shared fd:
-# trio raises BusyResourceError if two tasks wait on the same fd at once.
+# Identity and cancellation ownership of the trio.run() reader system task.
+# The token is published under _async_pipe_lock before spawning so concurrent
+# setup remains idempotent within one run.
 _trio_pipe_token: Optional[object] = None
+_trio_pipe_cancel_scope: Optional[Any] = None
 _async_pipe_lock = threading.Lock()
-_client_registry: dict = {}
+_client_registry: "weakref.WeakValueDictionary[int, BaseClient]" = (
+    weakref.WeakValueDictionary()
+)
 _pipe_remainder: bytes = b""
+_pipe_remainder_is_stale: bool = False
 _FRAME_STRUCT = struct.Struct("=QQQQ")  # Pre-compiled for hot path
 _PUBSUB_SENTINEL = 0xFFFFFFFFFFFFFFFF  # request_id sentinel for pubsub frames
 
@@ -245,28 +290,27 @@ if _FREE_THREADED:
 
 
 def _free_orphaned_frame(request_id, response_ptr, arena_or_err):
-    """Free resources from a pipe frame whose client has been closed."""
-    if request_id == _PUBSUB_SENTINEL:
-        if arena_or_err & (1 << 63):
-            # Pointer-mode pubsub: free the heap-allocated payload
-            payload_len = arena_or_err & 0x7FFFFFFFFFFFFFFF
-            any_c = next(iter(_client_registry.values()), None)
-            if any_c:
-                any_c._lib.free_pubsub_pointer_payload(
-                    any_c._ffi.cast("uint8_t*", response_ptr), payload_len
-                )
-        return
-    any_c = next(iter(_client_registry.values()), None)
-    if any_c is None:
-        return
+    """Free native ownership from a frame whose weak client is already gone."""
+    ffi = _ASYNC_FFI.ffi
+    lib = _ASYNC_FFI.lib
     try:
+        if request_id == _PUBSUB_SENTINEL:
+            if arena_or_err & (1 << 63):
+                # Inline pubsub frames own no native allocation. Pointer-mode
+                # frames always own exactly one heap payload.
+                payload_len = arena_or_err & 0x7FFFFFFFFFFFFFFF
+                lib.free_pubsub_pointer_payload(
+                    ffi.cast("uint8_t*", response_ptr), payload_len
+                )
+            return
         if response_ptr != 0 and arena_or_err != 0:
-            any_c._lib.free_response_arena(any_c._ffi.cast("void*", arena_or_err))
+            lib.free_response_arena(ffi.cast("void*", arena_or_err))
         elif response_ptr == 0 and arena_or_err != 0:
             err_ptr = arena_or_err & 0x00FFFFFFFFFFFFFF
             if err_ptr:
-                any_c._lib.free_pipe_error_string(any_c._ffi.cast("char*", err_ptr))
+                lib.free_pipe_error_string(ffi.cast("char*", err_ptr))
     except Exception:
+        # Pipe cleanup is best effort and must not stop later frames draining.
         pass
 
 
@@ -360,10 +404,11 @@ def _handle_pointer_pubsub(client, ptr_val: int, payload_len: int):
         buf_ptr = ffi.cast("uint8_t*", ptr_val)
         payload = bytes(ffi.buffer(buf_ptr, payload_len))
         _handle_inline_pubsub(client, payload)
-    except Exception as e:
-        ClientLogger.log(
-            LogLevel.ERROR, "pubsub_pipe", f"Error handling pointer pubsub: {e}"
-        )
+    except BaseException:
+        # Never include callback exceptions or PubSub payloads in logs.
+        import logging
+
+        logging.getLogger(__name__).error("PubSub pointer notification failed")
     finally:
         client._lib.free_pubsub_pointer_payload(
             client._ffi.cast("uint8_t*", ptr_val), payload_len
@@ -397,25 +442,28 @@ def _handle_inline_pubsub(client, payload: bytes):
             ClientLogger.log(
                 LogLevel.WARN,
                 "pubsub_pipe",
-                f"Unknown push notification kind received: {payload[:4]!r}",
+                "Unknown PubSub notification kind",
             )
-    except Exception as e:
-        ClientLogger.log(
-            LogLevel.ERROR, "pubsub_pipe", f"Error handling pubsub frame: {e}"
-        )
+    except BaseException:
+        # Python callback trampolines must contain every user exception, including
+        # BaseException subclasses, without logging exception text or payload bytes.
+        import logging
+
+        logging.getLogger(__name__).error("PubSub notification failed")
 
 
 def _detect_fork_and_reset() -> None:
-    """Detect if we are in a forked child and reset pipe state.
+    """Close inherited pipe state and request one child-side native reinit.
 
-    After fork(), the flush thread is dead (threads don't survive fork) but
-    the pipe fd and Rust OnceLock state are inherited. Reset the Python-side
-    state so _setup_pipe will create a fresh pipe and call reinit_async_pipe.
-    Must be called while holding _async_pipe_lock.
+    A same-process setup failure must never reach this path. The PID mismatch
+    is the sole condition that invalidates the native writer and permits
+    reinit_async_pipe. Must be called while holding _async_pipe_lock.
     """
     global _async_pipe_read_fd, _async_pipe_write_fd
     global _async_pipe_registered, _async_pipe_loop
-    global _pipe_remainder, _trio_pipe_token
+    global _pipe_remainder, _pipe_remainder_is_stale, _trio_pipe_token
+    global _trio_pipe_cancel_scope, _async_pipe_init_pid
+    global _async_pipe_needs_fork_reinit
     current_pid = os.getpid()
     if (
         _async_pipe_read_fd >= 0
@@ -433,67 +481,56 @@ def _detect_fork_and_reset() -> None:
                 pass
         _async_pipe_read_fd = -1
         _async_pipe_write_fd = -1
+        _async_pipe_init_pid = -1
         _async_pipe_registered = False
         _async_pipe_loop = None
         _pipe_remainder = b""
+        _pipe_remainder_is_stale = False
         _trio_pipe_token = None
+        # Do not touch an inherited CancelScope: its Trio run and task no
+        # longer exist in the child.
+        _trio_pipe_cancel_scope = None
+        _async_pipe_needs_fork_reinit = True
         _client_registry.clear()
 
 
-def _drain_stale_pipe_frames():
-    """Drain stale frames from the pipe to prevent reading freed pointers."""
-    while True:
-        try:
-            stale = os.read(_async_pipe_read_fd, 32 * 256)
-            if not stale:
-                break
-        except (BlockingIOError, OSError):
-            break
-
-
-def _on_async_pipe_readable() -> None:  # noqa: C901
-    # Free-threading optimization: when GIL is disabled, dispatch response parsing
-    # to a thread pool for parallel execution across cores. With GIL enabled,
-    # parse serially on the event loop thread (thread pool overhead not worth it).
-    global _pipe_remainder
-    try:
-        data = os.read(_async_pipe_read_fd, 32 * 512)
-    except (BlockingIOError, OSError):
-        return
-    if not data:
-        return
-    if _pipe_remainder:
-        data = _pipe_remainder + data
-        _pipe_remainder = b""
+def _consume_pipe_frames(data: bytes, *, dispatch: bool, max_frames=None):  # noqa: C901
+    """Consume complete pipe frames, optionally dispatching them to clients."""
     offset = 0
-    while offset + 32 <= len(data):
+    frames_consumed = 0
+    while offset + _FRAME_STRUCT.size <= len(data):
+        if max_frames is not None and frames_consumed >= max_frames:
+            break
+        frame_start = offset
         client_id, request_id, response_ptr, arena_or_err = _FRAME_STRUCT.unpack_from(
             data, offset
         )
-        offset += 32
+        offset += _FRAME_STRUCT.size
+        inline_payload = None
+        if request_id == _PUBSUB_SENTINEL and not arena_or_err & (1 << 63):
+            payload_len = response_ptr
+            if offset + payload_len > len(data):
+                offset = frame_start
+                break
+            inline_payload = data[offset : offset + payload_len]
+            offset += payload_len
+
+        frames_consumed += 1
+        if not dispatch:
+            _free_orphaned_frame(request_id, response_ptr, arena_or_err)
+            continue
+
         client = _client_registry.get(client_id)
         if request_id == _PUBSUB_SENTINEL:
             if arena_or_err & (1 << 63):
-                # Pointer-mode: large message delivered via heap pointer
                 payload_len = arena_or_err & 0x7FFFFFFFFFFFFFFF
                 if client is not None:
                     _handle_pointer_pubsub(client, response_ptr, payload_len)
                 else:
-                    any_c = next(iter(_client_registry.values()), None)
-                    if any_c:
-                        any_c._lib.free_pubsub_pointer_payload(
-                            any_c._ffi.cast("uint8_t*", response_ptr), payload_len
-                        )
-            else:
-                # Inline pubsub: response_ptr = payload_len, data follows header
-                payload_len = response_ptr
-                if offset + payload_len > len(data):
-                    # Incomplete payload — put header + remaining back
-                    offset -= 32
-                    break
-                if client is not None:
-                    _handle_inline_pubsub(client, data[offset : offset + payload_len])
-                offset += payload_len
+                    _free_orphaned_frame(request_id, response_ptr, arena_or_err)
+            elif client is not None:
+                assert inline_payload is not None
+                _handle_inline_pubsub(client, inline_payload)
             continue
         if client is None:
             _free_orphaned_frame(request_id, response_ptr, arena_or_err)
@@ -505,42 +542,258 @@ def _on_async_pipe_readable() -> None:  # noqa: C901
                 )
             else:
                 _handle_pipe_success(client, request_id, response_ptr, arena_or_err)
+        elif _FREE_THREADED and _response_thread_pool is not None:
+            _response_thread_pool.submit(
+                _handle_pipe_error, client, request_id, arena_or_err
+            )
         else:
-            if _FREE_THREADED and _response_thread_pool is not None:
-                _response_thread_pool.submit(
-                    _handle_pipe_error, client, request_id, arena_or_err
-                )
-            else:
-                _handle_pipe_error(client, request_id, arena_or_err)
-    if offset < len(data):
-        _pipe_remainder = data[offset:]
+            _handle_pipe_error(client, request_id, arena_or_err)
+    return data[offset:], frames_consumed
 
 
-async def _trio_pipe_reader(pipe_fd: int, token: object) -> None:
-    """Background trio task that reads from the shared pipe.
+def _drain_stale_pipe_frames():
+    """Drain stale frames without dispatch while releasing native ownership."""
+    global _pipe_remainder, _pipe_remainder_is_stale
+    data, _pipe_remainder = _pipe_remainder, b""
+    while True:
+        if data:
+            data, _ = _consume_pipe_frames(data, dispatch=False)
+        try:
+            stale = os.read(_async_pipe_read_fd, _FRAME_STRUCT.size * 256)
+        except (BlockingIOError, OSError):
+            break
+        if not stale:
+            break
+        data += stale
+    # An EAGAIN can split an inline payload or header. Preserve that prefix and
+    # mark it stale so the next reader finishes and frees/skips it without ever
+    # dispatching payload bytes as a new header.
+    _pipe_remainder = data
+    _pipe_remainder_is_stale = bool(data)
 
-    ``token`` identifies the trio.run() this reader was spawned for.  On exit
-    it clears the shared registration only if it still owns that token, so a
-    reader that is cancelled while a newer trio.run() has already registered
-    its own reader cannot wipe the newer run's state.
-    """
+
+def _on_async_pipe_readable() -> None:
+    # Free-threading optimization: when GIL is disabled, dispatch response parsing
+    # to a thread pool for parallel execution across cores. With GIL enabled,
+    # parse serially on the event loop thread (thread pool overhead not worth it).
+    global _pipe_remainder, _pipe_remainder_is_stale
+    try:
+        data = os.read(_async_pipe_read_fd, _FRAME_STRUCT.size * 512)
+    except (BlockingIOError, OSError):
+        return
+    if not data:
+        return
+    if _pipe_remainder:
+        data = _pipe_remainder + data
+        _pipe_remainder = b""
+    if _pipe_remainder_is_stale:
+        # A stale remainder contains at most one incomplete frame because the
+        # drain consumed every preceding complete frame. Finish exactly that
+        # frame without dispatch, then resume normal handling at its boundary.
+        data, consumed = _consume_pipe_frames(data, dispatch=False, max_frames=1)
+        if not consumed:
+            _pipe_remainder = data
+            return
+        _pipe_remainder_is_stale = False
+    _pipe_remainder, _ = _consume_pipe_frames(data, dispatch=True)
+
+
+async def _trio_pipe_reader(pipe_fd: int, token: object, cancel_scope) -> None:
+    """Read pipe frames for one Trio run under cancellable ownership."""
     import trio
 
-    global _trio_pipe_token, _async_pipe_registered
+    global _trio_pipe_token, _trio_pipe_cancel_scope, _async_pipe_registered
     try:
-        while True:
-            await trio.lowlevel.wait_readable(pipe_fd)
-            try:
-                _on_async_pipe_readable()
-            except trio.Cancelled:
-                raise
-            except Exception as e:
-                ClientLogger.log(LogLevel.ERROR, "trio_pipe", f"Pipe read error: {e}")
+        with cancel_scope:
+            while True:
+                await trio.lowlevel.wait_readable(pipe_fd)
+                try:
+                    _on_async_pipe_readable()
+                except trio.Cancelled:
+                    raise
+                except Exception as e:
+                    ClientLogger.log(
+                        LogLevel.ERROR, "trio_pipe", f"Pipe read error: {e}"
+                    )
     finally:
         with _async_pipe_lock:
             if _trio_pipe_token is token:
                 _trio_pipe_token = None
+                _trio_pipe_cancel_scope = None
                 _async_pipe_registered = False
+
+
+class _NativeCreateState:
+    """Own one native create result until the caller adopts or abandons it."""
+
+    def __init__(
+        self,
+        ffi,
+        lib,
+        create_args,
+        callback_refs,
+        adoption_decision_timeout_seconds: Optional[float] = None,
+    ) -> None:
+        self._ffi = ffi
+        self._lib = lib
+        self._create_args = create_args
+        self._callback_refs = callback_refs
+        self._adoption_decision_timeout_seconds = (
+            _NATIVE_CREATE_ADOPTION_DECISION_TIMEOUT_SECONDS
+            if adoption_decision_timeout_seconds is None
+            else adoption_decision_timeout_seconds
+        )
+        self._lock = threading.Lock()
+        self._result_ready = threading.Event()
+        self._decision_ready = threading.Event()
+        self.cleanup_complete = threading.Event()
+        self._core_client = None
+        self._error_message: Optional[str] = None
+        self._exception: Optional[BaseException] = None
+        self._abandoned = False
+        self._adopted = False
+        self._thread = threading.Thread(target=self._run, daemon=True)
+
+    def _start(self) -> None:
+        self._thread.start()
+
+    async def _wait_and_adopt(self):
+        """Wait cancellably; cancellation leaves cleanup to the create worker."""
+        try:
+            await anyio.to_thread.run_sync(
+                self._result_ready.wait, abandon_on_cancel=True
+            )
+        except BaseException:
+            self._abandon()
+            raise
+
+        with self._lock:
+            if self._abandoned:
+                raise RuntimeError("Native client creation was abandoned")
+            core_client = self._core_client
+            error_message = self._error_message
+            exception = self._exception
+            if exception is None and error_message is None and core_client is not None:
+                self._adopted = True
+            else:
+                self._abandoned = True
+        self._decision_ready.set()
+
+        if exception is not None:
+            raise exception
+        if error_message is not None:
+            raise ClosingError(error_message)
+        if core_client is None:
+            raise ClosingError("Failed to create client, response pointer is NULL.")
+        return core_client
+
+    def _abandon(self) -> None:
+        """Atomically choose worker cleanup unless the pointer was adopted."""
+        with self._lock:
+            if not self._adopted:
+                self._abandoned = True
+        self._decision_ready.set()
+
+    def _run(self) -> None:  # noqa: C901
+        response_ptr = self._ffi.NULL
+        core_client = None
+        error_message = None
+        exception = None
+        try:
+            try:
+                response_ptr = self._lib.create_client(*self._create_args)
+                if response_ptr == self._ffi.NULL:
+                    error_message = "Failed to create client, response pointer is NULL."
+                else:
+                    try:
+                        response = self._ffi.cast("ConnectionResponse*", response_ptr)
+                        if response.conn_ptr == self._ffi.NULL:
+                            error_message = (
+                                self._ffi.string(
+                                    response.connection_error_message
+                                ).decode(ENCODING)
+                                if response.connection_error_message != self._ffi.NULL
+                                else "Unknown error"
+                            )
+                        else:
+                            core_client = response.conn_ptr
+                    finally:
+                        # The worker is the sole owner of ConnectionResponse.
+                        self._lib.free_connection_response(response_ptr)
+            except BaseException as error:
+                exception = error
+
+            with self._lock:
+                self._core_client = core_client
+                self._error_message = error_message
+                self._exception = exception
+            self._result_ready.set()
+            if core_client is not None:
+                decision_arrived = self._decision_ready.wait(
+                    self._adoption_decision_timeout_seconds
+                )
+                if not decision_arrived:
+                    # Timeout and caller adoption race under the same lock. If
+                    # adoption already won, this is a no-op; otherwise the
+                    # worker consumes ownership and performs the only close.
+                    with self._lock:
+                        if not self._adopted and not self._abandoned:
+                            self._abandoned = True
+            with self._lock:
+                should_close = (
+                    self._abandoned
+                    and not self._adopted
+                    and self._core_client is not None
+                )
+                core_client = self._core_client if should_close else None
+                if should_close:
+                    self._core_client = None
+            if core_client is not None:
+                try:
+                    self._lib.close_client(core_client)
+                except BaseException:
+                    # There is no caller left to receive an abandoned-create
+                    # cleanup error; ownership has nevertheless been consumed.
+                    pass
+        finally:
+            self._callback_refs = ()
+            self._create_args = ()
+            self.cleanup_complete.set()
+
+
+class _NativeCloseState:
+    """Close a detached native owner independently of an async event loop."""
+
+    def __init__(self, owner: _NativeClientOwner, release_refs) -> None:
+        self._owner: Optional[_NativeClientOwner] = owner
+        self._release_refs = release_refs
+        self.done = threading.Event()
+        self.error: Optional[BaseException] = None
+        self._thread = threading.Thread(target=self._run, daemon=True)
+
+    def _start(self) -> None:
+        self._thread.start()
+
+    def _run(self) -> None:
+        try:
+            owner = self._owner
+            assert owner is not None
+            owner.close()
+        except BaseException as error:
+            self.error = error
+        finally:
+            # This callback only mutates Python references and is safe after the
+            # owner loop has exited. Native close has already stopped callbacks.
+            self._release_refs()
+            self._release_refs = None
+            self._owner = None
+            self.done.set()
+
+    async def wait(self) -> None:
+        """Wait cancellably while native cleanup continues in the worker."""
+        await anyio.to_thread.run_sync(self.done.wait, abandon_on_cancel=True)
+        if self.error is not None:
+            raise self.error
 
 
 class BaseClient(CoreCommands):
@@ -558,16 +811,25 @@ class BaseClient(CoreCommands):
         self._pending_futures: Dict[int, "TFuture"] = {}
         self._callback_id_gen = itertools.count(1)
         self._lock = threading.Lock()
+        self._use_direct_lifecycle = True
+        self._close_lock = threading.Lock()
+        self._close_state: Optional[_NativeCloseState] = None
+        self._native_owner: Optional[_NativeClientOwner] = None
+        self._native_finalizer: Optional[weakref.finalize] = None
         self._address_resolver_callback_ref = None
+        self._address_resolver_callback_owner = None
+        self._credential_provider_callback_ref = None
+        self._credential_provider_callback_owner = None
         self._pubsub_futures: List["TFuture"] = []
         self._pubsub_lock = threading.Lock()
         self._pending_push_notifications: List[PubSubMsg] = []
         self._pipe_client_id: int = 0
+        self._direct_callback_id: int = 0
         self._create_pid: int = 0
         self._is_asyncio: bool = True
 
     @classmethod
-    async def create(cls, config: BaseClientConfiguration) -> Self:
+    async def create(cls, config: BaseClientConfiguration) -> Self:  # noqa: C901
         """Creates a Glide client.
 
         Args:
@@ -607,112 +869,212 @@ class BaseClient(CoreCommands):
         # Pubsub messages are delivered via the shared pipe — no callback needed.
         pubsub_callback = self._ffi.cast("PubSubCallback", 0)
 
+        # Direct callback IDs use the reserved high uintptr namespace, which is
+        # also safe in the async pipe's u64 client-id field.
+        self._direct_callback_id = _allocate_direct_callback_id(self._ffi)
+        self._pipe_client_id = self._direct_callback_id
+        self._create_pid = os.getpid()
+
         # Create address resolver callback if configured
         from glide_shared.ffi_helpers import create_address_resolver_callback
 
-        address_resolver_callback = create_address_resolver_callback(
-            self._ffi, self.config.address_resolver
+        (
+            address_resolver_callback,
+            address_resolver_callback_owner,
+        ) = create_address_resolver_callback(
+            self._ffi,
+            self.config.address_resolver,
+            callback_id=self._direct_callback_id,
         )
         if self.config.address_resolver is not None:
             self._address_resolver_callback_ref = address_resolver_callback
+            self._address_resolver_callback_owner = address_resolver_callback_owner
 
-        # Set pipe_client_id before create_client so Rust routes responses
-        # through the pipe from the very first command — no race window.
-        self._pipe_client_id = next(_next_client_id)
-        self._create_pid = os.getpid()
+        credential_provider = None
+        if (
+            self.config.credentials is not None
+            and self.config.credentials.iam_config is not None
+        ):
+            credential_provider = self.config.credentials.iam_config.credential_provider
 
-        client_response_ptr = self._lib.create_client(
-            conn_req_bytes,
-            len(conn_req_bytes),
-            client_type,
-            pubsub_callback,
-            address_resolver_callback,
-            self._pipe_client_id,
+        trio_token = None
+        if not self._is_asyncio:
+            import trio
+
+            # Capture ownership before Rust invokes the callback from a foreign
+            # thread; current_trio_token() is unavailable from that thread.
+            trio_token = trio.lowlevel.current_trio_token()
+        (
+            credential_provider_callback,
+            credential_provider_callback_owner,
+        ) = create_credential_provider_callback(
+            self._ffi,
+            credential_provider,
+            callback_id=self._direct_callback_id,
+            event_loop=self._loop,
+            trio_token=trio_token,
+            allow_async=True,
+            provider_owner=self,
         )
-
-        ClientLogger.log(LogLevel.INFO, "connection info", "new connection established")
-
-        if client_response_ptr == self._ffi.NULL:
-            raise ClosingError("Failed to create client, response pointer is NULL.")
-
-        client_response = self._ffi.cast("ConnectionResponse*", client_response_ptr)
-        if client_response.conn_ptr != self._ffi.NULL:
-            self._core_client = client_response.conn_ptr
-        else:
-            error_msg = (
-                self._ffi.string(client_response.connection_error_message).decode(
-                    ENCODING
-                )
-                if client_response.connection_error_message != self._ffi.NULL
-                else "Unknown error"
+        if credential_provider is not None:
+            self._credential_provider_callback_ref = credential_provider_callback
+            self._credential_provider_callback_owner = (
+                credential_provider_callback_owner
             )
-            self._lib.free_connection_response(client_response_ptr)
-            raise ClosingError(error_msg)
 
-        self._lib.free_connection_response(client_response_ptr)
+        # Install the shared pipe before native creation. Preconfigured subscriptions can emit
+        # pushes as soon as the core connects, so post-create initialization is too late.
+        try:
+            self._setup_pipe()
+        except BaseException:
+            self._is_closed = True
+            _client_registry.pop(self._pipe_client_id, None)
+            self._release_callback_references()
+            raise
 
-        self._setup_pipe()
+        create_state = _NativeCreateState(
+            self._ffi,
+            self._lib,
+            (
+                conn_req_bytes,
+                len(conn_req_bytes),
+                client_type,
+                pubsub_callback,
+                address_resolver_callback,
+                credential_provider_callback,
+                self._pipe_client_id,
+            ),
+            (
+                client_type,
+                pubsub_callback,
+                address_resolver_callback,
+                credential_provider_callback,
+                address_resolver_callback_owner,
+                credential_provider_callback_owner,
+            ),
+        )
+        create_state._start()
 
-        return self
+        try:
+            # The native worker exclusively owns and frees ConnectionResponse.
+            # Cancellation only marks its result abandoned; a late successful
+            # pointer is closed by that same worker without using this runtime.
+            self._core_client = await create_state._wait_and_adopt()
+            self._native_owner, self._native_finalizer = (
+                _create_native_client_finalizer(
+                    self,
+                    self._lib,
+                    self._core_client,
+                    (
+                        pubsub_callback,
+                        address_resolver_callback,
+                        credential_provider_callback,
+                    ),
+                    self._create_pid,
+                    callback_owners=(
+                        address_resolver_callback_owner,
+                        credential_provider_callback_owner,
+                    ),
+                )
+            )
 
-    def _setup_pipe(self) -> None:
-        """Initialize and register the shared response pipe."""
+            # Give pending AnyIO/Trio cancellation a delivery point before the
+            # initialized client escapes. Raw asyncio cancellation is handled by
+            # the same close-worker transfer in the exception path below.
+            await anyio.lowlevel.checkpoint()
+
+            ClientLogger.log(
+                LogLevel.INFO, "connection info", "new connection established"
+            )
+            with _live_async_clients_lock:
+                _live_async_clients.add(self)
+            return self
+        except BaseException:
+            create_state._abandon()
+            _client_registry.pop(self._pipe_client_id, None)
+            if self._core_client is not None and not self._is_closed:
+                try:
+                    await self.close()
+                except BaseException:
+                    # close() transfers ownership before its first await. A
+                    # cancelled waiter may return while native cleanup continues.
+                    pass
+            else:
+                self._is_closed = True
+                self._release_callback_references()
+            raise
+
+    def _setup_pipe(self) -> None:  # noqa: C901
+        """Transactionally initialize or transfer the shared response pipe."""
         global _async_pipe_read_fd, _async_pipe_write_fd
         global _async_pipe_registered, _async_pipe_loop
-        global _pipe_remainder, _trio_pipe_token, _async_pipe_init_pid
-        # Identify the current trio.run() up front (outside the lock).  The
-        # token uniquely names this run, so it both makes registration
-        # idempotent within a run and tells a fresh run that a prior run's
-        # registration is stale.
+        global _trio_pipe_token, _trio_pipe_cancel_scope
+        global _async_pipe_init_pid, _async_pipe_needs_fork_reinit
+        global _pipe_remainder, _pipe_remainder_is_stale
+
         trio_token = None
         if not self._is_asyncio:
             import trio
 
             trio_token = trio.lowlevel.current_trio_token()
+        if not self._pipe_client_id:
+            raise ClosingError("Async response pipe is unavailable")
+        if self._is_asyncio and self._loop is None:
+            raise ClosingError("Async response pipe has no owning event loop")
+
         with _async_pipe_lock:
             _detect_fork_and_reset()
             current_pid = os.getpid()
+            created_read_fd = -1
+            created_write_fd = -1
+            created_transport = False
+            registered_here = False
 
-            if _async_pipe_read_fd < 0:
-                try:
-                    _async_pipe_read_fd, pw = os.pipe()
-                    os.set_blocking(_async_pipe_read_fd, False)
-                    if _async_pipe_init_pid > 0 and current_pid != _async_pipe_init_pid:
-                        self._lib.reinit_async_pipe(pw)
-                    else:
-                        self._lib.init_async_pipe(pw)
-                    _async_pipe_write_fd = pw
-                    _async_pipe_init_pid = current_pid
-                except OSError:
-                    _async_pipe_read_fd = -1
-                    self._pipe_client_id = 0
-            # Detect stale registration: the loop that originally called
-            # add_reader has been closed/destroyed (e.g. between anyio.run()
-            # calls in benchmarks).  Reset so we re-register below.
-            if _async_pipe_registered and _async_pipe_loop is not None:
-                if _async_pipe_loop.is_closed():
-                    _async_pipe_registered = False
-                    _async_pipe_loop = None
-                    _pipe_remainder = b""
-                    _drain_stale_pipe_frames()
-            # Trio: registration belongs to exactly one trio.run().  If the
-            # recorded token differs from this run's, the previous run's reader
-            # is gone (trio.run() cancels its system tasks before returning), so
-            # re-register for this run.  Keying on the token instead of a
-            # lazily-set liveness flag prevents a second client in the same run
-            # from spawning a duplicate reader on the shared fd, which is what
-            # triggered BusyResourceError.
-            if (
-                not self._is_asyncio
-                and _async_pipe_registered
-                and _async_pipe_loop is None
-                and _trio_pipe_token is not trio_token
-            ):
+            def _detach_reader() -> None:
+                """Best-effort detach of the current Python reader owner."""
+                nonlocal registered_here
+                global _async_pipe_registered, _async_pipe_loop
+                global _trio_pipe_token, _trio_pipe_cancel_scope
+                if _async_pipe_loop is not None:
+                    try:
+                        _async_pipe_loop.remove_reader(_async_pipe_read_fd)
+                    except BaseException:
+                        pass
+                if _trio_pipe_cancel_scope is not None:
+                    try:
+                        _trio_pipe_cancel_scope.cancel()
+                    except BaseException:
+                        pass
                 _async_pipe_registered = False
+                _async_pipe_loop = None
                 _trio_pipe_token = None
-                _pipe_remainder = b""
-                _drain_stale_pipe_frames()
-            if _async_pipe_read_fd >= 0 and self._pipe_client_id:
+                _trio_pipe_cancel_scope = None
+                registered_here = False
+
+            try:
+                if _async_pipe_read_fd < 0:
+                    created_read_fd, created_write_fd = os.pipe()
+                    os.set_blocking(created_read_fd, False)
+                    # Publish coherent descriptors before registering a callback.
+                    # The native writer is not installed yet, so no frame can be
+                    # observed until every fallible Python setup step succeeds.
+                    _async_pipe_read_fd = created_read_fd
+                    _async_pipe_write_fd = created_write_fd
+                    created_transport = True
+
+                if _async_pipe_write_fd < 0:
+                    raise RuntimeError("Async response pipe is unavailable")
+
+                same_owner = (
+                    self._is_asyncio
+                    and _async_pipe_loop is self._loop
+                    or not self._is_asyncio
+                    and _trio_pipe_token is trio_token
+                )
+                if _async_pipe_registered and not same_owner:
+                    _detach_reader()
+                    _drain_stale_pipe_frames()
+
                 _client_registry[self._pipe_client_id] = self
                 if not _async_pipe_registered:
                     if self._is_asyncio:
@@ -721,19 +1083,71 @@ class BaseClient(CoreCommands):
                             _async_pipe_read_fd, _on_async_pipe_readable
                         )
                         _async_pipe_loop = self._loop
+                        _trio_pipe_token = None
+                        _trio_pipe_cancel_scope = None
                     else:
-                        # For trio: spawn a background task that polls the pipe.
-                        # Record the token before spawning (still under the
-                        # lock) so a concurrent _setup_pipe in this same run
-                        # sees us as registered and does not spawn a second
-                        # reader on the same fd.
                         import trio
 
+                        cancel_scope = trio.CancelScope()
                         _trio_pipe_token = trio_token
+                        _trio_pipe_cancel_scope = cancel_scope
                         trio.lowlevel.spawn_system_task(
-                            _trio_pipe_reader, _async_pipe_read_fd, trio_token
+                            _trio_pipe_reader,
+                            _async_pipe_read_fd,
+                            trio_token,
+                            cancel_scope,
                         )
                     _async_pipe_registered = True
+                    registered_here = True
+
+                if created_transport:
+                    # This is intentionally the final fallible operation. After
+                    # native success, only infallible process-state publication
+                    # remains. reinit is exclusively selected by a fork reset.
+                    native_init = (
+                        self._lib.reinit_async_pipe
+                        if _async_pipe_needs_fork_reinit
+                        else self._lib.init_async_pipe
+                    )
+                    native_init(created_write_fd)
+                    _async_pipe_init_pid = current_pid
+                    _async_pipe_needs_fork_reinit = False
+            except BaseException as error:
+                _client_registry.pop(self._pipe_client_id, None)
+                if registered_here:
+                    _detach_reader()
+
+                # A failed same-process ownership move must preserve the
+                # established FDs/native writer for a later registration retry.
+                # Only a newly-created, not-yet-committed transport is closed.
+                if created_read_fd >= 0:
+                    for fd in {created_read_fd, created_write_fd}:
+                        if fd >= 0:
+                            try:
+                                os.close(fd)
+                            except OSError:
+                                pass
+                    _async_pipe_read_fd = -1
+                    _async_pipe_write_fd = -1
+                    _async_pipe_init_pid = -1
+                    _async_pipe_registered = False
+                    _async_pipe_loop = None
+                    _trio_pipe_token = None
+                    _trio_pipe_cancel_scope = None
+                    _pipe_remainder = b""
+                    _pipe_remainder_is_stale = False
+                elif _async_pipe_read_fd < 0:
+                    # os.pipe itself failed; no transport exists, but stale
+                    # parser state and ownership still belong to the failed
+                    # transaction and must not leak into a retry.
+                    _pipe_remainder = b""
+                    _pipe_remainder_is_stale = False
+
+                if isinstance(error, Exception):
+                    raise ClosingError(
+                        "Failed to initialize the async response pipe"
+                    ) from error
+                raise
 
     # ==================== Callback Handling ====================
 
@@ -1139,11 +1553,140 @@ class BaseClient(CoreCommands):
             actual_subscriptions=actual_subscriptions,
         )
 
-    async def close(self, err_message: Optional[str] = None) -> None:
-        if not self._is_closed:
-            self._is_closed = True
-            err_message = "" if err_message is None else err_message
+    def _detach_native_owner(self) -> Optional[_NativeClientOwner]:
+        """Disarm GC cleanup and transfer its native ownership to the caller."""
+        finalizer = getattr(self, "_native_finalizer", None)
+        self._native_finalizer = None
+        owner = getattr(self, "_native_owner", None)
+        self._native_owner = None
+        if finalizer is not None:
+            finalizer.detach()
+        return owner
 
+    def _deactivate_callback_owners(self) -> None:
+        """Stop new direct callbacks while retaining owners through native close."""
+        for callback_owner in (
+            getattr(self, "_address_resolver_callback_owner", None),
+            getattr(self, "_credential_provider_callback_owner", None),
+        ):
+            if callback_owner is not None:
+                callback_owner.close()
+
+    def _release_callback_references(self) -> None:
+        """Release callback owners after native code can no longer invoke them."""
+        self._deactivate_callback_owners()
+        self._pubsub_callback_ref = None
+        self._address_resolver_callback_ref = None
+        self._address_resolver_callback_owner = None
+        self._credential_provider_callback_ref = None
+        self._credential_provider_callback_owner = None
+
+    def _invalidate_after_fork(self) -> None:
+        """Drop inherited native ownership without acquiring parent-held locks."""
+        client_id = getattr(self, "_pipe_client_id", 0)
+        _client_registry.pop(client_id, None)
+        finalizer = getattr(self, "_native_finalizer", None)
+        owner = getattr(self, "_native_owner", None)
+        self._native_finalizer = None
+        self._native_owner = None
+        if owner is not None:
+            _NativeClientOwner.disarm_after_fork(owner)
+        if finalizer is not None:
+            finalizer.detach()
+
+        # The shared callback registries were cleared by their earlier at-fork
+        # hook. Avoid owner locks here and simply drop inherited references.
+        self._core_client = None
+        self._is_closed = True
+        self._close_state = None
+        self._pipe_client_id = 0
+        self._pending_futures = {}
+        self._pubsub_futures = []
+        self._pending_push_notifications = []
+        self._pubsub_callback_ref = None
+        self._address_resolver_callback_ref = None
+        self._address_resolver_callback_owner = None
+        self._credential_provider_callback_ref = None
+        self._credential_provider_callback_owner = None
+        self._lock = threading.Lock()
+        self._pubsub_lock = threading.Lock()
+        self._close_lock = threading.Lock()
+
+    async def close(self, err_message: Optional[str] = None) -> None:  # noqa: C901
+        """Close exactly once; cancelled waiters leave native cleanup running.
+
+        A caller cancelled after ownership transfer returns immediately with its
+        cancellation. The dedicated close worker still retains every callback,
+        performs native close, records any error for later close callers, and
+        releases references without requiring the owner event loop.
+        """
+        if not self._use_direct_lifecycle:
+            if not self._is_closed:
+                self._is_closed = True
+                err_message = "" if err_message is None else err_message
+
+                with self._lock:
+                    for fut in self._pending_futures.values():
+                        if not fut.done():
+                            fut.set_exception(ClosingError(err_message))
+                    self._pending_futures.clear()
+
+                with self._pubsub_lock:
+                    for fut in self._pubsub_futures:
+                        if not fut.done():
+                            fut.set_exception(ClosingError(err_message))
+                    self._pubsub_futures.clear()
+
+                _client_registry.pop(getattr(self, "_pipe_client_id", 0), None)
+
+                # Skip FFI call if this client was created in a different process
+                # (the tokio Runtime doesn't survive fork; dropping it would hang).
+                if self._core_client is not None and self._create_pid == os.getpid():
+                    self._lib.close_client(self._core_client)
+                    self._core_client = None
+            return
+
+        if _is_credential_provider_executing(self):
+            raise RuntimeError(
+                "Cannot close a client from its own credential provider callback"
+            )
+        with self._close_lock:
+            close_state = self._close_state
+            if close_state is not None:
+                owns_close = False
+            elif self._is_closed:
+                return
+            else:
+                self._is_closed = True
+                self._deactivate_callback_owners()
+                owner = self._detach_native_owner()
+                core_client, self._core_client = self._core_client, None
+                if owner is None and core_client is not None:
+                    # Supports partially initialized direct-client shells;
+                    # successful direct clients always have a finalizer owner.
+                    owner = _NativeClientOwner(
+                        self._lib,
+                        core_client,
+                        (
+                            self._pubsub_callback_ref,
+                            self._address_resolver_callback_ref,
+                            self._credential_provider_callback_ref,
+                        ),
+                        self._create_pid,
+                    )
+                if owner is not None:
+                    close_state = _NativeCloseState(
+                        owner,
+                        self._release_callback_references,
+                    )
+                    self._close_state = close_state
+                owns_close = True
+
+        with _live_async_clients_lock:
+            _live_async_clients.discard(self)
+
+        if owns_close:
+            err_message = "" if err_message is None else err_message
             with self._lock:
                 for fut in self._pending_futures.values():
                     if not fut.done():
@@ -1157,12 +1700,15 @@ class BaseClient(CoreCommands):
                 self._pubsub_futures.clear()
 
             _client_registry.pop(getattr(self, "_pipe_client_id", 0), None)
+            if close_state is None:
+                # Fork-inherited or never-created clients have no native
+                # ownership to transfer.
+                self._release_callback_references()
+                return
+            close_state._start()
 
-            # Skip FFI call if this client was created in a different process
-            # (the tokio Runtime doesn't survive fork; dropping it would hang).
-            if self._core_client is not None and self._create_pid == os.getpid():
-                self._lib.close_client(self._core_client)
-                self._core_client = None
+        assert close_state is not None
+        await close_state.wait()
 
     async def aclose(self, err_message: Optional[str] = None) -> None:
         """Alias for close() for compatibility with async context managers."""

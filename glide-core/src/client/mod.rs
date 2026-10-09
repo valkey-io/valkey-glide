@@ -2279,15 +2279,15 @@ impl Client {
         }
     }
 
-    /// Manually refresh the IAM token and update connection authentication
+    /// Manually retrieve IAM credentials, regenerate the authentication token, and cache the token.
     ///
-    /// This method generates a new IAM token using the configured IAM token manager
-    /// and immediately authenticates all connections with the new token.
+    /// The refreshed token is used by subsequent reconnect and authentication flows.
+    /// Credential-provider and token-signing failures are returned to the caller.
     ///
     /// # Returns
-    /// - `Ok(())` if the token was successfully refreshed and authentication succeeded
-    /// - `Err(RedisError)` if no IAM token manager is configured, token generation fails,
-    ///   or authentication with the new token fails.
+    /// - `Ok(())` if the token was successfully regenerated and cached
+    /// - `Err(RedisError)` if no IAM token manager is configured, credential retrieval fails,
+    ///   or token signing fails.
     pub async fn refresh_iam_token(&mut self) -> RedisResult<()> {
         // Check if IAM token manager is available
         let iam_manager = self.iam_token_manager.as_ref().ok_or_else(|| {
@@ -2297,9 +2297,16 @@ impl Client {
             ))
         })?;
 
-        // Refresh the token using the IAM token manager
-        iam_manager.refresh_token().await;
-        Ok(())
+        // Refresh the token using the IAM token manager. Explicit refresh must
+        // surface provider/signing failures; the manager preserves the previous
+        // cached token when generation fails.
+        iam_manager.refresh_token().await.map_err(|error| {
+            RedisError::from((
+                ErrorKind::ClientError,
+                "IAM token refresh failed",
+                error.to_string(),
+            ))
+        })
     }
 }
 /// Trait for executing PubSub commands on the internal client wrapper
@@ -4169,6 +4176,53 @@ mod tests {
         tokio::runtime::Runtime::new().unwrap()
     }
 
+    /// An explicit client refresh surfaces a custom provider failure instead of
+    /// reporting success while silently retaining the cached token.
+    #[test]
+    fn refresh_iam_token_propagates_custom_provider_failure() {
+        let client = create_test_client();
+        let fail = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let fail_provider = std::sync::Arc::clone(&fail);
+        let provider: crate::iam::CredentialsProvider = std::sync::Arc::new(move || {
+            if fail_provider.load(std::sync::atomic::Ordering::Acquire) {
+                return Err(crate::iam::GlideIAMError::CredentialsError(
+                    "client manual refresh provider failure".to_string(),
+                ));
+            }
+            Ok((
+                "test_access_key".to_string(),
+                "test_secret_key".to_string(),
+                None,
+                None,
+            ))
+        });
+        let rt = borrow_test_runtime();
+        let mut client = rt.block_on(async move {
+            let manager = crate::iam::IAMTokenManager::new(
+                "test-cluster".to_string(),
+                "test-user".to_string(),
+                "us-east-1".to_string(),
+                crate::iam::ServiceType::ElastiCache,
+                None,
+                Some(provider),
+            )
+            .await
+            .expect("initial provider call should succeed");
+            let generation = manager.token_generation();
+            attach_iam(client, std::sync::Arc::new(manager), generation)
+        });
+
+        fail.store(true, std::sync::atomic::Ordering::Release);
+        let error = rt
+            .block_on(client.refresh_iam_token())
+            .expect_err("Client::refresh_iam_token must propagate provider failure");
+        assert!(
+            error
+                .to_string()
+                .contains("client manual refresh provider failure")
+        );
+    }
+
     /// A non-IAM (password) client must be a pure no-op: no manager, no AUTH, Ok.
     #[test]
     fn prepare_for_borrow_is_noop_for_non_iam_client() {
@@ -4229,7 +4283,7 @@ mod tests {
             let seeded = manager.token_generation();
             // Seed the client at the current generation, then rotate so the bookmark is stale.
             let client = attach_iam(client, manager.clone(), seeded);
-            manager.refresh_token().await; // bumps token_generation past `seeded`
+            manager.refresh_token().await.unwrap(); // bumps token_generation past `seeded`
             assert!(
                 manager.token_generation() > seeded,
                 "refresh_token must advance the manager generation for a valid A-B setup"
@@ -4291,7 +4345,7 @@ mod tests {
             let manager = test_iam_manager().await;
             let seeded = manager.token_generation();
             let client = attach_iam(client, manager.clone(), seeded);
-            manager.refresh_token().await; // make the bookmark stale
+            manager.refresh_token().await.unwrap(); // make the bookmark stale
             client
         });
         client.mark_pool_managed();

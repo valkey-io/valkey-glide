@@ -70,13 +70,6 @@ func NewClusterClient(config *config.ClusterClientConfiguration) (*ClusterClient
 	if err != nil {
 		return nil, err
 	}
-	if config.HasSubscription() {
-		subConfig := config.GetSubscription()
-		client.setMessageHandler(NewMessageHandler(subConfig.GetCallback(), subConfig.GetContext()))
-	} else {
-		client.setMessageHandler(NewMessageHandler(nil, nil))
-	}
-
 	return &ClusterClient{baseClient: *client, clientConfig: config}, nil
 }
 

@@ -97,11 +97,18 @@ EXCLUDED_TESTS = {
         # Abandon detection tests — async-only (monitor runs on tokio runtime)
         "test_pool_abandon_detection",
         "test_pool_abandon_detection_disabled",
+        # Async credential-provider forms have no sync-client equivalent.
+        "test_iam_custom_async_provider_forms",
+        # Closing while an async provider is suspended exercises the async
+        # client's owner event loop; sync clients reject async providers.
+        "test_iam_close_during_provider_refresh_does_not_block_owner_runtime",
     ],
     "sync_only": [
         "test_sync_fork",
         "sync_poll_for_timestamp_change",
         "get_min_compressed_size",
+        # Sync thread-based callback close churn has no async API parity requirement.
+        "test_pubsub_publish_vs_close_churn",
         # get() with buffer — sync-only FFI path, no async equivalent
         "test_sync_get_into_buffer",
         "test_sync_get_into_buffer_nonexistent_key",
@@ -192,9 +199,9 @@ def filter_and_remove_prefix(
     """Filter out excluded/private functions and optionally normalize names."""
     result = {}
     for func, files in functions.items():
-        if func in exclude or func.startswith("_"):
-            continue
         normalized = normalize(func) if normalize else func
+        if func in exclude or normalized in exclude or func.startswith("_"):
+            continue
         result[normalized] = files
     return result
 

@@ -2,75 +2,142 @@
 
 use std::fmt::Display;
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
-use jni::objects::{GlobalRef, JMethodID, JObject, JString};
+use jni::objects::{GlobalRef, JClass, JMethodID, JObject, JString, JValue};
+use jni::sys::jlong;
 use jni::{JNIEnv, JavaVM};
 use log::error;
 
+/// The Java wait must finish before glide-core's 10-second credentials-provider deadline.
+const CREDENTIAL_FUTURE_TIMEOUT: Duration = Duration::from_secs(9);
+
 /// JNI bridge to a Java `GlideCredentialProvider` instance.
 ///
-/// Holds a `GlobalRef` to the Java object so that it is not garbage-collected
-/// while the Rust `IAMTokenManager` is alive.  The callback is invoked from a
+/// Holds a `GlobalRef` to a Java `CredentialsProviderInvoker`, which in turn owns the provider and
+/// a single zero-backlog daemon worker. The callback is invoked from a
 /// `tokio::task::spawn_blocking` thread managed by the async token-refresh task.
-/// `jvm.attach_current_thread_as_daemon()` handles the necessary JNI thread attachment.
+/// `jvm.attach_current_thread_as_daemon()` handles the necessary JNI thread attachment. The
+/// synchronous `getCredentials()` method body and its returned future share one nine-second
+/// deadline. A timed-out method body is interrupted, and a worker still occupied by a provider that
+/// ignored interruption causes subsequent invocations to fail immediately rather than queue.
 pub struct JavaIamTokenCallback {
     jvm: Arc<JavaVM>,
-    callback_global: GlobalRef,
-    get_credentials_method_id: JMethodID,
+    invoker_global: GlobalRef,
+    submit_method_id: JMethodID,
+    future_timeout: Duration,
 }
 
 impl JavaIamTokenCallback {
     /// Create a new `JavaIamTokenCallback`.
     ///
     /// # Returns
-    /// `None` if the global reference or method-ID lookup fails.
+    /// `None` if the invoker, global reference, or method-ID lookup cannot be created.
     pub fn new(env: &mut JNIEnv, jvm: Arc<JavaVM>, callback: &JObject) -> Option<Self> {
-        let callback_global = match env.new_global_ref(callback) {
-            Ok(g) => g,
+        Self::new_with_timeout(env, jvm, callback, CREDENTIAL_FUTURE_TIMEOUT)
+    }
+
+    fn new_with_timeout(
+        env: &mut JNIEnv,
+        jvm: Arc<JavaVM>,
+        callback: &JObject,
+        future_timeout: Duration,
+    ) -> Option<Self> {
+        let bridge_class = match env.find_class("glide/internal/GlideNativeBridge") {
+            Ok(class) => class,
             Err(e) => {
-                if env.exception_check().unwrap_or(false) {
-                    let _ = env.exception_clear();
-                }
-                error!("Failed to create global reference for IAM credentials callback: {e}");
+                clear_pending_exception(env);
+                error!(
+                    "Failed to find GlideNativeBridge for IAM credentials provider invoker: {e}"
+                );
                 return None;
             }
         };
-
-        let class = match env.get_object_class(callback_global.as_obj()) {
-            Ok(c) => c,
-            Err(e) => {
-                if env.exception_check().unwrap_or(false) {
-                    let _ = env.exception_clear();
-                }
-                error!("Failed to get class of IAM credentials callback object: {e}");
-                return None;
-            }
-        };
-
-        // The Java interface method: AwsCredentials getCredentials() throws Exception
-        let get_credentials_method_id = match env.get_method_id(
-            class,
-            "getCredentials",
-            "()Lglide/api/models/configuration/AwsCredentials;",
+        let invoker = match env.call_static_method(
+            bridge_class,
+            "createCredentialsProviderInvoker",
+            "(Lglide/api/models/configuration/GlideCredentialProvider;)Lglide/internal/CredentialsProviderInvoker;",
+            &[JValue::Object(callback)],
         ) {
-            Ok(mid) => mid,
-            Err(e) => {
-                if env.exception_check().unwrap_or(false) {
-                    let _ = env.exception_clear();
+            Ok(value) => match value.l() {
+                Ok(invoker) if !invoker.is_null() => invoker,
+                Ok(_) => {
+                    error!("IAM credentials provider invoker factory returned null");
+                    return None;
                 }
-                error!("Failed to find 'getCredentials' method on IAM credentials callback: {e}");
+                Err(e) => {
+                    clear_pending_exception(env);
+                    error!("IAM credentials provider invoker factory returned an invalid value: {e}");
+                    return None;
+                }
+            },
+            Err(e) => {
+                let exception = take_java_exception(env, &e);
+                error!(
+                    "Failed to create IAM credentials provider invoker: {}",
+                    exception.message
+                );
                 return None;
             }
         };
+        Self::new_from_invoker_with_timeout(env, jvm, &invoker, future_timeout, "submit")
+    }
 
-        Some(Self {
+    fn new_from_invoker_with_timeout(
+        env: &mut JNIEnv,
+        jvm: Arc<JavaVM>,
+        invoker: &JObject,
+        future_timeout: Duration,
+        submit_method_name: &str,
+    ) -> Option<Self> {
+        let result = Self::try_new_from_invoker_with_timeout(
+            env,
             jvm,
-            callback_global,
-            get_credentials_method_id,
+            invoker,
+            future_timeout,
+            submit_method_name,
+        );
+        match result {
+            Ok(callback) => Some(callback),
+            Err(message) => {
+                // A failed JNI lookup may leave a pending exception, which must be cleared before
+                // close() can run. shutdown_invoker also consumes any exception thrown by close().
+                clear_pending_exception(env);
+                shutdown_invoker(env, invoker);
+                error!("{message}");
+                None
+            }
+        }
+    }
+
+    fn try_new_from_invoker_with_timeout(
+        env: &mut JNIEnv,
+        jvm: Arc<JavaVM>,
+        invoker: &JObject,
+        future_timeout: Duration,
+        submit_method_name: &str,
+    ) -> Result<Self, String> {
+        let invoker_global = env.new_global_ref(invoker).map_err(|e| {
+            format!("Failed to create global reference for IAM credentials provider invoker: {e}")
+        })?;
+        let class = env
+            .get_object_class(invoker_global.as_obj())
+            .map_err(|e| format!("Failed to get IAM credentials provider invoker class: {e}"))?;
+        let submit_method_id = env
+            .get_method_id(class, submit_method_name, "()Ljava/util/concurrent/Future;")
+            .map_err(|e| {
+                format!("Failed to find submit method on IAM credentials provider invoker: {e}")
+            })?;
+
+        Ok(Self {
+            jvm,
+            invoker_global,
+            submit_method_id,
+            future_timeout,
         })
     }
 
-    /// Call `getCredentials()` on the Java object.
+    /// Obtain credentials through the bounded Java provider invoker.
     ///
     /// Returns `(access_key_id, secret_access_key, session_token, expires_at)`.
     fn try_get_credentials(
@@ -89,20 +156,15 @@ impl JavaIamTokenCallback {
             .attach_current_thread_as_daemon()
             .map_err(IamCallbackError::AttachFailed)?;
 
-        // Use a local frame so that all JNI local references created inside
-        // are freed when the frame is popped.  This prevents local-ref
-        // accumulation on reused tokio blocking threads across many refreshes.
-        // Capacity 8 covers: result object, creds object, 3 String fields,
-        // and a few intermediate refs.
-        //
-        // `with_local_frame` requires E: From<jni::errors::Error>; we satisfy
-        // that by wrapping in `Result<Result<...>, jni::errors::Error>` and
-        // flattening afterwards.
+        // Free every local reference when the callback returns. Capacity 40 covers both futures,
+        // credentials, TimeUnit, credential fields, and a bounded throwable cause chain.
         let inner_result: Result<Result<_, IamCallbackError>, jni::errors::Error> =
-            env.with_local_frame(8, |env| Ok(self.try_get_credentials_inner(env)));
-        inner_result
+            env.with_local_frame(40, |env| Ok(self.try_get_credentials_inner(env)));
+        let result = inner_result
             .map_err(|e| IamCallbackError::CallFailed(format!("local frame error: {e}")))
-            .and_then(|r| r)
+            .and_then(|r| r);
+        clear_pending_exception(&mut env);
+        result
     }
 
     fn try_get_credentials_inner(
@@ -117,84 +179,325 @@ impl JavaIamTokenCallback {
         ),
         IamCallbackError,
     > {
-        // SAFETY: method_id is pre-computed from the same object class.
-        let result = unsafe {
+        let time_unit_class = env
+            .find_class("java/util/concurrent/TimeUnit")
+            .map_err(|e| {
+                clear_pending_exception(env);
+                IamCallbackError::InvalidReturn(e)
+            })?;
+        let milliseconds = env
+            .get_static_field(
+                time_unit_class,
+                "MILLISECONDS",
+                "Ljava/util/concurrent/TimeUnit;",
+            )
+            .map_err(|e| {
+                clear_pending_exception(env);
+                IamCallbackError::InvalidReturn(e)
+            })?
+            .l()
+            .map_err(IamCallbackError::InvalidReturn)?;
+        let deadline = Instant::now()
+            .checked_add(self.future_timeout)
+            .ok_or_else(|| {
+                IamCallbackError::InvalidCredentials(
+                    "credentials-provider timeout is too large for a monotonic deadline"
+                        .to_string(),
+                )
+            })?;
+
+        // submit() uses an explicit admission gate and only queues an invocation after admission. It
+        // never runs the provider body on this JNI thread and rejects immediately when its sole
+        // worker is occupied.
+        // SAFETY: submit_method_id was resolved from this invoker object's class.
+        let invocation_result = unsafe {
             env.call_method_unchecked(
-                self.callback_global.as_obj(),
-                self.get_credentials_method_id,
+                self.invoker_global.as_obj(),
+                self.submit_method_id,
                 jni::signature::ReturnType::Object,
                 &[],
             )
         };
-
-        // Check for and clear any pending Java exception before inspecting the result.
-        let result = result.map_err(|err| {
-            // Try to capture the Java exception message before clearing it.
-            let exception_msg = if env.exception_check().unwrap_or(false) {
-                env.exception_occurred()
-                    .ok()
-                    .and_then(|throwable| {
-                        // Clear the original exception — required before making further JNI calls.
-                        let _ = env.exception_clear();
-                        let msg = env
-                            .call_method(throwable, "getMessage", "()Ljava/lang/String;", &[])
-                            .ok()
-                            .and_then(|v| v.l().ok())
-                            .filter(|o| !o.is_null())
-                            .and_then(|jstr| {
-                                env.get_string(&JString::from(jstr)).ok().map(|s| s.into())
-                            });
-                        // Clear any secondary exception that getMessage() or string
-                        // conversion may have thrown, so the JNI thread is left clean.
-                        if env.exception_check().unwrap_or(false) {
-                            let _ = env.exception_clear();
-                        }
-                        msg
-                    })
-                    .unwrap_or_else(|| format!("(no message): {err}"))
-            } else {
-                format!("(no Java exception): {err}")
-            };
-            IamCallbackError::CallFailed(exception_msg)
-        })?;
-
-        // Unwrap the returned AwsCredentials object.
-        let creds_obj = result.l().map_err(IamCallbackError::InvalidReturn)?;
-        if creds_obj.is_null() {
+        let invocation_result = match invocation_result {
+            Ok(result) => result,
+            Err(err) => {
+                let exception = take_java_exception(env, &err);
+                if exception.is_rejected {
+                    return Err(IamCallbackError::InvocationRejected(exception.message));
+                }
+                return Err(IamCallbackError::CallFailed(exception.message));
+            }
+        };
+        let invocation_future = invocation_result
+            .l()
+            .map_err(IamCallbackError::InvalidReturn)?;
+        if invocation_future.is_null() {
             return Err(IamCallbackError::InvalidCredentials(
-                "getCredentials() returned null".to_string(),
+                "credentials provider invoker returned a null invocation Future".to_string(),
             ));
         }
 
-        // Extract accessKeyId via AwsCredentials.getAccessKeyId()
+        let Some(body_wait_millis) = remaining_timeout_millis(deadline) else {
+            cancel_future(env, &invocation_future);
+            return Err(IamCallbackError::MethodBodyTimeout(self.future_timeout));
+        };
+        let provider_future_result = env.call_method(
+            &invocation_future,
+            "get",
+            "(JLjava/util/concurrent/TimeUnit;)Ljava/lang/Object;",
+            &[
+                JValue::Long(body_wait_millis),
+                JValue::Object(&milliseconds),
+            ],
+        );
+        let provider_future_result = match provider_future_result {
+            Ok(result) => result,
+            Err(err) => {
+                let exception = take_java_exception(env, &err);
+                if exception.is_timeout {
+                    cancel_future(env, &invocation_future);
+                    return Err(IamCallbackError::MethodBodyTimeout(self.future_timeout));
+                }
+                return Err(IamCallbackError::CallFailed(exception.message));
+            }
+        };
+        let provider_future = provider_future_result
+            .l()
+            .map_err(IamCallbackError::InvalidReturn)?;
+        if provider_future.is_null() {
+            return Err(IamCallbackError::InvalidCredentials(
+                "getCredentials() returned null CompletableFuture".to_string(),
+            ));
+        }
+
+        let Some(future_wait_millis) = remaining_timeout_millis(deadline) else {
+            cancel_future(env, &provider_future);
+            return Err(IamCallbackError::FutureTimeout(self.future_timeout));
+        };
+        let credentials_result = env.call_method(
+            &provider_future,
+            "get",
+            "(JLjava/util/concurrent/TimeUnit;)Ljava/lang/Object;",
+            &[
+                JValue::Long(future_wait_millis),
+                JValue::Object(&milliseconds),
+            ],
+        );
+        let credentials_result = match credentials_result {
+            Ok(result) => result,
+            Err(err) => {
+                let exception = take_java_exception(env, &err);
+                if exception.is_timeout {
+                    cancel_future(env, &provider_future);
+                    return Err(IamCallbackError::FutureTimeout(self.future_timeout));
+                }
+                return Err(IamCallbackError::CallFailed(exception.message));
+            }
+        };
+
+        let creds_obj = credentials_result
+            .l()
+            .map_err(IamCallbackError::InvalidReturn)?;
+        if creds_obj.is_null() {
+            return Err(IamCallbackError::InvalidCredentials(
+                "CompletableFuture.get() returned null AwsCredentials".to_string(),
+            ));
+        }
+
         let access_key_id = get_string_field(env, &creds_obj, "getAccessKeyId")?;
-        if access_key_id.is_empty() {
+        if access_key_id.trim().is_empty() {
             return Err(IamCallbackError::InvalidCredentials(
                 "getCredentials() returned a blank accessKeyId".to_string(),
             ));
         }
 
-        // Extract secretAccessKey via AwsCredentials.getSecretAccessKey()
         let secret_access_key = get_string_field(env, &creds_obj, "getSecretAccessKey")?;
-        if secret_access_key.is_empty() {
+        if secret_access_key.trim().is_empty() {
             return Err(IamCallbackError::InvalidCredentials(
                 "getCredentials() returned a blank secretAccessKey".to_string(),
             ));
         }
 
-        // Extract optional sessionToken via AwsCredentials.getSessionToken()
         let session_token = get_nullable_string_field(env, &creds_obj, "getSessionToken")?;
-
-        // Extract optional expiresAt via AwsCredentials.getExpiresAt()
-        // Returns null if not set; otherwise a java.time.Instant.
-        // We extract the epoch milliseconds via Instant.toEpochMilli().
         let expires_at = get_nullable_instant_field(env, &creds_obj, "getExpiresAt")?;
 
         Ok((access_key_id, secret_access_key, session_token, expires_at))
     }
 }
 
+impl Drop for JavaIamTokenCallback {
+    fn drop(&mut self) {
+        let Ok(mut env) = self.jvm.attach_current_thread_as_daemon() else {
+            error!(
+                "Failed to attach JVM thread while shutting down IAM credentials provider invoker"
+            );
+            return;
+        };
+        shutdown_invoker(&mut env, self.invoker_global.as_obj());
+    }
+}
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
+
+fn clear_pending_exception(env: &mut JNIEnv) {
+    if env.exception_check().unwrap_or(false) {
+        let _ = env.exception_clear();
+    }
+}
+
+fn shutdown_invoker(env: &mut JNIEnv, invoker: &JObject) {
+    clear_pending_exception(env);
+    if let Err(err) = env.call_method(invoker, "close", "()V", &[]) {
+        let exception = take_java_exception(env, &err);
+        error!(
+            "Failed to shut down IAM credentials provider invoker: {}",
+            exception.message
+        );
+    }
+    clear_pending_exception(env);
+}
+
+/// Test-only JNI seam that forces a post-creation method lookup failure. The Java test owns the
+/// invoker and verifies that failed initialization shut it down and terminated its prestarted worker.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_glide_internal_IamTokenCallbackTest_failProviderCallbackInitialization(
+    mut env: JNIEnv,
+    _class: JClass,
+    invoker: JObject,
+) {
+    let Some(jvm) = env.get_java_vm().ok().map(Arc::new) else {
+        clear_pending_exception(&mut env);
+        let _ = env.throw_new("java/lang/RuntimeException", "Failed to access Java VM");
+        return;
+    };
+
+    if let Some(callback) = JavaIamTokenCallback::new_from_invoker_with_timeout(
+        &mut env,
+        jvm,
+        &invoker,
+        CREDENTIAL_FUTURE_TIMEOUT,
+        "missingSubmitForInitializationFailureTest",
+    ) {
+        drop(callback);
+        clear_pending_exception(&mut env);
+        let _ = env.throw_new(
+            "java/lang/AssertionError",
+            "Invalid submit method unexpectedly resolved",
+        );
+    }
+}
+
+fn remaining_timeout_millis(deadline: Instant) -> Option<jlong> {
+    let remaining = deadline.checked_duration_since(Instant::now())?;
+    if remaining.is_zero() {
+        return None;
+    }
+    // Java's timed Future.get uses whole milliseconds. Round up so a positive sub-millisecond
+    // remainder never becomes the special zero-millisecond immediate timeout.
+    let millis = remaining.as_nanos().saturating_add(999_999) / 1_000_000;
+    jlong::try_from(millis).ok().filter(|millis| *millis > 0)
+}
+
+fn cancel_future(env: &mut JNIEnv, future: &JObject) {
+    let _ = env.call_method(future, "cancel", "(Z)Z", &[JValue::Bool(1)]);
+    clear_pending_exception(env);
+}
+
+struct JavaException {
+    is_timeout: bool,
+    is_rejected: bool,
+    message: String,
+}
+
+/// Take and clear a pending Java exception before making any further JNI calls.
+/// Classifies timeout and executor rejection while preserving a bounded cause-chain rendering.
+fn take_java_exception(env: &mut JNIEnv, err: &jni::errors::Error) -> JavaException {
+    if !env.exception_check().unwrap_or(false) {
+        return JavaException {
+            is_timeout: false,
+            is_rejected: false,
+            message: format!("(no Java exception): {err}"),
+        };
+    }
+
+    let throwable = match env.exception_occurred() {
+        Ok(throwable) => throwable,
+        Err(_) => {
+            clear_pending_exception(env);
+            return JavaException {
+                is_timeout: false,
+                is_rejected: false,
+                message: format!("(unable to read Java exception): {err}"),
+            };
+        }
+    };
+    let _ = env.exception_clear();
+
+    let is_timeout = env
+        .is_instance_of(&throwable, "java/util/concurrent/TimeoutException")
+        .unwrap_or(false);
+    clear_pending_exception(env);
+    let is_rejected = env
+        .is_instance_of(
+            &throwable,
+            "java/util/concurrent/RejectedExecutionException",
+        )
+        .unwrap_or(false);
+    clear_pending_exception(env);
+
+    let mut messages = Vec::new();
+    let mut current = match env.new_local_ref(&throwable) {
+        Ok(current) => current,
+        Err(_) => {
+            clear_pending_exception(env);
+            return JavaException {
+                is_timeout,
+                is_rejected,
+                message: format!("(unable to inspect Java exception): {err}"),
+            };
+        }
+    };
+    // Cause chains should be short. Bound traversal to protect against malformed cyclic chains and
+    // to stay within the local-frame capacity.
+    for _ in 0..12 {
+        match env.call_method(&current, "getMessage", "()Ljava/lang/String;", &[]) {
+            Ok(value) => {
+                if let Ok(message_obj) = value.l()
+                    && !message_obj.is_null()
+                    && let Ok(message) = env.get_string(&JString::from(message_obj))
+                {
+                    messages.push(String::from(message));
+                }
+            }
+            Err(_) => {
+                clear_pending_exception(env);
+                break;
+            }
+        }
+
+        match env.call_method(&current, "getCause", "()Ljava/lang/Throwable;", &[]) {
+            Ok(value) => match value.l() {
+                Ok(cause) if !cause.is_null() => current = cause,
+                _ => break,
+            },
+            Err(_) => {
+                clear_pending_exception(env);
+                break;
+            }
+        }
+    }
+    clear_pending_exception(env);
+
+    JavaException {
+        is_timeout,
+        is_rejected,
+        message: if messages.is_empty() {
+            format!("(no message): {err}")
+        } else {
+            messages.join(": ")
+        },
+    }
+}
 
 /// Call a no-arg getter on `obj` that returns a non-null `String`.
 fn get_string_field(
@@ -270,18 +573,28 @@ fn get_nullable_instant_field(
     if instant_obj.is_null() {
         return Ok(None);
     }
-    // Call Instant.toEpochMilli() -> long
+    // Call Instant.toEpochMilli() -> long. Values that Java cannot represent as epoch milliseconds
+    // and values that SystemTime cannot represent are controlled credentials errors.
     let millis_result = env
         .call_method(&instant_obj, "toEpochMilli", "()J", &[])
         .map_err(|e| {
-            if env.exception_check().unwrap_or(false) {
-                let _ = env.exception_clear();
-            }
-            IamCallbackError::InvalidReturn(e)
+            let exception = take_java_exception(env, &e);
+            IamCallbackError::InvalidCredentials(format!(
+                "expiresAt cannot be represented as epoch milliseconds: {}",
+                exception.message
+            ))
         })?;
     let epoch_millis = millis_result.j().map_err(IamCallbackError::InvalidReturn)?;
-    let expires_at =
-        std::time::SystemTime::UNIX_EPOCH + std::time::Duration::from_millis(epoch_millis as u64);
+    if epoch_millis <= 0 {
+        return Ok(None);
+    }
+    let expires_at = std::time::SystemTime::UNIX_EPOCH
+        .checked_add(Duration::from_millis(epoch_millis as u64))
+        .ok_or_else(|| {
+            IamCallbackError::InvalidCredentials(
+                "expiresAt is outside the supported SystemTime range".to_string(),
+            )
+        })?;
     Ok(Some(expires_at))
 }
 
@@ -292,6 +605,9 @@ enum IamCallbackError {
     InvalidReturn(jni::errors::Error),
     InvalidUtf8(std::str::Utf8Error),
     InvalidCredentials(String),
+    MethodBodyTimeout(Duration),
+    FutureTimeout(Duration),
+    InvocationRejected(String),
 }
 
 impl Display for IamCallbackError {
@@ -312,6 +628,20 @@ impl Display for IamCallbackError {
             IamCallbackError::InvalidCredentials(msg) => {
                 write!(f, "Invalid credentials from getCredentials(): {msg}")
             }
+            IamCallbackError::MethodBodyTimeout(timeout) => write!(
+                f,
+                "Timed out after {} ms waiting for getCredentials() method body; invocation was cancelled with interruption",
+                timeout.as_millis()
+            ),
+            IamCallbackError::FutureTimeout(timeout) => write!(
+                f,
+                "Timed out after {} ms total waiting for getCredentials() CompletableFuture; future was cancelled",
+                timeout.as_millis()
+            ),
+            IamCallbackError::InvocationRejected(message) => write!(
+                f,
+                "Credentials provider invocation rejected because its single worker is still busy; no invocation was queued: {message}"
+            ),
         }
     }
 }
@@ -334,4 +664,87 @@ pub fn make_iam_provider_callback(
             .try_get_credentials()
             .map_err(glide_core::iam::GlideIAMError::from)
     })
+}
+
+/// Internal JNI seams used by `IamTokenCallbackTest`. The Java declarations exist only in test
+/// sources, so these do not add public Java APIs. Production callbacks always use the nine-second
+/// timeout above.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_glide_internal_IamTokenCallbackTest_createProviderCallback(
+    mut env: JNIEnv,
+    _class: JClass,
+    callback: JObject,
+    timeout_millis: jlong,
+) -> jlong {
+    if timeout_millis <= 0 {
+        let _ = env.throw_new(
+            "java/lang/IllegalArgumentException",
+            "timeoutMillis must be positive",
+        );
+        return 0;
+    }
+
+    let callback = env.get_java_vm().ok().and_then(|jvm| {
+        JavaIamTokenCallback::new_with_timeout(
+            &mut env,
+            Arc::new(jvm),
+            &callback,
+            Duration::from_millis(timeout_millis as u64),
+        )
+    });
+    let Some(callback) = callback else {
+        clear_pending_exception(&mut env);
+        let _ = env.throw_new(
+            "java/lang/RuntimeException",
+            "Failed to initialize IAM credentials callback",
+        );
+        return 0;
+    };
+
+    Box::into_raw(Box::new(callback)) as jlong
+}
+
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_glide_internal_IamTokenCallbackTest_invokeProvider<'local>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    callback_handle: jlong,
+) -> JString<'local> {
+    if callback_handle == 0 {
+        let _ = env.throw_new("java/lang/IllegalStateException", "Callback is closed");
+        return JString::default();
+    }
+
+    // SAFETY: the test creates this handle with createProviderCallback, invokes it serially, and
+    // closes it exactly once after no invocation remains active.
+    let callback = unsafe { &*(callback_handle as *const JavaIamTokenCallback) };
+    match callback.try_get_credentials() {
+        Ok((access_key_id, _, _, _)) => match env.new_string(access_key_id) {
+            Ok(value) => value,
+            Err(err) => {
+                clear_pending_exception(&mut env);
+                let _ = env.throw_new("java/lang/RuntimeException", err.to_string());
+                JString::default()
+            }
+        },
+        Err(err) => {
+            clear_pending_exception(&mut env);
+            let _ = env.throw_new("java/lang/RuntimeException", err.to_string());
+            JString::default()
+        }
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_glide_internal_IamTokenCallbackTest_closeProviderCallback(
+    mut env: JNIEnv,
+    _class: JClass,
+    callback_handle: jlong,
+) {
+    if callback_handle == 0 {
+        return;
+    }
+    // SAFETY: the test owns this handle and closes it exactly once after all invocations finish.
+    drop(unsafe { Box::from_raw(callback_handle as *mut JavaIamTokenCallback) });
+    clear_pending_exception(&mut env);
 }

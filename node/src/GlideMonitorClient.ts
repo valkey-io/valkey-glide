@@ -14,6 +14,7 @@ export interface MonitorLine {
 }
 
 export class GlideMonitorClient {
+    private static nativeCreateMonitorClient = createMonitorClient;
     private handleId: number | null = null;
     private closed = false;
     private readonly queue: MonitorLine[] = [];
@@ -35,11 +36,17 @@ export class GlideMonitorClient {
         options: BaseClientConfiguration,
         callback?: (line: MonitorLine) => void,
     ): Promise<GlideMonitorClient> {
+        if (options.credentials != null && "iamConfig" in options.credentials) {
+            throw new Error(
+                "Monitor clients do not support IAM authentication or custom credential providers.",
+            );
+        }
+
         const client = new GlideMonitorClient();
         const request = GlideMonitorClient.buildConnectionRequest(options);
         const bytes =
             connection_request.ConnectionRequest.encode(request).finish();
-        client.handleId = await createMonitorClient(
+        client.handleId = await GlideMonitorClient.nativeCreateMonitorClient(
             Buffer.from(bytes),
             (timestamp, db, clientAddr, command, args) => {
                 const line: MonitorLine = {

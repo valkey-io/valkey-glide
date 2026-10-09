@@ -130,6 +130,17 @@ class ClientPool:
                 "Use the main client's pubsub API for subscriptions."
             )
 
+        # Reject custom IAM credential providers. Pool connections cannot
+        # forward a callback per connection; ordinary IAM still uses the
+        # default AWS credential chain.
+        _creds = getattr(client_config, "credentials", None)
+        _iam = getattr(_creds, "iam_config", None) if _creds else None
+        if _iam is not None and getattr(_iam, "credential_provider", None) is not None:
+            raise ValueError(
+                "Pool clients cannot use a custom IAM credentials provider. "
+                "Configure IAM without a credential_provider to use the default AWS credential chain."
+            )
+
         ffi_instance = _GlideFFI()
         self._ffi = ffi_instance.ffi
         self._lib = ffi_instance.lib
@@ -264,6 +275,7 @@ class ClientPool:
             client._pubsub_condition = threading.Condition(client._pubsub_lock)
             client._pubsub_callback_ref = None
             client._client_lock = threading.Lock()
+            client._use_direct_lifecycle = False
             client._core_client = cast_ptr
             client._conn_req_bytes = self._conn_req_bytes
 
