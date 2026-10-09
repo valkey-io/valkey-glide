@@ -37,10 +37,10 @@ pub fn cmd(name: &str) -> Cmd {
 /// ```rust,no_run
 /// use glide::AsyncCommands;
 /// # async fn demo(client: glide::GlideClient) -> glide::ValkeyResult<()> {
-/// let set = glide::cmd("SET").arg("my_key").arg(42).clone();
+/// let set = glide::cmd("SET").with_arg("my_key").with_arg(42);
 /// let _: () = client.glide_send_command_as(set).await?;
 ///
-/// let get = glide::cmd("GET").arg("my_key").clone();
+/// let get = glide::cmd("GET").with_arg("my_key");
 /// let value: i64 = client.glide_send_command_as(get).await?;
 ///
 /// # assert_eq!(value, 42);
@@ -66,6 +66,25 @@ impl Cmd {
     #[inline]
     pub fn arg<A: ToValkeyArgs>(&mut self, arg: A) -> &mut Self {
         arg.write_valkey_args(self);
+        self
+    }
+
+    /// Append an argument and return `self` by value for chaining.
+    ///
+    /// Unlike [`Cmd::arg`], the chain can be bound directly, without
+    /// `let mut` or `.clone()`. `Option` arguments append nothing when
+    /// `None`, so optional arguments stay in the chain.
+    ///
+    /// ```
+    /// let ttl: Option<i64> = None;
+    /// let cmd = glide::cmd("SET")
+    ///     .with_arg("key")
+    ///     .with_arg("value")
+    ///     .with_arg(ttl.map(|s| ("EX", s)));
+    /// ```
+    #[inline]
+    pub fn with_arg<A: ToValkeyArgs>(mut self, arg: A) -> Self {
+        self.arg(arg);
         self
     }
 
@@ -143,15 +162,32 @@ mod tests {
 
     #[test]
     fn matches_redis_cmd_single_arg() {
-        let v = cmd("SET").arg("key").arg(42i64).clone();
+        let v = cmd("SET").with_arg("key").with_arg(42i64);
         let r = redis::cmd("SET").arg("key").arg(42i64).clone();
         assert_eq!(v.as_redis().get_packed_command(), r.get_packed_command());
     }
 
     #[test]
     fn matches_redis_cmd_multi_arg() {
-        let v = cmd("MGET").arg(&["a", "b", "c"][..]).clone();
+        let v = cmd("MGET").with_arg(&["a", "b", "c"][..]);
         let r = redis::cmd("MGET").arg(&["a", "b", "c"][..]).clone();
         assert_eq!(v.as_redis().get_packed_command(), r.get_packed_command());
+    }
+
+    #[test]
+    fn with_arg_matches_arg() {
+        let none: Option<i64> = None;
+        let v = cmd("SET")
+            .with_arg("key")
+            .with_arg(&b"value"[..])
+            .with_arg(none.map(|s| ("EX", s)))
+            .with_arg(Some(("PX", 5)))
+            .with_arg(true.then_some("GET"));
+        let mut a = cmd("SET");
+        a.arg("key").arg(&b"value"[..]).arg("PX").arg(5).arg("GET");
+        assert_eq!(
+            v.as_redis().get_packed_command(),
+            a.as_redis().get_packed_command()
+        );
     }
 }

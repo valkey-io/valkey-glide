@@ -26,8 +26,7 @@ pub trait ServerManagementCommands: CommandExecutor {
         &self,
         sections: &[S],
     ) -> ValkeyResult<String> {
-        let mut cmd = cmd("INFO");
-        cmd.arg(sections);
+        let cmd = cmd("INFO").with_arg(sections);
         String::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
@@ -41,8 +40,7 @@ pub trait ServerManagementCommands: CommandExecutor {
         &self,
         parameter: P,
     ) -> ValkeyResult<HashMap<String, Bytes>> {
-        let mut cmd = cmd("CONFIG");
-        cmd.arg("GET").arg(parameter);
+        let cmd = cmd("CONFIG").with_arg("GET").with_arg(parameter);
         let map: HashMap<String, Vec<u8>> =
             FromValkeyValue::from_owned_valkey_value(self.execute_command(cmd, None).await?)?;
         Ok(map.into_iter().map(|(k, v)| (k, Bytes::from(v))).collect())
@@ -54,15 +52,16 @@ pub trait ServerManagementCommands: CommandExecutor {
         parameter: P,
         value: V,
     ) -> ValkeyResult<()> {
-        let mut cmd = cmd("CONFIG");
-        cmd.arg("SET").arg(parameter).arg(value);
+        let cmd = cmd("CONFIG")
+            .with_arg("SET")
+            .with_arg(parameter)
+            .with_arg(value);
         <()>::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
     /// Reset configuration statistics (`CONFIG RESETSTAT`).
     async fn config_resetstat(&self) -> ValkeyResult<()> {
-        let mut cmd = cmd("CONFIG");
-        cmd.arg("RESETSTAT");
+        let cmd = cmd("CONFIG").with_arg("RESETSTAT");
         <()>::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
@@ -89,18 +88,14 @@ pub trait ServerManagementCommands: CommandExecutor {
     /// Rewrite the configuration file with the in-memory configuration
     /// (`CONFIG REWRITE`).
     async fn config_rewrite(&self) -> ValkeyResult<()> {
-        let mut cmd = cmd("CONFIG");
-        cmd.arg("REWRITE");
+        let cmd = cmd("CONFIG").with_arg("REWRITE");
         <()>::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
     /// Display a piece of generative art and the server version (`LOLWUT`),
     /// optionally selecting a rendering `version`.
     async fn lolwut(&self, version: Option<i64>) -> ValkeyResult<String> {
-        let mut cmd = cmd("LOLWUT");
-        if let Some(v) = version {
-            cmd.arg("VERSION").arg(v);
-        }
+        let cmd = cmd("LOLWUT").with_arg(version.map(|v| ("VERSION", v)));
         String::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
@@ -113,10 +108,7 @@ pub trait ServerManagementCommands: CommandExecutor {
     /// Asynchronously save the dataset to disk (`BGSAVE`). Set `schedule` to defer
     /// until no other save is running. Returns the server's status message.
     async fn bgsave(&self, schedule: bool) -> ValkeyResult<String> {
-        let mut cmd = cmd("BGSAVE");
-        if schedule {
-            cmd.arg("SCHEDULE");
-        }
+        let cmd = cmd("BGSAVE").with_arg(schedule.then_some("SCHEDULE"));
         String::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
@@ -127,15 +119,13 @@ pub trait ServerManagementCommands: CommandExecutor {
 
     /// Make the server a replica of another instance (`REPLICAOF host port`).
     async fn replicaof<H: ToValkeyArgs + Send>(&self, host: H, port: i64) -> ValkeyResult<()> {
-        let mut cmd = cmd("REPLICAOF");
-        cmd.arg(host).arg(port);
+        let cmd = cmd("REPLICAOF").with_arg(host).with_arg(port);
         <()>::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
     /// Promote the server to a primary (`REPLICAOF NO ONE`).
     async fn replicaof_no_one(&self) -> ValkeyResult<()> {
-        let mut cmd = cmd("REPLICAOF");
-        cmd.arg("NO").arg("ONE");
+        let cmd = cmd("REPLICAOF").with_arg("NO").with_arg("ONE");
         <()>::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
@@ -147,23 +137,15 @@ pub trait ServerManagementCommands: CommandExecutor {
         force: bool,
         timeout_ms: Option<i64>,
     ) -> ValkeyResult<()> {
-        let mut cmd = cmd("FAILOVER");
-        if let Some((host, port)) = to {
-            cmd.arg("TO").arg(host).arg(port);
-            if force {
-                cmd.arg("FORCE");
-            }
-        }
-        if let Some(t) = timeout_ms {
-            cmd.arg("TIMEOUT").arg(t);
-        }
+        let cmd = cmd("FAILOVER")
+            .with_arg(to.map(|(host, port)| ("TO", host, port, force.then_some("FORCE"))))
+            .with_arg(timeout_ms.map(|t| ("TIMEOUT", t)));
         <()>::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
     /// Abort an in-progress coordinated failover (`FAILOVER ABORT`).
     async fn failover_abort(&self) -> ValkeyResult<()> {
-        let mut cmd = cmd("FAILOVER");
-        cmd.arg("ABORT");
+        let cmd = cmd("FAILOVER").with_arg("ABORT");
         <()>::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
@@ -173,32 +155,28 @@ pub trait ServerManagementCommands: CommandExecutor {
         timeout_ms: i64,
         mode: Option<ClientPauseMode>,
     ) -> ValkeyResult<()> {
-        let mut cmd = cmd("CLIENT");
-        cmd.arg("PAUSE").arg(timeout_ms);
-        if let Some(m) = mode {
-            cmd.arg(m.as_arg());
-        }
+        let cmd = cmd("CLIENT")
+            .with_arg("PAUSE")
+            .with_arg(timeout_ms)
+            .with_arg(mode.map(|m| m.as_arg()));
         <()>::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
     /// Resume paused clients (`CLIENT UNPAUSE`).
     async fn client_unpause(&self) -> ValkeyResult<()> {
-        let mut cmd = cmd("CLIENT");
-        cmd.arg("UNPAUSE");
+        let cmd = cmd("CLIENT").with_arg("UNPAUSE");
         <()>::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
     /// Get latency time series for an event (`LATENCY HISTORY`).
     async fn latency_history<E: ToValkeyArgs + Send>(&self, event: E) -> ValkeyResult<ValkeyValue> {
-        let mut cmd = cmd("LATENCY");
-        cmd.arg("HISTORY").arg(event);
+        let cmd = cmd("LATENCY").with_arg("HISTORY").with_arg(event);
         self.execute_command(cmd, None).await
     }
 
     /// Get the latest latency samples for all events (`LATENCY LATEST`).
     async fn latency_latest(&self) -> ValkeyResult<ValkeyValue> {
-        let mut cmd = cmd("LATENCY");
-        cmd.arg("LATEST");
+        let cmd = cmd("LATENCY").with_arg("LATEST");
         self.execute_command(cmd, None).await
     }
 
@@ -208,22 +186,19 @@ pub trait ServerManagementCommands: CommandExecutor {
         &self,
         events: &[E],
     ) -> ValkeyResult<i64> {
-        let mut cmd = cmd("LATENCY");
-        cmd.arg("RESET").arg(events);
+        let cmd = cmd("LATENCY").with_arg("RESET").with_arg(events);
         i64::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
     /// Get a human-readable latency diagnosis report (`LATENCY DOCTOR`).
     async fn latency_doctor(&self) -> ValkeyResult<String> {
-        let mut cmd = cmd("LATENCY");
-        cmd.arg("DOCTOR");
+        let cmd = cmd("LATENCY").with_arg("DOCTOR");
         String::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
     /// Get a latency graph for an event (`LATENCY GRAPH`).
     async fn latency_graph<E: ToValkeyArgs + Send>(&self, event: E) -> ValkeyResult<String> {
-        let mut cmd = cmd("LATENCY");
-        cmd.arg("GRAPH").arg(event);
+        let cmd = cmd("LATENCY").with_arg("GRAPH").with_arg(event);
         String::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 }

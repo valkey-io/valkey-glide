@@ -16,8 +16,9 @@ pub trait SetCommands: CommandExecutor {
 
     /// Cardinality of the intersection of the given sets (`SINTERCARD`).
     async fn sintercard<K: ToValkeyArgs + Send + Sync>(&self, keys: &[K]) -> ValkeyResult<i64> {
-        let mut cmd = cmd("SINTERCARD");
-        cmd.arg(keys.num_of_args()).arg(keys);
+        let cmd = cmd("SINTERCARD")
+            .with_arg(keys.num_of_args())
+            .with_arg(keys);
         i64::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
@@ -29,11 +30,11 @@ pub trait SetCommands: CommandExecutor {
         keys: &[K],
         limit: i64,
     ) -> ValkeyResult<i64> {
-        let mut cmd = cmd("SINTERCARD");
-        cmd.arg(keys.num_of_args())
-            .arg(keys)
-            .arg("LIMIT")
-            .arg(limit);
+        let cmd = cmd("SINTERCARD")
+            .with_arg(keys.num_of_args())
+            .with_arg(keys)
+            .with_arg("LIMIT")
+            .with_arg(limit);
         i64::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 }

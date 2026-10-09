@@ -78,8 +78,7 @@ pub trait PubSubCommands: CommandExecutor {
         keyword: &'static str,
         channels: &[C],
     ) -> ValkeyResult<()> {
-        let mut cmd = cmd(keyword);
-        cmd.arg(channels);
+        let cmd = cmd(keyword).with_arg(channels);
         self.execute_command(cmd, None).await?;
         Ok(())
     }
@@ -100,8 +99,7 @@ pub trait PubSubCommands: CommandExecutor {
 
     /// Get the number of subscriptions to patterns (`PUBSUB NUMPAT`).
     async fn pubsub_numpat(&self) -> ValkeyResult<i64> {
-        let mut cmd = cmd("PUBSUB");
-        cmd.arg("NUMPAT");
+        let cmd = cmd("PUBSUB").with_arg("NUMPAT");
         i64::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
@@ -127,11 +125,7 @@ pub trait PubSubCommands: CommandExecutor {
         sub: &'static str,
         pattern: Option<&[u8]>,
     ) -> ValkeyResult<Vec<Bytes>> {
-        let mut cmd = cmd("PUBSUB");
-        cmd.arg(sub);
-        if let Some(p) = pattern {
-            cmd.arg(p);
-        }
+        let cmd = cmd("PUBSUB").with_arg(sub).with_arg(pattern);
         match self.execute_command(cmd, None).await? {
             ValkeyValue::Array(items) => items
                 .into_iter()
@@ -148,8 +142,7 @@ pub trait PubSubCommands: CommandExecutor {
         sub: &'static str,
         channels: &[C],
     ) -> ValkeyResult<Vec<(Bytes, i64)>> {
-        let mut cmd = cmd("PUBSUB");
-        cmd.arg(sub).arg(channels);
+        let cmd = cmd("PUBSUB").with_arg(sub).with_arg(channels);
         parse_numsub(self.execute_command(cmd, None).await?)
     }
 }

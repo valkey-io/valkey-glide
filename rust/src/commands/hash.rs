@@ -22,15 +22,13 @@ pub trait HashCommands: CommandExecutor {
         key: K,
         field: F,
     ) -> ValkeyResult<i64> {
-        let mut cmd = cmd("HSTRLEN");
-        cmd.arg(key).arg(field);
+        let cmd = cmd("HSTRLEN").with_arg(key).with_arg(field);
         i64::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
     /// Get a random field from the hash (`HRANDFIELD`).
     async fn hrandfield<K: ToValkeyArgs + Send>(&self, key: K) -> ValkeyResult<Option<Bytes>> {
-        let mut cmd = cmd("HRANDFIELD");
-        cmd.arg(key);
+        let cmd = cmd("HRANDFIELD").with_arg(key);
         Option::<Bytes>::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
@@ -40,8 +38,7 @@ pub trait HashCommands: CommandExecutor {
         key: K,
         count: i64,
     ) -> ValkeyResult<Vec<Bytes>> {
-        let mut cmd = cmd("HRANDFIELD");
-        cmd.arg(key).arg(count);
+        let cmd = cmd("HRANDFIELD").with_arg(key).with_arg(count);
         collect_bytes(self.execute_command(cmd, None).await?)
     }
 
@@ -52,8 +49,10 @@ pub trait HashCommands: CommandExecutor {
         key: K,
         count: i64,
     ) -> ValkeyResult<Vec<(Bytes, Bytes)>> {
-        let mut cmd = cmd("HRANDFIELD");
-        cmd.arg(key).arg(count).arg("WITHVALUES");
+        let cmd = cmd("HRANDFIELD")
+            .with_arg(key)
+            .with_arg(count)
+            .with_arg("WITHVALUES");
         collect_pairs(self.execute_command(cmd, None).await?)
     }
 
@@ -66,15 +65,12 @@ pub trait HashCommands: CommandExecutor {
         pattern: Option<&[u8]>,
         count: Option<i64>,
     ) -> ValkeyResult<(String, Vec<Bytes>)> {
-        let mut cmd = cmd("HSCAN");
-        cmd.arg(key).arg(cursor);
-        if let Some(p) = pattern {
-            cmd.arg("MATCH").arg(p);
-        }
-        if let Some(c) = count {
-            cmd.arg("COUNT").arg(c);
-        }
-        cmd.arg("NOVALUES");
+        let cmd = cmd("HSCAN")
+            .with_arg(key)
+            .with_arg(cursor)
+            .with_arg(pattern.map(|p| ("MATCH", p)))
+            .with_arg(count.map(|c| ("COUNT", c)))
+            .with_arg("NOVALUES");
         crate::commands::generic::parse_scan_reply(self.execute_command(cmd, None).await?)
     }
 }

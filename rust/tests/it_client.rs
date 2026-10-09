@@ -246,7 +246,7 @@ timed_tokio_test!(
 
         // ECHO to all primaries returns reply per primary node.
         let msg = "glide-route-probe";
-        let echo = cmd("ECHO").arg(msg).clone();
+        let echo = cmd("ECHO").with_arg(msg);
         let r = client
             .route_command(echo, Route::AllPrimaries)
             .await
@@ -272,7 +272,7 @@ timed_tokio_test!(
 
         // A key-routed SET then GET through the slot-key route.
         let k = common::key("route:k");
-        let set = cmd("SET").arg(&k).arg("v").clone();
+        let set = cmd("SET").with_arg(&k).with_arg("v");
         client
             .route_command(set, Route::slot_key(k.clone(), glide::SlotType::Primary))
             .await

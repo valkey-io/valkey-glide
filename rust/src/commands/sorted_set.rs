@@ -112,8 +112,11 @@ pub trait SortedSetCommands: CommandExecutor {
         member: M,
         increment: f64,
     ) -> ValkeyResult<Option<f64>> {
-        let mut cmd = cmd("ZADD");
-        cmd.arg(key).arg("INCR").arg(increment).arg(member);
+        let cmd = cmd("ZADD")
+            .with_arg(key)
+            .with_arg("INCR")
+            .with_arg(increment)
+            .with_arg(member);
         Option::<f64>::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
@@ -123,8 +126,10 @@ pub trait SortedSetCommands: CommandExecutor {
         key: K,
         member: M,
     ) -> ValkeyResult<Option<(i64, f64)>> {
-        let mut cmd = cmd("ZRANK");
-        cmd.arg(key).arg(member).arg("WITHSCORE");
+        let cmd = cmd("ZRANK")
+            .with_arg(key)
+            .with_arg(member)
+            .with_arg("WITHSCORE");
         parse_rank_withscore(self.execute_command(cmd, None).await?)
     }
 
@@ -135,8 +140,10 @@ pub trait SortedSetCommands: CommandExecutor {
         key: K,
         member: M,
     ) -> ValkeyResult<Option<(i64, f64)>> {
-        let mut cmd = cmd("ZREVRANK");
-        cmd.arg(key).arg(member).arg("WITHSCORE");
+        let cmd = cmd("ZREVRANK")
+            .with_arg(key)
+            .with_arg(member)
+            .with_arg("WITHSCORE");
         parse_rank_withscore(self.execute_command(cmd, None).await?)
     }
 
@@ -150,11 +157,12 @@ pub trait SortedSetCommands: CommandExecutor {
         stop: i64,
         rev: bool,
     ) -> ValkeyResult<i64> {
-        let mut cmd = cmd("ZRANGESTORE");
-        cmd.arg(destination).arg(source).arg(start).arg(stop);
-        if rev {
-            cmd.arg("REV");
-        }
+        let cmd = cmd("ZRANGESTORE")
+            .with_arg(destination)
+            .with_arg(source)
+            .with_arg(start)
+            .with_arg(stop)
+            .with_arg(rev.then_some("REV"));
         i64::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
@@ -176,18 +184,14 @@ pub trait SortedSetCommands: CommandExecutor {
     ) -> ValkeyResult<i64> {
         // For a reverse range the server expects the high bound first.
         let (first, second) = if rev { (max, min) } else { (min, max) };
-        let mut cmd = cmd("ZRANGESTORE");
-        cmd.arg(destination)
-            .arg(source)
-            .arg(first)
-            .arg(second)
-            .arg("BYSCORE");
-        if rev {
-            cmd.arg("REV");
-        }
-        if let Some(limit) = limit {
-            cmd.arg("LIMIT").arg(limit.offset).arg(limit.count);
-        }
+        let cmd = cmd("ZRANGESTORE")
+            .with_arg(destination)
+            .with_arg(source)
+            .with_arg(first)
+            .with_arg(second)
+            .with_arg("BYSCORE")
+            .with_arg(rev.then_some("REV"))
+            .with_arg(limit.map(|l| ("LIMIT", l.offset, l.count)));
         i64::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
@@ -208,25 +212,20 @@ pub trait SortedSetCommands: CommandExecutor {
         limit: Option<Limit>,
     ) -> ValkeyResult<i64> {
         let (first, second) = if rev { (max, min) } else { (min, max) };
-        let mut cmd = cmd("ZRANGESTORE");
-        cmd.arg(destination)
-            .arg(source)
-            .arg(first)
-            .arg(second)
-            .arg("BYLEX");
-        if rev {
-            cmd.arg("REV");
-        }
-        if let Some(limit) = limit {
-            cmd.arg("LIMIT").arg(limit.offset).arg(limit.count);
-        }
+        let cmd = cmd("ZRANGESTORE")
+            .with_arg(destination)
+            .with_arg(source)
+            .with_arg(first)
+            .with_arg(second)
+            .with_arg("BYLEX")
+            .with_arg(rev.then_some("REV"))
+            .with_arg(limit.map(|l| ("LIMIT", l.offset, l.count)));
         i64::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
     /// Compute the difference of the given sorted sets (`ZDIFF`).
     async fn zdiff<K: ToValkeyArgs + Send + Sync>(&self, keys: &[K]) -> ValkeyResult<Vec<Bytes>> {
-        let mut cmd = cmd("ZDIFF");
-        cmd.arg(keys.num_of_args()).arg(keys);
+        let cmd = cmd("ZDIFF").with_arg(keys.num_of_args()).with_arg(keys);
         collect_bytes(self.execute_command(cmd, None).await?)
     }
 
@@ -236,8 +235,10 @@ pub trait SortedSetCommands: CommandExecutor {
         &self,
         keys: &[K],
     ) -> ValkeyResult<Vec<(Bytes, f64)>> {
-        let mut cmd = cmd("ZDIFF");
-        cmd.arg(keys.num_of_args()).arg(keys).arg("WITHSCORES");
+        let cmd = cmd("ZDIFF")
+            .with_arg(keys.num_of_args())
+            .with_arg(keys)
+            .with_arg("WITHSCORES");
         collect_member_scores(self.execute_command(cmd, None).await?)
     }
 
@@ -248,8 +249,10 @@ pub trait SortedSetCommands: CommandExecutor {
         destination: D,
         keys: &[K],
     ) -> ValkeyResult<i64> {
-        let mut cmd = cmd("ZDIFFSTORE");
-        cmd.arg(destination).arg(keys.num_of_args()).arg(keys);
+        let cmd = cmd("ZDIFFSTORE")
+            .with_arg(destination)
+            .with_arg(keys.num_of_args())
+            .with_arg(keys);
         i64::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
@@ -259,11 +262,10 @@ pub trait SortedSetCommands: CommandExecutor {
         keys: &[K],
         aggregate: Option<AggregationType>,
     ) -> ValkeyResult<Vec<Bytes>> {
-        let mut cmd = cmd("ZUNION");
-        cmd.arg(keys.num_of_args()).arg(keys);
-        if let Some(agg) = aggregate {
-            cmd.arg("AGGREGATE").arg(agg.as_arg());
-        }
+        let cmd = cmd("ZUNION")
+            .with_arg(keys.num_of_args())
+            .with_arg(keys)
+            .with_arg(aggregate.map(|agg| ("AGGREGATE", agg.as_arg())));
         collect_bytes(self.execute_command(cmd, None).await?)
     }
 
@@ -274,12 +276,11 @@ pub trait SortedSetCommands: CommandExecutor {
         keys: &[K],
         aggregate: Option<AggregationType>,
     ) -> ValkeyResult<Vec<(Bytes, f64)>> {
-        let mut cmd = cmd("ZUNION");
-        cmd.arg(keys.num_of_args()).arg(keys);
-        if let Some(agg) = aggregate {
-            cmd.arg("AGGREGATE").arg(agg.as_arg());
-        }
-        cmd.arg("WITHSCORES");
+        let cmd = cmd("ZUNION")
+            .with_arg(keys.num_of_args())
+            .with_arg(keys)
+            .with_arg(aggregate.map(|agg| ("AGGREGATE", agg.as_arg())))
+            .with_arg("WITHSCORES");
         collect_member_scores(self.execute_command(cmd, None).await?)
     }
 
@@ -289,11 +290,10 @@ pub trait SortedSetCommands: CommandExecutor {
         keys: &[K],
         aggregate: Option<AggregationType>,
     ) -> ValkeyResult<Vec<Bytes>> {
-        let mut cmd = cmd("ZINTER");
-        cmd.arg(keys.num_of_args()).arg(keys);
-        if let Some(agg) = aggregate {
-            cmd.arg("AGGREGATE").arg(agg.as_arg());
-        }
+        let cmd = cmd("ZINTER")
+            .with_arg(keys.num_of_args())
+            .with_arg(keys)
+            .with_arg(aggregate.map(|agg| ("AGGREGATE", agg.as_arg())));
         collect_bytes(self.execute_command(cmd, None).await?)
     }
 
@@ -304,12 +304,11 @@ pub trait SortedSetCommands: CommandExecutor {
         keys: &[K],
         aggregate: Option<AggregationType>,
     ) -> ValkeyResult<Vec<(Bytes, f64)>> {
-        let mut cmd = cmd("ZINTER");
-        cmd.arg(keys.num_of_args()).arg(keys);
-        if let Some(agg) = aggregate {
-            cmd.arg("AGGREGATE").arg(agg.as_arg());
-        }
-        cmd.arg("WITHSCORES");
+        let cmd = cmd("ZINTER")
+            .with_arg(keys.num_of_args())
+            .with_arg(keys)
+            .with_arg(aggregate.map(|agg| ("AGGREGATE", agg.as_arg())))
+            .with_arg("WITHSCORES");
         collect_member_scores(self.execute_command(cmd, None).await?)
     }
 
@@ -320,11 +319,10 @@ pub trait SortedSetCommands: CommandExecutor {
         keys: &[K],
         limit: Option<i64>,
     ) -> ValkeyResult<i64> {
-        let mut cmd = cmd("ZINTERCARD");
-        cmd.arg(keys.num_of_args()).arg(keys);
-        if let Some(l) = limit {
-            cmd.arg("LIMIT").arg(l);
-        }
+        let cmd = cmd("ZINTERCARD")
+            .with_arg(keys.num_of_args())
+            .with_arg(keys)
+            .with_arg(limit.map(|l| ("LIMIT", l)));
         i64::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 }

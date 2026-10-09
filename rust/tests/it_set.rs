@@ -72,7 +72,7 @@ matrix_test!(spop, c, {
 matrix_test!(spop_count, c, {
     let k = common::key("s");
     let _: usize = c.sadd(&k, &["a", "b", "c"][..]).await.unwrap();
-    let cmd = glide::cmd("SPOP").arg(&k).arg(2).clone();
+    let cmd = glide::cmd("SPOP").with_arg(&k).with_arg(2);
     let popped: HashSet<String> = glide::AsyncCommands::glide_send_command_as(&c, cmd)
         .await
         .unwrap();

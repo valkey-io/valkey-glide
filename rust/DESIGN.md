@@ -79,7 +79,9 @@ brings only that trait's methods into scope, as in redis-rs.
 For a command the table does not cover, build the command yourself and run it
 with `glide_send_command_as`, which returns the reply already decoded into the
 type you ask for. `Cmd::query_async` does the same in redis-rs's calling style,
-so code moving over from that crate keeps working.
+so code moving over from that crate keeps working. `Cmd::arg` matches
+redis-rs (`&mut self`); `Cmd::with_arg` takes and returns `self`, so a chain
+such as `let c = cmd("SORT").with_arg(key);` can be bound without `let mut`.
 
 Commands **beyond** that table live in GLIDE **extension traits**
 (`src/commands/`): the remaining stream commands (`XREADGROUP`,

@@ -45,10 +45,10 @@ fn sync_glide_send_command_as() {
     let c = sync_client(server.port);
     let k = common::key("sync:glide_send_command_as");
 
-    let set = cmd("SET").arg(&k).arg(9).clone();
+    let set = cmd("SET").with_arg(&k).with_arg(9);
     let _: () = glide::Commands::glide_send_command_as(&c, set).unwrap();
 
-    let get = cmd("GET").arg(&k).clone();
+    let get = cmd("GET").with_arg(&k);
     let v: i64 = glide::Commands::glide_send_command_as(&c, get).unwrap();
 
     assert_eq!(v, 9);

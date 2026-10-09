@@ -14,30 +14,30 @@ use bytes::Bytes;
 pub trait ConnectionManagementCommands: CommandExecutor {
     /// Echo a message (`ECHO`).
     async fn echo<M: ToValkeyArgs + Send>(&self, message: M) -> ValkeyResult<Bytes> {
-        let mut cmd = cmd("ECHO");
-        cmd.arg(message);
+        let cmd = cmd("ECHO").with_arg(message);
         Bytes::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
     /// Select the logical database with the given index (`SELECT`).
     async fn select(&self, index: i64) -> ValkeyResult<()> {
-        let mut cmd = cmd("SELECT");
-        cmd.arg(index);
+        let cmd = cmd("SELECT").with_arg(index);
         <()>::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
     /// Enable or disable eviction for the current connection (`CLIENT NO-EVICT`).
     async fn client_no_evict(&self, on: bool) -> ValkeyResult<()> {
-        let mut cmd = cmd("CLIENT");
-        cmd.arg("NO-EVICT").arg(if on { "ON" } else { "OFF" });
+        let cmd = cmd("CLIENT")
+            .with_arg("NO-EVICT")
+            .with_arg(if on { "ON" } else { "OFF" });
         <()>::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
     /// Enable or disable access-time updates for the current connection
     /// (`CLIENT NO-TOUCH`).
     async fn client_no_touch(&self, on: bool) -> ValkeyResult<()> {
-        let mut cmd = cmd("CLIENT");
-        cmd.arg("NO-TOUCH").arg(if on { "ON" } else { "OFF" });
+        let cmd = cmd("CLIENT")
+            .with_arg("NO-TOUCH")
+            .with_arg(if on { "ON" } else { "OFF" });
         <()>::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
