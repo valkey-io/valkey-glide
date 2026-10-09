@@ -1318,27 +1318,31 @@ pub fn create_direct_client<'a>(
         connection_request.address_resolver = Some(resolver);
     }
 
-    // Build the wake TSFN only after claim validation. If construction fails,
+    type DirectClientDeferredValue = Either<DirectClientResolution, ()>;
+    type DirectClientDeferredResolver = Box<dyn FnOnce(Env) -> Result<DirectClientDeferredValue>>;
+
+    // Allocate the Promise before building the wake TSFN. If this fails,
     // restore the provider before N-API publishes the error to JavaScript.
-    let wake_tsfn: Arc<ThreadsafeFunction<(), (), (), Status, false>> =
-        match wake_callback.build_threadsafe_function().build() {
-            Ok(callback) => Arc::new(callback),
+    let (deferred, promise) =
+        match env.create_deferred::<DirectClientDeferredValue, DirectClientDeferredResolver>() {
+            Ok(deferred_and_promise) => deferred_and_promise,
             Err(error) => {
                 drop(credential_provider_claim);
                 return Err(error);
             }
         };
 
-    // Allocate the Promise only after every preceding fallible step. If this
-    // fails, restore the provider before N-API publishes the error, and let the
-    // wake TSFN drop on this Rust stack.
-    let (deferred, promise) = match env.create_deferred() {
-        Ok(deferred_and_promise) => deferred_and_promise,
-        Err(error) => {
-            drop(credential_provider_claim);
-            return Err(error);
-        }
-    };
+    // Build the wake TSFN after the Promise. If construction fails, restore the
+    // provider and settle the unreachable Promise so its internal TSFN is released.
+    let wake_tsfn: Arc<ThreadsafeFunction<(), (), (), Status, false>> =
+        match wake_callback.build_threadsafe_function().build() {
+            Ok(callback) => Arc::new(callback),
+            Err(error) => {
+                drop(credential_provider_claim);
+                deferred.resolve(Box::new(|_| Ok(Either::B(()))));
+                return Err(error);
+            }
+        };
 
     // Create shared response buffer
     let response_buffer = Arc::new(ResponseBuffer::new());
@@ -1452,12 +1456,12 @@ pub fn create_direct_client<'a>(
         // so no push notifications can be missed after this point. The provider
         // claim is committed by DirectClientResolution only after the handle is
         // successfully converted for JavaScript; every earlier failure restores it.
-        deferred.resolve(move |_| {
-            Ok(DirectClientResolution {
+        deferred.resolve(Box::new(move |_| {
+            Ok(Either::A(DirectClientResolution {
                 handle,
                 credential_provider_claim,
-            })
-        });
+            }))
+        }));
 
         // Process messages from the channel.
         // Each message spawns a local task for concurrent execution within this thread.
