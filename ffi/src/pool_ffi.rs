@@ -933,7 +933,6 @@ pub unsafe extern "C" fn glide_scope_prewarm(
                     return;
                 }
             };
-            // Reserve respecting max_total; skip if full or closed.
             let reservation = match pool_clone.lock().await.reserve_slot() {
                 Some(reservation) => reservation,
                 None => return,

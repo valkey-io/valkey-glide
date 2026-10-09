@@ -411,8 +411,6 @@ pub enum ScopeCreateError {
     PoolClosed,
 }
 
-/// Which `ScopeCreateError` variant a failure was, without its payload.
-///
 /// The counterpart of [`crate::pool::ScopeTargetUnresolved::same_kind`] for
 /// creation failures, so repeats of one cause are recognized by variant. A
 /// payload-free copy rather than the error itself: the pool only needs equality
@@ -893,7 +891,6 @@ pub enum ScopeRetryCause {
     /// created, an idle connection is being re-`SELECT`ed, or another acquire
     /// briefly holds the pool lock.
     Pending,
-    /// Every slot up to `max_total` is borrowed.
     Exhausted,
     /// The routing slot has no mapped primary yet, or the topology is being
     /// refreshed.
@@ -924,11 +921,8 @@ pub enum ScopeFailCause {
 /// the retry decision and the error name cannot drift apart.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ScopeAcquireOutcome {
-    /// A scope was handed out.
     Acquired(u64),
-    /// A later attempt may succeed.
     Retry(ScopeRetryCause),
-    /// No later attempt can succeed until the cause is fixed.
     Fail(ScopeFailCause),
 }
 
@@ -1181,7 +1175,6 @@ async fn acquire_scope_with_wait_cap(
     }
 }
 
-/// The client's scope pool, created on first use.
 #[cfg(feature = "proto")]
 fn scope_pool_for(client_id: u64, connection_request_bytes: Vec<u8>) -> ScopePoolHandle {
     // Fast path: check if scope pool exists before cloning bytes

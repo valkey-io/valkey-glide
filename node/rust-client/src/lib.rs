@@ -800,7 +800,6 @@ pub struct GlideClientHandle {
     /// Wrapped in Option to allow explicit drop during close(), which allows Node.js to exit.
     wake_callback: Option<Arc<ThreadsafeFunction<(), (), (), Status, false>>>,
     /// Unique client ID registered in the glide-core scope registry.
-    /// Used for scope operations (acquire, execute, release).
     client_id: u64,
 }
 
