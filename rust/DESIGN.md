@@ -90,7 +90,8 @@ concrete return types and never collide with unified-trait names, so both can
 be imported together.
 
 - **Arguments**: generic over `glide::ToValkeyArgs` — accepts `&str`, `String`,
-  `&[u8]`, `Vec<u8>`, `Bytes`, integers, floats, slices, etc.
+  `&[u8]`, `Vec<u8>`, `Bytes`, integers, floats, slices, etc. Byte slices encode
+  as one argument; other slices encode one argument per element.
 - **Returns**: the unified traits are generic over `glide::FromValkeyValue`
   (`let v: Option<String> = c.get(k).await?`). The extension traits return
   concrete typed results.
