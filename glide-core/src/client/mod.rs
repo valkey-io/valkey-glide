@@ -221,6 +221,66 @@ pub(crate) fn validate_effective_lib_ver(lib_ver: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// Validate a Unix domain socket address: an absolute path that fits in a socket address,
+/// no host or port, and no TLS, which the server does not offer on its socket.
+pub(crate) fn validate_unix_socket_address(address: &NodeAddress, tls: bool) -> Result<(), String> {
+    let Some(path) = &address.unix_socket_path else {
+        return Ok(());
+    };
+    if !cfg!(unix) {
+        return Err("Unix domain sockets are not supported on this platform".to_string());
+    }
+    // A relative path would resolve against the working directory at each reconnect.
+    if !path.is_absolute() {
+        return Err(format!("Unix domain socket path {path:?} must be absolute"));
+    }
+    // Rejects NUL bytes and paths longer than the platform's `sun_path`.
+    #[cfg(unix)]
+    std::os::unix::net::SocketAddr::from_pathname(path)
+        .map_err(|err| format!("Invalid Unix domain socket path {path:?}: {err}"))?;
+    if !address.host.is_empty() || address.port != 0 {
+        return Err(format!(
+            "Unix domain socket address {path:?} must not also set a host or port"
+        ));
+    }
+    if tls {
+        return Err("TLS is not supported over Unix domain sockets".to_string());
+    }
+    Ok(())
+}
+
+/// Validate a request's Unix domain socket addresses. They are standalone only, since
+/// cluster topology and replica discovery only advertise IP/port endpoints.
+pub(crate) fn validate_unix_socket_addresses(request: &ConnectionRequest) -> Result<(), String> {
+    let socket_addresses = request
+        .addresses
+        .iter()
+        .filter(|address| address.unix_socket_path.is_some())
+        .count();
+    if socket_addresses == 0 {
+        return Ok(());
+    }
+    if request.cluster_mode_enabled {
+        return Err("Unix domain socket addresses are not supported in cluster mode".to_string());
+    }
+    if socket_addresses != request.addresses.len() {
+        return Err(
+            "Unix domain socket addresses cannot be combined with TCP addresses".to_string(),
+        );
+    }
+    if request.node_discovery_mode == NodeDiscoveryMode::DiscoverAll {
+        return Err(
+            "DiscoverAll node discovery is not supported with Unix domain socket addresses"
+                .to_string(),
+        );
+    }
+    let tls = request.tls_mode.unwrap_or_default() != TlsMode::NoTls;
+    request
+        .addresses
+        .iter()
+        .try_for_each(|address| validate_unix_socket_address(address, tls))
+}
+
 /// Get Valkey connection info with IAM token integration
 ///
 /// If IAM config + token manager exist, use the IAM token as the password; otherwise use the provided password.
@@ -316,6 +376,14 @@ pub(super) fn get_connection_info(
     tls_params: Option<redis::TlsConnParams>,
     address_resolver: Option<&Arc<dyn AddressResolver>>,
 ) -> redis::ConnectionInfo {
+    // Client creation has already rejected TLS for socket addresses, and the resolver
+    // only maps host/port pairs.
+    if let Some(path) = &address.unix_socket_path {
+        return redis::ConnectionInfo {
+            addr: redis::ConnectionAddr::Unix(path.clone()),
+            redis: redis_connection_info,
+        };
+    }
     // Trim an IPv6 host's `[ ]` before use (and before the resolver sees it), so a
     // configured `[::1]` reaches redis-rs's tuple `lookup_host` as a bare `::1`.
     let host = crate::scope::strip_host_brackets(&address.host);
@@ -2773,7 +2841,7 @@ fn sanitized_request_string(request: &ConnectionRequest) -> String {
     let addresses = request
         .addresses
         .iter()
-        .map(|address| format!("{}:{}", address.host, address.port))
+        .map(NodeAddress::endpoint)
         .collect::<Vec<_>>()
         .join(", ");
     let tls_mode = request
@@ -2951,6 +3019,7 @@ impl Client {
                 })
             })?;
         }
+        validate_unix_socket_addresses(&request).map_err(ConnectionError::Configuration)?;
 
         // Add buffer to connection_timeout to allow inner connection logic to fully execute before the outer timeout triggers
         let client_creation_timeout = request.get_connection_timeout() + Duration::from_millis(500);
@@ -3007,19 +3076,18 @@ impl Client {
             .await;
 
             // Extract connection metadata for OTel span attributes.
-            // Port 0 is normalized to the default (6379) for OTel reporting.
+            // Port 0 is normalized to the default (6379) for OTel reporting. A Unix
+            // socket address reports its path as the address and has no port.
+            let (server_address, server_port) = match request.addresses.first() {
+                Some(addr) => match &addr.unix_socket_path {
+                    Some(path) => (path.display().to_string(), None),
+                    None => (addr.host.clone(), Some(get_port(addr))),
+                },
+                None => ("unknown".to_string(), Some(6379)),
+            };
             let otel_metadata = types::OTelMetadata {
-                address: request
-                    .addresses
-                    .first()
-                    .map(|addr| types::NodeAddress {
-                        host: addr.host.clone(),
-                        port: get_port(addr),
-                    })
-                    .unwrap_or_else(|| types::NodeAddress {
-                        host: "unknown".to_string(),
-                        port: 6379,
-                    }),
+                server_address,
+                server_port,
                 db_namespace: request.database_id.to_string(),
             };
 
@@ -3441,16 +3509,16 @@ impl Client {
             .unwrap_or(false)
     }
 
-    /// Returns the initial connection address, used as the default
-    /// OTel `server.address` span attribute.
+    /// Returns the initial connection address (the socket path for a Unix domain
+    /// socket), used as the default OTel `server.address` span attribute.
     pub fn server_address(&self) -> &str {
-        &self.otel_metadata.address.host
+        &self.otel_metadata.server_address
     }
 
-    /// Returns the initial connection port, used as the default
-    /// OTel `server.port` span attribute.
-    pub fn server_port(&self) -> u16 {
-        self.otel_metadata.address.port
+    /// Returns the initial connection port, used as the default OTel `server.port`
+    /// span attribute. `None` for a Unix domain socket, which has no port.
+    pub fn server_port(&self) -> Option<u16> {
+        self.otel_metadata.server_port
     }
 
     pub fn db_namespace(&self) -> &str {
@@ -3508,7 +3576,7 @@ impl Client {
         internal_client: Arc<RwLock<ClientWrapper>>,
         pubsub_synchronizer: Arc<dyn PubSubSynchronizer>,
     ) -> Self {
-        use crate::client::types::{NodeAddress, OTelMetadata};
+        use crate::client::types::OTelMetadata;
         Client {
             shared: Arc::new(ClientShared {
                 internal_client,
@@ -3533,10 +3601,8 @@ impl Client {
             }),
             iam_token_manager: None,
             otel_metadata: Arc::new(OTelMetadata {
-                address: NodeAddress {
-                    host: "localhost".to_string(),
-                    port: 6379,
-                },
+                server_address: "localhost".to_string(),
+                server_port: Some(6379),
                 db_namespace: "0".to_string(),
             }),
         }
@@ -3562,6 +3628,7 @@ pub fn create_test_glide_client() -> Client {
         addresses: vec![NodeAddress {
             host: "127.0.0.1".to_string(),
             port: 6379,
+            unix_socket_path: None,
         }],
         lazy_connect: true,
         ..Default::default()
@@ -3607,10 +3674,8 @@ pub fn create_test_glide_client() -> Client {
         }),
         iam_token_manager: None,
         otel_metadata: Arc::new(OTelMetadata {
-            address: NodeAddress {
-                host: "127.0.0.1".to_string(),
-                port: 6379,
-            },
+            server_address: "127.0.0.1".to_string(),
+            server_port: Some(6379),
             db_namespace: "0".to_string(),
         }),
     }
@@ -3631,10 +3696,11 @@ mod tests {
     };
 
     use super::{
-        Client, ClientWrapper, ConnectionError, LazyClient, get_connection_info,
-        get_timeout_from_cmd_arg, validate_effective_lib_name, validate_effective_lib_ver,
+        AddressResolver, Client, ClientWrapper, ConnectionError, LazyClient, TlsMode,
+        get_connection_info, get_timeout_from_cmd_arg, sanitized_request_string,
+        validate_effective_lib_name, validate_effective_lib_ver, validate_unix_socket_addresses,
     };
-    use std::sync::Weak;
+    use std::sync::{Arc, Weak};
 
     #[test]
     fn test_validate_effective_lib_name_accepts_supported_values() {
@@ -3667,6 +3733,7 @@ mod tests {
             let address = NodeAddress {
                 host: configured.to_string(),
                 port: 6379,
+                unix_socket_path: None,
             };
             let info = get_connection_info(
                 &address,
@@ -3683,6 +3750,245 @@ mod tests {
                 other => panic!("expected Tcp addr, got {other:?}"),
             }
         }
+    }
+
+    fn unix_address(path: &str) -> NodeAddress {
+        NodeAddress {
+            host: String::new(),
+            port: 0,
+            unix_socket_path: Some(std::path::PathBuf::from(path)),
+        }
+    }
+
+    #[test]
+    fn test_get_connection_info_unix_socket_bypasses_resolver() {
+        #[derive(Debug)]
+        struct PanickingResolver;
+        impl AddressResolver for PanickingResolver {
+            fn resolve(&self, _host: &str, _port: u16) -> (String, u16) {
+                panic!("the address resolver must not be called for a Unix socket address");
+            }
+        }
+
+        let resolver: Arc<dyn AddressResolver> = Arc::new(PanickingResolver);
+        let info = get_connection_info(
+            &unix_address("/tmp/valkey.sock"),
+            TlsMode::NoTls,
+            redis::RedisConnectionInfo::default(),
+            None,
+            Some(&resolver),
+        );
+        assert_eq!(
+            info.addr,
+            redis::ConnectionAddr::Unix(std::path::PathBuf::from("/tmp/valkey.sock"))
+        );
+    }
+
+    fn tcp_address() -> NodeAddress {
+        NodeAddress {
+            host: "10.0.0.1".to_string(),
+            port: 6380,
+            unix_socket_path: None,
+        }
+    }
+
+    #[test]
+    fn test_validate_unix_socket_addresses_accepts_supported_requests() {
+        for (name, request) in [
+            (
+                "tcp only",
+                ConnectionRequest {
+                    addresses: vec![tcp_address()],
+                    cluster_mode_enabled: true,
+                    tls_mode: Some(TlsMode::SecureTls),
+                    ..Default::default()
+                },
+            ),
+            (
+                "single socket",
+                ConnectionRequest {
+                    addresses: vec![unix_address("/tmp/valkey.sock")],
+                    ..Default::default()
+                },
+            ),
+            (
+                "several sockets, static discovery",
+                ConnectionRequest {
+                    addresses: vec![unix_address("/tmp/a.sock"), unix_address("/tmp/b.sock")],
+                    node_discovery_mode: crate::client::NodeDiscoveryMode::Static,
+                    tls_mode: Some(TlsMode::NoTls),
+                    ..Default::default()
+                },
+            ),
+        ] {
+            assert_eq!(validate_unix_socket_addresses(&request), Ok(()), "{name}");
+        }
+    }
+
+    #[test]
+    fn test_validate_unix_socket_addresses_rejects_unsupported_requests() {
+        let unix_with_host = NodeAddress {
+            host: "localhost".to_string(),
+            ..unix_address("/tmp/valkey.sock")
+        };
+        let unix_with_port = NodeAddress {
+            port: 6379,
+            ..unix_address("/tmp/valkey.sock")
+        };
+        let too_long = format!("/tmp/{}.sock", "a".repeat(200));
+        for (request, expected) in [
+            (
+                ConnectionRequest {
+                    addresses: vec![tcp_address(), unix_address("/tmp/valkey.sock")],
+                    cluster_mode_enabled: true,
+                    ..Default::default()
+                },
+                "not supported in cluster mode",
+            ),
+            (
+                ConnectionRequest {
+                    addresses: vec![tcp_address(), unix_address("/tmp/valkey.sock")],
+                    ..Default::default()
+                },
+                "cannot be combined with TCP addresses",
+            ),
+            (
+                ConnectionRequest {
+                    addresses: vec![unix_address("/tmp/valkey.sock"), tcp_address()],
+                    ..Default::default()
+                },
+                "cannot be combined with TCP addresses",
+            ),
+            (
+                ConnectionRequest {
+                    addresses: vec![unix_address("/tmp/valkey.sock")],
+                    node_discovery_mode: crate::client::NodeDiscoveryMode::DiscoverAll,
+                    ..Default::default()
+                },
+                "DiscoverAll node discovery is not supported",
+            ),
+            (
+                ConnectionRequest {
+                    addresses: vec![unix_address("/tmp/a.sock"), unix_address("/tmp/b.sock")],
+                    tls_mode: Some(TlsMode::SecureTls),
+                    ..Default::default()
+                },
+                "TLS is not supported",
+            ),
+            (
+                ConnectionRequest {
+                    addresses: vec![unix_address("/tmp/valkey.sock")],
+                    tls_mode: Some(TlsMode::InsecureTls),
+                    ..Default::default()
+                },
+                "TLS is not supported",
+            ),
+            (
+                ConnectionRequest {
+                    addresses: vec![unix_address("/tmp/a.sock"), unix_address("")],
+                    ..Default::default()
+                },
+                "must be absolute",
+            ),
+            (
+                ConnectionRequest {
+                    addresses: vec![unix_address("run/valkey.sock")],
+                    ..Default::default()
+                },
+                "must be absolute",
+            ),
+            (
+                ConnectionRequest {
+                    addresses: vec![unix_address("/tmp/val\0key.sock")],
+                    ..Default::default()
+                },
+                "Invalid Unix domain socket path",
+            ),
+            (
+                ConnectionRequest {
+                    addresses: vec![unix_address(&too_long)],
+                    ..Default::default()
+                },
+                "Invalid Unix domain socket path",
+            ),
+            (
+                ConnectionRequest {
+                    addresses: vec![unix_with_host],
+                    ..Default::default()
+                },
+                "must not also set a host or port",
+            ),
+            (
+                ConnectionRequest {
+                    addresses: vec![unix_with_port],
+                    ..Default::default()
+                },
+                "must not also set a host or port",
+            ),
+        ] {
+            let error = validate_unix_socket_addresses(&request).expect_err(&format!(
+                "expected `{expected}` for {:?}",
+                request.addresses
+            ));
+            assert!(
+                error.contains(expected),
+                "expected `{expected}`, got `{error}`"
+            );
+            // Error text crosses the FFI as a C string, so it must never carry a raw NUL.
+            assert!(!error.contains('\0'), "raw NUL in `{error:?}`");
+        }
+    }
+
+    #[test]
+    fn test_sanitized_request_string_shows_unix_socket_path() {
+        let request = ConnectionRequest {
+            addresses: vec![
+                unix_address("/tmp/valkey.sock"),
+                NodeAddress {
+                    host: "10.0.0.1".to_string(),
+                    port: 6380,
+                    unix_socket_path: None,
+                },
+            ],
+            ..Default::default()
+        };
+        let sanitized = sanitized_request_string(&request);
+        assert!(
+            sanitized.contains("Addresses: unix:/tmp/valkey.sock, 10.0.0.1:6380"),
+            "{sanitized}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_otel_metadata_reports_unix_socket_path_without_port() {
+        let request = ConnectionRequest {
+            addresses: vec![unix_address("/tmp/valkey.sock")],
+            lazy_connect: true,
+            ..Default::default()
+        };
+        let client = Client::new(request, None)
+            .await
+            .expect("lazy client construction does not touch the network");
+        assert_eq!(client.server_address(), "/tmp/valkey.sock");
+        assert_eq!(client.server_port(), None);
+    }
+
+    #[tokio::test]
+    async fn test_otel_metadata_reports_tcp_host_and_default_port() {
+        let request = ConnectionRequest {
+            addresses: vec![NodeAddress {
+                host: "127.0.0.1".to_string(),
+                port: 0,
+                unix_socket_path: None,
+            }],
+            lazy_connect: true,
+            ..Default::default()
+        };
+        let client = Client::new(request, None)
+            .await
+            .expect("lazy client construction does not touch the network");
+        assert_eq!(client.server_address(), "127.0.0.1");
+        assert_eq!(client.server_port(), Some(6379));
     }
 
     #[test]
@@ -3716,6 +4022,7 @@ mod tests {
             addresses: vec![NodeAddress {
                 host: "127.0.0.1".to_string(),
                 port: 1,
+                unix_socket_path: None,
             }],
             lazy_connect: true,
             lib_name: Some("invalid name".to_string()),
@@ -3762,6 +4069,7 @@ mod tests {
             addresses: vec![NodeAddress {
                 host: "127.0.0.1".to_string(),
                 port: 1,
+                unix_socket_path: None,
             }],
             lazy_connect: true,
             lib_ver: Some("bad version".to_string()),
@@ -3785,6 +4093,7 @@ mod tests {
                     addresses: vec![NodeAddress {
                         host: "127.0.0.1".to_string(),
                         port: 1,
+                        unix_socket_path: None,
                     }],
                     cluster_mode_enabled,
                     lazy_connect,
@@ -4063,6 +4372,7 @@ mod tests {
             addresses: vec![NodeAddress {
                 host: "127.0.0.1".to_string(),
                 port: 6379,
+                unix_socket_path: None,
             }],
             lazy_connect: true,
             ..Default::default()
@@ -4109,10 +4419,8 @@ mod tests {
             }),
             iam_token_manager: None,
             otel_metadata: Arc::new(OTelMetadata {
-                address: NodeAddress {
-                    host: "localhost".to_string(),
-                    port: 6379,
-                },
+                server_address: "localhost".to_string(),
+                server_port: Some(6379),
                 db_namespace: "0".to_string(),
             }),
         }
@@ -4894,6 +5202,7 @@ mod tests {
             addresses: vec![NodeAddress {
                 host: "127.0.0.1".to_string(),
                 port: 1,
+                unix_socket_path: None,
             }],
             lazy_connect: true,
             authentication_info: Some(crate::client::types::AuthenticationInfo {
@@ -4924,6 +5233,7 @@ mod tests {
             addresses: vec![NodeAddress {
                 host: "127.0.0.1".to_string(),
                 port: 1,
+                unix_socket_path: None,
             }],
             lazy_connect: true,
             ..Default::default()

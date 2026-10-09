@@ -68,6 +68,61 @@ impl Drop for Server {
     }
 }
 
+/// A server that listens only on a Unix domain socket (`--port 0`), so a client
+/// that connects must have gone through the socket.
+struct UnixSocketServer {
+    process: Child,
+    dir: std::path::PathBuf,
+    socket_path: std::path::PathBuf,
+}
+
+impl UnixSocketServer {
+    fn with_requirepass(password: &str) -> Self {
+        static NEXT_ID: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+        let id = NEXT_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        // Socket paths are limited to ~104-108 bytes, so stay in /tmp.
+        let dir =
+            std::path::PathBuf::from(format!("/tmp/glide-ffi-uri-{}-{id}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("Failed to create socket directory");
+        let socket_path = dir.join("valkey.sock");
+        let run_server = |engine_type: &str| {
+            Command::new(engine_type)
+                .args(["--port", "0", "--save", "", "--appendonly", "no"])
+                .arg("--unixsocket")
+                .arg(&socket_path)
+                .arg("--dir")
+                .arg(&dir)
+                .args(["--requirepass", password])
+                .spawn()
+        };
+        let process = run_server("valkey-server")
+            .or_else(|_| run_server("redis-server"))
+            .expect("Failed to start both valkey-server and redis-server");
+        // The server creates the socket file once it listens.
+        let deadline = std::time::Instant::now() + Duration::from_secs(10);
+        while !socket_path.exists() {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "server did not listen on {socket_path:?}"
+            );
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        Self {
+            process,
+            dir,
+            socket_path,
+        }
+    }
+}
+
+impl Drop for UnixSocketServer {
+    fn drop(&mut self) {
+        self.process.kill().ok();
+        self.process.wait().ok();
+        std::fs::remove_dir_all(&self.dir).ok();
+    }
+}
+
 fn parse_error_msg(err_msg_ptr: *const c_char) -> String {
     if err_msg_ptr.is_null() {
         return String::new();
@@ -1661,6 +1716,52 @@ fn test_create_client_from_uri_with_reserved_char_password_authenticates() {
     assert!(
         !conn_response.conn_ptr.is_null(),
         "expected a live connection after successful AUTH"
+    );
+
+    unsafe {
+        close_client(conn_response.conn_ptr);
+        free_connection_response(response as *mut ConnectionResponse);
+        drop(Box::from_raw(client_type));
+    }
+}
+
+// The server listens only on the socket and requires a password, so a
+// successful connection shows the URI's socket path and `pass` query
+// parameter both reached glide-core.
+#[rstest]
+#[case("valkey+unix")]
+#[case("redis+unix")]
+#[case("unix")]
+fn test_create_client_from_uri_unix_socket_authenticates(#[case] scheme: &str) {
+    let password = "p@ss";
+    let server = UnixSocketServer::with_requirepass(password);
+    let uri = CString::new(format!(
+        "{scheme}://{}?db=5&pass=p%40ss",
+        server.socket_path.display()
+    ))
+    .unwrap();
+
+    let client_type = Box::into_raw(Box::new(ClientType::SyncClient));
+
+    let response = unsafe {
+        create_client_from_uri(
+            uri.as_ptr(),
+            ptr::null(),
+            client_type,
+            null_pubsub_callback(),
+        )
+    };
+
+    assert!(!response.is_null());
+    let conn_response = unsafe { &*response };
+
+    if !conn_response.connection_error_message.is_null() {
+        let error = parse_error_msg(conn_response.connection_error_message);
+        panic!("expected a connection over {scheme}:// with AUTH, got: {error}");
+    }
+    assert!(
+        !conn_response.conn_ptr.is_null(),
+        "expected a live connection over the socket"
     );
 
     unsafe {

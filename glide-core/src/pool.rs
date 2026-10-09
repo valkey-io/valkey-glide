@@ -1935,6 +1935,7 @@ mod client_pool_marking_tests {
             addresses: vec![NodeAddress {
                 host: "127.0.0.1".to_string(),
                 port: 1,
+                unix_socket_path: None,
             }],
             cluster_mode_enabled: false,
             lazy_connect: true,
@@ -3537,6 +3538,7 @@ mod scope_pool_tests {
             request.addresses.push(crate::client::NodeAddress {
                 host: "127.0.0.1".into(),
                 port: server.port,
+                unix_socket_path: None,
             });
             crate::client::Client::new(request, None)
                 .await
@@ -4324,6 +4326,7 @@ mod client_pool_tests {
         request.addresses.push(crate::client::NodeAddress {
             host: "127.0.0.1".into(),
             port,
+            unix_socket_path: None,
         });
         request.lazy_connect = true;
         request.connection_timeout = Some(60_000);
