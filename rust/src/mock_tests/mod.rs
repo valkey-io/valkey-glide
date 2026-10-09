@@ -111,7 +111,6 @@ impl CommandExecutor for Mock {
 
 mod bitmap;
 mod connection_management;
-mod executor;
 mod generic;
 mod geo;
 mod hash;

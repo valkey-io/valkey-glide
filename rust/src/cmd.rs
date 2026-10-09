@@ -71,17 +71,13 @@ impl Cmd {
 
     /// Append an argument and return `self` by value for chaining.
     ///
-    /// Unlike [`Cmd::arg`], the chain can be bound directly, without
-    /// `let mut` or `.clone()`. `Option` arguments append nothing when
-    /// `None`, so optional arguments stay in the chain.
-    ///
     /// ```
-    /// let ttl: Option<i64> = None;
     /// let cmd = glide::cmd("SET")
     ///     .with_arg("key")
     ///     .with_arg("value")
-    ///     .with_arg(ttl.map(|s| ("EX", s)));
     /// ```
+    ///
+    /// Extends redis-rs's `Cmd` interface.
     #[inline]
     pub fn with_arg<A: ToValkeyArgs>(mut self, arg: A) -> Self {
         self.arg(arg);
@@ -177,14 +173,17 @@ mod tests {
     #[test]
     fn with_arg_matches_arg() {
         let none: Option<i64> = None;
+
         let v = cmd("SET")
             .with_arg("key")
             .with_arg(&b"value"[..])
             .with_arg(none.map(|s| ("EX", s)))
             .with_arg(Some(("PX", 5)))
             .with_arg(true.then_some("GET"));
+
         let mut a = cmd("SET");
         a.arg("key").arg(&b"value"[..]).arg("PX").arg(5).arg("GET");
+
         assert_eq!(
             v.as_redis().get_packed_command(),
             a.as_redis().get_packed_command()

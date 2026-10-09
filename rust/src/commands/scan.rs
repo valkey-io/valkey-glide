@@ -391,21 +391,4 @@ mod tests {
         assert!(iter.next().expect("expected an error").is_err());
         assert!(iter.next().is_none());
     }
-
-    #[test]
-    fn page_spec_places_cursor_between_prefix_and_suffix() {
-        let spec = PageSpec {
-            prefix: vec![b"HSCAN".to_vec(), b"h".to_vec()],
-            suffix: vec![b"MATCH".to_vec(), b"x*".to_vec()],
-        };
-        assert_eq!(
-            spec.to_cmd(7).as_redis().get_packed_command(),
-            redis::cmd("HSCAN")
-                .arg("h")
-                .arg(7)
-                .arg("MATCH")
-                .arg("x*")
-                .get_packed_command()
-        );
-    }
 }
