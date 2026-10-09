@@ -20,9 +20,9 @@ use crate::{ValkeyResult, commands::core::Commands};
 /// glide::cmd("PING");
 /// ```
 pub fn cmd(name: &str) -> Cmd {
-    let mut command = Cmd::new();
-    command.arg(name);
-    command
+    Cmd {
+        inner: redis::cmd(name),
+    }
 }
 
 /// A command to send to the server.
@@ -59,9 +59,7 @@ impl Cmd {
     /// It is recommended to use [`cmd`] instead
     /// to explicitly specify the command keyword.
     pub fn new() -> Self {
-        Cmd {
-            inner: redis::Cmd::new(),
-        }
+        Self::default()
     }
 
     /// Append an argument and return `&mut self` for chaining.
@@ -145,23 +143,15 @@ mod tests {
 
     #[test]
     fn matches_redis_cmd_single_arg() {
-        let mut v = Cmd::new();
-        v.arg("SET").arg("key").arg(42i64);
-
-        let mut r = redis::Cmd::new();
-        r.arg("SET").arg("key").arg(42i64);
-
+        let v = cmd("SET").arg("key").arg(42i64).clone();
+        let r = redis::cmd("SET").arg("key").arg(42i64).clone();
         assert_eq!(v.as_redis().get_packed_command(), r.get_packed_command());
     }
 
     #[test]
     fn matches_redis_cmd_multi_arg() {
-        let mut v = Cmd::new();
-        v.arg("MGET").arg(&["a", "b", "c"][..]);
-
-        let mut r = redis::Cmd::new();
-        r.arg("MGET").arg(&["a", "b", "c"][..]);
-
+        let v = cmd("MGET").arg(&["a", "b", "c"][..]).clone();
+        let r = redis::cmd("MGET").arg(&["a", "b", "c"][..]).clone();
         assert_eq!(v.as_redis().get_packed_command(), r.get_packed_command());
     }
 }

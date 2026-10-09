@@ -10,8 +10,8 @@
 
 mod common;
 
-use glide::Cmd;
 use glide::client::{ClusterScanCursor, PubSubMessageKind};
+use glide::cmd;
 use glide::config::{PubSubChannelMode, PubSubSubscriptions};
 use glide::{
     AsyncTypedCommands, CustomCommand, FromValkeyValue, GlideClient, GlideClientConfiguration,
@@ -246,8 +246,7 @@ timed_tokio_test!(
 
         // ECHO to all primaries returns reply per primary node.
         let msg = "glide-route-probe";
-        let mut echo = Cmd::new();
-        echo.arg("ECHO").arg(msg);
+        let echo = cmd("ECHO").arg(msg).clone();
         let r = client
             .route_command(echo, Route::AllPrimaries)
             .await
@@ -267,15 +266,13 @@ timed_tokio_test!(
         );
 
         // PING to a random node returns PONG.
-        let mut ping = Cmd::new();
-        ping.arg("PING");
+        let ping = cmd("PING");
         let r2 = client.route_command(ping, Route::RandomNode).await.unwrap();
         assert_eq!(String::from_owned_valkey_value(r2).unwrap(), "PONG");
 
         // A key-routed SET then GET through the slot-key route.
         let k = common::key("route:k");
-        let mut set = Cmd::new();
-        set.arg("SET").arg(&k).arg("v");
+        let set = cmd("SET").arg(&k).arg("v").clone();
         client
             .route_command(set, Route::slot_key(k.clone(), glide::SlotType::Primary))
             .await

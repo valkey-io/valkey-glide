@@ -38,10 +38,8 @@ pub trait CustomCommand: CommandExecutor {
     where
         A: ToValkeyArgs + Sync,
     {
-        let mut cmd = Cmd::new();
-        for a in args {
-            cmd.arg(a);
-        }
+        let mut cmd = Cmd::default();
+        cmd.arg(args);
         self.execute_command(cmd, None).await
     }
 
@@ -55,10 +53,8 @@ pub trait CustomCommand: CommandExecutor {
     where
         A: ToValkeyArgs + Sync,
     {
-        let mut cmd = Cmd::new();
-        for a in args {
-            cmd.arg(a);
-        }
+        let mut cmd = Cmd::default();
+        cmd.arg(args);
         self.execute_command(cmd, Some(route)).await
     }
 }

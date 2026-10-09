@@ -49,13 +49,11 @@ matrix_test!(cmd_exec_async, c, {
 
 matrix_test!(glide_send_command_as, c, {
     let k = common::key("glide_send_command_as");
-    let mut set = cmd("SET");
-    set.arg(&k).arg(7);
+    let set = cmd("SET").arg(&k).arg(7).clone();
     let _: () = glide::AsyncCommands::glide_send_command_as(&c, set)
         .await
         .unwrap();
-    let mut get = cmd("GET");
-    get.arg(&k);
+    let get = cmd("GET").arg(&k).clone();
     let v: i64 = glide::AsyncCommands::glide_send_command_as(&c, get)
         .await
         .unwrap();

@@ -4,7 +4,7 @@
 
 use crate::GlideError;
 use crate::ValkeyResult;
-use crate::cmd::Cmd;
+use crate::cmd::cmd;
 use crate::executor::CommandExecutor;
 use crate::value::FromValkeyValue;
 use crate::value::ValkeyValue;
@@ -945,9 +945,8 @@ pub trait StreamCommands: CommandExecutor {
         keys_ids: &[(K, &str)],
         options: Option<StreamReadGroupOptions>,
     ) -> ValkeyResult<Vec<(Bytes, Vec<StreamEntry>)>> {
-        let mut cmd = Cmd::new();
-        cmd.arg("XREADGROUP").arg("GROUP").arg(group).arg(consumer);
-        cmd.arg(options);
+        let mut cmd = cmd("XREADGROUP");
+        cmd.arg("GROUP").arg(group).arg(consumer).arg(options);
         cmd.arg("STREAMS");
         for (k, _) in keys_ids {
             cmd.arg(k);
@@ -970,8 +969,8 @@ pub trait StreamCommands: CommandExecutor {
         min_idle_time_ms: Option<i64>,
         consumer: Option<&str>,
     ) -> ValkeyResult<Vec<XPendingEntry>> {
-        let mut cmd = Cmd::new();
-        cmd.arg("XPENDING").arg(key).arg(group);
+        let mut cmd = cmd("XPENDING");
+        cmd.arg(key).arg(group);
         if let Some(idle) = min_idle_time_ms {
             cmd.arg("IDLE").arg(idle);
         }
@@ -990,8 +989,8 @@ pub trait StreamCommands: CommandExecutor {
         key: K,
         count: Option<i64>,
     ) -> ValkeyResult<Vec<(Bytes, ValkeyValue)>> {
-        let mut cmd = Cmd::new();
-        cmd.arg("XINFO").arg("STREAM").arg(key).arg("FULL");
+        let mut cmd = cmd("XINFO");
+        cmd.arg("STREAM").arg(key).arg("FULL");
         if let Some(c) = count {
             cmd.arg("COUNT").arg(c);
         }
@@ -1006,8 +1005,8 @@ pub trait StreamCommands: CommandExecutor {
         entries_added: Option<i64>,
         max_deleted_id: Option<&str>,
     ) -> ValkeyResult<()> {
-        let mut cmd = Cmd::new();
-        cmd.arg("XSETID").arg(key).arg(last_id);
+        let mut cmd = cmd("XSETID");
+        cmd.arg(key).arg(last_id);
         if let Some(e) = entries_added {
             cmd.arg("ENTRIESADDED").arg(e);
         }
@@ -1026,13 +1025,8 @@ pub trait StreamCommands: CommandExecutor {
         id: &str,
         options: &StreamGroupCreateOptions,
     ) -> ValkeyResult<()> {
-        let mut cmd = Cmd::new();
-        cmd.arg("XGROUP")
-            .arg("CREATE")
-            .arg(key)
-            .arg(group)
-            .arg(id)
-            .arg(options);
+        let mut cmd = cmd("XGROUP");
+        cmd.arg("CREATE").arg(key).arg(group).arg(id).arg(options);
         <()>::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
@@ -1044,8 +1038,8 @@ pub trait StreamCommands: CommandExecutor {
         id: &str,
         entries_read: Option<i64>,
     ) -> ValkeyResult<()> {
-        let mut cmd = Cmd::new();
-        cmd.arg("XGROUP").arg("SETID").arg(key).arg(group).arg(id);
+        let mut cmd = cmd("XGROUP");
+        cmd.arg("SETID").arg(key).arg(group).arg(id);
         if let Some(e) = entries_read {
             cmd.arg("ENTRIESREAD").arg(e);
         }

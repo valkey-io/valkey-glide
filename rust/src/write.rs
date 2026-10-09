@@ -237,7 +237,8 @@ impl ToValkeyArgs for Bytes {
     }
 }
 
-/// Encodes a `Vec` as command arguments.
+/// Encodes a `Vec` as command arguments: one per element,
+/// except `Vec<u8>`, which encodes as a single binary argument.
 impl<T: ToValkeyArgs> ToValkeyArgs for Vec<T> {
     fn write_valkey_args<W: ?Sized + ValkeyWrite>(&self, out: &mut W) {
         T::write_valkey_args_from_slice(self, out);
@@ -248,7 +249,8 @@ impl<T: ToValkeyArgs> ToValkeyArgs for Vec<T> {
     }
 }
 
-/// Encodes a slice as command arguments.
+/// Encodes a slice as command arguments: one per element,
+/// except `&[u8]`, which encodes as a single binary argument.
 impl<T: ToValkeyArgs> ToValkeyArgs for &[T] {
     fn write_valkey_args<W: ?Sized + ValkeyWrite>(&self, out: &mut W) {
         T::write_valkey_args_from_slice(self, out);
@@ -259,7 +261,8 @@ impl<T: ToValkeyArgs> ToValkeyArgs for &[T] {
     }
 }
 
-/// Encodes a fixed-size array as command arguments.
+/// Encodes a fixed-size array as command arguments: one per element,
+/// except `&[u8; N]`, which encodes as a single binary argument.
 impl<T: ToValkeyArgs, const N: usize> ToValkeyArgs for &[T; N] {
     fn write_valkey_args<W: ?Sized + ValkeyWrite>(&self, out: &mut W) {
         T::write_valkey_args_from_slice(self.as_slice(), out);
@@ -481,14 +484,14 @@ mod tests {
 
     #[test]
     fn cmd_writer() {
-        let mut out = crate::cmd::Cmd::new();
+        let mut out = crate::cmd::Cmd::default();
         out.write_arg(TEXT);
         out.write_arg(BINARY);
         out.write_arg_fmt(NUMBER);
 
         assert_eq!(
             out.as_redis().get_packed_command(),
-            crate::cmd::Cmd::new()
+            crate::cmd::Cmd::default()
                 .arg(TEXT)
                 .arg(BINARY)
                 .arg(NUMBER)

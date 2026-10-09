@@ -2,7 +2,7 @@
 //! String commands. Mirrors Python's string command surface.
 
 use crate::ValkeyResult;
-use crate::cmd::Cmd;
+use crate::cmd::cmd;
 use crate::executor::CommandExecutor;
 use crate::value::FromValkeyValue;
 use crate::value::ValkeyValue;
@@ -19,8 +19,8 @@ pub trait StringCommands: CommandExecutor {
         key1: K1,
         key2: K2,
     ) -> ValkeyResult<i64> {
-        let mut cmd = Cmd::new();
-        cmd.arg("LCS").arg(key1).arg(key2).arg("LEN");
+        let mut cmd = cmd("LCS");
+        cmd.arg(key1).arg(key2).arg("LEN");
         i64::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
@@ -30,8 +30,8 @@ pub trait StringCommands: CommandExecutor {
         key1: K1,
         key2: K2,
     ) -> ValkeyResult<Bytes> {
-        let mut cmd = Cmd::new();
-        cmd.arg("LCS").arg(key1).arg(key2);
+        let mut cmd = cmd("LCS");
+        cmd.arg(key1).arg(key2);
         Bytes::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
@@ -45,8 +45,8 @@ pub trait StringCommands: CommandExecutor {
         min_match_len: Option<i64>,
         with_match_len: bool,
     ) -> ValkeyResult<ValkeyValue> {
-        let mut cmd = Cmd::new();
-        cmd.arg("LCS").arg(key1).arg(key2).arg("IDX");
+        let mut cmd = cmd("LCS");
+        cmd.arg(key1).arg(key2).arg("IDX");
         if let Some(m) = min_match_len {
             cmd.arg("MINMATCHLEN").arg(m);
         }

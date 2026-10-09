@@ -66,3 +66,17 @@ async fn watch_unwatch() {
     m.unwatch().await.unwrap();
     m.assert_args(&["UNWATCH"]);
 }
+
+#[tokio::test]
+async fn touch_encodes_each_key() {
+    let m = Mock::int(2);
+    m.touch(&["a", "b"]).await.unwrap();
+    m.assert_args(&["TOUCH", "a", "b"]);
+}
+
+#[tokio::test]
+async fn touch_byte_slice_is_one_key() {
+    let m = Mock::int(1);
+    m.touch(&b"abc"[..]).await.unwrap();
+    m.assert_args(&["TOUCH", "abc"]);
+}

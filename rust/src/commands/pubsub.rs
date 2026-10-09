@@ -9,7 +9,7 @@
 //! commands.
 
 use crate::ValkeyResult;
-use crate::cmd::Cmd;
+use crate::cmd::cmd;
 use crate::executor::CommandExecutor;
 use crate::value::FromValkeyValue;
 use crate::value::ValkeyValue;
@@ -78,11 +78,8 @@ pub trait PubSubCommands: CommandExecutor {
         keyword: &'static str,
         channels: &[C],
     ) -> ValkeyResult<()> {
-        let mut cmd = Cmd::new();
-        cmd.arg(keyword);
-        for c in channels {
-            cmd.arg(c);
-        }
+        let mut cmd = cmd(keyword);
+        cmd.arg(channels);
         self.execute_command(cmd, None).await?;
         Ok(())
     }
@@ -103,8 +100,8 @@ pub trait PubSubCommands: CommandExecutor {
 
     /// Get the number of subscriptions to patterns (`PUBSUB NUMPAT`).
     async fn pubsub_numpat(&self) -> ValkeyResult<i64> {
-        let mut cmd = Cmd::new();
-        cmd.arg("PUBSUB").arg("NUMPAT");
+        let mut cmd = cmd("PUBSUB");
+        cmd.arg("NUMPAT");
         i64::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
@@ -130,8 +127,8 @@ pub trait PubSubCommands: CommandExecutor {
         sub: &'static str,
         pattern: Option<&[u8]>,
     ) -> ValkeyResult<Vec<Bytes>> {
-        let mut cmd = Cmd::new();
-        cmd.arg("PUBSUB").arg(sub);
+        let mut cmd = cmd("PUBSUB");
+        cmd.arg(sub);
         if let Some(p) = pattern {
             cmd.arg(p);
         }
@@ -151,11 +148,8 @@ pub trait PubSubCommands: CommandExecutor {
         sub: &'static str,
         channels: &[C],
     ) -> ValkeyResult<Vec<(Bytes, i64)>> {
-        let mut cmd = Cmd::new();
-        cmd.arg("PUBSUB").arg(sub);
-        for c in channels {
-            cmd.arg(c);
-        }
+        let mut cmd = cmd("PUBSUB");
+        cmd.arg(sub).arg(channels);
         parse_numsub(self.execute_command(cmd, None).await?)
     }
 }

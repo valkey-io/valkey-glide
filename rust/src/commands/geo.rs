@@ -5,7 +5,7 @@
 
 use crate::GlideError;
 use crate::ValkeyResult;
-use crate::cmd::Cmd;
+use crate::cmd::cmd;
 use crate::commands::options::{ExistenceCheck, OrderBy};
 use crate::executor::CommandExecutor;
 use crate::value::FromValkeyValue;
@@ -147,9 +147,8 @@ pub trait GeoCommands: CommandExecutor {
         radius: f64,
         unit: GeoUnit,
     ) -> ValkeyResult<Vec<Bytes>> {
-        let mut cmd = Cmd::new();
-        cmd.arg("GEOSEARCH")
-            .arg(key)
+        let mut cmd = cmd("GEOSEARCH");
+        cmd.arg(key)
             .arg("FROMMEMBER")
             .arg(member)
             .arg("BYRADIUS")
@@ -174,8 +173,8 @@ pub trait GeoCommands: CommandExecutor {
         existence_check: Option<ExistenceCheck>,
         changed: bool,
     ) -> ValkeyResult<i64> {
-        let mut cmd = Cmd::new();
-        cmd.arg("GEOADD").arg(key);
+        let mut cmd = cmd("GEOADD");
+        cmd.arg(key);
         if let Some(c) = existence_check {
             cmd.arg(c);
         }
@@ -195,9 +194,8 @@ pub trait GeoCommands: CommandExecutor {
         shape: GeoSearchShape,
         options: GeoSearchOptions,
     ) -> ValkeyResult<Vec<GeoSearchResult>> {
-        let mut cmd = Cmd::new();
-        cmd.arg("GEOSEARCH")
-            .arg(key)
+        let mut cmd = cmd("GEOSEARCH");
+        cmd.arg(key)
             .arg("FROMMEMBER")
             .arg(member)
             .arg(shape)
@@ -214,9 +212,8 @@ pub trait GeoCommands: CommandExecutor {
         shape: GeoSearchShape,
         options: GeoSearchOptions,
     ) -> ValkeyResult<Vec<GeoSearchResult>> {
-        let mut cmd = Cmd::new();
-        cmd.arg("GEOSEARCH")
-            .arg(key)
+        let mut cmd = cmd("GEOSEARCH");
+        cmd.arg(key)
             .arg("FROMLONLAT")
             .arg(coord.longitude)
             .arg(coord.latitude)
@@ -239,9 +236,8 @@ pub trait GeoCommands: CommandExecutor {
         shape: GeoSearchShape,
         options: GeoSearchStoreOptions,
     ) -> ValkeyResult<i64> {
-        let mut cmd = Cmd::new();
-        cmd.arg("GEOSEARCHSTORE")
-            .arg(destination)
+        let mut cmd = cmd("GEOSEARCHSTORE");
+        cmd.arg(destination)
             .arg(source)
             .arg("FROMMEMBER")
             .arg(member)
@@ -260,9 +256,8 @@ pub trait GeoCommands: CommandExecutor {
         shape: GeoSearchShape,
         options: GeoSearchStoreOptions,
     ) -> ValkeyResult<i64> {
-        let mut cmd = Cmd::new();
-        cmd.arg("GEOSEARCHSTORE")
-            .arg(destination)
+        let mut cmd = cmd("GEOSEARCHSTORE");
+        cmd.arg(destination)
             .arg(source)
             .arg("FROMLONLAT")
             .arg(coord.longitude)
