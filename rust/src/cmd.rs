@@ -74,7 +74,7 @@ impl Cmd {
     /// ```
     /// let cmd = glide::cmd("SET")
     ///     .with_arg("key")
-    ///     .with_arg("value")
+    ///     .with_arg("value");
     /// ```
     ///
     /// Extends redis-rs's `Cmd` interface.
