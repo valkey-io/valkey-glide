@@ -619,12 +619,9 @@ pub fn pool_destroy(pool_id: i64) {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /// Acquire a scope from the client's scope pool. Returns `Promise<number>` resolving
-/// to the scope id. Waiting happens in the core, so the caller makes one call per
-/// acquire; the promise rejects with the core's message when the deadline passes,
-/// the parent is closed, or the configuration cannot produce a scoped connection.
-/// The rejection message is prefixed with the `RequestErrorType` name (`Timeout`,
-/// `Disconnect`, `Unspecified`) followed by `: `, so the binding can pick its error
-/// class; napi offers no custom `code` field for that.
+/// to the scope id. The rejection message is prefixed with the `RequestErrorType`
+/// name from `ScopeAcquireError::request_error_type` followed by `: `, so the
+/// binding can pick its error class; napi offers no custom `code` field for that.
 #[napi(ts_return_type = "Promise<number>")]
 pub fn scope_acquire<'a>(
     env: &'a Env,

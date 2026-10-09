@@ -984,10 +984,8 @@ fn scope_id_response(scope_id: u64) -> *mut CommandResponse {
 
 /// Acquire a scope from the client's scope pool (async — non-blocking, fires callback).
 ///
-/// Waits inside the core for up to `timeout_ms` for a retryable condition (pool
-/// exhausted, connection still being created, slot unmapped) to clear, then calls
-/// `success_callback(request_id, response)` with an `Int` response holding the
-/// scope id, or `failure_callback(request_id, error, type)`. The error type is
+/// Waits inside the core for up to `timeout_ms` for a retryable cause to clear.
+/// The success response is an `Int` holding the scope id. The error type is
 /// `Timeout` when the deadline passes, `Disconnect` when the parent client is
 /// closed, `Unspecified` for a configuration problem the message describes.
 ///
