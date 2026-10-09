@@ -912,16 +912,11 @@ pub unsafe extern "C" fn glide_scope_prewarm(
     let pool = glide_core::pool::get_or_create_scope_pool(client_id, conn_bytes.clone()).pool;
 
     // Spawn min_idle background creation tasks. Each resolves slot 0 through the
-    // parent client's current topology first, then reserves a slot against
-    // max_total via the target-aware helper (for slot accounting; the marker is
-    // never matched, since each task mints its own token — see below), skipping if
-    // full or closed. Resolving before reserving means an unresolvable target never
-    // holds a slot. Each task carries a unique attempt token, so the min_idle
-    // prewarms are distinct dials that do not dedupe against each other or against
-    // a concurrent acquire. An unresolvable target skips the connection —
-    // expected for a lazily connected cluster client (no slot map until its first
-    // command), so logged at debug rather than warn. The guard means a failed or
-    // cancelled prewarm always gives its slot back.
+    // parent client's current topology before reserving a slot against max_total,
+    // so an unresolvable target never holds a slot; that case is expected for a
+    // lazily connected cluster client (no slot map until its first command) and
+    // is logged at debug rather than warn. The reservation guard gives the slot
+    // back if the prewarm fails or is cancelled.
     for _ in 0..min_idle {
         let pool_clone = pool.clone();
         let bytes = conn_bytes.clone();

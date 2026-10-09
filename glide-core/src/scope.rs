@@ -1786,11 +1786,11 @@ mod tests {
     }
 
     /// The defect's layer: `create_scope_connection` runs in a detached task and
-    /// can be cancelled mid-connect. Reserve through the real `try_acquire` (so the
-    /// guard also carries the pending marker), spawn creation against an endpoint
-    /// that accepts TCP but never completes the handshake — so the task parks —
-    /// then abort it. The guard's `Drop` must reclaim the slot AND clear the marker;
-    /// pre-guard code left both leaked because no give-back path ran on cancel.
+    /// can be cancelled mid-connect. Reserve through the real `try_acquire`, spawn
+    /// creation against an endpoint that accepts TCP but never completes the
+    /// handshake — so the task parks — then abort it. The guard's `Drop` must
+    /// reclaim the slot; pre-guard code leaked it because no give-back path ran on
+    /// cancel.
     #[tokio::test]
     async fn cancelled_create_scope_connection_reclaims_slot() {
         // Accept-only listener: the client's TCP connect succeeds at the kernel,
