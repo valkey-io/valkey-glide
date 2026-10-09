@@ -10,41 +10,49 @@ use jni::JNIEnv;
 use jni::objects::{JByteArray, JClass};
 use jni::sys::{jint, jlong};
 
-/// Acquire a scope from the client's internal connection pool.
-/// Returns scope_id >= 0, -1 if exhausted, -2 if invalid.
+/// Acquire a scope from the client's scope pool, completing the Java future for
+/// `callback_id` with the scope id as a `Long`, or exceptionally with the error type
+/// and message the core produced (`Timeout` at the deadline, `Disconnect` for a
+/// closed parent, `Unspecified` for a configuration problem). Waiting happens in
+/// the core, so the caller makes one call per acquire.
+///
+/// Returns 0 once the acquire is queued; -2 if the byte array cannot be read, in
+/// which case the future is not touched.
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_glide_ffi_resolvers_GlideScopeResolver_glideScopeTryAcquire(
+pub extern "system" fn Java_glide_ffi_resolvers_GlideScopeResolver_glideScopeAcquire(
     env: JNIEnv,
     _class: JClass,
     client_id: jlong,
     connection_request_bytes: JByteArray,
     routing_slot: jint,
-    attempt_token: jlong,
-) -> jlong {
+    timeout_ms: jlong,
+    callback_id: jlong,
+) -> jint {
     let bytes = match env.convert_byte_array(&connection_request_bytes) {
         Ok(b) => b,
         Err(_) => return -2,
     };
 
     let runtime = get_runtime();
-    glide_core::scope::try_acquire_scope(
-        client_id as u64,
-        bytes,
-        runtime.handle(),
-        routing_slot as u16,
-        attempt_token as u64,
-    )
-}
+    let handle = runtime.handle().clone();
+    let jvm = JVM.get().unwrap().clone();
 
-/// Allocate a unique scope-acquire attempt token. Called once per `acquire()` and
-/// passed on every retry poll of `glideScopeTryAcquire`, so the core dedupes a
-/// single acquire's retries without serializing distinct concurrent borrowers.
-#[unsafe(no_mangle)]
-pub extern "system" fn Java_glide_ffi_resolvers_GlideScopeResolver_glideScopeNextAttemptToken(
-    _env: JNIEnv,
-    _class: JClass,
-) -> jlong {
-    glide_core::pool::next_scope_attempt_token() as jlong
+    runtime.spawn(async move {
+        let result = glide_core::scope::acquire_scope(
+            client_id as u64,
+            bytes,
+            &handle,
+            routing_slot as u16,
+            std::time::Duration::from_millis(timeout_ms.max(0) as u64),
+        )
+        .await
+        .map(|scope_id| redis::Value::Int(scope_id as i64))
+        .map_err(redis::RedisError::from);
+
+        complete_callback(jvm, callback_id, result, false);
+    });
+
+    0
 }
 
 /// Release a scope back to the pool. Fire-and-forget.
