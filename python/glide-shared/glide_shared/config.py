@@ -65,7 +65,7 @@ class NodeAddress:
     ):
         self.host = host
         self.port = port
-        self.unix_socket_path: Optional[str] = (
+        self.unix_socket_path = (
             None if unix_socket_path is None else os.fspath(unix_socket_path)
         )
 
