@@ -1300,7 +1300,8 @@ impl ScopePool {
         if let Some(mut conn) = found {
             let scope_id = conn.scope_id;
             conn.borrowed_at = Some(Instant::now());
-            // Reset to None on release, so it never outlives the borrow.
+            // Idle connections are rebuilt with `acquisition_slot: None`, so this
+            // cannot outlive the borrow.
             conn.acquisition_slot = acquisition_slot;
             // Preserve the connection's actual db; reset only borrow-scoped flags.
             conn.state.begin_borrow(runtime_db);
@@ -1826,38 +1827,6 @@ pub fn get_or_create_scope_pool(
 /// Re-exports redis-rs's slot computation for use by binding layers.
 pub fn slot_for_key(key: &[u8]) -> u16 {
     redis::cluster_topology::get_slot(key)
-}
-
-/// Validate that a command's keys target the scope's pinned slot.
-/// Returns Ok(slot) if consistent, Err if cross-slot.
-/// If scope has no pinned slot yet, returns the slot from the first key.
-pub fn validate_scope_slot(pinned: Option<u16>, keys: &[&[u8]]) -> Result<Option<u16>, String> {
-    if keys.is_empty() {
-        return Ok(pinned); // No keys — no slot constraint
-    }
-
-    let first_slot = slot_for_key(keys[0]);
-
-    // Validate all keys are in the same slot
-    for key in &keys[1..] {
-        let s = slot_for_key(key);
-        if s != first_slot {
-            return Err(format!(
-                "Cross-slot error: key targets slot {} but scope is pinned to slot {}",
-                s, first_slot
-            ));
-        }
-    }
-
-    // Validate against pinned slot
-    match pinned {
-        None => Ok(Some(first_slot)), // First keyed command — pin to this slot
-        Some(p) if p == first_slot => Ok(Some(p)), // Consistent
-        Some(p) => Err(format!(
-            "Cross-slot error: command targets slot {} but scope is pinned to slot {}",
-            first_slot, p
-        )),
-    }
 }
 
 #[cfg(test)]

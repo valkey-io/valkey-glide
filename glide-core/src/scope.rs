@@ -28,8 +28,8 @@
 
 use crate::client::Client;
 use crate::pool::{
-    ScopedConnection, get_client_scope_pools, get_scope_registry, update_state_for_command,
-    validate_scope_slot,
+    ScopedConnection, get_client_scope_pools, get_scope_registry, slot_for_key,
+    update_state_for_command,
 };
 use redis::{Cmd, RedisError, RedisResult, Value};
 
@@ -100,68 +100,107 @@ pub fn deserialize_command(bytes: &[u8]) -> Option<(String, Vec<Vec<u8>>)> {
 // KEY EXTRACTION
 // ═══════════════════════════════════════════════════════════════════════════════
 
-/// Extract key arguments from a command for slot validation.
+/// The slot a command constrains a scope to, derived from cluster routing.
+#[derive(Debug, PartialEq)]
+pub enum ScopeSlot {
+    /// The command does not constrain the scope (no keys, random/keyless routing,
+    /// or an admin fan-out that a single-connection scope treats as unconstrained).
+    Unconstrained,
+    /// The command targets exactly this slot.
+    Slot(u16),
+    /// The command's keys span more than one slot. A scope is a single pinned
+    /// connection and cannot fan out, so this is a cross-slot error (the same
+    /// outcome the cluster layer gives an atomic pipeline it cannot split).
+    CrossSlot,
+}
+
+/// Resolve the slot a command constrains a scope to, using the same routing table
+/// (`RoutingInfo::for_routable`) the ordinary dispatch path uses — rather than a
+/// hand-maintained key-position table that drifts and misclassifies commands.
 ///
-/// Returns references to the argument bytes that represent keys.
-/// Commands with no keys (MULTI, EXEC, PING, etc.) return empty.
-pub fn extract_key_args<'a>(cmd_name: &str, args: &[&'a [u8]]) -> Vec<&'a [u8]> {
-    match cmd_name.to_uppercase().as_str() {
-        // Commands with first arg as key
-        "GET" | "SET" | "INCR" | "DECR" | "INCRBY" | "DECRBY" | "SETNX" | "SETEX" | "PSETEX"
-        | "GETSET" | "GETDEL" | "GETEX" | "APPEND" | "STRLEN" | "TYPE" | "EXPIRE" | "EXPIREAT"
-        | "TTL" | "PTTL" | "PERSIST" | "DUMP" | "RESTORE" | "HGET" | "HSET" | "HDEL" | "HLEN"
-        | "HGETALL" | "HGETDEL" | "HMGET" | "HMSET" | "LPUSH" | "RPUSH" | "LPOP" | "RPOP"
-        | "LLEN" | "LRANGE" | "SADD" | "SREM" | "SMEMBERS" | "SCARD" | "SISMEMBER" | "ZADD"
-        | "ZREM" | "ZRANGE" | "ZCARD" | "ZSCORE" | "SUBSCRIBE" | "UNSUBSCRIBE" | "BLPOP"
-        | "BRPOP" | "BLMOVE" => {
-            if !args.is_empty() {
-                vec![args[0]]
+/// The mapping reflects a scope's defining constraint: one pinned connection, no
+/// fan-out. So it mirrors how the cluster layer treats a command it cannot split:
+/// - `SpecificNode(slot)` — the command's slot; constrain to it.
+/// - `MultiSlot` — a multi-key command whose keys span slots; unanimous slot
+///   constrains, otherwise `CrossSlot` (the atomic-pipeline outcome).
+/// - `Random` / `RandomPrimary` / `None` — keyless or free routing; unconstrained.
+/// - `MultiNode` (`AllNodes` / `AllMasters`) — an admin fan-out; inapplicable to a
+///   single-connection scope, so unconstrained (it dispatches to the one connection).
+/// - `ByAddress` — no slot; unconstrained.
+///
+/// `EVAL`/`FCALL` resolve to `SpecificNode(first-key slot)` and are NOT scattered by
+/// the router, so a cross-slot multi-key script would otherwise slip through. We
+/// cross-check the script's declared keys explicitly to keep it consistent with the
+/// multi-key `MultiSlot` commands above.
+pub fn scope_slot_for_command(cmd_name: &str, args: &[&[u8]]) -> ScopeSlot {
+    use redis::cluster_routing::{MultipleNodeRoutingInfo, RoutingInfo, SingleNodeRoutingInfo};
+
+    // Scripts declare their keys explicitly (`EVAL script numkeys k1 k2 ...`); the
+    // router routes them to the first key's slot without checking the rest, so verify
+    // they share a slot here. A malformed or zero-key invocation yields no keys.
+    if matches!(
+        cmd_name.to_uppercase().as_str(),
+        "EVAL" | "EVALSHA" | "EVAL_RO" | "EVALSHA_RO" | "FCALL" | "FCALL_RO"
+    ) {
+        let numkeys = args
+            .get(1)
+            .and_then(|n| std::str::from_utf8(n).ok())
+            .and_then(|n| n.parse::<usize>().ok())
+            .unwrap_or(0);
+        let keys = args.get(2..2 + numkeys).unwrap_or(&[]);
+        return slot_of_unanimous_keys(keys);
+    }
+
+    let mut cmd = Cmd::new();
+    cmd.arg(cmd_name.as_bytes());
+    for arg in args {
+        cmd.arg(*arg);
+    }
+
+    match RoutingInfo::for_routable(&cmd) {
+        // Keyless / free routing, and admin fan-outs (AllNodes/AllMasters) which a
+        // single-connection scope cannot and need not spread: unconstrained.
+        None
+        | Some(RoutingInfo::SingleNode(
+            SingleNodeRoutingInfo::Random
+            | SingleNodeRoutingInfo::RandomPrimary
+            | SingleNodeRoutingInfo::ByAddress { .. },
+        ))
+        | Some(RoutingInfo::MultiNode((MultipleNodeRoutingInfo::AllNodes, _)))
+        | Some(RoutingInfo::MultiNode((MultipleNodeRoutingInfo::AllMasters, _))) => {
+            ScopeSlot::Unconstrained
+        }
+        // Single-slot command: constrain to it.
+        Some(RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(route))) => {
+            ScopeSlot::Slot(route.slot())
+        }
+        // Multi-key command (MGET/DEL/MSET/...). Unanimous slot constrains; otherwise
+        // cross-slot — the outcome the cluster layer gives an unsplittable atomic unit.
+        Some(RoutingInfo::MultiNode((MultipleNodeRoutingInfo::MultiSlot((routes, _)), _))) => {
+            let Some(((first, _), rest)) = routes.split_first() else {
+                return ScopeSlot::Unconstrained;
+            };
+            let slot = first.slot();
+            if rest.iter().all(|(r, _)| r.slot() == slot) {
+                ScopeSlot::Slot(slot)
             } else {
-                vec![]
+                ScopeSlot::CrossSlot
             }
         }
-        // All args are keys (every key must hash to the same slot).
-        "WATCH" | "MGET" | "DEL" | "EXISTS" | "TOUCH" | "UNLINK" => args.to_vec(),
-        // MSET: keys at even positions (key, value, key, value, ...)
-        "MSET" | "MSETNX" => args.iter().step_by(2).copied().collect(),
-        // Scripts declare their key count explicitly: `EVAL script numkeys k1 k2 ...`
-        // (FCALL function numkeys ...). The script/function name is NOT a key, so the
-        // keys are the `numkeys` args after it; parse that count rather than treating
-        // args[0] as the key. A malformed or zero-key invocation yields no keys.
-        "EVAL" | "EVALSHA" | "EVAL_RO" | "EVALSHA_RO" | "FCALL" | "FCALL_RO" => {
-            let numkeys = args
-                .get(1)
-                .and_then(|n| std::str::from_utf8(n).ok())
-                .and_then(|n| n.parse::<usize>().ok())
-                .unwrap_or(0);
-            args.get(2..2 + numkeys)
-                .map(<[&[u8]]>::to_vec)
-                .unwrap_or_default()
-        }
-        // Container commands whose key-bearing subcommands carry the key at args[1]
-        // (`OBJECT ENCODING <key>`, `MEMORY USAGE <key>`). Keyless subcommands
-        // (`OBJECT HELP`, `MEMORY STATS`) have no args[1] and yield no keys.
-        "OBJECT" | "MEMORY" => {
-            if args.len() > 1 {
-                vec![args[1]]
-            } else {
-                vec![]
-            }
-        }
-        // Commands with no keys
-        "MULTI" | "EXEC" | "DISCARD" | "UNWATCH" | "PING" | "SELECT" | "AUTH" | "CLIENT"
-        | "INFO" | "DBSIZE" | "FLUSHDB" | "FLUSHALL" | "RESET" | "QUIT" | "COMMAND" | "CONFIG"
-        | "CLUSTER" | "TIME" | "WAIT" | "DEBUG" | "SLOWLOG" | "LATENCY" => {
-            vec![]
-        }
-        // Default: assume first arg is a key (safe approximation for unknown commands)
-        _ => {
-            if !args.is_empty() {
-                vec![args[0]]
-            } else {
-                vec![]
-            }
-        }
+    }
+}
+
+/// Return `Slot(s)` if every key in `keys` hashes to the same slot `s`, `CrossSlot`
+/// if they disagree, `Unconstrained` if there are none.
+fn slot_of_unanimous_keys(keys: &[&[u8]]) -> ScopeSlot {
+    let Some((first, rest)) = keys.split_first() else {
+        return ScopeSlot::Unconstrained;
+    };
+    let slot = slot_for_key(first);
+    if rest.iter().all(|k| slot_for_key(k) == slot) {
+        ScopeSlot::Slot(slot)
+    } else {
+        ScopeSlot::CrossSlot
     }
 }
 
@@ -224,24 +263,35 @@ pub async fn execute_scope_command(
         None => false,
     };
     if is_cluster {
-        let key_args = extract_key_args(cmd_name, &arg_refs);
-        if !key_args.is_empty() {
-            // Seed from the acquisition slot so the first keyed command must hash to
-            // it: the physical connection already targets that slot, so a first
-            // command for a different slot would only fail as a server MOVED (or
-            // silently "succeed" when the two slots share a primary). A no-op once
-            // pinned.
-            let effective_pinned = conn.pinned_slot.or(conn.acquisition_slot);
-            match validate_scope_slot(effective_pinned, &key_args) {
-                Ok(new_slot) => {
-                    conn.pinned_slot = new_slot;
-                }
-                Err(e) => {
-                    return Err(RedisError::from((
-                        redis::ErrorKind::CrossSlot,
-                        "CROSSSLOT",
-                        e,
-                    )));
+        match scope_slot_for_command(cmd_name, &arg_refs) {
+            // No slot constraint (keyless, random/fan-out routing): nothing to check.
+            ScopeSlot::Unconstrained => {}
+            // The command's keys span slots; a single-connection scope cannot fan out.
+            ScopeSlot::CrossSlot => {
+                return Err(RedisError::from((
+                    redis::ErrorKind::CrossSlot,
+                    "CROSSSLOT",
+                    "Cross-slot error: command keys span multiple slots".to_string(),
+                )));
+            }
+            ScopeSlot::Slot(slot) => {
+                // Seed from the acquisition slot so the first keyed command must hash
+                // to it: the physical connection already targets that slot, so a first
+                // command for a different slot would only fail as a server MOVED (or
+                // silently "succeed" when the two slots share a primary). A no-op once
+                // pinned.
+                match conn.pinned_slot.or(conn.acquisition_slot) {
+                    None => conn.pinned_slot = Some(slot),
+                    Some(pinned) if pinned == slot => conn.pinned_slot = Some(pinned),
+                    Some(pinned) => {
+                        return Err(RedisError::from((
+                            redis::ErrorKind::CrossSlot,
+                            "CROSSSLOT",
+                            format!(
+                                "Cross-slot error: command targets slot {slot} but scope is pinned to slot {pinned}"
+                            ),
+                        )));
+                    }
                 }
             }
         }
@@ -1265,8 +1315,8 @@ mod tests {
 
     use super::{
         ScopeCreateError, acquisition_slot_for, build_scope_connection, create_scope_connection,
-        execute_scope_command, extract_key_args, get_parent_client, inherited_tls_params,
-        resolve_scope_parent, try_acquire_scope, try_resolve_scope_target,
+        execute_scope_command, get_parent_client, inherited_tls_params, resolve_scope_parent,
+        try_acquire_scope, try_resolve_scope_target,
     };
     use super::{build_scope_connection_addr, parse_cluster_target, strip_host_brackets};
 
@@ -2898,40 +2948,80 @@ mod tests {
     // rather than accepting it unconstrained and only failing as a server MOVED.
 
     #[test]
-    fn extract_key_args_reads_script_keys_and_all_variadic_keys() {
-        // EVAL/FCALL declare numkeys: the script/function name is not a key; the
-        // keys are the numkeys args after it.
-        let args: &[&[u8]] = &[b"return 1", b"2", b"k1", b"k2", b"arg"];
-        assert_eq!(extract_key_args("EVAL", args), vec![b"k1" as &[u8], b"k2"]);
-        assert_eq!(extract_key_args("FCALL", args), vec![b"k1" as &[u8], b"k2"]);
-        // numkeys 0 → no keys (unconstrained), never the script.
-        assert!(extract_key_args("EVAL", &[b"return 1", b"0", b"arg"]).is_empty());
-        // Malformed (missing numkeys) → no keys rather than a panic or the script.
-        assert!(extract_key_args("EVAL", &[b"return 1"]).is_empty());
-        // A numkeys larger than the args present → no out-of-bounds, no keys.
-        assert!(extract_key_args("EVAL", &[b"s", b"5", b"k1"]).is_empty());
+    fn scope_slot_for_command_classifies_via_router() {
+        use super::{ScopeSlot, scope_slot_for_command};
+        use crate::pool::slot_for_key;
 
-        // Variadic key commands return every key, so a cross-slot pair is caught
-        // locally instead of only at the server.
-        let del: &[&[u8]] = &[b"k1", b"k2", b"k3"];
-        assert_eq!(
-            extract_key_args("DEL", del),
-            vec![b"k1" as &[u8], b"k2", b"k3"]
-        );
-        assert_eq!(extract_key_args("EXISTS", del).len(), 3);
+        let slot = |k: &[u8]| slot_for_key(k);
 
-        // OBJECT/MEMORY key-bearing subcommands carry the key at args[1]; keyless
-        // subcommands have no args[1] and yield no keys.
+        // Single-key command → that key's slot.
         assert_eq!(
-            extract_key_args("OBJECT", &[b"ENCODING", b"k1"]),
-            vec![b"k1" as &[u8]]
+            scope_slot_for_command("GET", &[b"k"]),
+            ScopeSlot::Slot(slot(b"k"))
+        );
+        // Container key-bearing subcommand (OBJECT ENCODING <key>, MEMORY USAGE <key>).
+        assert_eq!(
+            scope_slot_for_command("OBJECT", &[b"ENCODING", b"k"]),
+            ScopeSlot::Slot(slot(b"k"))
         );
         assert_eq!(
-            extract_key_args("MEMORY", &[b"USAGE", b"k1"]),
-            vec![b"k1" as &[u8]]
+            scope_slot_for_command("MEMORY", &[b"USAGE", b"k"]),
+            ScopeSlot::Slot(slot(b"k"))
         );
-        assert!(extract_key_args("OBJECT", &[b"HELP"]).is_empty());
-        assert!(extract_key_args("MEMORY", &[b"STATS"]).is_empty());
+
+        // Variadic command, keys on one slot → that slot; cross-slot → CrossSlot.
+        assert_eq!(
+            scope_slot_for_command("DEL", &[b"{t}a", b"{t}b"]),
+            ScopeSlot::Slot(slot(b"{t}a"))
+        );
+        assert_eq!(
+            scope_slot_for_command("MGET", &[b"a", b"b", b"c"]),
+            // a/b/c land on different slots → cross-slot
+            ScopeSlot::CrossSlot
+        );
+
+        // EVAL/FCALL: numkeys keys after the script; cross-check them, never the script.
+        assert_eq!(
+            scope_slot_for_command("EVAL", &[b"script", b"2", b"{t}k1", b"{t}k2"]),
+            ScopeSlot::Slot(slot(b"{t}k1"))
+        );
+        assert_eq!(
+            scope_slot_for_command("EVAL", &[b"script", b"2", b"a", b"b"]),
+            ScopeSlot::CrossSlot
+        );
+        // numkeys 0 / malformed / over-count → unconstrained, never the script.
+        assert_eq!(
+            scope_slot_for_command("EVAL", &[b"script", b"0"]),
+            ScopeSlot::Unconstrained
+        );
+        assert_eq!(
+            scope_slot_for_command("EVAL", &[b"script"]),
+            ScopeSlot::Unconstrained
+        );
+        assert_eq!(
+            scope_slot_for_command("FCALL", &[b"fn", b"5", b"k1"]),
+            ScopeSlot::Unconstrained
+        );
+
+        // Keyless / admin / unknown-first-arg commands → unconstrained (not pinned to
+        // a junk slot). These are the regression cases: before the router swap, the
+        // first-arg fallback pinned them to a bogus slot and a keyed scope then
+        // rejected them locally even though the server would accept them.
+        let unconstrained: &[(&str, &[&[u8]])] = &[
+            ("SCAN", &[b"0"]),
+            ("ECHO", &[b"hi"]),
+            ("KEYS", &[b"pattern*"]),
+            ("SCRIPT", &[b"LOAD", b"return 1"]),
+            ("FUNCTION", &[b"LOAD", b"code"]),
+            ("PING", &[]),
+        ];
+        for (name, args) in unconstrained {
+            assert_eq!(
+                scope_slot_for_command(name, args),
+                ScopeSlot::Unconstrained,
+                "{name} should be unconstrained"
+            );
+        }
     }
 
     #[test]
@@ -3007,9 +3097,9 @@ mod tests {
     /// rejected command must not pin the connection, and the connection must stay
     /// reusable (not poisoned) and return to idle on release.
     ///
-    /// A-B: without the acquisition-slot seed, `validate_scope_slot(None, [bar])`
-    /// returns `Ok(Some(slot(bar)))` and this command is accepted — so this test
-    /// fails on the pre-fix code, where the first command is unconstrained.
+    /// A-B: without the acquisition-slot seed the first command is unconstrained,
+    /// so `GET bar` pins to `slot(bar)` and is accepted — this test fails on the
+    /// pre-fix code. The seed makes the first command check against `slot(foo)`.
     #[tokio::test]
     async fn first_cluster_command_must_match_acquisition_slot() {
         let (port, shutdown_sender, server) = responsive_endpoint();
