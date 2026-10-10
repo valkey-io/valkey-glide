@@ -88,6 +88,10 @@ async def test_scope_first_command_must_match_acquisition_slot(cluster_mode):
     The scope is acquired for slot A via routing_key, then its first keyed
     command targets slot B on another primary. This must fail locally with a
     cross-slot error before dispatch, not reach the server as a MOVED.
+
+    Lives in this module (rather than the modifiers suite) because it reuses the
+    ``_keys_on_slot_zero_and_another_primary`` helper, not because it is about
+    slot-0 affinity specifically.
     """
     addresses = require_cluster_addresses()
 

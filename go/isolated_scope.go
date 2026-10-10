@@ -270,6 +270,11 @@ func (client *Client) ScopedConnection(ctx context.Context, timeout time.Duratio
 	// A routing key is optional; when absent, a cluster scope stays unconstrained
 	// (any primary) rather than being pinned to a slot. Presence is carried in a
 	// separate flag so slot 0 is a real value, not "unset".
+	//
+	// Go-only: an empty string is treated as absent, because Go's string type has
+	// no undefined/null and "" is the only "not supplied" signal available. The
+	// other bindings (Python is-not-None, Java != null, Node !== undefined) treat
+	// an explicit "" as present (it hashes to slot 0).
 	hasRoutingSlot := routingKey != ""
 	var routingSlot uint16
 	if hasRoutingSlot {
@@ -381,6 +386,11 @@ func (client *ClusterClient) ScopedConnection(
 	// A routing key is optional; when absent, a cluster scope stays unconstrained
 	// (any primary) rather than being pinned to a slot. Presence is carried in a
 	// separate flag so slot 0 is a real value, not "unset".
+	//
+	// Go-only: an empty string is treated as absent, because Go's string type has
+	// no undefined/null and "" is the only "not supplied" signal available. The
+	// other bindings (Python is-not-None, Java != null, Node !== undefined) treat
+	// an explicit "" as present (it hashes to slot 0).
 	hasRoutingSlot := routingKey != ""
 	var routingSlot uint16
 	if hasRoutingSlot {
