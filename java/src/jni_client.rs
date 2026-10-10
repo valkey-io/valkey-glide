@@ -166,11 +166,8 @@ pub(crate) fn get_pending_map() -> &'static PendingMap {
     PENDING_CONFIGS.get_or_init(|| Arc::new(DashMap::new()))
 }
 
-/// Allocate a JNI handle for an ordinary client.
-///
-/// Ordinary and pooled clients share one handle table keyed by id, so both must
-/// draw from the same allocator; a separate counter could hand out an id already
-/// live as a pooled client, and closing one would evict the other.
+/// Allocate a JNI handle for an ordinary client. Draws from the shared
+/// `glide_core::pool::allocate_client_id` sequence (see its doc for why).
 pub fn generate_safe_handle() -> u64 {
     glide_core::pool::allocate_client_id()
 }
@@ -1073,8 +1070,7 @@ mod tests {
 
     #[test]
     fn ordinary_handles_and_pooled_ids_never_collide() {
-        // Both allocators must share one sequence, else their id ranges overlap in
-        // the shared handle table.
+        // Both allocators share one sequence (invariant on `allocate_client_id`).
         use std::collections::HashSet;
         let mut seen = HashSet::new();
         for _ in 0..1000 {

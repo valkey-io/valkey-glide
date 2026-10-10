@@ -341,6 +341,12 @@ public class ClientPoolIntegrationTest {
             throws Exception {
         assumeMode(clusterMode);
 
+        // The deterministic cross-counter guarantee is the Rust unit test
+        // `ordinary_and_pooled_ids_share_one_sequence`; this is the E2E scenario.
+        // Pre-fix, whether it collides depends on how far the two counters have
+        // drifted by the time it runs, so a green run is not by itself proof the
+        // collision is covered.
+        //
         // ClientPool.create runs a connectivity probe: it opens and closes one ordinary
         // client. Borrow several pooled clients and keep them alive across that probe and
         // across further ordinary-client closes below.
