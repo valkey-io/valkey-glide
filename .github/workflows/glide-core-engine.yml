@@ -10,18 +10,36 @@ on:
             - release-*
             - v*
         paths:
-            - glide-core/redis-rs/redis/**
-            - utils/cluster_manager.py
+            - glide-core/redis-rs/**
+
+            # Rust dependencies
+            - glide-telemetry/**
+            - glide-logger/**
             - deny.toml
-            - .github/actions/install-shared-dependencies/action.yml
+
+            # GitHub workflows
             - .github/workflows/glide-core-engine.yml
+            - .github/actions/install-engine/action.yml
+            - .github/actions/install-protoc/action.yml
+            - .github/actions/install-rust/action.yml
+            - .github/actions/install-shared-dependencies/action.yml
+            - .github/actions/install-zig/action.yml
     pull_request:
         paths:
-            - glide-core/redis-rs/redis/**
-            - utils/cluster_manager.py
+            - glide-core/redis-rs/**
+
+            # Rust dependencies
+            - glide-telemetry/**
+            - glide-logger/**
             - deny.toml
-            - .github/actions/install-shared-dependencies/action.yml
+
+            # GitHub workflows
             - .github/workflows/glide-core-engine.yml
+            - .github/actions/install-engine/action.yml
+            - .github/actions/install-protoc/action.yml
+            - .github/actions/install-rust/action.yml
+            - .github/actions/install-shared-dependencies/action.yml
+            - .github/actions/install-zig/action.yml
     workflow_dispatch:
         inputs:
             use-self-hosted-linux:

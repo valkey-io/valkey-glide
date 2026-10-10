@@ -11,15 +11,27 @@ on:
             - v*
         paths:
             - glide-logger/**
-            - .github/workflows/glide-logger.yml
-            - .github/workflows/lint-rust/action.yml
+
+            # Rust dependencies
             - deny.toml
+
+            # GitHub workflows
+            - .github/workflows/glide-logger.yml
+            - .github/actions/install-protoc/action.yml
+            - .github/actions/install-rust/action.yml
+            - .github/workflows/lint-rust/action.yml
     pull_request:
         paths:
             - glide-logger/**
-            - .github/workflows/glide-logger.yml
-            - .github/workflows/lint-rust/action.yml
+
+            # Rust dependencies
             - deny.toml
+
+            # GitHub workflows
+            - .github/workflows/glide-logger.yml
+            - .github/actions/install-protoc/action.yml
+            - .github/actions/install-rust/action.yml
+            - .github/workflows/lint-rust/action.yml
     workflow_dispatch:
     workflow_call:
 
