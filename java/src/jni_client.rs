@@ -166,11 +166,10 @@ pub(crate) fn get_pending_map() -> &'static PendingMap {
     PENDING_CONFIGS.get_or_init(|| Arc::new(DashMap::new()))
 }
 
-/// Generate unique safe handle for JNI resource management
-static NEXT_HANDLE_ID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
-
+/// Allocate a JNI handle for an ordinary client. Draws from the shared
+/// `glide_core::pool::allocate_client_id` sequence (see its doc for why).
 pub fn generate_safe_handle() -> u64 {
-    NEXT_HANDLE_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+    glide_core::pool::allocate_client_id()
 }
 
 /// Create actual glide-core Valkey client with specified configuration
@@ -1065,8 +1064,28 @@ pub fn complete_error_sync(
 
 #[cfg(test)]
 mod tests {
+    use super::generate_safe_handle;
     use super::serialize_array_to_bytes;
     use redis::{Value, parse_redis_value};
+
+    #[test]
+    fn ordinary_handles_and_pooled_ids_never_collide() {
+        // Both allocators share one sequence (invariant on `allocate_client_id`).
+        use std::collections::HashSet;
+        let mut seen = HashSet::new();
+        for _ in 0..1000 {
+            let handle = generate_safe_handle();
+            assert!(
+                seen.insert(handle),
+                "generate_safe_handle produced a duplicate id: {handle}"
+            );
+            let pooled = glide_core::pool::allocate_client_id();
+            assert!(
+                seen.insert(pooled),
+                "allocate_client_id collided with an ordinary handle: {pooled}"
+            );
+        }
+    }
 
     #[test]
     fn serialize_array_to_bytes_encodes_bool_double_bignumber_and_nil() {

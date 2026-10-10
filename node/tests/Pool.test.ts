@@ -464,5 +464,49 @@ describe("ClientPool", () => {
             },
             TIMEOUT,
         );
+
+        it(
+            "ordinary-client close does not evict pooled clients",
+            async () => {
+                // On Node the collision damages registry-mediated paths: acquire()
+                // resolves the pooled client from the scope registry (pool_build_handle
+                // -> scope::get_parent_client), which an ordinary close with a colliding
+                // id would have removed. So create and close ordinary clients BEFORE and
+                // BETWEEN acquires, and re-resolve each pooled client after a close — not
+                // just drive already-built handles, which never touch the registry. The
+                // deterministic cross-counter guarantee is the Rust unit test
+                // ordinary_and_pooled_ids_share_one_sequence; this is the E2E scenario.
+                const pool = await ClientPool.create(standaloneConfig, {
+                    maxSize: 3,
+                    minIdle: 1,
+                });
+                await waitForIdle(pool, 1);
+
+                // Open and close ordinary clients up front, advancing the ordinary-id
+                // allocator before any pooled id is resolved from the registry.
+                for (let i = 0; i < 5; i++) {
+                    const ordinary =
+                        await GlideClient.createClient(standaloneConfig);
+                    ordinary.close();
+                }
+
+                // Each borrow re-resolves the pooled client through the registry; a
+                // close between borrows must not have evicted it.
+                for (let round = 0; round < 3; round++) {
+                    const client = await pool.acquire();
+                    const key = makeKey(false, `round-${round}`);
+                    await client.set(key, "alive");
+                    expect(await client.get(key)).toBe("alive");
+                    await pool.release(client);
+
+                    const ordinary =
+                        await GlideClient.createClient(standaloneConfig);
+                    ordinary.close();
+                }
+
+                pool.close();
+            },
+            TIMEOUT,
+        );
     });
 });

@@ -594,10 +594,13 @@ pub fn unregister_blocking_flag(client_id: u64) {
     get_blocking_flag_registry().remove(&client_id);
 }
 
-/// Global client_id allocator — ensures uniqueness across all pools.
 static NEXT_CLIENT_ID: AtomicU64 = AtomicU64::new(1);
 
-/// Allocate a globally unique client_id (can be called without holding a pool lock).
+/// Allocate a client_id unique across every id-keyed registry in the process:
+/// pooled clients (`ClientPool::next_id`) and the bindings' ordinary clients
+/// (Java handle table, Node/core scope registry) must all draw from this one
+/// sequence. A binding-local counter would reissue ids live in those registries.
+/// Callable without holding a pool lock.
 pub fn allocate_client_id() -> u64 {
     NEXT_CLIENT_ID.fetch_add(1, Ordering::Relaxed)
 }
@@ -2015,6 +2018,26 @@ mod client_pool_marking_tests {
             entry.client.is_pool_managed(),
             "add_client_reserved must mark the client pool-managed"
         );
+    }
+
+    /// Proves the invariant documented on `allocate_client_id`: interleaving the
+    /// pooled (`ClientPool::next_id`) and ordinary (`allocate_client_id`) allocators
+    /// yields all-distinct ids. A-B: fails if either draws from a separate counter.
+    #[test]
+    fn ordinary_and_pooled_ids_share_one_sequence() {
+        use std::collections::HashSet;
+        let pool = test_pool();
+        let mut seen = HashSet::new();
+        for _ in 0..1000 {
+            assert!(
+                seen.insert(pool.next_id()),
+                "ClientPool::next_id produced a duplicate id"
+            );
+            assert!(
+                seen.insert(super::allocate_client_id()),
+                "allocate_client_id collided with a pooled id"
+            );
+        }
     }
 }
 
