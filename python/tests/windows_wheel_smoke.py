@@ -31,7 +31,7 @@ def blackhole_server() -> Iterator[int]:
             try:
                 connection, _ = listener.accept()
                 connections.append(connection)
-            except TimeoutError:
+            except socket.timeout:
                 continue
             except OSError:
                 break
@@ -58,6 +58,20 @@ def assert_command_response_layout() -> None:
     assert ffi.offsetof("CommandResponse", "string_value_len") == 40
     assert ffi.offsetof("CommandResponse", "array_value_len") == 56
     assert ffi.offsetof("CommandResponse", "sets_value_len") == 88
+
+
+def assert_statistics_layout() -> None:
+    """Verify the statistics ABI preserves values above the Windows ULONG limit."""
+    from glide_shared._glide_ffi import _GlideFFI
+
+    ffi = _GlideFFI().ffi
+    assert ffi.sizeof("Statistics") == 80
+    statistics = ffi.new("Statistics*")
+    for index, (name, field) in enumerate(ffi.typeof("Statistics").fields):
+        assert ffi.sizeof(field.type) == 8
+        assert ffi.offsetof("Statistics", name) == index * 8
+        setattr(statistics, name, 2**32 + 123)
+        assert getattr(statistics, name) == 2**32 + 123
 
 
 def smoke_sync_command(port: int) -> None:
@@ -150,6 +164,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--client", choices=("async", "sync"), required=True)
     args = parser.parse_args()
+    assert_statistics_layout()
     port = unused_local_port()
     if args.client == "sync":
         assert_command_response_layout()

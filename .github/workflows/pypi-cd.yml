@@ -17,6 +17,8 @@ on:
             - python/glide-async/**
             - python/glide-shared/**
             - python/glide-sync/**
+            - python/tests/async_tests/test_pipe_reader.py
+            - python/tests/test_windows_wheels.py
             - python/tests/windows_wheel_smoke.py
     push:
         tags:
@@ -546,6 +548,7 @@ jobs:
               uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
               with:
                   submodules: "true"
+                  persist-credentials: false
 
             - name: Set the release version
               shell: pwsh
@@ -629,9 +632,9 @@ jobs:
                   Copy-Item "python\README.md" "python\glide-async\README.md"
                   Copy-Item "python\glide-shared\glide_shared" "python\glide-async\python" -Recurse -Force
 
-            - name: Test CommandResponse ABI
+            - name: Test FFI ABI
               if: matrix.build.PYTHON_VERSION == '3.14'
-              run: cargo test --manifest-path ffi\Cargo.toml --test test_command_response_layout
+              run: cargo test --manifest-path ffi\Cargo.toml --test test_command_response_layout --test test_statistics
               env:
                   GLIDE_NAME: GlidePySync
                   GLIDE_VERSION: ${{ env.RELEASE_VERSION }}
@@ -651,7 +654,10 @@ jobs:
                       throw "Failed to build glide-shared"
                   }
                   $sharedWheel = Get-ChildItem "$sharedWheels\*.whl"
-                  & "$env:TARGET_PYTHON" -c "import sys, zipfile; wheel, dest = sys.argv[1:]; archive = zipfile.ZipFile(wheel); [archive.extract(name, dest) for name in archive.namelist() if name.startswith('glide_shared/_fast_response') and name.endswith('.pyd')]" $sharedWheel.FullName "python\glide-async\python"
+                  & "$env:TARGET_PYTHON" -c "import sys, zipfile; wheel, dest = sys.argv[1:]; archive = zipfile.ZipFile(wheel); matches = [name for name in archive.namelist() if name.startswith('glide_shared/_fast_response') and name.endswith('.pyd')]; assert matches, 'Shared wheel is missing _fast_response*.pyd'; [archive.extract(name, dest) for name in matches]" $sharedWheel.FullName "python\glide-async\python"
+                  if ($LASTEXITCODE -ne 0) {
+                      throw "Failed to extract the shared native extension"
+                  }
               env:
                   GLIDE_NAME: GlidePy
                   GLIDE_VERSION: ${{ env.RELEASE_VERSION }}
@@ -682,6 +688,9 @@ jobs:
             - name: Smoke test wheels
               shell: pwsh
               run: |
+                  $ErrorActionPreference = 'Stop'
+                  $PSNativeCommandUseErrorActionPreference = $true
+
                   $pythonTag = "cp$($env:PYTHON_VERSION.Replace('.', ''))"
                   $asyncWheel = Get-ChildItem "python\glide-async\wheels\*$pythonTag*$env:WHEEL_TAG.whl"
                   $syncWheel = Get-ChildItem "python\glide-sync\wheels\*$pythonTag*$env:WHEEL_TAG.whl"
@@ -700,6 +709,15 @@ jobs:
                   PYTHON_VERSION: ${{ matrix.build.PYTHON_VERSION }}
                   TARGET_PYTHON: ${{ steps.target_python.outputs.python-path }}
                   WHEEL_TAG: ${{ matrix.build.WHEEL_TAG }}
+
+            - name: Run Windows regression tests
+              shell: pwsh
+              run: |
+                  $ErrorActionPreference = 'Stop'
+                  $PSNativeCommandUseErrorActionPreference = $true
+
+                  & "$env:RUNNER_TEMP\smoke-async\Scripts\python.exe" -m pip install "pytest<9.1"
+                  & "$env:RUNNER_TEMP\smoke-async\Scripts\python.exe" -m pytest --noconftest -o "addopts=" python\tests\test_windows_wheels.py python\tests\async_tests\test_pipe_reader.py
 
             - name: Upload Python Async client wheel
               if: github.event_name != 'pull_request'

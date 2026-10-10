@@ -382,16 +382,16 @@ class _GlideFFI:
 
             // ============== STATISTICS ==============
             typedef struct {
-                unsigned long total_connections;
-                unsigned long total_clients;
-                unsigned long total_values_compressed;
-                unsigned long total_values_decompressed;
-                unsigned long total_original_bytes;
-                unsigned long total_bytes_compressed;
-                unsigned long total_bytes_decompressed;
-                unsigned long compression_skipped_count;
-                unsigned long subscription_out_of_sync_count;
-                unsigned long subscription_last_sync_timestamp;
+                uint64_t total_connections;
+                uint64_t total_clients;
+                uint64_t total_values_compressed;
+                uint64_t total_values_decompressed;
+                uint64_t total_original_bytes;
+                uint64_t total_bytes_compressed;
+                uint64_t total_bytes_decompressed;
+                uint64_t compression_skipped_count;
+                uint64_t subscription_out_of_sync_count;
+                uint64_t subscription_last_sync_timestamp;
             } Statistics;
 
             Statistics get_statistics();

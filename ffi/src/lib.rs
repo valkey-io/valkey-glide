@@ -6037,29 +6037,30 @@ pub unsafe extern "C" fn free_log_result(result_ptr: *mut LogResult) {
 /// Statistics structure containing telemetry data.
 ///
 /// This struct provides compression and connection statistics for the client.
+/// All fields use fixed-width integers to preserve counters and timestamps on Windows.
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub struct Statistics {
     /// Total number of connections opened to Valkey
-    pub total_connections: c_ulong,
+    pub total_connections: u64,
     /// Total number of GLIDE clients
-    pub total_clients: c_ulong,
+    pub total_clients: u64,
     /// Total number of values compressed
-    pub total_values_compressed: c_ulong,
+    pub total_values_compressed: u64,
     /// Total number of values decompressed
-    pub total_values_decompressed: c_ulong,
+    pub total_values_decompressed: u64,
     /// Total original bytes before compression
-    pub total_original_bytes: c_ulong,
+    pub total_original_bytes: u64,
     /// Total bytes after compression
-    pub total_bytes_compressed: c_ulong,
+    pub total_bytes_compressed: u64,
     /// Total bytes after decompression
-    pub total_bytes_decompressed: c_ulong,
+    pub total_bytes_decompressed: u64,
     /// Number of times compression was skipped
-    pub compression_skipped_count: c_ulong,
+    pub compression_skipped_count: u64,
     /// Number of times subscriptions were out of sync during reconciliation
-    pub subscription_out_of_sync_count: c_ulong,
+    pub subscription_out_of_sync_count: u64,
     /// Timestamp of last successful subscription sync (milliseconds since epoch)
-    pub subscription_last_sync_timestamp: c_ulong,
+    pub subscription_last_sync_timestamp: u64,
 }
 
 /// Get compression and connection statistics.
@@ -6073,16 +6074,16 @@ pub struct Statistics {
 #[unsafe(no_mangle)]
 pub extern "C" fn get_statistics() -> Statistics {
     Statistics {
-        total_connections: Telemetry::total_connections() as c_ulong,
-        total_clients: Telemetry::total_clients() as c_ulong,
-        total_values_compressed: Telemetry::total_values_compressed() as c_ulong,
-        total_values_decompressed: Telemetry::total_values_decompressed() as c_ulong,
-        total_original_bytes: Telemetry::total_original_bytes() as c_ulong,
-        total_bytes_compressed: Telemetry::total_bytes_compressed() as c_ulong,
-        total_bytes_decompressed: Telemetry::total_bytes_decompressed() as c_ulong,
-        compression_skipped_count: Telemetry::compression_skipped_count() as c_ulong,
-        subscription_out_of_sync_count: Telemetry::subscription_out_of_sync_count() as c_ulong,
-        subscription_last_sync_timestamp: Telemetry::subscription_last_sync_timestamp() as c_ulong,
+        total_connections: Telemetry::total_connections() as u64,
+        total_clients: Telemetry::total_clients() as u64,
+        total_values_compressed: Telemetry::total_values_compressed() as u64,
+        total_values_decompressed: Telemetry::total_values_decompressed() as u64,
+        total_original_bytes: Telemetry::total_original_bytes() as u64,
+        total_bytes_compressed: Telemetry::total_bytes_compressed() as u64,
+        total_bytes_decompressed: Telemetry::total_bytes_decompressed() as u64,
+        compression_skipped_count: Telemetry::compression_skipped_count() as u64,
+        subscription_out_of_sync_count: Telemetry::subscription_out_of_sync_count() as u64,
+        subscription_last_sync_timestamp: Telemetry::subscription_last_sync_timestamp(),
     }
 }
 

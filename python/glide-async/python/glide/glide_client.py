@@ -298,6 +298,16 @@ def _resolve_future(fut, result, client):
         fut.set_result(result)
 
 
+def _complete_pipe_request(client, request_id, result):
+    if _PENDING_FUTURES_REQUIRE_LOCK:
+        with client._lock:
+            fut = client._pending_futures.pop(request_id, None)
+    else:
+        fut = client._pending_futures.pop(request_id, None)
+    if fut is not None and not fut.done():
+        _resolve_future(fut, result, client)
+
+
 def _handle_pipe_success(client, request_id, response_ptr, arena_or_err):
     """Handle a success frame from the shared pipe (event loop thread)."""
     if client._is_closed:
@@ -317,13 +327,7 @@ def _handle_pipe_success(client, request_id, response_ptr, arena_or_err):
     finally:
         if arena_or_err:
             client._lib.free_response_arena(client._ffi.cast("void*", arena_or_err))
-    if _PENDING_FUTURES_REQUIRE_LOCK:
-        with client._lock:
-            fut = client._pending_futures.pop(request_id, None)
-    else:
-        fut = client._pending_futures.pop(request_id, None)
-    if fut is not None and not fut.done():
-        _resolve_future(fut, result, client)
+    _complete_pipe_request(client, request_id, result)
 
 
 def _handle_pipe_error(client, request_id, arena_or_err):
@@ -346,13 +350,7 @@ def _handle_pipe_error(client, request_id, arena_or_err):
         finally:
             client._lib.free_pipe_error_string(client._ffi.cast("char*", err_ptr))
     exc = get_request_error_class(error_type)(msg)
-    if _PENDING_FUTURES_REQUIRE_LOCK:
-        with client._lock:
-            fut = client._pending_futures.pop(request_id, None)
-    else:
-        fut = client._pending_futures.pop(request_id, None)
-    if fut is not None and not fut.done():
-        _resolve_future(fut, exc, client)
+    _complete_pipe_request(client, request_id, exc)
 
 
 def _handle_pointer_pubsub(client, ptr_val: int, payload_len: int):
@@ -453,7 +451,58 @@ def _drain_stale_pipe_frames():
             break
 
 
-def _on_async_pipe_readable() -> bool:  # noqa: C901
+def _handle_pipe_frame(client, request_id, response_ptr, arena_or_err, payload=b""):
+    """Isolate frame failures, including when dispatched to a response worker."""
+    try:
+        if client is None:
+            _free_orphaned_frame(request_id, response_ptr, arena_or_err)
+        elif request_id == _PUBSUB_SENTINEL:
+            if arena_or_err & (1 << 63):
+                _handle_pointer_pubsub(
+                    client, response_ptr, arena_or_err & 0x7FFFFFFFFFFFFFFF
+                )
+            else:
+                _handle_inline_pubsub(client, payload)
+        elif response_ptr != 0:
+            _handle_pipe_success(client, request_id, response_ptr, arena_or_err)
+        else:
+            _handle_pipe_error(client, request_id, arena_or_err)
+    except Exception as error:
+        ClientLogger.log(
+            LogLevel.ERROR, "async_pipe", f"Error handling frame {request_id}: {error}"
+        )
+        if client is not None and request_id != _PUBSUB_SENTINEL:
+            try:
+                _complete_pipe_request(client, request_id, error)
+            except Exception as completion_error:
+                ClientLogger.log(
+                    LogLevel.ERROR,
+                    "async_pipe",
+                    f"Error completing failed request {request_id}: {completion_error}",
+                )
+
+
+def _submit_pipe_frame(client, request_id, response_ptr, arena_or_err):
+    claimed = threading.Lock()
+
+    def handle_once():
+        # submit() can enqueue work before failing to start a thread. Keep this
+        # claim locked so the queued worker and fallback cannot free it twice.
+        if claimed.acquire(blocking=False):
+            _handle_pipe_frame(client, request_id, response_ptr, arena_or_err)
+
+    try:
+        _response_thread_pool.submit(handle_once)
+    except Exception as error:
+        ClientLogger.log(
+            LogLevel.ERROR,
+            "async_pipe",
+            f"Response dispatch failed; handling frame inline: {error}",
+        )
+        handle_once()
+
+
+def _on_async_pipe_readable() -> bool:
     # Free-threading optimization: when GIL is disabled, dispatch response parsing
     # to a thread pool for parallel execution across cores. With GIL enabled,
     # parse serially on the event loop thread (thread pool overhead not worth it).
@@ -474,46 +523,24 @@ def _on_async_pipe_readable() -> bool:  # noqa: C901
         )
         offset += 32
         client = _client_registry.get(client_id)
-        if request_id == _PUBSUB_SENTINEL:
-            if arena_or_err & (1 << 63):
-                # Pointer-mode: large message delivered via heap pointer
-                payload_len = arena_or_err & 0x7FFFFFFFFFFFFFFF
-                if client is not None:
-                    _handle_pointer_pubsub(client, response_ptr, payload_len)
-                else:
-                    any_c = next(iter(_client_registry.values()), None)
-                    if any_c:
-                        any_c._lib.free_pubsub_pointer_payload(
-                            any_c._ffi.cast("uint8_t*", response_ptr), payload_len
-                        )
-            else:
-                # Inline pubsub: response_ptr = payload_len, data follows header
-                payload_len = response_ptr
-                if offset + payload_len > len(data):
-                    # Incomplete payload — put header + remaining back
-                    offset -= 32
-                    break
-                if client is not None:
-                    _handle_inline_pubsub(client, data[offset : offset + payload_len])
-                offset += payload_len
-            continue
-        if client is None:
-            _free_orphaned_frame(request_id, response_ptr, arena_or_err)
-            continue
-        if response_ptr != 0:
-            if _FREE_THREADED and _response_thread_pool is not None:
-                _response_thread_pool.submit(
-                    _handle_pipe_success, client, request_id, response_ptr, arena_or_err
-                )
-            else:
-                _handle_pipe_success(client, request_id, response_ptr, arena_or_err)
+        payload = b""
+        if request_id == _PUBSUB_SENTINEL and not arena_or_err & (1 << 63):
+            payload_len = response_ptr
+            if offset + payload_len > len(data):
+                offset -= 32
+                break
+            payload = data[offset : offset + payload_len]
+            # Advance before dispatch so a failed handler cannot lose later frames.
+            offset += payload_len
+        if (
+            request_id != _PUBSUB_SENTINEL
+            and client is not None
+            and _FREE_THREADED
+            and _response_thread_pool is not None
+        ):
+            _submit_pipe_frame(client, request_id, response_ptr, arena_or_err)
         else:
-            if _FREE_THREADED and _response_thread_pool is not None:
-                _response_thread_pool.submit(
-                    _handle_pipe_error, client, request_id, arena_or_err
-                )
-            else:
-                _handle_pipe_error(client, request_id, arena_or_err)
+            _handle_pipe_frame(client, request_id, response_ptr, arena_or_err, payload)
     if offset < len(data):
         _pipe_remainder = data[offset:]
     return True
@@ -521,8 +548,14 @@ def _on_async_pipe_readable() -> bool:  # noqa: C901
 
 def _windows_pipe_reader(pipe_fd: int) -> None:
     """Read response frames on a dedicated thread because Windows event loops cannot watch pipes."""
-    while pipe_fd == _async_pipe_read_fd and _on_async_pipe_readable():
-        pass
+    while pipe_fd == _async_pipe_read_fd:
+        try:
+            if not _on_async_pipe_readable():
+                break
+        except Exception as error:
+            ClientLogger.log(
+                LogLevel.ERROR, "windows_pipe", f"Pipe read error: {error}"
+            )
 
 
 async def _trio_pipe_reader(pipe_fd: int, token: object) -> None:
