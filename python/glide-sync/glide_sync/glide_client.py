@@ -123,7 +123,8 @@ class BaseClient(CoreCommands):
         self._config = config
         self._is_closed = False
 
-        os.register_at_fork(after_in_child=self._create_core_client)
+        if hasattr(os, "register_at_fork"):
+            os.register_at_fork(after_in_child=self._create_core_client)
 
         self._create_core_client()
 

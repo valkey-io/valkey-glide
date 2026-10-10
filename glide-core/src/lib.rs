@@ -9,10 +9,27 @@ pub mod pool;
 #[cfg(feature = "socket-layer")]
 pub mod rotating_buffer;
 pub mod scope;
-#[cfg(feature = "socket-layer")]
+#[cfg(all(feature = "socket-layer", not(windows)))]
 mod socket_listener;
-#[cfg(feature = "socket-layer")]
+#[cfg(all(feature = "socket-layer", not(windows)))]
 pub use socket_listener::*;
+#[cfg(all(feature = "socket-layer", windows))]
+mod windows_socket_layer {
+    /// Maximum number of arguments sent inline instead of by pointer.
+    pub const MAX_REQUEST_ARGS_LENGTH: usize = 2_i32.pow(12) as usize;
+
+    /// The legacy socket transport is unavailable on Windows.
+    pub fn start_socket_listener<InitCallback>(init_callback: InitCallback)
+    where
+        InitCallback: FnOnce(Result<String, String>) + Send + Clone + 'static,
+    {
+        init_callback(Err(
+            "The legacy Unix socket transport is unavailable on Windows.".to_string(),
+        ));
+    }
+}
+#[cfg(all(feature = "socket-layer", windows))]
+pub use windows_socket_layer::*;
 pub mod address_resolver_registry;
 pub mod compression;
 pub mod errors;
