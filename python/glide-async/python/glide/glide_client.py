@@ -1195,8 +1195,13 @@ class BaseClient(CoreCommands):
         Args:
             timeout: Maximum seconds to wait for a scope connection (default 5.0).
             routing_key: In cluster mode, the key whose hash slot determines which
-                node the scope connects to. All keys used in the scope must hash to
-                the same slot. If None, defaults to slot 0.
+                node the scope connects to, and against which the scope's first
+                keyed command is validated (a command for a different slot is
+                rejected locally with CROSSSLOT). If None, the scope starts
+                unconstrained (slot 0 selects only the initial connection target):
+                the first keyed command may target any slot and pins the scope to
+                it, after which later keyed commands for a different slot receive
+                CROSSSLOT. In standalone mode this argument is ignored.
 
         Returns:
             An AsyncIsolatedScope instance.
@@ -1215,11 +1220,13 @@ class BaseClient(CoreCommands):
         client_id = int(self._ffi.cast("uintptr_t", self._core_client))
         conn_req_bytes = self._conn_req_bytes
 
-        # Compute routing slot from key (CRC16 mod 16384)
-        if routing_key is not None:
-            routing_slot = _slot_for_key(routing_key.encode("utf-8"))
-        else:
-            routing_slot = 0
+        # Compute routing slot from key (CRC16 mod 16384). Presence is carried
+        # separately so a cluster scope with no routing key stays unconstrained
+        # (any primary) rather than being pinned to slot 0, which is a real slot.
+        has_routing_slot = routing_key is not None
+        routing_slot = (
+            _slot_for_key(routing_key.encode("utf-8")) if routing_key is not None else 0
+        )
 
         loop = asyncio.get_running_loop()
 
@@ -1237,6 +1244,7 @@ class BaseClient(CoreCommands):
                     client_id,
                     self._ffi.cast("const uint8_t*", buf),
                     len(conn_req_bytes),
+                    has_routing_slot,
                     routing_slot,
                     attempt_token,
                 )

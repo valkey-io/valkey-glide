@@ -7,7 +7,10 @@ import uuid
 
 import pytest
 from glide_shared.routes import SlotIdRoute, SlotType
-from glide_sync import GlideClusterClient, GlideClusterClientConfiguration
+from glide_sync import (
+    GlideClusterClient,
+    GlideClusterClientConfiguration,
+)
 
 from tests.utils.utils import require_cluster_addresses
 
@@ -77,5 +80,39 @@ def test_sync_scope_slot_zero_affinity_cluster(slot_zero_first):
             assert scope.get(second_key) == "second"
 
         client.delete([slot_zero_key, other_primary_key])
+    finally:
+        client.close()
+
+
+@pytest.mark.parametrize("cluster_mode", [True])
+def test_sync_scope_first_command_must_match_acquisition_slot(cluster_mode):
+    """A scope's very first command must hash to its acquisition slot.
+
+    The scope is acquired for slot A via routing_key, then its first keyed
+    command targets slot B on another primary. This must fail locally with a
+    cross-slot error before dispatch, not reach the server as a MOVED.
+
+    Lives in this module (rather than the modifiers suite) because it reuses the
+    ``_keys_on_slot_zero_and_another_primary`` helper, not because it is about
+    slot-0 affinity specifically.
+    """
+    addresses = require_cluster_addresses()
+
+    client = GlideClusterClient.create(
+        GlideClusterClientConfiguration(addresses=addresses, request_timeout=5000)
+    )
+    try:
+        acquisition_key, other_primary_key = _keys_on_slot_zero_and_another_primary(
+            client
+        )
+
+        with client.scoped_connection(routing_key=acquisition_key) as scope:
+            with pytest.raises(RuntimeError, match="(?i)cross.?slot"):
+                scope.set(other_primary_key, "wrong-slot")
+            # The scope stays usable for its acquisition slot.
+            assert scope.set(acquisition_key, "right-slot") is not None
+            assert scope.get(acquisition_key) == "right-slot"
+
+        client.delete([acquisition_key])
     finally:
         client.close()

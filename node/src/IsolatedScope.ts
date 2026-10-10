@@ -174,7 +174,12 @@ export class IsolatedScope {
             );
         }
 
-        const routingSlot = routingKey
+        // Optional routing key: omitted leaves a cluster scope unconstrained (any
+        // primary). An explicit key (including "") is present and hashed, so slot 0
+        // is a real value — matching the Python/Java bindings (Go treats "" as
+        // absent, forced by its string type).
+        const hasRoutingSlot = routingKey !== undefined;
+        const routingSlot = hasRoutingSlot
             ? slotForKey(Buffer.from(routingKey))
             : 0;
 
@@ -189,6 +194,7 @@ export class IsolatedScope {
             const scopeId = scopeTryAcquire(
                 clientId,
                 connectionRequestBytes,
+                hasRoutingSlot,
                 routingSlot,
                 attemptToken,
             );
