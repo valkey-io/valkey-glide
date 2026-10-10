@@ -270,7 +270,7 @@ def test_convert_to_protobuf():
 )
 def test_node_address_unix_socket_path(socket_path):
     address = NodeAddress(unix_socket_path=socket_path)
-    assert address.unix_socket_path == "/run/valkey/valkey.sock"
+    assert address.unix_socket_path == os.fspath(socket_path)
 
 
 @pytest.mark.parametrize(
