@@ -70,12 +70,14 @@ impl Drop for Server {
 
 /// A server that listens only on a Unix domain socket (`--port 0`), so a client
 /// that connects must have gone through the socket.
+#[cfg(unix)]
 struct UnixSocketServer {
     process: Child,
     dir: std::path::PathBuf,
     socket_path: std::path::PathBuf,
 }
 
+#[cfg(unix)]
 impl UnixSocketServer {
     fn with_requirepass(password: &str) -> Self {
         static NEXT_ID: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
@@ -115,6 +117,7 @@ impl UnixSocketServer {
     }
 }
 
+#[cfg(unix)]
 impl Drop for UnixSocketServer {
     fn drop(&mut self) {
         self.process.kill().ok();
@@ -1728,6 +1731,7 @@ fn test_create_client_from_uri_with_reserved_char_password_authenticates() {
 // The server listens only on the socket and requires a password, so a
 // successful connection shows the URI's socket path and `pass` query
 // parameter both reached glide-core.
+#[cfg(unix)]
 #[rstest]
 #[case("valkey+unix")]
 #[case("redis+unix")]

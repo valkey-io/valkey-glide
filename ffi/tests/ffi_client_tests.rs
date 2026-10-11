@@ -579,6 +579,7 @@ fn test_ffi_monitor_rejects_invalid_final_lib_name_before_connection() {
     }
 }
 
+#[cfg(unix)]
 #[test]
 fn test_ffi_monitor_rejects_unix_socket_with_tls() {
     unsafe extern "C-unwind" fn no_op_monitor_callback(
