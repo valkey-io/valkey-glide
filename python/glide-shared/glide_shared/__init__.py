@@ -64,6 +64,8 @@ from .commands.server_modules.ft_options.ft_aggregate_options import (
     FtAggregateReducer,
     FtAggregateSortBy,
     FtAggregateSortProperty,
+    FtWithCursor,
+    LoadField,
 )
 from .commands.server_modules.ft_options.ft_create_options import (
     DataType,
@@ -80,6 +82,17 @@ from .commands.server_modules.ft_options.ft_create_options import (
     VectorFieldAttributesFlat,
     VectorFieldAttributesHnsw,
     VectorType,
+)
+from .commands.server_modules.ft_options.ft_hybrid_options import (
+    FtHybridCombine,
+    FtHybridFunction,
+    FtHybridLinear,
+    FtHybridOptions,
+    FtHybridRrf,
+    FtHybridSearchArm,
+    FtHybridVsimArm,
+    FtHybridVsimFilter,
+    HybridFilterPolicy,
 )
 from .commands.server_modules.ft_options.ft_profile_options import (
     FtProfileOptions,
@@ -383,6 +396,17 @@ __all__ = [
     "FtAggregateReducer",
     "FtAggregateSortBy",
     "FtAggregateSortProperty",
+    "FtWithCursor",
+    "LoadField",
+    "FtHybridCombine",
+    "FtHybridFunction",
+    "FtHybridLinear",
+    "FtHybridOptions",
+    "FtHybridRrf",
+    "FtHybridSearchArm",
+    "FtHybridVsimArm",
+    "FtHybridVsimFilter",
+    "HybridFilterPolicy",
     "FtProfileOptions",
     "QueryType",
     # OpenTelemetry

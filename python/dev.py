@@ -233,28 +233,31 @@ def install_glide_shared(env: Dict[str, str], release: bool = False) -> None:
 
     # Build the FFI library and copy to glide_shared so it can be found
     # without requiring glide-sync to be installed.
+    #
+    # Always runs `cargo build` and re-copies the result, rather than
+    # skipping the build whenever `dest` already exists. Cargo's own
+    # incremental build makes a no-op rebuild cheap, and the previous
+    # exists()-only check meant any FFI/glide-core source change was
+    # silently never picked up here once a copy had been produced once --
+    # a stale cdylib that still LOOKED like it had been "installed" kept
+    # custom_command conversions running against old Rust logic (e.g. the
+    # WITHSCORES/cursor-wrapper conversions added for 1.3) while every
+    # pyo3-based signal (module path, mtime of the pyo3 .so) looked fresh,
+    # because the pyo3 extension and this cdylib are two separate build
+    # artifacts entirely.
     ffi_output_dir = FFI_OUTPUT_DIR_RELEASE if release else FFI_OUTPUT_DIR_DEBUG
-    try:
-        ffi_lib_path = find_libglide_ffi(ffi_output_dir)
-        dest = SHARED_PACKAGE_DIR / ffi_lib_path.name
-        needs_build = not dest.exists()
-    except FileNotFoundError:
-        needs_build = True
-        dest = None
-
-    if needs_build:
-        ffi_build_cmd = ["cargo", "build"]
-        if release:
-            ffi_build_cmd += ["--release"]
-        run_command(
-            ffi_build_cmd,
-            cwd=FFI_DIR,
-            env=shared_env,
-            label="build FFI library",
-        )
-        ffi_lib_path = find_libglide_ffi(ffi_output_dir)
-        dest = SHARED_PACKAGE_DIR / ffi_lib_path.name
-        copy2(ffi_lib_path, dest)
+    ffi_build_cmd = ["cargo", "build"]
+    if release:
+        ffi_build_cmd += ["--release"]
+    run_command(
+        ffi_build_cmd,
+        cwd=FFI_DIR,
+        env=shared_env,
+        label="build FFI library",
+    )
+    ffi_lib_path = find_libglide_ffi(ffi_output_dir)
+    dest = SHARED_PACKAGE_DIR / ffi_lib_path.name
+    copy2(ffi_lib_path, dest)
 
 
 def build_async_client_wheel(

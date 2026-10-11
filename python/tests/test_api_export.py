@@ -37,7 +37,7 @@ def _get_export_rename_map(package: str):
     tree = ast.parse(source_code)
     rename_map = {}
     for node in tree.body:
-        if isinstance(node, ast.ImportFrom) or isinstance(node, ast.ImportFrom):
+        if isinstance(node, ast.Import) or isinstance(node, ast.ImportFrom):
             for alias in node.names:
                 if alias.asname and alias.asname in exported_symbol_list:
                     rename_map[alias.name] = alias.asname
@@ -107,7 +107,10 @@ excluded_shared_symbols = [
     "FtCreateKeywords",  # ClassDef
     "FtSearchKeywords",  # ClassDef
     "FtAggregateKeywords",  # ClassDef
+    "FtAggregateReducerKeywords",  # ClassDef
     "FtProfileKeywords",  # ClassDef
+    "FtCursorKeywords",  # ClassDef
+    "FtHybridKeywords",  # ClassDef
     # python/glide-shared/glide_shared/_glide_ffi.py
     "find_libglide_ffi",  # FunctionDef
     "CURR_DIR",  # Assignment
@@ -302,12 +305,12 @@ class TestAPIExport:
             ):
                 missing_from_sync.append(shared_symbol)
 
-            assert not missing_from_async, (
-                "Shared symbols missing from async package exports. "
-                + f"Missing symbols: {missing_from_async}"
-            )
+        assert not missing_from_async, (
+            "Shared symbols missing from async package exports. "
+            + f"Missing symbols: {missing_from_async}"
+        )
 
-            assert not missing_from_sync, (
-                "Shared symbols missing from sync package exports. "
-                + f"Missing symbols: {missing_from_sync}"
-            )
+        assert not missing_from_sync, (
+            "Shared symbols missing from sync package exports. "
+            + f"Missing symbols: {missing_from_sync}"
+        )

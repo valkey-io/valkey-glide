@@ -1,9 +1,11 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 import sys
+import uuid
 from typing import List
 
 import pytest
+from glide_shared.exceptions import RequestError
 
 from tests.sync_tests.conftest import create_sync_client
 from tests.utils.cluster import ValkeyCluster
@@ -348,6 +350,138 @@ def skip_if_version_below(request):
                 )
         finally:
             client.close()
+
+
+def classify_inkeys_probe_error(msg: str) -> bool:
+    """R2-M-1: pure classification function extracted from
+    ``_probe_search_1_3_capability`` so the skip-or-run decision for every
+    1.3-only test has a server-free unit test (see
+    ``tests/test_options.py::TestClassifyInkeysProbeError``).
+
+    Returns True if ``msg`` matches the pre-1.3 "Unexpected argument
+    `INKEYS`" rejection (raw or GLIDE-reformatted spelling), False
+    otherwise. Returning False does not mean "definitely 1.3+" -- the
+    caller still needs to distinguish "no error at all" (1.3+) from "a
+    different error" (unexpected, should raise), which is why this
+    function returns a bool classification rather than driving the
+    control flow itself.
+    """
+    return "Unexpected" in msg and "INKEYS" in msg
+
+
+def _probe_search_1_3_capability(client) -> bool:
+    """Classify the connected search module as 1.3+-capable or not.
+
+    Uses a real-command, fake-argument probe rather than a version-string
+    compare (runbook Trap 5: a version string can be present and still not
+    answer the question that matters -- whether the specific capability a
+    test needs is live). ``INKEYS`` is used as the capability marker because
+    it is new in 1.3.0-rc1 (PR #967) and is parsed by the same shared
+    ``vmsdk::ParamParser`` keyword-dispatch machinery as every other
+    FT.SEARCH option, so a module that doesn't understand it rejects it with
+    that parser's generic unknown-argument error rather than silently
+    ignoring it.
+
+    The probe targets a real (throwaway) index rather than a nonexistent one.
+    A nonexistent index raises its own domain error ("Index ... not found")
+    before option parsing is even reached, on both pre-1.3 and 1.3+ modules
+    identically -- that was tried and confirmed empirically against a built
+    1.2.1 module (ver 66049) and masks the signal entirely. Against a real
+    index:
+      * pre-1.3 (confirmed against 1.2.1, ver 66049): rejects with
+        "Unexpected argument `INKEYS`" -- the generic unknown-parameter
+        error from ``vmsdk/src/command_parser.h`` (byte-identical in both
+        1.2.1 and 1.3.0-rc1, so this error text is a stable signal, not a
+        moving target). GLIDE's ``RequestError`` splits the server's error
+        text on its first word as if it were an error code, so the message
+        surfaces here as "Unexpected: argument `INKEYS`" (confirmed
+        empirically against the built 1.2.1 module) -- the check below
+        tolerates both the raw and GLIDE-reformatted spellings.
+      * 1.3.0-rc1 (ver 66304) and later: ``INKEYS 0`` parses as "filter to
+        zero keys" and returns an empty result array, no error.
+    """
+    probe_index = f"__glide_search_1_3_probe_{uuid.uuid4()}"
+    try:
+        client.custom_command(["FT.CREATE", probe_index, "SCHEMA", "title", "TEXT"])
+    except RequestError as e:
+        # Module entirely absent, or FT.CREATE itself unavailable. This must
+        # be a hard, loud failure -- never a silent skip (runbook Trap 3).
+        raise RuntimeError(
+            "search 1.3 capability probe could not create a test index "
+            f"(is the search module loaded at all?): {e}"
+        ) from e
+    try:
+        client.custom_command(["FT.SEARCH", probe_index, "*", "INKEYS", "0"])
+        return True
+    except RequestError as e:
+        msg = str(e)
+        if classify_inkeys_probe_error(msg):
+            return False
+        # A different error (e.g. a wire-syntax regression) is not the
+        # pre-1.3-vs-1.3 signal this probe exists to detect. Fail loudly
+        # rather than silently treating it as "not 1.3".
+        raise RuntimeError(
+            f"search 1.3 capability probe got an unexpected error: {e}"
+        ) from e
+    finally:
+        try:
+            client.custom_command(["FT.DROPINDEX", probe_index])
+        except RequestError:
+            pass
+
+
+@pytest.fixture(scope="session")
+def search_1_3_capability(request) -> bool:
+    """Session-scoped: True if the connected search module supports 1.3
+    features (probed once per session), False if it is present but pre-1.3.
+
+    Raises (does not skip) if the search module appears entirely absent --
+    see ``_probe_search_1_3_capability``. Use the ``requires_search_1_3``
+    marker on individual tests rather than depending on this fixture
+    directly in most cases.
+
+    Connects in cluster mode if cluster endpoints (or an internally-created
+    cluster) are available for this session, else standalone -- a
+    standalone-only run (e.g. ``--standalone-endpoints`` with no
+    ``--cluster-endpoints``) has no ``pytest.valkey_cluster`` to connect
+    through at all, which a hardcoded cluster_mode=True here would hit as
+    an AttributeError instead of probing the server that is actually live.
+    """
+    use_cluster_mode = bool(
+        request.config.getoption("--cluster-endpoints")
+        or getattr(pytest, "valkey_cluster", None) is not None
+    )
+    client = create_sync_client(request, use_cluster_mode)
+    try:
+        return _probe_search_1_3_capability(client)
+    finally:
+        client.close()
+
+
+@pytest.fixture(autouse=True)
+def _apply_requires_search_1_3(request):
+    """Skip, with an attributed reason, any test marked
+    ``@pytest.mark.requires_search_1_3`` when the connected module is
+    present but pre-1.3. Module-absent is handled by
+    ``_probe_search_1_3_capability`` raising, not by this fixture.
+
+    Takes ``search_1_3_capability`` via ``request.getfixturevalue()``
+    rather than as a direct parameter: this fixture is autouse (runs for
+    every test in the whole session, including pure unit tests with no
+    server at all), so the capability probe -- which opens a real cluster
+    connection -- must stay lazy and only actually run for tests that carry
+    the marker. A direct parameter would make pytest evaluate it eagerly for
+    every test, which breaks any suite run that doesn't have a live cluster
+    (e.g. unit-test-only runs).
+    """
+    if request.node.get_closest_marker("requires_search_1_3"):
+        if not request.getfixturevalue("search_1_3_capability"):
+            pytest.skip(
+                reason="search module is present but pre-1.3 (INKEYS probe "
+                "rejected with 'Unexpected argument `INKEYS`'); this test "
+                "exercises a valkey-search 1.3 feature (runbook Trap 3: "
+                "attributed, not silent)."
+            )
 
 
 @pytest.fixture(scope="session")
