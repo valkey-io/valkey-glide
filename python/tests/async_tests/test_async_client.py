@@ -9,6 +9,7 @@ import os
 import platform
 import sys
 import time
+import warnings
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Mapping, Optional, Union, cast, get_type_hints
 
@@ -183,10 +184,12 @@ class TestGlideClients:
 
     @pytest.mark.parametrize("cluster_mode", [False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP3])
+    @pytest.mark.parametrize("resource_warning_filter", ["always", "error"])
     async def test_unreferenced_client_releases_connection(
-        self, request, cluster_mode, protocol
+        self, request, cluster_mode, protocol, resource_warning_filter
     ):
-        """A client dropped without close() is collected and its connection closed."""
+        """A client dropped without close() is collected and its connection closed,
+        whether its ResourceWarning is reported or raised."""
         observer = await create_client(
             request, cluster_mode=cluster_mode, protocol=protocol
         )
@@ -204,14 +207,19 @@ class TestGlideClients:
 
         assert not await dropped_client_gone()
         pipe_client_id = client._pipe_client_id
-        with pytest.warns(ResourceWarning):
+        # Under "error" the warning raises inside the finalizer and reaches
+        # sys.unraisablehook, so only the closed connection proves it still ran.
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter(resource_warning_filter, ResourceWarning)
             del client
             gc.collect()
-            assert pipe_client_id not in _client_registry
-            await wait_for(
-                dropped_client_gone,
-                "the dropped client's connection was not closed",
-            )
+        if resource_warning_filter == "always":
+            assert any(issubclass(w.category, ResourceWarning) for w in caught)
+        assert pipe_client_id not in _client_registry
+        await wait_for(
+            dropped_client_gone,
+            "the dropped client's connection was not closed",
+        )
         await observer.close()
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
