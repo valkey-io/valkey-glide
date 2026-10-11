@@ -1237,10 +1237,7 @@ mod tests {
         ScopeCreateError, build_scope_connection, create_scope_connection, inherited_tls_params,
         resolve_scope_parent, try_acquire_scope, try_resolve_scope_target,
     };
-    use super::{
-        build_scope_connection_addr, parse_cluster_target, strip_host_brackets,
-        unix_socket_scope_addr,
-    };
+    use super::{build_scope_connection_addr, parse_cluster_target, strip_host_brackets};
 
     use super::Client;
     use crate::client::{ConnectionRequest as ClientRequest, NodeAddress as ClientAddress};
@@ -2860,6 +2857,7 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn unix_socket_scope_addr_uses_the_socket_seed() {
+        use super::unix_socket_scope_addr;
         use crate::connection_request::TlsMode;
         let unix = NodeAddress {
             unix_socket_path: Some("/tmp/valkey.sock".into()),

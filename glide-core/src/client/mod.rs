@@ -3793,6 +3793,19 @@ mod tests {
         }
     }
 
+    #[cfg(windows)]
+    #[test]
+    fn test_validate_unix_socket_addresses_rejects_socket_on_windows() {
+        let request = ConnectionRequest {
+            addresses: vec![unix_address("/tmp/valkey.sock")],
+            ..Default::default()
+        };
+        assert_eq!(
+            validate_unix_socket_addresses(&request),
+            Err("Unix domain sockets are not supported on this platform".to_string())
+        );
+    }
+
     #[cfg(unix)]
     #[test]
     fn test_validate_unix_socket_addresses_accepts_supported_requests() {
