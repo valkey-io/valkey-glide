@@ -950,6 +950,72 @@ export enum NodeDiscoveryMode {
 }
 
 /**
+ * Address of a node: a host and optional port, or the path of the server's Unix domain socket.
+ *
+ * A socket address is for standalone clients only, and is not supported on Windows, with TLS,
+ * with `NodeDiscoveryMode.DiscoverAll`, or mixed with TCP addresses.
+ *
+ * @example
+ * ```typescript
+ * const tcp: NodeAddress = { host: "localhost", port: 6379 };
+ * const socket: NodeAddress = { unixSocketPath: "/run/valkey/valkey.sock" };
+ * ```
+ */
+export type NodeAddress =
+    | {
+          host: string;
+          /**
+           * If port isn't supplied, 6379 will be used
+           */
+          port?: number;
+          unixSocketPath?: never;
+      }
+    | {
+          /**
+           * Absolute path of the server's Unix domain socket.
+           */
+          unixSocketPath: string;
+          host?: never;
+          port?: never;
+      };
+
+/**
+ * @internal
+ * Rejects the common Unix domain socket misconfigurations before connecting: a socket address in
+ * cluster mode, mixed with TCP addresses, or together with TLS. The core enforces the remaining
+ * rules.
+ */
+export function validateUnixSocketAddresses(
+    options: BaseClientConfiguration,
+    clusterMode: boolean,
+): void {
+    const addresses = options.addresses ?? [];
+    const isSocket = (address: NodeAddress) => address.unixSocketPath != null;
+
+    if (!addresses.some(isSocket)) {
+        return;
+    }
+
+    if (clusterMode) {
+        throw new ConfigurationError(
+            "Unix domain socket addresses are not supported in cluster mode",
+        );
+    }
+
+    if (!addresses.every(isSocket)) {
+        throw new ConfigurationError(
+            "Unix domain socket addresses cannot be combined with TCP addresses",
+        );
+    }
+
+    if (options.useTLS) {
+        throw new ConfigurationError(
+            "TLS is not supported over Unix domain sockets",
+        );
+    }
+}
+
+/**
  * Configuration settings for creating a client. Shared settings for standalone and cluster clients.
  *
  * @remarks
@@ -1052,19 +1118,13 @@ export interface BaseClientConfiguration {
      * ```typescript
      * configuration.addresses =
      * [
-     *   { address: sample-address-0001.use1.cache.amazonaws.com, port:6378 },
-     *   { address: sample-address-0002.use2.cache.amazonaws.com }
-     *   { address: sample-address-0003.use2.cache.amazonaws.com, port:6380 }
+     *   { host: "sample-address-0001.use1.cache.amazonaws.com", port: 6378 },
+     *   { host: "sample-address-0002.use2.cache.amazonaws.com" },
+     *   { host: "sample-address-0003.use2.cache.amazonaws.com", port: 6380 },
      * ]
      * ```
      */
-    addresses: {
-        host: string;
-        /**
-         * If port isn't supplied, 6379 will be used
-         */
-        port?: number;
-    }[];
+    addresses: NodeAddress[];
     /**
      * Index of the logical database to connect to.
      *

@@ -2,7 +2,10 @@
 
 import { closeMonitorClient, createMonitorClient } from "../build-ts/native";
 import { connection_request } from "../build-ts/ProtobufMessage";
-import { BaseClientConfiguration } from "./BaseClient.js";
+import {
+    BaseClientConfiguration,
+    validateUnixSocketAddresses,
+} from "./BaseClient.js";
 import { resolveClientLibraryName } from "./ClientLibraryNameResolver.js";
 
 export interface MonitorLine {
@@ -41,6 +44,7 @@ export class GlideMonitorClient {
             );
         }
 
+        validateUnixSocketAddresses(options, false);
         const client = new GlideMonitorClient();
         const request = GlideMonitorClient.buildConnectionRequest(options);
         const bytes =
@@ -120,10 +124,7 @@ export class GlideMonitorClient {
         options: BaseClientConfiguration,
     ): connection_request.IConnectionRequest {
         return connection_request.ConnectionRequest.create({
-            addresses: options.addresses?.map((a) => ({
-                host: a.host,
-                port: a.port,
-            })),
+            addresses: options.addresses,
             tlsMode: options.useTLS
                 ? connection_request.TlsMode.SecureTls
                 : connection_request.TlsMode.NoTls,

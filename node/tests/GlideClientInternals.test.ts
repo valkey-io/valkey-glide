@@ -12,7 +12,12 @@ import {
     BaseClientConfiguration,
     AZ_AFFINITY_READ_FROM_STRATEGIES,
     ConfigurationError,
+    GlideClient,
+    GlideClientConfiguration,
+    GlideClusterClient,
     GlideClusterClientConfiguration,
+    GlideMonitorClient,
+    NodeAddress,
     Logger,
     MAX_REQUEST_ARGS_LEN,
     ReadFrom,
@@ -225,6 +230,98 @@ describe("Client library identification requests", () => {
             );
         },
     );
+});
+
+describe("Unix domain socket addresses", () => {
+    class TestClient extends GlideClient {
+        public constructor() {
+            super();
+        }
+
+        public buildRequest(
+            options: GlideClientConfiguration,
+        ): connection_request.IConnectionRequest {
+            return this.createClientRequest(options);
+        }
+    }
+
+    class TestClusterClient extends GlideClusterClient {
+        public constructor() {
+            super();
+        }
+
+        public buildRequest(
+            options: GlideClusterClientConfiguration,
+        ): connection_request.IConnectionRequest {
+            return this.createClientRequest(options);
+        }
+    }
+
+    const unixSocketPath = "/run/valkey/valkey.sock";
+
+    it.each([undefined, null])(
+        "treats an address whose socket path is %s as TCP",
+        (path) => {
+            // What an untyped (JavaScript) caller passes for an unset optional path.
+            const address = {
+                host: "10.0.0.1",
+                unixSocketPath: path,
+            } as unknown as NodeAddress;
+
+            expect(() =>
+                new TestClusterClient().buildRequest({ addresses: [address] }),
+            ).not.toThrow();
+        },
+    );
+
+    it("rejects mixing socket and TCP addresses", () => {
+        expect(() =>
+            new TestClient().buildRequest({
+                addresses: [{ unixSocketPath }, { host: "localhost" }],
+            }),
+        ).toThrow(
+            new ConfigurationError(
+                "Unix domain socket addresses cannot be combined with TCP addresses",
+            ),
+        );
+    });
+
+    it("rejects a socket address with TLS", () => {
+        expect(() =>
+            new TestClient().buildRequest({
+                addresses: [{ unixSocketPath }],
+                useTLS: true,
+            }),
+        ).toThrow(
+            new ConfigurationError(
+                "TLS is not supported over Unix domain sockets",
+            ),
+        );
+    });
+
+    it("rejects a socket address in cluster mode", () => {
+        expect(() =>
+            new TestClusterClient().buildRequest({
+                addresses: [{ unixSocketPath }],
+            }),
+        ).toThrow(
+            new ConfigurationError(
+                "Unix domain socket addresses are not supported in cluster mode",
+            ),
+        );
+    });
+
+    it("rejects a monitor mixing TCP and socket addresses before connecting", async () => {
+        await expect(
+            GlideMonitorClient.create({
+                addresses: [{ host: "localhost" }, { unixSocketPath }],
+            }),
+        ).rejects.toThrow(
+            new ConfigurationError(
+                "Unix domain socket addresses cannot be combined with TCP addresses",
+            ),
+        );
+    });
 });
 
 describe("ReadFrom strategy configuration", () => {

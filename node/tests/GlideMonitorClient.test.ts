@@ -12,21 +12,10 @@ import {
 } from "../build-ts";
 import {
     getClientConfigurationOption,
+    getClientInfoField,
     getServerVersion,
     parseEndpoints,
 } from "./TestUtilities";
-
-function getClientInfoField(
-    clientInfo: string,
-    fieldName: string,
-): string | undefined {
-    const prefix = `${fieldName}=`;
-    return clientInfo
-        .trim()
-        .split(/\s+/u)
-        .find((field) => field.startsWith(prefix))
-        ?.slice(prefix.length);
-}
 
 function isMonitorClient(clientInfo: string): boolean {
     const command = getClientInfoField(clientInfo, "cmd");

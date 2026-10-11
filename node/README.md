@@ -104,6 +104,18 @@ try {
 }
 ```
 
+#### Standalone Mode over a Unix Domain Socket:
+
+A standalone client can connect through the server's Unix domain socket (its `unixsocket` setting, as an absolute path) instead of TCP. Unix domain sockets are not available on Windows, and are not supported in cluster mode, with TLS, with `NodeDiscoveryMode.DiscoverAll`, or mixed with TCP addresses.
+
+```typescript
+import { GlideClient } from "@valkey/valkey-glide";
+
+const client = await GlideClient.createClient({
+    addresses: [{ unixSocketPath: "/run/valkey/valkey.sock" }],
+});
+```
+
 #### Cluster Mode:
 
 ```typescript
