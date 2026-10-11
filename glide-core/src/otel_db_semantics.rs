@@ -175,7 +175,9 @@ const DB_SYSTEM_NAME: &str = "redis";
 pub fn set_db_connection_attributes(span: &GlideSpan, client: &Client) {
     span.set_attribute("db.system.name", DB_SYSTEM_NAME);
     span.set_attribute("server.address", client.server_address().to_string());
-    span.set_attribute_i64("server.port", client.server_port() as i64);
+    if let Some(port) = client.server_port() {
+        span.set_attribute_i64("server.port", port as i64);
+    }
     span.set_attribute("db.namespace", client.db_namespace().to_string());
 }
 

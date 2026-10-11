@@ -225,6 +225,7 @@ async fn get_connection(args: &Args) -> Client {
     let address_info: NodeAddress = NodeAddress {
         host: args.host.clone(),
         port: args.port as u16,
+        unix_socket_path: None,
     };
     let connection_request = ConnectionRequest {
         addresses: vec![address_info],

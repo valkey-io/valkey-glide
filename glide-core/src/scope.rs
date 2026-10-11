@@ -393,6 +393,9 @@ pub enum ScopeCreateError {
     /// nothing to inherit. Connecting anyway would silently fall back to system
     /// trust roots with no client certificate.
     ParentCertMaterialUnavailable,
+    /// The standalone seed is an invalid Unix domain socket address (for example, one
+    /// combined with TLS).
+    InvalidUnixSocketAddress(String),
     /// `redis::Client::open` rejected the constructed `ConnectionInfo`.
     ClientOpenFailed(RedisError),
     /// The connect attempt failed.
@@ -441,6 +444,9 @@ impl std::fmt::Display for ScopeCreateError {
             Self::ParentCertMaterialUnavailable => f.write_str(
                 "parent client's TLS certificate material is not available; connect the parent client before taking a scope",
             ),
+            Self::InvalidUnixSocketAddress(reason) => {
+                write!(f, "invalid Unix domain socket address: {reason}")
+            }
             Self::ClientOpenFailed(e) => write!(f, "client open failed: {e}"),
             Self::ConnectFailed(e) => write!(f, "connect failed: {e}"),
             Self::ConnectTimedOut => write!(f, "connect timed out after {SCOPE_CONNECT_TIMEOUT:?}"),
@@ -513,6 +519,23 @@ fn build_scope_connection_addr(
     }
 }
 
+/// The address of a standalone scope whose seed is a Unix domain socket, or `None` for
+/// a TCP seed: a parent configured with a socket opens its scopes over the same socket.
+#[cfg(feature = "proto")]
+fn unix_socket_scope_addr(
+    seed: &crate::connection_request::NodeAddress,
+    tls_mode: crate::connection_request::TlsMode,
+) -> Result<Option<redis::ConnectionAddr>, ScopeCreateError> {
+    let address = crate::client::NodeAddress::from(seed);
+    let Some(path) = address.unix_socket_path.clone() else {
+        return Ok(None);
+    };
+    let tls = tls_mode != crate::connection_request::TlsMode::NoTls;
+    crate::client::validate_unix_socket_address(&address, tls)
+        .map_err(ScopeCreateError::InvalidUnixSocketAddress)?;
+    Ok(Some(redis::ConnectionAddr::Unix(path)))
+}
+
 /// The certificate material a scope inherits from its parent.
 ///
 /// The reload handle wins over the parent's `tls_params`: that snapshot is frozen
@@ -572,32 +595,38 @@ async fn build_scope_connection(
     {
         return Err(ScopeCreateError::ParentCertMaterialUnavailable);
     }
-    let (host, port) = match target {
+    let connection_addr = match target {
         ScopeTarget::Standalone => {
             let addr = proto
                 .addresses
                 .first()
                 .ok_or(ScopeCreateError::NoSeedAddress)?;
-            let port = if addr.port == 0 {
-                6379
+            if let Some(unix_addr) = unix_socket_scope_addr(addr, tls_mode)? {
+                unix_addr
             } else {
-                addr.port as u16
-            };
-            // Trim brackets here too, so a configured `[::1]` standalone host works
-            // like the cluster branch — redis-rs's tuple `lookup_host` wants bare `::1`.
-            let host = strip_host_brackets(&addr.host);
-            // The seed is still the raw configured address, resolved here the same
-            // way `client::get_connection_info` does. The cluster arm must not.
-            match client.and_then(|c| c.address_resolver()) {
-                Some(resolver) => resolver.resolve(host, port),
-                None => (host.to_string(), port),
+                let port = if addr.port == 0 {
+                    6379
+                } else {
+                    addr.port as u16
+                };
+                // Trim brackets here too, so a configured `[::1]` standalone host works
+                // like the cluster branch — redis-rs's tuple `lookup_host` wants bare `::1`.
+                let host = strip_host_brackets(&addr.host);
+                // The seed is still the raw configured address, resolved here the same
+                // way `client::get_connection_info` does. The cluster arm must not.
+                let (host, port) = match client.and_then(|c| c.address_resolver()) {
+                    Some(resolver) => resolver.resolve(host, port),
+                    None => (host.to_string(), port),
+                };
+                build_scope_connection_addr(host, port, tls_mode, tls_params)
             }
         }
-        ScopeTarget::ClusterPrimary(addr) => parse_cluster_target(addr)
-            .ok_or_else(|| ScopeCreateError::InvalidClusterTarget(Arc::clone(addr)))?,
+        ScopeTarget::ClusterPrimary(addr) => {
+            let (host, port) = parse_cluster_target(addr)
+                .ok_or_else(|| ScopeCreateError::InvalidClusterTarget(Arc::clone(addr)))?;
+            build_scope_connection_addr(host, port, tls_mode, tls_params)
+        }
     };
-
-    let connection_addr = build_scope_connection_addr(host, port, tls_mode, tls_params);
     let redis_client = redis::Client::open(redis::ConnectionInfo {
         addr: connection_addr,
         // The old `redis://` URL carried no `resp3` param, so redis-rs parsed it
@@ -1321,6 +1350,7 @@ mod tests {
             addresses: vec![ClientAddress {
                 host: "127.0.0.1".to_string(),
                 port: 1,
+                unix_socket_path: None,
             }],
             lazy_connect: true,
             root_certs: vec![CERT_A.into()],
@@ -1340,6 +1370,7 @@ mod tests {
             addresses: vec![ClientAddress {
                 host: "127.0.0.1".to_string(),
                 port: 1,
+                unix_socket_path: None,
             }],
             cluster_mode_enabled: cluster,
             lazy_connect: true,
@@ -2284,6 +2315,7 @@ mod tests {
         parent_request.addresses.push(crate::client::NodeAddress {
             host: "127.0.0.1".into(),
             port,
+            unix_socket_path: None,
         });
         parent_request.lazy_connect = true;
         let parent = Client::new(parent_request, None)
@@ -2349,6 +2381,7 @@ mod tests {
         parent_request.addresses.push(crate::client::NodeAddress {
             host: "127.0.0.1".into(),
             port,
+            unix_socket_path: None,
         });
         parent_request.lazy_connect = true;
         let parent = Client::new(parent_request, None)
@@ -2817,5 +2850,39 @@ mod tests {
 
         shutdown_sender.send(()).expect("stop mock server");
         server.join().expect("mock server exits cleanly");
+    }
+
+    // ── Unix domain sockets (#4878) ─────────────────────────────────────────
+
+    #[cfg(unix)]
+    #[test]
+    fn unix_socket_scope_addr_uses_the_socket_seed() {
+        use super::unix_socket_scope_addr;
+        use crate::connection_request::TlsMode;
+        let unix = NodeAddress {
+            unix_socket_path: Some("/tmp/valkey.sock".into()),
+            ..Default::default()
+        };
+        let addr = unix_socket_scope_addr(&unix, TlsMode::NoTls).expect("valid socket seed");
+        assert_eq!(
+            addr,
+            Some(redis::ConnectionAddr::Unix("/tmp/valkey.sock".into()))
+        );
+
+        for tls_mode in [TlsMode::SecureTls, TlsMode::InsecureTls] {
+            let err = unix_socket_scope_addr(&unix, tls_mode)
+                .expect_err("TLS over a Unix socket must fail closed");
+            assert!(
+                matches!(&err, ScopeCreateError::InvalidUnixSocketAddress(reason) if reason.contains("TLS")),
+                "{tls_mode:?}: {err}"
+            );
+        }
+
+        let tcp = NodeAddress {
+            host: "127.0.0.1".into(),
+            port: 6379,
+            ..Default::default()
+        };
+        assert_eq!(unix_socket_scope_addr(&tcp, TlsMode::NoTls).unwrap(), None);
     }
 }

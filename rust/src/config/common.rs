@@ -196,6 +196,7 @@ impl NodeAddress {
         CoreNodeAddress {
             host: self.host.clone(),
             port: self.port,
+            unix_socket_path: None,
         }
     }
 }

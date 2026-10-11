@@ -579,6 +579,52 @@ fn test_ffi_monitor_rejects_invalid_final_lib_name_before_connection() {
     }
 }
 
+#[cfg(unix)]
+#[test]
+fn test_ffi_monitor_rejects_unix_socket_with_tls() {
+    unsafe extern "C-unwind" fn no_op_monitor_callback(
+        _client_ptr: usize,
+        _timestamp: f64,
+        _db: i64,
+        _client_addr: *const u8,
+        _client_addr_len: i64,
+        _command: *const u8,
+        _command_len: i64,
+        _args_json: *const u8,
+        _args_json_len: i64,
+    ) {
+    }
+
+    // The TLS rejection only fires if the socket path survived the protobuf-to-core
+    // address conversion in `create_monitor_client`.
+    let mut request = ConnectionRequest::new();
+    request.tls_mode = TlsMode::SecureTls.into();
+    let mut address = NodeAddress::new();
+    address.unix_socket_path = Some("/tmp/glide-ffi-monitor.sock".into());
+    request.addresses.push(address);
+    let request_bytes = request.write_to_bytes().expect("Failed to serialize");
+
+    unsafe {
+        let response_ptr = create_monitor_client(
+            request_bytes.as_ptr(),
+            request_bytes.len(),
+            no_op_monitor_callback,
+        );
+
+        assert!(!response_ptr.is_null());
+        let response = &*response_ptr;
+        assert!(response.conn_ptr.is_null());
+        assert!(!response.connection_error_message.is_null());
+        let error = parse_error_msg(response.connection_error_message);
+        assert!(
+            error.contains("TLS is not supported over Unix domain sockets"),
+            "{error}"
+        );
+
+        free_connection_response(response_ptr as *mut ConnectionResponse);
+    }
+}
+
 #[test]
 fn test_create_otel_span_with_parent() {
     // Test creating a parent span

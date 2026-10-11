@@ -2828,10 +2828,7 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_createMonitorClient
                 .addresses
                 .first()
                 .ok_or_else(|| FFIError::Logger("No addresses in ConnectionRequest".to_string()))?;
-            let address = glide_core::client::NodeAddress {
-                host: addr_proto.host.to_string(),
-                port: addr_proto.port as u16,
-            };
+            let address = glide_core::client::NodeAddress::from(addr_proto);
 
             let lib_name = if proto_request.lib_name.is_empty() {
                 None

@@ -57,6 +57,7 @@
 
 ### Changes
 
+* Core/FFI, Python: Add Unix domain socket support for standalone clients with `NodeAddress(unix_socket_path=...)`, and accept `valkey+unix://` URIs in `create_client_from_uri` ([#4878](https://github.com/valkey-io/valkey-glide/issues/4878))
 * Java: add useMutualTlsFromKeyStore to load mTLS client identity ([#7258](https://github.com/valkey-io/valkey-glide/pull/7258))
 * Java: Add `HGETDEL` command support ([#6145](https://github.com/valkey-io/valkey-glide/issues/6145))
 * Node: Add `HGETDEL` command support ([#6145](https://github.com/valkey-io/valkey-glide/issues/6145))
