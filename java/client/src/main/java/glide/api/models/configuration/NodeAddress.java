@@ -8,13 +8,15 @@ import lombok.NonNull;
 import lombok.ToString;
 
 /**
- * Represents the address and port of a node in the cluster or in standalone installation.
+ * Represents the address of a node in the cluster or in standalone installation: a host and port,
+ * or a Unix domain socket.
  *
  * @example
  *     <pre>{@code
  * NodeAddress address1 = NodeAddress.builder().build(); // default parameters: localhost:6379
  * NodeAddress address2 = NodeAddress.builder().port(6380).build(); // localhost:6380
- * NodeAddress address2 = NodeAddress.builder().address("my.cloud.com").port(12345).build(); // custom address
+ * NodeAddress address3 = NodeAddress.builder().host("my.cloud.com").port(12345).build(); // custom address
+ * NodeAddress address4 = NodeAddress.builder().unixSocketPath("/run/valkey/valkey.sock").build();
  * }</pre>
  */
 @Getter
@@ -29,4 +31,11 @@ public class NodeAddress {
 
     @NonNull @Builder.Default private final String host = DEFAULT_HOST;
     @NonNull @Builder.Default private final Integer port = DEFAULT_PORT;
+
+    /**
+     * Absolute path of the server's Unix domain socket. When set, {@code host} and {@code port} are
+     * ignored. Standalone clients only; not supported on Windows, with TLS, with {@link
+     * NodeDiscoveryMode#DISCOVER_ALL}, or mixed with TCP addresses.
+     */
+    private final String unixSocketPath;
 }

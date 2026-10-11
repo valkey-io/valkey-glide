@@ -30,6 +30,7 @@ import glide.api.models.exceptions.GlideException;
 import glide.internal.AsyncRegistry;
 import glide.internal.ClientLibraryNameResolver;
 import glide.internal.GlideNativeBridge;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -411,8 +412,7 @@ public class ConnectionManager {
         ConnectionRequest.Builder requestBuilder = ConnectionRequest.newBuilder();
 
         for (glide.api.models.configuration.NodeAddress addr : configuration.getAddresses()) {
-            requestBuilder.addAddresses(
-                    NodeAddress.newBuilder().setHost(addr.getHost()).setPort(addr.getPort()).build());
+            requestBuilder.addAddresses(toProtobufAddress(addr));
         }
 
         if (configuration.isUseTLS()) {
@@ -726,6 +726,42 @@ public class ConnectionManager {
                     String.format(
                             "invalid reconnect strategy: %s must be between 0 and %d, got %d",
                             name, maxValue, value));
+        }
+    }
+
+    /**
+     * Converts a configured address to its protobuf form. A Unix domain socket address carries only
+     * its path, so the core never receives a host and port alongside it.
+     */
+    public static NodeAddress toProtobufAddress(glide.api.models.configuration.NodeAddress address) {
+        if (address.getUnixSocketPath() != null) {
+            return NodeAddress.newBuilder().setUnixSocketPath(address.getUnixSocketPath()).build();
+        }
+        return NodeAddress.newBuilder().setHost(address.getHost()).setPort(address.getPort()).build();
+    }
+
+    /**
+     * Rejects Unix domain socket misconfigurations before connecting. {@code MonitorClient} connects
+     * only to the first address, so this is its only mixed-address check.
+     *
+     * @throws ConfigurationError if a Unix domain socket address is used in cluster mode, mixed with
+     *     TCP addresses, or with TLS.
+     */
+    public static void validateUnixSocketAddresses(BaseClientConfiguration configuration) {
+        List<glide.api.models.configuration.NodeAddress> addresses = configuration.getAddresses();
+        if (addresses.stream().noneMatch(address -> address.getUnixSocketPath() != null)) {
+            return;
+        }
+        if (configuration instanceof GlideClusterClientConfiguration) {
+            throw new ConfigurationError(
+                    "Unix domain socket addresses are not supported in cluster mode");
+        }
+        if (!addresses.stream().allMatch(address -> address.getUnixSocketPath() != null)) {
+            throw new ConfigurationError(
+                    "Unix domain socket addresses cannot be combined with TCP addresses");
+        }
+        if (configuration.isUseTLS()) {
+            throw new ConfigurationError("TLS is not supported over Unix domain sockets");
         }
     }
 
