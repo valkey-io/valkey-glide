@@ -3784,6 +3784,7 @@ mod tests {
         );
     }
 
+    #[cfg(unix)]
     fn tcp_address() -> NodeAddress {
         NodeAddress {
             host: "10.0.0.1".to_string(),
@@ -3792,6 +3793,7 @@ mod tests {
         }
     }
 
+    #[cfg(unix)]
     #[test]
     fn test_validate_unix_socket_addresses_accepts_supported_requests() {
         for (name, request) in [
@@ -3825,6 +3827,7 @@ mod tests {
         }
     }
 
+    #[cfg(unix)]
     #[test]
     fn test_validate_unix_socket_addresses_rejects_unsupported_requests() {
         let unix_with_host = NodeAddress {
@@ -3959,6 +3962,7 @@ mod tests {
         );
     }
 
+    #[cfg(unix)]
     #[tokio::test]
     async fn test_otel_metadata_reports_unix_socket_path_without_port() {
         let request = ConnectionRequest {

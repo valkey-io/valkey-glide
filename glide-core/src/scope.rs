@@ -2857,6 +2857,7 @@ mod tests {
 
     // ── Unix domain sockets (#4878) ─────────────────────────────────────────
 
+    #[cfg(unix)]
     #[test]
     fn unix_socket_scope_addr_uses_the_socket_seed() {
         use crate::connection_request::TlsMode;

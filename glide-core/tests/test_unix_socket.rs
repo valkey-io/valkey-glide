@@ -4,6 +4,8 @@
 //! Every server here is started with `--port 0`, so a successful connection can
 //! only have gone through the socket.
 
+#![cfg(unix)]
+
 mod constants;
 mod utilities;
 

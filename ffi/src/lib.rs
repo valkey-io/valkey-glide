@@ -2299,6 +2299,7 @@ mod tests_create_client_from_uri_internal {
         );
     }
 
+    #[cfg(unix)]
     #[test]
     fn unix_socket_uris_set_unix_socket_path() {
         for uri in [
@@ -2327,6 +2328,7 @@ mod tests_create_client_from_uri_internal {
         }
     }
 
+    #[cfg(unix)]
     #[test]
     fn unix_socket_uri_reads_db_and_credentials_from_query() {
         // Same query parameters as redis-rs's Unix socket URLs.
@@ -2341,6 +2343,7 @@ mod tests_create_client_from_uri_internal {
         assert_eq!(&*auth.password, "s@cret");
     }
 
+    #[cfg(unix)]
     #[test]
     fn unix_socket_uri_username_only_keeps_username() {
         let req = parse_uri("valkey+unix:///tmp/valkey.sock?user=iam-user");
@@ -2349,12 +2352,14 @@ mod tests_create_client_from_uri_internal {
         assert_eq!(&*auth.password, "");
     }
 
+    #[cfg(unix)]
     fn unix_uri_error(uri: &str) -> String {
         let c_uri = CString::new(uri).unwrap();
         create_client_from_uri_internal(c_uri.as_ptr(), std::ptr::null())
             .expect_err(&format!("expected {uri} to be rejected"))
     }
 
+    #[cfg(unix)]
     #[test]
     fn unix_socket_uri_percent_decodes_path_and_credentials() {
         // `+` stays literal in query values, as in URI userinfo; `%20` is a space.
@@ -2368,6 +2373,7 @@ mod tests_create_client_from_uri_internal {
         assert_eq!(&*auth.password, "a+b c");
     }
 
+    #[cfg(unix)]
     #[test]
     fn unix_socket_uri_rejects_invalid_forms() {
         for (uri, expected) in [
@@ -2403,6 +2409,7 @@ mod tests_create_client_from_uri_internal {
         }
     }
 
+    #[cfg(unix)]
     #[test]
     fn unix_socket_uri_errors_do_not_echo_query_text() {
         // A mistyped separator puts the password inside another key or value.
