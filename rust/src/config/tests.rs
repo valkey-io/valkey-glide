@@ -19,6 +19,23 @@ fn node_address_default_is_localhost_6379() {
     let a = NodeAddress::default();
     assert_eq!(a.host, "localhost");
     assert_eq!(a.port, 6379);
+    assert_eq!(a.unix_socket_path, None);
+}
+
+#[test]
+fn node_address_unix_lowers_to_socket_only_core_address() {
+    let path = std::path::Path::new("/run/valkey/valkey.sock");
+    let with_host_and_port = NodeAddress {
+        unix_socket_path: Some(path.into()),
+        ..NodeAddress::default()
+    };
+
+    for a in [NodeAddress::unix(path), with_host_and_port] {
+        let req = GlideClientConfiguration::new(vec![a]).to_request();
+        let core = &req.addresses[0];
+        assert_eq!(core.unix_socket_path.as_deref(), Some(path));
+        assert_eq!((core.host.as_str(), core.port), ("", 0));
+    }
 }
 
 #[test]
@@ -837,7 +854,119 @@ fn from_url_tls_schemes() {
 fn from_url_invalid_rejected() {
     assert!(GlideClientConfiguration::from_url("not a url").is_err());
     assert!(GlideClientConfiguration::from_url("http://host").is_err());
-    assert!(GlideClientConfiguration::from_url("redis+unix:///tmp/redis.sock").is_err());
+}
+
+#[cfg(unix)]
+#[test]
+fn from_url_unix_socket() {
+    for url in [
+        "unix:///run/valkey/valkey.sock?db=2&user=alice&pass=secret",
+        "redis+unix:///run/valkey/valkey.sock?db=2&user=alice&pass=secret",
+    ] {
+        let cfg = GlideClientConfiguration::from_url(url).unwrap();
+        assert_eq!(
+            cfg.addresses,
+            vec![NodeAddress::unix("/run/valkey/valkey.sock")],
+            "{url}"
+        );
+        assert_eq!(cfg.tls, TlsConfig::NoTls, "{url}");
+        assert_eq!(cfg.database_id, 2, "{url}");
+        let creds = cfg.credentials.expect("credentials parsed");
+        assert_eq!(creds.username(), Some("alice"), "{url}");
+        assert_eq!(creds.password.as_deref(), Some("secret"), "{url}");
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn from_url_unix_socket_decodes_path() {
+    let cfg = GlideClientConfiguration::from_url("unix:///run/my%20dir/a%23b.sock").unwrap();
+    assert_eq!(
+        cfg.addresses,
+        vec![NodeAddress::unix("/run/my dir/a#b.sock")]
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn from_url_unix_socket_treats_empty_credentials_as_absent() {
+    let cfg =
+        GlideClientConfiguration::from_url("unix:///run/valkey/valkey.sock?user=&pass=secret")
+            .unwrap();
+    let creds = cfg.credentials.expect("credentials parsed");
+    assert!(creds.username().is_none());
+    assert_eq!(creds.password.as_deref(), Some("secret"));
+
+    let cfg = GlideClientConfiguration::from_url("unix:///run/valkey/valkey.sock?pass=").unwrap();
+    assert!(cfg.credentials.is_none());
+}
+
+#[cfg(not(unix))]
+#[test]
+fn from_url_unix_socket_unsupported_off_unix() {
+    let err = GlideClientConfiguration::from_url("unix:///run/valkey/valkey.sock")
+        .expect_err("Unix socket URLs need a Unix platform");
+    assert!(
+        err.to_string().contains("not available on this platform"),
+        "{err}"
+    );
+}
+
+#[test]
+fn from_url_unix_socket_rejects_misread_forms() {
+    for (url, expected) in [
+        (
+            "unix://alice:secret@localhost/run/valkey/valkey.sock",
+            "`user` and `pass` query parameters",
+        ),
+        (
+            "redis+unix://alice@localhost/run/valkey/valkey.sock",
+            "`user` and `pass` query parameters",
+        ),
+        (
+            "unix://localhost/run/valkey/valkey.sock",
+            "must not contain a host",
+        ),
+        ("unix://run/valkey/valkey.sock", "must not contain a host"),
+        (
+            "unix:///run/valkey/valkey.sock?pass=ab#cd",
+            "must not contain a fragment",
+        ),
+        (
+            "unix:///run/valkey/valkey.sock?password=secret",
+            "Unsupported query parameter",
+        ),
+        (
+            "unix:///run/valkey/valkey.sock?pass:secret",
+            "Unsupported query parameter",
+        ),
+        (
+            "unix:///run/valkey/valkey.sock?database=2",
+            "Unsupported query parameter",
+        ),
+    ] {
+        let err = GlideClientConfiguration::from_url(url).expect_err(url);
+        assert!(err.to_string().contains(expected), "{url}: {err}");
+        assert!(!err.to_string().contains("secret"), "{url}: {err}");
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn cluster_from_url_rejects_unix_socket() {
+    for result in [
+        GlideClusterClientConfiguration::from_url("unix:///run/valkey/valkey.sock"),
+        GlideClusterClientConfiguration::from_urls([
+            "redis://n1:7000",
+            "unix:///run/valkey/valkey.sock",
+        ]),
+    ] {
+        let err = result.expect_err("cluster mode cannot use a Unix socket");
+        assert!(
+            err.to_string().contains("not supported in cluster mode"),
+            "{err}"
+        );
+    }
 }
 
 #[test]
