@@ -388,6 +388,42 @@ public class IsolatedScopeIntegrationTest {
         closer.get(5, TimeUnit.SECONDS);
     }
 
+    /** A caller that stops waiting must not keep the slot the core later grants it. */
+    @Test
+    public void abandonedAcquireReturnsItsSlot() throws Exception {
+        try (GlideClient client =
+                GlideClient.createClient(getTestClientConfig()).get(10, TimeUnit.SECONDS)) {
+            List<IsolatedScope> held = holdWholeScopePool(client);
+
+            CompletableFuture<IsolatedScope> waiter = client.scopedConnection(Duration.ofSeconds(5));
+            Thread.sleep(200);
+            assertTrue(waiter.cancel(true));
+
+            // The abandoned acquire is still waiting in the core; freeing the pool
+            // lets it win a slot, which the binding must then release on its behalf.
+            held.forEach(IsolatedScope::close);
+
+            List<IsolatedScope> refilled = new ArrayList<>(SCOPE_POOL_MAX_TOTAL);
+            try {
+                for (int i = 0; i < SCOPE_POOL_MAX_TOTAL; i++) {
+                    try {
+                        refilled.add(client.scopedConnection(Duration.ofSeconds(2)).get(10, TimeUnit.SECONDS));
+                    } catch (ExecutionException e) {
+                        fail(
+                                "slot "
+                                        + (i + 1)
+                                        + " of "
+                                        + SCOPE_POOL_MAX_TOTAL
+                                        + " unavailable after an abandoned acquire: "
+                                        + e.getCause());
+                    }
+                }
+            } finally {
+                refilled.forEach(IsolatedScope::close);
+            }
+        }
+    }
+
     @Test
     public void lazyMtlsParentFailsWithoutWaiting() throws Exception {
         // A lazily connected client with TLS material never dials, so there is

@@ -266,7 +266,21 @@ public class GlideClient extends BaseClient
             future.completeExceptionally(
                     new IllegalArgumentException("Invalid connection request bytes"));
         }
-        return future.thenApply(scopeId -> new IsolatedScope((Long) scopeId, clientId));
+        // The core keeps waiting after the caller cancels. Give back a scope it is
+        // later granted, or its slot stays in use until the client closes.
+        CompletableFuture<IsolatedScope> result = new CompletableFuture<>();
+        future.whenComplete(
+                (scopeId, err) -> {
+                    if (err != null) {
+                        result.completeExceptionally(err);
+                        return;
+                    }
+                    IsolatedScope scope = new IsolatedScope((Long) scopeId, clientId);
+                    if (!result.complete(scope)) {
+                        scope.close();
+                    }
+                });
+        return result;
     }
 
     /** Convenience overload — defaults to slot 0 (standalone mode). */
