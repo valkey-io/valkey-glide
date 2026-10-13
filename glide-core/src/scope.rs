@@ -25,6 +25,10 @@
 //! into push-message mode, which needs a dedicated message handler that scopes do
 //! not wire up; use the parent client's pub/sub API, which keeps its own
 //! subscription connections.
+//!
+//! While a raw MULTI is open the local cross-slot check is skipped (see
+//! [`execute_scope_command`]) so every queued command reaches the server and its
+//! own EXECABORT governs the transaction, as on the non-scoped path.
 
 use crate::client::Client;
 use crate::pool::{
@@ -257,12 +261,16 @@ pub async fn execute_scope_command(
     let subscribed_before_command = conn.state.has_subscriptions();
     update_state_for_command(&mut conn.state, cmd_name, &arg_refs);
 
-    // Cluster mode: validate slot consistency (skip in standalone — no slots)
+    // Cluster mode: validate slot consistency (skip in standalone — no slots).
+    // Skip too while a MULTI is already open: a locally-rejected command never
+    // reaches the server, so EXEC would commit the rest of the queue instead of
+    // EXECABORTing. Let every queued command through and let the server's own
+    // cross-slot check flag the transaction, as the non-scoped path does.
     let is_cluster = match client {
         Some(c) => c.is_cluster_mode(),
         None => false,
     };
-    if is_cluster {
+    if is_cluster && !multi_active_before_command {
         match scope_slot_for_command(cmd_name, &arg_refs) {
             // No slot constraint (keyless, random/fan-out routing): nothing to check.
             ScopeSlot::Unconstrained => {}
@@ -1591,6 +1599,44 @@ mod tests {
             stream
                 .write_all(b"+OK\r\n+OK\r\n")
                 .expect("respond to startup commands");
+            shutdown_receiver.recv().expect("receive server shutdown");
+        });
+        (port, shutdown_sender, server)
+    }
+
+    /// Like [`responsive_endpoint`], but answers `extra_ok_replies` further commands
+    /// with `+OK` after the handshake before falling silent — so a test can drive N
+    /// commands cleanly and observe the (N+1)th hang on a reply that never comes.
+    fn endpoint_answering_n_more_commands(
+        extra_ok_replies: usize,
+    ) -> (u16, Sender<()>, JoinHandle<()>) {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind test listener");
+        let port = listener.local_addr().expect("listener address").port();
+        let (shutdown_sender, shutdown_receiver) = mpsc::channel();
+        let server = std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().expect("accept scope connection");
+            stream
+                .set_read_timeout(Some(std::time::Duration::from_secs(10)))
+                .expect("set read timeout");
+            let mut request = [0_u8; 1024];
+            let bytes_read = stream.read(&mut request).expect("read startup commands");
+            assert!(bytes_read > 0, "startup commands must not be empty");
+            stream
+                .write_all(b"+OK\r\n+OK\r\n")
+                .expect("respond to startup commands");
+
+            // Each client write here is one packed RESP command; read it and
+            // answer +OK, then move on.
+            for _ in 0..extra_ok_replies {
+                let mut buf = [0_u8; 1024];
+                match stream.read(&mut buf) {
+                    Ok(n) if n > 0 => {}
+                    _ => break,
+                }
+                if stream.write_all(b"+OK\r\n").is_err() {
+                    break;
+                }
+            }
             shutdown_receiver.recv().expect("receive server shutdown");
         });
         (port, shutdown_sender, server)
@@ -3158,5 +3204,97 @@ mod tests {
         unregister_client(client_id);
         shutdown_sender.send(()).expect("stop mock server");
         server.join().expect("mock server exits cleanly");
+    }
+
+    /// A cross-slot command queued inside an open MULTI must reach the server, not
+    /// be rejected locally: a local rejection drops it from the server's queue, so
+    /// EXEC commits the rest instead of EXECABORTing. The mock answers the handshake
+    /// plus the two commands before the queued one then falls silent, so the
+    /// cross-slot `SET` hangs on a reply that never comes (harness or request
+    /// timeout, never `CrossSlot`); a local rejection would return `CrossSlot` at
+    /// once. The companion case — the same command outside a MULTI still rejected
+    /// locally — bounds the fix to the open-transaction case, not a blanket removal.
+    #[tokio::test]
+    async fn multi_active_scope_skips_local_slot_check_for_queued_commands() {
+        let (port, shutdown_sender, server) = endpoint_answering_n_more_commands(2);
+
+        let slot_a = crate::pool::slot_for_key(b"foo");
+        let slot_b = crate::pool::slot_for_key(b"bar");
+        assert_ne!(slot_a, slot_b, "the two keys must hash to different slots");
+
+        let (scope_id, pool, client_id) = borrow_cluster_scope(port, slot_a).await;
+        let parent = get_parent_client(client_id).expect("parent registered");
+
+        // Open a MULTI, then pin the scope with a same-slot command.
+        execute_scope_command(scope_id, "MULTI", &[], Some(&parent))
+            .await
+            .expect("MULTI is keyless and must not be rejected");
+        execute_scope_command(
+            scope_id,
+            "SET",
+            &[b"foo".to_vec(), b"1".to_vec()],
+            Some(&parent),
+        )
+        .await
+        .expect("same-slot command inside MULTI must not be rejected");
+
+        // The cross-slot command queued inside the open MULTI must reach the wire,
+        // not be rejected locally; the mock has stopped replying, so a dispatched
+        // command hangs (timeout) while a local rejection returns CrossSlot at once.
+        let queued = tokio::time::timeout(
+            std::time::Duration::from_millis(300),
+            execute_scope_command(
+                scope_id,
+                "SET",
+                &[b"bar".to_vec(), b"2".to_vec()],
+                Some(&parent),
+            ),
+        )
+        .await;
+        match queued {
+            Err(_) => {} // harness timeout: command reached the wire, never completed
+            Ok(Ok(_)) => panic!("a cross-slot command queued inside MULTI must not succeed"),
+            Ok(Err(e)) => assert_ne!(
+                e.kind(),
+                redis::ErrorKind::CrossSlot,
+                "must not be rejected locally; it must reach the server and fail only \
+                 for network/timeout reasons, got: {e:?}"
+            ),
+        }
+
+        shutdown_sender.send(()).expect("stop mock server");
+        server.join().expect("mock server exits cleanly");
+        get_client_scope_pools().remove(&client_id);
+        unregister_client(client_id);
+
+        // Companion (A-B bound): the same cross-slot command OUTSIDE a MULTI must
+        // still be rejected locally and at once.
+        let (port2, shutdown_sender2, server2) = endpoint_answering_n_more_commands(1);
+        let (scope_id2, pool2, client_id2) = borrow_cluster_scope(port2, slot_a).await;
+        let parent2 = get_parent_client(client_id2).expect("parent registered");
+        execute_scope_command(
+            scope_id2,
+            "SET",
+            &[b"foo".to_vec(), b"1".to_vec()],
+            Some(&parent2),
+        )
+        .await
+        .expect("same-slot command must not be rejected");
+        let err = execute_scope_command(
+            scope_id2,
+            "SET",
+            &[b"bar".to_vec(), b"2".to_vec()],
+            Some(&parent2),
+        )
+        .await
+        .expect_err("a cross-slot command outside MULTI must still be rejected locally");
+        assert_eq!(err.kind(), redis::ErrorKind::CrossSlot);
+
+        let _ = pool.lock().await;
+        let _ = pool2.lock().await;
+        shutdown_sender2.send(()).expect("stop mock server");
+        server2.join().expect("mock server exits cleanly");
+        get_client_scope_pools().remove(&client_id2);
+        unregister_client(client_id2);
     }
 }

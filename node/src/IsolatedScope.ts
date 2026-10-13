@@ -215,9 +215,8 @@ export class IsolatedScope {
         // is a real value — matching the Python/Java bindings (Go treats "" as
         // absent, forced by its string type).
         const hasRoutingSlot = routingKey !== undefined;
-        const routingSlot = hasRoutingSlot
-            ? slotForKey(Buffer.from(routingKey))
-            : 0;
+        const routingSlot =
+            routingKey !== undefined ? slotForKey(Buffer.from(routingKey)) : 0;
 
         let backoffMs = 10;
 

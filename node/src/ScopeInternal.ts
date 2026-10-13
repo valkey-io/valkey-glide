@@ -58,5 +58,11 @@ export function tryAcquireScope(
         );
     }
 
-    return scopeTryAcquire(clientId, bytes, hasRoutingSlot, routingSlot, attemptToken);
+    return scopeTryAcquire(
+        clientId,
+        bytes,
+        hasRoutingSlot,
+        routingSlot,
+        attemptToken,
+    );
 }
