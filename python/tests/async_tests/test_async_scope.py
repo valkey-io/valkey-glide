@@ -236,11 +236,11 @@ class TestAsyncIsolatedScopeAcquireFailsFast:
         client = await GlideClient.create(config)
         held = [await client.scoped_connection() for _ in range(_SCOPE_POOL_MAX_TOTAL)]
 
-        async def close_soon():
+        async def _close_soon():
             await asyncio.sleep(0.2)
             await client.aclose()
 
-        closer = asyncio.create_task(close_soon())
+        closer = asyncio.create_task(_close_soon())
         started = time.monotonic()
         with pytest.raises(ConnectionError):
             await client.scoped_connection(timeout=5.0)
