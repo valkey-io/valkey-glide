@@ -29,6 +29,64 @@ public class HSetExOptionsTest {
     }
 
     @Test
+    public void testOnlyKeyConditionalChangeToArgs() {
+        HSetExOptions options = HSetExOptions.builder().onlyIfKeyExists().build();
+        String[] args = options.toArgs();
+        assertArrayEquals(new String[] {"XX"}, args);
+
+        options = HSetExOptions.builder().onlyIfKeyDoesNotExist().build();
+        args = options.toArgs();
+        assertArrayEquals(new String[] {"NX"}, args);
+    }
+
+    @Test
+    public void testKeyAndFieldConditionalChangeCombinedToArgs() {
+        HSetExOptions options = HSetExOptions.builder().onlyIfKeyExists().onlyIfNoneExist().build();
+        String[] args = options.toArgs();
+        assertArrayEquals(new String[] {"XX", "FNX"}, args);
+
+        options = HSetExOptions.builder().onlyIfKeyDoesNotExist().onlyIfAllExist().build();
+        args = options.toArgs();
+        assertArrayEquals(new String[] {"NX", "FXX"}, args);
+    }
+
+    @Test
+    public void testKeyConditionalChangeWithExpiryToArgs() {
+        HSetExOptions options =
+                HSetExOptions.builder().onlyIfKeyExists().expiry(ExpirySet.Seconds(60L)).build();
+        String[] args = options.toArgs();
+        assertArrayEquals(new String[] {"XX", "EX", "60"}, args);
+
+        options =
+                HSetExOptions.builder()
+                        .onlyIfKeyDoesNotExist()
+                        .onlyIfNoneExist()
+                        .expiry(ExpirySet.Seconds(60L))
+                        .build();
+        args = options.toArgs();
+        assertArrayEquals(new String[] {"NX", "FNX", "EX", "60"}, args);
+    }
+
+    @Test
+    public void testKeyConditionalChangeBuilderConvenienceMethods() {
+        HSetExOptions options1 = HSetExOptions.builder().onlyIfKeyExists().build();
+
+        HSetExOptions options2 =
+                HSetExOptions.builder().conditionalChange(HashConditionalChange.ONLY_IF_KEY_EXISTS).build();
+
+        assertEquals(options1, options2);
+
+        HSetExOptions options3 = HSetExOptions.builder().onlyIfKeyDoesNotExist().build();
+
+        HSetExOptions options4 =
+                HSetExOptions.builder()
+                        .conditionalChange(HashConditionalChange.ONLY_IF_KEY_DOES_NOT_EXIST)
+                        .build();
+
+        assertEquals(options3, options4);
+    }
+
+    @Test
     public void testOnlyExpiryToArgs() {
         HSetExOptions options = HSetExOptions.builder().expiry(ExpirySet.Seconds(60L)).build();
         String[] args = options.toArgs();
@@ -113,8 +171,8 @@ public class HSetExOptionsTest {
 
         String toString = options.toString();
         assertEquals(
-                "HSetExOptions(fieldConditionalChange=ONLY_IF_NONE_EXIST, expiry=ExpirySet{type=SECONDS,"
-                        + " count=60})",
+                "HSetExOptions(conditionalChange=null, fieldConditionalChange=ONLY_IF_NONE_EXIST,"
+                        + " expiry=ExpirySet{type=SECONDS, count=60})",
                 toString);
     }
 
