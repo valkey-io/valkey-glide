@@ -1239,7 +1239,19 @@ class BaseClient(CoreCommands):
                 self._ffi, self._lib, result, lambda resp: resp.int_value
             )
 
-        scope_id = await loop.run_in_executor(None, _acquire_sync)
+        acquire = loop.run_in_executor(None, _acquire_sync)
+        try:
+            scope_id = await asyncio.shield(acquire)
+        except asyncio.CancelledError:
+            # The executor thread keeps waiting after the caller gives up. Give
+            # back a scope it is later granted, or its slot stays in use until
+            # the client closes.
+            def _release_late_scope(done: "asyncio.Future[int]") -> None:
+                if not done.cancelled() and done.exception() is None:
+                    self._lib.glide_scope_release(done.result(), client_id)
+
+            acquire.add_done_callback(_release_late_scope)
+            raise
 
         return AsyncIsolatedScope(
             scope_id,

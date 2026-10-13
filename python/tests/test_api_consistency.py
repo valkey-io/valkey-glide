@@ -28,6 +28,8 @@ EXCLUDED_TESTS = {
         "test_UDS_socket_connection_failure",
         "test_cancelled_request_handled_gracefully",
         "test_client_usable_after_cancelled_commands",
+        # Async-only: the sync client blocks in the FFI call and cannot abandon it
+        "test_abandoned_acquire_returns_its_slot",
         "test_connection_timeout_on_unavailable_host",
         "test_invalid_tls_config_fails_fast",
         "test_aclose_alias",

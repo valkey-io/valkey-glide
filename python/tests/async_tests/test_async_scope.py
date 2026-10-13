@@ -249,6 +249,35 @@ class TestAsyncIsolatedScopeAcquireFailsFast:
         await closer
         del held
 
+    async def test_abandoned_acquire_returns_its_slot(self, client):
+        # A caller that stops waiting must not keep the slot the core later
+        # grants it.
+        held = [await client.scoped_connection() for _ in range(_SCOPE_POOL_MAX_TOTAL)]
+        waiter = asyncio.create_task(client.scoped_connection(timeout=5.0))
+        await asyncio.sleep(0.2)
+        waiter.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await waiter
+
+        # The abandoned acquire is still waiting in the core; freeing the pool
+        # lets it win a slot, which the binding must then release on its behalf.
+        for scope in held:
+            await scope.close()
+
+        refilled = []
+        try:
+            for i in range(_SCOPE_POOL_MAX_TOTAL):
+                try:
+                    refilled.append(await client.scoped_connection(timeout=2.0))
+                except TimeoutError:
+                    pytest.fail(
+                        f"slot {i + 1} of {_SCOPE_POOL_MAX_TOTAL} unavailable "
+                        "after an abandoned acquire"
+                    )
+        finally:
+            for scope in refilled:
+                await scope.close()
+
     async def test_lazy_mtls_parent_fails_without_waiting(self):
         # A lazily connected client with TLS material never dials, so there is
         # nothing for a scoped connection to inherit; no amount of waiting fixes
