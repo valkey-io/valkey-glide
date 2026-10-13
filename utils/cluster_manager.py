@@ -470,6 +470,11 @@ def start_server(
         "no",
         "--save",
         "",
+        # Start a replica's full sync as soon as it asks. The default 5s delay
+        # batches replicas to save forks on large datasets; test clusters have
+        # one replica per shard and an empty dataset, so the delay is pure wait.
+        "--repl-diskless-sync-delay",
+        "0",
     ]
 
     cmd_args.extend(["--bind", *get_bind_addresses(host)])
