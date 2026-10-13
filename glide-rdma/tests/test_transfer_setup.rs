@@ -26,7 +26,7 @@ fn a_registered_buffer_produces_a_sendable_set_command() {
         .lend_for_set(b"chunk:abc", 0, payload.len())
         .expect("the window fits");
 
-    assert_eq!(command.name(), "BLOB.SET");
+    assert_eq!(command.name(), "BLOB.RDMA_SET");
     let arguments = command.arguments();
     assert_eq!(
         arguments.len(),
@@ -42,7 +42,7 @@ fn a_registered_buffer_produces_a_sendable_set_command() {
     assert_eq!(arguments[4], payload.len().to_string().into_bytes());
 
     let hello = glide_rdma::hello(fabric.local_address());
-    assert_eq!(hello.name(), "BLOB.HELLO");
+    assert_eq!(hello.name(), "BLOB.RDMA_HELLO");
     assert_eq!(
         hello.arguments(),
         [encode_hex(fabric.local_address()).into_bytes()]

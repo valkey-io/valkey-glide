@@ -2,8 +2,8 @@
 
 //! The `BLOB.*` command vocabulary, independent of any RESP client.
 //!
-//! The client's fabric address is sent once by `BLOB.HELLO` and the server
-//! remembers it for the connection. `BLOB.GET` and `BLOB.SET` commands carry
+//! The client's fabric address is sent once by `BLOB.RDMA_HELLO` and the server
+//! remembers it for the connection. `BLOB.RDMA_GET` and `BLOB.RDMA_SET` commands carry
 //! a key and the specific window of the client's registered memory where
 //! the RDMA transfer should be performed.
 
@@ -11,7 +11,7 @@ use crate::error::RdmaError;
 #[cfg(any(feature = "libfabric", test))]
 use crate::region_ref::RegionRef;
 
-/// What a `BLOB.GET` yielded.
+/// What a `BLOB.RDMA_GET` yielded.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ReadReceipt {
     /// Byte length transferred.
@@ -21,7 +21,7 @@ pub struct ReadReceipt {
 }
 
 impl ReadReceipt {
-    /// Convert the two integers of a `BLOB.GET` reply, `[length, checksum]`,
+    /// Convert the two integers of a `BLOB.RDMA_GET` reply, `[length, checksum]`,
     /// into a ReadReceipt.
     pub fn from_wire(bytes_written: i64, checksum: i64) -> Result<Self, RdmaError> {
         let checksum = u32::try_from(checksum)
@@ -63,7 +63,7 @@ impl ReadReceipt {
     }
 }
 
-/// The server's reply to a `BLOB.GET` or `BLOB.SET`.
+/// The server's reply to a `BLOB.RDMA_GET` or `BLOB.RDMA_SET`.
 ///
 /// The protocol requires the server to reply only once its transfer has completed
 /// with delivery guaranteed (`FI_DELIVERY_COMPLETE`), so a reply means it is done
@@ -71,11 +71,11 @@ impl ReadReceipt {
 /// Passing a reply to `LentBuffer::reclaim` is how a caller gets its buffer back.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TransferReply {
-    /// `BLOB.GET` wrote the stored object into the window.
+    /// `BLOB.RDMA_GET` wrote the stored object into the window.
     Read(ReadReceipt),
-    /// `BLOB.GET` found no such key and wrote nothing.
+    /// `BLOB.RDMA_GET` found no such key and wrote nothing.
     Missing,
-    /// `BLOB.SET` read the window and stored it.
+    /// `BLOB.RDMA_SET` read the window and stored it.
     Stored,
     /// The server replied with an error.
     Failed,
@@ -101,13 +101,13 @@ impl RdmaCommand {
 }
 
 /// The command that opens a session.
-pub(crate) const HELLO: &str = "BLOB.HELLO";
+pub(crate) const HELLO: &str = "BLOB.RDMA_HELLO";
 
 /// The command that reads a stored object into registered memory.
-pub(crate) const GET: &str = "BLOB.GET";
+pub(crate) const GET: &str = "BLOB.RDMA_GET";
 
 /// The command that stores an object read out of registered memory.
-pub(crate) const SET: &str = "BLOB.SET";
+pub(crate) const SET: &str = "BLOB.RDMA_SET";
 
 /// Whether a given command needs to run on a connection that already has
 /// an open RDMA session.
@@ -117,7 +117,7 @@ pub fn needs_session(name: &[u8]) -> bool {
         .any(|transfer| name.eq_ignore_ascii_case(transfer.as_bytes()))
 }
 
-/// `BLOB.HELLO <client-address>`
+/// `BLOB.RDMA_HELLO <client-address>`
 ///
 /// Opens the session. The server inserts `client_address` into the address
 /// vector of every fabric device it serves from and replies with its own
@@ -129,7 +129,7 @@ pub fn hello(client_address: &[u8]) -> RdmaCommand {
     }
 }
 
-/// `BLOB.SET <key> <length> <rkey> <remote-address> <length>`
+/// `BLOB.RDMA_SET <key> <length> <rkey> <remote-address> <length>`
 ///
 /// The server reads `length` bytes out of the named window and stores them. The
 /// first `length` is the object's size, the second the window's; with one window
@@ -149,7 +149,7 @@ pub(crate) fn set(key: &[u8], length: usize, region_ref: &RegionRef) -> RdmaComm
     }
 }
 
-/// `BLOB.GET <key> <rkey> <remote-address> <length>`
+/// `BLOB.RDMA_GET <key> <rkey> <remote-address> <length>`
 ///
 /// The server writes the stored object into the named window, or replies with an
 /// error without writing if the object is longer than `length`.
@@ -198,21 +198,21 @@ mod tests {
     #[test]
     fn hello_carries_this_client_address_as_hex() {
         let command = hello(&[0xde, 0xad, 0xbe, 0xef]);
-        assert_eq!(command.name(), "BLOB.HELLO");
+        assert_eq!(command.name(), "BLOB.RDMA_HELLO");
         assert_eq!(arguments(&command), ["deadbeef"]);
     }
 
     #[test]
     fn set_lays_out_arguments_in_wire_order() {
         let command = set(b"key", 64, &region_ref());
-        assert_eq!(command.name(), "BLOB.SET");
+        assert_eq!(command.name(), "BLOB.RDMA_SET");
         assert_eq!(arguments(&command), ["key", "64", "7", "4096", "64"]);
     }
 
     #[test]
     fn get_lays_out_arguments_in_wire_order() {
         let command = get(b"key", 256, &region_ref());
-        assert_eq!(command.name(), "BLOB.GET");
+        assert_eq!(command.name(), "BLOB.RDMA_GET");
         assert_eq!(arguments(&command), ["key", "7", "4096", "256"]);
     }
 
@@ -300,15 +300,18 @@ mod tests {
 
     #[test]
     fn only_the_transfers_need_a_session() {
-        assert!(needs_session(b"BLOB.GET"));
-        assert!(needs_session(b"BLOB.SET"));
+        assert!(needs_session(b"BLOB.RDMA_GET"));
+        assert!(needs_session(b"BLOB.RDMA_SET"));
         // Lowercase because a caller may have typed it, and the server does not care.
-        assert!(needs_session(b"blob.set"));
+        assert!(needs_session(b"blob.rdma_set"));
 
         // The one that opens a session cannot be gated on having one.
-        assert!(!needs_session(b"BLOB.HELLO"));
+        assert!(!needs_session(b"BLOB.RDMA_HELLO"));
         assert!(!needs_session(b"GET"));
         assert!(!needs_session(b"SET"));
+        // The TCP variants carry the value over RESP, so they need no session.
+        assert!(!needs_session(b"BLOB.TCP_GET"));
+        assert!(!needs_session(b"BLOB.TCP_SET"));
         assert!(!needs_session(b""));
     }
 }

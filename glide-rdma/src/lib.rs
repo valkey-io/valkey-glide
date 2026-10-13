@@ -2,8 +2,8 @@
 
 //! RDMA support for Valkey GLIDE.
 //!
-//! An RDMA session is opened by the client sending a `BLOB.HELLO` command with
-//! its fabric endpoint. `BLOB.GET` and `BLOB.SET` use the RESP connection to
+//! An RDMA session is opened by the client sending a `BLOB.RDMA_HELLO` command with
+//! its fabric endpoint. `BLOB.RDMA_GET` and `BLOB.RDMA_SET` use the RESP connection to
 //! coordinate with the server, but the server performs the data transfer itself
 //! against the client host memory that it registered for RDMA. The RESP reply
 //! carries only a byte count and a checksum.
