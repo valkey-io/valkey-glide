@@ -37,3 +37,23 @@ def test_empty_list_reply_returns_none():
 
 def test_dict_reply_missing_key_returns_none():
     assert _parse_emulate_release_level({"some.other.key": "value"}) is None
+
+
+def test_scalar_reply_returns_none():
+    """QA R4-L-1: a scalar reply (neither dict nor list/tuple) must return
+    None rather than raise, so emulate_release_level can fail loudly with
+    a clear message instead of a bare TypeError."""
+    assert _parse_emulate_release_level(b"1.3.0") is None
+    assert _parse_emulate_release_level("1.3.0") is None
+    assert _parse_emulate_release_level(None) is None
+
+
+def test_odd_length_flat_list_drops_dangling_key():
+    """An odd-length flat list (a malformed reply) silently drops the
+    trailing unpaired element via zip rather than raising; it still
+    returns None if search.emulate-release was the dropped element."""
+    assert _parse_emulate_release_level(["search.emulate-release"]) is None
+
+
+def test_tuple_reply_is_accepted_like_a_list():
+    assert _parse_emulate_release_level(("search.emulate-release", "1.3.0")) == "1.3.0"

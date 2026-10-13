@@ -37,7 +37,7 @@ class FtAggregateLimit(FtAggregateClause):
     `search.emulate-release` level, SORTBY still truncates to its own default (10 rows) or
     explicit MAX regardless of a LIMIT past that point. "Adjacent" means immediately before or
     after SORTBY in the clause list; a stage such as GROUPBY in between blocks the widening on
-    both branches. Needs `search.emulate-release` >= 1.3.0 for the widened behavior -- see
+    both branches. Requires `search.emulate-release` >= 1.3.0 for the widened behavior -- see
     upstream COMPATIBILITY.md's "Sunsetting of Incompatible Behavior" section.
     """
 
@@ -342,7 +342,7 @@ class LoadField:
     certainly nonexistent field named "AS" and a field named the alias string, which the engine
     then rejects as "Index field does not exist". Use the `requires_search_1_3` marker (or
     equivalent capability check) around any code path that relies on the alias actually renaming
-    the column. Needs `search.emulate-release` >= 1.3.0 -- see upstream COMPATIBILITY.md's
+    the column. Requires `search.emulate-release` >= 1.3.0 -- see upstream COMPATIBILITY.md's
     "Sunsetting of Incompatible Behavior" section.
     """
 
@@ -355,7 +355,7 @@ class LoadField:
         Args:
             field_identifier (TEncodable): The identifier for the field to load.
             alias (Optional[TEncodable]): The alias to emit the field's column under. Requires
-                valkey-search 1.3.0 (``search.emulate-release >= 1.3.0``) to take effect.
+                `search.emulate-release` >= 1.3.0 to take effect.
         """
         self.field_identifier = field_identifier
         self.alias = alias

@@ -291,7 +291,7 @@ def info(
 
     Note:
         `index_definition`'s `score_field` key (reporting `FtCreateOptions(score_field=...)`, see
-        ``ft_create_options.py``) only appears when `search.emulate-release` is at least 1.3.0
+        ``ft_create_options.py``) requires `search.emulate-release` >= 1.3.0 to appear at all
         (``ft_info_score_field`` compatibility flag) -- below that level the pair is omitted entirely,
         even if the index was created with `score_field` set. See upstream COMPATIBILITY.md's
         "Sunsetting of Incompatible Behavior" section.

@@ -68,6 +68,7 @@ from glide_shared.exceptions import RequestError
 from glide_shared.routes import ByAddressRoute
 
 from tests.async_tests.conftest import create_client
+from tests.conftest import _parse_emulate_release_level
 from tests.utils.ft_test_helpers import (
     HYBRID_DOC_TEXT_WINNER,
     HYBRID_DOC_VECTOR_WINNER,
@@ -956,18 +957,17 @@ class TestFt:
         # Pre-1.3 modules (e.g. 1.2.1, confirmed via live CONFIG GET during
         # Group 6 evidence collection) don't define this config at all --
         # CONFIG GET returns an empty reply, not the key with an empty/
-        # default value -- so a bare dict lookup here would raise a bare
-        # KeyError instead of a clear "pre-1.3" signal. Default to "1.0.0"
-        # (the module's own documented default) when the key is absent.
-        emulate_release_config = cast(
-            Mapping[bytes, bytes],
-            await glide_client.custom_command(
-                ["CONFIG", "GET", "search.emulate-release"]
-            ),
+        # default value. _parse_emulate_release_level returns None for that
+        # (and for any other shape it can't decode), so default to "1.0.0"
+        # (the module's own documented default) in that case -- this test
+        # isn't gated by search_1_3_capability, so it must behave correctly
+        # on a pre-1.3 module too, unlike emulate_release_level (QA R4-L-2:
+        # one decoder shared with conftest.py's fixture rather than a
+        # second inline reader with its own rule).
+        emulate_release_raw = await glide_client.custom_command(
+            ["CONFIG", "GET", "search.emulate-release"]
         )
-        emulate_release = emulate_release_config.get(
-            b"search.emulate-release", b"1.0.0"
-        ).decode()
+        emulate_release = _parse_emulate_release_level(emulate_release_raw) or "1.0.0"
         condition_column = json_groupby_column(
             b"$.condition", b"condition", emulate_release
         )
@@ -2312,7 +2312,7 @@ class TestFt:
         await self._poll_until_indexed(glide_client, index, 1)
 
         if check_version_lt(emulate_release_level, "1.3.0"):
-            with pytest.raises(RequestError, match="AS"):
+            with pytest.raises(RequestError, match=r"Index: field `AS` does not exist"):
                 await ft.aggregate(
                     glide_client,
                     index,

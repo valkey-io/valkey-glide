@@ -67,6 +67,7 @@ from glide_sync import glide_json as GlideJson
 from glide_sync.glide_client import GlideClient, GlideClusterClient
 from glide_sync.glide_client import TGlideClient as TSyncGlideClient
 
+from tests.conftest import _parse_emulate_release_level
 from tests.sync_tests.conftest import create_sync_client
 from tests.utils.ft_test_helpers import (
     HYBRID_DOC_TEXT_WINNER,
@@ -1014,18 +1015,17 @@ class TestSyncFt:
         # Pre-1.3 modules (e.g. 1.2.1, confirmed via live CONFIG GET during
         # Group 6 evidence collection) don't define this config at all --
         # CONFIG GET returns an empty reply, not the key with an empty/
-        # default value -- so a bare dict lookup here would raise a bare
-        # KeyError instead of a clear "pre-1.3" signal. Default to "1.0.0"
-        # (the module's own documented default) when the key is absent.
-        emulate_release_config = cast(
-            Mapping[bytes, bytes],
-            glide_sync_client.custom_command(
-                ["CONFIG", "GET", "search.emulate-release"]
-            ),
+        # default value. _parse_emulate_release_level returns None for that
+        # (and for any other shape it can't decode), so default to "1.0.0"
+        # (the module's own documented default) in that case -- this test
+        # isn't gated by search_1_3_capability, so it must behave correctly
+        # on a pre-1.3 module too, unlike emulate_release_level (QA R4-L-2:
+        # one decoder shared with conftest.py's fixture rather than a
+        # second inline reader with its own rule).
+        emulate_release_raw = glide_sync_client.custom_command(
+            ["CONFIG", "GET", "search.emulate-release"]
         )
-        emulate_release = emulate_release_config.get(
-            b"search.emulate-release", b"1.0.0"
-        ).decode()
+        emulate_release = _parse_emulate_release_level(emulate_release_raw) or "1.0.0"
         condition_column = json_groupby_column(
             b"$.condition", b"condition", emulate_release
         )
@@ -2378,7 +2378,7 @@ class TestSyncFt:
         self._poll_until_indexed(glide_sync_client, index, 1)
 
         if check_version_lt(emulate_release_level, "1.3.0"):
-            with pytest.raises(RequestError, match="AS"):
+            with pytest.raises(RequestError, match=r"Index: field `AS` does not exist"):
                 ft.aggregate(
                     glide_sync_client,
                     index,

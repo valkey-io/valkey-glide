@@ -462,18 +462,24 @@ def _parse_emulate_release_level(config_get_raw: object) -> Optional[str]:
     """Pull the value out of a ``CONFIG GET search.emulate-release`` reply.
 
     GLIDE's own ``CONFIG GET`` returns a ``dict`` (confirmed against a live
-    1.3.0-rc1 module); a flat ``[key, value]`` list is also accepted for
-    safety, in case a future client surface or a different reply mode ever
-    returns one. Returns ``None`` -- rather than raising -- when the key is
-    absent or the reply is empty: that happens on a pre-1.3 module, where
-    ``search.emulate-release`` doesn't exist at all, which is a legitimate
-    "unknown" state for the caller to turn into a skip rather than an error.
+    1.3.0-rc1 module); a flat ``[key, value]`` list or ``tuple`` is also
+    accepted for safety, in case a future client surface or a different
+    reply mode ever returns one. Returns ``None`` -- rather than raising --
+    when the key is absent, the reply is empty, or the reply is some other
+    shape entirely (a scalar, a nested per-node dict from a non-GLIDE
+    caller, an odd-length flat list): the caller is responsible for
+    deciding whether a ``None`` here means "pre-1.3" or "unparseable
+    reply from a 1.3-capable module" (QA R4-L-1) -- this function only
+    reports "no value found", it does not have enough context to tell
+    those apart.
     """
     if isinstance(config_get_raw, dict):
         pairs = config_get_raw
-    else:
+    elif isinstance(config_get_raw, (list, tuple)):
         flat = cast(List, config_get_raw)
         pairs = dict(zip(flat[0::2], flat[1::2]))
+    else:
+        return None
     for key, value in pairs.items():
         decoded_key = key.decode() if isinstance(key, bytes) else key
         if decoded_key == "search.emulate-release":
@@ -504,14 +510,34 @@ def emulate_release_level(request, search_1_3_capability: bool) -> str:
     ``emulate_release_level`` gets the capability probe (and, through the
     ``requires_search_1_3`` marker, a skip) resolved first. On a pre-1.3
     module ``search.emulate-release`` doesn't exist, so this skips with a
-    reason instead of raising -- a belt-and-suspenders backstop alongside
-    the ordering fix, for any test that ends up requesting this fixture
-    without the marker.
+    reason instead of raising.
+
+    QA R4-L-1: once ``search_1_3_capability`` is True, a ``None`` from
+    ``_parse_emulate_release_level`` can no longer mean "pre-1.3" -- it
+    means the harness got a reply shape it couldn't decode from a module
+    that IS 1.3-capable (a nested per-node dict, an odd-length flat list,
+    a scalar). Skipping in that state would be a false green: every gated
+    test would skip as "pre-1.3" against a module that actually is 1.3.
+    This fails loudly instead, per the runbook's Trap 3 rule that a
+    harness misread must never present as a skip.
 
     Connects the same way as `search_1_3_capability` (cluster mode if
     cluster endpoints are available, else standalone) for the same reason:
     a standalone-only run has no `pytest.valkey_cluster` to connect
     through.
+
+    QA R4-L-4: this is session-scoped and reads the level from ONE
+    deployment (cluster, when available) -- the resulting value is then
+    reused for every test regardless of that test's own `cluster_mode`
+    parametrization, including `cluster_mode=False` tests. This is only
+    correct when every deployment in the session was started with the
+    same `search.emulate-release` (true of CI and
+    `utils/run-modules-ci-locally.sh` today, which set one `EMULATE_RELEASE`
+    for both the standalone and cluster containers). A session that mixed
+    levels across deployments would send the standalone tests down the
+    wrong branch with a misleading diff. `search_1_3_capability` carries
+    the same assumption, but that one is sound regardless, since module
+    presence is a binary property of the image, not a per-server config.
     """
     if not search_1_3_capability:
         pytest.skip(
@@ -527,10 +553,11 @@ def emulate_release_level(request, search_1_3_capability: bool) -> str:
         raw = client.custom_command(["CONFIG", "GET", "search.emulate-release"])
         level = _parse_emulate_release_level(raw)
         if level is None:
-            pytest.skip(
-                reason="search module is present but pre-1.3; "
-                f"CONFIG GET search.emulate-release returned no value "
-                f"(raw reply: {raw!r})."
+            raise RuntimeError(
+                "search module reports 1.3-capable (search_1_3_capability "
+                "is True), but CONFIG GET search.emulate-release returned "
+                f"an unparseable reply: {raw!r}. This is a harness bug, "
+                "not a legitimate pre-1.3 state."
             )
         return level
     finally:
