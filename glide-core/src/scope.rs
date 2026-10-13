@@ -3089,12 +3089,21 @@ mod tests {
     /// Seat one cluster-target connection against the mock endpoint and borrow it
     /// with `acquisition_slot`, returning the live scope id and its pool. The
     /// caller drives commands through `execute_scope_command` and cleans up.
+    ///
+    /// `client_id` must be unique per call: it keys the process-global
+    /// `get_client_scope_pools()` / client registry, so two borrows sharing an id
+    /// (e.g. both seeded from the same key) stomp each other's pool/parent entries
+    /// under concurrent test execution.
     async fn borrow_cluster_scope(
         port: u16,
         acquisition_slot: u16,
     ) -> (u64, Arc<TokioMutex<ScopePool>>, u64) {
+        // Arbitrary base; the counter guarantees uniqueness, the value has no meaning.
+        const FIRST_TEST_CLIENT_ID: u64 = 70_570_000;
+        static NEXT_TEST_CLIENT_ID: std::sync::atomic::AtomicU64 =
+            std::sync::atomic::AtomicU64::new(FIRST_TEST_CLIENT_ID);
         let request_bytes = request_bytes_with_mode("", port, true);
-        let client_id = 70_570_000_u64 + u64::from(acquisition_slot);
+        let client_id = NEXT_TEST_CLIENT_ID.fetch_add(1, Ordering::Relaxed);
         let pool = Arc::new(TokioMutex::new(ScopePool::new(
             ScopePoolConfig::default(),
             request_bytes.clone(),
