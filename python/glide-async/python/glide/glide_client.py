@@ -1082,6 +1082,13 @@ class BaseClient(CoreCommands):
                 try:
                     prior_loop.add_reader(_async_pipe_read_fd, _on_async_pipe_readable)
                 except BaseException:
+                    # add_reader may install before raising. Never publish an
+                    # owner unless restoration completed, and remove any reader
+                    # that the failed attempt may have left armed.
+                    try:
+                        prior_loop.remove_reader(_async_pipe_read_fd)
+                    except BaseException:
+                        pass
                     return False
                 return True
 
