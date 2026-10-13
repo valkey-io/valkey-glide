@@ -2235,7 +2235,7 @@ fn ft_aggregate_option_tail_contains_flag(cmd: &Cmd, start: usize, flag: &[u8]) 
     false
 }
 
-/// Walks FT.HYBRID's SEARCH/VSIM/[COMBINE] prefix (`src/commands/
+/// Walks FT.HYBRID's SEARCH/VSIM/\[COMBINE\] prefix (`src/commands/
 /// ft_hybrid_parser.cc`), returning the index of the first token belonging
 /// to the shared aggregate-suffix tail (LOAD/APPLY/FILTER/GROUPBY/SORTBY/
 /// LIMIT/PARAMS/TIMEOUT/DIALECT/WITHCURSOR/LOCALONLY), or `cmd.args_iter()
@@ -2351,7 +2351,7 @@ fn ft_hybrid_prefix_tail_start(cmd: &Cmd) -> usize {
 }
 
 /// Mirrors [`ft_aggregate_option_tail_contains_flag`] for FT.HYBRID: walks
-/// the SEARCH/VSIM/[COMBINE] prefix first via
+/// the SEARCH/VSIM/\[COMBINE\] prefix first via
 /// [`ft_hybrid_prefix_tail_start`], then hands off to the shared
 /// aggregate-suffix scanner for the remainder, since FT.HYBRID forwards
 /// that whole tail (LOAD/APPLY/FILTER/GROUPBY/SORTBY/LIMIT/PARAMS/TIMEOUT/

@@ -322,6 +322,13 @@ async def info(
     Returns:
         FtInfoResponse: Nested maps with info about the index. See example for more details.
 
+    Note:
+        `index_definition`'s `score_field` key (reporting `FtCreateOptions(score_field=...)`, see
+        ``ft_create_options.py``) only appears when `search.emulate-release` is at least 1.3.0
+        (``ft_info_score_field`` compatibility flag) -- below that level the pair is omitted entirely,
+        even if the index was created with `score_field` set. See upstream COMPATIBILITY.md's
+        "Sunsetting of Incompatible Behavior" section.
+
     Examples:
         An index with name 'myIndex', 1 text field and 1 vector field is already created for gettting the output of this
         example.
