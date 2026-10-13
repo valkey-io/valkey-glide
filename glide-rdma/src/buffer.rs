@@ -138,8 +138,8 @@ impl RdmaBuffer {
     ///
     /// # Errors
     ///
-    /// Hands the buffer back, unlent, when the window runs past the end of the buffer
-    /// or the buffer has been revoked.
+    /// Hands the buffer back, unlent, when the window runs past the end of the buffer,
+    /// the buffer has been revoked, or a revoke of it failed.
     pub fn lend_for_get(
         self,
         key: &[u8],
@@ -156,8 +156,8 @@ impl RdmaBuffer {
     ///
     /// # Errors
     ///
-    /// Hands the buffer back, unlent, when the window runs past the end of the buffer
-    /// or the buffer has been revoked.
+    /// Hands the buffer back, unlent, when the window runs past the end of the buffer,
+    /// the buffer has been revoked, or a revoke of it failed.
     pub fn lend_for_set(
         self,
         key: &[u8],
@@ -173,8 +173,8 @@ impl RdmaBuffer {
         length: usize,
         build: impl FnOnce(&RegionRef) -> RdmaCommand,
     ) -> Result<(RdmaCommand, LentBuffer), (Self, RdmaError)> {
-        if self.is_revoked() {
-            return Err((self, RdmaError::Revoked));
+        if let Err(error) = self.registration.check_open() {
+            return Err((self, error));
         }
         let Some(window) = self.window(at, length) else {
             let error = RdmaError::Configuration(format!(
@@ -595,6 +595,30 @@ mod tests {
         assert_eq!(error, RdmaError::Revoked);
         let (_, error) = buffer.lend_for_set(b"key", 0, 64).unwrap_err();
         assert_eq!(error, RdmaError::Revoked);
+    }
+
+    /// A failed close still frees the handle on efa, so the key could name some later
+    /// region. The buffer is not revoked, but it must not be lent either.
+    #[test]
+    fn a_buffer_whose_revoke_failed_is_not_lent() {
+        let buffer = fabric().register(vec![0u8; 64]).unwrap();
+        fail_next_closes(1);
+        let failed = buffer.revoke().expect_err("the close fails");
+        assert!(
+            !buffer.is_revoked(),
+            "the server may still reach the memory"
+        );
+
+        let closes = close_calls();
+        let (buffer, error) = buffer.lend_for_get(b"key", 0, 64).unwrap_err();
+        assert_eq!(error, failed);
+        let (_, error) = buffer.lend_for_set(b"key", 0, 64).unwrap_err();
+        assert_eq!(error, failed);
+        assert_eq!(
+            close_calls(),
+            closes,
+            "refusing to lend does not try the close again"
+        );
     }
 
     #[test]

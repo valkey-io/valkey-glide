@@ -454,6 +454,26 @@ impl Registration {
         self.state.revoke()
     }
 
+    /// Whether a peer may still be handed this region's key.
+    ///
+    /// # Errors
+    ///
+    /// [`RdmaError::Revoked`] once the region is closed. The `fi_close` error once
+    /// a close has failed: efa has freed the handle by then, so the key may name a
+    /// region registered later.
+    pub(crate) fn check_open(&self) -> Result<(), RdmaError> {
+        let region = self
+            .state
+            .region
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+        match &*region {
+            RegionState::Open(_) => Ok(()),
+            RegionState::Closed => Err(RdmaError::Revoked),
+            RegionState::Abandoned { code, .. } => check(*code, "fi_close"),
+        }
+    }
+
     /// Whether the region has been closed.
     pub(crate) fn is_revoked(&self) -> bool {
         *self.state.revoked.borrow()
