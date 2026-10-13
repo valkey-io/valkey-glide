@@ -1092,6 +1092,385 @@ def test_async_pipe_loop_transition_failure_preserves_native_writer(monkeypatch)
     os.close(original_fds[1])
 
 
+def test_async_pipe_running_owner_dispatches_new_loop_clients(monkeypatch):
+    import glide.glide_client as async_client_module
+
+    _reset_pipe_test_state(monkeypatch, async_client_module)
+    fake_lib = SimpleNamespace(
+        init_async_pipe=MagicMock(), reinit_async_pipe=MagicMock()
+    )
+    stale_drain = MagicMock()
+    monkeypatch.setattr(async_client_module, "_drain_stale_pipe_frames", stale_drain)
+    clients = []
+    owner_ready = threading.Event()
+    owner_loop = asyncio.new_event_loop()
+    owner_holder = {}
+
+    def resolve_success(client, request_id, unused_response, unused_arena):
+        future = client._pending_futures.pop(request_id)
+        async_client_module._resolve_future(future, request_id, client)
+
+    monkeypatch.setattr(async_client_module, "_handle_pipe_success", resolve_success)
+
+    def owner_thread_main():
+        asyncio.set_event_loop(owner_loop)
+        owner = _new_pipe_setup_client(
+            async_client_module, fake_lib, 7061, loop=owner_loop
+        )
+        owner._pending_futures = {}
+        clients.append(owner)
+        owner_holder["client"] = owner
+        owner._setup_pipe()
+        owner_ready.set()
+        owner_loop.run_forever()
+
+    owner_thread = threading.Thread(target=owner_thread_main)
+    owner_thread.start()
+    assert owner_ready.wait(timeout=2)
+    owner = owner_holder["client"]
+
+    def owner_response(request_id):
+        registered = threading.Event()
+
+        async def wait_for_response():
+            future = owner_loop.create_future()
+            owner._pending_futures[request_id] = future
+            registered.set()
+            return await future
+
+        result = asyncio.run_coroutine_threadsafe(wait_for_response(), owner_loop)
+        assert registered.wait(timeout=2)
+        os.write(
+            async_client_module._async_pipe_write_fd,
+            async_client_module._FRAME_STRUCT.pack(7061, request_id, 1, 0),
+        )
+        return result.result(timeout=2)
+
+    try:
+        assert owner_response(1) == 1
+
+        async def use_second_loop():
+            second_loop = asyncio.get_running_loop()
+            second = _new_pipe_setup_client(
+                async_client_module, fake_lib, 7062, loop=second_loop
+            )
+            second._pending_futures = {}
+            clients.append(second)
+            second._setup_pipe()
+            assert async_client_module._async_pipe_loop is owner_loop
+
+            owner_registered = threading.Event()
+
+            async def wait_for_owner_response():
+                future = owner_loop.create_future()
+                owner._pending_futures[2] = future
+                owner_registered.set()
+                return await future
+
+            owner_result = asyncio.run_coroutine_threadsafe(
+                wait_for_owner_response(), owner_loop
+            )
+            assert owner_registered.wait(timeout=2)
+            second_future = second_loop.create_future()
+            second._pending_futures[3] = second_future
+            os.write(
+                async_client_module._async_pipe_write_fd,
+                b"".join(
+                    (
+                        async_client_module._FRAME_STRUCT.pack(7061, 2, 1, 0),
+                        async_client_module._FRAME_STRUCT.pack(7062, 3, 1, 0),
+                    )
+                ),
+            )
+            with anyio.fail_after(2):
+                assert await second_future == 3
+            assert owner_result.result(timeout=2) == 2
+            async_client_module._client_registry.pop(7062)
+
+        asyncio.run(use_second_loop())
+        assert async_client_module._async_pipe_loop is owner_loop
+        assert owner_response(4) == 4
+        fake_lib.init_async_pipe.assert_called_once()
+        fake_lib.reinit_async_pipe.assert_not_called()
+        stale_drain.assert_not_called()
+    finally:
+        owner_loop.call_soon_threadsafe(owner_loop.stop)
+        owner_thread.join(timeout=2)
+        assert not owner_thread.is_alive()
+        owner_loop.remove_reader(async_client_module._async_pipe_read_fd)
+        owner_loop.close()
+        os.close(async_client_module._async_pipe_read_fd)
+        os.close(async_client_module._async_pipe_write_fd)
+
+
+def test_async_pipe_stopped_open_loop_takeover_reuses_transport(monkeypatch):
+    import glide.glide_client as async_client_module
+
+    _reset_pipe_test_state(monkeypatch, async_client_module)
+    fake_lib = SimpleNamespace(
+        init_async_pipe=MagicMock(), reinit_async_pipe=MagicMock()
+    )
+    stale_drain = MagicMock()
+    monkeypatch.setattr(async_client_module, "_drain_stale_pipe_frames", stale_drain)
+    clients = []
+    first_loop = asyncio.new_event_loop()
+    first = _new_pipe_setup_client(async_client_module, fake_lib, 7071, loop=first_loop)
+    clients.append(first)
+    first._setup_pipe()
+    original_fds = (
+        async_client_module._async_pipe_read_fd,
+        async_client_module._async_pipe_write_fd,
+    )
+
+    async def takeover():
+        second_loop = asyncio.get_running_loop()
+        second = _new_pipe_setup_client(
+            async_client_module, fake_lib, 7072, loop=second_loop
+        )
+        clients.append(second)
+        second._setup_pipe()
+        assert async_client_module._async_pipe_loop is second_loop
+        return (
+            async_client_module._async_pipe_read_fd,
+            async_client_module._async_pipe_write_fd,
+        )
+
+    try:
+        assert asyncio.run(takeover()) == original_fds
+        fake_lib.init_async_pipe.assert_called_once_with(original_fds[1])
+        fake_lib.reinit_async_pipe.assert_not_called()
+        stale_drain.assert_not_called()
+    finally:
+        first_loop.close()
+        os.close(original_fds[0])
+        os.close(original_fds[1])
+
+
+def test_async_pipe_closed_loop_takeover_preserves_remainder(monkeypatch):
+    import glide.glide_client as async_client_module
+
+    _reset_pipe_test_state(monkeypatch, async_client_module)
+    fake_lib = SimpleNamespace(
+        init_async_pipe=MagicMock(), reinit_async_pipe=MagicMock()
+    )
+    stale_drain = MagicMock()
+    monkeypatch.setattr(async_client_module, "_drain_stale_pipe_frames", stale_drain)
+    clients = []
+    first_loop = asyncio.new_event_loop()
+    first = _new_pipe_setup_client(async_client_module, fake_lib, 7081, loop=first_loop)
+    clients.append(first)
+    first._setup_pipe()
+    original_fds = (
+        async_client_module._async_pipe_read_fd,
+        async_client_module._async_pipe_write_fd,
+    )
+    first_loop.close()
+    remainder = b"partial-live-header"
+    async_client_module._pipe_remainder = remainder
+
+    async def takeover():
+        second_loop = asyncio.get_running_loop()
+        second = _new_pipe_setup_client(
+            async_client_module, fake_lib, 7082, loop=second_loop
+        )
+        clients.append(second)
+        second._setup_pipe()
+        assert async_client_module._async_pipe_loop is second_loop
+        assert async_client_module._pipe_remainder == remainder
+
+    try:
+        asyncio.run(takeover())
+        assert (
+            async_client_module._async_pipe_read_fd,
+            async_client_module._async_pipe_write_fd,
+        ) == original_fds
+        fake_lib.init_async_pipe.assert_called_once_with(original_fds[1])
+        fake_lib.reinit_async_pipe.assert_not_called()
+        stale_drain.assert_not_called()
+    finally:
+        os.close(original_fds[0])
+        os.close(original_fds[1])
+
+
+@pytest.mark.parametrize("remainder_size", [9, 35])
+def test_async_pipe_takeover_dispatches_remainder_and_queued_frames_once(
+    monkeypatch, remainder_size
+):
+    import glide.glide_client as async_client_module
+
+    _reset_pipe_test_state(monkeypatch, async_client_module)
+    fake_lib = SimpleNamespace(
+        init_async_pipe=MagicMock(), reinit_async_pipe=MagicMock()
+    )
+    clients = []
+    old_loop = asyncio.new_event_loop()
+    old_client = _new_pipe_setup_client(
+        async_client_module, fake_lib, 7091, loop=old_loop
+    )
+    clients.append(old_client)
+    old_client._setup_pipe()
+
+    events = []
+    orphaned = []
+
+    def record_success(client, request_id, response_ptr, arena):
+        events.append(("success", client._pipe_client_id, request_id))
+
+    def record_error(client, request_id, arena):
+        events.append(("error", client._pipe_client_id, request_id))
+
+    def record_pubsub(kind):
+        def handler(client, *unused_payload):
+            acquired = async_client_module._async_pipe_lock.acquire(timeout=1)
+            assert acquired
+            async_client_module._async_pipe_lock.release()
+            events.append((kind, client._pipe_client_id))
+
+        return handler
+
+    monkeypatch.setattr(async_client_module, "_handle_pipe_success", record_success)
+    monkeypatch.setattr(async_client_module, "_handle_pipe_error", record_error)
+    monkeypatch.setattr(
+        async_client_module, "_handle_inline_pubsub", record_pubsub("inline")
+    )
+    monkeypatch.setattr(
+        async_client_module, "_handle_pointer_pubsub", record_pubsub("pointer")
+    )
+    monkeypatch.setattr(
+        async_client_module,
+        "_free_orphaned_frame",
+        lambda *frame: orphaned.append(frame),
+    )
+    stale_drain = MagicMock()
+    monkeypatch.setattr(async_client_module, "_drain_stale_pipe_frames", stale_drain)
+
+    inline_payload = b"inline-payload"
+    inline_frame = (
+        async_client_module._FRAME_STRUCT.pack(
+            7092,
+            async_client_module._PUBSUB_SENTINEL,
+            len(inline_payload),
+            0,
+        )
+        + inline_payload
+    )
+    frames = b"".join(
+        (
+            inline_frame,
+            async_client_module._FRAME_STRUCT.pack(7091, 1, 0x1000, 0x2000),
+            async_client_module._FRAME_STRUCT.pack(7092, 2, 0, 3 << 56),
+            async_client_module._FRAME_STRUCT.pack(9999, 3, 0x3000, 0x4000),
+            async_client_module._FRAME_STRUCT.pack(
+                7091,
+                async_client_module._PUBSUB_SENTINEL,
+                0x5000,
+                (1 << 63) | 17,
+            ),
+        )
+    )
+    async_client_module._pipe_remainder = frames[:remainder_size]
+    os.write(async_client_module._async_pipe_write_fd, frames[remainder_size:])
+
+    async def takeover_and_wait():
+        new_loop = asyncio.get_running_loop()
+        new_client = _new_pipe_setup_client(
+            async_client_module, fake_lib, 7092, loop=new_loop
+        )
+        clients.append(new_client)
+        new_client._setup_pipe()
+        deadline = new_loop.time() + 2
+        while len(events) < 4 and new_loop.time() < deadline:
+            await asyncio.sleep(0)
+        assert async_client_module._async_pipe_loop is new_loop
+
+    try:
+        asyncio.run(takeover_and_wait())
+        assert events == [
+            ("inline", 7092),
+            ("success", 7091, 1),
+            ("error", 7092, 2),
+            ("pointer", 7091),
+        ]
+        assert orphaned == [(3, 0x3000, 0x4000)]
+        assert async_client_module._pipe_remainder == b""
+        assert not async_client_module._pipe_remainder_is_stale
+        stale_drain.assert_not_called()
+    finally:
+        old_loop.close()
+        os.close(async_client_module._async_pipe_read_fd)
+        os.close(async_client_module._async_pipe_write_fd)
+
+
+def test_async_pipe_takeover_registration_failure_restores_stopped_owner(monkeypatch):
+    import glide.glide_client as async_client_module
+
+    _reset_pipe_test_state(monkeypatch, async_client_module)
+    fake_lib = SimpleNamespace(
+        init_async_pipe=MagicMock(), reinit_async_pipe=MagicMock()
+    )
+    stale_drain = MagicMock()
+    monkeypatch.setattr(async_client_module, "_drain_stale_pipe_frames", stale_drain)
+    clients = []
+    old_loop = asyncio.new_event_loop()
+    old_client = _new_pipe_setup_client(
+        async_client_module, fake_lib, 7095, loop=old_loop
+    )
+    clients.append(old_client)
+    old_client._setup_pipe()
+    original_fds = (
+        async_client_module._async_pipe_read_fd,
+        async_client_module._async_pipe_write_fd,
+    )
+    remainder = b"partial-frame"
+    async_client_module._pipe_remainder = remainder
+
+    async def fail_then_retry():
+        new_loop = asyncio.get_running_loop()
+        real_add_reader = new_loop.add_reader
+        failed = False
+
+        def fail_once(*args, **kwargs):
+            nonlocal failed
+            if not failed:
+                failed = True
+                raise OSError("injected takeover registration failure")
+            return real_add_reader(*args, **kwargs)
+
+        monkeypatch.setattr(new_loop, "add_reader", fail_once)
+        failed_client = _new_pipe_setup_client(
+            async_client_module, fake_lib, 7096, loop=new_loop
+        )
+        clients.append(failed_client)
+        with pytest.raises(ClosingError, match="async response pipe"):
+            failed_client._setup_pipe()
+        assert async_client_module._async_pipe_registered
+        assert async_client_module._async_pipe_loop is old_loop
+        assert async_client_module._pipe_remainder == remainder
+        assert async_client_module._client_registry.get(7095) is old_client
+        assert async_client_module._client_registry.get(7096) is None
+
+        retry_client = _new_pipe_setup_client(
+            async_client_module, fake_lib, 7097, loop=new_loop
+        )
+        clients.append(retry_client)
+        retry_client._setup_pipe()
+        assert async_client_module._async_pipe_loop is new_loop
+
+    try:
+        asyncio.run(fail_then_retry())
+        assert (
+            async_client_module._async_pipe_read_fd,
+            async_client_module._async_pipe_write_fd,
+        ) == original_fds
+        fake_lib.init_async_pipe.assert_called_once_with(original_fds[1])
+        fake_lib.reinit_async_pipe.assert_not_called()
+        stale_drain.assert_not_called()
+    finally:
+        old_loop.close()
+        os.close(original_fds[0])
+        os.close(original_fds[1])
+
+
 def test_async_pipe_reuses_writer_across_sequential_trio_runs(monkeypatch):
     import glide.glide_client as async_client_module
 

@@ -1029,27 +1029,61 @@ class BaseClient(CoreCommands):
             created_write_fd = -1
             created_transport = False
             registered_here = False
+            prior_registered = _async_pipe_registered
+            prior_loop = _async_pipe_loop
+            prior_trio_token = _trio_pipe_token
+            prior_trio_cancel_scope = _trio_pipe_cancel_scope
+            prior_reader_detached = False
+            prior_client = _client_registry.get(self._pipe_client_id)
+            new_trio_cancel_scope = None
 
-            def _detach_reader() -> None:
-                """Best-effort detach of the current Python reader owner."""
-                nonlocal registered_here
+            def _publish_no_owner() -> None:
                 global _async_pipe_registered, _async_pipe_loop
                 global _trio_pipe_token, _trio_pipe_cancel_scope
-                if _async_pipe_loop is not None:
-                    try:
-                        _async_pipe_loop.remove_reader(_async_pipe_read_fd)
-                    except BaseException:
-                        pass
-                if _trio_pipe_cancel_scope is not None:
-                    try:
-                        _trio_pipe_cancel_scope.cancel()
-                    except BaseException:
-                        pass
                 _async_pipe_registered = False
                 _async_pipe_loop = None
                 _trio_pipe_token = None
                 _trio_pipe_cancel_scope = None
-                registered_here = False
+
+            def _detach_prior_reader() -> None:
+                """Detach a stopped owner while retaining its state for rollback."""
+                nonlocal prior_reader_detached
+                if prior_loop is not None:
+                    if not prior_loop.is_closed():
+                        try:
+                            prior_loop.remove_reader(_async_pipe_read_fd)
+                        except BaseException:
+                            if not prior_loop.is_closed():
+                                raise
+                elif prior_trio_cancel_scope is not None:
+                    # Sequential Trio token takeover is supported. Simultaneous
+                    # Trio runs retain the known single-reader race in #7122.
+                    prior_trio_cancel_scope.cancel()
+                prior_reader_detached = True
+
+            def _detach_current_reader() -> None:
+                """Best-effort cleanup of a partially registered new reader."""
+                if self._is_asyncio:
+                    assert self._loop is not None
+                    try:
+                        self._loop.remove_reader(_async_pipe_read_fd)
+                    except BaseException:
+                        pass
+                elif new_trio_cancel_scope is not None:
+                    try:
+                        new_trio_cancel_scope.cancel()
+                    except BaseException:
+                        pass
+
+            def _restore_prior_reader() -> bool:
+                """Restore a detached asyncio owner after takeover failure."""
+                if prior_loop is None or prior_loop.is_closed():
+                    return False
+                try:
+                    prior_loop.add_reader(_async_pipe_read_fd, _on_async_pipe_readable)
+                except BaseException:
+                    return False
+                return True
 
             try:
                 if _async_pipe_read_fd < 0:
@@ -1071,33 +1105,50 @@ class BaseClient(CoreCommands):
                     or not self._is_asyncio
                     and _trio_pipe_token is trio_token
                 )
-                if _async_pipe_registered and not same_owner:
-                    _detach_reader()
-                    _drain_stale_pipe_frames()
-
                 _client_registry[self._pipe_client_id] = self
-                if not _async_pipe_registered:
+
+                if (
+                    _async_pipe_registered
+                    and not same_owner
+                    and _async_pipe_loop is not None
+                    and not _async_pipe_loop.is_closed()
+                    and _async_pipe_loop.is_running()
+                ):
+                    # One live asyncio reader dispatches every process-wide frame.
+                    # _resolve_future hops completion to each destination loop.
+                    return
+
+                if _async_pipe_registered and not same_owner:
+                    _detach_prior_reader()
+
+                if not _async_pipe_registered or not same_owner:
                     if self._is_asyncio:
                         assert self._loop is not None
                         self._loop.add_reader(
                             _async_pipe_read_fd, _on_async_pipe_readable
                         )
-                        _async_pipe_loop = self._loop
-                        _trio_pipe_token = None
-                        _trio_pipe_cancel_scope = None
                     else:
                         import trio
 
-                        cancel_scope = trio.CancelScope()
-                        _trio_pipe_token = trio_token
-                        _trio_pipe_cancel_scope = cancel_scope
+                        new_trio_cancel_scope = trio.CancelScope()
                         trio.lowlevel.spawn_system_task(
                             _trio_pipe_reader,
                             _async_pipe_read_fd,
                             trio_token,
-                            cancel_scope,
+                            new_trio_cancel_scope,
                         )
+
+                    # Publish only after registration succeeds. The old reader's
+                    # Trio finalizer cannot race this update while the lock is held.
                     _async_pipe_registered = True
+                    if self._is_asyncio:
+                        _async_pipe_loop = self._loop
+                        _trio_pipe_token = None
+                        _trio_pipe_cancel_scope = None
+                    else:
+                        _async_pipe_loop = None
+                        _trio_pipe_token = trio_token
+                        _trio_pipe_cancel_scope = new_trio_cancel_scope
                     registered_here = True
 
                 if created_transport:
@@ -1113,12 +1164,25 @@ class BaseClient(CoreCommands):
                     _async_pipe_init_pid = current_pid
                     _async_pipe_needs_fork_reinit = False
             except BaseException as error:
-                _client_registry.pop(self._pipe_client_id, None)
+                if prior_client is None:
+                    if _client_registry.get(self._pipe_client_id) is self:
+                        _client_registry.pop(self._pipe_client_id, None)
+                else:
+                    _client_registry[self._pipe_client_id] = prior_client
+
                 if registered_here:
-                    _detach_reader()
+                    _detach_current_reader()
+
+                if prior_reader_detached and _restore_prior_reader():
+                    _async_pipe_registered = prior_registered
+                    _async_pipe_loop = prior_loop
+                    _trio_pipe_token = prior_trio_token
+                    _trio_pipe_cancel_scope = prior_trio_cancel_scope
+                elif prior_reader_detached or registered_here:
+                    _publish_no_owner()
 
                 # A failed same-process ownership move must preserve the
-                # established FDs/native writer for a later registration retry.
+                # established FDs/native writer and parser bytes for a retry.
                 # Only a newly-created, not-yet-committed transport is closed.
                 if created_read_fd >= 0:
                     for fd in {created_read_fd, created_write_fd}:
@@ -1130,16 +1194,12 @@ class BaseClient(CoreCommands):
                     _async_pipe_read_fd = -1
                     _async_pipe_write_fd = -1
                     _async_pipe_init_pid = -1
-                    _async_pipe_registered = False
-                    _async_pipe_loop = None
-                    _trio_pipe_token = None
-                    _trio_pipe_cancel_scope = None
+                    _publish_no_owner()
                     _pipe_remainder = b""
                     _pipe_remainder_is_stale = False
                 elif _async_pipe_read_fd < 0:
-                    # os.pipe itself failed; no transport exists, but stale
-                    # parser state and ownership still belong to the failed
-                    # transaction and must not leak into a retry.
+                    # os.pipe itself failed; no transport exists, so parser
+                    # state belongs to the failed first initialization.
                     _pipe_remainder = b""
                     _pipe_remainder_is_stale = False
 
