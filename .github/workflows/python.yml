@@ -239,6 +239,7 @@ jobs:
             - name: Test with pytest (serial-only tests)
               working-directory: ./python
               env:
+                  TEST_NAME_ARG: ${{ inputs.name && format('-k {0}', inputs.name) || '' }}
                   AWS_ACCESS_KEY_ID: test_access_key
                   AWS_SECRET_ACCESS_KEY: test_secret_key
                   AWS_SESSION_TOKEN: test_session_token
@@ -252,7 +253,7 @@ jobs:
                   elif [ "$RUN_SYNC_ONLY" = "true" ]; then
                       python3 dev.py test --args -m serial_only tests/sync_tests --html=pytest_report_serial.html --self-contained-html
                   else
-                      python3 dev.py test --args -m serial_only --async-backend=asyncio --html=pytest_report_serial.html --self-contained-html
+                      python3 dev.py test --args -m serial_only --async-backend=asyncio --html=pytest_report_serial.html --self-contained-html "$TEST_NAME_ARG"
                   fi
 
             - uses: ./.github/workflows/test-benchmark
