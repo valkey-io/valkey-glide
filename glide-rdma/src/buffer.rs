@@ -131,7 +131,7 @@ impl RdmaBuffer {
         self.fabric.is(fabric)
     }
 
-    /// Lend `[at, at + length)` of this buffer to a `LO.GET` of `key` for the server
+    /// Lend `[at, at + length)` of this buffer to a `BLOB.GET` of `key` for the server
     /// to write the stored object into.
     ///
     /// Returns the command to send and the loan to hold until the server replies.
@@ -149,7 +149,7 @@ impl RdmaBuffer {
         self.lend(at, length, |window| command::get(key, window))
     }
 
-    /// Lend `[at, at + length)` of this buffer to a `LO.SET` of `key` for the server
+    /// Lend `[at, at + length)` of this buffer to a `BLOB.SET` of `key` for the server
     /// to read those bytes and store them.
     ///
     /// Returns the command to send and the loan to hold until the server replies.
@@ -525,7 +525,7 @@ mod tests {
 
         let (command, _loan) = buffer.lend_for_get(b"key", 1024, 256).expect("lends");
 
-        assert_eq!(command.name(), "LO.GET");
+        assert_eq!(command.name(), "BLOB.GET");
         assert_eq!(
             arguments(&command),
             [
@@ -543,7 +543,7 @@ mod tests {
 
         let (command, _loan) = buffer.lend_for_set(b"key", 1024, 256).expect("lends");
 
-        assert_eq!(command.name(), "LO.SET");
+        assert_eq!(command.name(), "BLOB.SET");
         assert_eq!(
             arguments(&command),
             [
@@ -654,11 +654,11 @@ mod tests {
         let register = || fabric.register(vec![0u8; 64]).unwrap();
 
         let (_, reported) = unsafe { lent_for_get(register()).reclaim(TransferReply::Missing) }
-            .expect("a missing key ends a LO.GET");
+            .expect("a missing key ends a BLOB.GET");
         assert_eq!(reported, None);
 
         let (_, reported) = unsafe { lent_for_set(register()).reclaim(TransferReply::Stored) }
-            .expect("a store ends a LO.SET");
+            .expect("a store ends a BLOB.SET");
         assert_eq!(reported, None);
 
         for loan in [lent_for_get(register()), lent_for_set(register())] {

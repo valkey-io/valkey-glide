@@ -4,7 +4,7 @@
 //!
 //! 1. The client learns the server node's fabric addresses and inserts them into
 //!    its local address vector so an RDMA transfer the node initiates is accepted.
-//! 2. The node learns the client's fabric address via `LO.HELLO` and identifies it
+//! 2. The node learns the client's fabric address via `BLOB.HELLO` and identifies it
 //!    by the client_id of the connection it arrived on.
 //!
 //! On both client and server, a RDMA session is paired with a RESP connection.

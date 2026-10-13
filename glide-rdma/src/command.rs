@@ -2,8 +2,8 @@
 
 //! The `LO.*` command vocabulary, independent of any RESP client.
 //!
-//! The client's fabric address is sent once by `LO.HELLO` and the server
-//! remembers it for the connection. `LO.GET` and `LO.SET` commands carry
+//! The client's fabric address is sent once by `BLOB.HELLO` and the server
+//! remembers it for the connection. `BLOB.GET` and `BLOB.SET` commands carry
 //! a key and the specific window of the client's registered memory where
 //! the RDMA transfer should be performed.
 
@@ -11,7 +11,7 @@ use crate::error::RdmaError;
 #[cfg(any(feature = "libfabric", test))]
 use crate::region_ref::RegionRef;
 
-/// What a `LO.GET` yielded.
+/// What a `BLOB.GET` yielded.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ReadReceipt {
     /// Byte length transferred.
@@ -38,7 +38,7 @@ impl ReadReceipt {
     }
 }
 
-/// The server's reply to a `LO.GET` or `LO.SET`.
+/// The server's reply to a `BLOB.GET` or `BLOB.SET`.
 ///
 /// The protocol requires the server to reply only once its transfer has completed
 /// with delivery guaranteed (`FI_DELIVERY_COMPLETE`), so a reply means it is done
@@ -46,11 +46,11 @@ impl ReadReceipt {
 /// Passing a reply to `LentBuffer::reclaim` is how a caller gets its buffer back.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TransferReply {
-    /// `LO.GET` wrote the stored object into the window.
+    /// `BLOB.GET` wrote the stored object into the window.
     Read(ReadReceipt),
-    /// `LO.GET` found no such key and wrote nothing.
+    /// `BLOB.GET` found no such key and wrote nothing.
     Missing,
-    /// `LO.SET` read the window and stored it.
+    /// `BLOB.SET` read the window and stored it.
     Stored,
     /// The server replied with an error.
     Failed,
@@ -76,13 +76,13 @@ impl RdmaCommand {
 }
 
 /// The command that opens a session.
-pub(crate) const HELLO: &str = "LO.HELLO";
+pub(crate) const HELLO: &str = "BLOB.HELLO";
 
 /// The command that reads a stored object into registered memory.
-pub(crate) const GET: &str = "LO.GET";
+pub(crate) const GET: &str = "BLOB.GET";
 
 /// The command that stores an object read out of registered memory.
-pub(crate) const SET: &str = "LO.SET";
+pub(crate) const SET: &str = "BLOB.SET";
 
 /// Whether a given command needs to run on a connection that already has
 /// an open RDMA session.
@@ -92,7 +92,7 @@ pub fn needs_session(name: &[u8]) -> bool {
         .any(|transfer| name.eq_ignore_ascii_case(transfer.as_bytes()))
 }
 
-/// `LO.HELLO <client-address>`
+/// `BLOB.HELLO <client-address>`
 ///
 /// Opens the session. The server inserts `client_address` into the address
 /// vector of every fabric device it serves from and replies with its own
@@ -104,7 +104,7 @@ pub fn hello(client_address: &[u8]) -> RdmaCommand {
     }
 }
 
-/// `LO.SET <key> <length> <rkey> <remote-address>`
+/// `BLOB.SET <key> <length> <rkey> <remote-address>`
 ///
 /// The server reads `length` bytes out of the named window and stores them.
 #[cfg(any(feature = "libfabric", test))]
@@ -117,7 +117,7 @@ pub(crate) fn set(key: &[u8], length: usize, region_ref: &RegionRef) -> RdmaComm
     }
 }
 
-/// `LO.GET <key> <rkey> <remote-address>`
+/// `BLOB.GET <key> <rkey> <remote-address>`
 ///
 // TODO(lo-get-length): send the length as an argument once module accepts it.
 #[cfg(any(feature = "libfabric", test))]
@@ -159,14 +159,14 @@ mod tests {
     #[test]
     fn hello_carries_this_client_address_as_hex() {
         let command = hello(&[0xde, 0xad, 0xbe, 0xef]);
-        assert_eq!(command.name(), "LO.HELLO");
+        assert_eq!(command.name(), "BLOB.HELLO");
         assert_eq!(arguments(&command), ["deadbeef"]);
     }
 
     #[test]
     fn set_lays_out_arguments_in_wire_order() {
         let command = set(b"key", 64, &region_ref());
-        assert_eq!(command.name(), "LO.SET");
+        assert_eq!(command.name(), "BLOB.SET");
         assert_eq!(arguments(&command), ["key", "64", "7", "4096"]);
     }
 
@@ -175,7 +175,7 @@ mod tests {
         // No length: the server sends the whole object, whatever the caller had
         // room for.
         let command = get(b"key", &region_ref());
-        assert_eq!(command.name(), "LO.GET");
+        assert_eq!(command.name(), "BLOB.GET");
         assert_eq!(arguments(&command), ["key", "7", "4096"]);
     }
 
@@ -212,13 +212,13 @@ mod tests {
 
     #[test]
     fn only_the_transfers_need_a_session() {
-        assert!(needs_session(b"LO.GET"));
-        assert!(needs_session(b"LO.SET"));
+        assert!(needs_session(b"BLOB.GET"));
+        assert!(needs_session(b"BLOB.SET"));
         // Lowercase because a caller may have typed it, and the server does not care.
-        assert!(needs_session(b"lo.set"));
+        assert!(needs_session(b"blob.set"));
 
         // The one that opens a session cannot be gated on having one.
-        assert!(!needs_session(b"LO.HELLO"));
+        assert!(!needs_session(b"BLOB.HELLO"));
         assert!(!needs_session(b"GET"));
         assert!(!needs_session(b"SET"));
         assert!(!needs_session(b""));
