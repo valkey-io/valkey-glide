@@ -42,6 +42,18 @@ impl Provider {
     pub(crate) fn needs_manual_progress(self) -> bool {
         !matches!(self, Provider::EfaDirect)
     }
+
+    /// Whether closing a memory region also stops a remote write the provider had
+    /// already accepted into it, so the memory can be freed as soon as the close
+    /// returns.
+    ///
+    /// True on `efa-direct`: the device aborts operations still in flight on a
+    /// region that is closing (`fi_efa(7)`, "MR ABORTING"). False on `tcp`, which can
+    /// keep delivering an accepted write into a region after it is closed
+    /// (`fi_mr(3)`).
+    pub(crate) fn close_stops_writes(self) -> bool {
+        matches!(self, Provider::EfaDirect)
+    }
 }
 
 /// How to open the local fabric endpoint.
@@ -89,5 +101,16 @@ impl FabricConfig {
     /// The source address to bind to.
     pub fn bind(&self) -> Option<&str> {
         self.bind.as_deref()
+    }
+}
+
+#[cfg(all(test, feature = "libfabric"))]
+mod tests {
+    use super::Provider;
+
+    #[test]
+    fn only_efa_direct_stops_writes_when_a_region_closes() {
+        assert!(Provider::EfaDirect.close_stops_writes());
+        assert!(!Provider::Tcp.close_stops_writes());
     }
 }

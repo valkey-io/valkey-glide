@@ -344,9 +344,9 @@ pub(crate) struct RegisteredMemory {
 ///
 /// Revoking deregisters the region early, from any thread, even while a transfer is
 /// using it. That is how a transfer is cancelled: once `fi_close` returns, a peer can
-/// post nothing new against the memory. An operation the provider already accepted
-/// may still access it (`fi_mr(3)`), so the memory must outlive the endpoint; see
-/// [`crate::LentBuffer`].
+/// post nothing new against the memory. On some providers, such as tcp, an operation
+/// the provider already accepted may still access it (`fi_mr(3)`), so there the
+/// memory must outlive the endpoint; see [`crate::LentBuffer`].
 #[derive(Debug)]
 pub(crate) struct Registration {
     state: Arc<RegistrationState>,

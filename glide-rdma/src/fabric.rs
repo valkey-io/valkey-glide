@@ -30,6 +30,8 @@ struct FabricInner {
     parked: Mutex<Vec<HostMemory>>,
     /// Total length of `parked`, readable without the lock.
     parked_bytes: AtomicUsize,
+    /// [`crate::config::Provider::close_stops_writes`] for this fabric's provider.
+    close_stops_writes: bool,
     address: Vec<u8>,
     uses_virtual_addressing: bool,
     /// Every peer address currently in the address vector and how many sessions
@@ -76,6 +78,7 @@ impl RdmaFabric {
                 endpoint: Mutex::new(endpoint),
                 parked: Mutex::new(Vec::new()),
                 parked_bytes: AtomicUsize::new(0),
+                close_stops_writes: config.provider().close_stops_writes(),
                 address,
                 uses_virtual_addressing,
                 peers: Mutex::new(HashMap::new()),
@@ -175,9 +178,22 @@ impl RdmaFabric {
         self.inner.progress.as_ref().map(ProgressDriver::drive)
     }
 
+    /// Dispose of the memory of a loan that ended without the server's reply.
+    /// `closed` is whether its region closed successfully.
+    ///
+    /// The memory is freed now when the region closed on a provider whose close also
+    /// stops writes already in flight. Otherwise it is parked until this fabric closes.
+    pub(crate) fn release_unanswered(&self, host: HostMemory, closed: bool) {
+        if closed && self.inner.close_stops_writes {
+            drop(host);
+        } else {
+            self.park(host);
+        }
+    }
+
     /// Keep `host` allocated until this fabric closes; see [`crate::LentBuffer`].
     /// Only the endpoint closing guarantees no accepted write can still land in it.
-    pub(crate) fn park(&self, host: HostMemory) {
+    fn park(&self, host: HostMemory) {
         let bytes = host.len();
         self.inner
             .parked
@@ -192,6 +208,9 @@ impl RdmaFabric {
 
     /// Bytes parked by loans that ended without a reply. Only grows; freed when the
     /// last handle drops, and every buffer, loan and session on the fabric holds one.
+    ///
+    /// Stays at zero on efa-direct unless a region fails to close, because there a
+    /// successful close stops the server's writes and the memory is freed at once.
     pub fn parked_bytes(&self) -> usize {
         self.inner.parked_bytes.load(Ordering::Relaxed)
     }
@@ -307,6 +326,16 @@ pub(crate) mod tests {
 
     fn fabric() -> RdmaFabric {
         RdmaFabric::open(&FabricConfig::new(Provider::Tcp)).expect("tcp should open")
+    }
+
+    /// A tcp fabric that treats a successful region close the way efa-direct's is
+    /// treated, for testing that path on a host without efa.
+    pub(crate) fn fabric_whose_close_stops_writes() -> RdmaFabric {
+        let mut fabric = fabric();
+        std::sync::Arc::get_mut(&mut fabric.inner)
+            .expect("nothing else holds a fresh fabric")
+            .close_stops_writes = true;
+        fabric
     }
 
     fn handshake_of(fabric: &RdmaFabric) -> crate::session::Handshake {

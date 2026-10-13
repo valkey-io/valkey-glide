@@ -11,8 +11,9 @@
 //! [`RdmaBuffer::lend_for_get`] and [`RdmaBuffer::lend_for_set`] are the only way to
 //! build a transfer command and they consume the buffer to do it. The buffer comes
 //! back from [`LentBuffer::reclaim`] once the server has replied, or from
-//! [`LentBuffer::cancel_unsent`] if the command never went out. Any other end parks
-//! its memory in the fabric.
+//! [`LentBuffer::cancel_unsent`] if the command never went out. Any other end closes
+//! the region and then frees the memory on efa-direct, or parks it in the fabric on
+//! tcp.
 
 use std::fmt;
 use std::mem::ManuallyDrop;
@@ -315,15 +316,25 @@ impl fmt::Debug for RdmaBuffer {
 /// - [`Self::cancel_unsent`] when the command was never sent, which hands the
 ///   buffer straight back.
 /// - [`Self::recall`] when no reply is coming, for example because the connection
-///   failed or the caller gave up. This revokes the buffer and parks its memory.
+///   failed or the caller gave up. This revokes the buffer and then frees or parks
+///   its memory, as below.
 /// - Dropping the loan, for example when the future awaiting the reply is
 ///   cancelled. As a recall, except that a failed revoke is not reported.
 ///
-/// Closing a region does not stop a write the provider already accepted
-/// (`fi_mr(3)`), so memory a loan ends without a reply is parked in the fabric
-/// and freed only when the fabric closes. Parked memory only accumulates;
-/// [`RdmaFabric::parked_bytes`] reports how much. To get it back, drop every
-/// buffer, loan, session and handle on the fabric. Register fresh memory to carry on.
+/// What happens to the memory of a loan that ends without a reply depends on the
+/// provider:
+///
+/// - On efa-direct, closing the region also aborts writes already in flight, so the
+///   memory is freed as soon as the revoke succeeds.
+/// - On tcp, closing a region does not stop a write the provider already accepted
+///   (`fi_mr(3)`), so the memory is parked in the fabric and freed only when the
+///   fabric closes.
+/// - On either, if the revoke fails, the memory is parked, because the server may
+///   still reach it.
+///
+/// Parked memory only accumulates; [`RdmaFabric::parked_bytes`] reports how much. To
+/// get it back, drop every buffer, loan, session and handle on the fabric. Register
+/// fresh memory to carry on.
 ///
 /// On tcp, the fabric's progress thread keeps polling for as long as a loan exists,
 /// because that provider moves no bytes unless the client polls.
@@ -373,21 +384,22 @@ impl LentBuffer {
         }
     }
 
-    /// End the loan without a reply: revoke the buffer and park its memory.
+    /// End the loan without a reply: revoke the buffer, then free its memory on
+    /// efa-direct or park it on tcp; see [`LentBuffer`].
     ///
-    /// Nothing comes back; the memory stays untouchable until the fabric closes.
+    /// Nothing comes back. Parked memory stays untouchable until the fabric closes.
     ///
     /// # Errors
     ///
     /// When libfabric fails to close the region, the loan is handed back unchanged.
-    /// A failed close is final; drop the loan, which parks the memory just the same.
+    /// A failed close is final; drop the loan, which parks the memory.
     pub fn recall(self) -> Result<(), (Self, RdmaError)> {
         if let Err(error) = self.buffer.revoke() {
             return Err((self, error));
         }
         let (buffer, _, _progress) = self.dismantle();
         let (registration, host, fabric) = buffer.into_parts();
-        fabric.park(host);
+        fabric.release_unanswered(host, true);
         drop(registration);
         Ok(())
     }
@@ -436,14 +448,14 @@ impl LentBuffer {
 }
 
 impl Drop for LentBuffer {
-    /// Revoke the region and park the memory. A failed revoke changes nothing: the
-    /// memory is parked either way.
+    /// Revoke the region, then free or park the memory as [`LentBuffer::recall`]
+    /// does. A failed revoke is not reported; the memory is parked.
     fn drop(&mut self) {
         // SAFETY: `buffer` is taken exactly once, here.
         let buffer = unsafe { ManuallyDrop::take(&mut self.buffer) };
-        let _ = buffer.revoke();
+        let closed = buffer.revoke().is_ok();
         let (registration, host, fabric) = buffer.into_parts();
-        fabric.park(host);
+        fabric.release_unanswered(host, closed);
         drop(registration);
     }
 }
@@ -478,7 +490,7 @@ mod tests {
     use crate::config::{FabricConfig, Provider};
     use crate::error::RdmaError;
     use crate::fabric::RdmaFabric;
-    use crate::fabric::tests::{close_calls, fail_next_closes};
+    use crate::fabric::tests::{close_calls, fabric_whose_close_stops_writes, fail_next_closes};
     use crate::region_ref::RegionRef;
     use std::sync::Arc;
     use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
@@ -746,6 +758,67 @@ mod tests {
         assert!(buffer.is_revoked());
         let (_, error) = buffer.lend_for_get(b"key", 0, 64).unwrap_err();
         assert!(matches!(error, RdmaError::Revoked), "{error:?}");
+    }
+
+    /// On a provider whose close also stops writes in flight, as efa-direct's does,
+    /// nothing can land after the revoke, so the memory is freed at once.
+    #[test]
+    fn a_recall_frees_the_memory_when_the_close_stops_writes() {
+        let fabric = fabric_whose_close_stops_writes();
+        let (memory, freed, _) = tracked();
+        let loan = lent_for_get(fabric.register(memory).unwrap());
+
+        loan.recall().expect("the region closes");
+
+        assert!(
+            freed.load(Ordering::SeqCst),
+            "freed without waiting for the fabric"
+        );
+        assert_eq!(fabric.parked(), 0);
+        assert_eq!(fabric.parked_bytes(), 0);
+    }
+
+    #[test]
+    fn dropping_a_loan_frees_the_memory_when_the_close_stops_writes() {
+        let fabric = fabric_whose_close_stops_writes();
+        let (memory, freed, _) = tracked();
+
+        drop(lent_for_set(fabric.register(memory).unwrap()));
+
+        assert!(freed.load(Ordering::SeqCst));
+        assert_eq!(fabric.parked(), 0);
+    }
+
+    /// A revoker closed the region first, so ending the loan finds it already closed.
+    #[test]
+    fn a_loan_revoked_from_elsewhere_is_freed_when_the_close_stops_writes() {
+        let fabric = fabric_whose_close_stops_writes();
+        let (memory, freed, _) = tracked();
+        let loan = lent_for_get(fabric.register(memory).unwrap());
+        loan.revoker().revoke().expect("the region closes");
+
+        drop(loan);
+
+        assert!(freed.load(Ordering::SeqCst));
+        assert_eq!(fabric.parked(), 0);
+    }
+
+    /// The server may still reach a region whose close failed, whatever the provider.
+    #[test]
+    fn a_failed_close_still_parks_when_the_close_would_stop_writes() {
+        let fabric = fabric_whose_close_stops_writes();
+        let (memory, freed, _) = tracked();
+        let loan = lent_for_get(fabric.register(memory).unwrap());
+
+        fail_next_closes(1);
+        let (loan, _) = loan.recall().expect_err("the close fails");
+        drop(loan);
+
+        assert!(
+            !freed.load(Ordering::SeqCst),
+            "the server may still reach it"
+        );
+        assert_eq!(fabric.parked(), 1);
     }
 
     #[test]
