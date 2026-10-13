@@ -2,7 +2,7 @@
 
 import sys
 import uuid
-from typing import List
+from typing import List, cast
 
 import pytest
 from glide_shared.exceptions import RequestError
@@ -454,6 +454,64 @@ def search_1_3_capability(request) -> bool:
     client = create_sync_client(request, use_cluster_mode)
     try:
         return _probe_search_1_3_capability(client)
+    finally:
+        client.close()
+
+
+def _parse_emulate_release_level(config_get_raw: object) -> str:
+    """Pull the value out of a ``CONFIG GET search.emulate-release`` reply.
+
+    ``CONFIG GET`` replies as a flat ``[key, value]`` pair on both RESP2 and
+    RESP3 (unlike FT.INFO's richer nesting) -- confirmed against a live
+    1.3.0-rc1 module. Raises if the key is missing, which would mean the
+    module isn't loaded at all; callers of ``emulate_release_level`` only
+    run after ``requires_search_1_3`` has already confirmed a 1.3-capable
+    module is present, so a missing key here is a harness bug, not a
+    legitimate "unknown" state to paper over.
+    """
+    flat = cast(List, config_get_raw)
+    pairs = dict(zip(flat[0::2], flat[1::2]))
+    for key, value in pairs.items():
+        decoded_key = key.decode() if isinstance(key, bytes) else key
+        if decoded_key == "search.emulate-release":
+            return value.decode() if isinstance(value, bytes) else value
+    raise RuntimeError(
+        "CONFIG GET search.emulate-release returned no value -- is the "
+        f"search module loaded? Raw reply: {config_get_raw!r}"
+    )
+
+
+@pytest.fixture(scope="session")
+def emulate_release_level(request) -> str:
+    """Session-scoped: the connected module's active ``search.emulate-release``
+    level (e.g. ``"1.0.0"`` at the module's own default, ``"1.3.0"`` when
+    explicitly raised), read once via ``CONFIG GET search.emulate-release``.
+
+    E-2 (D22): ``requires_search_1_3`` (the ``search_1_3_capability`` probe
+    above) answers "is this binary 1.3-capable at all", not "is the 1.3
+    RediSearch-compatible behavior actually active right now" -- those are
+    different questions, because `search.emulate-release` defaults to the
+    module's current major (1.0.0) regardless of binary version
+    (COMPATIBILITY.md, "Sunsetting of Incompatible Behavior"). A 1.3-capable
+    module left at that default still runs the legacy branch of every
+    `VALKEY_SEARCH_COMPATIBILITY_FIX(1, 3, 0, ...)` gate. Tests that assert
+    the *corrected* 1.3 behavior (not just "the server didn't reject the
+    command") need this fixture to know which branch is actually live, in
+    addition to the `requires_search_1_3` marker that gates on the binary.
+
+    Connects the same way as `search_1_3_capability` (cluster mode if
+    cluster endpoints are available, else standalone) for the same reason:
+    a standalone-only run has no `pytest.valkey_cluster` to connect
+    through.
+    """
+    use_cluster_mode = bool(
+        request.config.getoption("--cluster-endpoints")
+        or getattr(pytest, "valkey_cluster", None) is not None
+    )
+    client = create_sync_client(request, use_cluster_mode)
+    try:
+        raw = client.custom_command(["CONFIG", "GET", "search.emulate-release"])
+        return _parse_emulate_release_level(raw)
     finally:
         client.close()
 

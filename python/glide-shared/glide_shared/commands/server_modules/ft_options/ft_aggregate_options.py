@@ -30,6 +30,15 @@ class FtAggregateClause(ABC):
 class FtAggregateLimit(FtAggregateClause):
     """
     A clause for limiting the number of retained records.
+
+    An adjacent SORTBY clause's retained-row window widens to match this LIMIT's offset + count
+    on valkey-search 1.3.0 and above (``sortby_max_follows_limit`` compatibility flag,
+    ``src/commands/ft_aggregate_parser.cc`` `ResolveSortByBounds()`) -- below that
+    `search.emulate-release` level, SORTBY still truncates to its own default (10 rows) or
+    explicit MAX regardless of a LIMIT past that point. "Adjacent" means immediately before or
+    after SORTBY in the clause list; a stage such as GROUPBY in between blocks the widening on
+    both branches. Needs `search.emulate-release` >= 1.3.0 for the widened behavior -- see
+    upstream COMPATIBILITY.md's "Sunsetting of Incompatible Behavior" section.
     """
 
     def __init__(self, offset: int, count: int):
@@ -293,7 +302,10 @@ class FtAggregateSortBy(FtAggregateClause):
 
         Args:
             properties (List[FtAggregateSortProperty]): A list of sorting parameters for the sort operation.
-            max: (Optional[int]): The MAX value for optimizing the sorting, by sorting only for the n-largest elements.
+            max: (Optional[int]): The MAX value for optimizing the sorting, by sorting only for the n-largest
+                elements. Omitting this falls back to a default of 10 retained rows unless an adjacent
+                `FtAggregateLimit` widens it (valkey-search 1.3.0 and above only -- see `FtAggregateLimit`'s
+                docstring for the `sortby_max_follows_limit` gate and `search.emulate-release` requirement).
         """
         self.properties = properties
         self.max = max
@@ -330,7 +342,8 @@ class LoadField:
     certainly nonexistent field named "AS" and a field named the alias string, which the engine
     then rejects as "Index field does not exist". Use the `requires_search_1_3` marker (or
     equivalent capability check) around any code path that relies on the alias actually renaming
-    the column.
+    the column. Needs `search.emulate-release` >= 1.3.0 -- see upstream COMPATIBILITY.md's
+    "Sunsetting of Incompatible Behavior" section.
     """
 
     def __init__(

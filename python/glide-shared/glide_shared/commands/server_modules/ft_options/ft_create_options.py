@@ -544,7 +544,13 @@ class FtCreateOptions:
                 ``src/commands/ft_create_parser.cc``: "the name of the document field whose numeric value is used
                 as the document's custom score. Only one per index."). The field must already exist in the
                 document; it is not itself a schema definition. Confirmed live: a document with a higher value in
-                this field ranks correspondingly higher under the same query.
+                this field ranks correspondingly higher under the same query. Separately, FT.INFO only reports this
+                option back under `index_definition`'s `score_field` key when `search.emulate-release` is at least
+                1.3.0 (``ft_info_score_field`` compatibility flag, ``src/index_schema.cc`` `RespondWithInfo()`) --
+                below that level the pair is omitted entirely and `default_score` reports the literal string "1"
+                regardless of this option. The scoring behavior itself (above) is unaffected by this flag; only
+                FT.INFO's reporting of it is gated. See upstream COMPATIBILITY.md's "Sunsetting of Incompatible
+                Behavior" section.
             no_highlight (bool): Emits NOHL. valkey-search does not support highlighting at all, so this is a
                 genuine no-op on this engine (confirmed live and in source: ``src/commands/ft_create_parser.cc``
                 "Highlighting is not supported, so NOHL is accepted and the match result deliberately discarded" --

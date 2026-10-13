@@ -14,10 +14,16 @@
 # actually exercise CI's startup code -- fixed by giving the shared script
 # a SEARCH_MODULE_ARGS hook instead of forking the bring-up logic).
 #
-# Usage:
-#   utils/run-modules-ci-locally.sh                  # default: 9.2.0-rc2, emulate-release 1.3.0
-#   IMAGE=valkey/valkey-bundle:9.1.3 utils/run-modules-ci-locally.sh
-#   EMULATE_RELEASE="" utils/run-modules-ci-locally.sh   # skip wiring emulate-release
+# Usage: three image/release combinations are used across this file's
+# proof runs, named in BUILD-MODULES-1.3.md and PR-DRAFT-PYTHON-VS13.md's
+# Testing table as "1.", "2." and "3." below. (A fourth combination --
+# 9.1.3 at its own default -- isn't listed as its own config: that image's
+# module predates the `--emulate-release` arg and aborts boot if given one,
+# so EMULATE_RELEASE="" is mandatory whenever IMAGE=9.1.3, not an
+# independent axis.)
+#   utils/run-modules-ci-locally.sh                                       # 1: 9.2.0-rc2, emulate-release 1.3.0 (default; run-proof)
+#   IMAGE=valkey/valkey-bundle:9.1.3 EMULATE_RELEASE="" utils/run-modules-ci-locally.sh   # 2: 9.1.3, search 1.2.1 (skip-proof)
+#   EMULATE_RELEASE="" utils/run-modules-ci-locally.sh                    # 3: 9.2.0-rc2, module's own default emulate-release (1.0.0) -- E-2 (D22)
 #
 # See BUILD-MODULES-1.3.md for narrated example runs and Mac-vs-CI-runner
 # differences (notably: Docker Desktop on macOS shares /Users by default,

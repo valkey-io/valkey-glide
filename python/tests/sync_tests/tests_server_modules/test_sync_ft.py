@@ -94,6 +94,7 @@ from tests.utils.ft_test_helpers import (
     normalize_cluster_shards_node,
     pair_flat_list,
 )
+from tests.utils.utils import check_version_lt
 
 
 class TestSyncFt:
@@ -2346,7 +2347,9 @@ class TestSyncFt:
     @pytest.mark.requires_search_1_3
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    def test_sync_ft_aggregate_load_as(self, glide_sync_client: TSyncGlideClient):
+    def test_sync_ft_aggregate_load_as(
+        self, glide_sync_client: TSyncGlideClient, emulate_release_level: str
+    ):
         """P4: FT.AGGREGATE LOAD ... AS (valkey-search 1.3.0,
         src/commands/ft_aggregate_parser.cc, compat flag
         `ft_aggregate_load_as`). Confirmed via D4's 1.3.0 baseline that the
@@ -2354,6 +2357,10 @@ class TestSyncFt:
         LOAD entry with a `LoadField` entry in the same list to confirm the
         two forms compose correctly (non-breaking addition: existing
         plain-string callers keep working unchanged).
+
+        E-2 (D22): sync mirror of the async test's branch below
+        `search.emulate-release` 1.3.0 -- see that docstring for the gate
+        and legacy-failure mechanism.
         """
         prefix = "{ft-load-as-" + str(uuid.uuid4()) + "}:"
         index = prefix + "index"
@@ -2370,18 +2377,29 @@ class TestSyncFt:
         glide_sync_client.hset(prefix + "1", {"title": "widget", "price": "9"})
         self._poll_until_indexed(glide_sync_client, index, 1)
 
-        result = ft.aggregate(
-            glide_sync_client,
-            index,
-            query="*",
-            options=FtAggregateOptions(
-                loadFields=["title", LoadField("price", alias="cost")]
-            ),
-        )
-        assert len(result) == 1
-        assert result[0][b"title"] == b"widget"
-        assert result[0][b"cost"] == b"9"
-        assert b"price" not in result[0]
+        if check_version_lt(emulate_release_level, "1.3.0"):
+            with pytest.raises(RequestError, match="AS"):
+                ft.aggregate(
+                    glide_sync_client,
+                    index,
+                    query="*",
+                    options=FtAggregateOptions(
+                        loadFields=["title", LoadField("price", alias="cost")]
+                    ),
+                )
+        else:
+            result = ft.aggregate(
+                glide_sync_client,
+                index,
+                query="*",
+                options=FtAggregateOptions(
+                    loadFields=["title", LoadField("price", alias="cost")]
+                ),
+            )
+            assert len(result) == 1
+            assert result[0][b"title"] == b"widget"
+            assert result[0][b"cost"] == b"9"
+            assert b"price" not in result[0]
 
         assert ft.dropindex(glide_sync_client, index) == OK
 
@@ -3326,10 +3344,11 @@ class TestSyncFt:
         assert ft.dropindex(glide_sync_client, index) == OK
 
     @pytest.mark.requires_search_1_3
+    @pytest.mark.requires_search_1_3
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     def test_ft_aggregate_sortby_adjacent_limit_widens_retained_rows(
-        self, glide_sync_client: TSyncGlideClient
+        self, glide_sync_client: TSyncGlideClient, emulate_release_level: str
     ):
         """M-1: sync mirror of the async test_ft_aggregate_sortby_adjacent_
         limit_widens_retained_rows (G-1). valkey-search 1.3.0's "LIMIT
@@ -3338,9 +3357,16 @@ class TestSyncFt:
         "sortby_max_follows_limit"). See the async test's docstring for the
         full measured table this reproduces; this is the same scenario
         exercised through the sync client.
+
+        E-2 (D22): this test was missing the `requires_search_1_3` marker
+        entirely (it ran, and would have failed, on a pre-1.3 module even
+        before E-2) -- added here alongside the legacy/fixed branch split.
+        See the async test's docstring for the gate and the exact rows
+        that differ between the two `search.emulate-release` branches.
         """
         prefix = "{ft-sortby-limit-" + str(uuid.uuid4()) + "}:"
         index = prefix + "index"
+        legacy = check_version_lt(emulate_release_level, "1.3.0")
 
         assert (
             ft.create(
@@ -3381,7 +3407,8 @@ class TestSyncFt:
         assert len(result) == 5
 
         # SORTBY + LIMIT 0 15, adjacent -> LIMIT raises the retained window
-        # to 15 rows (the 1.3 fix; pre-1.3 this would still cap at 10).
+        # to 15 rows (the 1.3 fix); below 1.3.0, SORTBY's own default-10
+        # retention wins instead.
         result = ft.aggregate(
             glide_sync_client,
             index,
@@ -3390,9 +3417,10 @@ class TestSyncFt:
                 clauses=[sort_asc, FtAggregateLimit(offset=0, count=15)]
             ),
         )
-        assert len(result) == 15
+        assert len(result) == (10 if legacy else 15)
 
-        # SORTBY MAX 5 + LIMIT 0 12, adjacent -> the LIMIT outranks the MAX.
+        # SORTBY MAX 5 + LIMIT 0 12, adjacent -> the 1.3 fix lets LIMIT
+        # outrank MAX; below 1.3.0, SORTBY's own MAX 5 still wins.
         result = ft.aggregate(
             glide_sync_client,
             index,
@@ -3401,10 +3429,10 @@ class TestSyncFt:
                 clauses=[sort_max_5, FtAggregateLimit(offset=0, count=12)]
             ),
         )
-        assert len(result) == 12
+        assert len(result) == (5 if legacy else 12)
 
         # LIMIT 0 15 THEN SORTBY -- either side of the pair counts as
-        # adjacent, not just LIMIT-after-SORTBY.
+        # adjacent, not just LIMIT-after-SORTBY. Same legacy-vs-fixed split.
         result = ft.aggregate(
             glide_sync_client,
             index,
@@ -3413,7 +3441,7 @@ class TestSyncFt:
                 clauses=[FtAggregateLimit(offset=0, count=15), sort_asc]
             ),
         )
-        assert len(result) == 15
+        assert len(result) == (10 if legacy else 15)
 
         # SORTBY + GROUPBY + LIMIT 0 15 -- GROUPBY sits between SORTBY and
         # LIMIT, so the LIMIT is not adjacent and must NOT widen SORTBY's
@@ -3695,12 +3723,16 @@ class TestSyncFt:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     def test_sync_ft_create_score_field_in_index_definition(
-        self, glide_sync_client: TSyncGlideClient
+        self, glide_sync_client: TSyncGlideClient, emulate_release_level: str
     ):
         """M-1: sync mirror of the async test_ft_create_score_field_in_
         index_definition (R3a-L-8/G-4). FT.CREATE's SCORE_FIELD option
         (P3, FtCreateOptions(score_field=...)) is reported back under
-        FT.INFO's `index_definition`, alongside a `default_score` entry."""
+        FT.INFO's `index_definition`, alongside a `default_score` entry.
+
+        E-2 (D22): sync mirror of the async test's legacy-vs-fixed branch
+        split below `search.emulate-release` 1.3.0 -- see that docstring
+        for the gate and the exact shape difference."""
         prefix = "{ft-score-field-info-" + str(uuid.uuid4()) + "}:"
         index = prefix + "index"
 
@@ -3721,8 +3753,12 @@ class TestSyncFt:
         info_raw = ft.info(glide_sync_client, index)
         info = pair_flat_list(info_raw)
         index_def = pair_flat_list(info[b"index_definition"])
-        assert index_def[b"score_field"] == b"boost"
-        assert b"default_score" in index_def
+        if check_version_lt(emulate_release_level, "1.3.0"):
+            assert b"score_field" not in index_def
+            assert index_def[b"default_score"] == b"1"
+        else:
+            assert index_def[b"score_field"] == b"boost"
+            assert b"default_score" in index_def
 
         assert ft.dropindex(glide_sync_client, index) == OK
 

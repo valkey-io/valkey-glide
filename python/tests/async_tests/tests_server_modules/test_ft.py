@@ -94,6 +94,7 @@ from tests.utils.ft_test_helpers import (
     normalize_cluster_shards_node,
     pair_flat_list,
 )
+from tests.utils.utils import check_version_lt
 
 
 @pytest.mark.anyio
@@ -2275,7 +2276,9 @@ class TestFt:
     @pytest.mark.requires_search_1_3
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_ft_aggregate_load_as(self, glide_client: TGlideClient):
+    async def test_ft_aggregate_load_as(
+        self, glide_client: TGlideClient, emulate_release_level: str
+    ):
         """P4: FT.AGGREGATE LOAD ... AS (valkey-search 1.3.0,
         src/commands/ft_aggregate_parser.cc, compat flag
         `ft_aggregate_load_as`). Confirmed via D4's 1.3.0 baseline that the
@@ -2283,6 +2286,15 @@ class TestFt:
         LOAD entry with a `LoadField` entry in the same list to confirm the
         two forms compose correctly (non-breaking addition: existing
         plain-string callers keep working unchanged).
+
+        E-2 (D22): below `search.emulate-release` 1.3.0, the
+        `ft_aggregate_load_as` gate stays on its legacy branch, which never
+        consumes the `AS` keyword -- it falls through and gets parsed as its
+        own LOAD field, which doesn't exist on the schema, failing the
+        clause outright (`src/commands/ft_aggregate_parser.cc`
+        `ConstructLoadParser()`). Asserts that legacy failure directly,
+        rather than skipping, since the two branches intentionally produce
+        different outcomes and both are worth pinning down.
         """
         prefix = "{ft-load-as-" + str(uuid.uuid4()) + "}:"
         index = prefix + "index"
@@ -2299,18 +2311,29 @@ class TestFt:
         await glide_client.hset(prefix + "1", {"title": "widget", "price": "9"})
         await self._poll_until_indexed(glide_client, index, 1)
 
-        result = await ft.aggregate(
-            glide_client,
-            index,
-            query="*",
-            options=FtAggregateOptions(
-                loadFields=["title", LoadField("price", alias="cost")]
-            ),
-        )
-        assert len(result) == 1
-        assert result[0][b"title"] == b"widget"
-        assert result[0][b"cost"] == b"9"
-        assert b"price" not in result[0]
+        if check_version_lt(emulate_release_level, "1.3.0"):
+            with pytest.raises(RequestError, match="AS"):
+                await ft.aggregate(
+                    glide_client,
+                    index,
+                    query="*",
+                    options=FtAggregateOptions(
+                        loadFields=["title", LoadField("price", alias="cost")]
+                    ),
+                )
+        else:
+            result = await ft.aggregate(
+                glide_client,
+                index,
+                query="*",
+                options=FtAggregateOptions(
+                    loadFields=["title", LoadField("price", alias="cost")]
+                ),
+            )
+            assert len(result) == 1
+            assert result[0][b"title"] == b"widget"
+            assert result[0][b"cost"] == b"9"
+            assert b"price" not in result[0]
 
         assert await ft.dropindex(glide_client, index) == OK
 
@@ -2886,7 +2909,7 @@ class TestFt:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_ft_aggregate_sortby_adjacent_limit_widens_retained_rows(
-        self, glide_client: TGlideClient
+        self, glide_client: TGlideClient, emulate_release_level: str
     ):
         """G-1: valkey-search 1.3.0's "LIMIT widens an adjacent SORTBY"
         compatibility fix (src/commands/ft_aggregate_parser.cc
@@ -2910,9 +2933,20 @@ class TestFt:
         before this (glissader, Q0 rc1 surface inventory) -- this test uses
         both typed classes rather than hand-built argv, so the typed API
         itself is exercised, not just the raw wire behaviour.
+
+        E-2 (D22): below `search.emulate-release` 1.3.0, the
+        `sortby_max_follows_limit` gate stays on its legacy branch
+        (`sortby->max_` keeps the explicit MAX, or the SORTBY default if
+        none was given, regardless of any adjacent LIMIT). Only the two
+        rows above where an adjacent LIMIT would otherwise widen the
+        retained window change: both cap at the SORTBY's own max (10 and 5
+        respectively) instead of the LIMIT's count. The no-adjacent-LIMIT
+        rows and the GROUPBY-blocks-widening row are identical on both
+        branches, since neither one involves the gate at all.
         """
         prefix = "{ft-sortby-limit-" + str(uuid.uuid4()) + "}:"
         index = prefix + "index"
+        legacy = check_version_lt(emulate_release_level, "1.3.0")
 
         assert (
             await ft.create(
@@ -2931,7 +2965,8 @@ class TestFt:
             properties=[FtAggregateSortProperty("@n", OrderBy.ASC)]
         )
 
-        # SORTBY, no MAX, no LIMIT -> the default 10 rows.
+        # SORTBY, no MAX, no LIMIT -> the default 10 rows. Unaffected by the
+        # gate: no adjacent LIMIT, same on both branches.
         result = await ft.aggregate(
             glide_client,
             index,
@@ -2940,7 +2975,8 @@ class TestFt:
         )
         assert len(result) == 10
 
-        # SORTBY MAX 5, no LIMIT -> 5 rows.
+        # SORTBY MAX 5, no LIMIT -> 5 rows. Unaffected by the gate: no
+        # adjacent LIMIT, same on both branches.
         sort_max_5 = FtAggregateSortBy(
             properties=[FtAggregateSortProperty("@n", OrderBy.ASC)], max=5
         )
@@ -2952,8 +2988,9 @@ class TestFt:
         )
         assert len(result) == 5
 
-        # SORTBY + LIMIT 0 15, adjacent -> LIMIT raises the retained window
-        # to 15 rows (the 1.3 fix; pre-1.3 this would still cap at 10).
+        # SORTBY + LIMIT 0 15, adjacent -> the 1.3 fix raises the retained
+        # window to 15 rows; below 1.3.0, the adjacent LIMIT does not widen
+        # SORTBY's own default-10 retention.
         result = await ft.aggregate(
             glide_client,
             index,
@@ -2962,9 +2999,10 @@ class TestFt:
                 clauses=[sort_asc, FtAggregateLimit(offset=0, count=15)]
             ),
         )
-        assert len(result) == 15
+        assert len(result) == (10 if legacy else 15)
 
-        # SORTBY MAX 5 + LIMIT 0 12, adjacent -> the LIMIT outranks the MAX.
+        # SORTBY MAX 5 + LIMIT 0 12, adjacent -> the 1.3 fix lets LIMIT
+        # outrank MAX; below 1.3.0, SORTBY's own MAX 5 still wins.
         result = await ft.aggregate(
             glide_client,
             index,
@@ -2973,10 +3011,11 @@ class TestFt:
                 clauses=[sort_max_5, FtAggregateLimit(offset=0, count=12)]
             ),
         )
-        assert len(result) == 12
+        assert len(result) == (5 if legacy else 12)
 
         # LIMIT 0 15 THEN SORTBY -- either side of the pair counts as
-        # adjacent, not just LIMIT-after-SORTBY.
+        # adjacent, not just LIMIT-after-SORTBY. Same legacy-vs-fixed split
+        # as the SORTBY-then-LIMIT row above.
         result = await ft.aggregate(
             glide_client,
             index,
@@ -2985,11 +3024,12 @@ class TestFt:
                 clauses=[FtAggregateLimit(offset=0, count=15), sort_asc]
             ),
         )
-        assert len(result) == 15
+        assert len(result) == (10 if legacy else 15)
 
         # SORTBY + GROUPBY + LIMIT 0 15 -- GROUPBY sits between SORTBY and
         # LIMIT, so the LIMIT is not adjacent and must NOT widen SORTBY's
-        # default-10 retention.
+        # default-10 retention. Unaffected by the gate: GROUPBY blocks
+        # widening on both branches.
         result = await ft.aggregate(
             glide_client,
             index,
@@ -3256,13 +3296,23 @@ class TestFt:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_ft_create_score_field_in_index_definition(
-        self, glide_client: TGlideClient
+        self, glide_client: TGlideClient, emulate_release_level: str
     ):
         """R3a-L-8 (G-4): FT.CREATE's SCORE_FIELD option (P3,
         FtCreateOptions(score_field=...)) is reported back under FT.INFO's
         `index_definition`, alongside a `default_score` entry -- confirmed
         live. No existing test converted or asserted either field even
-        though P3 added SCORE_FIELD; this closes that gap."""
+        though P3 added SCORE_FIELD; this closes that gap.
+
+        E-2 (D22): below `search.emulate-release` 1.3.0, the
+        `ft_info_score_field` gate stays on its legacy branch
+        (`src/index_schema.cc` `RespondWithInfo()`): `index_definition`
+        never gains a `score_field` pair at all (6 elements, not 8, before
+        any `filter` pair), and `default_score` is always the literal
+        string `"1"` rather than the real configured score as a double --
+        SCORE only ever accepted 1.0 at the time, so the literal was
+        always accurate. Asserts that legacy shape directly.
+        """
         prefix = "{ft-score-field-info-" + str(uuid.uuid4()) + "}:"
         index = prefix + "index"
 
@@ -3283,8 +3333,12 @@ class TestFt:
         info_raw = await ft.info(glide_client, index)
         info = pair_flat_list(info_raw)
         index_def = pair_flat_list(info[b"index_definition"])
-        assert index_def[b"score_field"] == b"boost"
-        assert b"default_score" in index_def
+        if check_version_lt(emulate_release_level, "1.3.0"):
+            assert b"score_field" not in index_def
+            assert index_def[b"default_score"] == b"1"
+        else:
+            assert index_def[b"score_field"] == b"boost"
+            assert b"default_score" in index_def
 
         assert await ft.dropindex(glide_client, index) == OK
 
