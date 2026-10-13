@@ -4,7 +4,7 @@
 
 ### Features
 
-* Java: Add `DELIFEQ` command support ([#6146](https://github.com/valkey-io/valkey-glide/issues/6146))
+* Java: Add `DELIFEQ` command support ([#7339](https://github.com/valkey-io/valkey-glide/pull/7339))
 
 ### Fixes
 
