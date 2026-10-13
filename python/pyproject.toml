@@ -1,13 +1,13 @@
 [tool.isort]
 profile = "black"
-skip = [".env", "glide-shared/glide_shared/protobuf", "build"]
+skip = [".env", "glide-shared/glide_shared/protobuf", "glide-async/python/glide_shared", "build"]
 known_first_party = ["glide-sync", "glide-async", "glide-shared", "tests"]
 
 [tool.black]
 target-version = ['py39', 'py310', 'py311', 'py312']
 
 [tool.mypy]
-exclude = "^(.*\\/)?(\\.env|glide-shared/glide_shared/protobuf|utils/release-candidate-testing|target|ort|build)(\\/|$)"
+exclude = "^(.*\\/)?(\\.env|glide-shared/glide_shared/protobuf|glide-async/python/glide_shared|utils/release-candidate-testing|target|ort|build)(\\/|$)"
 
 [[tool.mypy.overrides]]
 module = "glide_shared._fast_response"
