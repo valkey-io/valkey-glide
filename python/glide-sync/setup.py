@@ -78,6 +78,14 @@ GLIDE_SHARED_RS_SOURCE = ROOT.parent / "glide-shared"
 GLIDE_SHARED_RS_DIST = ROOT / "glide-shared-rs"
 
 
+def cargo_target_dir(crate_dir: Path) -> Path:
+    """Cargo honors CARGO_TARGET_DIR over the per-crate default; so must every
+    path that reads cargo's output, or a shared target dir (the CI cache)
+    breaks the build."""
+    override = os.environ.get("CARGO_TARGET_DIR")
+    return Path(override) if override else crate_dir / "target"
+
+
 # Helper to safely remove files, directories, or symlinks
 def remove_existing(path: Path):
     if path.is_symlink():
@@ -203,7 +211,7 @@ class build_ext(build_ext_orig):
         suffix = {"linux": ".so", "darwin": ".dylib", "win32": ".dll"}[sys.platform]
         lib_name = "libglide_ffi" + suffix
 
-        built_lib = ffi_path / "target" / target_dir / lib_name
+        built_lib = cargo_target_dir(ffi_path) / target_dir / lib_name
         dest_dir = Path(self.build_lib) / "glide_sync"
         dest_dir.mkdir(parents=True, exist_ok=True)
         print(f"[INFO] Copying {built_lib} → {dest_dir / lib_name}")
@@ -235,7 +243,9 @@ class build_ext(build_ext_orig):
             "EXT_SUFFIX"
         )  # e.g. .cpython-311-darwin.so
         src_lib = (
-            glide_shared_rs / "target" / target_dir / ("lib_fast_response" + suffix)
+            cargo_target_dir(glide_shared_rs)
+            / target_dir
+            / ("lib_fast_response" + suffix)
         )
         dest_shared = Path(self.build_lib) / "glide_shared"
         dest_shared.mkdir(parents=True, exist_ok=True)

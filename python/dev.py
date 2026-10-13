@@ -41,10 +41,19 @@ PROTO_REL_PATH = "glide-core/src/protobuf"
 GLIDE_ROOT = find_project_root()
 PYTHON_DIR = GLIDE_ROOT / "python"
 
+
+def cargo_target_dir(crate_dir: Path) -> Path:
+    """Cargo honors CARGO_TARGET_DIR over the per-crate default; so must every
+    path that reads cargo's output, or a shared target dir (the CI cache)
+    breaks the build."""
+    override = os.environ.get("CARGO_TARGET_DIR")
+    return Path(override) if override else crate_dir / "target"
+
+
 # Constants – FFI
 FFI_DIR = GLIDE_ROOT / "ffi"
-FFI_OUTPUT_DIR_DEBUG = FFI_DIR / "target" / "debug"
-FFI_OUTPUT_DIR_RELEASE = FFI_DIR / "target" / "release"
+FFI_OUTPUT_DIR_DEBUG = cargo_target_dir(FFI_DIR) / "debug"
+FFI_OUTPUT_DIR_RELEASE = cargo_target_dir(FFI_DIR) / "release"
 
 # Constants – Shared
 GLIDE_SHARED_DIR = PYTHON_DIR / "glide-shared"
@@ -287,7 +296,7 @@ def build_async_client_wheel(
     )
 
     # 3. Find and install wheel
-    wheel_dir = GLIDE_ASYNC_DIR / "target" / "wheels"
+    wheel_dir = cargo_target_dir(GLIDE_ASYNC_DIR) / "wheels"
     wheel_files = list(wheel_dir.glob("*.whl"))
     if not wheel_files:
         raise FileNotFoundError(f"No wheel found in {wheel_dir}")
