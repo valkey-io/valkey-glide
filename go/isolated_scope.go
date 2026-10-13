@@ -306,9 +306,10 @@ func acquireScope(
 	var result payload
 	select {
 	case <-ctx.Done():
-		if _, claimed := takeRequest(requestID); !claimed {
-			go discardResponse(resultChannel)
-		}
+		// The core keeps waiting after the caller gives up. Leave the request
+		// registered so a late success still arrives here, and give that scope
+		// back; otherwise its slot stays in use until the client closes.
+		go releaseLateScope(resultChannel, clientID)
 		return nil, ctx.Err()
 	case result = <-resultChannel:
 	}
@@ -322,6 +323,18 @@ func acquireScope(
 		scopeID:  int64(resp.int_value),
 		clientID: clientID,
 	}, nil
+}
+
+// releaseLateScope gives back a scope the core granted after its caller stopped waiting.
+func releaseLateScope(resultChannel chan payload, clientID uint64) {
+	result := <-resultChannel
+	if result.value == nil {
+		return
+	}
+	if result.error == nil {
+		C.glide_scope_release(C.uint64_t(result.value.int_value), C.uint64_t(clientID))
+	}
+	C.free_command_response(result.value)
 }
 
 // getConnectionRequest returns the protobuf ConnectionRequest for this client's config.

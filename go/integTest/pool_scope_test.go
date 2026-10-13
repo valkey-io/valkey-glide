@@ -1391,3 +1391,35 @@ func TestScopeAcquireLazyMtlsParentFailsWithoutWaiting(t *testing.T) {
 	assert.Contains(t, err.Error(), "certificate material")
 	assert.Less(t, elapsed, 2*time.Second)
 }
+
+// A caller that stops waiting must not keep the slot the core later grants it.
+func TestScopeAcquireAbandonedByCallerReturnsItsSlot(t *testing.T) {
+	skipMode(t, false)
+	client := newScopeClient(t, false)
+	defer client.Close()
+
+	held := holdWholeScopePool(t, client)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	_, err := client.ScopedConnection(ctx, 5*time.Second, "")
+	require.ErrorIs(t, err, context.DeadlineExceeded)
+
+	// The abandoned acquire is still waiting in the core; freeing the pool lets
+	// it win a slot, which the binding must then release on its behalf.
+	for _, s := range held {
+		s.Close()
+	}
+
+	refilled := make([]*glide.IsolatedScope, 0, scopePoolMaxTotal)
+	defer func() {
+		for _, s := range refilled {
+			s.Close()
+		}
+	}()
+	for i := 0; i < scopePoolMaxTotal; i++ {
+		scope, err := client.ScopedConnection(context.Background(), 2*time.Second, "")
+		require.NoError(t, err, "slot %d of %d unavailable after an abandoned acquire", i+1, scopePoolMaxTotal)
+		refilled = append(refilled, scope)
+	}
+}
