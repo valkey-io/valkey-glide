@@ -1644,6 +1644,8 @@ def main():
             ]
             if args.cluster_mode:
                 cm_args.append("--cluster-mode")
+            if args.cluster_node_timeout is not None:
+                cm_args += ["--cluster-node-timeout", str(args.cluster_node_timeout)]
             if args.ports:
                 # Explicit ports requested - pass them through
                 cm_args += ["-p"] + [str(p) for p in args.ports]
