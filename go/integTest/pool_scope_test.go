@@ -1371,16 +1371,10 @@ func TestScopeAcquireLazyMtlsParentFailsWithoutWaiting(t *testing.T) {
 	caCert, err := os.ReadFile(filepath.Join("..", "..", "glide-core", "src", "tls_reload", "test_data", "cert_a.pem"))
 	require.NoError(t, err)
 
-	cfg := config.NewClientConfiguration().
-		WithAddress(&config.NodeAddress{Host: "127.0.0.1", Port: 1}).
-		WithUseTLS(true).
-		WithLazyConnect(true).
-		WithRequestTimeout(5 * time.Second).
-		WithAdvancedConfiguration(
-			config.NewAdvancedClientConfiguration().WithTlsConfiguration(
-				config.NewTlsConfiguration().WithRootCertificates(caCert),
-			),
-		)
+	cfg := tlsClientConfigFor(
+		config.NewTlsConfiguration().WithRootCertificates(caCert),
+		config.NodeAddress{Host: "127.0.0.1", Port: 1},
+	).WithLazyConnect(true)
 	client, err := glide.NewClient(cfg)
 	require.NoError(t, err)
 	defer client.Close()
