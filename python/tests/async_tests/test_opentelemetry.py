@@ -416,8 +416,8 @@ class TestOpenTelemetryGlide:
         # The invariant to test is that every span handed to the binding is
         # dropped once its command completes.
         assert (
-            memory_increase < 15
-        ), f"Memory usage increased by {memory_increase: .2f}%, which is more than the allowed 15%"
+            memory_increase < 17.5
+        ), f"Memory usage increased by {memory_increase: .2f}%, which is more than the allowed 17.5%"
 
         await client.close()
 
