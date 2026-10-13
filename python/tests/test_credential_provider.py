@@ -4652,6 +4652,279 @@ def test_delegated_request_rechecks_stopped_asyncio_owner(monkeypatch):
             os.close(async_client_module._async_pipe_write_fd)
 
 
+@pytest.mark.parametrize("requester_backend", ["asyncio", "trio"])
+@pytest.mark.parametrize("pointer_mode", [False, True], ids=["inline", "pointer"])
+def test_delegated_pubsub_wait_takes_over_stopped_asyncio_owner(
+    monkeypatch, requester_backend, pointer_mode
+):
+    """A blocking PubSub wait revives a delegated pipe without explicit setup."""
+    import sys
+
+    import glide.glide_client as async_client_module
+
+    _reset_pipe_test_state(monkeypatch, async_client_module)
+    ffi = GlideFFI.ffi
+    fake_lib = SimpleNamespace(
+        init_async_pipe=MagicMock(),
+        reinit_async_pipe=MagicMock(),
+        free_pubsub_pointer_payload=MagicMock(),
+    )
+    owner_loop = asyncio.new_event_loop()
+    owner_ready = threading.Event()
+    owner_holder = {}
+    clients = []
+
+    def owner_thread_main():
+        asyncio.set_event_loop(owner_loop)
+        owner = _new_pipe_setup_client(
+            async_client_module, fake_lib, 7351, loop=owner_loop
+        )
+        clients.append(owner)
+        owner_holder["client"] = owner
+        owner._setup_pipe()
+        owner_loop.call_soon(owner_ready.set)
+        owner_loop.run_forever()
+        owner_loop.close()
+
+    owner_thread = threading.Thread(target=owner_thread_main)
+    owner_thread.start()
+    assert owner_ready.wait(timeout=2)
+    assert async_client_module._async_pipe_loop is owner_loop
+
+    payload = b"".join(
+        (
+            (3).to_bytes(4, byteorder=sys.byteorder, signed=True),
+            len(b"message").to_bytes(4, byteorder=sys.byteorder),
+            b"message",
+            len(b"channel").to_bytes(4, byteorder=sys.byteorder),
+            b"channel",
+            (0).to_bytes(4, byteorder=sys.byteorder),
+        )
+    )
+    pointer_buffer = ffi.new("uint8_t[]", payload) if pointer_mode else None
+
+    async def wait_after_owner_stops():
+        is_asyncio = sniffio.current_async_library() == "asyncio"
+        requester_loop = asyncio.get_running_loop() if is_asyncio else None
+        client = async_client_module.BaseClient(
+            GlideClientConfiguration(addresses=[NodeAddress()])
+        )
+        client._lib = fake_lib
+        client._pipe_client_id = 7352
+        client._create_pid = os.getpid()
+        client._is_asyncio = is_asyncio
+        client._loop = requester_loop
+        clients.append(client)
+        client._setup_pipe()
+        assert async_client_module._async_pipe_loop is owner_loop
+        assert async_client_module._client_registry[7352] is client
+
+        setup_calls = []
+        original_setup = async_client_module.BaseClient._setup_pipe
+
+        def tracked_setup(self, *, register_client=True):
+            setup_calls.append(self._pipe_client_id)
+            return original_setup(self, register_client=register_client)
+
+        monkeypatch.setattr(
+            async_client_module.BaseClient, "_setup_pipe", tracked_setup
+        )
+
+        owner_loop.call_soon_threadsafe(owner_loop.stop)
+        await anyio.to_thread.run_sync(lambda: owner_thread.join(timeout=2))
+        assert not owner_thread.is_alive()
+        assert owner_loop.is_closed()
+
+        if pointer_mode:
+            assert pointer_buffer is not None
+            response_ptr = int(ffi.cast("uintptr_t", pointer_buffer))
+            arena_or_error = (1 << 63) | len(payload)
+            frame = async_client_module._FRAME_STRUCT.pack(
+                client._pipe_client_id,
+                async_client_module._PUBSUB_SENTINEL,
+                response_ptr,
+                arena_or_error,
+            )
+        else:
+            frame = (
+                async_client_module._FRAME_STRUCT.pack(
+                    client._pipe_client_id,
+                    async_client_module._PUBSUB_SENTINEL,
+                    len(payload),
+                    0,
+                )
+                + payload
+            )
+        os.write(async_client_module._async_pipe_write_fd, frame)
+
+        with anyio.fail_after(2):
+            message = await client.get_pubsub_message()
+        assert message.message == b"message"
+        assert message.channel == b"channel"
+        assert message.pattern is None
+        assert setup_calls == [client._pipe_client_id]
+
+        if is_asyncio:
+            assert requester_loop is not None
+            assert async_client_module._async_pipe_loop is requester_loop
+            requester_loop.remove_reader(async_client_module._async_pipe_read_fd)
+        else:
+            cancel_scope = async_client_module._trio_pipe_cancel_scope
+            assert cancel_scope is not None
+            cancel_scope.cancel()
+            with anyio.fail_after(2):
+                while async_client_module._async_pipe_registered:
+                    await anyio.sleep(0)
+
+    try:
+        anyio.run(wait_after_owner_stops, backend=requester_backend)
+        fake_lib.init_async_pipe.assert_called_once()
+        fake_lib.reinit_async_pipe.assert_not_called()
+        if pointer_mode:
+            fake_lib.free_pubsub_pointer_payload.assert_called_once_with(
+                ffi.cast("uint8_t*", pointer_buffer), len(payload)
+            )
+        else:
+            fake_lib.free_pubsub_pointer_payload.assert_not_called()
+    finally:
+        if owner_thread.is_alive():
+            owner_loop.call_soon_threadsafe(owner_loop.stop)
+            owner_thread.join(timeout=2)
+        os.close(async_client_module._async_pipe_read_fd)
+        os.close(async_client_module._async_pipe_write_fd)
+
+
+def test_simultaneous_trio_requests_preserve_reader_ownership(  # noqa: C901
+    monkeypatch,
+):
+    """Per-request liveness checks retain one Trio reader across two runs."""
+    import glide.glide_client as async_client_module
+    import trio
+
+    _reset_pipe_test_state(monkeypatch, async_client_module)
+    read_fd, write_fd = os.pipe()
+    os.set_blocking(read_fd, False)
+    clients = [
+        async_client_module.BaseClient(
+            GlideClientConfiguration(addresses=[NodeAddress()])
+        )
+        for _ in range(2)
+    ]
+    for index, client in enumerate(clients):
+        client._lib = SimpleNamespace()
+        client._pipe_client_id = 7361 + index
+        client._create_pid = os.getpid()
+        client._is_asyncio = False
+        client._loop = None
+
+    setup_calls = []
+    monkeypatch.setattr(
+        async_client_module.BaseClient,
+        "_setup_pipe",
+        lambda self, **unused_kwargs: setup_calls.append(self._pipe_client_id),
+    )
+
+    tokens = [None, None]
+    ready = [threading.Event(), threading.Event()]
+    begin = threading.Event()
+    starts = [[threading.Event() for _ in range(4)] for _ in range(2)]
+    registered = [[threading.Event() for _ in range(4)] for _ in range(2)]
+    completed = [[threading.Event() for _ in range(4)] for _ in range(2)]
+    results = [[], []]
+    errors = []
+
+    async def issue_requests(index):
+        try:
+            tokens[index] = trio.lowlevel.current_trio_token()
+            ready[index].set()
+            await anyio.to_thread.run_sync(begin.wait)
+            client = clients[index]
+            for request_index in range(4):
+                await anyio.to_thread.run_sync(starts[index][request_index].wait)
+                callback_id = request_index + 1
+                future = async_client_module._get_new_future_instance()
+                await client._register_future(callback_id, future)
+                registered[index][request_index].set()
+                results[index].append(await future)
+                completed[index][request_index].set()
+        except BaseException as error:
+            errors.append(error)
+
+    def run_requests(index):
+        trio.run(issue_requests, index)
+
+    threads = [
+        threading.Thread(target=run_requests, args=(index,)) for index in range(2)
+    ]
+    for thread in threads:
+        thread.start()
+    assert all(event.wait(timeout=2) for event in ready)
+
+    stable_scope = object()
+    with async_client_module._async_pipe_lock:
+        async_client_module._async_pipe_read_fd = read_fd
+        async_client_module._async_pipe_write_fd = write_fd
+        async_client_module._async_pipe_init_pid = os.getpid()
+        async_client_module._async_pipe_registered = True
+        async_client_module._async_pipe_loop = None
+        async_client_module._trio_pipe_token = tokens[0]
+        async_client_module._trio_pipe_cancel_scope = stable_scope
+        for client in clients:
+            async_client_module._client_registry[client._pipe_client_id] = client
+
+    def resolve_error(client, request_id, unused_arena):
+        future = client._pending_futures.pop(request_id)
+        async_client_module._resolve_future(
+            future, (client._pipe_client_id, request_id), client
+        )
+
+    monkeypatch.setattr(async_client_module, "_handle_pipe_error", resolve_error)
+    begin.set()
+
+    try:
+        for request_index in range(4):
+            for client_index in range(2):
+                starts[client_index][request_index].set()
+                assert registered[client_index][request_index].wait(timeout=2)
+                assert async_client_module._trio_pipe_token is tokens[0]
+                assert async_client_module._trio_pipe_cancel_scope is stable_scope
+
+            os.write(
+                write_fd,
+                b"".join(
+                    async_client_module._FRAME_STRUCT.pack(
+                        client._pipe_client_id, request_index + 1, 0, 0
+                    )
+                    for client in clients
+                ),
+            )
+            async_client_module._on_async_pipe_readable()
+            assert all(
+                completed[index][request_index].wait(timeout=2) for index in range(2)
+            )
+
+        for thread in threads:
+            thread.join(timeout=2)
+        assert not any(thread.is_alive() for thread in threads)
+        assert not errors
+        assert setup_calls == []
+        assert async_client_module._trio_pipe_token is tokens[0]
+        assert async_client_module._trio_pipe_cancel_scope is stable_scope
+        assert results == [
+            [(7361, request_id) for request_id in range(1, 5)],
+            [(7362, request_id) for request_id in range(1, 5)],
+        ]
+    finally:
+        begin.set()
+        for client_starts in starts:
+            for start in client_starts:
+                start.set()
+        for thread in threads:
+            thread.join(timeout=2)
+        os.close(read_fd)
+        os.close(write_fd)
+
+
 def test_async_pool_wrapper_registers_only_after_successful_setup(monkeypatch):
     """A failed pool setup is unretained, and retry registers after setup."""
     import glide.client_pool as pool_module

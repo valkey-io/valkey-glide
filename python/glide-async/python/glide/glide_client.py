@@ -1254,6 +1254,62 @@ class BaseClient(CoreCommands):
                 )
             _client_registry[self._pipe_client_id] = self
 
+    def _ensure_pipe_reader_liveness(self) -> None:
+        """Recover absent or stopped shared-pipe ownership when necessary."""
+        with _async_pipe_lock:
+            pipe_state = (
+                _async_pipe_read_fd,
+                _async_pipe_write_fd,
+                _async_pipe_init_pid,
+                _async_pipe_registered,
+                _async_pipe_loop,
+                _trio_pipe_token,
+                _trio_pipe_cancel_scope,
+            )
+
+        (
+            read_fd,
+            write_fd,
+            init_pid,
+            registered,
+            owner_loop,
+            trio_token,
+            trio_cancel_scope,
+        ) = pipe_state
+        transport_is_coherent = (
+            read_fd >= 0 and write_fd >= 0 and init_pid == os.getpid()
+        )
+        asyncio_owner_is_coherent = (
+            registered
+            and owner_loop is not None
+            and trio_token is None
+            and trio_cancel_scope is None
+        )
+        trio_owner_is_coherent = (
+            registered
+            and owner_loop is None
+            and trio_token is not None
+            and trio_cancel_scope is not None
+        )
+
+        if transport_is_coherent and trio_owner_is_coherent:
+            # A published Trio reader remains authoritative until its system-task
+            # finalizer clears ownership. Another simultaneous Trio run can use
+            # it because each _CompatFuture completes through its captured token.
+            return
+        if (
+            transport_is_coherent
+            and asyncio_owner_is_coherent
+            and owner_loop is not None
+            and not owner_loop.is_closed()
+            and owner_loop.is_running()
+        ):
+            return
+
+        # _setup_pipe acquires _async_pipe_lock and handles fork recovery. Never
+        # call it while holding the snapshot lock above.
+        self._setup_pipe()
+
     # ==================== Callback Handling ====================
 
     def _get_callback_id(self) -> int:
@@ -1261,10 +1317,7 @@ class BaseClient(CoreCommands):
 
     async def _register_future(self, callback_id: int, fut: "TFuture") -> None:
         """Ensure a viable reader, then register a pending future."""
-        # A client created on another loop may have delegated to the current
-        # process-wide reader. Re-evaluate that owner immediately before every
-        # native pipe request so a stopped owner is replaced before dispatch.
-        self._setup_pipe()
+        self._ensure_pipe_reader_liveness()
         if _FREE_THREADED:
             with self._lock:
                 self._pending_futures[callback_id] = fut
@@ -1294,6 +1347,7 @@ class BaseClient(CoreCommands):
             raise ConfigurationError(
                 "The operation will never complete since messages will be passed to the configured callback."
             )
+        self._ensure_pipe_reader_liveness()
         fut: "TFuture" = _get_new_future_instance()
         with self._pubsub_lock:
             self._pubsub_futures.append(fut)
