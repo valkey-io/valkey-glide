@@ -306,9 +306,8 @@ func acquireScope(
 	var result payload
 	select {
 	case <-ctx.Done():
-		// The core keeps waiting after the caller gives up. Leave the request
-		// registered so a late success still arrives here, and give that scope
-		// back; otherwise its slot stays in use until the client closes.
+		// The core keeps waiting after the caller gives up. Give back a scope it
+		// is later granted, or its slot stays in use until the client closes.
 		go releaseLateScope(resultChannel, clientID)
 		return nil, ctx.Err()
 	case result = <-resultChannel:
