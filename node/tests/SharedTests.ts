@@ -9931,7 +9931,9 @@ export function runBaseTests(config: {
                 }
 
                 expect(await client.objectEncoding(skiplist_key)).toEqual(
-                    "skiplist",
+                    cluster.checkIfServerVersionLessThan("9.2.0")
+                        ? "skiplist"
+                        : "btree",
                 );
 
                 expect(
