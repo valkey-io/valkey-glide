@@ -102,6 +102,9 @@ excluded_shared_symbols = [
     "BaseBatchOptions",
     # python/glide-shared/glide_shared/commands/sorted_set.py
     "separate_keys",  # FunctionDef
+    # python/glide-shared/glide_shared/commands/server_modules/ft_options/ft_aggregate_options.py
+    "load_fields_to_args",  # FunctionDef - internal serializer shared with ft_hybrid_options.py
+    "params_to_args",  # FunctionDef - internal serializer shared with ft_hybrid_options.py
     # python/glide-shared/glide_shared/commands/server_modules/ft_options/ft_constants.py
     "CommandNames",  # ClassDef
     "FtCreateKeywords",  # ClassDef
