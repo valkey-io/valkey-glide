@@ -13,15 +13,17 @@ This is the Node.js/TypeScript client binding for Valkey GLIDE, providing both s
 **Key Components:**
 
 - `src/` - Main TypeScript client library
-- `rust-client/` - Rust NAPI bindings and FFI integration
-- `build-ts/` - Compiled TypeScript output
-- `tests/` - Test suites and utilities
+- `rust-client/` - Rust NAPI bindings (`src/lib.rs` client handle, `src/pool.rs` client pool and isolated scopes)
+- `build-ts/` - Generated: compiled TypeScript, protobuf JS, NAPI `native.js`/`native.d.ts`, and the copied `.node` binary
+- `tests/` - Jest test suites and utilities
 - `pm-and-types-tests/` - Package manager and TypeScript types testing
+- `hybrid-node-tests/` - CommonJS/ESM/pnpm consumer smoke tests
+- `npm/` - Per-platform native binary packages (`@valkey/valkey-glide-<platform>`)
 
 ## Architecture Quick Facts
 
 **Core Implementation:** TypeScript wrapper around glide-core Rust library via NAPI-RS
-**Client Types:** GlideClient (standalone), GlideClusterClient (cluster)
+**Client Types:** GlideClient (standalone), GlideClusterClient (cluster), GlideMonitorClient (`MONITOR` stream), `ClientPool` (client-instance pool), `IsolatedScope` (dedicated connection for WATCH/MULTI/SELECT state); the last two are backed by `rust-client/src/pool.rs`
 **API Style:** Async-first with Promise return types
 **Command Protocol:** Direct NAPI function calls on `GlideClientHandle` (not protobuf for command flow)
 
@@ -36,7 +38,7 @@ This is the Node.js/TypeScript client binding for Valkey GLIDE, providing both s
 7. JS `handleResponsesAvailable` calls `clientHandle.drainResponses()` to get all pending `CommandResponse` objects
 8. For responses with value pointers, JS calls `valueFromSplitPointer(high, low, stringDecoder)` to reclaim and decode the `redis::Value`
 
-Other NAPI entry points: `sendBatch`, `invokeScript`, `clusterScan`, `updateConnectionPassword`, `refreshIamToken`.
+Other NAPI entry points on the handle: `sendBatch`, `invokeScript`, `clusterScan`, `updateConnectionPassword`, `refreshIamToken`. Free functions: `CreateDirectClient`, `createMonitorClient`, `registerAddressResolver`, `InitOpenTelemetry`, `InitInternalLogger`; the `createPool`/`pool*` and `scope*` functions live in `rust-client/src/pool.rs`.
 
 ### Worker Pool Architecture
 
@@ -57,11 +59,9 @@ Other NAPI entry points: `sendBatch`, `invokeScript`, `clusterScan`, `updateConn
 - **Cluster routing**: `Routes` protobuf encoded to bytes in JS, parsed by Rust via `parse_route_bytes`
 - **Command type enums**: `RequestType` protobuf enum maps command names to numeric IDs
 
-**Supported Platforms:**
+**Supported Platforms:** see [README.md: System Requirements](./README.md#system-requirements). Native binaries are built for the `napi.triples` list in `package.json` and published as `npm/<platform>/` packages.
 
-- Linux: glibc 2.17+, musl libc 1.2.3+ (Alpine)
-- macOS: 13.5+ (x86_64), 15.0+ (aarch64/Apple Silicon)
-- Node.js: 20+ (npm 11+ recommended for Linux)
+**Node.js:** `>=20` (`engines` in `package.json`); npm 11+ recommended on Linux for libc-aware optional-dependency download.
 
 **Package:** `@valkey/valkey-glide` on npm
 
@@ -70,32 +70,32 @@ Other NAPI entry points: `sendBatch`, `invokeScript`, `clusterScan`, `updateConn
 ### Preferred (npm Scripts)
 
 ```bash
-# Build commands
-npm run build                    # Development build (fast, unoptimized)
-npm run build:release           # Release build (optimized, stripped debug symbols)
-npm run build:benchmark         # Benchmark build (optimized with debug symbols)
+# Build commands (each runs `npm ci` first; `build` also runs `clean:build` via the prebuild hook)
+npm run build                    # Development build (unoptimized, testing_utilities feature)
+npm run build:release           # Release build (optimized, stripped)
+npm run build:benchmark         # Release build with the testing_utilities feature (what benchmarks/ expects)
 
 # Incremental builds
-npm run build:ts                # TypeScript only
-npm run build:rust-client       # Rust client only
-npm run build-protobuf          # Protobuf generation only
+npm run build:ts                # TypeScript only (tsc)
+npm run build:rust-client       # Rust NAPI module only (dev profile)
+npm run build-protobuf          # Protobuf JS/d.ts generation only
 
-# Testing
-npm test                        # Standard tests (excludes server modules)
-npm run test:debug              # Tests with debugging options
-npm run test:minimum            # Minimal test suite (faster)
-npm run test:modules            # Server module tests only
+# Testing (each builds ../utils first; the suites start their own servers)
+npm test                        # All suites except ServerModules, parallel
+npm run test:debug              # All suites including ServerModules, serial (--runInBand)
+npm run test:minimum            # Serial, skips GlideJson/GlideFt/pubsub/kill tests
+npm run test:modules            # Serial, only GlideJson/GlideFt tests (needs a modules-enabled server)
 
-# Linting and Formatting
-npm run lint                    # Check code quality (ESLint + Prettier)
-npm run lint:fix                # Auto-fix linting issues
-npm run prettier:check          # Check formatting only
-npm run prettier:format         # Format code automatically
+# Linting and Formatting (lint runs `npm ci` in the repo root first)
+npm run lint                    # ESLint + Prettier check
+npm run lint:fix                # ESLint --fix + Prettier write
+npm run prettier:check          # Prettier check only
+npm run prettier:format         # Prettier write only
 
 # Development utilities
-npm run repl                    # Interactive TypeScript REPL
-npm run clean:build             # Clean build artifacts only
-npm run clean                   # Complete cleanup including node_modules
+npm run repl                    # ts-node REPL against src/
+npm run clean:build             # Remove build-ts/, rust-client/target/, .node binaries
+npm run clean                   # Also removes node_modules/ and the tracked lock files
 ```
 
 ### Raw Equivalents
@@ -104,15 +104,16 @@ npm run clean                   # Complete cleanup including node_modules
 # Manual TypeScript compilation
 npx tsc
 
-# Manual protobuf generation
+# Manual protobuf generation (same three steps `npm run build-protobuf` runs; do not drop the `replace`)
 mkdir -p build-ts
-pbjs -t static-module -w commonjs --no-verify --no-convert -o build-ts/ProtobufMessage.js ../glide-core/src/protobuf/*.proto
-pbts -o build-ts/ProtobufMessage.d.ts build-ts/ProtobufMessage.js
+npx pbjs -t static-module -w commonjs --no-verify --no-convert -o build-ts/ProtobufMessage.js ../glide-core/src/protobuf/*.proto
+npx pbts -o build-ts/ProtobufMessage.d.ts build-ts/ProtobufMessage.js
+npx replace "this\.encode\(message, writer\)\.ldelim" "this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim" build-ts/ProtobufMessage.js
 
-# Manual Rust build (from rust-client/)
+# Manual Rust build (from rust-client/; produces target/release/libvalkey_glide.dylib|.so, not the .node file napi builds)
 cargo build --release
 
-# Manual test execution
+# Manual test execution (unfiltered: starts servers per suite and runs everything, including ServerModules)
 npx jest --verbose
 
 # Manual linting
@@ -129,8 +130,8 @@ npm run test:debug -- --cluster-endpoints=localhost:7000 --standalone-endpoints=
 # Run with TLS
 npm run test:debug -- --cluster-endpoints=localhost:7000 --standalone-endpoints=localhost:6379 --tls=true
 
-# Run specific test pattern
-npm run test:debug -- --testNamePattern="batch"
+# Run specific test pattern (test:debug includes ServerModules.test.ts, which fails without --cluster-endpoints)
+npm run test:debug -- --testPathIgnorePatterns=ServerModules --testNamePattern="batch"
 
 # Run server modules tests
 npm run test:modules -- --cluster-endpoints=localhost:7000
@@ -211,17 +212,13 @@ cargo fmt --manifest-path ./Cargo.toml --all
 
 ### Generated Outputs (Never Commit)
 
-- `build-ts/` - Compiled TypeScript output
-- `node_modules/` - Node.js dependencies
-- `rust-client/node_modules/` - Rust client dependencies
+- `build-ts/` - Compiled TypeScript, generated protobuf and NAPI glue, copied `.node` binary
+- `node_modules/`, `rust-client/node_modules/` - Dependencies
 - `rust-client/target/` - Rust build artifacts
-- `rust-client/valkey-glide.*.node` - Native binaries
-- `src/valkey-glide.*.node` - Native binaries
-- `build/*.tsbuildinfo` - TypeScript build info
-- `*.tsbuildinfo` - TypeScript incremental build files
-- `test-report*.html` - Test reports
+- `rust-client/index.*`, `rust-client/valkey-glide.*.node`, `src/valkey-glide.*.node` - NAPI outputs
+- `test-report*.html`, `coverage/` - Jest outputs
 - `glide-logs/` - Runtime logs
-- `package-lock.json`, `yarn.lock` - Lock files (project uses npm)
+- `yarn.lock` - Project uses npm; `package-lock.json` and `rust-client/package-lock.json` ARE committed (`npm ci` needs them)
 
 ### Node.js-Specific Rules
 
@@ -247,17 +244,24 @@ node/
 │   ├── BaseClient.ts           # Core client logic: sendCommand, drainResponses, handleResponse
 │   ├── GlideClient.ts          # Standalone client
 │   ├── GlideClusterClient.ts   # Cluster client
+│   ├── GlideMonitorClient.ts   # MONITOR stream client
+│   ├── ClientPool.ts           # Client-instance pool
+│   ├── IsolatedScope.ts        # Dedicated-connection scopes (WATCH/MULTI/SELECT)
 │   ├── Commands.ts             # Command builders (createGet, createSet, etc.)
+│   ├── server-modules/         # GlideJson, GlideFt
 │   └── index.ts                # Main exports
 ├── rust-client/                # Rust NAPI bindings
 │   ├── src/lib.rs              # GlideClientHandle, ResponseBuffer, worker pool, NAPI exports
+│   ├── src/pool.rs             # Client pool and isolated-scope NAPI exports
 │   └── Cargo.toml              # Rust dependencies
-├── build-ts/                   # Compiled TypeScript (generated)
-├── tests/                      # Test suites
+├── build-ts/                   # Generated outputs (see Guardrails)
+├── tests/                      # Jest test suites
 ├── pm-and-types-tests/         # Package manager compatibility tests
+├── hybrid-node-tests/          # CommonJS/ESM/pnpm consumer tests
+├── npm/                        # Per-platform native binary packages
 ├── package.json                # npm configuration and scripts
 ├── tsconfig.json               # TypeScript configuration
-└── jest.config.js              # Jest test configuration
+└── jest.config.ts              # Jest test configuration
 ```
 
 ## Quality Gates (Agent Checklist)
