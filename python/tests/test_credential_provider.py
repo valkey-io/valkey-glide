@@ -914,16 +914,14 @@ async def test_async_pipe_setup_failure_rolls_back_and_retries(  # noqa: C901
     assert fake_lib.init_async_pipe.call_count == expected_failed_init_calls
     fake_lib.reinit_async_pipe.assert_not_called()
     if is_asyncio:
-        if failure_stage == "init":
-            assert len(removed_readers) == 1
-        else:
-            assert not removed_readers
+        expected_removals = 1 if failure_stage in ("init", "registration") else 0
+        assert len(removed_readers) == expected_removals
     else:
         expected_registration_attempts = (
             1 if failure_stage in ("init", "registration") else 0
         )
         assert len(trio_cancel_scopes) == expected_registration_attempts
-        if failure_stage == "init":
+        if expected_registration_attempts:
             assert trio_cancel_scopes[0].cancel_called
         assert not removed_readers
     assert not registry
@@ -1422,30 +1420,71 @@ def test_async_pipe_takeover_registration_failure_restores_stopped_owner(monkeyp
         async_client_module._async_pipe_write_fd,
     )
     remainder = b"partial-frame"
+    queued_frame = async_client_module._FRAME_STRUCT.pack(7095, 1, 0, 0)
     async_client_module._pipe_remainder = remainder
+    os.write(original_fds[1], queued_frame)
+
+    def pipe_is_readable():
+        with selectors.DefaultSelector() as selector:
+            selector.register(original_fds[0], selectors.EVENT_READ)
+            return bool(selector.select(0))
+
+    assert pipe_is_readable()
 
     async def fail_then_retry():
         new_loop = asyncio.get_running_loop()
-        real_add_reader = new_loop.add_reader
+        real_old_add_reader = old_loop.add_reader
+        real_old_remove_reader = old_loop.remove_reader
+        real_new_add_reader = new_loop.add_reader
+        real_new_remove_reader = new_loop.remove_reader
+        active_readers = {old_loop}
         failed = False
 
-        def fail_once(*args, **kwargs):
+        def tracked_old_add_reader(*args, **kwargs):
+            result = real_old_add_reader(*args, **kwargs)
+            active_readers.add(old_loop)
+            return result
+
+        def tracked_old_remove_reader(fd):
+            result = real_old_remove_reader(fd)
+            active_readers.discard(old_loop)
+            return result
+
+        def install_then_fail_once(*args, **kwargs):
             nonlocal failed
+            assert not active_readers
+            result = real_new_add_reader(*args, **kwargs)
+            active_readers.add(new_loop)
+            assert active_readers == {new_loop}
             if not failed:
                 failed = True
                 raise OSError("injected takeover registration failure")
-            return real_add_reader(*args, **kwargs)
+            return result
 
-        monkeypatch.setattr(new_loop, "add_reader", fail_once)
+        def tracked_new_remove_reader(fd):
+            result = real_new_remove_reader(fd)
+            active_readers.discard(new_loop)
+            return result
+
+        monkeypatch.setattr(old_loop, "add_reader", tracked_old_add_reader)
+        monkeypatch.setattr(old_loop, "remove_reader", tracked_old_remove_reader)
+        monkeypatch.setattr(new_loop, "add_reader", install_then_fail_once)
+        monkeypatch.setattr(new_loop, "remove_reader", tracked_new_remove_reader)
         failed_client = _new_pipe_setup_client(
             async_client_module, fake_lib, 7096, loop=new_loop
         )
         clients.append(failed_client)
         with pytest.raises(ClosingError, match="async response pipe"):
             failed_client._setup_pipe()
+        assert active_readers == {old_loop}
         assert async_client_module._async_pipe_registered
         assert async_client_module._async_pipe_loop is old_loop
         assert async_client_module._pipe_remainder == remainder
+        assert pipe_is_readable()
+        assert (
+            async_client_module._async_pipe_read_fd,
+            async_client_module._async_pipe_write_fd,
+        ) == original_fds
         assert async_client_module._client_registry.get(7095) is old_client
         assert async_client_module._client_registry.get(7096) is None
 
@@ -1454,7 +1493,10 @@ def test_async_pipe_takeover_registration_failure_restores_stopped_owner(monkeyp
         )
         clients.append(retry_client)
         retry_client._setup_pipe()
+        assert active_readers == {new_loop}
         assert async_client_module._async_pipe_loop is new_loop
+        assert async_client_module._pipe_remainder == remainder
+        assert pipe_is_readable()
 
     try:
         asyncio.run(fail_then_retry())
@@ -1497,6 +1539,145 @@ def test_async_pipe_reuses_writer_across_sequential_trio_runs(monkeypatch):
 
     os.close(first_fds[0])
     os.close(first_fds[1])
+
+
+def test_async_pipe_trio_takeover_install_then_raise_cancels_new_reader(monkeypatch):
+    import glide.glide_client as async_client_module
+
+    _reset_pipe_test_state(monkeypatch, async_client_module)
+    fake_lib = SimpleNamespace(
+        init_async_pipe=MagicMock(), reinit_async_pipe=MagicMock()
+    )
+    stale_drain = MagicMock()
+    monkeypatch.setattr(async_client_module, "_drain_stale_pipe_frames", stale_drain)
+    clients = []
+
+    async def establish_transport():
+        client = _new_pipe_setup_client(async_client_module, fake_lib, 7105)
+        clients.append(client)
+        client._setup_pipe()
+
+    anyio.run(establish_transport, backend="trio")
+    original_fds = (
+        async_client_module._async_pipe_read_fd,
+        async_client_module._async_pipe_write_fd,
+    )
+    remainder = b"partial-trio-frame"
+    queued_frame = async_client_module._FRAME_STRUCT.pack(7105, 1, 0, 0)
+    async_client_module._pipe_remainder = remainder
+    os.write(original_fds[1], queued_frame)
+
+    def pipe_is_readable():
+        with selectors.DefaultSelector() as selector:
+            selector.register(original_fds[0], selectors.EVENT_READ)
+            return bool(selector.select(0))
+
+    active_readers = set()
+
+    class StoppedOwnerScope:
+        def __init__(self):
+            self.cancel_called = False
+
+        def cancel(self):
+            self.cancel_called = True
+            active_readers.discard(self)
+
+    old_scope = StoppedOwnerScope()
+    old_token = object()
+    active_readers.add(old_scope)
+    monkeypatch.setattr(async_client_module, "_async_pipe_registered", True)
+    monkeypatch.setattr(async_client_module, "_trio_pipe_token", old_token)
+    monkeypatch.setattr(async_client_module, "_trio_pipe_cancel_scope", old_scope)
+    assert pipe_is_readable()
+
+    async def fail_then_retry():
+        import trio
+
+        real_spawn_system_task = trio.lowlevel.spawn_system_task
+        attempts = []
+        completions = []
+        failed = False
+
+        def install_then_fail_once(async_fn, *args, **kwargs):
+            nonlocal failed
+            if async_fn is not async_client_module._trio_pipe_reader:
+                return real_spawn_system_task(async_fn, *args, **kwargs)
+
+            cancel_scope = args[2]
+            completion = trio.Event()
+            attempts.append(cancel_scope)
+            completions.append(completion)
+            assert not active_readers
+            active_readers.add(cancel_scope)
+            assert active_readers == {cancel_scope}
+
+            async def tracked_pipe_reader():
+                try:
+                    await async_fn(*args)
+                finally:
+                    active_readers.discard(cancel_scope)
+                    completion.set()
+
+            result = real_spawn_system_task(tracked_pipe_reader, **kwargs)
+            if not failed:
+                failed = True
+                raise OSError("injected Trio takeover registration failure")
+            return result
+
+        monkeypatch.setattr(trio.lowlevel, "spawn_system_task", install_then_fail_once)
+        failed_client = _new_pipe_setup_client(async_client_module, fake_lib, 7106)
+        clients.append(failed_client)
+        with pytest.raises(ClosingError, match="async response pipe"):
+            failed_client._setup_pipe()
+        assert old_scope.cancel_called
+        assert len(attempts) == 1
+        assert attempts[0].cancel_called
+        assert not async_client_module._async_pipe_registered
+        assert async_client_module._async_pipe_loop is None
+        assert async_client_module._trio_pipe_token is None
+        assert async_client_module._trio_pipe_cancel_scope is None
+        assert async_client_module._pipe_remainder == remainder
+        assert pipe_is_readable()
+        assert (
+            async_client_module._async_pipe_read_fd,
+            async_client_module._async_pipe_write_fd,
+        ) == original_fds
+        assert async_client_module._client_registry.get(7105) is clients[0]
+        assert async_client_module._client_registry.get(7106) is None
+        with trio.fail_after(1):
+            await completions[0].wait()
+        assert not active_readers
+
+        retry_client = _new_pipe_setup_client(async_client_module, fake_lib, 7107)
+        clients.append(retry_client)
+        retry_client._setup_pipe()
+        assert len(attempts) == 2
+        assert active_readers == {attempts[1]}
+        assert async_client_module._async_pipe_registered
+        assert (
+            async_client_module._trio_pipe_token is trio.lowlevel.current_trio_token()
+        )
+        assert async_client_module._trio_pipe_cancel_scope is attempts[1]
+        assert async_client_module._pipe_remainder == remainder
+        assert pipe_is_readable()
+
+        attempts[1].cancel()
+        with trio.fail_after(1):
+            await completions[1].wait()
+        assert not active_readers
+
+    try:
+        anyio.run(fail_then_retry, backend="trio")
+        assert (
+            async_client_module._async_pipe_read_fd,
+            async_client_module._async_pipe_write_fd,
+        ) == original_fds
+        fake_lib.init_async_pipe.assert_called_once_with(original_fds[1])
+        fake_lib.reinit_async_pipe.assert_not_called()
+        stale_drain.assert_not_called()
+    finally:
+        os.close(original_fds[0])
+        os.close(original_fds[1])
 
 
 @pytest.mark.skipif(not hasattr(os, "fork"), reason="requires os.fork")

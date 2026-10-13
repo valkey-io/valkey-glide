@@ -259,8 +259,8 @@ _async_pipe_loop: Optional[asyncio.AbstractEventLoop] = (
     None  # asyncio loop that owns the reader
 )
 # Identity and cancellation ownership of the trio.run() reader system task.
-# The token is published under _async_pipe_lock before spawning so concurrent
-# setup remains idempotent within one run.
+# The token is published under _async_pipe_lock only after spawning succeeds;
+# setup retains the candidate scope locally to cancel partial registration.
 _trio_pipe_token: Optional[object] = None
 _trio_pipe_cancel_scope: Optional[Any] = None
 _async_pipe_lock = threading.Lock()
@@ -1124,6 +1124,9 @@ class BaseClient(CoreCommands):
                 if not _async_pipe_registered or not same_owner:
                     if self._is_asyncio:
                         assert self._loop is not None
+                        # add_reader implementations may install before raising.
+                        # Arm cleanup first so rollback always attempts removal.
+                        registered_here = True
                         self._loop.add_reader(
                             _async_pipe_read_fd, _on_async_pipe_readable
                         )
@@ -1131,6 +1134,9 @@ class BaseClient(CoreCommands):
                         import trio
 
                         new_trio_cancel_scope = trio.CancelScope()
+                        # A custom spawn implementation may schedule before
+                        # raising. Retain and arm its scope before that attempt.
+                        registered_here = True
                         trio.lowlevel.spawn_system_task(
                             _trio_pipe_reader,
                             _async_pipe_read_fd,
@@ -1149,7 +1155,6 @@ class BaseClient(CoreCommands):
                         _async_pipe_loop = None
                         _trio_pipe_token = trio_token
                         _trio_pipe_cancel_scope = new_trio_cancel_scope
-                    registered_here = True
 
                 if created_transport:
                     # This is intentionally the final fallible operation. After
