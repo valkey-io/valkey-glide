@@ -39,6 +39,47 @@ macro_rules! drop_orphaned_adapter {
 /// runtime, where the backstop is the only timer that fires.
 const SCOPE_ACQUIRE_WATCHDOG_MARGIN: std::time::Duration = std::time::Duration::from_secs(1);
 
+/// Log the watchdog's diagnostic for a scoped operation that outlived its
+/// deadline and return the error the caller reports. One place for the cause
+/// classification and the event shape, so the four scope race sites cannot
+/// drift. `p99` comes from the parent client's latency tracker when the caller
+/// has one; `None` leaves the suggested timeout unset.
+fn scope_watchdog_timeout(
+    command: &'static str,
+    configured_timeout: std::time::Duration,
+    actual_elapsed: std::time::Duration,
+    p99: Option<std::time::Duration>,
+) -> RedisError {
+    use glide_core::timeout_watchdog::{CommandPhase, TimeoutCause, TimeoutEvent};
+    let pending = glide_core::timeout_watchdog::pending_count();
+    let cause = if pending > 100 {
+        TimeoutCause::SystemOverload {
+            pending_total: pending,
+        }
+    } else {
+        TimeoutCause::ServerUnresponsive {
+            node: "scope".to_owned(),
+        }
+    };
+    let event = TimeoutEvent {
+        cause,
+        command,
+        node: "scope".to_owned(),
+        phase: CommandPhase::Sent,
+        configured_timeout,
+        actual_elapsed,
+        pending_commands: pending,
+        recent_p99_latency: p99,
+        rss_bytes: glide_core::timeout_watchdog::get_rss(),
+        suggested_timeout: p99.map(|p| (p * 3).max(configured_timeout)),
+        inflight_at_register: None,
+        inflight_at_timeout: None,
+        retry_count: 0,
+    };
+    glide_logger::log_warn("timeout_watchdog", event.to_string());
+    std::io::Error::from(std::io::ErrorKind::TimedOut).into()
+}
+
 /// Whether the diagnostic timeout watchdog should be armed for a scoped command.
 ///
 /// The watchdog arms at the flat client request timeout and aborts the command
@@ -794,39 +835,12 @@ pub unsafe extern "C" fn glide_scope_execute_async(
                 recv_result = timeout_rx => {
                     match recv_result {
                         Err(_) => execute.await,
-                        Ok(()) => {
-                            let actual_elapsed = cmd_start.elapsed();
-                            let pending = glide_core::timeout_watchdog::pending_count();
-                            let p99 = client.latency_tracker().p99();
-                            let cause = if pending > 100 {
-                                glide_core::timeout_watchdog::TimeoutCause::SystemOverload {
-                                    pending_total: pending,
-                                }
-                            } else {
-                                glide_core::timeout_watchdog::TimeoutCause::ServerUnresponsive {
-                                    node: "scope".to_owned(),
-                                }
-                            };
-                            let event = glide_core::timeout_watchdog::TimeoutEvent {
-                                cause,
-                                command: glide_core::timeout_watchdog::cmd_name_from_bytes(
-                                    cmd_name.as_bytes(),
-                                ),
-                                node: "scope".to_owned(),
-                                phase: glide_core::timeout_watchdog::CommandPhase::Sent,
-                                configured_timeout: timeout_duration,
-                                actual_elapsed,
-                                pending_commands: pending,
-                                recent_p99_latency: p99,
-                                rss_bytes: glide_core::timeout_watchdog::get_rss(),
-                                suggested_timeout: p99.map(|p| (p * 3).max(timeout_duration)),
-                                inflight_at_register: None,
-                                inflight_at_timeout: None,
-                                retry_count: 0,
-                            };
-                            glide_logger::log_warn("timeout_watchdog", event.to_string());
-                            Err(std::io::Error::from(std::io::ErrorKind::TimedOut).into())
-                        }
+                        Ok(()) => Err(scope_watchdog_timeout(
+                            glide_core::timeout_watchdog::cmd_name_from_bytes(cmd_name.as_bytes()),
+                            timeout_duration,
+                            cmd_start.elapsed(),
+                            client.latency_tracker().p99(),
+                        ))
                     }
                 }
             }
@@ -1034,43 +1048,20 @@ pub unsafe extern "C" fn glide_scope_acquire_async(
             timeout_duration,
         );
         tokio::pin!(acquire);
+        let parent_p99 = || {
+            scope::get_parent_client(client_id).and_then(|client| client.latency_tracker().p99())
+        };
         let result = tokio::select! {
             result = &mut acquire => result.map_err(RedisError::from),
             recv_result = timeout_rx => {
                 match recv_result {
                     Err(_) => acquire.await.map_err(RedisError::from),
-                    Ok(()) => {
-                        let actual_elapsed = acquire_start.elapsed();
-                        let pending = glide_core::timeout_watchdog::pending_count();
-                        let p99 = scope::get_parent_client(client_id)
-                            .and_then(|client| client.latency_tracker().p99());
-                        let cause = if pending > 100 {
-                            glide_core::timeout_watchdog::TimeoutCause::SystemOverload {
-                                pending_total: pending,
-                            }
-                        } else {
-                            glide_core::timeout_watchdog::TimeoutCause::ServerUnresponsive {
-                                node: "scope".to_owned(),
-                            }
-                        };
-                        let event = glide_core::timeout_watchdog::TimeoutEvent {
-                            cause,
-                            command: "SCOPE_ACQUIRE",
-                            node: "scope".to_owned(),
-                            phase: glide_core::timeout_watchdog::CommandPhase::Sent,
-                            configured_timeout: timeout_duration,
-                            actual_elapsed,
-                            pending_commands: pending,
-                            recent_p99_latency: p99,
-                            rss_bytes: glide_core::timeout_watchdog::get_rss(),
-                            suggested_timeout: p99.map(|p| (p * 3).max(timeout_duration)),
-                            inflight_at_register: None,
-                            inflight_at_timeout: None,
-                            retry_count: 0,
-                        };
-                        glide_logger::log_warn("timeout_watchdog", event.to_string());
-                        Err(std::io::Error::from(std::io::ErrorKind::TimedOut).into())
-                    }
+                    Ok(()) => Err(scope_watchdog_timeout(
+                        "SCOPE_ACQUIRE",
+                        timeout_duration,
+                        acquire_start.elapsed(),
+                        parent_p99(),
+                    ))
                 }
             }
         };
@@ -1138,43 +1129,20 @@ pub unsafe extern "C" fn glide_scope_acquire_blocking(
             timeout_duration,
         );
         tokio::pin!(acquire);
+        let parent_p99 = || {
+            scope::get_parent_client(client_id).and_then(|client| client.latency_tracker().p99())
+        };
         tokio::select! {
             result = &mut acquire => result.map_err(RedisError::from),
             recv_result = timeout_rx => {
                 match recv_result {
                     Err(_) => acquire.await.map_err(RedisError::from),
-                    Ok(()) => {
-                        let actual_elapsed = acquire_start.elapsed();
-                        let pending = glide_core::timeout_watchdog::pending_count();
-                        let p99 = scope::get_parent_client(client_id)
-                            .and_then(|client| client.latency_tracker().p99());
-                        let cause = if pending > 100 {
-                            glide_core::timeout_watchdog::TimeoutCause::SystemOverload {
-                                pending_total: pending,
-                            }
-                        } else {
-                            glide_core::timeout_watchdog::TimeoutCause::ServerUnresponsive {
-                                node: "scope".to_owned(),
-                            }
-                        };
-                        let event = glide_core::timeout_watchdog::TimeoutEvent {
-                            cause,
-                            command: "SCOPE_ACQUIRE",
-                            node: "scope".to_owned(),
-                            phase: glide_core::timeout_watchdog::CommandPhase::Sent,
-                            configured_timeout: timeout_duration,
-                            actual_elapsed,
-                            pending_commands: pending,
-                            recent_p99_latency: p99,
-                            rss_bytes: glide_core::timeout_watchdog::get_rss(),
-                            suggested_timeout: p99.map(|p| (p * 3).max(timeout_duration)),
-                            inflight_at_register: None,
-                            inflight_at_timeout: None,
-                            retry_count: 0,
-                        };
-                        glide_logger::log_warn("timeout_watchdog", event.to_string());
-                        Err(std::io::Error::from(std::io::ErrorKind::TimedOut).into())
-                    }
+                    Ok(()) => Err(scope_watchdog_timeout(
+                        "SCOPE_ACQUIRE",
+                        timeout_duration,
+                        acquire_start.elapsed(),
+                        parent_p99(),
+                    ))
                 }
             }
         }
@@ -1258,39 +1226,12 @@ pub unsafe extern "C" fn glide_scope_execute(
             recv_result = timeout_rx => {
                 match recv_result {
                     Err(_) => execute.await,
-                    Ok(()) => {
-                        let actual_elapsed = cmd_start.elapsed();
-                        let pending = glide_core::timeout_watchdog::pending_count();
-                        let p99 = parent_client.latency_tracker().p99();
-                        let cause = if pending > 100 {
-                            glide_core::timeout_watchdog::TimeoutCause::SystemOverload {
-                                pending_total: pending,
-                            }
-                        } else {
-                            glide_core::timeout_watchdog::TimeoutCause::ServerUnresponsive {
-                                node: "scope".to_owned(),
-                            }
-                        };
-                        let event = glide_core::timeout_watchdog::TimeoutEvent {
-                            cause,
-                            command: glide_core::timeout_watchdog::cmd_name_from_bytes(
-                                cmd_name.as_bytes(),
-                            ),
-                            node: "scope".to_owned(),
-                            phase: glide_core::timeout_watchdog::CommandPhase::Sent,
-                            configured_timeout: timeout_duration,
-                            actual_elapsed,
-                            pending_commands: pending,
-                            recent_p99_latency: p99,
-                            rss_bytes: glide_core::timeout_watchdog::get_rss(),
-                            suggested_timeout: p99.map(|p| (p * 3).max(timeout_duration)),
-                            inflight_at_register: None,
-                            inflight_at_timeout: None,
-                            retry_count: 0,
-                        };
-                        glide_logger::log_warn("timeout_watchdog", event.to_string());
-                        Err(std::io::Error::from(std::io::ErrorKind::TimedOut).into())
-                    }
+                    Ok(()) => Err(scope_watchdog_timeout(
+                        glide_core::timeout_watchdog::cmd_name_from_bytes(cmd_name.as_bytes()),
+                        timeout_duration,
+                        cmd_start.elapsed(),
+                        parent_client.latency_tracker().p99(),
+                    ))
                 }
             }
         }
