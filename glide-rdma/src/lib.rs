@@ -6,7 +6,7 @@
 //! its fabric endpoint. `BLOB.GET` and `BLOB.SET` use the RESP connection to
 //! coordinate with the server, but the server performs the data transfer itself
 //! against the client host memory that it registered for RDMA. The RESP reply
-//! carries only a byte count and an optional checksum.
+//! carries only a byte count and a checksum.
 //!
 //! `RdmaBuffer` and `LentBuffer` loans bytes to the server for the duration of
 //! a transfer. The memory can be accessed again only after the loan ends.

@@ -9,13 +9,13 @@ pub enum RdmaError {
     #[error("rdma protocol error: {0}")]
     Protocol(String),
 
-    /// The checksum the server sent with an `BLOB.GET` reply disagreed with the
+    /// The checksum the server sent with a `BLOB.GET` reply disagreed with the
     /// bytes that landed.
     #[error("rdma checksum mismatch: expected {expected:#010x}, got {actual:#010x}")]
     ChecksumMismatch {
-        /// The checksum computed over the bytes that were meant to move.
+        /// The checksum the server sent, of the object it stored.
         expected: u32,
-        /// The checksum actually observed.
+        /// The checksum of the bytes that landed in the client's window.
         actual: u32,
     },
 

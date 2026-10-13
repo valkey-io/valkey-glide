@@ -16,12 +16,17 @@ pub(crate) struct RegionRef {
 
 #[cfg(any(feature = "libfabric", test))]
 impl RegionRef {
-    /// Command arguments a region reference occupies.
-    pub(crate) const ARG_COUNT: usize = 2;
+    /// Command arguments one window of a region occupies.
+    pub(crate) const ARG_COUNT: usize = 3;
 
-    /// The arguments a transfer carries: `<rkey> <remote-address>`.
-    pub(crate) fn to_args(&self) -> [String; Self::ARG_COUNT] {
-        [self.remote_key.to_string(), self.remote_address.to_string()]
+    /// The arguments naming a window of `length` bytes starting at this reference:
+    /// `<rkey> <remote-address> <length>`.
+    pub(crate) fn to_args(&self, length: usize) -> [String; Self::ARG_COUNT] {
+        [
+            self.remote_key.to_string(),
+            self.remote_address.to_string(),
+            length.to_string(),
+        ]
     }
 }
 

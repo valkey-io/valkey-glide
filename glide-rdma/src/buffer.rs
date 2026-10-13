@@ -146,7 +146,7 @@ impl RdmaBuffer {
         at: usize,
         length: usize,
     ) -> Result<(RdmaCommand, LentBuffer), (Self, RdmaError)> {
-        self.lend(at, length, |window| command::get(key, window))
+        self.lend(at, length, |window| command::get(key, length, window))
     }
 
     /// Lend `[at, at + length)` of this buffer to a `BLOB.SET` of `key` for the server
@@ -506,7 +506,7 @@ mod tests {
     fn receipt(bytes_written: usize) -> TransferReply {
         TransferReply::Read(ReadReceipt {
             bytes_written,
-            checksum: None,
+            checksum: 0,
         })
     }
 
@@ -532,6 +532,7 @@ mod tests {
                 "key".to_string(),
                 region_ref.remote_key.to_string(),
                 (region_ref.remote_address + 1024).to_string(),
+                "256".to_string(),
             ]
         );
     }
@@ -551,6 +552,7 @@ mod tests {
                 "256".to_string(),
                 region_ref.remote_key.to_string(),
                 (region_ref.remote_address + 1024).to_string(),
+                "256".to_string(),
             ]
         );
     }

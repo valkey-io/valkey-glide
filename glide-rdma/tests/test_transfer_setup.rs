@@ -28,13 +28,18 @@ fn a_registered_buffer_produces_a_sendable_set_command() {
 
     assert_eq!(command.name(), "BLOB.SET");
     let arguments = command.arguments();
-    assert_eq!(arguments.len(), 4, "key, length, rkey, remote address");
+    assert_eq!(
+        arguments.len(),
+        5,
+        "key, length, rkey, remote address, window length"
+    );
     assert_eq!(arguments[0], b"chunk:abc");
     assert_eq!(arguments[1], payload.len().to_string().into_bytes());
     for number in &arguments[2..] {
         let text = std::str::from_utf8(number).expect("decimal ASCII");
         text.parse::<u64>().expect("an unsigned integer");
     }
+    assert_eq!(arguments[4], payload.len().to_string().into_bytes());
 
     let hello = glide_rdma::hello(fabric.local_address());
     assert_eq!(hello.name(), "BLOB.HELLO");
