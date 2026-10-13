@@ -243,7 +243,17 @@ jobs:
                   AWS_SECRET_ACCESS_KEY: test_secret_key
                   AWS_SESSION_TOKEN: test_session_token
               run: |
-                  python3 dev.py test --args -m serial_only --async-backend=asyncio --html=pytest_report_serial.html --self-contained-html
+                  # Same mode selection as the xdist steps above, so each mode runs
+                  # its serial tests with its own backends and directory.
+                  if [ "$RUN_FULL_MATRIX" = "true" ]; then
+                      python3 dev.py test --args -m serial_only --async-backend=asyncio --async-backend=trio --html=pytest_report_serial.html --self-contained-html
+                  elif [ "$RUN_ASYNC_ONLY" = "true" ]; then
+                      python3 dev.py test --args -m serial_only tests/async_tests --async-backend=asyncio --async-backend=trio --html=pytest_report_serial.html --self-contained-html
+                  elif [ "$RUN_SYNC_ONLY" = "true" ]; then
+                      python3 dev.py test --args -m serial_only tests/sync_tests --html=pytest_report_serial.html --self-contained-html
+                  else
+                      python3 dev.py test --args -m serial_only --async-backend=asyncio --html=pytest_report_serial.html --self-contained-html
+                  fi
 
             - uses: ./.github/workflows/test-benchmark
               if: ${{ matrix.engine.version == '8.0' && matrix.host.OS == 'ubuntu' && matrix.host.RUNNER == 'ubuntu-latest' && matrix.python == '3.13' }}
