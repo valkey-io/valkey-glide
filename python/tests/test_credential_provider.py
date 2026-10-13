@@ -5,6 +5,7 @@ import gc
 import inspect
 import os
 import selectors
+import sys
 import threading
 import time
 import warnings
@@ -4797,25 +4798,21 @@ def test_delegated_pubsub_wait_takes_over_stopped_asyncio_owner(
 def test_simultaneous_trio_requests_preserve_reader_ownership(  # noqa: C901
     monkeypatch,
 ):
-    """Per-request liveness checks retain one Trio reader across two runs."""
+    """Run A's pipe reader completes result, error, and PubSub futures in run B."""
     import glide.glide_client as async_client_module
     import trio
 
     _reset_pipe_test_state(monkeypatch, async_client_module)
     read_fd, write_fd = os.pipe()
     os.set_blocking(read_fd, False)
-    clients = [
-        async_client_module.BaseClient(
-            GlideClientConfiguration(addresses=[NodeAddress()])
-        )
-        for _ in range(2)
-    ]
-    for index, client in enumerate(clients):
-        client._lib = SimpleNamespace()
-        client._pipe_client_id = 7361 + index
-        client._create_pid = os.getpid()
-        client._is_asyncio = False
-        client._loop = None
+    client = async_client_module.BaseClient(
+        GlideClientConfiguration(addresses=[NodeAddress()])
+    )
+    client._lib = SimpleNamespace()
+    client._pipe_client_id = 7362
+    client._create_pid = os.getpid()
+    client._is_asyncio = False
+    client._loop = None
 
     setup_calls = []
     monkeypatch.setattr(
@@ -4825,104 +4822,185 @@ def test_simultaneous_trio_requests_preserve_reader_ownership(  # noqa: C901
     )
 
     tokens = [None, None]
-    ready = [threading.Event(), threading.Event()]
-    begin = threading.Event()
-    starts = [[threading.Event() for _ in range(4)] for _ in range(2)]
-    registered = [[threading.Event() for _ in range(4)] for _ in range(2)]
-    completed = [[threading.Event() for _ in range(4)] for _ in range(2)]
-    results = [[], []]
-    errors = []
+    owner_scope = []
+    owner_ready = threading.Event()
+    futures_parked = threading.Event()
+    completed = threading.Event()
+    results = []
+    exceptions = []
+    pubsub_messages = []
+    owner_errors = []
+    requester_errors = []
+    reader_contexts = []
 
-    async def issue_requests(index):
-        try:
-            tokens[index] = trio.lowlevel.current_trio_token()
-            ready[index].set()
-            await anyio.to_thread.run_sync(begin.wait)
-            client = clients[index]
-            for request_index in range(4):
-                await anyio.to_thread.run_sync(starts[index][request_index].wait)
-                callback_id = request_index + 1
-                future = async_client_module._get_new_future_instance()
-                await client._register_future(callback_id, future)
-                registered[index][request_index].set()
-                results[index].append(await future)
-                completed[index][request_index].set()
-        except BaseException as error:
-            errors.append(error)
-
-    def run_requests(index):
-        trio.run(issue_requests, index)
-
-    threads = [
-        threading.Thread(target=run_requests, args=(index,)) for index in range(2)
-    ]
-    for thread in threads:
-        thread.start()
-    assert all(event.wait(timeout=2) for event in ready)
-
-    stable_scope = object()
-    with async_client_module._async_pipe_lock:
-        async_client_module._async_pipe_read_fd = read_fd
-        async_client_module._async_pipe_write_fd = write_fd
-        async_client_module._async_pipe_init_pid = os.getpid()
-        async_client_module._async_pipe_registered = True
-        async_client_module._async_pipe_loop = None
-        async_client_module._trio_pipe_token = tokens[0]
-        async_client_module._trio_pipe_cancel_scope = stable_scope
-        for client in clients:
-            async_client_module._client_registry[client._pipe_client_id] = client
-
-    def resolve_error(client, request_id, unused_arena):
-        future = client._pending_futures.pop(request_id)
-        async_client_module._resolve_future(
-            future, (client._pipe_client_id, request_id), client
+    def record_reader_context(kind):
+        reader_contexts.append(
+            (kind, trio.lowlevel.current_trio_token(), threading.get_ident())
         )
 
+    def resolve_success(target_client, request_id, unused_response, unused_arena):
+        record_reader_context("result")
+        future = target_client._pending_futures.pop(request_id, None)
+        if future is not None:
+            async_client_module._resolve_future(future, "result", target_client)
+
+    def resolve_error(target_client, request_id, unused_arena):
+        record_reader_context("exception")
+        future = target_client._pending_futures.pop(request_id, None)
+        if future is not None:
+            async_client_module._resolve_future(
+                future, RequestError("cross-run error"), target_client
+            )
+
+    original_inline_pubsub = async_client_module._handle_inline_pubsub
+
+    def resolve_pubsub(target_client, payload):
+        record_reader_context("pubsub")
+        original_inline_pubsub(target_client, payload)
+
+    monkeypatch.setattr(async_client_module, "_handle_pipe_success", resolve_success)
     monkeypatch.setattr(async_client_module, "_handle_pipe_error", resolve_error)
-    begin.set()
+    monkeypatch.setattr(async_client_module, "_handle_inline_pubsub", resolve_pubsub)
+
+    async def own_reader():
+        try:
+            token = trio.lowlevel.current_trio_token()
+            cancel_scope = trio.CancelScope()
+            tokens[0] = token
+            owner_scope.append(cancel_scope)
+            with async_client_module._async_pipe_lock:
+                async_client_module._async_pipe_read_fd = read_fd
+                async_client_module._async_pipe_write_fd = write_fd
+                async_client_module._async_pipe_init_pid = os.getpid()
+                async_client_module._async_pipe_registered = True
+                async_client_module._async_pipe_loop = None
+                async_client_module._trio_pipe_token = token
+                async_client_module._trio_pipe_cancel_scope = cancel_scope
+                async_client_module._client_registry[client._pipe_client_id] = client
+            owner_ready.set()
+            await async_client_module._trio_pipe_reader(read_fd, token, cancel_scope)
+        except BaseException as error:
+            owner_errors.append(error)
+
+    async def request_from_other_run():
+        try:
+            tokens[1] = trio.lowlevel.current_trio_token()
+            result_future = async_client_module._get_new_future_instance()
+            exception_future = async_client_module._get_new_future_instance()
+            await client._register_future(1, result_future)
+            await client._register_future(2, exception_future)
+
+            async def wait_for_result():
+                results.append(await result_future)
+
+            async def wait_for_exception():
+                with pytest.raises(RequestError, match="cross-run error"):
+                    await exception_future
+                exceptions.append("raised")
+
+            async def wait_for_pubsub():
+                pubsub_messages.append(await client.get_pubsub_message())
+
+            with trio.fail_after(5):
+                async with trio.open_nursery() as nursery:
+                    nursery.start_soon(wait_for_result)
+                    nursery.start_soon(wait_for_exception)
+                    nursery.start_soon(wait_for_pubsub)
+                    while not client._pubsub_futures:
+                        await trio.lowlevel.checkpoint()
+                    pubsub_future = client._pubsub_futures[0]
+                    while not (
+                        result_future._is_done.statistics().tasks_waiting
+                        and exception_future._is_done.statistics().tasks_waiting
+                        and pubsub_future._is_done.statistics().tasks_waiting
+                    ):
+                        await trio.lowlevel.checkpoint()
+                    futures_parked.set()
+            completed.set()
+        except BaseException as error:
+            requester_errors.append(error)
+            futures_parked.set()
+
+    def run_owner():
+        trio.run(own_reader)
+
+    def run_requester():
+        trio.run(request_from_other_run)
+
+    owner_thread = threading.Thread(target=run_owner)
+    requester_thread = threading.Thread(target=run_requester)
+    owner_thread.start()
+    assert owner_ready.wait(timeout=3)
+    requester_thread.start()
 
     try:
-        for request_index in range(4):
-            for client_index in range(2):
-                starts[client_index][request_index].set()
-                assert registered[client_index][request_index].wait(timeout=2)
-                assert async_client_module._trio_pipe_token is tokens[0]
-                assert async_client_module._trio_pipe_cancel_scope is stable_scope
+        assert futures_parked.wait(timeout=3)
+        assert not requester_errors
+        assert tokens[0] is not tokens[1]
+        assert tokens[0] != tokens[1]
 
-            os.write(
-                write_fd,
-                b"".join(
-                    async_client_module._FRAME_STRUCT.pack(
-                        client._pipe_client_id, request_index + 1, 0, 0
-                    )
-                    for client in clients
+        payload = b"".join(
+            (
+                (3).to_bytes(4, byteorder=sys.byteorder, signed=True),
+                len(b"message").to_bytes(4, byteorder=sys.byteorder),
+                b"message",
+                len(b"channel").to_bytes(4, byteorder=sys.byteorder),
+                b"channel",
+                (0).to_bytes(4, byteorder=sys.byteorder),
+            )
+        )
+        frames = b"".join(
+            (
+                async_client_module._FRAME_STRUCT.pack(client._pipe_client_id, 1, 1, 0),
+                async_client_module._FRAME_STRUCT.pack(client._pipe_client_id, 2, 0, 0),
+                async_client_module._FRAME_STRUCT.pack(
+                    client._pipe_client_id,
+                    async_client_module._PUBSUB_SENTINEL,
+                    len(payload),
+                    0,
                 ),
+                payload,
             )
-            async_client_module._on_async_pipe_readable()
-            assert all(
-                completed[index][request_index].wait(timeout=2) for index in range(2)
-            )
+        )
+        os.write(write_fd, frames)
 
-        for thread in threads:
-            thread.join(timeout=2)
-        assert not any(thread.is_alive() for thread in threads)
-        assert not errors
+        assert completed.wait(timeout=6)
+        requester_thread.join(timeout=1)
+        assert not requester_thread.is_alive()
+        assert not requester_errors
+        assert results == ["result"]
+        assert exceptions == ["raised"]
+        assert len(pubsub_messages) == 1
+        assert pubsub_messages[0].message == b"message"
+        assert pubsub_messages[0].channel == b"channel"
+        assert pubsub_messages[0].pattern is None
+        assert [kind for kind, _, _ in reader_contexts] == [
+            "result",
+            "exception",
+            "pubsub",
+        ]
+        assert all(token is tokens[0] for _, token, _ in reader_contexts)
+        assert len({thread_id for _, _, thread_id in reader_contexts}) == 1
         assert setup_calls == []
         assert async_client_module._trio_pipe_token is tokens[0]
-        assert async_client_module._trio_pipe_cancel_scope is stable_scope
-        assert results == [
-            [(7361, request_id) for request_id in range(1, 5)],
-            [(7362, request_id) for request_id in range(1, 5)],
-        ]
+        assert async_client_module._trio_pipe_cancel_scope is owner_scope[0]
+        assert not client._pending_futures
+        assert not client._pubsub_futures
+        assert not client._pending_push_notifications
     finally:
-        begin.set()
-        for client_starts in starts:
-            for start in client_starts:
-                start.set()
-        for thread in threads:
-            thread.join(timeout=2)
+        if owner_scope and tokens[0] is not None:
+            try:
+                tokens[0].run_sync_soon(owner_scope[0].cancel)
+            except trio.RunFinishedError:
+                pass
+        owner_thread.join(timeout=3)
+        requester_thread.join(timeout=6)
         os.close(read_fd)
         os.close(write_fd)
+
+    assert not owner_thread.is_alive()
+    assert not requester_thread.is_alive()
+    assert not owner_errors
 
 
 def test_async_pool_wrapper_registers_only_after_successful_setup(monkeypatch):

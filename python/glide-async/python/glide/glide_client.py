@@ -170,10 +170,19 @@ class _CompatFuture:
         self._is_done.set()
 
     def _set_done_threadsafe(self) -> None:
-        """Set the completion event, hopping to the trio thread when needed."""
-        if self._token is None or trio.lowlevel.in_trio_task():
+        """Set the completion event on its owning Trio run when applicable."""
+        if self._token is None:
             self._is_done.set()
             return
+
+        try:
+            current_token = trio.lowlevel.current_trio_token()
+        except RuntimeError:
+            current_token = None
+        if current_token is self._token or current_token == self._token:
+            self._is_done.set()
+            return
+
         try:
             self._token.run_sync_soon(self._mark_done)
         except trio.RunFinishedError:
