@@ -293,7 +293,7 @@ func acquireScope(
 		(*C.uint8_t)(unsafe.Pointer(&connReqBytes[0])),
 		C.uintptr_t(len(connReqBytes)),
 		C.uint16_t(routingSlot),
-		C.uint64_t(timeout.Milliseconds()),
+		C.uint64_t(max(timeout.Milliseconds(), 0)),
 		C.uintptr_t(requestID),
 		C.SuccessCallback(unsafe.Pointer(C.successCallback)),
 		C.FailureCallback(unsafe.Pointer(C.failureCallback)),
