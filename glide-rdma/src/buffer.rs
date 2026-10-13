@@ -220,7 +220,7 @@ impl RdmaBuffer {
     /// new buffer.
     ///
     /// A failed close is final: later revokes report the same error, and the
-    /// memory is leaked on drop rather than freed.
+    /// memory is leaked on drop rather than freed; see [`RdmaFabric::leaked_bytes`].
     pub fn revoke(&self) -> Result<(), RdmaError> {
         self.registration.revoke()
     }
@@ -290,6 +290,8 @@ impl Drop for RdmaBuffer {
         if self.registration.revoke().is_ok() {
             // SAFETY: the region is closed, and `host` is not touched again after this.
             unsafe { ManuallyDrop::drop(&mut self.host) };
+        } else {
+            self.fabric.note_leaked(self.host.len());
         }
     }
 }
@@ -329,8 +331,8 @@ impl fmt::Debug for RdmaBuffer {
 /// - On tcp, closing a region does not stop a write the provider already accepted
 ///   (`fi_mr(3)`), so the memory is parked in the fabric and freed only when the
 ///   fabric closes.
-/// - On either, if the revoke fails, the memory is parked, because the server may
-///   still reach it.
+/// - On either, if the revoke fails, the memory is leaked for the life of the process,
+///   because the server may still reach it; see [`RdmaFabric::leaked_bytes`].
 ///
 /// Parked memory only accumulates; [`RdmaFabric::parked_bytes`] reports how much. To
 /// get it back, drop every buffer, loan, session and handle on the fabric. Register
@@ -392,7 +394,8 @@ impl LentBuffer {
     /// # Errors
     ///
     /// When libfabric fails to close the region, the loan is handed back unchanged.
-    /// A failed close is final; drop the loan, which parks the memory.
+    /// A failed close is final; drop the loan, which leaks the memory for the life of
+    /// the process; see [`RdmaFabric::leaked_bytes`].
     pub fn recall(self) -> Result<(), (Self, RdmaError)> {
         if let Err(error) = self.buffer.revoke() {
             return Err((self, error));
@@ -449,7 +452,8 @@ impl LentBuffer {
 
 impl Drop for LentBuffer {
     /// Revoke the region, then free or park the memory as [`LentBuffer::recall`]
-    /// does. A failed revoke is not reported; the memory is parked.
+    /// does. A failed revoke is not returned; the memory is leaked, and the failure
+    /// is logged and counted in [`RdmaFabric::leaked_bytes`].
     fn drop(&mut self) {
         // SAFETY: `buffer` is taken exactly once, here.
         let buffer = unsafe { ManuallyDrop::take(&mut self.buffer) };
@@ -803,11 +807,13 @@ mod tests {
         assert_eq!(fabric.parked(), 0);
     }
 
-    /// The server may still reach a region whose close failed, whatever the provider.
+    /// The server may still reach a region whose close failed, whatever the provider,
+    /// so its memory is leaked, and even closing the fabric does not free it.
     #[test]
-    fn a_failed_close_still_parks_when_the_close_would_stop_writes() {
+    fn a_failed_close_leaks_even_when_the_close_would_stop_writes() {
         let fabric = fabric_whose_close_stops_writes();
         let (memory, freed, _) = tracked();
+        let size = memory.bytes.len();
         let loan = lent_for_get(fabric.register(memory).unwrap());
 
         fail_next_closes(1);
@@ -818,7 +824,13 @@ mod tests {
             !freed.load(Ordering::SeqCst),
             "the server may still reach it"
         );
-        assert_eq!(fabric.parked(), 1);
+        assert_eq!(fabric.leaked_bytes(), size);
+        assert_eq!(fabric.parked_bytes(), 0, "leaked, not parked");
+        drop(fabric);
+        assert!(
+            !freed.load(Ordering::SeqCst),
+            "kept for the life of the process"
+        );
     }
 
     #[test]
@@ -870,7 +882,12 @@ mod tests {
 
         drop(loan);
         assert_eq!(close_calls(), closes, "nor on drop");
-        assert_eq!(fabric.parked(), 1, "the memory is parked, never freed");
+        assert_eq!(
+            fabric.leaked_bytes(),
+            64,
+            "the memory is leaked, never freed"
+        );
+        assert_eq!(fabric.parked(), 0);
     }
 
     /// Tcp moves no bytes unless the client polls, so the poller must run for exactly
@@ -1045,13 +1062,25 @@ mod tests {
 
     #[test]
     fn a_failed_close_on_drop_leaks_the_memory() {
+        let fabric = fabric();
         let (memory, freed, _) = tracked();
-        let buffer = fabric().register(memory).unwrap();
+        let size = memory.bytes.len();
+        let buffer = fabric.register(memory).unwrap();
 
         fail_next_closes(1);
         drop(buffer);
 
         assert!(!freed.load(Ordering::SeqCst), "the memory must be leaked");
+        assert_eq!(fabric.leaked_bytes(), size, "and counted");
+    }
+
+    #[test]
+    fn nothing_is_leaked_while_every_close_succeeds() {
+        let fabric = fabric();
+        drop(lent_for_get(fabric.register(vec![0u8; 64]).unwrap()));
+        drop(fabric.register(vec![0u8; 64]).unwrap());
+
+        assert_eq!(fabric.leaked_bytes(), 0);
     }
 
     #[tokio::test]

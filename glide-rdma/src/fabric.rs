@@ -30,6 +30,8 @@ struct FabricInner {
     parked: Mutex<Vec<HostMemory>>,
     /// Total length of `parked`, readable without the lock.
     parked_bytes: AtomicUsize,
+    /// Bytes kept for the life of the process because their region failed to close.
+    leaked_bytes: AtomicUsize,
     /// [`crate::config::Provider::close_stops_writes`] for this fabric's provider.
     close_stops_writes: bool,
     address: Vec<u8>,
@@ -78,6 +80,7 @@ impl RdmaFabric {
                 endpoint: Mutex::new(endpoint),
                 parked: Mutex::new(Vec::new()),
                 parked_bytes: AtomicUsize::new(0),
+                leaked_bytes: AtomicUsize::new(0),
                 close_stops_writes: config.provider().close_stops_writes(),
                 address,
                 uses_virtual_addressing,
@@ -182,13 +185,34 @@ impl RdmaFabric {
     /// `closed` is whether its region closed successfully.
     ///
     /// The memory is freed now when the region closed on a provider whose close also
-    /// stops writes already in flight. Otherwise it is parked until this fabric closes.
+    /// stops writes already in flight, parked until this fabric closes when it closed
+    /// on any other provider, and leaked when it failed to close.
     pub(crate) fn release_unanswered(&self, host: HostMemory, closed: bool) {
-        if closed && self.inner.close_stops_writes {
+        if !closed {
+            let bytes = host.len();
+            std::mem::forget(host);
+            self.note_leaked(bytes);
+        } else if self.inner.close_stops_writes {
             drop(host);
         } else {
             self.park(host);
         }
+    }
+
+    /// Count `bytes` the caller is keeping for the life of the process because their
+    /// region failed to close.
+    ///
+    /// A failed close means the device may still let the server write into the
+    /// memory, so it can never safely be freed. It also keeps this fabric open for
+    /// good, so nothing parked on it is freed either.
+    pub(crate) fn note_leaked(&self, bytes: usize) {
+        let total = self.inner.leaked_bytes.fetch_add(bytes, Ordering::Relaxed) + bytes;
+        log::error!(
+            "an RDMA memory region failed to close, so its {bytes} bytes stay allocated \
+             until the process exits ({total} bytes in all), and this fabric can no longer \
+             close. Create a new client to keep transferring; restart the process when the \
+             leaked total passes your threshold"
+        );
     }
 
     /// Keep `host` allocated until this fabric closes; see [`crate::LentBuffer`].
@@ -208,11 +232,26 @@ impl RdmaFabric {
 
     /// Bytes parked by loans that ended without a reply. Only grows; freed when the
     /// last handle drops, and every buffer, loan and session on the fabric holds one.
+    /// To get them back sooner, drop this fabric's buffers and create a new client,
+    /// which opens a new fabric.
     ///
-    /// Stays at zero on efa-direct unless a region fails to close, because there a
-    /// successful close stops the server's writes and the memory is freed at once.
+    /// Stays at zero on efa-direct, where a successful close stops the server's writes
+    /// and the memory is freed at once.
     pub fn parked_bytes(&self) -> usize {
         self.inner.parked_bytes.load(Ordering::Relaxed)
+    }
+
+    /// Bytes kept for the life of the process because their region failed to close.
+    /// Only grows.
+    ///
+    /// After a failed close the device may still let the server write into the memory,
+    /// so it is never freed, and this fabric can never close, which also keeps any
+    /// [`Self::parked_bytes`] for good. A failed close needs a device or driver error,
+    /// and each one is logged at error level.
+    ///
+    /// Restart the process when the leaked total passes your chosen threshold.
+    pub fn leaked_bytes(&self) -> usize {
+        self.inner.leaked_bytes.load(Ordering::Relaxed)
     }
 
     /// Whether `self` and `other` are the same open fabric, rather than two opened
