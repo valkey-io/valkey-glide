@@ -143,6 +143,9 @@ EXCLUDED_TESTS_FILENAMES = {
         "test_client_side_cache.py",
         "test_async_freethreading.py",
         "test_fork_safety.py",
+        # Tests asyncio/Trio event-loop ownership of the async shared response
+        # pipe, which has no sync-client analogue.
+        "test_async_pipe_liveness.py",
     ],
     "sync_only": [
         "test_sync_client_side_cache.py",
