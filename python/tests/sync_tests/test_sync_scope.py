@@ -10,6 +10,7 @@ Requires a running Valkey server (standalone).
 import threading
 import time
 import uuid
+from pathlib import Path
 
 import pytest
 from glide_sync import (
@@ -23,7 +24,6 @@ from glide_sync import (
     TlsAdvancedConfiguration,
 )
 
-from tests.utils.utils import get_ca_certificate
 from tests.utils.utils import get_standalone_address as _get_standalone_address
 
 
@@ -202,6 +202,18 @@ class TestIsolatedScopePoolReuse:
         scope2.close()
 
 
+# Any certificate serves as root material here: the client is lazy and never
+# dials, so the bytes are stored, not verified. Read the committed glide-core
+# fixture rather than utils/tls_crts/, which exists only after a TLS server start.
+_ANY_ROOT_CERT = (
+    Path(__file__).resolve().parents[3]
+    / "glide-core"
+    / "src"
+    / "tls_reload"
+    / "test_data"
+    / "cert_a.pem"
+)
+
 # The scope pool holds at most this many connections per client (glide-core
 # ScopePoolConfig::default().max_total). Not configurable from Python.
 _SCOPE_POOL_MAX_TOTAL = 64
@@ -251,7 +263,7 @@ class TestIsolatedScopeAcquireFailsFast:
             request_timeout=5000,
             advanced_config=AdvancedGlideClientConfiguration(
                 tls_config=TlsAdvancedConfiguration(
-                    root_pem_cacerts=get_ca_certificate()
+                    root_pem_cacerts=_ANY_ROOT_CERT.read_bytes()
                 )
             ),
         )

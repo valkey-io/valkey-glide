@@ -390,16 +390,20 @@ public class IsolatedScopeIntegrationTest {
 
     @Test
     public void lazyMtlsParentFailsWithoutWaiting() throws Exception {
+        // A lazily connected client with TLS material never dials, so there is
+        // nothing for a scoped connection to inherit. Any certificate serves as the
+        // material; read the committed glide-core fixture rather than utils/tls_crts/,
+        // which exists only after a TLS server start.
         byte[] caCert =
                 Files.readAllBytes(
                         Paths.get(System.getProperty("user.dir"))
                                 .getParent()
                                 .getParent()
-                                .resolve("utils")
-                                .resolve("tls_crts")
-                                .resolve("ca.crt"));
-        // A lazily connected client with TLS material never dials, so there is
-        // nothing for a scoped connection to inherit.
+                                .resolve("glide-core")
+                                .resolve("src")
+                                .resolve("tls_reload")
+                                .resolve("test_data")
+                                .resolve("cert_a.pem"));
         GlideClientConfiguration config =
                 GlideClientConfiguration.builder()
                         .address(NodeAddress.builder().host("127.0.0.1").port(1).build())

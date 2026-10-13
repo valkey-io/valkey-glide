@@ -6,6 +6,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -1362,11 +1364,13 @@ func TestScopeAcquireEndsWhenClientClosesMidWait(t *testing.T) {
 }
 
 func TestScopeAcquireLazyMtlsParentFailsWithoutWaiting(t *testing.T) {
-	caCert, err := getCaCertificate()
+	// A lazily connected client with TLS material never dials, so there is
+	// nothing for a scoped connection to inherit. Any certificate serves as the
+	// material; read the committed glide-core fixture rather than utils/tls_crts/,
+	// which exists only after a TLS server start.
+	caCert, err := os.ReadFile(filepath.Join("..", "..", "glide-core", "src", "tls_reload", "test_data", "cert_a.pem"))
 	require.NoError(t, err)
 
-	// A lazily connected client with TLS material never dials, so there is
-	// nothing for a scoped connection to inherit.
 	cfg := config.NewClientConfiguration().
 		WithAddress(&config.NodeAddress{Host: "127.0.0.1", Port: 1}).
 		WithUseTLS(true).

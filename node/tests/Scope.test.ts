@@ -6,6 +6,7 @@
  */
 
 import { describe, expect, it, beforeAll, afterAll } from "@jest/globals";
+import * as fs from "fs";
 import {
     ClientPool,
     ClosingError,
@@ -20,13 +21,19 @@ import { GlideClientConfiguration, GlideClusterClientConfiguration } from "..";
 import { connection_request } from "../build-ts/ProtobufMessage";
 import { ValkeyCluster } from "../../utils/TestUtils.js";
 import {
-    getCaCertificateData,
     getClientConfigurationOption,
     getServerVersion,
     parseEndpoints,
 } from "./TestUtilities";
 
 const TIMEOUT = 30_000;
+
+// Any certificate serves as root material here: the client is lazy and never
+// dials, so the bytes are stored, not verified. Read the committed glide-core
+// fixture rather than utils/tls_crts/, which exists only after a TLS server start.
+const ANY_ROOT_CERT = fs.readFileSync(
+    `${process.cwd()}/../glide-core/src/tls_reload/test_data/cert_a.pem`,
+);
 
 // The scope pool holds at most this many connections per client (glide-core
 // ScopePoolConfig::default().max_total). Not configurable from Node.
@@ -745,7 +752,7 @@ describe("IsolatedScope", () => {
                     requestTimeout: 5000,
                     advancedConfiguration: {
                         tlsAdvancedConfiguration: {
-                            rootCertificates: getCaCertificateData(),
+                            rootCertificates: ANY_ROOT_CERT,
                         },
                     },
                 });
@@ -753,7 +760,7 @@ describe("IsolatedScope", () => {
                     addresses: [{ host: "127.0.0.1", port: 1 }],
                     requestTimeout: 5000,
                     tlsMode: connection_request.TlsMode.SecureTls,
-                    rootCerts: [getCaCertificateData()],
+                    rootCerts: [ANY_ROOT_CERT],
                 });
                 const bytes =
                     connection_request.ConnectionRequest.encode(req).finish();
