@@ -2,6 +2,10 @@
 
 ## Pending 2.6
 
+### Features
+
+* Java: Add `DELIFEQ` command support ([#6146](https://github.com/valkey-io/valkey-glide/issues/6146))
+
 ### Fixes
 
 * Node: Log the disconnect warning when the Disconnection push arrives ([#7277](https://github.com/valkey-io/valkey-glide/pull/7277))

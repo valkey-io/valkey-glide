@@ -396,6 +396,7 @@ pub enum RequestType {
     SetRange = 1520,
     Strlen = 1521,
     Substr = 1522,
+    DelIfEq = 1523,
 
     //// Transaction commands
     Discard = 1601,
@@ -584,6 +585,7 @@ impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
             ProtobufRequestType::ZRemRangeByLex => RequestType::ZRemRangeByLex,
             ProtobufRequestType::ZLexCount => RequestType::ZLexCount,
             ProtobufRequestType::Append => RequestType::Append,
+            ProtobufRequestType::DelIfEq => RequestType::DelIfEq,
             ProtobufRequestType::SDiffStore => RequestType::SDiffStore,
             ProtobufRequestType::SInter => RequestType::SInter,
             ProtobufRequestType::SInterStore => RequestType::SInterStore,
@@ -869,7 +871,7 @@ impl RequestType {
     /// Returns `None` if the command is compatible with compression.
     ///
     /// Commands that are incompatible with compression are those that:
-    /// - Manipulate string data on the server side (APPEND, GETRANGE, SETRANGE, STRLEN, LCS)
+    /// - Manipulate string data on the server side (APPEND, GETRANGE, SETRANGE, STRLEN, LCS, DELIFEQ)
     /// - Perform numeric operations on string values (INCR, INCRBY, INCRBYFLOAT, DECR, DECRBY)
     /// - Perform bit operations on string values (GETBIT, SETBIT, BITCOUNT, BITPOS, BITFIELD, BITFIELD_RO, BITOP)
     pub fn compression_incompatibility_reason(self) -> Option<&'static str> {
@@ -892,6 +894,9 @@ impl RequestType {
             ),
             RequestType::Substr => Some(
                 "SUBSTR (deprecated alias for GETRANGE) returns a substring of raw bytes, which would return compressed data",
+            ),
+            RequestType::DelIfEq => Some(
+                "DELIFEQ compares the stored value against raw bytes on the server, which would compare against compressed data instead of the original value",
             ),
 
             // Numeric operations - expect numeric string values
@@ -947,6 +952,7 @@ impl RequestType {
             RequestType::Get => Some("GET"),
             RequestType::Set => Some("SET"),
             RequestType::Append => Some("APPEND"),
+            RequestType::DelIfEq => Some("DELIFEQ"),
             RequestType::GetRange => Some("GETRANGE"),
             RequestType::SetRange => Some("SETRANGE"),
             RequestType::Strlen => Some("STRLEN"),
@@ -1003,6 +1009,7 @@ impl RequestType {
             "STRLEN" => Some(RequestType::Strlen),
             "LCS" => Some(RequestType::LCS),
             "SUBSTR" => Some(RequestType::Substr),
+            "DELIFEQ" => Some(RequestType::DelIfEq),
             // Incompatible commands - numeric operations
             "INCR" => Some(RequestType::Incr),
             "INCRBY" => Some(RequestType::IncrBy),
@@ -1160,6 +1167,7 @@ impl RequestType {
             RequestType::ZRemRangeByLex => Some(cmd("ZREMRANGEBYLEX")),
             RequestType::ZLexCount => Some(cmd("ZLEXCOUNT")),
             RequestType::Append => Some(cmd("APPEND")),
+            RequestType::DelIfEq => Some(cmd("DELIFEQ")),
             RequestType::SDiffStore => Some(cmd("SDIFFSTORE")),
             RequestType::SInter => Some(cmd("SINTER")),
             RequestType::SInterStore => Some(cmd("SINTERSTORE")),
