@@ -160,3 +160,71 @@ async def test_async_pool_takes_over_stopped_owner_and_reuses_pipe():
         close_thread.start()
         close_thread.join(timeout=10)
         assert not close_thread.is_alive()
+
+
+async def test_delegated_client_takes_over_before_next_command(monkeypatch):
+    """The next request replaces a delegated reader whose loop has stopped."""
+    import glide.glide_client as async_client_module
+
+    config = GlideClientConfiguration(
+        addresses=[get_standalone_address()], request_timeout=5000
+    )
+    owner_loop = asyncio.new_event_loop()
+    owner_ready = threading.Event()
+    owner_holder = {}
+
+    def owner_thread_main():
+        asyncio.set_event_loop(owner_loop)
+
+        async def create_owner():
+            owner_holder["client"] = await GlideClient.create(config)
+            owner_ready.set()
+
+        owner_loop.run_until_complete(create_owner())
+        owner_loop.run_forever()
+        owner_loop.close()
+
+    owner_thread = threading.Thread(target=owner_thread_main)
+    owner_thread.start()
+    assert await anyio.to_thread.run_sync(lambda: owner_ready.wait(timeout=10))
+
+    second = await GlideClient.create(config)
+    owner_closed = False
+    deliveries = []
+    real_handle_success = async_client_module._handle_pipe_success
+
+    def track_success(client, request_id, response_ptr, arena_or_err):
+        if client is second:
+            deliveries.append(request_id)
+        real_handle_success(client, request_id, response_ptr, arena_or_err)
+
+    monkeypatch.setattr(async_client_module, "_handle_pipe_success", track_success)
+    try:
+        assert async_client_module._async_pipe_loop is owner_loop
+
+        close_owner = asyncio.run_coroutine_threadsafe(
+            owner_holder["client"].close(), owner_loop
+        )
+        await _thread_result(close_owner)
+        owner_closed = True
+        owner_loop.call_soon_threadsafe(owner_loop.stop)
+        await anyio.to_thread.run_sync(lambda: owner_thread.join(timeout=10))
+        assert not owner_thread.is_alive()
+        assert owner_loop.is_closed()
+
+        payload = f"takeover-{uuid.uuid4().hex}"
+        with anyio.fail_after(10):
+            assert await second.custom_command(["PING", payload]) == payload.encode()
+        assert async_client_module._async_pipe_loop is asyncio.get_running_loop()
+        assert deliveries == [1]
+    finally:
+        await second.close()
+        if owner_thread.is_alive():
+            if not owner_closed:
+                close_owner = asyncio.run_coroutine_threadsafe(
+                    owner_holder["client"].close(), owner_loop
+                )
+                await _thread_result(close_owner)
+            owner_loop.call_soon_threadsafe(owner_loop.stop)
+            await anyio.to_thread.run_sync(lambda: owner_thread.join(timeout=10))
+        assert not owner_thread.is_alive()

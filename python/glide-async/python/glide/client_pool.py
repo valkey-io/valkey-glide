@@ -252,8 +252,15 @@ class AsyncClientPool:
             except RuntimeError:
                 client._loop = None
 
-            _client_registry[client_id] = client
-            client._setup_pipe()
+            # Set up the process-wide reader before making the wrapper visible
+            # to frame dispatch. No native request is sent until after this
+            # method returns, so setup cannot race an unregistered response.
+            try:
+                client._setup_pipe(register_client=False)
+                client._register_pipe_client()
+            except BaseException:
+                client._is_closed = True
+                raise
 
             self._client_cache[client_id] = client
             return client

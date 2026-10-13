@@ -1004,8 +1004,13 @@ class BaseClient(CoreCommands):
                 self._release_callback_references()
             raise
 
-    def _setup_pipe(self) -> None:  # noqa: C901
-        """Transactionally initialize or transfer the shared response pipe."""
+    def _setup_pipe(self, *, register_client: bool = True) -> None:  # noqa: C901
+        """Transactionally initialize or transfer the shared response pipe.
+
+        Args:
+            register_client: Whether to register this wrapper for frame routing.
+                Pool wrappers defer registration until setup has succeeded.
+        """
         global _async_pipe_read_fd, _async_pipe_write_fd
         global _async_pipe_registered, _async_pipe_loop
         global _trio_pipe_token, _trio_pipe_cancel_scope
@@ -1034,8 +1039,23 @@ class BaseClient(CoreCommands):
             prior_trio_token = _trio_pipe_token
             prior_trio_cancel_scope = _trio_pipe_cancel_scope
             prior_reader_detached = False
-            prior_client = _client_registry.get(self._pipe_client_id)
+            was_registered = _client_registry.get(self._pipe_client_id) is self
             new_trio_cancel_scope = None
+
+            if register_client:
+                existing = _client_registry.get(self._pipe_client_id)
+                if existing is not None and existing is not self:
+                    raise ClosingError(
+                        f"Async pipe client ID {self._pipe_client_id} is already registered"
+                    )
+
+            def _register_client() -> None:
+                existing = _client_registry.get(self._pipe_client_id)
+                if existing is not None and existing is not self:
+                    raise RuntimeError(
+                        f"Async pipe client ID {self._pipe_client_id} is already registered"
+                    )
+                _client_registry[self._pipe_client_id] = self
 
             def _publish_no_owner() -> None:
                 global _async_pipe_registered, _async_pipe_loop
@@ -1112,8 +1132,6 @@ class BaseClient(CoreCommands):
                     or not self._is_asyncio
                     and _trio_pipe_token is trio_token
                 )
-                _client_registry[self._pipe_client_id] = self
-
                 if (
                     _async_pipe_registered
                     and not same_owner
@@ -1123,6 +1141,8 @@ class BaseClient(CoreCommands):
                 ):
                     # One live asyncio reader dispatches every process-wide frame.
                     # _resolve_future hops completion to each destination loop.
+                    if register_client:
+                        _register_client()
                     return
 
                 if _async_pipe_registered and not same_owner:
@@ -1175,12 +1195,15 @@ class BaseClient(CoreCommands):
                     native_init(created_write_fd)
                     _async_pipe_init_pid = current_pid
                     _async_pipe_needs_fork_reinit = False
+
+                if register_client:
+                    _register_client()
             except BaseException as error:
-                if prior_client is None:
-                    if _client_registry.get(self._pipe_client_id) is self:
-                        _client_registry.pop(self._pipe_client_id, None)
-                else:
-                    _client_registry[self._pipe_client_id] = prior_client
+                if (
+                    not was_registered
+                    and _client_registry.get(self._pipe_client_id) is self
+                ):
+                    _client_registry.pop(self._pipe_client_id, None)
 
                 if registered_here:
                     _detach_current_reader()
@@ -1221,13 +1244,27 @@ class BaseClient(CoreCommands):
                     ) from error
                 raise
 
+    def _register_pipe_client(self) -> None:
+        """Register a setup pool wrapper without replacing a live client."""
+        with _async_pipe_lock:
+            existing = _client_registry.get(self._pipe_client_id)
+            if existing is not None and existing is not self:
+                raise RuntimeError(
+                    f"Async pipe client ID {self._pipe_client_id} is already registered"
+                )
+            _client_registry[self._pipe_client_id] = self
+
     # ==================== Callback Handling ====================
 
     def _get_callback_id(self) -> int:
         return next(self._callback_id_gen)
 
-    def _register_future(self, callback_id: int, fut: "TFuture") -> None:
-        """Register a pending future (thread-safe for free-threading)."""
+    async def _register_future(self, callback_id: int, fut: "TFuture") -> None:
+        """Ensure a viable reader, then register a pending future."""
+        # A client created on another loop may have delegated to the current
+        # process-wide reader. Re-evaluate that owner immediately before every
+        # native pipe request so a stopped owner is replaced before dispatch.
+        self._setup_pipe()
         if _FREE_THREADED:
             with self._lock:
                 self._pending_futures[callback_id] = fut
@@ -1327,7 +1364,7 @@ class BaseClient(CoreCommands):
         callback_id = self._get_callback_id()
         fut = _get_new_future_instance()
 
-        self._register_future(callback_id, fut)
+        await self._register_future(callback_id, fut)
 
         c_args, c_lengths, buffers = self._to_c_strings(args)
 
@@ -1394,7 +1431,7 @@ class BaseClient(CoreCommands):
         callback_id = self._get_callback_id()
         fut = _get_new_future_instance()
 
-        self._register_future(callback_id, fut)
+        await self._register_future(callback_id, fut)
 
         span = 0
         if OpenTelemetry.is_tracing_enabled() and OpenTelemetry.should_sample():
@@ -1444,7 +1481,7 @@ class BaseClient(CoreCommands):
         callback_id = self._get_callback_id()
         fut = _get_new_future_instance()
 
-        self._register_future(callback_id, fut)
+        await self._register_future(callback_id, fut)
 
         if keys is None:
             keys = []
@@ -1528,7 +1565,7 @@ class BaseClient(CoreCommands):
         callback_id = self._get_callback_id()
         fut = _get_new_future_instance()
 
-        self._register_future(callback_id, fut)
+        await self._register_future(callback_id, fut)
 
         c_password = (
             self._ffi.new("char[]", password.encode(ENCODING))
@@ -1558,7 +1595,7 @@ class BaseClient(CoreCommands):
         callback_id = self._get_callback_id()
         fut = _get_new_future_instance()
 
-        self._register_future(callback_id, fut)
+        await self._register_future(callback_id, fut)
 
         self._lib.refresh_iam_token(
             self._core_client,
@@ -1943,7 +1980,7 @@ class GlideClusterClient(BaseClient, ClusterCommands):
         callback_id = self._get_callback_id()
         fut = _get_new_future_instance()
 
-        self._register_future(callback_id, fut)
+        await self._register_future(callback_id, fut)
 
         # Build scan args
         args = []

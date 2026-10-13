@@ -4534,3 +4534,205 @@ def test_stale_inline_remainder_is_not_dispatched_or_reparsed_on_new_loop(monkey
     fake_lib.free_pubsub_pointer_payload.assert_not_called()
     assert async_client_module._pipe_remainder == b""
     assert not async_client_module._pipe_remainder_is_stale
+
+
+def test_delegated_request_rechecks_stopped_asyncio_owner(monkeypatch):
+    """Asyncio and Trio requests replace a delegated stopped asyncio reader."""
+    import glide.glide_client as async_client_module
+
+    for requester_backend in ("asyncio", "trio"):
+        _reset_pipe_test_state(monkeypatch, async_client_module)
+        fake_lib = SimpleNamespace(
+            init_async_pipe=MagicMock(),
+            reinit_async_pipe=MagicMock(),
+            drop_otel_span=MagicMock(),
+        )
+        owner_loop = asyncio.new_event_loop()
+        owner_ready = threading.Event()
+        owner_holder = {}
+        clients = []
+        deliveries = []
+
+        def owner_thread_main():
+            asyncio.set_event_loop(owner_loop)
+            owner = _new_pipe_setup_client(
+                async_client_module, fake_lib, 7301, loop=owner_loop
+            )
+            clients.append(owner)
+            owner_holder["client"] = owner
+            owner._setup_pipe()
+            owner_ready.set()
+            owner_loop.run_forever()
+            owner_loop.close()
+
+        owner_thread = threading.Thread(target=owner_thread_main)
+        owner_thread.start()
+        assert owner_ready.wait(timeout=2)
+
+        def resolve_error(client, request_id, unused_arena):
+            deliveries.append((client._pipe_client_id, request_id))
+            future = client._pending_futures.pop(request_id)
+            async_client_module._resolve_future(future, "resolved", client)
+
+        monkeypatch.setattr(async_client_module, "_handle_pipe_error", resolve_error)
+
+        async def request_after_owner_stops():
+            is_asyncio = sniffio.current_async_library() == "asyncio"
+            loop = asyncio.get_running_loop() if is_asyncio else None
+            second = _new_pipe_setup_client(
+                async_client_module, fake_lib, 7302, loop=loop
+            )
+            clients.append(second)
+            second._ffi = SimpleNamespace(NULL=None)
+            second._core_client = object()
+            second._is_closed = False
+            second._create_pid = os.getpid()
+            second._callback_id_gen = iter((1,))
+            second._pending_futures = {}
+            second._lock = threading.Lock()
+            second._to_c_strings = lambda unused_args: (None, None, [])
+
+            def command(
+                unused_client,
+                callback_id,
+                unused_request_type,
+                unused_arg_count,
+                unused_args,
+                unused_lengths,
+                unused_route,
+                unused_route_len,
+                unused_span,
+            ):
+                if is_asyncio:
+                    assert async_client_module._async_pipe_loop is loop
+                else:
+                    assert async_client_module._async_pipe_loop is None
+                    assert async_client_module._trio_pipe_token is not None
+                os.write(
+                    async_client_module._async_pipe_write_fd,
+                    async_client_module._FRAME_STRUCT.pack(
+                        second._pipe_client_id, callback_id, 0, 0
+                    ),
+                )
+
+            fake_lib.command = command
+            second._setup_pipe()
+            assert async_client_module._async_pipe_loop is owner_loop
+            assert async_client_module._client_registry[7302] is second
+
+            owner_loop.call_soon_threadsafe(owner_loop.stop)
+            await anyio.to_thread.run_sync(lambda: owner_thread.join(timeout=2))
+            assert not owner_thread.is_alive()
+            assert owner_loop.is_closed()
+
+            with anyio.fail_after(2):
+                assert await second._execute_command(RequestType.Ping, []) == "resolved"
+            for _ in range(3):
+                await anyio.sleep(0)
+            assert deliveries == [(7302, 1)]
+
+            if is_asyncio:
+                assert loop is not None
+                loop.remove_reader(async_client_module._async_pipe_read_fd)
+            else:
+                cancel_scope = async_client_module._trio_pipe_cancel_scope
+                assert cancel_scope is not None
+                cancel_scope.cancel()
+                await anyio.sleep(0)
+
+        try:
+            anyio.run(request_after_owner_stops, backend=requester_backend)
+            fake_lib.init_async_pipe.assert_called_once()
+            fake_lib.reinit_async_pipe.assert_not_called()
+        finally:
+            if owner_thread.is_alive():
+                owner_loop.call_soon_threadsafe(owner_loop.stop)
+                owner_thread.join(timeout=2)
+            os.close(async_client_module._async_pipe_read_fd)
+            os.close(async_client_module._async_pipe_write_fd)
+
+
+def test_async_pool_wrapper_registers_only_after_successful_setup(monkeypatch):
+    """A failed pool setup is unretained, and retry registers after setup."""
+    import glide.client_pool as pool_module
+    import glide.glide_client as async_client_module
+
+    registry = weakref.WeakValueDictionary()
+    monkeypatch.setattr(async_client_module, "_client_registry", registry)
+    monkeypatch.setattr(pool_module, "_client_registry", registry)
+    client_id = 7401
+    ffi = GlideFFI.ffi
+    fake_lib = SimpleNamespace(
+        glide_pool_get_client_ptr=MagicMock(return_value=17),
+    )
+    pool = object.__new__(pool_module.AsyncClientPool)
+    pool._ffi = ffi
+    pool._lib = fake_lib
+    pool._client_config = GlideClientConfiguration(addresses=[NodeAddress()])
+    pool._client_cache = {}
+    pool._cache_lock = threading.Lock()
+    pool._is_cluster = False
+    pool._conn_req_bytes = b"connection-request"
+
+    setup_attempts = 0
+    wrapper_refs = []
+    events = []
+    original_register = async_client_module.BaseClient._register_pipe_client
+
+    def setup_pipe(client, *, register_client=True):
+        nonlocal setup_attempts
+        setup_attempts += 1
+        wrapper_refs.append(weakref.ref(client))
+        events.append("setup")
+        assert not register_client
+        assert client_id not in registry
+        assert client_id not in pool._client_cache
+        if setup_attempts == 1:
+            raise ClosingError("injected pool pipe setup failure")
+
+    def register_pipe_client(client):
+        events.append("register")
+        assert client_id not in registry
+        assert client_id not in pool._client_cache
+        original_register(client)
+
+    monkeypatch.setattr(async_client_module.BaseClient, "_setup_pipe", setup_pipe)
+    monkeypatch.setattr(
+        async_client_module.BaseClient,
+        "_register_pipe_client",
+        register_pipe_client,
+    )
+
+    with pytest.raises(ClosingError, match="injected pool pipe setup failure"):
+        pool._get_or_create_client(client_id)
+    assert client_id not in registry
+    assert client_id not in pool._client_cache
+    gc.collect()
+    assert wrapper_refs[0]() is None
+    assert events == ["setup"]
+
+    client = pool._get_or_create_client(client_id)
+    assert client is wrapper_refs[1]()
+    assert registry[client_id] is client
+    assert pool._client_cache[client_id] is client
+    assert events == ["setup", "setup", "register"]
+    assert pool._get_or_create_client(client_id) is client
+    assert setup_attempts == 2
+
+
+def test_async_pool_wrapper_registration_rejects_live_id_collision(monkeypatch):
+    """Post-setup registration must not silently replace a live wrapper."""
+    import glide.glide_client as async_client_module
+
+    registry = weakref.WeakValueDictionary()
+    monkeypatch.setattr(async_client_module, "_client_registry", registry)
+    existing = object.__new__(async_client_module.GlideClient)
+    candidate = object.__new__(async_client_module.GlideClient)
+    existing._pipe_client_id = 7402
+    candidate._pipe_client_id = 7402
+    registry[7402] = existing
+
+    with pytest.raises(RuntimeError, match="already registered"):
+        candidate._register_pipe_client()
+
+    assert registry[7402] is existing
