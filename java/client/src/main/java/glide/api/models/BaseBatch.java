@@ -634,6 +634,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     public <ArgType> T delifeq(@NonNull ArgType key, @NonNull ArgType value) {
         checkTypeOrThrow(key);
+        checkTypeOrThrow(value);
         addCommand(DelIfEq, newArgsBuilder().add(key).add(value));
         return getThis();
     }
