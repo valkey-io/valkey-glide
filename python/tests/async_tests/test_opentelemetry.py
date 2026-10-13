@@ -22,6 +22,7 @@ from glide_shared.commands.batch import Batch, ClusterBatch
 from glide_shared.config import ProtocolVersion
 from glide_shared.exceptions import ClosingError, ConfigurationError, RequestError
 from glide_shared.logger import Level, Logger
+from glide_sync.opentelemetry import OpenTelemetry as _SyncOpenTelemetry
 from opentelemetry import trace
 from opentelemetry.trace import NonRecordingSpan, SpanContext, TraceFlags
 from opentelemetry.trace.span import TraceState
@@ -293,6 +294,12 @@ def test_wrong_opentelemetry_config():
 @pytest.mark.anyio
 async def test_span_not_exported_before_init_otel(request):
     """Test that spans are not exported before OpenTelemetry is initialized"""
+    # The Rust-side OpenTelemetry is process-global and one-shot, shared by the
+    # sync and async wrappers, so the precondition only holds in the first
+    # module to run in this process.
+    if OpenTelemetry.is_initialized() or _SyncOpenTelemetry.is_initialized():
+        pytest.skip("OpenTelemetry already initialized in this process")
+
     # Clean up any existing files
     if os.path.exists(VALID_ENDPOINT_TRACES):
         os.unlink(VALID_ENDPOINT_TRACES)
