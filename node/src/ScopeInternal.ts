@@ -44,6 +44,7 @@ export function clearScopeConnectionRequest(client: BaseClient): void {
 export function tryAcquireScope(
     client: BaseClient,
     clientId: number,
+    hasRoutingSlot: boolean,
     routingSlot: number,
     attemptToken: bigint,
     explicitBytes?: Uint8Array,
@@ -57,5 +58,11 @@ export function tryAcquireScope(
         );
     }
 
-    return scopeTryAcquire(clientId, bytes, routingSlot, attemptToken);
+    return scopeTryAcquire(
+        clientId,
+        bytes,
+        hasRoutingSlot,
+        routingSlot,
+        attemptToken,
+    );
 }

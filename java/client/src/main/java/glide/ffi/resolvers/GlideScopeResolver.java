@@ -8,7 +8,11 @@ public class GlideScopeResolver {
     }
 
     public static native long glideScopeTryAcquire(
-            long clientId, byte[] connectionRequestBytes, int routingSlot, long attemptToken);
+            long clientId,
+            byte[] connectionRequestBytes,
+            boolean hasRoutingSlot,
+            int routingSlot,
+            long attemptToken);
 
     /**
      * Allocate a unique scope-acquire attempt token. Call once per {@code acquire()} and pass it on
