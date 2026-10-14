@@ -1,6 +1,7 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 import asyncio
+import contextlib
 import itertools
 import os
 import struct
@@ -56,6 +57,7 @@ from glide_shared.constants import (
 from glide_shared.exceptions import (
     ClosingError,
     ConfigurationError,
+    ConnectionError,
     RequestError,
     get_request_error_class,
 )
@@ -176,6 +178,27 @@ def _get_new_future_instance() -> "TFuture":
     # _CompatFuture is also compatible with asyncio, but introduces performance
     # degradation, so we only use it for trio/other frameworks
     return _CompatFuture()
+
+
+class _ReleaseLateScope:
+    """Takes a cancelled acquire's place in ``_pending_futures``.
+
+    Core keeps waiting after the caller gives up. A scope it then grants must
+    go back, or its slot stays in use until the client closes.
+    """
+
+    def __init__(self, lib, client_id: int) -> None:
+        self._lib = lib
+        self._client_id = client_id
+
+    def done(self) -> bool:
+        return False
+
+    def set_result(self, scope_id: int) -> None:
+        self._lib.glide_scope_release(scope_id, self._client_id)
+
+    def set_exception(self, _exception: BaseException) -> None:
+        pass
 
 
 def _slot_for_key(key: bytes) -> int:
@@ -748,6 +771,20 @@ class BaseClient(CoreCommands):
         else:
             self._pending_futures[callback_id] = fut
 
+    def _replace_pending_future(
+        self, callback_id: int, expected: "TFuture", replacement: Any
+    ) -> None:
+        """Swap ``callback_id``'s entry unless a result already arrived and
+        removed it. ``None`` removes it."""
+        lock = self._lock if _FREE_THREADED else contextlib.nullcontext()
+        with lock:
+            if self._pending_futures.get(callback_id) is not expected:
+                return
+            if replacement is None:
+                del self._pending_futures[callback_id]
+            else:
+                self._pending_futures[callback_id] = replacement
+
     def _complete_pubsub_futures_safe(self):
         """Complete pending pubsub futures with available messages. Must hold _pubsub_lock."""
         loop = self._loop
@@ -1213,8 +1250,6 @@ class BaseClient(CoreCommands):
                 scoped connection.
             ClosingError: If the client is already closed.
         """
-        from glide_shared.ffi_helpers import handle_command_result
-
         from .isolated_scope import AsyncIsolatedScope
 
         if self._is_closed:
@@ -1231,37 +1266,40 @@ class BaseClient(CoreCommands):
             _slot_for_key(routing_key.encode("utf-8")) if routing_key is not None else 0
         )
 
-        loop = asyncio.get_running_loop()
+        callback_id = self._get_callback_id()
+        fut = _get_new_future_instance()
+        self._register_future(callback_id, fut)
 
-        def _acquire_sync():
-            buf = self._ffi.from_buffer(conn_req_bytes)
-            result = self._lib.glide_scope_acquire_blocking(
-                client_id,
-                self._ffi.cast("const uint8_t*", buf),
-                len(conn_req_bytes),
-                has_routing_slot,
-                routing_slot,
-                # uint64_t on the FFI side: a negative value would raise
-                # OverflowError instead of the documented TimeoutError.
-                # Negative means no wait.
-                max(0, int(timeout * 1000)),
-            )
-            return handle_command_result(
-                self._ffi, self._lib, result, lambda resp: resp.int_value
-            )
+        buf = self._ffi.from_buffer(conn_req_bytes)
+        rc = self._lib.glide_scope_acquire_pipe(
+            client_id,
+            self._ffi.cast("const uint8_t*", buf),
+            len(conn_req_bytes),
+            has_routing_slot,
+            routing_slot,
+            # uint64_t on the FFI side: a negative value would raise
+            # OverflowError instead of the documented TimeoutError.
+            # Negative means no wait.
+            max(0, int(timeout * 1000)),
+            callback_id,
+            self._pipe_client_id,
+        )
+        if rc != 0:
+            self._replace_pending_future(callback_id, fut, None)
+            raise RequestError(f"Failed to queue scope acquire: error code {rc}")
 
-        acquire = loop.run_in_executor(None, _acquire_sync)
         try:
-            scope_id = await asyncio.shield(acquire)
-        except asyncio.CancelledError:
-            # The executor thread keeps waiting after the caller gives up. Give
-            # back a scope it is later granted, or its slot stays in use until
-            # the client closes.
-            def _release_late_scope(done: "asyncio.Future[int]") -> None:
-                if not done.cancelled() and done.exception() is None:
-                    self._lib.glide_scope_release(done.result(), client_id)
-
-            acquire.add_done_callback(_release_late_scope)
+            scope_id = await fut
+        except ClosingError as e:
+            # close() fails every pending future before core's Disconnect
+            # frame can arrive; keep the documented class.
+            raise ConnectionError(str(e) or "Client closed while waiting") from e
+        except BaseException:
+            # Cancellation (asyncio.CancelledError, trio.Cancelled) leaves the
+            # core wait running.
+            self._replace_pending_future(
+                callback_id, fut, _ReleaseLateScope(self._lib, client_id)
+            )
             raise
 
         return AsyncIsolatedScope(

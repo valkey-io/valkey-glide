@@ -1194,8 +1194,7 @@ pub unsafe extern "C" fn glide_scope_acquire_pipe(
 ///
 /// Same semantics as [`glide_scope_acquire_async`], returned as a `CommandResult`
 /// whose `response` is an `Int` holding the scope id, or whose `command_error`
-/// carries the failure. Used by Python, which runs blocking FFI calls on an
-/// executor thread, the same way it calls `glide_scope_execute`. Because that
+/// carries the failure. Used by the Python sync client. Because the calling
 /// thread polls the future itself, the watchdog backstop returns here even when
 /// every runtime worker is stalled.
 ///
