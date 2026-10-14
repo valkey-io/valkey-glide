@@ -80,6 +80,48 @@ fn scope_watchdog_timeout(
     std::io::Error::from(std::io::ErrorKind::TimedOut).into()
 }
 
+/// The core scope acquire under the watchdog backstop (#6673, #5806). Always
+/// armed: `should_arm_watchdog` exists for unbounded commands, and an acquire
+/// has a finite deadline. One future for every acquire export, so the deadline
+/// semantics cannot drift between delivery paths.
+async fn acquire_scope_with_watchdog(
+    client_id: u64,
+    conn_bytes: Vec<u8>,
+    handle: &tokio::runtime::Handle,
+    routing_slot: Option<u16>,
+    timeout_duration: std::time::Duration,
+) -> Result<u64, RedisError> {
+    let acquire_start = std::time::Instant::now();
+    let timeout_rx = glide_core::timeout_watchdog::TimeoutWatchdog::global().register(
+        timeout_duration + SCOPE_ACQUIRE_WATCHDOG_MARGIN,
+        acquire_start,
+    );
+    let acquire = scope::acquire_scope(
+        client_id,
+        conn_bytes,
+        handle,
+        routing_slot,
+        timeout_duration,
+    );
+    tokio::pin!(acquire);
+    let parent_p99 =
+        || scope::get_parent_client(client_id).and_then(|client| client.latency_tracker().p99());
+    tokio::select! {
+        result = &mut acquire => result.map_err(RedisError::from),
+        recv_result = timeout_rx => {
+            match recv_result {
+                Err(_) => acquire.await.map_err(RedisError::from),
+                Ok(()) => Err(scope_watchdog_timeout(
+                    "SCOPE_ACQUIRE",
+                    timeout_duration,
+                    acquire_start.elapsed(),
+                    parent_p99(),
+                ))
+            }
+        }
+    }
+}
+
 /// Whether the diagnostic timeout watchdog should be armed for a scoped command.
 ///
 /// The watchdog arms at the flat client request timeout and aborts the command
@@ -1038,40 +1080,14 @@ pub unsafe extern "C" fn glide_scope_acquire_async(
     let runtime = get_pool_runtime();
     let handle = runtime.handle().clone();
     runtime.spawn(async move {
-        // Backstop for a starved runtime (#6673, #5806), as glide_scope_execute
-        // does. Always armed: should_arm_watchdog exists for unbounded commands,
-        // and an acquire has a finite deadline.
-        let acquire_start = std::time::Instant::now();
-        let timeout_duration = std::time::Duration::from_millis(timeout_ms);
-        let timeout_rx = glide_core::timeout_watchdog::TimeoutWatchdog::global().register(
-            timeout_duration + SCOPE_ACQUIRE_WATCHDOG_MARGIN,
-            acquire_start,
-        );
-        let acquire = scope::acquire_scope(
+        let result = acquire_scope_with_watchdog(
             client_id,
             conn_bytes,
             &handle,
             has_routing_slot.then_some(routing_slot),
-            timeout_duration,
-        );
-        tokio::pin!(acquire);
-        let parent_p99 = || {
-            scope::get_parent_client(client_id).and_then(|client| client.latency_tracker().p99())
-        };
-        let result = tokio::select! {
-            result = &mut acquire => result.map_err(RedisError::from),
-            recv_result = timeout_rx => {
-                match recv_result {
-                    Err(_) => acquire.await.map_err(RedisError::from),
-                    Ok(()) => Err(scope_watchdog_timeout(
-                        "SCOPE_ACQUIRE",
-                        timeout_duration,
-                        acquire_start.elapsed(),
-                        parent_p99(),
-                    ))
-                }
-            }
-        };
+            std::time::Duration::from_millis(timeout_ms),
+        )
+        .await;
         match result {
             Ok(scope_id) => unsafe {
                 success_callback(request_id, scope_id_response(scope_id));
@@ -1121,40 +1137,13 @@ pub unsafe extern "C" fn glide_scope_acquire_blocking(
             .to_vec();
 
     let runtime = get_pool_runtime();
-    // Same watchdog backstop as the async export; see the comment there.
-    let acquire_start = std::time::Instant::now();
-    let timeout_duration = std::time::Duration::from_millis(timeout_ms);
-    let result = runtime.block_on(async {
-        let timeout_rx = glide_core::timeout_watchdog::TimeoutWatchdog::global().register(
-            timeout_duration + SCOPE_ACQUIRE_WATCHDOG_MARGIN,
-            acquire_start,
-        );
-        let acquire = scope::acquire_scope(
-            client_id,
-            conn_bytes,
-            runtime.handle(),
-            has_routing_slot.then_some(routing_slot),
-            timeout_duration,
-        );
-        tokio::pin!(acquire);
-        let parent_p99 = || {
-            scope::get_parent_client(client_id).and_then(|client| client.latency_tracker().p99())
-        };
-        tokio::select! {
-            result = &mut acquire => result.map_err(RedisError::from),
-            recv_result = timeout_rx => {
-                match recv_result {
-                    Err(_) => acquire.await.map_err(RedisError::from),
-                    Ok(()) => Err(scope_watchdog_timeout(
-                        "SCOPE_ACQUIRE",
-                        timeout_duration,
-                        acquire_start.elapsed(),
-                        parent_p99(),
-                    ))
-                }
-            }
-        }
-    });
+    let result = runtime.block_on(acquire_scope_with_watchdog(
+        client_id,
+        conn_bytes,
+        runtime.handle(),
+        has_routing_slot.then_some(routing_slot),
+        std::time::Duration::from_millis(timeout_ms),
+    ));
     match result {
         Ok(scope_id) => Box::into_raw(Box::new(CommandResult {
             response: scope_id_response(scope_id),
