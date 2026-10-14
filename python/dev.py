@@ -494,7 +494,7 @@ def clean_clients(client: ClientTarget) -> None:
     # Clean sync-only artifacts.
     if client in (ClientTarget.SYNC, ClientTarget.ALL):
         run_command(
-            [sys.executable, "setup.py", "clean"],
+            [str(venv_ctx["python_exe"]), "setup.py", "clean"],
             cwd=GLIDE_SYNC_DIR,
             label="setup.py clean",
         )

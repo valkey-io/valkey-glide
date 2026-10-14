@@ -4,34 +4,30 @@ This file provides AI agents and developers with the minimum but sufficient cont
 
 ## Repository Overview
 
-This is the Python client binding for Valkey GLIDE, providing both async and sync client implementations. The Python wrapper consists of three components: async client (PyO3/Maturin), sync client (CFFI/setuptools), and shared logic.
+This is the Python client binding for Valkey GLIDE, providing both async and sync client implementations, as three packages: async client, sync client, and a shared package used by both. Command dispatch for **both** clients goes through CFFI calls into the `ffi/` crate; async response parsing goes through the PyO3 `_fast_response` module in `glide-shared/`.
 
-**Primary Languages:** Python, Rust (PyO3 and CFFI bindings)
-**Build System:** Custom dev.py CLI with Maturin (async) and setuptools (sync)
-**Architecture:** Hybrid Python/Rust with PyO3 (async) and CFFI (sync) bindings
+**Primary Languages:** Python, Rust (CFFI dispatch + PyO3 response parsing)
+**Build System:** Custom dev.py CLI driving Maturin (async, shared) and setuptools (sync)
+**Architecture:** Hybrid Python/Rust — CFFI for command dispatch (both clients), PyO3 for async response parsing
 
 **Key Components:**
 
-- `glide-async/` - Async client using PyO3 bindings and Unix Domain Socket communication
-- `glide-sync/` - Sync client using CFFI bindings and direct FFI communication
-- `glide-shared/` - Shared Python logic used by both clients
+- `glide-async/` - Async client (Maturin-packaged); responses arrive from Rust worker threads over an anonymous pipe
+- `glide-sync/` - Sync client (setuptools-packaged); responses are direct FFI return values
+- `glide-shared/` - Shared Python logic plus the PyO3 `_fast_response` parser (Maturin hybrid crate)
 - `tests/` - Shared test suite for both clients
 - `dev.py` - CLI utility for build, test, and development tasks
 
 ## Architecture Quick Facts
 
-**Core Implementation:** Python wrappers around glide-core Rust library
+**Core Implementation:** Python wrappers around glide-core Rust library via `ffi/`
 **Client Types:** GlideClient/GlideClusterClient (async), GlideClient/GlideClusterClient (sync)
 **API Styles:** Async with asyncio/trio support, Sync with blocking calls
-**Communication:** UDS (async), Direct FFI (sync)
+**Communication:** CFFI into `ffi/` for both clients; async responses via anonymous pipe, sync responses via FFI return values
 
-**Supported Platforms:**
+**Supported Platforms:** see the System Requirements section of [README.md](./README.md). Alpine Linux/MUSL is not supported.
 
-- Linux: Ubuntu 20+, Amazon Linux 2/2023 (x86_64, aarch64)
-- macOS: 13.7+ (x86_64), 14.7+ (aarch64)
-- **Note:** Alpine Linux/MUSL not supported
-
-**Python Versions:** 3.9–3.14, plus 3.14t (free-threaded). CI's always-run set is 3.9, 3.13, 3.14t (`.github/json_matrices/supported-languages-versions.json`). The free-threaded 3.14t build has extra concurrency rules — see the root [../AGENTS.md](../AGENTS.md) "Python Free-Threading" section.
+**Python Versions:** 3.9–3.14, plus 3.14t (free-threaded). CI's always-run set is 3.9, 3.13, 3.14t (`.github/json_matrices/supported-languages-versions.json`). Free-threaded 3.14t has extra concurrency rules — see "Python Free-Threading" below.
 **Async Frameworks:** asyncio, trio, uvloop
 
 **Packages:** `valkey-glide` (async), `valkey-glide-sync` (sync)
@@ -74,26 +70,37 @@ python3 dev.py --help                                 # Show all available comma
 
 ### Raw Equivalents
 
+These are the steps `dev.py build` runs. `glide_shared` must be installed and `libglide_ffi` built before either client.
+
 ```bash
+# Shared package + FFI library (from python/)
+source .env/bin/activate
+(cd glide-shared && maturin develop --release)
+(cd ../ffi && cargo build --release)
+cp ../ffi/target/release/libglide_ffi.dylib glide-shared/glide_shared/   # .so on Linux
+
 # Manual async client build (from glide-async/)
 source ../.env/bin/activate
 maturin develop --release
 
-# Manual sync client build (from glide-sync/)
+# Manual sync client build (from glide-sync/) — setup.py vendors ffi/ + glide-shared/ into
+# glide-sync/ and runs cargo on the copies, so this is a from-scratch Rust build each time
 source ../.env/bin/activate
-pip install -e ../glide-shared
-python setup.py build_ext --inplace
+RELEASE_MODE=1 pip install .    # omit RELEASE_MODE for a debug build
 
 # Manual test execution (from python/)
 source .env/bin/activate
 pytest -v
 
-# Manual linting
+# Manual linting (from python/; dev.py runs mypy on the repo root, not just python/)
 source .env/bin/activate
-isort . && black . && flake8 . && mypy .
+isort . && black . && flake8 . && mypy ..
 
-# Manual protobuf generation
-protoc --python_out=glide-shared/glide_shared/protobuf --pyi_out=glide-shared/glide_shared/protobuf ../glide-core/src/protobuf/*.proto
+# Manual protobuf generation (from python/)
+source .env/bin/activate
+protoc --plugin=protoc-gen-mypy=.env/bin/protoc-gen-mypy -Iprotobuf=../glide-core/src/protobuf \
+  --python_out=glide-shared/glide_shared --mypy_out=glide-shared/glide_shared \
+  ../glide-core/src/protobuf/*.proto
 ```
 
 ### Test Servers
@@ -173,6 +180,25 @@ cargo clippy --all-features --all-targets -- -D warnings
 - **Protobuf Updates:** Run `python3 dev.py protobuf` after proto changes
 - **Stale `libglide_ffi.so` after core changes:** `install_glide_shared` (in `dev.py`) only (re)builds and copies the C-ABI `libglide_ffi.*` into `glide-shared/glide_shared/` when that destination file is **absent** — so once a copy exists, a later `dev.py build` keeps using the old one even after you change `ffi/`/`glide-core` (symptom: sync tests fail with `undefined symbol: glide_scope_...` against a stale `.so`). Rebuilding `ffi` alone does **not** fix it because the copy is skipped. To force a refresh, delete the stale lib (`rm glide-shared/glide_shared/libglide_ffi.*`) or run `python3 dev.py clean`, then rebuild. Not environment-specific. CI never hits this (ephemeral runners build from scratch).
 - **Documentation Style:** Follow Google Style Python Docstrings format
+
+### Python Free-Threading (3.14t) Concurrency Rules
+
+The async client (`glide-async/python/glide/glide_client.py`) supports free-threaded CPython (`3.14t`, GIL disabled). The module declares `#[pymodule(gil_used = false)]` in `glide-async/src/lib.rs`, and when `_FREE_THREADED` is true, response parsing runs on a `ThreadPoolExecutor` so completions can arrive on a non-event-loop thread.
+
+Cross-thread wakeups are the sharp edge. Under trio, `_CompatFuture._is_done` is an `anyio.Event` backed by a `trio.Event`, and trio primitives are **not thread-safe**: `.set()` from a foreign thread marks the event set but never reschedules the parked waiter, so the `await` hangs with no timeout firing (the main thread is parked in native code where Python signal handlers, including pytest-timeout's, cannot run). Any object completed from the response thread pool must hop back to its owning loop/run: asyncio uses `loop.call_soon_threadsafe`, trio uses the `trio.lowlevel.TrioToken.run_sync_soon` captured at future-creation time. When touching future/event completion, verify the wake path for both asyncio and trio.
+
+Build and run against free-threaded Python locally (fast iteration beats CI):
+
+```bash
+# Install the free-threaded interpreter (Homebrew: python-freethreading -> python3.14t)
+python3.14t -m venv .env   # dev.py reuses an existing .env
+python3 dev.py build
+# -k "" clears pytest.ini's default exclusion so the pubsub tests run too
+python3 dev.py test --args tests/async_tests/test_async_client.py --async-backend=trio -k ""
+# Confirm no-GIL: .env/bin/python -c "import sys; print(sys._is_gil_enabled())"  # -> False
+```
+
+Reproduce a suspected hang with a stack dump: `kill -ABRT <pid>` (faulthandler prints the parked Python stack) since py-spy needs root on macOS.
 
 ### Package Structure Rules
 
