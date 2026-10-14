@@ -88,6 +88,7 @@ import {
     parseLatencyLatestResponse,
     parseMemoryStatsResponse,
 } from "./Commands";
+import { setScopeConnectionRequest } from "./ScopeInternal";
 
 /* eslint-disable-next-line @typescript-eslint/no-namespace */
 export namespace GlideClientConfiguration {
@@ -355,6 +356,7 @@ export class GlideClient extends BaseClient {
     public static async fromPoolClientId(
         clientId: number,
         options: GlideClientConfiguration,
+        connectionRequestBytes: Uint8Array,
     ): Promise<GlideClient> {
         const { poolBuildHandle } = await import("../build-ts/native");
         // Create the client instance whose handleResponsesAvailable will be stored
@@ -370,6 +372,9 @@ export class GlideClient extends BaseClient {
         // Inject the handle into the SAME instance whose callback was registered.
         (client as unknown as { clientHandle: typeof handle }).clientHandle =
             handle;
+        // The client never runs connectToServer, so give it the pool's
+        // connection request for scopedConnection().
+        setScopeConnectionRequest(client, connectionRequestBytes);
         return client;
     }
 

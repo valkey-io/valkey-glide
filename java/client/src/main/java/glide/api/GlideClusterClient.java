@@ -239,8 +239,12 @@ public class GlideClusterClient extends BaseClient
      * The scope is pinned to a single slot after the first keyed command.
      *
      * @param timeout maximum time to wait for a scope to become available
-     * @param routingKey the key whose hash slot determines which node the scope connects to. All keys
-     *     used in the scope must hash to the same slot. May be null (defaults to slot 0).
+     * @param routingKey the key whose hash slot determines which node the scope connects to, and
+     *     against which the scope's first keyed command is validated (a command for a different slot
+     *     is rejected locally with CROSSSLOT). May be null, in which case the scope starts
+     *     unconstrained (slot 0 selects only the initial connection target): the first keyed command
+     *     may target any slot and pins the scope to it, after which later keyed commands for a
+     *     different slot receive CROSSSLOT.
      * @return a Future resolving to an {@link glide.api.models.scope.IsolatedScope}
      */
     public CompletableFuture<glide.api.models.scope.IsolatedScope> scopedConnection(
@@ -253,8 +257,11 @@ public class GlideClusterClient extends BaseClient
             return f;
         }
 
-        int routingSlot =
-                routingKey != null ? slotForKey(routingKey.getBytes(StandardCharsets.UTF_8)) : 0;
+        // A routing key is optional; when absent, a cluster scope stays
+        // unconstrained (any primary) rather than being pinned to a slot. Presence
+        // is carried in a separate flag so slot 0 is a real value, not "unset".
+        boolean hasRoutingSlot = routingKey != null;
+        int routingSlot = hasRoutingSlot ? slotForKey(routingKey.getBytes(StandardCharsets.UTF_8)) : 0;
         long timeoutMs = timeout.toMillis();
         long deadline = System.currentTimeMillis() + timeoutMs;
         // One logical acquire: one stable attempt token across the retry loop.
@@ -265,7 +272,7 @@ public class GlideClusterClient extends BaseClient
                     while (true) {
                         long scopeId =
                                 glide.ffi.resolvers.GlideScopeResolver.glideScopeTryAcquire(
-                                        clientId, connBytes, routingSlot, attemptToken);
+                                        clientId, connBytes, hasRoutingSlot, routingSlot, attemptToken);
                         if (scopeId >= 0) {
                             return new glide.api.models.scope.IsolatedScope(scopeId, clientId);
                         }
@@ -285,7 +292,7 @@ public class GlideClusterClient extends BaseClient
                 });
     }
 
-    /** Convenience overload — defaults to slot 0 (standalone mode). */
+    /** Convenience overload — no routing key, so the scope is unconstrained. */
     public CompletableFuture<glide.api.models.scope.IsolatedScope> scopedConnection(
             @NonNull java.time.Duration timeout) {
         return scopedConnection(timeout, null);

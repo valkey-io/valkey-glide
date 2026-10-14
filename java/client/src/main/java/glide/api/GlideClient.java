@@ -239,9 +239,8 @@ public class GlideClient extends BaseClient
      * is returned to the pool.
      *
      * @param timeout maximum time to wait for a scope to become available
-     * @param routingKey in cluster mode, the key whose hash slot determines which node the scope
-     *     connects to. All keys used in the scope must hash to the same slot. May be null (defaults
-     *     to slot 0).
+     * @param routingKey ignored in standalone mode (no slots); may be null. Accepted for signature
+     *     parity with the cluster client, where it determines the scope's node and slot.
      * @return a Future resolving to an {@link IsolatedScope}
      */
     public CompletableFuture<IsolatedScope> scopedConnection(
@@ -254,8 +253,10 @@ public class GlideClient extends BaseClient
             return f;
         }
 
-        int routingSlot =
-                routingKey != null ? slotForKey(routingKey.getBytes(StandardCharsets.UTF_8)) : 0;
+        // Standalone ignores routing, but the FFI signature carries presence
+        // uniformly; a standalone scope is always unconstrained.
+        boolean hasRoutingSlot = routingKey != null;
+        int routingSlot = hasRoutingSlot ? slotForKey(routingKey.getBytes(StandardCharsets.UTF_8)) : 0;
         long timeoutMs = timeout.toMillis();
         long deadline = System.currentTimeMillis() + timeoutMs;
         // One logical acquire: mint a single attempt token and pass it on every
@@ -268,7 +269,7 @@ public class GlideClient extends BaseClient
                     while (true) {
                         long scopeId =
                                 glide.ffi.resolvers.GlideScopeResolver.glideScopeTryAcquire(
-                                        clientId, connBytes, routingSlot, attemptToken);
+                                        clientId, connBytes, hasRoutingSlot, routingSlot, attemptToken);
                         if (scopeId >= 0) {
                             return new IsolatedScope(scopeId, clientId);
                         }
@@ -289,7 +290,7 @@ public class GlideClient extends BaseClient
                 });
     }
 
-    /** Convenience overload — defaults to slot 0 (standalone mode). */
+    /** Convenience overload — no routing key (standalone mode ignores it). */
     public CompletableFuture<IsolatedScope> scopedConnection(@NonNull java.time.Duration timeout) {
         return scopedConnection(timeout, null);
     }
