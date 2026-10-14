@@ -5071,6 +5071,159 @@ def test_async_pool_wrapper_registers_only_after_successful_setup(monkeypatch):
     assert setup_attempts == 2
 
 
+@pytest.mark.anyio
+async def test_async_pool_borrow_context_rolls_back_failed_setup(monkeypatch):
+    """A failed borrowed-wrapper setup returns the only slot for the next borrow."""
+    import glide.client_pool as pool_module
+
+    pool = object.__new__(pool_module.AsyncClientPool)
+    client_id = 7403
+    available = True
+    releases = []
+    setup_attempts = 0
+    expected_client = object()
+
+    async def acquire(unused_pool, timeout=None):
+        nonlocal available
+        if not available:
+            raise TimeoutError("pool exhausted")
+        available = False
+        return client_id
+
+    def release(unused_pool, released_id):
+        nonlocal available
+        releases.append(released_id)
+        available = True
+
+    def get_or_create_client(unused_pool, acquired_id):
+        nonlocal setup_attempts
+        assert acquired_id == client_id
+        setup_attempts += 1
+        if setup_attempts == 1:
+            raise ClosingError("injected wrapper registration failure")
+        return expected_client
+
+    monkeypatch.setattr(pool_module.AsyncClientPool, "acquire", acquire)
+    monkeypatch.setattr(pool_module.AsyncClientPool, "release", release)
+    monkeypatch.setattr(
+        pool_module.AsyncClientPool,
+        "_get_or_create_client",
+        get_or_create_client,
+    )
+
+    failed_borrow = pool.borrow()
+    with pytest.raises(ClosingError, match="wrapper registration failure"):
+        async with failed_borrow:
+            pytest.fail("failed setup must not enter the context body")
+
+    assert failed_borrow._client_id == -1
+    assert releases == [client_id]
+
+    async with pool.borrow() as client:
+        assert client is expected_client
+        assert releases == [client_id]
+
+    assert releases == [client_id, client_id]
+    assert setup_attempts == 2
+
+
+@pytest.mark.anyio
+async def test_async_pool_borrow_context_rolls_back_setup_cancellation(monkeypatch):
+    """Cancellation raised during wrapper setup releases the acquired slot once."""
+    import glide.client_pool as pool_module
+
+    pool = object.__new__(pool_module.AsyncClientPool)
+    release = MagicMock()
+
+    async def acquire(unused_pool, timeout=None):
+        return 7404
+
+    def cancel_setup(unused_pool, unused_client_id):
+        raise asyncio.CancelledError("injected setup cancellation")
+
+    monkeypatch.setattr(pool_module.AsyncClientPool, "acquire", acquire)
+    monkeypatch.setattr(pool_module.AsyncClientPool, "release", release)
+    monkeypatch.setattr(
+        pool_module.AsyncClientPool, "_get_or_create_client", cancel_setup
+    )
+
+    borrow = pool.borrow()
+    with pytest.raises(asyncio.CancelledError, match="setup cancellation"):
+        await borrow.__aenter__()
+
+    release.assert_called_once_with(7404)
+    assert borrow._client_id == -1
+
+
+@pytest.mark.anyio
+async def test_async_pool_borrow_context_success_and_acquire_failure(monkeypatch):
+    """Successful exit releases once, while acquisition failure releases nothing."""
+    import glide.client_pool as pool_module
+
+    pool = object.__new__(pool_module.AsyncClientPool)
+    expected_client = object()
+    release = MagicMock()
+
+    async def acquire(unused_pool, timeout=None):
+        return 7405
+
+    monkeypatch.setattr(pool_module.AsyncClientPool, "acquire", acquire)
+    monkeypatch.setattr(pool_module.AsyncClientPool, "release", release)
+    monkeypatch.setattr(
+        pool_module.AsyncClientPool,
+        "_get_or_create_client",
+        lambda unused_pool, unused_client_id: expected_client,
+    )
+
+    async with pool.borrow() as client:
+        assert client is expected_client
+        release.assert_not_called()
+    release.assert_called_once_with(7405)
+
+    async def fail_acquire(unused_pool, timeout=None):
+        raise TimeoutError("injected acquire failure")
+
+    monkeypatch.setattr(pool_module.AsyncClientPool, "acquire", fail_acquire)
+    failed_borrow = pool.borrow()
+    with pytest.raises(TimeoutError, match="acquire failure"):
+        await failed_borrow.__aenter__()
+
+    release.assert_called_once_with(7405)
+    assert failed_borrow._client_id == -1
+
+
+@pytest.mark.anyio
+async def test_async_pool_borrow_context_preserves_setup_error_on_release_failure(
+    monkeypatch,
+):
+    """Rollback failure must not replace the original wrapper setup exception."""
+    import glide.client_pool as pool_module
+
+    pool = object.__new__(pool_module.AsyncClientPool)
+    setup_error = ClosingError("original setup failure")
+    release = MagicMock(side_effect=RuntimeError("rollback failure"))
+
+    async def acquire(unused_pool, timeout=None):
+        return 7406
+
+    def fail_setup(unused_pool, unused_client_id):
+        raise setup_error
+
+    monkeypatch.setattr(pool_module.AsyncClientPool, "acquire", acquire)
+    monkeypatch.setattr(pool_module.AsyncClientPool, "release", release)
+    monkeypatch.setattr(
+        pool_module.AsyncClientPool, "_get_or_create_client", fail_setup
+    )
+
+    borrow = pool.borrow()
+    with pytest.raises(ClosingError, match="original setup failure") as exc_info:
+        await borrow.__aenter__()
+
+    assert exc_info.value is setup_error
+    release.assert_called_once_with(7406)
+    assert borrow._client_id == -1
+
+
 def test_async_pool_wrapper_registration_rejects_live_id_collision(monkeypatch):
     """Post-setup registration must not silently replace a live wrapper."""
     import glide.glide_client as async_client_module

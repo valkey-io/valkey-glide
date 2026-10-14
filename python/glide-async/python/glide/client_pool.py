@@ -341,8 +341,18 @@ class _AsyncBorrowContext:
         self._client_id = -1
 
     async def __aenter__(self):
-        self._client_id = await self._pool.acquire(self._timeout)
-        return self._pool._get_or_create_client(self._client_id)
+        client_id = await self._pool.acquire(self._timeout)
+        self._client_id = client_id
+        try:
+            return self._pool._get_or_create_client(client_id)
+        except BaseException:
+            try:
+                self._pool.release(client_id)
+            except BaseException:
+                # Setup failures take precedence over best-effort rollback failures.
+                pass
+            self._client_id = -1
+            raise
 
     async def __aexit__(self, *_):
         self._pool.release(self._client_id)
