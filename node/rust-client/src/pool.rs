@@ -622,6 +622,7 @@ pub fn pool_destroy(pool_id: i64) {
 pub fn scope_try_acquire(
     client_id: i64,
     connection_request_bytes: Uint8Array,
+    has_routing_slot: bool,
     routing_slot: u16,
     attempt_token: BigInt,
 ) -> Result<i64> {
@@ -642,7 +643,7 @@ pub fn scope_try_acquire(
         client_id as u64,
         conn_bytes,
         runtime.handle(),
-        routing_slot,
+        has_routing_slot.then_some(routing_slot),
         token,
     );
     Ok(result)
