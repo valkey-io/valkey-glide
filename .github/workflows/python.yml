@@ -175,9 +175,9 @@ jobs:
               with:
                   path: |
                       python/target
-                  key: ${{ matrix.host.TARGET }}-python-${{ hashFiles('python/glide-async/Cargo.lock', 'python/glide-shared/Cargo.lock', 'ffi/Cargo.lock') }}
+                  key: ${{ matrix.host.TARGET }}-python-v2-${{ hashFiles('python/glide-async/Cargo.lock', 'python/glide-shared/Cargo.lock', 'ffi/Cargo.lock') }}
                   restore-keys: |
-                      ${{ matrix.host.TARGET }}-python-
+                      ${{ matrix.host.TARGET }}-python-v2-
 
             - name: Build Python wrapper
               uses: ./.github/workflows/build-python-wrapper
@@ -307,9 +307,9 @@ jobs:
               with:
                   path: |
                       python/target
-                  key: ${{ matrix.host.TARGET }}-python-${{ hashFiles('python/glide-async/Cargo.lock', 'python/glide-shared/Cargo.lock', 'ffi/Cargo.lock') }}
+                  key: ${{ matrix.host.TARGET }}-python-v2-${{ hashFiles('python/glide-async/Cargo.lock', 'python/glide-shared/Cargo.lock', 'ffi/Cargo.lock') }}
                   restore-keys: |
-                      ${{ matrix.host.TARGET }}-python-
+                      ${{ matrix.host.TARGET }}-python-v2-
 
             - name: Build Python wrapper
               uses: ./.github/workflows/build-python-wrapper
@@ -484,9 +484,9 @@ jobs:
               with:
                   path: |
                       python/target
-                  key: ${{ matrix.host.IMAGE }}-python-${{ hashFiles('python/glide-async/Cargo.lock', 'python/glide-shared/Cargo.lock', 'ffi/Cargo.lock') }}
+                  key: ${{ matrix.host.IMAGE }}-python-v2-${{ hashFiles('python/glide-async/Cargo.lock', 'python/glide-shared/Cargo.lock', 'ffi/Cargo.lock') }}
                   restore-keys: |
-                      ${{ matrix.host.IMAGE }}-python-
+                      ${{ matrix.host.IMAGE }}-python-v2-
 
             - name: Build Python wrapper
               uses: ./.github/workflows/build-python-wrapper
