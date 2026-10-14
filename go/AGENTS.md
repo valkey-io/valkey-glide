@@ -11,13 +11,15 @@ This is the Go client binding for Valkey GLIDE, providing both standalone and cl
 **Architecture:** Go wrapper around Rust FFI core with CGO bindings
 
 **Key Components:**
-- `./` - Main Go client library
+- `./` - Main Go client library (`glide_client.go`, `glide_cluster_client.go`, `base_client.go`; `*_test.go` here hold the runnable examples)
 - `interfaces/` - Public client and command interfaces (BaseClientCommands, GlideClientCommands, etc.)
+- `config/`, `options/`, `models/`, `pipeline/`, `constants/` - Public config, command options, result types, batches
+- `servermodules/` - JSON and FT (vector search) module commands
 - `integTest/` - Integration tests and test suites
-- `benchmarks/` - Performance benchmarking tool
-- `internal/` - Internal packages including protobuf definitions
-- `rustbin/` - Platform-specific Rust static libraries
-- `examples/` - Usage examples and documentation
+- `benchmarks/` - Performance benchmarking tool (separate Go module)
+- `internal/` - Internal packages including generated protobuf code
+- `rustbin/` - Platform-specific Rust static libraries (generated)
+- `examples/examples.md` - Index of the example files
 
 ## Architecture Quick Facts
 
@@ -86,11 +88,14 @@ golines --dry-run --shorten-comments -m 127 .
 gofumpt -w .
 golines -w --shorten-comments -m 127 .
 
-# Manual protobuf generation
-# Manual protobuf generation (the Makefile also passes --go_opt=Mconnection_request.proto=…,
-# Mcommand_request.proto=…, Mresponse.proto=… and --go_opt=paths=source_relative, and rm -rf
-# internal/protobuf first — without the M-opts the generated import paths won't match). Prefer `make generate-protobuf`.
-protoc --proto_path=../glide-core/src/protobuf --go_out=./internal/protobuf ../glide-core/src/protobuf/*.proto
+# Manual protobuf generation (the .proto files carry no go_package, so the M mappings are
+# required; the Makefile also rm -rf's internal/protobuf first). Prefer `make generate-protobuf`.
+protoc --proto_path=../glide-core/src/protobuf \
+  --go_opt=Mconnection_request.proto=github.com/valkey-io/valkey-glide/go/v2/internal/protobuf \
+  --go_opt=Mcommand_request.proto=github.com/valkey-io/valkey-glide/go/v2/internal/protobuf \
+  --go_opt=Mresponse.proto=github.com/valkey-io/valkey-glide/go/v2/internal/protobuf \
+  --go_opt=paths=source_relative --go_out=./internal/protobuf \
+  ../glide-core/src/protobuf/*.proto
 ```
 
 ### Test Servers
@@ -108,8 +113,9 @@ make integ-test test-filter="Test\(Set\|Get\)"
 # Run with existing endpoints
 make integ-test standalone-endpoints=localhost:6379 cluster-endpoints=localhost:7000
 
-# Run with TLS
-make integ-test standalone-endpoints=localhost:6379 cluster-endpoints=localhost:7000 tls=true
+# Run with TLS (the suite starts its own servers — passing your own endpoints with TLS is
+# not supported; see DEVELOPER.md). The method-name filter selects the Tls-designated tests.
+make tls-test tls=true
 
 # Alpine/MUSL builds (note: GOFLAGS=... is an env var — the `:=` form shown in some
 # notes is Makefile assignment syntax and will NOT work in a shell)

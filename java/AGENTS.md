@@ -43,6 +43,12 @@ This is the Java client binding for Valkey GLIDE, providing both standalone and 
 
 ## Build and Test Rules (Agents)
 
+### Environment
+
+- **Every `./gradlew` invocation in this directory kills servers machine-wide when the build finishes.** `integTest/build.gradle`'s `gradle.buildFinished` hook runs `pkill -f valkey-server` and `pkill -f redis-server` (via WSL on Windows) — even for unrelated tasks like `./gradlew tasks` — unless `GLIDE_DOCKER_SERVERS=true` is set. On a shared machine or in parallel sessions this kills test servers you did not start. Also, `:integTest:test`/`pubsubTest` stop every `cluster*` folder under `utils/clusters/` and start fresh ones before running.
+- `protoc` 29.x on `PATH` — `protobuf-java` is pinned to 4.29.6, and a newer protoc (e.g. 36.x) generates incompatible code; the build's own version check does not reject it, so you'll get a `com.google.protobuf.GeneratedFile`-not-found error instead of a clear version mismatch.
+- After changing `PATH`/`JAVA_HOME`, run `./gradlew --stop` — Gradle daemons cache the environment they started with.
+
 ### Preferred (Gradle Tasks)
 ```bash
 # Build all components (buildAll = protobuf + buildRust (release) + :client:build only —
@@ -50,23 +56,25 @@ This is the Java client binding for Valkey GLIDE, providing both standalone and 
 ./gradlew :client:buildAll
 
 # Testing
-./gradlew :client:test           # Unit tests
-./gradlew :integTest:test        # Integration tests (excludes PubSubTests AND modules.* — run those via pubsubTest / modulesTest)
-./gradlew :integTest:pubsubTest  # PubSub integration tests
+./gradlew :client:test            # Unit tests (~1300 tests)
+./gradlew :integTest:test         # Integration tests (excludes PubSubTests AND modules.* — run those via pubsubTest / modulesTest)
+./gradlew :integTest:pubsubTest   # PubSub integration tests
+./gradlew :integTest:scopeTest    # glide.scope.* integration tests
 
 # Linting and Code Quality
 ./gradlew :spotlessCheck         # Check code formatting
 ./gradlew :spotlessApply         # Apply code formatting
 ./gradlew spotbugsMain           # Run SpotBugs static analysis
 
-# Code Coverage
-./gradlew jacocoTestReport       # Generate JaCoCo coverage reports
+# Code Coverage — JaCoCo reports are produced automatically after each Test task
+# (finalizedBy); running `./gradlew jacocoTestReport` on its own fails (missing
+# dependency on :client:copyNativeLib). Run a Test task first, or let it run.
 
 # Publishing
-./gradlew publishToMavenLocal    # Publish to local Maven repository
+./gradlew publishToMavenLocal    # Publish to local Maven repository (integTest depends on this)
 
 # Benchmarks
-./gradlew run --args="--help"    # Show benchmark options
+./gradlew :benchmarks:run --args="--help"    # Show benchmark options
 ```
 
 ### Raw Equivalents
@@ -81,7 +89,7 @@ This is the Java client binding for Valkey GLIDE, providing both standalone and 
 
 ### Test Servers
 
-Integration tests (`:integTest:test`, `:integTest:pubsubTest`, `make java-test`) **auto-start** standalone + cluster servers via `utils/cluster_manager.py` and stop them afterward — you don't start anything manually for a normal run. The `-Dcluster-endpoints=`/`-Dstandalone-endpoints=` options below are only for pointing at a server you started yourself (ad-hoc/manual testing); see the root [../AGENTS.md](../AGENTS.md) "Test Servers" section for the `cluster_manager.py` commands. A `valkey-server`/`redis-server` on `PATH` is required either way.
+Integration tests (`:integTest:test`, `:integTest:pubsubTest`, `make java-test`) **auto-start** standalone + cluster servers via `utils/cluster_manager.py` and stop them afterward — you don't start anything manually for a normal run. **But note the machine-wide `pkill` build-finish hook under "Environment" above** — it stops *all* valkey/redis-server processes, not just ones this build started. The `-Dcluster-endpoints=`/`-Dstandalone-endpoints=` options below are only for pointing at a server you started yourself; see the root [../AGENTS.md](../AGENTS.md) "Test Servers" section. A `valkey-server`/`redis-server` on `PATH` is required either way.
 
 ### Test Execution Options
 ```bash
@@ -91,8 +99,8 @@ Integration tests (`:integTest:test`, `:integTest:pubsubTest`, `make java-test`)
 # Run against existing endpoints
 ./gradlew :integTest:test -Dcluster-endpoints=localhost:7000 -Dstandalone-endpoints=localhost:6379
 
-# Run specific test
-./gradlew :integTest:test --tests '*.functionLoad_and_functionList' --rerun
+# Run specific test (method name pattern; `*.foo` matches a method named exactly foo)
+./gradlew :integTest:test --tests '*.set_and_get_without_options' --rerun
 
 # Run specific test class
 ./gradlew :client:test --tests 'BatchTests' --rerun
@@ -148,7 +156,6 @@ cargo clippy --all-features --all-targets -- -D warnings
 - **Compile toolchain pinned to JDK 11, runtime supports Java 8+:** the Gradle Java toolchain is set to exactly 11 with `options.release = 8`, so the compile JDK is auto-provisioned at 11 even if you launch Gradle on 21. What needs "11+" is the Gradle/Spotless *launcher* JVM. CI compiles on JDK 11 and runs tests on Java 8 (`-PtestJava8=true`) as an always-run matrix row.
 - **Classifier Required:** Must specify platform classifier in dependencies
 - **Maven Version:** Building/consuming via Maven needs Maven 3.9+ (uses `os-maven-plugin`); an old 3.0.x `mvn` fails on it. Gradle is the primary build tool — this applies when you drive the client through Maven.
-- **Module System:** Include `requires glide.api;` in module-info.java
 - **Async Pattern:** All client methods return CompletableFuture
 - **Resource Management:** Use try-with-resources for client instances
 - **Protobuf Updates:** Run `./gradlew protobuf` after proto changes

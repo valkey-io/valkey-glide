@@ -33,36 +33,13 @@ Each binding has its own `AGENTS.md`. The Rust crates (`rust/`, `glide-core/`, `
 **Design Constraints:** Async-first APIs, cluster-aware routing, batching support, cross-AZ affinity
 **Key Features:** Multi-slot command handling, PubSub auto-reconnection, cluster scan, OpenTelemetry integration
 
-### Python Free-Threading (3.14t) Concurrency Rules
-
-The Python async client (`python/glide-async/python/glide/glide_client.py`) supports free-threaded CPython (`3.14t`, GIL disabled). The module declares `#[pymodule(gil_used = false)]` in `glide-async/src/lib.rs` and the `_FREE_THREADED` flag dispatches response parsing to a `ThreadPoolExecutor` so completions can arrive on a non-event-loop thread.
-
-Cross-thread wakeups are the sharp edge here. Under trio, `_CompatFuture` wraps a `trio.Event`, and trio synchronization primitives are **not thread-safe**: calling `.set()` from a foreign thread marks the event set but never reschedules the parked waiter, so the `await` hangs forever with no timeout firing (the main thread is stuck in native code where Python signal handlers, including pytest-timeout's, cannot run). Any object completed from the response thread pool must hop back to its owning loop/run: asyncio uses `loop.call_soon_threadsafe`, trio uses the `trio.lowlevel.TrioToken.run_sync_soon` captured at future-creation time. When touching future/event completion, verify the wake path for both asyncio and trio.
-
-To build and run the suite against free-threaded Python locally (fast iteration beats CI):
-
-```bash
-# Install the free-threaded interpreter (Homebrew: python-freethreading -> python3.14t)
-python3.14t -m venv python/.env   # dev.py reuses an existing python/.env
-cd python && python3 dev.py build
-python3 dev.py test --args tests/async_tests/test_async_client.py --async-backend=trio -k ""
-# Confirm no-GIL: .env/bin/python -c "import sys; print(sys._is_gil_enabled())"  # -> False
-```
-
-Reproduce a suspected hang with a stack dump: `kill -ABRT <pid>` (faulthandler prints the parked Python stack) since py-spy needs root on macOS.
-
 ### RESP2/RESP3 Response Normalization
 
 Valkey supports two wire protocols (RESP2 and RESP3) that may return structurally different responses for the same commands. For example, RESP2 returns flat arrays where RESP3 returns maps, and RESP2 returns bulk strings where RESP3 returns typed doubles.
 
 The Rust core normalizes these differences in `glide-core/src/client/value_conversion.rs` so that language bindings receive a consistent data structure regardless of protocol version; language bindings should *not* need to handle RESP2/RESP3 differences themselves. When adding a new command whose RESP2 and RESP3 responses differ, add or reuse an `ExpectedReturnType` variant and implement the conversion logic in `convert_to_expected_type`.
 
-**Supported Engine Versions** (per `.github/json_matrices/engine-matrix.json`):
-
-| Engine Type | 6.2 | 7.0 | 7.2 | 8.0 | 8.1 | 9.0 | 9.1 | 9.2.0-rc1 |
-|-------------|-----|-----|-----|-----|-----|-----|-----|-----------|
-| Valkey      | -   | -   | ✓   | ✓   | ✓   | ✓   | ✓   | ✓         |
-| Redis       | ✓   | ✓   | -   | -   | -   | -   | -   | -         |
+**Supported Engine Versions:** see the table in [README.md](./README.md#supported-engine-versions). The authoritative CI test matrix is `.github/json_matrices/engine-matrix.json` (currently adds a pre-release Valkey `9.2.0-rc1` not listed in the README table). Don't duplicate the version table here — it drifts.
 
 ## Test Servers
 
@@ -164,12 +141,12 @@ cd java
 # Unit tests
 ./gradlew :client:test                             # Run all unit tests
 ./gradlew :client:test --tests 'BatchTests'        # Run unit tests from a class
-./gradlew :client:test --tests '*.latencyHistory'  # Run unit tests with a pattern
+./gradlew :client:test --tests '*.latencyHistory*' # Run unit tests with a pattern (exact '*.latencyHistory' matches 0 tests — method names are suffixed, e.g. latencyHistory_returns_success)
 
 # Integration tests
 ./gradlew :integTest:test                               # Run all integration tests
 ./gradlew :integTest:test --tests 'SharedCommandTests'  # Run integration tests from a class
-./gradlew :integTest:test --tests '*.latencyHistory'    # Run integration tests with a pattern
+./gradlew :integTest:test --tests '*.latencyHistory*'   # Run integration tests with a pattern
 ```
 
 **Python:**
@@ -338,7 +315,7 @@ valkey-glide/
 
 ## Quick Facts for Reasoners
 
-**Engines Supported:** Valkey 7.2, 8.0, 8.1, 9.0, 9.1, 9.2 | Redis 6.2, 7.0
+**Engines Supported:** see [README.md](./README.md#supported-engine-versions)
 **Key Features:** AZ Affinity, PubSub auto-reconnection, sharded PubSub, cluster-aware multi-key commands, cluster scan, batching (pipeline/transaction), OpenTelemetry integration
 **Architecture:** Rust core with FFI bindings, async-first design, cluster and standalone support
 **Performance:** Optimized for high throughput and low latency with connection pooling
