@@ -182,7 +182,7 @@ class FtSearchOptions:
                 combined with ``withsortkeys=True`` and ``nocontent=True``, the sort key is dropped entirely from
                 that combination's result (confirmed live), leaving only ``[score]`` -- NOT ``[score, None]``. With
                 both ``with_scores=True`` and ``withsortkeys=True`` and content present, each row becomes a
-                four-element list ``[score, sort_key, field_map]`` (`glide-core`'s
+                three-element list ``[score, sort_key, field_map]`` (`glide-core`'s
                 ``FTSearchWithScoresAndSortKeysReturnType``), a genuinely different shape from either flag alone.
             scorer (Optional[TEncodable]): The scoring function used to rank results (valkey-search 1.3.0,
                 ``src/indexes/scoring/scorer.h``). ``"BM25STD"`` is the only value currently registered and

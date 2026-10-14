@@ -5,6 +5,14 @@
 # and utils/run-modules-ci-locally.sh (local reproduction) so the two paths
 # cannot silently drift apart (BRIEF-R1-FIXES.md Group 8).
 #
+# Every container runs with --network host, which Docker Desktop on macOS
+# requires enabling separately (Settings > Resources > Network > "Enable
+# host networking") -- without it, containers start but 127.0.0.1:<port>
+# is never reachable from the host, which looks identical to the server
+# itself failing (CodeRabbit review #7335; see macos_host_network_hint
+# below, which fires on that exact failure shape). Not an issue on CI's
+# Linux runners, where --network host needs no extra toggle.
+#
 # Required env vars:
 #   IMAGE               Docker image tag, e.g. valkey/valkey-bundle:9.1.3
 #   ENGINE_VERSION      Valkey engine version, e.g. 9.0 (controls EXTRA_ARGS)
@@ -97,10 +105,37 @@ docker pull "$IMAGE"
 # search here still yields all 5 modules (search, json, bf, ldap, lua) on
 # MODULE LIST, matching the original mechanism exactly when
 # SEARCH_MODULE_ARGS is empty.
+macos_host_network_hint() {
+    # Both readiness-timeout failure sites below call this: a container
+    # that starts but is never reachable at 127.0.0.1:<port> looks
+    # identical whether the server itself failed, or Docker Desktop's
+    # separate "Enable host networking" setting is off (--network host
+    # requires it explicitly on macOS; this script relies on every node
+    # being reachable at 127.0.0.1 from the host, so there is no fallback
+    # path without that setting). CodeRabbit review #7335.
+    if [[ "$(uname -s)" == "Darwin" ]]; then
+        echo "HINT: this script uses --network host, which Docker Desktop on" >&2
+        echo "macOS requires enabling separately (Settings > Resources >" >&2
+        echo "Network > 'Enable host networking') -- if that setting is off," >&2
+        echo "the container starts but the port above is never reachable from" >&2
+        echo "this host, which looks exactly like the readiness timeout above." >&2
+    fi
+}
+
 gen_conf() {
     local port="$1" extra_lines="$2" conf_path="$3"
     {
         echo "port ${port}"
+        # Every endpoint this script (and its callers) ever addresses a
+        # node by is 127.0.0.1 -- the cluster's own CLUSTER MEET traffic
+        # between nodes stays on loopback too, since all nodes run on the
+        # same host via --network host. Binding here closes the exposure
+        # protected-mode no otherwise leaves open: with --network host and
+        # no bind directive, the server listens on every interface the
+        # host has, so any machine that can reach this host's ports could
+        # issue commands against a protected-mode-disabled, debug-commands-
+        # enabled test server (CodeRabbit review #7335).
+        echo "bind 127.0.0.1 -::1"
         echo "protected-mode no"
         echo "save \"\""
         echo "enable-debug-command yes"
@@ -131,6 +166,7 @@ done
 if [ "$READY" != "true" ]; then
     echo "ERROR: Standalone module server on port ${STANDALONE_PORT} failed to start"
     docker logs valkey-modules-standalone 2>&1 || true
+    macos_host_network_hint
     exit 1
 fi
 export_var MODULES_STANDALONE_ENDPOINT "127.0.0.1:${STANDALONE_PORT}"
@@ -171,6 +207,7 @@ for port in $(seq "$PORT_START" "$PORT_END"); do
     if [ "$READY" != "true" ]; then
         echo "ERROR: Cluster module node on port $port failed to start"
         docker logs "valkey-modules-cluster-${port}" 2>&1 || true
+        macos_host_network_hint
         exit 1
     fi
 done

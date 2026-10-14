@@ -1988,7 +1988,7 @@ fn ft_search_option_tail_contains_flag(cmd: &Cmd, start: usize, flag: &[u8]) -> 
             let Some(n) = parse_count_arg(count_arg) else {
                 break;
             };
-            i += 1 + n;
+            i = i.saturating_add(1).saturating_add(n);
             continue;
         }
         // PARAMS n name1 value1 name2 value2 ...: keyword + count + exactly
@@ -2001,7 +2001,7 @@ fn ft_search_option_tail_contains_flag(cmd: &Cmd, start: usize, flag: &[u8]) -> 
             let Some(n) = parse_count_arg(count_arg) else {
                 break;
             };
-            i += 1 + n;
+            i = i.saturating_add(1).saturating_add(n);
             continue;
         }
         // RETURN n field1 [AS alias1] field2 [AS alias2] ... : keyword +
@@ -2112,7 +2112,7 @@ fn ft_aggregate_option_tail_contains_flag(cmd: &Cmd, start: usize, flag: &[u8]) 
             let Some(n) = parse_count_arg(count_arg) else {
                 break;
             };
-            i += 1 + n;
+            i = i.saturating_add(1).saturating_add(n);
             continue;
         }
         // SORTBY n field1 [ASC|DESC] field2 [ASC|DESC] ... [MAX m]: keyword
@@ -2207,7 +2207,7 @@ fn ft_aggregate_option_tail_contains_flag(cmd: &Cmd, start: usize, flag: &[u8]) 
             let Some(n) = parse_count_arg(count_arg) else {
                 break;
             };
-            i += 1 + n;
+            i = i.saturating_add(1).saturating_add(n);
             while let Some(maybe_reduce) = cmd.arg_idx(i) {
                 if !arg_eq_ignore_case(maybe_reduce, b"REDUCE") {
                     break;
@@ -2220,7 +2220,7 @@ fn ft_aggregate_option_tail_contains_flag(cmd: &Cmd, start: usize, flag: &[u8]) 
                 let Some(reduce_n) = parse_count_arg(reduce_count_arg) else {
                     break;
                 };
-                i += 1 + reduce_n;
+                i = i.saturating_add(1).saturating_add(reduce_n);
                 if let Some(maybe_as) = cmd.arg_idx(i)
                     && arg_eq_ignore_case(maybe_as, b"AS")
                 {
@@ -2310,7 +2310,7 @@ fn ft_hybrid_prefix_tail_start(cmd: &Cmd) -> usize {
         let Some(n) = parse_count_arg(count_arg) else {
             return total;
         };
-        i += 1 + n;
+        i = i.saturating_add(1).saturating_add(n);
     }
     loop {
         let Some(tok) = cmd.arg_idx(i) else {
@@ -2332,7 +2332,7 @@ fn ft_hybrid_prefix_tail_start(cmd: &Cmd) -> usize {
                     // Counted form: the budget covers the expression plus
                     // any POLICY/BATCH_SIZE sub-args, exactly as LIMIT's
                     // count covers its own sub-args.
-                    i += 1 + n;
+                    i = i.saturating_add(1).saturating_add(n);
                 }
                 _ => {
                     // Uncounted extension: a single expression token, no
@@ -2358,7 +2358,7 @@ fn ft_hybrid_prefix_tail_start(cmd: &Cmd) -> usize {
         let Some(n) = parse_count_arg(count_arg) else {
             return total;
         };
-        i += 1 + n;
+        i = i.saturating_add(1).saturating_add(n);
     }
     i
 }
@@ -5567,6 +5567,128 @@ mod tests {
             .arg("LOAD")
             .arg("18446744073709551615")
             .arg("title");
+        let _ = expected_type_for_cmd(&cmd);
+    }
+
+    #[test]
+    fn ft_search_inkeys_with_oversized_count_does_not_overflow_or_wrap() {
+        // CodeRabbit review #7335 follow-up (value_conversion.rs:1991): the
+        // i < total loop-bound fix only covers the RETURN/SORTBY/LOAD
+        // step-loops. INKEYS, PARAMS, GROUPBY and REDUCE instead jump
+        // directly via `i += 1 + n`, which is unchecked arithmetic on an
+        // n that parse_count_arg reads straight off the wire with no upper
+        // bound. n = usize::MAX - 1 makes 1 + n wrap to usize::MAX in a
+        // release build; adding that to i wraps back to i - 1 (the INKEYS
+        // keyword itself), so the scanner re-reads INKEYS forever instead
+        // of terminating -- a hang, not a panic, and in a debug build the
+        // same n instead panics outright on the overflowing add. Fixed
+        // with i.saturating_add(1).saturating_add(n), which this test
+        // completing at all (not panicking, not hanging) is the assertion
+        // for.
+        let mut cmd = redis::cmd("FT.SEARCH");
+        cmd.arg("idx")
+            .arg("*")
+            .arg("INKEYS")
+            .arg((usize::MAX - 1).to_string())
+            .arg("key1");
+        let _ = expected_type_for_cmd(&cmd);
+    }
+
+    #[test]
+    fn ft_search_params_with_oversized_count_does_not_overflow_or_wrap() {
+        // Same hazard and fix as the INKEYS test above (CodeRabbit review
+        // #7335 follow-up).
+        let mut cmd = redis::cmd("FT.SEARCH");
+        cmd.arg("idx")
+            .arg("*")
+            .arg("PARAMS")
+            .arg((usize::MAX - 1).to_string())
+            .arg("name")
+            .arg("value");
+        let _ = expected_type_for_cmd(&cmd);
+    }
+
+    #[test]
+    fn ft_aggregate_groupby_with_oversized_count_does_not_overflow_or_wrap() {
+        // Same hazard and fix as the INKEYS test above, for GROUPBY's own
+        // count (CodeRabbit review #7335 follow-up).
+        let mut cmd = redis::cmd("FT.AGGREGATE");
+        cmd.arg("idx")
+            .arg("*")
+            .arg("GROUPBY")
+            .arg((usize::MAX - 1).to_string())
+            .arg("@field");
+        let _ = expected_type_for_cmd(&cmd);
+    }
+
+    #[test]
+    fn ft_aggregate_groupby_reduce_with_oversized_count_does_not_overflow_or_wrap() {
+        // Same hazard and fix as the INKEYS test above, for the REDUCE
+        // sub-clause's own nested count (CodeRabbit review #7335 follow-up).
+        let mut cmd = redis::cmd("FT.AGGREGATE");
+        cmd.arg("idx")
+            .arg("*")
+            .arg("GROUPBY")
+            .arg("1")
+            .arg("@field")
+            .arg("REDUCE")
+            .arg("COUNT")
+            .arg((usize::MAX - 1).to_string());
+        let _ = expected_type_for_cmd(&cmd);
+    }
+
+    #[test]
+    fn ft_hybrid_knn_block_with_oversized_count_does_not_overflow_or_wrap() {
+        // Same hazard and fix as the INKEYS test above, for FT.HYBRID's
+        // VSIM KNN sub-block count, inside ft_hybrid_prefix_tail_start
+        // (CodeRabbit review #7335 follow-up).
+        let mut cmd = redis::cmd("FT.HYBRID");
+        cmd.arg("idx")
+            .arg("SEARCH")
+            .arg("hello")
+            .arg("VSIM")
+            .arg("@vec")
+            .arg("$q")
+            .arg("KNN")
+            .arg((usize::MAX - 1).to_string())
+            .arg("K")
+            .arg("5");
+        let _ = expected_type_for_cmd(&cmd);
+    }
+
+    #[test]
+    fn ft_hybrid_filter_counted_form_with_oversized_count_does_not_overflow_or_wrap() {
+        // Same hazard and fix as the INKEYS test above, for FT.HYBRID's
+        // VSIM FILTER counted form (CodeRabbit review #7335 follow-up).
+        let mut cmd = redis::cmd("FT.HYBRID");
+        cmd.arg("idx")
+            .arg("SEARCH")
+            .arg("hello")
+            .arg("VSIM")
+            .arg("@vec")
+            .arg("$q")
+            .arg("FILTER")
+            .arg((usize::MAX - 1).to_string())
+            .arg("@price:[0 10]");
+        let _ = expected_type_for_cmd(&cmd);
+    }
+
+    #[test]
+    fn ft_hybrid_combine_with_oversized_count_does_not_overflow_or_wrap() {
+        // Same hazard and fix as the INKEYS test above, for FT.HYBRID's
+        // COMBINE block count (CodeRabbit review #7335 follow-up).
+        let mut cmd = redis::cmd("FT.HYBRID");
+        cmd.arg("idx")
+            .arg("SEARCH")
+            .arg("hello")
+            .arg("VSIM")
+            .arg("@vec")
+            .arg("$q")
+            .arg("COMBINE")
+            .arg("RRF")
+            .arg((usize::MAX - 1).to_string())
+            .arg("CONSTANT")
+            .arg("60");
         let _ = expected_type_for_cmd(&cmd);
     }
 

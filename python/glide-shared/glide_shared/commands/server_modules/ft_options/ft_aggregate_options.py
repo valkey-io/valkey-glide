@@ -337,13 +337,13 @@ class LoadField:
     (``src/commands/ft_aggregate_parser.cc``, gated by the ``ft_aggregate_load_as`` compatibility
     flag -- see ``COMPATIBILITY.md``). Below ``search.emulate-release 1.3.0``, the legacy branch
     does not recognise ``AS`` as a rename keyword at all: it is consumed as just another LOAD
-    field token rather than a rename directive. Passing an alias here when running against a
-    pre-1.3.0 emulate-release therefore does not raise -- it silently loads an extra, almost
-    certainly nonexistent field named "AS" and a field named the alias string, which the engine
-    then rejects as "Index field does not exist". Use the `requires_search_1_3` marker (or
-    equivalent capability check) around any code path that relies on the alias actually renaming
-    the column. Requires `search.emulate-release` >= 1.3.0 -- see upstream COMPATIBILITY.md's
-    "Sunsetting of Incompatible Behavior" section.
+    field token rather than a rename directive. GLIDE does not validate this client-side; against
+    a pre-1.3.0 emulate-release the server rejects the command outright with a `RequestError`
+    reading "Index: field `AS` does not exist" (confirmed live against 1.3.0-rc1, and asserted in
+    `tests/async_tests/tests_server_modules/test_ft.py`'s `test_ft_aggregate_load_as`). Use the
+    `requires_search_1_3` marker (or equivalent capability check) around any code path that relies
+    on the alias actually renaming the column. Requires `search.emulate-release` >= 1.3.0 -- see
+    upstream COMPATIBILITY.md's "Sunsetting of Incompatible Behavior" section.
     """
 
     def __init__(
