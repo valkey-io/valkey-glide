@@ -546,11 +546,13 @@ class TestSyncAuthCommands:
             management_sync_client, USERNAME, NEW_PASSWORD
         )
 
-        # Sleep to allow enough time for reconnecting
-        time.sleep(2)
+        def _reconnected() -> bool:
+            try:
+                return acl_glide_sync_client.get("test_key") == b"test_value"
+            except Exception:
+                return False
 
-        # The client should now reconnect with the new password automatically
-        # Verify that the client is still able to perform operations
+        sync_wait_for(_reconnected, "Client did not reconnect with the new password")
         value = acl_glide_sync_client.get("test_key")
         assert value == b"test_value"
 
@@ -580,9 +582,6 @@ class TestSyncAuthCommands:
         set_new_acl_username_with_password(
             management_sync_client, USERNAME, NEW_PASSWORD
         )
-
-        # Sleep to allow enough time for reconnecting
-        time.sleep(2)
 
         # This command right after disconnection requires the acl_glide_sync_client to have a request timeout of 2000 ms
         # for full matrix tests to pass (otherwise failing on linux-aarch64 architecture).
