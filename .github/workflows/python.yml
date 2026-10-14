@@ -152,6 +152,7 @@ jobs:
         env:
             VALKEY_GLIDE_DNS_TESTS_ENABLED: "1"
             CARGO_TARGET_DIR: ${{ github.workspace }}/python/target
+            CARGO_INCREMENTAL: "0"
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -288,6 +289,7 @@ jobs:
                 host: ${{ fromJson(needs.get-matrices.outputs.host-matrix-output) }}
         env:
             CARGO_TARGET_DIR: ${{ github.workspace }}/python/target
+            CARGO_INCREMENTAL: "0"
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -462,6 +464,7 @@ jobs:
         env:
             VALKEY_GLIDE_DNS_TESTS_ENABLED: "1"
             CARGO_TARGET_DIR: ${{ github.workspace }}/python/target
+            CARGO_INCREMENTAL: "0"
         container:
             image: ${{ matrix.host.IMAGE }}
             options: ${{ join(' -q ', matrix.host.CONTAINER_OPTIONS) }} # adding `-q` to bypass empty options
