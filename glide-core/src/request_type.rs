@@ -871,9 +871,9 @@ impl RequestType {
     /// Returns `None` if the command is compatible with compression.
     ///
     /// Commands that are incompatible with compression are those that:
-    /// - Manipulate string data on the server side (APPEND, GETRANGE, SETRANGE, STRLEN, LCS, DELIFEQ)
-    /// - Perform numeric operations on string values (INCR, INCRBY, INCRBYFLOAT, DECR, DECRBY)
-    /// - Perform bit operations on string values (GETBIT, SETBIT, BITCOUNT, BITPOS, BITFIELD, BITFIELD_RO, BITOP)
+    /// - Manipulate string data on the server side (e.g. APPEND)
+    /// - Perform numeric operations on string values (e.g. INCR)
+    /// - Perform bit operations on string values (e.g. GETBIT)
     pub fn compression_incompatibility_reason(self) -> Option<&'static str> {
         match self {
             // String manipulation commands - operate on raw bytes server-side

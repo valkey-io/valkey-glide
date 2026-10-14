@@ -3005,9 +3005,7 @@ mod tests {
             scope_slot_for_command("GET", &[b"k"]),
             ScopeSlot::Slot(slot(b"k"))
         );
-        // DELIFEQ key value → the key's slot (first-key write). The old hand-maintained
-        // key list pinned it explicitly; the router reaches the same result via the
-        // FirstKey fallback, so it stays a single-key write after the merge.
+        // DELIFEQ key value → the key's slot (first-key write).
         assert_eq!(
             scope_slot_for_command("DELIFEQ", &[b"k", b"v"]),
             ScopeSlot::Slot(slot(b"k"))

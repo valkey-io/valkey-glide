@@ -704,7 +704,7 @@ public interface StringBaseCommands {
      * @since Valkey 9.0 and above.
      * @see <a href="https://valkey.io/commands/delifeq/">valkey.io</a> for details.
      * @param key The key to delete.
-     * @param value The expected value. The key is only deleted if its current value matches exactly.
+     * @param value The comparison value. The key is only deleted if its current value matches exactly.
      * @return <code>true</code> if <code>key</code> was deleted, <code>false</code> if <code>key
      *     </code> did not exist or its value did not match <code>value</code>.
      * @example
@@ -721,7 +721,7 @@ public interface StringBaseCommands {
      * @since Valkey 9.0 and above.
      * @see <a href="https://valkey.io/commands/delifeq/">valkey.io</a> for details.
      * @param key The key to delete.
-     * @param value The expected value. The key is only deleted if its current value matches exactly.
+     * @param value The comparison value. The key is only deleted if its current value matches exactly.
      * @return <code>true</code> if <code>key</code> was deleted, <code>false</code> if <code>key
      *     </code> did not exist or its value did not match <code>value</code>.
      * @example
