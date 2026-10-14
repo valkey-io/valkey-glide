@@ -1241,7 +1241,10 @@ class BaseClient(CoreCommands):
                 len(conn_req_bytes),
                 has_routing_slot,
                 routing_slot,
-                int(timeout * 1000),
+                # uint64_t on the FFI side: a negative value would raise
+                # OverflowError instead of the documented TimeoutError.
+                # Negative means no wait.
+                max(0, int(timeout * 1000)),
             )
             return handle_command_result(
                 self._ffi, self._lib, result, lambda resp: resp.int_value
