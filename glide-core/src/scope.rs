@@ -33,7 +33,7 @@
 use crate::client::Client;
 use crate::errors::RequestErrorType;
 use crate::pool::{
-    ScopePoolHandle, ScopedConnection, get_client_scope_pools, get_scope_registry, slot_for_key,
+    ScopedConnection, get_client_scope_pools, get_scope_registry, slot_for_key,
     update_state_for_command,
 };
 use redis::{Cmd, RedisError, RedisResult, Value};
@@ -42,7 +42,8 @@ use redis::{Cmd, RedisError, RedisResult, Value};
 use crate::client::SlotAddressError;
 #[cfg(feature = "proto")]
 use crate::pool::{
-    ConnectionState, POOL_RUNNING, ScopeAcquire, ScopePool, ScopeTarget, ScopeTargetUnresolved,
+    ConnectionState, POOL_RUNNING, ScopeAcquire, ScopePool, ScopePoolHandle, ScopeTarget,
+    ScopeTargetUnresolved,
 };
 #[cfg(feature = "proto")]
 use std::str::FromStr;
@@ -1192,7 +1193,9 @@ const SCOPE_ACQUIRE_WAIT_CAP: Duration = Duration::from_millis(50);
 /// acquire redials as fast as the runtime can spin until its deadline, against a
 /// server that is already refusing. The deleted binding loops waited 1 to
 /// 500 ms between attempts; this keeps that bound in core.
+#[cfg(feature = "proto")]
 const SCOPE_REDIAL_BACKOFF_START: Duration = Duration::from_millis(10);
+#[cfg(feature = "proto")]
 const SCOPE_REDIAL_BACKOFF_CAP: Duration = Duration::from_millis(200);
 
 /// Acquire a scope, waiting up to `deadline` for a retryable cause to clear.
@@ -1236,6 +1239,7 @@ pub async fn acquire_scope(
 /// deadline before the tokio timer does, and the caller gets a bare "timed out"
 /// instead of the core's cause ("pool exhausted"). Costs one second on a starved
 /// runtime, where the backstop is the only timer that fires.
+#[cfg(feature = "proto")]
 pub const SCOPE_ACQUIRE_WATCHDOG_MARGIN: Duration = Duration::from_secs(1);
 
 /// Log the watchdog's diagnostic for a scoped operation that outlived its
@@ -1243,6 +1247,7 @@ pub const SCOPE_ACQUIRE_WATCHDOG_MARGIN: Duration = Duration::from_secs(1);
 /// the acquire path here and the C ABI's execute race sites cannot drift. `p99`
 /// comes from the parent client's latency tracker when the caller has one;
 /// `None` leaves the suggested timeout unset.
+#[cfg(feature = "proto")]
 pub fn log_scope_watchdog_timeout(
     command: &'static str,
     configured_timeout: Duration,
@@ -1286,6 +1291,7 @@ pub fn log_scope_watchdog_timeout(
 /// deadline, unlike the unbounded commands `should_arm_watchdog` exists for.
 /// Every native interface awaits this one future, so no binding's wait is
 /// unbounded and the deadline semantics cannot drift between them.
+#[cfg(feature = "proto")]
 pub async fn acquire_scope_with_watchdog(
     client_id: u64,
     connection_request_bytes: Vec<u8>,
