@@ -11616,17 +11616,16 @@ class TestSyncScripts:
             test_client.invoke_script(writing_script, keys=[get_random_string(5)])
 
         def attempt_kill_writing_script():
-            foundUnkillable = False
-            while True:
+            def kill_reports_unkillable() -> bool:
                 try:
                     test_client2.script_kill()
                 except RequestError as e:
-                    if "UNKILLABLE" in str(e):
-                        foundUnkillable = True
-                        break
-                    time.sleep(0.1)
+                    return "UNKILLABLE" in str(e)
+                return False
 
-            assert foundUnkillable
+            sync_wait_for(
+                kill_reports_unkillable, "SCRIPT KILL never reported UNKILLABLE"
+            )
 
         # Run the writing script and attempt to kill it
         script_thread = threading.Thread(target=run_writing_script)
