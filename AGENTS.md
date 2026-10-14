@@ -13,9 +13,9 @@ This is the Valkey GLIDE mono-repository containing a Rust core (`glide-core`) a
 - `rust/` - Native Rust client (preview). See [rust/AGENTS.md](./rust/AGENTS.md).
 - `glide-core/` - Core Rust implementation with async client logic. See [glide-core/AGENTS.md](./glide-core/AGENTS.md).
 - `glide-core/redis-rs/` - Vendored fork of redis-rs 0.25.2 (GLIDE-owned, not third-party).
-- `ffi/` - Foreign Function Interface layer (used by Go and Python-sync).
+- `ffi/` - Foreign Function Interface layer (used by Go and both Python clients).
 - `java/` - Java client bindings with Gradle build system (JNI).
-- `python/` - Python async (PyO3) + sync (CFFI) client bindings.
+- `python/` - Python async + sync client bindings (CFFI into `ffi/`; PyO3 for async response parsing).
 - `node/` - Node.js/TypeScript client bindings via NAPI-RS.
 - `go/` - Go client bindings (CGO).
 - `glide-telemetry/` - OpenTelemetry integration crate.
@@ -80,9 +80,7 @@ make go            # Build Go client
 make java-test     # Run Java integration tests
 make python-test   # Run Python tests
 make node-test     # Run Node.js tests
-# NOTE: `make go-test` (and therefore `make all`) is currently broken — it calls
-# `make -C go test`, but go/Makefile has no `test` target. Use the go/ targets
-# directly: `make -C go unit-test integ-test` (see go/AGENTS.md).
+make go-test       # Run Go integration tests (go/ integ-test; needs a valkey-server on PATH)
 
 # Linting
 make java-lint     # Run Java spotlessApply
@@ -297,7 +295,7 @@ valkey-glide/
 ├── examples/            # Usage examples per language
 ├── rust/                # Native Rust client (preview)
 ├── glide-core/          # Core Rust implementation (incl. redis-rs/ vendored fork)
-├── ffi/                 # Foreign Function Interface layer (used by go/, python-sync)
+├── ffi/                 # Foreign Function Interface layer (used by go/, both python clients)
 ├── glide-telemetry/     # OpenTelemetry integration crate
 ├── glide-logger/        # Shared logging infrastructure
 ├── go/                  # Go client bindings
@@ -311,7 +309,7 @@ valkey-glide/
 
 ## Quality Gates (Agent Checklist)
 
-- [ ] Build passes: the touched binding's build target succeeds (e.g. `make java`/`make node`; see each binding's AGENTS.md — avoid `make all`, which chains the broken `go-test`), `cargo build --release` succeeds (touched Rust crates)
+- [ ] Build passes: the touched binding's build target succeeds (e.g. `make java`/`make node`; see each binding's AGENTS.md), `cargo build --release` succeeds (touched Rust crates)
 - [ ] Lint passes: `make *-lint` succeeds (bindings), the Rust lint gate above succeeds (touched Rust crates)
 - [ ] Tests pass: `make *-test` succeeds (bindings), the crate's documented test invocation succeeds (touched Rust crates — see glide-core/AGENTS.md and rust/AGENTS.md for feature flags and thread-count requirements)
 - [ ] No generated outputs committed (check `.gitignore`)
