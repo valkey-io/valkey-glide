@@ -6,8 +6,14 @@
  */
 
 import { describe, expect, it, beforeAll, afterAll } from "@jest/globals";
-import { GlideClient, IsolatedScope } from "..";
-import { GlideClientConfiguration } from "..";
+import {
+    ClientPool,
+    ClosingError,
+    GlideClient,
+    GlideClusterClient,
+    IsolatedScope,
+} from "..";
+import { GlideClientConfiguration, GlideClusterClientConfiguration } from "..";
 import { connection_request } from "../build-ts/ProtobufMessage";
 import { ValkeyCluster } from "../../utils/TestUtils.js";
 import {
@@ -361,6 +367,380 @@ describe("IsolatedScope", () => {
             scope.release();
             db0Client.close();
             db2Client.close();
+        },
+        TIMEOUT,
+    );
+
+    // ─── Public acquisition API (issue #6962) ─────────────────────────────────
+    //
+    // A scope must be openable through the public API alone: no caller should
+    // have to build connection-request bytes from a non-exported protobuf.
+
+    it(
+        "scopedConnection() opens a scope without bytes",
+        async () => {
+            const scope = await client.scopedConnection();
+
+            try {
+                expect(await scope.ping()).toBe("PONG");
+                const key = makeKey("scoped-conn");
+                await scope.set(key, "value");
+                expect(await scope.get(key)).toBe("value");
+                await scope.del(key);
+            } finally {
+                scope.release();
+            }
+
+            expect(scope.isReleased).toBe(true);
+        },
+        TIMEOUT,
+    );
+
+    it(
+        "scopedConnection() accepts a routing key",
+        async () => {
+            // Write and read back through the same routing key so a cluster run
+            // catches a scope connected to the wrong node; PING alone would not.
+            const key = makeKey("route");
+            const scope = await client.scopedConnection(key);
+
+            try {
+                await scope.set(key, "routed-value");
+                expect(await scope.get(key)).toBe("routed-value");
+                await scope.del(key);
+            } finally {
+                scope.release();
+            }
+        },
+        TIMEOUT,
+    );
+
+    it(
+        "scopedConnection() on a closed client rejects with ClosingError",
+        async () => {
+            const closedClient = await GlideClient.createClient(config);
+            closedClient.close();
+
+            const attempt = closedClient.scopedConnection();
+            await expect(attempt).rejects.toBeInstanceOf(ClosingError);
+        },
+        TIMEOUT,
+    );
+
+    it(
+        "cached connection-request bytes cannot be reached from the client",
+        async () => {
+            // The bytes carry the connection's password or mTLS key. Prove a
+            // caller holding the client cannot recover them through any own or
+            // inherited, string- or symbol-keyed path, the way the earlier
+            // exported-symbol accessor allowed.
+            const probeClient = await GlideClient.createClient(config);
+
+            try {
+                // Internal code can still open a scope, so the bytes remain
+                // reachable where they should be.
+                const scope = await probeClient.scopedConnection();
+
+                try {
+                    expect(await scope.ping()).toBe("PONG");
+                } finally {
+                    scope.release();
+                }
+
+                // A reachable Uint8Array leaks the request only if it decodes to
+                // a ConnectionRequest carrying this cluster's addresses.
+                const leaksRequest = (value: unknown): boolean => {
+                    if (!(value instanceof Uint8Array)) return false;
+
+                    try {
+                        const req =
+                            connection_request.ConnectionRequest.decode(value);
+                        return (req.addresses?.length ?? 0) > 0;
+                    } catch {
+                        return false;
+                    }
+                };
+
+                // Walk the whole prototype chain plus the instance, reading
+                // every property and invoking symbol-keyed accessors (the covert
+                // channel the exploit used). String-named methods are the
+                // documented public API and are only read, not called.
+                let target: object | null = probeClient;
+                const seen = new Set<object>();
+
+                while (
+                    target &&
+                    target !== Object.prototype &&
+                    !seen.has(target)
+                ) {
+                    seen.add(target);
+
+                    const keys: (string | symbol)[] = [
+                        ...Object.getOwnPropertyNames(target),
+                        ...Object.getOwnPropertySymbols(target),
+                    ];
+
+                    for (const key of keys) {
+                        const isSymbol = typeof key === "symbol";
+
+                        if (isSymbol) {
+                            // The removed accessor keyed a method by this symbol.
+                            expect(key.toString()).not.toContain(
+                                "connectionRequestBytes",
+                            );
+                        }
+
+                        let value: unknown;
+
+                        try {
+                            value = Reflect.get(target, key);
+                        } catch {
+                            continue;
+                        }
+
+                        expect(leaksRequest(value)).toBe(false);
+
+                        if (isSymbol && typeof value === "function") {
+                            let returned: unknown;
+
+                            try {
+                                returned = (value as () => unknown).call(
+                                    probeClient,
+                                );
+                            } catch {
+                                returned = undefined;
+                            }
+
+                            expect(leaksRequest(returned)).toBe(false);
+                        }
+                    }
+
+                    target = Object.getPrototypeOf(target);
+                }
+            } finally {
+                probeClient.close();
+            }
+        },
+        TIMEOUT,
+    );
+
+    it(
+        "acquire(client) one-argument form derives the connection request",
+        async () => {
+            const scope = await IsolatedScope.acquire(client);
+
+            try {
+                expect(await scope.ping()).toBe("PONG");
+                const key = makeKey("one-arg");
+                await scope.set(key, "derived");
+                expect(await scope.get(key)).toBe("derived");
+                await scope.del(key);
+            } finally {
+                scope.release();
+            }
+        },
+        TIMEOUT,
+    );
+
+    it(
+        "explicit connectionRequestBytes still work (additive)",
+        async () => {
+            const scope = await IsolatedScope.acquire(client, connReqBytes);
+
+            try {
+                expect(await scope.ping()).toBe("PONG");
+            } finally {
+                scope.release();
+            }
+        },
+        TIMEOUT,
+    );
+
+    it(
+        "scopedConnection() works on a pool-borrowed client",
+        async () => {
+            const pool = await ClientPool.create(config, {
+                maxSize: 2,
+                minIdle: 1,
+            });
+
+            try {
+                const key = makeKey("pool-scope");
+                const result = await pool.borrow(async (borrowed) => {
+                    const scope = await borrowed.scopedConnection();
+
+                    try {
+                        await scope.watch(key);
+                        await scope.multi();
+                        await scope.set(key, "from-pool-scope");
+                        await scope.exec();
+                        return await scope.get(key);
+                    } finally {
+                        scope.release();
+                    }
+                });
+
+                expect(result).toBe("from-pool-scope");
+                await client.del([key]);
+            } finally {
+                pool.close();
+            }
+        },
+        TIMEOUT,
+    );
+
+    it(
+        "scopedConnection() works after a pool client is released and re-borrowed",
+        async () => {
+            // maxSize 1 forces the second acquire onto the same pooled
+            // connection, which is rebuilt via fromPoolClientId.
+            const pool = await ClientPool.create(config, {
+                maxSize: 1,
+                minIdle: 1,
+            });
+
+            try {
+                const key = makeKey("pool-reborrow");
+
+                const first = await pool.acquire();
+                const firstClientId = first.getClientId();
+
+                try {
+                    const firstScope = await first.scopedConnection();
+
+                    try {
+                        await firstScope.set(key, "first-borrow");
+                    } finally {
+                        firstScope.release();
+                    }
+                } finally {
+                    await pool.release(first);
+                }
+
+                const second = await pool.acquire();
+
+                try {
+                    expect(second.getClientId()).toBe(firstClientId);
+                    const secondScope = await second.scopedConnection();
+
+                    try {
+                        expect(await secondScope.get(key)).toBe("first-borrow");
+                    } finally {
+                        secondScope.release();
+                    }
+                } finally {
+                    await pool.release(second);
+                }
+
+                await client.del([key]);
+            } finally {
+                pool.close();
+            }
+        },
+        TIMEOUT,
+    );
+
+    it(
+        "scopedConnection() on a released pool client rejects with ClosingError",
+        async () => {
+            const pool = await ClientPool.create(config, {
+                maxSize: 1,
+                minIdle: 1,
+            });
+
+            try {
+                const borrowed = await pool.acquire();
+                await pool.release(borrowed);
+
+                await expect(borrowed.scopedConnection()).rejects.toThrow(
+                    ClosingError,
+                );
+            } finally {
+                pool.close();
+            }
+        },
+        TIMEOUT,
+    );
+});
+
+describe("IsolatedScope (cluster)", () => {
+    let cluster: ValkeyCluster;
+    let client: GlideClusterClient;
+    let config: GlideClusterClientConfiguration;
+
+    beforeAll(async () => {
+        const clusterAddresses = global.CLUSTER_ENDPOINTS as string;
+        cluster = clusterAddresses
+            ? await ValkeyCluster.initFromExistingCluster(
+                  true,
+                  parseEndpoints(clusterAddresses),
+                  getServerVersion,
+              )
+            : await ValkeyCluster.createCluster(true, 3, 1, getServerVersion);
+
+        config = getClientConfigurationOption(cluster.getAddresses(), 0, {
+            requestTimeout: 5000,
+        }) as GlideClusterClientConfiguration;
+
+        client = await GlideClusterClient.createClient(config);
+    }, 120_000);
+
+    afterAll(async () => {
+        client?.close();
+        await cluster?.close();
+    }, TIMEOUT);
+
+    // Keys in distinct hash tags land on different slots (and, across three
+    // shards, different nodes), so a scope routed to the wrong node fails
+    // with MOVED.
+    const routedKeys = ["{a}", "{b}", "{c}"].map((tag) => makeKey(tag));
+
+    it(
+        "scopedConnection(routingKey) routes on a cluster client",
+        async () => {
+            for (const key of routedKeys) {
+                const scope = await client.scopedConnection(key);
+
+                try {
+                    await scope.set(key, "direct");
+                    expect(await scope.get(key)).toBe("direct");
+                } finally {
+                    scope.release();
+                }
+            }
+
+            await Promise.all(routedKeys.map((key) => client.del([key])));
+        },
+        TIMEOUT,
+    );
+
+    it(
+        "scopedConnection(routingKey) routes on a pool-borrowed cluster client",
+        async () => {
+            const pool = await ClientPool.create(config, {
+                maxSize: 2,
+                minIdle: 1,
+                clusterMode: true,
+            });
+
+            try {
+                await pool.borrow(async (borrowed) => {
+                    for (const key of routedKeys) {
+                        const scope = await borrowed.scopedConnection(key);
+
+                        try {
+                            await scope.set(key, "pooled");
+                            expect(await scope.get(key)).toBe("pooled");
+                        } finally {
+                            scope.release();
+                        }
+                    }
+                });
+
+                await Promise.all(routedKeys.map((key) => client.del([key])));
+            } finally {
+                pool.close();
+            }
         },
         TIMEOUT,
     );

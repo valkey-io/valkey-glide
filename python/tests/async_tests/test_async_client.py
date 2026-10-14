@@ -1267,6 +1267,9 @@ class TestCommands:
         # Verify client recovers after reset
         pong = await glide_client.ping()
         assert pong == b"PONG"
+        # RESET downgrades the glide client to RESP2 for the rest of its life
+        # (glide-core stores RESP2 for reconnects too); keep it out of the pool.
+        await glide_client.close()
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])

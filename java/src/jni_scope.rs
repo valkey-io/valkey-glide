@@ -8,16 +8,21 @@
 use crate::jni_client::{JVM, complete_callback, get_runtime};
 use jni::JNIEnv;
 use jni::objects::{JByteArray, JClass};
-use jni::sys::{jint, jlong};
+use jni::sys::{jboolean, jint, jlong};
 
 /// Acquire a scope from the client's internal connection pool.
 /// Returns scope_id >= 0, -1 if exhausted, -2 if invalid.
+///
+/// `routing_slot` is read only when `has_routing_slot` is nonzero (the cluster hash
+/// slot the scope's commands must target); otherwise the caller gave no routing key
+/// and the slot is ignored, mirroring this ABI's `has_*` optional-field convention.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_glide_ffi_resolvers_GlideScopeResolver_glideScopeTryAcquire(
     env: JNIEnv,
     _class: JClass,
     client_id: jlong,
     connection_request_bytes: JByteArray,
+    has_routing_slot: jboolean,
     routing_slot: jint,
     attempt_token: jlong,
 ) -> jlong {
@@ -31,7 +36,7 @@ pub extern "system" fn Java_glide_ffi_resolvers_GlideScopeResolver_glideScopeTry
         client_id as u64,
         bytes,
         runtime.handle(),
-        routing_slot as u16,
+        (has_routing_slot != 0).then_some(routing_slot as u16),
         attempt_token as u64,
     )
 }
