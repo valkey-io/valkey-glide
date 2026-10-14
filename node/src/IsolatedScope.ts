@@ -256,6 +256,10 @@ export class IsolatedScope {
         const routingSlot =
             routingKey !== undefined ? slotForKey(Buffer.from(routingKey)) : 0;
 
+        // The native parameter is a u32; napi truncates, so a negative value
+        // would wait ~49 days. Negative means no wait, as in Go and Java.
+        const clampedTimeoutMs = Math.min(Math.max(0, timeoutMs), 0xffff_ffff);
+
         let scopeId: number;
 
         try {
@@ -264,7 +268,7 @@ export class IsolatedScope {
                 clientId,
                 hasRoutingSlot,
                 routingSlot,
-                timeoutMs,
+                clampedTimeoutMs,
                 explicitBytes,
             );
         } catch (e) {
