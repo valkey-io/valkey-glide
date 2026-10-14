@@ -229,6 +229,28 @@ class TestAsyncIsolatedScopeAcquireFailsFast:
             for scope in held:
                 await scope.close()
 
+    async def test_many_waiters_time_out_together(self, client):
+        # Every waiter's deadline is core's, so the count of concurrent waiters
+        # does not stretch any one of them.
+        held = [await client.scoped_connection() for _ in range(_SCOPE_POOL_MAX_TOTAL)]
+        try:
+            started = time.monotonic()
+            outcomes = await asyncio.gather(
+                *(
+                    client.scoped_connection(timeout=0.5)
+                    for _ in range(_SCOPE_POOL_MAX_TOTAL)
+                ),
+                return_exceptions=True,
+            )
+            elapsed = time.monotonic() - started
+            assert all(isinstance(o, TimeoutError) for o in outcomes), outcomes
+            assert (
+                elapsed < 1.5
+            ), f"{_SCOPE_POOL_MAX_TOTAL} 0.5s waits took {elapsed:.2f}s"
+        finally:
+            for scope in held:
+                await scope.close()
+
     async def test_closing_the_client_ends_a_waiting_acquire(self):
         config = GlideClientConfiguration(
             addresses=[_get_standalone_address()], request_timeout=5000
