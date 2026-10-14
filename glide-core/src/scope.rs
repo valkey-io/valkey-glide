@@ -1207,10 +1207,10 @@ const SCOPE_REDIAL_BACKOFF_CAP: Duration = Duration::from_millis(200);
 /// [`ScopePoolHandle::wakeup`], armed before the attempt so a release that lands
 /// between classifying and sleeping is not missed, capped by
 /// `SCOPE_ACQUIRE_WAIT_CAP` and the remaining deadline. After a dial of its own
-/// fails it instead backs off (`SCOPE_REDIAL_BACKOFF_START` doubling to
-/// `SCOPE_REDIAL_BACKOFF_CAP`) on a wake armed after the failure; a release in
-/// that arming gap only lengthens the one wait. A terminal cause returns at
-/// once.
+/// fails it instead sleeps (`SCOPE_REDIAL_BACKOFF_START` doubling to
+/// `SCOPE_REDIAL_BACKOFF_CAP`) with no early wake, since every failed dial also
+/// fires the wakeup; a release during that sleep waits at most one step. A
+/// terminal cause returns at once.
 ///
 /// Cancel-safe: dropping the future between attempts leaks nothing, and a
 /// creation spawned by an earlier attempt finishes on its own and seats its
@@ -1403,16 +1403,11 @@ async fn acquire_scope_with_wait_cap(
                         }),
                     });
                 }
-                // A fresh `notified()`, not the loop-top one: the failed dial's own
-                // slot return already fired that earlier `Notify`, so reusing it
-                // would return at once. Best-effort: a release that lands before
-                // this is first polled is missed, which only lengthens this one
-                // wait; the next iteration re-reads the pool under the lock.
-                let released = wakeup.notified();
-                tokio::select! {
-                    _ = released => {}
-                    _ = tokio::time::sleep(remaining.min(redial_backoff)) => {}
-                }
+                // No early wake: every failed dial's `ScopeReservation::drop`
+                // fires `wakeup`, so concurrent acquires would cut each other's
+                // backoff short and redial in lockstep. A release that lands
+                // during the backoff waits at most one step.
+                tokio::time::sleep(remaining.min(redial_backoff)).await;
                 redial_backoff = (redial_backoff * 2).min(SCOPE_REDIAL_BACKOFF_CAP);
             }
         }
@@ -2699,8 +2694,9 @@ mod tests {
     }
 
     /// A server that refuses every connection is dialed a bounded number of
-    /// times per waiting acquire, so a node that is already rejecting clients
-    /// is not flooded by the clients trying to reach it.
+    /// times per waiting acquire, including when several acquires wait at once,
+    /// so a node that is already rejecting clients is not flooded by the clients
+    /// trying to reach it.
     #[tokio::test]
     async fn acquire_scope_backs_off_between_failed_dials() {
         let client_id = 67_950_010_u64;
@@ -2740,14 +2736,13 @@ mod tests {
 
         let deadline = Duration::from_millis(500);
         let started = Instant::now();
-        let acquired = super::acquire_scope(
-            client_id,
-            request_bytes,
-            &tokio::runtime::Handle::current(),
-            None,
-            deadline,
-        )
-        .await;
+        // Two at once: a failed dial's slot return fires the pool wakeup, so a
+        // second waiter is what would turn one acquire's backoff into lockstep.
+        let handle = tokio::runtime::Handle::current();
+        let (acquired, second) = tokio::join!(
+            super::acquire_scope(client_id, request_bytes.clone(), &handle, None, deadline),
+            super::acquire_scope(client_id, request_bytes, &handle, None, deadline),
+        );
         let elapsed = started.elapsed();
 
         unregister_client(client_id);
@@ -2768,11 +2763,18 @@ mod tests {
             elapsed >= deadline && elapsed < Duration::from_secs(2),
             "deadline honoured: {elapsed:?}"
         );
-        // 10 ms doubling to 200 ms covers 500 ms in about seven dials; allow
-        // generous slack for a fast first failure before the first wait.
+        assert!(
+            matches!(
+                second,
+                Err(super::ScopeAcquireError::DeadlineExceeded { .. })
+            ),
+            "{second:?}"
+        );
+        // 10 ms doubling to 200 ms covers 500 ms in about seven dials per acquire;
+        // slack for a fast first failure before the first wait.
         let dials = accepted.load(Ordering::Acquire);
         assert!(
-            (2..=20).contains(&dials),
+            (4..=40).contains(&dials),
             "{dials} dials in {elapsed:?}; a refusing server must not be redialed in a tight loop"
         );
     }
