@@ -8,6 +8,7 @@ import math
 import os
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Mapping, Optional, Union, cast
 
@@ -515,19 +516,16 @@ class TestGlideClients:
             timeout_client.close()
 
         # Run tests
-        debug_thread_1 = threading.Thread(target=run_debug_sleep)
-        fail_thread = threading.Thread(target=fail_to_connect_to_client)
-        debug_thread_1.start()
-        fail_thread.start()
-        debug_thread_1.join()
-        fail_thread.join()
-
-        debug_thread_2 = threading.Thread(target=run_debug_sleep)
-        connect_thread = threading.Thread(target=connect_to_client)
-        debug_thread_2.start()
-        connect_thread.start()
-        debug_thread_2.join()
-        connect_thread.join()
+        with ThreadPoolExecutor(2) as pool:
+            sleep = pool.submit(run_debug_sleep)
+            fail = pool.submit(fail_to_connect_to_client)
+            sleep.result()
+            fail.result()
+        with ThreadPoolExecutor(2) as pool:
+            sleep = pool.submit(run_debug_sleep)
+            connect = pool.submit(connect_to_client)
+            sleep.result()
+            connect.result()
 
         probe.close()
         client.close()
@@ -9102,15 +9100,12 @@ class TestCommands:
 
             assert running_scripts
 
-        thread1 = threading.Thread(target=endless_fcall_route_call)
-        thread2 = threading.Thread(target=wait_and_function_stats)
-
         with sync_low_busy_reply_threshold(glide_sync_client):
-            thread1.start()
-            thread2.start()
-
-            thread1.join()
-            thread2.join()
+            with ThreadPoolExecutor(2) as pool:
+                fcall = pool.submit(endless_fcall_route_call)
+                stats = pool.submit(wait_and_function_stats)
+                fcall.result()
+                stats.result()
 
         test_client.close()
         test_client2.close()
@@ -9224,15 +9219,12 @@ class TestCommands:
                     timeout += 0.1
                     time.sleep(0.1)
 
-        thread1 = threading.Thread(target=endless_fcall_route_call)
-        thread2 = threading.Thread(target=wait_and_function_kill)
-
         with sync_low_busy_reply_threshold(glide_sync_client):
-            thread1.start()
-            thread2.start()
-
-            thread1.join()
-            thread2.join()
+            with ThreadPoolExecutor(2) as pool:
+                fcall = pool.submit(endless_fcall_route_call)
+                kill = pool.submit(wait_and_function_kill)
+                fcall.result()
+                kill.result()
 
         # no functions running so we get notbusy error again
         with pytest.raises(RequestError) as e:
@@ -9280,15 +9272,12 @@ class TestCommands:
             # expect an unkillable error
             assert foundUnkillable
 
-        thread1 = threading.Thread(target=endless_fcall_route_call)
-        thread2 = threading.Thread(target=wait_and_function_kill)
-
         with sync_low_busy_reply_threshold(glide_sync_client):
-            thread1.start()
-            thread2.start()
-
-            thread1.join()
-            thread2.join()
+            with ThreadPoolExecutor(2) as pool:
+                fcall = pool.submit(endless_fcall_route_call)
+                kill = pool.submit(wait_and_function_kill)
+                fcall.result()
+                kill.result()
 
         test_client.close()
 
@@ -11368,15 +11357,12 @@ def script_kill_tests(
                 time.sleep(0.1)
 
     # Run the long script and kill it
-    script_thread = threading.Thread(target=run_long_script)
-    kill_thread = threading.Thread(target=wait_and_kill_script)
-
     with sync_low_busy_reply_threshold(glide_sync_client):
-        script_thread.start()
-        kill_thread.start()
-
-        script_thread.join()
-        kill_thread.join()
+        with ThreadPoolExecutor(2) as pool:
+            script = pool.submit(run_long_script)
+            kill = pool.submit(wait_and_kill_script)
+            script.result()
+            kill.result()
 
     # Verify that script_kill raises an error when no script is running
     with pytest.raises(RequestError) as e:
@@ -11633,15 +11619,12 @@ class TestSyncScripts:
             )
 
         # Run the writing script and attempt to kill it
-        script_thread = threading.Thread(target=run_writing_script)
-        kill_thread = threading.Thread(target=attempt_kill_writing_script)
-
         with sync_low_busy_reply_threshold(glide_sync_client):
-            script_thread.start()
-            kill_thread.start()
-
-            script_thread.join()
-            kill_thread.join()
+            with ThreadPoolExecutor(2) as pool:
+                script = pool.submit(run_writing_script)
+                kill = pool.submit(attempt_kill_writing_script)
+                script.result()
+                kill.result()
 
         test_client.close()
         test_client2.close()
