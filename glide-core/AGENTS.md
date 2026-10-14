@@ -4,7 +4,7 @@ This file provides AI agents with the minimum but sufficient context to work pro
 
 ## Repository Overview
 
-`glide-core` is the shared async Rust engine every language binding (Java, Python, Node, Go, Rust) is built on. None of these crates are directly end-user-facing; they are consumed via FFI (Java/Go/Python-sync), NAPI (Node), or a direct Rust dependency (the `rust/` client).
+`glide-core` is the shared async Rust engine every language binding (Java, Python, Node, Go, Rust) is built on. None of these crates are directly end-user-facing; they are consumed via FFI (Go and both Python clients), JNI (Java), NAPI (Node), or a direct Rust dependency (the `rust/` client).
 
 **Crate Dependency Table** (none share a Cargo workspace — each has its own `Cargo.toml`/`Cargo.lock`, resolved via path+version dependencies):
 
@@ -22,7 +22,7 @@ This file provides AI agents with the minimum but sufficient context to work pro
 
 **Core Implementation:** `glide-core` holds the async client logic, cluster-aware routing, batching, and command dispatch. Every binding ultimately calls into it.
 **RESP2/RESP3 Normalization:** `glide-core/src/client/value_conversion.rs` converts both wire protocols to one consistent shape so bindings never need protocol-version branching. New commands with divergent RESP2/RESP3 shapes add/reuse an `ExpectedReturnType` variant and implement the conversion in `convert_to_expected_type`.
-**ffi/:** Builds as `staticlib` + `rlib` + `cdylib` (`[lib] crate-type` in `ffi/Cargo.toml`) — it's the one crate here meant to be linked into non-Rust binaries. Consumed by the Go (CGO) and Python-sync (CFFI) bindings; Java and Node do **not** go through `ffi/` (JNI and NAPI link `glide-core` more directly through their own Rust glue in `java/src/` and `node/rust-client/`).
+**ffi/:** Builds as `staticlib` + `rlib` + `cdylib` (`[lib] crate-type` in `ffi/Cargo.toml`) — it's the one crate here meant to be linked into non-Rust binaries. Consumed by the Go (CGO) and both Python (CFFI) bindings; Java and Node do **not** go through `ffi/` (JNI and NAPI link `glide-core` more directly through their own Rust glue in `java/src/` and `node/rust-client/`).
 **glide-telemetry:** OpenTelemetry span/metrics export, consumed by `glide-core`'s `telemetry` support and the native Rust client.
 **glide-logger:** The only crate with zero internal dependencies; a shared logger used by every other crate including `ffi/`.
 **MSRV / edition:** `glide-core`, `ffi`, `glide-telemetry`, `glide-logger` don't pin a `rust-version` yet (`# TODO #7175` in each) and are `edition = "2024"`. The redis-rs fork is different: it pins `rust-version = "1.71"` and `edition = "2021"` (and is BSD-3-Clause, not Apache-2.0 — matters for `cargo deny` and new-file headers in that tree). Don't assume a shared MSRV floor.
@@ -128,7 +128,7 @@ DCO signoff and Conventional Commits are required repo-wide — see [../AGENTS.m
 
 ### Rust-Specific Rules
 - `glide-core/redis-rs/` is a real fork, not vendored-and-frozen — changes are allowed, but check for upstream drift before diverging further.
-- `ffi/` must stay FFI-safe at its public boundary (`#[unsafe(no_mangle)]` — the `unsafe(...)` wrapper is required because `ffi/` is edition 2024); it's linked into non-Rust binaries (Go, Python-sync) as `staticlib`/`cdylib`. `ffi/` has a `pool-support` feature (default-on) gating its pool surface (`ffi/src/pool_ffi.rs`); `ffi/miri-tests/` mirrors it.
+- `ffi/` must stay FFI-safe at its public boundary (`#[unsafe(no_mangle)]` — the `unsafe(...)` wrapper is required because `ffi/` is edition 2024); it's linked into non-Rust binaries (Go, both Python clients) as `staticlib`/`cdylib`. `ffi/` has a `pool-support` feature (default-on) gating its pool surface (`ffi/src/pool_ffi.rs`); `ffi/miri-tests/` mirrors it.
 - **Miri gotcha:** `ffi/miri-tests/` recompiles `ffi/src/` against mock crates (`mock-tokio`, `mock-glide-core`, …) because Miri can't call foreign code — so a new dependency or newly-used upstream API in `ffi/src/` breaks `cargo miri test` at compile time until a mock is updated (see `ffi/miri-tests/README.md`).
 - **protoc prerequisite:** `glide-core/build.rs` runs protobuf codegen whenever `proto` is enabled, so a fresh box needs `protoc` on PATH or the build fails in `build.rs` with no obvious explanation (CI installs it via `install-protoc`).
 - When adding a feature flag to `glide-core`, update both the `cargo check --no-default-features` expectation and the CI feature list (`proto,socket-layer,standalone_heartbeat`) if the new code path needs to be exercised in CI.
@@ -149,7 +149,7 @@ glide-core/
 └── DEVELOPER.md                     # Timeout watchdog, IAM/DNS test setup
 
 ffi/
-├── src/lib.rs                       # staticlib + rlib + cdylib — linked into Go (CGO), Python-sync (CFFI)
+├── src/lib.rs                       # staticlib + rlib + cdylib — linked into Go (CGO), both Python clients (CFFI)
 ├── miri-tests/                      # cargo miri test (separate Cargo.lock, nightly toolchain)
 └── tests/
 
@@ -173,7 +173,7 @@ glide-logger/
 
 **Crates:** `glide-core` (`glide_core`), `glide-core-engine` (redis-rs fork, lib `redis`), `glide-ffi`, `glide-telemetry`, `glide-logger` — independent crates, no cargo workspace
 **MSRV:** not yet pinned (`# TODO #7175` in each `Cargo.toml`) — unlike `rust/`, which pins 1.94.1
-**Consumed by:** Go + Python-sync via `ffi/`; Node via `node/rust-client/`; Java via `java/src/`; the native Rust client directly
+**Consumed by:** Go + both Python clients via `ffi/`; Node via `node/rust-client/`; Java via `java/src/`; the native Rust client directly
 **RESP2/3 normalization:** `glide-core/src/client/value_conversion.rs`
 **Test caveats:** `glide-core` needs feature flags (`proto,socket-layer,standalone_heartbeat`); `glide-telemetry`/`glide-logger` need `--test-threads=1`; `ffi/miri-tests/` runs under Miri (nightly)
 
