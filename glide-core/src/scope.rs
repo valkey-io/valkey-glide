@@ -1203,8 +1203,11 @@ const SCOPE_REDIAL_BACKOFF_CAP: Duration = Duration::from_millis(200);
 /// wait rather than a retry. Between attempts the call sleeps on
 /// [`ScopePoolHandle::wakeup`], armed before the attempt so a release that lands
 /// between classifying and sleeping is not missed, capped by
-/// `SCOPE_ACQUIRE_WAIT_CAP` and the remaining deadline. A terminal cause
-/// returns at once.
+/// `SCOPE_ACQUIRE_WAIT_CAP` and the remaining deadline. After a dial of its own
+/// fails it instead backs off (`SCOPE_REDIAL_BACKOFF_START` doubling to
+/// `SCOPE_REDIAL_BACKOFF_CAP`) on a wake armed after the failure; a release in
+/// that arming gap only lengthens the one wait. A terminal cause returns at
+/// once.
 ///
 /// Cancel-safe: dropping the future between attempts leaks nothing, and a
 /// creation spawned by an earlier attempt finishes on its own and seats its
@@ -1237,9 +1240,9 @@ pub const SCOPE_ACQUIRE_WATCHDOG_MARGIN: Duration = Duration::from_secs(1);
 
 /// Log the watchdog's diagnostic for a scoped operation that outlived its
 /// deadline. One place for the cause classification and the event shape, so
-/// the scope race sites in every native interface cannot drift. `p99` comes
-/// from the parent client's latency tracker when the caller has one; `None`
-/// leaves the suggested timeout unset.
+/// the acquire path here and the C ABI's execute race sites cannot drift. `p99`
+/// comes from the parent client's latency tracker when the caller has one;
+/// `None` leaves the suggested timeout unset.
 pub fn log_scope_watchdog_timeout(
     command: &'static str,
     configured_timeout: Duration,
@@ -1375,31 +1378,36 @@ async fn acquire_scope_with_wait_cap(
                         });
                     }
                 };
-                // A seated connection, or a panicked task whose guard gave the
-                // slot back, both leave the next attempt to read the pool.
-                if let Ok(Err(kind)) = created {
-                    match kind.fail_cause() {
+                // A seated connection is taken by the next pass at once. A
+                // retryable failure, or a panicked task whose guard gave the slot
+                // back, both redial, so both wait first.
+                let failed_kind = match created {
+                    Ok(Ok(())) => continue,
+                    Ok(Err(kind)) => match kind.fail_cause() {
                         Some(cause) => return Err(ScopeAcquireError::Terminal(cause)),
-                        None if deadline.saturating_sub(started.elapsed()).is_zero() => {
-                            return Err(ScopeAcquireError::DeadlineExceeded {
-                                last: ScopeRetryCause::CreateFailed(kind),
-                            });
-                        }
-                        None => {
-                            // The failed dial's own slot return already fired
-                            // `notified`; listen only for a release after it, which
-                            // makes a seated connection available and beats
-                            // dialing again.
-                            let released = wakeup.notified();
-                            let remaining = deadline.saturating_sub(started.elapsed());
-                            tokio::select! {
-                                _ = released => {}
-                                _ = tokio::time::sleep(remaining.min(redial_backoff)) => {}
-                            }
-                            redial_backoff = (redial_backoff * 2).min(SCOPE_REDIAL_BACKOFF_CAP);
-                        }
-                    }
+                        None => Some(kind),
+                    },
+                    Err(_) => None,
+                };
+                let remaining = deadline.saturating_sub(started.elapsed());
+                if remaining.is_zero() {
+                    return Err(ScopeAcquireError::DeadlineExceeded {
+                        last: failed_kind.map_or(ScopeRetryCause::Pending, |kind| {
+                            ScopeRetryCause::CreateFailed(kind)
+                        }),
+                    });
                 }
+                // A fresh `notified()`, not the loop-top one: the failed dial's own
+                // slot return already fired that earlier `Notify`, so reusing it
+                // would return at once. Best-effort: a release that lands before
+                // this is first polled is missed, which only lengthens this one
+                // wait; the next iteration re-reads the pool under the lock.
+                let released = wakeup.notified();
+                tokio::select! {
+                    _ = released => {}
+                    _ = tokio::time::sleep(remaining.min(redial_backoff)) => {}
+                }
+                redial_backoff = (redial_backoff * 2).min(SCOPE_REDIAL_BACKOFF_CAP);
             }
         }
     }

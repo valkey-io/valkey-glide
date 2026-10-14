@@ -4,7 +4,7 @@
  * Isolated Execution Scope for Node.js.
  *
  * Commands go through glide-core's scope module via N-API:
- * - `scopeAcquire` → `glide_core::scope::acquire_scope`
+ * - `scopeAcquire` → `glide_core::scope::acquire_scope_with_watchdog`
  * - `scopeExecute` → `glide_core::scope::execute_scope_command`
  * - `scopeRelease` → `glide_core::scope::release_scope`
  *
