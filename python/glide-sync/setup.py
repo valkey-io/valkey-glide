@@ -112,13 +112,15 @@ def vendor_dependencies():
         print(f"[INFO] Copying {folder.source} → {folder.dist}")
         shutil.copytree(folder.source, folder.dist, ignore=ignore_dirs)
 
-    # Vendor only the Rust build files for glide-shared (Cargo.toml + src/)
+    # Vendor only the Rust build files for glide-shared (Cargo.toml, Cargo.lock
+    # + src/); --locked needs the lockfile present in the vendored copy.
     if GLIDE_SHARED_RS_DIST.exists():
         remove_existing(GLIDE_SHARED_RS_DIST)
     GLIDE_SHARED_RS_DIST.mkdir()
-    shutil.copy2(
-        GLIDE_SHARED_RS_SOURCE / "Cargo.toml", GLIDE_SHARED_RS_DIST / "Cargo.toml"
-    )
+    for build_file in ("Cargo.toml", "Cargo.lock"):
+        shutil.copy2(
+            GLIDE_SHARED_RS_SOURCE / build_file, GLIDE_SHARED_RS_DIST / build_file
+        )
     shutil.copytree(GLIDE_SHARED_RS_SOURCE / "src", GLIDE_SHARED_RS_DIST / "src")
 
 
@@ -200,7 +202,7 @@ class build_ext(build_ext_orig):
         ffi_path = VENDORED_DEPENDENCIES["ffi"].dist
         print(f"[INFO] Building Rust FFI lib with cargo in {ffi_path}")
         subprocess.run(
-            ["cargo", "build"] + (["--release"] if release else []),
+            ["cargo", "build", "--locked"] + (["--release"] if release else []),
             cwd=ffi_path,
             env=env,
             check=True,
@@ -232,7 +234,7 @@ class build_ext(build_ext_orig):
                 + " -C link-arg=-undefined -C link-arg=dynamic_lookup"
             )
         subprocess.run(
-            ["cargo", "build"] + (["--release"] if release else []),
+            ["cargo", "build", "--locked"] + (["--release"] if release else []),
             cwd=glide_shared_rs,
             env=pyo3_env,
             check=True,
