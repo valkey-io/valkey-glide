@@ -57,5 +57,11 @@ export function acquireScope(
         );
     }
 
-    return scopeAcquire(clientId, bytes, hasRoutingSlot, routingSlot, timeoutMs);
+    return scopeAcquire(
+        clientId,
+        bytes,
+        hasRoutingSlot,
+        routingSlot,
+        timeoutMs,
+    );
 }
