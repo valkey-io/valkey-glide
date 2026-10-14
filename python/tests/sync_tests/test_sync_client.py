@@ -9075,7 +9075,9 @@ class TestCommands:
         def wait_and_function_stats():
             def fcall_is_running() -> bool:
                 result = test_client2.function_stats()
-                return any(res.get(b"running_script") for res in result.values())
+                return any(
+                    res and res.get(b"running_script") for res in result.values()
+                )
 
             sync_wait_for(fcall_is_running, "FCALL never registered as running")
             result = test_client2.function_stats()
