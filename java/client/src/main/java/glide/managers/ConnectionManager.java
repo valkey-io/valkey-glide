@@ -43,6 +43,9 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class ConnectionManager {
 
+    /** The largest reconnect jitter the core accepts. */
+    private static final int MAX_JITTER_PERCENT = 100;
+
     /** Native client handle for operations */
     private volatile long nativeClientHandle = 0;
 
@@ -345,6 +348,7 @@ public class ConnectionManager {
         String protocolName =
                 configuration.getProtocol() != null ? configuration.getProtocol().name() : null;
         BackoffStrategy reconnectStrategy = configuration.getReconnectStrategy();
+        validateReconnectStrategy(reconnectStrategy);
         int reconnectNumRetries =
                 reconnectStrategy != null && reconnectStrategy.getNumOfRetries() != null
                         ? reconnectStrategy.getNumOfRetries()
@@ -534,7 +538,7 @@ public class ConnectionManager {
             }
         }
 
-        if (reconnectNumRetries > 0 || reconnectFactor > 0 || reconnectExponentBase > 0) {
+        if (reconnectStrategy != null) {
             ConnectionRetryStrategy.Builder retryBuilder = ConnectionRetryStrategy.newBuilder();
             retryBuilder.setNumberOfRetries(reconnectNumRetries);
             retryBuilder.setFactor(reconnectFactor);
@@ -698,6 +702,31 @@ public class ConnectionManager {
                 return ReadFrom.AZAffinityAllNodes;
         }
         throw new ConfigurationError("Unsupported ReadFrom strategy: " + readFrom);
+    }
+
+    /**
+     * Rejects a reconnect strategy value outside the range the core accepts, instead of letting a
+     * negative value wrap to a huge unsigned one or be dropped on the wire.
+     *
+     * @throws ConfigurationError if a field is negative or {@code jitterPercent} is above 100.
+     */
+    static void validateReconnectStrategy(BackoffStrategy strategy) {
+        if (strategy == null) {
+            return;
+        }
+        checkReconnectField("numOfRetries", strategy.getNumOfRetries(), Integer.MAX_VALUE);
+        checkReconnectField("factor", strategy.getFactor(), Integer.MAX_VALUE);
+        checkReconnectField("exponentBase", strategy.getExponentBase(), Integer.MAX_VALUE);
+        checkReconnectField("jitterPercent", strategy.getJitterPercent(), MAX_JITTER_PERCENT);
+    }
+
+    private static void checkReconnectField(String name, Integer value, int maxValue) {
+        if (value != null && (value < 0 || value > maxValue)) {
+            throw new ConfigurationError(
+                    String.format(
+                            "invalid reconnect strategy: %s must be between 0 and %d, got %d",
+                            name, maxValue, value));
+        }
     }
 
     /**

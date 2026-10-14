@@ -10,6 +10,8 @@ import {
     expect,
     it,
 } from "@jest/globals";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { ValkeyCluster } from "../../utils/TestUtils.js";
 import {
@@ -25,6 +27,7 @@ import {
     GlideString,
     InfoOptions,
     ListDirection,
+    Logger,
     ProtocolVersion,
     RequestError,
     Script,
@@ -48,6 +51,7 @@ import {
     parseEndpoints,
     socketDrainDelay,
     validateBatchResponse,
+    waitFor,
     waitForNotBusy,
 } from "./TestUtilities";
 // This timeout is used for tests like transactions and copy with DB, it should not be used for other tests
@@ -209,6 +213,87 @@ describe("GlideClient", () => {
                 );
             } finally {
                 combinedClient.close();
+            }
+        },
+        TIMEOUT,
+    );
+
+    it(
+        "disconnection_push_logged_and_not_surfaced_to_js",
+        async () => {
+            client = await GlideClient.createClient(
+                getClientConfigurationOption(
+                    cluster.getAddresses(),
+                    ProtocolVersion.RESP3,
+                ),
+            );
+            const killer = await GlideClient.createClient(
+                getClientConfigurationOption(
+                    cluster.getAddresses(),
+                    ProtocolVersion.RESP3,
+                ),
+            );
+            // Route native logs to a file unique to this test, so the warning
+            // logged by the Rust push listener can be asserted.
+            const logName = `disconnection_push_${getRandomKey()}.log`;
+            // Like glide-logger: an unset or blank GLIDE_LOG_DIR means
+            // "glide-logs"; any other value is used as is.
+            const envLogDir = process.env.GLIDE_LOG_DIR;
+            const logDir = envLogDir?.trim() ? envLogDir : "glide-logs";
+
+            try {
+                Logger.setLoggerConfig("warn", logName);
+                const clientId = String(
+                    await client.customCommand(["CLIENT", "ID"]),
+                );
+                // A command in flight observes the drop, which is what makes
+                // the native layer emit the Disconnection push.
+                const blocked = client.blpop([getRandomKey()], 0);
+                // Attach the rejection handler now: BLPOP can reject before
+                // CLIENT KILL's own reply is processed, or when the client is
+                // closed if a step below fails.
+                const blockedRejects = expect(blocked).rejects.toThrow();
+                await waitFor(
+                    async () =>
+                        String(
+                            await killer.customCommand([
+                                "CLIENT",
+                                "LIST",
+                                "ID",
+                                clientId,
+                            ]),
+                        ).includes("cmd=blpop"),
+                    "BLPOP did not reach the server",
+                );
+                await killer.customCommand(["CLIENT", "KILL", "ID", clientId]);
+                await blockedRejects;
+
+                // Reconnected; give a forwarded push time to reach JS.
+                expect(await client.ping()).toEqual("PONG");
+                await sleep(100);
+
+                // The push is dropped natively, so JS never queues it.
+                expect(client["pendingPushNotification"]).toHaveLength(0);
+
+                // The native listener logs the warning exactly once. Hourly
+                // rotation suffixes the file name, so match on the prefix.
+                const warnings = (existsSync(logDir) ? readdirSync(logDir) : [])
+                    .filter((f) => f.startsWith(logName))
+                    .flatMap((f) =>
+                        readFileSync(join(logDir, f), "utf8").split("\n"),
+                    )
+                    .filter(
+                        (line) =>
+                            line.includes("disconnect notification") &&
+                            line.includes(
+                                "Transport disconnected, messages might be lost",
+                            ),
+                    );
+                expect(warnings).toHaveLength(1);
+            } finally {
+                // Restore the logger configured in tests/setup.ts.
+                Logger.setLoggerConfig("error", "log.log");
+                killer.close();
             }
         },
         TIMEOUT,

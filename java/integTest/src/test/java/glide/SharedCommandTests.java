@@ -12300,7 +12300,9 @@ public class SharedCommandTests {
         for (Integer i = 0; i <= 128; i++) {
             assertEquals(1, client.zadd(zsetSkiplistKey, createMap(i.toString(), 2d)).get());
         }
-        assertEquals("skiplist", client.objectEncoding(zsetSkiplistKey).get());
+        assertEquals(
+                SERVER_VERSION.isLowerThan("9.2.0") ? "skiplist" : "btree",
+                client.objectEncoding(zsetSkiplistKey).get());
     }
 
     @SneakyThrows

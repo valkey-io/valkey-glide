@@ -417,13 +417,15 @@ impl IamAuthConfig {
 /// Mirrors Python `BackoffStrategy`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BackoffStrategy {
-    /// Number of retry attempts before giving up on a reconnection burst.
+    /// Number of retries over which the delay between attempts keeps growing. After that the delay
+    /// stops growing and the client keeps retrying until it reconnects.
     pub num_of_retries: u32,
-    /// The exponent base used for the exponential backoff.
-    pub factor: u32,
     /// The multiplier that will be applied to the waiting time between retries.
+    pub factor: u32,
+    /// The exponent base used for the exponential backoff.
     pub exponent_base: u32,
-    /// Optional jitter percentage applied to the computed delay.
+    /// Optional jitter percentage applied to the computed delay. Must be between 0 and 100; a
+    /// larger value is rejected when the client is created.
     pub jitter_percent: Option<u32>,
 }
 

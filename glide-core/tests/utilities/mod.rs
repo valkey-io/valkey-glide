@@ -535,6 +535,20 @@ pub fn rotate_client_cert_and_key(
     dest_crt: &std::path::Path,
     dest_key: &std::path::Path,
 ) {
+    rotate_client_cert_and_key_with_cn(tls_paths, dest_crt, dest_key, "Generic-cert");
+}
+
+/// [`rotate_client_cert_and_key`] with a caller-chosen Common Name.
+///
+/// A server running `tls-auth-clients-user CN` (Valkey 9.0+) authenticates the
+/// connection as the ACL user named by this field, so the CN is how a test tells
+/// two otherwise identical client certificates apart over the wire.
+pub fn rotate_client_cert_and_key_with_cn(
+    tls_paths: &TlsFilePaths,
+    dest_crt: &std::path::Path,
+    dest_key: &std::path::Path,
+    common_name: &str,
+) {
     let ca_crt = &tls_paths.ca_crt;
     let ca_key = ca_crt.with_file_name("ca.key");
     let ca_serial = ca_crt.with_file_name("ca.txt");
@@ -566,7 +580,7 @@ pub fn rotate_client_cert_and_key(
         .arg("-new")
         .arg("-sha256")
         .arg("-subj")
-        .arg("/O=Redis Test/CN=Generic-cert")
+        .arg(format!("/O=Redis Test/CN={common_name}"))
         .arg("-key")
         .arg(dest_key)
         .stdout(process::Stdio::piped())
@@ -841,6 +855,12 @@ pub fn create_connection_request(
     if let Some(key_path) = &configuration.client_key_path {
         connection_request.client_key_path = Some(key_path.clone().into());
     }
+    if let Some(cert) = &configuration.client_cert {
+        connection_request.client_cert = cert.clone().into();
+    }
+    if let Some(key) = &configuration.client_key {
+        connection_request.client_key = key.clone().into();
+    }
     if !configuration.root_certs.is_empty() {
         connection_request.root_certs = configuration
             .root_certs
@@ -882,6 +902,12 @@ pub struct TestConfiguration {
     pub client_cert_path: Option<String>,
     /// Path to the mTLS client private key file (PEM) for path-based cert reload.
     pub client_key_path: Option<String>,
+    /// Inline (byte-based) mTLS client certificate (PEM). Mutually exclusive with
+    /// `client_cert_path`, and configures no reload handle — the client's static
+    /// `tls_params` are the only source of this material.
+    pub client_cert: Option<Vec<u8>>,
+    /// Inline (byte-based) mTLS client private key (PEM). See `client_cert`.
+    pub client_key: Option<Vec<u8>>,
     /// Root/CA certificate bytes for SecureTls verification.
     pub root_certs: Vec<Vec<u8>>,
     /// Cert reload interval in seconds (enables periodic re-read of client cert/key).
@@ -1125,6 +1151,30 @@ pub async fn version_greater_or_equal(
     let server_version = Versioning::new(format!("{major}.{minor}.{patch}")).unwrap();
     let compared_version = Versioning::new(version).unwrap();
     server_version >= compared_version
+}
+
+/// Version reported by the `redis-server` binary on PATH, without starting one.
+///
+/// [`version_greater_or_equal`] needs a running server, which is too late to gate
+/// a test on a config directive the server refuses to start with (it would fail
+/// as an opaque startup error instead of skipping). Returns `None` if the binary
+/// or its version line cannot be read.
+pub fn installed_server_version() -> Option<(u16, u16, u16)> {
+    let output = process::Command::new("redis-server")
+        .arg("--version")
+        .output()
+        .ok()?;
+    // Both Redis and Valkey print `... server v=<major>.<minor>.<patch> sha=...`.
+    let banner = String::from_utf8_lossy(&output.stdout);
+    let version = banner
+        .split_whitespace()
+        .find_map(|token| token.strip_prefix("v="))?;
+    let mut parts = version.split('.');
+    Some((
+        parts.next()?.parse().ok()?,
+        parts.next()?.parse().ok()?,
+        parts.next()?.parse().ok()?,
+    ))
 }
 
 /// Extract client ID from CLIENT INFO response string

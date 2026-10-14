@@ -333,7 +333,11 @@ func (config *baseClientConfiguration) toProtobuf() (*protobuf.ConnectionRequest
 	}
 
 	if config.reconnectStrategy != nil {
-		request.ConnectionRetryStrategy = config.reconnectStrategy.toProtobuf()
+		retryStrategyPb, err := config.reconnectStrategy.toProtobuf()
+		if err != nil {
+			return nil, fmt.Errorf("invalid reconnect strategy: %w", err)
+		}
+		request.ConnectionRetryStrategy = retryStrategyPb
 	}
 
 	if config.lazyConnect {
@@ -383,47 +387,100 @@ func (config *baseClientConfiguration) toProtobuf() (*protobuf.ConnectionRequest
 // a successful connection is established. The client retries indefinitely.
 //
 // If no strategy is explicitly provided, a default backoff strategy will be used.
+//
+// A factor or exponent base of 0 is not used verbatim: the core substitutes its own default
+// (factor 100, exponent base 2). A retry count of 0 is honored as-is.
 type BackoffStrategy struct {
 	// Number of retry attempts that the client should perform when disconnected from the server, where the time
 	// between retries increases. Once the retries have reached the maximum value, the time between retries will remain
 	// constant until a reconnect attempt is successful.
-	numOfRetries int
+	numOfRetries uint32
 	// The multiplier that will be applied to the waiting time between each retry.
-	// This value is specified in milliseconds.
-	factor int
-	// The exponent base configured for the strategy.
-	exponentBase int
-	// The Jitter percent on the calculated duration. If not set, a default value will be used.
-	jitterPercent *int
+	// This value is specified in milliseconds. A value of 0 means the core default (100) is used.
+	factor uint32
+	// The exponent base configured for the strategy. A value of 0 means the core default (2) is used.
+	exponentBase uint32
+	// The Jitter percent on the calculated duration, between 0 and 100. If not set, a default value will be used.
+	jitterPercent *uint32
+	// Out-of-range values seen by the setters, indexed like backoffFields. An array keeps the struct
+	// comparable and makes a value copy independent of its source.
+	invalid [len(backoffFields)]error
 }
+
+const (
+	// maxBackoffValue is the largest retry count, factor and exponent base the core accepts, which
+	// it represents as a uint32.
+	maxBackoffValue = int64(math.MaxUint32)
+	// maxJitterPercent is the largest jitter the core accepts: it derives the jitter bounds as
+	// 1 ± jitterPercent/100, so anything above 100 makes the lower bound negative.
+	maxJitterPercent = int64(100)
+)
+
+// backoffFields lists the settable fields in report order, so a configuration error names them
+// deterministically.
+var backoffFields = [...]string{"numOfRetries", "factor", "exponentBase", "jitterPercent"}
+
+// Indexes into backoffFields.
+const (
+	numOfRetriesField = iota
+	factorField
+	exponentBaseField
+	jitterPercentField
+)
 
 // NewBackoffStrategy returns a [BackoffStrategy] with the given configuration parameters.
+//
+// Each parameter must be between 0 and 2^32 - 1. Using a value outside that range leads to an
+// invalid configuration, reported as an error when the client is created.
 func NewBackoffStrategy(numOfRetries int, factor int, exponentBase int) *BackoffStrategy {
-	return &BackoffStrategy{
-		numOfRetries: numOfRetries,
-		factor:       factor,
-		exponentBase: exponentBase,
-	}
-}
-
-// WithJitterPercent sets the jitter percent.
-func (strategy *BackoffStrategy) WithJitterPercent(jitter int) *BackoffStrategy {
-	strategy.jitterPercent = &jitter
+	strategy := &BackoffStrategy{}
+	strategy.numOfRetries = strategy.toUint32(numOfRetriesField, numOfRetries, maxBackoffValue)
+	strategy.factor = strategy.toUint32(factorField, factor, maxBackoffValue)
+	strategy.exponentBase = strategy.toUint32(exponentBaseField, exponentBase, maxBackoffValue)
 	return strategy
 }
 
-func (strategy *BackoffStrategy) toProtobuf() *protobuf.ConnectionRetryStrategy {
+// WithJitterPercent sets the jitter percent.
+//
+// The jitter must be between 0 and 100. Using a value outside that range leads to an invalid
+// configuration, reported as an error when the client is created.
+func (strategy *BackoffStrategy) WithJitterPercent(jitter int) *BackoffStrategy {
+	jitterPercent := strategy.toUint32(jitterPercentField, jitter, maxJitterPercent)
+	strategy.jitterPercent = &jitterPercent
+	return strategy
+}
+
+// toUint32 narrows a parameter to the uint32 the core expects. An out-of-range value is recorded
+// instead of being wrapped around silently, because the setters cannot report it themselves. A valid
+// value clears the field's earlier error, so the reported error always describes the current state.
+func (strategy *BackoffStrategy) toUint32(field int, value int, maxValue int64) uint32 {
+	strategy.invalid[field] = nil
+	if value < 0 || int64(value) > maxValue {
+		strategy.invalid[field] = fmt.Errorf(
+			"%s must be between 0 and %d, got %d", backoffFields[field], maxValue, value,
+		)
+		return 0
+	}
+	return uint32(value)
+}
+
+func (strategy *BackoffStrategy) toProtobuf() (*protobuf.ConnectionRetryStrategy, error) {
+	// Report every invalid field at once, in backoffFields order.
+	if err := errors.Join(strategy.invalid[:]...); err != nil {
+		return nil, err
+	}
+
 	protoStrategy := &protobuf.ConnectionRetryStrategy{
-		NumberOfRetries: uint32(strategy.numOfRetries),
-		Factor:          uint32(strategy.factor),
-		ExponentBase:    uint32(strategy.exponentBase),
+		NumberOfRetries: strategy.numOfRetries,
+		Factor:          strategy.factor,
+		ExponentBase:    strategy.exponentBase,
 	}
 
 	if strategy.jitterPercent != nil {
-		protoStrategy.JitterPercent = proto.Uint32(uint32(*strategy.jitterPercent))
+		protoStrategy.JitterPercent = proto.Uint32(*strategy.jitterPercent)
 	}
 
-	return protoStrategy
+	return protoStrategy, nil
 }
 
 // ClientConfiguration represents the configuration settings for a Standalone client.

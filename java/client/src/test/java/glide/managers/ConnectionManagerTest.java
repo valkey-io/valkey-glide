@@ -27,8 +27,10 @@ import java.util.Arrays;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 public class ConnectionManagerTest {
 
@@ -328,25 +330,87 @@ public class ConnectionManagerTest {
         assertEquals(lazy, request.getLazyConnect(), "pooled lazy_connect");
     }
 
-    /** jitterPercent in the reconnect strategy must survive onto the pooled wire. */
+    /**
+     * jitterPercent in the reconnect strategy, bounds included, must reach the pooled wire as set,
+     * matching a directly-created client, rather than falling back to the core default of 20.
+     */
+    @ParameterizedTest
+    @ValueSource(ints = {0, 20, 100})
+    void clientPoolSerialization_carriesReconnectJitterPercent(int jitter) throws Exception {
+        GlideClientConfiguration clientConfig =
+                GlideClientConfiguration.builder()
+                        .reconnectStrategy(validBackoff().jitterPercent(jitter).build())
+                        .build();
+
+        ConnectionRequestOuterClass.ConnectionRetryStrategy pooled =
+                ConnectionRequestOuterClass.ConnectionRequest.parseFrom(poolBytes(clientConfig))
+                        .getConnectionRetryStrategy();
+
+        assertTrue(pooled.hasJitterPercent(), "pooled jitter_percent present");
+        assertEquals(jitter, pooled.getJitterPercent(), "pooled jitter_percent");
+        assertEquals(
+                ConnectionManager.buildConnectionRequest(clientConfig).getConnectionRetryStrategy(),
+                pooled,
+                "pooled retry strategy matches direct");
+    }
+
+    /** An all-zero strategy is sent as set, so the client makes 0 growing retries like the others. */
     @Test
-    void clientPoolSerialization_carriesReconnectJitterPercent() throws Exception {
+    void buildConnectionRequest_sendsAllZeroReconnectStrategy() throws Exception {
         GlideClientConfiguration clientConfig =
                 GlideClientConfiguration.builder()
                         .reconnectStrategy(
-                                BackoffStrategy.builder()
-                                        .numOfRetries(3)
-                                        .factor(2)
-                                        .exponentBase(2)
-                                        .jitterPercent(20)
-                                        .build())
+                                BackoffStrategy.builder().numOfRetries(0).factor(0).exponentBase(0).build())
                         .build();
 
         ConnectionRequestOuterClass.ConnectionRequest request =
-                ConnectionRequestOuterClass.ConnectionRequest.parseFrom(poolBytes(clientConfig));
+                ConnectionManager.buildConnectionRequest(clientConfig);
 
-        assertEquals(
-                20, request.getConnectionRetryStrategy().getJitterPercent(), "pooled jitter_percent");
+        assertTrue(request.hasConnectionRetryStrategy(), "all-zero reconnect strategy is sent");
+        ConnectionRequestOuterClass.ConnectionRetryStrategy strategy =
+                request.getConnectionRetryStrategy();
+        assertEquals(0, strategy.getNumberOfRetries(), "number_of_retries");
+        assertEquals(0, strategy.getFactor(), "factor");
+        assertEquals(0, strategy.getExponentBase(), "exponent_base");
+    }
+
+    private static BackoffStrategy.BackoffStrategyBuilder validBackoff() {
+        return BackoffStrategy.builder().numOfRetries(3).factor(2).exponentBase(2);
+    }
+
+    static Stream<Arguments> outOfRangeReconnectStrategies() {
+        return Stream.of(
+                Arguments.of("numOfRetries", -1, validBackoff().numOfRetries(-1)),
+                Arguments.of("factor", -1, validBackoff().factor(-1)),
+                Arguments.of("exponentBase", -1, validBackoff().exponentBase(-1)),
+                Arguments.of("jitterPercent", -1, validBackoff().jitterPercent(-1)),
+                Arguments.of("jitterPercent", 101, validBackoff().jitterPercent(101)));
+    }
+
+    /**
+     * An out-of-range reconnect value is rejected with a ConfigurationError naming the field, on both
+     * the direct and the pooled path, instead of wrapping to a huge unsigned value or being dropped.
+     */
+    @ParameterizedTest
+    @MethodSource("outOfRangeReconnectStrategies")
+    void buildConnectionRequest_rejectsOutOfRangeReconnectStrategy(
+            String field, int value, BackoffStrategy.BackoffStrategyBuilder strategy) {
+        GlideClientConfiguration clientConfig =
+                GlideClientConfiguration.builder().reconnectStrategy(strategy.build()).build();
+        int max = "jitterPercent".equals(field) ? 100 : Integer.MAX_VALUE;
+        String expected =
+                "invalid reconnect strategy: " + field + " must be between 0 and " + max + ", got " + value;
+
+        ConfigurationError direct =
+                assertThrows(
+                        ConfigurationError.class, () -> ConnectionManager.buildConnectionRequest(clientConfig));
+        assertEquals(expected, direct.getMessage());
+
+        Exception pooled = assertThrows(Exception.class, () -> poolBytes(clientConfig));
+        // Reflection wraps the ConfigurationError in an InvocationTargetException.
+        Throwable cause = pooled.getCause() != null ? pooled.getCause() : pooled;
+        assertTrue(cause instanceof ConfigurationError, "cause: " + cause);
+        assertEquals(expected, cause.getMessage());
     }
 
     /**
