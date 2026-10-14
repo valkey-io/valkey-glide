@@ -252,7 +252,14 @@ def install_glide_shared(env: Dict[str, str], release: bool = False) -> None:
         dest = None
 
     if needs_build:
-        ffi_build_cmd = ["cargo", "build", "--locked"]
+        ffi_build_cmd = [
+            "cargo",
+            "rustc",
+            "--lib",
+            "--crate-type",
+            "cdylib",
+            "--locked",
+        ]
         if release:
             ffi_build_cmd += ["--release"]
         run_command(
@@ -421,7 +428,7 @@ def build_sync_client(
         }
     )
     # Build the FFI library
-    build_args = ["cargo", "build", "--locked"]
+    build_args = ["cargo", "rustc", "--lib", "--crate-type", "cdylib", "--locked"]
     if release:
         build_args += ["--release"]
 

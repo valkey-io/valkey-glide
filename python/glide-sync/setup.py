@@ -202,7 +202,8 @@ class build_ext(build_ext_orig):
         ffi_path = VENDORED_DEPENDENCIES["ffi"].dist
         print(f"[INFO] Building Rust FFI lib with cargo in {ffi_path}")
         subprocess.run(
-            ["cargo", "build", "--locked"] + (["--release"] if release else []),
+            ["cargo", "rustc", "--lib", "--crate-type", "cdylib", "--locked"]
+            + (["--release"] if release else []),
             cwd=ffi_path,
             env=env,
             check=True,
