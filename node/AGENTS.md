@@ -17,11 +17,13 @@ This is the Node.js/TypeScript client binding for Valkey GLIDE, providing both s
 - `build-ts/` - Compiled TypeScript output
 - `tests/` - Test suites and utilities
 - `pm-and-types-tests/` - Package manager and TypeScript types testing
+- `hybrid-node-tests/` - CommonJS/ESM/pnpm consumer smoke tests
+- `npm/` - Per-platform native binary packages (`@valkey/valkey-glide-<platform>`)
 
 ## Architecture Quick Facts
 
 **Core Implementation:** TypeScript wrapper around glide-core Rust library via NAPI-RS
-**Client Types:** GlideClient (standalone), GlideClusterClient (cluster)
+**Client Types:** GlideClient (standalone), GlideClusterClient (cluster), GlideMonitorClient (`MONITOR` stream), `ClientPool` (client-instance pool), `IsolatedScope` (dedicated connection for WATCH/MULTI/SELECT state) — the last two backed by `rust-client/src/pool.rs`
 **API Style:** Async-first with Promise return types
 **Command Protocol:** Direct NAPI function calls on `GlideClientHandle` (not protobuf for command flow)
 
@@ -83,9 +85,9 @@ npm run build-protobuf          # Protobuf generation only
 
 # Testing
 npm test                        # Standard tests (excludes server modules)
-npm run test:debug              # Tests with debugging options
-npm run test:minimum            # Minimal test suite (faster)
-npm run test:modules            # Server module tests only
+npm run test:debug              # All suites incl. ServerModules, serial (--runInBand)
+npm run test:minimum            # Serial; skips GlideJson/GlideFt/pubsub/kill tests
+npm run test:modules            # Serial; only GlideJson/GlideFt tests (needs a modules-enabled server)
 
 # Linting and Formatting
 npm run lint                    # Check code quality (ESLint + Prettier)
@@ -135,7 +137,7 @@ npm run test:debug -- --cluster-endpoints=localhost:7000 --standalone-endpoints=
 npm run test:debug -- --cluster-endpoints=localhost:7000 --standalone-endpoints=localhost:6379 --tls=true
 
 # Run specific test pattern
-npm run test:debug -- --testNamePattern="batch"
+npm run test:debug -- --testPathIgnorePatterns=ServerModules --testNamePattern="batch"   # test:debug includes ServerModules.test.ts, which fails without --cluster-endpoints
 
 # Run server modules tests
 npm run test:modules -- --cluster-endpoints=localhost:7000

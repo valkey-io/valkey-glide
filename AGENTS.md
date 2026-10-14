@@ -25,7 +25,7 @@ This is the Valkey GLIDE mono-repository containing a Rust core (`glide-core`) a
 - `examples/` - Usage examples for each language binding.
 - `docs/` - Documentation and MkDocs configuration.
 
-Each binding has its own `AGENTS.md`. The Rust crates (`rust/`, `glide-core/`, `glide-core/redis-rs/redis/`, `ffi/`, `glide-telemetry/`, `glide-logger/`) are independent crates — each with its own `Cargo.toml`/`Cargo.lock`, no top-level cargo workspace; see [glide-core/AGENTS.md](./glide-core/AGENTS.md) for the crate dependency table.
+Each binding has its own `AGENTS.md` — read it after this file for the binding you're changing. `CLAUDE.md` at the repo root holds additional hard constraints that apply alongside this file. The Rust crates (`rust/`, `glide-core/`, `glide-core/redis-rs/redis/`, `ffi/`, `glide-telemetry/`, `glide-logger/`) are independent crates — each with its own `Cargo.toml`/`Cargo.lock`, no top-level cargo workspace; see [glide-core/AGENTS.md](./glide-core/AGENTS.md) for the crate dependency table.
 
 ## Architecture Quick Facts
 
@@ -90,9 +90,14 @@ make python-lint   # Run Python linters via dev.py
 make node-lint     # Run Node.js linters
 make go-lint       # Run Go linters
 
+# Formatting (Markdown/YAML/JSON via prettier)
+make prettier-check
+make prettier-fix
+
 # Utilities
-make clean         # Remove .build/ directory
-make help          # List available targets
+make check-valkey-server  # Verify valkey-server (or redis-server) is on PATH; tests need one
+make clean                # Remove .build/ directory
+make help                 # List available targets
 ```
 
 There is no `make rust`/`make rust-test`/`make rust-lint` — the Rust crates have no top-level Make integration. Use the raw cargo commands below from each crate's own directory.
@@ -214,6 +219,8 @@ cd benchmarks && ./install_and_test.sh
 
 **Test Results:** Stored in language-specific directories (`target/`, `build/`, `node_modules/`, etc.)
 
+> **Memory-constrained machines:** the native **link** phase (Rust/FFI, and the builds that fork it) is the real memory spike, not compilation — several parallel linkers can each take ~1–2 GB and briefly exhaust RAM. On a low-memory box (e.g. ~16 GB), cap link parallelism and don't build multiple bindings at once: `cargo build -j2` or `export CARGO_BUILD_JOBS=2` for Rust/FFI, `./gradlew <task> --max-workers=2` for Java (then `./gradlew --stop` to drop the daemon), and `make -j2` for the make-based native builds — never `-j$(nproc)`. Machines with ample RAM don't need these caps.
+
 ## Contribution Requirements
 
 ### Developer Certificate of Origin (DCO) Signoff REQUIRED
@@ -323,7 +330,8 @@ valkey-glide/
 ## If You Need More
 
 - **Getting Started:** [README.md](./README.md)
-- **Contributing:** [CONTRIBUTING.md](./CONTRIBUTING.md)
+- **Contributing:** [CONTRIBUTING.md](./CONTRIBUTING.md), [PICKING_UP_ISSUES.md](./PICKING_UP_ISSUES.md), [SUBMITTING_PRS.md](./SUBMITTING_PRS.md), [REVIEWING_PRS.md](./REVIEWING_PRS.md)
+- **Agent constraints:** [CLAUDE.md](./CLAUDE.md)
 - **Security:** [SECURITY.md](https://github.com/valkey-io/.github/blob/main/SECURITY.md)
 - **Documentation:** [docs/README.md](./docs/README.md)
 - **Examples:** [examples/](./examples/)

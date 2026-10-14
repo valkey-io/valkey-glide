@@ -16,8 +16,9 @@ This is the Java client binding for Valkey GLIDE, providing both standalone and 
 - `jedis-compat-shared/` - Shared `redis.clients.jedis.*` types used by both Jedis compatibility artifacts
 - `jedis-compatibility/` - Jedis 5.x–shaped compatible API layer for drop-in replacement
 - `jedis-4-compatibility/` - Jedis 4.x–shaped compatible API layer
-- `benchmarks/` - Performance benchmarking tool
-- `src/` - Rust FFI integration code
+- `benchmarks/` - Performance benchmarking tool (Gradle project `:benchmarks`)
+- `e2e/` - Standalone Docker-based E2E scenarios (circuit breaker, DNS failover, Lambda); not part of the Gradle build or CI
+- `src/` - Rust JNI library (crate `glide-rs`, built by `Cargo.toml` in this directory)
 
 ## Architecture Quick Facts
 

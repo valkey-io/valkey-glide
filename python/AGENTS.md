@@ -46,9 +46,10 @@ python3 dev.py build --client sync --mode debug       # Build sync client (debug
 python3 dev.py build --client async --wheel           # Build async wheel
 python3 dev.py build --client sync --wheel            # Build sync wheel
 
-# Testing
-python3 dev.py test                                    # Run all tests
-python3 dev.py test --args -k <test_name>             # Run specific test
+# Testing (pytest.ini excludes pubsub and server_modules tests by default, and sets --timeout=300 per test)
+python3 dev.py test                                    # Run all tests except pubsub/server_modules
+python3 dev.py test --args -k <test_name>             # Run specific test (-k replaces the default exclusion)
+python3 dev.py test --args -k 'pubsub'                # Run the pubsub tests (CI's form)
 python3 dev.py test --args --async-backend=trio       # Test with trio backend
 python3 dev.py test --args --async-backend=asyncio    # Test with asyncio backend
 
@@ -120,7 +121,7 @@ python3 dev.py test --args --tls --cluster-endpoints=localhost:7000 --standalone
 python3 dev.py test --args --async-backend=trio --async-backend=asyncio
 
 # Run specific test pattern
-python3 dev.py test --args -k "test_set_and_get"
+python3 dev.py test --args -k "test_socket_set_get"
 ```
 
 ## Contribution Requirements
