@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/valkey-io/valkey-glide/go/v2"
 )
 
@@ -29,31 +30,53 @@ func (suite *GlideTestSuite) TestSubscriptionSyncTimestampMetricOnSuccess() {
 			} else {
 				initialStats = receiver.(*glide.ClusterClient).GetStatistics()
 			}
-			initialTimestamp := initialStats["subscription_last_sync_timestamp"]
+			initialTimestamp := int64(initialStats["subscription_last_sync_timestamp"])
 
 			t.Logf("Initial sync timestamp: %d", initialTimestamp)
 
 			// Verify timestamp is set (non-zero)
-			assert.Greater(t, initialTimestamp, uint64(0),
+			assert.Greater(t, initialTimestamp, int64(0),
 				"Sync timestamp should be set after successful subscription")
 
-			// Wait a bit and check it's been updated
-			time.Sleep(1500 * time.Millisecond)
-
-			var updatedStats map[string]uint64
-			if clientType == StandaloneClient {
-				updatedStats = receiver.(*glide.Client).GetStatistics()
-			} else {
-				updatedStats = receiver.(*glide.ClusterClient).GetStatistics()
+			getSyncTimestamp := func() int64 {
+				var stats map[string]uint64
+				if clientType == StandaloneClient {
+					stats = receiver.(*glide.Client).GetStatistics()
+				} else {
+					stats = receiver.(*glide.ClusterClient).GetStatistics()
+				}
+				return int64(stats["subscription_last_sync_timestamp"])
 			}
-			updatedTimestamp := updatedStats["subscription_last_sync_timestamp"]
+
+			// The sync timestamp is refreshed by the background reconciliation loop using the
+			// server clock, while "now" is read from the local clock. Poll until the reported
+			// timestamp is recent instead of sleeping a fixed amount and asserting once: a single
+			// fixed sleep can race the reconciliation cadence, and small clock skew between the
+			// two clocks can make the timestamp appear to be slightly in the future. Using signed
+			// arithmetic avoids the unsigned-underflow wraparound that made the previous
+			// comparison flaky.
+			//
+			// recencyWindowMs: how old the last sync is allowed to be.
+			// skewToleranceMs: how far the timestamp is allowed to appear ahead of the local clock.
+			const (
+				recencyWindowMs = int64(5000)
+				skewToleranceMs = int64(5000)
+			)
+
+			var updatedTimestamp int64
+			require.Eventually(t, func() bool {
+				updatedTimestamp = getSyncTimestamp()
+				if updatedTimestamp <= 0 {
+					return false
+				}
+				age := time.Now().UnixMilli() - updatedTimestamp
+				// age < 0  => timestamp is ahead of the local clock (clock skew)
+				// age >= 0 => timestamp is in the past; must be within the recency window
+				return age >= -skewToleranceMs && age < recencyWindowMs
+			}, 15*time.Second, 100*time.Millisecond,
+				"Sync timestamp should be refreshed and recent")
 
 			t.Logf("Updated sync timestamp: %d", updatedTimestamp)
-
-			// Timestamp should be recent (within last few seconds)
-			now := uint64(time.Now().UnixMilli())
-			assert.Less(t, now-updatedTimestamp, uint64(5000),
-				"Sync timestamp should be recent")
 		})
 	}
 }
