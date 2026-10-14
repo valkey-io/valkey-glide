@@ -50,6 +50,7 @@
 * Core: Fix native panic for setex psetex and setnx commands ([#6551](https://github.com/valkey-io/valkey-glide/pull/6551))
 * Core/FFI: fix(ffi): forward Disconnection push notifications past the malformed-frame guard ([#6543](https://github.com/valkey-io/valkey-glide/pull/6543))
 * CI: Run `test-release` in `pypi-cd.yml` when only one package is published manually, so a skipped sibling publish job no longer causes post-publish validation to be skipped entirely ([#6542](https://github.com/valkey-io/valkey-glide/pull/6542))
+* CI: Build Valkey engine TLS against OpenSSL instead of LibreSSL on Alpine/musl ([#7323](https://github.com/valkey-io/valkey-glide/pull/7323))
 * Core/FFI: fix(ffi): prevent pub/sub DoS from malformed server push frames ([#6530](https://github.com/valkey-io/valkey-glide/pull/6530))
 * Python: Restore `BaseClient.__aenter__` return type to `Self` (from the widened `"BaseClient"` introduced in 2.5.0). Entering the async context manager (`async with await GlideClusterClient.create(...) as client`) now preserves the concrete subclass for static type checkers, matching `create()`. ([#6531](https://github.com/valkey-io/valkey-glide/issues/6531))
 * Core: fix(core): enforce RESP3 recursion-depth guard for all aggregate types ([#6477](https://github.com/valkey-io/valkey-glide/pull/6477))
