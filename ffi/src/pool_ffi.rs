@@ -1105,6 +1105,91 @@ pub unsafe extern "C" fn glide_scope_acquire_async(
     0
 }
 
+/// Acquire a scope and deliver the outcome as a frame on the shared async pipe.
+///
+/// Same acquire as [`glide_scope_acquire_async`]; only the delivery differs.
+/// The Python async client reads every command result from the pipe on its
+/// event loop, so an acquire delivered the same way costs no thread while it
+/// waits, and the deadline is core's alone. Blocking on an executor thread
+/// instead puts a second queue in front of core's: once every worker in the
+/// executor is parked in an acquire, the next caller waits for a thread before
+/// its deadline even starts. The success frame carries an `Int` response whose
+/// value is the scope id, built in an arena so the reader frees it with
+/// `free_response_arena`; the error frame carries core's error type and
+/// message.
+///
+/// Returns 0 once the acquire is queued; -2 if the arguments are invalid; -3 if
+/// no pipe is registered (`init_async_pipe` has not run), in which case no
+/// frame is written.
+///
+/// # Safety
+/// `connection_request_ptr` must point to `connection_request_len` valid bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn glide_scope_acquire_pipe(
+    client_id: u64,
+    connection_request_ptr: *const u8,
+    connection_request_len: usize,
+    has_routing_slot: bool,
+    routing_slot: u16,
+    timeout_ms: u64,
+    request_id: usize,
+    pipe_client_id: u64,
+) -> i32 {
+    if connection_request_ptr.is_null() || connection_request_len == 0 {
+        return -2;
+    }
+    if get_async_pipe().is_none() {
+        return -3;
+    }
+    let conn_bytes =
+        unsafe { std::slice::from_raw_parts(connection_request_ptr, connection_request_len) }
+            .to_vec();
+
+    let runtime = get_pool_runtime();
+    let handle = runtime.handle().clone();
+    runtime.spawn(async move {
+        let result = acquire_scope_with_watchdog(
+            client_id,
+            conn_bytes,
+            &handle,
+            has_routing_slot.then_some(routing_slot),
+            std::time::Duration::from_millis(timeout_ms),
+        )
+        .await;
+        let Some(pipe) = get_async_pipe() else {
+            // No reader remains for a frame; give the slot back.
+            if let Ok(scope_id) = result {
+                scope::release_scope(scope_id, client_id, &handle);
+            }
+            return;
+        };
+        let push_error = |err: RedisError| {
+            pipe.push_error(
+                pipe_client_id,
+                request_id,
+                errors::error_type(&err),
+                errors::error_message(&err),
+            )
+        };
+        match result {
+            Ok(scope_id) => {
+                match valkey_value_to_arena_response(Value::Int(scope_id as i64), &[]) {
+                    Ok((root, arena)) => {
+                        pipe.push_success(pipe_client_id, request_id, root as usize, arena as usize)
+                    }
+                    Err(err) => {
+                        scope::release_scope(scope_id, client_id, &handle);
+                        push_error(err)
+                    }
+                }
+            }
+            Err(err) => push_error(err),
+        }
+    });
+
+    0
+}
+
 /// Acquire a scope from the client's scope pool (synchronous — blocks until result).
 ///
 /// Same semantics as [`glide_scope_acquire_async`], returned as a `CommandResult`
