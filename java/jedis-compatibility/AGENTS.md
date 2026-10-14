@@ -146,7 +146,7 @@ Use conventional commit format:
 
 - **Client Dependency:** `implementation project(':client')`; `api project(':jedis-compat-shared')` and `api commons-pool2` are part of the public API
 - **No Shadow JAR:** This module publishes a plain JAR. Protobuf relocation (`glide.com.google.protobuf`) happens in the client's shadow JAR, which is what `:client` resolves to
-- **Native Libraries:** Not bundled here; tests use `../target/release` via `java.library.path`. Run `./gradlew :client:buildAll` once so the library exists
+- **Native Libraries:** Not bundled here; tests use `../target/release` (or `../target/${arch}-unknown-linux-musl/release` on Alpine/musl) via `java.library.path`. Run `./gradlew :client:buildAll` once so the library exists
 - **Classifier:** `osdetector.classifier` (e.g. `osx-aarch_64`); set `JEDIS_NO_CLASSIFIER_BUILD=true` for a classifier-less JAR
 
 ## Project Structure (Essential)

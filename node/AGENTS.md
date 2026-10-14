@@ -259,7 +259,7 @@ node/
 **Client Types:** GlideClient (standalone), GlideClusterClient (cluster)
 **Key Features:** TypeScript support, NAPI-RS native bindings, direct NAPI command calls with response buffering
 **Testing:** Jest test framework, interactive REPL, package manager compatibility tests
-**Platforms:** Linux (glibc/musl), macOS (Intel/Apple Silicon)
+**Platforms:** Linux (glibc/musl), macOS (Intel/Apple Silicon), Windows (x86_64)
 **Dependencies:** Node.js 20+, protobufjs (connection/routing only), long, platform-specific native binaries
 
 ## If You Need More

@@ -190,7 +190,7 @@ java/
 ## Quality Gates (Agent Checklist)
 
 - [ ] Build passes: `./gradlew :client:buildAll` succeeds
-- [ ] All tests pass: `./gradlew test` succeeds
+- [ ] All tests pass: `./gradlew :client:test` (unit) and `./gradlew :integTest:test` (integration) succeed — there is no aggregate `test` task
 - [ ] Spotless formatting: `./gradlew :spotlessCheck` passes
 - [ ] SpotBugs analysis: `./gradlew spotbugsMain` generates clean reports
 - [ ] Integration tests pass: `./gradlew :integTest:test` succeeds
