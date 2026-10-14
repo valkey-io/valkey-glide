@@ -8965,17 +8965,19 @@ class TestCommands:
             await test_client.fcall_ro(func_name, arguments=[])
 
         async def wait_and_function_stats():
+            result: Any = None
+
             async def fcall_is_running() -> bool:
+                nonlocal result
                 result = await test_client2.function_stats()
                 return any(
                     res and res.get(b"running_script") for res in result.values()
                 )
 
             await wait_for(fcall_is_running, "FCALL never registered as running")
-            result = await test_client2.function_stats()
             running_scripts = False
             for res in result.values():
-                if res.get(b"running_script"):
+                if res and res.get(b"running_script"):
                     if running_scripts:
                         raise Exception("Already running script on a different node")
                     running_scripts = True
