@@ -1,6 +1,6 @@
 # AGENTS: Python Client Context for Agentic Tools
 
-This file provides AI agents and developers with the minimum but sufficient context to work productively with the Valkey GLIDE Python client. It covers build commands, testing, contribution requirements, and essential guardrails specific to the Python implementation.
+This file provides AI agents and developers with the minimum but sufficient context to work productively with the Valkey GLIDE Python client — build commands, testing, and Python-specific guardrails. It builds on [../AGENTS.md](../AGENTS.md) (repo-wide conventions, DCO, commit format, test servers) — read that first.
 
 ## Repository Overview
 
@@ -31,7 +31,7 @@ This is the Python client binding for Valkey GLIDE, providing both async and syn
 - macOS: 13.7+ (x86_64), 14.7+ (aarch64)
 - **Note:** Alpine Linux/MUSL not supported
 
-**Python Versions:** 3.9, 3.10, 3.11, 3.12, 3.13
+**Python Versions:** 3.9–3.14, plus 3.14t (free-threaded). CI's always-run set is 3.9, 3.13, 3.14t (`.github/json_matrices/supported-languages-versions.json`). The free-threaded 3.14t build has extra concurrency rules — see the root [../AGENTS.md](../AGENTS.md) "Python Free-Threading" section.
 **Async Frameworks:** asyncio, trio, uvloop
 
 **Packages:** `valkey-glide` (async), `valkey-glide-sync` (sync)
@@ -96,6 +96,10 @@ isort . && black . && flake8 . && mypy .
 protoc --python_out=glide-shared/glide_shared/protobuf --pyi_out=glide-shared/glide_shared/protobuf ../glide-core/src/protobuf/*.proto
 ```
 
+### Test Servers
+
+`python3 dev.py test` **auto-starts** standalone + cluster servers via `utils/cluster_manager.py` and stops them afterward — you don't start anything manually for a normal run. The `--cluster-endpoints=`/`--standalone-endpoints=` flags below are only for pointing at a server you started yourself (ad-hoc/manual testing); see the root [../AGENTS.md](../AGENTS.md) "Test Servers" section for the `cluster_manager.py` commands. A `valkey-server`/`redis-server` on `PATH` is required either way.
+
 ### Test Execution Options
 
 ```bash
@@ -114,35 +118,7 @@ python3 dev.py test --args -k "test_set_and_get"
 
 ## Contribution Requirements
 
-### Developer Certificate of Origin (DCO) Signoff REQUIRED
-
-All commits must include a `Signed-off-by` line:
-
-```bash
-# Add signoff to new commits
-git commit -s -m "feat(python): add new command implementation"
-
-# Configure automatic signoff
-git config --global format.signOff true
-
-# Add signoff to existing commit
-git commit --amend --signoff --no-edit
-
-# Add signoff to multiple commits
-git rebase -i HEAD~n --signoff
-```
-
-### Conventional Commits
-
-Use conventional commit format:
-
-```
-<type>(<scope>): <description>
-
-[optional body]
-```
-
-**Example:** `feat(python): implement async cluster scan with routing options`
+DCO signoff and Conventional Commits are required repo-wide — see [../AGENTS.md](../AGENTS.md#contribution-requirements) for the exact commands. Use the `python` scope, e.g. `feat(python): implement async cluster scan with routing options`.
 
 ### Code Quality Requirements
 
@@ -160,13 +136,13 @@ python3 dev.py lint --check            # Check-only mode
 - `flake8` - Style and error checking
 - `mypy` - Type checking
 
-**Rust Components:**
+**Rust Components** (the PyO3 glue — CI lints this from `python/glide-async/` via the shared Rust gate; there is no `python/Cargo.toml`):
 
 ```bash
-# From python/ directory
-rustup component add clippy rustfmt
+# From python/glide-async/ — runs the full repo-wide Rust gate (fmt --check, clippy ×2, cargo deny, cargo doc).
+# See ../AGENTS.md for the exact command list.
+cargo fmt --all -- --check
 cargo clippy --all-features --all-targets -- -D warnings
-cargo fmt --manifest-path ./Cargo.toml --all
 ```
 
 ## Guardrails & Policies
@@ -195,6 +171,7 @@ cargo fmt --manifest-path ./Cargo.toml --all
 - **anyio in tests:** Never use `asyncio.sleep`, `asyncio.wait_for`, or `asyncio.Queue` directly in test code. Use `anyio.sleep`, `anyio.fail_after`, and the `wait_for()` helper from `tests/utils/utils.py` instead. Tests run under both asyncio and trio via pytest-anyio.
 - **Prefer polling over sleeps:** Use `await wait_for(condition, message, timeout)` instead of fixed `await anyio.sleep(N)` delays. The condition should be an async callable returning bool. The timeout should be a reasonable small seconds.
 - **Protobuf Updates:** Run `python3 dev.py protobuf` after proto changes
+- **Stale `libglide_ffi.so` after core changes:** `install_glide_shared` (in `dev.py`) only (re)builds and copies the C-ABI `libglide_ffi.*` into `glide-shared/glide_shared/` when that destination file is **absent** — so once a copy exists, a later `dev.py build` keeps using the old one even after you change `ffi/`/`glide-core` (symptom: sync tests fail with `undefined symbol: glide_scope_...` against a stale `.so`). Rebuilding `ffi` alone does **not** fix it because the copy is skipped. To force a refresh, delete the stale lib (`rm glide-shared/glide_shared/libglide_ffi.*`) or run `python3 dev.py clean`, then rebuild. Not environment-specific. CI never hits this (ephemeral runners build from scratch).
 - **Documentation Style:** Follow Google Style Python Docstrings format
 
 ### Package Structure Rules

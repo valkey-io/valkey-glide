@@ -10,17 +10,22 @@ This is the Valkey GLIDE mono-repository containing a Rust core (`glide-core`) a
 
 **Key Components:**
 
-- `glide-core/` - Core Rust implementation with async client logic
-- `ffi/` - Foreign Function Interface layer for language interoperability
-- `java/` - Java client bindings with Gradle build system
-- `python/` - Python async/sync client bindings
-- `node/` - Node.js/TypeScript client bindings with npm
-- `go/` - Go client bindings
-- `glide-logger/` - Shared logging infrastructure
-- `utils/` - Shared utilities and cluster management tools
-- `benchmarks/` - Performance benchmarks across languages
-- `examples/` - Usage examples for each language binding
-- `docs/` - Documentation and MkDocs configuration
+- `rust/` - Native Rust client (preview). See [rust/AGENTS.md](./rust/AGENTS.md).
+- `glide-core/` - Core Rust implementation with async client logic. See [glide-core/AGENTS.md](./glide-core/AGENTS.md).
+- `glide-core/redis-rs/` - Vendored fork of redis-rs 0.25.2 (GLIDE-owned, not third-party).
+- `ffi/` - Foreign Function Interface layer (used by Go and Python-sync).
+- `java/` - Java client bindings with Gradle build system (JNI).
+- `python/` - Python async (PyO3) + sync (CFFI) client bindings.
+- `node/` - Node.js/TypeScript client bindings via NAPI-RS.
+- `go/` - Go client bindings (CGO).
+- `glide-telemetry/` - OpenTelemetry integration crate.
+- `glide-logger/` - Shared logging infrastructure.
+- `utils/` - Shared utilities and cluster management tools (`cluster_manager.py`).
+- `benchmarks/` - Performance benchmarks across languages.
+- `examples/` - Usage examples for each language binding.
+- `docs/` - Documentation and MkDocs configuration.
+
+Each binding has its own `AGENTS.md`. The Rust crates (`rust/`, `glide-core/`, `glide-core/redis-rs/redis/`, `ffi/`, `glide-telemetry/`, `glide-logger/`) are independent crates — each with its own `Cargo.toml`/`Cargo.lock`, no top-level cargo workspace; see [glide-core/AGENTS.md](./glide-core/AGENTS.md) for the crate dependency table.
 
 ## Architecture Quick Facts
 
@@ -52,12 +57,33 @@ Valkey supports two wire protocols (RESP2 and RESP3) that may return structurall
 
 The Rust core normalizes these differences in `glide-core/src/client/value_conversion.rs` so that language bindings receive a consistent data structure regardless of protocol version; language bindings should *not* need to handle RESP2/RESP3 differences themselves. When adding a new command whose RESP2 and RESP3 responses differ, add or reuse an `ExpectedReturnType` variant and implement the conversion logic in `convert_to_expected_type`.
 
-**Supported Engine Versions:**
+**Supported Engine Versions** (per `.github/json_matrices/engine-matrix.json`):
 
-| Engine Type | 6.2 | 7.0 | 7.1 | 7.2 | 8.0 | 8.1 |
-|-------------|-----|-----|-----|-----|-----|-----|
-| Valkey      | -   | -   | -   | ✓   | ✓   | ✓   |
-| Redis       | ✓   | ✓   | ✓   | ✓   | -   | -   |
+| Engine Type | 6.2 | 7.0 | 7.2 | 8.0 | 8.1 | 9.0 | 9.1 | 9.2.0-rc1 |
+|-------------|-----|-----|-----|-----|-----|-----|-----|-----------|
+| Valkey      | -   | -   | ✓   | ✓   | ✓   | ✓   | ✓   | ✓         |
+| Redis       | ✓   | ✓   | -   | -   | -   | -   | -   | -         |
+
+## Test Servers
+
+Unit and integration test targets (`make *-test` except modules, `./gradlew :integTest:test` without endpoint flags, `npm test`, `python3 dev.py test`) **auto-start** standalone and cluster Valkey/Redis servers via `utils/cluster_manager.py` and tear them down after — you don't start anything manually.
+
+**Module tests are the exception:** `make modules-test` / `:integTest:modulesTest` / `npm run test:modules` require module-enabled servers that `cluster_manager.py` does not provide, so they take **mandatory** `--cluster-endpoints=`/`--standalone-endpoints=` flags pointing at servers you (or CI, via Docker) started separately.
+
+For ad-hoc/manual testing or pointing a run at a long-lived cluster, drive the harness directly:
+
+```bash
+# From utils/, start a standalone server (prints the port and config dir)
+python3 cluster_manager.py start
+
+# Start a cluster (default 3 shards, 1 replica each)
+python3 cluster_manager.py start --cluster-mode
+
+# Stop a server/cluster you started (by the folder printed at start)
+python3 cluster_manager.py stop --cluster-folder <folder-printed-by-start>
+```
+
+Then pass the printed endpoint(s) via that binding's endpoint flag (see each binding's AGENTS.md). Requires a `valkey-server` (or `redis-server`) binary on `PATH`.
 
 ## Build and Test Rules (Agents)
 
@@ -77,7 +103,9 @@ make go            # Build Go client
 make java-test     # Run Java integration tests
 make python-test   # Run Python tests
 make node-test     # Run Node.js tests
-make go-test       # Run Go tests
+# NOTE: `make go-test` (and therefore `make all`) is currently broken — it calls
+# `make -C go test`, but go/Makefile has no `test` target. Use the go/ targets
+# directly: `make -C go unit-test integ-test` (see go/AGENTS.md).
 
 # Linting
 make java-lint     # Run Java spotlessApply
@@ -90,18 +118,37 @@ make clean         # Remove .build/ directory
 make help          # List available targets
 ```
 
+There is no `make rust`/`make rust-test`/`make rust-lint` — the Rust crates have no top-level Make integration. Use the raw cargo commands below from each crate's own directory.
+
 ### Raw Equivalents Per Stack
 
-**Rust (glide-core):**
+**Rust — native client (`rust/`):**
+
+See [rust/AGENTS.md](./rust/AGENTS.md) for the full reference. Summary:
 
 ```bash
-cd glide-core
+cd rust
 cargo build --release
-cargo test
-cargo bench
-cargo clippy
-cargo fmt
+cargo unit-tests         # alias (rust/.cargo/config.toml) for: cargo test --lib
+cargo doc-tests          # alias for: cargo test --doc
+cargo integration-tests  # alias for: cargo test --test it_*  (needs a Valkey/Redis server; see Test Servers above)
+cargo clippy --all-features --all-targets -- -D warnings
+cargo fmt --all -- --check
 ```
+
+**Rust — core and shared crates (`glide-core/`, `ffi/`, `glide-telemetry/`, `glide-logger/`):**
+
+See [glide-core/AGENTS.md](./glide-core/AGENTS.md) for per-crate test invocations (several require `-- --test-threads=1`) and the Miri UB tests under `ffi/miri-tests/`. The same lint gate below runs in each of `rust/`, `glide-core/`, `ffi/`, `glide-telemetry/`, `glide-logger/`, `benchmarks/rust/`, and the embedded Rust glue in `java/`, `node/rust-client/`, `python/glide-async/` (Go has no Rust directory of its own; its CI re-checks `ffi/` directly). The one exception is `glide-core/redis-rs/redis/` (the vendored engine fork), which uses a lighter gate — see glide-core/AGENTS.md.
+
+```bash
+cargo fmt --all -- --check
+cargo clippy --all-features --all-targets -- -D warnings
+cargo clippy --all-targets -- -D warnings   # also run without features
+cargo install --locked cargo-deny && cargo deny --config <repo-root>/deny.toml check
+RUSTDOCFLAGS="-Dwarnings" cargo doc --no-deps --document-private-items
+```
+
+> `glide-logger/` was renamed from `logger_core/` in PR #7178 — update any older local script that still references `logger_core`.
 
 **Java:**
 
@@ -154,7 +201,7 @@ python3 dev.py clean --client async  # Clean shared and async client artifacts
 cd node
 
 # Install and build
-npm ci
+npm ci                 # needs the committed package-lock.json
 npm run build:release  # Build Rust and TypeScript (slow)
 npm run build:ts       # Build TypeScript only (fast)
 
@@ -171,11 +218,11 @@ npm test -- --testPathPattern='GlideClient'  # Run tests from a specific file
 
 ```bash
 cd go
+make install-tools  # First time / after a toolchain bump: protoc-gen-go, cbindgen, linters
 make build
-make test
+make unit-test
+make integ-test
 make lint
-go build ./...
-go test ./...
 ```
 
 **Benchmarks:**
@@ -253,7 +300,8 @@ Use conventional commit format for all commit messages:
 - Follow SECURITY.md for vulnerability reporting
 - Run lint/format targets before committing
 - Maintain compatibility with supported engine versions
-- Do not modify vendored or third-party code
+- Do not modify genuinely vendored or third-party code. Note `glide-core/redis-rs/` is **not** in this category — it's a GLIDE-owned fork of redis-rs 0.25.2 (renamed `glide-core-engine`) that the repo deliberately patches; changes there are allowed but check for upstream drift first (see glide-core/AGENTS.md).
+- Rust crates must pass `cargo deny check` (see Rust lint commands above)
 
 ## Project Structure (Essential)
 
@@ -263,22 +311,25 @@ valkey-glide/
 ├── benchmarks/          # Performance benchmarks
 ├── docs/                # Documentation (MkDocs)
 ├── examples/            # Usage examples per language
-├── ffi/                 # Foreign Function Interface layer
-├── glide-core/          # Core Rust implementation
+├── rust/                # Native Rust client (preview)
+├── glide-core/          # Core Rust implementation (incl. redis-rs/ vendored fork)
+├── ffi/                 # Foreign Function Interface layer (used by go/, python-sync)
+├── glide-telemetry/     # OpenTelemetry integration crate
 ├── glide-logger/        # Shared logging infrastructure
 ├── go/                  # Go client bindings
 ├── java/                # Java client bindings (Gradle)
 ├── node/                # Node.js/TypeScript bindings (npm)
 ├── python/              # Python async/sync bindings
+├── deny.toml            # cargo-deny config, shared by all Rust crates
 ├── utils/               # Cluster management and utilities
 └── Makefile            # Top-level build orchestration
 ```
 
 ## Quality Gates (Agent Checklist)
 
-- [ ] Build passes: `make all` succeeds
-- [ ] Lint passes: `make *-lint` targets succeed
-- [ ] Tests pass: `make *-test` targets succeed
+- [ ] Build passes: the touched binding's build target succeeds (e.g. `make java`/`make node`; see each binding's AGENTS.md — avoid `make all`, which chains the broken `go-test`), `cargo build --release` succeeds (touched Rust crates)
+- [ ] Lint passes: `make *-lint` succeeds (bindings), the Rust lint gate above succeeds (touched Rust crates)
+- [ ] Tests pass: `make *-test` succeeds (bindings), the crate's documented test invocation succeeds (touched Rust crates — see glide-core/AGENTS.md and rust/AGENTS.md for feature flags and thread-count requirements)
 - [ ] No generated outputs committed (check `.gitignore`)
 - [ ] DCO signoff present: `git log --format="%B" -n 1 | grep "Signed-off-by"`
 - [ ] Conventional commit format used
@@ -287,7 +338,7 @@ valkey-glide/
 
 ## Quick Facts for Reasoners
 
-**Engines Supported:** Valkey 7.2, 8.0, 8.1, 9.0+ | Redis 6.2, 7.0, 7.1, 7.2
+**Engines Supported:** Valkey 7.2, 8.0, 8.1, 9.0, 9.1, 9.2 | Redis 6.2, 7.0
 **Key Features:** AZ Affinity, PubSub auto-reconnection, sharded PubSub, cluster-aware multi-key commands, cluster scan, batching (pipeline/transaction), OpenTelemetry integration
 **Architecture:** Rust core with FFI bindings, async-first design, cluster and standalone support
 **Performance:** Optimized for high throughput and low latency with connection pooling
@@ -300,6 +351,8 @@ valkey-glide/
 - **Documentation:** [docs/README.md](./docs/README.md)
 - **Examples:** [examples/](./examples/)
 - **Language-Specific Guides:**
+  - [Rust Client Guide](./rust/AGENTS.md)
+  - [glide-core / Rust Core Guide](./glide-core/AGENTS.md)
   - [Java Developer Guide](./java/DEVELOPER.md)
   - [Python Developer Guide](./python/DEVELOPER.md)
   - [Node.js Developer Guide](./node/DEVELOPER.md)
