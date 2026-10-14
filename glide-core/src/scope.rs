@@ -1185,6 +1185,16 @@ impl std::error::Error for ScopeAcquireError {}
 #[cfg(feature = "proto")]
 const SCOPE_ACQUIRE_WAIT_CAP: Duration = Duration::from_millis(50);
 
+/// First wait after a retryable creation failure, doubling per consecutive
+/// failure up to [`SCOPE_REDIAL_BACKOFF_CAP`]. A scoped connection dials with
+/// `connection_retry_strategy: None`, so a refused connect or a fast init error
+/// (WRONGPASS, max clients) fails within a millisecond; without a wait one
+/// acquire redials as fast as the runtime can spin until its deadline, against a
+/// server that is already refusing. The deleted binding loops waited 1 to
+/// 500 ms between attempts; this keeps that bound in core.
+const SCOPE_REDIAL_BACKOFF_START: Duration = Duration::from_millis(10);
+const SCOPE_REDIAL_BACKOFF_CAP: Duration = Duration::from_millis(200);
+
 /// Acquire a scope, waiting up to `deadline` for a retryable cause to clear.
 ///
 /// One call, one result: the wait lives here, not in the caller, so the
@@ -1329,6 +1339,7 @@ async fn acquire_scope_with_wait_cap(
         pool: scope_pool,
         wakeup,
     } = scope_pool_for(client_id, connection_request_bytes);
+    let mut redial_backoff = SCOPE_REDIAL_BACKOFF_START;
 
     loop {
         let notified = wakeup.notified();
@@ -1374,7 +1385,19 @@ async fn acquire_scope_with_wait_cap(
                                 last: ScopeRetryCause::CreateFailed(kind),
                             });
                         }
-                        None => {}
+                        None => {
+                            // The failed dial's own slot return already fired
+                            // `notified`; listen only for a release after it, which
+                            // makes a seated connection available and beats
+                            // dialing again.
+                            let released = wakeup.notified();
+                            let remaining = deadline.saturating_sub(started.elapsed());
+                            tokio::select! {
+                                _ = released => {}
+                                _ = tokio::time::sleep(remaining.min(redial_backoff)) => {}
+                            }
+                            redial_backoff = (redial_backoff * 2).min(SCOPE_REDIAL_BACKOFF_CAP);
+                        }
                     }
                 }
             }
@@ -2658,6 +2681,85 @@ mod tests {
         assert!(
             elapsed >= Duration::from_millis(100) && elapsed < Duration::from_secs(2),
             "deadline honoured: {elapsed:?}"
+        );
+    }
+
+    /// A server that refuses every connection is dialed a bounded number of
+    /// times per waiting acquire, so a node that is already rejecting clients
+    /// is not flooded by the clients trying to reach it.
+    #[tokio::test]
+    async fn acquire_scope_backs_off_between_failed_dials() {
+        let client_id = 67_950_010_u64;
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind test listener");
+        listener
+            .set_nonblocking(true)
+            .expect("nonblocking listener");
+        let port = listener.local_addr().expect("listener address").port();
+        let accepted = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let stop = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let server = {
+            let accepted = accepted.clone();
+            let stop = stop.clone();
+            std::thread::spawn(move || {
+                while !stop.load(Ordering::Acquire) {
+                    match listener.accept() {
+                        // Dropping the stream closes it before any handshake byte.
+                        Ok(_) => {
+                            accepted.fetch_add(1, Ordering::Release);
+                        }
+                        Err(e) if e.kind() == ErrorKind::WouldBlock => {
+                            std::thread::sleep(Duration::from_micros(200));
+                        }
+                        Err(e) => panic!("accept failed: {e}"),
+                    }
+                }
+            })
+        };
+        let request_bytes = request_bytes("", port);
+        let pool = Arc::new(TokioMutex::new(ScopePool::new(
+            ScopePoolConfig::default(),
+            request_bytes.clone(),
+            client_id,
+        )));
+        get_client_scope_pools().insert(client_id, ScopePoolHandle::for_test(&pool));
+        register_client(client_id, lazy_parent(false).await);
+
+        let deadline = Duration::from_millis(500);
+        let started = Instant::now();
+        let acquired = super::acquire_scope(
+            client_id,
+            request_bytes,
+            &tokio::runtime::Handle::current(),
+            None,
+            deadline,
+        )
+        .await;
+        let elapsed = started.elapsed();
+
+        unregister_client(client_id);
+        get_client_scope_pools().remove(&client_id);
+        stop.store(true, Ordering::Release);
+        server.join().expect("join listener thread");
+
+        // The last attempt may still be mid-dial when the deadline lands, so the
+        // final cause is `CreateFailed` or `Pending`; the dial count is the claim.
+        assert!(
+            matches!(
+                acquired,
+                Err(super::ScopeAcquireError::DeadlineExceeded { .. })
+            ),
+            "{acquired:?}"
+        );
+        assert!(
+            elapsed >= deadline && elapsed < Duration::from_secs(2),
+            "deadline honoured: {elapsed:?}"
+        );
+        // 10 ms doubling to 200 ms covers 500 ms in about seven dials; allow
+        // generous slack for a fast first failure before the first wait.
+        let dials = accepted.load(Ordering::Acquire);
+        assert!(
+            (2..=20).contains(&dials),
+            "{dials} dials in {elapsed:?}; a refusing server must not be redialed in a tight loop"
         );
     }
 
