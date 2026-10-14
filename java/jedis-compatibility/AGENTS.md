@@ -62,7 +62,7 @@ Run from `java/`. Prerequisites and the `pkill valkey-server` build-finish hook 
 
 ### Raw Equivalents
 
-None: this is a plain Java module with no code generation. The native library is not copied into this module; tests load it from `../target/release` via `java.library.path`, which `build.gradle` sets on every Test task.
+None: this is a plain Java module with no code generation. The native library is not copied into this module; tests load it from `../target/release` via `java.library.path`, which `build.gradle` sets on every Test task. On Alpine/musl the path is `../target/${arch}-unknown-linux-musl/release` instead.
 
 ### Test Execution Options
 
