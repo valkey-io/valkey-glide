@@ -4541,6 +4541,10 @@ def test_delegated_request_rechecks_stopped_asyncio_owner(monkeypatch):
     """Asyncio and Trio requests replace a delegated stopped asyncio reader."""
     import glide.glide_client as async_client_module
 
+    monkeypatch.setattr(
+        async_client_module.OpenTelemetry, "should_sample", lambda: False
+    )
+
     for requester_backend in ("asyncio", "trio"):
         _reset_pipe_test_state(monkeypatch, async_client_module)
         fake_lib = SimpleNamespace(
