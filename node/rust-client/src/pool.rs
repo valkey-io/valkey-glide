@@ -637,7 +637,7 @@ pub fn scope_acquire<'a>(
     let handle = runtime.handle().clone();
 
     runtime.spawn(async move {
-        let result = scope::acquire_scope(
+        let result = scope::acquire_scope_with_watchdog(
             client_id as u64,
             conn_bytes,
             &handle,

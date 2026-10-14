@@ -37,7 +37,7 @@ pub extern "system" fn Java_glide_ffi_resolvers_GlideScopeResolver_glideScopeAcq
     let jvm = JVM.get().unwrap().clone();
 
     runtime.spawn(async move {
-        let result = glide_core::scope::acquire_scope(
+        let result = glide_core::scope::acquire_scope_with_watchdog(
             client_id as u64,
             bytes,
             &handle,

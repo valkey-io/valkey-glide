@@ -1085,6 +1085,10 @@ pub enum ScopeAcquireError {
     DeadlineExceeded { last: ScopeRetryCause },
     /// An attempt hit a cause no amount of waiting clears.
     Terminal(ScopeFailCause),
+    /// The watchdog backstop fired before the core deadline did, so the runtime
+    /// was too starved to run its own timer and the cause of the wait is
+    /// unknown.
+    RuntimeStalled,
 }
 
 impl ScopeAcquireError {
@@ -1095,7 +1099,7 @@ impl ScopeAcquireError {
     /// the `#[repr(C)]` enum, so the native interfaces are unchanged here.
     pub fn request_error_type(self) -> RequestErrorType {
         match self {
-            Self::DeadlineExceeded { .. } => RequestErrorType::Timeout,
+            Self::DeadlineExceeded { .. } | Self::RuntimeStalled => RequestErrorType::Timeout,
             Self::Terminal(ScopeFailCause::ParentUnregistered | ScopeFailCause::PoolClosed) => {
                 RequestErrorType::Disconnect
             }
@@ -1165,6 +1169,9 @@ impl std::fmt::Display for ScopeAcquireError {
                 write!(f, "timed out waiting for isolated scope ({last})")
             }
             Self::Terminal(cause) => write!(f, "cannot acquire isolated scope: {cause}"),
+            Self::RuntimeStalled => f.write_str(
+                "timed out waiting for isolated scope (runtime stalled; watchdog backstop fired)",
+            ),
         }
     }
 }
@@ -1209,6 +1216,100 @@ pub async fn acquire_scope(
         SCOPE_ACQUIRE_WAIT_CAP,
     )
     .await
+}
+
+/// How much later than the core deadline the watchdog backstop fires on a scope
+/// acquire. Without a margin the watchdog's OS thread often observes the shared
+/// deadline before the tokio timer does, and the caller gets a bare "timed out"
+/// instead of the core's cause ("pool exhausted"). Costs one second on a starved
+/// runtime, where the backstop is the only timer that fires.
+pub const SCOPE_ACQUIRE_WATCHDOG_MARGIN: Duration = Duration::from_secs(1);
+
+/// Log the watchdog's diagnostic for a scoped operation that outlived its
+/// deadline. One place for the cause classification and the event shape, so
+/// the scope race sites in every native interface cannot drift. `p99` comes
+/// from the parent client's latency tracker when the caller has one; `None`
+/// leaves the suggested timeout unset.
+pub fn log_scope_watchdog_timeout(
+    command: &'static str,
+    configured_timeout: Duration,
+    actual_elapsed: Duration,
+    p99: Option<Duration>,
+) {
+    use crate::timeout_watchdog::{CommandPhase, TimeoutCause, TimeoutEvent};
+    let pending = crate::timeout_watchdog::pending_count();
+    let cause = if pending > 100 {
+        TimeoutCause::SystemOverload {
+            pending_total: pending,
+        }
+    } else {
+        TimeoutCause::ServerUnresponsive {
+            node: "scope".to_owned(),
+        }
+    };
+    let event = TimeoutEvent {
+        cause,
+        command,
+        node: "scope".to_owned(),
+        phase: CommandPhase::Sent,
+        configured_timeout,
+        actual_elapsed,
+        pending_commands: pending,
+        recent_p99_latency: p99,
+        rss_bytes: crate::timeout_watchdog::get_rss(),
+        suggested_timeout: p99.map(|p| (p * 3).max(configured_timeout)),
+        inflight_at_register: None,
+        inflight_at_timeout: None,
+        retry_count: 0,
+    };
+    glide_logger::log_warn("timeout_watchdog", event.to_string());
+}
+
+/// [`acquire_scope`] under the [`TimeoutWatchdog`](crate::timeout_watchdog::TimeoutWatchdog)
+/// backstop (#6673, #5806). The core deadline is a tokio timer, which a starved
+/// runtime may never run; the watchdog's own OS thread fires at
+/// `deadline + SCOPE_ACQUIRE_WATCHDOG_MARGIN` and the caller gets
+/// [`ScopeAcquireError::RuntimeStalled`]. Always armed: an acquire has a finite
+/// deadline, unlike the unbounded commands `should_arm_watchdog` exists for.
+/// Every native interface awaits this one future, so no binding's wait is
+/// unbounded and the deadline semantics cannot drift between them.
+pub async fn acquire_scope_with_watchdog(
+    client_id: u64,
+    connection_request_bytes: Vec<u8>,
+    runtime: &tokio::runtime::Handle,
+    routing_slot: Option<u16>,
+    deadline: Duration,
+) -> Result<u64, ScopeAcquireError> {
+    let acquire_start = Instant::now();
+    let timeout_rx = crate::timeout_watchdog::TimeoutWatchdog::global()
+        .register(deadline + SCOPE_ACQUIRE_WATCHDOG_MARGIN, acquire_start);
+    let acquire = acquire_scope(
+        client_id,
+        connection_request_bytes,
+        runtime,
+        routing_slot,
+        deadline,
+    );
+    tokio::pin!(acquire);
+    tokio::select! {
+        result = &mut acquire => result,
+        recv_result = timeout_rx => {
+            match recv_result {
+                Err(_) => acquire.await,
+                Ok(()) => {
+                    let p99 = get_parent_client(client_id)
+                        .and_then(|client| client.latency_tracker().p99());
+                    log_scope_watchdog_timeout(
+                        "SCOPE_ACQUIRE",
+                        deadline,
+                        acquire_start.elapsed(),
+                        p99,
+                    );
+                    Err(ScopeAcquireError::RuntimeStalled)
+                }
+            }
+        }
+    }
 }
 
 /// [`acquire_scope`] with the wait cap as a parameter. Tests pass a cap longer
@@ -1696,6 +1797,7 @@ mod tests {
                 ScopeAcquireError::DeadlineExceeded {
                     last: ScopeRetryCause::CreateFailed(ScopeCreateErrorKind::ConnectFailed),
                 },
+                ScopeAcquireError::RuntimeStalled,
             ]);
         for err in errors {
             let converted = redis::RedisError::from(err);

@@ -32,94 +32,17 @@ macro_rules! drop_orphaned_adapter {
     };
 }
 
-/// How much later than the core deadline the watchdog backstop fires on a scope
-/// acquire. Without a margin the watchdog's OS thread often observes the shared
-/// deadline before the tokio timer does, and the caller gets a bare "timed out"
-/// instead of the core's cause ("pool exhausted"). Costs one second on a starved
-/// runtime, where the backstop is the only timer that fires.
-const SCOPE_ACQUIRE_WATCHDOG_MARGIN: std::time::Duration = std::time::Duration::from_secs(1);
-
-/// Log the watchdog's diagnostic for a scoped operation that outlived its
-/// deadline and return the error the caller reports. One place for the cause
-/// classification and the event shape, so the four scope race sites cannot
-/// drift. `p99` comes from the parent client's latency tracker when the caller
-/// has one; `None` leaves the suggested timeout unset.
+/// The watchdog's error for a scoped command that outlived its deadline, with
+/// the diagnostic logged through core so the event shape is shared with the
+/// acquire path.
 fn scope_watchdog_timeout(
     command: &'static str,
     configured_timeout: std::time::Duration,
     actual_elapsed: std::time::Duration,
     p99: Option<std::time::Duration>,
 ) -> RedisError {
-    use glide_core::timeout_watchdog::{CommandPhase, TimeoutCause, TimeoutEvent};
-    let pending = glide_core::timeout_watchdog::pending_count();
-    let cause = if pending > 100 {
-        TimeoutCause::SystemOverload {
-            pending_total: pending,
-        }
-    } else {
-        TimeoutCause::ServerUnresponsive {
-            node: "scope".to_owned(),
-        }
-    };
-    let event = TimeoutEvent {
-        cause,
-        command,
-        node: "scope".to_owned(),
-        phase: CommandPhase::Sent,
-        configured_timeout,
-        actual_elapsed,
-        pending_commands: pending,
-        recent_p99_latency: p99,
-        rss_bytes: glide_core::timeout_watchdog::get_rss(),
-        suggested_timeout: p99.map(|p| (p * 3).max(configured_timeout)),
-        inflight_at_register: None,
-        inflight_at_timeout: None,
-        retry_count: 0,
-    };
-    glide_logger::log_warn("timeout_watchdog", event.to_string());
+    scope::log_scope_watchdog_timeout(command, configured_timeout, actual_elapsed, p99);
     std::io::Error::from(std::io::ErrorKind::TimedOut).into()
-}
-
-/// The core scope acquire under the watchdog backstop (#6673, #5806). Always
-/// armed: `should_arm_watchdog` exists for unbounded commands, and an acquire
-/// has a finite deadline. One future for every acquire export, so the deadline
-/// semantics cannot drift between delivery paths.
-async fn acquire_scope_with_watchdog(
-    client_id: u64,
-    conn_bytes: Vec<u8>,
-    handle: &tokio::runtime::Handle,
-    routing_slot: Option<u16>,
-    timeout_duration: std::time::Duration,
-) -> Result<u64, RedisError> {
-    let acquire_start = std::time::Instant::now();
-    let timeout_rx = glide_core::timeout_watchdog::TimeoutWatchdog::global().register(
-        timeout_duration + SCOPE_ACQUIRE_WATCHDOG_MARGIN,
-        acquire_start,
-    );
-    let acquire = scope::acquire_scope(
-        client_id,
-        conn_bytes,
-        handle,
-        routing_slot,
-        timeout_duration,
-    );
-    tokio::pin!(acquire);
-    let parent_p99 =
-        || scope::get_parent_client(client_id).and_then(|client| client.latency_tracker().p99());
-    tokio::select! {
-        result = &mut acquire => result.map_err(RedisError::from),
-        recv_result = timeout_rx => {
-            match recv_result {
-                Err(_) => acquire.await.map_err(RedisError::from),
-                Ok(()) => Err(scope_watchdog_timeout(
-                    "SCOPE_ACQUIRE",
-                    timeout_duration,
-                    acquire_start.elapsed(),
-                    parent_p99(),
-                ))
-            }
-        }
-    }
 }
 
 /// Whether the diagnostic timeout watchdog should be armed for a scoped command.
@@ -1080,14 +1003,15 @@ pub unsafe extern "C" fn glide_scope_acquire_async(
     let runtime = get_pool_runtime();
     let handle = runtime.handle().clone();
     runtime.spawn(async move {
-        let result = acquire_scope_with_watchdog(
+        let result = scope::acquire_scope_with_watchdog(
             client_id,
             conn_bytes,
             &handle,
             has_routing_slot.then_some(routing_slot),
             std::time::Duration::from_millis(timeout_ms),
         )
-        .await;
+        .await
+        .map_err(RedisError::from);
         match result {
             Ok(scope_id) => unsafe {
                 success_callback(request_id, scope_id_response(scope_id));
@@ -1148,14 +1072,15 @@ pub unsafe extern "C" fn glide_scope_acquire_pipe(
     let runtime = get_pool_runtime();
     let handle = runtime.handle().clone();
     runtime.spawn(async move {
-        let result = acquire_scope_with_watchdog(
+        let result = scope::acquire_scope_with_watchdog(
             client_id,
             conn_bytes,
             &handle,
             has_routing_slot.then_some(routing_slot),
             std::time::Duration::from_millis(timeout_ms),
         )
-        .await;
+        .await
+        .map_err(RedisError::from);
         let Some(pipe) = get_async_pipe() else {
             // No reader remains for a frame; give the slot back.
             if let Ok(scope_id) = result {
@@ -1221,7 +1146,7 @@ pub unsafe extern "C" fn glide_scope_acquire_blocking(
             .to_vec();
 
     let runtime = get_pool_runtime();
-    let result = runtime.block_on(acquire_scope_with_watchdog(
+    let result = runtime.block_on(scope::acquire_scope_with_watchdog(
         client_id,
         conn_bytes,
         runtime.handle(),
@@ -1234,7 +1159,7 @@ pub unsafe extern "C" fn glide_scope_acquire_blocking(
             command_error: std::ptr::null_mut(),
             arena: std::ptr::null_mut(),
         })),
-        Err(err) => create_error_result_with_redis_error(err),
+        Err(err) => create_error_result_with_redis_error(RedisError::from(err)),
     }
 }
 
