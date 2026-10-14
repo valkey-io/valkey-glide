@@ -1116,7 +1116,7 @@ class BaseClient(CoreCommands):
         Raises:
             TimeoutError: If no scope is available within the timeout.
             ConnectionError: If the client is closed while waiting.
-            ConfigurationError: If the client's configuration cannot produce a
+            RequestError: If the client's configuration cannot produce a
                 scoped connection.
             ClosingError: If the client is already closed.
         """
