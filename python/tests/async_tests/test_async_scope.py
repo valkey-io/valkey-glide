@@ -244,8 +244,9 @@ class TestAsyncIsolatedScopeAcquireFailsFast:
             )
             elapsed = time.monotonic() - started
             assert all(isinstance(o, TimeoutError) for o in outcomes), outcomes
+            assert all("pool exhausted" in str(o) for o in outcomes), outcomes
             assert (
-                elapsed < 1.5
+                0.4 <= elapsed < 1.5
             ), f"{_SCOPE_POOL_MAX_TOTAL} 0.5s waits took {elapsed:.2f}s"
         finally:
             for scope in held:
