@@ -627,6 +627,7 @@ pub fn scope_acquire<'a>(
     env: &'a Env,
     client_id: i64,
     connection_request_bytes: Uint8Array,
+    has_routing_slot: bool,
     routing_slot: u16,
     timeout_ms: u32,
 ) -> Result<Object<'a>> {
@@ -640,7 +641,7 @@ pub fn scope_acquire<'a>(
             client_id as u64,
             conn_bytes,
             &handle,
-            routing_slot,
+            has_routing_slot.then_some(routing_slot),
             std::time::Duration::from_millis(u64::from(timeout_ms)),
         )
         .await;

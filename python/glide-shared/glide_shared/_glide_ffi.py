@@ -449,6 +449,7 @@ class _GlideFFI:
                 uint64_t client_id,
                 const uint8_t* connection_request_ptr,
                 size_t connection_request_len,
+                bool has_routing_slot,
                 uint16_t routing_slot,
                 uint64_t timeout_ms
             );

@@ -43,6 +43,7 @@ export function clearScopeConnectionRequest(client: BaseClient): void {
 export function acquireScope(
     client: BaseClient,
     clientId: number,
+    hasRoutingSlot: boolean,
     routingSlot: number,
     timeoutMs: number,
     explicitBytes?: Uint8Array,
@@ -56,5 +57,5 @@ export function acquireScope(
         );
     }
 
-    return scopeAcquire(clientId, bytes, routingSlot, timeoutMs);
+    return scopeAcquire(clientId, bytes, hasRoutingSlot, routingSlot, timeoutMs);
 }

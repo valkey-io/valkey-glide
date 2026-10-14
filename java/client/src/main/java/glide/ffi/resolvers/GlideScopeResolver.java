@@ -12,12 +12,15 @@ public class GlideScopeResolver {
      * a {@link Long}, or exceptionally with the error the core classified. The core owns the wait, so
      * one call covers the whole acquire.
      *
+     * @param hasRoutingSlot whether {@code routingSlot} is a caller-supplied slot; when false the
+     *     slot is ignored and a cluster scope is left unconstrained (any primary)
      * @return 0 once queued; -2 if the connection request bytes could not be read, in which case the
      *     future is never completed by the native side
      */
     public static native int glideScopeAcquire(
             long clientId,
             byte[] connectionRequestBytes,
+            boolean hasRoutingSlot,
             int routingSlot,
             long timeoutMs,
             long callbackId);

@@ -1007,6 +1007,12 @@ fn scope_id_response(scope_id: u64) -> *mut CommandResponse {
 /// Returns 0 once the acquire is queued; -2 if the arguments are invalid, in which
 /// case no callback fires.
 ///
+/// `routing_slot` is read only when `has_routing_slot` is true; it is then the
+/// cluster hash slot the scope's commands must target. When `has_routing_slot` is
+/// false the caller supplied no routing key and the slot is ignored (any primary is
+/// acceptable), mirroring the `has_timeout`/`has_sample_percentage` optional-field
+/// convention elsewhere in this ABI.
+///
 /// # Safety
 /// `connection_request_ptr` must point to `connection_request_len` valid bytes.
 /// `success_callback` and `failure_callback` must be valid function pointers.
@@ -1015,6 +1021,7 @@ pub unsafe extern "C" fn glide_scope_acquire_async(
     client_id: u64,
     connection_request_ptr: *const u8,
     connection_request_len: usize,
+    has_routing_slot: bool,
     routing_slot: u16,
     timeout_ms: u64,
     request_id: usize,
@@ -1044,7 +1051,7 @@ pub unsafe extern "C" fn glide_scope_acquire_async(
             client_id,
             conn_bytes,
             &handle,
-            routing_slot,
+            has_routing_slot.then_some(routing_slot),
             timeout_duration,
         );
         tokio::pin!(acquire);
@@ -1099,6 +1106,7 @@ pub unsafe extern "C" fn glide_scope_acquire_blocking(
     client_id: u64,
     connection_request_ptr: *const u8,
     connection_request_len: usize,
+    has_routing_slot: bool,
     routing_slot: u16,
     timeout_ms: u64,
 ) -> *mut CommandResult {
@@ -1125,7 +1133,7 @@ pub unsafe extern "C" fn glide_scope_acquire_blocking(
             client_id,
             conn_bytes,
             runtime.handle(),
-            routing_slot,
+            has_routing_slot.then_some(routing_slot),
             timeout_duration,
         );
         tokio::pin!(acquire);

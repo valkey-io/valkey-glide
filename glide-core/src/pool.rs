@@ -1023,6 +1023,9 @@ pub struct ScopedConnection {
     /// In cluster mode: the slot this scope is pinned to after first keyed command.
     /// None means not yet pinned (no keyed command issued).
     pub pinned_slot: Option<u16>,
+    /// The cluster routing slot this borrow was acquired for; seeds `pinned_slot`
+    /// so the first keyed command must hash to it. `None` in standalone and idle.
+    pub acquisition_slot: Option<u16>,
     /// The topology-aware destination this connection was created for.
     pub target: ScopeTarget,
     /// Last IAM token generation this connection's AUTH was applied at (see
@@ -1217,11 +1220,16 @@ impl ScopePool {
     /// round-trip); if the only reusable one is on another database,
     /// [`ScopeAcquire::NeedsResync`] is returned so the caller re-`SELECT`s it before a
     /// borrower can see it.
+    ///
+    /// `acquisition_slot` is recorded on the borrowed connection so command
+    /// validation can require the first keyed command to hash to it (`None` in
+    /// standalone).
     pub fn try_acquire(
         &mut self,
         registry: &DashMap<u64, ScopeEntry>,
         target: ScopeTarget,
         runtime_db: u32,
+        acquisition_slot: Option<u16>,
     ) -> ScopeAcquire {
         if self.state.load(Ordering::Acquire) != POOL_RUNNING {
             return ScopeAcquire::Exhausted;
@@ -1261,6 +1269,9 @@ impl ScopePool {
         if let Some(mut conn) = found {
             let scope_id = conn.scope_id;
             conn.borrowed_at = Some(Instant::now());
+            // Idle connections are rebuilt with `acquisition_slot: None`, so this
+            // cannot outlive the borrow.
+            conn.acquisition_slot = acquisition_slot;
             // Preserve the connection's actual db; reset only borrow-scoped flags.
             conn.state.begin_borrow(runtime_db);
             registry.insert(
@@ -1411,6 +1422,8 @@ impl ScopePool {
                         // than discarding it to 0.
                         state: ConnectionState::with_configured_db(conn.state.selected_db),
                         pinned_slot: None,
+                        // Idle: not borrowed, so no acquisition slot. Set per borrow.
+                        acquisition_slot: None,
                         target: conn.target.clone(),
                         last_iam_generation: AtomicU64::new(
                             conn.last_iam_generation.load(Ordering::Relaxed),
@@ -1547,6 +1560,8 @@ impl ScopePool {
                                     // so record that as its actual db, not a default.
                                     state: ConnectionState::with_configured_db(self_parent_db),
                                     pinned_slot: None,
+                                    // Idle: not borrowed, so no acquisition slot. Set per borrow.
+                                    acquisition_slot: None,
                                     target: guard.target.clone(),
                                     last_iam_generation: AtomicU64::new(
                                         guard.last_iam_generation.load(Ordering::Relaxed),
@@ -1776,38 +1791,6 @@ pub fn slot_for_key(key: &[u8]) -> u16 {
     redis::cluster_topology::get_slot(key)
 }
 
-/// Validate that a command's keys target the scope's pinned slot.
-/// Returns Ok(slot) if consistent, Err if cross-slot.
-/// If scope has no pinned slot yet, returns the slot from the first key.
-pub fn validate_scope_slot(pinned: Option<u16>, keys: &[&[u8]]) -> Result<Option<u16>, String> {
-    if keys.is_empty() {
-        return Ok(pinned); // No keys — no slot constraint
-    }
-
-    let first_slot = slot_for_key(keys[0]);
-
-    // Validate all keys are in the same slot
-    for key in &keys[1..] {
-        let s = slot_for_key(key);
-        if s != first_slot {
-            return Err(format!(
-                "Cross-slot error: key targets slot {} but scope is pinned to slot {}",
-                s, first_slot
-            ));
-        }
-    }
-
-    // Validate against pinned slot
-    match pinned {
-        None => Ok(Some(first_slot)), // First keyed command — pin to this slot
-        Some(p) if p == first_slot => Ok(Some(p)), // Consistent
-        Some(p) => Err(format!(
-            "Cross-slot error: command targets slot {} but scope is pinned to slot {}",
-            first_slot, p
-        )),
-    }
-}
-
 #[cfg(test)]
 mod connection_state_tests {
     use super::ConnectionState;
@@ -2033,6 +2016,7 @@ mod scope_pool_tests {
                     &registry,
                     ScopeTarget::cluster_primary(format!("10.0.0.1:{slot}")),
                     0,
+                    None,
                 ) {
                     ScopeAcquire::Reserved(guard) => guards.push(guard),
                     other => panic!(
@@ -2045,7 +2029,8 @@ mod scope_pool_tests {
                     pool.try_acquire(
                         &registry,
                         ScopeTarget::cluster_primary(format!("10.0.0.1:{max_total}")),
-                        0
+                        0,
+                        None,
                     ),
                     ScopeAcquire::Exhausted
                 ),
@@ -2254,7 +2239,7 @@ mod scope_pool_tests {
         // same way `try_acquire` would for a real borrower.
         let scope_id = {
             let mut pool = pool_arc.lock().await;
-            match pool.try_acquire(registry, ScopeTarget::Standalone, 0) {
+            match pool.try_acquire(registry, ScopeTarget::Standalone, 0, None) {
                 ScopeAcquire::Reused(id) => id,
                 other => panic!("expected the freshly created connection to be idle: {other:?}"),
             }
@@ -2295,7 +2280,7 @@ mod scope_pool_tests {
         // cleared by the release cleanup pipeline, not merely reclassified.
         let scope_id = {
             let mut pool = pool_arc.lock().await;
-            match pool.try_acquire(registry, ScopeTarget::Standalone, 0) {
+            match pool.try_acquire(registry, ScopeTarget::Standalone, 0, None) {
                 ScopeAcquire::Reused(id) => id,
                 other => panic!("expected the cleaned-up connection to be reused: {other:?}"),
             }
@@ -2378,7 +2363,7 @@ mod scope_pool_tests {
         // same way `try_acquire` would for a real borrower.
         let scope_id = {
             let mut pool = pool_arc.lock().await;
-            match pool.try_acquire(registry, ScopeTarget::Standalone, 0) {
+            match pool.try_acquire(registry, ScopeTarget::Standalone, 0, None) {
                 ScopeAcquire::Reused(id) => id,
                 other => panic!("expected the freshly created connection to be idle: {other:?}"),
             }
@@ -2438,7 +2423,7 @@ mod scope_pool_tests {
         // borrower's override, and not empty.
         let scope_id = {
             let mut pool = pool_arc.lock().await;
-            match pool.try_acquire(registry, ScopeTarget::Standalone, 0) {
+            match pool.try_acquire(registry, ScopeTarget::Standalone, 0, None) {
                 ScopeAcquire::Reused(id) => id,
                 other => panic!("expected the cleaned-up connection to be reused: {other:?}"),
             }
@@ -2530,7 +2515,7 @@ mod scope_pool_tests {
         // then acquire — now it's a clean db match.
         let first_acquire = {
             let mut pool = pool_arc.lock().await;
-            pool.try_acquire(registry, ScopeTarget::Standalone, runtime_db)
+            pool.try_acquire(registry, ScopeTarget::Standalone, runtime_db, None)
         };
         assert!(
             matches!(first_acquire, ScopeAcquire::NeedsResync),
@@ -2545,7 +2530,7 @@ mod scope_pool_tests {
 
         let scope_id = {
             let mut pool = pool_arc.lock().await;
-            match pool.try_acquire(registry, ScopeTarget::Standalone, runtime_db) {
+            match pool.try_acquire(registry, ScopeTarget::Standalone, runtime_db, None) {
                 ScopeAcquire::Reused(id) => id,
                 other => panic!("expected the resynced connection to be reused: {other:?}"),
             }
@@ -2581,7 +2566,7 @@ mod scope_pool_tests {
         // no resync needed.
         let scope_id = {
             let mut pool = pool_arc.lock().await;
-            match pool.try_acquire(registry, ScopeTarget::Standalone, runtime_db) {
+            match pool.try_acquire(registry, ScopeTarget::Standalone, runtime_db, None) {
                 ScopeAcquire::Reused(id) => id,
                 other => {
                     panic!("expected the idle connection to be reused on the runtime db: {other:?}")
@@ -2671,10 +2656,12 @@ mod scope_pool_tests {
         // Bring the connection onto the runtime database (3), mirroring the acquire path.
         assert!(matches!(
             {
-                pool_arc
-                    .lock()
-                    .await
-                    .try_acquire(registry, ScopeTarget::Standalone, runtime_db)
+                pool_arc.lock().await.try_acquire(
+                    registry,
+                    ScopeTarget::Standalone,
+                    runtime_db,
+                    None,
+                )
             },
             ScopeAcquire::NeedsResync
         ));
@@ -2687,7 +2674,7 @@ mod scope_pool_tests {
 
         let scope_id = {
             let mut pool = pool_arc.lock().await;
-            match pool.try_acquire(registry, ScopeTarget::Standalone, runtime_db) {
+            match pool.try_acquire(registry, ScopeTarget::Standalone, runtime_db, None) {
                 ScopeAcquire::Reused(id) => id,
                 other => panic!("expected reuse on the runtime db: {other:?}"),
             }
@@ -2726,7 +2713,7 @@ mod scope_pool_tests {
         // and the key written on db 3 must be visible.
         let scope_id = {
             let mut pool = pool_arc.lock().await;
-            match pool.try_acquire(registry, ScopeTarget::Standalone, runtime_db) {
+            match pool.try_acquire(registry, ScopeTarget::Standalone, runtime_db, None) {
                 ScopeAcquire::Reused(id) => id,
                 other => panic!(
                     "release must restore the runtime baseline so reuse is a clean db match: {other:?}"
@@ -2813,7 +2800,7 @@ mod scope_pool_tests {
                 pool_arc
                     .lock()
                     .await
-                    .try_acquire(registry, ScopeTarget::Standalone, 3)
+                    .try_acquire(registry, ScopeTarget::Standalone, 3, None)
             },
             ScopeAcquire::NeedsResync
         ));
@@ -2821,7 +2808,7 @@ mod scope_pool_tests {
             .await;
         let scope_id = {
             let mut pool = pool_arc.lock().await;
-            match pool.try_acquire(registry, ScopeTarget::Standalone, 3) {
+            match pool.try_acquire(registry, ScopeTarget::Standalone, 3, None) {
                 ScopeAcquire::Reused(id) => id,
                 other => panic!("expected reuse on db 3: {other:?}"),
             }
@@ -2844,7 +2831,7 @@ mod scope_pool_tests {
                     pool_arc
                         .lock()
                         .await
-                        .try_acquire(registry, ScopeTarget::Standalone, 5)
+                        .try_acquire(registry, ScopeTarget::Standalone, 5, None)
                 },
                 ScopeAcquire::NeedsResync
             ),
@@ -2854,7 +2841,7 @@ mod scope_pool_tests {
             .await;
         let scope_id = {
             let mut pool = pool_arc.lock().await;
-            match pool.try_acquire(registry, ScopeTarget::Standalone, 5) {
+            match pool.try_acquire(registry, ScopeTarget::Standalone, 5, None) {
                 ScopeAcquire::Reused(id) => id,
                 other => panic!("expected reuse on db 5 after resync: {other:?}"),
             }
@@ -2946,7 +2933,7 @@ mod scope_pool_tests {
         // Hold the db-3 connection by acquiring it, so the next resync can't touch it.
         let held_db3 = {
             let mut pool = pool_arc.lock().await;
-            match pool.try_acquire(registry, ScopeTarget::Standalone, 3) {
+            match pool.try_acquire(registry, ScopeTarget::Standalone, 3, None) {
                 ScopeAcquire::Reused(id) => id,
                 other => panic!("expected to hold the db-3 connection: {other:?}"),
             }
@@ -2985,7 +2972,7 @@ mod scope_pool_tests {
         // Acquire at runtime db 5: must be a clean reuse of the db-5 connection, no resync.
         let scope_id = {
             let mut pool = pool_arc.lock().await;
-            match pool.try_acquire(registry, ScopeTarget::Standalone, 5) {
+            match pool.try_acquire(registry, ScopeTarget::Standalone, 5, None) {
                 ScopeAcquire::Reused(id) => id,
                 other => {
                     panic!("acquire at db 5 must directly reuse the db-5 connection, not {other:?}")
@@ -3097,7 +3084,7 @@ mod scope_pool_tests {
                 pool_arc
                     .lock()
                     .await
-                    .try_acquire(registry, ScopeTarget::Standalone, 6)
+                    .try_acquire(registry, ScopeTarget::Standalone, 6, None)
             },
             ScopeAcquire::NeedsResync
         ));
@@ -3111,7 +3098,7 @@ mod scope_pool_tests {
 
         let scope_id = {
             let mut pool = pool_arc.lock().await;
-            match pool.try_acquire(registry, ScopeTarget::Standalone, 6) {
+            match pool.try_acquire(registry, ScopeTarget::Standalone, 6, None) {
                 ScopeAcquire::Reused(id) => id,
                 other => panic!("expected reuse on db 6: {other:?}"),
             }
@@ -3336,7 +3323,7 @@ mod scope_pool_tests {
 
         let scope_id = {
             let mut pool = pool_arc.lock().await;
-            match pool.try_acquire(registry, ScopeTarget::Standalone, 0) {
+            match pool.try_acquire(registry, ScopeTarget::Standalone, 0, None) {
                 ScopeAcquire::Reused(id) => id,
                 other => panic!("expected a clean reuse on db 0: {other:?}"),
             }
@@ -3464,7 +3451,7 @@ mod scope_pool_tests {
             client_id,
             connection_request_bytes.clone(),
             &handle,
-            0,
+            None,
         );
         assert!(
             matches!(first, crate::scope::ScopeAcquireOutcome::Retry(_)),
@@ -3475,7 +3462,7 @@ mod scope_pool_tests {
             client_id,
             connection_request_bytes.clone(),
             &handle,
-            0,
+            None,
             std::time::Duration::from_secs(5),
         )
         .await
@@ -3584,11 +3571,11 @@ mod scope_pool_tests {
         let target = ScopeTarget::cluster_primary("10.0.0.1:6379");
 
         // Borrower #1 reserves and holds its slot (its creation is in flight).
-        let _r1 = match pool.try_acquire(&registry, target.clone(), 0) {
+        let _r1 = match pool.try_acquire(&registry, target.clone(), 0, None) {
             ScopeAcquire::Reserved(r) => r,
             other => panic!("borrower #1 must reserve, got {other:?}"),
         };
-        let _r2 = match pool.try_acquire(&registry, target, 0) {
+        let _r2 = match pool.try_acquire(&registry, target, 0, None) {
             ScopeAcquire::Reserved(r) => r,
             other => panic!(
                 "a distinct concurrent borrower of the same target must reserve \
@@ -3691,7 +3678,7 @@ mod scope_pool_tests {
             // and this acquire returns `Reserved` (the slot was counted before connecting).
             let scope_id = {
                 let mut pool = pool_arc.lock().await;
-                match pool.try_acquire(registry, ScopeTarget::Standalone, 0) {
+                match pool.try_acquire(registry, ScopeTarget::Standalone, 0, None) {
                     ScopeAcquire::Reused(id) => id,
                     other => {
                         panic!("scope against {host} did not seat a connection: {other:?}")

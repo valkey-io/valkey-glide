@@ -8,7 +8,7 @@
 use crate::jni_client::{JVM, complete_callback, get_runtime};
 use jni::JNIEnv;
 use jni::objects::{JByteArray, JClass};
-use jni::sys::{jint, jlong};
+use jni::sys::{jboolean, jint, jlong};
 
 /// Acquire a scope from the client's scope pool, completing the Java future for
 /// `callback_id` with the scope id as a `Long`, or exceptionally with the message
@@ -22,6 +22,7 @@ pub extern "system" fn Java_glide_ffi_resolvers_GlideScopeResolver_glideScopeAcq
     _class: JClass,
     client_id: jlong,
     connection_request_bytes: JByteArray,
+    has_routing_slot: jboolean,
     routing_slot: jint,
     timeout_ms: jlong,
     callback_id: jlong,
@@ -40,7 +41,7 @@ pub extern "system" fn Java_glide_ffi_resolvers_GlideScopeResolver_glideScopeAcq
             client_id as u64,
             bytes,
             &handle,
-            routing_slot as u16,
+            (has_routing_slot != 0).then_some(routing_slot as u16),
             std::time::Duration::from_millis(timeout_ms.max(0) as u64),
         )
         .await

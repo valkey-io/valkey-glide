@@ -267,11 +267,20 @@ func (client *Client) ScopedConnection(ctx context.Context, timeout time.Duratio
 		}
 	}
 
-	routingSlot := uint16(0)
-	if routingKey != "" {
+	// A routing key is optional; when absent, a cluster scope stays unconstrained
+	// (any primary) rather than being pinned to a slot. Presence is carried in a
+	// separate flag so slot 0 is a real value, not "unset".
+	//
+	// Go-only: an empty string is treated as absent, because Go's string type has
+	// no undefined/null and "" is the only "not supplied" signal available. The
+	// other bindings (Python is-not-None, Java != null, Node !== undefined) treat
+	// an explicit "" as present (it hashes to slot 0).
+	hasRoutingSlot := routingKey != ""
+	var routingSlot uint16
+	if hasRoutingSlot {
 		routingSlot = slotForKey([]byte(routingKey))
 	}
-	return acquireScope(ctx, clientID, connReqBytes, routingSlot, timeout)
+	return acquireScope(ctx, clientID, connReqBytes, hasRoutingSlot, routingSlot, timeout)
 }
 
 // acquireScope asks the core for a scope and waits for its answer. The core owns
@@ -282,6 +291,7 @@ func acquireScope(
 	ctx context.Context,
 	clientID uint64,
 	connReqBytes []byte,
+	hasRoutingSlot bool,
 	routingSlot uint16,
 	timeout time.Duration,
 ) (*IsolatedScope, error) {
@@ -292,6 +302,7 @@ func acquireScope(
 		C.uint64_t(clientID),
 		(*C.uint8_t)(unsafe.Pointer(&connReqBytes[0])),
 		C.uintptr_t(len(connReqBytes)),
+		C.bool(hasRoutingSlot),
 		C.uint16_t(routingSlot),
 		C.uint64_t(max(timeout.Milliseconds(), 0)),
 		C.uintptr_t(requestID),
@@ -390,11 +401,20 @@ func (client *ClusterClient) ScopedConnection(
 		}
 	}
 
-	routingSlot := uint16(0)
-	if routingKey != "" {
+	// A routing key is optional; when absent, a cluster scope stays unconstrained
+	// (any primary) rather than being pinned to a slot. Presence is carried in a
+	// separate flag so slot 0 is a real value, not "unset".
+	//
+	// Go-only: an empty string is treated as absent, because Go's string type has
+	// no undefined/null and "" is the only "not supplied" signal available. The
+	// other bindings (Python is-not-None, Java != null, Node !== undefined) treat
+	// an explicit "" as present (it hashes to slot 0).
+	hasRoutingSlot := routingKey != ""
+	var routingSlot uint16
+	if hasRoutingSlot {
 		routingSlot = slotForKey([]byte(routingKey))
 	}
-	return acquireScope(ctx, clientID, connReqBytes, routingSlot, timeout)
+	return acquireScope(ctx, clientID, connReqBytes, hasRoutingSlot, routingSlot, timeout)
 }
 
 // getConnectionRequest returns the protobuf ConnectionRequest for this cluster client's config.
