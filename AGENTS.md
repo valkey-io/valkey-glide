@@ -124,8 +124,8 @@ See [glide-core/AGENTS.md](./glide-core/AGENTS.md) for per-crate test invocation
 ```bash
 cargo fmt --all -- --check
 cargo clippy --all-features --all-targets -- -D warnings
-cargo clippy --all-targets -- -D warnings   # also run without features
-cargo install --locked cargo-deny && cargo deny --config <repo-root>/deny.toml check
+cargo clippy --all-targets -- -D warnings   # second pass with default features (not --all-features)
+cargo install --locked cargo-deny && cargo deny --config "$(git rev-parse --show-toplevel)/deny.toml" check
 RUSTDOCFLAGS="-Dwarnings" cargo doc --no-deps --document-private-items
 ```
 

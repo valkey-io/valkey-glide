@@ -125,7 +125,7 @@ npx prettier --check .
 
 ### Test Servers
 
-`npm test` and the unit/integration run **auto-start** standalone + cluster servers via `utils/cluster_manager.py` and stop them afterward — nothing to start manually. **`npm run test:modules` is the exception:** it needs module-enabled servers that `cluster_manager.py` doesn't provide, so `--cluster-endpoints=`/`--standalone-endpoints=` are **mandatory** there (CI starts module servers via Docker). The endpoint flags on the non-module runs are only for pointing at a server you started yourself; see the root [../AGENTS.md](../AGENTS.md) "Test Servers" section. A `valkey-server`/`redis-server` on `PATH` is required either way.
+`npm test` and the unit/integration run **auto-start** standalone + cluster servers via `utils/cluster_manager.py` and stop them afterward — nothing to start manually. **`npm run test:modules` is the exception:** it needs module-enabled servers that `cluster_manager.py` doesn't provide, so `--cluster-endpoints=` is **mandatory** there (CI starts module servers via Docker). The endpoint flags on the non-module runs are only for pointing at a server you started yourself; see the root [../AGENTS.md](../AGENTS.md) "Test Servers" section. A `valkey-server`/`redis-server` on `PATH` is required either way.
 
 ### Test Execution Options
 

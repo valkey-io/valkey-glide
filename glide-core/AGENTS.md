@@ -34,8 +34,8 @@ All four crates share the same lint gate (`.github/workflows/lint-rust/action.ym
 ```bash
 cargo fmt --all -- --check
 cargo clippy --all-features --all-targets -- -D warnings
-cargo clippy --all-targets -- -D warnings   # also without features
-cargo install --locked cargo-deny && cargo deny --config <repo-root>/deny.toml check
+cargo clippy --all-targets -- -D warnings   # second pass with default features (not --all-features)
+cargo install --locked cargo-deny && cargo deny --config "$(git rev-parse --show-toplevel)/deny.toml" check
 RUSTDOCFLAGS="-Dwarnings" cargo doc --no-deps --document-private-items
 ```
 
@@ -45,7 +45,7 @@ RUSTDOCFLAGS="-Dwarnings" cargo doc --no-deps --document-private-items
 cd glide-core/redis-rs/redis
 cargo fmt --all -- --check
 cargo clippy -- -D warnings   # no --all-features/--all-targets here: tests/benches carry required-features (test_async, bench_cluster, …), so --all-targets would fail to compile without selecting them
-cargo install --locked cargo-deny && cargo deny --config <repo-root>/deny.toml --exclude-dev check all
+cargo install --locked cargo-deny && cargo deny --config "$(git rev-parse --show-toplevel)/deny.toml" --exclude-dev check all
 cargo audit                   # separate from cargo-deny; fails the job if any advisory is found
 cargo install --locked cargo-machete && cargo machete   # unused-dependency check; fails if any found
 ```

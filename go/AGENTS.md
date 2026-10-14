@@ -100,7 +100,7 @@ protoc --proto_path=../glide-core/src/protobuf \
 
 ### Test Servers
 
-`make integ-test`, `make pubsub-test` etc. **auto-start** standalone + cluster servers via `utils/cluster_manager.py` and stop them afterward — nothing to start manually. **`make modules-test` is the exception:** it needs module-enabled servers `cluster_manager.py` doesn't provide, so `standalone-endpoints=`/`cluster-endpoints=` are **mandatory** there (CI starts them via Docker). The endpoint args on the non-module targets are only for pointing at a server you started yourself; see the root [../AGENTS.md](../AGENTS.md) "Test Servers" section. A `valkey-server`/`redis-server` on `PATH` is required either way.
+`make integ-test`, `make pubsub-test` etc. **auto-start** standalone + cluster servers via `utils/cluster_manager.py` and stop them afterward — nothing to start manually. **`make modules-test` is the exception:** it needs module-enabled servers `cluster_manager.py` doesn't provide, so `standalone-endpoints=`/`cluster-endpoints=` are **mandatory** there (CI starts them via Docker). The endpoint args on the non-module targets are only for pointing at a server you started yourself; see the root [../AGENTS.md](../AGENTS.md) "Test Servers" section. A `valkey-server`/`redis-server` on `PATH` is required either way. Note: the integration suite's `SetupSuite` stops every `cluster*` folder under `utils/clusters/` before starting fresh ones — including clusters left behind by an interrupted earlier run, so a crashed run self-heals on the next invocation but a concurrently-running suite's clusters can be caught too.
 
 ### Test Execution Options
 ```bash
@@ -161,8 +161,8 @@ All `.go` files must include: `// Copyright Valkey GLIDE Project Contributors - 
 
 **Rust Components** (Go has no Rust crate of its own — CI lints the `ffi/` crate it depends on via the shared Rust gate; there is no `go/Cargo.toml`):
 ```bash
-# From ffi/ — runs the full repo-wide Rust gate (fmt --check, clippy ×2, cargo deny, cargo doc).
-# See ../AGENTS.md for the exact command list.
+# From ffi/ — these are the common Rust checks; the full repo-wide gate
+# (fmt --check, clippy ×2, cargo deny, cargo doc) is in ../AGENTS.md. Run it there.
 cargo fmt --all -- --check
 cargo clippy --all-features --all-targets -- -D warnings
 ```
