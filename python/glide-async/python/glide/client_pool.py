@@ -14,6 +14,7 @@ import threading
 from dataclasses import dataclass
 from typing import Optional
 
+import anyio
 from glide_shared.config import (
     BaseClientConfiguration,
     GlideClusterClientConfiguration,
@@ -358,5 +359,5 @@ class _AsyncBorrowContext:
         self._pool.release(self._client_id)
         # Yield to event loop so the async release (DISCARD + SELECT) can
         # complete via the pipe reader before the next acquire attempt.
-        await asyncio.sleep(0)
+        await anyio.sleep(0)
         return False
