@@ -147,6 +147,7 @@ from tests.utils.utils import (
     trigger_latency_spike,
     wait_for,
     wait_for_save_not_in_progress,
+    wait_for_server_blocked,
 )
 
 
@@ -477,6 +478,9 @@ class TestGlideClients:
             protocol=protocol,
             request_timeout=20000,  # 20 seconds timeout
         )
+        probe = await create_client(
+            request, cluster_mode, protocol=protocol, request_timeout=100
+        )
 
         async def run_debug_sleep():
             """
@@ -489,8 +493,7 @@ class TestGlideClients:
                 await client.custom_command(command)
 
         async def fail_to_connect_to_client():
-            # try to connect with a small timeout connection
-            await anyio.sleep(0.2)
+            await wait_for_server_blocked(probe)
             with pytest.raises(ClosingError) as e:
                 await create_client(
                     request,
@@ -504,7 +507,7 @@ class TestGlideClients:
             assert "timed out" in str(e).lower() or "timeout" in str(e).lower()
 
         async def connect_to_client():
-            await anyio.sleep(0.2)
+            await wait_for_server_blocked(probe)
             timeout_client = await create_client(
                 request,
                 cluster_mode,
@@ -524,6 +527,7 @@ class TestGlideClients:
         async with anyio.create_task_group() as tg:
             tg.start_soon(run_debug_sleep)
             tg.start_soon(connect_to_client)
+        await probe.close()
 
         # Clean up the main client
         await client.close()

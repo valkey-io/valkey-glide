@@ -411,6 +411,32 @@ def sync_low_busy_reply_threshold(client: TSyncGlideClient) -> Iterator[None]:
             )
 
 
+async def wait_for_server_blocked(probe: TGlideClient) -> None:
+    """``probe`` needs a request timeout well under the server's block duration."""
+
+    async def ping_times_out() -> bool:
+        try:
+            await probe.ping()
+        except GlideTimeoutError:
+            return True
+        return False
+
+    await wait_for(ping_times_out, "server never stopped answering PING")
+
+
+def sync_wait_for_server_blocked(probe: TSyncGlideClient) -> None:
+    """``probe`` needs a request timeout well under the server's block duration."""
+
+    def ping_times_out() -> bool:
+        try:
+            probe.ping()
+        except GlideTimeoutError:
+            return True
+        return False
+
+    sync_wait_for(ping_times_out, "server never stopped answering PING")
+
+
 async def wait_for_save_not_in_progress(client: TGlideClient) -> None:
     """Waits until no save (RDB save or AOF rewrite) is in progress."""
 

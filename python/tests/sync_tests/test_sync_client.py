@@ -144,6 +144,7 @@ from tests.utils.utils import (
     sync_low_busy_reply_threshold,
     sync_wait_for,
     sync_wait_for_save_not_in_progress,
+    sync_wait_for_server_blocked,
     trigger_latency_spike_sync,
 )
 
@@ -471,6 +472,9 @@ class TestGlideClients:
             protocol=protocol,
             request_timeout=20000,  # 20 seconds timeout
         )
+        probe = create_sync_client(
+            request, cluster_mode, protocol=protocol, request_timeout=100
+        )
 
         def run_debug_sleep():
             """
@@ -483,8 +487,7 @@ class TestGlideClients:
                 client.custom_command(command)
 
         def fail_to_connect_to_client():
-            # try to connect with a small timeout connection
-            time.sleep(0.2)
+            sync_wait_for_server_blocked(probe)
             with pytest.raises(ClosingError) as e:
                 create_sync_client(
                     request,
@@ -498,7 +501,7 @@ class TestGlideClients:
             assert "timed out" in str(e).lower() or "timeout" in str(e).lower()
 
         def connect_to_client():
-            time.sleep(0.2)
+            sync_wait_for_server_blocked(probe)
             timeout_client = create_sync_client(
                 request,
                 cluster_mode,
@@ -526,7 +529,7 @@ class TestGlideClients:
         debug_thread_2.join()
         connect_thread.join()
 
-        # Clean up the main client
+        probe.close()
         client.close()
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
