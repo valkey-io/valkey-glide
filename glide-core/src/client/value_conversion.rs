@@ -2022,7 +2022,14 @@ fn ft_search_option_tail_contains_flag(cmd: &Cmd, start: usize, flag: &[u8]) -> 
             };
             i += 1;
             let mut consumed = 0usize;
-            while consumed < n {
+            // i < total bounds this against a server-controlled n with no
+            // upper limit (parse_count_arg parses to usize): without it, a
+            // malformed/adversarial n keeps this loop running past the
+            // command's real argument count, since cmd.arg_idx(i) returning
+            // None never breaks the loop on its own -- only consumed < n
+            // does, and consumed is driven by n, not by i (CodeRabbit review
+            // #7335, value_conversion.rs:2037).
+            while consumed < n && i < total {
                 // The field name itself.
                 i += 1;
                 consumed += 1;
@@ -2126,7 +2133,10 @@ fn ft_aggregate_option_tail_contains_flag(cmd: &Cmd, start: usize, flag: &[u8]) 
             };
             i += 1;
             let mut consumed = 0usize;
-            while consumed < n {
+            // i < total bounds this against a server-controlled n with no
+            // upper limit, same hazard and fix as the RETURN loop above
+            // (CodeRabbit review #7335, value_conversion.rs:2037).
+            while consumed < n && i < total {
                 i += 1;
                 consumed += 1;
                 if let Some(maybe_dir) = cmd.arg_idx(i)
@@ -2167,7 +2177,10 @@ fn ft_aggregate_option_tail_contains_flag(cmd: &Cmd, start: usize, flag: &[u8]) 
             };
             i += 1;
             let mut consumed = 0usize;
-            while consumed < n {
+            // i < total bounds this against a server-controlled n with no
+            // upper limit, same hazard and fix as the RETURN loop above
+            // (CodeRabbit review #7335, value_conversion.rs:2037).
+            while consumed < n && i < total {
                 i += 1;
                 consumed += 1;
                 if let Some(maybe_as) = cmd.arg_idx(i)
@@ -5506,6 +5519,55 @@ mod tests {
             expected_type_for_cmd(&cmd),
             Some(ExpectedReturnType::FTSearchWithSortKeysReturnType)
         ));
+    }
+
+    #[test]
+    fn ft_search_return_with_oversized_count_does_not_hang() {
+        // CodeRabbit review #7335 (value_conversion.rs:2037): RETURN's
+        // token-budget loop incremented `i` and `consumed` in lockstep from
+        // a server-supplied `n` (parse_count_arg parses to usize with no
+        // upper bound) without ever checking `i` against the command's
+        // real argument count. A malformed/adversarial huge n -- here,
+        // deliberately larger than usize::MAX / 2 so stepping by 1 could
+        // never organically reach it -- used to spin past the end of the
+        // command's real arguments; cmd.arg_idx returning None doesn't
+        // break the loop on its own, only `consumed < n` does. The fix adds
+        // `&& i < total`. This test completing at all (not hanging) is the
+        // assertion; the specific return value only confirms the scanner
+        // still produces a sane result once bounded.
+        let mut cmd = redis::cmd("FT.SEARCH");
+        cmd.arg("idx")
+            .arg("*")
+            .arg("RETURN")
+            .arg("18446744073709551615")
+            .arg("title");
+        let _ = expected_type_for_cmd(&cmd);
+    }
+
+    #[test]
+    fn ft_aggregate_sortby_with_oversized_count_does_not_hang() {
+        // Same hazard and fix as the RETURN test above, for the aggregate
+        // scanner's SORTBY loop (CodeRabbit review #7335).
+        let mut cmd = redis::cmd("FT.AGGREGATE");
+        cmd.arg("idx")
+            .arg("*")
+            .arg("SORTBY")
+            .arg("18446744073709551615")
+            .arg("@price");
+        let _ = expected_type_for_cmd(&cmd);
+    }
+
+    #[test]
+    fn ft_aggregate_load_with_oversized_count_does_not_hang() {
+        // Same hazard and fix as the RETURN test above, for the aggregate
+        // scanner's LOAD loop (CodeRabbit review #7335).
+        let mut cmd = redis::cmd("FT.AGGREGATE");
+        cmd.arg("idx")
+            .arg("*")
+            .arg("LOAD")
+            .arg("18446744073709551615")
+            .arg("title");
+        let _ = expected_type_for_cmd(&cmd);
     }
 
     #[test]

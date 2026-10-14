@@ -505,7 +505,7 @@ def start_server(
             )
         for module_path in load_module:
             # module_path may carry trailing module config args (e.g.
-            # "/path/libsearch.dylib --search.emulate-release 1.3.0" or
+            # "/path/libsearch.dylib --emulate-release 1.3.0" or
             # "/path/libsearch.dylib --use-coordinator yes") -- Valkey's
             # module loader requires each such arg to be its own argv token
             # starting with "--" (confirmed via valkey_search 1.3.0-rc1:
@@ -1444,7 +1444,7 @@ def main():
         help="The path of a server module to load. Use multiple times for "
         "multiple modules. May include trailing module config args as one "
         "space-separated string, e.g. "
-        "'/path/libsearch.dylib --search.emulate-release 1.3.0' or "
+        "'/path/libsearch.dylib --emulate-release 1.3.0' or "
         "'/path/libsearch.dylib --use-coordinator yes' -- each arg must "
         "start with '--' (Valkey module-loader requirement) and is split "
         "into its own argv token before exec.",

@@ -33,8 +33,8 @@
 #                       the container, confirmed the hard way). Defaults to
 #                       a dir next to this script.
 #
-# On success, exports (via GITHUB_ENV if set, else prints export lines to
-# stdout for the caller to eval):
+# On success, exports (via GITHUB_ENV if set, else writes export lines to
+# $SCRATCH_DIR/endpoints.env for the caller to source) these variables:
 #   MODULES_STANDALONE_ENDPOINT
 #   MODULES_CLUSTER_ENDPOINTS
 
@@ -48,6 +48,16 @@ SEARCH_MODULE_ARGS="${SEARCH_MODULE_ARGS:-}"
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SCRATCH_DIR="${SCRATCH_DIR:-${REPO_ROOT}/.module-ci-local-scratch}"
 mkdir -p "$SCRATCH_DIR"
+FALLBACK_ENV_FILE="${SCRATCH_DIR}/endpoints.env"
+if [ -z "${GITHUB_ENV:-}" ]; then
+    # Fresh file per run, not an append target across runs (CodeRabbit
+    # review #7335, start-valkey-docker-modules.sh:39): the earlier version
+    # of this fallback wrote export lines to stdout, interleaved with every
+    # other echo'd progress line in this script, making it unsafe for a
+    # caller to `eval` cleanly. A dedicated file the caller sources instead
+    # mirrors the GITHUB_ENV path's own append-to-a-file contract.
+    : > "$FALLBACK_ENV_FILE"
+fi
 
 export_var() {
     # Mirrors GITHUB_ENV's "KEY=value" append-line convention so this
@@ -57,7 +67,7 @@ export_var() {
     if [ -n "${GITHUB_ENV:-}" ]; then
         echo "${key}=${value}" >> "$GITHUB_ENV"
     else
-        echo "export ${key}=${value}"
+        echo "export ${key}=${value}" >> "$FALLBACK_ENV_FILE"
     fi
 }
 
