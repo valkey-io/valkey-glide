@@ -5,6 +5,7 @@ import static glide.TestConfiguration.SERVER_VERSION;
 import static glide.TestUtilities.BGREWRITEAOF_RESPONSES;
 import static glide.TestUtilities.BGSAVE_NOT_CANCELLED_RESPONSE;
 import static glide.TestUtilities.BGSAVE_RESPONSES;
+import static glide.TestUtilities.BGSAVE_TYPES;
 import static glide.TestUtilities.PRIMARY_SLOT_ROUTE;
 import static glide.TestUtilities.assertClientTrackingInfo;
 import static glide.TestUtilities.assertDeepEquals;
@@ -27,6 +28,7 @@ import static glide.TestUtilities.getUnixSeconds;
 import static glide.TestUtilities.getValueFromInfo;
 import static glide.TestUtilities.isWindows;
 import static glide.TestUtilities.parseInfoResponseToMap;
+import static glide.TestUtilities.parseLong;
 import static glide.TestUtilities.waitFor;
 import static glide.TestUtilities.waitForNotBusy;
 import static glide.TestUtilities.waitForSaveNotInProgress;
@@ -36,10 +38,12 @@ import static glide.api.models.commands.FlushMode.ASYNC;
 import static glide.api.models.commands.FlushMode.SYNC;
 import static glide.api.models.commands.InfoOptions.Section.CLIENTS;
 import static glide.api.models.commands.InfoOptions.Section.CLUSTER;
+import static glide.api.models.commands.InfoOptions.Section.CLUSTER_INFO;
 import static glide.api.models.commands.InfoOptions.Section.COMMANDSTATS;
 import static glide.api.models.commands.InfoOptions.Section.CPU;
 import static glide.api.models.commands.InfoOptions.Section.EVERYTHING;
 import static glide.api.models.commands.InfoOptions.Section.MEMORY;
+import static glide.api.models.commands.InfoOptions.Section.PERSISTENCE;
 import static glide.api.models.commands.InfoOptions.Section.REPLICATION;
 import static glide.api.models.commands.InfoOptions.Section.SERVER;
 import static glide.api.models.commands.InfoOptions.Section.STATS;
@@ -488,6 +492,34 @@ public class CommandTests {
                 assertTrue(info.contains("# " + section), "Section " + section + " is missing");
             }
         }
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void info_valkey_9_2_fields(GlideClusterClient clusterClient) {
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("9.2.0"), "This feature added in version 9.2");
+
+        // Persistence fields
+        Map<String, String> persistence =
+                parseInfoResponseToMap(
+                        clusterClient.info(new Section[] {PERSISTENCE}, RANDOM).get().getSingleValue());
+
+        assertTrue(BGSAVE_TYPES.contains(persistence.get("rdb_current_bgsave_type")));
+        assertTrue(BGSAVE_TYPES.contains(persistence.get("rdb_last_bgsave_type")));
+
+        String remainingName = "forkless_estimated_seconds_remaining";
+        long remainingValue = parseLong(persistence.get(remainingName), remainingName);
+        assertTrue(remainingValue >= -1);
+
+        // Cluster info fields
+        Map<String, String> clusterInfo =
+                parseInfoResponseToMap(
+                        clusterClient.info(new Section[] {CLUSTER_INFO}, RANDOM).get().getSingleValue());
+
+        String fallbacksName = "cluster_io_main_thread_fallbacks";
+        long fallbacksValue = parseLong(clusterInfo.get(fallbacksName), fallbacksName);
+        assertTrue(fallbacksValue >= 0);
     }
 
     @ParameterizedTest(autoCloseArguments = false)

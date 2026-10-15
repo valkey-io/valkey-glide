@@ -12,6 +12,7 @@ import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleM
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleSingleNodeRoute.RANDOM;
 import static glide.utils.Java8Utils.createMap;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -80,6 +81,14 @@ public class TestUtilities {
     public static final Set<String> BGSAVE_RESPONSES =
             new java.util.HashSet<>(
                     Arrays.asList("Background saving started", "Background saving scheduled"));
+
+    /**
+     * Expected server responses for the "rdb_*_bgsave_type" INFO persistence fields.
+     *
+     * <p>Since Valkey 9.2.0.
+     */
+    public static final Set<String> BGSAVE_TYPES =
+            new java.util.HashSet<>(Arrays.asList("fork", "forkless", "none"));
 
     /** Expected server error response for BGSAVE CANCEL when no save is in progress. */
     public static final String BGSAVE_NOT_CANCELLED_RESPONSE =
@@ -215,6 +224,17 @@ public class TestUtilities {
         }
 
         return sb.toString();
+    }
+
+    /**
+     * Asserts that value is an integer and returns it.
+     *
+     * @param value The value to parse.
+     * @param name The name that identifies the value in the failure message.
+     */
+    public static long parseLong(String value, String name) {
+        return assertDoesNotThrow(
+                () -> Long.parseLong(value), name + " is not an integer: \"" + value + "\"");
     }
 
     /**

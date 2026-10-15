@@ -5,6 +5,7 @@ import static glide.TestConfiguration.SERVER_VERSION;
 import static glide.TestUtilities.BGREWRITEAOF_RESPONSES;
 import static glide.TestUtilities.BGSAVE_NOT_CANCELLED_RESPONSE;
 import static glide.TestUtilities.BGSAVE_RESPONSES;
+import static glide.TestUtilities.BGSAVE_TYPES;
 import static glide.TestUtilities.assertDeepEquals;
 import static glide.TestUtilities.assertMemoryStatsDbEntry;
 import static glide.TestUtilities.assertMemoryStatsFields;
@@ -21,6 +22,7 @@ import static glide.TestUtilities.generateLuaLibCodeBinary;
 import static glide.TestUtilities.getUnixSeconds;
 import static glide.TestUtilities.getValueFromInfo;
 import static glide.TestUtilities.parseInfoResponseToMap;
+import static glide.TestUtilities.parseLong;
 import static glide.TestUtilities.waitFor;
 import static glide.TestUtilities.waitForNotBusy;
 import static glide.TestUtilities.waitForSaveNotInProgress;
@@ -32,6 +34,7 @@ import static glide.api.models.commands.InfoOptions.Section.CLUSTER;
 import static glide.api.models.commands.InfoOptions.Section.CPU;
 import static glide.api.models.commands.InfoOptions.Section.EVERYTHING;
 import static glide.api.models.commands.InfoOptions.Section.MEMORY;
+import static glide.api.models.commands.InfoOptions.Section.PERSISTENCE;
 import static glide.api.models.commands.InfoOptions.Section.SERVER;
 import static glide.api.models.commands.InfoOptions.Section.STATS;
 import static glide.api.models.commands.function.FunctionRestorePolicy.APPEND;
@@ -239,6 +242,23 @@ public class CommandTests {
         for (String section : EVERYTHING_INFO_SECTIONS) {
             assertTrue(data.contains("# " + section), "Section " + section + " is missing");
         }
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void info_valkey_9_2_fields(GlideClient regularClient) {
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("9.2.0"), "This feature added in version 9.2");
+
+        Map<String, String> persistence =
+                parseInfoResponseToMap(regularClient.info(new Section[] {PERSISTENCE}).get());
+
+        assertTrue(BGSAVE_TYPES.contains(persistence.get("rdb_current_bgsave_type")));
+        assertTrue(BGSAVE_TYPES.contains(persistence.get("rdb_last_bgsave_type")));
+
+        String remainingName = "forkless_estimated_seconds_remaining";
+        long remainingValue = parseLong(persistence.get(remainingName), remainingName);
+        assertTrue(remainingValue >= -1);
     }
 
     @ParameterizedTest(autoCloseArguments = false)
