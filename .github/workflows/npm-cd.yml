@@ -148,7 +148,7 @@ jobs:
                   # Filter entries with npm in PACKAGE_MANAGERS and use CD_RUNNER if available, replace "ephemeral" with "persistent" in RUNNER
                   export PLATFORM_MATRIX=$(jq 'map(
                       select(.PACKAGE_MANAGERS != null and (.PACKAGE_MANAGERS | contains(["npm"])))
-                      | .runner = (
+                      | .RUNNER = (
                           if (.CD_RUNNER != null)
                           then .CD_RUNNER
                           elif (.RUNNER != null and (.RUNNER | type != "array")) then .RUNNER
@@ -176,7 +176,7 @@ jobs:
             matrix:
                 include: ${{ fromJson(needs.get-build-parameters.outputs.platform_matrix) }}
             fail-fast: false
-        runs-on: ${{ matrix.runner }}
+        runs-on: ${{ matrix.RUNNER }}
         name: Build for ${{ matrix.TARGET }} (${{ matrix.build_type }})
         steps:
             - name: Checkout repository
@@ -482,7 +482,7 @@ jobs:
             matrix:
                 include: ${{ fromJson(needs.get-build-parameters.outputs.platform_matrix) }}
             fail-fast: true
-        runs-on: ${{ matrix.test-runner || matrix.runner }}
+        runs-on: ${{ matrix.test-runner || matrix.RUNNER }}
         container:
             image: ${{ matrix.IMAGE || ''}}
             options: ${{ matrix.CONTAINER_OPTIONS || 'none' }}
