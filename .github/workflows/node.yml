@@ -88,7 +88,7 @@ run-name:
 
 jobs:
     get-matrices:
-        runs-on: ubuntu-latest
+        runs-on: ubuntu-24.04
         outputs:
             engine-matrix-output: ${{ steps.get-matrices.outputs.engine-matrix-output }}
             host-matrix-output: ${{ steps.get-matrices.outputs.host-matrix-output }}
@@ -106,7 +106,7 @@ jobs:
 
     approve-self-hosted:
         if: inputs.use-self-hosted-linux == true || contains(github.event.pull_request.labels.*.name, 'ci/use-self-hosted')
-        runs-on: ubuntu-latest
+        runs-on: ubuntu-24.04
         environment: AWS_ACTIONS
         needs: get-matrices
         steps:
@@ -194,7 +194,7 @@ jobs:
 
     test-node-extras:
         name: Node Extra Tests (ES/CJS, Yarn, Types, Benchmarks)
-        runs-on: ubuntu-latest
+        runs-on: ubuntu-24.04
         timeout-minutes: 25
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -311,7 +311,7 @@ jobs:
 
     lint-rust:
         timeout-minutes: 15
-        runs-on: ubuntu-latest
+        runs-on: ubuntu-24.04
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -322,7 +322,7 @@ jobs:
                   github-token: ${{ secrets.GITHUB_TOKEN }}
 
     get-containers:
-        runs-on: ubuntu-latest
+        runs-on: ubuntu-24.04
         if: ${{ github.event.inputs.full-matrix == 'true' || github.event_name == 'schedule' || inputs.full-matrix == true }}
         outputs:
             engine-matrix-output: ${{ steps.get-matrices.outputs.engine-matrix-output }}
@@ -449,7 +449,7 @@ jobs:
 
     test-windows:
         name: Test Windows (x86_64-pc-windows-msvc) via CodeBuild
-        runs-on: ubuntu-latest
+        runs-on: ubuntu-24.04
         # AWS_ACTIONS environment requires manual approval from a maintainer,
         # acting as the gate for real AWS resource usage (EC2, S3, CodeBuild).
         environment: AWS_ACTIONS

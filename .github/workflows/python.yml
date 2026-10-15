@@ -113,7 +113,7 @@ env:
 
 jobs:
     get-matrices:
-        runs-on: ubuntu-latest
+        runs-on: ubuntu-24.04
         outputs:
             engine-matrix-output: ${{ steps.get-matrices.outputs.engine-matrix-output }}
             host-matrix-output: ${{ steps.get-matrices.outputs.host-matrix-output }}
@@ -130,7 +130,7 @@ jobs:
 
     approve-self-hosted:
         if: inputs.use-self-hosted-linux == true || contains(github.event.pull_request.labels.*.name, 'ci/use-self-hosted')
-        runs-on: ubuntu-latest
+        runs-on: ubuntu-24.04
         environment: AWS_ACTIONS
         needs: get-matrices
         steps:
@@ -257,7 +257,7 @@ jobs:
                   fi
 
             - uses: ./.github/workflows/test-benchmark
-              if: ${{ matrix.engine.version == '8.0' && matrix.host.OS == 'ubuntu' && matrix.host.RUNNER == 'ubuntu-latest' && matrix.python == '3.13' }}
+              if: ${{ matrix.engine.version == '8.0' && matrix.host.OS == 'ubuntu' && matrix.host.RUNNER == 'ubuntu-24.04' && matrix.python == '3.13' }}
               with:
                   language-flag: -python
 
@@ -382,7 +382,7 @@ jobs:
                       python/tests/pytest_report.html
 
     lint:
-        runs-on: ubuntu-latest
+        runs-on: ubuntu-24.04
         if: ${{ github.event.inputs.containers-only != 'true' }}
         timeout-minutes: 15
         steps:
@@ -407,7 +407,7 @@ jobs:
                   python3 dev.py lint --check
 
     docs-test:
-        runs-on: ubuntu-latest
+        runs-on: ubuntu-24.04
         if: ${{ github.event.inputs.containers-only != 'true' }}
         timeout-minutes: 15
         steps:
@@ -429,7 +429,7 @@ jobs:
                   make html SPHINXOPTS="-W --keep-going"
 
     get-containers:
-        runs-on: ubuntu-latest
+        runs-on: ubuntu-24.04
         if: ${{ github.event.inputs.full-matrix == 'true' || github.event.inputs.containers-only == 'true' || github.event_name == 'schedule' || inputs.full-matrix == true }}
         outputs:
             engine-matrix-output: ${{ steps.get-matrices.outputs.engine-matrix-output }}

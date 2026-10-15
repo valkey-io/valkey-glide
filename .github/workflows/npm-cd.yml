@@ -31,7 +31,7 @@ permissions:
 
 jobs:
     get-build-parameters:
-        runs-on: ubuntu-latest
+        runs-on: ubuntu-24.04
         environment: AWS_ACTIONS
         outputs:
             release_version: ${{ steps.get-params.outputs.release_version }}
@@ -152,7 +152,7 @@ jobs:
                           if (.CD_RUNNER != null)
                           then .CD_RUNNER
                           elif (.RUNNER != null and (.RUNNER | type != "array")) then .RUNNER
-                          else "ubuntu-latest"
+                          else "ubuntu-24.04"
                           end
                       )
                       | .build_type = (
@@ -304,7 +304,7 @@ jobs:
         environment: AWS_ACTIONS
         if: github.repository_owner == 'valkey-io' && needs.get-build-parameters.outputs.should_publish == 'true'
         needs: [get-build-parameters, build-native-modules]
-        runs-on: ubuntu-latest
+        runs-on: ubuntu-24.04
         outputs:
             release_package_artifact_name: "release-packages-${{ github.run_id }}"
         steps:
@@ -610,7 +610,7 @@ jobs:
     cleanup-artifacts:
         needs: [test-published-release, get-build-parameters]
         if: always() && needs.get-build-parameters.outputs.should_publish == 'true'
-        runs-on: ubuntu-latest
+        runs-on: ubuntu-24.04
         steps:
             - name: Delete artifacts
               uses: geekyeggo/delete-artifact@54ab544f12cdb7b71613a16a2b5a37a9ade990af # v2
@@ -623,7 +623,7 @@ jobs:
     deprecate-on-failure:
         needs: [test-published-release, get-build-parameters]
         if: failure() && needs.get-build-parameters.outputs.should_publish == 'true'
-        runs-on: ubuntu-latest
+        runs-on: ubuntu-24.04
         steps:
             - name: Setup Node.js
               uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
