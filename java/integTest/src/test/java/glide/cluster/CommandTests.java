@@ -23,11 +23,11 @@ import static glide.TestUtilities.generateLuaLibCode;
 import static glide.TestUtilities.generateLuaLibCodeBinary;
 import static glide.TestUtilities.getFirstEntryFromMultiValue;
 import static glide.TestUtilities.getFirstKeyFromMultiValue;
+import static glide.TestUtilities.getInfo;
 import static glide.TestUtilities.getReplicaCount;
 import static glide.TestUtilities.getUnixSeconds;
 import static glide.TestUtilities.getValueFromInfo;
 import static glide.TestUtilities.isWindows;
-import static glide.TestUtilities.parseInfoResponseToMap;
 import static glide.TestUtilities.parseLong;
 import static glide.TestUtilities.waitFor;
 import static glide.TestUtilities.waitForNotBusy;
@@ -501,9 +501,7 @@ public class CommandTests {
         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("9.2.0"), "This feature added in version 9.2");
 
         // Persistence fields
-        Map<String, String> persistence =
-                parseInfoResponseToMap(
-                        clusterClient.info(new Section[] {PERSISTENCE}, RANDOM).get().getSingleValue());
+        Map<String, String> persistence = getInfo(clusterClient, PERSISTENCE);
 
         assertTrue(BGSAVE_TYPES.contains(persistence.get("rdb_current_bgsave_type")));
         assertTrue(BGSAVE_TYPES.contains(persistence.get("rdb_last_bgsave_type")));
@@ -513,9 +511,7 @@ public class CommandTests {
         assertTrue(remainingValue >= -1);
 
         // Cluster info fields
-        Map<String, String> clusterInfo =
-                parseInfoResponseToMap(
-                        clusterClient.info(new Section[] {CLUSTER_INFO}, RANDOM).get().getSingleValue());
+        Map<String, String> clusterInfo = getInfo(clusterClient, CLUSTER_INFO);
 
         String fallbacksName = "cluster_io_main_thread_fallbacks";
         long fallbacksValue = parseLong(clusterInfo.get(fallbacksName), fallbacksName);
@@ -723,8 +719,7 @@ public class CommandTests {
     @MethodSource("getClients")
     @SneakyThrows
     public void config_rewrite_non_existent_config_file(GlideClusterClient clusterClient) {
-        ClusterValue<String> info = clusterClient.info(new Section[] {SERVER}, RANDOM).get();
-        String configFile = parseInfoResponseToMap(info.getSingleValue()).get("config_file");
+        String configFile = getInfo(clusterClient, SERVER).get("config_file");
 
         if (configFile == null || configFile.isEmpty()) {
             ExecutionException executionException =

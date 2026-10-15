@@ -59,7 +59,6 @@ import {
     convertElementsAndScores,
     convertGlideRecordToRecord,
     MemoryStats,
-    parseInfoResponse,
 } from "../build-ts";
 import {
     BGSAVE_TYPES,
@@ -69,6 +68,7 @@ import {
     flattenClusterResponseArrays,
     GetAndSetRandomValue,
     getFirstResult,
+    getInfo,
     getRandomKey,
     getUnixSeconds,
     INFO_DEFAULT_FIELDS,
@@ -325,10 +325,8 @@ export function runBaseTests(config: {
         `test config rewrite_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const serverInfo = await client.info([InfoOptions.Server]);
-                const conf_file = parseInfoResponse(
-                    getFirstResult(serverInfo).toString(),
-                )["config_file"];
+                const info = await getInfo(client, [InfoOptions.Server]);
+                const conf_file = info["config_file"];
 
                 if (conf_file.length > 0) {
                     expect(await client.configRewrite()).toEqual("OK");
@@ -380,18 +378,8 @@ export function runBaseTests(config: {
         async (protocol) => {
             await runTest(
                 async (client: BaseClient, cluster: ValkeyCluster) => {
-                    const getInfo = async (sections?: InfoOptions[]) =>
-                        parseInfoResponse(
-                            getFirstResult(
-                                client instanceof GlideClient
-                                    ? await client.info(sections)
-                                    : await client.info({ sections }),
-                            ).toString(),
-                        );
-
                     // Default fields
-                    const info = await getInfo();
-
+                    const info = await getInfo(client);
                     for (const field of INFO_DEFAULT_FIELDS) {
                         expect(info).toHaveProperty(field);
                     }
@@ -404,7 +392,7 @@ export function runBaseTests(config: {
                     }
 
                     // Persistence fields
-                    const persistence = await getInfo([
+                    const persistence = await getInfo(client, [
                         InfoOptions.Persistence,
                     ]);
 
@@ -425,7 +413,7 @@ export function runBaseTests(config: {
 
                     // Cluster info fields
                     if (client instanceof GlideClusterClient) {
-                        const clusterInfo = await getInfo([
+                        const clusterInfo = await getInfo(client, [
                             InfoOptions.ClusterInfo,
                         ]);
 

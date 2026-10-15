@@ -92,7 +92,7 @@ from glide_shared.constants import (
     TResult,
 )
 from glide_shared.exceptions import TimeoutError as GlideTimeoutError
-from glide_shared.routes import AllNodes, SlotKeyRoute, SlotType
+from glide_shared.routes import AllNodes, RandomNode, SlotKeyRoute, SlotType
 from glide_sync import GlideClient as SyncGlideClient
 from glide_sync import GlideClusterClient as SyncGlideClusterClient
 from glide_sync import TGlideClient as TSyncGlideClient
@@ -222,19 +222,77 @@ def trigger_latency_spike_sync(glide_client: TSyncGlideClient) -> None:
     glide_client.config_set({"latency-monitor-threshold": prev_threshold})
 
 
-def parse_info_response(res: Union[bytes, Dict[bytes, bytes]]) -> Dict[str, str]:
-    res_first = get_first_result(res)
-    res_decoded = res_first.decode() if isinstance(res_first, bytes) else res_first
-    info_lines = [
-        line for line in res_decoded.splitlines() if line and not line.startswith("#")
-    ]
+async def get_info(
+    client: TGlideClient, sections: Optional[List[InfoSection]] = None
+) -> Dict[str, str]:
+    """
+    Returns the fields and values from the given INFO sections.
+    For cluster clients, the command is sent to a random node.
+
+    Args:
+        client: A client that is connected to the server.
+        sections: The INFO sections to request. Defaults to the default sections.
+
+    Returns:
+        A dictionary mapping each INFO field name to its value.
+    """
+    if isinstance(client, GlideClusterClient):
+        info = await client.info(sections, RandomNode())
+    else:
+        info = await client.info(sections)
+    return _parse_info_response(cast(bytes, info))
+
+
+def sync_get_info(
+    client: TSyncGlideClient, sections: Optional[List[InfoSection]] = None
+) -> Dict[str, str]:
+    """
+    Returns the fields and values from the given INFO sections.
+    For cluster clients, the command is sent to a random node.
+
+    Args:
+        client: A client that is connected to the server.
+        sections: The INFO sections to request. Defaults to the default sections.
+
+    Returns:
+        A dictionary mapping each INFO field name to its value.
+    """
+    if isinstance(client, SyncGlideClusterClient):
+        info = client.info(sections, RandomNode())
+    else:
+        info = client.info(sections)
+    return _parse_info_response(cast(bytes, info))
+
+def _parse_info_response(info: Union[str, bytes]) -> Dict[str, str]:
+    """
+    Parses INFO output into a dictionary of field names to values.
+
+    Args:
+        info: The INFO output from a single node.
+
+    Returns:
+        A dictionary mapping each INFO field name to its value.
+    """
+    info_str = info.decode() if isinstance(info, bytes) else info
     info_dict = {}
-    for line in info_lines:
-        splitted_line = line.split(":")
-        key = splitted_line[0]
-        value = splitted_line[1]
-        info_dict[key] = value
+    for line in info_str.splitlines():
+        if line and not line.startswith("#"):
+            key, _, value = line.partition(":")
+            info_dict[key] = value
     return info_dict
+    
+def parse_int(value: Optional[str], name: str) -> int:
+    """
+    Asserts that value is an integer and returns it.
+
+    Args:
+        value: The value to parse.
+        name: The name that identifies the value in the failure message.
+    """
+    try:
+        return int(cast(str, value))
+    except (TypeError, ValueError):
+        pytest.fail(f'{name} is not an integer: "{value}"')
 
 
 def get_random_string(length):
@@ -245,26 +303,26 @@ def get_random_string(length):
 async def check_if_server_version_lt(client: TGlideClient, min_version: str) -> bool:
     global version_str
     if not version_str:
-        info = parse_info_response(await client.info([InfoSection.SERVER]))
+        info = await get_info(client, [InfoSection.SERVER])
         version_str = info.get("valkey_version") or info.get("redis_version")  # type: ignore
     assert version_str is not None, "Server version not found in INFO response"
     return version.parse(version_str) < version.parse(min_version)
 
 
 def sync_check_if_server_version_lt(client: TSyncGlideClient, min_version: str) -> bool:
-    info = parse_info_response(client.info([InfoSection.SERVER]))
+    info = sync_get_info(client, [InfoSection.SERVER])
     version_str = info.get("valkey_version") or info.get("redis_version")
     assert version_str is not None, "Server version not found in INFO response"
     return version.parse(version_str) < version.parse(min_version)
 
 
 async def get_version(client: TGlideClient) -> str:
-    info = parse_info_response(await client.info([InfoSection.SERVER]))
+    info = await get_info(client, [InfoSection.SERVER])
     return info.get("valkey_version") or info.get("redis_version")  # type: ignore
 
 
 def sync_get_version(client: TSyncGlideClient) -> str:
-    info = parse_info_response(client.info([InfoSection.SERVER]))
+    info = sync_get_info(client, [InfoSection.SERVER])
     return info.get("valkey_version") or info.get("redis_version")  # type: ignore
 
 
@@ -273,6 +331,22 @@ BGSAVE_RESPONSES = {
     "Background saving started",
     "Background saving scheduled",
 }
+
+# One field from each default INFO section.
+INFO_DEFAULT_FIELDS = [
+    "redis_version",  # server
+    "connected_clients",  # clients
+    "used_memory",  # memory
+    "rdb_changes_since_last_save",  # persistence
+    "total_commands_processed",  # stats
+    "role",  # replication
+    "used_cpu_sys",  # cpu
+    "cluster_enabled",  # cluster
+]
+
+# Expected server responses for the "rdb_*_bgsave_type" INFO persistence fields.
+# Since Valkey 9.2.0.
+BGSAVE_TYPES = {"fork", "forkless", "none"}
 
 # Expected server responses for BGREWRITEAOF.
 BGREWRITEAOF_RESPONSES = {

@@ -2802,6 +2802,40 @@ export function assertMemoryStatsFields(
 }
 
 /**
+ * Returns the fields and values from the given INFO sections.
+ * For cluster clients, the command is sent to a random node.
+ *
+ * @param client - A client that is connected to the server.
+ * @param sections - The INFO sections to request. Defaults to the default sections.
+ * @returns A record mapping each INFO field name to its value.
+ */
+export async function getInfo(
+    client: BaseClient,
+    sections?: InfoOptions[],
+): Promise<Record<string, string>> {
+    const info =
+        client instanceof GlideClusterClient
+            ? await client.info({ sections, route: "randomNode" })
+            : await (client as GlideClient).info(sections);
+
+    const fields: Record<string, string> = {};
+
+    for (const line of info.toString().split("\n")) {
+        const trimmed = line.trim();
+        if (trimmed === "" || trimmed.startsWith("#")) {
+            continue;
+        }
+
+        const separator = trimmed.indexOf(":");
+        if (separator !== -1) {
+            fields[trimmed.slice(0, separator)] = trimmed.slice(separator + 1);
+        }
+    }
+
+    return fields;
+}
+
+/**
  * Asserts that value is an integer and returns it.
  *
  * @param value - The value to parse.

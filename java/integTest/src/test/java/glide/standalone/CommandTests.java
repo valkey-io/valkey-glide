@@ -19,9 +19,9 @@ import static glide.TestUtilities.createLongRunningLuaScript;
 import static glide.TestUtilities.createLuaLibWithLongRunningFunction;
 import static glide.TestUtilities.generateLuaLibCode;
 import static glide.TestUtilities.generateLuaLibCodeBinary;
+import static glide.TestUtilities.getInfo;
 import static glide.TestUtilities.getUnixSeconds;
 import static glide.TestUtilities.getValueFromInfo;
-import static glide.TestUtilities.parseInfoResponseToMap;
 import static glide.TestUtilities.parseLong;
 import static glide.TestUtilities.waitFor;
 import static glide.TestUtilities.waitForNotBusy;
@@ -250,8 +250,7 @@ public class CommandTests {
     public void info_valkey_9_2_fields(GlideClient regularClient) {
         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("9.2.0"), "This feature added in version 9.2");
 
-        Map<String, String> persistence =
-                parseInfoResponseToMap(regularClient.info(new Section[] {PERSISTENCE}).get());
+        Map<String, String> persistence = getInfo(regularClient, PERSISTENCE);
 
         assertTrue(BGSAVE_TYPES.contains(persistence.get("rdb_current_bgsave_type")));
         assertTrue(BGSAVE_TYPES.contains(persistence.get("rdb_last_bgsave_type")));
@@ -438,8 +437,7 @@ public class CommandTests {
     @MethodSource("getClients")
     @SneakyThrows
     public void config_rewrite_non_existent_config_file(GlideClient regularClient) {
-        String info = regularClient.info(new Section[] {SERVER}).get();
-        String configFile = parseInfoResponseToMap(info).get("config_file");
+        String configFile = getInfo(regularClient, SERVER).get("config_file");
 
         if (configFile.isEmpty()) {
             ExecutionException executionException =
