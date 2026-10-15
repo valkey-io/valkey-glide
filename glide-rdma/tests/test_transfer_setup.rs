@@ -6,7 +6,7 @@
 
 #![cfg(feature = "libfabric")]
 
-use glide_rdma::{FabricConfig, Provider, RdmaFabric, encode_hex};
+use glide_rdma::{FabricConfig, Provider, RdmaFabric, SetChecksum, encode_hex};
 
 /// The whole client-side sequence short of the transfer itself.
 #[test]
@@ -23,23 +23,28 @@ fn a_registered_buffer_produces_a_sendable_set_command() {
     assert_eq!(buffer.copy_from(payload), Some(payload.len()));
 
     let (command, loan) = buffer
-        .lend_for_set(b"chunk:abc", 0, payload.len())
+        .lend_for_set(b"chunk:abc", 0, payload.len(), SetChecksum::Compute)
         .expect("the window fits");
 
     assert_eq!(command.name(), "BLOB.RDMA_SET");
     let arguments = command.arguments();
     assert_eq!(
         arguments.len(),
-        5,
-        "key, length, rkey, remote address, window length"
+        7,
+        "key, length, CRC, checksum, rkey, remote address, window length"
     );
     assert_eq!(arguments[0], b"chunk:abc");
     assert_eq!(arguments[1], payload.len().to_string().into_bytes());
-    for number in &arguments[2..] {
+    assert_eq!(arguments[2], b"CRC");
+    assert_eq!(
+        arguments[3],
+        glide_rdma::checksum(payload).to_string().into_bytes()
+    );
+    for number in &arguments[4..] {
         let text = std::str::from_utf8(number).expect("decimal ASCII");
         text.parse::<u64>().expect("an unsigned integer");
     }
-    assert_eq!(arguments[4], payload.len().to_string().into_bytes());
+    assert_eq!(arguments[6], payload.len().to_string().into_bytes());
 
     let hello = glide_rdma::hello(fabric.local_address());
     assert_eq!(hello.name(), "BLOB.RDMA_HELLO");

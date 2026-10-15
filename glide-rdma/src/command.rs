@@ -129,14 +129,42 @@ pub fn hello(client_address: &[u8]) -> RdmaCommand {
     }
 }
 
-/// `BLOB.RDMA_SET <key> <length> <rkey> <remote-address> <length>`
+/// Whether a `BLOB.RDMA_SET` asks the server to check what it read.
+///
+/// With a checksum, the server compares it with the CRC-32c of the bytes it
+/// read and refuses to store them if they differ. Without one, the server
+/// stores whatever it read.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum SetChecksum {
+    /// Send no checksum. The server does not check the bytes.
+    #[default]
+    Skip,
+    /// Compute the CRC-32c of the window when it is lent. This reads every byte
+    /// of the window once.
+    Compute,
+    /// Send this CRC-32c, which the caller already knows for the window's bytes.
+    /// Saves reading the window again.
+    Known(u32),
+}
+
+/// `BLOB.RDMA_SET <key> <length> [CRC <checksum>] <rkey> <remote-address> <length>`
 ///
 /// The server reads `length` bytes out of the named window and stores them. The
 /// first `length` is the object's size, the second the window's; with one window
-/// they are the same.
+/// they are the same. `checksum`, when given, is the CRC-32c of the bytes in the
+/// window; see [`SetChecksum`].
 #[cfg(any(feature = "libfabric", test))]
-pub(crate) fn set(key: &[u8], length: usize, region_ref: &RegionRef) -> RdmaCommand {
+pub(crate) fn set(
+    key: &[u8],
+    length: usize,
+    checksum: Option<u32>,
+    region_ref: &RegionRef,
+) -> RdmaCommand {
     let mut arguments = vec![key.to_vec(), number(length as u64)];
+    if let Some(checksum) = checksum {
+        arguments.push(b"CRC".to_vec());
+        arguments.push(number(u64::from(checksum)));
+    }
     arguments.extend(
         region_ref
             .to_args(length)
@@ -204,9 +232,28 @@ mod tests {
 
     #[test]
     fn set_lays_out_arguments_in_wire_order() {
-        let command = set(b"key", 64, &region_ref());
+        let command = set(b"key", 64, None, &region_ref());
         assert_eq!(command.name(), "BLOB.RDMA_SET");
         assert_eq!(arguments(&command), ["key", "64", "7", "4096", "64"]);
+    }
+
+    #[test]
+    fn set_puts_a_checksum_between_the_length_and_the_window() {
+        let command = set(b"key", 64, Some(0xE306_9283), &region_ref());
+        assert_eq!(
+            arguments(&command),
+            ["key", "64", "CRC", "3808858755", "7", "4096", "64"]
+        );
+    }
+
+    /// The server parses the checksum as an unsigned 32-bit decimal, so both ends
+    /// of the range must go out that way, never negative or in hex.
+    #[test]
+    fn set_writes_the_checksum_as_unsigned_decimal() {
+        let zero = set(b"key", 1, Some(0), &region_ref());
+        assert_eq!(arguments(&zero)[2..4], ["CRC", "0"]);
+        let top = set(b"key", 1, Some(u32::MAX), &region_ref());
+        assert_eq!(arguments(&top)[2..4], ["CRC", "4294967295"]);
     }
 
     #[test]
@@ -219,7 +266,7 @@ mod tests {
     /// A key is bytes, not text, and must survive unaltered.
     #[test]
     fn a_key_is_carried_as_raw_bytes() {
-        let command = set(&[0x00, 0xff], 1, &region_ref());
+        let command = set(&[0x00, 0xff], 1, None, &region_ref());
         assert_eq!(command.arguments()[0].as_slice(), [0x00, 0xff]);
     }
 

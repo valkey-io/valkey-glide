@@ -19,7 +19,7 @@ use std::fmt;
 use std::mem::ManuallyDrop;
 use std::ptr::{self, NonNull};
 
-use crate::command::{self, RdmaCommand, ReadReceipt, TransferReply};
+use crate::command::{self, RdmaCommand, ReadReceipt, SetChecksum, TransferReply};
 use crate::endpoint::{Registration, RevokeHandle};
 use crate::error::RdmaError;
 use crate::fabric::RdmaFabric;
@@ -147,11 +147,14 @@ impl RdmaBuffer {
         at: usize,
         length: usize,
     ) -> Result<(RdmaCommand, LentBuffer), (Self, RdmaError)> {
-        self.lend(at, length, |window| command::get(key, length, window))
+        self.lend(at, length, |_, window| command::get(key, length, window))
     }
 
     /// Lend `[at, at + length)` of this buffer to a `BLOB.RDMA_SET` of `key` for the server
     /// to read those bytes and store them.
+    ///
+    /// `checksum` decides whether the command carries a CRC-32c of the window for
+    /// the server to check before it stores the bytes; see [`SetChecksum`].
     ///
     /// Returns the command to send and the loan to hold until the server replies.
     ///
@@ -164,15 +167,23 @@ impl RdmaBuffer {
         key: &[u8],
         at: usize,
         length: usize,
+        checksum: SetChecksum,
     ) -> Result<(RdmaCommand, LentBuffer), (Self, RdmaError)> {
-        self.lend(at, length, |window| command::set(key, length, window))
+        self.lend(at, length, |bytes, window| {
+            let checksum = match checksum {
+                SetChecksum::Skip => None,
+                SetChecksum::Compute => Some(crate::checksum(bytes)),
+                SetChecksum::Known(checksum) => Some(checksum),
+            };
+            command::set(key, length, checksum, window)
+        })
     }
 
     fn lend(
         self,
         at: usize,
         length: usize,
-        build: impl FnOnce(&RegionRef) -> RdmaCommand,
+        build: impl FnOnce(&[u8], &RegionRef) -> RdmaCommand,
     ) -> Result<(RdmaCommand, LentBuffer), (Self, RdmaError)> {
         if let Err(error) = self.registration.check_open() {
             return Err((self, error));
@@ -185,7 +196,8 @@ impl RdmaBuffer {
             ));
             return Err((self, error));
         };
-        let command = build(&window);
+        // `window` succeeded, so the range is in bounds.
+        let command = build(&self.as_host()[at..at + length], &window);
         let progress = self.fabric.drive_progress();
         let loan = LentBuffer {
             buffer: ManuallyDrop::new(self),
@@ -490,7 +502,7 @@ impl RdmaRevoker {
 #[cfg(test)]
 mod tests {
     use super::{LentBuffer, RdmaBuffer};
-    use crate::command::{RdmaCommand, ReadReceipt, TransferReply};
+    use crate::command::{RdmaCommand, ReadReceipt, SetChecksum, TransferReply};
     use crate::config::{FabricConfig, Provider};
     use crate::error::RdmaError;
     use crate::fabric::RdmaFabric;
@@ -531,7 +543,10 @@ mod tests {
     }
 
     fn lent_for_set(buffer: RdmaBuffer) -> LentBuffer {
-        buffer.lend_for_set(b"key", 0, 64).expect("lends").1
+        buffer
+            .lend_for_set(b"key", 0, 64, SetChecksum::Skip)
+            .expect("lends")
+            .1
     }
 
     #[test]
@@ -558,7 +573,9 @@ mod tests {
         let buffer = fabric().register(vec![0u8; 4096]).unwrap();
         let region_ref = buffer.region_ref().clone();
 
-        let (command, _loan) = buffer.lend_for_set(b"key", 1024, 256).expect("lends");
+        let (command, _loan) = buffer
+            .lend_for_set(b"key", 1024, 256, SetChecksum::Skip)
+            .expect("lends");
 
         assert_eq!(command.name(), "BLOB.RDMA_SET");
         assert_eq!(
@@ -571,6 +588,52 @@ mod tests {
                 "256".to_string(),
             ]
         );
+    }
+
+    /// A computed checksum covers the lent window only, not the bytes around it.
+    #[test]
+    fn lending_for_set_checksums_only_the_window() {
+        let mut buffer = fabric().register(vec![0u8; 4096]).unwrap();
+        for (index, byte) in buffer.as_host_mut().iter_mut().enumerate() {
+            *byte = (index % 251) as u8;
+        }
+        let expected = crate::checksum(&buffer.as_host()[1024..1280]);
+        assert_ne!(expected, crate::checksum(&buffer.as_host()[..256]));
+
+        let (command, _loan) = buffer
+            .lend_for_set(b"key", 1024, 256, SetChecksum::Compute)
+            .expect("lends");
+
+        assert_eq!(
+            arguments(&command)[2..4],
+            ["CRC".to_string(), expected.to_string()]
+        );
+    }
+
+    /// A known checksum is sent as given, without reading the window.
+    #[test]
+    fn lending_for_set_sends_a_known_checksum_as_given() {
+        let buffer = fabric().register(vec![0u8; 4096]).unwrap();
+
+        let (command, _loan) = buffer
+            .lend_for_set(b"key", 0, 64, SetChecksum::Known(42))
+            .expect("lends");
+
+        assert_eq!(
+            arguments(&command)[2..4],
+            ["CRC".to_string(), "42".to_string()]
+        );
+    }
+
+    /// A window that runs past the end is refused before any checksum is computed,
+    /// so a bad window cannot read out of bounds.
+    #[test]
+    fn a_window_past_the_end_is_refused_before_its_checksum() {
+        let buffer = fabric().register(vec![0u8; 1024]).unwrap();
+        let (_, error) = buffer
+            .lend_for_set(b"key", 1000, 64, SetChecksum::Compute)
+            .unwrap_err();
+        assert!(matches!(error, RdmaError::Configuration(_)), "{error:?}");
     }
 
     #[test]
@@ -590,7 +653,9 @@ mod tests {
             );
             buffer = returned;
         }
-        let (mut buffer, error) = buffer.lend_for_set(b"key", 0, 1025).unwrap_err();
+        let (mut buffer, error) = buffer
+            .lend_for_set(b"key", 0, 1025, SetChecksum::Skip)
+            .unwrap_err();
         assert!(matches!(error, RdmaError::Configuration(_)), "{error:?}");
 
         // Still usable, right up to the last byte.
@@ -609,7 +674,9 @@ mod tests {
 
         let (buffer, error) = buffer.lend_for_get(b"key", 0, 64).unwrap_err();
         assert_eq!(error, RdmaError::Revoked);
-        let (_, error) = buffer.lend_for_set(b"key", 0, 64).unwrap_err();
+        let (_, error) = buffer
+            .lend_for_set(b"key", 0, 64, SetChecksum::Skip)
+            .unwrap_err();
         assert_eq!(error, RdmaError::Revoked);
     }
 
@@ -628,7 +695,9 @@ mod tests {
         let closes = close_calls();
         let (buffer, error) = buffer.lend_for_get(b"key", 0, 64).unwrap_err();
         assert_eq!(error, failed);
-        let (_, error) = buffer.lend_for_set(b"key", 0, 64).unwrap_err();
+        let (_, error) = buffer
+            .lend_for_set(b"key", 0, 64, SetChecksum::Skip)
+            .unwrap_err();
         assert_eq!(error, failed);
         assert_eq!(
             close_calls(),

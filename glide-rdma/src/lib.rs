@@ -31,7 +31,7 @@ mod session;
 #[cfg(feature = "libfabric")]
 pub use buffer::{LentBuffer, RdmaBuffer, RdmaRevoker};
 pub use checksum::checksum;
-pub use command::{RdmaCommand, ReadReceipt, TransferReply, hello, needs_session};
+pub use command::{RdmaCommand, ReadReceipt, SetChecksum, TransferReply, hello, needs_session};
 pub use config::{FabricConfig, Provider};
 pub use error::RdmaError;
 #[cfg(feature = "libfabric")]
