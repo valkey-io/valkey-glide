@@ -901,6 +901,22 @@ impl RoutingInfo {
         // FT.SEARCH WITHCURSOR is deliberately NOT covered: it is a
         // Valkey-only extension, out of scope under D2, and GLIDE's typed
         // API never emits it.
+        //
+        // This branch is not just a primary pin on top of what `_ =>
+        // RouteBy::FirstKey` would already compute correctly -- it also
+        // fixes the SLOT itself (affonsov review #7335). FirstKey reads
+        // `arg_idx(1)` as the key. For `FT.CURSOR READ index cursor_id` and
+        // `FT.CURSOR DEL index cursor_id`, argument 1 is the subcommand
+        // token (`READ`/`DEL`), not the index name -- the index name is
+        // argument 2. Routing on `arg_idx(1)` would have hashed the
+        // subcommand token's slot instead of the index's, sending the
+        // command to a shard that most likely isn't the one holding the
+        // cursor at all, not just skipping the primary pin above. FT.HYBRID
+        // has no subcommand token (`FT.HYBRID index ...`), so its index
+        // name genuinely is argument 1, same as FirstKey would already
+        // compute -- only FT.CURSOR needs the different offset. A future
+        // cleanup must not fold this branch away as redundant with
+        // FirstKey: FirstKey was never correct for FT.CURSOR to begin with.
         if cmd.eq_ignore_ascii_case(b"FT.CURSOR") || cmd.eq_ignore_ascii_case(b"FT.HYBRID") {
             return r
                 .arg_idx(if cmd.eq_ignore_ascii_case(b"FT.CURSOR") {

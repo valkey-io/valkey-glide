@@ -214,7 +214,25 @@ class FtHybridVsimArm:
                 the LOAD-clause restriction that applies identically here.
             filter (Optional[FtHybridVsimFilter]): A pre-filter on the vector search. See
                 `FtHybridVsimFilter`.
+
+        Raises:
+            ValueError: If `ef_runtime` is set while `filter.policy` is
+                `HybridFilterPolicy.ADHOC` -- the server rejects that combination outright
+                ("EF_RUNTIME is irrelevant for POLICY ADHOC", see `HybridFilterPolicy.ADHOC`'s
+                docstring). Mirrors the client-side validation `FtHybridVsimFilter` already does
+                for `batch_size` with a non-`BATCHES` policy, so this is caught immediately rather
+                than on a server round trip.
         """
+        if (
+            ef_runtime is not None
+            and filter is not None
+            and filter.policy == HybridFilterPolicy.ADHOC
+        ):
+            raise ValueError(
+                "ef_runtime is not supported with filter.policy=HybridFilterPolicy.ADHOC "
+                "(the server rejects this combination: "
+                '"EF_RUNTIME is irrelevant for POLICY ADHOC").'
+            )
         self.field = field
         self.vector = vector
         self.k = k
@@ -230,12 +248,17 @@ class FtHybridVsimArm:
         Returns:
             bool: True if `vector` already names a parameter (starts with ``$``), False if it is
                 raw vector bytes that `to_args` requires a generated parameter name for.
+
+        Note:
+            Only a `str` starting with ``$`` is treated as a parameter reference. A raw vector's
+            packed binary representation is arbitrary and can legitimately start with the byte
+            ``0x24`` (``$``) by coincidence; treating `bytes`/`bytearray` the same way as `str`
+            here would misclassify that vector as a parameter reference, skip generating the
+            internal `PARAMS` entry in `to_args`, and send the raw vector bytes in the
+            parameter-reference position, which the server cannot resolve. `bytes`/`bytearray` is
+            therefore always raw vector data regardless of its first byte.
         """
-        if isinstance(self.vector, str):
-            return self.vector.startswith("$")
-        if isinstance(self.vector, (bytes, bytearray)):
-            return self.vector.startswith(b"$")
-        return False
+        return isinstance(self.vector, str) and self.vector.startswith("$")
 
     def to_args(
         self, generated_param_name: Optional[TEncodable] = None

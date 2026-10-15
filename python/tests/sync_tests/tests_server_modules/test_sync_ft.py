@@ -3121,13 +3121,20 @@ class TestSyncFt:
         aggregate), this assertion will fail loudly and should be updated
         with a source citation for the fix, the same way the compat-gated
         tests elsewhere in this file are.
+
+        Key placement across shards is deterministic (affonsov review
+        #7335), not left to chance: after FT.CREATE lands on one primary,
+        this test finds the real CLUSTER KEYSLOT outcome for enough
+        candidate key suffixes to guarantee at least one key on the
+        index-owning shard and the rest elsewhere, rather than generating a
+        fixed suffix set and hoping it spreads. The earlier version had an
+        approximately 0.8% chance per run (on a 3-primary cluster) of every
+        key landing off the owning shard, which would have hung
+        `_poll_until_indexed` waiting for a document count that could never
+        arrive even though the implementation was behaving correctly.
         """
         prefix = "ft-multishard-" + str(uuid.uuid4()) + ":"
         index = prefix + "idx"
-
-        # No hashtag: let the cluster's own hashing spread these keys across
-        # shards instead of forcing co-location (M-6's whole point).
-        key_names = [f"{prefix}doc{i}" for i in range(MULTI_SHARD_DOC_COUNT)]
 
         assert (
             ft.create(
@@ -3138,18 +3145,14 @@ class TestSyncFt:
             )
             == OK
         )
-        for i, key in enumerate(key_names):
-            glide_sync_client.hset(key, {"title": f"doc number {i}"})
 
         cluster = pytest.valkey_cluster  # type: ignore[attr-defined]
         node_addrs = cluster.nodes_addr
         assert len(node_addrs) >= 2, "test requires a real multi-shard cluster"
 
-        # Confirm (not assume) the keys actually landed on more than one
-        # shard -- the test is only meaningful if they did. CLUSTER SHARDS
-        # gives this cluster's slot ranges; CLUSTER KEYSLOT gives each key's
-        # slot. Map slot -> shard index via the ranges rather than hardcoding
-        # port numbers, so this doesn't depend on a specific cluster layout.
+        # CLUSTER SHARDS gives this cluster's slot ranges; mapped to a
+        # callable rather than hardcoding port numbers, so this doesn't
+        # depend on a specific cluster layout.
         shards_reply = cast(
             List, glide_sync_client.custom_command(["CLUSTER", "SHARDS"])
         )
@@ -3164,20 +3167,6 @@ class TestSyncFt:
                 if lo <= slot <= hi:
                     return shard_idx
             raise AssertionError(f"slot {slot} not covered by any shard range")
-
-        shards_hit = set()
-        for key in key_names:
-            slot = cast(
-                int, glide_sync_client.custom_command(["CLUSTER", "KEYSLOT", key])
-            )
-            shards_hit.add(_shard_index_for_slot(slot))
-        assert len(shards_hit) >= 2, (
-            f"test fixture bug, not an engine finding: all {len(key_names)} "
-            f"keys landed on a single shard ({shards_hit}) -- no hashtags "
-            "were used, so this would mean the slot spread assumption this "
-            "test relies on doesn't hold for this cluster size; increase "
-            "key_names or re-check CLUSTER SHARDS"
-        )
 
         # Per-node placement check (runbook sec5): ask every PRIMARY directly
         # which indexes it has, rather than inferring placement from search
@@ -3223,6 +3212,65 @@ class TestSyncFt:
             f"expected FT.CREATE to land on exactly one primary; got "
             f"{nodes_with_index} (list_by_node={list_by_node})"
         )
+        index_owning_shard = next(
+            shard_idx
+            for shard_idx, shard in enumerate(shards_reply)
+            for raw_node in normalize_cluster_shards_entry(shard)[b"nodes"]
+            for node in (normalize_cluster_shards_node(raw_node),)
+            if (node[b"ip"].decode(), int(node[b"port"])) == nodes_with_index[0]
+            and node[b"role"] == b"master"
+        )
+
+        # affonsov review (#7335): deterministic slot coverage instead of
+        # relying on MULTI_SHARD_DOC_COUNT random-suffix keys happening to
+        # land on the index-owning shard by chance (~0.8% failure rate on a
+        # 3-primary cluster with the fixed suffix set this test used to
+        # generate unconditionally). Walk an unbounded suffix counter and
+        # classify each candidate key by its real CLUSTER KEYSLOT outcome.
+        # Capped at exactly 1 owning-shard key (just enough for
+        # _poll_until_indexed/the "partial" assertions below to have
+        # something to observe) and MULTI_SHARD_DOC_COUNT - 1 elsewhere keys
+        # (the cross-shard spread this test is actually about), so the two
+        # lists concatenate to exactly MULTI_SHARD_DOC_COUNT keys with no
+        # truncation risk either way. No hashtag is used on any key:
+        # letting the cluster's own hashing decide placement (M-6's whole
+        # point) is still exactly what happens here, just checked and
+        # topped up as needed instead of assumed.
+        on_owning_shard: List[str] = []
+        elsewhere: List[str] = []
+        suffix = 0
+        while (
+            len(on_owning_shard) < 1 or len(elsewhere) < MULTI_SHARD_DOC_COUNT - 1
+        ) and suffix < MULTI_SHARD_DOC_COUNT * 50:
+            candidate = f"{prefix}doc{suffix}"
+            slot = cast(
+                int,
+                glide_sync_client.custom_command(["CLUSTER", "KEYSLOT", candidate]),
+            )
+            if (
+                _shard_index_for_slot(slot) == index_owning_shard
+                and not on_owning_shard
+            ):
+                on_owning_shard.append(candidate)
+            elif len(elsewhere) < MULTI_SHARD_DOC_COUNT - 1:
+                elsewhere.append(candidate)
+            suffix += 1
+        assert on_owning_shard, (
+            "test fixture bug, not an engine finding: scanned "
+            f"{suffix} candidate keys without finding one that hashes onto "
+            f"the index-owning shard ({index_owning_shard}) -- re-check "
+            "CLUSTER SHARDS or raise the scan bound above"
+        )
+        assert elsewhere, (
+            "test fixture bug, not an engine finding: scanned "
+            f"{suffix} candidate keys without finding one that hashes onto "
+            f"a DIFFERENT shard than the index-owning one "
+            f"({index_owning_shard}) -- re-check CLUSTER SHARDS or raise "
+            "the scan bound above"
+        )
+        key_names = (on_owning_shard + elsewhere)[:MULTI_SHARD_DOC_COUNT]
+        for i, key in enumerate(key_names):
+            glide_sync_client.hset(key, {"title": f"doc number {i}"})
 
         self._poll_until_indexed(glide_sync_client, index, 1)
 
@@ -4351,6 +4399,16 @@ class TestSyncFt:
             )
             cursor_id = page[1]
             total_rows += len(page[0])
+            # affonsov review (#7335): track the actual __key values seen
+            # across all pages, not just a row count -- mirrors the same
+            # guard already applied to this test's FT.AGGREGATE sibling,
+            # for the identical reason (a paging bug that duplicates or
+            # drops a specific row while still returning the right total
+            # row count would otherwise pass undetected). __key is present
+            # on every row without an explicit loadFields, confirmed by
+            # the other FT.HYBRID tests in this file that read
+            # row[b"__key"] the same way.
+            seen_keys = {row[b"__key"] for row in page[0]}
             pages_read = 1
             while cursor_id != 0:
                 next_page = cast(
@@ -4358,10 +4416,18 @@ class TestSyncFt:
                     ft.cursor_read(prefer_replica_client, index, cursor_id),
                 )
                 total_rows += len(next_page[0])
+                seen_keys.update(row[b"__key"] for row in next_page[0])
                 cursor_id = next_page[1]
                 pages_read += 1
                 assert pages_read <= 10, "paging did not terminate as expected"
             assert total_rows == 2
+            assert seen_keys == {
+                (prefix + HYBRID_DOC_TEXT_WINNER).encode(),
+                (prefix + HYBRID_DOC_VECTOR_WINNER).encode(),
+            }, (
+                "paging returned the right row COUNT but the wrong SET of "
+                f"keys: {seen_keys}"
+            )
         finally:
             prefer_replica_client.close()
 

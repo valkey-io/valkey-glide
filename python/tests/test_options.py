@@ -1,5 +1,6 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
+import struct
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -446,9 +447,43 @@ class TestFtHybridVsimArm:
         assert FtHybridVsimArm("vec", "$myvec").is_param_reference()
         assert not FtHybridVsimArm("vec", "notaparam").is_param_reference()
 
-    def test_is_param_reference_detects_dollar_prefixed_bytes(self):
-        assert FtHybridVsimArm("vec", b"$myvec").is_param_reference()
+    def test_is_param_reference_treats_bytes_as_always_raw_vector_data(self):
+        # affonsov review (#7335): a raw vector's packed binary
+        # representation is arbitrary and can legitimately start with the
+        # byte 0x24 ("$") by coincidence. bytes/bytearray must never be
+        # treated as a $name parameter reference regardless of its first
+        # byte -- only an actual str starting with "$" is a reference.
+        # struct.pack("2f", 1.0000042915344238, 1.0) is the smallest float32
+        # pair whose packed bytes start with 0x24 on a little-endian
+        # platform, a concrete example of a vector this bug would have
+        # misclassified.
+        packed_vector_starting_with_dollar_byte = struct.pack(
+            "2f", 1.0000042915344238, 1.0
+        )
+        assert packed_vector_starting_with_dollar_byte.startswith(b"$")
+        assert not FtHybridVsimArm(
+            "vec", packed_vector_starting_with_dollar_byte
+        ).is_param_reference()
+        assert not FtHybridVsimArm("vec", b"$myvec").is_param_reference()
+        assert not FtHybridVsimArm("vec", bytearray(b"$myvec")).is_param_reference()
         assert not FtHybridVsimArm("vec", b"rawbytes").is_param_reference()
+
+    def test_to_args_requires_generated_param_name_for_raw_bytes_starting_with_dollar(
+        self,
+    ):
+        # Companion to the is_param_reference test above: to_args must
+        # still raise (not silently pass the raw bytes through) when a
+        # 0x24-leading raw vector reaches it without a generated param name,
+        # the same way it already does for any other raw-bytes vector.
+        packed_vector_starting_with_dollar_byte = struct.pack(
+            "2f", 1.0000042915344238, 1.0
+        )
+        with pytest.raises(ValueError):
+            FtHybridVsimArm("vec", packed_vector_starting_with_dollar_byte).to_args()
+        args = FtHybridVsimArm("vec", packed_vector_starting_with_dollar_byte).to_args(
+            generated_param_name="$generated"
+        )
+        assert args == ["VSIM", "@vec", "$generated"]
 
     def test_knn_block_omitted_when_no_knn_sub_args_given(self):
         # Confirmed live: omitting the whole KNN block defaults K to 10
@@ -478,6 +513,38 @@ class TestFtHybridVsimArm:
             "SHARD_K_RATIO",
             "0.5",
         ]
+
+    def test_ef_runtime_rejected_with_adhoc_filter_policy(self):
+        # affonsov review (#7335): the server rejects EF_RUNTIME outright
+        # when filter.policy=ADHOC ("EF_RUNTIME is irrelevant for POLICY
+        # ADHOC"); catch it client-side instead of a round trip, mirroring
+        # FtHybridVsimFilter's own batch_size-requires-BATCHES validation.
+        with pytest.raises(ValueError):
+            FtHybridVsimArm(
+                "vec",
+                "$q",
+                ef_runtime=100,
+                filter=FtHybridVsimFilter(
+                    "@title:hello", policy=HybridFilterPolicy.ADHOC
+                ),
+            )
+
+    def test_ef_runtime_allowed_with_batches_filter_policy(self):
+        # Companion to the rejection test above: EF_RUNTIME is fine with
+        # any other policy, including BATCHES, or with no filter at all.
+        args = FtHybridVsimArm(
+            "vec",
+            "$q",
+            ef_runtime=100,
+            filter=FtHybridVsimFilter(
+                "@title:hello", policy=HybridFilterPolicy.BATCHES
+            ),
+        ).to_args()
+        assert "EF_RUNTIME" in args
+
+    def test_ef_runtime_allowed_with_unfiltered_vsim(self):
+        args = FtHybridVsimArm("vec", "$q", ef_runtime=100).to_args()
+        assert "EF_RUNTIME" in args
 
     def test_yield_score_as_after_knn_block(self):
         args = FtHybridVsimArm("vec", "$q", k=5, yield_score_as="vs").to_args()

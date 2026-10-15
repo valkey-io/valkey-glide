@@ -504,16 +504,12 @@ def start_server(
                 "Please provide the path(s) to the module(s) you want to load."
             )
         for module_path in load_module:
-            # module_path may carry trailing module config args (e.g.
-            # "/path/libsearch.dylib --emulate-release 1.3.0" or
-            # "/path/libsearch.dylib --use-coordinator yes") -- Valkey's
-            # module loader requires each such arg to be its own argv token
-            # starting with "--" (confirmed via valkey_search 1.3.0-rc1:
-            # passing it as one combined string makes the server try to
-            # dlopen the literal combined string as a filename, and passing
-            # it without "--" fails module init with "must start with '--'").
-            # shlex.split lets callers write the whole thing as one
-            # space-separated string while still producing separate tokens.
+            # Valkey's module loader requires each trailing config arg
+            # (e.g. --emulate-release 1.3.0) to be its own argv token
+            # starting with "--", not one combined string -- confirmed via
+            # valkey_search 1.3.0-rc1. shlex.split lets callers write the
+            # whole thing as one space-separated string while still
+            # producing separate tokens.
             cmd_args.extend(["--loadmodule", *shlex.split(module_path)])
     cmd_args += tls_args
     p = subprocess.Popen(
