@@ -617,7 +617,7 @@ async def profile(
 
     Note:
         Not supported by valkey-search <= 1.3.0-rc1 -- confirmed live, the server rejects FT.PROFILE
-        outright with "unknown command" (the command is not registered at all; see R2-L-1). This
+        outright with "unknown command" (the command is not registered at all). This
         function remains part of the public API for parity with RediSearch clients, but any call
         currently raises a `RequestError`.
 
@@ -726,7 +726,7 @@ async def hybrid(
     Note:
         A paged (``with_cursor``) FT.HYBRID query, and every subsequent FT.CURSOR READ/DEL against
         the cursor it opens, always reads from the PRIMARY of the index's slot, regardless of the
-        client's ``ReadFrom`` configuration (P5, Jon's decision Q2). This is because a cursor is a
+        client's ``ReadFrom`` configuration. This is because a cursor is a
         per-process, node-local resource on the server that opened it -- it is not shared or
         forwarded between nodes, so a read that lands on a different node (a replica a
         ``PREFER_REPLICA``/AZ-affinity client would otherwise have used) fails with "Cursor not

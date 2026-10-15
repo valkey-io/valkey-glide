@@ -204,7 +204,7 @@ class FtHybridVsimArm:
                 (``src/commands/ft_hybrid_parser.cc`` ``kDefaultKnnK``), the same default RediSearch
                 documents for FT.HYBRID's VSIM clause.
             ef_runtime (Optional[int]): HNSW search-time effort parameter. Only valid when the KNN
-                block is written (RANGE is not currently supported by this typed API; see D10).
+                block is written (RANGE is not currently supported by this typed API).
             shard_k_ratio (Optional[float]): Tunes how much of `k` each shard returns during a
                 cluster fanout. Confirmed live: parsed and accepted but does not change query
                 results, only how much work each shard does to produce them -- accepted here so a
@@ -451,8 +451,8 @@ class FtHybridFunction(FtHybridCombine):
     SEARCH+VSIM two-arm shape) ``@__search_score`` / ``@__vector_score`` specifically. Confirmed
     live and in ``src/commands/ft_hybrid_parser.cc``.
 
-    This is a valkey-search extension not present in RediSearch's FT.HYBRID (per Jon's decision,
-    D17: included here anyway rather than dropped).
+    This is a valkey-search extension not present in RediSearch's FT.HYBRID (included here
+    anyway rather than dropped).
     """
 
     def __init__(
@@ -553,7 +553,7 @@ class FtHybridOptions:
                 `FtWithCursor`.
             local_only (Optional[bool]): Restricts the query to the local shard rather than
                 fanning out across the cluster. This is a valkey-search extension not present in
-                RediSearch's FT.HYBRID (per Jon's decision, D17: included here anyway rather than
+                RediSearch's FT.HYBRID (included here anyway rather than
                 dropped). Confirmed live: LOCALONLY is accepted anywhere in this tail BEFORE
                 PARAMS (including after DIALECT or a LOAD clause) but is rejected
                 ("Unexpected argument `LOCALONLY`") once PARAMS has been parsed, regardless of

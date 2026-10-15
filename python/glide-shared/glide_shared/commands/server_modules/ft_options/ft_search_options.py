@@ -10,7 +10,7 @@ from glide_shared.commands.server_modules.ft_options.ft_constants import (
 from glide_shared.constants import TEncodable
 
 # OrderBy (imported above) is re-exported from command_args rather than
-# redefined here (L-1): FT.SEARCH's SORTBY direction is the exact same
+# redefined here: FT.SEARCH's SORTBY direction is the exact same
 # ASC/DESC concept FT.AGGREGATE's SortBy clause already uses via
 # command_args.OrderBy. The public name `OrderBy` stays importable from this
 # module for existing callers.
@@ -149,7 +149,7 @@ class FtSearchOptions:
             limit (Optional[FtSearchLimit]): This option provides pagination capability. Only the keys that satisfy the offset
                 and count values are returned. See `FtSearchLimit`.
             count (Optional[bool]): Returns only the total number of matching documents, with no document rows at
-                all (not even keys). D11/L-9 fix: previously this emitted a bare ``COUNT`` token, which
+                all (not even keys). Previously this emitted a bare ``COUNT`` token, which
                 valkey-search's FT.SEARCH parser does not recognise at all -- confirmed live, the server rejects it
                 outright with ``"Unexpected argument 'COUNT'"`` (``src/commands/ft_search_parser.cc`` has no COUNT
                 keyword registered). This now maps to the server's actual documented count-only form instead,
@@ -178,9 +178,9 @@ class FtSearchOptions:
                 (valkey-search 1.3.0). This changes the result shape: each document value in the result map
                 becomes a two-element list ``[score, field_map]`` instead of just ``field_map`` (a `bytes`-encoded
                 decimal string, e.g. ``b"0.287682086229"`` -- confirmed live, not a float, on both RESP2 and RESP3).
-                With ``nocontent=True``, the field map is omitted and the shape becomes ``[score]`` only -- or, if
-                combined with ``withsortkeys=True`` and ``nocontent=True``, the sort key is dropped entirely from
-                that combination's result (confirmed live), leaving only ``[score]`` -- NOT ``[score, None]``. With
+                With ``nocontent=True``, the shape becomes ``[score, {}]``, with an empty field map. Combining
+                ``withsortkeys=True`` with ``nocontent=True`` gives the same ``[score, {}]``, because the server drops
+                the sort key in that combination (confirmed live). It is not ``[score, None, {}]``. With
                 both ``with_scores=True`` and ``withsortkeys=True`` and content present, each row becomes a
                 three-element list ``[score, sort_key, field_map]`` (`glide-core`'s
                 ``FTSearchWithScoresAndSortKeysReturnType``), a genuinely different shape from either flag alone.
@@ -230,7 +230,7 @@ class FtSearchOptions:
         if self.count and self.limit is not None:
             raise ValueError(
                 "count and limit are mutually exclusive -- count maps to "
-                "LIMIT 0 0 internally (D11/L-9), so an explicit limit "
+                "LIMIT 0 0 internally, so an explicit limit "
                 "would conflict with it."
             )
 
@@ -311,7 +311,7 @@ class FtSearchOptions:
         if self.limit:
             args.extend(self.limit.to_args())
         if self.count:
-            # D11/L-9 fix: COUNT is not a real FT.SEARCH keyword (confirmed
+            # COUNT is not a real FT.SEARCH keyword (confirmed
             # live -- the server rejects a bare COUNT token outright). The
             # count-only form the server actually recognises is LIMIT 0 0;
             # _validate() above has already confirmed self.limit is unset

@@ -855,7 +855,7 @@ impl RoutingInfo {
     {
         let cmd = &r.command()?[..];
 
-        // P5 (Jon's option 4, Q2): FT.CURSOR and FT.AGGREGATE/FT.HYBRID ...
+        // FT.CURSOR and FT.AGGREGATE/FT.HYBRID ...
         // WITHCURSOR must land on the PRIMARY of the index-name slot,
         // regardless of ReadFrom, because a cursor is a per-process,
         // main-thread-only singleton on the server that created it
@@ -881,7 +881,7 @@ impl RoutingInfo {
         // here anyway so this stays correct and documented even if a future
         // change adds it to that list without noticing the cursor
         // implication. FT.HYBRID is handled the same way for the same
-        // reason, ahead of its own typed API (P6) landing.
+        // reason, ahead of its own typed API landing.
         //
         // FT.AGGREGATE IS in the is_readonly_cmd() list (plain FT.AGGREGATE
         // genuinely has no cursor-affinity requirement and benefits from
@@ -892,14 +892,14 @@ impl RoutingInfo {
         // positive here (e.g. an INKEYS/PARAMS/LOAD value happening to
         // equal "WITHCURSOR") only ever means "routed to the primary when
         // it didn't strictly need to be" -- a availability/distribution
-        // cost, not a correctness bug, unlike the reply-shape dispatch
-        // L-4 was about. glide-core's own full scanner isn't reachable from
+        // cost, not a correctness bug, unlike reply-shape dispatch mistakes
+        // (which can misparse the actual response). glide-core's own full scanner isn't reachable from
         // this crate anyway (glide-core depends on this one, not the other
         // way around), so duplicating that level of rigor here would cost
         // more than it returns for a routing-only decision.
         //
         // FT.SEARCH WITHCURSOR is deliberately NOT covered: it is a
-        // Valkey-only extension, out of scope under D2, and GLIDE's typed
+        // Valkey-only extension, out of scope here, and GLIDE's typed
         // API never emits it.
         //
         // This branch is not just a primary pin on top of what `_ =>
@@ -2289,7 +2289,7 @@ mod tests_routing {
 
     /// Helper asserting a command resolves to SingleNode(SpecificNode(Route
     /// { slot, SlotAddr::Master })), i.e. the primary of the slot the given
-    /// key would hash to -- the P5 pinning this module adds for
+    /// key would hash to -- the pinning this module adds for
     /// FT.CURSOR/FT.HYBRID/FT.AGGREGATE WITHCURSOR.
     fn assert_routes_to_primary_of_key(cmd: &Cmd, key_arg: &str) {
         let routing = RoutingInfo::for_routable(cmd);
@@ -2389,7 +2389,7 @@ mod tests_routing {
 
     #[test]
     fn test_ft_aggregate_withcursor_false_positive_from_exact_value_still_routes_to_primary() {
-        // R3a-L-4: the comment above this routing special-case concedes a
+        // The comment above this routing special-case concedes a
         // false positive is possible when a caller-controlled VALUE (not
         // just a substring) happens to equal "WITHCURSOR" exactly -- e.g. a
         // LOAD field or an INKEYS key literally named that. This confirms

@@ -377,7 +377,7 @@ class LoadField:
 def load_fields_to_args(
     load_fields: Optional[List[Union[TEncodable, "LoadField"]]],
 ) -> List[TEncodable]:
-    """Serialize a LOAD clause's field list for FT.AGGREGATE and FT.HYBRID (R3b L-8: shared,
+    """Serialize a LOAD clause's field list for FT.AGGREGATE and FT.HYBRID (shared,
     since the two commands' LOAD clause grammar is byte-identical, confirmed in source -- see
     `LoadField`'s docstring). The count is a token budget, not an entry count -- each `LoadField`
     with an alias contributes 3 tokens (field, AS, alias) rather than 1, matching the parser's own
@@ -401,7 +401,7 @@ def params_to_args(
     params: Optional[Mapping[TEncodable, TEncodable]],
     params_keyword: TEncodable = FtAggregateKeywords.PARAMS,
 ) -> List[TEncodable]:
-    """Serialize a PARAMS option for FT.AGGREGATE and FT.HYBRID (R3b L-8: shared, since the two
+    """Serialize a PARAMS option for FT.AGGREGATE and FT.HYBRID (shared, since the two
     commands' PARAMS grammar is byte-identical). `params_keyword` lets a caller (e.g.
     `FtHybridOptions`) pass its own command-specific keyword constant rather than this module's
     FT.AGGREGATE one, even though the two currently serialize to the same literal text.
@@ -456,12 +456,12 @@ class FtWithCursor:
     Shared verbatim between FT.AGGREGATE and FT.HYBRID -- confirmed in
     ``src/commands/ft_hybrid_parser.cc``: WITHCURSOR is handled by the exact same aggregate-suffix
     parser both commands drive, so the option's own grammar (``WITHCURSOR [COUNT n] [MAXIDLE
-    ms]``) and reply shape are identical regardless of which command opened the cursor. See P5's
-    cursor-affinity routing: a paged query, and every subsequent `glide.async_commands.ft.
+    ms]``) and reply shape are identical regardless of which command opened the cursor. A paged
+    query, and every subsequent `glide.async_commands.ft.
     cursor_read`/`cursor_del` (or `glide_sync.sync_commands.ft.cursor_read`/`cursor_del`) against
     the cursor it opens, is pinned to the PRIMARY of the index's slot regardless of ``ReadFrom``
-    -- a cursor is a per-process, node-local resource, and this is Jon's explicitly approved,
-    documented exception to GLIDE's normal read routing.
+    -- a cursor is a per-process, node-local resource, and this is a deliberate, documented
+    exception to GLIDE's normal read routing.
     """
 
     def __init__(self, count: Optional[int] = None, maxidle: Optional[int] = None):
@@ -549,7 +549,7 @@ class FtAggregateOptions:
         Note:
             A paged (``with_cursor``) query, and every subsequent FT.CURSOR READ/DEL against the cursor it opens,
             always reads from the PRIMARY of the index's slot, regardless of the client's ``ReadFrom``
-            configuration (P5, Jon's decision Q2/D15). This is because a cursor is a per-process, node-local
+            configuration. This is because a cursor is a per-process, node-local
             resource on the server that opened it -- it is not shared or forwarded between nodes, so a read that
             lands on a different node (a replica a ``PREFER_REPLICA``/AZ-affinity client would otherwise have
             used) fails with "Cursor not found". A failover of the primary that was holding an open cursor loses
