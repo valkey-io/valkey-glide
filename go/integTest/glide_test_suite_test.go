@@ -562,6 +562,10 @@ var bgsaveResponses = []string{
 	"Background saving scheduled",
 }
 
+// Expected valid responses for the "rdb_*_bgsave_type" INFO persistence fields.
+// Since Valkey 9.2.0.
+var bgsaveTypes = []string{"fork", "forkless", "none"}
+
 // Expected valid responses for BGREWRITEAOF.
 var bgrewriteaofResponses = []string{
 	"Background append only file rewriting started",

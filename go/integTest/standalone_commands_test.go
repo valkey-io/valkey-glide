@@ -450,6 +450,28 @@ func (suite *GlideTestSuite) TestInfoStandalone() {
 	for _, section := range sections {
 		assert.Contains(t, strings.ToLower(info), strings.ToLower("# "+string(section)), "Section "+section+" is missing")
 	}
+
+	// Valkey 9.2+ fields
+	// ------------------
+
+	if suite.serverVersion < "9.2.0" {
+		return
+	}
+
+	// Persistence fields
+	info, err = client.InfoWithOptions(
+		context.Background(),
+		options.InfoOptions{Sections: []constants.Section{constants.Persistence}},
+	)
+	require.NoError(t, err)
+	persistence := parseInfoResponse(info)
+
+	assert.Contains(t, bgsaveTypes, persistence["rdb_current_bgsave_type"])
+	assert.Contains(t, bgsaveTypes, persistence["rdb_last_bgsave_type"])
+
+	remaining_name := "forkless_estimated_seconds_remaining"
+	remaining_value := AssertInt(t, persistence[remaining_name], remaining_name)
+	assert.GreaterOrEqual(t, remaining_value, int64(-1))
 }
 
 func (suite *GlideTestSuite) TestDBSize() {
