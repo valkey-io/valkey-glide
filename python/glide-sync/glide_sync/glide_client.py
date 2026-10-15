@@ -25,6 +25,7 @@ from glide_shared.exceptions import (
     RequestError,
     get_request_error_class,
 )
+from glide_shared.ffi_helpers import handle_command_result
 from glide_shared.opentelemetry import _create_batch_span, _create_command_span
 from glide_shared.protobuf.command_request_pb2 import RequestType
 from glide_shared.routes import (
@@ -1114,10 +1115,11 @@ class BaseClient(CoreCommands):
 
         Raises:
             TimeoutError: If no scope is available within the timeout.
-            ClosingError: If the client is closed.
+            ConnectionError: If the client is closed while waiting.
+            RequestError: If the client's configuration cannot produce a
+                scoped connection.
+            ClosingError: If the client is already closed.
         """
-        import time
-
         from .isolated_scope import IsolatedScope
 
         if self._is_closed:
@@ -1135,40 +1137,26 @@ class BaseClient(CoreCommands):
             _slot_for_key(routing_key.encode("utf-8")) if routing_key is not None else 0
         )
 
-        deadline = time.monotonic() + timeout
-        backoff = 0.01  # Start at 10ms (first scope needs ~500ms for TCP connect)
-
-        # One logical acquire: one stable token across the retry loop, so the core
-        # dedupes this acquire's retries without serializing distinct borrowers.
-        attempt_token = self._lib.glide_scope_next_attempt_token()
-
-        while True:
-            buf = self._ffi.from_buffer(conn_req_bytes)
-            scope_id = self._lib.glide_scope_try_acquire(
-                client_id,
-                self._ffi.cast("const uint8_t*", buf),
-                len(conn_req_bytes),
-                has_routing_slot,
-                routing_slot,
-                attempt_token,
-            )
-
-            if scope_id >= 0:
-                return IsolatedScope(
-                    scope_id,
-                    client_id,
-                    _SYNC_FFI,
-                    self._parse_scope_response,
-                )
-
-            remaining = deadline - time.monotonic()
-            if remaining <= 0:
-                raise TimeoutError(
-                    "Timed out waiting for isolated scope (pool exhausted)"
-                )
-
-            time.sleep(min(backoff, remaining))
-            backoff = min(backoff * 2, 0.5)  # Cap at 500ms
+        buf = self._ffi.from_buffer(conn_req_bytes)
+        result = self._lib.glide_scope_acquire_blocking(
+            client_id,
+            self._ffi.cast("const uint8_t*", buf),
+            len(conn_req_bytes),
+            has_routing_slot,
+            routing_slot,
+            # uint64_t on the FFI side: a negative value would raise OverflowError
+            # instead of the documented TimeoutError. Negative means no wait.
+            max(0, int(timeout * 1000)),
+        )
+        scope_id = handle_command_result(
+            self._ffi, self._lib, result, lambda resp: resp.int_value
+        )
+        return IsolatedScope(
+            scope_id,
+            client_id,
+            _SYNC_FFI,
+            self._parse_scope_response,
+        )
 
     def _parse_scope_response(self, response_ptr) -> Optional[str]:  # noqa: C901
         """Parse a CommandResponse pointer from a scope execution into a Python string."""

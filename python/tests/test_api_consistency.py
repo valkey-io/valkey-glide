@@ -28,6 +28,10 @@ EXCLUDED_TESTS = {
         "test_UDS_socket_connection_failure",
         "test_cancelled_request_handled_gracefully",
         "test_client_usable_after_cancelled_commands",
+        # Async-only: the sync client blocks in the FFI call and cannot abandon it
+        "test_abandoned_acquire_returns_its_slot",
+        # Async-only: the sync client has no event loop whose waiters could queue
+        "test_many_waiters_time_out_together",
         "test_connection_timeout_on_unavailable_host",
         "test_invalid_tls_config_fails_fast",
         "test_aclose_alias",
@@ -136,6 +140,7 @@ EXCLUDED_TESTS_FILENAMES = {
         "test_client_side_cache.py",
         "test_async_freethreading.py",
         "test_fork_safety.py",
+        "test_async_scope_backends.py",
     ],
     "sync_only": [
         "test_sync_client_side_cache.py",
