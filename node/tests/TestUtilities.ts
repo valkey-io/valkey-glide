@@ -531,6 +531,25 @@ export async function waitForSaveNotInProgress(
     }, "Timed out waiting for save to complete");
 }
 
+/** One field from each default INFO section. */
+export const INFO_DEFAULT_FIELDS = [
+    "redis_version", // server
+    "connected_clients", // clients
+    "used_memory", // memory
+    "rdb_changes_since_last_save", // persistence
+    "total_commands_processed", // stats
+    "role", // replication
+    "used_cpu_sys", // cpu
+    "cluster_enabled", // cluster
+];
+
+/**
+ * Expected server responses for the "rdb_*_bgsave_type" INFO persistence fields.
+ *
+ * @remarks Since Valkey version 9.2.0.
+ */
+export const BGSAVE_TYPES = ["fork", "forkless", "none"];
+
 /** Route to a single primary node. */
 export const PRIMARY_SLOT_ROUTE_OPTION = {
     route: { type: "primarySlotKey" as const, key: "1" },
@@ -2780,4 +2799,20 @@ export function assertMemoryStatsFields(
         expect(stats.overheadDbHashtableLut).toBeUndefined();
         expect(stats.overheadDbHashtableRehashing).toBeUndefined();
     }
+}
+
+/**
+ * Asserts that value is an integer and returns it.
+ *
+ * @param value - The value to parse.
+ * @param name - The name that identifies the value in the failure message.
+ */
+export function parseInteger(value: string | undefined, name: string): number {
+    const result = Number(value);
+
+    if (value === undefined || !Number.isInteger(result)) {
+        throw new Error(`${name} is not an integer: "${value}"`);
+    }
+
+    return result;
 }

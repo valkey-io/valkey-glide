@@ -62,14 +62,17 @@ import {
     parseInfoResponse,
 } from "../build-ts";
 import {
-    Client,
-    GetAndSetRandomValue,
+    BGSAVE_TYPES,
     assertMemoryStatsDbEntry,
     assertMemoryStatsFields,
+    Client,
     flattenClusterResponseArrays,
+    GetAndSetRandomValue,
     getFirstResult,
     getRandomKey,
     getUnixSeconds,
+    INFO_DEFAULT_FIELDS,
+    parseInteger,
     PRIMARY_SLOT_ROUTE_OPTION,
     triggerLatencySpike,
     waitFor,
@@ -368,6 +371,75 @@ export function runBaseTests(config: {
                           ).join();
                 expect(result).not.toContain("cmdstat_set");
             }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `info returns expected fields_%p`,
+        async (protocol) => {
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    const getInfo = async (sections?: InfoOptions[]) =>
+                        parseInfoResponse(
+                            getFirstResult(
+                                client instanceof GlideClient
+                                    ? await client.info(sections)
+                                    : await client.info({ sections }),
+                            ).toString(),
+                        );
+
+                    // Default fields
+                    const info = await getInfo();
+
+                    for (const field of INFO_DEFAULT_FIELDS) {
+                        expect(info).toHaveProperty(field);
+                    }
+
+                    // Valkey 9.2+ fields
+                    // ------------------
+
+                    if (cluster.checkIfServerVersionLessThan("9.2.0")) {
+                        return;
+                    }
+
+                    // Persistence fields
+                    const persistence = await getInfo([
+                        InfoOptions.Persistence,
+                    ]);
+
+                    expect(BGSAVE_TYPES).toContain(
+                        persistence["rdb_current_bgsave_type"],
+                    );
+                    expect(BGSAVE_TYPES).toContain(
+                        persistence["rdb_last_bgsave_type"],
+                    );
+
+                    const remainingName =
+                        "forkless_estimated_seconds_remaining";
+                    const remainingValue = parseInteger(
+                        persistence[remainingName],
+                        remainingName,
+                    );
+                    expect(remainingValue).toBeGreaterThanOrEqual(-1);
+
+                    // Cluster info fields
+                    if (client instanceof GlideClusterClient) {
+                        const clusterInfo = await getInfo([
+                            InfoOptions.ClusterInfo,
+                        ]);
+
+                        const fallbacksName =
+                            "cluster_io_main_thread_fallbacks";
+                        const fallbacksValue = parseInteger(
+                            clusterInfo[fallbacksName],
+                            fallbacksName,
+                        );
+                        expect(fallbacksValue).toBeGreaterThanOrEqual(0);
+                    }
+                },
+                protocol,
+            );
         },
         config.timeout,
     );
