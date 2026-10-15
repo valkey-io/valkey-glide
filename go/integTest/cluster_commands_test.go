@@ -181,9 +181,9 @@ func (suite *GlideTestSuite) TestInfoCluster() {
 	require.NoError(t, err)
 	cluster_info := parseInfoResponse(response.SingleValue())
 
-	fallback_name := "cluster_io_main_thread_fallbacks"
-	fallback_value := AssertInt(t, cluster_info[fallback_name], fallback_name)
-	assert.GreaterOrEqual(t, fallback_value, int64(0))
+	fallbacks_name := "cluster_io_main_thread_fallbacks"
+	fallbacks_value := AssertInt(t, cluster_info[fallbacks_name], fallbacks_name)
+	assert.GreaterOrEqual(t, fallbacks_value, int64(0))
 }
 
 func (suite *GlideTestSuite) TestClusterRegisterCustomClientInfoTag() {
