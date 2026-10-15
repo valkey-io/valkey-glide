@@ -165,7 +165,8 @@ jobs:
                           else "mac"
                           end
                       )
-                      | if .RUNNER == "macos13" then .["test-runner"] = "macos13" else . end
+                      # npm resolves the native package by the runner's arch, so x86 darwin must TEST on Intel or it validates the arm64 build.
+                      | if .TARGET == "x86_64-apple-darwin" then .["test-runner"] = "macos-15-intel" else . end
                   )' < .github/json_matrices/build-matrix.json | jq -c .)
                   echo "platform_matrix=${PLATFORM_MATRIX}" >> $GITHUB_OUTPUT
                   echo "Platform matrix loaded: ${PLATFORM_MATRIX}"
