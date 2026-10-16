@@ -10,7 +10,7 @@
 #[cfg(feature = "rdma")]
 pub(crate) mod protocol;
 
-/// Why a `LO.HELLO` was refused by the server.
+/// Why a `BLOB.RDMA_HELLO` was refused by the server.
 #[cfg(feature = "rdma")]
 pub(crate) fn handshake_refused(node: &str, error: redis::RedisError) -> redis::RedisError {
     if !answered_by_server(&error) {
@@ -42,7 +42,7 @@ pub(crate) fn handshake_refused(node: &str, error: redis::RedisError) -> redis::
     protocol::configuration_error(reason.to_string())
 }
 
-/// A `LO.HELLO` reply this client could not read.
+/// A `BLOB.RDMA_HELLO` reply this client could not read.
 ///
 /// Different from a refusal because it indicates the node has the
 /// module and answered, but the two disagree about the reply's shape.
@@ -240,10 +240,10 @@ pub(crate) fn cancelled_if_revoked(
     }
 }
 
-/// Refuse an `LO.*` command that did not come from the client's RDMA methods,
+/// Refuse a `BLOB.*` command that did not come from the client's RDMA methods,
 /// `Client::rdma_get` and `Client::rdma_set`.
 pub(crate) fn refuse_direct(name: &[u8]) -> redis::RedisResult<()> {
-    const COMMANDS: [&[u8]; 3] = [b"LO.HELLO", b"LO.GET", b"LO.SET"];
+    const COMMANDS: [&[u8]; 3] = [b"BLOB.RDMA_HELLO", b"BLOB.RDMA_GET", b"BLOB.RDMA_SET"];
     if !COMMANDS
         .iter()
         .any(|command| name.eq_ignore_ascii_case(command))
@@ -318,8 +318,10 @@ pub enum RdmaUnavailable {
         node: String,
     },
 
-    /// A node answered the handshake with an error of its own. A replica does
-    /// this because the module registers `LO.HELLO` as a write command.
+    /// A node answered the handshake with an error of its own, for example a
+    /// `READONLY` from a node that will not take writes. The current module
+    /// accepts the handshake on replicas, but transfers are only routed to
+    /// primaries because the module does not replicate its objects yet.
     #[error("node {node} refused the RDMA handshake: {reason}")]
     HandshakeRefused {
         /// The node that refused.
@@ -329,7 +331,7 @@ pub enum RdmaUnavailable {
     },
 
     /// The handshake reply could not be read.
-    #[error("node {node} returned a malformed LO.HELLO reply: {reason}")]
+    #[error("node {node} returned a malformed BLOB.RDMA_HELLO reply: {reason}")]
     MalformedHandshake {
         /// The node that answered.
         node: String,
@@ -402,8 +404,8 @@ mod tests {
     #[test]
     fn a_server_that_does_not_know_the_command_has_no_module() {
         for detail in [
-            "unknown command 'LO.HELLO'",
-            "unknown or disabled command 'LO.HELLO'",
+            "unknown command 'BLOB.RDMA_HELLO'",
+            "unknown or disabled command 'BLOB.RDMA_HELLO'",
         ] {
             let failure = handshake_refused("10.0.0.1:6379", server_error(detail));
             let message = failure.to_string();
@@ -458,7 +460,7 @@ mod tests {
     #[test]
     fn an_unreadable_reply_names_the_node_and_stays_a_protocol_error() {
         let unreadable = protocol::as_redis_error(glide_rdma::RdmaError::Protocol(
-            "lo.hello returned no addresses".to_string(),
+            "blob.rdma_hello returned no addresses".to_string(),
         ));
 
         let failure = malformed_handshake("10.0.0.1:6379", unreadable);
@@ -466,7 +468,10 @@ mod tests {
         assert_eq!(failure.kind(), redis::ErrorKind::TypeError);
         let message = failure.to_string();
         assert!(message.contains("10.0.0.1:6379"), "{message}");
-        assert!(message.contains("malformed LO.HELLO reply"), "{message}");
+        assert!(
+            message.contains("malformed BLOB.RDMA_HELLO reply"),
+            "{message}"
+        );
     }
 
     #[test]
@@ -476,7 +481,12 @@ mod tests {
 
     #[test]
     fn rdma_commands_are_refused_outside_the_rdma_methods() {
-        for name in [b"LO.HELLO".as_slice(), b"LO.GET", b"LO.SET", b"lo.get"] {
+        for name in [
+            b"BLOB.RDMA_HELLO".as_slice(),
+            b"BLOB.RDMA_GET",
+            b"BLOB.RDMA_SET",
+            b"blob.rdma_get",
+        ] {
             let error = refuse_direct(name).expect_err("an RDMA command is refused");
             assert_eq!(error.kind(), redis::ErrorKind::ClientError);
             assert!(
@@ -484,7 +494,16 @@ mod tests {
                 "{error}"
             );
         }
-        for name in [b"GET".as_slice(), b"SET", b"LO", b"LO.GETX", b""] {
+        // The TCP variants carry the value over RESP, so callers may send them directly.
+        for name in [
+            b"GET".as_slice(),
+            b"SET",
+            b"BLOB",
+            b"BLOB.RDMA_GETX",
+            b"BLOB.TCP_GET",
+            b"BLOB.TCP_SET",
+            b"",
+        ] {
             assert!(
                 refuse_direct(name).is_ok(),
                 "{:?}",
@@ -499,7 +518,12 @@ mod tests {
         batch.cmd("SET").arg("key").arg("value");
         assert!(refuse_direct_in_batch(&batch).is_ok());
 
-        batch.cmd("LO.SET").arg("key").arg("8").arg("7").arg("4096");
+        batch
+            .cmd("BLOB.RDMA_SET")
+            .arg("key")
+            .arg("8")
+            .arg("7")
+            .arg("4096");
         assert!(refuse_direct_in_batch(&batch).is_err());
     }
 

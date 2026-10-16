@@ -646,7 +646,7 @@ pub fn is_blocking_command_name(name: &[u8], args: &[Vec<u8>]) -> bool {
         // A RDMA transfer is treated as blocking mainly so the client does not
         // abandon it while it is in flight and leave the registered memory in
         // an undefined state.
-        b"LO.GET" | b"LO.SET" => true,
+        b"BLOB.RDMA_GET" | b"BLOB.RDMA_SET" => true,
         // BLOCK is matched case-insensitively, mirroring `Cmd::position`.
         b"XREAD" | b"XREADGROUP" => args.iter().any(|a| a.eq_ignore_ascii_case(b"BLOCK")),
         _ => false,
@@ -679,7 +679,7 @@ fn get_request_timeout(cmd: &Cmd, default_timeout: Duration) -> RedisResult<Opti
         // registered memory.
         //
         // Close the client instead to abort a transfer and revoke the registration.
-        b"LO.GET" | b"LO.SET" => Ok(RequestTimeoutOption::NoTimeout),
+        b"BLOB.RDMA_GET" | b"BLOB.RDMA_SET" => Ok(RequestTimeoutOption::NoTimeout),
         _ => Ok(RequestTimeoutOption::ClientConfig),
     }?;
 
@@ -1275,16 +1275,18 @@ impl Client {
         cmd: &'a mut Cmd,
         routing: Option<RoutingInfo>,
     ) -> redis::RedisFuture<'a, Value> {
-        self.send_command_inner(cmd, routing, false)
+        self.send_command_inner(cmd, routing, false, None)
     }
 
-    /// [`Self::send_command`], which refuses `LO.*` commands unless
-    /// `from_rdma_method` is set. Only `rdma_transfer` sets it.
+    /// [`Self::send_command`], which refuses `BLOB.*` commands unless
+    /// `from_rdma_method` is set. Only `rdma_transfer` sets it, and passes the
+    /// in-flight slot it reserved before lending its buffer as `reserved`.
     fn send_command_inner<'a>(
         &'a mut self,
         cmd: &'a mut Cmd,
         routing: Option<RoutingInfo>,
         from_rdma_method: bool,
+        reserved: Option<redis::cluster_async::InflightRequestTracker>,
     ) -> redis::RedisFuture<'a, Value> {
         Box::pin(async move {
             if !from_rdma_method {
@@ -1294,7 +1296,7 @@ impl Client {
             self.reconcile_iam_before_dispatch().await?;
             // Track MULTI/EXEC/DISCARD for the borrow-time re-AUTH defer.
             self.track_transaction_state(cmd);
-            self.send_command_ungated(cmd, routing).await
+            self.send_command_ungated(cmd, routing, reserved).await
         })
     }
 
@@ -1307,15 +1309,13 @@ impl Client {
         &'a mut self,
         cmd: &'a mut Cmd,
         routing: Option<RoutingInfo>,
+        reserved: Option<redis::cluster_async::InflightRequestTracker>,
     ) -> RedisResult<Value> {
         let client = self.get_or_initialize_client().await?;
 
         // Reject immediately if circuit breaker is open.
         if !self.is_circuit_breaker_healthy() {
-            return Err(RedisError::from((
-                ErrorKind::CircuitBreakerOpen,
-                "Client circuit breaker is open - core unhealthy",
-            )));
+            return Err(circuit_breaker_open());
         }
 
         if let Some(result) = self.pubsub_synchronizer.intercept_pubsub_command(cmd).await {
@@ -1328,23 +1328,9 @@ impl Client {
         // last clone of the Cmd is dropped (i.e. all sub-commands in the
         // cluster event loop finish). This decouples user-facing timeout
         // from internal pipeline cleanup.
-        let tracker = match self.reserve_inflight_request() {
+        let tracker = match reserved.or_else(|| self.reserve_inflight_request()) {
             Some(t) => t,
-            None => {
-                let available = self.inflight_requests_allowed.load(Ordering::Relaxed);
-                log_warn_rate_limited!(
-                    "inflight",
-                    10,
-                    format!(
-                        "Inflight request limit exhausted. limit={}, available={}",
-                        self.inflight_requests_limit, available
-                    )
-                );
-                return Err(RedisError::from((
-                    ErrorKind::ClientError,
-                    "Reached maximum inflight requests",
-                )));
-            }
+            None => return Err(self.inflight_requests_exhausted()),
         };
 
         // Log at debug level when inflight usage crosses a 10% threshold.
@@ -2155,6 +2141,20 @@ impl Client {
         )
     }
 
+    /// The error for a command refused because every in-flight slot is taken.
+    fn inflight_requests_exhausted(&self) -> RedisError {
+        let available = self.inflight_requests_allowed.load(Ordering::Relaxed);
+        log_warn_rate_limited!(
+            "inflight",
+            10,
+            format!(
+                "Inflight request limit exhausted. limit={}, available={}",
+                self.inflight_requests_limit, available
+            )
+        );
+        RedisError::from((ErrorKind::ClientError, "Reached maximum inflight requests"))
+    }
+
     /// Returns the current number of available inflight slots.
     /// For testing/observability — the inflight limit minus this value equals
     /// the number of commands currently held by the internal pipeline.
@@ -2255,7 +2255,8 @@ impl Client {
         cmd.arg(pass);
         // Ungated: this AUTH is itself the pool-borrow reconcile's dispatch, so it
         // must not re-enter the borrow gate.
-        self.send_command_ungated(&mut cmd, Some(routing)).await
+        self.send_command_ungated(&mut cmd, Some(routing), None)
+            .await
     }
 
     /// Returns the username if one was configured during client creation. Otherwise, returns None.
@@ -2953,6 +2954,14 @@ fn sanitized_request_string(request: &ConnectionRequest) -> String {
     )
 }
 
+/// The error for a command refused because the client circuit breaker is open.
+fn circuit_breaker_open() -> RedisError {
+    RedisError::from((
+        ErrorKind::CircuitBreakerOpen,
+        "Client circuit breaker is open - core unhealthy",
+    ))
+}
+
 /// What an RDMA transfer hands back: the buffer, and how the transfer went.
 ///
 /// The buffer is `None` only when a transfer was abandoned and its region could
@@ -2971,7 +2980,9 @@ fn reclaim_rdma_loan(
         Ok(reply) => (reply, None),
         Err(error) => (glide_rdma::TransferReply::Failed, Some(error)),
     };
-    match loan.reclaim(transfer_reply) {
+    // SAFETY: `reply` is the server's answer to this loan's command, so the server
+    // is done with the window.
+    match unsafe { loan.reclaim(transfer_reply) } {
         Ok((buffer, receipt)) => (Some(buffer), parse_error.map_or(Ok(receipt), Err)),
         Err((buffer, error)) => (
             Some(buffer),
@@ -2980,43 +2991,32 @@ fn reclaim_rdma_loan(
     }
 }
 
-/// End a loan the server may still be using: close the region, then hand the
-/// buffer back.
+/// End a loan the server may still be using: close the region, then free its
+/// memory on efa-direct or park it until the fabric closes on tcp. No buffer comes
+/// back.
 #[cfg(feature = "rdma")]
 fn recall_rdma_loan(
     loan: glide_rdma::LentBuffer,
     error: redis::RedisError,
 ) -> RdmaOutcome<Option<glide_rdma::ReadReceipt>> {
     match loan.recall() {
-        Ok(buffer) => (Some(buffer), Err(error)),
+        Ok(()) => (None, Err(error)),
         // The server may still reach the memory. Dropping the loan tries to close
         // the region once more, and leaks the memory if that fails too.
         Err((_loan, _)) => (None, Err(error)),
     }
 }
 
-/// Check the checksum a `LO.GET` reported against the bytes that landed.
+/// Check the checksum a `BLOB.RDMA_GET` reported against the bytes that landed.
 #[cfg(feature = "rdma")]
 fn verify_rdma_checksum(
     buffer: &glide_rdma::RdmaBuffer,
     offset: usize,
     receipt: &glide_rdma::ReadReceipt,
 ) -> Result<(), redis::RedisError> {
-    let Some(reported) = receipt.checksum else {
-        return Ok(());
-    };
-    // `reclaim` checked the byte count against the window, which fits the buffer.
-    let landed = &buffer.as_host()[offset..offset + receipt.bytes_written];
-    let computed = glide_rdma::checksum(landed);
-    if computed != reported {
-        return Err(crate::rdma::protocol::as_redis_error(
-            glide_rdma::RdmaError::ChecksumMismatch {
-                expected: reported,
-                actual: computed,
-            },
-        ));
-    }
-    Ok(())
+    receipt
+        .verify(&buffer.as_host()[offset..])
+        .map_err(crate::rdma::protocol::as_redis_error)
 }
 
 /// Create a compression manager from the given configuration
@@ -3367,6 +3367,48 @@ impl Client {
         self.rdma_regions.register(|| rdma_fabric.register(memory))
     }
 
+    /// Bytes of registered memory this client is holding back because transfers
+    /// ended without the server's reply, so the server might still write into them.
+    /// Only grows while the client lives.
+    ///
+    /// Stays at zero on efa-direct, where closing a region stops the server's writes.
+    /// On tcp, which is for development, every transfer that ends without the
+    /// server's reply holds its memory: one that was cancelled, abandoned, or lost its
+    /// connection.
+    ///
+    /// If this passes a threshold of your own, create a new client and register your
+    /// memory again. The held memory is freed once this client and all its clones are
+    /// dropped along with every buffer registered through them, unless
+    /// [`Self::rdma_leaked_bytes`] is nonzero.
+    ///
+    /// # Errors
+    ///
+    /// When the client was created without an RDMA configuration.
+    #[cfg(feature = "rdma")]
+    pub fn rdma_parked_bytes(&self) -> Result<usize, redis::RedisError> {
+        Ok(self.require_rdma_fabric()?.parked_bytes())
+    }
+
+    /// Bytes of registered memory kept until the process exits, because closing their
+    /// region failed. Only grows.
+    ///
+    /// A failed close needs a device or driver error, so this should stay at zero.
+    /// Once it is not, the server might still write into that memory, so it is never
+    /// freed, and this client's other held memory ([`Self::rdma_parked_bytes`]) can no
+    /// longer be freed either. Each failure is also logged at error level.
+    ///
+    /// Watch this against a threshold of your own, and restart the process once it is
+    /// passed. Until then, a new client can keep transferring with newly registered
+    /// memory.
+    ///
+    /// # Errors
+    ///
+    /// When the client was created without an RDMA configuration.
+    #[cfg(feature = "rdma")]
+    pub fn rdma_leaked_bytes(&self) -> Result<usize, redis::RedisError> {
+        Ok(self.require_rdma_fabric()?.leaked_bytes())
+    }
+
     /// Cancel every transfer this client has in flight and refuse new ones.
     ///
     /// Revokes every region registered through this client or any clone of it.
@@ -3408,6 +3450,10 @@ impl Client {
         if let Err(error) = self.check_rdma_buffer(&buffer) {
             return (Some(buffer), Err(error));
         }
+        let slot = match self.rdma_preflight().await {
+            Ok(slot) => slot,
+            Err(error) => return (Some(buffer), Err(error)),
+        };
         let (command, loan) = match buffer.lend_for_get(key, offset, length) {
             Ok(lent) => lent,
             Err((buffer, error)) => {
@@ -3418,7 +3464,7 @@ impl Client {
             }
         };
         let (buffer, result) = self
-            .rdma_transfer(command, loan, crate::rdma::protocol::parse_read_reply)
+            .rdma_transfer(command, loan, slot, crate::rdma::protocol::parse_read_reply)
             .await;
         let result = match (&buffer, result) {
             (Some(buffer), Ok(Some(receipt))) => {
@@ -3441,10 +3487,28 @@ impl Client {
         offset: usize,
         length: usize,
     ) -> RdmaOutcome<()> {
+        self.rdma_set_with_checksum(key, buffer, offset, length, glide_rdma::SetChecksum::Skip)
+            .await
+    }
+
+    /// E2E scaffolding for the CRC prototype: [`Self::rdma_set`] with a checksum choice.
+    #[cfg(feature = "rdma")]
+    pub async fn rdma_set_with_checksum(
+        &mut self,
+        key: &[u8],
+        buffer: glide_rdma::RdmaBuffer,
+        offset: usize,
+        length: usize,
+        checksum: glide_rdma::SetChecksum,
+    ) -> RdmaOutcome<()> {
         if let Err(error) = self.check_rdma_buffer(&buffer) {
             return (Some(buffer), Err(error));
         }
-        let (command, loan) = match buffer.lend_for_set(key, offset, length) {
+        let slot = match self.rdma_preflight().await {
+            Ok(slot) => slot,
+            Err(error) => return (Some(buffer), Err(error)),
+        };
+        let (command, loan) = match buffer.lend_for_set(key, offset, length, checksum) {
             Ok(lent) => lent,
             Err((buffer, error)) => {
                 return (
@@ -3454,7 +3518,12 @@ impl Client {
             }
         };
         let (buffer, result) = self
-            .rdma_transfer(command, loan, crate::rdma::protocol::parse_write_reply)
+            .rdma_transfer(
+                command,
+                loan,
+                slot,
+                crate::rdma::protocol::parse_write_reply,
+            )
             .await;
         (buffer, result.map(|_| ()))
     }
@@ -3468,12 +3537,21 @@ impl Client {
     /// recalled instead, which closes the region first. So is a revoke that wins
     /// the race against the reply.
     ///
+    /// The client-side checks that can fail before anything is sent already ran in
+    /// [`Self::rdma_preflight`], before the buffer was lent. A connection error that
+    /// says the command was not transmitted (`FatalSendError`) is still recalled:
+    /// the cluster client may have retried after an earlier attempt that did reach
+    /// the server, so it does not prove the server never saw the command.
+    ///
+    /// `slot` is the in-flight slot [`Self::rdma_preflight`] reserved.
+    ///
     /// If this future is dropped, so is the loan, which also closes the region.
     #[cfg(feature = "rdma")]
     async fn rdma_transfer(
         &mut self,
         command: glide_rdma::RdmaCommand,
         loan: glide_rdma::LentBuffer,
+        slot: redis::cluster_async::InflightRequestTracker,
         parse: fn(redis::Value) -> redis::RedisResult<glide_rdma::TransferReply>,
     ) -> RdmaOutcome<Option<glide_rdma::ReadReceipt>> {
         let mut command = crate::rdma::protocol::redis_command(&command);
@@ -3481,7 +3559,7 @@ impl Client {
             // A reply that is ready wins over a revoke that is also ready: the
             // transfer did finish, so the caller should hear that it did.
             biased;
-            reply = self.send_command_inner(&mut command, None, true) => Some(reply),
+            reply = self.send_command_inner(&mut command, None, true, Some(slot)) => Some(reply),
             () = loan.revoked() => None,
         };
         match reply {
@@ -3504,6 +3582,23 @@ impl Client {
                 recall_rdma_loan(loan, error)
             }
         }
+    }
+
+    /// The checks [`Self::send_command_inner`] makes before it sends anything, run
+    /// before a transfer lends its buffer, so that failing one hands the buffer
+    /// straight back instead of revoking it. Returns the in-flight slot reserved for
+    /// the transfer, which the send then uses.
+    #[cfg(feature = "rdma")]
+    async fn rdma_preflight(
+        &mut self,
+    ) -> Result<redis::cluster_async::InflightRequestTracker, redis::RedisError> {
+        self.reconcile_iam_before_dispatch().await?;
+        self.get_or_initialize_client().await?;
+        if !self.is_circuit_breaker_healthy() {
+            return Err(circuit_breaker_open());
+        }
+        self.reserve_inflight_request()
+            .ok_or_else(|| self.inflight_requests_exhausted())
     }
 
     /// Whether the client is closing, and if so, once the close has tried every
@@ -3980,6 +4075,10 @@ pub fn create_test_glide_client() -> Client {
             cert_material: Arc::default(),
             address_resolver: None,
             configures_cert_material: false,
+            #[cfg(feature = "rdma")]
+            rdma_fabric: None,
+            #[cfg(feature = "rdma")]
+            rdma_regions: Default::default(),
         }),
         iam_token_manager: None,
         otel_metadata: Arc::new(OTelMetadata {
@@ -4508,8 +4607,9 @@ mod tests {
 
     #[test]
     fn test_rdma_transfers_have_no_timeout() {
-        // `LO.GET <key> <rkey> <remote-address>`, `LO.SET <key> <len> <rkey> <remote-address>`
-        for name in ["LO.GET", "LO.SET"] {
+        // `BLOB.RDMA_GET <key> <rkey> <remote-address> <len>`,
+        // `BLOB.RDMA_SET <key> <len> <rkey> <remote-address> <len>`
+        for name in ["BLOB.RDMA_GET", "BLOB.RDMA_SET"] {
             let mut cmd = Cmd::new();
             cmd.arg(name)
                 .arg("key")
@@ -4525,10 +4625,13 @@ mod tests {
 
     #[test]
     fn test_rdma_handshake_keeps_the_default_timeout() {
-        let mut cmd = Cmd::new();
-        cmd.arg("LO.HELLO");
-        let result = get_request_timeout(&cmd, Duration::from_millis(250)).unwrap();
-        assert_eq!(result, Some(Duration::from_millis(250)));
+        // As do the TCP variants, which are ordinary round trips over RESP.
+        for name in ["BLOB.RDMA_HELLO", "BLOB.TCP_GET", "BLOB.TCP_SET"] {
+            let mut cmd = Cmd::new();
+            cmd.arg(name);
+            let result = get_request_timeout(&cmd, Duration::from_millis(250)).unwrap();
+            assert_eq!(result, Some(Duration::from_millis(250)), "{name}");
+        }
     }
 
     #[test]
@@ -5333,7 +5436,7 @@ mod tests {
 
     #[test]
     fn test_rdma_transfers_count_as_blocking() {
-        for name in ["LO.GET", "LO.SET"] {
+        for name in ["BLOB.RDMA_GET", "BLOB.RDMA_SET"] {
             let mut cmd = Cmd::new();
             cmd.arg(name)
                 .arg("key")
@@ -5351,11 +5454,14 @@ mod tests {
             );
         }
 
-        // The handshake is an ordinary round trip with a request timeout
-        let mut cmd = Cmd::new();
-        cmd.arg("LO.HELLO");
-        assert!(!is_blocking_command(&cmd));
-        assert!(!is_blocking_command_name(b"LO.HELLO", &[]));
+        // The handshake and the TCP variants are ordinary round trips with a
+        // request timeout.
+        for name in ["BLOB.RDMA_HELLO", "BLOB.TCP_GET", "BLOB.TCP_SET"] {
+            let mut cmd = Cmd::new();
+            cmd.arg(name);
+            assert!(!is_blocking_command(&cmd), "{name}");
+            assert!(!is_blocking_command_name(name.as_bytes(), &[]), "{name}");
+        }
     }
 
     #[test]

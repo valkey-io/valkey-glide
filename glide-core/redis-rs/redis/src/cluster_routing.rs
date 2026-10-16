@@ -744,9 +744,15 @@ fn base_routing(cmd: &[u8]) -> RouteBy {
         b"MIGRATE" => RouteBy::ThirdArg,
 
         // The RDMA transfer commands are of the form:
-        // LO.GET <key> <rkey> <remote-address>
-        // LO.SET <key> <length> <rkey> <remote-address>
-        b"LO.GET" | b"LO.SET" => RouteBy::FirstKey,
+        // BLOB.RDMA_GET <key> <rkey> <remote-address> <length>
+        // BLOB.RDMA_SET <key> <length> <rkey> <remote-address> <length>
+        //
+        // Both go to the key's primary: they are deliberately left out of
+        // `is_readonly_cmd`, so no read-from-replica setting sends a read to a
+        // replica. The large-object module does not replicate its objects yet, so a
+        // replica holds none of them and would answer every read as a missing key.
+        // Add `BLOB.RDMA_GET` there once the module replicates.
+        b"BLOB.RDMA_GET" | b"BLOB.RDMA_SET" => RouteBy::FirstKey,
 
         b"LMPOP" | b"SINTERCARD" | b"ZDIFF" | b"ZINTER" | b"ZINTERCARD" | b"ZMPOP" | b"ZUNION" => {
             RouteBy::SecondArgAfterKeyCount
@@ -1565,31 +1571,34 @@ mod tests_routing {
     use core::panic;
     use std::sync::{Arc, RwLock};
 
-    /// `LO.GET <key> <rkey> <remote-address>`, the read half of a RDMA transfer.
+    /// `BLOB.RDMA_GET <key> <rkey> <remote-address> <length>`, the read half of a RDMA
+    /// transfer.
     fn rdma_get(key: &str) -> crate::Cmd {
-        let mut command = cmd("LO.GET");
+        let mut command = cmd("BLOB.RDMA_GET");
         command
             .arg(key)
             .arg("439041101") // rkey
-            .arg("140229324210176"); // remote-address
+            .arg("140229324210176") // remote-address
+            .arg("262144"); // window length
         command
     }
 
-    /// `LO.SET <key> <length> <rkey> <remote-address>`, the write half.
+    /// `BLOB.RDMA_SET <key> <length> <rkey> <remote-address> <length>`, the write half.
     fn rdma_set(key: &str) -> crate::Cmd {
-        let mut command = cmd("LO.SET");
+        let mut command = cmd("BLOB.RDMA_SET");
         command
             .arg(key)
             .arg("262144") // payload length
             .arg("439041101") // rkey
-            .arg("140229324210176"); // remote-address
+            .arg("140229324210176") // remote-address
+            .arg("262144"); // window length
         command
     }
 
     fn rdma_cmd(name: &str, key: &str) -> crate::Cmd {
         match name {
-            "LO.GET" => rdma_get(key),
-            "LO.SET" => rdma_set(key),
+            "BLOB.RDMA_GET" => rdma_get(key),
+            "BLOB.RDMA_SET" => rdma_set(key),
             other => panic!("not a RDMA transfer command: {other}"),
         }
     }
@@ -1618,7 +1627,7 @@ mod tests_routing {
         plain.arg("foo");
         let expected = slot_of(&plain);
 
-        for name in ["LO.GET", "LO.SET"] {
+        for name in ["BLOB.RDMA_GET", "BLOB.RDMA_SET"] {
             assert_eq!(
                 slot_of(&rdma_cmd(name, "foo")),
                 expected,
@@ -1629,8 +1638,8 @@ mod tests_routing {
 
     #[test]
     fn test_routing_info_rdma_reads_are_pinned_to_the_primary() {
-        // Unlike a plain GET: the server holds the transfer's state on the
-        // connection the handshake arrived on, and that is a primary.
+        // Unlike a plain GET: the large-object module does not replicate its
+        // objects yet, so only the primary can answer an RDMA read.
         let mut plain_get = cmd("GET");
         plain_get.arg("foo");
         assert_eq!(slot_addr_of(&plain_get), SlotAddr::ReplicaOptional);
@@ -1641,8 +1650,8 @@ mod tests_routing {
 
     #[test]
     fn test_rdma_data_commands_trigger_moved() {
-        assert!(RoutingInfo::is_key_routing_command(b"LO.GET"));
-        assert!(RoutingInfo::is_key_routing_command(b"LO.SET"));
+        assert!(RoutingInfo::is_key_routing_command(b"BLOB.RDMA_GET"));
+        assert!(RoutingInfo::is_key_routing_command(b"BLOB.RDMA_SET"));
     }
 
     #[test]

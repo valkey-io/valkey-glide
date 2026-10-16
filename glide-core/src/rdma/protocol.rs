@@ -20,19 +20,17 @@ pub(crate) fn redis_command(command: &RdmaCommand) -> Cmd {
     built
 }
 
-/// `LO.HELLO <client-address>`
+/// `BLOB.RDMA_HELLO <client-address>`
 pub fn hello_command(client_address: &[u8]) -> Cmd {
     redis_command(&glide_rdma::hello(client_address))
 }
 
-/// Parse a read reply: nil for a missing key, a byte count, or a
-/// `[bytes, checksum]` pair.
+/// Parse a read reply: nil for a missing key, or a `[bytes, checksum]` pair.
 pub fn parse_receipt(reply: Value) -> Result<Option<ReadReceipt>, RedisError> {
     let (bytes_written, checksum) = match reply {
         Value::Nil => return Ok(None),
-        Value::Int(bytes) => (bytes, None),
         Value::Array(items) => match items.as_slice() {
-            [Value::Int(bytes), Value::Int(checksum)] => (*bytes, Some(*checksum)),
+            [Value::Int(bytes), Value::Int(checksum)] => (*bytes, *checksum),
             other => {
                 return Err(protocol_error(format!(
                     "expected [bytes, checksum], got {} elements",
@@ -47,18 +45,18 @@ pub fn parse_receipt(reply: Value) -> Result<Option<ReadReceipt>, RedisError> {
         .map_err(as_redis_error)
 }
 
-/// Check a write reply. `LO.SET` answers `OK` on success.
+/// Check a write reply. `BLOB.RDMA_SET` answers `OK` on success.
 pub fn parse_write_ack(reply: Value) -> Result<(), RedisError> {
     match reply {
         Value::Okay => Ok(()),
         Value::SimpleString(status) if status.eq_ignore_ascii_case("ok") => Ok(()),
         other => Err(protocol_error(format!(
-            "expected OK from lo.set, got {other:?}"
+            "expected OK from blob.rdma_set, got {other:?}"
         ))),
     }
 }
 
-/// Parse a `LO.GET` reply into what ends the loan.
+/// Parse a `BLOB.RDMA_GET` reply into what ends the loan.
 pub(crate) fn parse_read_reply(reply: Value) -> Result<TransferReply, RedisError> {
     Ok(match parse_receipt(reply)? {
         Some(receipt) => TransferReply::Read(receipt),
@@ -66,17 +64,17 @@ pub(crate) fn parse_read_reply(reply: Value) -> Result<TransferReply, RedisError
     })
 }
 
-/// Parse a `LO.SET` reply into what ends the loan.
+/// Parse a `BLOB.RDMA_SET` reply into what ends the loan.
 pub(crate) fn parse_write_reply(reply: Value) -> Result<TransferReply, RedisError> {
     parse_write_ack(reply).map(|()| TransferReply::Stored)
 }
 
-/// Parse `LO.HELLO` into every fabric address the server may initiate from.
+/// Parse `BLOB.RDMA_HELLO` into every fabric address the server may initiate from.
 pub fn parse_hello(reply: Value) -> Result<Handshake, RedisError> {
     let encoded: Vec<String> = redis::from_redis_value(&reply)
-        .map_err(|error| protocol_error(format!("lo.hello: {error}")))?;
+        .map_err(|error| protocol_error(format!("blob.rdma_hello: {error}")))?;
     if encoded.is_empty() {
-        return Err(protocol_error("lo.hello returned no addresses"));
+        return Err(protocol_error("blob.rdma_hello returned no addresses"));
     }
     let peers = encoded
         .iter()
@@ -147,7 +145,7 @@ mod tests {
     #[test]
     fn a_command_maps_onto_a_cmd_in_wire_order() {
         let command = hello_command(&[0xde, 0xad]);
-        assert_eq!(args(&command), ["LO.HELLO", "dead"]);
+        assert_eq!(args(&command), ["BLOB.RDMA_HELLO", "dead"]);
     }
 
     #[test]
@@ -157,10 +155,10 @@ mod tests {
             TransferReply::Missing
         );
         assert_eq!(
-            parse_read_reply(Value::Int(8)).unwrap(),
+            parse_read_reply(Value::Array(vec![Value::Int(8), Value::Int(5)])).unwrap(),
             TransferReply::Read(ReadReceipt {
                 bytes_written: 8,
-                checksum: None
+                checksum: 5
             })
         );
         assert!(parse_read_reply(Value::Okay).is_err());
@@ -200,11 +198,10 @@ mod tests {
         assert_eq!(parse_receipt(Value::Nil).unwrap(), None);
     }
 
+    /// The server always sends the checksum, so a byte count alone is malformed.
     #[test]
-    fn parses_a_bare_byte_count() {
-        let receipt = parse_receipt(Value::Int(1024)).unwrap().unwrap();
-        assert_eq!(receipt.bytes_written, 1024);
-        assert_eq!(receipt.checksum, None);
+    fn rejects_a_bare_byte_count() {
+        assert!(parse_receipt(Value::Int(1024)).is_err());
     }
 
     #[test]
@@ -212,7 +209,7 @@ mod tests {
         let reply = Value::Array(vec![Value::Int(1024), Value::Int(0xE306_9283)]);
         let receipt = parse_receipt(reply).unwrap().unwrap();
         assert_eq!(receipt.bytes_written, 1024);
-        assert_eq!(receipt.checksum, Some(0xE306_9283));
+        assert_eq!(receipt.checksum, 0xE306_9283);
     }
 
     #[test]

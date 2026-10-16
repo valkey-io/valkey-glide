@@ -182,9 +182,9 @@ async fn get_multiplexed_connection(
 
 /// Pair a fresh connection with the fabric its RDMA session will be opened on.
 ///
-/// The RDMA session is opened with an `LO.HELLO` by the first transfer requested.
+/// The RDMA session is opened with a `BLOB.RDMA_HELLO` by the first transfer requested.
 /// When a connection is replaced, the RDMA session goes too, it does not inherit
-/// the old one. There should be only one `LO.HELLO` per RESP connection.
+/// the old one. There should be only one `BLOB.RDMA_HELLO` per RESP connection.
 #[cfg(feature = "rdma")]
 fn open_glide_connection(
     client: &redis::Client,

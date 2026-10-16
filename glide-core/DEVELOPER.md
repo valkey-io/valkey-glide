@@ -74,7 +74,7 @@ cargo test --features rdma --test test_rdma
 ```
 
 [`tests/test_rdma_remote.rs`](tests/test_rdma_remote.rs) performs real transfers and is
-`#[ignore]`d, because it needs a server that serves the `LO.*` commands. Point it at one,
+`#[ignore]`d, because it needs a server that serves the `BLOB.*` commands. Point it at one,
 and pick the provider:
 
 ```bash

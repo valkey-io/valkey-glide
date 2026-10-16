@@ -174,6 +174,16 @@ mod dma_tests {
             .register_rdma_region(vec![0u8; 4096])
             .expect_err("a client without a fabric cannot register");
         assert!(error.to_string().contains("RdmaConfiguration"), "{error}");
+        for error in [
+            client
+                .rdma_parked_bytes()
+                .expect_err("no fabric, so nothing to report"),
+            client
+                .rdma_leaked_bytes()
+                .expect_err("no fabric, so nothing to report"),
+        ] {
+            assert!(error.to_string().contains("RdmaConfiguration"), "{error}");
+        }
 
         // A buffer cannot be made without a fabric, so borrow one from a
         // standalone tcp endpoint purely to have something to pass.
@@ -192,7 +202,7 @@ mod dma_tests {
 
     // ---- against a mock server ----------------------------------------------
     //
-    // A mock can answer `LO.*` commands without a server module, including with
+    // A mock can answer `BLOB.*` commands without a server module, including with
     // errors and with no reply at all, which a live server cannot be made to do.
 
     /// What a standalone client asks a node before it will use it.
@@ -209,7 +219,7 @@ mod dma_tests {
         ])
     }
 
-    /// A `LO.HELLO` reply naming one peer and the endpoint it belongs to.
+    /// A `BLOB.RDMA_HELLO` reply naming one peer and the endpoint it belongs to.
     ///
     /// The address comes from a real tcp endpoint rather than a handwritten
     /// sockaddr, because what `fi_av_insert` accepts is platform-specific -- a
@@ -245,16 +255,50 @@ mod dma_tests {
             rdma: RdmaSetting::Configured(FabricConfig::new(Provider::Tcp)),
             ..Default::default()
         };
-        Client::new(request, None)
-            .await
-            .expect("building a client sends no LO.HELLO, so the mock needs no script for it")
+        Client::new(request, None).await.expect(
+            "building a client sends no BLOB.RDMA_HELLO, so the mock needs no script for it",
+        )
     }
 
-    /// A byte count, which is what a read reply carries.
-    const READ_REPLY: &str = ":8\r\n";
+    /// A transfer that fails before its command is sent never gave the server the
+    /// memory, so the buffer must come back usable, not revoked. Hitting the in-flight
+    /// limit is the everyday case: it is back-pressure under load.
+    #[tokio::test]
+    async fn a_transfer_refused_by_the_inflight_limit_hands_back_a_usable_buffer() {
+        let (_peer, mock) = server_that_never_answers("BLOB.RDMA_GET");
+        let request = glide_core::client::ConnectionRequest {
+            addresses: vec![mock_address(&mock)],
+            rdma: RdmaSetting::Configured(FabricConfig::new(Provider::Tcp)),
+            inflight_requests_limit: Some(1),
+            ..Default::default()
+        };
+        let client = Client::new(request, None).await.expect("connects");
 
-    /// What every replica answers, because the module registers `LO.HELLO` as a
-    /// write command.
+        // Take the one in-flight slot with a transfer the server never answers.
+        let mut holding = client.clone();
+        let first = client.register_rdma_region(vec![0u8; 4096]).unwrap();
+        let _held = tokio::spawn(async move { holding.rdma_get(b"key", first, 0, 4096).await });
+        tokio::time::sleep(STUCK).await;
+
+        let mut refused = client.clone();
+        let second = client.register_rdma_region(vec![0u8; 4096]).unwrap();
+        let (buffer, result) = refused.rdma_get(b"key", second, 0, 4096).await;
+
+        let error = result.expect_err("no in-flight slot is free");
+        assert!(error.to_string().contains("inflight"), "{error}");
+        let buffer = buffer.expect("nothing was sent, so the buffer comes back");
+        assert!(!buffer.is_revoked(), "and it can be lent again");
+        assert_eq!(client.rdma_parked_bytes().unwrap(), 0);
+    }
+
+    /// A byte count and its checksum, which is what a read reply carries. The
+    /// mock writes nothing, so the checksum is that of the eight zero bytes every
+    /// test's region starts with.
+    const READ_REPLY: &str = "*2\r\n:8\r\n:2351477386\r\n";
+
+    /// A refusal from a node that will not take writes. Earlier module builds
+    /// registered the handshake as a write command, so every replica answered it
+    /// this way; the current one accepts it, but a node can still refuse.
     const READONLY: &str = "-READONLY You can't write against a read only replica.\r\n";
 
     #[tokio::test]
@@ -264,10 +308,10 @@ mod dma_tests {
             // A second handshake would take this reply and fail the transfer
             // that sent it, so the test cannot pass if one is ever sent.
             (
-                "LO.HELLO".to_string(),
-                vec![hello, "-ERR a second LO.HELLO\r\n".to_string()],
+                "BLOB.RDMA_HELLO".to_string(),
+                vec![hello, "-ERR a second BLOB.RDMA_HELLO\r\n".to_string()],
             ),
-            ("LO.GET".to_string(), vec![READ_REPLY.to_string()]),
+            ("BLOB.RDMA_GET".to_string(), vec![READ_REPLY.to_string()]),
         ]);
         let mock = ServerMock::new_with_command_scripts(primary_responses(), scripts);
 
@@ -290,7 +334,7 @@ mod dma_tests {
         assert_eq!(
             mock.get_number_of_received_commands(),
             3,
-            "one LO.HELLO for the two LO.GETs, not one each"
+            "one BLOB.RDMA_HELLO for the two BLOB.GETs, not one each"
         );
     }
 
@@ -301,7 +345,7 @@ mod dma_tests {
     fn server_that_never_answers(command: &str) -> (glide_rdma::RdmaFabric, ServerMock) {
         let (peer, hello) = hello_reply();
         let scripts = HashMap::from([
-            ("LO.HELLO".to_string(), vec![hello]),
+            ("BLOB.RDMA_HELLO".to_string(), vec![hello]),
             (command.to_string(), vec![NO_REPLY.to_string()]),
         ]);
         (
@@ -315,12 +359,90 @@ mod dma_tests {
     const STUCK: std::time::Duration = std::time::Duration::from_millis(200);
     const PROMPTLY: std::time::Duration = std::time::Duration::from_secs(5);
 
+    /// Memory for a region that records when it is freed.
+    struct Tracked {
+        bytes: Vec<u8>,
+        freed: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    }
+
+    impl AsMut<[u8]> for Tracked {
+        fn as_mut(&mut self) -> &mut [u8] {
+            &mut self.bytes
+        }
+    }
+
+    impl Drop for Tracked {
+        fn drop(&mut self) {
+            self.freed.store(true, std::sync::atomic::Ordering::SeqCst);
+        }
+    }
+
+    fn tracked() -> (Tracked, std::sync::Arc<std::sync::atomic::AtomicBool>) {
+        let freed = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let memory = Tracked {
+            bytes: vec![0u8; 4096],
+            freed: freed.clone(),
+        };
+        (memory, freed)
+    }
+
+    /// Wait up to [`PROMPTLY`] for `freed` to be set.
+    async fn freed_promptly(freed: &std::sync::atomic::AtomicBool) -> bool {
+        let deadline = tokio::time::Instant::now() + PROMPTLY;
+        while !freed.load(std::sync::atomic::Ordering::SeqCst) {
+            if tokio::time::Instant::now() > deadline {
+                return false;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+        true
+    }
+
+    /// The test fabric is tcp, where closing a region does not stop a write already
+    /// accepted, so a cancelled transfer's memory is parked until the fabric closes.
+    /// The caller can see how much, and a new client is the way to get it back.
+    #[tokio::test]
+    async fn a_cancelled_read_parks_its_memory_until_the_client_is_dropped() {
+        let (_peer, mock) = server_that_never_answers("BLOB.RDMA_GET");
+        let client = rdma_client_against(&mock).await;
+        let (memory, freed) = tracked();
+        let buffer = client.register_rdma_region(memory).expect("registers");
+        let revoker = buffer.revoker();
+
+        let mut transferring = client.clone();
+        let transfer =
+            tokio::spawn(async move { transferring.rdma_get(b"key", buffer, 0, 4096).await });
+        tokio::time::sleep(STUCK).await;
+        revoker.revoke().expect("the region closes");
+        let _ = tokio::time::timeout(PROMPTLY, transfer)
+            .await
+            .expect("the revoke ends the wait");
+
+        mock.close().await;
+        tokio::time::sleep(STUCK).await;
+        assert!(
+            !freed.load(std::sync::atomic::Ordering::SeqCst),
+            "without a reply, tcp memory stays parked"
+        );
+        assert_eq!(
+            client.rdma_parked_bytes().unwrap(),
+            4096,
+            "and the caller can see how much"
+        );
+        assert_eq!(client.rdma_leaked_bytes().unwrap(), 0, "parked, not leaked");
+
+        // A new client is the way to get it back: once this one and the buffers
+        // registered through it are gone, its fabric closes and frees the memory.
+        drop(client);
+        assert!(freed_promptly(&freed).await);
+    }
+
     /// The hung-server case: no reply is coming, so only closing the client can
     /// end the wait. It must also leave the region revoked, since that is what
     /// makes returning early safe.
     #[tokio::test]
     async fn closing_the_client_cancels_a_read_the_server_never_answers() {
-        let (_peer, mock) = server_that_never_answers("LO.GET");
+        let (_peer, mock) = server_that_never_answers("BLOB.RDMA_GET");
         let client = rdma_client_against(&mock).await;
         let buffer = client
             .register_rdma_region(vec![0u8; 4096])
@@ -338,19 +460,21 @@ mod dma_tests {
             .await
             .expect("closing the client ends the wait")
             .unwrap();
-        let buffer = buffer.expect("a closed region hands the buffer back");
+        assert!(
+            buffer.is_none(),
+            "a recalled loan's memory is parked until the fabric closes"
+        );
         let cancelled = outcome.expect_err("a cancelled read is an error");
         assert_eq!(cancelled.kind(), redis::ErrorKind::ClientError);
         assert!(
             cancelled.to_string().contains("RDMA transfer cancelled"),
             "{cancelled}"
         );
-        assert!(buffer.is_revoked(), "the server can no longer reach it");
     }
 
     #[tokio::test]
     async fn closing_the_client_cancels_a_write_the_server_never_answers() {
-        let (_peer, mock) = server_that_never_answers("LO.SET");
+        let (_peer, mock) = server_that_never_answers("BLOB.RDMA_SET");
         let mut client = rdma_client_against(&mock).await;
         let buffer = client
             .register_rdma_region(vec![1u8; 4096])
@@ -366,21 +490,23 @@ mod dma_tests {
             tokio::time::timeout(STUCK + PROMPTLY, client.rdma_set(b"key", buffer, 0, 4096))
                 .await
                 .expect("closing the client ends the wait");
-        let buffer = buffer.expect("a closed region hands the buffer back");
+        assert!(
+            buffer.is_none(),
+            "a recalled loan's memory is parked until the fabric closes"
+        );
         let cancelled = outcome.expect_err("a cancelled write is an error");
         closing.await.unwrap().expect("the region closes");
         assert!(
             cancelled.to_string().contains("RDMA transfer cancelled"),
             "{cancelled}"
         );
-        assert!(buffer.is_revoked());
     }
 
     /// Revoking one region is the same cancellation without closing the client,
     /// and the error should say which of the two happened.
     #[tokio::test]
     async fn revoking_a_region_cancels_the_transfer_using_it() {
-        let (_peer, mock) = server_that_never_answers("LO.GET");
+        let (_peer, mock) = server_that_never_answers("BLOB.RDMA_GET");
         let client = rdma_client_against(&mock).await;
         let buffer = client
             .register_rdma_region(vec![0u8; 4096])
@@ -398,7 +524,10 @@ mod dma_tests {
             .await
             .expect("revoking the region ends the wait")
             .unwrap();
-        assert!(buffer.expect("the buffer comes back").is_revoked());
+        assert!(
+            buffer.is_none(),
+            "a recalled loan's memory is parked until the fabric closes"
+        );
         let cancelled = outcome.expect_err("a cancelled read is an error");
         assert!(
             cancelled.to_string().contains("region was revoked"),
@@ -406,21 +535,21 @@ mod dma_tests {
         );
     }
 
-    /// `LO.*` sent any other way than `rdma_get` and `rdma_set` would skip their
+    /// `BLOB.*` sent any other way than `rdma_get` and `rdma_set` would skip their
     /// window checks, progress and cancellation, so the client refuses it before
     /// anything reaches the server.
     #[tokio::test]
     async fn rdma_commands_sent_directly_are_refused() {
         let (_peer, hello) = hello_reply();
         let scripts = HashMap::from([
-            ("LO.HELLO".to_string(), vec![hello]),
-            ("LO.GET".to_string(), vec![READ_REPLY.to_string()]),
-            ("LO.SET".to_string(), vec!["+OK\r\n".to_string()]),
+            ("BLOB.RDMA_HELLO".to_string(), vec![hello]),
+            ("BLOB.RDMA_GET".to_string(), vec![READ_REPLY.to_string()]),
+            ("BLOB.RDMA_SET".to_string(), vec!["+OK\r\n".to_string()]),
         ]);
         let mock = ServerMock::new_with_command_scripts(primary_responses(), scripts);
         let mut client = rdma_client_against(&mock).await;
 
-        for name in ["LO.HELLO", "LO.GET", "lo.set"] {
+        for name in ["BLOB.RDMA_HELLO", "BLOB.RDMA_GET", "blob.rdma_set"] {
             let mut command = redis::cmd(name);
             command.arg("key").arg("7").arg("4096");
             let refused = client
@@ -432,7 +561,12 @@ mod dma_tests {
 
         let mut batch = redis::pipe();
         batch.cmd("SET").arg("key").arg("value");
-        batch.cmd("LO.SET").arg("key").arg("8").arg("7").arg("4096");
+        batch
+            .cmd("BLOB.RDMA_SET")
+            .arg("key")
+            .arg("8")
+            .arg("7")
+            .arg("4096");
         client
             .send_pipeline(
                 &batch,
@@ -468,7 +602,7 @@ mod dma_tests {
     #[tokio::test]
     async fn a_closed_client_refuses_rdma_and_still_serves_other_commands() {
         let (_peer, hello) = hello_reply();
-        let scripts = HashMap::from([("LO.HELLO".to_string(), vec![hello])]);
+        let scripts = HashMap::from([("BLOB.RDMA_HELLO".to_string(), vec![hello])]);
         let mock = ServerMock::new_with_command_scripts(primary_responses(), scripts);
         let mut client = rdma_client_against(&mock).await;
         let registered_before = client
@@ -500,15 +634,20 @@ mod dma_tests {
 
     /// The promotion case, which is why a refusal cannot be remembered.
     ///
-    /// A replica refuses every handshake. The connection built against it stays
-    /// perfectly usable, and when that node is promoted the next transfer has to
-    /// ask again on the same connection rather than having written the node off.
+    /// A node refuses the handshake, as a replica did on module builds that
+    /// treated it as a write. The connection built against it stays perfectly
+    /// usable, and once the node will take it, for example after a promotion, the
+    /// next transfer has to ask again on the same connection rather than having
+    /// written the node off.
     #[tokio::test]
     async fn a_refused_handshake_is_tried_again_by_the_next_transfer() {
         let (_peer, hello) = hello_reply();
         let scripts = HashMap::from([
-            ("LO.HELLO".to_string(), vec![READONLY.to_string(), hello]),
-            ("LO.GET".to_string(), vec![READ_REPLY.to_string()]),
+            (
+                "BLOB.RDMA_HELLO".to_string(),
+                vec![READONLY.to_string(), hello],
+            ),
+            ("BLOB.RDMA_GET".to_string(), vec![READ_REPLY.to_string()]),
         ]);
         let mock = ServerMock::new_with_command_scripts(primary_responses(), scripts);
 
@@ -551,13 +690,13 @@ mod dma_tests {
         );
     }
 
-    /// A mock that handshakes and then answers `LO.GET` with each reply in turn.
+    /// A mock that handshakes and then answers `BLOB.RDMA_GET` with each reply in turn.
     fn server_answering_reads(replies: &[&str]) -> (glide_rdma::RdmaFabric, ServerMock) {
         let (peer, hello) = hello_reply();
         let scripts = HashMap::from([
-            ("LO.HELLO".to_string(), vec![hello]),
+            ("BLOB.RDMA_HELLO".to_string(), vec![hello]),
             (
-                "LO.GET".to_string(),
+                "BLOB.RDMA_GET".to_string(),
                 replies.iter().map(|reply| reply.to_string()).collect(),
             ),
         ]);
@@ -604,7 +743,7 @@ mod dma_tests {
 
     #[tokio::test]
     async fn a_reply_larger_than_the_window_is_an_error_and_keeps_the_buffer() {
-        let (_peer, mock) = server_answering_reads(&[":4097\r\n"]);
+        let (_peer, mock) = server_answering_reads(&["*2\r\n:4097\r\n:0\r\n"]);
         let mut client = rdma_client_against(&mock).await;
         let buffer = client
             .register_rdma_region(vec![0u8; 8192])
@@ -626,21 +765,24 @@ mod dma_tests {
     /// can touch it.
     #[tokio::test]
     async fn abandoning_a_transfer_revokes_its_region() {
-        let (_peer, mock) = server_that_never_answers("LO.GET");
+        let (_peer, mock) = server_that_never_answers("BLOB.RDMA_GET");
         let mut client = rdma_client_against(&mock).await;
         let buffer = client
             .register_rdma_region(vec![0u8; 4096])
             .expect("registers");
         let revoker = buffer.revoker();
+        let closed = buffer.revoked();
 
         tokio::time::timeout(STUCK, client.rdma_get(b"key", buffer, 0, 4096))
             .await
             .expect_err("the server never replies, so the wait times out");
 
-        assert!(
-            revoker.is_released(),
-            "dropping the transfer dropped the loan, which closed the region"
-        );
+        // Dropping the transfer dropped the loan, which queued the close on the
+        // fabric's closing thread rather than closing the region in the drop.
+        tokio::time::timeout(PROMPTLY, closed)
+            .await
+            .expect("dropping the transfer closed the region");
+        assert!(revoker.is_released());
     }
 
     /// A window that runs past the end is refused before anything is sent, and the

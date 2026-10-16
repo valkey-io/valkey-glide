@@ -9,7 +9,7 @@
 //! The session is opened by the first transfer that needs it rather than when
 //! the connection is built. A connection that never carries a transfer -- every
 //! replica connection, every connection of a client that only ever sends
-//! ordinary commands -- never sends `LO.HELLO` at all.
+//! ordinary commands -- never sends `BLOB.RDMA_HELLO` at all.
 
 #[cfg(not(feature = "rdma"))]
 pub type GlideConnectionWithRdma = redis::aio::MultiplexedConnection;
@@ -105,7 +105,7 @@ mod with_rdma {
         }
     }
 
-    /// Run `LO.HELLO` on this connection and open the session it reports.
+    /// Run `BLOB.RDMA_HELLO` on this connection and open the session it reports.
     /// Should be run only once per RESP connection.
     async fn handshake(
         connection: &mut MultiplexedConnection,
