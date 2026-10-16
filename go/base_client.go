@@ -17,13 +17,9 @@ package glide
 // void successCallback(uintptr_t requestID, struct CommandResponse *message);
 // void failureCallback(uintptr_t requestID, char *errMessage, RequestErrorType errType);
 // void pubSubCallback(uintptr_t callbackID, enum PushKind kind,
-//                     const uint8_t *message, int64_t message_len,
-//                     const uint8_t *channel, int64_t channel_len,
-//                     const uint8_t *pattern, int64_t pattern_len);
-// static inline PubSubCallback glide_pubsub_callback(void) {
-//     PubSubCallback callback = pubSubCallback;
-//     return callback;
-// }
+//                     void *message, int64_t messageLen,
+//                     void *channel, int64_t channelLen,
+//                     void *pattern, int64_t patternLen);
 // uint16_t addressResolverCallback(uintptr_t client_id, const uint8_t *host, uintptr_t host_len,
 //                                  uint16_t port,
 //                                  uint8_t *resolved_host_buf, uintptr_t resolved_host_buf_len,
@@ -79,8 +75,9 @@ type baseClient struct {
 	coreClient     unsafe.Pointer
 	mu             *sync.Mutex
 	messageHandler *MessageHandler
-	// resolverID is the stable ID shared by PubSub, address-resolver, and
-	// credential-provider callbacks for the complete native client lifetime.
+	// resolverID is the shared callback ID used for both the address-resolver and the
+	// credential-provider callbacks. Both are registered under the same clientID, so a
+	// single field suffices; no separate credentialProviderID is needed.
 	resolverID uintptr
 }
 
@@ -153,35 +150,6 @@ func buildAsyncClientType(successCb C.SuccessCallback, failureCb C.FailureCallba
 	return clientType, nil
 }
 
-// messageHandlerForConfig constructs the final PubSub owner before native
-// creation. Configured subscriptions may deliver pushes from Client::new, so
-// replacing this handler after create_client returns would lose early messages.
-func messageHandlerForConfig(cfg clientConfiguration) *MessageHandler {
-	var callback config.MessageCallback
-	var callbackContext any
-	switch typedConfig := cfg.(type) {
-	case *config.ClientConfiguration:
-		if subscription := typedConfig.GetSubscription(); subscription != nil {
-			callback = subscription.GetCallback()
-			callbackContext = subscription.GetContext()
-		}
-	case *config.ClusterClientConfiguration:
-		if subscription := typedConfig.GetSubscription(); subscription != nil {
-			callback = subscription.GetCallback()
-			callbackContext = subscription.GetContext()
-		}
-	}
-	return NewMessageHandler(callback, callbackContext)
-}
-
-func allocateDirectClientID() uintptr {
-	for {
-		if clientID := uintptr(clientIDCounter.Add(1)); clientID != 0 {
-			return clientID
-		}
-	}
-}
-
 // Creates a connection by invoking the `create_client` function from Rust library via FFI.
 // Passes the pointers to callback functions which will be invoked when the command succeeds or fails.
 // Once the connection is established, this function invokes `free_connection_response` exposed by rust library to free the
@@ -207,66 +175,71 @@ func createClient(cfg clientConfiguration) (*baseClient, error) {
 	if err != nil {
 		return nil, NewClosingError(err.Error())
 	}
+	client := &baseClient{pending: make(map[uintptr]struct{}), mu: &sync.Mutex{}}
 
-	clientID := allocateDirectClientID()
-	client := &baseClient{
-		pending:        make(map[uintptr]struct{}),
-		mu:             &sync.Mutex{},
-		messageHandler: messageHandlerForConfig(cfg),
-		resolverID:     clientID,
-	}
-	registerClient(client, clientID)
-
-	// Resolver, credential-provider, and PubSub callbacks all share the stable
-	// explicit ID. Register every owner before create_client because Client::new
-	// may invoke any of them before returning.
+	// Determine resolver callback, credential provider callback, and shared client ID.
+	// A single clientID is passed to create_client and forwarded to both callbacks.
 	var resolverCallback C.AddressResolverCallback
 	var credProviderCallback C.CredentialProviderCallback
+	var clientID uintptr
 	if resolver := cfg.GetAddressResolver(); resolver != nil {
+		if clientID == 0 {
+			clientID = uintptr(clientIDCounter.Add(1))
+		}
 		registerResolver(clientID, resolver)
 		resolverCallback = C.AddressResolverCallback(unsafe.Pointer(C.addressResolverCallback))
 	}
 	if provider := cfg.GetCredentialProvider(); provider != nil {
+		if clientID == 0 {
+			clientID = uintptr(clientIDCounter.Add(1))
+		}
 		registerCredentialProvider(clientID, provider)
 		credProviderCallback = C.CredentialProviderCallback(unsafe.Pointer(C.credentialProviderCallback))
 	}
 
-	creationSucceeded := false
-	defer func() {
-		if creationSucceeded {
-			return
-		}
-		unregisterClient(clientID)
-		unregisterResolver(clientID)
-		unregisterCredentialProvider(clientID)
-		client.resolverID = 0
-	}()
-
-	cResponse := (*C.struct_ConnectionResponse)(
-		C.create_client(
-			(*C.uchar)(requestBytes),
-			C.uintptr_t(byteCount),
-			&clientType,
-			C.glide_pubsub_callback(),
-			resolverCallback,
-			credProviderCallback,
-			C.uintptr_t(clientID),
-		),
-	)
-	if cResponse == nil {
-		return nil, NewConnectionError("native client creation returned no response")
+	var cResponse *C.struct_ConnectionResponse
+	if credProviderCallback != nil {
+		cResponse = (*C.struct_ConnectionResponse)(
+			C.create_client_with_credential_provider(
+				(*C.uchar)(requestBytes),
+				C.uintptr_t(byteCount),
+				&clientType,
+				C.PubSubCallback(unsafe.Pointer(C.pubSubCallback)),
+				resolverCallback,
+				C.uintptr_t(clientID),
+				credProviderCallback,
+			),
+		)
+	} else {
+		cResponse = (*C.struct_ConnectionResponse)(
+			C.create_client(
+				(*C.uchar)(requestBytes),
+				C.uintptr_t(byteCount),
+				&clientType,
+				C.PubSubCallback(unsafe.Pointer(C.pubSubCallback)),
+				resolverCallback,
+				C.uintptr_t(clientID),
+			),
+		)
 	}
+
 	defer C.free_connection_response(cResponse)
-	if cResponse.connection_error_message != nil {
-		return nil, NewConnectionError(C.GoString(cResponse.connection_error_message))
-	}
-	if cResponse.conn_ptr == nil {
-		return nil, NewConnectionError("native client creation returned no client")
+	cErr := cResponse.connection_error_message
+	if cErr != nil {
+		message := C.GoString(cErr)
+		if clientID != 0 {
+			unregisterResolver(clientID)
+			unregisterCredentialProvider(clientID)
+		}
+		return nil, NewConnectionError(message)
 	}
 
-	// Publish the adapter pointer only after the successful native response.
 	client.coreClient = cResponse.conn_ptr
-	creationSucceeded = true
+	client.resolverID = clientID
+
+	// Register the client in our registry using the pointer value from C
+	registerClient(client, uintptr(cResponse.conn_ptr))
+
 	return client, nil
 }
 
@@ -279,11 +252,12 @@ func (client *baseClient) Close() {
 		return
 	}
 
+	unregisterClient(uintptr(client.coreClient))
+
 	C.close_client(client.coreClient)
 	client.coreClient = nil
 
 	if client.resolverID != 0 {
-		unregisterClient(client.resolverID)
 		unregisterResolver(client.resolverID)
 		unregisterCredentialProvider(client.resolverID)
 		client.resolverID = 0

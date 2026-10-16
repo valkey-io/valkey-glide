@@ -14,7 +14,6 @@ export interface MonitorLine {
 }
 
 export class GlideMonitorClient {
-    private static nativeCreateMonitorClient = createMonitorClient;
     private handleId: number | null = null;
     private closed = false;
     private readonly queue: MonitorLine[] = [];
@@ -46,7 +45,7 @@ export class GlideMonitorClient {
         const request = GlideMonitorClient.buildConnectionRequest(options);
         const bytes =
             connection_request.ConnectionRequest.encode(request).finish();
-        client.handleId = await GlideMonitorClient.nativeCreateMonitorClient(
+        client.handleId = await createMonitorClient(
             Buffer.from(bytes),
             (timestamp, db, clientAddr, command, args) => {
                 const line: MonitorLine = {

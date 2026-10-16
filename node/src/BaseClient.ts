@@ -74,8 +74,8 @@ import {
     GlideClientHandle,
     createLeakedStringVec,
     registerAddressResolver,
-    removeAddressResolver,
     registerCredentialProvider,
+    removeAddressResolver,
     removeCredentialProvider,
     StreamAddOptions,
     StreamClaimOptions,
@@ -300,6 +300,11 @@ import {
     response,
 } from "../build-ts/ProtobufMessage";
 import { resolveClientLibraryName } from "./ClientLibraryNameResolver.js";
+import { IsolatedScope } from "./IsolatedScope.js";
+import {
+    clearScopeConnectionRequest,
+    setScopeConnectionRequest,
+} from "./ScopeInternal.js";
 /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
 type PromiseFunction = (value?: any) => void;
 type ErrorFunction = (error: ValkeyError) => void;
@@ -840,62 +845,16 @@ export enum ServiceType {
     MemoryDB = "MemoryDB",
 }
 
-/**
- * Represents AWS credentials returned by a custom GlideCredentialProvider.
- * All fields match the Java AwsCredentials class for cross-language consistency.
- */
+/** AWS credentials returned by a custom credential provider. */
 export interface AwsCredentials {
-    /** The AWS Access Key ID. Required; must not be blank. */
     accessKeyId: string;
-    /** The AWS Secret Access Key. Required; must not be blank. */
     secretAccessKey: string;
-    /** The AWS Session Token. Optional; omit for long-term (non-session) credentials. */
     sessionToken?: string;
-    /**
-     * Optional credential expiry time as Unix epoch milliseconds.
-     * When provided, passed to the AWS SDK so it has accurate credential metadata.
-     * This does not override {@link IamAuthConfig.refreshIntervalSeconds}.
-     * Omit or pass `undefined` if credentials have no known expiry. Pass `0` or
-     * a negative value to indicate no expiry (treated the same as omitting the field).
-     */
+    /** Unix epoch milliseconds; omit when expiry is unknown. */
     expiresAtEpochMillis?: number;
 }
 
-/**
- * A callback that supplies AWS credentials for IAM token signing.
- *
- * Implement this when credentials come from a custom source (e.g. HashiCorp Vault,
- * a custom STS assume-role flow) instead of the default AWS credential chain.
- *
- * Both synchronous and asynchronous (Promise-returning) providers are supported.
- * The Node object bridge validates strings during memory-safe N-API conversion;
- * it does not use the buffer-negotiation protocol or its 1 MiB field/aggregate
- * cap, which applies only to the Go and Python C FFI adapters.
- *
- * **Thread safety**: implementations must be safe for concurrent calls — in cluster
- * mode, independent reconnections may invoke this callback simultaneously.
- *
- * **Promptness**: return quickly; this callback sits on the reconnect path and
- * a slow implementation directly extends failover time. The Node callback bridge
- * imposes a **9-second timeout**, before the Rust core's 10-second outer deadline;
- * providers that do not complete in time cause token generation to fail.
- *
- * @example
- * ```typescript
- * // Synchronous provider:
- * const provider: GlideCredentialProvider = () => ({
- *     accessKeyId: myVaultClient.getAccessKeyId(),
- *     secretAccessKey: myVaultClient.getSecretAccessKey(),
- * });
- *
- * // Async provider:
- * const asyncProvider: GlideCredentialProvider = async () => ({
- *     accessKeyId: await myVaultClient.getAccessKeyId(),
- *     secretAccessKey: await myVaultClient.getSecretAccessKey(),
- *     sessionToken: await myVaultClient.getSessionToken(),
- * });
- * ```
- */
+/** Supplies credentials synchronously or asynchronously for IAM token signing. */
 export type GlideCredentialProvider = () =>
     AwsCredentials | Promise<AwsCredentials>;
 
@@ -912,12 +871,7 @@ export interface IamAuthConfig {
      * If not provided, defaults to 300 seconds (5 min).
      */
     refreshIntervalSeconds?: number;
-    /**
-     * Optional custom credentials provider. When set, this provider is invoked to retrieve
-     * AWS credentials for IAM token signing instead of the default AWS credential chain.
-     *
-     * @see {@link GlideCredentialProvider}
-     */
+    /** Optional direct-client credential source replacing the default AWS chain. */
     credentialProvider?: GlideCredentialProvider;
 }
 
@@ -1606,7 +1560,6 @@ export class BaseClient {
     private static nativeRegisterCredentialProvider =
         registerCredentialProvider;
     private static nativeRemoveCredentialProvider = removeCredentialProvider;
-
     protected readonly promiseCallbackFunctions:
         | [PromiseFunction, ErrorFunction, Decoder | undefined][]
         | [PromiseFunction, ErrorFunction][] = [];
@@ -1907,6 +1860,20 @@ export class BaseClient {
     }
 
     /**
+     * Like {@link ensureClientIsOpen}, but also rejects a client with no native
+     * handle, such as one released back to a `ClientPool`.
+     */
+    private ensureClientIsUsable() {
+        this.ensureClientIsOpen();
+
+        if (!this.clientHandle) {
+            throw new ClosingError(
+                "Client handle not initialized. Please create a new client.",
+            );
+        }
+    }
+
+    /**
      * @internal
      *
      * Creates a promise that resolves or rejects based on the result of a command request.
@@ -1926,13 +1893,7 @@ export class BaseClient {
 
         raiseOnError = false,
     ): Promise<T> {
-        this.ensureClientIsOpen();
-
-        if (!this.clientHandle) {
-            throw new ClosingError(
-                "Client handle not initialized. Please create a new client.",
-            );
-        }
+        this.ensureClientIsUsable();
 
         if (!Array.isArray(command)) {
             return this.sendCommand<T>(command, options);
@@ -10266,13 +10227,15 @@ export class BaseClient {
                 ).finish(),
             );
 
+            // Keep the exact bytes used to connect for scopedConnection().
+            setScopeConnectionRequest(this, connectionRequestBytes);
+
             this.clientHandle = await BaseClient.nativeCreateDirectClient(
                 connectionRequestBytes,
                 this.handleResponsesAvailable,
             );
-            // The direct NAPI path consumes the provider only after the handle
-            // has been acknowledged by JavaScript. Do not retain a stale key
-            // that close() could later remove after an unrelated registration.
+            // Native direct creation consumed the provider claim only after
+            // successful GlideClientHandle conversion.
             this.credentialProviderKey = undefined;
             Logger.log(
                 "info",
@@ -10285,10 +10248,7 @@ export class BaseClient {
         }
     }
 
-    /**
-     * Clears and removes connection setup registrations exactly once.
-     * @internal
-     */
+    /** Remove setup registrations exactly once. */
     private cleanupConnectionRegistrations(): void {
         const addressResolverKey = this.addressResolverKey;
         const credentialProviderKey = this.credentialProviderKey;
@@ -10342,6 +10302,51 @@ export class BaseClient {
     }
 
     /**
+     * Acquire an isolated execution scope on this client: a dedicated connection
+     * for operations that need per-connection state, such as `WATCH`/`MULTI`/`EXEC`
+     * transactions, `CLIENT TRACKING`, and blocking commands.
+     *
+     * The scope runs on its own connection through glide-core rather than the
+     * shared multiplexed one, so its state does not affect other commands on this
+     * client. This works on both a standalone client and a pool-borrowed client;
+     * the connection request captured at connect time is reused, so the caller
+     * does not have to produce any bytes.
+     *
+     * Release the scope when finished, or wrap it in a `try`/`finally`.
+     *
+     * @example
+     * ```typescript
+     * const scope = await client.scopedConnection();
+     * try {
+     *     await scope.watch("key");
+     *     const value = await scope.get("key");
+     *     await scope.multi();
+     *     await scope.set("key", String(Number(value ?? "0") + 1));
+     *     await scope.exec();
+     * } finally {
+     *     scope.release();
+     * }
+     * ```
+     *
+     * @param routingKey - In cluster mode, the key whose hash slot decides which
+     *     node the scope connects to. Every key used in the scope must hash to the
+     *     same slot. Defaults to slot 0.
+     * @param timeoutMs - Maximum time to wait for a scope, in milliseconds.
+     *     Default: 5000.
+     * @returns A new {@link IsolatedScope}.
+     * @throws {TimeoutError} if no scope became available within `timeoutMs`.
+     * @throws {ConnectionError} if the client was closed while waiting.
+     * @throws {RequestError} if the client's configuration cannot produce a scoped connection.
+     */
+    public async scopedConnection(
+        routingKey?: string,
+        timeoutMs = 5000,
+    ): Promise<IsolatedScope> {
+        this.ensureClientIsUsable();
+        return IsolatedScope.acquire(this, routingKey, timeoutMs);
+    }
+
+    /**
      *  Terminate the client by closing all associated resources and any active promises.
      *  All open promises will be closed with an exception.
      * @param errorMessage - If defined, this error message will be passed along with the exceptions when closing all open promises.
@@ -10357,9 +10362,12 @@ export class BaseClient {
             reject(new ClosingError(errorMessage || ""));
         });
 
-        // Clean up any connection registrations still owned by JavaScript.
-        // A successful direct-client handoff clears the consumed provider key,
-        // while the resolver key remains owned until close.
+        // Drop the cached connection request so its credentials do not outlive
+        // the client.
+        clearScopeConnectionRequest(this);
+
+        // Clean up setup registrations. A consumed provider key was cleared
+        // after successful handle conversion and is therefore not removed here.
         this.cleanupConnectionRegistrations();
 
         // Clean up OTel spans for in-flight requests to prevent memory leaks
@@ -10398,10 +10406,7 @@ export class BaseClient {
     public static serializeConnectionRequest(
         options: BaseClientConfiguration,
         constructor: (options?: BaseClientConfiguration) => BaseClient,
-    ): {
-        bytes: Uint8Array;
-        resolverKey: string | undefined;
-    } {
+    ): { bytes: Uint8Array; resolverKey: string | undefined } {
         const instance = constructor(options);
         const request = instance.createClientRequest(options);
 
@@ -10510,16 +10515,15 @@ export class BaseClient {
     }
 
     /**
-     * Manually retrieve IAM credentials, regenerate the authentication token, and cache the token.
+     * Manually refresh the IAM token for the current connection.
      *
      * This method is only available if the client was created with IAM authentication.
-     * The refreshed token is used by subsequent reconnect and authentication flows.
-     * Credential-provider and token-signing failures are surfaced to the caller.
+     * It triggers an immediate refresh of the IAM token and updates the connection.
      *
      * @throws ConfigurationError if the client is not using IAM authentication.
      * @example
      * ```typescript
-     * await client.refreshIamToken();
+     * await client.refreshToken();
      * ```
      */
     public async refreshIamToken(): Promise<GlideString> {

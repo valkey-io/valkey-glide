@@ -138,9 +138,9 @@ func deliverFailure(requestID uintptr, cErrorMessage *C.char, cErrorType C.Reque
 	resultChannel <- payload{value: nil, error: GoError(uint32(cErrorType), msg)}
 }
 
-// handlePubSubCallback validates every borrowed field before copying it. Rust
-// retains ownership of the payload and frees it after the exported callback
-// returns, so all C.GoStringN calls must remain synchronous.
+// handlePubSubCallback validates and copies every borrowed field before
+// returning to Rust. The captured handler keeps accepted delivery independent
+// of concurrent client unregistration.
 func handlePubSubCallback(
 	callbackID uintptr,
 	message unsafe.Pointer,
@@ -157,8 +157,6 @@ func handlePubSubCallback(
 		!validField(message, messageLen) ||
 		!validField(channel, channelLen) ||
 		!validField(pattern, patternLen) {
-		// Never log borrowed PubSub data or length values: either may be
-		// controlled by an application and contain sensitive information.
 		log.Print("invalid PubSub callback payload")
 		return false
 	}
@@ -168,9 +166,6 @@ func handlePubSubCallback(
 		log.Print("PubSub client not found")
 		return false
 	}
-	// Capture the final handler before returning to Rust. Creation failure may
-	// unregister the client immediately after the native call returns, but an
-	// already accepted push still owns this handler and must be delivered.
 	handler := client.getMessageHandler()
 	if handler == nil {
 		log.Print("PubSub handler not found")

@@ -14,7 +14,6 @@ import threading
 from dataclasses import dataclass
 from typing import Optional
 
-import anyio
 from glide_shared.config import (
     BaseClientConfiguration,
     GlideClusterClientConfiguration,
@@ -26,6 +25,7 @@ from .glide_client import (
     BaseClient,
     GlideClient,
     GlideClusterClient,
+    _async_pipe_lock,
     _client_registry,
 )
 
@@ -101,6 +101,15 @@ class AsyncClientPool:
         client_config: BaseClientConfiguration,
         pool_config: Optional[PoolConfig] = None,
     ):
+        # Custom providers are direct-client-only; pools may use the default AWS chain.
+        credentials = getattr(client_config, "credentials", None)
+        iam_config = getattr(credentials, "iam_config", None)
+        if iam_config is not None and iam_config.credential_provider is not None:
+            raise ValueError(
+                "Pool clients cannot use a custom IAM credentials provider. "
+                "Configure IAM without a credential_provider to use the default AWS credential chain."
+            )
+
         # Reject pubsub subscriptions — pool state reset doesn't UNSUBSCRIBE
         if (
             hasattr(client_config, "pubsub_subscriptions")
@@ -109,17 +118,6 @@ class AsyncClientPool:
             raise ValueError(
                 "Pool clients cannot have pubsub subscriptions configured. "
                 "Use the main client's pubsub API for subscriptions."
-            )
-
-        # Reject custom IAM credential providers. Pool connections cannot
-        # forward a callback per connection; ordinary IAM still uses the
-        # default AWS credential chain.
-        _creds = getattr(client_config, "credentials", None)
-        _iam = getattr(_creds, "iam_config", None) if _creds else None
-        if _iam is not None and getattr(_iam, "credential_provider", None) is not None:
-            raise ValueError(
-                "Pool clients cannot use a custom IAM credentials provider. "
-                "Configure IAM without a credential_provider to use the default AWS credential chain."
             )
 
         ffi_instance = _ASYNC_FFI
@@ -139,10 +137,31 @@ class AsyncClientPool:
         conn_req = _create_async_connection_request(client_config)
         self._conn_req_bytes = conn_req.SerializeToString()
 
-        # Pools reject configured PubSub, so no push can arrive during native
-        # pool creation. The probe (or first borrowed client for direct
-        # construction) establishes the shared pipe through BaseClient's
-        # transactional reader-before-writer setup before any command runs.
+        # Initialize the shared async pipe BEFORE creating pool clients.
+        # This ensures ASYNC_PIPE is set so pooled AsyncClient adapters
+        # write responses to the pipe (not the callback path).
+        import glide.glide_client as _gc
+
+        with _async_pipe_lock:
+            _gc._detect_fork_and_reset()
+            current_pid = os.getpid()
+
+            if _gc._async_pipe_read_fd < 0:
+                try:
+                    r, w = os.pipe()
+                    os.set_blocking(r, False)
+                    if (
+                        _gc._async_pipe_init_pid > 0
+                        and current_pid != _gc._async_pipe_init_pid
+                    ):
+                        self._lib.reinit_async_pipe(w)
+                    else:
+                        self._lib.init_async_pipe(w)
+                    _gc._async_pipe_read_fd = r
+                    _gc._async_pipe_write_fd = w
+                    _gc._async_pipe_init_pid = current_pid
+                except OSError:
+                    pass
 
         # Create pool with AsyncClient type (no-op callbacks — pipe handles responses)
         client_type = self._ffi.new("ClientType*")
@@ -238,7 +257,6 @@ class AsyncClientPool:
             client._pubsub_callback_ref = None
             client._callback_id_gen = __import__("itertools").count(1)
             client._lock = threading.Lock()
-            client._use_direct_lifecycle = False
             client._is_asyncio = True
             client._core_client = self._ffi.cast("void*", adapter_ptr)
             client._conn_req_bytes = self._conn_req_bytes
@@ -253,15 +271,8 @@ class AsyncClientPool:
             except RuntimeError:
                 client._loop = None
 
-            # Set up the process-wide reader before making the wrapper visible
-            # to frame dispatch. No native request is sent until after this
-            # method returns, so setup cannot race an unregistered response.
-            try:
-                client._setup_pipe(register_client=False)
-                client._register_pipe_client()
-            except BaseException:
-                client._is_closed = True
-                raise
+            _client_registry[client_id] = client
+            client._setup_pipe()
 
             self._client_cache[client_id] = client
             return client
@@ -342,22 +353,12 @@ class _AsyncBorrowContext:
         self._client_id = -1
 
     async def __aenter__(self):
-        client_id = await self._pool.acquire(self._timeout)
-        self._client_id = client_id
-        try:
-            return self._pool._get_or_create_client(client_id)
-        except BaseException:
-            try:
-                self._pool.release(client_id)
-            except BaseException:
-                # Setup failures take precedence over best-effort rollback failures.
-                pass
-            self._client_id = -1
-            raise
+        self._client_id = await self._pool.acquire(self._timeout)
+        return self._pool._get_or_create_client(self._client_id)
 
     async def __aexit__(self, *_):
         self._pool.release(self._client_id)
         # Yield to event loop so the async release (DISCARD + SELECT) can
         # complete via the pipe reader before the next acquire attempt.
-        await anyio.sleep(0)
+        await asyncio.sleep(0)
         return False

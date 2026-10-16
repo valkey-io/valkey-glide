@@ -234,6 +234,8 @@ pub type FunctionFlushOptions = FlushAllOptions;
 //
 // TODO #7237: Add `IFNE` (and `ValueComparison::ifne`) for Valkey 9.2.
 // TODO #7238: Use for `del_ex` (`DELEX`, Valkey 9.2).
+// TODO #7365: Compress this comparison value when used with `SET` under
+// compression (see `glide-core/src/compression.rs`).
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum ValueComparison {

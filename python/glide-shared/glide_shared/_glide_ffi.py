@@ -203,7 +203,7 @@ class _GlideFFI:
             void noop_failure_callback(uintptr_t index_ptr, const char* error_message, int error_type);
 
             typedef void (*PubSubCallback)(
-                uintptr_t callback_id,
+                uintptr_t client_ptr,
                 int kind,
                 const uint8_t* message,
                 int64_t message_len,
@@ -259,11 +259,17 @@ class _GlideFFI:
                 const ClientType* client_type,
                 PubSubCallback pubsub_callback,
                 AddressResolverCallback address_resolver,
-                CredentialProviderCallback credential_provider,
                 uintptr_t client_id
             );
-            bool retain_client(const void* client_adapter_ptr);
-            void release_client(const void* client_adapter_ptr);
+            const ConnectionResponse* create_client_with_credential_provider(
+                const uint8_t* connection_request_bytes,
+                size_t connection_request_len,
+                const ClientType* client_type,
+                PubSubCallback pubsub_callback,
+                AddressResolverCallback address_resolver,
+                uintptr_t client_id,
+                CredentialProviderCallback credential_provider
+            );
             void close_client(const void* client_adapter_ptr);
             void init_async_pipe(int pipe_write_fd);
             void reinit_async_pipe(int pipe_write_fd);
@@ -462,13 +468,23 @@ class _GlideFFI:
             );
 
             // ============== ISOLATED EXECUTION SCOPES ==============
-            uint64_t glide_scope_next_attempt_token(void);
-            int64_t glide_scope_try_acquire(
+            CommandResult* glide_scope_acquire_blocking(
                 uint64_t client_id,
                 const uint8_t* connection_request_ptr,
                 size_t connection_request_len,
+                bool has_routing_slot,
                 uint16_t routing_slot,
-                uint64_t attempt_token
+                uint64_t timeout_ms
+            );
+            int32_t glide_scope_acquire_pipe(
+                uint64_t client_id,
+                const uint8_t* connection_request_ptr,
+                size_t connection_request_len,
+                bool has_routing_slot,
+                uint16_t routing_slot,
+                uint64_t timeout_ms,
+                uintptr_t request_id,
+                uint64_t pipe_client_id
             );
             int32_t glide_scope_release(uint64_t scope_id, uint64_t client_id);
             CommandResult* glide_scope_execute(

@@ -38,11 +38,8 @@ pub trait CustomCommand: CommandExecutor {
     where
         A: ToValkeyArgs + Sync,
     {
-        let mut cmd = Cmd::new();
-        for a in args {
-            cmd.arg(a);
-        }
-        self.execute_command(cmd, None).await
+        self.execute_command(Cmd::default().with_arg(args), None)
+            .await
     }
 
     /// Like [`CustomCommand::custom_command`] but routed (cluster). Ignored for
@@ -55,11 +52,8 @@ pub trait CustomCommand: CommandExecutor {
     where
         A: ToValkeyArgs + Sync,
     {
-        let mut cmd = Cmd::new();
-        for a in args {
-            cmd.arg(a);
-        }
-        self.execute_command(cmd, Some(route)).await
+        self.execute_command(Cmd::default().with_arg(args), Some(route))
+            .await
     }
 }
 

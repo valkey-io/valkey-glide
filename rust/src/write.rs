@@ -481,14 +481,14 @@ mod tests {
 
     #[test]
     fn cmd_writer() {
-        let mut out = crate::cmd::Cmd::new();
+        let mut out = crate::cmd::Cmd::default();
         out.write_arg(TEXT);
         out.write_arg(BINARY);
         out.write_arg_fmt(NUMBER);
 
         assert_eq!(
             out.as_redis().get_packed_command(),
-            crate::cmd::Cmd::new()
+            crate::cmd::Cmd::default()
                 .arg(TEXT)
                 .arg(BINARY)
                 .arg(NUMBER)

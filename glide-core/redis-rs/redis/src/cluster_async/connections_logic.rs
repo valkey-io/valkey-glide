@@ -6,11 +6,11 @@ use crate::cluster_slotmap::ReadFromReplicaStrategy;
 use crate::{
     aio::{ConnectionLike, DisconnectNotifier},
     client::GlideConnectionOptions,
-    cluster::get_connection_info,
+    cluster::{get_connection_info_for_resolved_address, parse_cluster_address},
     cluster_client::ClusterParams,
     ErrorKind, RedisError, RedisResult,
 };
-use std::net::{Ipv6Addr, SocketAddr};
+use std::net::SocketAddr;
 
 use futures::prelude::*;
 use futures_util::{future::BoxFuture, join};
@@ -20,6 +20,8 @@ pub(crate) type ConnectionFuture<C> = futures::future::Shared<BoxFuture<'static,
 /// Cluster node for async connections
 #[doc(hidden)]
 pub type AsyncClusterNode<C> = ClusterNode<ConnectionFuture<C>>;
+
+use crate::cluster::ReadyToDialAddress;
 
 #[doc(hidden)]
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -51,7 +53,7 @@ where
 }
 
 pub(crate) async fn get_or_create_conn<C>(
-    addr: &str,
+    addr: &ReadyToDialAddress,
     node: Option<AsyncClusterNode<C>>,
     params: &ClusterParams,
     conn_type: RefreshConnectionType,
@@ -63,9 +65,9 @@ where
     if let Some(node) = node {
         // We won't check whether the DNS address of this node has changed and now points to a new IP.
         // Instead, we depend on managed Redis services to close the connection for refresh if the node has changed.
-        match check_node_connections(&node, params, conn_type, addr).await {
+        match check_node_connections(&node, params, conn_type, addr.as_str()).await {
             None => Ok(node),
-            Some(conn_type) => connect_and_check(
+            Some(conn_type) => connect_and_check_prepared(
                 addr,
                 params.clone(),
                 None,
@@ -77,7 +79,7 @@ where
             .get_node(),
         }
     } else {
-        connect_and_check(
+        connect_and_check_prepared(
             addr,
             params.clone(),
             None,
@@ -104,7 +106,7 @@ where
 }
 
 pub(crate) async fn connect_and_check_all_connections<C>(
-    addr: &str,
+    addr: &ReadyToDialAddress,
     params: ClusterParams,
     socket_addr: Option<SocketAddr>,
     glide_connection_options: GlideConnectionOptions,
@@ -144,13 +146,15 @@ where
                     user_conn,
                     Some(management_conn),
                 )),
-                Err(err) => failed_management_connection(addr, user_conn.into_future(), err),
+                Err(err) => {
+                    failed_management_connection(addr.as_str(), user_conn.into_future(), err)
+                }
             }
         }
         (Ok(mut connection), Err(err)) | (Err(err), Ok(mut connection)) => {
             // Only a single connection was successfully established. Use it for the user connection
             match setup_user_connection(&mut connection, params).await {
-                Ok(_) => failed_management_connection(addr, connection.into_future(), err),
+                Ok(_) => failed_management_connection(addr.as_str(), connection.into_future(), err),
                 Err(err) => err.into(),
             }
         }
@@ -167,7 +171,7 @@ where
 }
 
 async fn connect_and_check_only_management_conn<C>(
-    addr: &str,
+    addr: &ReadyToDialAddress,
     params: ClusterParams,
     socket_addr: Option<SocketAddr>,
     prev_node: AsyncClusterNode<C>,
@@ -202,11 +206,13 @@ where
     )
     .await
     {
-        Err(conn_err) => failed_management_connection(addr, prev_node.user_connection, conn_err),
+        Err(conn_err) => {
+            failed_management_connection(addr.as_str(), prev_node.user_connection, conn_err)
+        }
 
         Ok(mut connection) => {
             if let Err(err) = setup_management_connection(&mut connection.conn).await {
-                return failed_management_connection(addr, prev_node.user_connection, err);
+                return failed_management_connection(addr.as_str(), prev_node.user_connection, err);
             }
 
             ConnectAndCheckResult::Success(ClusterNode {
@@ -271,8 +277,8 @@ impl<C> From<RedisResult<AsyncClusterNode<C>>> for ConnectAndCheckResult<C> {
 }
 
 #[doc(hidden)]
-pub async fn connect_and_check<C>(
-    addr: &str,
+pub async fn connect_and_check_prepared<C>(
+    addr: &ReadyToDialAddress,
     params: ClusterParams,
     socket_addr: Option<SocketAddr>,
     conn_type: RefreshConnectionType,
@@ -330,7 +336,7 @@ where
 }
 
 async fn create_and_setup_user_connection<C>(
-    node: &str,
+    node: &ReadyToDialAddress,
     params: ClusterParams,
     socket_addr: Option<SocketAddr>,
     glide_connection_options: GlideConnectionOptions,
@@ -386,7 +392,7 @@ where
 }
 
 async fn create_connection<C>(
-    node: &str,
+    node: &ReadyToDialAddress,
     params: ClusterParams,
     socket_addr: Option<SocketAddr>,
     is_management: bool,
@@ -397,7 +403,7 @@ where
 {
     let connection_timeout = params.connection_timeout;
     let response_timeout = params.response_timeout;
-    let info = get_connection_info(node, params)?;
+    let info = get_connection_info_for_resolved_address(node.as_str(), params)?;
     // management connection does not require notifications or disconnect notifications
     // or pubsub synchronizer (subscriptions only exist on user connections)
     if is_management {
@@ -491,15 +497,5 @@ where
 /// - IPv4/hostname: "<host>:<port>" (e.g., "127.0.0.1:6379")
 /// - IPv6 bracketed: "[<ipv6>]:<port>" (e.g., "[2001:db8::1]:6379")
 pub fn get_host_and_port_from_addr(addr: &str) -> Option<(&str, u16)> {
-    let (host, port_str) = addr.rsplit_once(':')?;
-    let port = port_str.parse::<u16>().ok()?;
-    let host = if host.starts_with('[') && host.ends_with(']') {
-        let inner = host.strip_prefix('[').unwrap().strip_suffix(']').unwrap();
-        inner.parse::<Ipv6Addr>().ok()?;
-        inner
-    } else {
-        host
-    };
-
-    Some((host, port))
+    parse_cluster_address(addr)
 }

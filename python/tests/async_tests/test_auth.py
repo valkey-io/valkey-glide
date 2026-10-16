@@ -812,6 +812,85 @@ class _BlockingCredentialProvider:
 @pytest.mark.anyio
 @pytest.mark.parametrize("cluster_mode", [False])
 @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP3])
+async def test_live_async_sync_provider_ids_coexist_without_registry_leaks(
+    request, cluster_mode, protocol
+):
+    """Create both direct client kinds concurrently in one provider registry."""
+    import glide_shared.ffi_helpers as helpers
+
+    from tests.sync_tests.conftest import create_sync_client
+
+    with helpers._credential_provider_owners._lock:
+        baseline_provider_ids = set(helpers._credential_provider_owners._owners)
+    async_clients = []
+    sync_clients = []
+
+    def _credentials():
+        return ServerCredentials(
+            username=IAM_USERNAME,
+            iam_config=IamAuthConfig(
+                cluster_name=IAM_TEST_CLUSTER_NAME,
+                service=ServiceType.ELASTICACHE,
+                region=IAM_TEST_REGION_US_EAST_1,
+                credential_provider=lambda: AwsCredentials(
+                    "test_access_key", "test_secret_key", "test_session_token"
+                ),
+            ),
+        )
+
+    async def _create_async_client():
+        client = await create_iam_client(
+            request,
+            cluster_mode,
+            protocol,
+            credential_provider=lambda: AwsCredentials(
+                "test_access_key", "test_secret_key", "test_session_token"
+            ),
+        )
+        async_clients.append(client)
+
+    async def _create_sync_client_on_worker():
+        client = await anyio.to_thread.run_sync(
+            lambda: create_sync_client(
+                request=request,
+                cluster_mode=cluster_mode,
+                protocol=protocol,
+                credentials=_credentials(),
+            )
+        )
+        sync_clients.append(client)
+
+    try:
+        async with anyio.create_task_group() as task_group:
+            for _ in range(8):
+                task_group.start_soon(_create_async_client)
+                task_group.start_soon(_create_sync_client_on_worker)
+        assert len(async_clients) == len(sync_clients) == 8
+        assert (
+            len(
+                {
+                    client._credential_provider_callback_owner.callback_id
+                    for client in [*async_clients, *sync_clients]
+                }
+            )
+            == 16
+        )
+    finally:
+        for client in async_clients:
+            await client.close()
+        for client in sync_clients:
+            await anyio.to_thread.run_sync(client.close)
+        with helpers._credential_provider_owners._lock:
+            assert (
+                set(helpers._credential_provider_owners._owners)
+                == baseline_provider_ids
+            )
+
+
+@pytest.mark.timeout(120)
+@pytest.mark.anyio
+@pytest.mark.parametrize("cluster_mode", [False])
+@pytest.mark.parametrize("protocol", [ProtocolVersion.RESP3])
 async def test_hung_custom_provider_timeout_does_not_block_close(
     request, cluster_mode, protocol
 ):

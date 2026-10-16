@@ -239,9 +239,8 @@ public class GlideClient extends BaseClient
      * is returned to the pool.
      *
      * @param timeout maximum time to wait for a scope to become available
-     * @param routingKey in cluster mode, the key whose hash slot determines which node the scope
-     *     connects to. All keys used in the scope must hash to the same slot. May be null (defaults
-     *     to slot 0).
+     * @param routingKey ignored in standalone mode (no slots); may be null. Accepted for signature
+     *     parity with the cluster client, where it determines the scope's node and slot.
      * @return a Future resolving to an {@link IsolatedScope}
      */
     public CompletableFuture<IsolatedScope> scopedConnection(
@@ -254,42 +253,38 @@ public class GlideClient extends BaseClient
             return f;
         }
 
-        int routingSlot =
-                routingKey != null ? slotForKey(routingKey.getBytes(StandardCharsets.UTF_8)) : 0;
-        long timeoutMs = timeout.toMillis();
-        long deadline = System.currentTimeMillis() + timeoutMs;
-        // One logical acquire: mint a single attempt token and pass it on every
-        // retry poll, so the core dedupes this acquire's retries to one in-flight
-        // creation while distinct concurrent acquires each dial their own.
-        long attemptToken = glide.ffi.resolvers.GlideScopeResolver.glideScopeNextAttemptToken();
+        // Standalone ignores routing, but the FFI signature carries presence
+        // uniformly; a standalone scope is always unconstrained.
+        boolean hasRoutingSlot = routingKey != null;
+        int routingSlot = hasRoutingSlot ? slotForKey(routingKey.getBytes(StandardCharsets.UTF_8)) : 0;
 
-        return CompletableFuture.supplyAsync(
-                () -> {
-                    while (true) {
-                        long scopeId =
-                                glide.ffi.resolvers.GlideScopeResolver.glideScopeTryAcquire(
-                                        clientId, connBytes, routingSlot, attemptToken);
-                        if (scopeId >= 0) {
-                            return new IsolatedScope(scopeId, clientId);
-                        }
-                        // Pool exhausted — retry with backoff until deadline
-                        long remaining = deadline - System.currentTimeMillis();
-                        if (remaining <= 0) {
-                            throw new java.util.concurrent.CompletionException(
-                                    new java.util.concurrent.TimeoutException(
-                                            "Timed out waiting for isolated scope (pool exhausted)"));
-                        }
-                        try {
-                            Thread.sleep(Math.min(10, remaining));
-                        } catch (InterruptedException e) {
-                            Thread.currentThread().interrupt();
-                            throw new java.util.concurrent.CompletionException(e);
-                        }
+        CompletableFuture<Object> future = new CompletableFuture<>();
+        long callbackId = glide.internal.AsyncRegistry.register(future, 0, clientId, 0);
+        int rc =
+                glide.ffi.resolvers.GlideScopeResolver.glideScopeAcquire(
+                        clientId, connBytes, hasRoutingSlot, routingSlot, timeout.toMillis(), callbackId);
+        if (rc != 0) {
+            future.completeExceptionally(
+                    new IllegalArgumentException("Invalid connection request bytes"));
+        }
+        // The core keeps waiting after the caller cancels. Give back a scope it is
+        // later granted, or its slot stays in use until the client closes.
+        CompletableFuture<IsolatedScope> result = new CompletableFuture<>();
+        future.whenComplete(
+                (scopeId, err) -> {
+                    if (err != null) {
+                        result.completeExceptionally(err);
+                        return;
+                    }
+                    IsolatedScope scope = new IsolatedScope((Long) scopeId, clientId);
+                    if (!result.complete(scope)) {
+                        scope.close();
                     }
                 });
+        return result;
     }
 
-    /** Convenience overload — defaults to slot 0 (standalone mode). */
+    /** Convenience overload — no routing key (standalone mode ignores it). */
     public CompletableFuture<IsolatedScope> scopedConnection(@NonNull java.time.Duration timeout) {
         return scopedConnection(timeout, null);
     }

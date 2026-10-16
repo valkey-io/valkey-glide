@@ -120,6 +120,15 @@ class ClientPool:
         client_config: BaseClientConfiguration,
         pool_config: Optional[PoolConfig] = None,
     ):
+        # Custom providers are direct-client-only; pools may use the default AWS chain.
+        credentials = getattr(client_config, "credentials", None)
+        iam_config = getattr(credentials, "iam_config", None)
+        if iam_config is not None and iam_config.credential_provider is not None:
+            raise ValueError(
+                "Pool clients cannot use a custom IAM credentials provider. "
+                "Configure IAM without a credential_provider to use the default AWS credential chain."
+            )
+
         # Reject pubsub subscriptions — pool state reset doesn't UNSUBSCRIBE
         if (
             hasattr(client_config, "pubsub_subscriptions")
@@ -128,17 +137,6 @@ class ClientPool:
             raise ValueError(
                 "Pool clients cannot have pubsub subscriptions configured. "
                 "Use the main client's pubsub API for subscriptions."
-            )
-
-        # Reject custom IAM credential providers. Pool connections cannot
-        # forward a callback per connection; ordinary IAM still uses the
-        # default AWS credential chain.
-        _creds = getattr(client_config, "credentials", None)
-        _iam = getattr(_creds, "iam_config", None) if _creds else None
-        if _iam is not None and getattr(_iam, "credential_provider", None) is not None:
-            raise ValueError(
-                "Pool clients cannot use a custom IAM credentials provider. "
-                "Configure IAM without a credential_provider to use the default AWS credential chain."
             )
 
         ffi_instance = _GlideFFI()
@@ -275,7 +273,6 @@ class ClientPool:
             client._pubsub_condition = threading.Condition(client._pubsub_lock)
             client._pubsub_callback_ref = None
             client._client_lock = threading.Lock()
-            client._use_direct_lifecycle = False
             client._core_client = cast_ptr
             client._conn_req_bytes = self._conn_req_bytes
 

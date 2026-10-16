@@ -326,6 +326,56 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void delifeq(BaseClient client) {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("9.0.0"), "This feature added in version 9.0.0");
+
+        String key = UUID.randomUUID().toString();
+        String value = String.valueOf(UUID.randomUUID());
+        String wrongValue = String.valueOf(UUID.randomUUID());
+
+        assertFalse(client.delifeq(key, value).get());
+
+        assertEquals(OK, client.set(key, value).get());
+
+        assertFalse(client.delifeq(key, wrongValue).get());
+        assertEquals(value, client.get(key).get());
+
+        assertTrue(client.delifeq(key, value).get());
+        assertNull(client.get(key).get());
+
+        String setKey = UUID.randomUUID().toString();
+        assertEquals(1, client.sadd(setKey, new String[] {"a"}).get());
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.delifeq(setKey, "a").get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void delifeqBinary(BaseClient client) {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("9.0.0"), "This feature added in version 9.0.0");
+
+        GlideString key = gs(UUID.randomUUID().toString());
+        GlideString value = gs(String.valueOf(UUID.randomUUID()));
+        GlideString wrongValue = gs(String.valueOf(UUID.randomUUID()));
+
+        assertFalse(client.delifeq(key, value).get());
+
+        assertEquals(OK, client.set(key, value).get());
+
+        assertFalse(client.delifeq(key, wrongValue).get());
+        assertEquals(value, client.get(key).get());
+
+        assertTrue(client.delifeq(key, value).get());
+        assertNull(client.get(key).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void del_multiple_keys(BaseClient client) {
         String key1 = "{key}" + UUID.randomUUID();
         String key2 = "{key}" + UUID.randomUUID();
@@ -12300,7 +12350,9 @@ public class SharedCommandTests {
         for (Integer i = 0; i <= 128; i++) {
             assertEquals(1, client.zadd(zsetSkiplistKey, createMap(i.toString(), 2d)).get());
         }
-        assertEquals("skiplist", client.objectEncoding(zsetSkiplistKey).get());
+        assertEquals(
+                SERVER_VERSION.isLowerThan("9.2.0") ? "skiplist" : "btree",
+                client.objectEncoding(zsetSkiplistKey).get());
     }
 
     @SneakyThrows

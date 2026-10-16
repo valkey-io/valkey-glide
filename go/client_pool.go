@@ -114,18 +114,16 @@ func NewClientPool(clientConfig *config.ClientConfiguration, poolConfig PoolConf
 		poolConfig.AbandonTimeout = 0 // negative → disabled (FFI interprets 0ms as disabled)
 	}
 
+	if clientConfig.GetCredentialProvider() != nil {
+		return nil, errCustomCredentialProviderPool
+	}
+
 	// Reject pubsub subscriptions — pool state reset doesn't UNSUBSCRIBE
 	if clientConfig.HasSubscription() {
 		return nil, errors.New(
 			"pool clients cannot have pubsub subscriptions configured; " +
 				"use the main client's pubsub API instead",
 		)
-	}
-
-	// Reject custom IAM credential providers. Pool connections cannot forward a
-	// Go callback per connection; ordinary IAM still uses the default AWS chain.
-	if clientConfig.GetCredentialProvider() != nil {
-		return nil, errCustomCredentialProviderPool
 	}
 
 	// Reject a custom address resolver. It is a per-client callback registered
@@ -351,18 +349,16 @@ func NewClusterClientPool(clientConfig *config.ClusterClientConfiguration, poolC
 		poolConfig.AbandonTimeout = 0 // negative → disabled (FFI interprets 0ms as disabled)
 	}
 
+	if clientConfig.GetCredentialProvider() != nil {
+		return nil, errCustomCredentialProviderPool
+	}
+
 	// Reject pubsub subscriptions — pool state reset doesn't UNSUBSCRIBE
 	if clientConfig.HasSubscription() {
 		return nil, errors.New(
 			"pool clients cannot have pubsub subscriptions configured; " +
 				"use the main client's pubsub API instead",
 		)
-	}
-
-	// Reject custom IAM credential providers. Pool connections cannot forward a
-	// Go callback per connection; ordinary IAM still uses the default AWS chain.
-	if clientConfig.GetCredentialProvider() != nil {
-		return nil, errCustomCredentialProviderPool
 	}
 
 	// Reject a custom address resolver. It is a per-client callback registered

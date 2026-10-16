@@ -33,6 +33,7 @@ import { GlideClient } from "./GlideClient";
 import type { GlideClientConfiguration } from "./GlideClient";
 import { GlideClusterClient } from "./GlideClusterClient";
 import type { GlideClusterClientConfiguration } from "./GlideClusterClient";
+import { clearScopeConnectionRequest } from "./ScopeInternal";
 import {
     createPool,
     poolTryAcquire,
@@ -89,15 +90,13 @@ export interface ClientPoolMetrics {
  * `GlideClient` handles.
  */
 export class ClientPool {
-    private static nativeCreatePool = createPool;
-    private static serializeStandaloneConfig = GlideClient.serializeConfig;
-    private static serializeClusterConfig = GlideClusterClient.serializeConfig;
     private closed = false;
     private readonly poolId: number;
     private readonly acquireTimeoutMs: number;
     private readonly isCluster: boolean;
     private readonly clientConfig: BaseClientConfiguration;
     private readonly resolverKey: string | undefined;
+    private readonly connectionRequestBytes: Uint8Array;
     private readonly activeClients = new Set<BaseClient>();
 
     private constructor(
@@ -106,12 +105,14 @@ export class ClientPool {
         isCluster: boolean,
         clientConfig: BaseClientConfiguration,
         resolverKey: string | undefined,
+        connectionRequestBytes: Uint8Array,
     ) {
         this.poolId = poolId;
         this.acquireTimeoutMs = acquireTimeoutMs;
         this.isCluster = isCluster;
         this.clientConfig = clientConfig;
         this.resolverKey = resolverKey;
+        this.connectionRequestBytes = connectionRequestBytes;
     }
 
     /**
@@ -131,6 +132,24 @@ export class ClientPool {
         const abandonTimeoutMs = poolConfig?.abandonTimeoutMs ?? 300_000;
         const isCluster = poolConfig?.clusterMode ?? false;
 
+        const credentialProvider =
+            clientConfig.credentials && "iamConfig" in clientConfig.credentials
+                ? clientConfig.credentials.iamConfig.credentialProvider
+                : undefined;
+
+        if (credentialProvider !== undefined) {
+            if (typeof credentialProvider !== "function") {
+                throw new TypeError(
+                    "credentialProvider must be a function when provided; custom providers are unsupported by ClientPool.",
+                );
+            }
+
+            throw new Error(
+                "Pool clients cannot use a custom IAM credentials provider. " +
+                    "Configure IAM without a credentialProvider to use the default AWS credential chain.",
+            );
+        }
+
         // Reject pubsub subscriptions.
         const cfg = clientConfig as
             GlideClientConfiguration | GlideClusterClientConfiguration;
@@ -142,38 +161,15 @@ export class ClientPool {
             );
         }
 
-        // Reject custom IAM credential providers. Pool connections cannot
-        // forward a callback per connection; ordinary IAM still uses the
-        // default AWS credential chain.
-        const credentialProvider = (
-            clientConfig.credentials as
-                | { iamConfig?: { credentialProvider?: unknown } | null }
-                | undefined
-        )?.iamConfig?.credentialProvider;
-
-        if (credentialProvider !== undefined) {
-            if (typeof credentialProvider !== "function") {
-                throw new TypeError(
-                    "credentialProvider must be a function when provided; " +
-                        "custom IAM credentials providers are unsupported by ClientPool.",
-                );
-            }
-
-            throw new Error(
-                "Pool clients cannot use a custom IAM credentials provider. " +
-                    "Configure IAM without a credentialProvider to use the default AWS credential chain.",
-            );
-        }
-
         // Serialise the connection config into protobuf bytes using the
         // appropriate typed client without opening a network connection.
         // serializeConfig also registers any addressResolver and returns the
         // key so we can clean up if pool creation fails.
         const { bytes: connectionRequestBytes, resolverKey } = isCluster
-            ? ClientPool.serializeClusterConfig(
+            ? GlideClusterClient.serializeConfig(
                   clientConfig as GlideClusterClientConfiguration,
               )
-            : ClientPool.serializeStandaloneConfig(
+            : GlideClient.serializeConfig(
                   clientConfig as GlideClientConfiguration,
               );
 
@@ -191,10 +187,7 @@ export class ClientPool {
         let poolId: number;
 
         try {
-            poolId = await ClientPool.nativeCreatePool(
-                connectionRequestBytes,
-                poolConfigNapi,
-            );
+            poolId = await createPool(connectionRequestBytes, poolConfigNapi);
         } catch (e) {
             // Clean up the address resolver registration if pool creation failed.
             if (resolverKey) {
@@ -210,6 +203,7 @@ export class ClientPool {
             isCluster,
             clientConfig,
             resolverKey,
+            connectionRequestBytes,
         );
     }
 
@@ -297,6 +291,7 @@ export class ClientPool {
 
         // Null out the handle to prevent use-after-release.
         (client as unknown as { clientHandle: null }).clientHandle = null;
+        clearScopeConnectionRequest(client);
 
         // Rust state reset + return to idle.
         await poolRelease(this.poolId, clientId);
@@ -374,10 +369,12 @@ export class ClientPool {
             ? await GlideClusterClient.fromPoolClientId(
                   clientId,
                   this.clientConfig as GlideClusterClientConfiguration,
+                  this.connectionRequestBytes,
               )
             : await GlideClient.fromPoolClientId(
                   clientId,
                   this.clientConfig as GlideClientConfiguration,
+                  this.connectionRequestBytes,
               );
 
         // Override close() so that callers who call client.close() directly

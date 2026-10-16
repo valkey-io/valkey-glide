@@ -2836,6 +2836,18 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_createMonitorClient
                         FFIError::Logger(format!("Failed to parse ConnectionRequest: {e}"))
                     })?;
 
+            if proto_request.credential_provider_key.is_some()
+                || proto_request
+                    .authentication_info
+                    .as_ref()
+                    .is_some_and(|auth| auth.iam_credentials.is_some())
+            {
+                return Err(FFIError::Logger(
+                    "Monitor clients do not support IAM authentication or credential_provider_key"
+                        .to_string(),
+                ));
+            }
+
             // Extract first address
             let addr_proto = proto_request
                 .addresses

@@ -2,6 +2,7 @@
 package glide.internal;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import connection_request.ConnectionRequestOuterClass.AuthenticationInfo;
@@ -106,6 +107,25 @@ public class CredentialProviderBoundaryTest {
         for (String key : new String[] {"", " ", "\t\n", "custom-provider"}) {
             long result = GlidePoolResolver.glidePoolCreate(1, 0, 1_000, 1_000, 0, lazyIamRequest(key));
             assertEquals(UNSUPPORTED_POOL_CONFIG, result, "key=" + key);
+        }
+    }
+
+    @Test
+    void rawMonitorRejectsIamAndEveryPresentProviderKey() {
+        MonitorCallback callback = (timestamp, db, clientAddr, command, argsJson) -> {};
+
+        Exception defaultIam =
+                assertThrows(
+                        Exception.class,
+                        () -> GlideNativeBridge.createMonitorClient(lazyIamRequest(null), callback));
+        assertTrue(defaultIam.getMessage().contains("do not support IAM authentication"));
+        for (String key : new String[] {"", "custom-provider"}) {
+            Exception keyedIam =
+                    assertThrows(
+                            Exception.class,
+                            () -> GlideNativeBridge.createMonitorClient(lazyIamRequest(key), callback),
+                            "key=" + key);
+            assertTrue(keyedIam.getMessage().contains("credential_provider_key"));
         }
     }
 }

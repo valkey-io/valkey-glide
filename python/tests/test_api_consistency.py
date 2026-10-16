@@ -28,6 +28,10 @@ EXCLUDED_TESTS = {
         "test_UDS_socket_connection_failure",
         "test_cancelled_request_handled_gracefully",
         "test_client_usable_after_cancelled_commands",
+        # Async-only: the sync client blocks in the FFI call and cannot abandon it
+        "test_abandoned_acquire_returns_its_slot",
+        # Async-only: the sync client has no event loop whose waiters could queue
+        "test_many_waiters_time_out_together",
         "test_connection_timeout_on_unavailable_host",
         "test_invalid_tls_config_fails_fast",
         "test_aclose_alias",
@@ -97,18 +101,16 @@ EXCLUDED_TESTS = {
         # Abandon detection tests — async-only (monitor runs on tokio runtime)
         "test_pool_abandon_detection",
         "test_pool_abandon_detection_disabled",
-        # Async credential-provider forms have no sync-client equivalent.
+        # Async provider scheduling has no sync equivalent.
         "test_iam_custom_async_provider_forms",
-        # Closing while an async provider is suspended exercises the async
-        # client's owner event loop; sync clients reject async providers.
         "test_iam_close_during_provider_refresh_does_not_block_owner_runtime",
+        # Coordinates both client kinds; a pure sync twin would not test coexistence.
+        "test_live_async_sync_provider_ids_coexist_without_registry_leaks",
     ],
     "sync_only": [
         "test_sync_fork",
         "sync_poll_for_timestamp_change",
         "get_min_compressed_size",
-        # Sync thread-based callback close churn has no async API parity requirement.
-        "test_pubsub_publish_vs_close_churn",
         # get() with buffer — sync-only FFI path, no async equivalent
         "test_sync_get_into_buffer",
         "test_sync_get_into_buffer_nonexistent_key",
@@ -143,9 +145,7 @@ EXCLUDED_TESTS_FILENAMES = {
         "test_client_side_cache.py",
         "test_async_freethreading.py",
         "test_fork_safety.py",
-        # Tests asyncio/Trio event-loop ownership of the async shared response
-        # pipe, which has no sync-client analogue.
-        "test_async_pipe_liveness.py",
+        "test_async_scope_backends.py",
     ],
     "sync_only": [
         "test_sync_client_side_cache.py",
@@ -202,9 +202,9 @@ def filter_and_remove_prefix(
     """Filter out excluded/private functions and optionally normalize names."""
     result = {}
     for func, files in functions.items():
-        normalized = normalize(func) if normalize else func
-        if func in exclude or normalized in exclude or func.startswith("_"):
+        if func in exclude or func.startswith("_"):
             continue
+        normalized = normalize(func) if normalize else func
         result[normalized] = files
     return result
 

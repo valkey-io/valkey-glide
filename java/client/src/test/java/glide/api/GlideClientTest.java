@@ -28,6 +28,7 @@ import static command_request.CommandRequestOuterClass.RequestType.DBSize;
 import static command_request.CommandRequestOuterClass.RequestType.Decr;
 import static command_request.CommandRequestOuterClass.RequestType.DecrBy;
 import static command_request.CommandRequestOuterClass.RequestType.Del;
+import static command_request.CommandRequestOuterClass.RequestType.DelIfEq;
 import static command_request.CommandRequestOuterClass.RequestType.Dump;
 import static command_request.CommandRequestOuterClass.RequestType.Echo;
 import static command_request.CommandRequestOuterClass.RequestType.Exists;
@@ -11371,6 +11372,27 @@ public class GlideClientTest {
         // verify
         assertEquals(testResponse, response);
         assertEquals(1L, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void delifeq() {
+        // setup
+        String key = "testKey";
+        String value = "testValue";
+        CompletableFuture<Boolean> testResponse = new CompletableFuture<>();
+        testResponse.complete(true);
+        when(commandManager.<Boolean>submitNewCommand(
+                        eq(DelIfEq), eq(new String[] {key, value}), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Boolean> response = service.delifeq(key, value);
+        Boolean payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(true, payload);
     }
 
     @SneakyThrows
