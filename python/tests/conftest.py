@@ -427,7 +427,14 @@ def _probe_search_1_3_capability(client) -> bool:
         try:
             client.custom_command(["FT.DROPINDEX", probe_index])
         except RequestError:
-            pass
+            # Retry once -- a transient failure here would otherwise leave
+            # probe_index on the server for the rest of the session, where
+            # later Search tests could observe it. If the retry also fails,
+            # raise instead of silently continuing: both FT.CREATE and
+            # FT.DROPINDEX use probe_index as their own first argument, so
+            # they always route to the same primary -- a cluster-routing
+            # mismatch is not a possible explanation for this failing.
+            client.custom_command(["FT.DROPINDEX", probe_index])
 
 
 @pytest.fixture(scope="session")

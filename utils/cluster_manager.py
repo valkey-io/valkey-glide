@@ -507,10 +507,24 @@ def start_server(
             # Valkey's module loader requires each trailing config arg
             # (e.g. --emulate-release 1.3.0) to be its own argv token
             # starting with "--", not one combined string -- confirmed via
-            # valkey_search 1.3.0-rc1. shlex.split lets callers write the
-            # whole thing as one space-separated string while still
-            # producing separate tokens.
-            cmd_args.extend(["--loadmodule", *shlex.split(module_path)])
+            # valkey_search 1.3.0-rc1. Only the trailing "--..." config
+            # suffix is split into separate tokens; the module path itself
+            # stays a single token even if it contains spaces (e.g. a
+            # path under "Program Files" on Windows, or any directory with
+            # a space in its name).
+            module_args = shlex.split(module_path)
+            config_index = next(
+                (i for i, arg in enumerate(module_args) if arg.startswith("--")),
+                len(module_args),
+            )
+            if config_index == len(module_args):
+                module_args = [module_path]
+            else:
+                module_args = [
+                    " ".join(module_args[:config_index]),
+                    *module_args[config_index:],
+                ]
+            cmd_args.extend(["--loadmodule", *module_args])
     cmd_args += tls_args
     p = subprocess.Popen(
         cmd_args,

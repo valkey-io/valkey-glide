@@ -35,12 +35,13 @@ pub(crate) enum ExpectedReturnType<'a> {
     /// WITHCURSOR on FT.AGGREGATE/FT.HYBRID and FT.CURSOR READ all share
     /// this shape (confirmed live against valkey-search 1.3.0-rc1):
     /// `[<inner-rows>, <cursor_id>]`, a 2-element array where element 0 is
-    /// converted with the wrapped type (FTAggregateReturnType today; the
-    /// same shape for FT.HYBRID once P6 lands) and element 1 (the cursor
+    /// converted with the wrapped type (FTAggregateReturnType for all
+    /// three commands, since FT.HYBRID reuses the aggregate pipeline's
+    /// own reply shape) and element 1 (the cursor
     /// id) is passed through unchanged -- it is always a plain Int, never
     /// something that needs its own conversion. NOT used for FT.SEARCH
     /// WITHCURSOR, which has a different, Valkey-only 3-element shape
-    /// (`[total, rows, cursor_id]`) that is out of scope under D2 (it is
+    /// (`[total, rows, cursor_id]`) that is out of scope here (it is
     /// not a RediSearch feature) -- the option-tail scanner must still
     /// recognise WITHCURSOR's own argument shape so this flag is never
     /// confused with a different clause's keyword either way.
@@ -954,7 +955,7 @@ pub(crate) fn convert_to_expected_type(
             Very first element in the response is meaningless and should be ignored.
             */
             Value::Array(array) => {
-                // R3b SEC-L-1: array.len() - 1 underflows on a genuinely
+                // array.len() - 1 underflows on a genuinely
                 // empty top-level array; saturating_sub avoids the panic
                 // (the skip(1) below is then a no-op, yielding an empty
                 // Vec, which is the correct result for an empty reply).
@@ -1207,7 +1208,7 @@ pub(crate) fn convert_to_expected_type(
             Response may contain only 1 element (COUNT option), no conversion
             in that case.
             */
-            // R3a-SEC-L-1: a zero-length array has no count element to
+            // A zero-length array has no count element to
             // remove either -- guard `<= 1`, not just `== 1`, so a
             // malformed/empty reply is passed through unchanged instead of
             // panicking on `array.remove(0)` below.
@@ -1325,7 +1326,7 @@ pub(crate) fn convert_to_expected_type(
             Response may contain only 1 element (COUNT option), no conversion
             in that case.
             */
-            // R3a-SEC-L-1: a zero-length array has no count element to
+            // A zero-length array has no count element to
             // remove either -- guard `<= 1`, not just `== 1`, so a
             // malformed/empty reply is passed through unchanged instead of
             // panicking on `array.remove(0)` below.
@@ -1890,7 +1891,7 @@ fn parse_count_arg(arg: &[u8]) -> Option<usize> {
     std::str::from_utf8(arg).ok()?.parse::<usize>().ok()
 }
 
-/// L-4 fix: walks the FT.SEARCH option tail starting at `start`, correctly
+/// Walks the FT.SEARCH option tail starting at `start`, correctly
 /// skipping each clause's own argument count instead of scanning every byte
 /// in the command for a literal match (which is what `Routable::position`
 /// in `cluster_routing.rs` does, and which a value inside INKEYS, PARAMS or
@@ -1978,8 +1979,9 @@ fn ft_search_option_tail_contains_flag(cmd: &Cmd, start: usize, flag: &[u8]) -> 
             continue;
         }
         // INKEYS n key1 key2 ... keyN: keyword + count + exactly n keys.
-        // This is the clause the L-4 hazard is actually about -- a key name
-        // is caller-controlled and only became reachable as of 1.3 (PR #967).
+        // This is the clause the misdetection hazard above is actually about
+        // -- a key name is caller-controlled and only became reachable as of
+        // 1.3 (PR #967).
         if arg_eq_ignore_case(tok, b"INKEYS") {
             i += 1;
             let Some(count_arg) = cmd.arg_idx(i) else {
@@ -2263,8 +2265,7 @@ fn ft_aggregate_option_tail_contains_flag(cmd: &Cmd, start: usize, flag: &[u8]) 
 /// specific to FT.HYBRID. Getting any of their skip-shapes wrong here would
 /// land the aggregate scanner's `start` index mid-clause, which is exactly
 /// the kind of misdetection the option-tail-scanning approach exists to
-/// avoid in the first place (see the L-4 hazard this pattern was built
-/// for). Only the skip-shape of each clause matters, not its semantic
+/// avoid in the first place. Only the skip-shape of each clause matters, not its semantic
 /// contents, mirroring the aggregate scanner's own comment.
 fn ft_hybrid_prefix_tail_start(cmd: &Cmd) -> usize {
     let total = cmd.args_iter().len();
@@ -2532,9 +2533,9 @@ pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType<'_>>
             // [[count, row...], cursor_id] (confirmed live). Index name
             // starts the tail at arg_idx(1), the query itself is at
             // arg_idx(2), so the option tail itself starts at arg_idx(3)
-            // (FT.AGGREGATE <index> <query> <...opts>) -- R3b L-1 fix:
-            // this previously started the scan at arg_idx(2), meaning
-            // the query argument itself was compared against WITHCURSOR,
+            // (FT.AGGREGATE <index> <query> <...opts>) -- the scan must
+            // start here, not at arg_idx(2): starting at arg_idx(2) would
+            // compare the query argument itself against WITHCURSOR,
             // so a query literally equal to "WITHCURSOR" picked the
             // cursor converter even with no WITHCURSOR option present.
             if ft_aggregate_option_tail_contains_flag(cmd, 3, b"WITHCURSOR") {
@@ -2579,7 +2580,7 @@ pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType<'_>>
             )))
         }
         b"FT.SEARCH" => {
-            // L-4 fix: scan the option tail (starting after <index> <query>)
+            // Scan the option tail (starting after <index> <query>)
             // rather than the whole command, so an INKEYS/PARAMS/RETURN
             // value named "withsortkeys" or "withscores" is never
             // misdetected as the flag itself. WITHSCORES and WITHSORTKEYS
@@ -4780,8 +4781,8 @@ mod tests {
     }
 
     #[test]
-    fn convert_ft_search_option_tail_scanner_guards_l4_and_withscores() {
-        // L-4 (fixed): expected_type_for_cmd's FT.SEARCH/FT.PROFILE branches
+    fn convert_ft_search_option_tail_scanner_guards_clause_values_and_withscores() {
+        // Fixed: expected_type_for_cmd's FT.SEARCH/FT.PROFILE branches
         // used to detect WITHSORTKEYS via cmd.position(b"WITHSORTKEYS"),
         // which scans every argument in the command -- not just the
         // trailing options -- via redis::Cmd's Routable::position
@@ -5036,7 +5037,7 @@ mod tests {
         .unwrap();
         assert_eq!(converted, count_only);
 
-        // R3a-L-9: the normal case above is RESP2's wire shape (count,
+        // The normal case above is RESP2's wire shape (count,
         // then flat key/score/fields-array triplets). Confirmed live and
         // in source (src/commands/ft_search.cc's reply writer has no
         // RESP3-specific branch for FT.SEARCH) that RESP3 produces the
@@ -5143,7 +5144,7 @@ mod tests {
     fn ft_aggregate_option_tail_scanner_does_not_misdetect_withcursor_in_clause_values() {
         // A PARAMS value, a LOAD alias and a GROUPBY/REDUCE alias each
         // literally named "withcursor" must not flip detection -- mirrors
-        // the L-4 guard for FT.SEARCH's scanner.
+        // the equivalent guard for FT.SEARCH's scanner.
         let mut cmd_params = redis::cmd("FT.AGGREGATE");
         cmd_params
             .arg("idx")
@@ -5210,7 +5211,7 @@ mod tests {
 
     #[test]
     fn ft_aggregate_query_literally_named_withcursor_is_not_misdetected() {
-        // R3b L-1 regression: the scanner previously started at arg_idx(2),
+        // Regression test: the scanner previously started at arg_idx(2),
         // which is the <query> argument itself, not the first real option
         // token. A query literally equal to "WITHCURSOR" therefore flipped
         // detection even with no WITHCURSOR option anywhere in the command.
@@ -5243,7 +5244,7 @@ mod tests {
 
     #[test]
     fn ft_aggregate_empty_array_reply_does_not_panic() {
-        // R3b SEC-L-1 regression: Vec::with_capacity(array.len() - 1)
+        // Regression test: Vec::with_capacity(array.len() - 1)
         // underflowed on a genuinely empty top-level array. The new cursor
         // and hybrid converters (which both delegate to FTAggregateReturnType
         // for their inner element) made this reachable in more places than
@@ -5434,7 +5435,7 @@ mod tests {
 
     #[test]
     fn ft_search_with_scores_empty_array_does_not_panic() {
-        // R3a-SEC-L-1: the WITHSCORES and WITHSCORES+WITHSORTKEYS converters
+        // The WITHSCORES and WITHSCORES+WITHSORTKEYS converters
         // guarded only `len() == 1` before calling `array.remove(0)`
         // unconditionally, so a genuinely empty (zero-length) top-level
         // array would panic instead of erroring gracefully. A client must
@@ -5462,7 +5463,7 @@ mod tests {
 
     #[test]
     fn ft_search_return_with_alias_and_withscores_still_detects_withscores() {
-        // R3a-H-1 regression: RETURN's `cnt` is a token budget where an `AS
+        // Regression test: RETURN's `cnt` is a token budget where an `AS
         // alias` pair counts 2 against it (src/commands/ft_search_parser.cc
         // ConstructReturnParser: `i += 2; if (i > cnt) return error`), not
         // an uncounted suffix. Before the fix, the scanner only advanced its
@@ -5490,7 +5491,7 @@ mod tests {
 
     #[test]
     fn ft_search_return_two_aliases_then_sortby_withsortkeys_regression() {
-        // R3a-H-1 regression against 046685fba (the base commit the whole
+        // Regression test against 046685fba (the base commit the whole
         // option-tail-scanner approach was built on): two RETURN fields,
         // BOTH aliased via AS, followed by SORTBY and WITHSORTKEYS. RETURN's
         // token budget here is 6 (title, AS, t, price, AS, p), i.e. 2 fields
@@ -5694,7 +5695,7 @@ mod tests {
 
     #[test]
     fn ft_aggregate_cursored_with_sortby_desc_detects_withcursor() {
-        // R3a-H-1 regression: aggregate SORTBY's `cnt` is also a token
+        // Regression test: aggregate SORTBY's `cnt` is also a token
         // budget where ASC/DESC counts against it (src/commands/
         // ft_aggregate_parser.cc ConstructSortByParser: `for (i = 0; i <
         // cnt; ++i)` with an EXTRA `i++` inside the loop body on a
@@ -5719,7 +5720,7 @@ mod tests {
 
     #[test]
     fn ft_aggregate_cursored_with_load_as_detects_withcursor() {
-        // R3a-H-1 regression: aggregate LOAD's `cnt` is a token budget where
+        // Regression test: aggregate LOAD's `cnt` is a token budget where
         // `AS <alias>` counts 2 against it (src/commands/
         // ft_aggregate_parser.cc ConstructLoadParser's own comment: "`cnt`
         // is a token budget... the `AS` keyword and its alias count against
@@ -5744,8 +5745,8 @@ mod tests {
     }
 
     #[test]
-    fn convert_ft_search_withsortkeys_reply_shapes_group5() {
-        // Group 5 (GAP D2): pins that convert_to_expected_type's
+    fn convert_ft_search_withsortkeys_reply_shapes_pass_through_sort_key_value() {
+        // Pins that convert_to_expected_type's
         // FTSearchWithSortKeysReturnType branch passes the sort key VALUE
         // through completely unchanged -- it only reshapes the surrounding
         // array into key -> (sort_key, fields) pairs, never inspecting or
