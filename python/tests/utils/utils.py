@@ -1,4 +1,5 @@
 import json
+import os
 import random
 import string
 from concurrent.futures import ThreadPoolExecutor
@@ -35,7 +36,10 @@ from glide_shared.commands.bitmap import (
 )
 from glide_shared.commands.command_args import Limit, ListDirection, OrderBy
 from glide_shared.commands.core_options import (
+    ExpireOptions,
     ExpiryGetEx,
+    ExpirySet,
+    ExpiryType,
     ExpiryTypeGetEx,
     FlushMode,
     InfoSection,
@@ -380,6 +384,30 @@ def _is_save_in_progress(result: Union[bytes, Dict[bytes, bytes]]) -> bool:
 
 def check_version_lt(version_str: str, min_version: str) -> bool:
     return version.parse(version_str) < version.parse(min_version)
+
+
+# The latest expiration time accepted by the server (LLONG_MAX milliseconds, in seconds).
+MAX_EXPIRE_TIME_SEC = (2**63 - 1) // 1000
+
+
+class Matches:
+    """
+    Compares equal to any value for which `predicate` returns True.
+    Use in expected results for replies that are not deterministic.
+
+    Example:
+        >>> assert [5] == [Matches(lambda ttl: 0 < ttl <= 10)]
+    """
+
+    def __init__(self, predicate: Callable[[Any], bool]):
+        self._predicate = predicate
+
+    def __eq__(self, other: object) -> bool:
+        return self._predicate(other)
+
+    def __repr__(self) -> str:
+        code = self._predicate.__code__
+        return f"Matches({os.path.basename(code.co_filename)}:{code.co_firstlineno})"
 
 
 def assert_responses_in(
@@ -1138,6 +1166,8 @@ def batch_test(
     key25 = generate_key(keyslot, batch.is_atomic)  # list
     key26 = generate_key(keyslot, batch.is_atomic)  # sort
     key27 = generate_key_same_slot(key26)  # sort
+    key28 = generate_key(keyslot, batch.is_atomic)  # hash field expiration
+    key29 = generate_key(keyslot, batch.is_atomic)  # hash
     value = datetime.now(timezone.utc).strftime("%m/%d/%Y, %H:%M:%S")
     value_bytes = value.encode()
     value2 = get_random_string(5)
@@ -1218,7 +1248,7 @@ def batch_test(
                 }
             )
 
-    # To fix flake8's complexity analysis, we break down the argument appending into 6
+    # To fix flake8's complexity analysis, we break down the argument appending into
     # helper functions.
     helper1(
         batch,
@@ -1282,7 +1312,51 @@ def batch_test(
         args,
     )
 
+    if not check_version_lt(version, "9.0.0"):
+        helper_valkey_9_0(batch, key28, args)
+
+    if not check_version_lt(version, "9.1.0"):
+        helper_valkey_9_1(batch, key29, args)
+
     return args
+
+
+def helper_valkey_9_0(transaction, key, args):
+    expiry = ExpirySet(ExpiryType.UNIX_SEC, MAX_EXPIRE_TIME_SEC)
+    transaction.hsetex(key, {"f1": "v1", "f2": "v2"}, expiry=expiry)
+
+    args.append(1)
+    transaction.hexpiretime(key, ["f1", "missing"])
+    args.append([MAX_EXPIRE_TIME_SEC, -2])
+    transaction.hpexpiretime(key, ["f1"])
+    args.append([MAX_EXPIRE_TIME_SEC * 1000])
+    transaction.hpersist(key, ["f1", "f2"])
+    args.append([1, 1])
+    transaction.httl(key, ["f1", "missing"])
+    args.append([-1, -2])
+    transaction.hpttl(key, ["f1"])
+    args.append([-1])
+    transaction.hexpireat(key, MAX_EXPIRE_TIME_SEC, ["f1"])
+    args.append([1])
+    transaction.hpexpireat(key, MAX_EXPIRE_TIME_SEC * 1000, ["f2"])
+    args.append([1])
+    transaction.hexpiretime(key, ["f1", "f2"])
+    args.append([MAX_EXPIRE_TIME_SEC, MAX_EXPIRE_TIME_SEC])
+    transaction.hexpire(key, 3600, ["f1"], option=ExpireOptions.HasExistingExpiry)
+    args.append([1])
+    transaction.hpexpire(key, 3600000, ["f2"])
+    args.append([1])
+    transaction.httl(key, ["f1"])
+    args.append([Matches(lambda ttl: 0 < ttl <= 3600)])
+    transaction.hgetex(key, ["f1"], expiry=ExpiryGetEx(ExpiryTypeGetEx.PERSIST, None))
+    args.append([b"v1"])
+
+
+def helper_valkey_9_1(transaction, key, args):
+    transaction.hset(key, {"f1": "v1"})
+    args.append(1)
+    transaction.hgetdel(key, ["f1", "missing"])
+    args.append([b"v1", None])
 
 
 def helper6(
