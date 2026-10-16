@@ -3,11 +3,13 @@
 
 from __future__ import annotations
 
+import gc
 import math
 import os
 import platform
 import sys
 import time
+import warnings
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Mapping, Optional, Union, cast, get_type_hints
 
@@ -19,6 +21,7 @@ else:
 import anyio
 import pytest
 from glide import GlideClient, GlideClusterClient, Script, TGlideClient
+from glide.glide_client import _client_registry
 from glide_shared import ClosingError, RequestError
 from glide_shared.commands.batch import Batch, ClusterBatch
 from glide_shared.commands.batch_options import ClusterBatchOptions
@@ -144,6 +147,7 @@ from tests.utils.utils import (
     parse_info_response,
     round_values,
     trigger_latency_spike,
+    wait_for,
     wait_for_save_not_in_progress,
 )
 
@@ -177,6 +181,46 @@ class TestGlideClients:
             )
 
         assert client._is_closed
+
+    @pytest.mark.parametrize("cluster_mode", [False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP3])
+    @pytest.mark.parametrize("resource_warning_filter", ["always", "error"])
+    async def test_unreferenced_client_releases_connection(
+        self, request, cluster_mode, protocol, resource_warning_filter
+    ):
+        """A client dropped without close() is collected and its connection closed,
+        whether its ResourceWarning is reported or raised."""
+        observer = await create_client(
+            request, cluster_mode=cluster_mode, protocol=protocol
+        )
+        client = await create_client(
+            request,
+            cluster_mode=cluster_mode,
+            protocol=protocol,
+            client_name="gc_dropped",
+        )
+
+        async def dropped_client_gone() -> bool:
+            client_list = await observer.custom_command(["CLIENT", "LIST"])
+            assert isinstance(client_list, bytes)
+            return b"name=gc_dropped" not in client_list
+
+        assert not await dropped_client_gone()
+        pipe_client_id = client._pipe_client_id
+        # Under "error" the warning raises inside the finalizer and reaches
+        # sys.unraisablehook, so only the closed connection proves it still ran.
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter(resource_warning_filter, ResourceWarning)
+            del client
+            gc.collect()
+        if resource_warning_filter == "always":
+            assert any(issubclass(w.category, ResourceWarning) for w in caught)
+        assert pipe_client_id not in _client_registry
+        await wait_for(
+            dropped_client_gone,
+            "the dropped client's connection was not closed",
+        )
+        await observer.close()
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
