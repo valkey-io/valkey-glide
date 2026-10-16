@@ -78,6 +78,14 @@ GLIDE_SHARED_RS_SOURCE = ROOT.parent / "glide-shared"
 GLIDE_SHARED_RS_DIST = ROOT / "glide-shared-rs"
 
 
+def cargo_target_dir(crate_dir: Path) -> Path:
+    """Cargo honors CARGO_TARGET_DIR over the per-crate default; so must every
+    path that reads cargo's output, or a shared target dir (the CI cache)
+    breaks the build."""
+    override = os.environ.get("CARGO_TARGET_DIR")
+    return Path(override) if override else crate_dir / "target"
+
+
 # Helper to safely remove files, directories, or symlinks
 def remove_existing(path: Path):
     if path.is_symlink():
@@ -104,13 +112,15 @@ def vendor_dependencies():
         print(f"[INFO] Copying {folder.source} → {folder.dist}")
         shutil.copytree(folder.source, folder.dist, ignore=ignore_dirs)
 
-    # Vendor only the Rust build files for glide-shared (Cargo.toml + src/)
+    # Vendor only the Rust build files for glide-shared (Cargo.toml, Cargo.lock
+    # + src/); --locked needs the lockfile present in the vendored copy.
     if GLIDE_SHARED_RS_DIST.exists():
         remove_existing(GLIDE_SHARED_RS_DIST)
     GLIDE_SHARED_RS_DIST.mkdir()
-    shutil.copy2(
-        GLIDE_SHARED_RS_SOURCE / "Cargo.toml", GLIDE_SHARED_RS_DIST / "Cargo.toml"
-    )
+    for build_file in ("Cargo.toml", "Cargo.lock"):
+        shutil.copy2(
+            GLIDE_SHARED_RS_SOURCE / build_file, GLIDE_SHARED_RS_DIST / build_file
+        )
     shutil.copytree(GLIDE_SHARED_RS_SOURCE / "src", GLIDE_SHARED_RS_DIST / "src")
 
 
@@ -192,7 +202,8 @@ class build_ext(build_ext_orig):
         ffi_path = VENDORED_DEPENDENCIES["ffi"].dist
         print(f"[INFO] Building Rust FFI lib with cargo in {ffi_path}")
         subprocess.run(
-            ["cargo", "build"] + (["--release"] if release else []),
+            ["cargo", "rustc", "--lib", "--crate-type", "cdylib", "--locked"]
+            + (["--release"] if release else []),
             cwd=ffi_path,
             env=env,
             check=True,
@@ -203,7 +214,7 @@ class build_ext(build_ext_orig):
         suffix = {"linux": ".so", "darwin": ".dylib", "win32": ".dll"}[sys.platform]
         lib_name = "libglide_ffi" + suffix
 
-        built_lib = ffi_path / "target" / target_dir / lib_name
+        built_lib = cargo_target_dir(ffi_path) / target_dir / lib_name
         dest_dir = Path(self.build_lib) / "glide_sync"
         dest_dir.mkdir(parents=True, exist_ok=True)
         print(f"[INFO] Copying {built_lib} → {dest_dir / lib_name}")
@@ -224,7 +235,7 @@ class build_ext(build_ext_orig):
                 + " -C link-arg=-undefined -C link-arg=dynamic_lookup"
             )
         subprocess.run(
-            ["cargo", "build"] + (["--release"] if release else []),
+            ["cargo", "build", "--locked"] + (["--release"] if release else []),
             cwd=glide_shared_rs,
             env=pyo3_env,
             check=True,
@@ -235,7 +246,9 @@ class build_ext(build_ext_orig):
             "EXT_SUFFIX"
         )  # e.g. .cpython-311-darwin.so
         src_lib = (
-            glide_shared_rs / "target" / target_dir / ("lib_fast_response" + suffix)
+            cargo_target_dir(glide_shared_rs)
+            / target_dir
+            / ("lib_fast_response" + suffix)
         )
         dest_shared = Path(self.build_lib) / "glide_shared"
         dest_shared.mkdir(parents=True, exist_ok=True)
