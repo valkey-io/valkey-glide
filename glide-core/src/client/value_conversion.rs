@@ -1709,7 +1709,9 @@ pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType<'_>>
         }
         b"SISMEMBER" => {
             // Match "XX" by position because the key or member may itself be "XX".
-            if cmd.arg_idx(3).is_some_and(|arg| arg.eq_ignore_ascii_case(b"XX"))
+            if cmd
+                .arg_idx(3)
+                .is_some_and(|arg| arg.eq_ignore_ascii_case(b"XX"))
             {
                 None
             } else {
