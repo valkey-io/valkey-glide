@@ -2259,7 +2259,9 @@ def assert_memory_stats_fields(stats: MemoryStats, server_version: str) -> None:
     assert stats.aof_buffer >= 0
     assert stats.clients_normal >= 0
     assert stats.clients_slaves >= 0
-    assert stats.dataset_bytes >= 0
+    # dataset.bytes is used memory minus overhead and is not clamped by the
+    # server, so it can be transiently negative.
+    assert isinstance(stats.dataset_bytes, int)
     assert isinstance(stats.fragmentation_bytes, int)
     assert stats.keys_bytes_per_key >= 0
     assert stats.keys_count >= 0

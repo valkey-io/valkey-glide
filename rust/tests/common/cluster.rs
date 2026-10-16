@@ -120,6 +120,12 @@ impl ClusterHarness {
             shards.as_str(),
             "-r",
             replicas.as_str(),
+            // A short node timeout forms the cluster faster. It is safe only
+            // while no Rust test runs a Lua script long enough for the other
+            // nodes to fail over the busy primary; a test that needs a busy
+            // script must start its cluster without this flag.
+            "--cluster-node-timeout",
+            "2000",
         ]);
 
         if mtls {

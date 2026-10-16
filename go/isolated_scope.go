@@ -267,56 +267,84 @@ func (client *Client) ScopedConnection(ctx context.Context, timeout time.Duratio
 		}
 	}
 
-	routingSlot := uint16(0)
-	if routingKey != "" {
+	// A routing key is optional; when absent, a cluster scope stays unconstrained
+	// (any primary) rather than being pinned to a slot. Presence is carried in a
+	// separate flag so slot 0 is a real value, not "unset".
+	//
+	// Go-only: an empty string is treated as absent, because Go's string type has
+	// no undefined/null and "" is the only "not supplied" signal available. The
+	// other bindings (Python is-not-None, Java != null, Node !== undefined) treat
+	// an explicit "" as present (it hashes to slot 0).
+	hasRoutingSlot := routingKey != ""
+	var routingSlot uint16
+	if hasRoutingSlot {
 		routingSlot = slotForKey([]byte(routingKey))
 	}
+	return acquireScope(ctx, clientID, connReqBytes, hasRoutingSlot, routingSlot, timeout)
+}
 
-	deadline := time.Now().Add(timeout)
-	backoff := 10 * time.Millisecond
+// acquireScope asks the core for a scope and waits for its answer. The core owns
+// the wait: it returns once a connection is available, the deadline passes, or a
+// cause that no amount of waiting can fix is found, and reports which through the
+// same callback path scope commands use, so the error type is the core's.
+func acquireScope(
+	ctx context.Context,
+	clientID uint64,
+	connReqBytes []byte,
+	hasRoutingSlot bool,
+	routingSlot uint16,
+	timeout time.Duration,
+) (*IsolatedScope, error) {
+	resultChannel := make(chan payload, 1)
+	requestID := registerRequest(resultChannel)
 
-	// One logical acquire: mint a single attempt token and pass it on every retry
-	// poll, so the core dedupes this acquire's retries to one in-flight creation
-	// while distinct concurrent acquires each dial their own.
-	attemptToken := C.glide_scope_next_attempt_token()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		default:
-		}
-
-		scopeID := C.glide_scope_try_acquire(
-			C.uint64_t(clientID),
-			(*C.uint8_t)(unsafe.Pointer(&connReqBytes[0])),
-			C.uintptr_t(len(connReqBytes)),
-			C.uint16_t(routingSlot),
-			attemptToken,
-		)
-
-		if scopeID >= 0 {
-			return &IsolatedScope{
-				scopeID:  int64(scopeID),
-				clientID: clientID,
-			}, nil
-		}
-
-		remaining := time.Until(deadline)
-		if remaining <= 0 {
-			return nil, errors.New("timed out waiting for isolated scope (pool exhausted)")
-		}
-
-		sleep := backoff
-		if sleep > remaining {
-			sleep = remaining
-		}
-		time.Sleep(sleep)
-		backoff *= 2
-		if backoff > 500*time.Millisecond {
-			backoff = 500 * time.Millisecond
-		}
+	rc := C.glide_scope_acquire_async(
+		C.uint64_t(clientID),
+		(*C.uint8_t)(unsafe.Pointer(&connReqBytes[0])),
+		C.uintptr_t(len(connReqBytes)),
+		C.bool(hasRoutingSlot),
+		C.uint16_t(routingSlot),
+		C.uint64_t(max(timeout.Milliseconds(), 0)),
+		C.uintptr_t(requestID),
+		C.SuccessCallback(unsafe.Pointer(C.successCallback)),
+		C.FailureCallback(unsafe.Pointer(C.failureCallback)),
+	)
+	if rc != 0 {
+		takeRequest(requestID)
+		return nil, fmt.Errorf("scope acquire failed: invalid arguments (code %d)", rc)
 	}
+
+	var result payload
+	select {
+	case <-ctx.Done():
+		// The core keeps waiting after the caller gives up. Give back a scope it
+		// is later granted, or its slot stays in use until the client closes.
+		go releaseLateScope(resultChannel, clientID)
+		return nil, ctx.Err()
+	case result = <-resultChannel:
+	}
+	if result.error != nil {
+		return nil, result.error
+	}
+
+	resp := result.value
+	defer C.free_command_response(resp)
+	return &IsolatedScope{
+		scopeID:  int64(resp.int_value),
+		clientID: clientID,
+	}, nil
+}
+
+// releaseLateScope gives back a scope the core granted after its caller stopped waiting.
+func releaseLateScope(resultChannel chan payload, clientID uint64) {
+	result := <-resultChannel
+	if result.value == nil {
+		return
+	}
+	if result.error == nil {
+		C.glide_scope_release(C.uint64_t(result.value.int_value), C.uint64_t(clientID))
+	}
+	C.free_command_response(result.value)
 }
 
 // getConnectionRequest returns the protobuf ConnectionRequest for this client's config.
@@ -373,55 +401,20 @@ func (client *ClusterClient) ScopedConnection(
 		}
 	}
 
-	routingSlot := uint16(0)
-	if routingKey != "" {
+	// A routing key is optional; when absent, a cluster scope stays unconstrained
+	// (any primary) rather than being pinned to a slot. Presence is carried in a
+	// separate flag so slot 0 is a real value, not "unset".
+	//
+	// Go-only: an empty string is treated as absent, because Go's string type has
+	// no undefined/null and "" is the only "not supplied" signal available. The
+	// other bindings (Python is-not-None, Java != null, Node !== undefined) treat
+	// an explicit "" as present (it hashes to slot 0).
+	hasRoutingSlot := routingKey != ""
+	var routingSlot uint16
+	if hasRoutingSlot {
 		routingSlot = slotForKey([]byte(routingKey))
 	}
-	deadline := time.Now().Add(timeout)
-	backoff := 10 * time.Millisecond
-
-	// One logical acquire: mint a single attempt token and pass it on every retry
-	// poll, so the core dedupes this acquire's retries to one in-flight creation
-	// while distinct concurrent acquires each dial their own.
-	attemptToken := C.glide_scope_next_attempt_token()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		default:
-		}
-
-		scopeID := C.glide_scope_try_acquire(
-			C.uint64_t(clientID),
-			(*C.uint8_t)(unsafe.Pointer(&connReqBytes[0])),
-			C.uintptr_t(len(connReqBytes)),
-			C.uint16_t(routingSlot),
-			attemptToken,
-		)
-
-		if scopeID >= 0 {
-			return &IsolatedScope{
-				scopeID:  int64(scopeID),
-				clientID: clientID,
-			}, nil
-		}
-
-		remaining := time.Until(deadline)
-		if remaining <= 0 {
-			return nil, errors.New("timed out waiting for isolated scope (pool exhausted)")
-		}
-
-		sleep := backoff
-		if sleep > remaining {
-			sleep = remaining
-		}
-		time.Sleep(sleep)
-		backoff *= 2
-		if backoff > 500*time.Millisecond {
-			backoff = 500 * time.Millisecond
-		}
-	}
+	return acquireScope(ctx, clientID, connReqBytes, hasRoutingSlot, routingSlot, timeout)
 }
 
 // getConnectionRequest returns the protobuf ConnectionRequest for this cluster client's config.

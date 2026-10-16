@@ -669,9 +669,11 @@ class TestBatch:
         # Wait for sleep to finish
         time.sleep(0.5)
 
-        # Execute the same batch again with a longer timeout, should succeed now
+        # Execute the same batch again with a longer timeout, should succeed now.
+        # The first DEBUG SLEEP may still be running on a loaded server, so the
+        # budget must cover its remainder plus this batch's own 0.5 s.
         result = await exec_batch(
-            glide_client, batch, raise_on_error=True, timeout=1000
+            glide_client, batch, raise_on_error=True, timeout=5000
         )
         assert result is not None
         assert len(result) == 1  # Should contain only the result of DEBUG SLEEP
@@ -935,3 +937,6 @@ class TestBatch:
         result = await exec_batch(glide_client, batch, raise_on_error=True)
         assert result is not None
         assert result[0] == b"RESET"
+        # RESET downgrades the glide client to RESP2 for the rest of its life
+        # (glide-core stores RESP2 for reconnects too); keep it out of the pool.
+        await glide_client.close()

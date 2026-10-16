@@ -12,7 +12,7 @@
  * the native scope layer.
  */
 
-import { scopeTryAcquire } from "../build-ts/native";
+import { scopeAcquire } from "../build-ts/native";
 import type { BaseClient } from "./BaseClient";
 
 /** client -> serialized ConnectionRequest captured at connect time. */
@@ -32,22 +32,22 @@ export function clearScopeConnectionRequest(client: BaseClient): void {
 }
 
 /**
- * Try to acquire a scope for a client, feeding the cached connection request
+ * Acquire a scope for a client, feeding the cached connection request
  * straight to the native layer. The bytes never leave this module, so a caller
  * holding the client or the returned scope cannot read the password or mTLS key
  * they carry. Pass `explicitBytes` to use a caller-supplied request instead.
- * `attemptToken` identifies one logical acquire across its retry polls.
  *
- * Returns the native scope id (>= 0), or a negative value when the pool is
- * exhausted or the request is invalid.
+ * Resolves to the native scope id; rejects with the core's prefixed message
+ * when the wait times out, the client closes, or the request is invalid.
  */
-export function tryAcquireScope(
+export function acquireScope(
     client: BaseClient,
     clientId: number,
+    hasRoutingSlot: boolean,
     routingSlot: number,
-    attemptToken: bigint,
+    timeoutMs: number,
     explicitBytes?: Uint8Array,
-): number {
+): Promise<number> {
     const bytes = explicitBytes ?? connectionRequests.get(client);
 
     if (!bytes) {
@@ -57,5 +57,11 @@ export function tryAcquireScope(
         );
     }
 
-    return scopeTryAcquire(clientId, bytes, routingSlot, attemptToken);
+    return scopeAcquire(
+        clientId,
+        bytes,
+        hasRoutingSlot,
+        routingSlot,
+        timeoutMs,
+    );
 }
