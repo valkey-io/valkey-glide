@@ -81,6 +81,7 @@ concurrency:
 
 env:
     CARGO_TERM_COLOR: always
+    BASE_NODE_VERSION: "26.x"
 
 run-name:
     # Set custom name if job is started manually and name is given
@@ -183,6 +184,14 @@ jobs:
                   JEST_HTML_REPORTER_OUTPUT_PATH: test-report-node.html
                   VALKEY_GLIDE_DNS_TESTS_ENABLED: "1"
 
+            - uses: ./.github/workflows/test-benchmark
+              with:
+                  language-flag: -node
+                  engine-run: ${{ matrix.engine.run }}
+                  target: ${{ matrix.host.TARGET }}
+                  language-version: ${{ matrix.node }}
+                  base-language-version: ${{ env.BASE_NODE_VERSION }}
+
             - name: Upload test reports
               if: always()
               continue-on-error: true
@@ -191,9 +200,10 @@ jobs:
                   name: node-test-reports-${{ matrix.node }}-${{ matrix.engine.type }}-${{ matrix.engine.version }}-${{ matrix.host.OS }}-${{ matrix.host.ARCH }}
                   path: |
                       node/test-report*.html
+                      benchmarks/results/**
 
     test-node-extras:
-        name: Node Extra Tests (ES/CJS, Yarn, Types, Benchmarks)
+        name: Node Extra Tests (ES/CJS, Yarn, Types)
         runs-on: ubuntu-24.04
         timeout-minutes: 25
         steps:
@@ -293,11 +303,6 @@ jobs:
                   pnpm run test
               working-directory: ./node/hybrid-node-tests/pnpm-pubsub-test
 
-            - name: Run benchmarks
-              uses: ./.github/workflows/test-benchmark
-              with:
-                  language-flag: -node
-
             - name: Upload test reports
               if: always()
               continue-on-error: true
@@ -307,7 +312,6 @@ jobs:
                   path: |
                       node/hybrid-node-tests/**/test-report*.html
                       utils/clusters/**
-                      benchmarks/results/**
 
     lint-rust:
         timeout-minutes: 15
