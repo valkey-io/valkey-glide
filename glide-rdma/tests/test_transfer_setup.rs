@@ -105,3 +105,32 @@ fn waiting_for_closes_returns_once_a_dropped_buffer_has_let_go_of_its_memory() {
     assert_eq!(fabric.parked_bytes(), 0);
     assert_eq!(fabric.leaked_bytes(), 0);
 }
+
+/// A caller holding only the buffer, such as a binding handed nothing else, can
+/// still wait for its region to close through the fabric the buffer names.
+#[test]
+fn a_buffer_names_its_fabric_so_a_caller_holding_only_the_buffer_can_wait() {
+    let dropped = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let buffer = {
+        let fabric = RdmaFabric::open(&FabricConfig::new(Provider::Tcp))
+            .expect("the tcp provider should open on any host with libfabric");
+        let buffer = fabric
+            .register(Tracked {
+                bytes: vec![0u8; 4096],
+                dropped: dropped.clone(),
+            })
+            .expect("registration failed");
+        assert!(buffer.is_registered_on(&fabric));
+        assert!(buffer.is_registered_on(buffer.fabric()));
+        buffer
+    };
+
+    let fabric = buffer.fabric().clone();
+    drop(buffer);
+    fabric.wait_for_closes();
+
+    assert!(
+        dropped.load(std::sync::atomic::Ordering::SeqCst),
+        "an idle buffer's memory is dropped by the time the wait returns"
+    );
+}

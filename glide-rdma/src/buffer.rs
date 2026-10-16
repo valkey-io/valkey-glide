@@ -138,6 +138,13 @@ impl RdmaBuffer {
         self.fabric.is(fabric)
     }
 
+    /// The fabric this buffer was registered with. Clone it to wait for the
+    /// buffer's region to close after dropping it; see
+    /// [`RdmaFabric::wait_for_closes`].
+    pub fn fabric(&self) -> &RdmaFabric {
+        &self.fabric
+    }
+
     /// Lend `[at, at + length)` of this buffer to a `BLOB.RDMA_GET` of `key` for the server
     /// to write the stored object into.
     ///
