@@ -1,6 +1,7 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 import asyncio
+import contextlib
 import itertools
 import os
 import struct
@@ -56,6 +57,7 @@ from glide_shared.constants import (
 from glide_shared.exceptions import (
     ClosingError,
     ConfigurationError,
+    ConnectionError,
     RequestError,
     get_request_error_class,
 )
@@ -176,6 +178,40 @@ def _get_new_future_instance() -> "TFuture":
     # _CompatFuture is also compatible with asyncio, but introduces performance
     # degradation, so we only use it for trio/other frameworks
     return _CompatFuture()
+
+
+class _ReleaseLateScope:
+    """Takes a cancelled acquire's place in ``_pending_futures``.
+
+    Core keeps waiting after the caller gives up. A scope it then grants must
+    go back, or its slot stays in use until the client closes. Covers a grant
+    that has not arrived yet; one already resolved into the caller's future
+    is released by ``scoped_connection`` itself.
+    """
+
+    def __init__(self, lib, client_id: int) -> None:
+        self._lib = lib
+        self._client_id = client_id
+
+    def done(self) -> bool:
+        return False
+
+    def set_result(self, scope_id: int) -> None:
+        self._lib.glide_scope_release(scope_id, self._client_id)
+
+    def set_exception(self, _exception: BaseException) -> None:
+        # The caller already left; a failed grant holds nothing to release.
+        pass
+
+
+def _delivered_result(fut: "TFuture") -> Optional[int]:
+    """The value a completed future holds, or ``None`` if it holds none."""
+    if not fut.done():
+        return None
+    try:
+        return fut.result()
+    except BaseException:
+        return None
 
 
 def _slot_for_key(key: bytes) -> int:
@@ -748,6 +784,21 @@ class BaseClient(CoreCommands):
         else:
             self._pending_futures[callback_id] = fut
 
+    def _replace_pending_future(
+        self, callback_id: int, expected: "TFuture", replacement: Any
+    ) -> None:
+        """The pipe reader may already have popped and resolved this entry;
+        swapping only while it is still ``expected`` leaves that result where
+        its awaiter will find it. ``None`` removes the entry."""
+        lock = self._lock if _FREE_THREADED else contextlib.nullcontext()
+        with lock:
+            if self._pending_futures.get(callback_id) is not expected:
+                return
+            if replacement is None:
+                del self._pending_futures[callback_id]
+            else:
+                self._pending_futures[callback_id] = replacement
+
     def _complete_pubsub_futures_safe(self):
         """Complete pending pubsub futures with available messages. Must hold _pubsub_lock."""
         loop = self._loop
@@ -1208,10 +1259,11 @@ class BaseClient(CoreCommands):
 
         Raises:
             TimeoutError: If no scope is available within the timeout.
-            ClosingError: If the client is closed.
+            ConnectionError: If the client is closed while waiting.
+            RequestError: If the client's configuration cannot produce a
+                scoped connection.
+            ClosingError: If the client is already closed.
         """
-        import time
-
         from .isolated_scope import AsyncIsolatedScope
 
         if self._is_closed:
@@ -1228,37 +1280,45 @@ class BaseClient(CoreCommands):
             _slot_for_key(routing_key.encode("utf-8")) if routing_key is not None else 0
         )
 
-        loop = asyncio.get_running_loop()
+        callback_id = self._get_callback_id()
+        fut = _get_new_future_instance()
+        self._register_future(callback_id, fut)
 
-        # One logical acquire: mint a single attempt token and pass it on every
-        # retry poll, so the core dedupes this acquire's retries to one in-flight
-        # creation while distinct concurrent acquires each dial their own.
-        attempt_token = self._lib.glide_scope_next_attempt_token()
+        buf = self._ffi.from_buffer(conn_req_bytes)
+        rc = self._lib.glide_scope_acquire_pipe(
+            client_id,
+            self._ffi.cast("const uint8_t*", buf),
+            len(conn_req_bytes),
+            has_routing_slot,
+            routing_slot,
+            # uint64_t on the FFI side: a negative value would raise
+            # OverflowError instead of the documented TimeoutError.
+            # Negative means no wait.
+            max(0, int(timeout * 1000)),
+            callback_id,
+            self._pipe_client_id,
+        )
+        if rc != 0:
+            self._replace_pending_future(callback_id, fut, None)
+            raise RuntimeError(f"Failed to queue scope acquire: error code {rc}")
 
-        def _acquire_sync():
-            deadline = time.monotonic() + timeout
-            backoff = 0.001
-            while True:
-                buf = self._ffi.from_buffer(conn_req_bytes)
-                scope_id = self._lib.glide_scope_try_acquire(
-                    client_id,
-                    self._ffi.cast("const uint8_t*", buf),
-                    len(conn_req_bytes),
-                    has_routing_slot,
-                    routing_slot,
-                    attempt_token,
-                )
-                if scope_id >= 0:
-                    return scope_id
-                remaining = deadline - time.monotonic()
-                if remaining <= 0:
-                    raise TimeoutError(
-                        "Timed out waiting for isolated scope (pool exhausted)"
-                    )
-                time.sleep(min(backoff, remaining))
-                backoff = min(backoff * 2, 0.05)
-
-        scope_id = await loop.run_in_executor(None, _acquire_sync)
+        try:
+            scope_id = await fut
+        except ClosingError as e:
+            # close() fails every pending future before core's Disconnect
+            # frame can arrive; keep the documented class.
+            raise ConnectionError(str(e) or "Client closed while waiting") from e
+        except BaseException:
+            # Cancellation (asyncio.CancelledError, trio.Cancelled) leaves the
+            # core wait running, or lands after the grant resolved the future
+            # but before this task saw it.
+            self._replace_pending_future(
+                callback_id, fut, _ReleaseLateScope(self._lib, client_id)
+            )
+            delivered = _delivered_result(fut)
+            if delivered is not None:
+                self._lib.glide_scope_release(delivered, client_id)
+            raise
 
         return AsyncIsolatedScope(
             scope_id,
