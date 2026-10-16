@@ -193,6 +193,7 @@ pub fn cmd_name_from_bytes(bytes: &[u8]) -> &'static str {
             &[
                 (b"CLUSTER", "CLUSTER"),
                 (b"COMMAND", "COMMAND"),
+                (b"DELIFEQ", "DELIFEQ"),
                 (b"DISCARD", "DISCARD"),
                 (b"EVALSHA", "EVALSHA"),
                 (b"FLUSHDB", "FLUSHDB"),
