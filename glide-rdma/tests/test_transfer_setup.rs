@@ -60,3 +60,48 @@ fn a_registered_buffer_produces_a_sendable_set_command() {
     let buffer = unsafe { loan.cancel_unsent() };
     assert_eq!(&buffer.as_host()[..payload.len()], payload);
 }
+
+/// Memory that records when it is dropped, standing in for memory the caller
+/// owns and may only reuse once the fabric lets go of it.
+struct Tracked {
+    bytes: Vec<u8>,
+    dropped: std::sync::Arc<std::sync::atomic::AtomicBool>,
+}
+
+impl AsMut<[u8]> for Tracked {
+    fn as_mut(&mut self) -> &mut [u8] {
+        &mut self.bytes
+    }
+}
+
+impl Drop for Tracked {
+    fn drop(&mut self) {
+        self.dropped
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+    }
+}
+
+/// Dropping a buffer closes its region later on the fabric's closing thread.
+/// Waiting for closes is how a caller knows the memory has been let go of.
+#[test]
+fn waiting_for_closes_returns_once_a_dropped_buffer_has_let_go_of_its_memory() {
+    let fabric = RdmaFabric::open(&FabricConfig::new(Provider::Tcp))
+        .expect("the tcp provider should open on any host with libfabric");
+    let dropped = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let buffer = fabric
+        .register(Tracked {
+            bytes: vec![0u8; 4096],
+            dropped: dropped.clone(),
+        })
+        .expect("registration failed");
+
+    drop(buffer);
+    fabric.wait_for_closes();
+
+    assert!(
+        dropped.load(std::sync::atomic::Ordering::SeqCst),
+        "an idle buffer's memory is dropped by the time the wait returns"
+    );
+    assert_eq!(fabric.parked_bytes(), 0);
+    assert_eq!(fabric.leaked_bytes(), 0);
+}

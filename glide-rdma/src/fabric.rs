@@ -31,6 +31,7 @@ struct PeerHandle(u64);
 ///   vector, which waits for any region closing at that moment.
 /// - [`RdmaBuffer::revoke`], [`crate::RdmaRevoker::revoke`] and
 ///   [`crate::LentBuffer::recall`]: close the region before returning.
+/// - [`Self::wait_for_closes`]: waits for the regions of buffers dropped before it.
 /// - Dropping the last handle to the fabric, from any thread but its closing
 ///   thread: stops the progress thread and closes the endpoint.
 ///
@@ -221,8 +222,19 @@ impl RdmaFabric {
         queue.submit(Box::new(move || close(&self)));
     }
 
-    /// Return once every close [`Self::close_later`] has queued so far has run.
-    pub(crate) fn wait_for_closes(&self) {
+    /// Wait until every [`RdmaBuffer`] and [`crate::LentBuffer`] dropped on this
+    /// fabric before this call has finished closing its region and has freed,
+    /// parked or leaked its memory.
+    ///
+    /// Dropping one of them only queues that work for the fabric's closing
+    /// thread. Call this when the caller needs it done, for example before
+    /// handing back memory it does not own: once this returns, the memory of
+    /// such a buffer has been dropped unless it was parked or leaked, which
+    /// [`Self::parked_bytes`] and [`Self::leaked_bytes`] count.
+    ///
+    /// Buffers dropped while this waits are not waited for. Called from the
+    /// closing thread itself, it returns at once.
+    pub fn wait_for_closes(&self) {
         self.inner.closer.queue().wait_until_idle();
     }
 
