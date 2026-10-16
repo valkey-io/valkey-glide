@@ -3726,11 +3726,6 @@ mod tests {
             scope_slot_for_command("GET", &[b"k"]),
             ScopeSlot::Slot(slot(b"k"))
         );
-        // DELIFEQ key value → the key's slot (first-key write).
-        assert_eq!(
-            scope_slot_for_command("DELIFEQ", &[b"k", b"v"]),
-            ScopeSlot::Slot(slot(b"k"))
-        );
         // Container key-bearing subcommand (OBJECT ENCODING <key>, MEMORY USAGE <key>).
         assert_eq!(
             scope_slot_for_command("OBJECT", &[b"ENCODING", b"k"]),

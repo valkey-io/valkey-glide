@@ -234,10 +234,8 @@ pub type FunctionFlushOptions = FlushAllOptions;
 //
 // TODO #7237: Add `IFNE` (and `ValueComparison::ifne`) for Valkey 9.2.
 // TODO #7238: Use for `del_ex` (`DELEX`, Valkey 9.2).
-// TODO #7365: This comparison value is sent raw and is not compressed by
-// glide-core's client-side compression, which only compresses the new value
-// for SET. When compression is enabled, the comparison runs against
-// mismatched compressed/raw bytes and silently never matches.
+// TODO #7365: Compress this comparison value when used with `SET` under
+// compression (see `glide-core/src/compression.rs`).
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum ValueComparison {
