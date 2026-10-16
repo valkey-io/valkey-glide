@@ -47,6 +47,7 @@ import {
     TimeUnit,
     UnsignedEncoding,
     convertRecordToGlideRecord,
+    parseInfoResponse,
 } from "../build-ts";
 const execAsync = promisify(exec);
 
@@ -2818,23 +2819,8 @@ export async function getInfo(
             ? await client.info({ sections, route: "randomNode" })
             : await (client as GlideClient).info(sections);
 
-    const fields: Record<string, string> = {};
-
-    for (const line of info.toString().split("\n")) {
-        const trimmed = line.trim();
-
-        if (trimmed === "" || trimmed.startsWith("#")) {
-            continue;
-        }
-
-        const separator = trimmed.indexOf(":");
-
-        if (separator !== -1) {
-            fields[trimmed.slice(0, separator)] = trimmed.slice(separator + 1);
-        }
-    }
-
-    return fields;
+    // TODO #7368: Inline `parseInfoResponse` here when it is removed.
+    return parseInfoResponse(info.toString());
 }
 
 /**

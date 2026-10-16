@@ -45,6 +45,26 @@ function toBuffersArray(args: GlideString[]) {
     return argsBytes;
 }
 
+// TODO #7368: Remove and inline in `getInfo`.
+/**
+ * @test
+ * @deprecated This function is deprecated and should no longer be used.
+ */
+export function parseInfoResponse(response: string): Record<string, string> {
+    const lines = response.split("\n");
+    const parsedResponse: Record<string, string> = {};
+
+    for (const line of lines) {
+        // Ignore lines that start with '#'
+        if (!line.startsWith("#")) {
+            const [key, value] = line.trim().split(":");
+            parsedResponse[key] = value;
+        }
+    }
+
+    return parsedResponse;
+}
+
 function createCommand(
     requestType: command_request.RequestType,
     args: GlideString[],
