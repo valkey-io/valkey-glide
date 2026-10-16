@@ -14,6 +14,12 @@
 //! [`LentBuffer::cancel_unsent`] if the command never went out. Any other end closes
 //! the region and then frees the memory on efa-direct, or parks it in the fabric on
 //! tcp.
+//!
+//! Dropping either type does not close the region on the dropping thread: the
+//! fabric's closing thread does it, then frees, parks or leaks the memory exactly
+//! as the drop would have. A close can take milliseconds on efa, and a `Drop`
+//! cannot `.await`, so this keeps a cancelled transfer from stalling an async
+//! runtime.
 
 use std::fmt;
 use std::mem::ManuallyDrop;
@@ -95,8 +101,8 @@ impl Drop for HostMemory {
 /// Registration is expensive, so one buffer is meant to serve many transfers in turn:
 /// lend it, get it back once the server replies, and lend it again.
 pub struct RdmaBuffer {
-    /// Declared first so the region deregisters before the domain that owns it closes.
-    registration: Registration,
+    /// Taken by `Drop`, which hands it to the fabric's closing thread.
+    registration: ManuallyDrop<Registration>,
     region_ref: RegionRef,
     /// Freed only once the region is closed; see the `Drop` impl.
     host: ManuallyDrop<HostMemory>,
@@ -115,7 +121,7 @@ impl RdmaBuffer {
         fabric: RdmaFabric,
     ) -> Self {
         Self {
-            registration,
+            registration: ManuallyDrop::new(registration),
             region_ref,
             host: ManuallyDrop::new(host),
             fabric,
@@ -285,7 +291,7 @@ impl RdmaBuffer {
         // SAFETY: `this` is never dropped, so each field is read out exactly once.
         unsafe {
             (
-                ptr::read(&this.registration),
+                ManuallyDrop::into_inner(ptr::read(&this.registration)),
                 ManuallyDrop::into_inner(ptr::read(&this.host)),
                 ptr::read(&this.fabric),
             )
@@ -297,14 +303,27 @@ impl Drop for RdmaBuffer {
     /// Free the memory only after the region over it is closed. If the region cannot
     /// be closed, the server may still reach the memory, so it is leaked instead.
     ///
+    /// Both happen on the fabric's closing thread, so this returns without waiting
+    /// for the close.
+    ///
     /// Only an unlent buffer gets here; a loan decides for itself, see [`LentBuffer`].
     fn drop(&mut self) {
-        if self.registration.revoke().is_ok() {
-            // SAFETY: the region is closed, and `host` is not touched again after this.
-            unsafe { ManuallyDrop::drop(&mut self.host) };
-        } else {
-            self.fabric.note_leaked(self.host.len());
-        }
+        // SAFETY: both are taken exactly once, here, and not touched again.
+        let (registration, host) = unsafe {
+            (
+                ManuallyDrop::take(&mut self.registration),
+                ManuallyDrop::take(&mut self.host),
+            )
+        };
+        self.fabric.clone().close_later(move |fabric| {
+            if registration.revoke().is_ok() {
+                drop(host);
+            } else {
+                fabric.note_leaked(host.len());
+                std::mem::forget(host);
+            }
+            drop(registration);
+        });
     }
 }
 
@@ -333,7 +352,9 @@ impl fmt::Debug for RdmaBuffer {
 ///   failed or the caller gave up. This revokes the buffer and then frees or parks
 ///   its memory, as below.
 /// - Dropping the loan, for example when the future awaiting the reply is
-///   cancelled. As a recall, except that a failed revoke is not reported.
+///   cancelled. As a recall, except that a failed revoke is not reported, and
+///   the revoke runs on the fabric's closing thread, so the drop does not wait
+///   for it.
 ///
 /// What happens to the memory of a loan that ends without a reply depends on the
 /// provider:
@@ -466,13 +487,21 @@ impl Drop for LentBuffer {
     /// Revoke the region, then free or park the memory as [`LentBuffer::recall`]
     /// does. A failed revoke is not returned; the memory is leaked, and the failure
     /// is logged and counted in [`RdmaFabric::leaked_bytes`].
+    ///
+    /// All of it runs on the fabric's closing thread, so this returns without
+    /// waiting for the close.
     fn drop(&mut self) {
         // SAFETY: `buffer` is taken exactly once, here.
         let buffer = unsafe { ManuallyDrop::take(&mut self.buffer) };
-        let closed = buffer.revoke().is_ok();
+        let progress = self._progress.take();
         let (registration, host, fabric) = buffer.into_parts();
-        fabric.release_unanswered(host, closed);
-        drop(registration);
+        fabric.close_later(move |fabric| {
+            let closed = registration.revoke().is_ok();
+            fabric.release_unanswered(host, closed);
+            drop(registration);
+            // Polling stops only once the region is closed, as for any other loan.
+            drop(progress);
+        });
     }
 }
 
@@ -501,16 +530,17 @@ impl RdmaRevoker {
 
 #[cfg(test)]
 mod tests {
-    use super::{LentBuffer, RdmaBuffer};
+    use super::{LentBuffer, RdmaBuffer, RdmaRevoker};
     use crate::command::{RdmaCommand, ReadReceipt, SetChecksum, TransferReply};
     use crate::config::{FabricConfig, Provider};
     use crate::error::RdmaError;
     use crate::fabric::RdmaFabric;
-    use crate::fabric::tests::{close_calls, fabric_whose_close_stops_writes, fail_next_closes};
+    use crate::fabric::tests::fabric_whose_close_stops_writes;
     use crate::region_ref::RegionRef;
     use std::sync::Arc;
     use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-    use std::time::Duration;
+    use std::sync::mpsc;
+    use std::time::{Duration, Instant};
 
     impl RdmaBuffer {
         /// Where this buffer lives, as a transfer command names it.
@@ -684,15 +714,16 @@ mod tests {
     /// region. The buffer is not revoked, but it must not be lent either.
     #[test]
     fn a_buffer_whose_revoke_failed_is_not_lent() {
-        let buffer = fabric().register(vec![0u8; 64]).unwrap();
-        fail_next_closes(1);
+        let fabric = fabric();
+        let buffer = fabric.register(vec![0u8; 64]).unwrap();
+        fabric.fail_next_closes(1);
         let failed = buffer.revoke().expect_err("the close fails");
         assert!(
             !buffer.is_revoked(),
             "the server may still reach the memory"
         );
 
-        let closes = close_calls();
+        let closes = fabric.close_calls();
         let (buffer, error) = buffer.lend_for_get(b"key", 0, 64).unwrap_err();
         assert_eq!(error, failed);
         let (_, error) = buffer
@@ -700,7 +731,7 @@ mod tests {
             .unwrap_err();
         assert_eq!(error, failed);
         assert_eq!(
-            close_calls(),
+            fabric.close_calls(),
             closes,
             "refusing to lend does not try the close again"
         );
@@ -815,6 +846,7 @@ mod tests {
         assert_eq!(fabric.transfers_in_flight(), 0);
         assert_eq!(fabric.parked_bytes(), 0);
         drop(buffer);
+        fabric.wait_for_closes();
         assert!(
             freed.load(Ordering::SeqCst),
             "freed as any unlent buffer is"
@@ -857,6 +889,7 @@ mod tests {
         let (memory, freed, _) = tracked();
 
         drop(lent_for_set(fabric.register(memory).unwrap()));
+        fabric.wait_for_closes();
 
         assert!(freed.load(Ordering::SeqCst));
         assert_eq!(fabric.parked(), 0);
@@ -871,6 +904,7 @@ mod tests {
         loan.revoker().revoke().expect("the region closes");
 
         drop(loan);
+        fabric.wait_for_closes();
 
         assert!(freed.load(Ordering::SeqCst));
         assert_eq!(fabric.parked(), 0);
@@ -885,9 +919,10 @@ mod tests {
         let size = memory.bytes.len();
         let loan = lent_for_get(fabric.register(memory).unwrap());
 
-        fail_next_closes(1);
+        fabric.fail_next_closes(1);
         let (loan, _) = loan.recall().expect_err("the close fails");
         drop(loan);
+        fabric.wait_for_closes();
 
         assert!(
             !freed.load(Ordering::SeqCst),
@@ -908,6 +943,7 @@ mod tests {
         let (memory, freed, _) = tracked();
 
         drop(lent_for_set(fabric.register(memory).unwrap()));
+        fabric.wait_for_closes();
 
         assert!(!freed.load(Ordering::SeqCst));
         assert_eq!(fabric.parked(), 1);
@@ -924,6 +960,7 @@ mod tests {
         let loan = lent_for_get(fabric.register(memory).unwrap());
         let (buffer, _) = unsafe { loan.reclaim(TransferReply::Missing) }.unwrap();
         drop(buffer);
+        fabric.wait_for_closes();
 
         assert!(freed.load(Ordering::SeqCst));
         assert_eq!(fabric.parked(), 0);
@@ -935,22 +972,23 @@ mod tests {
         let fabric = fabric();
         let loan = lent_for_get(fabric.register(vec![0u8; 64]).unwrap());
 
-        fail_next_closes(1);
+        fabric.fail_next_closes(1);
         let (loan, error) = loan.recall().unwrap_err();
         assert!(matches!(error, RdmaError::Fabric { .. }), "{error:?}");
         assert!(!loan.is_revoked(), "the server may still reach the memory");
 
-        let closes = close_calls();
+        let closes = fabric.close_calls();
         let (loan, again) = loan.recall().unwrap_err();
         assert_eq!(
-            close_calls(),
+            fabric.close_calls(),
             closes,
             "the handle was not passed to fi_close again"
         );
         assert!(matches!(again, RdmaError::Fabric { .. }), "{again:?}");
 
         drop(loan);
-        assert_eq!(close_calls(), closes, "nor on drop");
+        fabric.wait_for_closes();
+        assert_eq!(fabric.close_calls(), closes, "nor on drop");
         assert_eq!(
             fabric.leaked_bytes(),
             64,
@@ -974,6 +1012,7 @@ mod tests {
         assert_eq!(fabric.transfers_in_flight(), 0);
 
         drop(lent_for_set(buffer));
+        fabric.wait_for_closes();
         assert_eq!(fabric.transfers_in_flight(), 0);
     }
 
@@ -1032,11 +1071,13 @@ mod tests {
     /// A handle must never keep memory registered after its buffer is freed.
     #[test]
     fn a_revoker_does_not_outlive_its_buffer() {
-        let buffer = fabric().register(vec![0u8; 64]).unwrap();
+        let fabric = fabric();
+        let buffer = fabric.register(vec![0u8; 64]).unwrap();
         let revoker = buffer.revoker();
         assert!(!revoker.is_released());
 
         drop(buffer);
+        fabric.wait_for_closes();
 
         assert!(revoker.is_released());
         revoker
@@ -1121,10 +1162,12 @@ mod tests {
 
     #[test]
     fn dropping_a_buffer_frees_its_memory() {
+        let fabric = fabric();
         let (memory, freed, _) = tracked();
-        let buffer = fabric().register(memory).unwrap();
+        let buffer = fabric.register(memory).unwrap();
 
         drop(buffer);
+        fabric.wait_for_closes();
 
         assert!(freed.load(Ordering::SeqCst));
     }
@@ -1136,8 +1179,9 @@ mod tests {
         let size = memory.bytes.len();
         let buffer = fabric.register(memory).unwrap();
 
-        fail_next_closes(1);
+        fabric.fail_next_closes(1);
         drop(buffer);
+        fabric.wait_for_closes();
 
         assert!(!freed.load(Ordering::SeqCst), "the memory must be leaked");
         assert_eq!(fabric.leaked_bytes(), size, "and counted");
@@ -1148,6 +1192,7 @@ mod tests {
         let fabric = fabric();
         drop(lent_for_get(fabric.register(vec![0u8; 64]).unwrap()));
         drop(fabric.register(vec![0u8; 64]).unwrap());
+        fabric.wait_for_closes();
 
         assert_eq!(fabric.leaked_bytes(), 0);
     }
@@ -1160,9 +1205,10 @@ mod tests {
         let revoker = buffer.revoker();
         let mut revoked = tokio::spawn(buffer.revoked());
 
-        fail_next_closes(1);
+        fabric.fail_next_closes(1);
         drop(buffer);
-        let closes = close_calls();
+        fabric.wait_for_closes();
+        let closes = fabric.close_calls();
 
         assert!(
             !revoker.is_released(),
@@ -1175,7 +1221,7 @@ mod tests {
         let error = revoker.revoke().expect_err("a failed close is final");
         assert!(matches!(error, RdmaError::Fabric { .. }), "{error:?}");
         assert_eq!(
-            close_calls(),
+            fabric.close_calls(),
             closes,
             "the handle was not passed to fi_close again"
         );
@@ -1188,6 +1234,8 @@ mod tests {
 
     /// The caller stopped waiting for the reply, so the server may still be using the
     /// memory: it is freed only with the fabric, which here closes with the loan.
+    /// The loan held the last handle, so the fabric closes on its own closing
+    /// thread, which must not wait for itself.
     #[test]
     fn dropping_a_loan_revokes_it_and_the_fabric_frees_the_memory_on_close() {
         let (memory, freed, _) = tracked();
@@ -1196,8 +1244,143 @@ mod tests {
 
         drop(loan);
 
+        eventually(
+            || freed.load(Ordering::SeqCst),
+            "the fabric closed and freed it",
+        );
+        assert!(revoker.is_released());
+    }
+
+    /// Wait up to five seconds for `condition`, for effects that land on another
+    /// thread with no handle left to wait on.
+    fn eventually(condition: impl Fn() -> bool, what: &str) {
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while !condition() {
+            assert!(Instant::now() < deadline, "timed out waiting: {what}");
+            std::thread::sleep(Duration::from_millis(1));
+        }
+    }
+
+    /// Run `drop_it` on a thread of its own and report whether it returned within
+    /// five seconds, so a drop that blocks fails the test instead of hanging it.
+    fn returns_promptly(drop_it: impl FnOnce() + Send + 'static) -> bool {
+        let (done, finished) = mpsc::channel();
+        std::thread::spawn(move || {
+            drop_it();
+            let _ = done.send(());
+        });
+        finished.recv_timeout(Duration::from_secs(5)).is_ok()
+    }
+
+    /// The point of the closing thread: a dropped loan returns while its close is
+    /// still under way, and the region counts as closed only once it is.
+    #[test]
+    fn dropping_a_loan_does_not_wait_for_its_close() {
+        let fabric = fabric();
+        let (memory, freed, _) = tracked();
+        let loan = lent_for_get(fabric.register(memory).unwrap());
+        let revoker = loan.revoker();
+
+        let held = fabric.hold_closes();
+        assert!(
+            returns_promptly(move || drop(loan)),
+            "the drop waited for fi_close"
+        );
+        assert!(!revoker.is_released(), "the close has not finished yet");
+
+        drop(held);
+        fabric.wait_for_closes();
+        assert!(revoker.is_released());
+        assert!(!freed.load(Ordering::SeqCst), "parked, as on tcp");
+        assert_eq!(fabric.parked(), 1);
+    }
+
+    #[test]
+    fn dropping_a_buffer_does_not_wait_for_its_close() {
+        let fabric = fabric();
+        let (memory, freed, _) = tracked();
+        let buffer = fabric.register(memory).unwrap();
+        let revoker = buffer.revoker();
+
+        let held = fabric.hold_closes();
+        assert!(
+            returns_promptly(move || drop(buffer)),
+            "the drop waited for fi_close"
+        );
+        assert!(!revoker.is_released());
+        assert!(
+            !freed.load(Ordering::SeqCst),
+            "the memory outlives the region over it"
+        );
+
+        drop(held);
+        fabric.wait_for_closes();
         assert!(revoker.is_released());
         assert!(freed.load(Ordering::SeqCst));
+    }
+
+    /// The review's case: a transfer that times out on a single-threaded runtime
+    /// drops its loan on the runtime's only thread, which must go on running other
+    /// tasks while the region closes.
+    #[test]
+    fn a_timed_out_transfer_does_not_stall_its_runtime() {
+        let fabric = fabric();
+        let loan = lent_for_get(fabric.register(vec![0u8; 64]).unwrap());
+
+        let held = fabric.hold_closes();
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_time()
+            .build()
+            .unwrap();
+        let ran = returns_promptly(move || {
+            runtime.block_on(async move {
+                let awaiting_reply = async move {
+                    let _loan = loan;
+                    std::future::pending::<()>().await
+                };
+                tokio::time::timeout(Duration::from_millis(10), awaiting_reply)
+                    .await
+                    .expect_err("no reply ever comes");
+                // Another task on the same thread still gets to run.
+                tokio::time::sleep(Duration::from_millis(1)).await;
+            })
+        });
+        assert!(ran, "the runtime stalled on the cancelled transfer's close");
+
+        drop(held);
+        fabric.wait_for_closes();
+        assert_eq!(fabric.parked(), 1);
+    }
+
+    /// Registering waits for regions still closing, so memory dropped just before
+    /// is no longer pinned against `RLIMIT_MEMLOCK` when the next one is.
+    #[test]
+    fn registering_waits_for_regions_still_closing() {
+        let fabric = fabric();
+        let buffer = fabric.register(vec![0u8; 64]).unwrap();
+        let revoker = buffer.revoker();
+
+        let held = fabric.hold_closes();
+        drop(buffer);
+        let (registered, done) = mpsc::channel();
+        let registering = std::thread::spawn({
+            let fabric = fabric.clone();
+            move || {
+                let buffer = fabric.register(vec![0u8; 64]);
+                registered.send(()).unwrap();
+                buffer
+            }
+        });
+        assert!(
+            done.recv_timeout(Duration::from_millis(100)).is_err(),
+            "registered while a region was still closing"
+        );
+
+        drop(held);
+        done.recv_timeout(Duration::from_secs(5))
+            .expect("registers once the close finishes");
+        assert!(revoker.is_released());
+        registering.join().unwrap().expect("registers");
     }
 
     #[test]
@@ -1209,5 +1392,99 @@ mod tests {
 
         assert!(matches!(error, RdmaError::Configuration(_)), "{error:?}");
         assert!(freed.load(Ordering::SeqCst));
+    }
+
+    /// Memory that counts, in a counter shared by many buffers, when it is freed.
+    struct Counted {
+        bytes: Vec<u8>,
+        freed: Arc<AtomicUsize>,
+    }
+
+    impl AsMut<[u8]> for Counted {
+        fn as_mut(&mut self) -> &mut [u8] {
+            &mut self.bytes
+        }
+    }
+
+    impl Drop for Counted {
+        fn drop(&mut self) {
+            self.freed.fetch_add(1, Ordering::SeqCst);
+        }
+    }
+
+    /// Register, lend, end the loan each possible way, drop, and register again,
+    /// many times over on several fabrics at once, half of them treating a close
+    /// as efa-direct's. Afterwards every region is closed, nothing is leaked, each
+    /// buffer's memory is freed or parked as its ending requires, nothing still
+    /// holds the fabric open, and closing the fabric frees whatever was parked.
+    #[test]
+    fn registering_and_dropping_over_and_over_frees_everything() {
+        const FABRICS: usize = 4;
+        const CYCLES: usize = 250;
+        let threads: Vec<_> = (0..FABRICS)
+            .map(|seed| {
+                std::thread::spawn(move || {
+                    let close_stops_writes = seed % 2 == 1;
+                    let fabric = if close_stops_writes {
+                        fabric_whose_close_stops_writes()
+                    } else {
+                        fabric()
+                    };
+                    let alone = fabric.holders();
+                    let freed = Arc::new(AtomicUsize::new(0));
+                    let mut unanswered = 0;
+                    let mut revokers = Vec::with_capacity(CYCLES);
+
+                    for cycle in 0..CYCLES {
+                        let memory = Counted {
+                            bytes: vec![0u8; 4096 * (1 + cycle % 4)],
+                            freed: freed.clone(),
+                        };
+                        let buffer = fabric.register(memory).expect("registers");
+                        revokers.push(buffer.revoker());
+                        match (cycle + seed) % 5 {
+                            0 => drop(buffer),
+                            1 => {
+                                let (buffer, _) =
+                                    unsafe { lent_for_get(buffer).reclaim(TransferReply::Missing) }
+                                        .expect("reclaims");
+                                drop(buffer);
+                            }
+                            2 => drop(unsafe { lent_for_set(buffer).cancel_unsent() }),
+                            3 => {
+                                lent_for_get(buffer).recall().expect("the region closes");
+                                unanswered += 1;
+                            }
+                            _ => {
+                                drop(lent_for_set(buffer));
+                                unanswered += 1;
+                            }
+                        }
+                    }
+
+                    fabric.wait_for_closes();
+                    assert!(
+                        revokers.iter().all(RdmaRevoker::is_released),
+                        "every region closed"
+                    );
+                    assert_eq!(fabric.leaked_bytes(), 0);
+                    assert_eq!(fabric.transfers_in_flight(), 0);
+                    let parked = if close_stops_writes { 0 } else { unanswered };
+                    assert_eq!(fabric.parked(), parked);
+                    assert_eq!(freed.load(Ordering::SeqCst), CYCLES - parked);
+                    assert_eq!(fabric.holders(), alone, "nothing holds the fabric open");
+
+                    drop(fabric);
+                    assert_eq!(
+                        freed.load(Ordering::SeqCst),
+                        CYCLES,
+                        "closing the fabric frees what was parked"
+                    );
+                })
+            })
+            .collect();
+        for thread in threads {
+            thread.join().expect("a fabric's cycles passed");
+        }
     }
 }

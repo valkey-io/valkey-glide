@@ -5,6 +5,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use crate::buffer::{HostMemory, RdmaBuffer};
+use crate::closer::Closer;
 use crate::config::FabricConfig;
 use crate::endpoint::{LibfabricEndpoint, Registration};
 use crate::error::RdmaError;
@@ -17,6 +18,24 @@ use crate::session::Handshake;
 struct PeerHandle(u64);
 
 /// The client's libfabric domain representing one network device open for use.
+///
+/// # What blocks
+///
+/// These calls can wait on libfabric, for microseconds on tcp and up to
+/// milliseconds on efa for large regions, so avoid making them on an async
+/// runtime's worker thread where that matters:
+///
+/// - [`Self::register`]: registers the memory, after waiting for any region this
+///   fabric is still closing.
+/// - [`Self::open_session`] and dropping an [`RdmaSession`]: edit the address
+///   vector, which waits for any region closing at that moment.
+/// - [`RdmaBuffer::revoke`], [`crate::RdmaRevoker::revoke`] and
+///   [`crate::LentBuffer::recall`]: close the region before returning.
+/// - Dropping the last handle to the fabric, from any thread but its closing
+///   thread: stops the progress thread and closes the endpoint.
+///
+/// Dropping an [`RdmaBuffer`] or a [`crate::LentBuffer`] does not block: the
+/// fabric's closing thread closes the region and then frees or parks the memory.
 #[derive(Clone, Debug)]
 pub struct RdmaFabric {
     inner: Arc<FabricInner>,
@@ -24,6 +43,10 @@ pub struct RdmaFabric {
 
 #[derive(Debug)]
 struct FabricInner {
+    /// Closes regions for the buffers and loans dropped on this fabric. Every
+    /// close it has queued holds a handle to the fabric, so by the time this
+    /// drops it has nothing left to run.
+    closer: Closer,
     /// `None` for efa-direct.
     progress: Option<ProgressDriver>,
     endpoint: Mutex<LibfabricEndpoint>,
@@ -39,6 +62,8 @@ struct FabricInner {
     /// Every peer address currently in the address vector and how many sessions
     /// depend on it.
     peers: Mutex<HashMap<Vec<u8>, PeerEntry>>,
+    #[cfg(test)]
+    hooks: tests::CloseHooks,
 }
 
 #[derive(Debug)]
@@ -76,6 +101,7 @@ impl RdmaFabric {
             .then(|| ProgressDriver::new(endpoint.completion_queue()));
         Ok(Self {
             inner: Arc::new(FabricInner {
+                closer: Closer::start()?,
                 progress,
                 endpoint: Mutex::new(endpoint),
                 parked: Mutex::new(Vec::new()),
@@ -85,6 +111,8 @@ impl RdmaFabric {
                 address,
                 uses_virtual_addressing,
                 peers: Mutex::new(HashMap::new()),
+                #[cfg(test)]
+                hooks: tests::CloseHooks::default(),
             }),
         })
     }
@@ -94,6 +122,9 @@ impl RdmaFabric {
     /// Registration is expensive and pins pages against `RLIMIT_MEMLOCK`, so reuse a
     /// buffer, lending a different window of it to each transfer, rather than
     /// registering per transfer.
+    ///
+    /// Waits first for every region this fabric is still closing, so the pages of
+    /// a buffer dropped just before are no longer pinned.
     pub fn register(
         &self,
         memory: impl AsMut<[u8]> + Send + 'static,
@@ -102,6 +133,7 @@ impl RdmaFabric {
         if host.len() == 0 {
             return Err(RdmaError::Configuration("cannot register 0 bytes".into()));
         }
+        self.wait_for_closes();
         // SAFETY: `host` keeps the bytes at one address until it is dropped, and the
         // returned RdmaBuffer drops it only after the region is closed.
         let registered = unsafe { self.endpoint().register_remote(host.bytes_ptr())? };
@@ -179,6 +211,19 @@ impl RdmaFabric {
     #[must_use]
     pub fn drive_progress(&self) -> Option<ProgressGuard> {
         self.inner.progress.as_ref().map(ProgressDriver::drive)
+    }
+
+    /// Close a region on this fabric's closing thread rather than the caller's:
+    /// `close` runs there with this handle, which keeps the fabric open until
+    /// it has.
+    pub(crate) fn close_later(self, close: impl FnOnce(&RdmaFabric) + Send + 'static) {
+        let queue = self.inner.closer.queue();
+        queue.submit(Box::new(move || close(&self)));
+    }
+
+    /// Return once every close [`Self::close_later`] has queued so far has run.
+    pub(crate) fn wait_for_closes(&self) {
+        self.inner.closer.queue().wait_until_idle();
     }
 
     /// Dispose of the memory of a loan that ended without the server's reply.
@@ -268,7 +313,7 @@ impl RdmaFabric {
     /// Close a fid belonging to this domain, returning libfabric's result code.
     pub(crate) fn fi_close(&self, fid: *mut ofi_libfabric_sys::bindgen::fid) -> i32 {
         #[cfg(test)]
-        if tests::record_close() {
+        if self.inner.hooks.record_close() {
             return -libc::EBUSY;
         }
         // this is the domain synchronization lock
@@ -304,8 +349,8 @@ pub(crate) mod tests {
     use crate::config::{FabricConfig, Provider};
     use crate::error::RdmaError;
     use crate::progress::ProgressDriver;
-    use std::cell::Cell;
-    use std::sync::PoisonError;
+    use std::sync::atomic::{AtomicU32, Ordering};
+    use std::sync::{Mutex, MutexGuard, PoisonError};
 
     impl RdmaFabric {
         /// How many distinct peer addresses the address vector currently holds.
@@ -334,33 +379,50 @@ pub(crate) mod tests {
                 .as_ref()
                 .map_or(0, ProgressDriver::active)
         }
+
+        /// Make the next `count` calls to [`RdmaFabric::fi_close`] on this fabric fail.
+        pub(crate) fn fail_next_closes(&self, count: u32) {
+            self.inner.hooks.failures.store(count, Ordering::SeqCst);
+        }
+
+        /// How many times [`RdmaFabric::fi_close`] has been called on this fabric.
+        pub(crate) fn close_calls(&self) -> u32 {
+            self.inner.hooks.calls.load(Ordering::SeqCst)
+        }
+
+        /// Hold every [`RdmaFabric::fi_close`] on this fabric until the guard drops,
+        /// standing in for a close that takes a long time.
+        pub(crate) fn hold_closes(&self) -> MutexGuard<'_, ()> {
+            self.inner
+                .hooks
+                .gate
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+        }
     }
 
-    thread_local! {
-        /// How many of this thread's next `fi_close` calls fail without closing.
-        static FAILED_CLOSES: Cell<u32> = const { Cell::new(0) };
-        /// Calls to `fi_close` on this thread, failed or not.
-        static CLOSE_CALLS: Cell<u32> = const { Cell::new(0) };
+    /// Per fabric, because closes run on the fabric's closing thread, not the test's.
+    #[derive(Debug, Default)]
+    pub(super) struct CloseHooks {
+        /// How many of the next `fi_close` calls fail without closing.
+        failures: AtomicU32,
+        /// Calls to `fi_close`, failed or not.
+        calls: AtomicU32,
+        /// Held by a test to keep `fi_close` from returning.
+        gate: Mutex<()>,
     }
 
-    /// Make the next `count` calls to [`RdmaFabric::fi_close`] on this thread fail.
-    pub(crate) fn fail_next_closes(count: u32) {
-        FAILED_CLOSES.with(|closes| closes.set(count));
-    }
-
-    /// How many times this thread has called [`RdmaFabric::fi_close`].
-    pub(crate) fn close_calls() -> u32 {
-        CLOSE_CALLS.with(Cell::get)
-    }
-
-    /// Count this `fi_close`; whether it should fail, using up one failure if so.
-    pub(super) fn record_close() -> bool {
-        CLOSE_CALLS.with(|calls| calls.set(calls.get() + 1));
-        FAILED_CLOSES.with(|closes| {
-            let left = closes.get();
-            closes.set(left.saturating_sub(1));
-            left > 0
-        })
+    impl CloseHooks {
+        /// Count this `fi_close`; whether it should fail, using up one failure if so.
+        pub(super) fn record_close(&self) -> bool {
+            drop(self.gate.lock().unwrap_or_else(PoisonError::into_inner));
+            self.calls.fetch_add(1, Ordering::SeqCst);
+            self.failures
+                .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |left| {
+                    left.checked_sub(1)
+                })
+                .is_ok()
+        }
     }
 
     fn fabric() -> RdmaFabric {

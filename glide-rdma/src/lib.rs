@@ -14,6 +14,8 @@
 #[cfg(feature = "libfabric")]
 mod buffer;
 mod checksum;
+#[cfg(feature = "libfabric")]
+mod closer;
 mod command;
 mod config;
 #[cfg(feature = "libfabric")]
