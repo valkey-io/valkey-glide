@@ -11,6 +11,7 @@ import pytest
 from glide_shared.commands.command_args import OrderBy
 from glide_shared.commands.server_modules.ft_options.ft_aggregate_options import (
     FtAggregateApply,
+    FtAggregateFilter,
     FtAggregateGroupBy,
     FtAggregateLimit,
     FtAggregateOptions,
@@ -4151,6 +4152,44 @@ class TestSyncFt:
         }
         for row in result:
             assert b"__score" in row
+
+        assert ft.dropindex(glide_sync_client, index) == OK
+
+    @pytest.mark.requires_search_1_3
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_ft_hybrid_aggregate_clause_filters_post_fusion(
+        self, glide_sync_client: TSyncGlideClient, protocol: ProtocolVersion
+    ):
+        """M-1: sync mirror of the async
+        test_ft_hybrid_aggregate_clause_filters_post_fusion. Regression
+        test: with no combine/local_only/load_*/timeout set, a leading
+        aggregate-tail clause used to be emitted right after the VSIM
+        arm's own tokens, where the server's VSIM parser claims it as its
+        own uncounted VSIM pre-filter (FT.SEARCH-style query syntax)
+        instead of an aggregate-pipeline FILTER (the FT.AGGREGATE
+        expression grammar). The SEARCH arm here yields its own score
+        under the alias "ss" (reachable with no LOAD clause) and only
+        matches HYBRID_DOC_VECTOR_WINNER's query ("goodbye"); the VSIM
+        arm (k=5) matches both documents, so the UNION going into the
+        aggregate tail is both documents. The FtAggregateFilter keeps
+        only rows where "ss" is a positive score -- correct (post-fusion)
+        behaviour keeps only HYBRID_DOC_VECTOR_WINNER."""
+        prefix = "{ft-hybrid-postfusion-filter-" + str(uuid.uuid4()) + "}:"
+        index = self._create_hybrid_index(glide_sync_client, prefix)
+
+        result = cast(
+            List,
+            ft.hybrid(
+                glide_sync_client,
+                index,
+                FtHybridSearchArm("goodbye", yield_score_as="ss"),
+                FtHybridVsimArm("vec", struct.pack("2f", 1.0, 1.0), k=5),
+                options=FtHybridOptions(clauses=[FtAggregateFilter("@ss > 0")]),
+            ),
+        )
+        assert len(result) == 1
+        assert result[0][b"__key"] == (prefix + HYBRID_DOC_VECTOR_WINNER).encode()
 
         assert ft.dropindex(glide_sync_client, index) == OK
 

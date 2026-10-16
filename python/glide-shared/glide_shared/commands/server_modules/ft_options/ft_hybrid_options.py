@@ -548,7 +548,11 @@ class FtHybridOptions:
                 only the LOAD clause has the restriction described above. FT.HYBRID also applies
                 its own default LIMIT of 10 rows when no `FtAggregateLimit` clause is given here
                 (confirmed live and in source) -- FT.AGGREGATE has no such default and returns
-                everything.
+                everything. `to_args` always emits `clauses` after `params`'s own serialized
+                arguments (PARAMS is always present for FT.HYBRID, so this tail is never empty) --
+                emitting a leading FILTER clause right after the VSIM arm would otherwise let the
+                server's VSIM parser claim it as a VSIM pre-filter instead (confirmed live,
+                `ft_hybrid_parser.cc`'s `vsim_scoped` FILTER handling).
             with_cursor (Optional[FtWithCursor]): Requests a paged reply. See
                 `FtWithCursor`.
             local_only (Optional[bool]): Restricts the query to the local shard rather than
@@ -557,9 +561,9 @@ class FtHybridOptions:
                 dropped). Confirmed live: LOCALONLY is accepted anywhere in this tail BEFORE
                 PARAMS (including after DIALECT or a LOAD clause) but is rejected
                 ("Unexpected argument `LOCALONLY`") once PARAMS has been parsed, regardless of
-                what follows PARAMS. `to_args` always emits it before `params`'s own serialized
-                arguments, so this restriction is handled transparently regardless of the order
-                its own arguments were given in.
+                what follows PARAMS. `to_args` always emits it before `params` and `clauses`
+                (PARAMS always follows it immediately), so this restriction is handled
+                transparently regardless of the order its own arguments were given in.
             timeout (Optional[int]): Overrides the timeout parameter of the module, in
                 milliseconds.
             params (Optional[Mapping[TEncodable, TEncodable]]): Param key/value pairs referenced
@@ -631,15 +635,19 @@ class FtHybridOptions:
             args.extend(load_fields_to_args(self.load_fields))
         if self.timeout is not None:
             args.extend([FtHybridKeywords.TIMEOUT, str(self.timeout)])
-        if self.clauses:
-            for clause in self.clauses:
-                args.extend(clause.to_args())
         args.extend(
             params_to_args(
                 self._merge_params(generated_vsim_param),
                 params_keyword=FtHybridKeywords.PARAMS,
             )
         )
+        if self.clauses:
+            # Must come after PARAMS -- a leading FILTER clause emitted
+            # right after the VSIM arm would otherwise be claimed by the
+            # server's VSIM parser as a VSIM pre-filter instead (confirmed
+            # live, see the docstring above).
+            for clause in self.clauses:
+                args.extend(clause.to_args())
         if self.with_cursor is not None:
             args.extend(self.with_cursor.to_args())
         if self.dialect is not None:

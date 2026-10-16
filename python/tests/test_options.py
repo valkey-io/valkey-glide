@@ -758,6 +758,51 @@ class TestFtHybridOptions:
         args = FtHybridOptions(clauses=[FtAggregateLimit(0, 10)]).to_args()
         assert args == ["LIMIT", "0", "10"]
 
+    def test_params_emitted_before_clauses(self):
+        # Regression test: with no combine/local_only/load_*/timeout, a
+        # leading clause used to land right after the VSIM arm's own
+        # tokens, where the server's VSIM parser claims a leading FILTER
+        # as its own pre-filter instead (confirmed live,
+        # ft_hybrid_parser.cc's vsim_scoped FILTER handling). PARAMS is
+        # always present for FT.HYBRID, so to_args() must always put it
+        # ahead of clauses regardless of field-construction order.
+        from glide_shared.commands.server_modules.ft_options.ft_aggregate_options import (
+            FtAggregateFilter,
+        )
+
+        args = FtHybridOptions(
+            clauses=[FtAggregateFilter("@price>0")], params={"q": "value"}
+        ).to_args()
+        assert args == ["PARAMS", "2", "q", "value", "FILTER", "@price>0"]
+
+    def test_local_only_params_and_clauses_order(self):
+        # Pins the full tail order end to end: LOCALONLY, then LOAD, then
+        # PARAMS, then clauses -- the three live-confirmed orderings this
+        # class's docstring documents, all in a single call.
+        from glide_shared.commands.server_modules.ft_options.ft_aggregate_options import (
+            FtAggregateLimit,
+        )
+
+        args = FtHybridOptions(
+            local_only=True,
+            load_fields=["title"],
+            params={"q": "value"},
+            clauses=[FtAggregateLimit(0, 10)],
+        ).to_args()
+        assert args == [
+            "LOCALONLY",
+            "LOAD",
+            "1",
+            "title",
+            "PARAMS",
+            "2",
+            "q",
+            "value",
+            "LIMIT",
+            "0",
+            "10",
+        ]
+
 
 class TestFtCreateOptionsScoreField:
     """Unit tests for P3: FtCreateOptions(score_field=)."""
