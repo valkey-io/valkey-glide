@@ -1792,6 +1792,9 @@ def helper3(
     args.append(1)
     transaction.sismember(key7, "bar")
     args.append(True)
+    if not check_version_lt(version, "9.2.0"):
+        transaction.sismember_if_exists(key7, "bar")
+        args.append(1)
     transaction.spop(key7)
     args.append(b"bar")
     transaction.sadd(key7, ["foo", "bar"])
