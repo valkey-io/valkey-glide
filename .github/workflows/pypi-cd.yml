@@ -41,7 +41,7 @@ permissions:
 
 jobs:
     load-platform-matrix:
-        runs-on: ubuntu-latest
+        runs-on: ubuntu-24.04
         environment: AWS_ACTIONS
         outputs:
             PLATFORM_MATRIX: ${{ steps.load-platform-matrix.outputs.PLATFORM_MATRIX }}
@@ -74,7 +74,7 @@ jobs:
 
     start-self-hosted-runner:
         if: github.repository_owner == 'valkey-io'
-        runs-on: ubuntu-latest
+        runs-on: ubuntu-24.04
         environment: AWS_ACTIONS
         steps:
             - name: Checkout
@@ -499,7 +499,7 @@ jobs:
     publish-async-to-pypi:
         if: ${{ github.event_name == 'push' || inputs.publish_async == true }}
         name: Publish the async PyPi package
-        runs-on: ubuntu-latest
+        runs-on: ubuntu-24.04
         environment: AWS_ACTIONS
         needs: publish-binaries
         steps:
@@ -573,7 +573,7 @@ jobs:
     publish-sync-to-pypi:
         if: ${{ github.event_name == 'push' || inputs.publish_sync == true }}
         name: Publish the sync PyPi package
-        runs-on: ubuntu-latest
+        runs-on: ubuntu-24.04
         environment: AWS_ACTIONS
         needs: publish-binaries
         steps:

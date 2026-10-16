@@ -38,8 +38,6 @@ tlsFlag="--tls"
 dotnetFramework="net6.0"
 
 function runAsyncPythonBenchmark(){
-  # generate protobuf files
-  protoc -Iprotobuf=${GLIDE_HOME_FOLDER}/glide-core/src/protobuf/ --python_out=${PYTHON_FOLDER}/python/glide ${GLIDE_HOME_FOLDER}/glide-core/src/protobuf/*.proto
   cd ${PYTHON_FOLDER}
   $pythonCommand -m venv .env
   source .env/bin/activate
@@ -55,8 +53,6 @@ function runAsyncPythonBenchmark(){
 }
 
 function runSyncPythonBenchmark(){
-  # generate protobuf files
-  protoc -Iprotobuf=${GLIDE_HOME_FOLDER}/glide-core/src/protobuf/ --python_out=${PYTHON_FOLDER}/python/glide ${GLIDE_HOME_FOLDER}/glide-core/src/protobuf/*.proto
   cd ${PYTHON_FOLDER}
   $pythonCommand -m venv .env
   source .env/bin/activate
@@ -91,7 +87,10 @@ function runCSharpBenchmark(){
 
 function runJavaBenchmark(){
   cd ${BENCH_FOLDER}/../java
-  ./gradlew :benchmarks:run --args="-resultsFile \"${BENCH_FOLDER}/$1\" --dataSize \"$2\" --concurrentTasks \"$concurrentTasks\" --clients \"$chosenClients\" --host $host $portFlag --clientCount \"$clientCount\" $tlsFlag $clusterFlag $minimalFlag"
+  # java/integTest/build.gradle's buildFinished hook pkills every valkey-server and
+  # redis-server on the host, including the one this script benchmarks against;
+  # GLIDE_DOCKER_SERVERS=true is its only opt-out.
+  GLIDE_DOCKER_SERVERS=true ./gradlew :benchmarks:run --args="-resultsFile \"${BENCH_FOLDER}/$1\" --dataSize \"$2\" --concurrentTasks \"$concurrentTasks\" --clients \"$chosenClients\" --host $host $portFlag --clientCount \"$clientCount\" $tlsFlag $clusterFlag $minimalFlag"
 }
 
 function runGoBenchmark(){
