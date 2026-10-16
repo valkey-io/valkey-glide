@@ -445,14 +445,23 @@ class _GlideFFI:
             );
 
             // ============== ISOLATED EXECUTION SCOPES ==============
-            uint64_t glide_scope_next_attempt_token(void);
-            int64_t glide_scope_try_acquire(
+            CommandResult* glide_scope_acquire_blocking(
                 uint64_t client_id,
                 const uint8_t* connection_request_ptr,
                 size_t connection_request_len,
                 bool has_routing_slot,
                 uint16_t routing_slot,
-                uint64_t attempt_token
+                uint64_t timeout_ms
+            );
+            int32_t glide_scope_acquire_pipe(
+                uint64_t client_id,
+                const uint8_t* connection_request_ptr,
+                size_t connection_request_len,
+                bool has_routing_slot,
+                uint16_t routing_slot,
+                uint64_t timeout_ms,
+                uintptr_t request_id,
+                uint64_t pipe_client_id
             );
             int32_t glide_scope_release(uint64_t scope_id, uint64_t client_id);
             CommandResult* glide_scope_execute(

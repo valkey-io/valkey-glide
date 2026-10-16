@@ -32,6 +32,19 @@ macro_rules! drop_orphaned_adapter {
     };
 }
 
+/// The watchdog's error for a scoped command that outlived its deadline, with
+/// the diagnostic logged through core so the event shape is shared with the
+/// acquire path.
+fn scope_watchdog_timeout(
+    command: &'static str,
+    configured_timeout: std::time::Duration,
+    actual_elapsed: std::time::Duration,
+    p99: Option<std::time::Duration>,
+) -> RedisError {
+    scope::log_scope_watchdog_timeout(command, configured_timeout, actual_elapsed, p99);
+    std::io::Error::from(std::io::ErrorKind::TimedOut).into()
+}
+
 /// Whether the diagnostic timeout watchdog should be armed for a scoped command.
 ///
 /// The watchdog arms at the flat client request timeout and aborts the command
@@ -787,39 +800,12 @@ pub unsafe extern "C" fn glide_scope_execute_async(
                 recv_result = timeout_rx => {
                     match recv_result {
                         Err(_) => execute.await,
-                        Ok(()) => {
-                            let actual_elapsed = cmd_start.elapsed();
-                            let pending = glide_core::timeout_watchdog::pending_count();
-                            let p99 = client.latency_tracker().p99();
-                            let cause = if pending > 100 {
-                                glide_core::timeout_watchdog::TimeoutCause::SystemOverload {
-                                    pending_total: pending,
-                                }
-                            } else {
-                                glide_core::timeout_watchdog::TimeoutCause::ServerUnresponsive {
-                                    node: "scope".to_owned(),
-                                }
-                            };
-                            let event = glide_core::timeout_watchdog::TimeoutEvent {
-                                cause,
-                                command: glide_core::timeout_watchdog::cmd_name_from_bytes(
-                                    cmd_name.as_bytes(),
-                                ),
-                                node: "scope".to_owned(),
-                                phase: glide_core::timeout_watchdog::CommandPhase::Sent,
-                                configured_timeout: timeout_duration,
-                                actual_elapsed,
-                                pending_commands: pending,
-                                recent_p99_latency: p99,
-                                rss_bytes: glide_core::timeout_watchdog::get_rss(),
-                                suggested_timeout: p99.map(|p| (p * 3).max(timeout_duration)),
-                                inflight_at_register: None,
-                                inflight_at_timeout: None,
-                                retry_count: 0,
-                            };
-                            glide_logger::log_warn("timeout_watchdog", event.to_string());
-                            Err(std::io::Error::from(std::io::ErrorKind::TimedOut).into())
-                        }
+                        Ok(()) => Err(scope_watchdog_timeout(
+                            glide_core::timeout_watchdog::cmd_name_from_bytes(cmd_name.as_bytes()),
+                            timeout_duration,
+                            cmd_start.elapsed(),
+                            client.latency_tracker().p99(),
+                        ))
                     }
                 }
             }
@@ -909,19 +895,14 @@ pub unsafe extern "C" fn glide_scope_prewarm(
     let runtime = get_pool_runtime();
 
     // Create the scope pool (registers it if not exists)
-    let pool = glide_core::pool::get_or_create_scope_pool(client_id, conn_bytes.clone());
+    let pool = glide_core::pool::get_or_create_scope_pool(client_id, conn_bytes.clone()).pool;
 
     // Spawn min_idle background creation tasks. Each resolves slot 0 through the
-    // parent client's current topology first, then reserves a slot against
-    // max_total via the target-aware helper (for slot accounting; the marker is
-    // never matched, since each task mints its own token — see below), skipping if
-    // full or closed. Resolving before reserving means an unresolvable target never
-    // holds a slot. Each task carries a unique attempt token, so the min_idle
-    // prewarms are distinct dials that do not dedupe against each other or against
-    // a concurrent acquire. An unresolvable target skips the connection —
-    // expected for a lazily connected cluster client (no slot map until its first
-    // command), so logged at debug rather than warn. The guard means a failed or
-    // cancelled prewarm always gives its slot back.
+    // parent client's current topology before reserving a slot against max_total,
+    // so an unresolvable target never holds a slot; that case is expected for a
+    // lazily connected cluster client (no slot map until its first command) and
+    // is logged at debug rather than warn. The reservation guard gives the slot
+    // back if the prewarm fails or is cancelled.
     for _ in 0..min_idle {
         let pool_clone = pool.clone();
         let bytes = conn_bytes.clone();
@@ -938,18 +919,11 @@ pub unsafe extern "C" fn glide_scope_prewarm(
                     return;
                 }
             };
-            // Reserve respecting max_total; skip if full or closed. Unique token per
-            // prewarm task so they do not dedupe against each other.
-            let token = glide_core::pool::next_scope_attempt_token();
-            let reservation = match pool_clone
-                .lock()
-                .await
-                .reserve_slot_for(target.clone(), token)
-            {
+            let reservation = match pool_clone.lock().await.reserve_slot() {
                 Some(reservation) => reservation,
                 None => return,
             };
-            scope::create_scope_connection(
+            let _ = scope::create_scope_connection(
                 pool_clone,
                 client.as_ref(),
                 &bytes,
@@ -961,25 +935,42 @@ pub unsafe extern "C" fn glide_scope_prewarm(
     }
 }
 
-/// Allocate a unique scope-acquire attempt token.
-///
-/// A binding calls this once per `acquire()` and passes the returned value as the
-/// `attempt_token` argument on every retry poll of [`glide_scope_try_acquire`], so
-/// the core dedupes that acquire's retries to a single in-flight creation without
-/// serializing distinct concurrent borrowers. The value is opaque and never reused.
-#[unsafe(no_mangle)]
-pub extern "C" fn glide_scope_next_attempt_token() -> u64 {
-    glide_core::pool::next_scope_attempt_token()
+/// `CommandResponse` carrying a scope id, the success value of both acquire entry
+/// points. Heap-allocated like the Ok/Nil fast paths; freed by the binding through
+/// `free_command_response`.
+fn scope_id_response(scope_id: u64) -> *mut CommandResponse {
+    Box::into_raw(Box::new(CommandResponse {
+        response_type: ResponseType::Int,
+        int_value: scope_id as i64,
+        float_value: 0.0,
+        bool_value: false,
+        string_value: std::ptr::null_mut(),
+        string_value_len: 0,
+        array_value: std::ptr::null_mut(),
+        array_value_len: 0,
+        map_key: std::ptr::null_mut(),
+        map_value: std::ptr::null_mut(),
+        sets_value: std::ptr::null_mut(),
+        sets_value_len: 0,
+        arena_ptr: std::ptr::null_mut(),
+    }))
 }
 
-/// Acquire a scope from the client's internal scope pool.
+/// Acquire a scope from the client's scope pool (async — non-blocking, fires callback).
 ///
-/// Returns scope_id >= 0 on success, -1 if pool exhausted, -2 on error.
+/// Waits inside the core for up to `timeout_ms` for a retryable cause to clear.
+/// The success response is an `Int` holding the scope id. The error type is
+/// `Timeout` when the deadline passes, `Disconnect` when the parent client is
+/// closed, `Unspecified` for a configuration problem the message describes.
 ///
-/// `attempt_token` identifies one logical acquire. The binding generates it once
-/// per `acquire()` call (via [`glide_core::pool::next_scope_attempt_token`]) and
-/// passes the same value on every retry poll, so the core dedupes a single
-/// acquire's retries while letting distinct concurrent borrowers each dial.
+/// The timeout watchdog is armed one second past `timeout_ms` as a backstop, so
+/// a deadline still fires when the runtime is too starved to run the core's
+/// timer; the callback then carries a `Timeout` without the core's cause text.
+/// Delivering that callback needs one poll of this task, so the backstop helps
+/// while any worker is alive and cannot help a fully stalled runtime.
+///
+/// Returns 0 once the acquire is queued; -2 if the arguments are invalid, in which
+/// case no callback fires.
 ///
 /// `routing_slot` is read only when `has_routing_slot` is true; it is then the
 /// cluster hash slot the scope's commands must target. When `has_routing_slot` is
@@ -989,30 +980,187 @@ pub extern "C" fn glide_scope_next_attempt_token() -> u64 {
 ///
 /// # Safety
 /// `connection_request_ptr` must point to `connection_request_len` valid bytes.
+/// `success_callback` and `failure_callback` must be valid function pointers.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn glide_scope_try_acquire(
+pub unsafe extern "C" fn glide_scope_acquire_async(
     client_id: u64,
     connection_request_ptr: *const u8,
     connection_request_len: usize,
     has_routing_slot: bool,
     routing_slot: u16,
-    attempt_token: u64,
-) -> i64 {
-    let conn_bytes = if connection_request_ptr.is_null() || connection_request_len == 0 {
-        Vec::new()
-    } else {
+    timeout_ms: u64,
+    request_id: usize,
+    success_callback: SuccessCallback,
+    failure_callback: FailureCallback,
+) -> i32 {
+    if connection_request_ptr.is_null() || connection_request_len == 0 {
+        return -2;
+    }
+    let conn_bytes =
         unsafe { std::slice::from_raw_parts(connection_request_ptr, connection_request_len) }
-            .to_vec()
-    };
+            .to_vec();
 
     let runtime = get_pool_runtime();
-    scope::try_acquire_scope(
+    let handle = runtime.handle().clone();
+    runtime.spawn(async move {
+        let result = scope::acquire_scope_with_watchdog(
+            client_id,
+            conn_bytes,
+            &handle,
+            has_routing_slot.then_some(routing_slot),
+            std::time::Duration::from_millis(timeout_ms),
+        )
+        .await
+        .map_err(RedisError::from);
+        match result {
+            Ok(scope_id) => unsafe {
+                success_callback(request_id, scope_id_response(scope_id));
+            },
+            Err(err) => {
+                let (c_msg, error_type) = to_c_error(err);
+                unsafe {
+                    failure_callback(request_id, c_msg, error_type);
+                    drop(CString::from_raw(c_msg as *mut c_char));
+                }
+            }
+        }
+    });
+
+    0
+}
+
+/// Acquire a scope and deliver the outcome as a frame on the shared async pipe.
+///
+/// Same acquire as [`glide_scope_acquire_async`]; only the delivery differs.
+/// The Python async client reads every command result from the pipe on its
+/// event loop, so an acquire delivered the same way costs no thread while it
+/// waits, and the deadline is core's alone. Blocking on an executor thread
+/// instead puts a second queue in front of core's: once every worker in the
+/// executor is parked in an acquire, the next caller waits for a thread before
+/// its deadline even starts. The success frame carries an `Int` response whose
+/// value is the scope id, built in an arena so the reader frees it with
+/// `free_response_arena`; the error frame carries core's error type and
+/// message.
+///
+/// Returns 0 once the acquire is queued; -2 if the arguments are invalid; -3 if
+/// no pipe is registered (`init_async_pipe` has not run), in which case no
+/// frame is written.
+///
+/// # Safety
+/// `connection_request_ptr` must point to `connection_request_len` valid bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn glide_scope_acquire_pipe(
+    client_id: u64,
+    connection_request_ptr: *const u8,
+    connection_request_len: usize,
+    has_routing_slot: bool,
+    routing_slot: u16,
+    timeout_ms: u64,
+    request_id: usize,
+    pipe_client_id: u64,
+) -> i32 {
+    if connection_request_ptr.is_null() || connection_request_len == 0 {
+        return -2;
+    }
+    if get_async_pipe().is_none() {
+        return -3;
+    }
+    let conn_bytes =
+        unsafe { std::slice::from_raw_parts(connection_request_ptr, connection_request_len) }
+            .to_vec();
+
+    let runtime = get_pool_runtime();
+    let handle = runtime.handle().clone();
+    runtime.spawn(async move {
+        let result = scope::acquire_scope_with_watchdog(
+            client_id,
+            conn_bytes,
+            &handle,
+            has_routing_slot.then_some(routing_slot),
+            std::time::Duration::from_millis(timeout_ms),
+        )
+        .await
+        .map_err(RedisError::from);
+        let Some(pipe) = get_async_pipe() else {
+            // No reader remains for a frame; give the slot back.
+            if let Ok(scope_id) = result {
+                scope::release_scope(scope_id, client_id, &handle);
+            }
+            return;
+        };
+        let push_error = |err: RedisError| {
+            pipe.push_error(
+                pipe_client_id,
+                request_id,
+                errors::error_type(&err),
+                errors::error_message(&err),
+            )
+        };
+        match result {
+            Ok(scope_id) => {
+                match valkey_value_to_arena_response(Value::Int(scope_id as i64), &[]) {
+                    Ok((root, arena)) => {
+                        pipe.push_success(pipe_client_id, request_id, root as usize, arena as usize)
+                    }
+                    Err(err) => {
+                        scope::release_scope(scope_id, client_id, &handle);
+                        push_error(err)
+                    }
+                }
+            }
+            Err(err) => push_error(err),
+        }
+    });
+
+    0
+}
+
+/// Acquire a scope from the client's scope pool (synchronous — blocks until result).
+///
+/// Same semantics as [`glide_scope_acquire_async`], returned as a `CommandResult`
+/// whose `response` is an `Int` holding the scope id, or whose `command_error`
+/// carries the failure. Used by the Python sync client. Because the calling
+/// thread polls the future itself, the watchdog backstop returns here even when
+/// every runtime worker is stalled.
+///
+/// # Safety
+/// `connection_request_ptr` must point to `connection_request_len` valid bytes.
+/// The returned pointer must be freed by the caller via `free_command_result`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn glide_scope_acquire_blocking(
+    client_id: u64,
+    connection_request_ptr: *const u8,
+    connection_request_len: usize,
+    has_routing_slot: bool,
+    routing_slot: u16,
+    timeout_ms: u64,
+) -> *mut CommandResult {
+    if connection_request_ptr.is_null() || connection_request_len == 0 {
+        return create_error_result_with_custom_error(
+            "connection request bytes are required".to_owned(),
+            RequestErrorType::Unspecified,
+        );
+    }
+    let conn_bytes =
+        unsafe { std::slice::from_raw_parts(connection_request_ptr, connection_request_len) }
+            .to_vec();
+
+    let runtime = get_pool_runtime();
+    let result = runtime.block_on(scope::acquire_scope_with_watchdog(
         client_id,
         conn_bytes,
         runtime.handle(),
         has_routing_slot.then_some(routing_slot),
-        attempt_token,
-    )
+        std::time::Duration::from_millis(timeout_ms),
+    ));
+    match result {
+        Ok(scope_id) => Box::into_raw(Box::new(CommandResult {
+            response: scope_id_response(scope_id),
+            command_error: std::ptr::null_mut(),
+            arena: std::ptr::null_mut(),
+        })),
+        Err(err) => create_error_result_with_redis_error(RedisError::from(err)),
+    }
 }
 
 /// Release a scope back to the pool. Fire-and-forget.
@@ -1084,39 +1232,12 @@ pub unsafe extern "C" fn glide_scope_execute(
             recv_result = timeout_rx => {
                 match recv_result {
                     Err(_) => execute.await,
-                    Ok(()) => {
-                        let actual_elapsed = cmd_start.elapsed();
-                        let pending = glide_core::timeout_watchdog::pending_count();
-                        let p99 = parent_client.latency_tracker().p99();
-                        let cause = if pending > 100 {
-                            glide_core::timeout_watchdog::TimeoutCause::SystemOverload {
-                                pending_total: pending,
-                            }
-                        } else {
-                            glide_core::timeout_watchdog::TimeoutCause::ServerUnresponsive {
-                                node: "scope".to_owned(),
-                            }
-                        };
-                        let event = glide_core::timeout_watchdog::TimeoutEvent {
-                            cause,
-                            command: glide_core::timeout_watchdog::cmd_name_from_bytes(
-                                cmd_name.as_bytes(),
-                            ),
-                            node: "scope".to_owned(),
-                            phase: glide_core::timeout_watchdog::CommandPhase::Sent,
-                            configured_timeout: timeout_duration,
-                            actual_elapsed,
-                            pending_commands: pending,
-                            recent_p99_latency: p99,
-                            rss_bytes: glide_core::timeout_watchdog::get_rss(),
-                            suggested_timeout: p99.map(|p| (p * 3).max(timeout_duration)),
-                            inflight_at_register: None,
-                            inflight_at_timeout: None,
-                            retry_count: 0,
-                        };
-                        glide_logger::log_warn("timeout_watchdog", event.to_string());
-                        Err(std::io::Error::from(std::io::ErrorKind::TimedOut).into())
-                    }
+                    Ok(()) => Err(scope_watchdog_timeout(
+                        glide_core::timeout_watchdog::cmd_name_from_bytes(cmd_name.as_bytes()),
+                        timeout_duration,
+                        cmd_start.elapsed(),
+                        parent_client.latency_tracker().p99(),
+                    ))
                 }
             }
         }
