@@ -417,11 +417,19 @@ pub(crate) mod tests {
         pub(super) fn record_close(&self) -> bool {
             drop(self.gate.lock().unwrap_or_else(PoisonError::into_inner));
             self.calls.fetch_add(1, Ordering::SeqCst);
-            self.failures
-                .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |left| {
-                    left.checked_sub(1)
-                })
-                .is_ok()
+            let mut left = self.failures.load(Ordering::SeqCst);
+            while left > 0 {
+                match self.failures.compare_exchange(
+                    left,
+                    left - 1,
+                    Ordering::SeqCst,
+                    Ordering::SeqCst,
+                ) {
+                    Ok(_) => return true,
+                    Err(actual) => left = actual,
+                }
+            }
+            false
         }
     }
 
