@@ -416,28 +416,15 @@ func (suite *GlideTestSuite) TestSortReadOnlyWithOptions_SuccessfulSortByWeightA
 }
 
 func (suite *GlideTestSuite) TestInfoStandalone() {
-	DEFAULT_INFO_SECTIONS := []string{
-		"Server",
-		"Clients",
-		"Memory",
-		"Persistence",
-		"Stats",
-		"Replication",
-		"CPU",
-		"Modules",
-		"Errorstats",
-		"Cluster",
-		"Keyspace",
-	}
-
 	client := suite.defaultClient()
 	t := suite.T()
 
 	// info without options
 	info, err := client.Info(context.Background())
 	assert.NoError(t, err)
-	for _, section := range DEFAULT_INFO_SECTIONS {
-		assert.Contains(t, info, "# "+section, "Section "+section+" is missing")
+	fields := parseInfoResponse(info)
+	for _, field := range infoDefaultFields {
+		assert.Contains(t, fields, field)
 	}
 
 	// info with option or with multiple options

@@ -82,6 +82,18 @@ public class TestUtilities {
             new java.util.HashSet<>(
                     Arrays.asList("Background saving started", "Background saving scheduled"));
 
+    /** One field from each default INFO section. */
+    public static final List<String> INFO_DEFAULT_FIELDS =
+            Arrays.asList(
+                    "redis_version", // server
+                    "connected_clients", // clients
+                    "used_memory", // memory
+                    "rdb_changes_since_last_save", // persistence
+                    "total_commands_processed", // stats
+                    "role", // replication
+                    "used_cpu_sys", // cpu
+                    "cluster_enabled"); // cluster
+
     /**
      * Expected server responses for the "rdb_*_bgsave_type" INFO persistence fields.
      *
@@ -241,7 +253,16 @@ public class TestUtilities {
                 client instanceof GlideClusterClient
                         ? ((GlideClusterClient) client).info(sections, RANDOM).get().getSingleValue()
                         : ((GlideClient) client).info(sections).get();
+        return parseInfo(info);
+    }
 
+    /**
+     * Parses INFO output from a single node into its fields and values.
+     *
+     * @param info The INFO output from a single node.
+     * @return A map from each INFO field name to its value.
+     */
+    public static Map<String, String> parseInfo(String info) {
         return Arrays.stream(info.split("\n"))
                 .filter(line -> line.contains(":"))
                 .map(line -> line.split(":", 2))

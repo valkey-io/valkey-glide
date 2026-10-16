@@ -6,6 +6,7 @@ import static glide.TestUtilities.BGREWRITEAOF_RESPONSES;
 import static glide.TestUtilities.BGSAVE_NOT_CANCELLED_RESPONSE;
 import static glide.TestUtilities.BGSAVE_RESPONSES;
 import static glide.TestUtilities.BGSAVE_TYPES;
+import static glide.TestUtilities.INFO_DEFAULT_FIELDS;
 import static glide.TestUtilities.assertDeepEquals;
 import static glide.TestUtilities.assertMemoryStatsDbEntry;
 import static glide.TestUtilities.assertMemoryStatsFields;
@@ -22,6 +23,7 @@ import static glide.TestUtilities.generateLuaLibCodeBinary;
 import static glide.TestUtilities.getInfo;
 import static glide.TestUtilities.getUnixSeconds;
 import static glide.TestUtilities.getValueFromInfo;
+import static glide.TestUtilities.parseInfo;
 import static glide.TestUtilities.parseLong;
 import static glide.TestUtilities.waitFor;
 import static glide.TestUtilities.waitForNotBusy;
@@ -43,7 +45,6 @@ import static glide.api.models.commands.function.FunctionRestorePolicy.REPLACE;
 import static glide.api.models.commands.scan.ScanOptions.ObjectType.HASH;
 import static glide.api.models.commands.scan.ScanOptions.ObjectType.SET;
 import static glide.api.models.commands.scan.ScanOptions.ObjectType.STRING;
-import static glide.cluster.CommandTests.DEFAULT_INFO_SECTIONS;
 import static glide.cluster.CommandTests.EVERYTHING_INFO_SECTIONS;
 import static glide.utils.Java8Utils.createMap;
 import static glide.utils.Java8Utils.repeat;
@@ -213,8 +214,9 @@ public class CommandTests {
     @SneakyThrows
     public void info_without_options(GlideClient regularClient) {
         String data = regularClient.info().get();
-        for (String section : DEFAULT_INFO_SECTIONS) {
-            assertTrue(data.contains("# " + section), "Section " + section + " is missing");
+        Map<String, String> fields = parseInfo(data);
+        for (String field : INFO_DEFAULT_FIELDS) {
+            assertTrue(fields.containsKey(field), field);
         }
     }
 

@@ -567,6 +567,18 @@ var bgsaveResponses = []string{
 // Since Valkey 9.2.0.
 var bgsaveTypes = []string{"fork", "forkless", "none"}
 
+// One field from each default INFO section.
+var infoDefaultFields = []string{
+	"redis_version",               // server
+	"connected_clients",           // clients
+	"used_memory",                 // memory
+	"rdb_changes_since_last_save", // persistence
+	"total_commands_processed",    // stats
+	"role",                        // replication
+	"used_cpu_sys",                // cpu
+	"cluster_enabled",             // cluster
+}
+
 // Expected valid responses for BGREWRITEAOF.
 var bgrewriteaofResponses = []string{
 	"Background append only file rewriting started",

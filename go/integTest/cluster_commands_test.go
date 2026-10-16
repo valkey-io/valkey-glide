@@ -75,20 +75,6 @@ func (suite *GlideTestSuite) TestClusterCustomCommandConfigGet() {
 }
 
 func (suite *GlideTestSuite) TestInfoCluster() {
-	DEFAULT_INFO_SECTIONS := []string{
-		"Server",
-		"Clients",
-		"Memory",
-		"Persistence",
-		"Stats",
-		"Replication",
-		"CPU",
-		"Modules",
-		"Errorstats",
-		"Cluster",
-		"Keyspace",
-	}
-
 	client := suite.defaultClusterClient()
 	t := suite.T()
 
@@ -96,8 +82,9 @@ func (suite *GlideTestSuite) TestInfoCluster() {
 	data, err := client.Info(context.Background())
 	assert.NoError(t, err)
 	for _, info := range data {
-		for _, section := range DEFAULT_INFO_SECTIONS {
-			assert.Contains(t, info, "# "+section, "Section "+section+" is missing")
+		fields := parseInfoResponse(info)
+		for _, field := range infoDefaultFields {
+			assert.Contains(t, fields, field)
 		}
 	}
 
@@ -146,8 +133,9 @@ func (suite *GlideTestSuite) TestInfoCluster() {
 	assert.NoError(t, err)
 	assert.True(t, response.IsMultiValue())
 	for _, info := range response.MultiValue() {
-		for _, section := range DEFAULT_INFO_SECTIONS {
-			assert.Contains(t, info, "# "+section, "Section "+section+" is missing")
+		fields := parseInfoResponse(info)
+		for _, field := range infoDefaultFields {
+			assert.Contains(t, fields, field)
 		}
 	}
 

@@ -6,6 +6,7 @@ import static glide.TestUtilities.BGREWRITEAOF_RESPONSES;
 import static glide.TestUtilities.BGSAVE_NOT_CANCELLED_RESPONSE;
 import static glide.TestUtilities.BGSAVE_RESPONSES;
 import static glide.TestUtilities.BGSAVE_TYPES;
+import static glide.TestUtilities.INFO_DEFAULT_FIELDS;
 import static glide.TestUtilities.PRIMARY_SLOT_ROUTE;
 import static glide.TestUtilities.assertClientTrackingInfo;
 import static glide.TestUtilities.assertDeepEquals;
@@ -28,6 +29,7 @@ import static glide.TestUtilities.getReplicaCount;
 import static glide.TestUtilities.getUnixSeconds;
 import static glide.TestUtilities.getValueFromInfo;
 import static glide.TestUtilities.isWindows;
+import static glide.TestUtilities.parseInfo;
 import static glide.TestUtilities.parseLong;
 import static glide.TestUtilities.waitFor;
 import static glide.TestUtilities.waitForNotBusy;
@@ -143,19 +145,6 @@ public class CommandTests {
 
     private static final List<Arguments> clients = new ArrayList<>();
 
-    public static final List<String> DEFAULT_INFO_SECTIONS =
-            Arrays.asList(
-                    "Server",
-                    "Clients",
-                    "Memory",
-                    "Persistence",
-                    "Stats",
-                    "Replication",
-                    "CPU",
-                    "Modules",
-                    "Errorstats",
-                    "Cluster",
-                    "Keyspace");
     public static final List<String> EVERYTHING_INFO_SECTIONS =
             SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")
                     // Latencystats was added in Valkey 7
@@ -432,8 +421,9 @@ public class CommandTests {
         ClusterValue<String> data = clusterClient.info().get();
         assertTrue(data.hasMultiData());
         for (String info : data.getMultiValue().values()) {
-            for (String section : DEFAULT_INFO_SECTIONS) {
-                assertTrue(info.contains("# " + section), "Section " + section + " is missing");
+            Map<String, String> fields = parseInfo(info);
+            for (String field : INFO_DEFAULT_FIELDS) {
+                assertTrue(fields.containsKey(field), field);
             }
         }
     }
@@ -445,8 +435,9 @@ public class CommandTests {
         ClusterValue<String> data = clusterClient.info(RANDOM).get();
         assertTrue(data.hasSingleData());
         String infoData = data.getSingleValue();
-        for (String section : DEFAULT_INFO_SECTIONS) {
-            assertTrue(infoData.contains("# " + section), "Section " + section + " is missing");
+        Map<String, String> fields = parseInfo(infoData);
+        for (String field : INFO_DEFAULT_FIELDS) {
+            assertTrue(fields.containsKey(field), field);
         }
     }
 
@@ -457,8 +448,9 @@ public class CommandTests {
         ClusterValue<String> data = clusterClient.info(ALL_NODES).get();
         assertTrue(data.hasMultiData());
         for (String info : data.getMultiValue().values()) {
-            for (String section : DEFAULT_INFO_SECTIONS) {
-                assertTrue(info.contains("# " + section), "Section " + section + " is missing");
+            Map<String, String> fields = parseInfo(info);
+            for (String field : INFO_DEFAULT_FIELDS) {
+                assertTrue(fields.containsKey(field), field);
             }
         }
     }
