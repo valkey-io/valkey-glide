@@ -39,14 +39,22 @@ pub(crate) struct CloseQueue {
     state: Mutex<QueueState>,
     /// Signalled when a close arrives or the thread is told to stop.
     work: Condvar,
-    /// Signalled when the queue is empty and no close is running.
-    idle: Condvar,
+    /// Signalled when a close finishes while someone waits for closes.
+    finished: Condvar,
 }
 
 #[derive(Default)]
 struct QueueState {
     jobs: VecDeque<CloseJob>,
-    running: bool,
+    /// Closes ever queued. A waiter notes this count and waits only for the
+    /// closes up to it, so closes queued after it started cannot keep it waiting.
+    submitted: u64,
+    /// Closes ever finished, in queue order, so every close numbered at or
+    /// below this count is done.
+    finished: u64,
+    /// Threads in [`CloseQueue::wait_until_idle`], so finishing a close skips
+    /// the wake-up when nobody is waiting.
+    waiting: usize,
     stop: bool,
     /// The closing thread, so waiting on the queue from it returns rather than
     /// waiting for itself.
@@ -58,7 +66,7 @@ impl Closer {
         let queue = Arc::new(CloseQueue {
             state: Mutex::new(QueueState::default()),
             work: Condvar::new(),
-            idle: Condvar::new(),
+            finished: Condvar::new(),
         });
         let thread = thread::Builder::new()
             .name("glide-rdma-closer".into())
@@ -103,22 +111,29 @@ impl Drop for Closer {
 impl CloseQueue {
     /// Queue `job` for the closing thread and return without waiting for it.
     pub(crate) fn submit(&self, job: CloseJob) {
-        self.state().jobs.push_back(job);
+        let mut state = self.state();
+        state.jobs.push_back(job);
+        state.submitted += 1;
+        drop(state);
         self.work.notify_one();
     }
 
-    /// Return once every close queued so far has finished.
+    /// Return once every close queued before this call has finished. Closes
+    /// queued while it waits are not waited for.
     pub(crate) fn wait_until_idle(&self) {
         let mut state = self.state();
         if state.thread_id == Some(thread::current().id()) {
             return;
         }
-        while state.running || !state.jobs.is_empty() {
+        let target = state.submitted;
+        state.waiting += 1;
+        while state.finished < target {
             state = self
-                .idle
+                .finished
                 .wait(state)
                 .unwrap_or_else(PoisonError::into_inner);
         }
+        state.waiting -= 1;
     }
 
     fn run(&self) {
@@ -127,7 +142,6 @@ impl CloseQueue {
                 let mut state = self.state();
                 loop {
                     if let Some(job) = state.jobs.pop_front() {
-                        state.running = true;
                         break job;
                     }
                     if state.stop {
@@ -145,9 +159,9 @@ impl CloseQueue {
                 log::error!("closing an RDMA region panicked; the thread carries on");
             }
             let mut state = self.state();
-            state.running = false;
-            if state.jobs.is_empty() {
-                self.idle.notify_all();
+            state.finished += 1;
+            if state.waiting > 0 {
+                self.finished.notify_all();
             }
         }
     }
@@ -163,7 +177,7 @@ impl fmt::Debug for Closer {
         formatter
             .debug_struct("Closer")
             .field("queued", &state.jobs.len())
-            .field("running", &state.running)
+            .field("unfinished", &(state.submitted - state.finished))
             .finish()
     }
 }
@@ -230,6 +244,37 @@ mod tests {
         finished
             .recv_timeout(Duration::from_secs(5))
             .expect("the next close still runs");
+    }
+
+    /// Closes queued after a wait starts must not hold it up, or a thread
+    /// waiting while others keep dropping buffers could wait forever.
+    #[test]
+    fn waiting_ignores_closes_queued_after_it_started() {
+        let closer = Closer::start().unwrap();
+        let queue = closer.queue();
+        let (release_later, later_released) = mpsc::channel::<()>();
+        closer.queue().submit(Box::new({
+            let queue = queue.clone();
+            move || {
+                // Hold this close open until the waiter below is waiting, then
+                // queue a close that stays blocked until the wait has returned.
+                while queue.state().waiting == 0 {
+                    std::thread::yield_now();
+                }
+                queue.submit(Box::new(move || {
+                    let _ = later_released.recv();
+                }));
+            }
+        }));
+        let (done, finished) = mpsc::channel();
+        let waiter = std::thread::spawn(move || {
+            queue.wait_until_idle();
+            done.send(()).unwrap();
+        });
+        let result = finished.recv_timeout(Duration::from_secs(5));
+        release_later.send(()).unwrap();
+        waiter.join().unwrap();
+        result.expect("the wait returns while a later close is still blocked");
     }
 
     /// The last close can drop the closer itself, as the last handle to a fabric
