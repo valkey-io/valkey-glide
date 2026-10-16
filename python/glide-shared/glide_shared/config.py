@@ -44,16 +44,30 @@ MAX_UINT32 = 2**32 - 1
 
 class NodeAddress:
     """
-    Represents the address and port of a node in the cluster.
+    Represents the address of a node, either a TCP host and port or a Unix domain socket.
 
     Attributes:
         host (str, optional): The server host. Defaults to "localhost".
         port (int, optional): The server port. Defaults to 6379.
+        unix_socket_path (Optional[StrPath]): Absolute path of the server's Unix domain socket.
+            When set, ``host`` and ``port`` are ignored. Standalone clients only, without TLS.
+            For example::
+
+                NodeAddress(unix_socket_path="/run/valkey/valkey.sock")
     """
 
-    def __init__(self, host: str = "localhost", port: int = 6379):
+    def __init__(
+        self,
+        host: str = "localhost",
+        port: int = 6379,
+        *,
+        unix_socket_path: Optional[StrPath] = None,
+    ):
         self.host = host
         self.port = port
+        self.unix_socket_path = (
+            None if unix_socket_path is None else os.fspath(unix_socket_path)
+        )
 
 
 class AddressResolver(Protocol):
@@ -1027,12 +1041,26 @@ class BaseClientConfiguration:
                 "client_az must be set when read_from is set to AZ_AFFINITY_ALL_NODES"
             )
 
+    def _validate_unix_socket_addresses(self, cluster_mode: bool) -> None:
+        """Reject common Unix domain socket misconfigurations; the core checks the rest."""
+        if all(address.unix_socket_path is None for address in self.addresses):
+            return
+        if cluster_mode:
+            raise ConfigurationError(
+                "Unix domain socket addresses are not supported in cluster mode"
+            )
+        if self.use_tls:
+            raise ConfigurationError("TLS is not supported over Unix domain sockets")
+
     def _set_addresses_in_request(self, request: ConnectionRequest) -> None:
-        """Set addresses in the protobuf request."""
+        """Set addresses in the protobuf request. An empty socket path is still sent so the core rejects it."""
         for address in self.addresses:
             address_info = request.addresses.add()
-            address_info.host = address.host
-            address_info.port = address.port
+            if address.unix_socket_path is not None:
+                address_info.unix_socket_path = address.unix_socket_path
+            else:
+                address_info.host = address.host
+                address_info.port = address.port
 
     def _set_reconnect_strategy_in_request(self, request: ConnectionRequest) -> None:
         """Set reconnect strategy in the protobuf request."""
@@ -1126,6 +1154,7 @@ class BaseClientConfiguration:
         request = ConnectionRequest()
 
         # Set basic configuration
+        self._validate_unix_socket_addresses(cluster_mode)
         self._set_addresses_in_request(request)
         request.tls_mode = TlsMode.SecureTls if self.use_tls else TlsMode.NoTls
         request.read_from = self.read_from.value
@@ -1467,6 +1496,7 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
     Attributes:
         addresses (List[NodeAddress]): DNS Addresses and ports of known nodes in the cluster.
             The list can be partial, as the client will attempt to map out the cluster and find all nodes.
+            Unix domain socket addresses are not supported in cluster mode.
             For example::
 
                 [
