@@ -145,7 +145,8 @@ jobs:
               id: load-platform-matrix
               shell: bash
               run: |
-                  # Filter entries with npm in PACKAGE_MANAGERS and use CD_RUNNER if available, replace "ephemeral" with "persistent" in RUNNER
+                  # Filter entries with npm in PACKAGE_MANAGERS and use CD_RUNNER if available, replace "ephemeral" with "persistent" in RUNNER.
+                  # x86_64-apple-darwin builds on CD_RUNNER (macos-15, arm64) but tests on macos-15-intel: npm resolves the native package by the runner arch, so testing on arm64 would validate the wrong build.
                   export PLATFORM_MATRIX=$(jq 'map(
                       select(.PACKAGE_MANAGERS != null and (.PACKAGE_MANAGERS | contains(["npm"])))
                       | .RUNNER = (
@@ -165,7 +166,6 @@ jobs:
                           else "mac"
                           end
                       )
-                      # npm resolves the native package by the runner's arch, so x86 darwin must TEST on Intel or it validates the arm64 build.
                       | if .TARGET == "x86_64-apple-darwin" then .["test-runner"] = "macos-15-intel" else . end
                   )' < .github/json_matrices/build-matrix.json | jq -c .)
                   echo "platform_matrix=${PLATFORM_MATRIX}" >> $GITHUB_OUTPUT
@@ -436,6 +436,8 @@ jobs:
               working-directory: ./node
               env:
                   NAPI_RS_VERSION_FROM_TAG: ${{ needs.get-build-parameters.outputs.release_version }}
+                  # napi prepublish has no --tag flag; set the dist-tag via npm config env instead.
+                  npm_config_tag: ${{ needs.get-build-parameters.outputs.npm_tag }}
               run: |
                   node_modules/.bin/napi prepublish \
                     --package-json-path npm/glide/package.json \
