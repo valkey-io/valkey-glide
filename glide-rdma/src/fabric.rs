@@ -234,14 +234,23 @@ impl RdmaFabric {
     /// on any other provider, and leaked when it failed to close.
     pub(crate) fn release_unanswered(&self, host: HostMemory, closed: bool) {
         if !closed {
-            let bytes = host.len();
-            std::mem::forget(host);
-            self.note_leaked(bytes);
+            self.leak(host);
         } else if self.inner.close_stops_writes {
             drop(host);
         } else {
             self.park(host);
         }
+    }
+
+    /// Keep `host` allocated for the life of the process because its region failed
+    /// to close, and count it in [`Self::leaked_bytes`].
+    ///
+    /// The memory is forgotten before anything else runs, so even a panic while
+    /// counting or logging cannot free memory the server may still write to.
+    pub(crate) fn leak(&self, host: HostMemory) {
+        let bytes = host.len();
+        std::mem::forget(host);
+        self.note_leaked(bytes);
     }
 
     /// Count `bytes` the caller is keeping for the life of the process because their
@@ -250,7 +259,7 @@ impl RdmaFabric {
     /// A failed close means the device may still let the server write into the
     /// memory, so it can never safely be freed. It also keeps this fabric open for
     /// good, so nothing parked on it is freed either.
-    pub(crate) fn note_leaked(&self, bytes: usize) {
+    fn note_leaked(&self, bytes: usize) {
         let total = self.inner.leaked_bytes.fetch_add(bytes, Ordering::Relaxed) + bytes;
         log::error!(
             "an RDMA memory region failed to close, so its {bytes} bytes stay allocated \

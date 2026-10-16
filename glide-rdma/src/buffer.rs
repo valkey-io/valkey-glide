@@ -319,8 +319,7 @@ impl Drop for RdmaBuffer {
             if registration.revoke().is_ok() {
                 drop(host);
             } else {
-                fabric.note_leaked(host.len());
-                std::mem::forget(host);
+                fabric.leak(host);
             }
             drop(registration);
         });
