@@ -628,7 +628,8 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
      * @param key The key to delete.
-     * @param value The comparison value. The key is only deleted if its current value matches exactly.
+     * @param value The comparison value. The key is only deleted if its current value matches
+     *     exactly.
      * @return Command Response - <code>true</code> if <code>key</code> was deleted, <code>false
      *     </code> if <code>key</code> did not exist or its value did not match <code>value</code>.
      */
