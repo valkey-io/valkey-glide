@@ -141,10 +141,13 @@ from tests.utils.utils import (
     get_random_string,
     get_unix_seconds,
     get_version,
+    low_busy_reply_threshold,
     parse_info_response,
     round_values,
     trigger_latency_spike,
+    wait_for,
     wait_for_save_not_in_progress,
+    wait_for_server_blocked,
 )
 
 
@@ -475,20 +478,22 @@ class TestGlideClients:
             protocol=protocol,
             request_timeout=20000,  # 20 seconds timeout
         )
+        probe = await create_client(
+            request, cluster_mode, protocol=protocol, request_timeout=100
+        )
 
         async def run_debug_sleep():
             """
             Run a long-running DEBUG SLEEP command.
             """
-            command = ["DEBUG", "sleep", "7"]
+            command = ["DEBUG", "sleep", "3"]
             if isinstance(client, GlideClusterClient):
                 await client.custom_command(command, AllNodes())
             else:
                 await client.custom_command(command)
 
         async def fail_to_connect_to_client():
-            # try to connect with a small timeout connection
-            await anyio.sleep(1)
+            await wait_for_server_blocked(probe)
             with pytest.raises(ClosingError) as e:
                 await create_client(
                     request,
@@ -497,13 +502,12 @@ class TestGlideClients:
                     connection_timeout=100,  # 100 ms
                     reconnect_strategy=BackoffStrategy(
                         1, 100, 2
-                    ),  # needs to be configured so that we wont be connected within 7 seconds bc of default retries
+                    ),  # needs to be configured so that we wont be connected within 3 seconds bc of default retries
                 )
             assert "timed out" in str(e).lower() or "timeout" in str(e).lower()
 
         async def connect_to_client():
-            # Create a second client with a connection timeout of 7 seconds
-            await anyio.sleep(1)
+            await wait_for_server_blocked(probe)
             timeout_client = await create_client(
                 request,
                 cluster_mode,
@@ -523,6 +527,7 @@ class TestGlideClients:
         async with anyio.create_task_group() as tg:
             tg.start_soon(run_debug_sleep)
             tg.start_soon(connect_to_client)
+        await probe.close()
 
         # Clean up the main client
         await client.close()
@@ -8942,7 +8947,7 @@ class TestCommands:
     ):
         lib_name = f"mylib1C{get_random_string(5)}"
         func_name = f"myfunc1c{get_random_string(5)}"
-        code = create_lua_lib_with_long_running_function(lib_name, func_name, 10, True)
+        code = create_lua_lib_with_long_running_function(lib_name, func_name, 3, True)
 
         # load the library
         assert await glide_client.function_load(code, replace=True) == lib_name.encode()
@@ -8960,12 +8965,19 @@ class TestCommands:
             await test_client.fcall_ro(func_name, arguments=[])
 
         async def wait_and_function_stats():
-            # it can take a few seconds for FCALL to register as running
-            await anyio.sleep(3)
-            result = await test_client2.function_stats()
+            result: Any = None
+
+            async def fcall_is_running() -> bool:
+                nonlocal result
+                result = await test_client2.function_stats()
+                return any(
+                    res and res.get(b"running_script") for res in result.values()
+                )
+
+            await wait_for(fcall_is_running, "FCALL never registered as running")
             running_scripts = False
             for res in result.values():
-                if res.get(b"running_script"):
+                if res and res.get(b"running_script"):
                     if running_scripts:
                         raise Exception("Already running script on a different node")
                     running_scripts = True
@@ -8979,9 +8991,10 @@ class TestCommands:
 
             assert running_scripts
 
-        async with anyio.create_task_group() as tg:
-            tg.start_soon(endless_fcall_route_call)
-            tg.start_soon(wait_and_function_stats)
+        async with low_busy_reply_threshold(glide_client):
+            async with anyio.create_task_group() as tg:
+                tg.start_soon(endless_fcall_route_call)
+                tg.start_soon(wait_and_function_stats)
 
         await test_client.close()
         await test_client2.close()
@@ -9059,7 +9072,7 @@ class TestCommands:
     ):
         lib_name = f"mylib1C{get_random_string(5)}"
         func_name = f"myfunc1c{get_random_string(5)}"
-        code = create_lua_lib_with_long_running_function(lib_name, func_name, 10, True)
+        code = create_lua_lib_with_long_running_function(lib_name, func_name, 3, True)
 
         # nothing to kill
         with pytest.raises(RequestError) as e:
@@ -9081,25 +9094,18 @@ class TestCommands:
             assert "Script killed by user" in str(e)
 
         async def wait_and_function_kill():
-            # it can take a few seconds for FCALL to register as running
-            await anyio.sleep(3)
-            timeout = 0
-            while timeout <= 5:
-                # keep trying to kill until we get an "OK"
+            async def kill_succeeded() -> bool:
                 try:
-                    result = await glide_client.function_kill()
-                    #  we expect to get success
-                    assert result == "OK"
-                    break
+                    return await glide_client.function_kill() == "OK"
                 except RequestError:
-                    # a RequestError may occur if the function is not yet running
-                    # sleep and try again
-                    timeout += 0.5
-                    await anyio.sleep(0.5)
+                    return False
 
-        async with anyio.create_task_group() as tg:
-            tg.start_soon(endless_fcall_route_call)
-            tg.start_soon(wait_and_function_kill)
+            await wait_for(kill_succeeded, "FUNCTION KILL never returned OK")
+
+        async with low_busy_reply_threshold(glide_client):
+            async with anyio.create_task_group() as tg:
+                tg.start_soon(endless_fcall_route_call)
+                tg.start_soon(wait_and_function_kill)
 
         # no functions running so we get notbusy error again
         with pytest.raises(RequestError) as e:
@@ -9115,7 +9121,7 @@ class TestCommands:
     ):
         lib_name = f"mylib1C{get_random_string(5)}"
         func_name = f"myfunc1c{get_random_string(5)}"
-        code = create_lua_lib_with_long_running_function(lib_name, func_name, 10, False)
+        code = create_lua_lib_with_long_running_function(lib_name, func_name, 3, False)
 
         # load the library on all primaries
         assert await glide_client.function_load(code, replace=True) == lib_name.encode()
@@ -9132,26 +9138,21 @@ class TestCommands:
             await test_client.fcall(func_name, keys=[lib_name])
 
         async def wait_and_function_kill():
-            # it can take a few seconds for FCALL to register as running
-            await anyio.sleep(3)
-            timeout = 0
-            foundUnkillable = False
-            while timeout <= 5:
-                # keep trying to kill until we get a unkillable return error
+            async def kill_reports_unkillable() -> bool:
                 try:
                     await glide_client.function_kill()
                 except RequestError as e:
-                    if "UNKILLABLE" in str(e):
-                        foundUnkillable = True
-                        break
-                timeout += 0.5
-                await anyio.sleep(0.5)
-            # expect an unkillable error
-            assert foundUnkillable
+                    return "UNKILLABLE" in str(e)
+                return False
 
-        async with anyio.create_task_group() as tg:
-            tg.start_soon(endless_fcall_route_call)
-            tg.start_soon(wait_and_function_kill)
+            await wait_for(
+                kill_reports_unkillable, "FUNCTION KILL never reported UNKILLABLE"
+            )
+
+        async with low_busy_reply_threshold(glide_client):
+            async with anyio.create_task_group() as tg:
+                tg.start_soon(endless_fcall_route_call)
+                tg.start_soon(wait_and_function_kill)
 
         await test_client.close()
 
@@ -11287,7 +11288,7 @@ async def script_kill_tests(
     assert "No scripts in execution right now" in str(e)
 
     # Create a long-running script
-    long_script = Script(create_long_running_lua_script(10))
+    long_script = Script(create_long_running_lua_script(3))
 
     async def run_long_script():
         with pytest.raises(RequestError) as e:
@@ -11298,10 +11299,7 @@ async def script_kill_tests(
         assert "Script killed by user" in str(e)
 
     async def wait_and_kill_script():
-        await anyio.sleep(3)  # Give some time for the script to start
-        timeout = 0
-        while timeout <= 5:
-            # keep trying to kill until we get an "OK"
+        async def kill_succeeded() -> bool:
             try:
                 if route is not None:
                     result = await cast(GlideClusterClient, glide_client).script_kill(
@@ -11309,19 +11307,17 @@ async def script_kill_tests(
                     )
                 else:
                     result = await glide_client.script_kill()
-                #  we expect to get success
-                assert result == "OK"
-                break
             except RequestError:
-                # a RequestError may occur if the script is not yet running
-                # sleep and try again
-                timeout += 0.5
-                await anyio.sleep(0.5)
+                return False
+            return result == "OK"
+
+        await wait_for(kill_succeeded, "SCRIPT KILL never returned OK")
 
     # Run the long script and kill it
-    async with anyio.create_task_group() as tg:
-        tg.start_soon(run_long_script)
-        tg.start_soon(wait_and_kill_script)
+    async with low_busy_reply_threshold(glide_client):
+        async with anyio.create_task_group() as tg:
+            tg.start_soon(run_long_script)
+            tg.start_soon(wait_and_kill_script)
 
     # Verify that script_kill raises an error when no script is running
     with pytest.raises(RequestError) as e:
@@ -11570,7 +11566,7 @@ class TestScripts:
         writing_script = Script("""
             redis.call('SET', KEYS[1], 'value')
             local start = redis.call('TIME')[1]
-            while redis.call('TIME')[1] - start < 15 do
+            while redis.call('TIME')[1] - start < 3 do
                 redis.call('SET', KEYS[1], 'value')
             end
         """)
@@ -11579,23 +11575,22 @@ class TestScripts:
             await test_client.invoke_script(writing_script, keys=[get_random_string(5)])
 
         async def attempt_kill_writing_script():
-            await anyio.sleep(3)  # Give some time for the script to start
-            foundUnkillable = False
-            while True:
+            async def kill_reports_unkillable() -> bool:
                 try:
                     await test_client2.script_kill()
                 except RequestError as e:
-                    if "UNKILLABLE" in str(e):
-                        foundUnkillable = True
-                        break
-                    await anyio.sleep(0.5)
+                    return "UNKILLABLE" in str(e)
+                return False
 
-            assert foundUnkillable
+            await wait_for(
+                kill_reports_unkillable, "SCRIPT KILL never reported UNKILLABLE"
+            )
 
         # Run the writing script and attempt to kill it
-        async with anyio.create_task_group() as tg:
-            tg.start_soon(run_writing_script)
-            tg.start_soon(attempt_kill_writing_script)
+        async with low_busy_reply_threshold(glide_client):
+            async with anyio.create_task_group() as tg:
+                tg.start_soon(run_writing_script)
+                tg.start_soon(attempt_kill_writing_script)
 
         await test_client.close()
         await test_client2.close()

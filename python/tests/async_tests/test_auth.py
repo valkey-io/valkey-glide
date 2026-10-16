@@ -551,11 +551,13 @@ class TestAuthCommands:
             management_client, USERNAME, NEW_PASSWORD
         )
 
-        # Sleep to allow enough time for reconnecting
-        await anyio.sleep(2)
+        async def _reconnected() -> bool:
+            try:
+                return await acl_glide_client.get("test_key") == b"test_value"
+            except Exception:
+                return False
 
-        # The client should now reconnect with the new password automatically
-        # Verify that the client is still able to perform operations
+        await wait_for(_reconnected, "Client did not reconnect with the new password")
         value = await acl_glide_client.get("test_key")
         assert value == b"test_value"
 
@@ -585,9 +587,6 @@ class TestAuthCommands:
         await set_new_acl_username_with_password(
             management_client, USERNAME, NEW_PASSWORD
         )
-
-        # Sleep to allow enough time for reconnecting
-        await anyio.sleep(2)
 
         # This command right after disconnection requires the acl_glide_client to have a request timeout of 2000 ms
         # for full matrix tests to pass (otherwise failing on linux-aarch64 architecture).
