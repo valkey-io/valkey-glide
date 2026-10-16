@@ -4,7 +4,7 @@
  * Isolated Execution Scope for Node.js.
  *
  * Commands go through glide-core's scope module via N-API:
- * - `scopeTryAcquire` → `glide_core::scope::try_acquire_scope`
+ * - `scopeAcquire` → `glide_core::scope::acquire_scope_with_watchdog`
  * - `scopeExecute` → `glide_core::scope::execute_scope_command`
  * - `scopeRelease` → `glide_core::scope::release_scope`
  *
@@ -12,14 +12,11 @@
  * timeout, and zero-cost release — identical to Java/Python/Go.
  */
 
-import {
-    scopeExecute,
-    scopeNextAttemptToken,
-    scopeRelease,
-} from "../build-ts/native";
+import { scopeExecute, scopeRelease } from "../build-ts/native";
 import type { GlideString } from "./BaseClient";
 import type { BaseClient } from "./BaseClient";
-import { tryAcquireScope } from "./ScopeInternal.js";
+import { ConnectionError, RequestError, TimeoutError } from "./Errors";
+import { acquireScope } from "./ScopeInternal.js";
 
 // ─── Wire Format Serialization ───────────────────────────────────────────────
 
@@ -102,6 +99,41 @@ function slotForKey(key: Buffer): number {
     return crc % 16384;
 }
 
+// ─── Acquire Errors ──────────────────────────────────────────────────────────
+
+/**
+ * The native `scopeAcquire` rejection carries the core's `RequestErrorType`
+ * name as a `Name: ` prefix on the message (the napi promise path pins the
+ * error's `code` to a napi status, so it cannot carry ours). Strip it and pick
+ * the error class every other command path uses for it.
+ *
+ * Reads `.message` by shape rather than `instanceof Error`: the rejection is
+ * created in the addon's realm, so `instanceof` can be false under test runners
+ * that isolate realms.
+ */
+function toAcquireError(e: unknown): Error {
+    const message =
+        typeof e === "object" && e !== null && "message" in e
+            ? String((e as { message: unknown }).message)
+            : String(e);
+    const sep = message.indexOf(": ");
+
+    if (sep < 0) {
+        return new RequestError(message);
+    }
+
+    const rest = message.slice(sep + 2);
+
+    switch (message.slice(0, sep)) {
+        case "Timeout":
+            return new TimeoutError(rest);
+        case "Disconnect":
+            return new ConnectionError(rest);
+        default:
+            return new RequestError(rest);
+    }
+}
+
 // ─── IsolatedScope ───────────────────────────────────────────────────────────
 
 /**
@@ -143,8 +175,8 @@ export class IsolatedScope {
     /**
      * Acquire an isolated scope for a client.
      *
-     * Uses `glide_core::scope::try_acquire_scope` with exponential backoff.
-     * Creates new scope connections in the background if the pool is empty.
+     * The core owns the wait: it returns once a connection is available, the
+     * timeout passes, or a cause that waiting cannot fix is found.
      *
      * The connection request is taken from the client, whether it was created
      * directly or borrowed from a `ClientPool`.
@@ -153,13 +185,16 @@ export class IsolatedScope {
      *
      * @param client - A GlideClient or GlideClusterClient instance.
      * @param routingKey - In cluster mode, the key whose hash slot determines which node the scope connects to.
-     * @param maxRetries - Maximum retries with backoff. Default: 10.
+     * @param timeoutMs - Maximum time to wait for a scope, in milliseconds. Default: 5000.
      * @returns A new IsolatedScope.
+     * @throws {TimeoutError} if no scope became available within `timeoutMs`.
+     * @throws {ConnectionError} if the client was closed while waiting.
+     * @throws {RequestError} if the client's configuration cannot produce a scoped connection.
      */
     static async acquire(
         client: BaseClient,
         routingKey?: string,
-        maxRetries?: number,
+        timeoutMs?: number,
     ): Promise<IsolatedScope>;
     /**
      * Acquire an isolated scope for a client using an explicit connection request.
@@ -167,20 +202,23 @@ export class IsolatedScope {
      * @param client - A GlideClient or GlideClusterClient instance.
      * @param connectionRequestBytes - Serialized connection request to use for the scope's connection.
      * @param routingKey - In cluster mode, the key whose hash slot determines which node the scope connects to.
-     * @param maxRetries - Maximum retries with backoff. Default: 10.
+     * @param timeoutMs - Maximum time to wait for a scope, in milliseconds. Default: 5000.
      * @returns A new IsolatedScope.
+     * @throws {TimeoutError} if no scope became available within `timeoutMs`.
+     * @throws {ConnectionError} if the client was closed while waiting.
+     * @throws {RequestError} if the client's configuration cannot produce a scoped connection.
      */
     static async acquire(
         client: BaseClient,
         connectionRequestBytes: Uint8Array,
         routingKey?: string,
-        maxRetries?: number,
+        timeoutMs?: number,
     ): Promise<IsolatedScope>;
     static async acquire(
         client: BaseClient,
         bytesOrRoutingKey?: Uint8Array | string,
-        routingKeyOrMaxRetries?: string | number,
-        maxRetries = 10,
+        routingKeyOrTimeoutMs?: string | number,
+        timeoutMs = 5000,
     ): Promise<IsolatedScope> {
         // Normalize the overloaded arguments. When the second argument is a
         // Uint8Array it is an explicit connection request; otherwise it is the
@@ -189,15 +227,15 @@ export class IsolatedScope {
         let routingKey: string | undefined;
 
         if (bytesOrRoutingKey instanceof Uint8Array) {
-            // acquire(client, bytes, routingKey?, maxRetries?)
+            // acquire(client, bytes, routingKey?, timeoutMs?)
             explicitBytes = bytesOrRoutingKey;
-            routingKey = routingKeyOrMaxRetries as string | undefined;
+            routingKey = routingKeyOrTimeoutMs as string | undefined;
         } else {
-            // acquire(client, routingKey?, maxRetries?)
+            // acquire(client, routingKey?, timeoutMs?)
             routingKey = bytesOrRoutingKey;
 
-            if (typeof routingKeyOrMaxRetries === "number") {
-                maxRetries = routingKeyOrMaxRetries;
+            if (typeof routingKeyOrTimeoutMs === "number") {
+                timeoutMs = routingKeyOrTimeoutMs;
             }
         }
 
@@ -218,36 +256,26 @@ export class IsolatedScope {
         const routingSlot =
             routingKey !== undefined ? slotForKey(Buffer.from(routingKey)) : 0;
 
-        let backoffMs = 10;
+        // The native parameter is a u32; napi truncates, so a negative value
+        // would wait ~49 days. Negative means no wait, as in Go and Java.
+        const clampedTimeoutMs = Math.min(Math.max(0, timeoutMs), 0xffff_ffff);
 
-        // One logical acquire: mint a single attempt token and pass it on every
-        // retry poll, so the core dedupes this acquire's retries to one in-flight
-        // creation while distinct concurrent acquires each dial their own.
-        const attemptToken = scopeNextAttemptToken();
+        let scopeId: number;
 
-        for (let i = 0; i < maxRetries; i++) {
-            const scopeId = tryAcquireScope(
+        try {
+            scopeId = await acquireScope(
                 client,
                 clientId,
                 hasRoutingSlot,
                 routingSlot,
-                attemptToken,
+                clampedTimeoutMs,
                 explicitBytes,
             );
-
-            if (scopeId >= 0) {
-                return new IsolatedScope(scopeId, clientId);
-            }
-
-            // Exponential backoff
-            await new Promise((resolve) => setTimeout(resolve, backoffMs));
-            backoffMs = Math.min(backoffMs * 2, 500);
+        } catch (e) {
+            throw toAcquireError(e);
         }
 
-        throw new Error(
-            "Could not acquire scoped connection after retries. " +
-                "All scope connections may be in use or connection creation failed.",
-        );
+        return new IsolatedScope(scopeId, clientId);
     }
 
     /** Whether this scope has been released. */
