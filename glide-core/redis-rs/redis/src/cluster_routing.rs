@@ -1571,7 +1571,7 @@ mod tests_routing {
     use core::panic;
     use std::sync::{Arc, RwLock};
 
-    /// `BLOB.RDMA_GET <key> <rkey> <remote-address> <length>`, the read half of a RDMA
+    /// `BLOB.RDMA_GET <key> <rkey> <remote-address> <length>`, the read half of an RDMA
     /// transfer.
     fn rdma_get(key: &str) -> crate::Cmd {
         let mut command = cmd("BLOB.RDMA_GET");

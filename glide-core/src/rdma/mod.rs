@@ -158,8 +158,9 @@ impl Regions {
     /// Revoke every region and refuse whatever comes after.
     ///
     /// A region that failed to close stays registered, and a transfer using it
-    /// keeps waiting for its reply; it also stays on the list, so closing again
-    /// tries it again. Otherwise closing again does nothing.
+    /// keeps waiting for its reply. It also stays on the list, so closing again
+    /// reports the failure again; libfabric is never asked to close it twice.
+    /// Otherwise closing again does nothing.
     pub fn close(&self) -> Result<(), redis::RedisError> {
         self.close_with(glide_rdma::RdmaRevoker::revoke)
     }
@@ -676,29 +677,39 @@ mod tests {
             .expect("the close has finished");
     }
 
+    /// A failed close is final in glide-rdma: the region is never closed, and
+    /// every later revoke reports the same failure. So the region stays on the
+    /// list, and each later close asks again and reports the failure again.
     #[cfg(feature = "rdma")]
     #[test]
-    fn a_region_that_failed_to_close_is_tried_again() {
+    fn a_region_that_failed_to_close_stays_on_the_list_and_keeps_failing() {
         let fabric = tcp_fabric();
         let regions = Regions::default();
         let region = regions.register(|| fabric.register(vec![0u8; 64])).unwrap();
-
-        let failed = regions.close_with(|_| {
+        let attempts = std::sync::atomic::AtomicUsize::new(0);
+        let failing_close = |_: &glide_rdma::RdmaRevoker| {
+            attempts.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
             Err(glide_rdma::RdmaError::Fabric {
                 operation: "fi_close",
                 message: "Device or resource busy".to_string(),
                 errno: Some(-16),
             })
-        });
+        };
 
-        assert!(failed.is_err());
-        assert!(!region.is_revoked());
-        assert_eq!(regions.tracked(), 1, "the failed region stays on the list");
-
-        regions.close().expect("the second close revokes it");
-
-        assert!(region.is_revoked());
-        assert_eq!(regions.tracked(), 0);
+        for close in ["first", "second"] {
+            let failed = regions.close_with(failing_close);
+            assert!(failed.is_err(), "the {close} close reports the failure");
+            assert!(
+                !region.is_revoked(),
+                "the server may still reach the memory"
+            );
+            assert_eq!(regions.tracked(), 1, "the failed region stays on the list");
+        }
+        assert_eq!(
+            attempts.load(std::sync::atomic::Ordering::SeqCst),
+            2,
+            "each close asks the region again"
+        );
     }
 
     #[cfg(feature = "rdma")]

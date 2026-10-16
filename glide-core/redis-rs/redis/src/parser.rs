@@ -934,7 +934,12 @@ mod tests {
 
     #[test]
     fn only_errors_parsed_from_a_reply_are_server_replies() {
-        for reply in [b"-ERR boom\r\n".as_slice(), b"-READONLY replica\r\n", b"-LO_FULL pool\r\n"] {
+        for reply in [
+            b"-ERR boom\r\n".as_slice(),
+            b"-READONLY replica\r\n",
+            // A code this client does not know, so it parses as an extension error.
+            b"-OOM command not allowed when used memory > 'maxmemory'.\r\n",
+        ] {
             let error = parse_redis_value(reply)
                 .unwrap()
                 .extract_error()

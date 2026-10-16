@@ -1025,9 +1025,8 @@ impl RedisError {
     pub fn is_server_reply(&self) -> bool {
         match self.repr {
             ErrorRepr::ExtensionError(_, _) => true,
-            ErrorRepr::WithDescription(_, desc) | ErrorRepr::WithDescriptionAndDetail(_, desc, _) => {
-                desc == SERVER_ERROR_DESCRIPTION
-            }
+            ErrorRepr::WithDescription(_, desc)
+            | ErrorRepr::WithDescriptionAndDetail(_, desc, _) => desc == SERVER_ERROR_DESCRIPTION,
             ErrorRepr::IoError(_) => false,
         }
     }

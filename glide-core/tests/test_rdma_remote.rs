@@ -114,7 +114,13 @@ mod remote_dma_tests {
 
         succeeded(
             client
-                .rdma_set(key.as_bytes(), source, 0, VALUE_BYTES)
+                .rdma_set(
+                    key.as_bytes(),
+                    source,
+                    0,
+                    VALUE_BYTES,
+                    glide_rdma::SetChecksum::Skip,
+                )
                 .await,
             "BLOB.RDMA_SET",
         );
@@ -173,6 +179,7 @@ mod remote_dma_tests {
                         source,
                         offset,
                         SLOT_BYTES,
+                        glide_rdma::SetChecksum::Skip,
                     )
                     .await,
                 format!("BLOB.RDMA_SET of slot {slot}"),
@@ -238,7 +245,15 @@ mod remote_dma_tests {
         for round in 1..=ROUNDS {
             source.as_host_mut().fill(round);
             source = succeeded(
-                client.rdma_set(key.as_bytes(), source, 0, BYTES).await,
+                client
+                    .rdma_set(
+                        key.as_bytes(),
+                        source,
+                        0,
+                        BYTES,
+                        glide_rdma::SetChecksum::Skip,
+                    )
+                    .await,
                 format!("BLOB.RDMA_SET in round {round}"),
             )
             .0;
@@ -274,10 +289,11 @@ mod remote_dma_tests {
         assert!(receipt.is_none(), "a missing key must transfer nothing");
     }
 
-    /// A value larger than the window is the server's to refuse. Whatever it does,
-    /// the client must end up
-    /// in one of two safe states: the buffer back and usable after a reply, or the
-    /// buffer revoked. This test records which one this server produces.
+    /// The server refuses a value larger than the window with an error reply,
+    /// before it writes anything. A reply means the server is done with the
+    /// memory, so the buffer comes back unrevoked and untouched, and it works for
+    /// the next transfer. Checked with the window both inside a larger region and
+    /// filling its region.
     #[tokio::test]
     #[serial_test::serial]
     #[ignore = "needs a server serving the BLOB.* commands"]
@@ -292,7 +308,15 @@ mod remote_dma_tests {
             .expect("registering the source region");
         source.as_host_mut().fill(7);
         succeeded(
-            client.rdma_set(key.as_bytes(), source, 0, VALUE).await,
+            client
+                .rdma_set(
+                    key.as_bytes(),
+                    source,
+                    0,
+                    VALUE,
+                    glide_rdma::SetChecksum::Skip,
+                )
+                .await,
             "BLOB.RDMA_SET",
         );
 
@@ -306,21 +330,26 @@ mod remote_dma_tests {
             let (buffer, result) = client
                 .rdma_get(key.as_bytes(), destination, 0, WINDOW)
                 .await;
-            let buffer = buffer.expect("the buffer comes back either way");
-            println!(
-                "window {label}: result {result:?}, buffer revoked: {}",
-                buffer.is_revoked()
-            );
             let error = result.expect_err("the value does not fit the window");
-            if !buffer.is_revoked() {
-                // Handed back after a reply, so it must work for the next transfer.
-                let absent = format!("{key}-absent");
-                succeeded(
-                    client.rdma_get(absent.as_bytes(), buffer, 0, WINDOW).await,
-                    format!("reusing the buffer after {error}"),
-                );
-            }
+            assert!(error.is_server_reply(), "{label}: {error}");
+            let buffer =
+                buffer.unwrap_or_else(|| panic!("{label}: an error reply hands the buffer back"));
+            assert!(
+                !buffer.is_revoked(),
+                "{label}: an error reply keeps the region"
+            );
+            assert!(
+                buffer.as_host().iter().all(|&byte| byte == 0),
+                "{label}: the server refused before writing"
+            );
+
+            let absent = format!("{key}-absent");
+            succeeded(
+                client.rdma_get(absent.as_bytes(), buffer, 0, WINDOW).await,
+                format!("{label}: reusing the buffer after {error}"),
+            );
         }
+        run(&mut client, &["DEL", &key]).await;
     }
 
     /// A client without RDMA, for arranging the server around a transfer.
@@ -399,7 +428,7 @@ mod remote_dma_tests {
         assert!(is_cancellation(&error), "{error}");
         assert!(
             buffer.is_none(),
-            "a recalled loan's memory is parked until the fabric closes"
+            "a transfer that ends without a reply hands back no buffer"
         );
     }
 
@@ -421,7 +450,15 @@ mod remote_dma_tests {
             .expect("registering the source region");
         source.as_host_mut().fill(0x5A);
         succeeded(
-            writer.rdma_set(key.as_bytes(), source, 0, 4096).await,
+            writer
+                .rdma_set(
+                    key.as_bytes(),
+                    source,
+                    0,
+                    4096,
+                    glide_rdma::SetChecksum::Skip,
+                )
+                .await,
             "BLOB.RDMA_SET",
         );
 
@@ -555,7 +592,13 @@ mod remote_dma_tests {
         source.copy_from(&changed).expect("staging the value");
         succeeded(
             client
-                .rdma_set(key.as_bytes(), source, 0, VALUE_BYTES)
+                .rdma_set(
+                    key.as_bytes(),
+                    source,
+                    0,
+                    VALUE_BYTES,
+                    glide_rdma::SetChecksum::Skip,
+                )
                 .await,
             "BLOB.RDMA_SET",
         );
@@ -563,7 +606,7 @@ mod remote_dma_tests {
         run(&mut client, &["DEL", &key]).await;
     }
 
-    // ─── CRC prototype (module #131) ─────────────────────────────────────────
+    // ─── Checksums on BLOB.RDMA_SET ───────────────────────────────────────────
 
     use glide_rdma::SetChecksum;
 
@@ -590,7 +633,7 @@ mod remote_dma_tests {
             .register_rdma_region(memory)
             .expect("registering the source region");
         client
-            .rdma_set_with_checksum(key.as_bytes(), source, offset, value.len(), checksum)
+            .rdma_set(key.as_bytes(), source, offset, value.len(), checksum)
             .await
     }
 
@@ -670,7 +713,6 @@ mod remote_dma_tests {
         let (buffer, result) =
             set_with(&mut client, &key, &value, 0, SetChecksum::Known(wrong)).await;
         let error = result.expect_err("a wrong CRC must be refused");
-        println!("mismatch error: kind={:?} text={error}", error.kind());
         assert!(
             error.to_string().contains("CRC mismatch after transfer"),
             "{error}"
@@ -681,7 +723,7 @@ mod remote_dma_tests {
 
         // The returned buffer still works: retry with the right CRC.
         let (_, result) = client
-            .rdma_set_with_checksum(
+            .rdma_set(
                 key.as_bytes(),
                 buffer,
                 0,
@@ -726,7 +768,7 @@ mod remote_dma_tests {
         run(&mut client, &["DEL", &key]).await;
     }
 
-    // ─── Closer: regions closed off the dropping thread ──────────────────────
+    // ─── Regions closed off the dropping thread ──────────────────────────────
 
     /// The common case and its opposite on one client: transfer through regions
     /// registered and dropped over and over, some transfers abandoned by a
@@ -745,7 +787,13 @@ mod remote_dma_tests {
         source.copy_from(&value).unwrap();
         let (source, ()) = succeeded(
             client
-                .rdma_set(key.as_bytes(), source, 0, VALUE_BYTES)
+                .rdma_set(
+                    key.as_bytes(),
+                    source,
+                    0,
+                    VALUE_BYTES,
+                    glide_rdma::SetChecksum::Skip,
+                )
                 .await,
             "BLOB.RDMA_SET",
         );
@@ -810,22 +858,22 @@ mod remote_dma_tests {
 
         assert_eq!(client.rdma_leaked_bytes().unwrap(), 0, "nothing leaked");
         let parked = client.rdma_parked_bytes().unwrap();
-        println!("churn: parked bytes {parked}");
         if matches!(provider(), Provider::EfaDirect) {
             assert_eq!(parked, 0, "efa-direct frees once the region closes");
         }
         run(&mut client, &["DEL", &key]).await;
     }
 
-    /// The review's opening point: when a `BLOB.RDMA_GET` times out, its region is
-    /// closed, and on efa a large region's close takes milliseconds. Closed on the
-    /// dropping thread, that would stall every other task on it. `#[tokio::test]`
-    /// runs on one thread, like the bindings' default runtime, so a ticker task
-    /// beside the transfers sees any stall as a gap between its ticks.
+    /// When a `BLOB.RDMA_GET` times out, its region is closed, and on efa a large
+    /// region's close takes milliseconds. Closed on the dropping thread, that
+    /// would stall every other task on it. `#[tokio::test]` runs on one thread,
+    /// like the bindings' default runtime, so a ticker task beside the transfers
+    /// sees any stall as a gap between its ticks.
     ///
     /// A `CLIENT PAUSE` holds each transfer at the server so it is sure to time
-    /// out. Four timing out together on one client is the review's amplifier:
-    /// closed inline, their closes would also queue on the fabric's endpoint lock.
+    /// out. Four time out together on one client, the worst case: closed on the
+    /// dropping thread, their closes would also wait on each other for the
+    /// fabric's endpoint lock.
     #[tokio::test]
     #[serial_test::serial]
     #[ignore = "needs a server serving the BLOB.* commands"]
@@ -840,7 +888,15 @@ mod remote_dma_tests {
             .expect("registering the source region");
         source.as_host_mut().fill(0x5A);
         let (source, ()) = succeeded(
-            client.rdma_set(key.as_bytes(), source, 0, 4096).await,
+            client
+                .rdma_set(
+                    key.as_bytes(),
+                    source,
+                    0,
+                    4096,
+                    glide_rdma::SetChecksum::Skip,
+                )
+                .await,
             "BLOB.RDMA_SET",
         );
         drop(source);

@@ -296,9 +296,8 @@ mod dma_tests {
     /// test's region starts with.
     const READ_REPLY: &str = "*2\r\n:8\r\n:2351477386\r\n";
 
-    /// A refusal from a node that will not take writes. Earlier module builds
-    /// registered the handshake as a write command, so every replica answered it
-    /// this way; the current one accepts it, but a node can still refuse.
+    /// A refusal from a node that will not take writes, which a node may send in
+    /// answer to the handshake.
     const READONLY: &str = "-READONLY You can't write against a read only replica.\r\n";
 
     #[tokio::test]
@@ -486,10 +485,12 @@ mod dma_tests {
             closer.close_rdma()
         });
 
-        let (buffer, outcome) =
-            tokio::time::timeout(STUCK + PROMPTLY, client.rdma_set(b"key", buffer, 0, 4096))
-                .await
-                .expect("closing the client ends the wait");
+        let (buffer, outcome) = tokio::time::timeout(
+            STUCK + PROMPTLY,
+            client.rdma_set(b"key", buffer, 0, 4096, glide_rdma::SetChecksum::Skip),
+        )
+        .await
+        .expect("closing the client ends the wait");
         assert!(
             buffer.is_none(),
             "a recalled loan's memory is parked until the fabric closes"
@@ -634,11 +635,10 @@ mod dma_tests {
 
     /// The promotion case, which is why a refusal cannot be remembered.
     ///
-    /// A node refuses the handshake, as a replica did on module builds that
-    /// treated it as a write. The connection built against it stays perfectly
-    /// usable, and once the node will take it, for example after a promotion, the
-    /// next transfer has to ask again on the same connection rather than having
-    /// written the node off.
+    /// A node refuses the handshake, for example a replica that will not take
+    /// writes. The connection built against it stays usable, and once the node
+    /// will take it, for example after a promotion, the next transfer has to ask
+    /// again on the same connection rather than having written the node off.
     #[tokio::test]
     async fn a_refused_handshake_is_tried_again_by_the_next_transfer() {
         let (_peer, hello) = hello_reply();

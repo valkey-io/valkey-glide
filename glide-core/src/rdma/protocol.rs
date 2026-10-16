@@ -84,7 +84,7 @@ pub fn parse_hello(reply: Value) -> Result<Handshake, RedisError> {
     Ok(Handshake { peers })
 }
 
-/// Translate a RDMA failure into the error type the rest of GLIDE carries.
+/// Translate an RDMA failure into the error type the rest of GLIDE carries.
 pub fn as_redis_error(error: RdmaError) -> RedisError {
     use redis::ErrorKind;
     let kind = match &error {

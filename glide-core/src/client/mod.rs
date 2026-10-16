@@ -643,7 +643,7 @@ pub fn is_blocking_command_name(name: &[u8], args: &[Vec<u8>]) -> bool {
     match upper.as_slice() {
         b"BLPOP" | b"BRPOP" | b"BLMOVE" | b"BZPOPMAX" | b"BZPOPMIN" | b"BRPOPLPUSH" | b"BLMPOP"
         | b"BZMPOP" | b"WAIT" | b"WAITAOF" => true,
-        // A RDMA transfer is treated as blocking mainly so the client does not
+        // An RDMA transfer is treated as blocking mainly so the client does not
         // abandon it while it is in flight and leave the registered memory in
         // an undefined state.
         b"BLOB.RDMA_GET" | b"BLOB.RDMA_SET" => true,
@@ -672,7 +672,7 @@ fn get_request_timeout(cmd: &Cmd, default_timeout: Duration) -> RedisResult<Opti
             };
             get_timeout_from_cmd_arg(cmd, idx, TimeUnit::Milliseconds)
         }
-        // A RDMA transfer should not have a timeout.
+        // An RDMA transfer should not have a timeout.
         //
         // Timing out will abandon the request and ignore the reply which isn't
         // safe because the server may still be writing into the caller's
@@ -2964,8 +2964,13 @@ fn circuit_breaker_open() -> RedisError {
 
 /// What an RDMA transfer hands back: the buffer, and how the transfer went.
 ///
-/// The buffer is `None` only when a transfer was abandoned and its region could
-/// not be closed, so the memory had to be leaked.
+/// The buffer comes back whenever the server is known to be done with it: it
+/// replied, or the transfer failed before its command was sent. It is `None`
+/// when the transfer ended without a reply, for example because it was
+/// cancelled or its connection failed. Its region is then closed, and its
+/// memory is freed, held until the fabric closes, or kept for good if the
+/// close failed; see [`Client::rdma_parked_bytes`] and
+/// [`Client::rdma_leaked_bytes`].
 #[cfg(feature = "rdma")]
 pub type RdmaOutcome<T> = (Option<glide_rdma::RdmaBuffer>, Result<T, redis::RedisError>);
 
@@ -3001,8 +3006,9 @@ fn recall_rdma_loan(
 ) -> RdmaOutcome<Option<glide_rdma::ReadReceipt>> {
     match loan.recall() {
         Ok(()) => (None, Err(error)),
-        // The server may still reach the memory. Dropping the loan tries to close
-        // the region once more, and leaks the memory if that fails too.
+        // The region failed to close, so the server may still reach the memory.
+        // Dropping the loan keeps that memory for the life of the process and
+        // counts it as leaked; the close is never tried again.
         Err((_loan, _)) => (None, Err(error)),
     }
 }
@@ -3427,18 +3433,15 @@ impl Client {
     /// registered memory.
     ///
     /// The buffer is lent to the server for the transfer and handed back with
-    /// the result. The buffer is `None` only when the transfer was abandoned and
-    /// its region could not be closed; the memory is then leaked, because the
-    /// server may still reach it.
+    /// the result once the server is known to be done with it; see
+    /// [`RdmaOutcome`].
     ///
     /// `Ok(None)` means the key does not exist. `Ok(Some(receipt))` means the
     /// bytes are already in the window by the time this returns.
     ///
-    /// Any error other than a reply the server sent revokes the buffer, because
-    /// the server may not be done with the memory. A revoked buffer cannot be
-    /// used for another transfer; register the memory again.
-    ///
-    /// TODO: add `length` parameter
+    /// Any error other than a reply the server sent means the server may not be
+    /// done with the memory, so the region is closed and no buffer comes back.
+    /// Register the memory again for the next transfer.
     #[cfg(feature = "rdma")]
     pub async fn rdma_get(
         &mut self,
@@ -3478,22 +3481,13 @@ impl Client {
     /// Store a value the server reads directly out of the `[offset, offset + length)`
     /// window of registered memory.
     ///
+    /// `checksum` decides whether the server checks the bytes it read against a
+    /// CRC-32c before storing them, refusing them if they differ; see
+    /// [`glide_rdma::SetChecksum`].
+    ///
     /// Hands the buffer back as [`Self::rdma_get`] does.
     #[cfg(feature = "rdma")]
     pub async fn rdma_set(
-        &mut self,
-        key: &[u8],
-        buffer: glide_rdma::RdmaBuffer,
-        offset: usize,
-        length: usize,
-    ) -> RdmaOutcome<()> {
-        self.rdma_set_with_checksum(key, buffer, offset, length, glide_rdma::SetChecksum::Skip)
-            .await
-    }
-
-    /// E2E scaffolding for the CRC prototype: [`Self::rdma_set`] with a checksum choice.
-    #[cfg(feature = "rdma")]
-    pub async fn rdma_set_with_checksum(
         &mut self,
         key: &[u8],
         buffer: glide_rdma::RdmaBuffer,
