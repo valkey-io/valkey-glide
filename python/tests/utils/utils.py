@@ -412,29 +412,45 @@ def sync_low_busy_reply_threshold(client: TSyncGlideClient) -> Iterator[None]:
 
 
 async def wait_for_server_blocked(probe: TGlideClient) -> None:
-    """``probe`` needs a request timeout well under the server's block duration."""
+    """``probe`` needs a request timeout well under the server's block duration.
 
-    async def ping_times_out() -> bool:
+    Two consecutive timeouts are required so one slow reply from a server that
+    is merely loaded is not mistaken for the block.
+    """
+    consecutive_timeouts = 0
+
+    async def ping_times_out_twice() -> bool:
+        nonlocal consecutive_timeouts
         try:
             await probe.ping()
         except GlideTimeoutError:
-            return True
+            consecutive_timeouts += 1
+            return consecutive_timeouts >= 2
+        consecutive_timeouts = 0
         return False
 
-    await wait_for(ping_times_out, "server never stopped answering PING")
+    await wait_for(ping_times_out_twice, "server never stopped answering PING")
 
 
 def sync_wait_for_server_blocked(probe: TSyncGlideClient) -> None:
-    """``probe`` needs a request timeout well under the server's block duration."""
+    """``probe`` needs a request timeout well under the server's block duration.
 
-    def ping_times_out() -> bool:
+    Two consecutive timeouts are required so one slow reply from a server that
+    is merely loaded is not mistaken for the block.
+    """
+    consecutive_timeouts = 0
+
+    def ping_times_out_twice() -> bool:
+        nonlocal consecutive_timeouts
         try:
             probe.ping()
         except GlideTimeoutError:
-            return True
+            consecutive_timeouts += 1
+            return consecutive_timeouts >= 2
+        consecutive_timeouts = 0
         return False
 
-    sync_wait_for(ping_times_out, "server never stopped answering PING")
+    sync_wait_for(ping_times_out_twice, "server never stopped answering PING")
 
 
 async def wait_for_save_not_in_progress(client: TGlideClient) -> None:
