@@ -945,40 +945,45 @@ impl RequestType {
     }
 
     /// Returns the command name as a string, if available.
+    ///
+    /// Note: this only contains the commands relevant to compression (see
+    /// `from_command_name` and `compression_incompatibility_reason`), not every
+    /// `RequestType` variant. Entries below `InvalidRequest`/`CustomCommand` are
+    /// ordered alphabetically by command name.
     pub fn command_name(self) -> Option<&'static str> {
         match self {
             RequestType::InvalidRequest => None,
             RequestType::CustomCommand => Some("CUSTOM"),
-            RequestType::Get => Some("GET"),
-            RequestType::Set => Some("SET"),
             RequestType::Append => Some("APPEND"),
-            RequestType::DelIfEq => Some("DELIFEQ"),
-            RequestType::GetRange => Some("GETRANGE"),
-            RequestType::SetRange => Some("SETRANGE"),
-            RequestType::Strlen => Some("STRLEN"),
-            RequestType::LCS => Some("LCS"),
-            RequestType::Substr => Some("SUBSTR"),
-            RequestType::Incr => Some("INCR"),
-            RequestType::IncrBy => Some("INCRBY"),
-            RequestType::IncrByFloat => Some("INCRBYFLOAT"),
-            RequestType::Decr => Some("DECR"),
-            RequestType::DecrBy => Some("DECRBY"),
-            RequestType::GetBit => Some("GETBIT"),
-            RequestType::SetBit => Some("SETBIT"),
             RequestType::BitCount => Some("BITCOUNT"),
-            RequestType::BitPos => Some("BITPOS"),
             RequestType::BitField => Some("BITFIELD"),
             RequestType::BitFieldReadOnly => Some("BITFIELD_RO"),
             RequestType::BitOp => Some("BITOP"),
+            RequestType::BitPos => Some("BITPOS"),
+            RequestType::Decr => Some("DECR"),
+            RequestType::DecrBy => Some("DECRBY"),
+            RequestType::DelIfEq => Some("DELIFEQ"),
+            RequestType::Get => Some("GET"),
+            RequestType::GetBit => Some("GETBIT"),
+            RequestType::GetDel => Some("GETDEL"),
+            RequestType::GetEx => Some("GETEX"),
+            RequestType::GetRange => Some("GETRANGE"),
+            RequestType::GetSet => Some("GETSET"),
+            RequestType::Incr => Some("INCR"),
+            RequestType::IncrBy => Some("INCRBY"),
+            RequestType::IncrByFloat => Some("INCRBYFLOAT"),
+            RequestType::LCS => Some("LCS"),
             RequestType::MGet => Some("MGET"),
             RequestType::MSet => Some("MSET"),
             RequestType::MSetNX => Some("MSETNX"),
-            RequestType::SetEx => Some("SETEX"),
             RequestType::PSetEx => Some("PSETEX"),
+            RequestType::Set => Some("SET"),
+            RequestType::SetBit => Some("SETBIT"),
+            RequestType::SetEx => Some("SETEX"),
             RequestType::SetNX => Some("SETNX"),
-            RequestType::GetEx => Some("GETEX"),
-            RequestType::GetDel => Some("GETDEL"),
-            RequestType::GetSet => Some("GETSET"),
+            RequestType::SetRange => Some("SETRANGE"),
+            RequestType::Strlen => Some("STRLEN"),
+            RequestType::Substr => Some("SUBSTR"),
             _ => None, // For other commands, return None
         }
     }

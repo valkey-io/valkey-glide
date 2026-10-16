@@ -37,8 +37,8 @@ fn masking_pattern(cmd_name: &str) -> MaskingPattern {
         // -- ShowFirst(1): only key/channel visible --
         // Note: ZADD has optional flags (NX|XX|GT|LT|CH|INCR) before score/member pairs,
         // making it hard to fit a more granular pattern. ShowFirst(1) is the safe choice.
-        "APPEND" | "GETSET" | "LPUSH" | "LPUSHX" | "PFADD" | "PUBLISH" | "RPUSH" | "RPUSHX"
-        | "SADD" | "SET" | "SETNX" | "SPUBLISH" | "XADD" | "ZADD" => {
+        "APPEND" | "DELIFEQ" | "GETSET" | "LPUSH" | "LPUSHX" | "PFADD" | "PUBLISH" | "RPUSH"
+        | "RPUSHX" | "SADD" | "SET" | "SETNX" | "SPUBLISH" | "XADD" | "ZADD" => {
             MaskingPattern::ShowFirst(1)
         }
 
