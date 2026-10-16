@@ -12,6 +12,7 @@ import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleM
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleSingleNodeRoute.RANDOM;
 import static glide.utils.Java8Utils.createMap;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -80,6 +81,26 @@ public class TestUtilities {
     public static final Set<String> BGSAVE_RESPONSES =
             new java.util.HashSet<>(
                     Arrays.asList("Background saving started", "Background saving scheduled"));
+
+    /** One field from each default INFO section. */
+    public static final List<String> INFO_DEFAULT_FIELDS =
+            Arrays.asList(
+                    "redis_version", // server
+                    "connected_clients", // clients
+                    "used_memory", // memory
+                    "rdb_changes_since_last_save", // persistence
+                    "total_commands_processed", // stats
+                    "role", // replication
+                    "used_cpu_sys", // cpu
+                    "cluster_enabled"); // cluster
+
+    /**
+     * Expected server responses for the "rdb_*_bgsave_type" INFO persistence fields.
+     *
+     * <p>Since Valkey 9.2.0.
+     */
+    public static final Set<String> BGSAVE_TYPES =
+            new java.util.HashSet<>(Arrays.asList("fork", "forkless", "none"));
 
     /** Expected server error response for BGSAVE CANCEL when no save is in progress. */
     public static final String BGSAVE_NOT_CANCELLED_RESPONSE =
@@ -218,11 +239,31 @@ public class TestUtilities {
     }
 
     /**
-     * Transforms server info string into a Map, using lines with ":" to create key-value pairs,
-     * replacing duplicates with the last encountered value.
+     * Returns the fields and values from the given INFO sections.
+     *
+     * <p>For cluster clients, the command is sent to a random node.
+     *
+     * @param client A client that is connected to the server.
+     * @param sections The INFO sections to request. Defaults to the default sections.
+     * @return A map from each INFO field name to its value.
      */
-    public static Map<String, String> parseInfoResponseToMap(String serverInfo) {
-        return Arrays.stream(serverInfo.split("\n"))
+    @SneakyThrows
+    public static Map<String, String> getInfo(BaseClient client, Section... sections) {
+        String info =
+                client instanceof GlideClusterClient
+                        ? ((GlideClusterClient) client).info(sections, RANDOM).get().getSingleValue()
+                        : ((GlideClient) client).info(sections).get();
+        return parseInfo(info);
+    }
+
+    /**
+     * Parses INFO output from a single node into its fields and values.
+     *
+     * @param info The INFO output from a single node.
+     * @return A map from each INFO field name to its value.
+     */
+    public static Map<String, String> parseInfo(String info) {
+        return Arrays.stream(info.split("\n"))
                 .filter(line -> line.contains(":"))
                 .map(line -> line.split(":", 2))
                 .collect(
@@ -231,6 +272,18 @@ public class TestUtilities {
                                 parts -> parts[1].trim(),
                                 (existingValue, newValue) -> newValue,
                                 LinkedHashMap::new));
+    }
+
+    /**
+     * Asserts that value is an integer and returns it.
+     *
+     * @param value The value to parse.
+     * @param name The name that identifies the value in the failure message.
+     * @return The integer value.
+     */
+    public static long parseLong(String value, String name) {
+        return assertDoesNotThrow(
+                () -> Long.parseLong(value), name + " is not an integer: \"" + value + "\"");
     }
 
     // copied from glide.utils.ArrayTransformUtils.concatenateArrays, because it is not exported
@@ -667,14 +720,7 @@ public class TestUtilities {
      */
     @SneakyThrows
     public static String getServerVersion(@NonNull final BaseClient client) {
-        String infoResponse =
-                client instanceof GlideClient
-                        ? ((GlideClient) client).info(new Section[] {Section.SERVER}).get()
-                        : ((GlideClusterClient) client)
-                                .info(new Section[] {Section.SERVER}, RANDOM)
-                                .get()
-                                .getSingleValue();
-        Map<String, String> infoResponseMap = parseInfoResponseToMap(infoResponse);
+        Map<String, String> infoResponseMap = getInfo(client, Section.SERVER);
         if (infoResponseMap.containsKey(VALKEY_VERSION_KEY)) {
             return infoResponseMap.get(VALKEY_VERSION_KEY);
         } else if (infoResponseMap.containsKey(REDIS_VERSION_KEY)) {

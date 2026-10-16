@@ -219,3 +219,25 @@ func assertClientTrackingInfo(t *testing.T, info models.ClientTrackingInfo, on b
 		assert.Empty(t, info.Prefixes)
 	}
 }
+
+// parseInfoResponse parses INFO output into a map of field names to values.
+func parseInfoResponse(info string) map[string]string {
+	fields := make(map[string]string)
+	for _, line := range strings.Split(info, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		if key, value, found := strings.Cut(line, ":"); found {
+			fields[key] = value
+		}
+	}
+	return fields
+}
+
+// AssertInt asserts that value is an integer and returns it.
+func AssertInt(t *testing.T, value string, name string) int64 {
+	result, err := strconv.ParseInt(value, 10, 64)
+	assert.NoError(t, err, "%s is not an integer: %q", name, value)
+	return result
+}

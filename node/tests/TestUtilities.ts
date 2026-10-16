@@ -47,6 +47,7 @@ import {
     TimeUnit,
     UnsignedEncoding,
     convertRecordToGlideRecord,
+    parseInfoResponse,
 } from "../build-ts";
 const execAsync = promisify(exec);
 
@@ -530,6 +531,25 @@ export async function waitForSaveNotInProgress(
         );
     }, "Timed out waiting for save to complete");
 }
+
+/** One field from each default INFO section. */
+export const INFO_DEFAULT_FIELDS = [
+    "redis_version", // server
+    "connected_clients", // clients
+    "used_memory", // memory
+    "rdb_changes_since_last_save", // persistence
+    "total_commands_processed", // stats
+    "role", // replication
+    "used_cpu_sys", // cpu
+    "cluster_enabled", // cluster
+];
+
+/**
+ * Expected server responses for the "rdb_*_bgsave_type" INFO persistence fields.
+ *
+ * @remarks Since Valkey version 9.2.0.
+ */
+export const BGSAVE_TYPES = ["fork", "forkless", "none"];
 
 /** Route to a single primary node. */
 export const PRIMARY_SLOT_ROUTE_OPTION = {
@@ -2780,4 +2800,42 @@ export function assertMemoryStatsFields(
         expect(stats.overheadDbHashtableLut).toBeUndefined();
         expect(stats.overheadDbHashtableRehashing).toBeUndefined();
     }
+}
+
+/**
+ * Returns the fields and values from the given INFO sections.
+ * For cluster clients, the command is sent to a random node.
+ *
+ * @param client - A client that is connected to the server.
+ * @param sections - The INFO sections to request. Defaults to the default sections.
+ * @returns A record mapping each INFO field name to its value.
+ */
+export async function getInfo(
+    client: BaseClient,
+    sections?: InfoOptions[],
+): Promise<Record<string, string>> {
+    const info =
+        client instanceof GlideClusterClient
+            ? await client.info({ sections, route: "randomNode" })
+            : await (client as GlideClient).info(sections);
+
+    // TODO #7368: Inline `parseInfoResponse` here when it is removed.
+    return parseInfoResponse(info.toString());
+}
+
+/**
+ * Asserts that value is an integer and returns it.
+ *
+ * @param value - The value to parse.
+ * @param name - The name that identifies the value in the failure message.
+ * @returns The integer value.
+ */
+export function parseInteger(value: string | undefined, name: string): number {
+    const result = Number(value);
+
+    if (!Number.isInteger(result) || String(result) !== value) {
+        throw new Error(`${name} is not an integer: "${value}"`);
+    }
+
+    return result;
 }

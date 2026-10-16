@@ -11,39 +11,45 @@ import glide.api.commands.ServerManagementCommands;
 public final class InfoOptions {
 
     public enum Section {
-        /** SERVER: General information about the server */
-        SERVER,
-        /** CLIENTS: Client connections section */
-        CLIENTS,
-        /** MEMORY: Memory consumption related information */
-        MEMORY,
-        /** PERSISTENCE: RDB and AOF related information */
-        PERSISTENCE,
-        /** STATS: General statistics */
-        STATS,
-        /** REPLICATION: Master/replica replication information */
-        REPLICATION,
-        /** CPU: CPU consumption statistics */
-        CPU,
-        /** COMMANDSTATS: Valkey command statistics */
-        COMMANDSTATS,
-        /** LATENCYSTATS: Valkey command latency percentile distribution statistics */
-        LATENCYSTATS,
-        /** SENTINEL: Valkey Sentinel section (only applicable to Sentinel instances) */
-        SENTINEL,
-        /** CLUSTER: Valkey Cluster section */
-        CLUSTER,
-        /** MODULES: Modules section */
-        MODULES,
-        /** KEYSPACE: Database related statistics */
-        KEYSPACE,
-        /** ERRORSTATS: Valkey error statistics */
-        ERRORSTATS,
         /** ALL: Return all sections (excluding module generated ones) */
         ALL,
+        /** CLIENTS: Client connections section */
+        CLIENTS,
+        /** CLUSTER: Valkey Cluster section */
+        CLUSTER,
+        /**
+         * CLUSTER_INFO: Valkey Cluster information.
+         *
+         * <p>Since Valkey 9.1.0.
+         */
+        CLUSTER_INFO,
+        /** COMMANDSTATS: Valkey command statistics */
+        COMMANDSTATS,
+        /** CPU: CPU consumption statistics */
+        CPU,
         /** DEFAULT: Return only the default set of sections */
         DEFAULT,
+        /** ERRORSTATS: Valkey error statistics */
+        ERRORSTATS,
         /** EVERYTHING: Includes all and modules */
         EVERYTHING,
+        /** KEYSPACE: Database related statistics */
+        KEYSPACE,
+        /** LATENCYSTATS: Valkey command latency percentile distribution statistics */
+        LATENCYSTATS,
+        /** MEMORY: Memory consumption related information */
+        MEMORY,
+        /** MODULES: Modules section */
+        MODULES,
+        /** PERSISTENCE: RDB and AOF related information */
+        PERSISTENCE,
+        /** REPLICATION: Master/replica replication information */
+        REPLICATION,
+        /** SENTINEL: Valkey Sentinel section (only applicable to Sentinel instances) */
+        SENTINEL,
+        /** SERVER: General information about the server */
+        SERVER,
+        /** STATS: General statistics */
+        STATS,
     }
 }
