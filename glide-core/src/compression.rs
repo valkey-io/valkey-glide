@@ -875,6 +875,13 @@ pub fn process_command_args_for_compression(
     }
 
     match request_type {
+        // TODO (#7365): SET's IFEQ option carries a raw comparison-value argument
+        // appended after the value; this only compresses args[1] (the new value),
+        // so the IFEQ comparison runs against mismatched compressed/raw bytes and
+        // silently never matches. Fix by compressing/handling the IFEQ argument too,
+        // or by blocking compression for SET ... IFEQ like DELIFEQ does. Extend to
+        // IFNE (#7237) once implemented, as it would have the opposite failure mode
+        // (always "not equal", silently overwriting the key).
         RequestType::Set => compress_single_value_command(args, manager, 1),
         RequestType::MSet | RequestType::MSetNX => compress_mset_command(args, manager),
         RequestType::SetEx => compress_single_value_command(args, manager, 2),
