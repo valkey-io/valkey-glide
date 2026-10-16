@@ -543,6 +543,7 @@ fn process_command_for_compression(
         "STRLEN" => RequestType::Strlen,
         "LCS" => RequestType::LCS,
         "SUBSTR" => RequestType::Substr,
+        "DELIFEQ" => RequestType::DelIfEq,
         "INCR" => RequestType::Incr,
         "INCRBY" => RequestType::IncrBy,
         "INCRBYFLOAT" => RequestType::IncrByFloat,

@@ -334,20 +334,16 @@ public class SharedCommandTests {
         String value = String.valueOf(UUID.randomUUID());
         String wrongValue = String.valueOf(UUID.randomUUID());
 
-        // key does not exist yet
         assertFalse(client.delifeq(key, value).get());
 
         assertEquals(OK, client.set(key, value).get());
 
-        // value does not match
         assertFalse(client.delifeq(key, wrongValue).get());
         assertEquals(value, client.get(key).get());
 
-        // value matches - key is deleted
         assertTrue(client.delifeq(key, value).get());
         assertNull(client.get(key).get());
 
-        // key holding the wrong kind of value
         String setKey = UUID.randomUUID().toString();
         assertEquals(1, client.sadd(setKey, new String[] {"a"}).get());
         ExecutionException executionException =
@@ -366,16 +362,13 @@ public class SharedCommandTests {
         GlideString value = gs(String.valueOf(UUID.randomUUID()));
         GlideString wrongValue = gs(String.valueOf(UUID.randomUUID()));
 
-        // key does not exist yet
         assertFalse(client.delifeq(key, value).get());
 
         assertEquals(OK, client.set(key, value).get());
 
-        // value does not match
         assertFalse(client.delifeq(key, wrongValue).get());
         assertEquals(value, client.get(key).get());
 
-        // value matches - key is deleted
         assertTrue(client.delifeq(key, value).get());
         assertNull(client.get(key).get());
     }
