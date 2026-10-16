@@ -9205,19 +9205,13 @@ class TestCommands:
             assert "Script killed by user" in str(e)
 
         def wait_and_function_kill():
-            timeout = 0
-            while timeout <= 5:
-                # keep trying to kill until we get an "OK"
+            def kill_succeeded() -> bool:
                 try:
-                    result = glide_sync_client.function_kill()
-                    #  we expect to get success
-                    assert result == "OK"
-                    break
+                    return glide_sync_client.function_kill() == "OK"
                 except RequestError:
-                    # a RequestError may occur if the function is not yet running
-                    # sleep and try again
-                    timeout += 0.1
-                    time.sleep(0.1)
+                    return False
+
+            sync_wait_for(kill_succeeded, "FUNCTION KILL never returned OK")
 
         with sync_low_busy_reply_threshold(glide_sync_client):
             with ThreadPoolExecutor(2) as pool:
@@ -9257,20 +9251,16 @@ class TestCommands:
             test_client.fcall(func_name, keys=[lib_name])
 
         def wait_and_function_kill():
-            timeout = 0
-            foundUnkillable = False
-            while timeout <= 5:
-                # keep trying to kill until we get a unkillable return error
+            def kill_reports_unkillable() -> bool:
                 try:
                     glide_sync_client.function_kill()
                 except RequestError as e:
-                    if "UNKILLABLE" in str(e):
-                        foundUnkillable = True
-                        break
-                timeout += 0.1
-                time.sleep(0.1)
-            # expect an unkillable error
-            assert foundUnkillable
+                    return "UNKILLABLE" in str(e)
+                return False
+
+            sync_wait_for(
+                kill_reports_unkillable, "FUNCTION KILL never reported UNKILLABLE"
+            )
 
         with sync_low_busy_reply_threshold(glide_sync_client):
             with ThreadPoolExecutor(2) as pool:
@@ -11337,9 +11327,7 @@ def script_kill_tests(
         assert "Script killed by user" in str(e)
 
     def wait_and_kill_script():
-        timeout = 0
-        while timeout <= 5:
-            # keep trying to kill until we get an "OK"
+        def kill_succeeded() -> bool:
             try:
                 if route is not None:
                     result = cast(GlideClusterClient, glide_sync_client).script_kill(
@@ -11347,14 +11335,11 @@ def script_kill_tests(
                     )
                 else:
                     result = glide_sync_client.script_kill()
-                #  we expect to get success
-                assert result == "OK"
-                break
             except RequestError:
-                # a RequestError may occur if the script is not yet running
-                # sleep and try again
-                timeout += 0.1
-                time.sleep(0.1)
+                return False
+            return result == "OK"
+
+        sync_wait_for(kill_succeeded, "SCRIPT KILL never returned OK")
 
     # Run the long script and kill it
     with sync_low_busy_reply_threshold(glide_sync_client):

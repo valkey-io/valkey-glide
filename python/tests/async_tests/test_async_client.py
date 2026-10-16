@@ -9094,19 +9094,13 @@ class TestCommands:
             assert "Script killed by user" in str(e)
 
         async def wait_and_function_kill():
-            timeout = 0
-            while timeout <= 5:
-                # keep trying to kill until we get an "OK"
+            async def kill_succeeded() -> bool:
                 try:
-                    result = await glide_client.function_kill()
-                    #  we expect to get success
-                    assert result == "OK"
-                    break
+                    return await glide_client.function_kill() == "OK"
                 except RequestError:
-                    # a RequestError may occur if the function is not yet running
-                    # sleep and try again
-                    timeout += 0.1
-                    await anyio.sleep(0.1)
+                    return False
+
+            await wait_for(kill_succeeded, "FUNCTION KILL never returned OK")
 
         async with low_busy_reply_threshold(glide_client):
             async with anyio.create_task_group() as tg:
@@ -9144,20 +9138,16 @@ class TestCommands:
             await test_client.fcall(func_name, keys=[lib_name])
 
         async def wait_and_function_kill():
-            timeout = 0
-            foundUnkillable = False
-            while timeout <= 5:
-                # keep trying to kill until we get a unkillable return error
+            async def kill_reports_unkillable() -> bool:
                 try:
                     await glide_client.function_kill()
                 except RequestError as e:
-                    if "UNKILLABLE" in str(e):
-                        foundUnkillable = True
-                        break
-                timeout += 0.1
-                await anyio.sleep(0.1)
-            # expect an unkillable error
-            assert foundUnkillable
+                    return "UNKILLABLE" in str(e)
+                return False
+
+            await wait_for(
+                kill_reports_unkillable, "FUNCTION KILL never reported UNKILLABLE"
+            )
 
         async with low_busy_reply_threshold(glide_client):
             async with anyio.create_task_group() as tg:
@@ -11309,9 +11299,7 @@ async def script_kill_tests(
         assert "Script killed by user" in str(e)
 
     async def wait_and_kill_script():
-        timeout = 0
-        while timeout <= 5:
-            # keep trying to kill until we get an "OK"
+        async def kill_succeeded() -> bool:
             try:
                 if route is not None:
                     result = await cast(GlideClusterClient, glide_client).script_kill(
@@ -11319,14 +11307,11 @@ async def script_kill_tests(
                     )
                 else:
                     result = await glide_client.script_kill()
-                #  we expect to get success
-                assert result == "OK"
-                break
             except RequestError:
-                # a RequestError may occur if the script is not yet running
-                # sleep and try again
-                timeout += 0.1
-                await anyio.sleep(0.1)
+                return False
+            return result == "OK"
+
+        await wait_for(kill_succeeded, "SCRIPT KILL never returned OK")
 
     # Run the long script and kill it
     async with low_busy_reply_threshold(glide_client):
