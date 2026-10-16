@@ -204,9 +204,12 @@ jobs:
                   make -k example-test
 
             - uses: ./.github/workflows/test-benchmark
-              if: ${{ matrix.engine.version == '8.0' && matrix.host.OS == 'ubuntu' && matrix.host.RUNNER == 'ubuntu-24.04' && matrix.go == env.BASE_GO_VERSION }}
               with:
                   language-flag: -go
+                  engine-run: ${{ matrix.engine.run }}
+                  target: ${{ matrix.host.TARGET }}
+                  language-version: ${{ matrix.go }}
+                  base-language-version: ${{ env.BASE_GO_VERSION }}
 
             - name: Upload logs and reports
               if: always()

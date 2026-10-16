@@ -110,6 +110,7 @@ env:
     RUN_WITH_MACOS: ${{ (github.event.inputs.run-with-macos) }}
     RUN_SYNC_ONLY: ${{ (github.event.inputs.run_sync_tests == 'true' && github.event.inputs.run_async_tests == 'false') }}
     RUN_ASYNC_ONLY: ${{ (github.event.inputs.run_async_tests == 'true' && github.event.inputs.run_sync_tests == 'false') }}
+    BASE_PYTHON_VERSION: "3.13"
 
 jobs:
     get-matrices:
@@ -257,9 +258,12 @@ jobs:
                   fi
 
             - uses: ./.github/workflows/test-benchmark
-              if: ${{ matrix.engine.version == '8.0' && matrix.host.OS == 'ubuntu' && matrix.host.RUNNER == 'ubuntu-24.04' && matrix.python == '3.13' }}
               with:
                   language-flag: -python
+                  engine-run: ${{ matrix.engine.run }}
+                  target: ${{ matrix.host.TARGET }}
+                  language-version: ${{ matrix.python }}
+                  base-language-version: ${{ env.BASE_PYTHON_VERSION }}
 
             - name: Upload test reports
               if: always()

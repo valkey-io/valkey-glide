@@ -198,6 +198,8 @@ jobs:
             - uses: ./.github/workflows/test-benchmark
               with:
                   language-flag: -rust
+                  engine-run: ${{ matrix.engine.run }}
+                  target: ${{ matrix.host.TARGET }}
 
     lint:
         runs-on: ubuntu-24.04

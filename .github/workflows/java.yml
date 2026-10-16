@@ -85,6 +85,9 @@ run-name:
     # Set custom name if job is started manually and name is given
     ${{ github.event_name == 'workflow_dispatch' && (inputs.name == '' && format('{0} @ {1} {2}', github.ref_name, github.sha, toJson(inputs)) || inputs.name) || '' }}
 
+env:
+    BASE_JAVA_VERSION: "17"
+
 jobs:
     get-matrices:
         runs-on: ubuntu-24.04
@@ -236,9 +239,12 @@ jobs:
                   fi
 
             - uses: ./.github/workflows/test-benchmark
-              if: ${{ matrix.engine.version == '8.0' && matrix.host.RUNNER == 'ubuntu-24.04' && matrix.java == '17' }}
               with:
                   language-flag: -java
+                  engine-run: ${{ matrix.engine.run }}
+                  target: ${{ matrix.host.TARGET }}
+                  language-version: ${{ matrix.java }}
+                  base-language-version: ${{ env.BASE_JAVA_VERSION }}
 
             - name: Upload test & spotbugs reports
               if: always()
