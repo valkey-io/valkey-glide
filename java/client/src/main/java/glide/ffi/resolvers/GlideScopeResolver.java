@@ -7,19 +7,23 @@ public class GlideScopeResolver {
         NativeUtils.loadGlideLib();
     }
 
-    public static native long glideScopeTryAcquire(
+    /**
+     * Acquire a scope, completing the future registered under {@code callbackId} with the scope id as
+     * a {@link Long}, or exceptionally with the error the core classified. The core owns the wait, so
+     * one call covers the whole acquire.
+     *
+     * @param hasRoutingSlot whether {@code routingSlot} is a caller-supplied slot; when false the
+     *     slot is ignored and a cluster scope is left unconstrained (any primary)
+     * @return 0 once queued; -2 if the connection request bytes could not be read, in which case the
+     *     future is never completed by the native side
+     */
+    public static native int glideScopeAcquire(
             long clientId,
             byte[] connectionRequestBytes,
             boolean hasRoutingSlot,
             int routingSlot,
-            long attemptToken);
-
-    /**
-     * Allocate a unique scope-acquire attempt token. Call once per {@code acquire()} and pass it on
-     * every retry poll of {@link #glideScopeTryAcquire}, so the core dedupes a single acquire's
-     * retries to one in-flight creation without serializing distinct concurrent borrowers.
-     */
-    public static native long glideScopeNextAttemptToken();
+            long timeoutMs,
+            long callbackId);
 
     public static native int glideScopeRelease(long scopeId, long clientId);
 
