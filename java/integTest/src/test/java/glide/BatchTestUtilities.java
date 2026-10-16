@@ -499,6 +499,21 @@ public class BatchTestUtilities {
                     .hgetdel(hashKey4, new String[] {field1, field2});
         }
 
+        // HSETEX key-level NX/XX condition (Valkey 9.1.0+)
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("9.1.0")) {
+            String hashKey5 = generateKey("HashKey", isAtomic);
+            HSetExOptions hsetexNxOptions = HSetExOptions.builder().onlyIfKeyDoesNotExist().build();
+            HSetExOptions hsetexXxOptions = HSetExOptions.builder().onlyIfKeyExists().build();
+            batch
+                    // key does not exist yet -> NX succeeds
+                    .hsetex(hashKey5, createMap(field1, value1), hsetexNxOptions)
+                    // key now exists -> second NX call fails (no-op)
+                    .hsetex(hashKey5, createMap(field1, value2), hsetexNxOptions)
+                    // key exists -> XX succeeds
+                    .hsetex(hashKey5, createMap(field1, value2), hsetexXxOptions)
+                    .hget(hashKey5, field1);
+        }
+
         if (SERVER_VERSION.isGreaterThanOrEqualTo("8.0.0")) {
             batch
                     .hscan(hashKey2, "0", HScanOptions.builder().count(20L).noValues(false).build())
@@ -585,6 +600,23 @@ public class BatchTestUtilities {
                             new Object[] {
                                 2L, // hset(hashKey4, createMap(field1, value1, field2, value2))
                                 new Object[] {value1, value2}, // hgetdel(hashKey4, new String[] {field1, field2})
+                            });
+        }
+
+        // Add expected results for HSETEX key-level NX/XX condition (Valkey 9.1.0+)
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("9.1.0")) {
+            result =
+                    concatenateArrays(
+                            result,
+                            new Object[] {
+                                1L, // hsetex(hashKey5, createMap(field1, value1), hsetexNxOptions) - key did not
+                                // exist, NX succeeds
+                                0L, // hsetex(hashKey5, createMap(field1, value2), hsetexNxOptions) - key now
+                                // exists, NX fails (no-op)
+                                1L, // hsetex(hashKey5, createMap(field1, value2), hsetexXxOptions) - key exists,
+                                // XX succeeds
+                                value2, // hget(hashKey5, field1) - updated by the XX call, unaffected by the
+                                // failed NX call
                             });
         }
 

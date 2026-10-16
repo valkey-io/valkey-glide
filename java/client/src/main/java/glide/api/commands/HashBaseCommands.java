@@ -847,6 +847,12 @@ public interface HashBaseCommands {
      *     .expiry(ExpirySet.KeepExisting())
      *     .build();
      * Long updateResult = client.hsetex("existing_hash", Map.of("field1", "newValue"), updateOptions).get();
+     *
+     * // Only run the command if the key already exists
+     * HSetExOptions keyExistsOptions = HSetExOptions.builder()
+     *     .onlyIfKeyExists()
+     *     .build();
+     * Long keyExistsResult = client.hsetex("existing_hash", Map.of("field1", "newValue"), keyExistsOptions).get();
      * }</pre>
      */
     CompletableFuture<Long> hsetex(
@@ -888,6 +894,12 @@ public interface HashBaseCommands {
      *     .expiry(ExpirySet.KeepExisting())
      *     .build();
      * Long updateResult = client.hsetex(gs("existing_hash"), Map.of(gs("field1"), gs("newValue")), updateOptions).get();
+     *
+     * // Only run the command if the key does not already exist
+     * HSetExOptions keyDoesNotExistOptions = HSetExOptions.builder()
+     *     .onlyIfKeyDoesNotExist()
+     *     .build();
+     * Long keyDoesNotExistResult = client.hsetex(gs("new_hash"), Map.of(gs("field1"), gs("value1")), keyDoesNotExistOptions).get();
      * }</pre>
      */
     CompletableFuture<Long> hsetex(
