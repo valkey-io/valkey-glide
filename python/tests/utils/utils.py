@@ -263,6 +263,7 @@ def sync_get_info(
         info = client.info(sections)
     return _parse_info_response(cast(bytes, info))
 
+
 def _parse_info_response(info: Union[str, bytes]) -> Dict[str, str]:
     """
     Parses INFO output into a dictionary of field names to values.
@@ -280,7 +281,8 @@ def _parse_info_response(info: Union[str, bytes]) -> Dict[str, str]:
             key, _, value = line.partition(":")
             info_dict[key] = value
     return info_dict
-    
+
+
 def parse_int(value: Optional[str], name: str) -> int:
     """
     Asserts that value is an integer and returns it.

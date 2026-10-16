@@ -380,6 +380,7 @@ export function runBaseTests(config: {
                 async (client: BaseClient, cluster: ValkeyCluster) => {
                     // Default fields
                     const info = await getInfo(client);
+
                     for (const field of INFO_DEFAULT_FIELDS) {
                         expect(info).toHaveProperty(field);
                     }

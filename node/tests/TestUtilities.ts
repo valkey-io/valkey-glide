@@ -2822,11 +2822,13 @@ export async function getInfo(
 
     for (const line of info.toString().split("\n")) {
         const trimmed = line.trim();
+
         if (trimmed === "" || trimmed.startsWith("#")) {
             continue;
         }
 
         const separator = trimmed.indexOf(":");
+
         if (separator !== -1) {
             fields[trimmed.slice(0, separator)] = trimmed.slice(separator + 1);
         }

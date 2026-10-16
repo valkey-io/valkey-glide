@@ -228,6 +228,7 @@ public class TestUtilities {
 
     /**
      * Returns the fields and values from the given INFO sections.
+     *
      * <p>For cluster clients, the command is sent to a random node.
      *
      * @param client A client that is connected to the server.
