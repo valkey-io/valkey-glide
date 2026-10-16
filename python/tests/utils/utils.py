@@ -290,6 +290,9 @@ def parse_int(value: Optional[str], name: str) -> int:
     Args:
         value: The value to parse.
         name: The name that identifies the value in the failure message.
+
+    Returns:
+        The integer value.
     """
     try:
         return int(cast(str, value))

@@ -258,6 +258,7 @@ public class TestUtilities {
      *
      * @param value The value to parse.
      * @param name The name that identifies the value in the failure message.
+     * @return The integer value.
      */
     public static long parseLong(String value, String name) {
         return assertDoesNotThrow(

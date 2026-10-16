@@ -250,6 +250,7 @@ public class CommandTests {
     public void info_valkey_9_2_fields(GlideClient regularClient) {
         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("9.2.0"), "This feature added in version 9.2");
 
+        // Persistence fields
         Map<String, String> persistence = getInfo(regularClient, PERSISTENCE);
 
         assertTrue(BGSAVE_TYPES.contains(persistence.get("rdb_current_bgsave_type")));

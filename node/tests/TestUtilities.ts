@@ -2842,11 +2842,12 @@ export async function getInfo(
  *
  * @param value - The value to parse.
  * @param name - The name that identifies the value in the failure message.
+ * @returns The integer value.
  */
 export function parseInteger(value: string | undefined, name: string): number {
     const result = Number(value);
 
-    if (value === undefined || !Number.isInteger(result)) {
+    if (!Number.isInteger(result) || String(result) !== value) {
         throw new Error(`${name} is not an integer: "${value}"`);
     }
 

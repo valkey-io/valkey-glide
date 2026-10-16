@@ -442,6 +442,7 @@ func (suite *GlideTestSuite) TestInfoStandalone() {
 
 	// info with option or with multiple options
 	sections := []constants.Section{constants.Cpu}
+	// TODO #5368: Compare versions semantically, not as strings.
 	if suite.serverVersion >= "7.0.0" {
 		sections = append(sections, constants.Memory)
 	}
@@ -454,6 +455,7 @@ func (suite *GlideTestSuite) TestInfoStandalone() {
 	// Valkey 9.2+ fields
 	// ------------------
 
+	// TODO #5368: Compare versions semantically, not as strings.
 	if suite.serverVersion < "9.2.0" {
 		return
 	}
@@ -873,6 +875,7 @@ func (suite *GlideTestSuite) TestLolwutWithOptions_EmptyArgs() {
 func (suite *GlideTestSuite) TestLolwutWithOptions_Version9_TwoParams() {
 	client := suite.defaultClient()
 	// Test LOLWUT version 9 (available in Valkey 9.0.0+)
+	// TODO #5368: Compare versions semantically, not as strings.
 	if suite.serverVersion >= "9.0.0" {
 		opts := options.NewLolwutOptions(9).SetArgs([]int{30, 4})
 		res, err := client.LolwutWithOptions(context.Background(), *opts)
@@ -887,6 +890,7 @@ func (suite *GlideTestSuite) TestLolwutWithOptions_Version9_TwoParams() {
 func (suite *GlideTestSuite) TestLolwutWithOptions_Version9_FourParams() {
 	client := suite.defaultClient()
 	// Test LOLWUT version 9 (available in Valkey 9.0.0+)
+	// TODO #5368: Compare versions semantically, not as strings.
 	if suite.serverVersion >= "9.0.0" {
 		opts := options.NewLolwutOptions(9).SetArgs([]int{40, 20, 1, 2})
 		res, err := client.LolwutWithOptions(context.Background(), *opts)

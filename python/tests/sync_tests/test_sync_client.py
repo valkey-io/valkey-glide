@@ -1013,8 +1013,9 @@ class TestCommands:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     def test_sync_info_default(self, glide_sync_client: TGlideClient):
-        # Verify that there is one response for each node.
         info_result = glide_sync_client.info()
+
+        # Verify that there is one response for each node.
         if isinstance(glide_sync_client, GlideClusterClient):
             cluster_nodes = glide_sync_client.custom_command(["CLUSTER", "NODES"])
             assert isinstance(cluster_nodes, (bytes, list))

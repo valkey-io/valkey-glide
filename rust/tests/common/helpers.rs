@@ -1,6 +1,7 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 //! Key generation and server capability/version helpers.
 
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 /// A process-and-thread-unique key with the given prefix, so tests never
@@ -49,16 +50,15 @@ pub const BGSAVE_TYPES: [&str; 3] = ["fork", "forkless", "none"];
 
 /// Assert that `value` is an integer and return it.
 /// `name` identifies the value in the failure message.
-pub fn parse_int(value: Option<&String>, name: &str) -> i64 {
-    match value.map(|v| v.parse::<i64>()) {
-        Some(Ok(result)) => result,
-        _ => panic!("{name} is not an integer: {value:?}"),
-    }
+pub fn parse_int(value: &str, name: &str) -> i64 {
+    value
+        .parse()
+        .unwrap_or_else(|_| panic!("{name} is not an integer: {value:?}"))
 }
 
 /// Return the fields and values from the given `INFO` sections.
 // TODO #7362: Support cluster clients once the typed `INFO` methods return per-node replies.
-pub async fn get_info<C>(c: &C, sections: &[&str]) -> std::collections::HashMap<String, String>
+pub async fn get_info<C>(c: &C, sections: &[&str]) -> HashMap<String, String>
 where
     C: glide::ServerManagementCommands + Sync,
 {

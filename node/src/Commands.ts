@@ -45,24 +45,6 @@ function toBuffersArray(args: GlideString[]) {
     return argsBytes;
 }
 
-/**
- * @test
- */
-export function parseInfoResponse(response: string): Record<string, string> {
-    const lines = response.split("\n");
-    const parsedResponse: Record<string, string> = {};
-
-    for (const line of lines) {
-        // Ignore lines that start with '#'
-        if (!line.startsWith("#")) {
-            const [key, value] = line.trim().split(":");
-            parsedResponse[key] = value;
-        }
-    }
-
-    return parsedResponse;
-}
-
 function createCommand(
     requestType: command_request.RequestType,
     args: GlideString[],

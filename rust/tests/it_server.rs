@@ -29,7 +29,7 @@ resp_test!(info_returns_expected_fields, c, {
     assert!(common::BGSAVE_TYPES.contains(&persistence["rdb_last_bgsave_type"].as_str()));
 
     let remaining_name = "forkless_estimated_seconds_remaining";
-    let remaining_value = common::parse_int(persistence.get(remaining_name), remaining_name);
+    let remaining_value = common::parse_int(&persistence[remaining_name], remaining_name);
     assert!(remaining_value >= -1);
 
     // Cluster info fields
@@ -39,7 +39,7 @@ resp_test!(info_returns_expected_fields, c, {
     //     let cluster_info = common::get_info(&c, &["cluster_info"]).await;
     //
     //     let fallbacks_name = "cluster_io_main_thread_fallbacks";
-    //     let fallbacks_value = common::parse_int(cluster_info.get(fallbacks_name), fallbacks_name);
+    //     let fallbacks_value = common::parse_int(&cluster_info[fallbacks_name], fallbacks_name);
     //     assert!(fallbacks_value >= 0);
     // }
 });

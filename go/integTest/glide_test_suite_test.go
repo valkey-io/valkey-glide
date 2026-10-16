@@ -551,6 +551,7 @@ func (suite *GlideTestSuite) verifyOK(result string, err error) {
 }
 
 func (suite *GlideTestSuite) SkipIfServerVersionLowerThan(version string, t *testing.T) {
+	// TODO #5368: Compare versions semantically, not as strings.
 	if suite.serverVersion < version {
 		t.Skipf("This feature is added in version %s", version)
 	}
