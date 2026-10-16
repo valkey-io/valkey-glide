@@ -59,6 +59,9 @@ macro_rules! retry_transient {
 macro_rules! resp_test {
     ($name:ident, $client:ident, $body:block) => {
         mod $name {
+            // The test body is placed in this module, so it imports everything that the test file imports.
+            // Some tests don't need any of them, so allow the import to go unused.
+            #[allow(unused_imports)]
             use super::*;
             #[allow(unused_imports)]
             use $crate::common;
@@ -108,6 +111,11 @@ macro_rules! resp_test {
 macro_rules! matrix_test {
     ($name:ident, $client:ident, $body:block) => {
         mod $name {
+            // The test body is placed in this module, so it imports everything that the test
+            // file imports (e.g. command traits such as `ServerManagementCommands`). Some test
+            // bodies don't need any of them (e.g. a body that only calls `common::` helpers),
+            // so allow the import to go unused rather than fail `clippy -D warnings`.
+            #[allow(unused_imports)]
             use super::*;
             #[allow(unused_imports)]
             use $crate::common;
