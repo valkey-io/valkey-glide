@@ -436,6 +436,8 @@ jobs:
               working-directory: ./node
               env:
                   NAPI_RS_VERSION_FROM_TAG: ${{ needs.get-build-parameters.outputs.release_version }}
+                  # napi prepublish has no --tag flag; set the dist-tag via npm config env instead.
+                  npm_config_tag: ${{ needs.get-build-parameters.outputs.npm_tag }}
               run: |
                   node_modules/.bin/napi prepublish \
                     --package-json-path npm/glide/package.json \
