@@ -27,6 +27,10 @@ EXCLUDED_API_FUNCTIONS = {
         "closed",
         "memoryview",
         "window",
+        # Members of the private tracker that keeps memory the fabric still holds.
+        "holds",
+        "keep",
+        "release_what_is_free",
     ],
 }
 

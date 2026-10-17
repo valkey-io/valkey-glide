@@ -442,6 +442,7 @@ class _GlideFFI:
 
             // ============== RDMA ==============
             typedef struct RdmaRegion RdmaRegion;
+            typedef struct RdmaMemoryHold RdmaMemoryHold;
 
             typedef struct {
                 const char* error_message;
@@ -479,16 +480,26 @@ class _GlideFFI:
                 size_t length
             );
 
+            typedef enum {
+                RDMA_SET_CHECKSUM_SKIP = 0,
+                RDMA_SET_CHECKSUM_COMPUTE = 1,
+                RDMA_SET_CHECKSUM_KNOWN = 2
+            } RdmaSetChecksumMode;
+
             RdmaResult* rdma_set(
                 const void* client_adapter_ptr,
                 const uint8_t* key,
                 size_t key_len,
                 RdmaRegion* region,
                 size_t offset,
-                size_t length
+                size_t length,
+                RdmaSetChecksumMode checksum_mode,
+                uint32_t checksum
             );
 
-            void free_rdma_region(RdmaRegion* region);
+            RdmaMemoryHold* free_rdma_region(RdmaRegion* region);
+            bool rdma_memory_released(const RdmaMemoryHold* hold);
+            void free_rdma_memory_hold(RdmaMemoryHold* hold);
             void free_rdma_registration(RdmaRegistration* registration);
             void free_rdma_result(RdmaResult* result);
 

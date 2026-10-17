@@ -361,6 +361,38 @@ class RdmaProvider:
         bind: Optional[str] = None
 
 
+class RdmaSetChecksum:
+    """
+    Whether ``rdma_set`` asks the server to check the bytes it read against a
+    CRC-32c before storing them. With a checksum, the server refuses to store
+    bytes whose CRC-32c differs, and the write raises ``RdmaError``.
+    """
+
+    @dataclass(frozen=True)
+    class Skip:
+        """Send no checksum. The server stores whatever it read."""
+
+    @dataclass(frozen=True)
+    class Compute:
+        """
+        Compute the CRC-32c of the window before sending. This reads every byte
+        of the window once.
+        """
+
+    @dataclass(frozen=True)
+    class Known:
+        """
+        Send a CRC-32c the caller already has for the window's bytes, for
+        example from ``GlideClient.rdma_checksum``, so the window is not read
+        again.
+
+        Attributes:
+            value (int): The CRC-32c, an unsigned 32-bit integer.
+        """
+
+        value: int
+
+
 @dataclass
 class RdmaConfiguration:
     """

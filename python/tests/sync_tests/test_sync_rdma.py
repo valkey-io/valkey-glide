@@ -2,7 +2,7 @@
 
 """RDMA on the synchronous client: regions, windows, and what each refuses.
 
-The transfer tests need a server that serves the ``LO.*`` commands, so they
+The transfer tests need a server that serves the ``BLOB.RDMA_*`` commands, so they
 are skipped unless ``GLIDE_RDMA_SERVER`` names one. Everything else runs
 anywhere, including on a build with no RDMA compiled in.
 """
@@ -21,6 +21,7 @@ from glide_shared.config import (
     ProtocolVersion,
     RdmaConfiguration,
     RdmaProvider,
+    RdmaSetChecksum,
 )
 from glide_shared.exceptions import (
     ClosingError,
@@ -29,6 +30,7 @@ from glide_shared.exceptions import (
     TimeoutError,
 )
 from glide_sync import GlideClient, RdmaRegion, RdmaWindow
+from glide_sync.glide_client import _RETAINED_RDMA_MEMORY
 
 REGION_BYTES = 1024
 
@@ -48,18 +50,39 @@ class _FakeFfi:
 class _FakeLib:
     """Records the frees a region performs, so lifetime can be asserted."""
 
+    RDMA_SET_CHECKSUM_SKIP = 0
+    RDMA_SET_CHECKSUM_COMPUTE = 1
+    RDMA_SET_CHECKSUM_KNOWN = 2
+
     def __init__(self):
+        # The arguments of every `rdma_set` call, in order.
+        self.sets = []
         self.freed = []
         self.freed_results = []
+        # What `free_rdma_region` hands back for each region: NULL, or a hold
+        # standing in for memory the fabric still keeps.
+        self.holds = {}
+        self.freed_holds = []
 
     def rdma_region_capacity(self, region):
         return region["capacity"]
 
     def free_rdma_region(self, region):
         self.freed.append(region)
+        return self.holds.get(id(region), _FakeFfi.NULL)
+
+    def rdma_memory_released(self, hold):
+        return hold["released"]
+
+    def free_rdma_memory_hold(self, hold):
+        self.freed_holds.append(hold)
 
     def free_rdma_result(self, result):
         self.freed_results.append(result)
+
+    def rdma_set(self, *arguments):
+        self.sets.append(arguments)
+        return _FakeResult(_FakeFfi.NULL, 0, found=True)
 
 
 def _offline_client() -> GlideClient:
@@ -84,12 +107,12 @@ def _offline_region(client: GlideClient, capacity: int = REGION_BYTES) -> RdmaRe
 
 
 class _FakeResult:
-    """A failed transfer as the FFI reports one, for the classification checks."""
+    """A transfer result as the FFI reports one: failed unless `found` is set."""
 
-    def __init__(self, error_message: bytes, error_type: int):
+    def __init__(self, error_message, error_type: int, found: bool = False):
         self.error_message = error_message
         self.error_type = error_type
-        self.found = False
+        self.found = found
         self.bytes_written = 0
         self.has_checksum = False
         self.checksum = 0
@@ -154,6 +177,62 @@ def test_a_region_closes_when_its_context_exits():
 
     assert region.closed is True
     assert len(client._lib.freed) == 1
+
+
+def test_closing_a_region_lets_go_of_the_memory_when_the_fabric_has():
+    client = _offline_client()
+    memory = bytearray(REGION_BYTES)
+    region = RdmaRegion(client, memory, {"capacity": REGION_BYTES})
+
+    region.close()
+
+    assert not _RETAINED_RDMA_MEMORY.holds(memory)
+    assert client._lib.freed_holds == []
+
+
+def test_a_closed_region_keeps_memory_the_fabric_still_holds():
+    # On tcp a transfer that ended without the server's reply leaves the memory
+    # parked, and a write could still land in it. Python must not free it until
+    # the fabric lets go, even though the region is closed.
+    client = _offline_client()
+    memory = bytearray(REGION_BYTES)
+    raw = {"capacity": REGION_BYTES}
+    hold = {"released": False}
+    client._lib.holds[id(raw)] = hold
+    region = RdmaRegion(client, memory, raw)
+
+    region.close()
+
+    assert _RETAINED_RDMA_MEMORY.holds(memory), "kept while the fabric holds it"
+    assert client._lib.freed_holds == []
+
+    # The fabric lets go, for example when the client's fabric closes. The next
+    # region close or client close notices.
+    hold["released"] = True
+    _offline_region(client).close()
+
+    assert not _RETAINED_RDMA_MEMORY.holds(memory)
+    assert client._lib.freed_holds == [hold]
+
+
+def test_memory_kept_for_a_failed_close_stays_kept():
+    # A region that failed to close may still be written by the device, so its
+    # hold is never released and the memory stays referenced.
+    client = _offline_client()
+    memory = bytearray(REGION_BYTES)
+    raw = {"capacity": REGION_BYTES}
+    hold = {"released": False}
+    client._lib.holds[id(raw)] = hold
+    RdmaRegion(client, memory, raw).close()
+
+    for _ in range(3):
+        _offline_region(client).close()
+
+    assert _RETAINED_RDMA_MEMORY.holds(memory)
+    # Let the shared keeper go of it, so other tests start clean.
+    hold["released"] = True
+    _offline_region(client).close()
+    assert not _RETAINED_RDMA_MEMORY.holds(memory)
 
 
 def test_a_closed_region_cannot_be_transferred_with():
@@ -269,9 +348,74 @@ def test_a_transfer_cancelled_by_closing_the_client_raises_closing_error(error_t
     assert client._lib.freed_results == [result]
 
 
+def _offline_set(checksum=None):
+    """Call `rdma_set` on an offline client and return the FFI's record of it."""
+    client = _offline_client()
+    client._core_client = object()
+    region = _offline_region(client)
+    if checksum is None:
+        client.rdma_set(b"key", region.window(0, 8))
+    else:
+        client.rdma_set(b"key", region.window(0, 8), checksum=checksum)
+    return client._lib
+
+
+@pytest.mark.parametrize(
+    ("checksum", "mode", "value"),
+    [
+        (RdmaSetChecksum.Skip(), _FakeLib.RDMA_SET_CHECKSUM_SKIP, 0),
+        (RdmaSetChecksum.Compute(), _FakeLib.RDMA_SET_CHECKSUM_COMPUTE, 0),
+        (
+            RdmaSetChecksum.Known(0xE3069283),
+            _FakeLib.RDMA_SET_CHECKSUM_KNOWN,
+            0xE3069283,
+        ),
+        (RdmaSetChecksum.Known(0), _FakeLib.RDMA_SET_CHECKSUM_KNOWN, 0),
+        (
+            RdmaSetChecksum.Known(0xFFFFFFFF),
+            _FakeLib.RDMA_SET_CHECKSUM_KNOWN,
+            0xFFFFFFFF,
+        ),
+    ],
+)
+def test_a_checksum_choice_reaches_the_ffi_as_its_mode_and_value(checksum, mode, value):
+    lib = _offline_set(checksum)
+    assert len(lib.sets) == 1
+    assert lib.sets[0][-2:] == (mode, value)
+
+
+def test_a_write_sends_no_checksum_by_default():
+    lib = _offline_set()
+    assert lib.sets[0][-2:] == (_FakeLib.RDMA_SET_CHECKSUM_SKIP, 0)
+
+
+@pytest.mark.parametrize("value", [-1, 0x1_0000_0000, True, "123", 1.0])
+def test_a_known_checksum_outside_32_bits_is_refused_before_the_ffi(value):
+    client = _offline_client()
+    client._core_client = object()
+    region = _offline_region(client)
+
+    with pytest.raises(ValueError, match="unsigned 32-bit integer"):
+        client.rdma_set(b"key", region.window(0, 8), RdmaSetChecksum.Known(value))
+
+    assert client._lib.sets == []
+
+
+@pytest.mark.parametrize("checksum", [None, 0, "compute", RdmaSetChecksum])
+def test_a_checksum_that_is_not_a_choice_is_refused_before_the_ffi(checksum):
+    client = _offline_client()
+    client._core_client = object()
+    region = _offline_region(client)
+
+    with pytest.raises(TypeError, match="RdmaSetChecksum"):
+        client.rdma_set(b"key", region.window(0, 8), checksum)
+
+    assert client._lib.sets == []
+
+
 def test_a_real_failure_is_reported_even_if_the_client_closed_meanwhile():
-    # A read that overran its window and a close that followed it: the caller
-    # must still learn about the overrun.
+    # A read whose reply claimed more bytes than the window, then a close: the
+    # caller must still learn about the oversized reply, not just the close.
     client = _offline_client()
     client._is_closed = True
     result = _FakeResult(
@@ -393,12 +537,41 @@ def test_an_rdma_client_against_a_plain_server_still_works(
         client.close()
 
 
+@pytest.mark.parametrize("cluster_mode", [False])
+@pytest.mark.parametrize("protocol", [ProtocolVersion.RESP3])
+def test_closing_an_idle_region_lets_go_of_the_memory_at_once(
+    glide_sync_client: GlideClient,
+):
+    # The fabric closes regions on a thread of its own. Freeing an idle region
+    # has to wait for that, so the memory is the caller's again as soon as the
+    # free returns: no hold, rather than one that is released a moment later.
+    # This calls the FFI directly, because `close` sweeps released holds right
+    # away and so would hide a hold that is only briefly outstanding.
+    if not GlideClient.rdma_usable():
+        pytest.skip("needs libfabric to open a tcp fabric")
+    config = type(glide_sync_client._config)(
+        addresses=glide_sync_client._config.addresses,
+        rdma=RdmaConfiguration(provider=RdmaProvider.Tcp()),
+    )
+    client = type(glide_sync_client).create(config)
+    try:
+        memory = bytearray(REGION_BYTES)
+        region = client.register_rdma_region(memory)
+        raw, region._region = region._region, None
+        hold = client._lib.free_rdma_region(raw)
+        if hold != client._ffi.NULL:
+            client._lib.free_rdma_memory_hold(hold)
+        assert hold == client._ffi.NULL, "an idle region's memory is let go at once"
+    finally:
+        client.close()
+
+
 @pytest.mark.skipif(
     not os.getenv("GLIDE_RDMA_SERVER"),
-    reason="needs GLIDE_RDMA_SERVER=<host>:<port> serving the LO.* commands",
+    reason="needs GLIDE_RDMA_SERVER=<host>:<port> serving the BLOB.RDMA_* commands",
 )
 class TestRdmaTransfers:
-    """Real transfers, against a server serving the LO.* commands."""
+    """Real transfers, against a server serving the BLOB.RDMA_* commands."""
 
     SLOT_BYTES = 4096
     SLOTS = 4
@@ -443,8 +616,57 @@ class TestRdmaTransfers:
             assert receipt is not None
             assert receipt.bytes_written == len(value)
             assert bytes(destination.memoryview()[: receipt.bytes_written]) == value
-            if receipt.checksum is not None:
-                assert receipt.checksum == GlideClient.rdma_checksum(value)
+            assert receipt.checksum == GlideClient.rdma_checksum(value)
+
+    def _read_back(self, client, key: bytes, length: int):
+        """`key` read over RDMA, or None if it is missing."""
+        with client.register_rdma_region(bytearray(length)) as destination:
+            receipt = client.rdma_get(key, destination.window())
+            if receipt is None:
+                return None
+            return bytes(destination.memoryview()[: receipt.bytes_written])
+
+    @pytest.mark.parametrize(
+        "checksum",
+        [
+            RdmaSetChecksum.Skip(),
+            RdmaSetChecksum.Compute(),
+            "known",
+        ],
+    )
+    def test_every_checksum_choice_stores_the_value(self, rdma_client, checksum):
+        value = bytes((index * 7) % 251 for index in range(self.SLOT_BYTES))
+        if checksum == "known":
+            checksum = RdmaSetChecksum.Known(GlideClient.rdma_checksum(value))
+        key = f"glide-py-rdma-crc-{type(checksum).__name__}".encode()
+
+        with rdma_client.register_rdma_region(bytearray(value)) as source:
+            rdma_client.rdma_set(key, source.window(), checksum=checksum)
+
+        assert self._read_back(rdma_client, key, self.SLOT_BYTES) == value
+        rdma_client.delete([key])
+
+    def test_a_wrong_checksum_is_refused_and_stores_nothing(self, rdma_client):
+        # The server compares the checksum with what it read and refuses the
+        # write. A refusal is a reply, so the region stays usable.
+        value = bytes(index % 251 for index in range(self.SLOT_BYTES))
+        wrong = GlideClient.rdma_checksum(value) ^ 1
+        key = b"glide-py-rdma-crc-mismatch"
+        rdma_client.delete([key])
+
+        with rdma_client.register_rdma_region(bytearray(value)) as source:
+            with pytest.raises(RdmaError, match="CRC mismatch"):
+                rdma_client.rdma_set(
+                    key, source.window(), checksum=RdmaSetChecksum.Known(wrong)
+                )
+            assert self._read_back(rdma_client, key, self.SLOT_BYTES) is None
+
+            rdma_client.rdma_set(
+                key, source.window(), checksum=RdmaSetChecksum.Compute()
+            )
+
+        assert self._read_back(rdma_client, key, self.SLOT_BYTES) == value
+        rdma_client.delete([key])
 
     def test_a_missing_key_transfers_nothing(self, rdma_client):
         with rdma_client.register_rdma_region(bytearray(self.SLOT_BYTES)) as region:
@@ -491,7 +713,7 @@ class TestRdmaTransfers:
             GlideClientConfiguration(addresses=[self._server()])
         )
         region = rdma_client.register_rdma_region(bytearray(self.SLOT_BYTES))
-        # Open the session first, so the transfer below is held at LO.GET itself.
+        # Open the session first, so the transfer below is held at BLOB.RDMA_GET itself.
         rdma_client.rdma_get(b"glide-py-rdma-cancel", region.window())
         outcome: dict = {}
 

@@ -17,6 +17,7 @@ from glide_shared.config import (
     BaseClientConfiguration,
     GlideClientConfiguration,
     GlideClusterClientConfiguration,
+    RdmaSetChecksum,
     _is_async_callable,
 )
 from glide_shared.connection_request import _create_sync_connection_request
@@ -142,6 +143,46 @@ class RdmaWindow:
         return self.region.memoryview()[self.offset : self.offset + self.length]
 
 
+class _RetainedRdmaMemory:
+    """
+    Caller memory the fabric still holds after its region was closed.
+
+    That happens when a transfer ended without the server's reply on a provider
+    where a write could still land (tcp), or when the region failed to close.
+    The memory is kept referenced here so Python cannot free it until the
+    fabric reports it released. For a region that failed to close, that is never.
+    """
+
+    def __init__(self):
+        self._lock = threading.Lock()
+        # (lib, hold, memory, view) for each region whose memory is still held.
+        self._held: List[Tuple[Any, Any, Any, Any]] = []
+
+    def keep(self, lib, hold, memory, view) -> None:
+        with self._lock:
+            self._held.append((lib, hold, memory, view))
+
+    def release_what_is_free(self) -> None:
+        """Drop the references to memory the fabric has let go of."""
+        with self._lock:
+            still_held = []
+            for entry in self._held:
+                lib, hold = entry[0], entry[1]
+                if lib.rdma_memory_released(hold):
+                    lib.free_rdma_memory_hold(hold)
+                else:
+                    still_held.append(entry)
+            self._held = still_held
+
+    def holds(self, memory: Any) -> bool:
+        """Whether `memory` is being kept here."""
+        with self._lock:
+            return any(entry[2] is memory for entry in self._held)
+
+
+_RETAINED_RDMA_MEMORY = _RetainedRdmaMemory()
+
+
 class RdmaRegion:
     """
     Memory registered with the server for RDMA transfers.
@@ -242,8 +283,14 @@ class RdmaRegion:
         """
         Deregister the memory and release the pinned pages.
 
-        The caller's buffer is not freed, can reuse or free once this
-        returns. Closing twice is a no-op, so this is safe in a ``finally``.
+        The caller's buffer is not freed. Usually it can be reused or freed once
+        this returns. The exception is a region whose transfer ended without the
+        server's reply on the tcp provider, or whose deregistration failed: a
+        write may still land in it, so GLIDE keeps the buffer referenced until the
+        fabric is done with it, and the caller should not reuse it either. On tcp
+        that is once the client and all its regions are closed; after a failed
+        deregistration, which is logged as an error, it is never. Closing twice is
+        a no-op, so this is safe in a ``finally``.
 
         Any transfer against the region must have finished first. This is not
         a way to cancel one: the server may still be moving bytes into these
@@ -253,7 +300,13 @@ class RdmaRegion:
         """
         region, self._region = self._region, None
         if region is not None:
-            self._client._lib.free_rdma_region(region)
+            hold = self._client._lib.free_rdma_region(region)
+            if hold != self._client._ffi.NULL:
+                _RETAINED_RDMA_MEMORY.keep(
+                    self._client._lib, hold, self._memory, self._view
+                )
+        # Closing this region may have been what let the fabric go of others'.
+        _RETAINED_RDMA_MEMORY.release_what_is_free()
         self._view = None
         self._memory = None
 
@@ -1361,12 +1414,15 @@ class BaseClient(CoreCommands):
     @staticmethod
     def rdma_usable() -> bool:
         """
-        Whether this machine can actually complete an RDMA transfer.
+        Whether this build has RDMA support and can load a compatible libfabric
+        on this machine.
 
-        Checks for the libfabric dependency on the machine.
+        It does not look for fabric hardware, so creating an RDMA client can
+        still fail, for example with ``RdmaProvider.EfaDirect()`` on a machine
+        without an EFA device.
 
         Returns:
-            bool: True if a RDMA transfer is possible on this machine.
+            bool: True if libfabric loads and this build supports RDMA.
 
         Example:
             >>> BaseClient.rdma_usable()
@@ -1451,22 +1507,19 @@ class BaseClient(CoreCommands):
         Args:
             key (TEncodable): The key to read.
             window (RdmaWindow): Where the value should land, from
-                :meth:`RdmaRegion.window`.
-
-                The server is not told the window's length, so a value larger
-                than it overruns whatever follows in the same region. The
-                receipt's byte count is checked against the window afterwards,
-                which reports the overrun rather than preventing it.
+                :meth:`RdmaRegion.window`. The server is told the window's
+                length and refuses a larger value before writing anything, so
+                the bytes around the window are never touched.
 
         Returns:
             Optional[RdmaReadReceipt]: What the server transferred, or None if the
-            key does not exist. Its ``checksum`` is set when the server reported
-            one, in which case the landed bytes have already been verified
-            against it.
+            key does not exist. The landed bytes have already been verified
+            against the receipt's ``checksum``.
 
         Raises:
             RdmaError: If the region is closed or belongs to another client, the
-                value was larger than the window, or a checksum did not match.
+                value was larger than the window (the region stays usable), or
+                the landed bytes did not match the checksum.
             ClosingError: If the client is closed, including when it is closed
                 during the transfer to cancel it.
 
@@ -1488,6 +1541,9 @@ class BaseClient(CoreCommands):
         self,
         key: TEncodable,
         window: RdmaWindow,
+        checksum: Union[
+            RdmaSetChecksum.Skip, RdmaSetChecksum.Compute, RdmaSetChecksum.Known
+        ] = RdmaSetChecksum.Skip(),
     ) -> None:
         """
         Store a value the server reads directly out of a window of registered
@@ -1500,6 +1556,9 @@ class BaseClient(CoreCommands):
             key (TEncodable): The key to write.
             window (RdmaWindow): The bytes to send, from
                 :meth:`RdmaRegion.window`.
+            checksum: Whether the server checks the bytes it read against a
+                CRC-32c before storing them; see :class:`RdmaSetChecksum`.
+                Defaults to ``RdmaSetChecksum.Skip()``, which sends none.
 
         Returns:
             None. The server acknowledges without reporting a length, having
@@ -1508,15 +1567,20 @@ class BaseClient(CoreCommands):
 
         Raises:
             RdmaError: If the region is closed or belongs to another client, or
-                the server refused the write.
+                the server refused the write, including when the bytes it read
+                do not match the checksum. A refused write stores nothing and
+                leaves the region usable.
             ClosingError: If the client is closed, including when it is closed
                 during the transfer to cancel it.
+            TypeError: If ``checksum`` is not an ``RdmaSetChecksum`` choice.
+            ValueError: If a known checksum is not an unsigned 32-bit integer.
 
         Example:
             >>> window = region.window(0, 11)
             >>> window.memoryview()[:] = b"hello world"
-            >>> client.rdma_set(b"key", window)
+            >>> client.rdma_set(b"key", window, checksum=RdmaSetChecksum.Compute())
         """
+        checksum_mode, checksum_value = self._rdma_set_checksum(checksum)
         region_ptr, offset, length = self._rdma_window(window)
         result = self._lib.rdma_set(
             self._require_open_client(),
@@ -1524,6 +1588,8 @@ class BaseClient(CoreCommands):
             region_ptr,
             offset,
             length,
+            checksum_mode,
+            checksum_value,
         )
         self._handle_rdma_result(result)
 
@@ -1533,10 +1599,9 @@ class BaseClient(CoreCommands):
         CRC-32c of ``data``, the integrity check the RDMA protocol carries.
 
         The same value the server computes, so a caller can verify what landed
-        after a read, or check a payload against its own record of it before
-        sending. ``rdma_get`` verifies for itself whenever the server volunteers
-        a checksum with its reply; ``rdma_set`` sends none at all, so this is the
-        only integrity check available on the write path.
+        after a read, or compute one before sending to pass to ``rdma_set`` as
+        ``RdmaSetChecksum.Known``. ``rdma_get`` verifies every read against the
+        checksum the server sends with its reply.
 
         Args:
             data (Any): Any bytes-like object.
@@ -1578,6 +1643,29 @@ class BaseClient(CoreCommands):
         key_bytes = key.encode(ENCODING) if isinstance(key, str) else bytes(key)
         return self._ffi.from_buffer(key_bytes), len(key_bytes)
 
+    def _rdma_set_checksum(self, checksum: Any) -> Tuple[Any, int]:
+        """The checksum mode and value ``rdma_set`` passes across the FFI."""
+        if isinstance(checksum, RdmaSetChecksum.Skip):
+            return self._lib.RDMA_SET_CHECKSUM_SKIP, 0
+        if isinstance(checksum, RdmaSetChecksum.Compute):
+            return self._lib.RDMA_SET_CHECKSUM_COMPUTE, 0
+        if isinstance(checksum, RdmaSetChecksum.Known):
+            value = checksum.value
+            if (
+                not isinstance(value, int)
+                or isinstance(value, bool)
+                or not 0 <= value <= 0xFFFFFFFF
+            ):
+                raise ValueError(
+                    "a known checksum must be an unsigned 32-bit integer, "
+                    f"got {value!r}"
+                )
+            return self._lib.RDMA_SET_CHECKSUM_KNOWN, value
+        raise TypeError(
+            "checksum must be RdmaSetChecksum.Skip(), .Compute() or .Known(value), "
+            f"got {type(checksum).__name__}"
+        )
+
     def _rdma_window(self, window: RdmaWindow) -> Tuple[Any, int, int]:
         """
         Unpack a window for the transfer, rejecting what cannot be used.
@@ -1606,8 +1694,8 @@ class BaseClient(CoreCommands):
 
         A transfer cancelled by closing the client raises ``ClosingError``.
         Any other failure keeps its own class even if the client was closed,
-        so an overrun or a checksum mismatch that happened just before the close
-        is still reported.
+        so a reply larger than the window or a checksum mismatch that happened
+        just before the close is still reported.
         """
         if result == self._ffi.NULL:
             raise RdmaError("Internal error: received NULL as an RDMA result")
@@ -1657,6 +1745,8 @@ class BaseClient(CoreCommands):
                     owner.close()
                 self._credential_provider_callback_owner = None
                 self._credential_provider_callback_ref = None
+        # Closing the client may be what lets the fabric go of memory it held.
+        _RETAINED_RDMA_MEMORY.release_what_is_free()
 
     def __enter__(self) -> Self:
         return self
