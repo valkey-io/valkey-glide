@@ -2,6 +2,10 @@
 
 ## Pending 2.6
 
+### Breaking Changes
+
+* Node: Remove deprecated `parseInfoResponse` function from `Commands.ts` ([#7368](https://github.com/valkey-io/valkey-glide/issues/7368))
+
 ### Features
 
 * All: Add `DELIFEQ` command support ([#6146](https://github.com/valkey-io/valkey-glide/issues/6146))

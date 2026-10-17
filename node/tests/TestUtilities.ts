@@ -2781,3 +2781,23 @@ export function assertMemoryStatsFields(
         expect(stats.overheadDbHashtableRehashing).toBeUndefined();
     }
 }
+
+/**
+ * Test helper: parse raw INFO response string into key-value pairs.
+ */
+export function parseInfoResponse(response: string): Record<string, string> {
+    const lines = response.split("\n");
+    const parsedResponse: Record<string, string> = {};
+
+    for (const line of lines) {
+        // Ignore lines that start with '#'
+        if (!line.startsWith("#")) {
+            const [key, value] = line.trim().split(":");
+            if (key) {
+                parsedResponse[key] = value;
+            }
+        }
+    }
+
+    return parsedResponse;
+}

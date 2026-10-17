@@ -59,7 +59,6 @@ import {
     convertElementsAndScores,
     convertGlideRecordToRecord,
     MemoryStats,
-    parseInfoResponse,
 } from "../build-ts";
 import {
     Client,
@@ -71,6 +70,7 @@ import {
     getRandomKey,
     getUnixSeconds,
     PRIMARY_SLOT_ROUTE_OPTION,
+    parseInfoResponse,
     triggerLatencySpike,
     waitFor,
     waitForSaveNotInProgress,
