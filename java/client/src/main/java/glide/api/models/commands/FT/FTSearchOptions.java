@@ -20,6 +20,14 @@ public class FTSearchOptions {
 
     @Builder.Default private final Map<GlideString, GlideString> identifiers = new HashMap<>();
 
+    /**
+     * Restricts the search to only this set of keys, filtering out any matching result whose key is
+     * not in the list. The result count is adjusted to reflect the filtered set. An explicit empty
+     * array is distinct from {@code null}: {@code null} omits {@code INKEYS} entirely (no
+     * restriction), while an empty array sends {@code INKEYS 0} and excludes every result.
+     */
+    private final GlideString[] inKeys;
+
     /** Query timeout in milliseconds. */
     private final Integer timeout;
 
@@ -82,6 +90,11 @@ public class FTSearchOptions {
         if (sortBy == null && withSortKeys) {
             throw new IllegalArgumentException("withSortKeys requires sortBy to be set.");
         }
+        if (count && limit != null) {
+            throw new IllegalArgumentException(
+                    "count and limit are mutually exclusive -- count maps to LIMIT 0 0 "
+                            + "internally, so an explicit limit would conflict with it.");
+        }
         ArrayList<GlideString> args = new ArrayList<GlideString>();
         if (shardScope != null) {
             args.add(gs(shardScope.toString()));
@@ -101,6 +114,13 @@ public class FTSearchOptions {
         if (slop != null) {
             args.add(gs("SLOP"));
             args.add(gs(slop.toString()));
+        }
+        if (inKeys != null) {
+            args.add(gs("INKEYS"));
+            args.add(gs(Integer.toString(inKeys.length)));
+            for (GlideString key : inKeys) {
+                args.add(key);
+            }
         }
         if (!identifiers.isEmpty()) {
             int returnIndex = args.size();
@@ -146,7 +166,13 @@ public class FTSearchOptions {
             args.add(gs(Integer.toString(limit.getRight())));
         }
         if (count) {
-            args.add(gs("COUNT"));
+            // COUNT is not a real FT.SEARCH keyword -- valkey-search's parser
+            // rejects a bare COUNT token outright. The count-only form the
+            // server actually recognises is LIMIT 0 0; the guard at the top
+            // of this method already confirmed limit is unset.
+            args.add(gs("LIMIT"));
+            args.add(gs("0"));
+            args.add(gs("0"));
         }
         if (dialect != null) {
             args.add(gs("DIALECT"));

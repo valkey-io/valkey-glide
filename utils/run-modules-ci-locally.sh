@@ -1,43 +1,33 @@
 #!/usr/bin/env bash
 # Reproduces the "Modules Tests (Linux)" job from
-# .github/workflows/python-modules.yml on this machine, as closely as
-# possible, against an overridable module image. Written for
-# BRIEF-R1-FIXES.md Group 8 (operator decision D1 = option c: do not pin a
-# new CI image; prove 1.3 support via a local run of the SAME job against a
+# .github/workflows/java-modules.yml on this machine, as closely as
+# possible, against an overridable module image (D1: don't pin a new CI
+# image; prove 1.3 support via a local run of the SAME job against a
 # 1.3-bearing image instead).
 #
 # Shares the docker start/verify logic with
 # .github/actions/start-valkey-docker/action.yml via
 # utils/start-valkey-docker-modules.sh on EVERY path, including the
-# emulate-release override (QA round 2, R2-H-1: an earlier version hand-
-# rolled a second bring-up for that case, so the 9.2.0-rc2 proof didn't
-# actually exercise CI's startup code -- fixed by giving the shared script
-# a SEARCH_MODULE_ARGS hook instead of forking the bring-up logic).
+# emulate-release override.
 #
 # Usage: three image/release combinations are used across this file's
-# proof runs, named in BUILD-MODULES-1.3.md and PR-DRAFT-PYTHON-VS13.md's
-# Testing table as "1.", "2." and "3." below. (A fourth combination --
-# 9.1.3 at its own default -- isn't listed as its own config: that image's
-# module predates the `--emulate-release` arg and aborts boot if given one,
-# so EMULATE_RELEASE="" is mandatory whenever IMAGE=9.1.3, not an
-# independent axis.)
+# proof runs (see VALKEY-SEARCH-1.3.PLAN.md's ports checklist):
 #   utils/run-modules-ci-locally.sh                                       # 1: 9.2.0-rc2, emulate-release 1.3.0 (default; run-proof)
 #   IMAGE=valkey/valkey-bundle:9.1.3 EMULATE_RELEASE="" utils/run-modules-ci-locally.sh   # 2: 9.1.3, search 1.2.1 (skip-proof)
-#   EMULATE_RELEASE="" utils/run-modules-ci-locally.sh                    # 3: 9.2.0-rc2, module's own default emulate-release (1.0.0) -- E-2 (D22)
+#   EMULATE_RELEASE="" utils/run-modules-ci-locally.sh                    # 3: 9.2.0-rc2, module's own default emulate-release (1.0.0) -- E-2 equivalent (D22)
 #
-# See BUILD-MODULES-1.3.md for narrated example runs and Mac-vs-CI-runner
-# differences (notably: Docker Desktop on macOS shares /Users by default,
-# not /tmp -- any file this script bind-mounts into a container MUST live
-# under a /Users path or the mount silently becomes an empty directory
-# instead of the file, with no error).
+# See BUILD-MODULES-1.3.md (python/) for narrated example runs and
+# Mac-vs-CI-runner differences (notably: Docker Desktop on macOS shares
+# /Users by default, not /tmp -- any file this script bind-mounts into a
+# container MUST live under a /Users path or the mount silently becomes an
+# empty directory instead of the file, with no error).
 #
-# Requires: docker, valkey-cli (Homebrew: `brew install valkey`), and the
-# Python client already built (python3 dev.py build --client async && ...
-# --client sync) -- this script does not rebuild the wrapper, matching the
-# CI job's "Build Python wrapper" step only in effect, not in mechanism (see
-# BUILD-MODULES-1.3.md for why: the CI step runs on a fresh runner and must
-# build from scratch, this script assumes a dev checkout that's already
-# built).
+# Requires: docker, valkey-cli (Homebrew: `brew install valkey`), and
+# protoc 29.1 pinned under tools/protoc-29.1/ (see BUILD-MODULES-1.3.md's
+# "Java build: protoc 29.1" section -- a newer system protoc generates
+# protobuf-java code the project's pinned 4.29.6 runtime can't compile).
+# This script does not rebuild the Rust native lib separately; Gradle does
+# that as part of :integTest:modulesTest.
 
 set -euo pipefail
 
@@ -105,17 +95,24 @@ for port in "$STANDALONE_PORT" $(seq "$CLUSTER_PORT_START" "$((CLUSTER_PORT_STAR
 done
 
 echo "=== Running modules tests ==="
-cd "${REPO_ROOT}/python"
-# Single-sourced from .github/workflows/python-modules.yml's "Run modules
-# tests" step (R2-H-1 fix #3: these must not drift independently -- see
-# tests/test_ci_workflow_sync.py, which greps the workflow file for this
-# exact arg list and fails the test suite if it ever changes there without
-# a matching update here).
-python3 dev.py test --args \
-    --standalone-endpoints="${MODULES_STANDALONE_ENDPOINT}" \
-    --cluster-endpoints="${MODULES_CLUSTER_ENDPOINTS}" \
-    -k server_modules \
-    --async-backend=asyncio \
-    --html=pytest_report.html \
-    --self-contained-html \
-    -rs
+cd "${REPO_ROOT}/java"
+# Single-sourced from .github/workflows/java-modules.yml's "Build and run
+# modules tests" step -- these must not drift independently; see
+# integTest/src/test/java/.../JavaModulesCiSyncTest.java, which parses the
+# workflow file for this exact gradle target + flags and fails the suite if
+# it ever changes there without a matching update here. protoc 29.1 must be
+# first on PATH (see BUILD-MODULES-1.3.md's "Java build: protoc 29.1"
+# section) -- a newer system protoc generates code the pinned
+# protobuf-java runtime can't compile.
+# protoc 29.1 is pinned under the shared Glide root (one level above every
+# per-language worktree, including this one), not inside this worktree --
+# see BUILD-MODULES-1.3.md's "Java build: protoc 29.1" section.
+export PATH="${REPO_ROOT}/../tools/protoc-29.1/bin:${PATH}"
+# --rerun-tasks: modulesTest's inputs don't include the -D endpoint
+# properties, so Gradle's up-to-date check doesn't notice when this
+# script runs it a second time against a different image/level -- it
+# would otherwise report a stale UP-TO-DATE pass instead of actually
+# re-testing against the new server.
+GLIDE_DOCKER_SERVERS=true ./gradlew --no-daemon --rerun-tasks :integTest:modulesTest \
+    -Dstandalone-endpoints="${MODULES_STANDALONE_ENDPOINT}" \
+    -Dcluster-endpoints="${MODULES_CLUSTER_ENDPOINTS}"

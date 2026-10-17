@@ -59,6 +59,30 @@ public class FTCreateOptions {
     private final String punctuation;
 
     /**
+     * A filter expression limiting which documents the index applies to (valkey-search 1.3.0). A
+     * document that doesn't match this expression is excluded from the index even if its key matches
+     * a configured prefix. Cannot be an empty string.
+     */
+    private final String filter;
+
+    /**
+     * The name of a document field whose numeric value is used as the document's custom score,
+     * multiplying into the final relevance score (valkey-search 1.3.0). The field must already exist
+     * in the document; it is not itself a schema definition. FT.INFO only reports this option back
+     * under {@code index_definition}'s {@code score_field} key when {@code search.emulate-release} is
+     * at least 1.3.0; below that level the pair is omitted and {@code default_score} reports the
+     * literal string "1" regardless of this option.
+     */
+    private final String scoreField;
+
+    /**
+     * Emits {@code NOHL}. valkey-search does not support highlighting at all, so this is a genuine
+     * no-op on this engine; the token is accepted but not even stored for FT.INFO to report.
+     * Implemented for wire compatibility with RediSearch clients.
+     */
+    @Builder.Default private final boolean noHighlight = false;
+
+    /**
      * Backward-compatible convenience constructor for callers that only need {@code dataType} and
      * {@code prefixes}. All other options use their defaults.
      *
@@ -77,6 +101,9 @@ public class FTCreateOptions {
         this.noStopWords = false;
         this.stopWords = null;
         this.punctuation = null;
+        this.filter = null;
+        this.scoreField = null;
+        this.noHighlight = false;
     }
 
     public static FTCreateOptionsBuilder builder() {
@@ -89,6 +116,9 @@ public class FTCreateOptions {
         }
         if (noStopWords && stopWords != null) {
             throw new IllegalArgumentException("noStopWords and stopWords are mutually exclusive.");
+        }
+        if (filter != null && filter.isEmpty()) {
+            throw new IllegalArgumentException("filter cannot be empty.");
         }
         ArrayList<GlideString> args = new ArrayList<GlideString>();
         if (dataType != null) {
@@ -132,6 +162,17 @@ public class FTCreateOptions {
         if (punctuation != null) {
             args.add(gs("PUNCTUATION"));
             args.add(gs(punctuation));
+        }
+        if (filter != null) {
+            args.add(gs("FILTER"));
+            args.add(gs(filter));
+        }
+        if (scoreField != null) {
+            args.add(gs("SCORE_FIELD"));
+            args.add(gs(scoreField));
+        }
+        if (noHighlight) {
+            args.add(gs("NOHL"));
         }
         return args.toArray(new GlideString[0]);
     }
@@ -178,10 +219,12 @@ public class FTCreateOptions {
     /** Field contains a number. */
     public static class NumericField implements Field {
         private final boolean sortable;
+        private final boolean unf;
 
         /** Create a {@code NUMERIC} field. */
         public NumericField() {
             this.sortable = false;
+            this.unf = false;
         }
 
         /**
@@ -191,13 +234,35 @@ public class FTCreateOptions {
          */
         public NumericField(boolean sortable) {
             this.sortable = sortable;
+            this.unf = false;
+        }
+
+        /**
+         * Create a {@code NUMERIC} field.
+         *
+         * @param sortable If set, the field value can be used for sorting.
+         * @param unf If set, keeps the sorted value in its original (un-normalized) form (valkey-search
+         *     1.3.0). NUMERIC fields are never normalized for sorting, so this has no observable effect
+         *     beyond emitting the keyword, but it's accepted here for API symmetry with TEXT/TAG.
+         *     Requires {@code sortable} to also be set; throws {@link IllegalArgumentException}
+         *     otherwise.
+         */
+        public NumericField(boolean sortable, boolean unf) {
+            if (unf && !sortable) {
+                throw new IllegalArgumentException("unf requires sortable to be set.");
+            }
+            this.sortable = sortable;
+            this.unf = unf;
         }
 
         @Override
         public String[] toArgs() {
             ArrayList<String> args = new ArrayList<String>();
             args.add(FieldType.NUMERIC.toString());
-            if (sortable) args.add("SORTABLE");
+            if (sortable) {
+                args.add("SORTABLE");
+                if (unf) args.add("UNF");
+            }
             return args.toArray(new String[0]);
         }
     }
@@ -209,6 +274,7 @@ public class FTCreateOptions {
         private final boolean withSuffixTrie;
         private final boolean noSuffixTrie;
         private final boolean sortable;
+        private final boolean unf;
 
         /** Create a {@code TEXT} field. */
         public TextField() {
@@ -217,6 +283,7 @@ public class FTCreateOptions {
             this.withSuffixTrie = false;
             this.noSuffixTrie = false;
             this.sortable = false;
+            this.unf = false;
         }
 
         /**
@@ -242,6 +309,41 @@ public class FTCreateOptions {
             this.withSuffixTrie = withSuffixTrie;
             this.noSuffixTrie = noSuffixTrie;
             this.sortable = sortable;
+            this.unf = false;
+        }
+
+        /**
+         * Create a {@code TEXT} field.
+         *
+         * @param noStem If set, disables stemming when indexing the field.
+         * @param weight Declares the importance of this field when calculating result accuracy. Default
+         *     is 1.
+         * @param withSuffixTrie If set, keeps a suffix trie for the field to optimize contains and
+         *     suffix queries. Mutually exclusive with {@code noSuffixTrie}.
+         * @param noSuffixTrie If set, disables the suffix trie for the field. Mutually exclusive with
+         *     {@code withSuffixTrie}.
+         * @param sortable If set, the field value can be used for sorting.
+         * @param unf If set, keeps the sorted value in its original (un-normalized) form, e.g.
+         *     preserving case for TEXT/TAG fields that would otherwise be lowercased for sorting
+         *     (valkey-search 1.3.0). Requires {@code sortable} to also be set; throws {@link
+         *     IllegalArgumentException} otherwise.
+         */
+        public TextField(
+                boolean noStem,
+                Double weight,
+                boolean withSuffixTrie,
+                boolean noSuffixTrie,
+                boolean sortable,
+                boolean unf) {
+            if (unf && !sortable) {
+                throw new IllegalArgumentException("unf requires sortable to be set.");
+            }
+            this.noStem = noStem;
+            this.weight = weight;
+            this.withSuffixTrie = withSuffixTrie;
+            this.noSuffixTrie = noSuffixTrie;
+            this.sortable = sortable;
+            this.unf = unf;
         }
 
         @Override
@@ -262,7 +364,10 @@ public class FTCreateOptions {
             } else if (noSuffixTrie) {
                 args.add("NOSUFFIXTRIE");
             }
-            if (sortable) args.add("SORTABLE");
+            if (sortable) {
+                args.add("SORTABLE");
+                if (unf) args.add("UNF");
+            }
             return args.toArray(new String[0]);
         }
     }
@@ -278,12 +383,14 @@ public class FTCreateOptions {
         private Optional<Character> separator;
         private final boolean caseSensitive;
         private final boolean sortable;
+        private final boolean unf;
 
         /** Create a <code>TAG</code> field. */
         public TagField() {
             this.separator = Optional.empty();
             this.caseSensitive = false;
             this.sortable = false;
+            this.unf = false;
         }
 
         /**
@@ -296,6 +403,7 @@ public class FTCreateOptions {
             this.separator = Optional.of(separator);
             this.caseSensitive = false;
             this.sortable = false;
+            this.unf = false;
         }
 
         /**
@@ -310,6 +418,7 @@ public class FTCreateOptions {
             this.separator = Optional.of(separator);
             this.caseSensitive = caseSensitive;
             this.sortable = false;
+            this.unf = false;
         }
 
         /**
@@ -322,6 +431,7 @@ public class FTCreateOptions {
             this.separator = Optional.empty();
             this.caseSensitive = caseSensitive;
             this.sortable = false;
+            this.unf = false;
         }
 
         /**
@@ -334,6 +444,7 @@ public class FTCreateOptions {
             this.separator = Optional.empty();
             this.caseSensitive = caseSensitive;
             this.sortable = sortable;
+            this.unf = false;
         }
 
         /**
@@ -348,6 +459,29 @@ public class FTCreateOptions {
             this.separator = Optional.of(separator);
             this.caseSensitive = caseSensitive;
             this.sortable = sortable;
+            this.unf = false;
+        }
+
+        /**
+         * Create a <code>TAG</code> field.
+         *
+         * @param separator Specify how text in the attribute is split into individual tags. Must be a
+         *     single character.
+         * @param caseSensitive Preserve the original letter cases of tags.
+         * @param sortable If set, the field value can be used for sorting.
+         * @param unf If set, keeps the sorted value in its original (un-normalized) form, e.g.
+         *     preserving case for TEXT/TAG fields that would otherwise be lowercased for sorting
+         *     (valkey-search 1.3.0). Requires {@code sortable} to also be set; throws {@link
+         *     IllegalArgumentException} otherwise.
+         */
+        public TagField(char separator, boolean caseSensitive, boolean sortable, boolean unf) {
+            if (unf && !sortable) {
+                throw new IllegalArgumentException("unf requires sortable to be set.");
+            }
+            this.separator = Optional.of(separator);
+            this.caseSensitive = caseSensitive;
+            this.sortable = sortable;
+            this.unf = unf;
         }
 
         @Override
@@ -363,6 +497,7 @@ public class FTCreateOptions {
             }
             if (sortable) {
                 args.add("SORTABLE");
+                if (unf) args.add("UNF");
             }
             return args.toArray(new String[0]);
         }
@@ -407,6 +542,26 @@ public class FTCreateOptions {
     private enum VectorAlgorithm {
         HNSW,
         FLAT
+    }
+
+    /** Type for the vector field. */
+    public enum VectorType {
+        /** 4 bytes per element, IEEE 754 single precision. */
+        FLOAT32,
+        /**
+         * 2 bytes per element, IEEE 754 half precision. Added in valkey-search 1.3.0. Callers must pass
+         * already-encoded bytes, the same way {@code FLOAT32} works today -- GLIDE does not encode
+         * vectors on the caller's behalf.
+         */
+        FLOAT16,
+        /**
+         * 2 bytes per element, truncated IEEE 754 single precision (the top 16 bits of a FLOAT32 --
+         * sign, 8-bit exponent, 7-bit mantissa). Added in valkey-search 1.3.0. Callers must pass
+         * already-encoded bytes; there is no built-in Java packer for this format. The engine may
+         * refuse to create or load a BFLOAT16 index on a host whose CPU lacks a SIMD BF16 code path --
+         * this is a server-side capability check, not a GLIDE-side restriction.
+         */
+        BFLOAT16
     }
 
     private enum VectorAlgorithmParam {
@@ -528,9 +683,19 @@ public class FTCreateOptions {
         final Map<VectorAlgorithmParam, String> params = new HashMap<>();
 
         VectorFieldBuilder(DistanceMetric distanceMetric, int dimensions) {
-            params.put(VectorAlgorithmParam.TYPE, "FLOAT32");
+            params.put(VectorAlgorithmParam.TYPE, VectorType.FLOAT32.toString());
             params.put(VectorAlgorithmParam.DIM, Integer.toString(dimensions));
             params.put(VectorAlgorithmParam.DISTANCE_METRIC, distanceMetric.toString());
+        }
+
+        /**
+         * Vector type: {@code FLOAT32} (the default if unset), {@code FLOAT16}, or {@code BFLOAT16}.
+         * Equivalent to {@code TYPE} on the module API.
+         */
+        @SuppressWarnings("unchecked")
+        public T type(@NonNull VectorType type) {
+            params.put(VectorAlgorithmParam.TYPE, type.toString());
+            return (T) this;
         }
 
         /**
