@@ -1,9 +1,15 @@
 #!/usr/bin/env bash
-# Reproduces the "Modules Tests (Linux)" job from
-# .github/workflows/node-modules.yml on this machine, as closely as
-# possible, against an overridable module image (D1: don't pin a new CI
-# image; prove 1.3 support via a local run of the SAME job against a
-# 1.3-bearing image instead).
+# Reproduces the "Modules Tests (Linux)" job from each language's own
+# <lang>-modules.yml on this machine, as closely as possible, against an
+# overridable module image (D1: don't pin a new CI image; prove 1.3
+# support via a local run of the SAME job against a 1.3-bearing image
+# instead). Shared across every language's port branch -- see
+# VALKEY-SEARCH-1.3.PLAN.md's ports checklist -- so this file is a single
+# source of truth per language, selected via MODULES_TEST_LANG, rather
+# than N language branches each overwriting the whole script and
+# colliding with each other and with Python's own CI-sync guard
+# (tests/test_ci_workflow_sync.py pins this file's Python invocation
+# verbatim).
 #
 # Shares the docker start/verify logic with
 # .github/actions/start-valkey-docker/action.yml via
@@ -16,17 +22,36 @@
 #   IMAGE=valkey/valkey-bundle:9.1.3 EMULATE_RELEASE="" utils/run-modules-ci-locally.sh   # 2: 9.1.3, search 1.2.1 (skip-proof)
 #   EMULATE_RELEASE="" utils/run-modules-ci-locally.sh                    # 3: 9.2.0-rc2, module's own default emulate-release (1.0.0) -- E-2 equivalent (D22)
 #
+# MODULES_TEST_LANG selects which language's test tail runs (default
+# "python", preserving every existing caller's behaviour byte-for-byte):
+#   MODULES_TEST_LANG=python utils/run-modules-ci-locally.sh   # default
+#   MODULES_TEST_LANG=node utils/run-modules-ci-locally.sh
+#   MODULES_TEST_LANG=java utils/run-modules-ci-locally.sh
+#   MODULES_TEST_LANG=go utils/run-modules-ci-locally.sh
+#
 # See BUILD-MODULES-1.3.md (python/) for narrated example runs and
 # Mac-vs-CI-runner differences (notably: Docker Desktop on macOS shares
 # /Users by default, not /tmp -- any file this script bind-mounts into a
 # container MUST live under a /Users path or the mount silently becomes an
 # empty directory instead of the file, with no error).
 #
-# Requires: docker, valkey-cli (Homebrew: `brew install valkey`), and the
-# Node client already built (npm ci && npm run build) -- this script does
-# not rebuild the native addon, matching the CI job's "Install and build"
-# step only in effect, not in mechanism (assumes a dev checkout that's
-# already built).
+# Requires, per MODULES_TEST_LANG:
+#   python (default): the Python client already built (python3 dev.py
+#     build --client async && --client sync) -- this script does not
+#     rebuild the wrapper, matching the CI job's "Build Python wrapper"
+#     step only in effect, not in mechanism.
+#   node: the Node client already built (npm ci && npm run build) --
+#     this script does not rebuild the native addon.
+#   java: protoc 29.1 pinned under tools/protoc-29.1/ (see
+#     BUILD-MODULES-1.3.md's "Java build: protoc 29.1" section -- a newer
+#     system protoc generates code the project's pinned 4.29.6 runtime
+#     can't compile).
+#   go: docker, the Rust toolchain + cbindgen (`cargo install cbindgen`),
+#     and `protoc-gen-go` (`go install
+#     google.golang.org/protobuf/cmd/protoc-gen-go@v1.33.0`). This script
+#     runs `make build-glide-client generate-protobuf` itself before
+#     testing, so a stale native lib or stale generated protobuf can't
+#     produce a false green.
 
 set -euo pipefail
 
@@ -94,13 +119,38 @@ for port in "$STANDALONE_PORT" $(seq "$CLUSTER_PORT_START" "$((CLUSTER_PORT_STAR
 done
 
 echo "=== Running modules tests ==="
-cd "${REPO_ROOT}/node"
-# Single-sourced from .github/workflows/node-modules.yml's "Run modules
-# tests" step -- these must not drift independently; see
-# tests/test_ci_workflow_sync.test.ts, which greps the workflow file for
-# this exact arg list and fails the suite if it ever changes there without
-# a matching update here. Assumes a dev checkout that's already built
-# (npm ci && npm run build), matching the Python runner's own assumption.
-npm run test:modules -- \
-    --standalone-endpoints="${MODULES_STANDALONE_ENDPOINT}" \
-    --cluster-endpoints="${MODULES_CLUSTER_ENDPOINTS}"
+MODULES_TEST_LANG="${MODULES_TEST_LANG:-python}"
+case "$MODULES_TEST_LANG" in
+    python)
+        cd "${REPO_ROOT}/python"
+        # Single-sourced from .github/workflows/python-modules.yml's "Run modules
+        # tests" step (R2-H-1 fix #3: these must not drift independently -- see
+        # tests/test_ci_workflow_sync.py, which greps the workflow file for this
+        # exact arg list and fails the test suite if it ever changes there without
+        # a matching update here).
+        python3 dev.py test --args \
+            --standalone-endpoints="${MODULES_STANDALONE_ENDPOINT}" \
+            --cluster-endpoints="${MODULES_CLUSTER_ENDPOINTS}" \
+            -k server_modules \
+            --async-backend=asyncio \
+            --html=pytest_report.html \
+            --self-contained-html \
+            -rs
+        ;;
+    node)
+        cd "${REPO_ROOT}/node"
+        # Single-sourced from .github/workflows/node-modules.yml's "Run modules
+        # tests" step -- these must not drift independently; see
+        # tests/ServerModulesCiSync.test.ts, which greps the workflow file for
+        # this exact arg list and fails the suite if it ever changes there without
+        # a matching update here. Assumes a dev checkout that's already built
+        # (npm ci && npm run build), matching the Python arm's own assumption.
+        npm run test:modules -- \
+            --standalone-endpoints="${MODULES_STANDALONE_ENDPOINT}" \
+            --cluster-endpoints="${MODULES_CLUSTER_ENDPOINTS}"
+        ;;
+    *)
+        echo "ERROR: unknown MODULES_TEST_LANG '${MODULES_TEST_LANG}' (expected python, node, java or go)" >&2
+        exit 1
+        ;;
+esac
