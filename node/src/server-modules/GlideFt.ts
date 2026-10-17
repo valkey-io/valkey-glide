@@ -159,6 +159,22 @@ export class GlideFt {
             if (options.punctuation) {
                 args.push("PUNCTUATION", options.punctuation);
             }
+
+            if (options.filter !== undefined) {
+                if (options.filter === "") {
+                    throw new Error("filter cannot be empty.");
+                }
+
+                args.push("FILTER", options.filter);
+            }
+
+            if (options.scoreField !== undefined) {
+                args.push("SCORE_FIELD", options.scoreField);
+            }
+
+            if (options.noHighlight) {
+                args.push("NOHL");
+            }
         }
 
         args.push("SCHEMA");
@@ -190,6 +206,12 @@ export class GlideFt {
 
                     if (f.sortable) {
                         args.push("SORTABLE");
+
+                        if (f.unf) {
+                            args.push("UNF");
+                        }
+                    } else if (f.unf) {
+                        throw new Error("unf requires sortable to be set.");
                     }
 
                     break;
@@ -206,6 +228,12 @@ export class GlideFt {
 
                     if (f.sortable) {
                         args.push("SORTABLE");
+
+                        if (f.unf) {
+                            args.push("UNF");
+                        }
+                    } else if (f.unf) {
+                        throw new Error("unf requires sortable to be set.");
                     }
 
                     break;
@@ -214,6 +242,12 @@ export class GlideFt {
                 case "NUMERIC": {
                     if (f.sortable) {
                         args.push("SORTABLE");
+
+                        if (f.unf) {
+                            args.push("UNF");
+                        }
+                    } else if (f.unf) {
+                        throw new Error("unf requires sortable to be set.");
                     }
 
                     break;
@@ -1019,6 +1053,15 @@ function _addFtSearchOptions(options?: FtSearchOptions): GlideString[] {
         args.push("SLOP", options.slop.toString());
     }
 
+    // INKEYS
+    if (options.inKeys !== undefined) {
+        args.push(
+            "INKEYS",
+            options.inKeys.length.toString(),
+            ...options.inKeys,
+        );
+    }
+
     // RETURN
     if (options.returnFields) {
         const returnFields: GlideString[] = [];
@@ -1071,9 +1114,14 @@ function _addFtSearchOptions(options?: FtSearchOptions): GlideString[] {
         );
     }
 
-    // COUNT
+    // COUNT: a bare COUNT token is not a real FT.SEARCH keyword --
+    // valkey-search's parser rejects it outright. The documented
+    // count-only form is LIMIT 0 0, which also returns just the total
+    // count with zero result rows. `count` and `limit` are mutually
+    // exclusive at the type level, so this never collides with the
+    // LIMIT emitted just above.
     if (options.count) {
-        args.push("COUNT");
+        args.push("LIMIT", "0", "0");
     }
 
     // DIALECT

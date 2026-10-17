@@ -12,6 +12,13 @@ interface BaseField {
     alias?: GlideString;
     /** If set, the field value can be used for sorting. Applies to TEXT, TAG, and NUMERIC fields. */
     sortable?: boolean;
+    /**
+     * If set, keeps the sorted value in its original (un-normalized) form, e.g. preserving case
+     * for TEXT/TAG fields that would otherwise be lowercased for sorting (valkey-search 1.3.0).
+     * Requires `sortable` to also be set; emitted directly after `SORTABLE`, the only position
+     * valkey-search recognises `UNF` in. Needs `search.emulate-release` >= 1.3.0.
+     */
+    unf?: boolean;
 }
 
 /**
@@ -81,8 +88,12 @@ interface VectorFieldAttributes {
      * Equivalent to `DISTANCE_METRIC` in the module API.
      */
     distanceMetric: "L2" | "IP" | "COSINE";
-    /** Vector type. The only supported type is FLOAT32. */
-    type?: "FLOAT32";
+    /**
+     * Vector type. `FLOAT32` is the default if unset. `FLOAT16` and `BFLOAT16` were added in
+     * valkey-search 1.3.0 (2 bytes per element each). Callers must pass already-encoded bytes
+     * for every type; GLIDE does not encode vectors on the caller's behalf.
+     */
+    type?: "FLOAT32" | "FLOAT16" | "BFLOAT16";
     /**
      * Initial vector capacity in the index affecting memory allocation size of the index.
      * Defaults to `1024`. Equivalent to `INITIAL_CAP` in the module API.
@@ -166,6 +177,27 @@ export interface FtCreateOptions {
     stopWords?: GlideString[];
     /** Custom punctuation characters to use during tokenization. */
     punctuation?: GlideString;
+    /**
+     * A filter expression limiting which documents the index applies to (valkey-search 1.3.0).
+     * A document that doesn't match this expression is excluded from the index even if its key
+     * matches a configured prefix. Cannot be an empty string.
+     */
+    filter?: GlideString;
+    /**
+     * The name of a document field whose numeric value is used as the document's custom score,
+     * multiplying into the final relevance score (valkey-search 1.3.0). The field must already
+     * exist in the document; it is not itself a schema definition. FT.INFO only reports this
+     * option back under `index_definition`'s `score_field` key when `search.emulate-release` is
+     * at least 1.3.0; below that level the pair is omitted and `default_score` reports the
+     * literal string "1" regardless of this option. The scoring behaviour itself is unaffected.
+     */
+    scoreField?: GlideString;
+    /**
+     * Emits `NOHL`. valkey-search does not support highlighting at all, so this is a genuine
+     * no-op on this engine; the token is accepted but not even stored for FT.INFO to report.
+     * Implemented for wire compatibility with RediSearch clients.
+     */
+    noHighlight?: boolean;
 }
 
 /** Additional parameters for {@link GlideFt.aggregate | FT.AGGREGATE} command. */
@@ -254,6 +286,85 @@ export interface FtAggregateReducer {
     name?: GlideString;
 }
 
+/**
+ * Typed factories for the reducer functions valkey-search 1.3.0 added, built on top of the
+ * generic {@link FtAggregateReducer} shape. Equivalent to Python's
+ * `FtAggregateReducer.to_list`/`first_value`/`random_sample` classmethods.
+ */
+export const FtAggregateReducer = {
+    /**
+     * Creates a TOLIST reducer, which collects all values for `field` across the records in a
+     * group into a single array, removing duplicates and nil values. If a value is itself an
+     * array, it is flattened one level before being added. Values are returned in the order they
+     * were first encountered.
+     *
+     * @param field - The property whose values are collected into a list.
+     * @param name - User defined property name for the reducer. If not provided, the server
+     *     generates a default name.
+     */
+    toList(field: GlideString, name?: GlideString): FtAggregateReducer {
+        return { function: "TOLIST", args: [field], name };
+    },
+
+    /**
+     * Creates a FIRST_VALUE reducer, which returns the value of `field` from a single record in
+     * the group. Without `by`, the first record encountered wins. With `by`, the record whose
+     * `by` property is smallest (`SortOrder.ASC`, the default) or largest (`SortOrder.DESC`)
+     * wins; ties keep the first-encountered record.
+     *
+     * @param field - The property whose value is returned.
+     * @param options - (Optional) `by`: the property used to choose which record's value of
+     *     `field` is returned, required if `order` is specified. `order`: the direction used to
+     *     pick the winning record when `by` is set.
+     * @param name - User defined property name for the reducer. If not provided, the server
+     *     generates a default name.
+     * @throws Error if `order` is specified without `by`.
+     */
+    firstValue(
+        field: GlideString,
+        options?: { by?: GlideString; order?: SortOrder | "ASC" | "DESC" },
+        name?: GlideString,
+    ): FtAggregateReducer {
+        if (options?.order !== undefined && options?.by === undefined) {
+            throw new Error("firstValue: order requires by to be set.");
+        }
+
+        const args: GlideString[] = [field];
+
+        if (options?.by !== undefined) {
+            args.push("BY", options.by);
+
+            if (options?.order !== undefined) {
+                args.push(options.order);
+            }
+        }
+
+        return { function: "FIRST_VALUE", args, name };
+    },
+
+    /**
+     * Creates a RANDOM_SAMPLE reducer, which returns a uniform random sample of up to `size`
+     * values of `field` from the records in a group, using reservoir sampling.
+     *
+     * @param field - The property to sample values from.
+     * @param size - The maximum number of values to sample. Must be a non-negative integer no
+     *     greater than `1000`; the server rejects values outside this range.
+     * @param name - User defined property name for the reducer. If not provided, the server
+     *     generates a default name.
+     */
+    randomSample(
+        field: GlideString,
+        size: number,
+        name?: GlideString,
+    ): FtAggregateReducer {
+        return {
+            function: "RANDOM_SAMPLE",
+            args: [field, size.toString()],
+            name,
+        };
+    },
+};
+
 /** A clause for sorting the pipeline up until the point of SORTBY, using a list of properties. */
 export interface FtAggregateSortBy {
     type: "SORTBY";
@@ -290,6 +401,14 @@ export interface FtAggregateApply {
 export type FtSearchOptions = {
     /** Query timeout in milliseconds. */
     timeout?: number;
+
+    /**
+     * Restricts the search to only this set of keys, filtering out any matching result whose key
+     * is not in the list. The result count is adjusted to reflect the filtered set. `[]` (an
+     * explicit empty array) is distinct from the default `undefined`: `undefined` omits `INKEYS`
+     * entirely (no restriction), while `[]` sends `INKEYS 0` and excludes every result.
+     */
+    inKeys?: GlideString[];
 
     /**
      * Add a field to be returned.
@@ -360,8 +479,9 @@ export type FtSearchOptions = {
       }
     | {
           /**
-           * Once set, the query will return only the number of documents in the result set without actually
-           * returning them.
+           * Once set, the query returns only the number of documents in the result set without
+           * actually returning them. Serialized as `LIMIT 0 0`: a bare `COUNT` token is not a
+           * real FT.SEARCH keyword -- valkey-search's parser rejects it outright.
            */
           count?: boolean;
           /** `limit` and `count` are mutually exclusive. */
