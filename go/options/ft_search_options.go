@@ -87,6 +87,15 @@ type FtSearchOptions struct {
 	Limit *FtSearchLimit
 	// NoContent returns only document IDs without field content.
 	NoContent bool
+	// InKeys restricts the search to only this set of keys, filtering out any matching result
+	// whose key is not in the list. The result count is adjusted to reflect the filtered set. A
+	// non-nil empty slice is distinct from nil: nil omits INKEYS entirely (no restriction), while
+	// an empty (non-nil) slice sends INKEYS 0 and excludes every result.
+	InKeys []string
+	// Count, once set, returns only the total number of matching documents, with no document rows
+	// at all. Serialized as LIMIT 0 0 -- a bare COUNT token is not a real FT.SEARCH keyword;
+	// valkey-search's parser rejects it outright. Mutually exclusive with Limit.
+	Count bool
 	// Dialect sets the query dialect version. The only supported dialect is 2.
 	Dialect *int
 	// Verbatim disables stemming on text terms in the query.
@@ -115,6 +124,9 @@ func (o *FtSearchOptions) ToArgs() ([]string, error) {
 	if o.SortByOrder != "" && o.SortBy == "" {
 		return nil, errors.New("SortByOrder requires SortBy to be set")
 	}
+	if o.Count && o.Limit != nil {
+		return nil, errors.New("Count and Limit are mutually exclusive")
+	}
 	args := []string{}
 	if o.ShardScope != "" {
 		args = append(args, string(o.ShardScope))
@@ -133,6 +145,10 @@ func (o *FtSearchOptions) ToArgs() ([]string, error) {
 	}
 	if o.Slop != nil {
 		args = append(args, "SLOP", strconv.Itoa(*o.Slop))
+	}
+	if o.InKeys != nil {
+		args = append(args, "INKEYS", strconv.Itoa(len(o.InKeys)))
+		args = append(args, o.InKeys...)
 	}
 	if len(o.ReturnFields) > 0 {
 		fieldArgs := []string{}
@@ -165,6 +181,12 @@ func (o *FtSearchOptions) ToArgs() ([]string, error) {
 	}
 	if o.Limit != nil {
 		args = append(args, "LIMIT", strconv.Itoa(o.Limit.Offset), strconv.Itoa(o.Limit.Count))
+	}
+	if o.Count {
+		// COUNT is not a real FT.SEARCH keyword -- valkey-search's parser rejects a bare COUNT
+		// token outright. The count-only form the server actually recognises is LIMIT 0 0; the
+		// guard at the top of this method already confirmed Limit is unset.
+		args = append(args, "LIMIT", "0", "0")
 	}
 	if o.Dialect != nil {
 		args = append(args, "DIALECT", strconv.Itoa(*o.Dialect))

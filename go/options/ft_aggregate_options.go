@@ -47,6 +47,57 @@ type FtAggregateReducer struct {
 	Name string
 }
 
+// NewToListReducer creates a TOLIST reducer, which collects all values for field across the
+// records in a group into a single array, removing duplicates and nil values. If a value is
+// itself an array, it is flattened one level before being added. Values are returned in the
+// order they were first encountered.
+func NewToListReducer(field string, name string) FtAggregateReducer {
+	return FtAggregateReducer{Function: "TOLIST", Args: []string{field}, Name: name}
+}
+
+// FtAggregateFirstValueOptions holds the optional By/Order parameters for NewFirstValueReducer.
+type FtAggregateFirstValueOptions struct {
+	// By is the property used to choose which record's value of Field is returned. Required if
+	// Order is set.
+	By string
+	// Order is the direction used to pick the winning record when By is set.
+	Order constants.FtAggregateOrderBy
+}
+
+// NewFirstValueReducer creates a FIRST_VALUE reducer, which returns the value of field from a
+// single record in the group. Without options.By, the first record encountered wins. With
+// options.By, the record whose By property is smallest (the default) or largest (per
+// options.Order) wins; ties keep the first-encountered record. Returns an error if Order is set
+// without By.
+func NewFirstValueReducer(
+	field string, options *FtAggregateFirstValueOptions, name string,
+) (FtAggregateReducer, error) {
+	args := []string{field}
+	if options != nil {
+		if options.Order != "" && options.By == "" {
+			return FtAggregateReducer{}, errors.New("FirstValue: Order requires By to be set")
+		}
+		if options.By != "" {
+			args = append(args, "BY", options.By)
+			if options.Order != "" {
+				args = append(args, string(options.Order))
+			}
+		}
+	}
+	return FtAggregateReducer{Function: "FIRST_VALUE", Args: args, Name: name}, nil
+}
+
+// NewRandomSampleReducer creates a RANDOM_SAMPLE reducer, which returns a uniform random sample
+// of up to size values of field from the records in a group, using reservoir sampling. size must
+// be a non-negative integer no greater than 1000; the server rejects values outside this range.
+func NewRandomSampleReducer(field string, size int, name string) FtAggregateReducer {
+	return FtAggregateReducer{
+		Function: "RANDOM_SAMPLE",
+		Args:     []string{field, strconv.Itoa(size)},
+		Name:     name,
+	}
+}
+
 func (r *FtAggregateReducer) toArgs() []string {
 	args := []string{"REDUCE", r.Function, strconv.Itoa(len(r.Args))}
 	args = append(args, r.Args...)

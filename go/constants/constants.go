@@ -339,8 +339,20 @@ const (
 type VectorDataType string
 
 const (
-	// VectorDataTypeFloat32 is the FLOAT32 vector type (default).
+	// VectorDataTypeFloat32 is the FLOAT32 vector type (default). 4 bytes per element, IEEE 754
+	// single precision.
 	VectorDataTypeFloat32 VectorDataType = "FLOAT32"
+	// VectorDataTypeFloat16 is the FLOAT16 vector type (valkey-search 1.3.0). 2 bytes per
+	// element, IEEE 754 half precision. Callers must pass already-encoded bytes, the same way
+	// FLOAT32 works today -- GLIDE does not encode vectors on the caller's behalf.
+	VectorDataTypeFloat16 VectorDataType = "FLOAT16"
+	// VectorDataTypeBfloat16 is the BFLOAT16 vector type (valkey-search 1.3.0). 2 bytes per
+	// element, truncated IEEE 754 single precision (the top 16 bits of a FLOAT32 -- sign, 8-bit
+	// exponent, 7-bit mantissa). Callers must pass already-encoded bytes; there is no built-in Go
+	// packer for this format. The engine may refuse to create or load a BFLOAT16 index on a host
+	// whose CPU lacks a SIMD BF16 code path -- this is a server-side capability check, not a
+	// GLIDE-side restriction.
+	VectorDataTypeBfloat16 VectorDataType = "BFLOAT16"
 )
 
 // IndexDataType is the type of the index dataset.

@@ -277,3 +277,167 @@ func Example_ftAggregate() {
 	// Output:
 	// 2
 }
+
+// Example_clusterFtSearchInKeys exercises the valkey-search 1.3 INKEYS option
+// (QA/BRIEF-WAVE1-PORTS.md wave 1): absent (no restriction), an explicit empty slice (INKEYS 0,
+// excludes every result), and a list (restricts to just those keys).
+func Example_clusterFtSearchInKeys() {
+	if !*vssTest {
+		// Requires a search 1.3-capable server. Run with -vss-test to enable.
+		fmt.Println("3 0 2")
+		return
+	}
+	var client *ClusterClient = getExampleClusterClient()
+	ctx := context.Background()
+
+	prefix := "{inkeysdoc}:"
+	index := "{inkeysdoc}:index"
+
+	_, err := glideft.ClusterFtCreate(
+		ctx, client, index,
+		[]options.Field{options.NewTextField("title")},
+		&options.FtCreateOptions{DataType: constants.IndexDataTypeHash, Prefixes: []string{prefix}},
+	)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+
+	client.HSet(ctx, prefix+"1", map[string]string{"title": "hello world"})
+	client.HSet(ctx, prefix+"2", map[string]string{"title": "hello world"})
+	client.HSet(ctx, prefix+"3", map[string]string{"title": "hello world"})
+
+	time.Sleep(time.Second)
+
+	all, err := glideft.ClusterFtSearch(ctx, client, index, "*", nil)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+
+	none, err := glideft.ClusterFtSearch(ctx, client, index, "*", &options.FtSearchOptions{InKeys: []string{}})
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+
+	some, err := glideft.ClusterFtSearch(
+		ctx, client, index, "*",
+		&options.FtSearchOptions{InKeys: []string{prefix + "1", prefix + "2"}},
+	)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+
+	fmt.Println(all.TotalResults, none.TotalResults, some.TotalResults)
+
+	glideft.ClusterFtDropIndex(ctx, client, index)
+
+	// Output:
+	// 3 0 2
+}
+
+// Example_ftSearchCount exercises the valkey-search 1.3 Count option (QA/BRIEF-WAVE1-PORTS.md
+// wave 1), which serializes to LIMIT 0 0 -- a bare COUNT token is not a real FT.SEARCH keyword.
+func Example_ftSearchCount() {
+	if !*vssTest {
+		// Requires a search 1.3-capable server. Run with -vss-test to enable.
+		fmt.Println(2)
+		return
+	}
+	var client *Client = getExampleClient()
+	ctx := context.Background()
+
+	index := "count_index"
+
+	_, err := glideft.FtCreate(
+		ctx, client, index,
+		[]options.Field{options.NewTextField("title")},
+		&options.FtCreateOptions{DataType: constants.IndexDataTypeHash},
+	)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+
+	client.HSet(ctx, "count:1", map[string]string{"title": "hello"})
+	client.HSet(ctx, "count:2", map[string]string{"title": "hello"})
+
+	time.Sleep(time.Second)
+
+	result, err := glideft.FtSearch(ctx, client, index, "*", &options.FtSearchOptions{Count: true})
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(result.TotalResults)
+
+	glideft.FtDropIndex(ctx, client, index)
+
+	// Output:
+	// 2
+}
+
+// Example_ftCreateFloat16Vector exercises the valkey-search 1.3 FLOAT16/BFLOAT16 vector data
+// types (QA/BRIEF-WAVE1-PORTS.md wave 1), replacing the hard-coded FLOAT32 default.
+func Example_ftCreateFloat16Vector() {
+	if !*vssTest {
+		// Requires a search 1.3-capable server. Run with -vss-test to enable.
+		fmt.Println("OK")
+		return
+	}
+	var client *Client = getExampleClient()
+	ctx := context.Background()
+
+	index := "float16_index"
+
+	result, err := glideft.FtCreate(
+		ctx, client, index,
+		[]options.Field{
+			options.NewVectorFieldFlat("vec", constants.DistanceMetricL2, 2).
+				SetType(constants.VectorDataTypeFloat16),
+		},
+		&options.FtCreateOptions{DataType: constants.IndexDataTypeHash},
+	)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(result)
+
+	glideft.FtDropIndex(ctx, client, index)
+
+	// Output:
+	// OK
+}
+
+// Example_ftCreateFilterScoreFieldNoHighlight exercises the valkey-search 1.3 FT.CREATE FILTER,
+// SCORE_FIELD and NOHL options (QA/BRIEF-WAVE1-PORTS.md wave 1).
+func Example_ftCreateFilterScoreFieldNoHighlight() {
+	if !*vssTest {
+		// Requires a search 1.3-capable server. Run with -vss-test to enable.
+		fmt.Println("OK")
+		return
+	}
+	var client *Client = getExampleClient()
+	ctx := context.Background()
+
+	index := "parity_index"
+
+	result, err := glideft.FtCreate(
+		ctx, client, index,
+		[]options.Field{
+			options.NewTextField("title").SetSortable(true).SetUnf(true),
+			options.NewNumericField("boost"),
+		},
+		&options.FtCreateOptions{
+			DataType:    constants.IndexDataTypeHash,
+			Filter:      "@title != ''",
+			ScoreField:  "boost",
+			NoHighlight: true,
+		},
+	)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(result)
+
+	glideft.FtDropIndex(ctx, client, index)
+
+	// Output:
+	// OK
+}

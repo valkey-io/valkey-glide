@@ -2390,3 +2390,182 @@ func (suite *GlideTestSuite) TestModuleFtSearchSortByReturnExcludesSortFieldStan
 
 	glideft.FtDropIndex(ctx, client, index)
 }
+
+// --- valkey-search 1.3 stable surface (QA/BRIEF-WAVE1-PORTS.md, wave 1) ---
+//
+// WITHSCORES/SCORER, ADDSCORES, WITHCURSOR/FT.CURSOR, FT.HYBRID and LoadField aliases are wave 2
+// (after #7335 merges) and are out of scope here.
+
+// classifyInkeysProbeError mirrors Python's classify_inkeys_probe_error / Node's
+// classifyInkeysProbeError / Java's VectorSearch13Tests.classifyInkeysProbeError.
+func classifyInkeysProbeError(msg string) bool {
+	return strings.Contains(msg, "Unexpected") && strings.Contains(msg, "INKEYS")
+}
+
+// probeSearch13CapabilityCluster probes a connected cluster client for valkey-search 1.3
+// capability using a real command plus a 1.3-only argument (INKEYS, added in rc1 / PR #967),
+// classified by error text rather than a version string -- a version string can be present
+// without the specific capability a test needs being live. The server-version-string gate
+// (SkipIfServerVersionLowerThan) used elsewhere in this suite can't tell apart a module's own
+// version from the server's, which is why this port needs its own probe. Fails the test loudly
+// (never returns a false "incapable") if the search module appears entirely absent.
+func (suite *GlideTestSuite) probeSearch13CapabilityCluster(
+	ctx context.Context, client *glide.ClusterClient,
+) bool {
+	probeIndex := "__glide_search_1_3_probe_" + uuid.New().String()
+	_, err := client.CustomCommand(ctx, []string{"FT.CREATE", probeIndex, "SCHEMA", "title", "TEXT"})
+	require.NoError(
+		suite.T(), err,
+		"search 1.3 capability probe could not create a test index (is the search module loaded at all?)",
+	)
+	defer func() {
+		if _, dropErr := client.CustomCommand(ctx, []string{"FT.DROPINDEX", probeIndex}); dropErr != nil {
+			// Retry once -- FT.CREATE and FT.DROPINDEX both use probeIndex as their own first
+			// argument, so they always route to the same primary; a cluster-routing mismatch is
+			// not a possible explanation for a retry also failing.
+			_, _ = client.CustomCommand(ctx, []string{"FT.DROPINDEX", probeIndex})
+		}
+	}()
+
+	_, err = client.CustomCommand(ctx, []string{"FT.SEARCH", probeIndex, "*", "INKEYS", "0"})
+	if err == nil {
+		return true
+	}
+	if classifyInkeysProbeError(err.Error()) {
+		return false
+	}
+	suite.FailNow("search 1.3 capability probe got an unexpected error: " + err.Error())
+	return false
+}
+
+// --- ft_search_inkeys ---
+
+func (suite *GlideTestSuite) TestModuleFtSearchInKeys() {
+	client := suite.defaultClusterClient()
+	ctx := context.Background()
+	if !suite.probeSearch13CapabilityCluster(ctx, client) {
+		suite.T().Skip("search module present but pre-1.3 (INKEYS probe rejected it)")
+	}
+
+	prefix := "{" + uuid.New().String() + "}:"
+	index := prefix + "index"
+
+	_, err := glideft.ClusterFtCreate(ctx, client, index,
+		[]options.Field{options.NewTextField("title")},
+		&options.FtCreateOptions{DataType: constants.IndexDataTypeHash, Prefixes: []string{prefix}})
+	assert.NoError(suite.T(), err)
+
+	key1 := prefix + "1"
+	key2 := prefix + "2"
+	key3 := prefix + "3"
+	for _, key := range []string{key1, key2, key3} {
+		_, err = client.HSet(ctx, key, map[string]string{"title": "hello world"})
+		assert.NoError(suite.T(), err)
+	}
+	time.Sleep(time.Second)
+
+	// absent -> no restriction, all 3 match
+	all, err := glideft.ClusterFtSearch(ctx, client, index, "*", nil)
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), int64(3), all.TotalResults)
+
+	// empty slice -> INKEYS 0, excludes every result
+	none, err := glideft.ClusterFtSearch(ctx, client, index, "*", &options.FtSearchOptions{InKeys: []string{}})
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), int64(0), none.TotalResults)
+
+	// a list -> restricts to just those keys
+	some, err := glideft.ClusterFtSearch(
+		ctx, client, index, "*", &options.FtSearchOptions{InKeys: []string{key1, key2}},
+	)
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), int64(2), some.TotalResults)
+}
+
+// --- ft_search_count ---
+
+func (suite *GlideTestSuite) TestModuleFtSearchCountMapsToLimitZeroZero() {
+	client := suite.defaultClusterClient()
+	ctx := context.Background()
+	if !suite.probeSearch13CapabilityCluster(ctx, client) {
+		suite.T().Skip("search module present but pre-1.3 (INKEYS probe rejected it)")
+	}
+
+	prefix := "{" + uuid.New().String() + "}:"
+	index := prefix + "index"
+
+	_, err := glideft.ClusterFtCreate(ctx, client, index,
+		[]options.Field{options.NewTextField("title")},
+		&options.FtCreateOptions{DataType: constants.IndexDataTypeHash, Prefixes: []string{prefix}})
+	assert.NoError(suite.T(), err)
+
+	_, err = client.HSet(ctx, prefix+"1", map[string]string{"title": "hello"})
+	assert.NoError(suite.T(), err)
+	_, err = client.HSet(ctx, prefix+"2", map[string]string{"title": "hello"})
+	assert.NoError(suite.T(), err)
+	time.Sleep(time.Second)
+
+	result, err := glideft.ClusterFtSearch(ctx, client, index, "*", &options.FtSearchOptions{Count: true})
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), int64(2), result.TotalResults)
+	assert.Equal(suite.T(), 0, len(result.Documents))
+}
+
+// --- ft_create float16/bfloat16 ---
+
+func (suite *GlideTestSuite) TestModuleFtCreateFloat16Bfloat16Vector() {
+	client := suite.defaultClusterClient()
+	ctx := context.Background()
+	if !suite.probeSearch13CapabilityCluster(ctx, client) {
+		suite.T().Skip("search module present but pre-1.3 (INKEYS probe rejected it)")
+	}
+
+	prefix := "{" + uuid.New().String() + "}:"
+	index := prefix + "index"
+
+	_, err := glideft.ClusterFtCreate(ctx, client, index,
+		[]options.Field{
+			options.NewVectorFieldFlat("vec16", constants.DistanceMetricL2, 2).
+				SetType(constants.VectorDataTypeFloat16),
+		},
+		&options.FtCreateOptions{DataType: constants.IndexDataTypeHash, Prefixes: []string{prefix}})
+	assert.NoError(suite.T(), err)
+
+	_, err = glideft.ClusterFtDropIndex(ctx, client, index)
+	assert.NoError(suite.T(), err)
+}
+
+// --- ft_create filter/score_field/nohl ---
+
+func (suite *GlideTestSuite) TestModuleFtCreateFilterScoreFieldNoHighlight() {
+	client := suite.defaultClusterClient()
+	ctx := context.Background()
+	if !suite.probeSearch13CapabilityCluster(ctx, client) {
+		suite.T().Skip("search module present but pre-1.3 (INKEYS probe rejected it)")
+	}
+
+	prefix := "{" + uuid.New().String() + "}:"
+	index := prefix + "index"
+
+	_, err := glideft.ClusterFtCreate(ctx, client, index,
+		[]options.Field{
+			options.NewTextField("title").SetSortable(true).SetUnf(true),
+			options.NewNumericField("boost"),
+		},
+		&options.FtCreateOptions{
+			DataType:    constants.IndexDataTypeHash,
+			Prefixes:    []string{prefix},
+			Filter:      "@title != ''",
+			ScoreField:  "boost",
+			NoHighlight: true,
+		})
+	assert.NoError(suite.T(), err)
+
+	_, err = client.HSet(ctx, prefix+"1", map[string]string{"title": "hello", "boost": "5"})
+	assert.NoError(suite.T(), err)
+	time.Sleep(time.Second)
+
+	info, err := glideft.ClusterFtInfo(ctx, client, index)
+	assert.NoError(suite.T(), err)
+	assert.NotEmpty(suite.T(), info)
+}
