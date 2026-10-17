@@ -4,6 +4,7 @@
 
 ### Features
 
+* Rust: Add `InfoSection` enum matching the other GLIDE clients ([#7366](https://github.com/valkey-io/valkey-glide/issues/7366))
 * All: Add `DELIFEQ` command support ([#6146](https://github.com/valkey-io/valkey-glide/issues/6146))
 
 ### Fixes

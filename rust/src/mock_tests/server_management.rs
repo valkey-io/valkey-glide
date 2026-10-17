@@ -14,6 +14,10 @@ async fn info_and_sections() {
     let m = Mock::bulk("# CPU\n");
     m.info_sections(&["cpu", "memory"]).await.unwrap();
     m.assert_args(&["INFO", "cpu", "memory"]);
+
+    let m = Mock::bulk("# Server\n");
+    m.info_sections(&[crate::commands::options::InfoSection::Server, crate::commands::options::InfoSection::ClusterInfo]).await.unwrap();
+    m.assert_args(&["INFO", "server", "cluster_info"]);
 }
 
 #[tokio::test]

@@ -20,7 +20,7 @@ resp_test!(info_non_empty, c, {
 });
 
 resp_test!(info_sections, c, {
-    let info = c.info_sections(&["server"]).await.unwrap();
+    let info = c.info_sections(&[valkey_glide::InfoSection::Server]).await.unwrap();
     assert!(!info.is_empty());
 });
 
