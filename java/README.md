@@ -6,6 +6,17 @@ Valkey General Language Independent Driver for the Enterprise (GLIDE), is an ope
 
 See GLIDE's Java [documentation site](https://glide.valkey.io/languages/java).
 
+## Pre-release IAM credential provider migration
+
+The custom IAM credential provider API is not present in any published Valkey GLIDE release. During its pre-release development, `GlideCredentialProvider#getCredentials()` changed to return `CompletableFuture<AwsCredentials>`. A synchronous provider must now wrap its result:
+
+```java
+GlideCredentialProvider provider = () ->
+    CompletableFuture.completedFuture(credentials);
+```
+
+This is intentionally source- and binary-incompatible with earlier development snapshots, but it does not affect compatibility with any published release.
+
 # Getting Started - Java Wrapper
 
 ## System Requirements

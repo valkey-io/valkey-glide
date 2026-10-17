@@ -2,9 +2,135 @@
 
 """Shared FFI helper utilities for converting Python arguments to C-compatible arrays."""
 
+import contextvars
+import os
+import threading
+import weakref
+from contextlib import contextmanager
 from enum import IntEnum
+from typing import Any, Iterator
 
 from glide_shared._glide_ffi import GlideFFI as _GlideFFI_singleton
+
+
+class _WeakCredentialProviderRegistry:
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._owners: dict[int, weakref.ReferenceType[Any]] = {}
+
+    def register(self, callback_id: int, owner: Any) -> None:
+        owner_ref: weakref.ReferenceType[Any]
+
+        def discard(ref: weakref.ReferenceType[Any]) -> None:
+            with self._lock:
+                if self._owners.get(callback_id) is ref:
+                    self._owners.pop(callback_id, None)
+
+        owner_ref = weakref.ref(owner, discard)
+        with self._lock:
+            if callback_id in self._owners:
+                raise RuntimeError(
+                    f"Credential provider callback ID {callback_id} is already registered"
+                )
+            self._owners[callback_id] = owner_ref
+
+    def get(self, callback_id: int) -> Any:
+        with self._lock:
+            ref = self._owners.get(callback_id)
+        return ref() if ref is not None else None
+
+    def unregister(self, callback_id: int, owner: Any) -> None:
+        with self._lock:
+            ref = self._owners.get(callback_id)
+            if ref is not None and ref() is owner:
+                self._owners.pop(callback_id, None)
+
+    def reset_after_fork(self) -> None:
+        self._lock = threading.Lock()
+        self._owners = {}
+
+
+_credential_provider_owners = _WeakCredentialProviderRegistry()
+_credential_provider_trampolines: dict[int, tuple[Any, Any]] = {}
+_credential_trampoline_lock = threading.Lock()
+_credential_id_lock = threading.Lock()
+_next_credential_id = 1
+
+
+def _allocate_credential_callback_id(ffi: Any) -> int:
+    """Allocate a process-unique provider ID outside ordinary pipe/pool IDs."""
+    global _next_credential_id
+    bits = int(ffi.sizeof("uintptr_t")) * 8
+    namespace_bit = 1 << (bits - 1)
+    max_sequence = namespace_bit - 1
+    with _credential_id_lock:
+        if _next_credential_id > max_sequence:
+            raise RuntimeError("Credential provider callback ID namespace exhausted")
+        callback_id = namespace_bit | _next_credential_id
+        _next_credential_id += 1
+    return callback_id
+
+
+def _reset_credential_callback_state_after_fork() -> None:
+    global _credential_id_lock, _credential_trampoline_lock
+    _credential_id_lock = threading.Lock()
+    _credential_trampoline_lock = threading.Lock()
+    _credential_provider_owners.reset_after_fork()
+
+
+if hasattr(os, "register_at_fork"):
+    os.register_at_fork(after_in_child=_reset_credential_callback_state_after_fork)
+
+
+class _CredentialProviderCallbackOwner:
+    def __init__(
+        self,
+        callback_id: int,
+        provider: Any,
+        *,
+        event_loop: Any = None,
+        trio_token: Any = None,
+        allow_async: bool = False,
+        provider_owner: Any = None,
+    ) -> None:
+        from glide_shared.config import _is_async_callable
+
+        self.callback_id = callback_id
+        self.provider = provider
+        self.is_async_callable = _is_async_callable(provider)
+        self.event_loop_ref = (
+            weakref.ref(event_loop) if event_loop is not None else None
+        )
+        self.trio_token = trio_token
+        self.allow_async = allow_async
+        try:
+            self.provider_owner_ref = (
+                weakref.ref(provider_owner) if provider_owner is not None else None
+            )
+        except TypeError:
+            self.provider_owner_ref = None
+        self._lock = threading.Lock()
+        self._closed = False
+        _credential_provider_owners.register(callback_id, self)
+
+    def event_loop(self) -> Any:
+        return self.event_loop_ref() if self.event_loop_ref is not None else None
+
+    def provider_owner(self) -> Any:
+        owner = (
+            self.provider_owner_ref() if self.provider_owner_ref is not None else None
+        )
+        return owner if owner is not None else self
+
+    def is_open(self) -> bool:
+        with self._lock:
+            return not self._closed
+
+    def close(self) -> None:
+        with self._lock:
+            self._closed = True
+        _credential_provider_owners.unregister(self.callback_id, self)
+
 
 ENCODING = "utf-8"
 
@@ -294,6 +420,504 @@ def create_address_resolver_callback(ffi, resolver_fn):
             return 0
 
     return ffi.callback("AddressResolverCallback", _address_resolver_callback)
+
+
+_CREDENTIAL_CALLBACK_FAILURE = 0
+
+
+# Native callbacks may execute synchronously on a foreign runtime thread.
+# Track the client whose user callback is executing so lifecycle operations on
+# that same client fail fast, without affecting unrelated threads or clients.
+_native_callback_thread_state = threading.local()
+_credential_provider_task_state: contextvars.ContextVar[tuple[Any, ...]] = (
+    contextvars.ContextVar("glide_credential_provider_owners", default=())
+)
+
+
+@contextmanager
+def _native_callback_execution(owner: Any) -> Iterator[bool]:
+    """Mark one provider callback without changing ordinary client lifecycle."""
+    owners = getattr(_native_callback_thread_state, "owners", ())
+    _native_callback_thread_state.owners = owners + (
+        (owner,) if owner is not None else ()
+    )
+    try:
+        yield True
+    finally:
+        if owner is not None:
+            current_owners = _native_callback_thread_state.owners
+            if len(current_owners) == 1:
+                del _native_callback_thread_state.owners
+            else:
+                _native_callback_thread_state.owners = current_owners[:-1]
+
+
+def _is_native_callback_executing(owner: Any) -> bool:
+    """Return whether this thread is inside ``owner``'s native callback."""
+    thread_owners: tuple[Any, ...] = getattr(
+        _native_callback_thread_state, "owners", ()
+    )
+    return any(item is owner for item in thread_owners)
+
+
+def _is_credential_provider_executing(owner) -> bool:
+    """Return whether this thread/task is inside ``owner``'s provider."""
+    task_owners: tuple[Any, ...] = _credential_provider_task_state.get()
+    return _is_native_callback_executing(owner) or any(
+        item is owner for item in task_owners
+    )
+
+
+async def _run_in_provider_task_context(owner, async_fn, *args):
+    """Run provider-owned awaitable work with a task-local reentrancy marker."""
+    token = _credential_provider_task_state.set(
+        _credential_provider_task_state.get() + (owner,)
+    )
+    try:
+        return await async_fn(*args)
+    finally:
+        _credential_provider_task_state.reset(token)
+
+
+_CREDENTIAL_CALLBACK_SUCCESS = 1
+_CREDENTIAL_CALLBACK_BUFFER_TOO_SMALL = 2
+_MAX_CREDENTIAL_BYTES = 1024 * 1024
+_CREDENTIAL_INNER_TIMEOUT_SECONDS = 8
+_CREDENTIAL_BRIDGE_TIMEOUT_SECONDS = 9
+
+
+class _AwaitableSchedulingError(RuntimeError):
+    """An owner runtime rejected work before the awaitable was scheduled."""
+
+
+async def _await_credential_result(awaitable, provider_owner):
+    """Await one provider result with a deadline below the Rust deadline."""
+    import anyio
+
+    async def await_result():
+        with anyio.fail_after(_CREDENTIAL_INNER_TIMEOUT_SECONDS):
+            return await awaitable
+
+    return await _run_in_provider_task_context(provider_owner, await_result)
+
+
+async def _call_async_credential_provider(provider, provider_owner):
+    """Call an async provider on its owning async runtime."""
+    import inspect
+
+    import anyio
+
+    async def call_provider():
+        result = provider()
+        if not inspect.isawaitable(result):
+            return result
+        with anyio.fail_after(_CREDENTIAL_INNER_TIMEOUT_SECONDS):
+            return await result
+
+    return await _run_in_provider_task_context(provider_owner, call_provider)
+
+
+def _consume_bridge_completion(future) -> None:
+    """Retrieve a bridge result so late task failures are never unobserved."""
+    import concurrent.futures
+
+    try:
+        future.exception()
+    except concurrent.futures.CancelledError:
+        pass
+
+
+def _run_coroutine_on_asyncio_loop(coroutine, event_loop):
+    """Run a coroutine from the native callback thread on an asyncio loop."""
+    import asyncio
+    import concurrent.futures
+
+    if event_loop is None or event_loop.is_closed():
+        _dispose_awaitable(coroutine)
+        raise _AwaitableSchedulingError(
+            "The credential provider's asyncio loop is unavailable"
+        )
+
+    try:
+        future = asyncio.run_coroutine_threadsafe(coroutine, event_loop)
+    except BaseException as error:
+        _dispose_awaitable(coroutine)
+        raise _AwaitableSchedulingError(
+            "The credential provider could not be scheduled on its asyncio loop"
+        ) from error
+
+    future.add_done_callback(_consume_bridge_completion)
+    try:
+        return future.result(timeout=_CREDENTIAL_BRIDGE_TIMEOUT_SECONDS)
+    except concurrent.futures.TimeoutError:
+        # The coroutine belongs to the event loop now. Request cancellation on
+        # that loop; never cancel or close it directly from this callback thread.
+        event_loop.call_soon_threadsafe(future.cancel)
+        raise
+
+
+class _TrioBridgeState:
+    """Coordinate one foreign-thread callback with its owning Trio run."""
+
+    def __init__(self, bridge, abandoned_cleanup=None) -> None:
+        self.bridge = bridge
+        self.abandoned_cleanup = abandoned_cleanup
+        self.lock = threading.Lock()
+        self.cancel_scope = None
+        self.abandoned = False
+        self.provider_started = False
+        self.cleanup_done = False
+
+    def abandon(self) -> None:
+        """Mark the waiter gone before requesting owner-thread cancellation."""
+        with self.lock:
+            self.abandoned = True
+
+    def should_schedule(self) -> bool:
+        """Return whether owner-side scheduling may still create a task."""
+        with self.lock:
+            return not self.abandoned
+
+    def begin_provider(self, cancel_scope) -> bool:
+        """Transfer work to a started provider task unless already abandoned."""
+        with self.lock:
+            self.cancel_scope = cancel_scope
+            if self.abandoned:
+                return False
+            self.provider_started = True
+            return True
+
+    def cancel_on_owner(self) -> None:
+        """Cancel started work; a not-yet-started runner observes abandonment."""
+        with self.lock:
+            cancel_scope = self.cancel_scope if self.provider_started else None
+        if cancel_scope is not None:
+            cancel_scope.cancel()
+
+    def dispose_abandoned_on_owner(self) -> None:
+        """Dispose never-started awaitable input exactly once on the Trio thread."""
+        with self.lock:
+            if self.cleanup_done:
+                return
+            self.cleanup_done = True
+            cleanup = self.abandoned_cleanup
+        if cleanup is not None:
+            cleanup()
+
+    def set_result(self, result) -> None:
+        if not self.bridge.done():
+            self.bridge.set_result(result)
+
+    def set_exception(self, error) -> None:
+        if not self.bridge.done():
+            self.bridge.set_exception(error)
+
+    def cancel_bridge(self) -> None:
+        if not self.bridge.done():
+            self.bridge.cancel()
+
+
+def _run_coroutine_on_trio_loop(  # noqa: C901
+    async_fn, args, trio_token, *, abandoned_cleanup=None
+):
+    """Schedule one credential task nonblockingly on its captured Trio run."""
+    import concurrent.futures
+
+    import trio
+
+    bridge = concurrent.futures.Future()
+    state = _TrioBridgeState(bridge, abandoned_cleanup)
+
+    async def runner():
+        try:
+            with trio.CancelScope() as cancel_scope:
+                if not state.begin_provider(cancel_scope):
+                    state.dispose_abandoned_on_owner()
+                    state.cancel_bridge()
+                    return
+                result = await async_fn(*args)
+            if cancel_scope.cancelled_caught:
+                state.cancel_bridge()
+            else:
+                state.set_result(result)
+        except BaseException as error:
+            state.set_exception(error)
+
+    def schedule() -> None:
+        # This callback executes on the Trio thread. It must never raise: Trio
+        # treats exceptions from run_sync_soon callbacks as internal failures.
+        try:
+            if not state.should_schedule():
+                state.dispose_abandoned_on_owner()
+                state.cancel_bridge()
+                return
+            trio.lowlevel.spawn_system_task(runner)
+        except BaseException as error:
+            state.dispose_abandoned_on_owner()
+            state.set_exception(error)
+
+    bridge.add_done_callback(_consume_bridge_completion)
+    try:
+        # This returns as soon as the callback is queued and never waits for a
+        # stalled owner run to execute it.
+        trio_token.run_sync_soon(schedule)
+    except BaseException as error:
+        raise _AwaitableSchedulingError(
+            "The credential provider could not be scheduled on its Trio run"
+        ) from error
+
+    try:
+        return bridge.result(timeout=_CREDENTIAL_BRIDGE_TIMEOUT_SECONDS)
+    except concurrent.futures.TimeoutError:
+        state.abandon()
+        try:
+            trio_token.run_sync_soon(state.cancel_on_owner)
+        except trio.RunFinishedError:
+            # An accepted schedule callback is guaranteed to have run before
+            # Trio exits, and runner completion is observed by bridge's callback.
+            pass
+        raise
+
+
+def _run_async_credential_provider(provider, provider_owner, event_loop, trio_token):
+    """Invoke a known async provider on its captured asyncio or Trio runtime."""
+    if event_loop is not None:
+        return _run_coroutine_on_asyncio_loop(
+            _call_async_credential_provider(provider, provider_owner), event_loop
+        )
+    if trio_token is not None:
+        return _run_coroutine_on_trio_loop(
+            _call_async_credential_provider,
+            (provider, provider_owner),
+            trio_token,
+        )
+    raise RuntimeError(
+        "Async credential providers require a running asyncio or Trio context"
+    )
+
+
+def _run_awaitable_result(awaitable, provider_owner, event_loop, trio_token):
+    """Await a result returned by a nominally synchronous provider."""
+    if event_loop is not None:
+        try:
+            return _run_coroutine_on_asyncio_loop(
+                _await_credential_result(awaitable, provider_owner), event_loop
+            )
+        except _AwaitableSchedulingError:
+            _dispose_awaitable(awaitable)
+            raise
+    if trio_token is not None:
+        try:
+            return _run_coroutine_on_trio_loop(
+                _await_credential_result,
+                (awaitable, provider_owner),
+                trio_token,
+                abandoned_cleanup=lambda: _dispose_awaitable(awaitable),
+            )
+        except _AwaitableSchedulingError:
+            _dispose_awaitable(awaitable)
+            raise
+    _dispose_awaitable(awaitable)
+    raise RuntimeError(
+        "Credential provider returned an awaitable without an async client context"
+    )
+
+
+def _dispose_awaitable(awaitable) -> None:
+    """Cancel or close an awaitable only before it belongs to an owner runtime."""
+    cancel = getattr(awaitable, "cancel", None)
+    if callable(cancel):
+        cancel()
+    close = getattr(awaitable, "close", None)
+    if callable(close):
+        close()
+
+
+def _invoke_credential_provider_owner(ffi: Any, owner: Any, buffers: tuple[Any, ...]):
+    """Invoke one live provider owner and write its credentials."""
+    import inspect
+
+    provider = owner.provider
+    provider_marker = owner.provider_owner()
+    with _native_callback_execution(provider_marker) as admitted:
+        if not admitted or not owner.is_open():
+            return _CREDENTIAL_CALLBACK_FAILURE
+        owner_loop = owner.event_loop()
+        if owner.is_async_callable:
+            if not owner.allow_async:
+                raise TypeError(
+                    "The sync client does not support async credential providers"
+                )
+            credentials = _run_async_credential_provider(
+                provider,
+                provider_marker,
+                owner_loop,
+                owner.trio_token,
+            )
+        else:
+            credentials = provider()
+            if inspect.isawaitable(credentials):
+                if not owner.allow_async:
+                    _dispose_awaitable(credentials)
+                    raise TypeError(
+                        "The sync credential provider returned an awaitable; "
+                        "use a synchronous provider or the async client"
+                    )
+                credentials = _run_awaitable_result(
+                    credentials,
+                    provider_marker,
+                    owner_loop,
+                    owner.trio_token,
+                )
+
+        if not owner.is_open():
+            return _CREDENTIAL_CALLBACK_FAILURE
+        return _write_credentials_to_buffers(ffi, credentials, *buffers)
+
+
+def _get_credential_provider_trampoline(ffi: Any) -> Any:
+    ffi_id = id(ffi)
+    with _credential_trampoline_lock:
+        entry = _credential_provider_trampolines.get(ffi_id)
+        if entry is not None and entry[0] is ffi:
+            return entry[1]
+
+        def trampoline(client_id, *buffers):
+            owner = _credential_provider_owners.get(int(client_id))
+            if owner is None or not owner.is_open():
+                return _CREDENTIAL_CALLBACK_FAILURE
+            try:
+                return _invoke_credential_provider_owner(ffi, owner, buffers)
+            except BaseException:
+                import logging
+
+                logging.getLogger(__name__).warning("IAM credential provider failed")
+                return _CREDENTIAL_CALLBACK_FAILURE
+
+        callback = ffi.callback("CredentialProviderCallback", trampoline)
+        _credential_provider_trampolines[ffi_id] = (ffi, callback)
+        return callback
+
+
+def create_credential_provider_callback(
+    ffi,
+    credential_provider_fn,
+    *,
+    callback_id=None,
+    event_loop=None,
+    trio_token=None,
+    allow_async=False,
+    provider_owner=None,
+):
+    """Register a credential owner behind an FFI-stable weak trampoline.
+
+    The callback follows the native stateless tri-state protocol: 0 means
+    failure, 1 means success, and 2 requests larger buffers. A provider can be
+    called twice during large-value negotiation; no result is cached between
+    those calls.
+
+    Returns:
+        A ``(callback, owner)`` pair. The callback is typed NULL and the owner
+        is None when no provider is configured. Otherwise the caller strongly
+        owns the owner and must close it at the lifecycle transition where new
+        callbacks are no longer allowed. The module registry holds it weakly.
+    """
+    if credential_provider_fn is None:
+        return ffi.cast("CredentialProviderCallback", ffi.NULL), None
+
+    if callback_id is None:
+        callback_id = _allocate_credential_callback_id(ffi)
+    callback_owner = _CredentialProviderCallbackOwner(
+        callback_id,
+        credential_provider_fn,
+        event_loop=event_loop,
+        trio_token=trio_token,
+        allow_async=allow_async,
+        provider_owner=provider_owner,
+    )
+    return _get_credential_provider_trampoline(ffi), callback_owner
+
+
+def _write_credentials_to_buffers(
+    ffi,
+    credentials,
+    access_key_id_buf,
+    access_key_id_buf_len,
+    access_key_id_len_ptr,
+    secret_access_key_buf,
+    secret_access_key_buf_len,
+    secret_access_key_len_ptr,
+    session_token_buf,
+    session_token_buf_len,
+    session_token_len_ptr,
+    expires_at_millis_ptr,
+):
+    """Validate, pre-encode, and atomically write one credential result."""
+    from glide_shared.config import AwsCredentials
+
+    if not isinstance(credentials, AwsCredentials):
+        raise TypeError("credential_provider must return AwsCredentials")
+
+    access_key_id = credentials.access_key_id
+    secret_access_key = credentials.secret_access_key
+    session_token = credentials.session_token
+    expires_at = credentials.expires_at_epoch_millis
+
+    if not isinstance(access_key_id, str) or not access_key_id.strip():
+        raise ValueError("access_key_id must be a nonblank string")
+    if not isinstance(secret_access_key, str) or not secret_access_key.strip():
+        raise ValueError("secret_access_key must be a nonblank string")
+    if session_token is not None and not isinstance(session_token, str):
+        raise ValueError("session_token must be a string or None")
+    if expires_at is not None and (
+        not isinstance(expires_at, int)
+        or isinstance(expires_at, bool)
+        or expires_at < -(2**63)
+        or expires_at > 2**63 - 1
+    ):
+        raise ValueError("expires_at_epoch_millis must be a signed 64-bit integer")
+
+    encoded_access_key_id = access_key_id.encode(ENCODING)
+    encoded_secret_access_key = secret_access_key.encode(ENCODING)
+    encoded_session_token = (
+        session_token.encode(ENCODING) if session_token is not None else b""
+    )
+    encoded_fields = (
+        encoded_access_key_id,
+        encoded_secret_access_key,
+        encoded_session_token,
+    )
+    lengths = tuple(len(field) for field in encoded_fields)
+
+    if any(length > _MAX_CREDENTIAL_BYTES for length in lengths):
+        raise ValueError("Each credential field must not exceed 1 MiB")
+    if sum(lengths) > _MAX_CREDENTIAL_BYTES:
+        raise ValueError("Aggregate credential fields must not exceed 1 MiB")
+
+    access_key_id_len_ptr[0] = lengths[0]
+    secret_access_key_len_ptr[0] = lengths[1]
+    session_token_len_ptr[0] = lengths[2]
+
+    capacities = (
+        access_key_id_buf_len,
+        secret_access_key_buf_len,
+        session_token_buf_len,
+    )
+    if any(required > capacity for required, capacity in zip(lengths, capacities)):
+        # Status 2 is metadata-only: do not touch credential bytes or expiry.
+        return _CREDENTIAL_CALLBACK_BUFFER_TOO_SMALL
+
+    # All validation and capacity checks completed before the first write.
+    if encoded_access_key_id:
+        ffi.memmove(access_key_id_buf, encoded_access_key_id, lengths[0])
+    if encoded_secret_access_key:
+        ffi.memmove(secret_access_key_buf, encoded_secret_access_key, lengths[1])
+    if encoded_session_token:
+        ffi.memmove(session_token_buf, encoded_session_token, lengths[2])
+    expires_at_millis_ptr[0] = (
+        expires_at if expires_at is not None and expires_at > 0 else 0
+    )
+    return _CREDENTIAL_CALLBACK_SUCCESS
 
 
 def handle_command_result(ffi, lib, command_result, response_handler):
