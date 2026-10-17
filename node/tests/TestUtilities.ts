@@ -2793,6 +2793,7 @@ export function parseInfoResponse(response: string): Record<string, string> {
         // Ignore lines that start with '#'
         if (!line.startsWith("#")) {
             const [key, value] = line.trim().split(":");
+
             if (key) {
                 parsedResponse[key] = value;
             }
