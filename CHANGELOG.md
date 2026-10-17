@@ -1,5 +1,11 @@
 # Changelog
 
+## Pending 3.0
+
+### Breaking Changes
+
+* Node: Remove deprecated `parseInfoResponse` function from `Commands.ts` ([#7368](https://github.com/valkey-io/valkey-glide/issues/7368))
+
 ## Pending 2.6
 
 ### Features
