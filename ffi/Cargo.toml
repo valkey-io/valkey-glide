@@ -11,7 +11,7 @@ edition = "2024"
 [features]
 default = ["pool-support"]
 pool-support = []
-# RDMA over EFA. libfabric is dynamically linked at runtime.
+# RDMA over fabric. libfabric is dynamically linked at runtime.
 rdma = ["dep:glide-rdma", "glide-core/rdma"]
 
 [lib]

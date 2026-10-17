@@ -9,6 +9,8 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 use super::*;
+#[cfg(feature = "rdma")]
+use std::sync::atomic::{AtomicBool, Ordering};
 
 /// Whether this build has RDMA compiled in via the `rdma` feature.
 #[unsafe(no_mangle)]
@@ -16,10 +18,11 @@ pub extern "C" fn rdma_available() -> bool {
     cfg!(feature = "rdma")
 }
 
-/// Whether this machine can actually carry an RDMA transfer.
+/// Whether this build has RDMA compiled in and can load a compatible libfabric
+/// on this machine.
 ///
-/// Requires the build to have had the `rdma` feature enabled and the machine
-/// to have libfabric installed and fabric hardware available.
+/// It does not look for fabric hardware, so creating a client can still fail,
+/// for example with efa-direct on a machine without an EFA device.
 #[unsafe(no_mangle)]
 pub extern "C" fn rdma_usable() -> bool {
     #[cfg(feature = "rdma")]
@@ -39,20 +42,47 @@ pub extern "C" fn rdma_usable() -> bool {
 #[cfg(feature = "rdma")]
 pub struct RdmaRegion {
     /// Taken out for the length of each transfer, which lends it to the server,
-    /// and put back when the transfer hands it back. Stays empty only if a
-    /// cancelled transfer could not close the region.
+    /// and put back when the transfer hands it back. Stays empty once a transfer
+    /// ends without the server's reply: the fabric then decides when the memory
+    /// is safe to let go, and [`Self::released`] says when it has.
     buffer: Option<glide_rdma::RdmaBuffer>,
     capacity: usize,
+    /// Set once the fabric has let go of the caller's memory; see [`ForeignRegion`].
+    released: Arc<AtomicBool>,
+    /// The fabric the buffer was registered with, kept even once the buffer is
+    /// gone, so [`free_rdma_region`] can wait for the region to finish closing.
+    fabric: glide_rdma::RdmaFabric,
+}
+
+/// What [`free_rdma_region`] hands back when the fabric still holds the caller's
+/// memory, because a write may yet land in it or its region failed to close.
+///
+/// The caller must keep the memory alive until [`rdma_memory_released`] says so,
+/// then free this with [`free_rdma_memory_hold`].
+#[cfg(feature = "rdma")]
+pub struct RdmaMemoryHold {
+    released: Arc<AtomicBool>,
 }
 
 #[cfg(feature = "rdma")]
 impl RdmaRegion {
+    /// A region for a freshly registered `buffer` over the caller's memory, whose
+    /// release `released` reports.
+    fn new(buffer: glide_rdma::RdmaBuffer, released: Arc<AtomicBool>) -> Self {
+        Self {
+            capacity: buffer.capacity(),
+            fabric: buffer.fabric().clone(),
+            buffer: Some(buffer),
+            released,
+        }
+    }
+
     /// Take the buffer out for a transfer, or say why there is none.
     fn take(&mut self) -> Result<glide_rdma::RdmaBuffer, RdmaResult> {
         self.buffer.take().ok_or_else(|| {
             RdmaResult::rejected(
-                "the region was lost when a cancelled transfer could not close it; free \
-                 it and register the memory again"
+                "the region was closed when a transfer ended without the server's reply; \
+                 free it and register the memory again"
                     .to_string(),
             )
         })
@@ -63,6 +93,9 @@ impl RdmaRegion {
 /// when the `rdma` feature is not enabled.
 #[cfg(not(feature = "rdma"))]
 pub enum RdmaRegion {}
+
+#[cfg(not(feature = "rdma"))]
+pub enum RdmaMemoryHold {}
 
 /// The outcome of [`register_rdma_region`].
 ///
@@ -75,6 +108,34 @@ pub struct RdmaRegistration {
     pub error_message: *const c_char,
     /// Null on failure, otherwise the registered region.
     pub region: *mut RdmaRegion,
+}
+
+/// Whether [`rdma_set`] asks the server to check what it read against a CRC-32c
+/// before storing it. With a checksum, the server refuses to store bytes whose
+/// CRC-32c differs.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RdmaSetChecksumMode {
+    /// Send no checksum. The server stores whatever it read.
+    Skip = 0,
+    /// Compute the CRC-32c of the window before sending, which reads every byte
+    /// of the window once.
+    Compute = 1,
+    /// Send the `checksum` argument, a CRC-32c the caller already knows for the
+    /// window's bytes.
+    Known = 2,
+}
+
+#[cfg(feature = "rdma")]
+impl RdmaSetChecksumMode {
+    /// The choice to hand glide-core, with `checksum` used only for `Known`.
+    fn with(self, checksum: u32) -> glide_rdma::SetChecksum {
+        match self {
+            Self::Skip => glide_rdma::SetChecksum::Skip,
+            Self::Compute => glide_rdma::SetChecksum::Compute,
+            Self::Known => glide_rdma::SetChecksum::Known(checksum),
+        }
+    }
 }
 
 /// The outcome of an RDMA transfer.
@@ -129,8 +190,10 @@ impl RdmaResult {
             error_type: RequestErrorType::Unspecified,
             found: true,
             bytes_written: receipt.bytes_written,
-            has_checksum: receipt.checksum.is_some(),
-            checksum: receipt.checksum.unwrap_or(0),
+            // A read reply always carries a checksum, so the flag is always set here.
+            // It stays in the struct because the Python client reads this C layout.
+            has_checksum: true,
+            checksum: receipt.checksum,
         }
     }
 
@@ -213,10 +276,24 @@ fn block_on_transfer<F: Future>(adapter: &ClientAdapter, future: F) -> F::Output
 }
 
 /// Caller-owned memory presented to the fabric as a registerable region.
+///
+/// The fabric drops this when it is done with the memory: at once, after the
+/// server's reply or a region close that stops writes in flight; only when the
+/// fabric closes, if a write could still land; never, if the region failed to
+/// close. Dropping sets `released`, which is how the caller learns it may free the
+/// memory.
 #[cfg(feature = "rdma")]
 struct ForeignRegion {
     memory: *mut u8,
     length: usize,
+    released: Arc<AtomicBool>,
+}
+
+#[cfg(feature = "rdma")]
+impl Drop for ForeignRegion {
+    fn drop(&mut self) {
+        self.released.store(true, Ordering::Release);
+    }
 }
 
 // SAFETY: the pointer is only ever dereferenced through `as_mut`, and the
@@ -329,17 +406,15 @@ fn register_region(
         if let Err(message) = require_sync_client(&adapter) {
             return failed(message);
         }
-        match adapter
-            .core
-            .client
-            .register_rdma_region(ForeignRegion { memory, length })
-        {
+        let released = Arc::new(AtomicBool::new(false));
+        match adapter.core.client.register_rdma_region(ForeignRegion {
+            memory,
+            length,
+            released: released.clone(),
+        }) {
             Ok(buffer) => RdmaRegistration {
                 error_message: std::ptr::null(),
-                region: Box::into_raw(Box::new(RdmaRegion {
-                    capacity: buffer.capacity(),
-                    buffer: Some(buffer),
-                })),
+                region: Box::into_raw(Box::new(RdmaRegion::new(buffer, released))),
             },
             Err(err) => failed(errors::error_message(&err)),
         }
@@ -378,11 +453,11 @@ pub unsafe extern "C" fn rdma_region_capacity(region: *const RdmaRegion) -> usiz
 /// stay, so the window then holds an unknown mix of old and new bytes. The
 /// region cannot be used for another transfer; free it with [`free_rdma_region`].
 ///
-/// After an error the server sent, the region can be used again. After any
-/// other error, such as a lost connection, the server might still be using the
-/// memory, so the region is revoked first and cannot be used again either.
-///
-/// TODO: `length` argument
+/// After an error the server sent, or one raised before the command was sent
+/// such as reaching the in-flight request limit, the region can be used again.
+/// If the transfer ends any other way, such as a lost connection, the server
+/// might still be using the memory, so the region is revoked first and cannot
+/// be used again either.
 ///
 /// # Returns
 ///
@@ -451,6 +526,11 @@ pub unsafe extern "C-unwind" fn rdma_get(
 /// Like [`rdma_get`], it has no timeout, and calling [`close_client`] from
 /// another thread cancels it.
 ///
+/// `checksum_mode` decides whether the server checks the bytes it read before
+/// storing them; see [`RdmaSetChecksumMode`]. `checksum` is read only for
+/// [`RdmaSetChecksumMode::Known`]. A mismatch fails with the server's error,
+/// stores nothing, and leaves the region usable.
+///
 /// # Returns
 ///
 /// A [`RdmaResult`] the caller frees with [`free_rdma_result`].
@@ -459,7 +539,9 @@ pub unsafe extern "C-unwind" fn rdma_get(
 ///
 /// Same contract as [`rdma_get`]. The region is read, not written, but the
 /// caller must still hold it exclusively for the duration of the call.
+/// `checksum_mode` must be one of the [`RdmaSetChecksumMode`] values.
 #[unsafe(no_mangle)]
+#[allow(clippy::too_many_arguments)]
 pub unsafe extern "C-unwind" fn rdma_set(
     client_adapter_ptr: *const c_void,
     key: *const u8,
@@ -467,8 +549,10 @@ pub unsafe extern "C-unwind" fn rdma_set(
     region: *mut RdmaRegion,
     offset: usize,
     length: usize,
+    checksum_mode: RdmaSetChecksumMode,
+    checksum: u32,
 ) -> *mut RdmaResult {
-    let _ = (key_len, offset, length);
+    let _ = (key_len, offset, length, checksum_mode, checksum);
     if let Some(rejection) = reject_bad_transfer_args(client_adapter_ptr, key, region) {
         return rejection.into_raw();
     }
@@ -492,8 +576,10 @@ pub unsafe extern "C-unwind" fn rdma_set(
         };
 
         let mut client = adapter.core.client.clone();
-        let (buffer, outcome) =
-            block_on_transfer(&adapter, client.rdma_set(key, buffer, offset, length));
+        let (buffer, outcome) = block_on_transfer(
+            &adapter,
+            client.rdma_set(key, buffer, offset, length, checksum_mode.with(checksum)),
+        );
         region.buffer = buffer;
 
         match outcome {
@@ -531,8 +617,19 @@ fn reject_bad_transfer_args(
 
 /// Deregister a region, releasing the pinned pages.
 ///
-/// The caller's memory is not freed: it was never owned here. Once this
-/// returns, the allocation is the caller's to free or reuse. Null is a no-op.
+/// Blocks until the region has closed, which can take milliseconds for a large
+/// region on efa. The caller's memory is never freed here: it was never owned
+/// here.
+///
+/// # Returns
+///
+/// Null when the caller may free or reuse the memory as soon as this returns. A
+/// hold when the fabric still keeps it: a transfer on this region ended without
+/// the server's reply and a write could still land, or the region failed to
+/// close. The caller must then keep the memory alive until
+/// [`rdma_memory_released`] returns true, and free the hold with
+/// [`free_rdma_memory_hold`]. A hold for a region that failed to close is never
+/// released. Null is a no-op that returns null.
 ///
 /// # Safety
 ///
@@ -540,15 +637,65 @@ fn reject_bad_transfer_args(
 /// * `free_rdma_region` may be called only once per region.
 /// * No transfer against the region may be in flight.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn free_rdma_region(region: *mut RdmaRegion) {
+pub unsafe extern "C" fn free_rdma_region(region: *mut RdmaRegion) -> *mut RdmaMemoryHold {
     // Without the `rdma` feature no region can ever have been handed out, so
     // there is nothing to release.
     #[cfg(feature = "rdma")]
     if !region.is_null() {
-        drop(unsafe { Box::from_raw(region) });
+        let RdmaRegion {
+            buffer,
+            released,
+            fabric,
+            ..
+        } = *unsafe { Box::from_raw(region) };
+        // Dropping the buffer only queues its region's close on the fabric's
+        // closing thread. Waiting for it means an idle region's memory is let go
+        // of before this returns, so the caller gets null rather than a hold.
+        drop(buffer);
+        fabric.wait_for_closes();
+        // If this was the fabric's last handle, dropping it closes the fabric and
+        // lets go of any memory it parked, so check `released` only after.
+        drop(fabric);
+        if !released.load(Ordering::Acquire) {
+            return Box::into_raw(Box::new(RdmaMemoryHold { released }));
+        }
     }
     #[cfg(not(feature = "rdma"))]
     let _ = region;
+    std::ptr::null_mut()
+}
+
+/// Whether the fabric has let go of the memory a [`RdmaMemoryHold`] keeps. Once
+/// true, it stays true, and the caller may free the memory. True for null.
+///
+/// # Safety
+///
+/// * `hold` must be null or a live hold from [`free_rdma_region`].
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rdma_memory_released(hold: *const RdmaMemoryHold) -> bool {
+    #[cfg(feature = "rdma")]
+    if !hold.is_null() {
+        return unsafe { &*hold }.released.load(Ordering::Acquire);
+    }
+    #[cfg(not(feature = "rdma"))]
+    let _ = hold;
+    true
+}
+
+/// Free a hold from [`free_rdma_region`]. This does not free the caller's memory,
+/// and is safe whether or not it has been released. Null is a no-op.
+///
+/// # Safety
+///
+/// * `hold` must be null or a hold from [`free_rdma_region`], freed only once.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn free_rdma_memory_hold(hold: *mut RdmaMemoryHold) {
+    #[cfg(feature = "rdma")]
+    if !hold.is_null() {
+        drop(unsafe { Box::from_raw(hold) });
+    }
+    #[cfg(not(feature = "rdma"))]
+    let _ = hold;
 }
 
 /// Deallocate a [`RdmaRegistration`] and the error message it carries.
@@ -672,7 +819,16 @@ mod tests {
         assert_eq!(error.as_deref(), Some("cannot transfer without a client"));
 
         let error = take_error(unsafe {
-            rdma_set(std::ptr::null(), key.as_ptr(), key.len(), region, 0, 3)
+            rdma_set(
+                std::ptr::null(),
+                key.as_ptr(),
+                key.len(),
+                region,
+                0,
+                3,
+                RdmaSetChecksumMode::Skip,
+                0,
+            )
         });
         assert_eq!(error.as_deref(), Some("cannot transfer without a client"));
     }
@@ -684,8 +840,18 @@ mod tests {
             take_error(unsafe { rdma_get(unread_client_ptr(), std::ptr::null(), 0, region, 0, 0) });
         assert_eq!(error.as_deref(), Some("cannot transfer without a key"));
 
-        let error =
-            take_error(unsafe { rdma_set(unread_client_ptr(), std::ptr::null(), 0, region, 0, 0) });
+        let error = take_error(unsafe {
+            rdma_set(
+                unread_client_ptr(),
+                std::ptr::null(),
+                0,
+                region,
+                0,
+                0,
+                RdmaSetChecksumMode::Skip,
+                0,
+            )
+        });
         assert_eq!(error.as_deref(), Some("cannot transfer without a key"));
     }
 
@@ -715,12 +881,33 @@ mod tests {
                 std::ptr::null_mut(),
                 0,
                 3,
+                RdmaSetChecksumMode::Skip,
+                0,
             )
         });
         assert_eq!(
             error.as_deref(),
             Some("cannot transfer without a registered region")
         );
+    }
+
+    /// Each C mode maps to the matching choice, and only `Known` carries the
+    /// caller's checksum: the value passed with the other modes is ignored.
+    #[cfg(feature = "rdma")]
+    #[test]
+    fn each_checksum_mode_maps_to_its_set_checksum() {
+        use glide_rdma::SetChecksum;
+        assert_eq!(RdmaSetChecksumMode::Skip.with(7), SetChecksum::Skip);
+        assert_eq!(RdmaSetChecksumMode::Compute.with(7), SetChecksum::Compute);
+        assert_eq!(RdmaSetChecksumMode::Known.with(7), SetChecksum::Known(7));
+    }
+
+    /// The values are part of the C ABI that bindings declare by hand.
+    #[test]
+    fn checksum_modes_keep_their_c_values() {
+        assert_eq!(RdmaSetChecksumMode::Skip as u32, 0);
+        assert_eq!(RdmaSetChecksumMode::Compute as u32, 1);
+        assert_eq!(RdmaSetChecksumMode::Known as u32, 2);
     }
 
     fn checksum_of(data: &[u8]) -> Option<u32> {
@@ -802,6 +989,24 @@ mod tests {
             error.contains("no RDMA support compiled in"),
             "unexpected message: {error}"
         );
+
+        let error = take_error(unsafe {
+            rdma_set(
+                unread_client_ptr(),
+                key.as_ptr(),
+                key.len(),
+                region,
+                0,
+                3,
+                RdmaSetChecksumMode::Known,
+                7,
+            )
+        })
+        .expect("a transfer must fail without the feature");
+        assert!(
+            error.contains("no RDMA support compiled in"),
+            "unexpected message: {error}"
+        );
     }
 
     /// The region hands the fabric the caller's own allocation, not a copy, so
@@ -813,8 +1018,79 @@ mod tests {
         let mut region = ForeignRegion {
             memory: memory.as_mut_ptr(),
             length: memory.len(),
+            released: Arc::new(AtomicBool::new(false)),
         };
         region.as_mut().copy_from_slice(b"12345678");
         assert_eq!(memory, b"12345678");
+    }
+
+    /// A region over `memory` on `fabric`, as `register_rdma_region` builds one.
+    #[cfg(feature = "rdma")]
+    fn foreign_region(fabric: &glide_rdma::RdmaFabric, memory: &mut [u8]) -> Box<RdmaRegion> {
+        let released = Arc::new(AtomicBool::new(false));
+        let buffer = fabric
+            .register(ForeignRegion {
+                memory: memory.as_mut_ptr(),
+                length: memory.len(),
+                released: released.clone(),
+            })
+            .expect("registers");
+        Box::new(RdmaRegion::new(buffer, released))
+    }
+
+    #[cfg(feature = "rdma")]
+    fn tcp_fabric() -> glide_rdma::RdmaFabric {
+        glide_rdma::RdmaFabric::open(&glide_rdma::FabricConfig::new(glide_rdma::Provider::Tcp))
+            .expect("tcp opens")
+    }
+
+    /// An idle region closes cleanly, so the caller may free its memory at once.
+    #[cfg(feature = "rdma")]
+    #[test]
+    fn freeing_an_idle_region_releases_the_memory_at_once() {
+        let fabric = tcp_fabric();
+        let mut memory = vec![0u8; 64];
+        let region = foreign_region(&fabric, &mut memory);
+
+        let hold = unsafe { free_rdma_region(Box::into_raw(region)) };
+
+        assert!(hold.is_null(), "nothing holds the memory any more");
+    }
+
+    /// On tcp a transfer that ended without a reply leaves the memory parked in the
+    /// fabric, because a write could still land. The caller has to keep it until
+    /// the fabric closes.
+    #[cfg(feature = "rdma")]
+    #[test]
+    fn a_parked_region_holds_the_memory_until_the_fabric_closes() {
+        let fabric = tcp_fabric();
+        let mut memory = vec![0u8; 64];
+        let mut region = foreign_region(&fabric, &mut memory);
+        let (_command, loan) = region
+            .buffer
+            .take()
+            .unwrap()
+            .lend_for_get(b"key", 0, 64)
+            .expect("lends");
+        loan.recall().expect("the region closes");
+
+        let hold = unsafe { free_rdma_region(Box::into_raw(region)) };
+
+        assert!(!hold.is_null(), "the fabric still holds the memory");
+        assert!(!unsafe { rdma_memory_released(hold) });
+        drop(fabric);
+        assert!(
+            unsafe { rdma_memory_released(hold) },
+            "closing the fabric lets it go"
+        );
+        unsafe { free_rdma_memory_hold(hold) };
+    }
+
+    #[cfg(feature = "rdma")]
+    #[test]
+    fn a_null_hold_is_released_and_freeing_it_is_a_no_op() {
+        assert!(unsafe { rdma_memory_released(std::ptr::null()) });
+        unsafe { free_rdma_memory_hold(std::ptr::null_mut()) };
+        assert!(unsafe { free_rdma_region(std::ptr::null_mut()) }.is_null());
     }
 }
