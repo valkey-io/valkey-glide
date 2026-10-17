@@ -1,9 +1,15 @@
 #!/usr/bin/env bash
-# Reproduces the "Modules Tests (Linux)" job from
-# .github/workflows/go-modules.yml on this machine, as closely as
-# possible, against an overridable module image (D1: don't pin a new CI
-# image; prove 1.3 support via a local run of the SAME job against a
-# 1.3-bearing image instead).
+# Reproduces the "Modules Tests (Linux)" job from each language's own
+# <lang>-modules.yml on this machine, as closely as possible, against an
+# overridable module image (D1: don't pin a new CI image; prove 1.3
+# support via a local run of the SAME job against a 1.3-bearing image
+# instead). Shared across every language's port branch -- see
+# VALKEY-SEARCH-1.3.PLAN.md's ports checklist -- so this file is a single
+# source of truth per language, selected via MODULES_TEST_LANG, rather
+# than N language branches each overwriting the whole script and
+# colliding with each other and with Python's own CI-sync guard
+# (tests/test_ci_workflow_sync.py pins this file's Python invocation
+# verbatim).
 #
 # Shares the docker start/verify logic with
 # .github/actions/start-valkey-docker/action.yml via
@@ -16,19 +22,36 @@
 #   IMAGE=valkey/valkey-bundle:9.1.3 EMULATE_RELEASE="" utils/run-modules-ci-locally.sh   # 2: 9.1.3, search 1.2.1 (skip-proof)
 #   EMULATE_RELEASE="" utils/run-modules-ci-locally.sh                    # 3: 9.2.0-rc2, module's own default emulate-release (1.0.0) -- E-2 equivalent (D22)
 #
+# MODULES_TEST_LANG selects which language's test tail runs (default
+# "python", preserving every existing caller's behaviour byte-for-byte):
+#   MODULES_TEST_LANG=python utils/run-modules-ci-locally.sh   # default
+#   MODULES_TEST_LANG=node utils/run-modules-ci-locally.sh
+#   MODULES_TEST_LANG=java utils/run-modules-ci-locally.sh
+#   MODULES_TEST_LANG=go utils/run-modules-ci-locally.sh
+#
 # See BUILD-MODULES-1.3.md (python/) for narrated example runs and
 # Mac-vs-CI-runner differences (notably: Docker Desktop on macOS shares
 # /Users by default, not /tmp -- any file this script bind-mounts into a
 # container MUST live under a /Users path or the mount silently becomes an
 # empty directory instead of the file, with no error).
 #
-# Requires: docker, valkey-cli (Homebrew: `brew install valkey`), the Rust
-# toolchain + cbindgen (`cargo install cbindgen`), and `protoc-gen-go`
-# (`go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.33.0`). This
-# script runs `make build-glide-client generate-protobuf` itself before
-# testing, so a stale native lib or stale generated protobuf (the stale-
-# build trap every language's dev tooling can hit) can't produce a false
-# green -- see BUILD-MODULES-1.3.md.
+# Requires, per MODULES_TEST_LANG:
+#   python (default): the Python client already built (python3 dev.py
+#     build --client async && --client sync) -- this script does not
+#     rebuild the wrapper, matching the CI job's "Build Python wrapper"
+#     step only in effect, not in mechanism.
+#   node: the Node client already built (npm ci && npm run build) --
+#     this script does not rebuild the native addon.
+#   java: protoc 29.1 pinned under tools/protoc-29.1/ (see
+#     BUILD-MODULES-1.3.md's "Java build: protoc 29.1" section -- a newer
+#     system protoc generates code the project's pinned 4.29.6 runtime
+#     can't compile).
+#   go: docker, the Rust toolchain + cbindgen (`cargo install cbindgen`),
+#     and `protoc-gen-go` (`go install
+#     google.golang.org/protobuf/cmd/protoc-gen-go@v1.33.0`). This script
+#     runs `make build-glide-client generate-protobuf` itself before
+#     testing, so a stale native lib or stale generated protobuf can't
+#     produce a false green.
 
 set -euo pipefail
 
@@ -96,43 +119,68 @@ for port in "$STANDALONE_PORT" $(seq "$CLUSTER_PORT_START" "$((CLUSTER_PORT_STAR
 done
 
 echo "=== Running modules tests ==="
-cd "${REPO_ROOT}/go"
-export PATH="${HOME}/.cargo/bin:$(go env GOPATH)/bin:${PATH}"
-# Fresh native artifact + protobuf before every run (the stale-build trap
-# every language's dev tooling can hit -- Python had two, see
-# BUILD-MODULES-1.3.md).
-make build-glide-client generate-protobuf
-# Local linker workaround (this machine's Go 1.26.5 + Apple clang 21 pair,
-# not a code issue): the Makefile's build-glide-client strips the Rust
-# static lib (`strip -x`), and `go test`'s test-binary link step on this
-# toolchain combination can't resolve some of aws-lc-rs's stripped
-# assembly object sections ("address=... not in any section"), while a
-# plain `go build` of the same lib links fine. Re-building without the
-# strip step and overwriting the already-stripped copy fixes `go test`
-# specifically; `go build`/the shipped library are unaffected either way.
-# Confirmed pre-existing on main (unrelated to this port) and confined to
-# this specific toolchain pairing -- not a fix for the shared Makefile.
-UNAME="$(uname -m)"
-case "$(uname)-$UNAME" in
-    Darwin-arm64) TARGET_TRIPLET="aarch64-apple-darwin" ;;
-    Darwin-x86_64) TARGET_TRIPLET="x86_64-apple-darwin" ;;
-    *) TARGET_TRIPLET="" ;;
+MODULES_TEST_LANG="${MODULES_TEST_LANG:-python}"
+case "$MODULES_TEST_LANG" in
+    python)
+        cd "${REPO_ROOT}/python"
+        # Single-sourced from .github/workflows/python-modules.yml's "Run modules
+        # tests" step (R2-H-1 fix #3: these must not drift independently -- see
+        # tests/test_ci_workflow_sync.py, which greps the workflow file for this
+        # exact arg list and fails the test suite if it ever changes there without
+        # a matching update here).
+        python3 dev.py test --args \
+            --standalone-endpoints="${MODULES_STANDALONE_ENDPOINT}" \
+            --cluster-endpoints="${MODULES_CLUSTER_ENDPOINTS}" \
+            -k server_modules \
+            --async-backend=asyncio \
+            --html=pytest_report.html \
+            --self-contained-html \
+            -rs
+        ;;
+    go)
+        cd "${REPO_ROOT}/go"
+        export PATH="${HOME}/.cargo/bin:$(go env GOPATH)/bin:${PATH}"
+        # Fresh native artifact + protobuf before every run (the stale-build trap
+        # every language's dev tooling can hit -- Python had two, see
+        # BUILD-MODULES-1.3.md).
+        make build-glide-client generate-protobuf
+        # Local linker workaround (this machine's Go 1.26.5 + Apple clang 21 pair,
+        # not a code issue): the Makefile's build-glide-client strips the Rust
+        # static lib (`strip -x`), and `go test`'s test-binary link step on this
+        # toolchain combination can't resolve some of aws-lc-rs's stripped
+        # assembly object sections ("address=... not in any section"), while a
+        # plain `go build` of the same lib links fine. Re-building without the
+        # strip step and overwriting the already-stripped copy fixes `go test`
+        # specifically; `go build`/the shipped library are unaffected either way.
+        # Confirmed pre-existing on main (unrelated to this port) and confined to
+        # this specific toolchain pairing -- not a fix for the shared Makefile.
+        GO_ARCH="$(uname -m)"
+        case "$(uname)-$GO_ARCH" in
+            Darwin-arm64) GO_TARGET_TRIPLET="aarch64-apple-darwin" ;;
+            Darwin-x86_64) GO_TARGET_TRIPLET="x86_64-apple-darwin" ;;
+            *) GO_TARGET_TRIPLET="" ;;
+        esac
+        if [ -n "$GO_TARGET_TRIPLET" ]; then
+            ( cd "${REPO_ROOT}/ffi" && cargo rustc --crate-type staticlib --release )
+            cp "${REPO_ROOT}/ffi/target/release/libglide_ffi.a" \
+                "${REPO_ROOT}/go/rustbin/${GO_TARGET_TRIPLET}/libglide_ffi.a"
+        fi
+        # Single-sourced from .github/workflows/go-modules.yml's "Build and run
+        # modules tests" step -- these must not drift independently; see
+        # integTest/go_modules_ci_sync_test.go, which parses the workflow file for
+        # this exact make target + flags and fails the suite if it ever changes
+        # there without a matching update here. Bypasses the Makefile's
+        # `make install-tools build modules-test` wrapper's HTML-report pipe
+        # (go-test-report), which depends on a flaky third-party module fetch
+        # unrelated to test correctness; this runs the same underlying `go test`
+        # invocation the Makefile's modules-test target does, directly.
+        CC="gcc -fsanitize=address" go test -v ./integTest/... \
+            -testify.m "^TestModule" \
+            --standalone-endpoints="${MODULES_STANDALONE_ENDPOINT}" \
+            --cluster-endpoints="${MODULES_CLUSTER_ENDPOINTS}"
+        ;;
+    *)
+        echo "ERROR: unknown MODULES_TEST_LANG '${MODULES_TEST_LANG}' (expected python, node, java or go)" >&2
+        exit 1
+        ;;
 esac
-if [ -n "$TARGET_TRIPLET" ]; then
-    ( cd "${REPO_ROOT}/ffi" && cargo rustc --crate-type staticlib --release )
-    cp "${REPO_ROOT}/ffi/target/release/libglide_ffi.a" \
-        "${REPO_ROOT}/go/rustbin/${TARGET_TRIPLET}/libglide_ffi.a"
-fi
-# Single-sourced from .github/workflows/go-modules.yml's "Build and run
-# modules tests" step -- these must not drift independently; see
-# integTest/go_modules_ci_sync_test.go, which parses the workflow file for
-# this exact make target + flags and fails the suite if it ever changes
-# there without a matching update here. Bypasses the Makefile's
-# `make install-tools build modules-test` wrapper's HTML-report pipe
-# (go-test-report), which depends on a flaky third-party module fetch
-# unrelated to test correctness; this runs the same underlying `go test`
-# invocation the Makefile's modules-test target does, directly.
-CC="gcc -fsanitize=address" go test -v ./integTest/... \
-    -testify.m "^TestModule" \
-    --standalone-endpoints="${MODULES_STANDALONE_ENDPOINT}" \
-    --cluster-endpoints="${MODULES_CLUSTER_ENDPOINTS}"
