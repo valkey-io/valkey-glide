@@ -446,6 +446,7 @@ fn process_command_for_compression(
         "STRLEN" => crate::request_type::RequestType::Strlen,
         "LCS" => crate::request_type::RequestType::LCS,
         "SUBSTR" => crate::request_type::RequestType::Substr,
+        "DELIFEQ" => crate::request_type::RequestType::DelIfEq,
         // Incompatible commands - numeric operations
         "INCR" => crate::request_type::RequestType::Incr,
         "INCRBY" => crate::request_type::RequestType::IncrBy,

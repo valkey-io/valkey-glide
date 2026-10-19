@@ -830,6 +830,11 @@ mod compression_tests {
                 .compression_incompatibility_reason()
                 .is_some()
         );
+        assert!(
+            RequestType::DelIfEq
+                .compression_incompatibility_reason()
+                .is_some()
+        );
 
         // Test numeric operations
         assert!(
@@ -1009,6 +1014,7 @@ mod compression_tests {
         assert_eq!(RequestType::Strlen.command_name(), Some("STRLEN"));
         assert_eq!(RequestType::LCS.command_name(), Some("LCS"));
         assert_eq!(RequestType::Substr.command_name(), Some("SUBSTR"));
+        assert_eq!(RequestType::DelIfEq.command_name(), Some("DELIFEQ"));
         assert_eq!(RequestType::Incr.command_name(), Some("INCR"));
         assert_eq!(RequestType::IncrBy.command_name(), Some("INCRBY"));
         assert_eq!(RequestType::IncrByFloat.command_name(), Some("INCRBYFLOAT"));
@@ -1107,6 +1113,10 @@ mod compression_tests {
         assert!(matches!(
             RequestType::from_command_name("SUBSTR"),
             Some(RequestType::Substr)
+        ));
+        assert!(matches!(
+            RequestType::from_command_name("DELIFEQ"),
+            Some(RequestType::DelIfEq)
         ));
 
         // Test incompatible commands - numeric operations

@@ -875,6 +875,8 @@ pub fn process_command_args_for_compression(
     }
 
     match request_type {
+        // TODO #7365: Add SET here so that the comparison value is compressed
+        // when called with IFEQ.
         RequestType::Set => compress_single_value_command(args, manager, 1),
         RequestType::MSet | RequestType::MSetNX => compress_mset_command(args, manager),
         RequestType::SetEx => compress_single_value_command(args, manager, 2),
