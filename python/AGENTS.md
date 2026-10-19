@@ -165,15 +165,16 @@ cargo clippy --all-features --all-targets -- -D warnings
 ### Generated Outputs (Never Commit)
 
 - `.env/` - Python virtual environment
-- `glide-async/target/` - Rust build artifacts (async)
-- `glide-sync/target/` - Rust build artifacts (sync)
-- `glide-shared/glide_shared/protobuf/` - Generated protobuf files
-- `build/` - Build artifacts
-- `dist/` - Distribution artifacts
-- `*.egg-info/` - Package metadata
-- `__pycache__/` - Python bytecode
-- `.pytest_cache/` - Pytest cache
-- `.mypy_cache/` - MyPy cache
+- `glide-async/target/`, `glide-shared/target/`, `glide-sync/ffi/target/` - Rust build artifacts
+- `glide-shared/glide_shared/protobuf/*_pb2.py*` - Generated protobuf files
+- `glide-shared/glide_shared/_fast_response*.so`, `glide-shared/glide_shared/libglide_ffi.*` - Native modules copied in by the build
+- `glide-async/python/glide/glide*.so` - PyO3 module built by maturin
+- `glide-async/python/glide_shared/` - `glide_shared` vendored into the async wheel
+- `glide-sync/glide_sync/libglide_ffi.so`, `glide-sync/{ffi,glide-core,glide-logger,glide-telemetry,glide_shared,glide-shared-rs}/` - FFI library and crates vendored by `setup.py` (removed after a successful build; left behind if it fails)
+- `glide-async/README.md`, `glide-sync/README.md` - Copied from `python/README.md` at build time
+- `build/`, `dist/`, `*.egg-info/` - Packaging artifacts
+- `__pycache__/`, `.pytest_cache/`, `.mypy_cache/` - Caches
+- `docs/` except `docs/index.rst` - Sphinx output and apidoc stubs
 - `docs/_build/` - Sphinx documentation build
 
 ### Python-Specific Rules

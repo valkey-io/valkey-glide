@@ -76,7 +76,7 @@ cd benchmarks && go build -ldflags="-w" ./...
 
 # Manual test execution
 go test -v ./... -skip 'Example|TestGlideTestSuite|TestPool|TestScope'   # matches `make unit-test`
-# NOTE: integ-tests run under AddressSanitizer in the Makefile: CC="gcc -fsanitize=address" go test -v ./integTest/... (needs gcc; disabled on musl)
+# NOTE: integ-tests run under AddressSanitizer in the Makefile: CC="gcc -fsanitize=address" go test -v ./integTest/... -skip 'TestGlideTestSuite/TestModule' (needs gcc; disabled on musl; the skip matches make integ-test, whose default servers have no modules)
 
 # Manual linting
 go vet ./...
