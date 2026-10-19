@@ -1241,6 +1241,33 @@ class TestBatch:
     @pytest.mark.skip_if_version_below("9.0.0")
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_delifeq_batch(self, glide_client: TGlideClient):
+        key = get_random_string(10)
+        value = get_random_string(10)
+        wrong_value = get_random_string(10)
+
+        if isinstance(glide_client, GlideClusterClient):
+            cluster_batch = ClusterBatch(is_atomic=False)
+            cluster_batch.set(key, value)
+            cluster_batch.delifeq(key, wrong_value)
+            cluster_batch.delifeq(key, value)
+            result = await glide_client.exec(cluster_batch, raise_on_error=False)
+        else:
+            standalone_batch = Batch(is_atomic=False)
+            standalone_batch.set(key, value)
+            standalone_batch.delifeq(key, wrong_value)
+            standalone_batch.delifeq(key, value)
+            result = await glide_client.exec(standalone_batch, raise_on_error=False)
+
+        assert result is not None
+
+        assert result[0] == OK
+        assert result[1] is False
+        assert result[2] is True
+
+    @pytest.mark.skip_if_version_below("9.0.0")
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_hexpire_batch(self, glide_client: TGlideClient):
         key1 = get_random_string(10)
         key2 = get_random_string(10)

@@ -470,6 +470,34 @@ class CoreCommands(Protocol):
         """
         return cast(int, await self._execute_command(RequestType.Append, [key, value]))
 
+    async def delifeq(self, key: TEncodable, value: TEncodable) -> bool:
+        """
+        Deletes `key` if its value equals `value`.
+
+        Since: Valkey 9.0 and above.
+
+        See [valkey.io](https://valkey.io/commands/delifeq) for more details.
+
+        Args:
+            key (TEncodable): The key to delete.
+            value (TEncodable): The comparison value. The key is only deleted if its current value
+                matches `value` exactly.
+
+        Returns:
+            bool: True if `key` was deleted. False if `key` did not exist or its value did not match
+                `value`.
+
+        Examples:
+            >>> await client.set("key", "value")
+            >>> await client.delifeq("key", "wrong_value")
+                False
+            >>> await client.delifeq("key", "value")
+                True
+        """
+        return cast(
+            bool, await self._execute_command(RequestType.DelIfEq, [key, value])
+        )
+
     async def strlen(self, key: TEncodable) -> int:
         """
         Get the length of the string value stored at `key`.

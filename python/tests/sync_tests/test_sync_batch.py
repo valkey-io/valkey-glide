@@ -875,6 +875,26 @@ class TestSyncBatch:
     @pytest.mark.skip_if_version_below("9.0.0")
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_delifeq_batch(self, glide_sync_client: TGlideClient):
+        key = get_random_string(10)
+        value = get_random_string(10)
+        wrong_value = get_random_string(10)
+
+        batch = (
+            Batch(is_atomic=False)
+            if isinstance(glide_sync_client, GlideClient)
+            else ClusterBatch(is_atomic=False)
+        )
+        batch.set(key, value)
+        batch.delifeq(key, wrong_value)
+        batch.delifeq(key, value)
+
+        result = exec_batch(glide_sync_client, batch)
+        assert result == [OK, False, True]
+
+    @pytest.mark.skip_if_version_below("9.0.0")
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     def test_sync_hpttl_batch(self, glide_sync_client: TGlideClient):
         key = get_random_string(10)
         field1 = get_random_string(5)

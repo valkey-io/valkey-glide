@@ -1463,6 +1463,30 @@ class TestCompressionIncompatibleCommands:
         # Cleanup
         await compression_client.delete([key])
 
+    @pytest.mark.skip_if_version_below("9.0.0")
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_delifeq_incompatible_with_compression(
+        self, compression_client: TGlideClient
+    ):
+        """Test that DELIFEQ command errors out when compression is enabled."""
+        key = f"delifeq_test_{get_random_string(8)}"
+
+        # First set a value
+        await compression_client.set(key, "initial_value")
+
+        # DELIFEQ should fail with compression enabled
+        with pytest.raises(Exception) as exc_info:
+            await compression_client.delifeq(key, "initial_value")
+
+        error_msg = str(exc_info.value).lower()
+        assert (
+            "incompatible" in error_msg or "compression" in error_msg
+        ), f"Error should mention incompatibility with compression: {exc_info.value}"
+
+        # Cleanup
+        await compression_client.delete([key])
+
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_getrange_incompatible_with_compression(
