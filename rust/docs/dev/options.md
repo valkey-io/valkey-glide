@@ -7,10 +7,9 @@ part of the crate's public API.
 
 ## Guidelines
 
-- **Location:** If commands in more than one command group use the option type
-  (e.g. `OrderBy`, used by `SORT` and `GEOSEARCH`), define it in the
-  [shared options module](../../src/commands/options.rs). Otherwise, define it
-  in its [command group module](../../src/commands/) (e.g. `GeoUnit`).
+- **Location:** TODO #7385: Add a
+  guideline once the option type layout is decided. Until then, define a new
+  option type next to similar existing ones.
 - **Encoding:** The option must implement `ToValkeyArgs`. Callers pass the
   value straight to `Cmd::with_arg`, and an `Option<T>` writes nothing when it
   is `None`.
