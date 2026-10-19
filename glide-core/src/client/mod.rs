@@ -2316,10 +2316,21 @@ impl Client {
     /// Create an `IAMTokenManager` when IAM auth is configured.
     ///
     /// Client retrieves tokens on-demand during command execution.
+    ///
+    /// An IAM token is a bearer credential: it must never be sent over plaintext.
+    /// Reject an IAM-configured client when TLS is disabled before the manager (and
+    /// thus any token) is created, so initial AUTH, background refresh, and reconnect
+    /// all fail closed rather than leaking the token in a cleartext `AUTH`.
     async fn create_iam_token_manager(
         auth_info: &crate::client::types::AuthenticationInfo,
+        tls_mode: TlsMode,
     ) -> Result<Option<std::sync::Arc<crate::iam::IAMTokenManager>>, ConnectionError> {
         if let Some(iam_config) = &auth_info.iam_config {
+            if tls_mode == TlsMode::NoTls {
+                return Err(ConnectionError::IAMError(
+                    "IAM authentication requires TLS; refusing to send an IAM token over a plaintext connection".to_string(),
+                ));
+            }
             if let Some(username) = &auth_info.username {
                 match crate::iam::IAMTokenManager::new(
                     iam_config.cluster_name.clone(),
@@ -3168,7 +3179,8 @@ impl Client {
 
             // Create IAM token manager if needed
             let iam_token_manager = if let Some(auth_info) = &request.authentication_info {
-                Self::create_iam_token_manager(auth_info).await?
+                Self::create_iam_token_manager(auth_info, request.tls_mode.unwrap_or_default())
+                    .await?
             } else {
                 None
             };
@@ -3695,7 +3707,7 @@ mod tests {
     use redis::Cmd;
 
     use crate::client::types::{
-        ConnectionRequest, ConnectionRetryStrategy, NodeAddress, OTelMetadata,
+        ConnectionRequest, ConnectionRetryStrategy, NodeAddress, OTelMetadata, TlsMode,
     };
     use crate::client::{
         BLOCKING_CMD_TIMEOUT_EXTENSION, ClientShared, RequestTimeoutOption, TimeUnit,
@@ -5276,6 +5288,8 @@ mod tests {
                 unix_socket_path: None,
             }],
             lazy_connect: true,
+            // IAM auth requires TLS (an IAM token must never traverse plaintext).
+            tls_mode: Some(TlsMode::SecureTls),
             authentication_info: Some(crate::client::types::AuthenticationInfo {
                 username: Some("iam-test-user".to_string()),
                 password: None,
@@ -5316,5 +5330,56 @@ mod tests {
             non_iam_client.iam_token_manager().is_none(),
             "iam_token_manager() should return None when IAM is not configured"
         );
+    }
+
+    /// `Client::new` rejects an IAM-configured request when TLS is disabled, before
+    /// any token manager (and therefore any AUTH) exists, so initial AUTH, refresh
+    /// and reconnect all fail closed.
+    ///
+    /// A-B: the same request over TLS succeeds, so the failure is the `NoTls` guard
+    /// firing, not IAM config being rejected unconditionally.
+    #[tokio::test]
+    #[cfg(feature = "proto")]
+    async fn test_iam_without_tls_is_rejected() {
+        setup_test_credentials();
+
+        let make_request = |tls_mode: TlsMode| ConnectionRequest {
+            addresses: vec![NodeAddress {
+                host: "127.0.0.1".to_string(),
+                port: 1,
+            }],
+            lazy_connect: true,
+            tls_mode: Some(tls_mode),
+            authentication_info: Some(crate::client::types::AuthenticationInfo {
+                username: Some("iam-test-user".to_string()),
+                password: None,
+                iam_config: Some(crate::client::types::IamAuthenticationConfig {
+                    cluster_name: "test-cluster".to_string(),
+                    region: "us-east-1".to_string(),
+                    service_type: crate::iam::ServiceType::ElastiCache,
+                    refresh_interval_seconds: None,
+                    credentials_provider: None,
+                }),
+            }),
+            ..Default::default()
+        };
+
+        let err = match Client::new(make_request(TlsMode::NoTls), None).await {
+            Err(e) => e,
+            Ok(_) => panic!("IAM + NoTls must be rejected before any token is obtained"),
+        };
+        let msg = format!("{err:?}");
+        assert!(
+            msg.contains("IAM authentication requires TLS"),
+            "error should name the TLS requirement, got: {msg}"
+        );
+
+        // A: the same config over TLS is accepted (lazy, so no network touched).
+        if Client::new(make_request(TlsMode::SecureTls), None)
+            .await
+            .is_err()
+        {
+            panic!("IAM + TLS must still be accepted");
+        }
     }
 }

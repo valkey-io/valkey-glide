@@ -874,7 +874,8 @@ pub(crate) mod shared_client_tests {
             let test_basics = setup_test_basics(
                 use_cluster,
                 TestConfiguration {
-                    shared_server: true,
+                    use_tls: true,
+                    shared_server: false,
                     ..Default::default()
                 },
             )
@@ -918,7 +919,7 @@ pub(crate) mod shared_client_tests {
 
             let connection_request = glide_core::connection_request::ConnectionRequest {
                 addresses: addresses_info,
-                tls_mode: TlsMode::NoTls.into(),
+                tls_mode: TlsMode::InsecureTls.into(),
                 cluster_mode_enabled: use_cluster,
                 request_timeout: 10000,
                 authentication_info: protobuf::MessageField::some(auth_info),
@@ -1217,7 +1218,8 @@ pub(crate) mod shared_client_tests {
             let test_basics = setup_test_basics(
                 use_cluster,
                 TestConfiguration {
-                    shared_server: true,
+                    use_tls: true,
+                    shared_server: false,
                     ..Default::default()
                 },
             )
@@ -1261,7 +1263,7 @@ pub(crate) mod shared_client_tests {
 
             let connection_request = glide_core::connection_request::ConnectionRequest {
                 addresses: addresses_info,
-                tls_mode: TlsMode::NoTls.into(),
+                tls_mode: TlsMode::InsecureTls.into(),
                 cluster_mode_enabled: use_cluster,
                 request_timeout: 10000,
                 authentication_info: protobuf::MessageField::some(auth_info),
@@ -4915,32 +4917,57 @@ pub(crate) mod shared_client_tests {
     async fn setup_iam_local_server(
         iam_username: &str,
     ) -> (
+        tempfile::TempDir,
         RedisServer,
         redis::ConnectionAddr,
         glide_core::connection_request::ConnectionRequest,
     ) {
         use ::protobuf::MessageField;
         use glide_core::connection_request as protobuf;
-        use protobuf::TlsMode;
         use protobuf::{AuthenticationInfo as ProtoAuthInfo, IamCredentials, NodeAddress};
         use protobuf::{
             ConnectionRequest as ProtoConnectionRequest, ServiceType as ProtoServiceType,
         };
 
-        // `nopass` means ACL ignores the supplied password entirely (verified
-        // empirically: `AUTH iamuser <anything>` succeeds), which is the closest
-        // local stand-in for how a real ElastiCache/MemoryDB IAM-enabled user
-        // accepts a valid-looking SigV4-signed token without the test having
-        // real AWS access.
-        let server = RedisServer::new(ServerType::Tcp { tls: false });
+        // IAM auth requires TLS, so the server is TLS-enabled and the request
+        // verifies it against the test CA — the scope exercises IAM `AUTH` over an
+        // encrypted channel. `nopass` means ACL ignores the supplied password
+        // entirely (verified empirically: `AUTH iamuser <anything>` succeeds), the
+        // closest local stand-in for how a real ElastiCache/MemoryDB IAM-enabled
+        // user accepts a valid-looking SigV4-signed token without real AWS access.
+        let tempdir = tempfile::tempdir().expect("Failed to create temp dir");
+        let tls_paths = build_tls_file_paths(&tempdir);
+        let ca_cert_bytes = tls_paths.read_ca_cert_as_bytes();
+        let server = RedisServer::new_with_addr_tls_modules_and_spawner(
+            redis::ConnectionAddr::TcpTls {
+                host: "127.0.0.1".to_string(),
+                port: get_available_port(),
+                insecure: false,
+                tls_params: None,
+            },
+            Some(tls_paths),
+            &[],
+            // No mTLS: IAM authenticates with a password-style AUTH, not a client
+            // certificate, so the server must not require one.
+            false,
+            |cmd| cmd.spawn().expect("Failed to spawn server"),
+        );
         let addr = server.get_client_addr();
+        tokio::time::sleep(std::time::Duration::from_millis(300)).await;
         let (host, port) = match &addr {
-            redis::ConnectionAddr::Tcp(host, port) => (host.clone(), *port),
-            other => panic!("Expected a plain TCP test server address, got: {other:?}"),
+            redis::ConnectionAddr::TcpTls { host, port, .. } => (host.clone(), *port),
+            other => panic!("Expected a TLS test server address, got: {other:?}"),
         };
 
+        // Connect the ACL-setup client over TLS too (insecure: skip verification —
+        // this raw helper connection is not the subject under test).
         let setup_client = redis::Client::open(redis::ConnectionInfo {
-            addr: addr.clone(),
+            addr: redis::ConnectionAddr::TcpTls {
+                host: host.clone(),
+                port,
+                insecure: true,
+                tls_params: None,
+            },
             redis: RedisConnectionInfo::default(),
         })
         .unwrap();
@@ -4970,7 +4997,9 @@ pub(crate) mod shared_client_tests {
             port: port.into(),
             ..Default::default()
         });
-        proto_request.tls_mode = TlsMode::NoTls.into();
+        // Verify the server against the test CA (SecureTls); IAM auth requires TLS.
+        proto_request.root_certs.push(ca_cert_bytes.into());
+        proto_request.tls_mode = protobuf::TlsMode::SecureTls.into();
         let mut iam_credentials = IamCredentials::new();
         iam_credentials.cluster_name = "test-scope-iam-cluster".into();
         iam_credentials.region = "us-east-1".into();
@@ -4980,7 +5009,7 @@ pub(crate) mod shared_client_tests {
         auth_info.iam_credentials = MessageField(Some(Box::new(iam_credentials)));
         proto_request.authentication_info = MessageField(Some(Box::new(auth_info)));
 
-        (server, addr, proto_request)
+        (tempdir, server, addr, proto_request)
     }
 
     /// Reads `cmdstat_auth`'s `calls=` counter from `INFO commandstats`.
@@ -5028,7 +5057,8 @@ pub(crate) mod shared_client_tests {
             setup_test_credentials();
 
             let iam_username = "iamuser";
-            let (_server, _addr, proto_request) = setup_iam_local_server(iam_username).await;
+            let (_tempdir, _server, _addr, proto_request) =
+                setup_iam_local_server(iam_username).await;
             let connection_request_bytes = proto_request
                 .write_to_bytes()
                 .expect("serialize scope connection request");
@@ -5087,7 +5117,8 @@ pub(crate) mod shared_client_tests {
             setup_test_credentials();
 
             let iam_username = "iamuser";
-            let (_server, addr, proto_request) = setup_iam_local_server(iam_username).await;
+            let (_tempdir, _server, addr, proto_request) =
+                setup_iam_local_server(iam_username).await;
             let bytes = proto_request
                 .clone()
                 .write_to_bytes()
@@ -5156,7 +5187,8 @@ pub(crate) mod shared_client_tests {
             setup_test_credentials();
 
             let iam_username = "iamuser";
-            let (_server, addr, proto_request) = setup_iam_local_server(iam_username).await;
+            let (_tempdir, _server, addr, proto_request) =
+                setup_iam_local_server(iam_username).await;
             let bytes = proto_request
                 .clone()
                 .write_to_bytes()
@@ -5249,7 +5281,8 @@ pub(crate) mod shared_client_tests {
             setup_test_credentials();
 
             let iam_username = "iamuser";
-            let (_server, addr, proto_request) = setup_iam_local_server(iam_username).await;
+            let (_tempdir, _server, addr, proto_request) =
+                setup_iam_local_server(iam_username).await;
 
             let mut client = Client::new(proto_request.into(), None)
                 .await
@@ -5362,7 +5395,8 @@ pub(crate) mod shared_client_tests {
             setup_test_credentials();
 
             let iam_username = "iamuser";
-            let (_server, addr, proto_request) = setup_iam_local_server(iam_username).await;
+            let (_tempdir, _server, addr, proto_request) =
+                setup_iam_local_server(iam_username).await;
 
             let mut client = Client::new(proto_request.into(), None)
                 .await
@@ -5452,7 +5486,8 @@ pub(crate) mod shared_client_tests {
             setup_test_credentials();
 
             let iam_username = "iamuser";
-            let (_server, addr, proto_request) = setup_iam_local_server(iam_username).await;
+            let (_tempdir, _server, addr, proto_request) =
+                setup_iam_local_server(iam_username).await;
 
             let mut client = Client::new(proto_request.into(), None)
                 .await
@@ -5532,7 +5567,8 @@ pub(crate) mod shared_client_tests {
             setup_test_credentials();
 
             let iam_username = "iamuser";
-            let (_server, addr, proto_request) = setup_iam_local_server(iam_username).await;
+            let (_tempdir, _server, addr, proto_request) =
+                setup_iam_local_server(iam_username).await;
 
             let mut client = Client::new(proto_request.into(), None)
                 .await
@@ -5614,16 +5650,29 @@ pub(crate) mod shared_client_tests {
             setup_test_credentials();
 
             let iam_username = "iamuser";
+            // IAM auth requires TLS, so stand up a TLS cluster. The request uses
+            // InsecureTls (skip verification) so no CA has to be threaded through.
+            let tempdir = tempfile::tempdir().expect("Failed to create temp dir");
+            let tls_paths = build_tls_file_paths(&tempdir);
             let cluster =
-                crate::utilities::cluster::RedisCluster::new(false, &None, Some(3), Some(0));
+                crate::utilities::cluster::RedisCluster::new_with_tls(3, 0, Some(tls_paths));
             let addresses = cluster.get_server_addresses();
 
             // Grant the `nopass` IAM user on every node (mirrors the standalone
             // `setup_iam_local_server`; `nopass` lets a valid-looking token AUTH
             // without real AWS).
             for addr in &addresses {
+                let (host, port) = match addr {
+                    redis::ConnectionAddr::TcpTls { host, port, .. } => (host.clone(), *port),
+                    other => panic!("Expected a TLS cluster node address, got: {other:?}"),
+                };
                 let admin = redis::Client::open(redis::ConnectionInfo {
-                    addr: addr.clone(),
+                    addr: redis::ConnectionAddr::TcpTls {
+                        host,
+                        port,
+                        insecure: true,
+                        tls_params: None,
+                    },
                     redis: RedisConnectionInfo::default(),
                 })
                 .unwrap();
@@ -5657,7 +5706,7 @@ pub(crate) mod shared_client_tests {
                 };
                 let mut req = ProtoConnectionRequest::new();
                 for addr in &addresses {
-                    if let redis::ConnectionAddr::Tcp(host, port) = addr {
+                    if let redis::ConnectionAddr::TcpTls { host, port, .. } = addr {
                         req.addresses.push(NodeAddress {
                             host: host.clone().into(),
                             port: (*port as u32),
@@ -5665,7 +5714,7 @@ pub(crate) mod shared_client_tests {
                         });
                     }
                 }
-                req.tls_mode = TlsMode::NoTls.into();
+                req.tls_mode = TlsMode::InsecureTls.into();
                 req.cluster_mode_enabled = true;
                 req.request_timeout = 10000;
                 let mut iam = IamCredentials::new();

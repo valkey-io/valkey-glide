@@ -11,7 +11,7 @@ import {
     expect,
     it,
 } from "@jest/globals";
-import { ValkeyCluster } from "../../utils/TestUtils";
+import { TestTLSConfig, ValkeyCluster } from "../../utils/TestUtils";
 import {
     CreateDirectClient,
     registerCredentialProvider,
@@ -69,6 +69,20 @@ function createTestIamConfig(refreshIntervalSeconds: number): IamAuthConfig {
         refreshIntervalSeconds: refreshIntervalSeconds,
     };
 }
+
+/**
+ * IAM auth requires TLS, so these tests start their own TLS server. Its
+ * certificates are self-signed, hence `insecure`. Shared between server
+ * startup and the client under test so the two cannot drift.
+ */
+const IAM_TLS_CONFIG: TestTLSConfig = {
+    useTLS: true,
+    advancedConfiguration: {
+        tlsAdvancedConfiguration: {
+            insecure: true,
+        },
+    },
+};
 
 describe("Auth tests", () => {
     let cmeCluster: ValkeyCluster;
@@ -652,20 +666,16 @@ describe("IAM Auth: Mock Credentials", () => {
             const username = IAM_USERNAME; // Use default user
             const iamConfig = createTestIamConfig(5);
 
-            // Use existing cluster from global setup
-            const clusterAddresses = global.CLUSTER_ENDPOINTS;
-            const cluster = clusterAddresses
-                ? await ValkeyCluster.initFromExistingCluster(
-                      true,
-                      parseEndpoints(clusterAddresses),
-                      getServerVersion,
-                  )
-                : await ValkeyCluster.createCluster(
-                      true,
-                      3,
-                      1,
-                      getServerVersion,
-                  );
+            // Dedicated TLS cluster: the one from global setup is plaintext
+            // unless the run opted into --tls, and IAM auth requires TLS.
+            const cluster = await ValkeyCluster.createCluster(
+                true,
+                3,
+                1,
+                getServerVersion,
+                true,
+                IAM_TLS_CONFIG,
+            );
 
             const addresses = cluster
                 .getAddresses()
@@ -678,7 +688,7 @@ describe("IAM Auth: Mock Credentials", () => {
                         username: username,
                         iamConfig: iamConfig,
                     },
-                    useTLS: global.TLS,
+                    ...IAM_TLS_CONFIG,
                 });
 
                 // Basic ping test to verify connection
@@ -718,20 +728,16 @@ describe("IAM Auth: Mock Credentials", () => {
             const username = IAM_USERNAME;
             const iamConfig = createTestIamConfig(2); // Short interval for automatic refresh
 
-            // Use existing cluster from global setup
-            const clusterAddresses = global.CLUSTER_ENDPOINTS;
-            const cluster = clusterAddresses
-                ? await ValkeyCluster.initFromExistingCluster(
-                      true,
-                      parseEndpoints(clusterAddresses),
-                      getServerVersion,
-                  )
-                : await ValkeyCluster.createCluster(
-                      true,
-                      3,
-                      1,
-                      getServerVersion,
-                  );
+            // Dedicated TLS cluster: the one from global setup is plaintext
+            // unless the run opted into --tls, and IAM auth requires TLS.
+            const cluster = await ValkeyCluster.createCluster(
+                true,
+                3,
+                1,
+                getServerVersion,
+                true,
+                IAM_TLS_CONFIG,
+            );
 
             const addresses = cluster
                 .getAddresses()
@@ -744,7 +750,7 @@ describe("IAM Auth: Mock Credentials", () => {
                         username: username,
                         iamConfig: iamConfig,
                     },
-                    useTLS: global.TLS,
+                    ...IAM_TLS_CONFIG,
                 });
 
                 // Verify initial connection
@@ -782,20 +788,16 @@ describe("IAM Auth: Mock Credentials", () => {
             const username = IAM_USERNAME;
             const iamConfig = createTestIamConfig(5);
 
-            // Use existing standalone server from global setup
-            const standaloneAddresses = global.STAND_ALONE_ENDPOINT;
-            const server = standaloneAddresses
-                ? await ValkeyCluster.initFromExistingCluster(
-                      false,
-                      parseEndpoints(standaloneAddresses),
-                      getServerVersion,
-                  )
-                : await ValkeyCluster.createCluster(
-                      false,
-                      1,
-                      0,
-                      getServerVersion,
-                  );
+            // Dedicated TLS server: the one from global setup is plaintext
+            // unless the run opted into --tls, and IAM auth requires TLS.
+            const server = await ValkeyCluster.createCluster(
+                false,
+                1,
+                0,
+                getServerVersion,
+                true,
+                IAM_TLS_CONFIG,
+            );
 
             const addresses = server
                 .getAddresses()
@@ -808,7 +810,7 @@ describe("IAM Auth: Mock Credentials", () => {
                         username: username,
                         iamConfig: iamConfig,
                     },
-                    useTLS: global.TLS,
+                    ...IAM_TLS_CONFIG,
                 });
 
                 // Basic ping test to verify connection
@@ -848,20 +850,16 @@ describe("IAM Auth: Mock Credentials", () => {
             const username = IAM_USERNAME;
             const iamConfig = createTestIamConfig(2);
 
-            // Use existing standalone server from global setup
-            const standaloneAddresses = global.STAND_ALONE_ENDPOINT;
-            const server = standaloneAddresses
-                ? await ValkeyCluster.initFromExistingCluster(
-                      false,
-                      parseEndpoints(standaloneAddresses),
-                      getServerVersion,
-                  )
-                : await ValkeyCluster.createCluster(
-                      false,
-                      1,
-                      0,
-                      getServerVersion,
-                  );
+            // Dedicated TLS server: the one from global setup is plaintext
+            // unless the run opted into --tls, and IAM auth requires TLS.
+            const server = await ValkeyCluster.createCluster(
+                false,
+                1,
+                0,
+                getServerVersion,
+                true,
+                IAM_TLS_CONFIG,
+            );
 
             const addresses = server
                 .getAddresses()
@@ -874,7 +872,7 @@ describe("IAM Auth: Mock Credentials", () => {
                         username: username,
                         iamConfig: iamConfig,
                     },
-                    useTLS: global.TLS,
+                    ...IAM_TLS_CONFIG,
                 });
 
                 // Verify initial connection
