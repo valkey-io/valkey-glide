@@ -2682,6 +2682,47 @@ export function runBaseTests(config: {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `delifeq basic functionality_%p`,
+        async (protocol) => {
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    if (cluster.checkIfServerVersionLessThan("9.0.0")) {
+                        return;
+                    }
+
+                    const key = getRandomKey();
+                    const value = getRandomKey();
+                    const wrongValue = getRandomKey();
+
+                    // Key does not exist yet
+                    expect(await client.delifeq(key, value)).toEqual(false);
+
+                    expect(await client.set(key, value)).toEqual("OK");
+
+                    // Value does not match - key remains
+                    expect(await client.delifeq(key, wrongValue)).toEqual(
+                        false,
+                    );
+                    expect(await client.get(key)).toEqual(value);
+
+                    // Value matches - key is deleted
+                    expect(await client.delifeq(key, value)).toEqual(true);
+                    expect(await client.get(key)).toEqual(null);
+
+                    // Test DELIFEQ on a key holding a non-string value returns WRONGTYPE
+                    const setKey = getRandomKey();
+                    expect(await client.sadd(setKey, ["a"])).toEqual(1);
+                    await expect(client.delifeq(setKey, "a")).rejects.toThrow(
+                        RequestError,
+                    );
+                },
+                protocol,
+            );
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `hexpire basic functionality_%p`,
         async (protocol) => {
             await runTest(
