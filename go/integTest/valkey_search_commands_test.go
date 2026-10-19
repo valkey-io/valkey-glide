@@ -4,6 +4,8 @@ package integTest
 
 import (
 	"context"
+	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -2438,6 +2440,107 @@ func (suite *GlideTestSuite) probeSearch13CapabilityCluster(
 	return false
 }
 
+// readMapField reads one field out of a reply that may be a flat []any slice (odd-index keys,
+// even-index values -- the shape FT.INFO's nested index_definition value comes back as, since
+// glide-core's FTInfoReturnType converter does not recurse into that specific key the way it does
+// fields/vector_params) or an already-flattened map[string]any. Returns (value, true) if found,
+// (nil, false) otherwise. Mirrors Node's readMapField / Java's equivalent inline lookup.
+func readMapField(reply any, field string) (any, bool) {
+	switch r := reply.(type) {
+	case map[string]any:
+		v, ok := r[field]
+		return v, ok
+	case []any:
+		for i := 0; i+1 < len(r); i += 2 {
+			key, ok := r[i].(string)
+			if ok && key == field {
+				return r[i+1], true
+			}
+		}
+	}
+	return nil, false
+}
+
+// parseEmulateReleaseLevel parses CONFIG GET search.emulate-release's reply into a string, or
+// ("", false) if the key is absent or the reply shape isn't recognised.
+func parseEmulateReleaseLevel(configGetReply any) (string, bool) {
+	value, ok := readMapField(configGetReply, "search.emulate-release")
+	if !ok || value == nil {
+		return "", false
+	}
+	switch v := value.(type) {
+	case string:
+		return v, true
+	case []byte:
+		return string(v), true
+	default:
+		return fmt.Sprintf("%v", v), true
+	}
+}
+
+// checkVersionLt returns true if level is strictly less than minLevel, both dotted X.Y.Z (an
+// optional -rcN suffix is stripped). Mirrors Node's checkVersionLt / Python's level comparison.
+func checkVersionLt(level string, minLevel string) bool {
+	strip := func(v string) []int {
+		base := strings.SplitN(v, "-", 2)[0]
+		parts := strings.Split(base, ".")
+		nums := make([]int, len(parts))
+		for i, p := range parts {
+			n, _ := strconv.Atoi(p)
+			nums[i] = n
+		}
+		return nums
+	}
+	a := strip(level)
+	b := strip(minLevel)
+	maxLen := len(a)
+	if len(b) > maxLen {
+		maxLen = len(b)
+	}
+	for i := 0; i < maxLen; i++ {
+		x, y := 0, 0
+		if i < len(a) {
+			x = a[i]
+		}
+		if i < len(b) {
+			y = b[i]
+		}
+		if x != y {
+			return x < y
+		}
+	}
+	return false
+}
+
+// getEmulateReleaseLevel reads the active search.emulate-release level from a connected,
+// 1.3-capable client. Fails the test loudly if the level can't be parsed -- a capable module with
+// an unparseable level is a harness bug, not something to silently skip past.
+func (suite *GlideTestSuite) getEmulateReleaseLevel(ctx context.Context, client *glide.ClusterClient) string {
+	reply, err := client.CustomCommand(ctx, []string{"CONFIG", "GET", "search.emulate-release"})
+	require.NoError(suite.T(), err, "CONFIG GET search.emulate-release failed on a 1.3-capable module")
+	// For an unrouted command like CONFIG GET or FT.INFO, the single node that answers returns
+	// its own map-shaped reply, and ClusterValue stores that single map under MultiValue()
+	// rather than SingleValue() (confirmed empirically against a live cluster: IsMultiValue() is
+	// true with exactly one entry whose key is the config key itself, e.g.
+	// "search.emulate-release", not a node address) -- so the multi-value map IS the reply's own
+	// contents here, not a per-node breakdown.
+	var unwrapped any
+	if reply.IsMultiValue() {
+		multi := reply.MultiValue()
+		unwrapped = make(map[string]any, len(multi))
+		for k, v := range multi {
+			unwrapped.(map[string]any)[k] = v
+		}
+	} else {
+		unwrapped = reply.SingleValue()
+	}
+	level, ok := parseEmulateReleaseLevel(unwrapped)
+	if !ok {
+		suite.FailNow("search.emulate-release could not be parsed from a 1.3-capable module's CONFIG GET reply")
+	}
+	return level
+}
+
 // --- ft_search_inkeys ---
 
 func (suite *GlideTestSuite) TestModuleFtSearchInKeys() {
@@ -2515,6 +2618,66 @@ func (suite *GlideTestSuite) TestModuleFtSearchCountMapsToLimitZeroZero() {
 	glideft.ClusterFtDropIndex(ctx, client, index)
 }
 
+// --- ft_aggregate typed reducers ---
+
+func (suite *GlideTestSuite) TestModuleFtAggregateTypedReducers() {
+	client := suite.defaultClusterClient()
+	ctx := context.Background()
+	if !suite.probeSearch13CapabilityCluster(ctx, client) {
+		suite.T().Skip("search module present but pre-1.3 (INKEYS probe rejected it)")
+	}
+
+	prefix := "{" + uuid.New().String() + "}:"
+	index := prefix + "index"
+
+	_, err := glideft.ClusterFtCreate(ctx, client, index,
+		[]options.Field{options.NewTextField("category"), options.NewNumericField("price")},
+		&options.FtCreateOptions{DataType: constants.IndexDataTypeHash, Prefixes: []string{prefix}})
+	assert.NoError(suite.T(), err)
+
+	_, err = client.HSet(ctx, prefix+"1", map[string]string{"category": "a", "price": "10"})
+	assert.NoError(suite.T(), err)
+	_, err = client.HSet(ctx, prefix+"2", map[string]string{"category": "a", "price": "30"})
+	assert.NoError(suite.T(), err)
+	_, err = client.HSet(ctx, prefix+"3", map[string]string{"category": "a", "price": "10"})
+	assert.NoError(suite.T(), err)
+	time.Sleep(time.Second)
+
+	firstValue, err := options.NewFirstValueReducer(
+		"@price", &options.FtAggregateFirstValueOptions{By: "@price", Order: constants.FtAggregateOrderByDesc}, "max_price",
+	)
+	assert.NoError(suite.T(), err)
+
+	rows, err := glideft.ClusterFtAggregate(ctx, client, index, "*", &options.FtAggregateOptions{
+		Clauses: []options.FtAggregateClause{
+			&options.FtAggregateGroupBy{
+				Properties: []string{"@category"},
+				Reducers: []options.FtAggregateReducer{
+					options.NewToListReducer("@price", "prices"),
+					firstValue,
+					options.NewRandomSampleReducer("@price", 2, "sample"),
+				},
+			},
+		},
+	})
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), 1, len(rows))
+
+	row := rows[0]
+	pricesAny, ok := row["prices"].([]any)
+	assert.True(suite.T(), ok, "prices should be an array")
+	prices := make([]string, len(pricesAny))
+	for i, p := range pricesAny {
+		prices[i] = fmt.Sprintf("%v", p)
+	}
+	sort.Strings(prices)
+	assert.Equal(suite.T(), []string{"10", "30"}, prices)
+
+	assert.Equal(suite.T(), "30", fmt.Sprintf("%v", row["max_price"]))
+
+	glideft.ClusterFtDropIndex(ctx, client, index)
+}
+
 // --- ft_create float16/bfloat16 ---
 
 func (suite *GlideTestSuite) TestModuleFtCreateFloat16Bfloat16Vector() {
@@ -2581,6 +2744,18 @@ func (suite *GlideTestSuite) TestModuleFtCreateFilterScoreFieldNoHighlight() {
 	info, err := glideft.ClusterFtInfo(ctx, client, index)
 	assert.NoError(suite.T(), err)
 	assert.NotEmpty(suite.T(), info)
+
+	indexDefinition, ok := info["index_definition"]
+	assert.True(suite.T(), ok, "FT.INFO reply is missing index_definition")
+	scoreField, scoreFieldPresent := readMapField(indexDefinition, "score_field")
+
+	level := suite.getEmulateReleaseLevel(ctx, client)
+	if !checkVersionLt(level, "1.3.0") {
+		assert.True(suite.T(), scoreFieldPresent, "score_field should be reported at emulate-release >= 1.3.0")
+		assert.Equal(suite.T(), "boost", fmt.Sprintf("%v", scoreField))
+	} else {
+		assert.False(suite.T(), scoreFieldPresent, "score_field should not be reported below emulate-release 1.3.0")
+	}
 
 	result, err := glideft.ClusterFtSearch(ctx, client, index, "*", nil)
 	assert.NoError(suite.T(), err)
