@@ -23,7 +23,6 @@ import static glide.TestUtilities.generateLuaLibCodeBinary;
 import static glide.TestUtilities.getInfo;
 import static glide.TestUtilities.getUnixSeconds;
 import static glide.TestUtilities.getValueFromInfo;
-import static glide.TestUtilities.parseInfo;
 import static glide.TestUtilities.parseLong;
 import static glide.TestUtilities.waitFor;
 import static glide.TestUtilities.waitForNotBusy;
@@ -213,8 +212,7 @@ public class CommandTests {
     @MethodSource("getClients")
     @SneakyThrows
     public void info_without_options(GlideClient regularClient) {
-        String data = regularClient.info().get();
-        Map<String, String> fields = parseInfo(data);
+        Map<String, String> fields = getInfo(regularClient).get(0);
         for (String field : INFO_DEFAULT_FIELDS) {
             assertTrue(fields.containsKey(field), field);
         }
@@ -253,7 +251,7 @@ public class CommandTests {
         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("9.2.0"), "This feature added in version 9.2");
 
         // Persistence fields
-        Map<String, String> persistence = getInfo(regularClient, PERSISTENCE);
+        Map<String, String> persistence = getInfo(regularClient, PERSISTENCE).get(0);
 
         assertTrue(BGSAVE_TYPES.contains(persistence.get("rdb_current_bgsave_type")));
         assertTrue(BGSAVE_TYPES.contains(persistence.get("rdb_last_bgsave_type")));
@@ -440,7 +438,7 @@ public class CommandTests {
     @MethodSource("getClients")
     @SneakyThrows
     public void config_rewrite_non_existent_config_file(GlideClient regularClient) {
-        String configFile = getInfo(regularClient, SERVER).get("config_file");
+        String configFile = getInfo(regularClient, SERVER).get(0).get("config_file");
 
         if (configFile.isEmpty()) {
             ExecutionException executionException =

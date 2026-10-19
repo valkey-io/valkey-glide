@@ -325,7 +325,7 @@ export function runBaseTests(config: {
         `test config rewrite_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const info = await getInfo(client, [InfoOptions.Server]);
+                const [info] = await getInfo(client, [InfoOptions.Server]);
                 const conf_file = info["config_file"];
 
                 if (conf_file.length > 0) {
@@ -379,10 +379,10 @@ export function runBaseTests(config: {
             await runTest(
                 async (client: BaseClient, cluster: ValkeyCluster) => {
                     // Default fields
-                    const info = await getInfo(client);
-
-                    for (const field of INFO_DEFAULT_FIELDS) {
-                        expect(info).toHaveProperty(field);
+                    for (const info of await getInfo(client)) {
+                        for (const field of INFO_DEFAULT_FIELDS) {
+                            expect(info).toHaveProperty(field);
+                        }
                     }
 
                     // Valkey 9.2+ fields
@@ -393,38 +393,38 @@ export function runBaseTests(config: {
                     }
 
                     // Persistence fields
-                    const persistence = await getInfo(client, [
+                    for (const persistence of await getInfo(client, [
                         InfoOptions.Persistence,
-                    ]);
+                    ])) {
+                        expect(BGSAVE_TYPES).toContain(
+                            persistence["rdb_current_bgsave_type"],
+                        );
+                        expect(BGSAVE_TYPES).toContain(
+                            persistence["rdb_last_bgsave_type"],
+                        );
 
-                    expect(BGSAVE_TYPES).toContain(
-                        persistence["rdb_current_bgsave_type"],
-                    );
-                    expect(BGSAVE_TYPES).toContain(
-                        persistence["rdb_last_bgsave_type"],
-                    );
-
-                    const remainingName =
-                        "forkless_estimated_seconds_remaining";
-                    const remainingValue = parseInteger(
-                        persistence[remainingName],
-                        remainingName,
-                    );
-                    expect(remainingValue).toBeGreaterThanOrEqual(-1);
+                        const remainingName =
+                            "forkless_estimated_seconds_remaining";
+                        const remainingValue = parseInteger(
+                            persistence[remainingName],
+                            remainingName,
+                        );
+                        expect(remainingValue).toBeGreaterThanOrEqual(-1);
+                    }
 
                     // Cluster info fields
                     if (client instanceof GlideClusterClient) {
-                        const clusterInfo = await getInfo(client, [
+                        for (const clusterInfo of await getInfo(client, [
                             InfoOptions.ClusterInfo,
-                        ]);
-
-                        const fallbacksName =
-                            "cluster_io_main_thread_fallbacks";
-                        const fallbacksValue = parseInteger(
-                            clusterInfo[fallbacksName],
-                            fallbacksName,
-                        );
-                        expect(fallbacksValue).toBeGreaterThanOrEqual(0);
+                        ])) {
+                            const fallbacksName =
+                                "cluster_io_main_thread_fallbacks";
+                            const fallbacksValue = parseInteger(
+                                clusterInfo[fallbacksName],
+                                fallbacksName,
+                            );
+                            expect(fallbacksValue).toBeGreaterThanOrEqual(0);
+                        }
                     }
                 },
                 protocol,

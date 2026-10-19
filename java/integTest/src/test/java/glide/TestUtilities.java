@@ -9,7 +9,6 @@ import static glide.TestConfiguration.TLS;
 import static glide.api.BaseClient.OK;
 import static glide.api.models.GlideString.gs;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleMultiNodeRoute.ALL_PRIMARIES;
-import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleSingleNodeRoute.RANDOM;
 import static glide.utils.Java8Utils.createMap;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -55,6 +54,7 @@ import java.security.spec.PKCS8EncodedKeySpec;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -241,37 +241,39 @@ public class TestUtilities {
     /**
      * Returns the fields and values from the given INFO sections.
      *
-     * <p>For cluster clients, the command is sent to a random node.
+     * <p>For cluster clients, the command is sent to all primary nodes.
      *
      * @param client A client that is connected to the server.
      * @param sections The INFO sections to request. Defaults to the default sections.
-     * @return A map from each INFO field name to its value.
+     * @return One map per node reply, from each INFO field name to its value.
      */
     @SneakyThrows
-    public static Map<String, String> getInfo(BaseClient client, Section... sections) {
-        String info =
-                client instanceof GlideClusterClient
-                        ? ((GlideClusterClient) client).info(sections, RANDOM).get().getSingleValue()
-                        : ((GlideClient) client).info(sections).get();
-        return parseInfo(info);
-    }
+    public static List<Map<String, String>> getInfo(BaseClient client, Section... sections) {
+        Collection<String> replies;
+        if (client instanceof GlideClusterClient) {
+            GlideClusterClient clusterClient = (GlideClusterClient) client;
+            ClusterValue<String> info =
+                    sections.length == 0 ? clusterClient.info().get() : clusterClient.info(sections).get();
+            replies = info.getMultiValue().values();
+        } else {
+            GlideClient glideClient = (GlideClient) client;
+            replies =
+                    Collections.singletonList(
+                            sections.length == 0 ? glideClient.info().get() : glideClient.info(sections).get());
+        }
 
-    /**
-     * Parses INFO output from a single node into its fields and values.
-     *
-     * @param info The INFO output from a single node.
-     * @return A map from each INFO field name to its value.
-     */
-    public static Map<String, String> parseInfo(String info) {
-        return Arrays.stream(info.split("\n"))
-                .filter(line -> line.contains(":"))
-                .map(line -> line.split(":", 2))
-                .collect(
-                        Collectors.toMap(
-                                parts -> parts[0].trim(),
-                                parts -> parts[1].trim(),
-                                (existingValue, newValue) -> newValue,
-                                LinkedHashMap::new));
+        List<Map<String, String>> infos = new ArrayList<>();
+        for (String reply : replies) {
+            Map<String, String> fields = new LinkedHashMap<>();
+            for (String line : reply.split("\n")) {
+                String[] parts = line.split(":", 2);
+                if (parts.length == 2) {
+                    fields.put(parts[0].trim(), parts[1].trim());
+                }
+            }
+            infos.add(fields);
+        }
+        return infos;
     }
 
     /**
@@ -720,7 +722,7 @@ public class TestUtilities {
      */
     @SneakyThrows
     public static String getServerVersion(@NonNull final BaseClient client) {
-        Map<String, String> infoResponseMap = getInfo(client, Section.SERVER);
+        Map<String, String> infoResponseMap = getInfo(client, Section.SERVER).get(0);
         if (infoResponseMap.containsKey(VALKEY_VERSION_KEY)) {
             return infoResponseMap.get(VALKEY_VERSION_KEY);
         } else if (infoResponseMap.containsKey(REDIS_VERSION_KEY)) {

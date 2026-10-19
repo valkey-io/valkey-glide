@@ -942,20 +942,19 @@ class TestCommands:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_info_default(self, glide_client: TGlideClient):
-        info_result = await glide_client.info()
+        infos = await get_info(glide_client)
 
         # Verify that there is one response for each node.
         if isinstance(glide_client, GlideClusterClient):
             cluster_nodes = await glide_client.custom_command(["CLUSTER", "NODES"])
             assert isinstance(cluster_nodes, (bytes, list))
             cluster_nodes = get_first_result(cluster_nodes)
-            expected_num_of_results = cluster_nodes.count(b"master")
-            assert len(info_result) == expected_num_of_results
+            assert len(infos) == cluster_nodes.count(b"master")
 
         # Default fields
-        info = await get_info(glide_client)
-        for field in INFO_DEFAULT_FIELDS:
-            assert field in info
+        for info in infos:
+            for field in INFO_DEFAULT_FIELDS:
+                assert field in info
 
         # Valkey 9.2+ fields
         # ------------------
@@ -964,24 +963,24 @@ class TestCommands:
             return
 
         # Persistence fields
-        persistence = await get_info(glide_client, [InfoSection.PERSISTENCE])
+        for persistence in await get_info(glide_client, [InfoSection.PERSISTENCE]):
+            assert persistence.get("rdb_current_bgsave_type") in BGSAVE_TYPES
+            assert persistence.get("rdb_last_bgsave_type") in BGSAVE_TYPES
 
-        assert persistence.get("rdb_current_bgsave_type") in BGSAVE_TYPES
-        assert persistence.get("rdb_last_bgsave_type") in BGSAVE_TYPES
-
-        remaining_name = "forkless_estimated_seconds_remaining"
-        remaining_value = parse_int(persistence.get(remaining_name), remaining_name)
-        assert remaining_value >= -1
+            remaining_name = "forkless_estimated_seconds_remaining"
+            remaining_value = parse_int(persistence.get(remaining_name), remaining_name)
+            assert remaining_value >= -1
 
         # Cluster info fields
         if isinstance(glide_client, GlideClusterClient):
-            cluster_info = await get_info(glide_client, [InfoSection.CLUSTER_INFO])
-
-            fallbacks_name = "cluster_io_main_thread_fallbacks"
-            fallbacks_value = parse_int(
-                cluster_info.get(fallbacks_name), fallbacks_name
-            )
-            assert fallbacks_value >= 0
+            for cluster_info in await get_info(
+                glide_client, [InfoSection.CLUSTER_INFO]
+            ):
+                fallbacks_name = "cluster_io_main_thread_fallbacks"
+                fallbacks_value = parse_int(
+                    cluster_info.get(fallbacks_name), fallbacks_name
+                )
+                assert fallbacks_value >= 0
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -1129,7 +1128,7 @@ class TestCommands:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_config_rewrite(self, glide_client: TGlideClient):
-        info_server = await get_info(glide_client, [InfoSection.SERVER])
+        info_server = (await get_info(glide_client, [InfoSection.SERVER]))[0]
         if len(info_server["config_file"]) > 0:
             assert await glide_client.config_rewrite() == OK
         else:

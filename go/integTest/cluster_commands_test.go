@@ -79,10 +79,7 @@ func (suite *GlideTestSuite) TestInfoCluster() {
 	t := suite.T()
 
 	// info without options
-	data, err := client.Info(context.Background())
-	assert.NoError(t, err)
-	for _, info := range data {
-		fields := parseInfoResponse(info)
+	for _, fields := range getInfo(t, client) {
 		for _, field := range infoDefaultFields {
 			assert.Contains(t, fields, field)
 		}
@@ -124,21 +121,6 @@ func (suite *GlideTestSuite) TestInfoCluster() {
 		)
 	}
 
-	// default sections, multi node route
-	opts = options.ClusterInfoOptions{
-		InfoOptions: nil,
-		RouteOption: &options.RouteOption{Route: config.AllPrimaries},
-	}
-	response, err = client.InfoWithOptions(context.Background(), opts)
-	assert.NoError(t, err)
-	assert.True(t, response.IsMultiValue())
-	for _, info := range response.MultiValue() {
-		fields := parseInfoResponse(info)
-		for _, field := range infoDefaultFields {
-			assert.Contains(t, fields, field)
-		}
-	}
-
 	// Valkey 9.2+ fields
 	// ------------------
 
@@ -148,32 +130,21 @@ func (suite *GlideTestSuite) TestInfoCluster() {
 	}
 
 	// Persistence fields
-	randomRoute := &options.RouteOption{Route: config.RandomRoute}
-	response, err = client.InfoWithOptions(context.Background(), options.ClusterInfoOptions{
-		InfoOptions: &options.InfoOptions{Sections: []constants.Section{constants.Persistence}},
-		RouteOption: randomRoute,
-	})
-	require.NoError(t, err)
-	persistence := parseInfoResponse(response.SingleValue())
+	for _, persistence := range getInfo(t, client, constants.Persistence) {
+		assert.Contains(t, bgsaveTypes, persistence["rdb_current_bgsave_type"])
+		assert.Contains(t, bgsaveTypes, persistence["rdb_last_bgsave_type"])
 
-	assert.Contains(t, bgsaveTypes, persistence["rdb_current_bgsave_type"])
-	assert.Contains(t, bgsaveTypes, persistence["rdb_last_bgsave_type"])
-
-	remaining_name := "forkless_estimated_seconds_remaining"
-	remaining_value := AssertInt(t, persistence[remaining_name], remaining_name)
-	assert.GreaterOrEqual(t, remaining_value, int64(-1))
+		remaining_name := "forkless_estimated_seconds_remaining"
+		remaining_value := AssertInt(t, persistence[remaining_name], remaining_name)
+		assert.GreaterOrEqual(t, remaining_value, int64(-1))
+	}
 
 	// Cluster info fields
-	response, err = client.InfoWithOptions(context.Background(), options.ClusterInfoOptions{
-		InfoOptions: &options.InfoOptions{Sections: []constants.Section{constants.ClusterInfo}},
-		RouteOption: randomRoute,
-	})
-	require.NoError(t, err)
-	cluster_info := parseInfoResponse(response.SingleValue())
-
-	fallbacks_name := "cluster_io_main_thread_fallbacks"
-	fallbacks_value := AssertInt(t, cluster_info[fallbacks_name], fallbacks_name)
-	assert.GreaterOrEqual(t, fallbacks_value, int64(0))
+	for _, cluster_info := range getInfo(t, client, constants.ClusterInfo) {
+		fallbacks_name := "cluster_io_main_thread_fallbacks"
+		fallbacks_value := AssertInt(t, cluster_info[fallbacks_name], fallbacks_name)
+		assert.GreaterOrEqual(t, fallbacks_value, int64(0))
+	}
 }
 
 func (suite *GlideTestSuite) TestClusterRegisterCustomClientInfoTag() {

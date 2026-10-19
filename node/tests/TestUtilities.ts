@@ -2804,23 +2804,24 @@ export function assertMemoryStatsFields(
 
 /**
  * Returns the fields and values from the given INFO sections.
- * For cluster clients, the command is sent to a random node.
+ * For cluster clients, the command is sent to all primary nodes.
  *
  * @param client - A client that is connected to the server.
  * @param sections - The INFO sections to request. Defaults to the default sections.
- * @returns A record mapping each INFO field name to its value.
+ * @returns One record per node reply, mapping each INFO field name to its value.
  */
 export async function getInfo(
     client: BaseClient,
     sections?: InfoOptions[],
-): Promise<Record<string, string>> {
+): Promise<Record<string, string>[]> {
     const info =
         client instanceof GlideClusterClient
-            ? await client.info({ sections, route: "randomNode" })
+            ? await client.info({ sections })
             : await (client as GlideClient).info(sections);
+    const replies = typeof info === "string" ? [info] : Object.values(info);
 
     // TODO #7368: Inline `parseInfoResponse` here when it is removed.
-    return parseInfoResponse(info.toString());
+    return replies.map((reply) => parseInfoResponse(reply));
 }
 
 /**

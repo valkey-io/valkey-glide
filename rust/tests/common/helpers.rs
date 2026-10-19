@@ -56,9 +56,9 @@ pub fn parse_int(value: &str, name: &str) -> i64 {
         .unwrap_or_else(|_| panic!("{name} is not an integer: {value:?}"))
 }
 
-/// Return the fields and values from the given `INFO` sections.
+/// Return the fields and values from the given `INFO` sections, with one map per node reply.
 // TODO #7362: Support cluster clients once the typed `INFO` methods return per-node replies.
-pub async fn get_info<C>(c: &C, sections: &[&str]) -> HashMap<String, String>
+pub async fn get_info<C>(c: &C, sections: &[&str]) -> Vec<HashMap<String, String>>
 where
     C: glide::ServerManagementCommands + Sync,
 {
@@ -68,13 +68,15 @@ where
         c.info_sections(sections).await
     };
 
-    info.unwrap()
+    let fields = info
+        .unwrap()
         .lines()
         .map(str::trim)
         .filter(|line| !line.is_empty() && !line.starts_with('#'))
         .filter_map(|line| line.split_once(':'))
         .map(|(k, v)| (k.to_string(), v.to_string()))
-        .collect()
+        .collect();
+    vec![fields]
 }
 
 /// Parse a `"major.minor.patch"` version string into a tuple.

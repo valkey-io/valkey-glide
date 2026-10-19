@@ -29,7 +29,6 @@ import static glide.TestUtilities.getReplicaCount;
 import static glide.TestUtilities.getUnixSeconds;
 import static glide.TestUtilities.getValueFromInfo;
 import static glide.TestUtilities.isWindows;
-import static glide.TestUtilities.parseInfo;
 import static glide.TestUtilities.parseLong;
 import static glide.TestUtilities.waitFor;
 import static glide.TestUtilities.waitForNotBusy;
@@ -418,37 +417,7 @@ public class CommandTests {
     @MethodSource("getClients")
     @SneakyThrows
     public void info_without_options(GlideClusterClient clusterClient) {
-        ClusterValue<String> data = clusterClient.info().get();
-        assertTrue(data.hasMultiData());
-        for (String info : data.getMultiValue().values()) {
-            Map<String, String> fields = parseInfo(info);
-            for (String field : INFO_DEFAULT_FIELDS) {
-                assertTrue(fields.containsKey(field), field);
-            }
-        }
-    }
-
-    @ParameterizedTest(autoCloseArguments = false)
-    @MethodSource("getClients")
-    @SneakyThrows
-    public void info_with_single_node_route(GlideClusterClient clusterClient) {
-        ClusterValue<String> data = clusterClient.info(RANDOM).get();
-        assertTrue(data.hasSingleData());
-        String infoData = data.getSingleValue();
-        Map<String, String> fields = parseInfo(infoData);
-        for (String field : INFO_DEFAULT_FIELDS) {
-            assertTrue(fields.containsKey(field), field);
-        }
-    }
-
-    @ParameterizedTest(autoCloseArguments = false)
-    @MethodSource("getClients")
-    @SneakyThrows
-    public void info_with_multi_node_route(GlideClusterClient clusterClient) {
-        ClusterValue<String> data = clusterClient.info(ALL_NODES).get();
-        assertTrue(data.hasMultiData());
-        for (String info : data.getMultiValue().values()) {
-            Map<String, String> fields = parseInfo(info);
+        for (Map<String, String> fields : getInfo(clusterClient)) {
             for (String field : INFO_DEFAULT_FIELDS) {
                 assertTrue(fields.containsKey(field), field);
             }
@@ -493,21 +462,21 @@ public class CommandTests {
         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("9.2.0"), "This feature added in version 9.2");
 
         // Persistence fields
-        Map<String, String> persistence = getInfo(clusterClient, PERSISTENCE);
+        for (Map<String, String> persistence : getInfo(clusterClient, PERSISTENCE)) {
+            assertTrue(BGSAVE_TYPES.contains(persistence.get("rdb_current_bgsave_type")));
+            assertTrue(BGSAVE_TYPES.contains(persistence.get("rdb_last_bgsave_type")));
 
-        assertTrue(BGSAVE_TYPES.contains(persistence.get("rdb_current_bgsave_type")));
-        assertTrue(BGSAVE_TYPES.contains(persistence.get("rdb_last_bgsave_type")));
-
-        String remainingName = "forkless_estimated_seconds_remaining";
-        long remainingValue = parseLong(persistence.get(remainingName), remainingName);
-        assertTrue(remainingValue >= -1);
+            String remainingName = "forkless_estimated_seconds_remaining";
+            long remainingValue = parseLong(persistence.get(remainingName), remainingName);
+            assertTrue(remainingValue >= -1);
+        }
 
         // Cluster info fields
-        Map<String, String> clusterInfo = getInfo(clusterClient, CLUSTER_INFO);
-
-        String fallbacksName = "cluster_io_main_thread_fallbacks";
-        long fallbacksValue = parseLong(clusterInfo.get(fallbacksName), fallbacksName);
-        assertTrue(fallbacksValue >= 0);
+        for (Map<String, String> clusterInfo : getInfo(clusterClient, CLUSTER_INFO)) {
+            String fallbacksName = "cluster_io_main_thread_fallbacks";
+            long fallbacksValue = parseLong(clusterInfo.get(fallbacksName), fallbacksName);
+            assertTrue(fallbacksValue >= 0);
+        }
     }
 
     @ParameterizedTest(autoCloseArguments = false)
@@ -711,7 +680,7 @@ public class CommandTests {
     @MethodSource("getClients")
     @SneakyThrows
     public void config_rewrite_non_existent_config_file(GlideClusterClient clusterClient) {
-        String configFile = getInfo(clusterClient, SERVER).get("config_file");
+        String configFile = getInfo(clusterClient, SERVER).get(0).get("config_file");
 
         if (configFile == null || configFile.isEmpty()) {
             ExecutionException executionException =

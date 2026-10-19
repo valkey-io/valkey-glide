@@ -420,9 +420,7 @@ func (suite *GlideTestSuite) TestInfoStandalone() {
 	t := suite.T()
 
 	// info without options
-	info, err := client.Info(context.Background())
-	assert.NoError(t, err)
-	fields := parseInfoResponse(info)
+	fields := getInfo(t, client)[0]
 	for _, field := range infoDefaultFields {
 		assert.Contains(t, fields, field)
 	}
@@ -433,7 +431,7 @@ func (suite *GlideTestSuite) TestInfoStandalone() {
 	if suite.serverVersion >= "7.0.0" {
 		sections = append(sections, constants.Memory)
 	}
-	info, err = client.InfoWithOptions(context.Background(), options.InfoOptions{Sections: sections})
+	info, err := client.InfoWithOptions(context.Background(), options.InfoOptions{Sections: sections})
 	assert.NoError(t, err)
 	for _, section := range sections {
 		assert.Contains(t, strings.ToLower(info), strings.ToLower("# "+string(section)), "Section "+section+" is missing")
@@ -448,12 +446,7 @@ func (suite *GlideTestSuite) TestInfoStandalone() {
 	}
 
 	// Persistence fields
-	info, err = client.InfoWithOptions(
-		context.Background(),
-		options.InfoOptions{Sections: []constants.Section{constants.Persistence}},
-	)
-	require.NoError(t, err)
-	persistence := parseInfoResponse(info)
+	persistence := getInfo(t, client, constants.Persistence)[0]
 
 	assert.Contains(t, bgsaveTypes, persistence["rdb_current_bgsave_type"])
 	assert.Contains(t, bgsaveTypes, persistence["rdb_last_bgsave_type"])
