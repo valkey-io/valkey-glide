@@ -15,6 +15,7 @@ import glide.api.GlideClient;
 import glide.api.GlideClusterClient;
 import glide.api.commands.servermodules.FT;
 import glide.api.models.GlideString;
+import glide.api.models.commands.FT.FTAggregateOptions;
 import glide.api.models.commands.FT.FTCreateOptions;
 import glide.api.models.commands.FT.FTCreateOptions.DataType;
 import glide.api.models.commands.FT.FTCreateOptions.DistanceMetric;
@@ -27,6 +28,7 @@ import glide.api.models.commands.FT.FTSearchOptions;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.configuration.RequestRoutingConfiguration.SimpleMultiNodeRoute;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -379,6 +381,87 @@ public class VectorSearch13Tests {
 
             Map<String, Object> info = FT.info(client, indexName).get();
             assertEquals(indexName, info.get("index_name").toString());
+        } finally {
+            FT.dropindex(client, indexName).get();
+        }
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void ft_aggregate_reducers(BaseClient client) {
+        Assumptions.assumeTrue(
+                capability, "search module present but pre-1.3 (INKEYS probe rejected it)");
+
+        String tag = "{" + UUID.randomUUID() + "}";
+        String prefix = tag + ":";
+        String indexName = prefix + "reducers_idx";
+        FieldInfo categoryField = new FieldInfo("category", new TextField());
+        FieldInfo priceField = new FieldInfo("price", new NumericField());
+
+        assertEquals(
+                OK,
+                FT.create(
+                                client,
+                                indexName,
+                                new FieldInfo[] {categoryField, priceField},
+                                FTCreateOptions.builder()
+                                        .dataType(DataType.HASH)
+                                        .prefixes(new String[] {prefix})
+                                        .build())
+                        .get());
+
+        try {
+            Map<String, String> row1 = new HashMap<>();
+            row1.put("category", "a");
+            row1.put("price", "10");
+            Map<String, String> row2 = new HashMap<>();
+            row2.put("category", "a");
+            row2.put("price", "30");
+            Map<String, String> row3 = new HashMap<>();
+            row3.put("category", "a");
+            row3.put("price", "10");
+
+            if (client instanceof GlideClusterClient) {
+                ((GlideClusterClient) client).hset(prefix + "1", row1).get();
+                ((GlideClusterClient) client).hset(prefix + "2", row2).get();
+                ((GlideClusterClient) client).hset(prefix + "3", row3).get();
+            } else {
+                ((GlideClient) client).hset(prefix + "1", row1).get();
+                ((GlideClient) client).hset(prefix + "2", row2).get();
+                ((GlideClient) client).hset(prefix + "3", row3).get();
+            }
+            Thread.sleep(1000);
+
+            FTAggregateOptions.GroupBy.Reducer toList =
+                    FTAggregateOptions.GroupBy.Reducer.toList("@price", "prices");
+            FTAggregateOptions.GroupBy.Reducer firstValue =
+                    FTAggregateOptions.GroupBy.Reducer.firstValue(
+                            "@price", "@price", FTAggregateOptions.SortBy.SortOrder.DESC, "max_price");
+            FTAggregateOptions.GroupBy.Reducer randomSample =
+                    FTAggregateOptions.GroupBy.Reducer.randomSample("@price", 2, "sample");
+
+            FTAggregateOptions options =
+                    FTAggregateOptions.builder()
+                            .addClause(
+                                    new FTAggregateOptions.GroupBy(
+                                            new String[] {"@category"},
+                                            new FTAggregateOptions.GroupBy.Reducer[] {toList, firstValue, randomSample}))
+                            .build();
+
+            Map<GlideString, Object>[] result = FT.aggregate(client, indexName, "*", options).get();
+            assertEquals(1, result.length);
+            Map<GlideString, Object> row = result[0];
+
+            Object[] prices = (Object[]) row.get(gs("prices"));
+            List<String> priceStrings = new ArrayList<>();
+            for (Object price : prices) {
+                priceStrings.add(price.toString());
+            }
+            priceStrings.sort(null);
+            assertEquals(Arrays.asList("10", "30"), priceStrings);
+
+            assertEquals("30", row.get(gs("max_price")).toString());
         } finally {
             FT.dropindex(client, indexName).get();
         }

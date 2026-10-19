@@ -177,4 +177,92 @@ public class FTOptions13Test {
                 IllegalArgumentException.class,
                 () -> FTSearchOptions.builder().count().limit(0, 10).build().toArgs());
     }
+
+    // ---- FTAggregateOptions.GroupBy.Reducer typed factories ----
+
+    @Test
+    public void testReducer_toList() {
+        FTAggregateOptions.GroupBy.Reducer reducer =
+                FTAggregateOptions.GroupBy.Reducer.toList("@price", "prices");
+        GlideString[] args =
+                new FTAggregateOptions.GroupBy(
+                                new String[] {"@category"}, new FTAggregateOptions.GroupBy.Reducer[] {reducer})
+                        .toArgs();
+        List<GlideString> argList = Arrays.asList(args);
+        int i = argList.indexOf(gs("REDUCE"));
+        assertArrayEquals(
+                new GlideString[] {
+                    gs("REDUCE"), gs("TOLIST"), gs("1"), gs("@price"), gs("AS"), gs("prices")
+                },
+                Arrays.copyOfRange(args, i, i + 6));
+    }
+
+    @Test
+    public void testReducer_firstValueWithoutBy() {
+        FTAggregateOptions.GroupBy.Reducer reducer =
+                FTAggregateOptions.GroupBy.Reducer.firstValue("@price", null, null, "first_price");
+        GlideString[] args =
+                new FTAggregateOptions.GroupBy(
+                                new String[] {"@category"}, new FTAggregateOptions.GroupBy.Reducer[] {reducer})
+                        .toArgs();
+        List<GlideString> argList = Arrays.asList(args);
+        int i = argList.indexOf(gs("REDUCE"));
+        assertArrayEquals(
+                new GlideString[] {
+                    gs("REDUCE"), gs("FIRST_VALUE"), gs("1"), gs("@price"), gs("AS"), gs("first_price")
+                },
+                Arrays.copyOfRange(args, i, i + 6));
+    }
+
+    @Test
+    public void testReducer_firstValueWithByAndOrder() {
+        FTAggregateOptions.GroupBy.Reducer reducer =
+                FTAggregateOptions.GroupBy.Reducer.firstValue(
+                        "@price", "@price", FTAggregateOptions.SortBy.SortOrder.DESC, "max_price");
+        GlideString[] args =
+                new FTAggregateOptions.GroupBy(
+                                new String[] {"@category"}, new FTAggregateOptions.GroupBy.Reducer[] {reducer})
+                        .toArgs();
+        List<GlideString> argList = Arrays.asList(args);
+        int i = argList.indexOf(gs("REDUCE"));
+        assertArrayEquals(
+                new GlideString[] {
+                    gs("REDUCE"),
+                    gs("FIRST_VALUE"),
+                    gs("4"),
+                    gs("@price"),
+                    gs("BY"),
+                    gs("@price"),
+                    gs("DESC"),
+                    gs("AS"),
+                    gs("max_price")
+                },
+                Arrays.copyOfRange(args, i, i + 9));
+    }
+
+    @Test
+    public void testReducer_firstValueOrderWithoutByThrows() {
+        assertThrows(
+                IllegalArgumentException.class,
+                () ->
+                        FTAggregateOptions.GroupBy.Reducer.firstValue(
+                                "@price", null, FTAggregateOptions.SortBy.SortOrder.ASC, "first_price"));
+    }
+
+    @Test
+    public void testReducer_randomSample() {
+        FTAggregateOptions.GroupBy.Reducer reducer =
+                FTAggregateOptions.GroupBy.Reducer.randomSample("@price", 2, "sample");
+        GlideString[] args =
+                new FTAggregateOptions.GroupBy(
+                                new String[] {"@category"}, new FTAggregateOptions.GroupBy.Reducer[] {reducer})
+                        .toArgs();
+        List<GlideString> argList = Arrays.asList(args);
+        int i = argList.indexOf(gs("REDUCE"));
+        assertArrayEquals(
+                new GlideString[] {
+                    gs("REDUCE"), gs("RANDOM_SAMPLE"), gs("2"), gs("@price"), gs("2"), gs("AS"), gs("sample")
+                },
+                Arrays.copyOfRange(args, i, i + 7));
+    }
 }

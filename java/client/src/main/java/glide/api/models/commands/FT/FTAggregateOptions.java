@@ -359,6 +359,73 @@ public class FTAggregateOptions {
                         args,
                         name == null ? new GlideString[0] : new GlideString[] {gs("AS"), gs(name)});
             }
+
+            /**
+             * Creates a <code>TOLIST</code> reducer, which collects all values for <code>field</code>
+             * across the records in a group into a single array, removing duplicates and <code>nil
+             * </code> values. If a value is itself an array, it is flattened one level before being
+             * added. Values are returned in the order they were first encountered.
+             *
+             * @param field The property whose values are collected into a list.
+             * @param name User defined property name for the reducer.
+             * @return A new {@link Reducer} instance configured as <code>TOLIST</code>.
+             */
+            public static Reducer toList(@NonNull String field, @NonNull String name) {
+                return new Reducer("TOLIST", new String[] {field}, name);
+            }
+
+            /**
+             * Creates a <code>FIRST_VALUE</code> reducer, which returns the value of <code>field</code>
+             * from a single record in the group. Without <code>by</code>, the first record encountered
+             * wins. With <code>by</code>, the record whose <code>by</code> property is smallest (<code>
+             * ASC</code>, the default) or largest (<code>DESC</code>) wins; ties keep the
+             * first-encountered record.
+             *
+             * @param field The property whose value is returned.
+             * @param by The property used to choose which record's value of <code>field</code> is
+             *     returned. May be <code>null</code> if <code>order</code> is also <code>null</code>.
+             * @param order The direction used to pick the winning record when <code>by</code> is set. May
+             *     be <code>null</code> to use the default (<code>ASC</code>).
+             * @param name User defined property name for the reducer.
+             * @return A new {@link Reducer} instance configured as <code>FIRST_VALUE</code>.
+             * @throws IllegalArgumentException if <code>order</code> is specified without <code>by
+             *     </code>.
+             */
+            public static Reducer firstValue(
+                    @NonNull String field, String by, SortBy.SortOrder order, @NonNull String name) {
+                if (order != null && by == null) {
+                    throw new IllegalArgumentException("firstValue: order requires by to be set.");
+                }
+
+                List<String> args = new ArrayList<>();
+                args.add(field);
+
+                if (by != null) {
+                    args.add("BY");
+                    args.add(by);
+
+                    if (order != null) {
+                        args.add(order.toString());
+                    }
+                }
+
+                return new Reducer("FIRST_VALUE", args.toArray(new String[0]), name);
+            }
+
+            /**
+             * Creates a <code>RANDOM_SAMPLE</code> reducer, which returns a uniform random sample of up
+             * to <code>size</code> values of <code>field</code> from the records in a group, using
+             * reservoir sampling.
+             *
+             * @param field The property to sample values from.
+             * @param size The maximum number of values to sample. Must be a non-negative integer no
+             *     greater than <code>1000</code>; the server rejects values outside this range.
+             * @param name User defined property name for the reducer.
+             * @return A new {@link Reducer} instance configured as <code>RANDOM_SAMPLE</code>.
+             */
+            public static Reducer randomSample(@NonNull String field, int size, @NonNull String name) {
+                return new Reducer("RANDOM_SAMPLE", new String[] {field, Integer.toString(size)}, name);
+            }
         }
     }
 
