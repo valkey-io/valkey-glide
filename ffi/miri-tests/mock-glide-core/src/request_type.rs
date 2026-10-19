@@ -2,6 +2,12 @@
 
 use redis::Cmd;
 
+/// Mirror of a subset of `glide-core::request_type::RequestType`,
+/// used only so `cargo miri test` can run FFI tests without pulling in real
+/// `glide-core`. Discriminant values here are independent of the real enum's
+/// protobuf ids. When a command's compression-incompatibility or
+/// custom-command resolution behavior becomes relevant to an FFI miri test,
+/// mirror it here too.
 #[derive(Debug, Clone, Copy)]
 #[repr(C)]
 pub enum RequestType {
@@ -50,6 +56,7 @@ pub enum RequestType {
     Strlen = 1521,
     LCS = 1522,
     Substr = 1523,
+    DelIfEq = 1531,
 
     // Incompatible commands - numeric operations
     Incr = 1510,
@@ -87,6 +94,7 @@ impl RequestType {
             RequestType::Strlen => Some("STRLEN returns the length of raw bytes"),
             RequestType::LCS => Some("LCS compares raw bytes between strings"),
             RequestType::Substr => Some("SUBSTR returns a substring of raw bytes"),
+            RequestType::DelIfEq => Some("DELIFEQ compares the stored value against raw bytes"),
             // Numeric operations
             RequestType::Incr => Some("INCR expects a numeric string value"),
             RequestType::IncrBy => Some("INCRBY expects a numeric string value"),
@@ -132,6 +140,7 @@ impl RequestType {
             "STRLEN" => Some(RequestType::Strlen),
             "LCS" => Some(RequestType::LCS),
             "SUBSTR" => Some(RequestType::Substr),
+            "DELIFEQ" => Some(RequestType::DelIfEq),
             // Incompatible commands - numeric operations
             "INCR" => Some(RequestType::Incr),
             "INCRBY" => Some(RequestType::IncrBy),
@@ -184,6 +193,7 @@ impl RequestType {
             RequestType::Strlen => Some("STRLEN"),
             RequestType::LCS => Some("LCS"),
             RequestType::Substr => Some("SUBSTR"),
+            RequestType::DelIfEq => Some("DELIFEQ"),
             RequestType::Incr => Some("INCR"),
             RequestType::IncrBy => Some("INCRBY"),
             RequestType::IncrByFloat => Some("INCRBYFLOAT"),

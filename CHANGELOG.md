@@ -2,8 +2,13 @@
 
 ## Pending 2.6
 
+### Features
+
+* All: Add `DELIFEQ` command support ([#6146](https://github.com/valkey-io/valkey-glide/issues/6146))
+
 ### Fixes
 
+* Core/All: Scope acquire waits inside glide-core instead of each binding polling `glide_scope_try_acquire` in its own retry loop. A cause that waiting cannot fix (parent closed mid-wait, lazily connected mTLS parent with no certificate material yet, a connection request that cannot produce a scoped connection) now raises the binding's disconnect or request-error class immediately instead of a "pool exhausted" timeout after the full deadline, and a deadline error names the cause of the final attempt. One acquire makes one dial: the acquire awaits the connection it reserved a slot for, so the attempt-token dedupe that let a binding's repeat poll recognise its own in-flight creation is removed along with the loops. `glide_scope_try_acquire` and `glide_scope_next_attempt_token` (and the JNI and napi counterparts) are replaced by `glide_scope_acquire_async` / `glide_scope_acquire_blocking` / `glide_scope_acquire_pipe` (the last delivers to the Python async client's shared pipe); Node's `IsolatedScope.acquire` takes `timeoutMs` where it took `maxRetries` ([#7112](https://github.com/valkey-io/valkey-glide/issues/7112))
 * Node: Log the disconnect warning when the Disconnection push arrives ([#7277](https://github.com/valkey-io/valkey-glide/pull/7277))
 * Core, Go, Java, Node, Python, Rust: use uint32 for Go BackoffStrategy fields and harden reconnect RetryStrategy against out-of-range values; in Java an all-zero BackoffStrategy now means zero retries, matching the other clients ([#6680](https://github.com/valkey-io/valkey-glide/pull/6680))
 * Java, Node: An ordinary client and a pooled client could be handed the same id because ordinary-client handles and pooled `client_id`s came from separate counters that both started at 1, so closing an ordinary client (including `ClientPool.create`'s own connectivity probe) evicted a pooled client sharing its id — killing it outright, invalidating its scopes, or polluting its inflight accounting. Ordinary-client handles now draw from the same global allocator pooled ids use, so every id in the shared registry is unique ([#6968](https://github.com/valkey-io/valkey-glide/issues/6968))
