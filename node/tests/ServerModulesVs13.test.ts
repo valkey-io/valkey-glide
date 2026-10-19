@@ -3,20 +3,26 @@
  */
 
 /**
- * Live tests for the valkey-search 1.3 stable surface (wave 1 of the ports --
- * see VALKEY-SEARCH-1.3.PLAN.md's "Ports" section). Scope here matches
- * QA/BRIEF-WAVE1-PORTS.md: INKEYS, the typed reducer factories, FLOAT16/
- * BFLOAT16, FT.CREATE FILTER/UNF/NOHL/SCORE_FIELD, and count -> LIMIT 0 0.
- * WITHSCORES/SCORER, ADDSCORES, WITHCURSOR/FT.CURSOR, FT.HYBRID and LoadField
- * aliases are wave 2 (after #7335 merges) and are out of scope here.
+ * Live tests for the valkey-search 1.3 stable surface (wave 1 of the ports).
+ * Scope: INKEYS, the typed reducer factories, FLOAT16/BFLOAT16, FT.CREATE
+ * FILTER/UNF/NOHL/SCORE_FIELD, and count -> LIMIT 0 0. WITHSCORES/SCORER,
+ * ADDSCORES, WITHCURSOR/FT.CURSOR, FT.HYBRID and LoadField aliases are wave 2
+ * (after the Python reference PR merges) and are out of scope here.
  *
- * Mirrors the Python reference's two-stage gate (python/tests/conftest.py):
+ * Mirrors the Python reference's two-stage gate:
  *   1. A capability probe (real command + a 1.3-only argument, classified by
  *      error text, never a version string) answers "is the search module
  *      1.3-capable at all?" -- a missing module raises loudly, never skips.
  *   2. An emulate-release level read answers "is 1.3 behaviour actually
  *      active right now?" -- only needed by the legacy-vs-1.3 branching
  *      test (SCORE_FIELD in FT.INFO) in this stable-surface slice.
+ *
+ * The count -> LIMIT 0 0 behaviour change itself is NOT gated behind the 1.3
+ * probe above: a bare COUNT token is invalid FT.SEARCH syntax on search 1.2.x
+ * too, so "count maps to LIMIT 0 0" below runs unconditionally and is the
+ * test that actually exercises CI's own search 1.2.1 image for this change.
+ * The 1.3-gated variant covers only the INKEYS/reducer/vector-type/parity
+ * additions that genuinely need 1.3.
  */
 
 import {
@@ -192,8 +198,6 @@ describe("GlideFt", () => {
                 });
 
                 it("count maps to LIMIT 0 0 (count-only, no document rows)", async () => {
-                    if (!capability) return;
-
                     client = await GlideClusterClient.createClient(
                         getClientConfigurationOption(
                             cluster.getAddresses(),
@@ -340,22 +344,35 @@ describe("GlideFt", () => {
                             protocol,
                         ),
                     );
-                    const indexName = `float16_idx_${Date.now()}`;
-                    const vectorField: VectorField = {
-                        type: "VECTOR",
-                        name: "vec",
-                        attributes: {
-                            algorithm: "FLAT",
-                            dimensions: 2,
-                            distanceMetric: "L2",
-                            type: "FLOAT16",
-                        },
-                    };
 
-                    await GlideFt.create(client, indexName, [vectorField], {
-                        dataType: "HASH",
-                    } as FtCreateOptions);
-                    await client.customCommand(["FT.DROPINDEX", indexName]);
+                    for (const vectorType of ["FLOAT16", "BFLOAT16"] as const) {
+                        const indexName = `${vectorType.toLowerCase()}_idx_${Date.now()}`;
+                        const vectorField: VectorField = {
+                            type: "VECTOR",
+                            name: "vec",
+                            attributes: {
+                                algorithm: "FLAT",
+                                dimensions: 2,
+                                distanceMetric: "L2",
+                                type: vectorType,
+                            },
+                        };
+
+                        await GlideFt.create(client, indexName, [vectorField], {
+                            dataType: "HASH",
+                        } as FtCreateOptions);
+
+                        try {
+                            // No writes/reads needed here: FT.CREATE
+                            // accepting the vector type is the behaviour
+                            // under test.
+                        } finally {
+                            await client.customCommand([
+                                "FT.DROPINDEX",
+                                indexName,
+                            ]);
+                        }
+                    }
                 });
 
                 it("FT.CREATE FILTER, UNF, NOHL, SCORE_FIELD", async () => {

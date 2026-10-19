@@ -6,7 +6,7 @@
  * Shared valkey-search 1.3 capability/emulate-release helpers, factored out
  * of ServerModulesVs13.test.ts so ServerModules.test.ts's existing
  * (pre-1.3) tests can also become level-aware where the server's reply
- * shape changes under `search.emulate-release >= 1.3.0` (D22) -- even for
+ * shape changes under `search.emulate-release >= 1.3.0` -- even for
  * assertions that predate the 1.3 port and were never gated before,
  * because this port is the first time those tests run against a module at
  * that level.

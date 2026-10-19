@@ -2368,7 +2368,7 @@ describe("Server Module Tests", () => {
 
     describe("GlideFt", () => {
         let client: GlideClusterClient;
-        // Session-memoized emulate-release level (D22): this describe
+        // Session-memoized emulate-release level: this describe
         // block's tests now run against modules at every level the local
         // 3-config proof exercises, including >= 1.3.0 for the first
         // time, so a pre-existing assertion about a compat-gated reply
@@ -2661,9 +2661,8 @@ describe("Server Module Tests", () => {
                 let response = await GlideFt.info(client, Buffer.from(index));
 
                 expect(response["index_name"]).toEqual(index);
-                // D22 / ft_info_score_field: default_score and the
-                // presence of score_field in index_definition both change
-                // shape at search.emulate-release >= 1.3.0 (see
+                // ft_info_score_field: default_score and the presence of
+                // score_field in index_definition both change shape at search.emulate-release >= 1.3.0 (see
                 // searchCapabilityHelpers.ts and
                 // ServerModulesVs13.test.ts's "FT.CREATE FILTER, UNF,
                 // NOHL, SCORE_FIELD" test, which exercises this gate

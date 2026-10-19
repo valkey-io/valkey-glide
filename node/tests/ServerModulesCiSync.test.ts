@@ -6,11 +6,18 @@
  * Single-sources `utils/run-modules-ci-locally.sh`'s test invocation against
  * `.github/workflows/node-modules.yml`'s "Run modules tests" step, so the two
  * cannot silently drift apart (the Node equivalent of Python's
- * `tests/test_ci_workflow_sync.py`, R2-H-1). This test does not run either
- * script -- it just asserts that both sides invoke `npm run test:modules`
- * with the same two endpoint flags, so a future edit to one side that isn't
- * mirrored on the other fails here instead of only showing up as a
- * discrepancy in a future review.
+ * `tests/test_ci_workflow_sync.py`). This test does not run either script --
+ * it just asserts that both sides invoke `npm run test:modules` with the
+ * same two endpoint flags, so a future edit to one side that isn't mirrored
+ * on the other fails here instead of only showing up as a discrepancy in a
+ * future review.
+ *
+ * The outer describe block's name contains "GlideFt" deliberately: both
+ * `npm run test:modules`'s `--testNamePattern="(GlideJson|GlideFt)"` and
+ * `npm test`'s `--testPathIgnorePatterns=ServerModules` need this file to
+ * actually run as part of the modules test job, not be silently excluded by
+ * either filter the way its filename and a plain "... sync" describe name
+ * would be.
  *
  * Node's module test command has no equivalent of pytest's `-k`/`--html`
  * flags (test selection happens via `--testNamePattern` baked into the
@@ -34,7 +41,7 @@ const LOCAL_RUNNER_FILE = join(REPO_ROOT, "utils", "run-modules-ci-locally.sh");
 
 const ENDPOINT_FLAGS = ["--standalone-endpoints", "--cluster-endpoints"];
 
-describe("node-modules.yml / run-modules-ci-locally.sh sync", () => {
+describe("GlideFt CI sync: node-modules.yml / run-modules-ci-locally.sh", () => {
     it("both invoke npm run test:modules with the same endpoint flags", () => {
         const workflowText = readFileSync(WORKFLOW_FILE, "utf-8");
         const runnerText = readFileSync(LOCAL_RUNNER_FILE, "utf-8");
