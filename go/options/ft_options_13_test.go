@@ -10,10 +10,10 @@ import (
 	"github.com/valkey-io/valkey-glide/go/v2/constants"
 )
 
-// Argv-serialization tests for the valkey-search 1.3 stable surface added to the FT.* options
-// (QA/BRIEF-WAVE1-PORTS.md): INKEYS, FLOAT16/BFLOAT16 vector types, FT.CREATE FILTER/
-// SCORE_FIELD/NOHL, per-field UNF, Count's LIMIT 0 0 serialization, and the typed reducer
-// factories. Mirrors Node's GlideFtOptions.test.ts and Python's test_options.py.
+// Argv-serialization tests for the valkey-search 1.3 stable surface added to the FT.* options:
+// INKEYS, FLOAT16/BFLOAT16 vector types, FT.CREATE FILTER/SCORE_FIELD/NOHL, per-field UNF,
+// Count's LIMIT 0 0 serialization, and the typed reducer factories. Mirrors Node's
+// GlideFtOptions.test.ts and Python's test_options.py.
 
 func TestFtSearchOptionsToArgs_InKeysAbsent(t *testing.T) {
 	opts := &FtSearchOptions{}

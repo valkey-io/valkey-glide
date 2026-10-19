@@ -32,6 +32,19 @@ func TestGoModulesCiSync(t *testing.T) {
 	workflowText := string(workflowBytes)
 	runnerText := string(runnerBytes)
 
+	// The runner script is shared across languages via a `case "$MODULES_TEST_LANG" in ... esac`
+	// block, and the python) arm's flag text happens to look like the go) arm's. Extract just the
+	// go) arm so a regression confined to that arm (while the python arm's matching text stays
+	// intact) is actually caught here, instead of only asserting against the whole file.
+	goArmPattern := regexp.MustCompile(`(?s)\n\s*go\)\n(.*?\n\s*);;`)
+	goArmMatch := goArmPattern.FindStringSubmatch(runnerText)
+	require.NotEmpty(
+		t, goArmMatch,
+		"could not find the go) case arm in utils/run-modules-ci-locally.sh -- "+
+			"has the case statement's structure changed?",
+	)
+	goArmText := goArmMatch[1]
+
 	// CI invokes `make modules-test standalone-endpoints=... cluster-endpoints=...`; the local
 	// runner bypasses the Makefile's HTML-report pipe (a flaky third-party module fetch) but must
 	// run the exact same underlying `go test ./integTest/... -testify.m "^TestModule"` with the
@@ -42,8 +55,8 @@ func TestGoModulesCiSync(t *testing.T) {
 			"go-modules.yml no longer passes %s -- update both files to match.", flag,
 		)
 		assert.Contains(
-			t, runnerText, flag,
-			"utils/run-modules-ci-locally.sh is missing %s, which CI's step passes.", flag,
+			t, goArmText, flag,
+			"utils/run-modules-ci-locally.sh's go) case arm is missing %s, which CI's step passes.", flag,
 		)
 	}
 
@@ -52,8 +65,8 @@ func TestGoModulesCiSync(t *testing.T) {
 		"go-modules.yml no longer invokes the modules-test make target -- update both files to match.",
 	)
 	assert.Regexp(
-		t, regexp.MustCompile(`-testify\.m\s+"?\^?TestModule`), runnerText,
-		"utils/run-modules-ci-locally.sh no longer filters to ^TestModule -- it would run (or "+
-			"skip) more or fewer tests than CI's modules-test target does.",
+		t, regexp.MustCompile(`-testify\.m\s+"?\^?TestModule`), goArmText,
+		"utils/run-modules-ci-locally.sh's go) case arm no longer filters to ^TestModule -- it would "+
+			"run (or skip) more or fewer tests than CI's modules-test target does.",
 	)
 }

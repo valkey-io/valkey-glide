@@ -1,15 +1,14 @@
 #!/usr/bin/env bash
 # Reproduces the "Modules Tests (Linux)" job from each language's own
 # <lang>-modules.yml on this machine, as closely as possible, against an
-# overridable module image (D1: don't pin a new CI image; prove 1.3
-# support via a local run of the SAME job against a 1.3-bearing image
-# instead). Shared across every language's port branch -- see
-# VALKEY-SEARCH-1.3.PLAN.md's ports checklist -- so this file is a single
-# source of truth per language, selected via MODULES_TEST_LANG, rather
-# than N language branches each overwriting the whole script and
-# colliding with each other and with Python's own CI-sync guard
-# (tests/test_ci_workflow_sync.py pins this file's Python invocation
-# verbatim).
+# overridable module image (deliberately not pinning a new CI image --
+# proves 1.3 support via a local run of the SAME job against a
+# 1.3-bearing image instead). Shared across every language's port branch,
+# so this file is a single source of truth per language, selected via
+# MODULES_TEST_LANG, rather than N language branches each overwriting the
+# whole script and colliding with each other and with Python's own
+# CI-sync guard (tests/test_ci_workflow_sync.py pins this file's Python
+# invocation verbatim).
 #
 # Shares the docker start/verify logic with
 # .github/actions/start-valkey-docker/action.yml via
@@ -17,20 +16,17 @@
 # emulate-release override.
 #
 # Usage: three image/release combinations are used across this file's
-# proof runs (see VALKEY-SEARCH-1.3.PLAN.md's ports checklist):
+# proof runs:
 #   utils/run-modules-ci-locally.sh                                       # 1: 9.2.0-rc2, emulate-release 1.3.0 (default; run-proof)
 #   IMAGE=valkey/valkey-bundle:9.1.3 EMULATE_RELEASE="" utils/run-modules-ci-locally.sh   # 2: 9.1.3, search 1.2.1 (skip-proof)
-#   EMULATE_RELEASE="" utils/run-modules-ci-locally.sh                    # 3: 9.2.0-rc2, module's own default emulate-release (1.0.0) -- E-2 equivalent (D22)
+#   EMULATE_RELEASE="" utils/run-modules-ci-locally.sh                    # 3: 9.2.0-rc2, module's own default emulate-release (1.0.0)
 #
 # MODULES_TEST_LANG selects which language's test tail runs (default
 # "python", preserving every existing caller's behaviour byte-for-byte):
 #   MODULES_TEST_LANG=python utils/run-modules-ci-locally.sh   # default
-#   MODULES_TEST_LANG=node utils/run-modules-ci-locally.sh
-#   MODULES_TEST_LANG=java utils/run-modules-ci-locally.sh
 #   MODULES_TEST_LANG=go utils/run-modules-ci-locally.sh
 #
-# See BUILD-MODULES-1.3.md (python/) for narrated example runs and
-# Mac-vs-CI-runner differences (notably: Docker Desktop on macOS shares
+# Notable Mac-vs-CI-runner difference: Docker Desktop on macOS shares
 # /Users by default, not /tmp -- any file this script bind-mounts into a
 # container MUST live under a /Users path or the mount silently becomes an
 # empty directory instead of the file, with no error).
@@ -40,12 +36,6 @@
 #     build --client async && --client sync) -- this script does not
 #     rebuild the wrapper, matching the CI job's "Build Python wrapper"
 #     step only in effect, not in mechanism.
-#   node: the Node client already built (npm ci && npm run build) --
-#     this script does not rebuild the native addon.
-#   java: protoc 29.1 pinned under tools/protoc-29.1/ (see
-#     BUILD-MODULES-1.3.md's "Java build: protoc 29.1" section -- a newer
-#     system protoc generates code the project's pinned 4.29.6 runtime
-#     can't compile).
 #   go: docker, the Rust toolchain + cbindgen (`cargo install cbindgen`),
 #     and `protoc-gen-go` (`go install
 #     google.golang.org/protobuf/cmd/protoc-gen-go@v1.33.0`). This script
@@ -73,12 +63,12 @@ STANDALONE_PORT="${STANDALONE_PORT:-6389}"
 # Confirmed by source (src/valkey_search_options.cc:883,
 # vmsdk/src/module_config.cc:179) and empirically against both a local
 # macOS build and the valkey/valkey-bundle:9.2.0-rc2 Docker image.
-# D4 baseline = 1.3.0. Set to an empty string to start at the module's own
+# Default baseline is 1.3.0. Set to an empty string to start at the module's own
 # default instead (useful for the 9.1.3 skip-proof run, where the module is
 # too old to accept this arg at all).
 EMULATE_RELEASE="${EMULATE_RELEASE-1.3.0}"
 
-# R2-SEC-2: a newline (or anything else outside X.Y.Z) in EMULATE_RELEASE
+# A newline (or anything else outside X.Y.Z) in EMULATE_RELEASE
 # would be interpolated into a generated .conf line. This script runs
 # locally as the operator against the operator's own containers (not a
 # cross-trust-boundary input), but the check is one line and closes it
@@ -124,7 +114,7 @@ case "$MODULES_TEST_LANG" in
     python)
         cd "${REPO_ROOT}/python"
         # Single-sourced from .github/workflows/python-modules.yml's "Run modules
-        # tests" step (R2-H-1 fix #3: these must not drift independently -- see
+        # tests" step (these must not drift independently -- see
         # tests/test_ci_workflow_sync.py, which greps the workflow file for this
         # exact arg list and fails the test suite if it ever changes there without
         # a matching update here).
@@ -141,8 +131,7 @@ case "$MODULES_TEST_LANG" in
         cd "${REPO_ROOT}/go"
         export PATH="${HOME}/.cargo/bin:$(go env GOPATH)/bin:${PATH}"
         # Fresh native artifact + protobuf before every run (the stale-build trap
-        # every language's dev tooling can hit -- Python had two, see
-        # BUILD-MODULES-1.3.md).
+        # every language's dev tooling can hit).
         make build-glide-client generate-protobuf
         # Local linker workaround (this machine's Go 1.26.5 + Apple clang 21 pair,
         # not a code issue): the Makefile's build-glide-client strips the Rust
@@ -180,7 +169,7 @@ case "$MODULES_TEST_LANG" in
             --cluster-endpoints="${MODULES_CLUSTER_ENDPOINTS}"
         ;;
     *)
-        echo "ERROR: unknown MODULES_TEST_LANG '${MODULES_TEST_LANG}' (expected python, node, java or go)" >&2
+        echo "ERROR: unknown MODULES_TEST_LANG '${MODULES_TEST_LANG}' (expected python or go)" >&2
         exit 1
         ;;
 esac

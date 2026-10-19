@@ -2391,7 +2391,7 @@ func (suite *GlideTestSuite) TestModuleFtSearchSortByReturnExcludesSortFieldStan
 	glideft.FtDropIndex(ctx, client, index)
 }
 
-// --- valkey-search 1.3 stable surface (QA/BRIEF-WAVE1-PORTS.md, wave 1) ---
+// --- valkey-search 1.3 stable surface ---
 //
 // WITHSCORES/SCORER, ADDSCORES, WITHCURSOR/FT.CURSOR, FT.HYBRID and LoadField aliases are wave 2
 // (after #7335 merges) and are out of scope here.
@@ -2480,6 +2480,8 @@ func (suite *GlideTestSuite) TestModuleFtSearchInKeys() {
 	)
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), int64(2), some.TotalResults)
+
+	glideft.ClusterFtDropIndex(ctx, client, index)
 }
 
 // --- ft_search_count ---
@@ -2509,6 +2511,8 @@ func (suite *GlideTestSuite) TestModuleFtSearchCountMapsToLimitZeroZero() {
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), int64(2), result.TotalResults)
 	assert.Equal(suite.T(), 0, len(result.Documents))
+
+	glideft.ClusterFtDropIndex(ctx, client, index)
 }
 
 // --- ft_create float16/bfloat16 ---
@@ -2527,9 +2531,15 @@ func (suite *GlideTestSuite) TestModuleFtCreateFloat16Bfloat16Vector() {
 		[]options.Field{
 			options.NewVectorFieldFlat("vec16", constants.DistanceMetricL2, 2).
 				SetType(constants.VectorDataTypeFloat16),
+			options.NewVectorFieldFlat("vecb16", constants.DistanceMetricL2, 2).
+				SetType(constants.VectorDataTypeBfloat16),
 		},
 		&options.FtCreateOptions{DataType: constants.IndexDataTypeHash, Prefixes: []string{prefix}})
 	assert.NoError(suite.T(), err)
+
+	info, err := glideft.ClusterFtInfo(ctx, client, index)
+	assert.NoError(suite.T(), err)
+	assert.NotEmpty(suite.T(), info)
 
 	_, err = glideft.ClusterFtDropIndex(ctx, client, index)
 	assert.NoError(suite.T(), err)
@@ -2563,9 +2573,20 @@ func (suite *GlideTestSuite) TestModuleFtCreateFilterScoreFieldNoHighlight() {
 
 	_, err = client.HSet(ctx, prefix+"1", map[string]string{"title": "hello", "boost": "5"})
 	assert.NoError(suite.T(), err)
+	// FILTER excludes documents with an empty title; this key must never appear in results.
+	_, err = client.HSet(ctx, prefix+"2", map[string]string{"title": "", "boost": "7"})
+	assert.NoError(suite.T(), err)
 	time.Sleep(time.Second)
 
 	info, err := glideft.ClusterFtInfo(ctx, client, index)
 	assert.NoError(suite.T(), err)
 	assert.NotEmpty(suite.T(), info)
+
+	result, err := glideft.ClusterFtSearch(ctx, client, index, "*", nil)
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), int64(1), result.TotalResults)
+	assert.Equal(suite.T(), 1, len(result.Documents))
+	assert.Equal(suite.T(), prefix+"1", result.Documents[0].Key)
+
+	glideft.ClusterFtDropIndex(ctx, client, index)
 }
