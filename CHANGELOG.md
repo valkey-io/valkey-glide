@@ -4,7 +4,7 @@
 
 ### Features
 
-* Java: valkey-search 1.3 stable surface for FT.SEARCH/FT.CREATE/FT.AGGREGATE — `inKeys` on `FTSearchOptions` (absent/`[]`/a list), a `VectorType` enum (`FLOAT32`/`FLOAT16`/`BFLOAT16`) replacing the hard-coded `FLOAT32` on vector field builders, `FTCreateOptions.filter`/`scoreField`/`noHighlight`, per-field `unf` (SORTABLE un-normalized sort, requires `sortable`) on `TextField`/`TagField`/`NumericField`, and `count()` now serializes to `LIMIT 0 0` instead of a bare `COUNT` token the server's FT.SEARCH parser does not recognise (with `count`/`limit` guarded as mutually exclusive, which wasn't previously enforced)
+* Java: valkey-search 1.3 stable surface for FT.SEARCH/FT.CREATE — `inKeys` on `FTSearchOptions` (absent/`[]`/a list), a `VectorType` enum (`FLOAT32`/`FLOAT16`/`BFLOAT16`) replacing the hard-coded `FLOAT32` on vector field builders, `FTCreateOptions.filter`/`scoreField`/`noHighlight`, per-field `unf` (SORTABLE un-normalized sort, requires `sortable`) on `TextField`/`TagField`/`NumericField`, and `count()` now serializes to `LIMIT 0 0` instead of a bare `COUNT` token the server's FT.SEARCH parser does not recognise (with `count`/`limit` guarded as mutually exclusive, which wasn't previously enforced)
 
 ### Fixes
 

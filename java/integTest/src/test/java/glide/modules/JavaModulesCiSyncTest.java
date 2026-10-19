@@ -60,11 +60,9 @@ public class JavaModulesCiSyncTest {
     @Test
     public void localRunnerPinsProtoc29ForTheSameReasonCiDoes() throws IOException {
         // CI pins protoc 29.1 (arduino/setup-protoc version "29.1" in java-modules.yml); a newer
-        // system protoc generates code the pinned protobuf-java 4.29.6 runtime can't compile
-        // (confirmed on this branch -- see BUILD-MODULES-1.3.md's "Java build: protoc 29.1"
-        // section). The local runner must pin the same version so a local pass is evidence the CI
-        // pass will also succeed, not an artifact of whatever protoc happens to be on this
-        // machine's PATH.
+        // system protoc generates code the pinned protobuf-java 4.29.6 runtime can't compile. The
+        // local runner must pin the same version so a local pass is evidence the CI pass will also
+        // succeed, not an artifact of whatever protoc happens to be on this machine's PATH.
         String workflowText = readFile(WORKFLOW_FILE);
         String runnerText = readFile(LOCAL_RUNNER_FILE);
 

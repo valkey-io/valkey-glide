@@ -22,9 +22,9 @@ import org.junit.jupiter.api.Test;
 
 /**
  * Argv-serialization tests for the valkey-search 1.3 stable surface added to the FT.* option
- * classes (QA/BRIEF-WAVE1-PORTS.md): INKEYS, FLOAT16/BFLOAT16 vector types, FT.CREATE FILTER/
- * SCORE_FIELD/NOHL, per-field UNF, and {@code count}'s LIMIT 0 0 serialization. Mirrors Node's
- * {@code GlideFtOptions.test.ts} and Python's {@code test_options.py}.
+ * classes: INKEYS, FLOAT16/BFLOAT16 vector types, FT.CREATE FILTER/SCORE_FIELD/NOHL, per-field UNF,
+ * and {@code count}'s LIMIT 0 0 serialization. Mirrors Node's {@code GlideFtOptions.test.ts} and
+ * Python's {@code test_options.py}.
  */
 public class FTOptions13Test {
 

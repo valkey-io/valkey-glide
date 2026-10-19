@@ -44,10 +44,10 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 /**
- * Live tests for the valkey-search 1.3 stable surface (wave 1 of the ports --
- * QA/BRIEF-WAVE1-PORTS.md): INKEYS, FLOAT16/BFLOAT16 vector types, FT.CREATE FILTER/SCORE_FIELD/
- * NOHL, per-field UNF, and count's LIMIT 0 0 serialization. WITHSCORES/SCORER, ADDSCORES,
- * WITHCURSOR/FT.CURSOR, FT.HYBRID and LoadField aliases are wave 2, out of scope here.
+ * Live tests for the valkey-search 1.3 stable surface: INKEYS, FLOAT16/BFLOAT16 vector types,
+ * FT.CREATE FILTER/SCORE_FIELD/NOHL, per-field UNF, and count's LIMIT 0 0 serialization.
+ * WITHSCORES/SCORER, ADDSCORES, WITHCURSOR/FT.CURSOR, FT.HYBRID and LoadField aliases are not
+ * covered here.
  *
  * <p>Carries its own 1.3 capability probe (real command + a 1.3-only argument, classified by error
  * text, never a version string), unlike {@link VectorSearchTests}, which has none: that file's
@@ -244,13 +244,15 @@ public class VectorSearch13Tests {
         }
     }
 
+    /**
+     * Not gated behind the 1.3 capability probe: a bare {@code COUNT} token is invalid FT.SEARCH
+     * syntax on search 1.2.x too, so this must run against whatever module version CI's own image
+     * actually has.
+     */
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void ft_search_count_maps_to_limit_zero_zero(BaseClient client) {
-        Assumptions.assumeTrue(
-                capability, "search module present but pre-1.3 (INKEYS probe rejected it)");
-
         String tag = "{" + UUID.randomUUID() + "}";
         String prefix = tag + ":";
         String indexName = prefix + "count_idx";
@@ -276,8 +278,13 @@ public class VectorSearch13Tests {
             }
             Thread.sleep(1000);
 
+            // A real field-filter query, not a bare "*" wildcard: valkey-search rejected a bare
+            // "*" for non-vector queries before 1.3 (unrelated to this test's actual target, the
+            // COUNT -> LIMIT 0 0 serialization), so using one here would make this test fail on
+            // CI's pre-1.3 image for the wrong reason.
             Object[] result =
-                    FT.search(client, indexName, "*", FTSearchOptions.builder().count().build()).get();
+                    FT.search(client, indexName, "@title:hello", FTSearchOptions.builder().count().build())
+                            .get();
             assertEquals(2L, result[0]);
             assertEquals(1, result.length);
         } finally {
@@ -292,19 +299,33 @@ public class VectorSearch13Tests {
         Assumptions.assumeTrue(
                 capability, "search module present but pre-1.3 (INKEYS probe rejected it)");
 
-        String indexName = "float16_idx_" + UUID.randomUUID();
-        FieldInfo vectorField =
+        String float16IndexName = "float16_idx_" + UUID.randomUUID();
+        FieldInfo float16VectorField =
                 new FieldInfo(
                         "vec", VectorFieldFlat.builder(DistanceMetric.L2, 2).type(VectorType.FLOAT16).build());
         assertEquals(
                 OK,
                 FT.create(
                                 client,
-                                indexName,
-                                new FieldInfo[] {vectorField},
+                                float16IndexName,
+                                new FieldInfo[] {float16VectorField},
                                 FTCreateOptions.builder().dataType(DataType.HASH).build())
                         .get());
-        FT.dropindex(client, indexName).get();
+        FT.dropindex(client, float16IndexName).get();
+
+        String bfloat16IndexName = "bfloat16_idx_" + UUID.randomUUID();
+        FieldInfo bfloat16VectorField =
+                new FieldInfo(
+                        "vec", VectorFieldFlat.builder(DistanceMetric.L2, 2).type(VectorType.BFLOAT16).build());
+        assertEquals(
+                OK,
+                FT.create(
+                                client,
+                                bfloat16IndexName,
+                                new FieldInfo[] {bfloat16VectorField},
+                                FTCreateOptions.builder().dataType(DataType.HASH).build())
+                        .get());
+        FT.dropindex(client, bfloat16IndexName).get();
     }
 
     @SneakyThrows
