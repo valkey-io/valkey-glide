@@ -90,6 +90,8 @@ impl ToValkeyArgs for ExistenceCheck {
     }
 }
 
+impl ToSingleValkeyArg for ExistenceCheck {}
+
 /// Field existence check for `HSETEX`.
 ///
 /// Mirrors redis-rs's `FieldExistenceCheck` type.
@@ -109,6 +111,8 @@ impl ToValkeyArgs for FieldExistenceCheck {
         });
     }
 }
+
+impl ToSingleValkeyArg for FieldExistenceCheck {}
 
 /// Options for the `HSETEX` command.
 ///
@@ -212,6 +216,8 @@ impl ToValkeyArgs for FlushAllOptions {
         out.write_arg(if self.blocking { b"SYNC" } else { b"ASYNC" });
     }
 }
+
+impl ToSingleValkeyArg for FlushAllOptions {}
 
 /// Options for the `FLUSHDB` command.
 ///
@@ -340,6 +346,8 @@ impl ToValkeyArgs for Direction {
     }
 }
 
+impl ToSingleValkeyArg for Direction {}
+
 /// Expiry argument for `GETEX`/`HGETEX`.
 ///
 /// Mirrors redis-rs's `Expiry` type.
@@ -434,15 +442,17 @@ pub enum FunctionRestorePolicy {
     Replace,
 }
 
-impl FunctionRestorePolicy {
-    pub(crate) fn as_arg(&self) -> &'static str {
-        match self {
-            FunctionRestorePolicy::Append => "APPEND",
-            FunctionRestorePolicy::Flush => "FLUSH",
-            FunctionRestorePolicy::Replace => "REPLACE",
-        }
+impl ToValkeyArgs for FunctionRestorePolicy {
+    fn write_valkey_args<W: ?Sized + ValkeyWrite>(&self, out: &mut W) {
+        out.write_arg(match self {
+            FunctionRestorePolicy::Append => b"APPEND".as_slice(),
+            FunctionRestorePolicy::Flush => b"FLUSH".as_slice(),
+            FunctionRestorePolicy::Replace => b"REPLACE".as_slice(),
+        });
     }
 }
+
+impl ToSingleValkeyArg for FunctionRestorePolicy {}
 
 /// Mode for the `CLIENT PAUSE` command.
 ///
@@ -455,14 +465,16 @@ pub enum ClientPauseMode {
     Write,
 }
 
-impl ClientPauseMode {
-    pub(crate) fn as_arg(&self) -> &'static str {
-        match self {
-            ClientPauseMode::All => "ALL",
-            ClientPauseMode::Write => "WRITE",
-        }
+impl ToValkeyArgs for ClientPauseMode {
+    fn write_valkey_args<W: ?Sized + ValkeyWrite>(&self, out: &mut W) {
+        out.write_arg(match self {
+            ClientPauseMode::All => b"ALL".as_slice(),
+            ClientPauseMode::Write => b"WRITE".as_slice(),
+        });
     }
 }
+
+impl ToSingleValkeyArg for ClientPauseMode {}
 
 /// Options for the `MIGRATE` command.
 ///
@@ -558,14 +570,16 @@ pub enum OrderBy {
     Desc,
 }
 
-impl OrderBy {
-    pub(crate) fn as_arg(&self) -> &'static str {
-        match self {
-            OrderBy::Asc => "ASC",
-            OrderBy::Desc => "DESC",
-        }
+impl ToValkeyArgs for OrderBy {
+    fn write_valkey_args<W: ?Sized + ValkeyWrite>(&self, out: &mut W) {
+        out.write_arg(match self {
+            OrderBy::Asc => b"ASC".as_slice(),
+            OrderBy::Desc => b"DESC".as_slice(),
+        });
     }
 }
+
+impl ToSingleValkeyArg for OrderBy {}
 
 /// A `LIMIT offset count` clause.
 ///
@@ -636,6 +650,12 @@ mod tests {
     fn direction_args() {
         assert_args(Direction::Left, &["LEFT"]);
         assert_args(Direction::Right, &["RIGHT"]);
+    }
+
+    #[test]
+    fn field_existence_check_args() {
+        assert_args(FieldExistenceCheck::FNX, &["FNX"]);
+        assert_args(FieldExistenceCheck::FXX, &["FXX"]);
     }
 
     #[test]
@@ -731,8 +751,8 @@ mod tests {
 
     #[test]
     fn order_by_args() {
-        assert_eq!(OrderBy::Asc.as_arg(), "ASC");
-        assert_eq!(OrderBy::Desc.as_arg(), "DESC");
+        assert_args(OrderBy::Asc, &["ASC"]);
+        assert_args(OrderBy::Desc, &["DESC"]);
     }
 
     #[test]
@@ -791,14 +811,14 @@ mod tests {
 
     #[test]
     fn client_pause_mode_args() {
-        assert_eq!(ClientPauseMode::All.as_arg(), "ALL");
-        assert_eq!(ClientPauseMode::Write.as_arg(), "WRITE");
+        assert_args(ClientPauseMode::All, &["ALL"]);
+        assert_args(ClientPauseMode::Write, &["WRITE"]);
     }
 
     #[test]
     fn function_restore_policy_args() {
-        assert_eq!(FunctionRestorePolicy::Append.as_arg(), "APPEND");
-        assert_eq!(FunctionRestorePolicy::Flush.as_arg(), "FLUSH");
-        assert_eq!(FunctionRestorePolicy::Replace.as_arg(), "REPLACE");
+        assert_args(FunctionRestorePolicy::Append, &["APPEND"]);
+        assert_args(FunctionRestorePolicy::Flush, &["FLUSH"]);
+        assert_args(FunctionRestorePolicy::Replace, &["REPLACE"]);
     }
 }

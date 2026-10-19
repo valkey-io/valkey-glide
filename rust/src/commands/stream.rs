@@ -9,6 +9,7 @@ use crate::executor::CommandExecutor;
 use crate::value::FromValkeyValue;
 use crate::value::ValkeyValue;
 use crate::value::to_glide_error;
+use crate::write::ToSingleValkeyArg;
 use crate::write::ToValkeyArgs;
 use crate::write::ValkeyWrite;
 use async_trait::async_trait;
@@ -38,6 +39,8 @@ impl ToValkeyArgs for StreamTrimmingMode {
         });
     }
 }
+
+impl ToSingleValkeyArg for StreamTrimmingMode {}
 
 /// A stream trim strategy.
 ///

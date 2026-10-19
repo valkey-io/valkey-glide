@@ -9,6 +9,7 @@ use crate::executor::CommandExecutor;
 use crate::value::FromValkeyValue;
 use crate::value::ValkeyValue;
 use crate::value::to_glide_error;
+use crate::write::ToSingleValkeyArg;
 use crate::write::ToValkeyArgs;
 use crate::write::ValkeyWrite;
 use async_trait::async_trait;
@@ -39,6 +40,8 @@ impl ToValkeyArgs for ScoreBound {
         }
     }
 }
+
+impl ToSingleValkeyArg for ScoreBound {}
 
 /// A lexicographical boundary for `ZRANGEBYLEX`/`ZLEXCOUNT`.
 ///
@@ -73,6 +76,8 @@ impl ToValkeyArgs for LexBound {
     }
 }
 
+impl ToSingleValkeyArg for LexBound {}
+
 /// Aggregation mode for `ZUNIONSTORE`/`ZINTERSTORE`.
 ///
 /// Mirrors Python `AggregationType`.
@@ -86,15 +91,17 @@ pub enum AggregationType {
     Max,
 }
 
-impl AggregationType {
-    fn as_arg(&self) -> &'static str {
-        match self {
-            AggregationType::Sum => "SUM",
-            AggregationType::Min => "MIN",
-            AggregationType::Max => "MAX",
-        }
+impl ToValkeyArgs for AggregationType {
+    fn write_valkey_args<W: ?Sized + ValkeyWrite>(&self, out: &mut W) {
+        out.write_arg(match self {
+            AggregationType::Sum => b"SUM".as_slice(),
+            AggregationType::Min => b"MIN".as_slice(),
+            AggregationType::Max => b"MAX".as_slice(),
+        });
     }
 }
+
+impl ToSingleValkeyArg for AggregationType {}
 
 /// Sorted-set commands (`ZADD`, `ZRANGE`, `ZSCORE`, ...).
 #[async_trait]
@@ -265,7 +272,7 @@ pub trait SortedSetCommands: CommandExecutor {
         let cmd = cmd("ZUNION")
             .with_arg(keys.num_of_args())
             .with_arg(keys)
-            .with_arg(aggregate.map(|agg| ("AGGREGATE", agg.as_arg())));
+            .with_arg(aggregate.map(|agg| ("AGGREGATE", agg)));
         collect_bytes(self.execute_command(cmd, None).await?)
     }
 
@@ -279,7 +286,7 @@ pub trait SortedSetCommands: CommandExecutor {
         let cmd = cmd("ZUNION")
             .with_arg(keys.num_of_args())
             .with_arg(keys)
-            .with_arg(aggregate.map(|agg| ("AGGREGATE", agg.as_arg())))
+            .with_arg(aggregate.map(|agg| ("AGGREGATE", agg)))
             .with_arg("WITHSCORES");
         collect_member_scores(self.execute_command(cmd, None).await?)
     }
@@ -293,7 +300,7 @@ pub trait SortedSetCommands: CommandExecutor {
         let cmd = cmd("ZINTER")
             .with_arg(keys.num_of_args())
             .with_arg(keys)
-            .with_arg(aggregate.map(|agg| ("AGGREGATE", agg.as_arg())));
+            .with_arg(aggregate.map(|agg| ("AGGREGATE", agg)));
         collect_bytes(self.execute_command(cmd, None).await?)
     }
 
@@ -307,7 +314,7 @@ pub trait SortedSetCommands: CommandExecutor {
         let cmd = cmd("ZINTER")
             .with_arg(keys.num_of_args())
             .with_arg(keys)
-            .with_arg(aggregate.map(|agg| ("AGGREGATE", agg.as_arg())))
+            .with_arg(aggregate.map(|agg| ("AGGREGATE", agg)))
             .with_arg("WITHSCORES");
         collect_member_scores(self.execute_command(cmd, None).await?)
     }
