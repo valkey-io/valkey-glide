@@ -2,6 +2,10 @@
 
 ## Pending 2.6
 
+### Features
+
+* All: Add `DELIFEQ` command support ([#6146](https://github.com/valkey-io/valkey-glide/issues/6146))
+
 ### Fixes
 
 * Core/All: Scope acquire waits inside glide-core instead of each binding polling `glide_scope_try_acquire` in its own retry loop. A cause that waiting cannot fix (parent closed mid-wait, lazily connected mTLS parent with no certificate material yet, a connection request that cannot produce a scoped connection) now raises the binding's disconnect or request-error class immediately instead of a "pool exhausted" timeout after the full deadline, and a deadline error names the cause of the final attempt. One acquire makes one dial: the acquire awaits the connection it reserved a slot for, so the attempt-token dedupe that let a binding's repeat poll recognise its own in-flight creation is removed along with the loops. `glide_scope_try_acquire` and `glide_scope_next_attempt_token` (and the JNI and napi counterparts) are replaced by `glide_scope_acquire_async` / `glide_scope_acquire_blocking` / `glide_scope_acquire_pipe` (the last delivers to the Python async client's shared pipe); Node's `IsolatedScope.acquire` takes `timeoutMs` where it took `maxRetries` ([#7112](https://github.com/valkey-io/valkey-glide/issues/7112))
