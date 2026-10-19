@@ -595,6 +595,26 @@ describe("Compression", () => {
     );
 
     it.each([false, true])(
+        "compression_delifeq_incompatible cluster_mode=%p",
+        async (clusterMode) => {
+            client = await createCompressedClient(clusterMode, {
+                enabled: true,
+            });
+            const key = uniqueKey("delifeq_test");
+            await client.set(key, "initial_value");
+
+            // DELIFEQ should fail with compression enabled
+            await expect(client.delifeq(key, "initial_value")).rejects.toThrow(
+                RequestError,
+            );
+            await expect(client.delifeq(key, "initial_value")).rejects.toThrow(
+                /incompatible|compression/i,
+            );
+        },
+        TIMEOUT,
+    );
+
+    it.each([false, true])(
         "compression_incr_incompatible cluster_mode=%p",
         async (clusterMode) => {
             client = await createCompressedClient(clusterMode, {
@@ -799,6 +819,11 @@ describe("Compression", () => {
 
             // SETRANGE
             expect(await client.setrange(key, 6, "WORLD")).toBe(11);
+
+            // DELIFEQ
+            await client.set(key, "delifeq_value");
+            expect(await client.delifeq(key, "delifeq_value")).toBe(true);
+            await client.set(key, "delifeq_value");
 
             // GETBIT
             await client.set(key, "\x00");
