@@ -29,6 +29,7 @@ on:
             - .github/actions/install-zig/action.yml
             - .github/actions/setup-dns-tests/action.yml
             - .github/actions/create-test-matrices/action.yml
+            - .github/actions/ensure-clean-tree/action.yml
             - .github/actions/lint-rust/action.yml
             - .github/actions/test-benchmark/action.yml
             - .github/json_matrices/**
@@ -58,6 +59,7 @@ on:
             - .github/actions/install-zig/action.yml
             - .github/actions/setup-dns-tests/action.yml
             - .github/actions/create-test-matrices/action.yml
+            - .github/actions/ensure-clean-tree/action.yml
             - .github/actions/lint-rust/action.yml
             - .github/actions/test-benchmark/action.yml
             - .github/json_matrices/**
