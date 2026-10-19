@@ -14,6 +14,7 @@ import glide.api.BaseClient;
 import glide.api.GlideClient;
 import glide.api.GlideClusterClient;
 import glide.api.commands.servermodules.FT;
+import glide.api.models.ClusterValue;
 import glide.api.models.GlideString;
 import glide.api.models.commands.FT.FTAggregateOptions;
 import glide.api.models.commands.FT.FTCreateOptions;
@@ -174,13 +175,109 @@ public class VectorSearch13Tests {
         }
     }
 
-    /** Dispatches a raw custom command through whichever concrete client type was given. */
+    /**
+     * Dispatches a raw custom command through whichever concrete client type was given, unwrapping a
+     * cluster client's {@link ClusterValue}. A command routed to a single node (the default for most
+     * commands, including FT.CREATE/FT.SEARCH/FT.INFO) comes back as a single value; a command that
+     * fans out to every node by default (such as CONFIG GET with no explicit route) comes back as a
+     * per-node map, in which case the first node's reply is returned -- every node in this test
+     * harness's single-module-config cluster reports the same value, so any one node answers the
+     * question this helper is used for.
+     */
     private static Object customCommand(BaseClient client, GlideString[] args)
             throws InterruptedException, ExecutionException {
         if (client instanceof GlideClusterClient) {
-            return ((GlideClusterClient) client).customCommand(args).get();
+            ClusterValue<Object> value = ((GlideClusterClient) client).customCommand(args).get();
+            // For an unrouted command like CONFIG GET or FT.INFO, the single node that answers
+            // returns its own map-shaped reply, and ClusterValue stores that single map under
+            // getMultiValue() rather than getSingleValue() (confirmed empirically against a live
+            // cluster: hasMultiData() is true with exactly one entry whose key is the config key
+            // itself, e.g. "search.emulate-release", not a node address) -- so the multi-value map
+            // IS the reply's own contents here, not a per-node breakdown.
+            if (value.hasMultiData()) {
+                return value.getMultiValue();
+            }
+            return value.getSingleValue();
         }
         return ((GlideClient) client).customCommand(args).get();
+    }
+
+    /**
+     * Reads one field out of a reply that may be a flat {@code Object[]} (odd-index keys, even-index
+     * values -- the shape FT.INFO's nested {@code index_definition} value comes back as on both RESP2
+     * and RESP3, since glide-core's {@code FTInfoReturnType} converter does not recurse into that
+     * specific key the way it does {@code fields}/{@code vector_params}) or an already-flattened
+     * {@code Map}. Returns {@code null} if the field is absent or the reply shape isn't recognised.
+     * Mirrors Node's {@code readMapField} / Go's equivalent helper.
+     */
+    @SuppressWarnings("unchecked")
+    static Object readMapField(Object reply, String field) {
+        if (reply instanceof Map) {
+            for (Map.Entry<?, ?> entry : ((Map<?, ?>) reply).entrySet()) {
+                if (field.equals(String.valueOf(entry.getKey()))) {
+                    return entry.getValue();
+                }
+            }
+            return null;
+        }
+
+        if (reply instanceof Object[]) {
+            Object[] arr = (Object[]) reply;
+            for (int i = 0; i + 1 < arr.length; i += 2) {
+                if (field.equals(String.valueOf(arr[i]))) {
+                    return arr[i + 1];
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * {@code true} if {@code level} is strictly less than {@code minLevel}, both dotted X.Y.Z (an
+     * optional {@code -rcN} suffix is stripped). Mirrors Node's {@code checkVersionLt}.
+     */
+    static boolean checkVersionLt(String level, String minLevel) {
+        int[] a = parseDottedVersion(level);
+        int[] b = parseDottedVersion(minLevel);
+        int maxLen = Math.max(a.length, b.length);
+        for (int i = 0; i < maxLen; i++) {
+            int x = i < a.length ? a[i] : 0;
+            int y = i < b.length ? b[i] : 0;
+            if (x != y) {
+                return x < y;
+            }
+        }
+        return false;
+    }
+
+    private static int[] parseDottedVersion(String version) {
+        String base = version.split("-", 2)[0];
+        String[] parts = base.split("\\.");
+        int[] result = new int[parts.length];
+        for (int i = 0; i < parts.length; i++) {
+            result[i] = Integer.parseInt(parts[i]);
+        }
+        return result;
+    }
+
+    /**
+     * Reads the active {@code search.emulate-release} level from a connected, 1.3-capable client.
+     * Fails loudly if the level can't be parsed -- a capable module with an unparseable level is a
+     * harness bug, not something to silently skip past.
+     */
+    @SneakyThrows
+    static String getEmulateReleaseLevel(BaseClient client) {
+        Object reply =
+                customCommand(
+                        client, new GlideString[] {gs("CONFIG"), gs("GET"), gs("search.emulate-release")});
+        Object level = readMapField(reply, "search.emulate-release");
+        if (level == null) {
+            throw new AssertionError(
+                    "search.emulate-release could not be parsed from a 1.3-capable module's CONFIG GET"
+                            + " reply");
+        }
+        return level.toString();
     }
 
     @SneakyThrows
@@ -381,6 +478,16 @@ public class VectorSearch13Tests {
 
             Map<String, Object> info = FT.info(client, indexName).get();
             assertEquals(indexName, info.get("index_name").toString());
+
+            Object indexDefinition = info.get("index_definition");
+            Object scoreField = readMapField(indexDefinition, "score_field");
+
+            String level = getEmulateReleaseLevel(client);
+            if (!checkVersionLt(level, "1.3.0")) {
+                assertEquals("boost", String.valueOf(scoreField));
+            } else {
+                assertEquals(null, scoreField);
+            }
         } finally {
             FT.dropindex(client, indexName).get();
         }
