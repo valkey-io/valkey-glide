@@ -374,7 +374,8 @@ impl ClientPool {
 /// This is the shared implementation used by all language bindings (FFI, JNI).
 /// It performs:
 /// 1. Takes the client out of `in_use`
-/// 2. Sends DISCARD + SELECT (batched reset) with a timeout of 2× request_timeout
+/// 2. Resets dirtied connection state (`reset_connection_state`) with a timeout
+///    of 2× request_timeout
 /// 3. Returns the client to idle on success, or discards it on failure
 /// 4. A `LeakGuard` ensures `discard_client(client_id)` is called if the future is cancelled
 ///
@@ -426,7 +427,9 @@ pub async fn release_client_async(pool_arc: Arc<TokioMutex<ClientPool>>, client_
         client_id: guard_client_id,
     };
 
-    // Reset state: DISCARD (cancel MULTI/WATCH) + SELECT <configured_db>
+    // Reset only the state the borrow dirtied: DISCARD a still-open MULTI, and
+    // SELECT back to the configured db if the borrow drifted off it. See
+    // `reset_connection_state`.
     let reset_result = tokio::time::timeout(
         timeout_duration,
         entry.client.reset_connection_state(configured_db),
@@ -3368,11 +3371,51 @@ mod scope_pool_tests {
         crate::pool::get_client_scope_pools().remove(&client_id);
     }
 
-    /// End-to-end through the FFI entry `acquire_scope_outcome`, exercising the glue the
-    /// direct-call tests skip: that a non-zero parent `current_database()` is actually
-    /// read from the client registry, that a wrong-db idle connection drives the
-    /// `NeedsResync` spawn (first call returns -1), and that the FFI retry converges to
-    /// a `Reused` scope on the parent's runtime db.
+    /// A batch `SELECT` must move `current_database()` once it dispatches, so the
+    /// pool-release drift check restores the configured db — pins the store-on-`Ok`
+    /// wiring in `send_pipeline`. Uses a real standalone server (db 4 is valid) so
+    /// the dispatch succeeds; the companion unit test covers the failure direction.
+    #[tokio::test]
+    async fn batch_select_moves_current_database_after_successful_dispatch() {
+        let server = TestServer::start();
+        wait_for_server_ready(server.port).await;
+
+        let mut client = {
+            let mut request = crate::client::ConnectionRequest::default();
+            request.addresses.push(crate::client::NodeAddress {
+                host: "127.0.0.1".into(),
+                port: server.port,
+            });
+            crate::client::Client::new(request, None)
+                .await
+                .expect("client connects to the test server")
+        };
+        assert_eq!(client.current_database(), 0, "starts on db 0");
+
+        // Drift via a pipeline (non-atomic batch) rather than a bare SELECT.
+        let mut pipe = redis::pipe();
+        pipe.cmd("SELECT").arg(4).cmd("PING");
+        client
+            .send_pipeline(&pipe, None, false, None, Default::default())
+            .await
+            .expect("pipeline with SELECT 4 dispatches on a standalone server");
+        assert_eq!(
+            client.current_database(),
+            4,
+            "a successful batch SELECT must move current_database so release sees the drift"
+        );
+
+        // Drift back to db 0 via a second pipeline, confirming the tracking follows
+        // the last SELECT rather than latching the first.
+        let mut back = redis::pipe();
+        back.cmd("SELECT").arg(0).cmd("PING");
+        client
+            .send_pipeline(&back, None, false, None, Default::default())
+            .await
+            .expect("pipeline with SELECT 0 dispatches");
+        assert_eq!(client.current_database(), 0, "the last batch SELECT wins");
+    }
+
     ///
     /// The other pool tests all run on db 0, so the `.unwrap_or(0)` registry read and the
     /// resync spawn are indistinguishable from no-ops there. Here the parent SELECTs db 4
