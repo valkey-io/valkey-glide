@@ -147,38 +147,6 @@ func (suite *GlideTestSuite) TestBatchMove() {
 	})
 }
 
-func (suite *GlideTestSuite) TestBatchDelIfEq() {
-	suite.runBatchTest(func(client interfaces.BaseClientCommands, isAtomic bool, t *testing.T) {
-		suite.SkipIfServerVersionLowerThan("9.0.0", t)
-		key := "{prefix}-" + uuid.NewString()
-		value := uuid.NewString()
-		wrongValue := uuid.NewString()
-
-		switch c := client.(type) {
-		case *glide.ClusterClient:
-			batch := pipeline.NewClusterBatch(isAtomic).
-				Set(key, value).
-				DelIfEq(key, wrongValue).
-				DelIfEq(key, value)
-
-			res, err := c.Exec(context.Background(), *batch, true)
-			suite.verifyOK(res[0].(string), err)
-			suite.False(res[1].(bool))
-			suite.True(res[2].(bool))
-		case *glide.Client:
-			batch := pipeline.NewStandaloneBatch(isAtomic).
-				Set(key, value).
-				DelIfEq(key, wrongValue).
-				DelIfEq(key, value)
-
-			res, err := c.Exec(context.Background(), *batch, true)
-			suite.verifyOK(res[0].(string), err)
-			suite.False(res[1].(bool))
-			suite.True(res[2].(bool))
-		}
-	})
-}
-
 func (suite *GlideTestSuite) TestWatch_and_Unwatch() {
 	suite.runWithDefaultClients(func(client1 interfaces.BaseClientCommands) {
 		key1 := "{prefix}" + uuid.NewString()
@@ -578,6 +546,19 @@ func CreateStringTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer str
 
 	batch.Append(multiKey1, "3")
 	testData = append(testData, CommandTestData{ExpectedResponse: int64(7), TestName: "Append(multiKey1, 3)"})
+
+	if serverVer >= "9.0.0" {
+		delIfEqKey := prefix + "delifeq-" + uuid.NewString()
+		delIfEqValue := "delifeq-value-" + uuid.NewString()
+		batch.Set(delIfEqKey, delIfEqValue)
+		testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "Set(delIfEqKey, delIfEqValue)"})
+
+		batch.DelIfEq(delIfEqKey, "wrong-value")
+		testData = append(testData, CommandTestData{ExpectedResponse: false, TestName: "DelIfEq(delIfEqKey, wrong-value)"})
+
+		batch.DelIfEq(delIfEqKey, delIfEqValue)
+		testData = append(testData, CommandTestData{ExpectedResponse: true, TestName: "DelIfEq(delIfEqKey, delIfEqValue)"})
+	}
 
 	batch.Set(multiKey2, "val")
 	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "Set(multiKey2, val)"})
