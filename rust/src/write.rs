@@ -874,6 +874,7 @@ mod to_single_arg {
         use crate::commands::options::FieldExistenceCheck;
         use crate::commands::options::FlushAllOptions;
         use crate::commands::options::FunctionRestorePolicy;
+        use crate::commands::options::ObjectType;
         use crate::commands::options::OrderBy;
         use crate::commands::sorted_set::AggregationType;
         use crate::commands::sorted_set::LexBound;
@@ -893,6 +894,7 @@ mod to_single_arg {
         assert_single(FunctionRestorePolicy::Append);
         assert_single(GeoUnit::Meters);
         assert_single(LexBound::Inclusive(b"a".to_vec()));
+        assert_single(ObjectType::ZSet);
         assert_single(OrderBy::Asc);
         assert_single(ScoreBound::Exclusive(1.5));
         assert_single(StreamTrimmingMode::Approx);

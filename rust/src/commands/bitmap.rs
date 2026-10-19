@@ -249,6 +249,12 @@ mod tests {
     use crate::test_utils::assert_args;
 
     #[test]
+    fn index_type_args() {
+        assert_args(BitmapIndexType::Byte, &["BYTE"]);
+        assert_args(BitmapIndexType::Bit, &["BIT"]);
+    }
+
+    #[test]
     fn encoding_and_offset_args() {
         assert_args(BitEncoding::Signed(8), &["i8"]);
         assert_args(BitEncoding::Unsigned(16), &["u16"]);

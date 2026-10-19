@@ -592,23 +592,48 @@ pub struct Limit {
     pub count: i64,
 }
 
+impl ToValkeyArgs for Limit {
+    fn write_valkey_args<W: ?Sized + ValkeyWrite>(&self, out: &mut W) {
+        out.write_arg(b"LIMIT");
+        out.write_arg_fmt(self.offset);
+        out.write_arg_fmt(self.count);
+    }
+}
+
 /// The type of a key, used by `OBJECT`/`TYPE`/`SCAN`.
+///
+/// Mirrors Python `ObjectType`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum ObjectType {
-    /// String.
+    /// String (`string`).
     String,
-    /// List.
+    /// List (`list`).
     List,
-    /// Set.
+    /// Set (`set`).
     Set,
-    /// Sorted set.
+    /// Sorted set (`zset`).
     ZSet,
-    /// Hash.
+    /// Hash (`hash`).
     Hash,
-    /// Stream.
+    /// Stream (`stream`).
     Stream,
 }
+
+impl ToValkeyArgs for ObjectType {
+    fn write_valkey_args<W: ?Sized + ValkeyWrite>(&self, out: &mut W) {
+        out.write_arg(match self {
+            ObjectType::String => b"string".as_slice(),
+            ObjectType::List => b"list".as_slice(),
+            ObjectType::Set => b"set".as_slice(),
+            ObjectType::ZSet => b"zset".as_slice(),
+            ObjectType::Hash => b"hash".as_slice(),
+            ObjectType::Stream => b"stream".as_slice(),
+        });
+    }
+}
+
+impl ToSingleValkeyArg for ObjectType {}
 
 impl ObjectType {
     /// Map to the vendored `redis` crate's `ObjectType` (used by cluster scan).
@@ -753,6 +778,27 @@ mod tests {
     fn order_by_args() {
         assert_args(OrderBy::Asc, &["ASC"]);
         assert_args(OrderBy::Desc, &["DESC"]);
+    }
+
+    #[test]
+    fn limit_args() {
+        assert_args(
+            Limit {
+                offset: 0,
+                count: 10,
+            },
+            &["LIMIT", "0", "10"],
+        );
+    }
+
+    #[test]
+    fn object_type_args() {
+        assert_args(ObjectType::String, &["string"]);
+        assert_args(ObjectType::List, &["list"]);
+        assert_args(ObjectType::Set, &["set"]);
+        assert_args(ObjectType::ZSet, &["zset"]);
+        assert_args(ObjectType::Hash, &["hash"]);
+        assert_args(ObjectType::Stream, &["stream"]);
     }
 
     #[test]

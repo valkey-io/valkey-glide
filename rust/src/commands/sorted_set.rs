@@ -198,7 +198,7 @@ pub trait SortedSetCommands: CommandExecutor {
             .with_arg(second)
             .with_arg("BYSCORE")
             .with_arg(rev.then_some("REV"))
-            .with_arg(limit.map(|l| ("LIMIT", l.offset, l.count)));
+            .with_arg(limit);
         i64::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
@@ -226,7 +226,7 @@ pub trait SortedSetCommands: CommandExecutor {
             .with_arg(second)
             .with_arg("BYLEX")
             .with_arg(rev.then_some("REV"))
-            .with_arg(limit.map(|l| ("LIMIT", l.offset, l.count)));
+            .with_arg(limit);
         i64::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
@@ -418,6 +418,13 @@ mod tests {
         assert_args(ScoreBound::PositiveInfinity, &["+inf"]);
         assert_args(ScoreBound::Inclusive(1.5), &["1.5"]);
         assert_args(ScoreBound::Exclusive(1.0), &["(1"]);
+    }
+
+    #[test]
+    fn aggregation_type_args() {
+        assert_args(AggregationType::Sum, &["SUM"]);
+        assert_args(AggregationType::Min, &["MIN"]);
+        assert_args(AggregationType::Max, &["MAX"]);
     }
 
     #[test]
