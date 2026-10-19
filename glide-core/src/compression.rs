@@ -2,6 +2,28 @@
 
 //! Compression module providing automatic compression and decompression capabilities
 //! for Valkey Glide client operations.
+//!
+//! ## Interaction with Valkey server-side compression (Valkey 9.2+)
+//!
+//! Valkey 9.2 introduces its own server-side inline compression of values at rest. That
+//! feature is orthogonal to this module: the RESP wire protocol is unchanged, and the
+//! server transparently decompresses before responding, so this client-side module does
+//! not need any special handling to interoperate with it.
+//!
+//! However, enabling both layers at once is wasteful: if a client compresses a value here
+//! and then the server also attempts to compress the resulting (already compressed,
+//! high-entropy) blob, the server's compression pass yields no further size reduction and
+//! wastes CPU, while skewing server-side compression-ratio metrics. Data integrity is not
+//! affected (the magic header produced by [`create_header`] survives a second, ineffective
+//! compression pass), but users should prefer running only one compression layer.
+//!
+//! On AWS ElastiCache (node-based and Serverless), `CONFIG GET`/`CONFIG SET` are blocked,
+//! so server-side compression state cannot be detected at runtime from this module; any
+//! future auto-detection logic must fail silently in that case rather than erroring.
+//!
+//! See <https://github.com/valkey-io/valkey-glide/issues/7204> for the tracking issue, and
+//! <https://github.com/valkey-io/valkey/issues/3423> for the (not yet implemented) Valkey
+//! server-side design.
 
 use std::borrow::Cow;
 use std::fmt;

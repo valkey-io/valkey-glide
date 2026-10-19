@@ -438,11 +438,14 @@ The package is optional and only needed when `enable_trace_context_propagation=T
 Valkey GLIDE supports automatic compression and decompression of string values to reduce memory usage and network bandwidth.
 
 **Incompatible Commands**: Compression is NOT compatible with commands that manipulate string data on the server:
-- APPEND, GETRANGE, SETRANGE, STRLEN, LCS
+- APPEND, GETRANGE, SETRANGE, STRLEN, LCS, SUBSTR
 - INCR, INCRBY, INCRBYFLOAT, DECR, DECRBY
 - GETBIT, SETBIT, BITCOUNT, BITPOS, BITFIELD, BITFIELD_RO, BITOP
 
 Using these commands with compressed values will result in incorrect behavior or errors.
+
+**Interaction with server-side compression (Valkey 9.2+)**: Valkey 9.2 introduces its own server-side inline compression of values at rest, which is independent of this client-side feature. Do not enable both at the same time: if the client compresses a value and the server also tries to compress it, the server is compressing already-compressed (high-entropy) data, which wastes CPU without reducing memory further and skews the server's compression-ratio metrics. Choose one layer, not both.
+- On AWS ElastiCache (node-based and Serverless), `CONFIG GET`/`CONFIG SET` are blocked, so whether server-side compression is active cannot be detected at runtime from the client. Check the AWS console or your parameter group settings instead.
 
 ### Basic Compression Setup
 
