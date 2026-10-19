@@ -3,7 +3,7 @@
 # Bloom, LDAP) via Docker, on dedicated ports, and verifies MODULE LIST on
 # every node. Shared by .github/actions/start-valkey-docker/action.yml (CI)
 # and utils/run-modules-ci-locally.sh (local reproduction) so the two paths
-# cannot silently drift apart (BRIEF-R1-FIXES.md Group 8).
+# cannot silently drift apart.
 #
 # Every container runs with --network host, which Docker Desktop on macOS
 # requires enabling separately (Settings > Resources > Network > "Enable
@@ -20,12 +20,11 @@
 #   CLUSTER_PORT_START  First of 6 consecutive cluster ports (default 8001)
 #   STANDALONE_PORT     Standalone port (default 6389)
 #   SEARCH_MODULE_ARGS  Extra args appended to the search module's loadmodule
-#                       line, e.g. "--emulate-release 1.3.0" (QA round 2,
-#                       R2-H-1). CI never sets this (empty by default) --
-#                       it exists so the local runner's non-default
-#                       emulate-release path can still call this exact
-#                       script instead of hand-rolling its own bring-up, the
-#                       gap R2-H-1 found. The arg name must be the BARE
+#                       line, e.g. "--emulate-release 1.3.0". CI never sets
+#                       this (empty by default) -- it exists so the local
+#                       runner's non-default emulate-release path can still
+#                       call this exact script instead of hand-rolling its
+#                       own bring-up. The arg name must be the BARE
 #                       config name (e.g. "emulate-release", not
 #                       "search.emulate-release" -- that longer form only
 #                       exists at the CONFIG GET/SET surface, where Valkey
@@ -88,11 +87,10 @@ docker pull "$IMAGE"
 # image ships (json, bf, ldap) is left to the image's own auto-discovery,
 # exactly as before this file started generating conf files at all. This
 # is the one code path for both the empty-SEARCH_MODULE_ARGS (CI) and
-# non-empty (local emulate-release override) cases -- R2-H-1 found that an
-# earlier version of this split into two bring-up implementations that
-# could drift.
+# non-empty (local emulate-release override) cases -- an earlier version
+# split this into two bring-up implementations that could drift.
 #
-# IMPORTANT, found during a later audit (QA round 2 follow-up): naming
+# IMPORTANT, found during a later audit: naming
 # EVERY module explicitly in the conf (an earlier version of this function
 # did, listing both search and json) is NOT equivalent to the original
 # CLI-flags-only invocation this replaced -- confirmed empirically that the
