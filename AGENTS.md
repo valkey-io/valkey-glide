@@ -349,6 +349,7 @@ Follow these development guidelines when applicable:
 - **Language-Specific Guides:**
   - [Rust Client Guide](./rust/AGENTS.md)
   - [glide-core / Rust Core Guide](./glide-core/AGENTS.md)
+  - [FFI crate notes](./ffi/DEVELOPER.md) (GLIDE_NAME/GLIDE_VERSION build variables for Go and Python)
   - [Java Developer Guide](./java/DEVELOPER.md)
   - [Python Developer Guide](./python/DEVELOPER.md)
   - [Node.js Developer Guide](./node/DEVELOPER.md)

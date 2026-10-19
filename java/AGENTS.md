@@ -215,6 +215,7 @@ java/
 
 - **Getting Started:** [README.md](./README.md)
 - **Development Setup:** [DEVELOPER.md](./DEVELOPER.md)
+- **Jedis compatibility layer:** [jedis-compatibility/AGENTS.md](./jedis-compatibility/AGENTS.md) (build, test and guardrails for the `jedis-compatibility`, `jedis-4-compatibility` and `jedis-compat-shared` modules described above)
 - **Examples:** [../examples/java/](../examples/java/)
 - **API Documentation:** Generated Javadocs in build output
 - **Integration Tests:** [integTest/src/test/java/glide/](./integTest/src/test/java/glide/)
