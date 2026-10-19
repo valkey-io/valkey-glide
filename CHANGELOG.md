@@ -56,6 +56,7 @@
 
 ### Changes
 
+* All: Document the interaction between client-side compression and Valkey 9.2's server-side inline compression, including the ElastiCache `CONFIG GET`/`CONFIG SET` detection limitation, and add `SUBSTR` to the compression-incompatible command list ([#7204](https://github.com/valkey-io/valkey-glide/issues/7204))
 * Java: add useMutualTlsFromKeyStore to load mTLS client identity ([#7258](https://github.com/valkey-io/valkey-glide/pull/7258))
 * Java: Add `HGETDEL` command support ([#6145](https://github.com/valkey-io/valkey-glide/issues/6145))
 * Node: Add `HGETDEL` command support ([#6145](https://github.com/valkey-io/valkey-glide/issues/6145))
