@@ -28,6 +28,7 @@ on:
             - .github/actions/setup-dns-tests/action.yml
             - .github/workflows/create-test-matrices/action.yml
             - .github/workflows/lint-rust/action.yml
+            - .github/actions/ensure-clean-tree/action.yml
             - .github/workflows/test-benchmark/action.yml
             - .github/json_matrices/**
             - benchmarks/install_and_test.sh
@@ -53,6 +54,7 @@ on:
             - .github/actions/setup-dns-tests/action.yml
             - .github/workflows/create-test-matrices/action.yml
             - .github/workflows/lint-rust/action.yml
+            - .github/actions/ensure-clean-tree/action.yml
             - .github/workflows/test-benchmark/action.yml
             - .github/json_matrices/**
             - benchmarks/install_and_test.sh
