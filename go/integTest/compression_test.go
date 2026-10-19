@@ -1223,6 +1223,28 @@ func (suite *GlideTestSuite) TestCompressionAppendIncompatible() {
 	client.Del(context.Background(), []string{key})
 }
 
+func (suite *GlideTestSuite) TestCompressionDelIfEqIncompatible() {
+	suite.SkipIfServerVersionLowerThan("9.0.0", suite.T())
+
+	client := suite.compressionClient()
+	defer client.Close()
+
+	t := suite.T()
+
+	key := fmt.Sprintf("delifeq_test_%s", randomString(8))
+	_, err := client.Set(context.Background(), key, "initial_value")
+	assert.NoError(t, err)
+
+	// DELIFEQ should fail with compression enabled
+	_, err = client.DelIfEq(context.Background(), key, "initial_value")
+	assert.Error(t, err)
+	errMsg := strings.ToLower(err.Error())
+	assert.True(t, strings.Contains(errMsg, "incompatible") || strings.Contains(errMsg, "compression"),
+		"Error should mention incompatibility: %v", err)
+
+	client.Del(context.Background(), []string{key})
+}
+
 func (suite *GlideTestSuite) TestCompressionGetRangeIncompatible() {
 	client := suite.compressionClient()
 	defer client.Close()

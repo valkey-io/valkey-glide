@@ -1598,6 +1598,34 @@ func (client *baseClient) Append(ctx context.Context, key string, value string) 
 	return handleIntResponse(result)
 }
 
+// Deletes `key` if its value equals `value`.
+//
+// Since:
+//
+//	Valkey 9.0 and above.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx   - The context for controlling the command execution.
+//	key   - The key to delete.
+//	value - The comparison value. The key is only deleted if its current value matches exactly.
+//
+// Return value:
+//
+//	`true` if `key` was deleted, `false` if `key` did not exist or its value did not match `value`.
+//
+// [valkey.io]: https://valkey.io/commands/delifeq/
+func (client *baseClient) DelIfEq(ctx context.Context, key string, value string) (bool, error) {
+	result, err := client.executeCommand(ctx, C.DelIfEq, []string{key, value})
+	if err != nil {
+		return models.DefaultBoolResponse, err
+	}
+
+	return handleBoolResponse(result)
+}
+
 // Returns the longest common subsequence between strings stored at `key1` and `key2`.
 //
 // Since:

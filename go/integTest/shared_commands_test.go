@@ -574,6 +574,43 @@ func (suite *GlideTestSuite) TestAppend_existingAndNonExistingKeys() {
 	})
 }
 
+func (suite *GlideTestSuite) TestDelIfEq() {
+	suite.SkipIfServerVersionLowerThan("9.0.0", suite.T())
+
+	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
+		key := uuid.New().String()
+		value := uuid.New().String()
+		wrongValue := uuid.New().String()
+
+		res, err := client.DelIfEq(context.Background(), key, value)
+		suite.NoError(err)
+		assert.False(suite.T(), res)
+
+		suite.verifyOK(client.Set(context.Background(), key, value))
+
+		res, err = client.DelIfEq(context.Background(), key, wrongValue)
+		suite.NoError(err)
+		assert.False(suite.T(), res)
+		res1, err := client.Get(context.Background(), key)
+		suite.NoError(err)
+		assert.Equal(suite.T(), value, res1.Value())
+
+		res, err = client.DelIfEq(context.Background(), key, value)
+		suite.NoError(err)
+		assert.True(suite.T(), res)
+		res1, err = client.Get(context.Background(), key)
+		suite.NoError(err)
+		assert.True(suite.T(), res1.IsNil())
+
+		// DELIFEQ on a key holding a non-string value returns a WRONGTYPE error
+		setKey := uuid.New().String()
+		_, err = client.SAdd(context.Background(), setKey, []string{"member"})
+		suite.NoError(err)
+		_, err = client.DelIfEq(context.Background(), setKey, "member")
+		suite.ErrorContains(err, "WRONGTYPE")
+	})
+}
+
 func (suite *GlideTestSuite) TestLCS_existingAndNonExistingKeys() {
 	suite.SkipIfServerVersionLowerThan("7.0.0", suite.T())
 
