@@ -8,6 +8,12 @@ This is the Valkey GLIDE mono-repository containing a Rust core (`glide-core`) a
 
 **Primary Languages Present:** Rust, Java, Python, Node.js/TypeScript, Go
 
+**Clients in separate repositories** — each has its own `AGENTS.md`; load it from that repo when working on the client:
+
+- C# - [valkey-io/valkey-glide-csharp](https://github.com/valkey-io/valkey-glide-csharp)
+- PHP - [valkey-io/valkey-glide-php](https://github.com/valkey-io/valkey-glide-php)
+- Ruby - [valkey-io/valkey-glide-ruby](https://github.com/valkey-io/valkey-glide-ruby)
+
 **Key Components:**
 
 - `rust/` - Native Rust client (preview). See [rust/AGENTS.md](./rust/AGENTS.md).
@@ -24,7 +30,7 @@ This is the Valkey GLIDE mono-repository containing a Rust core (`glide-core`) a
 - `utils/` - Shared utilities and cluster management tools (`cluster_manager.py`).
 - `benchmarks/` - Performance benchmarks across languages.
 - `examples/` - Usage examples for each language binding.
-- `docs/` - Documentation and MkDocs configuration.
+- `docs/` - Internal/in-repo docs. The published docs live in [valkey-io/valkey-glide-docs](https://github.com/valkey-io/valkey-glide-docs).
 
 Each binding has its own `AGENTS.md` — read it after this file for the binding you're changing. `CLAUDE.md` at the repo root holds additional hard constraints that apply alongside this file. The Rust crates (`rust/`, `glide-core/`, `glide-core/redis-rs/redis/`, `ffi/`, `glide-telemetry/`, `glide-logger/`) are independent crates — each with its own `Cargo.toml`/`Cargo.lock`, no top-level cargo workspace; see [glide-core/AGENTS.md](./glide-core/AGENTS.md) for the crate dependency table.
 
@@ -63,7 +69,7 @@ python3 cluster_manager.py stop --cluster-folder <folder-printed-by-start>
 
 Then pass the printed endpoint(s) via that binding's endpoint flag (see each binding's AGENTS.md). Requires a `valkey-server` (or `redis-server`) binary on `PATH`.
 
-## Build and Test Rules (Agents)
+## Build and Test Rules
 
 ### Preferred (Make Targets)
 
@@ -265,7 +271,6 @@ Use conventional commit format for all commit messages:
 - `target/` - Rust build artifacts
 - `node_modules/` - Node.js dependencies
 - `.build/` - Make build cache
-- `debug/` - Debug builds
 - `generated/` - Generated protobuf files
 - `benchmarks/results/` - Benchmark output
 - `python/.env*` - Python virtual environments
@@ -280,7 +285,7 @@ Use conventional commit format for all commit messages:
 ### Security & Code Quality
 
 - Never commit secrets, credentials, or API keys
-- Follow SECURITY.md for vulnerability reporting
+- Follow the organization-level [SECURITY.md](https://github.com/valkey-io/.github/blob/main/SECURITY.md) for vulnerability reporting (there is no repository-level copy)
 - Run lint/format targets before committing
 - Maintain compatibility with supported engine versions
 - Do not modify genuinely vendored or third-party code. Note `glide-core/redis-rs/` is **not** in this category — it's a GLIDE-owned fork of redis-rs 0.25.2 (renamed `glide-core-engine`) that the repo deliberately patches; changes there are allowed but check for upstream drift first (see glide-core/AGENTS.md).
@@ -292,7 +297,7 @@ Use conventional commit format for all commit messages:
 valkey-glide/
 ├── .github/workflows/   # CI/CD pipelines
 ├── benchmarks/          # Performance benchmarks
-├── docs/                # Documentation (MkDocs)
+├── docs/                # Internal docs (published docs: valkey-glide-docs repo)
 ├── examples/            # Usage examples per language
 ├── rust/                # Native Rust client (preview)
 ├── glide-core/          # Core Rust implementation (incl. redis-rs/ vendored fork)
@@ -336,10 +341,10 @@ Follow these development guidelines when applicable:
 ## If You Need More
 
 - **Getting Started:** [README.md](./README.md)
-- **Contributing:** [CONTRIBUTING.md](./CONTRIBUTING.md), [PICKING_UP_ISSUES.md](./PICKING_UP_ISSUES.md), [SUBMITTING_PRS.md](./SUBMITTING_PRS.md), [REVIEWING_PRS.md](./REVIEWING_PRS.md)
+- **Contributing:** [CONTRIBUTING.md](./CONTRIBUTING.md), [PICKING_UP_ISSUES.md](./PICKING_UP_ISSUES.md), [CREATING_ISSUES.md](./CREATING_ISSUES.md), [TRIAGING_ISSUES.md](./TRIAGING_ISSUES.md), [SUBMITTING_PRS.md](./SUBMITTING_PRS.md), [REVIEWING_PRS.md](./REVIEWING_PRS.md)
 - **Agent constraints:** [CLAUDE.md](./CLAUDE.md)
 - **Security:** [SECURITY.md](https://github.com/valkey-io/.github/blob/main/SECURITY.md)
-- **Documentation:** [docs/README.md](./docs/README.md)
+- **Documentation:** [valkey-io/valkey-glide-docs](https://github.com/valkey-io/valkey-glide-docs) (published docs; in-repo `docs/` holds internal docs)
 - **Examples:** [examples/](./examples/)
 - **Language-Specific Guides:**
   - [Rust Client Guide](./rust/AGENTS.md)

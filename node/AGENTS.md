@@ -107,10 +107,12 @@ npm run clean                   # Full cleanup — WARNING: also deletes the com
 # Manual TypeScript compilation
 npx tsc
 
-# Manual protobuf generation
+# Manual protobuf generation (same three steps `npm run build-protobuf` runs; do not drop the `replace`)
+# npx because pbjs/pbts/replace are devDependencies, not global binaries
 mkdir -p build-ts
-pbjs -t static-module -w commonjs --no-verify --no-convert -o build-ts/ProtobufMessage.js ../glide-core/src/protobuf/*.proto
-pbts -o build-ts/ProtobufMessage.d.ts build-ts/ProtobufMessage.js
+npx pbjs -t static-module -w commonjs --no-verify --no-convert -o build-ts/ProtobufMessage.js ../glide-core/src/protobuf/*.proto
+npx pbts -o build-ts/ProtobufMessage.d.ts build-ts/ProtobufMessage.js
+npx replace "this\.encode\(message, writer\)\.ldelim" "this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim" build-ts/ProtobufMessage.js
 
 # Manual Rust build (from rust-client/)
 cargo build --release

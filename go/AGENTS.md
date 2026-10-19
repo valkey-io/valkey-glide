@@ -33,7 +33,7 @@ This is the Go client binding for Valkey GLIDE, providing both standalone and cl
 - macOS: 13.7+ (x86_64), 14.7+ (aarch64)
 - **Note:** Alpine Linux/MUSL supported with `musl` build tag
 
-**Go Versions:** 1.22+
+**Go Versions:** 1.22+ (`go.mod`; CI runs 1.22 and 1.24)
 **Module:** `github.com/valkey-io/valkey-glide/go/v2`
 
 ## Build and Test Rules (Agents)

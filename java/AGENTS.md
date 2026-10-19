@@ -102,6 +102,7 @@ Integration tests (`:integTest:test`, `:integTest:pubsubTest`, `make java-test`)
 
 # Run specific test (method name pattern; `*.foo` matches a method named exactly foo)
 ./gradlew :integTest:test --tests '*.set_and_get_without_options' --rerun
+./gradlew :client:test --tests '*.latencyHistory*' --rerun
 
 # Run specific test class
 ./gradlew :client:test --tests 'BatchTests' --rerun
@@ -190,7 +191,7 @@ java/
 ## Quality Gates (Agent Checklist)
 
 - [ ] Build passes: `./gradlew :client:buildAll` succeeds
-- [ ] All tests pass: `./gradlew :client:test` (unit) and `./gradlew :integTest:test` (integration) succeed — there is no aggregate `test` task
+- [ ] All tests pass: `./gradlew :client:test` (unit) and `./gradlew :integTest:test` (integration) succeed — `./gradlew test` runs the `test` task in every subproject (needs servers running)
 - [ ] Spotless formatting: `./gradlew :spotlessCheck` passes
 - [ ] SpotBugs analysis: `./gradlew spotbugsMain` generates clean reports
 - [ ] Integration tests pass: `./gradlew :integTest:test` succeeds
@@ -206,7 +207,7 @@ java/
 **API Style:** Async with CompletableFuture, try-with-resources pattern
 **Client Types:** GlideClient (standalone), GlideClusterClient (cluster)
 **Key Features:** Jedis compatibility layer, comprehensive benchmarking, JNI-based Rust integration
-**Testing:** Unit tests, FFI tests, integration tests, PubSub tests
+**Testing:** Unit tests (`:client:test`), integration tests (`:integTest:test`, `pubsubTest`, `scopeTest`, `modulesTest`)
 **Platforms:** Linux (Ubuntu, AL2/AL2023), macOS (Intel/Apple Silicon)
 **Dependencies:** JDK 11+ to build (Java 8+ runtime), platform-specific native libraries
 

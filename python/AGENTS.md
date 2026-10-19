@@ -54,7 +54,7 @@ python3 dev.py test --args --async-backend=trio       # Test with trio backend
 python3 dev.py test --args --async-backend=asyncio    # Test with asyncio backend
 
 # Linting and Formatting
-python3 dev.py lint                                    # Auto-fix formatting (isort, black)
+python3 dev.py lint                                    # Auto-fix formatting (isort, black), then flake8 and mypy
 python3 dev.py lint --check                           # Check formatting only
 
 # Protobuf generation
@@ -114,7 +114,14 @@ protoc --plugin=protoc-gen-mypy=.env/bin/protoc-gen-mypy -Iprotobuf=../glide-cor
 # Run with existing endpoints
 python3 dev.py test --args --cluster-endpoints=localhost:7000 --standalone-endpoints=localhost:6379
 
-# Run with TLS
+# Run with TLS (the harness starts its own TLS servers; this is the only mode that
+# creates the *_tls_cluster and auth fixtures that test_tls.py, the DNS tests and
+# the auth suite read)
+python3 dev.py test --args --tls
+
+# Run with TLS against existing endpoints: --tls applies to the main standalone and
+# cluster fixtures only; tests that read the harness-created *_tls_cluster/auth
+# fixtures raise AttributeError in this mode (see create_clusters() in tests/conftest.py)
 python3 dev.py test --args --tls --cluster-endpoints=localhost:7000 --standalone-endpoints=localhost:6379
 
 # Run with specific async backend
