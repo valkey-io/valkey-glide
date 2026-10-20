@@ -397,9 +397,10 @@ impl_to_valkey_args_tuple! {
 /// - bytes
 /// - references
 ///
-/// Implement this trait for every type that always writes exactly one argument.
-/// Never implement it for a type that can write zero or several arguments.
-/// Implement it for your own types to pass them directly as command arguments.
+/// Implement this trait for every type that always writes exactly one argument,
+/// and never for a type that can write zero or several. It is the bound on
+/// single-value command parameters like keys (e.g. `get<K: ToSingleValkeyArg>`),
+/// so a wrong implementation shifts every later argument of the command.
 ///
 /// Mirrors redis-rs's `ToSingleRedisArg`.
 pub trait ToSingleValkeyArg: ToValkeyArgs {}
