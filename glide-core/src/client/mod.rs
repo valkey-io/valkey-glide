@@ -1275,28 +1275,14 @@ impl Client {
         cmd: &'a mut Cmd,
         routing: Option<RoutingInfo>,
     ) -> redis::RedisFuture<'a, Value> {
-        self.send_command_inner(cmd, routing, false, None)
-    }
-
-    /// [`Self::send_command`], which refuses `BLOB.*` commands unless
-    /// `from_rdma_method` is set. Only `rdma_transfer` sets it, and passes the
-    /// in-flight slot it reserved before lending its buffer as `reserved`.
-    fn send_command_inner<'a>(
-        &'a mut self,
-        cmd: &'a mut Cmd,
-        routing: Option<RoutingInfo>,
-        from_rdma_method: bool,
-        reserved: Option<redis::cluster_async::InflightRequestTracker>,
-    ) -> redis::RedisFuture<'a, Value> {
         Box::pin(async move {
-            if !from_rdma_method {
-                crate::rdma::refuse_direct_command(cmd)?;
-            }
+            // `BLOB.*` transfers lend a buffer, so only the rdma methods send them.
+            crate::rdma::refuse_direct_command(cmd)?;
             // Refresh IAM auth before the command (see `reconcile_iam_before_dispatch`).
             self.reconcile_iam_before_dispatch().await?;
             // Track MULTI/EXEC/DISCARD for the borrow-time re-AUTH defer.
             self.track_transaction_state(cmd);
-            self.send_command_ungated(cmd, routing, reserved).await
+            self.send_command_ungated(cmd, routing).await
         })
     }
 
@@ -1309,29 +1295,31 @@ impl Client {
         &'a mut self,
         cmd: &'a mut Cmd,
         routing: Option<RoutingInfo>,
-        reserved: Option<redis::cluster_async::InflightRequestTracker>,
     ) -> RedisResult<Value> {
-        let client = self.get_or_initialize_client().await?;
+        let permit = DispatchPermit::take(self).await?;
 
-        // Reject immediately if circuit breaker is open.
-        if !self.is_circuit_breaker_healthy() {
-            return Err(circuit_breaker_open());
-        }
-
+        // An intercepted command drops `permit` here, which frees its slot.
         if let Some(result) = self.pubsub_synchronizer.intercept_pubsub_command(cmd).await {
             return result;
         }
 
-        let request_timeout = get_request_timeout(cmd, self.request_timeout)?;
+        self.dispatch(permit, cmd, routing).await
+    }
 
-        // Reserve an inflight slot. The tracker holds the slot until the
-        // last clone of the Cmd is dropped (i.e. all sub-commands in the
-        // cluster event loop finish). This decouples user-facing timeout
-        // from internal pipeline cleanup.
-        let tracker = match reserved.or_else(|| self.reserve_inflight_request()) {
-            Some(t) => t,
-            None => return Err(self.inflight_requests_exhausted()),
-        };
+    /// Send `cmd` with the client and in-flight slot in `permit`.
+    ///
+    /// Adds no checks of its own: the circuit breaker and the in-flight limit were
+    /// checked when `permit` was taken. The request-timeout lookup can still refuse
+    /// the command, but never an RDMA transfer's. An error from here does not prove
+    /// the command reached the server: the connection layer can fail before sending.
+    async fn dispatch<'a>(
+        &'a mut self,
+        permit: DispatchPermit,
+        cmd: &'a mut Cmd,
+        routing: Option<RoutingInfo>,
+    ) -> RedisResult<Value> {
+        let (client, tracker) = permit.into_parts();
+        let request_timeout = get_request_timeout(cmd, self.request_timeout)?;
 
         // Log at debug level when inflight usage crosses a 10% threshold.
         // Only one log per threshold crossing — zero noise when stable.
@@ -2255,8 +2243,7 @@ impl Client {
         cmd.arg(pass);
         // Ungated: this AUTH is itself the pool-borrow reconcile's dispatch, so it
         // must not re-enter the borrow gate.
-        self.send_command_ungated(&mut cmd, Some(routing), None)
-            .await
+        self.send_command_ungated(&mut cmd, Some(routing)).await
     }
 
     /// Returns the username if one was configured during client creation. Otherwise, returns None.
@@ -2962,6 +2949,50 @@ fn circuit_breaker_open() -> RedisError {
     ))
 }
 
+use dispatch_permit::DispatchPermit;
+
+/// Kept in its own module so that [`DispatchPermit::take`] is the only way to get a
+/// permit, and so no permit skips its checks.
+mod dispatch_permit {
+    use super::{Client, ClientWrapper, circuit_breaker_open};
+    use redis::RedisResult;
+    use redis::cluster_async::InflightRequestTracker;
+
+    /// The client and in-flight slot a command is sent with, held once the circuit
+    /// breaker and the in-flight limit have let it through.
+    pub(super) struct DispatchPermit {
+        client: ClientWrapper,
+        tracker: InflightRequestTracker,
+    }
+
+    impl DispatchPermit {
+        /// Check the circuit breaker and reserve an in-flight slot. The tracker holds
+        /// the slot until the last clone of the Cmd is dropped (i.e. all sub-commands
+        /// in the cluster event loop finish). This decouples user-facing timeout from
+        /// internal pipeline cleanup.
+        pub(super) async fn take(client: &Client) -> RedisResult<Self> {
+            let wrapper = client.get_or_initialize_client().await?;
+
+            // Reject immediately if circuit breaker is open.
+            if !client.is_circuit_breaker_healthy() {
+                return Err(circuit_breaker_open());
+            }
+
+            let tracker = client
+                .reserve_inflight_request()
+                .ok_or_else(|| client.inflight_requests_exhausted())?;
+            Ok(Self {
+                client: wrapper,
+                tracker,
+            })
+        }
+
+        pub(super) fn into_parts(self) -> (ClientWrapper, InflightRequestTracker) {
+            (self.client, self.tracker)
+        }
+    }
+}
+
 /// What an RDMA transfer hands back: the buffer, and how the transfer went.
 ///
 /// The buffer comes back whenever the server is known to be done with it: it
@@ -3453,8 +3484,8 @@ impl Client {
         if let Err(error) = self.check_rdma_buffer(&buffer) {
             return (Some(buffer), Err(error));
         }
-        let slot = match self.rdma_preflight().await {
-            Ok(slot) => slot,
+        let permit = match self.rdma_preflight().await {
+            Ok(permit) => permit,
             Err(error) => return (Some(buffer), Err(error)),
         };
         let (command, loan) = match buffer.lend_for_get(key, offset, length) {
@@ -3467,7 +3498,12 @@ impl Client {
             }
         };
         let (buffer, result) = self
-            .rdma_transfer(command, loan, slot, crate::rdma::protocol::parse_read_reply)
+            .rdma_transfer(
+                command,
+                loan,
+                permit,
+                crate::rdma::protocol::parse_read_reply,
+            )
             .await;
         let result = match (&buffer, result) {
             (Some(buffer), Ok(Some(receipt))) => {
@@ -3498,8 +3534,8 @@ impl Client {
         if let Err(error) = self.check_rdma_buffer(&buffer) {
             return (Some(buffer), Err(error));
         }
-        let slot = match self.rdma_preflight().await {
-            Ok(slot) => slot,
+        let permit = match self.rdma_preflight().await {
+            Ok(permit) => permit,
             Err(error) => return (Some(buffer), Err(error)),
         };
         let (command, loan) = match buffer.lend_for_set(key, offset, length, checksum) {
@@ -3515,7 +3551,7 @@ impl Client {
             .rdma_transfer(
                 command,
                 loan,
-                slot,
+                permit,
                 crate::rdma::protocol::parse_write_reply,
             )
             .await;
@@ -3537,7 +3573,7 @@ impl Client {
     /// the cluster client may have retried after an earlier attempt that did reach
     /// the server, so it does not prove the server never saw the command.
     ///
-    /// `slot` is the in-flight slot [`Self::rdma_preflight`] reserved.
+    /// `permit` is what [`Self::rdma_preflight`] returned.
     ///
     /// If this future is dropped, so is the loan, which also closes the region.
     #[cfg(feature = "rdma")]
@@ -3545,7 +3581,7 @@ impl Client {
         &mut self,
         command: glide_rdma::RdmaCommand,
         loan: glide_rdma::LentBuffer,
-        slot: redis::cluster_async::InflightRequestTracker,
+        permit: DispatchPermit,
         parse: fn(redis::Value) -> redis::RedisResult<glide_rdma::TransferReply>,
     ) -> RdmaOutcome<Option<glide_rdma::ReadReceipt>> {
         let mut command = crate::rdma::protocol::redis_command(&command);
@@ -3553,7 +3589,7 @@ impl Client {
             // A reply that is ready wins over a revoke that is also ready: the
             // transfer did finish, so the caller should hear that it did.
             biased;
-            reply = self.send_command_inner(&mut command, None, true, Some(slot)) => Some(reply),
+            reply = self.dispatch(permit, &mut command, None) => Some(reply),
             () = loan.revoked() => None,
         };
         match reply {
@@ -3578,21 +3614,19 @@ impl Client {
         }
     }
 
-    /// The checks [`Self::send_command_inner`] makes before it sends anything, run
-    /// before a transfer lends its buffer, so that failing one hands the buffer
-    /// straight back instead of revoking it. Returns the in-flight slot reserved for
-    /// the transfer, which the send then uses.
+    /// The checks that can refuse a transfer before it is sent, run before the
+    /// transfer lends its buffer, so that failing one hands the buffer straight back
+    /// instead of revoking it: the IAM reconcile, then [`DispatchPermit::take`]. The
+    /// send then uses the returned permit and does not repeat them.
+    ///
+    /// The rest of [`Self::send_command`] is skipped on purpose: `BLOB.*` is what
+    /// `refuse_direct_command` refuses, and is neither a transaction command nor a
+    /// pubsub one. A check added to `send_command` that a transfer also needs must be
+    /// added here too.
     #[cfg(feature = "rdma")]
-    async fn rdma_preflight(
-        &mut self,
-    ) -> Result<redis::cluster_async::InflightRequestTracker, redis::RedisError> {
+    async fn rdma_preflight(&mut self) -> Result<DispatchPermit, redis::RedisError> {
         self.reconcile_iam_before_dispatch().await?;
-        self.get_or_initialize_client().await?;
-        if !self.is_circuit_breaker_healthy() {
-            return Err(circuit_breaker_open());
-        }
-        self.reserve_inflight_request()
-            .ok_or_else(|| self.inflight_requests_exhausted())
+        DispatchPermit::take(self).await
     }
 
     /// Whether the client is closing, and if so, once the close has tried every
@@ -5618,5 +5652,111 @@ mod tests {
             non_iam_client.iam_token_manager().is_none(),
             "iam_token_manager() should return None when IAM is not configured"
         );
+    }
+
+    /// Answer every command the way a standalone primary would, well enough for a
+    /// client to connect and send: `PING` gets `PONG`, `INFO` reports the master
+    /// role, and anything else gets `OK`.
+    async fn serve_as_a_primary(listener: tokio::net::TcpListener) {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        loop {
+            let Ok((mut socket, _)) = listener.accept().await else {
+                return;
+            };
+            tokio::spawn(async move {
+                let mut pending = Vec::new();
+                let mut chunk = [0u8; 4096];
+                while let Ok(read @ 1..) = socket.read(&mut chunk).await {
+                    pending.extend_from_slice(&chunk[..read]);
+                    while let Some((name, used)) = first_command_name(&pending) {
+                        pending.drain(..used);
+                        let reply: &[u8] = match name.to_ascii_uppercase().as_slice() {
+                            b"PING" => b"+PONG\r\n",
+                            b"INFO" => b"$13\r\nrole:master\r\n\r\n",
+                            _ => b"+OK\r\n",
+                        };
+                        if socket.write_all(reply).await.is_err() {
+                            return;
+                        }
+                    }
+                }
+            });
+        }
+    }
+
+    /// The name of the first whole RESP command in `bytes`, and how many bytes the
+    /// command takes, or `None` until all of it has arrived.
+    fn first_command_name(bytes: &[u8]) -> Option<(Vec<u8>, usize)> {
+        fn line(bytes: &[u8], at: usize) -> Option<(&[u8], usize)> {
+            let end = at + bytes.get(at..)?.windows(2).position(|w| w == b"\r\n")?;
+            Some((&bytes[at..end], end + 2))
+        }
+        fn number(text: &[u8]) -> usize {
+            std::str::from_utf8(text).unwrap().parse().unwrap()
+        }
+        let (header, mut at) = line(bytes, 0)?;
+        let mut name = None;
+        for _ in 0..number(&header[1..]) {
+            let (length, start) = line(bytes, at)?;
+            let end = start + number(&length[1..]);
+            if bytes.len() < end + 2 {
+                return None;
+            }
+            name.get_or_insert_with(|| bytes[start..end].to_vec());
+            at = end + 2;
+        }
+        Some((name?, at))
+    }
+
+    /// A send that already holds its permit must not check the circuit breaker
+    /// again. An RDMA transfer takes its permit before lending its buffer, so a
+    /// breaker that opens after that would otherwise refuse a command that was
+    /// never sent, and the buffer would be revoked instead of handed back.
+    #[tokio::test]
+    async fn a_permit_still_sends_after_the_circuit_breaker_opens() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        tokio::spawn(serve_as_a_primary(listener));
+        let request = ConnectionRequest {
+            addresses: vec![NodeAddress {
+                host: "127.0.0.1".to_string(),
+                port,
+            }],
+            // One error opens the breaker, and it stays open for the whole test.
+            client_circuit_breaker: Some(crate::client::types::ClientCircuitBreakerConfig {
+                window_size_ms: 10_000,
+                failure_rate_threshold: 1.0,
+                min_errors: 1,
+                open_timeout_ms: 60_000,
+                count_timeouts: false,
+                consecutive_successes: 1,
+            }),
+            ..Default::default()
+        };
+        let mut client = Client::new(request, None).await.expect("connects");
+
+        let permit = super::DispatchPermit::take(&client)
+            .await
+            .expect("the breaker is closed and a slot is free");
+
+        client
+            .circuit_breaker
+            .as_ref()
+            .expect("configured")
+            .on_result(true, Some("IoError"), 0);
+        assert!(!client.is_circuit_breaker_healthy(), "the breaker is open");
+
+        let mut refused = redis::cmd("SET");
+        refused.arg("key").arg("value");
+        let error = client
+            .send_command(&mut refused, None)
+            .await
+            .expect_err("a send without a permit checks the breaker");
+        assert_eq!(error.kind(), redis::ErrorKind::CircuitBreakerOpen);
+
+        let mut sent = redis::cmd("SET");
+        sent.arg("key").arg("value");
+        let reply = client.dispatch(permit, &mut sent, None).await;
+        assert_eq!(reply, Ok(redis::Value::Okay));
     }
 }

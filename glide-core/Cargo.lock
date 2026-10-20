@@ -1372,6 +1372,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "glide-libfabric-sys"
+version = "0.1.0"
+dependencies = [
+ "cc",
+ "libc",
+]
+
+[[package]]
 name = "glide-logger"
 version = "0.1.1"
 dependencies = [
@@ -1387,9 +1395,9 @@ name = "glide-rdma"
 version = "0.1.0"
 dependencies = [
  "crc-fast",
+ "glide-libfabric-sys",
+ "glide-logger",
  "libc",
- "log",
- "ofi-libfabric-sys",
  "thiserror 2.0.20",
  "tokio",
 ]
@@ -2132,14 +2140,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "91df4bbde75afed763b708b7eee1e8e7651e02d97f6d5dd763e89367e957b23b"
 dependencies = [
  "hermit-abi",
- "libc",
-]
-
-[[package]]
-name = "ofi-libfabric-sys"
-version = "0.1.0"
-dependencies = [
- "cc",
  "libc",
 ]
 
