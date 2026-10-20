@@ -82,8 +82,6 @@ jobs:
         env:
             JAVA_VERSION: "11"
             RELEASE_VERSION: ${{ needs.set-release-version.outputs.RELEASE_VERSION }}
-            # Kept outside the checkout so signing never dirties the worktree.
-            SECRING_FILE: ${{ runner.temp }}/secring.gpg
         strategy:
             # Run all jobs
             fail-fast: false
@@ -149,8 +147,11 @@ jobs:
                   # untracked secret in the worktree. Gradle resolves
                   # signing.secretKeyRingFile via project.file(), so one absolute path
                   # serves every module and no per-module copies are needed.
-                  echo "$SECRING_GPG" | base64 --decode > "$SECRING_FILE"
-                  ls -l "$SECRING_FILE"
+                  # Set here, not in job-level env: the runner context is unavailable
+                  # at jobs.<id>.env, so $RUNNER_TEMP is resolved in the step instead.
+                  echo "SECRING_FILE=${RUNNER_TEMP}/secring.gpg" >> "$GITHUB_ENV"
+                  echo "$SECRING_GPG" | base64 --decode > "${RUNNER_TEMP}/secring.gpg"
+                  ls -l "${RUNNER_TEMP}/secring.gpg"
               env:
                   SECRING_GPG: ${{ secrets.SECRING_GPG }}
 
@@ -281,11 +282,6 @@ jobs:
         env:
             JAVA_VERSION: "11"
             RELEASE_VERSION: ${{ needs.set-release-version.outputs.RELEASE_VERSION }}
-            # Kept outside the checkout so signing never dirties the worktree.
-            SECRING_FILE: ${{ runner.temp }}/secring.gpg
-            # Bundle JARs are assembled here rather than in java/ so they do not
-            # show up as untracked files in the worktree check.
-            BUNDLE_DIR: ${{ runner.temp }}/bundles
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -355,8 +351,12 @@ jobs:
               shell: bash
               run: |
                   # See create-binaries-to-publish: one absolute path, no per-module copies.
-                  echo "$SECRING_GPG" | base64 --decode > "$SECRING_FILE"
-                  mkdir -p "$BUNDLE_DIR"
+                  # Set here, not in job-level env: the runner context is unavailable at
+                  # jobs.<id>.env, so $RUNNER_TEMP is resolved in the step instead.
+                  echo "SECRING_FILE=${RUNNER_TEMP}/secring.gpg" >> "$GITHUB_ENV"
+                  echo "BUNDLE_DIR=${RUNNER_TEMP}/bundles" >> "$GITHUB_ENV"
+                  echo "$SECRING_GPG" | base64 --decode > "${RUNNER_TEMP}/secring.gpg"
+                  mkdir -p "${RUNNER_TEMP}/bundles"
               env:
                   SECRING_GPG: ${{ secrets.SECRING_GPG }}
 
