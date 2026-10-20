@@ -497,6 +497,13 @@ pub struct ClientShared {
     // Tracks the current database selected at runtime (updated on SELECT commands).
     // Used by scope connections to inherit the parent's current database.
     current_database: Arc<AtomicU32>,
+    // Set before dispatching any SELECT-bearing command (single or batch); cleared
+    // only by a successful release reset. `current_database` can under-report the
+    // live db — a SELECT can apply on the connection even when the call errors or
+    // times out, or when an earlier batch SELECT applied but a later one was
+    // rejected. The flag makes `reset_connection_state` fail safe: restore whenever
+    // a SELECT may have been issued, not only on observed drift.
+    db_maybe_dirty: Arc<AtomicBool>,
     // IAM token generation the live connection last authenticated at. Compared by
     // `prepare_for_borrow` on the first command after a borrow to detect a rotation
     // that landed while the client sat idle in a pool, triggering a re-AUTH before
@@ -1330,6 +1337,10 @@ impl Client {
             self.reconcile_iam_before_dispatch().await?;
             // Track MULTI/EXEC/DISCARD for the borrow-time re-AUTH defer.
             self.track_transaction_state(cmd);
+            // Flag a possible db change before dispatch (see `db_maybe_dirty`).
+            if self.is_select_command(cmd) {
+                self.shared.db_maybe_dirty.store(true, Ordering::Release);
+            }
             self.send_command_ungated(cmd, routing).await
         })
     }
@@ -2014,9 +2025,13 @@ impl Client {
         Box::pin(async move {
             self.reconcile_iam_before_dispatch().await?;
             // Capture the batch's last SELECT now; apply it after dispatch if the
-            // reply shows the server took it. No MULTI tracking here: redis-rs
-            // brackets MULTI/EXEC at pack time and it always closes.
+            // reply shows the server took it, and flag a possible db change (see
+            // `db_maybe_dirty`). No MULTI tracking here: redis-rs brackets MULTI/EXEC
+            // at pack time and it always closes.
             let drifted_db = self.last_select_db(pipeline);
+            if drifted_db.is_some() {
+                self.shared.db_maybe_dirty.store(true, Ordering::Release);
+            }
             let client = self.get_or_initialize_client().await?;
             let command_count = pipeline.cmd_iter().count();
             // The offset is set to command_count + 1 to account for:
@@ -2109,6 +2124,9 @@ impl Client {
                 self.track_transaction_state(cmd);
             }
             let drifted_db = self.last_select_db(pipeline);
+            if drifted_db.is_some() {
+                self.shared.db_maybe_dirty.store(true, Ordering::Release);
+            }
             let client = self.get_or_initialize_client().await?;
 
             let command_count = pipeline.cmd_iter().count();
@@ -3175,6 +3193,7 @@ impl Client {
                         ))
                     }),
                     current_database: Arc::new(AtomicU32::new(request.database_id as u32)),
+                    db_maybe_dirty: Arc::new(AtomicBool::new(false)),
                     last_iam_generation: Arc::new(AtomicU64::new(0)),
                     is_pool_managed: Arc::new(AtomicBool::new(false)),
                     iam_reconcile_lock: Arc::new(tokio::sync::Mutex::new(())),
@@ -3369,12 +3388,18 @@ impl Client {
             .await;
 
         // `None` routing is intentional: SELECT is an AllNodes command, so it fans
-        // out to every node without spelling it out like DISCARD above.
-        if self.current_database() != configured_db {
+        // out to every node without spelling it out like DISCARD above. Restore on
+        // tracked drift OR a possible untracked SELECT (see `db_maybe_dirty`).
+        if self.current_database() != configured_db
+            || self.shared.db_maybe_dirty.load(Ordering::Acquire)
+        {
             let mut select_cmd = redis::cmd("SELECT");
             select_cmd.arg(configured_db.to_string());
             self.send_command(&mut select_cmd, None).await?;
         }
+        // Cleared only after a successful reset: the connection is now on the
+        // configured db.
+        self.shared.db_maybe_dirty.store(false, Ordering::Release);
 
         Ok(())
     }
@@ -3461,7 +3486,12 @@ impl Client {
     /// db (`update_stored_database_id`), the OTel `db_namespace`, and
     /// `current_database` (read by scope connections).
     async fn apply_batch_select_db(&mut self, db: u32) {
-        let _ = self.update_stored_database_id(db as i64).await;
+        if let Err(e) = self.update_stored_database_id(db as i64).await {
+            log_warn(
+                "apply_batch_select_db",
+                format!("failed to update reconnect database to {db}: {e}"),
+            );
+        }
         Arc::make_mut(&mut self.otel_metadata).db_namespace = db.to_string();
         self.shared.current_database.store(db, Ordering::Release);
     }
@@ -3673,6 +3703,7 @@ impl Client {
                 latency_tracker: Arc::new(crate::timeout_watchdog::LatencyTracker::new(64)),
                 circuit_breaker: None,
                 current_database: Arc::new(AtomicU32::new(0)),
+                db_maybe_dirty: Arc::new(AtomicBool::new(false)),
                 last_iam_generation: Arc::new(AtomicU64::new(0)),
                 is_pool_managed: Arc::new(AtomicBool::new(false)),
                 iam_reconcile_lock: Arc::new(tokio::sync::Mutex::new(())),
@@ -3746,6 +3777,7 @@ pub fn create_test_glide_client() -> Client {
             latency_tracker: Arc::new(crate::timeout_watchdog::LatencyTracker::new(64)),
             circuit_breaker: None,
             current_database: Arc::new(AtomicU32::new(0)),
+            db_maybe_dirty: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             last_iam_generation: Arc::new(std::sync::atomic::AtomicU64::new(0)),
             is_pool_managed: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             iam_reconcile_lock: Arc::new(tokio::sync::Mutex::new(())),
@@ -4508,6 +4540,7 @@ mod tests {
                 latency_tracker: Arc::new(crate::timeout_watchdog::LatencyTracker::new(64)),
                 circuit_breaker: None,
                 current_database: Arc::new(AtomicU32::new(0)),
+                db_maybe_dirty: Arc::new(AtomicBool::new(false)),
                 last_iam_generation: Arc::new(AtomicU64::new(0)),
                 is_pool_managed: Arc::new(AtomicBool::new(false)),
                 iam_reconcile_lock: Arc::new(tokio::sync::Mutex::new(())),

@@ -3435,6 +3435,71 @@ mod scope_pool_tests {
         );
     }
 
+    /// `reset_connection_state` must restore the configured db when a SELECT may
+    /// have landed untracked — not only when `current_database` shows drift. An
+    /// earlier batch SELECT that the server applied, followed by a rejected one,
+    /// leaves the connection on the new db while `current_database` still reads the
+    /// configured value; the `db_maybe_dirty` flag is what makes release fail safe
+    /// here. A-B: without the flag (drift-only check) this leaks the wrong db.
+    #[tokio::test]
+    async fn release_restores_db_when_current_database_underreports() {
+        use redis::FromRedisValue as _;
+        let server = TestServer::start();
+        wait_for_server_ready(server.port).await;
+
+        let mut client = {
+            let mut request = crate::client::ConnectionRequest::default();
+            request.addresses.push(crate::client::NodeAddress {
+                host: "127.0.0.1".into(),
+                port: server.port,
+            });
+            crate::client::Client::new(request, None)
+                .await
+                .expect("client connects to the test server")
+        };
+
+        // SELECT 3 applies; SELECT 99 is rejected. `last_select_db` sees only the
+        // last (99 → ServerError → not recorded), so current_database stays 0 while
+        // the connection is really on db 3.
+        let mut pipe = redis::pipe();
+        pipe.cmd("SELECT").arg(3).cmd("SELECT").arg(99);
+        let _ = client
+            .send_pipeline(&pipe, None, false, None, Default::default())
+            .await;
+        assert_eq!(
+            client.current_database(),
+            0,
+            "current_database under-reports: it still reads the configured db"
+        );
+
+        // Confirm the connection really drifted to db 3.
+        let info_before = client
+            .send_command(redis::cmd("CLIENT").arg("INFO"), None)
+            .await
+            .expect("CLIENT INFO");
+        let info_before = String::from_redis_value(&info_before).unwrap_or_default();
+        assert!(
+            info_before.contains(" db=3"),
+            "connection should be on db 3 after the applied SELECT, got: {info_before}"
+        );
+
+        // Release reset must restore db 0 despite no tracked drift, driven by the
+        // db_maybe_dirty flag.
+        client
+            .reset_connection_state(0)
+            .await
+            .expect("reset restores the configured db");
+        let info_after = client
+            .send_command(redis::cmd("CLIENT").arg("INFO"), None)
+            .await
+            .expect("CLIENT INFO");
+        let info_after = String::from_redis_value(&info_after).unwrap_or_default();
+        assert!(
+            info_after.contains(" db=0"),
+            "reset must restore db 0 even though current_database showed no drift, got: {info_after}"
+        );
+    }
+
     /// End-to-end through the FFI entry `acquire_scope_outcome`, exercising the glue the
     /// direct-call tests skip: that a non-zero parent `current_database()` is actually
     /// read from the client registry, that a wrong-db idle connection drives the
