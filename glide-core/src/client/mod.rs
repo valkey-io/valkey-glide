@@ -761,7 +761,10 @@ impl Client {
     /// Handles cases where command() returns None gracefully.
     /// Note: The underlying redis-rs library normalizes commands to uppercase.
     fn is_select_command(&self, cmd: &Cmd) -> bool {
-        cmd.command().is_some_and(|bytes| bytes == b"SELECT")
+        // arg_idx(0) borrows the command name; cmd.command() would allocate an
+        // uppercased Vec on every call, and this runs on the hot send_command path.
+        cmd.arg_idx(0)
+            .is_some_and(|name| name.eq_ignore_ascii_case(b"SELECT"))
     }
 
     /// Extracts the database ID from a SELECT command.
@@ -3370,10 +3373,12 @@ impl Client {
     ///   to reach every node a borrow may have opened a MULTI on; standalone takes
     ///   its single connection.
     /// - SELECT <configured_db> — sent only when the database drifted
-    ///   (`current_database() != configured_db`). This is the fix for the cluster
-    ///   discard bug: a clean db-0 pool no longer sends a `SELECT` the cluster
-    ///   server rejects. Topology-independent — cluster supports multiple databases
-    ///   since Valkey 9.0 (`cluster-databases`), so a drift must be undone there too.
+    ///   (`current_database() != configured_db`) or a SELECT may have applied
+    ///   untracked during the borrow (`db_maybe_dirty`); a borrow that never sent
+    ///   SELECT skips the round-trip. This is the fix for the cluster discard bug: a
+    ///   clean db-0 pool no longer sends a `SELECT` the cluster server rejects.
+    ///   Topology-independent — cluster supports multiple databases since Valkey 9.0
+    ///   (`cluster-databases`), so a drift must be undone there too.
     ///
     /// Does not UNSUBSCRIBE: callers must not subscribe on a pooled client (use the
     /// parent client's pub/sub API, which keeps dedicated connections).
