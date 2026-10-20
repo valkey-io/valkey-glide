@@ -643,6 +643,9 @@ public class BatchTests {
         batch.sismember("key", "member");
         results.add(Pair.of(SIsMember, buildArgs("key", "member")));
 
+        batch.sismemberIfExists("key", "member");
+        results.add(Pair.of(SIsMember, buildArgs("key", "member", "XX")));
+
         batch.srem("key", new String[] {"value"});
         results.add(Pair.of(SRem, buildArgs("key", "value")));
 

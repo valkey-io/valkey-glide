@@ -25,6 +25,9 @@ part of the crate's public API.
 - **Docs:** The option must have a doc comment on the type and on each variant
   naming its wire keyword. If it mirrors a redis-rs or Python type, the doc
   comment must say so.
+- **Server version:** TODO #7402: Add a guideline for a `Since Valkey X.Y.Z.`
+  doc paragraph on options and variants that need a server newer than the CI
+  minimum version.
 - **Exports:** The option must be re-exported from the
   [crate root](../../src/lib.rs), under "Shared command options" or "Command
   group-specific options".

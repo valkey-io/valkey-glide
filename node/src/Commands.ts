@@ -1525,8 +1525,15 @@ export function createSUnionStore(
 export function createSIsMember(
     key: GlideString,
     member: GlideString,
+    ifExists?: boolean,
 ): command_request.Command {
-    return createCommand(RequestType.SIsMember, [key, member]);
+    const args = [key, member];
+
+    if (ifExists) {
+        args.push("XX");
+    }
+
+    return createCommand(RequestType.SIsMember, args);
 }
 
 /**
