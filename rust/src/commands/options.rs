@@ -620,20 +620,23 @@ pub enum ObjectType {
     Stream,
 }
 
-impl ToValkeyArgs for ObjectType {
-    fn write_valkey_args<W: ?Sized + ValkeyWrite>(&self, out: &mut W) {
-        out.write_arg(match self {
-            ObjectType::String => b"string".as_slice(),
-            ObjectType::List => b"list".as_slice(),
-            ObjectType::Set => b"set".as_slice(),
-            ObjectType::ZSet => b"zset".as_slice(),
-            ObjectType::Hash => b"hash".as_slice(),
-            ObjectType::Stream => b"stream".as_slice(),
-        });
-    }
-}
-
-impl ToSingleValkeyArg for ObjectType {}
+// TODO #7082: Uncomment for `SCAN ... TYPE`. Nothing writes `ObjectType` as a
+// command argument yet: cluster scan passes it to glide-core via `to_redis()`.
+//
+// impl ToValkeyArgs for ObjectType {
+//     fn write_valkey_args<W: ?Sized + ValkeyWrite>(&self, out: &mut W) {
+//         out.write_arg(match self {
+//             ObjectType::String => b"string".as_slice(),
+//             ObjectType::List => b"list".as_slice(),
+//             ObjectType::Set => b"set".as_slice(),
+//             ObjectType::ZSet => b"zset".as_slice(),
+//             ObjectType::Hash => b"hash".as_slice(),
+//             ObjectType::Stream => b"stream".as_slice(),
+//         });
+//     }
+// }
+//
+// impl ToSingleValkeyArg for ObjectType {}
 
 impl ObjectType {
     /// Map to the vendored `redis` crate's `ObjectType` (used by cluster scan).
@@ -791,15 +794,17 @@ mod tests {
         );
     }
 
-    #[test]
-    fn object_type_args() {
-        assert_args(ObjectType::String, &["string"]);
-        assert_args(ObjectType::List, &["list"]);
-        assert_args(ObjectType::Set, &["set"]);
-        assert_args(ObjectType::ZSet, &["zset"]);
-        assert_args(ObjectType::Hash, &["hash"]);
-        assert_args(ObjectType::Stream, &["stream"]);
-    }
+    // TODO #7082: Uncomment with the `ObjectType` `ToValkeyArgs` impl.
+    //
+    // #[test]
+    // fn object_type_args() {
+    //     assert_args(ObjectType::String, &["string"]);
+    //     assert_args(ObjectType::List, &["list"]);
+    //     assert_args(ObjectType::Set, &["set"]);
+    //     assert_args(ObjectType::ZSet, &["zset"]);
+    //     assert_args(ObjectType::Hash, &["hash"]);
+    //     assert_args(ObjectType::Stream, &["stream"]);
+    // }
 
     #[test]
     fn restore_options_args() {
