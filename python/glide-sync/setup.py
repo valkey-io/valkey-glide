@@ -81,9 +81,10 @@ GLIDE_SHARED_RS_DIST = ROOT / "glide-shared-rs"
 def cargo_target_dir(crate_dir: Path) -> Path:
     """Cargo honors CARGO_TARGET_DIR over the per-crate default; so must every
     path that reads cargo's output, or a shared target dir (the CI cache)
-    breaks the build."""
+    breaks the build. A relative override is resolved against the crate dir,
+    which is cargo's cwd at every build site here."""
     override = os.environ.get("CARGO_TARGET_DIR")
-    return Path(override) if override else crate_dir / "target"
+    return crate_dir / override if override else crate_dir / "target"
 
 
 # Helper to safely remove files, directories, or symlinks
