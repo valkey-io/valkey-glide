@@ -292,6 +292,12 @@ valkey-glide/
 **Architecture:** Rust core with FFI bindings, async-first design, cluster and standalone support
 **Performance:** Optimized for high throughput and low latency with connection pooling
 
+## Guidelines
+
+Follow these development guidelines when applicable:
+
+- **Rust:** [Options](./rust/docs/dev/options.md)
+
 ## If You Need More
 
 - **Getting Started:** [README.md](./README.md)
