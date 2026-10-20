@@ -90,6 +90,8 @@ impl ToValkeyArgs for ExistenceCheck {
     }
 }
 
+impl ToSingleValkeyArg for ExistenceCheck {}
+
 /// Field existence check for `HSETEX`.
 ///
 /// Mirrors redis-rs's `FieldExistenceCheck` type.
@@ -109,6 +111,8 @@ impl ToValkeyArgs for FieldExistenceCheck {
         });
     }
 }
+
+impl ToSingleValkeyArg for FieldExistenceCheck {}
 
 /// Options for the `HSETEX` command.
 ///
@@ -212,6 +216,8 @@ impl ToValkeyArgs for FlushAllOptions {
         out.write_arg(if self.blocking { b"SYNC" } else { b"ASYNC" });
     }
 }
+
+impl ToSingleValkeyArg for FlushAllOptions {}
 
 /// Options for the `FLUSHDB` command.
 ///
@@ -340,6 +346,8 @@ impl ToValkeyArgs for Direction {
     }
 }
 
+impl ToSingleValkeyArg for Direction {}
+
 /// Expiry argument for `GETEX`/`HGETEX`.
 ///
 /// Mirrors redis-rs's `Expiry` type.
@@ -434,15 +442,17 @@ pub enum FunctionRestorePolicy {
     Replace,
 }
 
-impl FunctionRestorePolicy {
-    pub(crate) fn as_arg(&self) -> &'static str {
-        match self {
-            FunctionRestorePolicy::Append => "APPEND",
-            FunctionRestorePolicy::Flush => "FLUSH",
-            FunctionRestorePolicy::Replace => "REPLACE",
-        }
+impl ToValkeyArgs for FunctionRestorePolicy {
+    fn write_valkey_args<W: ?Sized + ValkeyWrite>(&self, out: &mut W) {
+        out.write_arg(match self {
+            FunctionRestorePolicy::Append => b"APPEND".as_slice(),
+            FunctionRestorePolicy::Flush => b"FLUSH".as_slice(),
+            FunctionRestorePolicy::Replace => b"REPLACE".as_slice(),
+        });
     }
 }
+
+impl ToSingleValkeyArg for FunctionRestorePolicy {}
 
 /// Mode for the `CLIENT PAUSE` command.
 ///
@@ -455,14 +465,16 @@ pub enum ClientPauseMode {
     Write,
 }
 
-impl ClientPauseMode {
-    pub(crate) fn as_arg(&self) -> &'static str {
-        match self {
-            ClientPauseMode::All => "ALL",
-            ClientPauseMode::Write => "WRITE",
-        }
+impl ToValkeyArgs for ClientPauseMode {
+    fn write_valkey_args<W: ?Sized + ValkeyWrite>(&self, out: &mut W) {
+        out.write_arg(match self {
+            ClientPauseMode::All => b"ALL".as_slice(),
+            ClientPauseMode::Write => b"WRITE".as_slice(),
+        });
     }
 }
+
+impl ToSingleValkeyArg for ClientPauseMode {}
 
 /// Options for the `MIGRATE` command.
 ///
@@ -558,14 +570,16 @@ pub enum OrderBy {
     Desc,
 }
 
-impl OrderBy {
-    pub(crate) fn as_arg(&self) -> &'static str {
-        match self {
-            OrderBy::Asc => "ASC",
-            OrderBy::Desc => "DESC",
-        }
+impl ToValkeyArgs for OrderBy {
+    fn write_valkey_args<W: ?Sized + ValkeyWrite>(&self, out: &mut W) {
+        out.write_arg(match self {
+            OrderBy::Asc => b"ASC".as_slice(),
+            OrderBy::Desc => b"DESC".as_slice(),
+        });
     }
 }
+
+impl ToSingleValkeyArg for OrderBy {}
 
 /// A `LIMIT offset count` clause.
 ///
@@ -578,23 +592,51 @@ pub struct Limit {
     pub count: i64,
 }
 
+impl ToValkeyArgs for Limit {
+    fn write_valkey_args<W: ?Sized + ValkeyWrite>(&self, out: &mut W) {
+        out.write_arg(b"LIMIT");
+        out.write_arg_fmt(self.offset);
+        out.write_arg_fmt(self.count);
+    }
+}
+
 /// The type of a key, used by `OBJECT`/`TYPE`/`SCAN`.
+///
+/// Mirrors Python `ObjectType`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum ObjectType {
-    /// String.
+    /// String (`string`).
     String,
-    /// List.
+    /// List (`list`).
     List,
-    /// Set.
+    /// Set (`set`).
     Set,
-    /// Sorted set.
+    /// Sorted set (`zset`).
     ZSet,
-    /// Hash.
+    /// Hash (`hash`).
     Hash,
-    /// Stream.
+    /// Stream (`stream`).
     Stream,
 }
+
+// TODO #7082: Uncomment for `SCAN ... TYPE`. Nothing writes `ObjectType` as a
+// command argument yet: cluster scan passes it to glide-core via `to_redis()`.
+//
+// impl ToValkeyArgs for ObjectType {
+//     fn write_valkey_args<W: ?Sized + ValkeyWrite>(&self, out: &mut W) {
+//         out.write_arg(match self {
+//             ObjectType::String => b"string".as_slice(),
+//             ObjectType::List => b"list".as_slice(),
+//             ObjectType::Set => b"set".as_slice(),
+//             ObjectType::ZSet => b"zset".as_slice(),
+//             ObjectType::Hash => b"hash".as_slice(),
+//             ObjectType::Stream => b"stream".as_slice(),
+//         });
+//     }
+// }
+//
+// impl ToSingleValkeyArg for ObjectType {}
 
 impl ObjectType {
     /// Map to the vendored `redis` crate's `ObjectType` (used by cluster scan).
@@ -636,6 +678,12 @@ mod tests {
     fn direction_args() {
         assert_args(Direction::Left, &["LEFT"]);
         assert_args(Direction::Right, &["RIGHT"]);
+    }
+
+    #[test]
+    fn field_existence_check_args() {
+        assert_args(FieldExistenceCheck::FNX, &["FNX"]);
+        assert_args(FieldExistenceCheck::FXX, &["FXX"]);
     }
 
     #[test]
@@ -731,9 +779,32 @@ mod tests {
 
     #[test]
     fn order_by_args() {
-        assert_eq!(OrderBy::Asc.as_arg(), "ASC");
-        assert_eq!(OrderBy::Desc.as_arg(), "DESC");
+        assert_args(OrderBy::Asc, &["ASC"]);
+        assert_args(OrderBy::Desc, &["DESC"]);
     }
+
+    #[test]
+    fn limit_args() {
+        assert_args(
+            Limit {
+                offset: 0,
+                count: 10,
+            },
+            &["LIMIT", "0", "10"],
+        );
+    }
+
+    // TODO #7082: Uncomment with the `ObjectType` `ToValkeyArgs` impl.
+    //
+    // #[test]
+    // fn object_type_args() {
+    //     assert_args(ObjectType::String, &["string"]);
+    //     assert_args(ObjectType::List, &["list"]);
+    //     assert_args(ObjectType::Set, &["set"]);
+    //     assert_args(ObjectType::ZSet, &["zset"]);
+    //     assert_args(ObjectType::Hash, &["hash"]);
+    //     assert_args(ObjectType::Stream, &["stream"]);
+    // }
 
     #[test]
     fn restore_options_args() {
@@ -791,14 +862,14 @@ mod tests {
 
     #[test]
     fn client_pause_mode_args() {
-        assert_eq!(ClientPauseMode::All.as_arg(), "ALL");
-        assert_eq!(ClientPauseMode::Write.as_arg(), "WRITE");
+        assert_args(ClientPauseMode::All, &["ALL"]);
+        assert_args(ClientPauseMode::Write, &["WRITE"]);
     }
 
     #[test]
     fn function_restore_policy_args() {
-        assert_eq!(FunctionRestorePolicy::Append.as_arg(), "APPEND");
-        assert_eq!(FunctionRestorePolicy::Flush.as_arg(), "FLUSH");
-        assert_eq!(FunctionRestorePolicy::Replace.as_arg(), "REPLACE");
+        assert_args(FunctionRestorePolicy::Append, &["APPEND"]);
+        assert_args(FunctionRestorePolicy::Flush, &["FLUSH"]);
+        assert_args(FunctionRestorePolicy::Replace, &["REPLACE"]);
     }
 }

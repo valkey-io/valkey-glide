@@ -9,6 +9,7 @@ use crate::executor::CommandExecutor;
 use crate::value::FromValkeyValue;
 use crate::value::ValkeyValue;
 use crate::value::to_glide_error;
+use crate::write::ToSingleValkeyArg;
 use crate::write::ToValkeyArgs;
 use crate::write::ValkeyWrite;
 use async_trait::async_trait;
@@ -38,6 +39,8 @@ impl ToValkeyArgs for StreamTrimmingMode {
         });
     }
 }
+
+impl ToSingleValkeyArg for StreamTrimmingMode {}
 
 /// A stream trim strategy.
 ///
@@ -225,6 +228,8 @@ impl ToValkeyArgs for StreamReadOptions {
 }
 
 /// Options for `XREADGROUP`.
+///
+/// Mirrors Python `StreamReadGroupOptions`.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct StreamReadGroupOptions {
     /// Block for up to this many milliseconds waiting for entries (`BLOCK`).
@@ -1181,6 +1186,12 @@ mod tests {
     use super::*;
     use crate::test_utils::assert_args;
     use crate::test_utils::assert_args_empty;
+
+    #[test]
+    fn trimming_mode_args() {
+        assert_args(StreamTrimmingMode::Exact, &["="]);
+        assert_args(StreamTrimmingMode::Approx, &["~"]);
+    }
 
     #[test]
     fn trim_strategy_args() {
