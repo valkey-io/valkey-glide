@@ -176,11 +176,55 @@ pub fn create_pool<'a>(
         // we remove the extra client from the idle list after reporting success.
         let probe_count = if min_idle == 0 { 1 } else { min_idle };
 
-        for i in 0..probe_count {
+        // Reserve the warmup slots up front so should_create() reads the pool as
+        // full while these connections are still in flight — the pool becomes
+        // acquirable once the first connection lands (deferred resolves on i==0)
+        // while later ones are still being made. See ClientPool::reserve_warmup_slots.
+        // Each seated connection consumes its reservation via add_client_reserved;
+        // the min_idle=0 probe is seated then removed via discard_client, which
+        // decrements the counted slot exactly once.
+        let mut remaining_reserved = {
+            let registry = pool::get_pool_registry();
+            match registry.get(&(pool_id as u64)) {
+                Some(pool_entry) => {
+                    let pool_guard = pool_entry.value().lock().await;
+                    pool_guard.reserve_warmup_slots(probe_count)
+                }
+                None => {
+                    if let Some(tx) = first_tx_opt.take() {
+                        let _ = tx.send(Err("Pool unregistered before warmup".to_string()));
+                    }
+                    return;
+                }
+            }
+        };
+
+        // Give back any reservations still unfilled when this task exits early.
+        // `take` zeroes the counter as it reads it, so a second call is a no-op
+        // (double-release-safe) and the reset is never a dead store.
+        macro_rules! release_remaining {
+            () => {{
+                let give_back = std::mem::take(&mut remaining_reserved);
+                if give_back > 0
+                    && let Some(pool_entry) = pool::get_pool_registry().get(&(pool_id as u64))
+                {
+                    let mut pg = pool_entry.value().lock().await;
+                    for _ in 0..give_back {
+                        pg.release_reservation();
+                    }
+                }
+            }};
+        }
+
+        // Iterate over the count snapshotted at reservation time; `remaining_reserved`
+        // is mutated below purely as the give-back counter, not the loop bound.
+        let to_create = remaining_reserved;
+        for i in 0..to_create {
             let connection_request = match ProtobufConnectionRequest::parse_from_bytes(&conn_bytes)
             {
                 Ok(req) => req,
                 Err(e) => {
+                    release_remaining!();
                     if let Some(tx) = first_tx_opt.take() {
                         let _ = tx.send(Err(format!(
                             "Failed to parse connection request during warmup: {e}"
@@ -216,12 +260,15 @@ pub fn create_pool<'a>(
                 Err(e) => {
                     let msg = format!("Pool warmup: failed to create client: {e}");
                     if i == 0 {
+                        release_remaining!();
                         if let Some(tx) = first_tx_opt.take() {
                             let _ = tx.send(Err(msg));
                         }
                         return;
                     }
                     glide_logger::log_warn("pool", msg);
+                    // Leftover reservations (this one and any after it) are handed back.
+                    release_remaining!();
                     break;
                 }
             };
@@ -233,23 +280,32 @@ pub fn create_pool<'a>(
                     Some(pool_entry) => {
                         let mut pool_guard = pool_entry.value().lock().await;
                         if pool_guard.state.load(Ordering::Acquire) == POOL_RUNNING {
-                            let cid = pool_guard.add_client(client.clone());
+                            // Slot already reserved — add_client_reserved does not
+                            // increment total_count.
+                            let cid = pool_guard.add_client_reserved(client.clone());
+                            remaining_reserved -= 1;
                             scope::register_client(cid, client);
                             let (_, condvar) = &*pool_guard.release_notify;
                             condvar.notify_all();
                         } else {
                             // Pool was destroyed before warmup finished.
+                            drop(pool_guard);
+                            release_remaining!();
                             return;
                         }
                     }
-                    None => return,
+                    None => {
+                        release_remaining!();
+                        return;
+                    }
                 }
             }
 
             // For min_idle=0: remove the probe from idle BEFORE signalling success
             // so the TS layer cannot acquire the probe client between the signal
             // and the removal (TOCTOU race).  We already hold no lock here, so
-            // re-acquire it for the removal then drop before the send.
+            // re-acquire it for the removal then drop before the send.  discard_client
+            // decrements the slot this probe consumed via add_client_reserved.
             if min_idle == 0 && i == 0 {
                 let registry = pool::get_pool_registry();
                 if let Some(pool_entry) = registry.get(&(pool_id as u64)) {
