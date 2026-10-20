@@ -59,7 +59,7 @@ use std::collections::HashMap;
 use std::collections::HashMap as StdHashMap;
 use std::ptr::from_mut;
 use std::str::FromStr;
-use std::sync::atomic::{AtomicIsize, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicIsize, AtomicU8, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use tokio::sync::mpsc;
 use tokio::task;
@@ -781,30 +781,163 @@ async fn execute_batch(
 static FAIL_PROVIDER_DIRECT_RESOLUTION_AFTER_CONVERSION: AtomicBool = AtomicBool::new(false);
 #[cfg(feature = "testing_utilities")]
 static PROVIDER_DIRECT_CLEANUP_COUNT: AtomicU64 = AtomicU64::new(0);
+#[cfg(feature = "testing_utilities")]
+static PROVIDER_DIRECT_OPEN_HANDLE_COUNT: AtomicU64 = AtomicU64::new(0);
 
+const PROVIDER_CLEANUP_OPEN: u8 = 0;
+const PROVIDER_CLEANUP_CLOSING: u8 = 1;
+const PROVIDER_CLEANUP_CLOSED: u8 = 2;
+
+/// Provider-only scope ownership shared by the native handle. `unregister`
+/// returns only after the winning caller has completed all cleanup side effects.
 struct ProviderDirectClientCleanup {
-    client_id: Option<u64>,
+    client_id: u64,
+    state: AtomicU8,
+    #[cfg(test)]
+    cleanup_count: AtomicU64,
+    #[cfg(test)]
+    synchronization: Option<Arc<ProviderCleanupTestSynchronization>>,
+}
+
+#[cfg(test)]
+struct ProviderCleanupTestSynchronization {
+    winner_claimed: std::sync::mpsc::SyncSender<()>,
+    release_winner: Mutex<std::sync::mpsc::Receiver<bool>>,
+    loser_observed_closing: std::sync::mpsc::SyncSender<()>,
+    pause_next_winner: AtomicBool,
+    signal_next_loser: AtomicBool,
+}
+
+/// Owns the `Open` to `Closing` transition. If cleanup unwinds, dropping this
+/// guard restores `Open` so a waiter or a later close/finalizer can retry.
+struct ProviderCleanupTransition<'a> {
+    cleanup: &'a ProviderDirectClientCleanup,
+    completed: bool,
+}
+
+impl ProviderCleanupTransition<'_> {
+    fn complete(mut self) {
+        self.cleanup
+            .state
+            .store(PROVIDER_CLEANUP_CLOSED, Ordering::Release);
+        self.completed = true;
+    }
+}
+
+impl Drop for ProviderCleanupTransition<'_> {
+    fn drop(&mut self) {
+        if !self.completed {
+            self.cleanup
+                .state
+                .store(PROVIDER_CLEANUP_OPEN, Ordering::Release);
+        }
+    }
 }
 
 impl ProviderDirectClientCleanup {
     fn new(client_id: u64) -> Self {
         Self {
-            client_id: Some(client_id),
+            client_id,
+            state: AtomicU8::new(PROVIDER_CLEANUP_OPEN),
+            #[cfg(test)]
+            cleanup_count: AtomicU64::new(0),
+            #[cfg(test)]
+            synchronization: None,
         }
     }
 
-    fn unregister(&mut self) {
-        if let Some(client_id) = self.client_id.take() {
-            glide_core::scope::unregister_client(client_id);
-            #[cfg(feature = "testing_utilities")]
-            PROVIDER_DIRECT_CLEANUP_COUNT.fetch_add(1, Ordering::SeqCst);
+    #[cfg(test)]
+    fn new_synchronized(
+        client_id: u64,
+        synchronization: Arc<ProviderCleanupTestSynchronization>,
+    ) -> Self {
+        Self {
+            synchronization: Some(synchronization),
+            ..Self::new(client_id)
         }
     }
-}
 
-impl Drop for ProviderDirectClientCleanup {
-    fn drop(&mut self) {
-        self.unregister();
+    fn unregister(&self) {
+        loop {
+            match self.state.load(Ordering::Acquire) {
+                PROVIDER_CLEANUP_OPEN => {
+                    if self
+                        .state
+                        .compare_exchange(
+                            PROVIDER_CLEANUP_OPEN,
+                            PROVIDER_CLEANUP_CLOSING,
+                            Ordering::AcqRel,
+                            Ordering::Acquire,
+                        )
+                        .is_err()
+                    {
+                        continue;
+                    }
+
+                    let transition = ProviderCleanupTransition {
+                        cleanup: self,
+                        completed: false,
+                    };
+
+                    #[cfg(test)]
+                    if let Some(synchronization) = &self.synchronization
+                        && synchronization
+                            .pause_next_winner
+                            .swap(false, Ordering::SeqCst)
+                    {
+                        synchronization
+                            .winner_claimed
+                            .send(())
+                            .expect("cleanup test must receive the winner signal");
+                        let panic_after_release = synchronization
+                            .release_winner
+                            .lock()
+                            .expect("cleanup test release lock must not be poisoned")
+                            .recv()
+                            .expect("cleanup test must release the winner");
+                        if panic_after_release {
+                            panic!("injected provider cleanup panic");
+                        }
+                    }
+
+                    glide_core::scope::unregister_client(self.client_id);
+                    #[cfg(test)]
+                    self.cleanup_count.fetch_add(1, Ordering::SeqCst);
+                    #[cfg(feature = "testing_utilities")]
+                    PROVIDER_DIRECT_CLEANUP_COUNT.fetch_add(1, Ordering::SeqCst);
+
+                    // Publish Closed only after every unregister/counter side effect.
+                    transition.complete();
+                    return;
+                }
+                PROVIDER_CLEANUP_CLOSING => {
+                    #[cfg(test)]
+                    if let Some(synchronization) = &self.synchronization
+                        && synchronization
+                            .signal_next_loser
+                            .swap(false, Ordering::SeqCst)
+                    {
+                        synchronization
+                            .loser_observed_closing
+                            .send(())
+                            .expect("cleanup test must receive the loser signal");
+                    }
+                    while self.state.load(Ordering::Acquire) == PROVIDER_CLEANUP_CLOSING {
+                        std::thread::yield_now();
+                    }
+                    // Closed means the winner completed; Open means it unwound.
+                    // Re-read in either case so an unwound cleanup is retried.
+                    continue;
+                }
+                PROVIDER_CLEANUP_CLOSED => return,
+                state => unreachable!("invalid provider cleanup state {state}"),
+            }
+        }
+    }
+
+    #[cfg(test)]
+    fn cleanup_count(&self) -> u64 {
+        self.cleanup_count.load(Ordering::SeqCst)
     }
 }
 
@@ -832,7 +965,12 @@ pub struct GlideClientHandle {
     client_id: u64,
     /// Present only for provider-backed direct clients. It covers the gap where
     /// handle conversion succeeds but Promise settlement/finalization fails.
-    provider_cleanup: Option<ProviderDirectClientCleanup>,
+    provider_cleanup: Option<Arc<ProviderDirectClientCleanup>>,
+    /// Makes the complete native close routine idempotent, including finalization.
+    closed: bool,
+    /// Test-only accounting remains open until every native handle field is closed.
+    #[cfg(feature = "testing_utilities")]
+    provider_handle_open: bool,
 }
 
 /// Logs the disconnect warning for a `Disconnection` push and returns `true`,
@@ -910,6 +1048,9 @@ pub(crate) async fn create_handle_for_client(
             wake_callback: Some(Arc::clone(&wake_tsfn)),
             client_id,
             provider_cleanup: None,
+            closed: false,
+            #[cfg(feature = "testing_utilities")]
+            provider_handle_open: false,
         };
 
         // Store worker-local references to avoid Arc::clone per command.
@@ -1259,7 +1400,7 @@ impl ToNapiValue for DirectClientResolution {
         mut value: Self,
     ) -> Result<napi::sys::napi_value> {
         #[cfg(feature = "testing_utilities")]
-        let provider_backed = value.credential_provider_claim.is_some();
+        let provider_backed = value.handle.provider_cleanup.is_some();
         let js_handle = unsafe { GlideClientHandle::to_napi_value(env, value.handle) }?;
         if let Some(claim) = value.credential_provider_claim.as_mut() {
             claim.commit();
@@ -1268,6 +1409,10 @@ impl ToNapiValue for DirectClientResolution {
         if provider_backed
             && FAIL_PROVIDER_DIRECT_RESOLUTION_AFTER_CONVERSION.swap(false, Ordering::SeqCst)
         {
+            // Conversion transferred ownership to the N-API wrapper. Recover that
+            // exact handle on this JS thread and run the normal full close path;
+            // its eventual finalizer observes `closed` and does nothing.
+            unsafe { close_converted_provider_direct_handle(env, js_handle) }?;
             return Err(napi::Error::new(
                 Status::GenericFailure,
                 "Injected provider direct-client failure after native handle conversion",
@@ -1275,6 +1420,33 @@ impl ToNapiValue for DirectClientResolution {
         }
         Ok(js_handle)
     }
+}
+
+#[cfg(feature = "testing_utilities")]
+unsafe fn close_converted_provider_direct_handle(
+    env: napi::sys::napi_env,
+    js_handle: napi::sys::napi_value,
+) -> Result<()> {
+    let mut native_handle = std::ptr::null_mut();
+    let status = unsafe { napi::sys::napi_unwrap(env, js_handle, &mut native_handle) };
+    if status != napi::sys::Status::napi_ok {
+        return Err(napi::Error::new(
+            Status::GenericFailure,
+            format!("Failed to recover converted provider direct-client handle: {status:?}"),
+        ));
+    }
+    let handle = unsafe {
+        native_handle
+            .cast::<GlideClientHandle>()
+            .as_mut()
+            .ok_or_else(|| {
+                napi::Error::new(
+                    Status::GenericFailure,
+                    "Converted provider direct-client handle was null",
+                )
+            })?
+    };
+    handle.close()
 }
 
 /// Arms a provider-direct-only one-shot failure after native handle conversion.
@@ -1286,12 +1458,20 @@ pub fn inject_provider_direct_resolution_failure_after_conversion() {
     FAIL_PROVIDER_DIRECT_RESOLUTION_AFTER_CONVERSION.store(true, Ordering::SeqCst);
 }
 
-/// Returns how many armed provider-direct handles released scope ownership.
+/// Returns how many provider-direct handles released scope ownership.
 /// @internal @test
 #[napi(js_name = "getProviderDirectCleanupCount")]
 #[cfg(feature = "testing_utilities")]
 pub fn get_provider_direct_cleanup_count() -> u32 {
     PROVIDER_DIRECT_CLEANUP_COUNT.load(Ordering::SeqCst) as u32
+}
+
+/// Returns how many provider-direct handles still own native resources.
+/// @internal @test
+#[napi(js_name = "getProviderDirectOpenHandleCount")]
+#[cfg(feature = "testing_utilities")]
+pub fn get_provider_direct_open_handle_count() -> u32 {
+    PROVIDER_DIRECT_OPEN_HANDLE_COUNT.load(Ordering::SeqCst) as u32
 }
 
 /// Creates a new direct NAPI client connection with response buffering.
@@ -1444,7 +1624,13 @@ pub fn create_direct_client<'a>(
 
         let provider_cleanup = credential_provider_claim
             .is_some()
-            .then(|| ProviderDirectClientCleanup::new(client_id));
+            .then(|| Arc::new(ProviderDirectClientCleanup::new(client_id)));
+        #[cfg(feature = "testing_utilities")]
+        let provider_handle_open = provider_cleanup.is_some();
+        #[cfg(feature = "testing_utilities")]
+        if provider_handle_open {
+            PROVIDER_DIRECT_OPEN_HANDLE_COUNT.fetch_add(1, Ordering::SeqCst);
+        }
         let handle = GlideClientHandle {
             command_tx: Some(command_tx_for_handle),
             inflight_requests: inflight_counter.clone(),
@@ -1452,6 +1638,9 @@ pub fn create_direct_client<'a>(
             wake_callback: Some(Arc::clone(&wake_tsfn)),
             client_id,
             provider_cleanup,
+            closed: false,
+            #[cfg(feature = "testing_utilities")]
+            provider_handle_open,
         };
 
         // Store worker-local references to avoid Arc::clone per command.
@@ -1695,13 +1884,17 @@ impl GlideClientHandle {
     /// which prevents use-after-free crashes during shutdown.
     #[napi]
     pub fn close(&mut self) -> Result<()> {
-        // IMPORTANT: Mark closed FIRST to prevent any in-flight tasks from calling wake_callback
+        if self.closed {
+            return Ok(());
+        }
+
+        // IMPORTANT: Mark the response buffer closed first to prevent any in-flight tasks from calling wake_callback
         // This prevents segfaults when the ThreadsafeFunction is dropped while tasks are running
         self.response_buffer.mark_closed();
 
         // Provider-backed direct handles use their finalization marker so close
         // and a later Drop cannot release the same scope ownership twice.
-        if let Some(cleanup) = self.provider_cleanup.as_mut() {
+        if let Some(cleanup) = self.provider_cleanup.as_ref() {
             cleanup.unregister();
         } else {
             glide_core::scope::unregister_client(self.client_id);
@@ -1721,6 +1914,16 @@ impl GlideClientHandle {
         // when the message loop exits (which happens after command_tx is dropped above).
         drop(self.wake_callback.take());
 
+        // Unlike the provider scope marker, this count represents completion of
+        // the entire native close routine above.
+        #[cfg(feature = "testing_utilities")]
+        if std::mem::take(&mut self.provider_handle_open) {
+            PROVIDER_DIRECT_OPEN_HANDLE_COUNT.fetch_sub(1, Ordering::SeqCst);
+        }
+
+        // Publish full-handle completion only after provider teardown and every
+        // native resource/counter side effect. A panic before here remains retryable.
+        self.closed = true;
         Ok(())
     }
 
@@ -1735,6 +1938,15 @@ impl GlideClientHandle {
     /// For standalone (non-pool) clients, call `close()` instead.
     #[napi]
     pub fn close_for_pool_release(&mut self) -> Result<()> {
+        // A provider-backed handle is a standalone direct client, even if this
+        // pool-only entry point is called accidentally. It must run full cleanup.
+        if self.provider_cleanup.is_some() {
+            return self.close();
+        }
+        if self.closed {
+            return Ok(());
+        }
+
         // Mark buffer closed first — prevents callbacks after this point.
         self.response_buffer.mark_closed();
 
@@ -1754,6 +1966,7 @@ impl GlideClientHandle {
         // Drop the wake callback reference.
         drop(self.wake_callback.take());
 
+        self.closed = true;
         Ok(())
     }
 
@@ -2227,25 +2440,20 @@ impl GlideClientHandle {
 
 impl Drop for GlideClientHandle {
     fn drop(&mut self) {
-        // Only provider-backed direct handles carry this marker. If handle
-        // conversion succeeded but Promise settlement did not, finalization
-        // releases the scope clone that otherwise retains the provider.
-        if let Some(cleanup) = self.provider_cleanup.as_mut() {
-            cleanup.unregister();
+        if self.closed {
+            return;
         }
 
-        // Ensure cleanup happens even if close() was never called.
-        // mark_closed() is idempotent (uses AtomicBool), so calling it again is safe.
+        // Provider-backed direct handles use the same complete close routine as
+        // explicit close and post-conversion fault recovery.
+        if self.provider_cleanup.is_some() {
+            let _ = self.close();
+            return;
+        }
+
+        // Preserve the ordinary direct/pool fallback finalization behavior.
         self.response_buffer.mark_closed();
-
-        // Free any leaked Value pointers in pending responses.
-        // If close() already called this, the buffer will be empty and this is a no-op.
         self.response_buffer.free_leaked_values();
-
-        // Drop the command channel to signal worker to exit.
-        // If already dropped by close(), this is a no-op.
-        // The spawned worker task will call release_worker_pool() when its message loop exits,
-        // which happens after this channel is closed.
         drop(self.command_tx.take());
     }
 }
@@ -3482,6 +3690,16 @@ mod tests {
     }
 
     fn provider_direct_test_handle(client_id: u64) -> GlideClientHandle {
+        provider_direct_test_handle_with_cleanup(
+            client_id,
+            Arc::new(ProviderDirectClientCleanup::new(client_id)),
+        )
+    }
+
+    fn provider_direct_test_handle_with_cleanup(
+        client_id: u64,
+        cleanup: Arc<ProviderDirectClientCleanup>,
+    ) -> GlideClientHandle {
         let (command_tx, _command_rx) = mpsc::unbounded_channel::<WorkerMessage>();
         GlideClientHandle {
             command_tx: Some(command_tx),
@@ -3489,8 +3707,95 @@ mod tests {
             response_buffer: Arc::new(ResponseBuffer::new()),
             wake_callback: None,
             client_id,
-            provider_cleanup: Some(ProviderDirectClientCleanup::new(client_id)),
+            provider_cleanup: Some(cleanup),
+            closed: false,
+            #[cfg(feature = "testing_utilities")]
+            provider_handle_open: false,
         }
+    }
+
+    fn provider_cleanup_test_synchronization() -> (
+        Arc<ProviderCleanupTestSynchronization>,
+        std::sync::mpsc::Receiver<()>,
+        std::sync::mpsc::SyncSender<bool>,
+        std::sync::mpsc::Receiver<()>,
+    ) {
+        let (winner_claimed_tx, winner_claimed_rx) = std::sync::mpsc::sync_channel(0);
+        let (release_winner_tx, release_winner_rx) = std::sync::mpsc::sync_channel(0);
+        let (loser_observed_tx, loser_observed_rx) = std::sync::mpsc::sync_channel(0);
+        (
+            Arc::new(ProviderCleanupTestSynchronization {
+                winner_claimed: winner_claimed_tx,
+                release_winner: Mutex::new(release_winner_rx),
+                loser_observed_closing: loser_observed_tx,
+                pause_next_winner: AtomicBool::new(true),
+                signal_next_loser: AtomicBool::new(true),
+            }),
+            winner_claimed_rx,
+            release_winner_tx,
+            loser_observed_rx,
+        )
+    }
+
+    #[test]
+    fn provider_direct_cleanup_is_idempotent() {
+        let client_id = glide_core::pool::allocate_client_id();
+        let cleanup = ProviderDirectClientCleanup::new(client_id);
+
+        cleanup.unregister();
+        cleanup.unregister();
+
+        assert_eq!(cleanup.cleanup_count(), 1);
+    }
+
+    #[test]
+    fn provider_direct_cleanup_loser_waits_for_winner_side_effects() {
+        let client_id = glide_core::pool::allocate_client_id();
+        let (synchronization, winner_claimed_rx, release_winner_tx, loser_observed_rx) =
+            provider_cleanup_test_synchronization();
+        let cleanup = Arc::new(ProviderDirectClientCleanup::new_synchronized(
+            client_id,
+            synchronization,
+        ));
+        let (winner_done_tx, winner_done_rx) = std::sync::mpsc::channel();
+        let (loser_done_tx, loser_done_rx) = std::sync::mpsc::channel();
+
+        std::thread::scope(|scope| {
+            let winner_cleanup = Arc::clone(&cleanup);
+            scope.spawn(move || {
+                winner_cleanup.unregister();
+                winner_done_tx.send(()).unwrap();
+            });
+            winner_claimed_rx.recv().unwrap();
+
+            let loser_cleanup = Arc::clone(&cleanup);
+            scope.spawn(move || {
+                loser_cleanup.unregister();
+                loser_done_tx.send(()).unwrap();
+            });
+            loser_observed_rx.recv().unwrap();
+
+            // The loser has definitely observed Closing, but cannot return while
+            // the winner is paused before unregister/counter side effects.
+            assert!(matches!(
+                loser_done_rx.try_recv(),
+                Err(std::sync::mpsc::TryRecvError::Empty)
+            ));
+            assert_eq!(cleanup.cleanup_count(), 0);
+
+            release_winner_tx.send(false).unwrap();
+            winner_done_rx.recv().unwrap();
+            loser_done_rx.recv().unwrap();
+        });
+
+        // Completion of either caller implies all winner side effects are visible.
+        assert_eq!(cleanup.cleanup_count(), 1);
+        assert_eq!(
+            cleanup.state.load(Ordering::Acquire),
+            PROVIDER_CLEANUP_CLOSED
+        );
+        cleanup.unregister();
+        assert_eq!(cleanup.cleanup_count(), 1);
     }
 
     async fn lazy_client(request: ConnectionRequest) -> Client {
@@ -3526,16 +3831,125 @@ mod tests {
         let client = lazy_client(ConnectionRequest::default()).await;
         glide_core::scope::register_client(client_id, client);
         let mut handle = provider_direct_test_handle(client_id);
+        let cleanup = Arc::clone(
+            handle
+                .provider_cleanup
+                .as_ref()
+                .expect("provider test handle carries cleanup state"),
+        );
+
+        let pending_response = CommandResponse {
+            callback_idx: 0,
+            resp_pointer_high: None,
+            resp_pointer_low: None,
+            constant_response: Some("pending".to_string()),
+            request_error: None,
+            closing_error: None,
+            is_push: false,
+        };
+        assert!(handle.response_buffer.push(pending_response));
 
         handle.close().unwrap();
+        assert!(handle.closed);
+        assert!(handle.command_tx.is_none());
+        assert!(handle.wake_callback.is_none());
+        assert!(handle.response_buffer.is_closed());
+        assert!(handle.response_buffer.responses.lock().is_empty());
         assert!(glide_core::scope::get_parent_client(client_id).is_none());
+        assert_eq!(cleanup.cleanup_count(), 1);
 
-        // A replacement proves Drop does not unregister the same ID again.
+        // Repeated close and a later Drop are no-ops. A replacement registration
+        // proves neither path unregisters the same ID again.
+        handle.close().unwrap();
         let replacement = lazy_client(ConnectionRequest::default()).await;
         glide_core::scope::register_client(client_id, replacement);
         drop(handle);
+        assert_eq!(cleanup.cleanup_count(), 1);
         assert!(glide_core::scope::get_parent_client(client_id).is_some());
         glide_core::scope::unregister_client(client_id);
+    }
+
+    #[tokio::test]
+    async fn provider_direct_close_for_pool_release_runs_full_cleanup_once() {
+        let client_id = glide_core::pool::allocate_client_id();
+        let client = lazy_client(ConnectionRequest::default()).await;
+        glide_core::scope::register_client(client_id, client);
+        let mut handle = provider_direct_test_handle(client_id);
+        let cleanup = Arc::clone(handle.provider_cleanup.as_ref().unwrap());
+
+        handle.close_for_pool_release().unwrap();
+
+        assert!(handle.closed);
+        assert!(handle.command_tx.is_none());
+        assert!(handle.wake_callback.is_none());
+        assert!(handle.response_buffer.is_closed());
+        assert!(glide_core::scope::get_parent_client(client_id).is_none());
+        assert_eq!(cleanup.cleanup_count(), 1);
+
+        handle.close_for_pool_release().unwrap();
+        drop(handle);
+        assert_eq!(cleanup.cleanup_count(), 1);
+    }
+
+    #[tokio::test]
+    async fn provider_direct_cleanup_panic_wakes_waiter_and_finalizer_retries() {
+        let client_id = glide_core::pool::allocate_client_id();
+        let client = lazy_client(ConnectionRequest::default()).await;
+        glide_core::scope::register_client(client_id, client);
+        let (synchronization, winner_claimed_rx, release_winner_tx, loser_observed_rx) =
+            provider_cleanup_test_synchronization();
+        let cleanup = Arc::new(ProviderDirectClientCleanup::new_synchronized(
+            client_id,
+            synchronization,
+        ));
+        let mut handle = provider_direct_test_handle_with_cleanup(client_id, Arc::clone(&cleanup));
+        let response_buffer = Arc::clone(&handle.response_buffer);
+        let pending_response = CommandResponse {
+            callback_idx: 0,
+            resp_pointer_high: None,
+            resp_pointer_low: None,
+            constant_response: Some("pending".to_string()),
+            request_error: None,
+            closing_error: None,
+            is_push: false,
+        };
+        assert!(response_buffer.push(pending_response));
+        let (loser_done_tx, loser_done_rx) = std::sync::mpsc::channel();
+
+        std::thread::scope(|scope| {
+            let winner = scope.spawn(move || handle.close().unwrap());
+            winner_claimed_rx.recv().unwrap();
+
+            let loser_cleanup = Arc::clone(&cleanup);
+            scope.spawn(move || {
+                loser_cleanup.unregister();
+                loser_done_tx.send(()).unwrap();
+            });
+            loser_observed_rx.recv().unwrap();
+
+            assert_eq!(
+                cleanup.state.load(Ordering::Acquire),
+                PROVIDER_CLEANUP_CLOSING
+            );
+            assert_eq!(cleanup.cleanup_count(), 0);
+            release_winner_tx.send(true).unwrap();
+
+            // The winner unwinds, its transition guard restores Open, and either
+            // the waiting loser or the handle finalizer wins the retry.
+            loser_done_rx.recv().unwrap();
+            assert!(winner.join().is_err());
+        });
+
+        assert_eq!(
+            cleanup.state.load(Ordering::Acquire),
+            PROVIDER_CLEANUP_CLOSED
+        );
+        assert_eq!(cleanup.cleanup_count(), 1);
+        assert!(glide_core::scope::get_parent_client(client_id).is_none());
+        assert!(response_buffer.is_closed());
+        assert!(response_buffer.responses.lock().is_empty());
+        cleanup.unregister();
+        assert_eq!(cleanup.cleanup_count(), 1);
     }
 
     #[tokio::test]

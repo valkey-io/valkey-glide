@@ -40,7 +40,7 @@ use std::str;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::sync::Condvar;
-use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU32, Ordering};
 use std::{
     ffi::{CString, c_void},
     os::raw::{c_char, c_double, c_long, c_ulong},
@@ -1960,6 +1960,8 @@ fn create_pipe_writer(pipe_write_fd: i32) -> &'static SharedPipeWriter {
 pub struct ClientAdapter {
     runtime: ManuallyDrop<Runtime>,
     pipe_client_id: std::sync::atomic::AtomicU64,
+    async_pipe_activation: Arc<AsyncPipeActivation>,
+    explicit_async_pipe: bool,
     /// Provider callbacks may outlive their timeout and must not block runtime destruction.
     has_external_blocking_provider: bool,
     /// Background runtime for spawned tasks (connection drivers, reconnection, cluster manager).
@@ -2012,6 +2014,14 @@ struct CommandExecutionCore {
 }
 
 impl ClientAdapter {
+    fn active_pipe_client_id(&self) -> Option<u64> {
+        if self.async_pipe_activation.state() != AsyncPipeActivationState::Active {
+            return None;
+        }
+        let pipe_client_id = self.pipe_client_id.load(Ordering::Acquire);
+        (pipe_client_id != 0 && get_async_pipe().is_some()).then_some(pipe_client_id)
+    }
+
     /// Executes a command and routes the result based on client type.
     ///
     /// For async clients, spawns the future and returns null immediately.
@@ -2039,10 +2049,7 @@ impl ClientAdapter {
                 failure_callback,
                 allow_stack_response,
             } => {
-                let cid = self
-                    .pipe_client_id
-                    .load(std::sync::atomic::Ordering::Relaxed);
-                if cid != 0 && get_async_pipe().is_some() {
+                if let Some(cid) = self.active_pipe_client_id() {
                     self.runtime.spawn(async move {
                         match request_future.await {
                             Ok(value) => {
@@ -2286,10 +2293,7 @@ impl ClientAdapter {
                 failure_callback,
                 allow_stack_response: _,
             } => {
-                let cid = self
-                    .pipe_client_id
-                    .load(std::sync::atomic::Ordering::Relaxed);
-                if cid != 0 && get_async_pipe().is_some() {
+                if let Some(cid) = self.active_pipe_client_id() {
                     if let Some(w) = get_async_pipe() {
                         w.push_error(cid, request_id, error_type, error_string);
                     }
@@ -2505,21 +2509,125 @@ enum AsyncPushDeliveryMode {
     Disabled,
 }
 
-fn async_push_delivery_mode(
-    pubsub_callback: PubSubCallback,
-    pipe_client_id: u64,
-) -> AsyncPushDeliveryMode {
-    if pubsub_callback.is_some() {
-        AsyncPushDeliveryMode::Direct
-    } else if pipe_client_id != 0 {
-        AsyncPushDeliveryMode::Pipe(pipe_client_id)
-    } else {
-        AsyncPushDeliveryMode::Disabled
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum AsyncPipeCreation {
+    Disabled,
+    #[allow(dead_code)] // Constructed by pool_ffi, which the Miri mock crate does not enable.
+    Active(u64),
+    Dormant(u64),
+}
+
+impl AsyncPipeCreation {
+    fn pipe_client_id(self) -> u64 {
+        match self {
+            Self::Disabled => 0,
+            Self::Active(pipe_client_id) | Self::Dormant(pipe_client_id) => pipe_client_id,
+        }
+    }
+
+    fn activation_state(self) -> AsyncPipeActivationState {
+        match self {
+            Self::Active(_) => AsyncPipeActivationState::Active,
+            Self::Disabled | Self::Dormant(_) => AsyncPipeActivationState::Dormant,
+        }
+    }
+
+    fn is_explicit(self) -> bool {
+        matches!(self, Self::Dormant(_))
     }
 }
 
-/// Attempts one delivery using the mode captured when the client was created.
-/// Returns `false` only while a Python pipe client is waiting for pipe setup.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[repr(u8)]
+enum AsyncPipeActivationState {
+    Dormant,
+    Active,
+    TimedOut,
+}
+
+/// Linearization point for explicit Python async-pipe activation.
+///
+/// The invariant is that an explicit client starts `Dormant` and can make exactly one terminal
+/// transition: activation CASes `Dormant -> Active`, while the deadline CASes
+/// `Dormant -> TimedOut`. `TimedOut` alone permits permanent push draining. Successful CASes use
+/// `AcqRel` to publish the winner, and all observations (including failed CASes) use `Acquire` so
+/// activation and deadline agree on that winner at the boundary.
+struct AsyncPipeActivation(AtomicU8);
+
+impl AsyncPipeActivation {
+    fn new(initial: AsyncPipeActivationState) -> Self {
+        Self(AtomicU8::new(initial as u8))
+    }
+
+    fn state(&self) -> AsyncPipeActivationState {
+        Self::decode(self.0.load(Ordering::Acquire))
+    }
+
+    fn activate(&self) -> bool {
+        self.transition_from_dormant(AsyncPipeActivationState::Active)
+            .is_ok()
+    }
+
+    fn time_out(&self) -> AsyncPipeActivationState {
+        match self.transition_from_dormant(AsyncPipeActivationState::TimedOut) {
+            Ok(()) => AsyncPipeActivationState::TimedOut,
+            Err(winner) => winner,
+        }
+    }
+
+    fn transition_from_dormant(
+        &self,
+        terminal: AsyncPipeActivationState,
+    ) -> Result<(), AsyncPipeActivationState> {
+        self.0
+            .compare_exchange(
+                AsyncPipeActivationState::Dormant as u8,
+                terminal as u8,
+                Ordering::AcqRel,
+                Ordering::Acquire,
+            )
+            .map(|_| ())
+            .map_err(Self::decode)
+    }
+
+    fn decode(value: u8) -> AsyncPipeActivationState {
+        match value {
+            value if value == AsyncPipeActivationState::Dormant as u8 => {
+                AsyncPipeActivationState::Dormant
+            }
+            value if value == AsyncPipeActivationState::Active as u8 => {
+                AsyncPipeActivationState::Active
+            }
+            value if value == AsyncPipeActivationState::TimedOut as u8 => {
+                AsyncPipeActivationState::TimedOut
+            }
+            _ => unreachable!("async pipe activation state is only written by this module"),
+        }
+    }
+}
+
+const ASYNC_PIPE_ACTIVATION_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(1);
+const ASYNC_PIPE_ACTIVATION_INITIAL_BACKOFF: std::time::Duration =
+    std::time::Duration::from_millis(1);
+const ASYNC_PIPE_ACTIVATION_MAX_BACKOFF: std::time::Duration = std::time::Duration::from_millis(25);
+
+fn async_push_delivery_mode(
+    pubsub_callback: PubSubCallback,
+    pipe_creation: AsyncPipeCreation,
+) -> AsyncPushDeliveryMode {
+    if pubsub_callback.is_some() {
+        AsyncPushDeliveryMode::Direct
+    } else {
+        match pipe_creation {
+            AsyncPipeCreation::Disabled => AsyncPushDeliveryMode::Disabled,
+            AsyncPipeCreation::Active(pipe_client_id)
+            | AsyncPipeCreation::Dormant(pipe_client_id) => {
+                AsyncPushDeliveryMode::Pipe(pipe_client_id)
+            }
+        }
+    }
+}
+
 fn dispatch_async_push_notification(
     push_msg: &redis::PushInfo,
     callback_store: &std::sync::RwLock<PubSubCallback>,
@@ -2567,6 +2675,27 @@ fn dispatch_async_push_notification(
     true
 }
 
+async fn wait_for_async_pipe_activation(
+    activation: &AsyncPipeActivation,
+    timeout: std::time::Duration,
+) -> bool {
+    let deadline = tokio::time::Instant::now() + timeout;
+    let mut backoff = ASYNC_PIPE_ACTIVATION_INITIAL_BACKOFF;
+    loop {
+        match activation.state() {
+            AsyncPipeActivationState::Active => return true,
+            AsyncPipeActivationState::TimedOut => return false,
+            AsyncPipeActivationState::Dormant => {}
+        }
+        let now = tokio::time::Instant::now();
+        if now >= deadline {
+            return activation.time_out() == AsyncPipeActivationState::Active;
+        }
+        tokio::time::sleep(backoff.min(deadline - now)).await;
+        backoff = (backoff * 2).min(ASYNC_PIPE_ACTIVATION_MAX_BACKOFF);
+    }
+}
+
 fn create_client_internal(
     connection_request_bytes: &[u8],
     client_type: ClientType,
@@ -2574,7 +2703,19 @@ fn create_client_internal(
     address_resolver: AddressResolverCallback,
     credential_provider: Option<NonNullCredentialProviderCallback>,
     client_id: usize,
+    pipe_creation: AsyncPipeCreation,
 ) -> Result<*const ClientAdapter, String> {
+    if pipe_creation.is_explicit() {
+        if !matches!(client_type, ClientType::AsyncClient { .. }) {
+            return Err("Python async pipe clients require ClientType::AsyncClient".to_string());
+        }
+        if pubsub_callback.is_some() {
+            return Err("Python async pipe clients require a null pubsub callback".to_string());
+        }
+        if pipe_creation.pipe_client_id() == 0 {
+            return Err("Python async pipe client ID must be nonzero".to_string());
+        }
+    }
     let request = connection_request::ConnectionRequest::parse_from_bytes(connection_request_bytes)
         .map_err(|err| err.to_string())?;
     if request.credential_provider_key.is_some() {
@@ -2707,9 +2848,13 @@ fn create_client_internal(
         client_type,
     });
     let pubsub_callback_store = Arc::new(std::sync::RwLock::new(pubsub_callback));
+    let async_pipe_activation =
+        Arc::new(AsyncPipeActivation::new(pipe_creation.activation_state()));
     let client_adapter = Arc::new(ClientAdapter {
         runtime: ManuallyDrop::new(runtime),
-        pipe_client_id: std::sync::atomic::AtomicU64::new(client_id as u64),
+        pipe_client_id: std::sync::atomic::AtomicU64::new(pipe_creation.pipe_client_id()),
+        async_pipe_activation: async_pipe_activation.clone(),
+        explicit_async_pipe: pipe_creation.is_explicit(),
         has_external_blocking_provider,
         background_runtime: ManuallyDrop::new(background_runtime),
         core,
@@ -2724,7 +2869,7 @@ fn create_client_internal(
         .as_ref()
         .unwrap_or(&client_adapter.runtime);
     let callback_store = pubsub_callback_store.clone();
-    let async_push_delivery = async_push_delivery_mode(pubsub_callback, client_id as u64);
+    let async_push_delivery = async_push_delivery_mode(pubsub_callback, pipe_creation);
     if is_sync {
         // Sync clients: direct callback (CFFI acquires GIL automatically).
         spawn_runtime.spawn(async move {
@@ -2744,18 +2889,36 @@ fn create_client_internal(
     } else {
         spawn_runtime.spawn(async move {
             while let Some(push_msg) = push_rx.recv().await {
-                // Python creates its pipe immediately after native construction.
-                // Retain this push and yield until that setup window closes rather
-                // than falling back to a callback or silently dropping it.
-                while !dispatch_async_push_notification(
+                if pipe_creation.is_explicit()
+                    && !wait_for_async_pipe_activation(
+                        &async_pipe_activation,
+                        ASYNC_PIPE_ACTIVATION_TIMEOUT,
+                    )
+                    .await
+                {
+                    glide_logger::log_warn(
+                        "ffi",
+                        format!(
+                            "Dropping and draining async pushes after waiting {ASYNC_PIPE_ACTIVATION_TIMEOUT:?} for pipe activation"
+                        ),
+                    );
+                    while push_rx.recv().await.is_some() {}
+                    return;
+                }
+                // Preserve the pre-existing pool behavior: active pool clients wait
+                // until the process-wide pipe exists before dispatching a push.
+                if matches!(pipe_creation, AsyncPipeCreation::Active(_)) {
+                    while get_async_pipe().is_none() {
+                        tokio::task::yield_now().await;
+                    }
+                }
+                dispatch_async_push_notification(
                     &push_msg,
                     &callback_store,
                     async_push_delivery,
                     client_adapter_ptr,
                     get_async_pipe(),
-                ) {
-                    tokio::task::yield_now().await;
-                }
+                );
             }
         });
     }
@@ -2771,6 +2934,7 @@ fn create_client_internal(
     Ok(Arc::into_raw(client_adapter))
 }
 
+#[allow(clippy::too_many_arguments)]
 unsafe fn create_client_response(
     connection_request_bytes: *const u8,
     connection_request_len: usize,
@@ -2779,6 +2943,7 @@ unsafe fn create_client_response(
     address_resolver: AddressResolverCallback,
     client_id: usize,
     credential_provider: CredentialProviderCallback,
+    pipe_creation: AsyncPipeCreation,
 ) -> *const ConnectionResponse {
     assert!(!connection_request_bytes.is_null());
     let request_bytes =
@@ -2791,6 +2956,7 @@ unsafe fn create_client_response(
         address_resolver,
         credential_provider,
         client_id,
+        pipe_creation,
     ) {
         Err(err) => ConnectionResponse {
             conn_ptr: std::ptr::null(),
@@ -2830,6 +2996,7 @@ pub unsafe extern "C-unwind" fn create_client(
             address_resolver,
             client_id,
             None,
+            AsyncPipeCreation::Disabled,
         )
     }
 }
@@ -2862,8 +3029,78 @@ pub unsafe extern "C-unwind" fn create_client_with_credential_provider(
             address_resolver,
             client_id,
             credential_provider,
+            AsyncPipeCreation::Disabled,
         )
     }
+}
+
+/// Creates a Python async client whose pipe delivery starts dormant.
+///
+/// This additive ABI preserves the complete six-argument [`create_client`] prefix, then appends
+/// the nullable credential provider and an explicit pipe client ID. The stored pipe ID is not used
+/// for command or push delivery until [`activate_client_async_pipe`] succeeds.
+///
+/// # Safety
+/// The [`create_client_with_credential_provider`] safety contract applies. `pipe_client_id` must
+/// be nonzero, `client_type` must identify an async client, and `pubsub_callback` must be null.
+#[unsafe(no_mangle)]
+pub unsafe extern "C-unwind" fn create_client_for_python_async(
+    connection_request_bytes: *const u8,
+    connection_request_len: usize,
+    client_type: *const ClientType,
+    pubsub_callback: PubSubCallback,
+    address_resolver: AddressResolverCallback,
+    client_id: usize,
+    credential_provider: CredentialProviderCallback,
+    pipe_client_id: u64,
+) -> *const ConnectionResponse {
+    unsafe {
+        create_client_response(
+            connection_request_bytes,
+            connection_request_len,
+            client_type,
+            pubsub_callback,
+            address_resolver,
+            client_id,
+            credential_provider,
+            AsyncPipeCreation::Dormant(pipe_client_id),
+        )
+    }
+}
+
+/// Activates pipe delivery for a client returned by [`create_client_for_python_async`].
+///
+/// Returns `false` without changing state for null, legacy, sync, already-activated, or pipe-less
+/// clients. Python calls this only after its registry and pipe reader are installed.
+///
+/// # Safety
+/// A non-null pointer must be a live client pointer returned by a direct-client creation function.
+#[unsafe(no_mangle)]
+pub unsafe extern "C-unwind" fn activate_client_async_pipe(
+    client_adapter_ptr: *const c_void,
+) -> bool {
+    if client_adapter_ptr.is_null() {
+        return false;
+    }
+    let client_adapter = unsafe {
+        Arc::increment_strong_count(client_adapter_ptr as *const ClientAdapter);
+        Arc::from_raw(client_adapter_ptr as *const ClientAdapter)
+    };
+    activate_client_async_pipe_inner(&client_adapter, get_async_pipe().is_some())
+}
+
+fn activate_client_async_pipe_inner(client_adapter: &ClientAdapter, pipe_exists: bool) -> bool {
+    if !pipe_exists
+        || !client_adapter.explicit_async_pipe
+        || !matches!(
+            client_adapter.core.client_type,
+            ClientType::AsyncClient { .. }
+        )
+        || client_adapter.pipe_client_id.load(Ordering::Acquire) == 0
+    {
+        return false;
+    }
+    client_adapter.async_pipe_activation.activate()
 }
 
 /// Creates a new client from a URI string and optional JSON configuration.
@@ -3041,6 +3278,7 @@ pub unsafe extern "C-unwind" fn create_client_from_uri(
                         None,
                         None,
                         0,
+                        AsyncPipeCreation::Disabled,
                     ) {
                         Err(err) => ConnectionResponse {
                             conn_ptr: std::ptr::null(),
@@ -5627,13 +5865,8 @@ pub unsafe extern "C-unwind" fn get_cache_metrics(
     };
     // For pipe clients (Python async) and sync clients, return directly.
     // For callback clients (Go, etc.), use execute_request to invoke callbacks.
-    let cid = client_adapter
-        .pipe_client_id
-        .load(std::sync::atomic::Ordering::Relaxed);
-    // Python pipe clients have cid != 0 AND ASYNC_PIPE initialized.
-    // Go/other clients may have cid != 0 for address resolver but no pipe.
     let is_pipe_or_sync = matches!(client_adapter.core.client_type, ClientType::SyncClient)
-        || (cid != 0 && get_async_pipe().is_some());
+        || client_adapter.active_pipe_client_id().is_some();
     if is_pipe_or_sync {
         match result {
             Ok(value) => match valkey_value_to_arena_response(value, &[]) {
@@ -7695,7 +7928,6 @@ mod tests_push_notification_safety {
         reset_callback_count();
         let callback_store =
             std::sync::RwLock::new(Some(counting_callback as NonNullPubSubCallback));
-        let provider_resolver_id = usize::MAX / 2 + 302;
         let adapter_id = usize::MAX / 2 + 303;
         let pipe = SharedPipeWriter {
             buffer: std::sync::Mutex::new(Vec::new()),
@@ -7704,7 +7936,7 @@ mod tests_push_notification_safety {
         };
         let delivery = async_push_delivery_mode(
             Some(counting_callback as NonNullPubSubCallback),
-            provider_resolver_id as u64,
+            AsyncPipeCreation::Disabled,
         );
 
         assert_eq!(delivery, AsyncPushDeliveryMode::Direct);
@@ -7782,7 +8014,7 @@ mod tests_push_notification_safety {
             condvar: Condvar::new(),
             pipe_fd: -1,
         };
-        let delivery = async_push_delivery_mode(None, 555);
+        let delivery = async_push_delivery_mode(None, AsyncPipeCreation::Active(555));
         let push = message_push();
 
         assert_eq!(delivery, AsyncPushDeliveryMode::Pipe(555));
@@ -7819,7 +8051,7 @@ mod tests_push_notification_safety {
             condvar: Condvar::new(),
             pipe_fd: -1,
         };
-        let delivery = async_push_delivery_mode(None, 556);
+        let delivery = async_push_delivery_mode(None, AsyncPipeCreation::Active(556));
 
         *callback_store.write().unwrap() = Some(counting_callback as NonNullPubSubCallback);
         assert!(dispatch_async_push_notification(
@@ -7865,7 +8097,7 @@ mod tests_push_notification_safety {
             condvar: Condvar::new(),
             pipe_fd: -1,
         };
-        let delivery = async_push_delivery_mode(None, 0);
+        let delivery = async_push_delivery_mode(None, AsyncPipeCreation::Disabled);
 
         *callback_store.write().unwrap() = Some(counting_callback as NonNullPubSubCallback);
         assert!(dispatch_async_push_notification(
@@ -7887,6 +8119,313 @@ mod tests_push_notification_safety {
             adapter_id
         );
         assert!(pipe.buffer.lock().unwrap().is_empty());
+    }
+
+    fn lazy_request() -> Vec<u8> {
+        let mut request = connection_request::ConnectionRequest::new();
+        request.lazy_connect = true;
+        let mut address = connection_request::NodeAddress::new();
+        address.host = "127.0.0.1".into();
+        address.port = 1;
+        request.addresses.push(address);
+        request.write_to_bytes().unwrap()
+    }
+
+    unsafe extern "C-unwind" fn noop_command_success(
+        _request_id: usize,
+        _response: *const CommandResponse,
+    ) {
+    }
+
+    unsafe extern "C-unwind" fn noop_command_failure(
+        _request_id: usize,
+        _error_message: *const c_char,
+        _error_type: RequestErrorType,
+    ) {
+    }
+
+    fn async_client_type() -> ClientType {
+        ClientType::AsyncClient {
+            success_callback: noop_command_success,
+            failure_callback: noop_command_failure,
+            allow_stack_response: false,
+        }
+    }
+
+    #[test]
+    fn legacy_null_callback_with_nonzero_client_id_is_immediately_disabled() {
+        let callback_store = std::sync::RwLock::new(None);
+        let pipe = SharedPipeWriter {
+            buffer: std::sync::Mutex::new(Vec::new()),
+            condvar: Condvar::new(),
+            pipe_fd: -1,
+        };
+        let delivery = async_push_delivery_mode(None, AsyncPipeCreation::Disabled);
+        assert_eq!(delivery, AsyncPushDeliveryMode::Disabled);
+        dispatch_async_push_notification(
+            &message_push(),
+            &callback_store,
+            delivery,
+            12345,
+            Some(&pipe),
+        );
+        assert!(pipe.buffer.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    fn legacy_symbols_never_store_client_id_as_pipe_id() {
+        let request = lazy_request();
+        for response in unsafe {
+            [
+                create_client(
+                    request.as_ptr(),
+                    request.len(),
+                    &async_client_type(),
+                    None,
+                    None,
+                    1001,
+                ),
+                create_client_with_credential_provider(
+                    request.as_ptr(),
+                    request.len(),
+                    &async_client_type(),
+                    None,
+                    None,
+                    1002,
+                    None,
+                ),
+            ]
+        } {
+            let adapter = unsafe { &*((*response).conn_ptr as *const ClientAdapter) };
+            assert_eq!(adapter.pipe_client_id.load(Ordering::Acquire), 0);
+            assert_eq!(
+                adapter.async_pipe_activation.state(),
+                AsyncPipeActivationState::Dormant
+            );
+            let client = unsafe { (*response).conn_ptr };
+            unsafe {
+                free_connection_response(response.cast_mut());
+                close_client(client);
+            }
+        }
+    }
+
+    #[test]
+    fn activation_before_timeout_wins_and_stays_active() {
+        let request = lazy_request();
+        let response = unsafe {
+            create_client_for_python_async(
+                request.as_ptr(),
+                request.len(),
+                &async_client_type(),
+                None,
+                None,
+                1003,
+                None,
+                2003,
+            )
+        };
+        let adapter = unsafe { &*((*response).conn_ptr as *const ClientAdapter) };
+        assert_eq!(adapter.pipe_client_id.load(Ordering::Acquire), 2003);
+        assert_eq!(
+            adapter.async_pipe_activation.state(),
+            AsyncPipeActivationState::Dormant
+        );
+        assert!(adapter.active_pipe_client_id().is_none());
+        assert!(activate_client_async_pipe_inner(adapter, true));
+        assert_eq!(
+            adapter.async_pipe_activation.state(),
+            AsyncPipeActivationState::Active
+        );
+        assert_eq!(
+            adapter.async_pipe_activation.time_out(),
+            AsyncPipeActivationState::Active
+        );
+        assert!(!activate_client_async_pipe_inner(adapter, true));
+        let client = unsafe { (*response).conn_ptr };
+        unsafe {
+            free_connection_response(response.cast_mut());
+            close_client(client);
+        }
+    }
+
+    #[test]
+    fn timeout_before_activation_rejects_late_activation() {
+        let request = lazy_request();
+        let response = unsafe {
+            create_client_for_python_async(
+                request.as_ptr(),
+                request.len(),
+                &async_client_type(),
+                None,
+                None,
+                1004,
+                None,
+                2004,
+            )
+        };
+        let adapter = unsafe { &*((*response).conn_ptr as *const ClientAdapter) };
+        assert_eq!(
+            adapter.async_pipe_activation.time_out(),
+            AsyncPipeActivationState::TimedOut
+        );
+        assert!(!activate_client_async_pipe_inner(adapter, true));
+        assert_eq!(
+            adapter.async_pipe_activation.state(),
+            AsyncPipeActivationState::TimedOut
+        );
+        assert!(adapter.active_pipe_client_id().is_none());
+        let client = unsafe { (*response).conn_ptr };
+        unsafe {
+            free_connection_response(response.cast_mut());
+            close_client(client);
+        }
+    }
+
+    #[test]
+    fn activation_and_deadline_boundary_cas_have_exactly_one_winner() {
+        use std::sync::Barrier;
+
+        for _ in 0..64 {
+            let activation = Arc::new(AsyncPipeActivation::new(AsyncPipeActivationState::Dormant));
+            let boundary = Arc::new(Barrier::new(3));
+
+            let activation_task = {
+                let activation = activation.clone();
+                let boundary = boundary.clone();
+                std::thread::spawn(move || {
+                    boundary.wait();
+                    activation.activate()
+                })
+            };
+            let deadline_task = {
+                let activation = activation.clone();
+                let boundary = boundary.clone();
+                std::thread::spawn(move || {
+                    boundary.wait();
+                    activation.time_out()
+                })
+            };
+
+            boundary.wait();
+            let activation_won = activation_task.join().unwrap();
+            let deadline_observed = deadline_task.join().unwrap();
+            assert_eq!(
+                activation_won,
+                deadline_observed == AsyncPipeActivationState::Active
+            );
+            assert_eq!(
+                activation.state(),
+                if activation_won {
+                    AsyncPipeActivationState::Active
+                } else {
+                    AsyncPipeActivationState::TimedOut
+                }
+            );
+        }
+    }
+
+    #[test]
+    fn invalid_nonexplicit_sync_and_pipe_less_activation_fail_safely() {
+        assert!(!unsafe { activate_client_async_pipe(std::ptr::null()) });
+        let request = lazy_request();
+        let legacy = unsafe {
+            create_client(
+                request.as_ptr(),
+                request.len(),
+                &async_client_type(),
+                None,
+                None,
+                77,
+            )
+        };
+        let legacy_adapter = unsafe { &*((*legacy).conn_ptr as *const ClientAdapter) };
+        assert!(!activate_client_async_pipe_inner(legacy_adapter, true));
+        let legacy_client = unsafe { (*legacy).conn_ptr };
+        unsafe {
+            free_connection_response(legacy.cast_mut());
+            close_client(legacy_client);
+        }
+
+        let sync = unsafe {
+            create_client(
+                request.as_ptr(),
+                request.len(),
+                &ClientType::SyncClient,
+                None,
+                None,
+                78,
+            )
+        };
+        let sync_adapter = unsafe { &*((*sync).conn_ptr as *const ClientAdapter) };
+        assert!(!activate_client_async_pipe_inner(sync_adapter, true));
+        let sync_client = unsafe { (*sync).conn_ptr };
+        unsafe {
+            free_connection_response(sync.cast_mut());
+            close_client(sync_client);
+        }
+
+        let explicit = unsafe {
+            create_client_for_python_async(
+                request.as_ptr(),
+                request.len(),
+                &async_client_type(),
+                None,
+                None,
+                79,
+                None,
+                80,
+            )
+        };
+        let explicit_adapter = unsafe { &*((*explicit).conn_ptr as *const ClientAdapter) };
+        assert!(!activate_client_async_pipe_inner(explicit_adapter, false));
+        let explicit_client = unsafe { (*explicit).conn_ptr };
+        unsafe {
+            free_connection_response(explicit.cast_mut());
+            close_client(explicit_client);
+        }
+    }
+
+    #[test]
+    fn successful_activation_does_not_lose_future_pushes() {
+        let activation = AsyncPipeActivation::new(AsyncPipeActivationState::Dormant);
+        assert!(activation.activate());
+        let runtime = Builder::new_current_thread().enable_all().build().unwrap();
+        let callback_store = std::sync::RwLock::new(None);
+        let pipe = SharedPipeWriter {
+            buffer: std::sync::Mutex::new(Vec::new()),
+            condvar: Condvar::new(),
+            pipe_fd: -1,
+        };
+        let delivery = async_push_delivery_mode(None, AsyncPipeCreation::Dormant(2005));
+
+        for _ in 0..2 {
+            assert!(runtime.block_on(wait_for_async_pipe_activation(
+                &activation,
+                std::time::Duration::ZERO,
+            )));
+            let previous_len = pipe.buffer.lock().unwrap().len();
+            assert!(dispatch_async_push_notification(
+                &message_push(),
+                &callback_store,
+                delivery,
+                1005,
+                Some(&pipe),
+            ));
+            assert!(pipe.buffer.lock().unwrap().len() > previous_len);
+        }
+        assert_eq!(activation.state(), AsyncPipeActivationState::Active);
+    }
+
+    #[test]
+    fn activation_wait_deadline_atomically_marks_timeout() {
+        let activation = AsyncPipeActivation::new(AsyncPipeActivationState::Dormant);
+        let runtime = Builder::new_current_thread().enable_all().build().unwrap();
+        assert!(!runtime.block_on(wait_for_async_pipe_activation(
+            &activation,
+            std::time::Duration::ZERO,
+        )));
+        assert_eq!(activation.state(), AsyncPipeActivationState::TimedOut);
     }
 
     #[test]

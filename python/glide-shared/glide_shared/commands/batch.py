@@ -1943,6 +1943,31 @@ class BaseBatch:
         """
         return self.append_command(RequestType.SIsMember, [key, member])
 
+    def sismember_if_exists(
+        self: TBatch,
+        key: TEncodable,
+        member: TEncodable,
+    ) -> TBatch:
+        """
+        Returns if `member` is a member of the set stored at `key`,
+        or `-1` if the `key` does not exist.
+
+        See [valkey.io](https://valkey.io/commands/sismember/) for more details.
+
+        Args:
+            key (TEncodable): The key of the set.
+            member (TEncodable): The member to check for existence in the set.
+
+        Commands response:
+            int: A status code indicating membership:
+            - `1`: The member exists in the set.
+            - `0`: The key exists but the member does not exist in the set.
+            - `-1`: The key does not exist.
+
+        Since: Valkey version 9.2.0.
+        """
+        return self.append_command(RequestType.SIsMember, [key, member, "XX"])
+
     def smove(
         self: TBatch,
         source: TEncodable,

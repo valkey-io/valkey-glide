@@ -270,6 +270,17 @@ class _GlideFFI:
                 uintptr_t client_id,
                 CredentialProviderCallback credential_provider
             );
+            const ConnectionResponse* create_client_for_python_async(
+                const uint8_t* connection_request_bytes,
+                size_t connection_request_len,
+                const ClientType* client_type,
+                PubSubCallback pubsub_callback,
+                AddressResolverCallback address_resolver,
+                uintptr_t client_id,
+                CredentialProviderCallback credential_provider,
+                uint64_t pipe_client_id
+            );
+            bool activate_client_async_pipe(const void* client_adapter_ptr);
             void close_client(const void* client_adapter_ptr);
             void init_async_pipe(int pipe_write_fd);
             void reinit_async_pipe(int pipe_write_fd);

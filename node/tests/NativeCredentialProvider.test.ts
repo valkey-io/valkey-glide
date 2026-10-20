@@ -3,8 +3,6 @@
  */
 
 import { describe, expect, it } from "@jest/globals";
-import { runInNewContext } from "node:vm";
-import { setFlagsFromString } from "node:v8";
 import {
     CreateDirectClient,
     createMonitorClient,
@@ -84,14 +82,15 @@ describe("Direct native credential provider key boundary", () => {
         }
     });
 
-    it("finalizes a provider-direct handle after injected post-conversion failure exactly once", async () => {
+    it("cleans a provider-direct handle synchronously after injected post-conversion failure", async () => {
         const {
             getProviderDirectCleanupCount,
+            getProviderDirectOpenHandleCount,
             injectProviderDirectResolutionFailureAfterConversion,
         } = await import("../build-ts/native");
         injectProviderDirectResolutionFailureAfterConversion();
 
-        // The one-shot fault and cleanup marker are provider-direct-only. An
+        // The one-shot fault and cleanup state are provider-direct-only. An
         // ordinary direct handle converts and closes without consuming either.
         const ordinaryHandle = await CreateDirectClient(
             encodeRequest(undefined, true, false),
@@ -99,6 +98,7 @@ describe("Direct native credential provider key boundary", () => {
         );
         ordinaryHandle.close();
         expect(getProviderDirectCleanupCount()).toBe(0);
+        expect(getProviderDirectOpenHandleCount()).toBe(0);
 
         const providerKey = registerCredentialProvider(() => ({
             accessKeyId: "access-key",
@@ -106,35 +106,18 @@ describe("Direct native credential provider key boundary", () => {
         }));
         const request = encodeRequest(providerKey);
 
-        setFlagsFromString("--expose_gc");
-        const collectGarbage = runInNewContext("gc") as () => void;
-        setFlagsFromString("--no-expose_gc");
-
         try {
             await expect(
                 CreateDirectClient(request, () => undefined),
             ).rejects.toThrow(/failure after native handle conversion/u);
 
-            // The claim committed after conversion, before the injected failure.
+            // Conversion committed the claim, and the injected failure invoked
+            // provider-direct cleanup before publishing the rejection.
             expect(() => CreateDirectClient(request, () => undefined)).toThrow(
                 /was not found in the registry/u,
             );
-
-            for (
-                let attempt = 0;
-                attempt < 100 && getProviderDirectCleanupCount() === 0;
-                attempt++
-            ) {
-                collectGarbage();
-                await new Promise<void>((resolve) => setTimeout(resolve, 10));
-            }
-
             expect(getProviderDirectCleanupCount()).toBe(1);
-
-            // Repeated collection cannot release the same native marker twice.
-            collectGarbage();
-            await new Promise<void>((resolve) => setImmediate(resolve));
-            expect(getProviderDirectCleanupCount()).toBe(1);
+            expect(getProviderDirectOpenHandleCount()).toBe(0);
         } finally {
             removeCredentialProvider(providerKey);
         }

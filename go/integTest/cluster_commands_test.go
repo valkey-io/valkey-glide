@@ -75,34 +75,19 @@ func (suite *GlideTestSuite) TestClusterCustomCommandConfigGet() {
 }
 
 func (suite *GlideTestSuite) TestInfoCluster() {
-	DEFAULT_INFO_SECTIONS := []string{
-		"Server",
-		"Clients",
-		"Memory",
-		"Persistence",
-		"Stats",
-		"Replication",
-		"CPU",
-		"Modules",
-		"Errorstats",
-		"Cluster",
-		"Keyspace",
-	}
-
 	client := suite.defaultClusterClient()
 	t := suite.T()
 
 	// info without options
-	data, err := client.Info(context.Background())
-	assert.NoError(t, err)
-	for _, info := range data {
-		for _, section := range DEFAULT_INFO_SECTIONS {
-			assert.Contains(t, info, "# "+section, "Section "+section+" is missing")
+	for _, fields := range getInfo(t, client) {
+		for _, field := range infoDefaultFields {
+			assert.Contains(t, fields, field)
 		}
 	}
 
 	// info with option or with multiple options without route
 	sections := []constants.Section{constants.Cpu}
+	// TODO #5368: Compare versions semantically, not as strings.
 	if suite.serverVersion >= "7.0.0" {
 		sections = append(sections, constants.Memory)
 	}
@@ -136,18 +121,29 @@ func (suite *GlideTestSuite) TestInfoCluster() {
 		)
 	}
 
-	// default sections, multi node route
-	opts = options.ClusterInfoOptions{
-		InfoOptions: nil,
-		RouteOption: &options.RouteOption{Route: config.AllPrimaries},
+	// Valkey 9.2+ fields
+	// ------------------
+
+	// TODO #5368: Compare versions semantically, not as strings.
+	if suite.serverVersion < "9.2.0" {
+		return
 	}
-	response, err = client.InfoWithOptions(context.Background(), opts)
-	assert.NoError(t, err)
-	assert.True(t, response.IsMultiValue())
-	for _, info := range response.MultiValue() {
-		for _, section := range DEFAULT_INFO_SECTIONS {
-			assert.Contains(t, info, "# "+section, "Section "+section+" is missing")
-		}
+
+	// Persistence fields
+	for _, persistence := range getInfo(t, client, constants.Persistence) {
+		assert.Contains(t, bgsaveTypes, persistence["rdb_current_bgsave_type"])
+		assert.Contains(t, bgsaveTypes, persistence["rdb_last_bgsave_type"])
+
+		remaining_name := "forkless_estimated_seconds_remaining"
+		remaining_value := AssertInt(t, persistence[remaining_name], remaining_name)
+		assert.GreaterOrEqual(t, remaining_value, int64(-1))
+	}
+
+	// Cluster info fields
+	for _, cluster_info := range getInfo(t, client, constants.ClusterInfo) {
+		fallbacks_name := "cluster_io_main_thread_fallbacks"
+		fallbacks_value := AssertInt(t, cluster_info[fallbacks_name], fallbacks_name)
+		assert.GreaterOrEqual(t, fallbacks_value, int64(0))
 	}
 }
 
@@ -1268,6 +1264,7 @@ func (suite *GlideTestSuite) TestLolwutWithOptions_WithRandomRoute() {
 func (suite *GlideTestSuite) TestLolwutWithOptions_Version9_AllNodes() {
 	client := suite.defaultClusterClient()
 	// Test LOLWUT version 9 (available in Valkey 9.0.0+)
+	// TODO #5368: Compare versions semantically, not as strings.
 	if suite.serverVersion >= "9.0.0" {
 		options := options.ClusterLolwutOptions{
 			LolwutOptions: &options.LolwutOptions{
@@ -1292,6 +1289,7 @@ func (suite *GlideTestSuite) TestLolwutWithOptions_Version9_AllNodes() {
 func (suite *GlideTestSuite) TestLolwutWithOptions_Version9_RandomNode() {
 	client := suite.defaultClusterClient()
 	// Test LOLWUT version 9 (available in Valkey 9.0.0+)
+	// TODO #5368: Compare versions semantically, not as strings.
 	if suite.serverVersion >= "9.0.0" {
 		options := options.ClusterLolwutOptions{
 			LolwutOptions: &options.LolwutOptions{
@@ -3236,6 +3234,7 @@ func (suite *GlideTestSuite) TestClusterShards() {
 	t := suite.T()
 
 	// CLUSTER SHARDS requires Valkey 7.0+
+	// TODO #5368: Compare versions semantically, not as strings.
 	if suite.serverVersion < "7.0.0" {
 		t.Skip("CLUSTER SHARDS requires Valkey 7.0 or above")
 	}
@@ -3261,6 +3260,7 @@ func (suite *GlideTestSuite) TestClusterShardsWithRoute() {
 	t := suite.T()
 
 	// CLUSTER SHARDS requires Valkey 7.0+
+	// TODO #5368: Compare versions semantically, not as strings.
 	if suite.serverVersion < "7.0.0" {
 		t.Skip("CLUSTER SHARDS requires Valkey 7.0 or above")
 	}
@@ -3345,6 +3345,7 @@ func (suite *GlideTestSuite) TestClusterMyShardId() {
 	t := suite.T()
 
 	// CLUSTER MYSHARDID requires Valkey 7.2+
+	// TODO #5368: Compare versions semantically, not as strings.
 	if suite.serverVersion < "7.2.0" {
 		t.Skip("CLUSTER MYSHARDID requires Valkey 7.2 or above")
 	}
@@ -3423,6 +3424,7 @@ func (suite *GlideTestSuite) TestClusterLinks() {
 	t := suite.T()
 
 	// CLUSTER LINKS requires Valkey 7.0+
+	// TODO #5368: Compare versions semantically, not as strings.
 	if suite.serverVersion < "7.0.0" {
 		t.Skip("CLUSTER LINKS requires Valkey 7.0 or above")
 	}

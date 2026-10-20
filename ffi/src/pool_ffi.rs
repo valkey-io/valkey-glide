@@ -142,6 +142,7 @@ fn create_pool_client(
         None, // no address resolver (uses the one in ConnectionRequest if any)
         None, // custom credential providers are rejected by glide_pool_create
         client_id,
+        AsyncPipeCreation::Active(client_id as u64),
     )?;
 
     // Extract the Client from the adapter for pool bookkeeping

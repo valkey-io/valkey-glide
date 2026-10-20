@@ -74,8 +74,12 @@ jobs:
             - name: Cache dependencies
               uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
               with:
+                  cache-bin: true
                   cache-on-failure: true
                   workspaces: ./ffi
+
+            - name: Install cbindgen
+              run: cargo install --locked cbindgen@0.29.4
 
             - name: Run glide-ffi tests
               working-directory: ./ffi
