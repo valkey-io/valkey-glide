@@ -5,6 +5,7 @@
 ### Features
 
 * All: Add `DELIFEQ` command support ([#6146](https://github.com/valkey-io/valkey-glide/issues/6146))
+* Python/CI: Add experimental Windows AMD64 (CPython 3.9–3.14) and ARM64 (CPython 3.11–3.14) wheel builds for the async and sync clients, including Windows FFI width fixes and a threaded async response-pipe reader. Wheels remain build-only CI artifacts; Windows integration coverage is required before PyPI publishing ([#6826](https://github.com/valkey-io/valkey-glide/pull/6826)).
 
 ### Fixes
 

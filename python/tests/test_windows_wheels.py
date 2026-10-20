@@ -1,5 +1,7 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
+import fnmatch
+import json
 import os
 import re
 import shutil
@@ -15,7 +17,9 @@ import pytest
 
 from tests import windows_wheel_smoke as smoke
 
-WORKFLOW = Path(__file__).resolve().parents[2] / ".github" / "workflows" / "pypi-cd.yml"
+WORKFLOW = (
+    Path(__file__).resolve().parents[2] / ".github" / "workflows" / "python-windows.yml"
+)
 
 
 def windows_step(name):
@@ -138,3 +142,98 @@ def test_windows_checkout_does_not_persist_credentials():
     step = windows_step("Checkout")
     assert 'submodules: "true"' in step
     assert "persist-credentials: false" in step
+
+
+@pytest.mark.parametrize(
+    "executable", [sys.executable, getattr(sys, "_base_executable", sys.executable)]
+)
+def test_protobuf_plugin_uses_target_python_scripts(executable):
+    step = windows_step("Generate protobuf files")
+    match = re.search(r'\$mypyPlugin = & "\$env:TARGET_PYTHON" -c "([^"]+)"', step)
+    assert match is not None
+    plugin = subprocess.check_output([executable, "-c", match.group(1)], text=True)
+    scripts = subprocess.check_output(
+        [executable, "-c", "import sysconfig; print(sysconfig.get_path('scripts'))"],
+        text=True,
+    )
+    assert Path(plugin.strip()) == Path(scripts.strip()) / "protoc-gen-mypy.exe"
+    assert "Test-Path -LiteralPath $mypyPlugin -PathType Leaf" in step
+    assert "throw" in step.split("$mypyPlugin", 2)[2].split("$protoFiles", 1)[0]
+
+
+@pytest.mark.skipif(shutil.which("pwsh") is None, reason="PowerShell is required")
+@pytest.mark.parametrize("event", ["pull_request", "workflow_dispatch"])
+def test_windows_matrix(tmp_path, event):
+    matrix_job = WORKFLOW.read_text().split("    build-windows-wheels:", 1)[0]
+    script = tmp_path / "matrix.ps1"
+    script.write_text(textwrap.dedent(matrix_job.split("run: |\n", 1)[1]))
+    output = tmp_path / "output"
+    result = subprocess.run(
+        ["pwsh", "-NoProfile", "-NonInteractive", "-File", str(script)],
+        env={**os.environ, "GITHUB_EVENT_NAME": event, "GITHUB_OUTPUT": str(output)},
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert result.returncode == 0, result.stderr
+    name, value = output.read_text().strip().split("=", 1)
+    assert name == "WINDOWS_MATRIX"
+    matrix = json.loads(value)
+    expected = []
+    for arch, python_arch, runner, target, wheel_tag, versions in [
+        (
+            "AMD64",
+            "x64",
+            "windows-latest",
+            "x86_64-pc-windows-msvc",
+            "win_amd64",
+            ["3.9", "3.10", "3.11", "3.12", "3.13", "3.14"],
+        ),
+        (
+            "ARM64",
+            "arm64",
+            "windows-11-arm",
+            "aarch64-pc-windows-msvc",
+            "win_arm64",
+            ["3.11", "3.12", "3.13", "3.14"],
+        ),
+    ]:
+        for version in ["3.14"] if event == "pull_request" else versions:
+            expected.append(
+                {
+                    "ARCH": arch,
+                    "PYTHON_ARCH": python_arch,
+                    "RUNNER": runner,
+                    "TARGET": target,
+                    "WHEEL_TAG": wheel_tag,
+                    "PYTHON_VERSION": version,
+                }
+            )
+    assert matrix == expected
+
+
+def test_windows_ci_is_separate_from_publishing():
+    windows = WORKFLOW.read_text()
+    cd = WORKFLOW.with_name("pypi-cd.yml").read_text()
+    cd_triggers = cd.split("\nconcurrency:", 1)[0]
+    for path in ("ffi/**", "glide-core/**", "python/**"):
+        assert f"- {path}" in windows
+    assert not re.search(r"- (ffi|glide-core|python)/", cd_triggers)
+    assert "build-windows-wheels" not in cd
+    assert "WINDOWS_MATRIX" not in cd
+    assert "self-hosted" not in windows
+    assert "AWS_ACTIONS" not in windows
+    assert "publish-binaries" not in windows
+    assert "gh-action-pypi-publish" not in windows
+    assert "id-token: write" not in windows
+    assert "contents: read" in windows
+    assert set(re.findall(r"^    ([\w-]+):", windows.split("\njobs:", 1)[1], re.M)) == {
+        "load-windows-matrix",
+        "build-windows-wheels",
+    }
+    for client in ("async", "sync"):
+        step = windows_step(f"Upload Python {client.title()} client wheel")
+        artifact = re.search(r"^\s+name: (.+)$", step, re.M)
+        assert artifact is not None
+        assert artifact.group(1).startswith("windows-ci-")
+        assert not fnmatch.fnmatchcase(artifact.group(1), f"wheels-*-{client}")

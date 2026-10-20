@@ -238,3 +238,200 @@ async def test_failed_frame_wakes_owning_loop(monkeypatch, pipe_client, anyio_ba
         with pytest.raises(RuntimeError, match="cleanup failed"):
             await future
     assert pipe_client._pending_futures == {}
+
+
+@pytest.mark.parametrize("require_lock", [False, True])
+@pytest.mark.parametrize("replacement", [None, "replacement"])
+@pytest.mark.parametrize("matches", [False, True])
+def test_pending_future_replacement_uses_reader_lock(
+    monkeypatch, pipe_client, require_lock, replacement, matches
+):
+    class CheckedDict(dict):
+        def get(self, key):
+            assert pipe_client._lock.locked() == require_lock
+            return super().get(key)
+
+        def __setitem__(self, key, value):
+            assert pipe_client._lock.locked() == require_lock
+            super().__setitem__(key, value)
+
+        def __delitem__(self, key):
+            assert pipe_client._lock.locked() == require_lock
+            super().__delitem__(key)
+
+    original = pipe_client._pending_futures[1]
+    pipe_client._pending_futures = CheckedDict({1: original})
+    monkeypatch.setattr(pipe, "_PENDING_FUTURES_REQUIRE_LOCK", require_lock)
+    pipe.BaseClient._replace_pending_future(
+        pipe_client, 1, original if matches else Future(), replacement
+    )
+    assert pipe_client._pending_futures == (
+        ({1: replacement} if replacement is not None else {})
+        if matches
+        else {1: original}
+    )
+
+
+@pytest.fixture
+def scope_client(monkeypatch, pipe_client):
+    client = pipe.BaseClient(Mock())
+    client._lib = Mock(glide_scope_acquire_pipe=Mock(return_value=0))
+    client._core_client = client._ffi.cast("void*", 77)
+    client._conn_req_bytes = b"request"
+    client._pipe_client_id = 7
+    monkeypatch.setattr(pipe, "_PENDING_FUTURES_REQUIRE_LOCK", True)
+    return client
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("delivery", ["after_cancel", "queued"])
+@pytest.mark.parametrize("failed", [False, True])
+@pytest.mark.parametrize("workers", [False, True])
+async def test_cancelled_scope_releases_grant_across_dispatch(
+    monkeypatch, scope_client, anyio_backend, delivery, failed, workers
+):
+    client = scope_client
+    future = pipe._get_new_future_instance()
+    monkeypatch.setattr(pipe, "_get_new_future_instance", lambda: future)
+    monkeypatch.setattr(pipe, "_FREE_THREADED", workers)
+    callbacks = []
+
+    def enqueue(callback, *args):
+        callbacks.append((callback, args))
+
+    if anyio_backend == "asyncio":
+        client._loop = SimpleNamespace(call_soon_threadsafe=enqueue)
+    else:
+        future._token = SimpleNamespace(run_sync_soon=enqueue)
+
+    def flush_callbacks():
+        while callbacks:
+            callback, args = callbacks.pop(0)
+            callback(*args)
+
+    finished = anyio.Event()
+
+    async def acquire(*, task_status):
+        with anyio.CancelScope() as cancel_scope:
+            task_status.started(cancel_scope)
+            await client.scoped_connection()
+            pytest.fail("Cancelled acquire must not return a scope")
+        finished.set()
+
+    result = RuntimeError("acquire failed") if failed else 42
+    with anyio.fail_after(5):
+        async with anyio.create_task_group() as tasks:
+            cancel_scope = await tasks.start(acquire)
+            assert 1 in client._pending_futures
+            if delivery != "after_cancel":
+                await anyio.to_thread.run_sync(
+                    pipe._complete_pipe_request, client, 1, result
+                )
+                assert client._pending_futures == {}
+                assert callbacks
+            cancel_scope.cancel()
+            await finished.wait()
+            if delivery == "after_cancel":
+                await anyio.to_thread.run_sync(
+                    pipe._complete_pipe_request, client, 1, result
+                )
+            flush_callbacks()
+    assert client._pending_futures == {}
+    if failed:
+        client._lib.glide_scope_release.assert_not_called()
+    else:
+        client._lib.glide_scope_release.assert_called_once_with(42, 77)
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("failed", [False, True])
+async def test_abandon_delivered_scope_releases_once(failed):
+    future = pipe._get_new_future_instance()
+    lib = Mock()
+    response = pipe._ScopeAcquireResponse(future, lib, 77)
+    if failed:
+        response.set_exception(RuntimeError("acquire failed"))
+        with pytest.raises(RuntimeError, match="acquire failed"):
+            await future
+    else:
+        response.set_result(42)
+        assert await future == 42
+    assert response.done()
+    response.abandon()
+    response.abandon()
+    if failed:
+        lib.glide_scope_release.assert_not_called()
+    else:
+        lib.glide_scope_release.assert_called_once_with(42, 77)
+
+
+@pytest.mark.anyio
+async def test_scope_queue_failure_removes_pending_response(scope_client):
+    scope_client._lib.glide_scope_acquire_pipe.return_value = 1
+    with pytest.raises(RuntimeError, match="Failed to queue scope acquire"):
+        await scope_client.scoped_connection()
+    assert scope_client._pending_futures == {}
+    scope_client._lib.glide_scope_release.assert_not_called()
+
+
+@pytest.mark.anyio
+async def test_close_fails_pending_scope(scope_client):
+    registered = anyio.Event()
+
+    def queue_acquire(*args):
+        registered.set()
+        return 0
+
+    scope_client._lib.glide_scope_acquire_pipe.side_effect = queue_acquire
+
+    async def acquire():
+        with pytest.raises(pipe.ConnectionError, match="closed for test"):
+            await scope_client.scoped_connection()
+
+    with anyio.fail_after(5):
+        async with anyio.create_task_group() as tasks:
+            tasks.start_soon(acquire)
+            await registered.wait()
+            await scope_client.close("closed for test")
+    assert scope_client._pending_futures == {}
+    scope_client._lib.glide_scope_release.assert_not_called()
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("failed", [False, True])
+async def test_scope_grant_wakes_owning_loop(scope_client, anyio_backend, failed):
+    client = scope_client
+    if anyio_backend == "asyncio":
+        client._loop = asyncio.get_running_loop()
+    registered = anyio.Event()
+
+    def queue_acquire(*args):
+        registered.set()
+        return 0
+
+    client._lib.glide_scope_acquire_pipe.side_effect = queue_acquire
+
+    async def complete(*, task_status):
+        await registered.wait()
+        await anyio.to_thread.run_sync(
+            pipe._complete_pipe_request,
+            client,
+            1,
+            RuntimeError("acquire failed") if failed else 42,
+        )
+        task_status.started()
+
+    async def acquire():
+        if failed:
+            with pytest.raises(RuntimeError, match="acquire failed"):
+                await client.scoped_connection()
+        else:
+            scope = await client.scoped_connection()
+            assert scope.scope_id == 42
+
+    with anyio.fail_after(5):
+        async with anyio.create_task_group() as tasks:
+            tasks.start_soon(acquire)
+            await tasks.start(complete)
+    assert client._pending_futures == {}
+    client._lib.glide_scope_release.assert_not_called()

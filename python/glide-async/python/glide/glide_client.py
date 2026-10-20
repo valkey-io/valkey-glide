@@ -180,38 +180,52 @@ def _get_new_future_instance() -> "TFuture":
     return _CompatFuture()
 
 
-class _ReleaseLateScope:
-    """Takes a cancelled acquire's place in ``_pending_futures``.
+class _ScopeAcquireResponse:
+    """Own a grant until the acquire returns, even while delivery is queued.
 
-    Core keeps waiting after the caller gives up. A scope it then grants must
-    go back, or its slot stays in use until the client closes. Covers a grant
-    that has not arrived yet; one already resolved into the caller's future
-    is released by ``scoped_connection`` itself.
+    Cancelling the awaiter's future must not discard a scope already popped
+    from the pending map but still waiting for its event-loop callback.
     """
 
-    def __init__(self, lib, client_id: int) -> None:
+    def __init__(self, future: TFuture, lib, client_id: int) -> None:
+        self._future = future
         self._lib = lib
         self._client_id = client_id
+        self._lock = threading.Lock()
+        self._completed = False
+        self._abandoned = False
+        self._scope_id: Optional[int] = None
 
     def done(self) -> bool:
-        return False
+        with self._lock:
+            return self._completed
 
     def set_result(self, scope_id: int) -> None:
-        self._lib.glide_scope_release(scope_id, self._client_id)
+        with self._lock:
+            self._completed = True
+            if self._abandoned:
+                self._lib.glide_scope_release(scope_id, self._client_id)
+            else:
+                self._scope_id = scope_id
+                if not self._future.done():
+                    self._future.set_result(scope_id)
 
-    def set_exception(self, _exception: BaseException) -> None:
-        # The caller already left; a failed grant holds nothing to release.
-        pass
+    def set_exception(self, exception: Exception) -> None:
+        with self._lock:
+            self._completed = True
+            if not self._abandoned and not self._future.done():
+                self._future.set_exception(exception)
+
+    def abandon(self) -> None:
+        with self._lock:
+            if self._abandoned:
+                return
+            self._abandoned = True
+            if self._scope_id is not None:
+                self._lib.glide_scope_release(self._scope_id, self._client_id)
 
 
-def _delivered_result(fut: "TFuture") -> Optional[int]:
-    """The value a completed future holds, or ``None`` if it holds none."""
-    if not fut.done():
-        return None
-    try:
-        return fut.result()
-    except BaseException:
-        return None
+TPendingFuture = Union[TFuture, _ScopeAcquireResponse]
 
 
 def _slot_for_key(key: bytes) -> int:
@@ -633,7 +647,7 @@ class BaseClient(CoreCommands):
         self._conn_req_bytes: bytes = b""
         self._pubsub_callback_ref = None
         self._loop: Optional[asyncio.AbstractEventLoop] = None  # set in create()
-        self._pending_futures: Dict[int, "TFuture"] = {}
+        self._pending_futures: Dict[int, TPendingFuture] = {}
         self._callback_id_gen = itertools.count(1)
         self._lock = threading.Lock()
         self._address_resolver_callback_ref = None
@@ -834,7 +848,7 @@ class BaseClient(CoreCommands):
     def _get_callback_id(self) -> int:
         return next(self._callback_id_gen)
 
-    def _register_future(self, callback_id: int, fut: "TFuture") -> None:
+    def _register_future(self, callback_id: int, fut: TPendingFuture) -> None:
         """Register a pending future when responses may complete off-loop."""
         if _PENDING_FUTURES_REQUIRE_LOCK:
             with self._lock:
@@ -843,12 +857,12 @@ class BaseClient(CoreCommands):
             self._pending_futures[callback_id] = fut
 
     def _replace_pending_future(
-        self, callback_id: int, expected: "TFuture", replacement: Any
+        self, callback_id: int, expected: TPendingFuture, replacement: Any
     ) -> None:
         """The pipe reader may already have popped and resolved this entry;
         swapping only while it is still ``expected`` leaves that result where
         its awaiter will find it. ``None`` removes the entry."""
-        lock = self._lock if _FREE_THREADED else contextlib.nullcontext()
+        lock = self._lock if _PENDING_FUTURES_REQUIRE_LOCK else contextlib.nullcontext()
         with lock:
             if self._pending_futures.get(callback_id) is not expected:
                 return
@@ -1340,7 +1354,8 @@ class BaseClient(CoreCommands):
 
         callback_id = self._get_callback_id()
         fut = _get_new_future_instance()
-        self._register_future(callback_id, fut)
+        response = _ScopeAcquireResponse(fut, self._lib, client_id)
+        self._register_future(callback_id, response)
 
         buf = self._ffi.from_buffer(conn_req_bytes)
         rc = self._lib.glide_scope_acquire_pipe(
@@ -1357,7 +1372,7 @@ class BaseClient(CoreCommands):
             self._pipe_client_id,
         )
         if rc != 0:
-            self._replace_pending_future(callback_id, fut, None)
+            self._replace_pending_future(callback_id, response, None)
             raise RuntimeError(f"Failed to queue scope acquire: error code {rc}")
 
         try:
@@ -1367,15 +1382,7 @@ class BaseClient(CoreCommands):
             # frame can arrive; keep the documented class.
             raise ConnectionError(str(e) or "Client closed while waiting") from e
         except BaseException:
-            # Cancellation (asyncio.CancelledError, trio.Cancelled) leaves the
-            # core wait running, or lands after the grant resolved the future
-            # but before this task saw it.
-            self._replace_pending_future(
-                callback_id, fut, _ReleaseLateScope(self._lib, client_id)
-            )
-            delivered = _delivered_result(fut)
-            if delivered is not None:
-                self._lib.glide_scope_release(delivered, client_id)
+            response.abandon()
             raise
 
         return AsyncIsolatedScope(
