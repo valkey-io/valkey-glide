@@ -3371,10 +3371,14 @@ mod scope_pool_tests {
         crate::pool::get_client_scope_pools().remove(&client_id);
     }
 
-    /// A batch `SELECT` must move `current_database()` once it dispatches, so the
-    /// pool-release drift check restores the configured db — pins the store-on-`Ok`
-    /// wiring in `send_pipeline`. Uses a real standalone server (db 4 is valid) so
-    /// the dispatch succeeds; the companion unit test covers the failure direction.
+    /// A batch `SELECT` must move `current_database()` when the server applies it,
+    /// and must NOT move it when the server rejects it — the pool-release drift
+    /// check reads `current_database`, and scope connections handshake into it, so a
+    /// poisoned value breaks later acquires. Pins both the store-on-applied wiring in
+    /// `send_pipeline` and the reply-validation (`batch_reply_applied`) that rejects
+    /// an out-of-range SELECT returned inside an Ok array. Uses a real standalone
+    /// server (db 4 valid, db 99 out of range); the companion unit test covers the
+    /// dispatch-failure direction.
     #[tokio::test]
     async fn batch_select_moves_current_database_after_successful_dispatch() {
         let server = TestServer::start();
@@ -3414,8 +3418,28 @@ mod scope_pool_tests {
             .await
             .expect("pipeline with SELECT 0 dispatches");
         assert_eq!(client.current_database(), 0, "the last batch SELECT wins");
+
+        // A rejected SELECT must NOT move current_database: with raise_on_error=false
+        // an out-of-range `SELECT 99` comes back as a ServerError *inside* an Ok array,
+        // so the outer Result is Ok but the db was never applied. Storing it would
+        // poison every later scope acquire (they handshake SELECT <current_database>).
+        let mut bad = redis::pipe();
+        bad.cmd("SELECT").arg(99).cmd("PING");
+        let _ = client
+            .send_pipeline(&bad, None, false, None, Default::default())
+            .await;
+        assert_eq!(
+            client.current_database(),
+            0,
+            "a rejected SELECT reply must not move current_database"
+        );
     }
 
+    /// End-to-end through the FFI entry `acquire_scope_outcome`, exercising the glue the
+    /// direct-call tests skip: that a non-zero parent `current_database()` is actually
+    /// read from the client registry, that a wrong-db idle connection drives the
+    /// `NeedsResync` spawn (first call returns -1), and that the FFI retry converges to
+    /// a `Reused` scope on the parent's runtime db.
     ///
     /// The other pool tests all run on db 0, so the `.unwrap_or(0)` registry read and the
     /// resync spawn are indistinguishable from no-ops there. Here the parent SELECTs db 4

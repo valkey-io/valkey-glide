@@ -2013,12 +2013,10 @@ impl Client {
     ) -> redis::RedisFuture<'a, Value> {
         Box::pin(async move {
             self.reconcile_iam_before_dispatch().await?;
-            // Record a SELECT in the batch for the pool-release drift check, but
-            // only after a successful dispatch (see `last_select_db`). No MULTI
-            // tracking here: redis-rs brackets MULTI/EXEC at pack time and it
-            // always closes.
+            // Capture the batch's last SELECT now; apply it after dispatch if the
+            // reply shows the server took it. No MULTI tracking here: redis-rs
+            // brackets MULTI/EXEC at pack time and it always closes.
             let drifted_db = self.last_select_db(pipeline);
-            let current_database = self.shared.current_database.clone();
             let client = self.get_or_initialize_client().await?;
             let command_count = pipeline.cmd_iter().count();
             // The offset is set to command_count + 1 to account for:
@@ -2070,11 +2068,12 @@ impl Client {
                 },
             )
             .await;
-            // Store the drift only on success — see `last_select_db`.
-            if result.is_ok()
-                && let Some(db) = drifted_db
+            // Record the drift only if the SELECT reply applied (see
+            // `batch_reply_applied`).
+            if let Some((idx, db)) = drifted_db
+                && Self::batch_reply_applied(&result, idx)
             {
-                current_database.store(db, Ordering::Release);
+                self.apply_batch_select_db(db).await;
             }
             result
         })
@@ -2104,14 +2103,12 @@ impl Client {
         Box::pin(async move {
             self.reconcile_iam_before_dispatch().await?;
             // A raw MULTI stays open after a non-atomic pipeline returns, so track
-            // it pre-dispatch for `prepare_for_borrow`'s defer. The SELECT drift,
-            // by contrast, is recorded only after a successful dispatch (see
-            // `last_select_db`).
+            // it pre-dispatch for `prepare_for_borrow`'s defer. The SELECT drift is
+            // applied post-dispatch instead (see the store below).
             for cmd in pipeline.cmd_iter() {
                 self.track_transaction_state(cmd);
             }
             let drifted_db = self.last_select_db(pipeline);
-            let current_database = self.shared.current_database.clone();
             let client = self.get_or_initialize_client().await?;
 
             let command_count = pipeline.cmd_iter().count();
@@ -2168,11 +2165,12 @@ impl Client {
                 },
             )
             .await;
-            // Store the drift only on success — see `last_select_db`.
-            if result.is_ok()
-                && let Some(db) = drifted_db
+            // Record the drift only if the SELECT reply applied (see
+            // `batch_reply_applied`).
+            if let Some((idx, db)) = drifted_db
+                && Self::batch_reply_applied(&result, idx)
             {
-                current_database.store(db, Ordering::Release);
+                self.apply_batch_select_db(db).await;
             }
             result
         })
@@ -3440,20 +3438,46 @@ impl Client {
         }
     }
 
-    /// Return the database id of the last `SELECT` in a batch, so the caller can
-    /// record the drift into `current_database` *after* a successful dispatch
-    /// (the single-command path does this in `handle_select_command`; the batch
-    /// paths never run that hook). Must stay a pure read: `current_database` is
-    /// authoritative for scope connections (`scope.rs` handshakes new connections
-    /// into it), so storing a SELECT the server rejected would poison every later
-    /// scope acquire — hence the caller gates the store on `Ok`.
-    fn last_select_db(&self, pipeline: &redis::Pipeline) -> Option<u32> {
+    /// The command index and database id of the last `SELECT` in a batch (or
+    /// `None`). The index is the command's `cmd_iter()` position, which is also its
+    /// reply position in the result array — the caller pairs it with
+    /// [`batch_reply_applied`](Self::batch_reply_applied) to record the drift only
+    /// if the server applied it. A pure read; never mutates db state.
+    fn last_select_db(&self, pipeline: &redis::Pipeline) -> Option<(usize, u32)> {
         pipeline
             .cmd_iter()
-            .filter(|cmd| self.is_select_command(cmd))
-            .filter_map(|cmd| self.extract_database_id_from_select(cmd).ok())
+            .enumerate()
+            .filter(|(_, cmd)| self.is_select_command(cmd))
+            .filter_map(|(idx, cmd)| {
+                self.extract_database_id_from_select(cmd)
+                    .ok()
+                    .map(|db| (idx, db as u32))
+            })
             .last()
-            .map(|db| db as u32)
+    }
+
+    /// Record a batch `SELECT`'s db, mirroring the single-command
+    /// `handle_select_command` so all three db trackers stay in step: the reconnect
+    /// db (`update_stored_database_id`), the OTel `db_namespace`, and
+    /// `current_database` (read by scope connections).
+    async fn apply_batch_select_db(&mut self, db: u32) {
+        let _ = self.update_stored_database_id(db as i64).await;
+        Arc::make_mut(&mut self.otel_metadata).db_namespace = db.to_string();
+        self.shared.current_database.store(db, Ordering::Release);
+    }
+
+    /// Whether the batch command at `idx` applied, i.e. its reply exists and is not
+    /// a `ServerError`. The outer `Result` is not enough: with `raise_on_error=false`
+    /// a rejected `SELECT` is a `ServerError` inside an `Ok(Value::Array)`, and a
+    /// WATCH-aborted `EXEC` returns `Ok(Value::Nil)` — both must be treated as not
+    /// applied, or a `SELECT` the server rejected would poison `current_database`
+    /// (authoritative for scope connections, which handshake into it).
+    fn batch_reply_applied(result: &RedisResult<Value>, idx: usize) -> bool {
+        matches!(
+            result,
+            Ok(Value::Array(values))
+                if !matches!(values.get(idx), None | Some(Value::ServerError(_)))
+        )
     }
 
     /// Reconcile per-borrow IAM authentication on the first command after a borrow.
@@ -4767,9 +4791,10 @@ mod tests {
         );
     }
 
-    /// `last_select_db` returns the last `SELECT`'s db in a batch (or `None`), as a
-    /// pure read — it must never touch `current_database` (authoritative for scope
-    /// connections, so it must not move for a SELECT the server never applied).
+    /// `last_select_db` returns the command index and db of the last `SELECT` in a
+    /// batch (or `None`), as a pure read — it must never touch `current_database`
+    /// (authoritative for scope connections, so it must not move for a SELECT the
+    /// server never applied). The index lets the caller validate the SELECT's reply.
     #[test]
     fn last_select_db_extracts_trailing_select() {
         use std::sync::atomic::Ordering;
@@ -4794,8 +4819,8 @@ mod tests {
             .arg("7");
         assert_eq!(
             client.last_select_db(&with_select),
-            Some(7),
-            "the last SELECT's db is the one left on the connection"
+            Some((2, 7)),
+            "the last SELECT's db (at command index 2) is the one left on the connection"
         );
         assert_eq!(
             client.shared.current_database.load(Ordering::Acquire),
