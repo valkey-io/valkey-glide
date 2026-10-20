@@ -1,4 +1,5 @@
 import json
+import os
 import random
 import string
 from concurrent.futures import ThreadPoolExecutor
@@ -35,7 +36,10 @@ from glide_shared.commands.bitmap import (
 )
 from glide_shared.commands.command_args import Limit, ListDirection, OrderBy
 from glide_shared.commands.core_options import (
+    ExpireOptions,
     ExpiryGetEx,
+    ExpirySet,
+    ExpiryType,
     ExpiryTypeGetEx,
     FlushMode,
     InfoSection,
@@ -222,19 +226,79 @@ def trigger_latency_spike_sync(glide_client: TSyncGlideClient) -> None:
     glide_client.config_set({"latency-monitor-threshold": prev_threshold})
 
 
-def parse_info_response(res: Union[bytes, Dict[bytes, bytes]]) -> Dict[str, str]:
-    res_first = get_first_result(res)
-    res_decoded = res_first.decode() if isinstance(res_first, bytes) else res_first
-    info_lines = [
-        line for line in res_decoded.splitlines() if line and not line.startswith("#")
-    ]
-    info_dict = {}
-    for line in info_lines:
-        splitted_line = line.split(":")
-        key = splitted_line[0]
-        value = splitted_line[1]
-        info_dict[key] = value
-    return info_dict
+async def get_info(
+    client: TGlideClient, sections: Optional[List[InfoSection]] = None
+) -> List[Dict[str, str]]:
+    """
+    Returns the fields and values from the given INFO sections.
+    For cluster clients, the command is sent to all primary nodes.
+
+    Args:
+        client: A client that is connected to the server.
+        sections: The INFO sections to request. Defaults to the default sections.
+
+    Returns:
+        A list with one dictionary per node reply, mapping each INFO field name to its value.
+    """
+    info = await client.info(sections)
+    return _parse_info_replies(info)
+
+
+def sync_get_info(
+    client: TSyncGlideClient, sections: Optional[List[InfoSection]] = None
+) -> List[Dict[str, str]]:
+    """
+    Returns the fields and values from the given INFO sections.
+    For cluster clients, the command is sent to all primary nodes.
+
+    Args:
+        client: A client that is connected to the server.
+        sections: The INFO sections to request. Defaults to the default sections.
+
+    Returns:
+        A list with one dictionary per node reply, mapping each INFO field name to its value.
+    """
+    info = client.info(sections)
+    return _parse_info_replies(info)
+
+
+def _parse_info_replies(info: TClusterResponse[bytes]) -> List[Dict[str, str]]:
+    """
+    Parses the INFO reply from each node into a dictionary of field names to values.
+
+    Args:
+        info: The INFO response. For cluster clients, maps each node to its reply.
+
+    Returns:
+        A list with one dictionary per node reply, mapping each INFO field name to its value.
+    """
+    replies = info.values() if isinstance(info, dict) else [info]
+    result = []
+    for reply in replies:
+        fields = {}
+        for line in cast(bytes, reply).decode().splitlines():
+            if line and not line.startswith("#"):
+                key, _, value = line.partition(":")
+                fields[key] = value
+        result.append(fields)
+    return result
+
+
+def parse_int(value: Optional[str], name: str) -> int:
+    """
+    Asserts that value is an integer and returns it.
+
+    Args:
+        value: The value to parse.
+        name: The name that identifies the value in the failure message.
+
+    Returns:
+        The integer value.
+    """
+    try:
+        return int(cast(str, value))
+    except (TypeError, ValueError):
+        pytest.fail(f'{name} is not an integer: "{value}"')
 
 
 def get_random_string(length):
@@ -245,26 +309,26 @@ def get_random_string(length):
 async def check_if_server_version_lt(client: TGlideClient, min_version: str) -> bool:
     global version_str
     if not version_str:
-        info = parse_info_response(await client.info([InfoSection.SERVER]))
+        info = (await get_info(client, [InfoSection.SERVER]))[0]
         version_str = info.get("valkey_version") or info.get("redis_version")  # type: ignore
     assert version_str is not None, "Server version not found in INFO response"
     return version.parse(version_str) < version.parse(min_version)
 
 
 def sync_check_if_server_version_lt(client: TSyncGlideClient, min_version: str) -> bool:
-    info = parse_info_response(client.info([InfoSection.SERVER]))
+    info = sync_get_info(client, [InfoSection.SERVER])[0]
     version_str = info.get("valkey_version") or info.get("redis_version")
     assert version_str is not None, "Server version not found in INFO response"
     return version.parse(version_str) < version.parse(min_version)
 
 
 async def get_version(client: TGlideClient) -> str:
-    info = parse_info_response(await client.info([InfoSection.SERVER]))
+    info = (await get_info(client, [InfoSection.SERVER]))[0]
     return info.get("valkey_version") or info.get("redis_version")  # type: ignore
 
 
 def sync_get_version(client: TSyncGlideClient) -> str:
-    info = parse_info_response(client.info([InfoSection.SERVER]))
+    info = sync_get_info(client, [InfoSection.SERVER])[0]
     return info.get("valkey_version") or info.get("redis_version")  # type: ignore
 
 
@@ -273,6 +337,22 @@ BGSAVE_RESPONSES = {
     "Background saving started",
     "Background saving scheduled",
 }
+
+# One field from each default INFO section.
+INFO_DEFAULT_FIELDS = [
+    "redis_version",  # server
+    "connected_clients",  # clients
+    "used_memory",  # memory
+    "rdb_changes_since_last_save",  # persistence
+    "total_commands_processed",  # stats
+    "role",  # replication
+    "used_cpu_sys",  # cpu
+    "cluster_enabled",  # cluster
+]
+
+# Expected server responses for the "rdb_*_bgsave_type" INFO persistence fields.
+# Since Valkey 9.2.0.
+BGSAVE_TYPES = {"fork", "forkless", "none"}
 
 # Expected server responses for BGREWRITEAOF.
 BGREWRITEAOF_RESPONSES = {
@@ -380,6 +460,30 @@ def _is_save_in_progress(result: Union[bytes, Dict[bytes, bytes]]) -> bool:
 
 def check_version_lt(version_str: str, min_version: str) -> bool:
     return version.parse(version_str) < version.parse(min_version)
+
+
+# The latest expiration time accepted by the server (LLONG_MAX milliseconds, in seconds).
+MAX_EXPIRE_TIME_SEC = (2**63 - 1) // 1000
+
+
+class Matches:
+    """
+    Compares equal to any value for which `predicate` returns True.
+    Use in expected results for replies that are not deterministic.
+
+    Example:
+        >>> assert [5] == [Matches(lambda ttl: 0 < ttl <= 10)]
+    """
+
+    def __init__(self, predicate: Callable[[Any], bool]):
+        self._predicate = predicate
+
+    def __eq__(self, other: object) -> bool:
+        return self._predicate(other)
+
+    def __repr__(self) -> str:
+        code = self._predicate.__code__
+        return f"Matches({os.path.basename(code.co_filename)}:{code.co_firstlineno})"
 
 
 def assert_responses_in(
@@ -1138,6 +1242,8 @@ def batch_test(
     key25 = generate_key(keyslot, batch.is_atomic)  # list
     key26 = generate_key(keyslot, batch.is_atomic)  # sort
     key27 = generate_key_same_slot(key26)  # sort
+    key28 = generate_key(keyslot, batch.is_atomic)  # hash field expiration
+    key29 = generate_key(keyslot, batch.is_atomic)  # hash
     value = datetime.now(timezone.utc).strftime("%m/%d/%Y, %H:%M:%S")
     value_bytes = value.encode()
     value2 = get_random_string(5)
@@ -1218,7 +1324,7 @@ def batch_test(
                 }
             )
 
-    # To fix flake8's complexity analysis, we break down the argument appending into 6
+    # To fix flake8's complexity analysis, we break down the argument appending into
     # helper functions.
     helper1(
         batch,
@@ -1282,7 +1388,51 @@ def batch_test(
         args,
     )
 
+    if not check_version_lt(version, "9.0.0"):
+        helper_valkey_9_0(batch, key28, args)
+
+    if not check_version_lt(version, "9.1.0"):
+        helper_valkey_9_1(batch, key29, args)
+
     return args
+
+
+def helper_valkey_9_0(transaction, key, args):
+    expiry = ExpirySet(ExpiryType.UNIX_SEC, MAX_EXPIRE_TIME_SEC)
+    transaction.hsetex(key, {"f1": "v1", "f2": "v2"}, expiry=expiry)
+
+    args.append(1)
+    transaction.hexpiretime(key, ["f1", "missing"])
+    args.append([MAX_EXPIRE_TIME_SEC, -2])
+    transaction.hpexpiretime(key, ["f1"])
+    args.append([MAX_EXPIRE_TIME_SEC * 1000])
+    transaction.hpersist(key, ["f1", "f2"])
+    args.append([1, 1])
+    transaction.httl(key, ["f1", "missing"])
+    args.append([-1, -2])
+    transaction.hpttl(key, ["f1"])
+    args.append([-1])
+    transaction.hexpireat(key, MAX_EXPIRE_TIME_SEC, ["f1"])
+    args.append([1])
+    transaction.hpexpireat(key, MAX_EXPIRE_TIME_SEC * 1000, ["f2"])
+    args.append([1])
+    transaction.hexpiretime(key, ["f1", "f2"])
+    args.append([MAX_EXPIRE_TIME_SEC, MAX_EXPIRE_TIME_SEC])
+    transaction.hexpire(key, 3600, ["f1"], option=ExpireOptions.HasExistingExpiry)
+    args.append([1])
+    transaction.hpexpire(key, 3600000, ["f2"])
+    args.append([1])
+    transaction.httl(key, ["f1"])
+    args.append([Matches(lambda ttl: 0 < ttl <= 3600)])
+    transaction.hgetex(key, ["f1"], expiry=ExpiryGetEx(ExpiryTypeGetEx.PERSIST, None))
+    args.append([b"v1"])
+
+
+def helper_valkey_9_1(transaction, key, args):
+    transaction.hset(key, {"f1": "v1"})
+    args.append(1)
+    transaction.hgetdel(key, ["f1", "missing"])
+    args.append([b"v1", None])
 
 
 def helper6(
@@ -1792,6 +1942,9 @@ def helper3(
     args.append(1)
     transaction.sismember(key7, "bar")
     args.append(True)
+    if not check_version_lt(version, "9.2.0"):
+        transaction.sismember_if_exists(key7, "bar")
+        args.append(1)
     transaction.spop(key7)
     args.append(b"bar")
     transaction.sadd(key7, ["foo", "bar"])

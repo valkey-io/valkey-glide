@@ -2,6 +2,10 @@
 
 ## Pending 2.6
 
+### Features
+
+* All: Add `DELIFEQ` command support ([#6146](https://github.com/valkey-io/valkey-glide/issues/6146))
+
 ### Fixes
 
 * Core/All: Scope acquire waits inside glide-core instead of each binding polling `glide_scope_try_acquire` in its own retry loop. A cause that waiting cannot fix (parent closed mid-wait, lazily connected mTLS parent with no certificate material yet, a connection request that cannot produce a scoped connection) now raises the binding's disconnect or request-error class immediately instead of a "pool exhausted" timeout after the full deadline, and a deadline error names the cause of the final attempt. One acquire makes one dial: the acquire awaits the connection it reserved a slot for, so the attempt-token dedupe that let a binding's repeat poll recognise its own in-flight creation is removed along with the loops. `glide_scope_try_acquire` and `glide_scope_next_attempt_token` (and the JNI and napi counterparts) are replaced by `glide_scope_acquire_async` / `glide_scope_acquire_blocking` / `glide_scope_acquire_pipe` (the last delivers to the Python async client's shared pipe); Node's `IsolatedScope.acquire` takes `timeoutMs` where it took `maxRetries` ([#7112](https://github.com/valkey-io/valkey-glide/issues/7112))
@@ -62,10 +66,12 @@
 
 * Python: Add valkey-search 1.3 support — `FtAggregateReducer.to_list`, `.first_value`, and `.random_sample` factory methods for the `TOLIST`, `FIRST_VALUE`, and `RANDOM_SAMPLE` FT.AGGREGATE reducers; an `in_keys` option on `FtSearchOptions` for FT.SEARCH's `INKEYS`; and test coverage for Vector Range queries (`VECTOR_RANGE`/`YIELD_DISTANCE_AS`) in FT.SEARCH and FT.AGGREGATE and for the bare `*` wildcard query. ([valkey-search#932](https://github.com/valkey-io/valkey-search/pull/932), [#946](https://github.com/valkey-io/valkey-search/pull/946), [#949](https://github.com/valkey-io/valkey-search/pull/949), [#967](https://github.com/valkey-io/valkey-search/pull/967), [#985](https://github.com/valkey-io/valkey-search/pull/985), [#960](https://github.com/valkey-io/valkey-search/pull/960))
 * Python: Add valkey-search 1.3 support — RediSearch-parity typed APIs for FT.CREATE (`FLOAT16`/`BFLOAT16` vectors, `FILTER`, `SORTABLE UNF`, `SCORE_FIELD`, `NOHL`), FT.SEARCH/FT.AGGREGATE scoring (`WITHSCORES`/`SCORER`/`ADDSCORES`), FT.AGGREGATE's `LOAD ... AS` renaming and `WITHCURSOR` paging (`ft.cursor_read`/`ft.cursor_del`), and a new `ft.hybrid` API fusing a text/tag/numeric SEARCH arm with a VSIM vector-similarity arm via `FtHybridCombine.RRF`/`.Linear`/`.Function`. See [#7335](https://github.com/valkey-io/valkey-glide/pull/7335) for the full feature list, including the `search.emulate-release` >= 1.3.0 server-side requirement for a few of these. ([valkey-search#1.3.0-rc1](https://github.com/valkey-io/valkey-search))
+* Go, Java, Node, Python: Add `cluster_info` `INFO` section (Valkey 9.1) ([#7199](https://github.com/valkey-io/valkey-glide/issues/7199))
 * Java: add useMutualTlsFromKeyStore to load mTLS client identity ([#7258](https://github.com/valkey-io/valkey-glide/pull/7258))
 * Java: Add `HGETDEL` command support ([#6145](https://github.com/valkey-io/valkey-glide/issues/6145))
 * Node: Add `HGETDEL` command support ([#6145](https://github.com/valkey-io/valkey-glide/issues/6145))
 * Python: Add `HGETDEL` command support ([#6145](https://github.com/valkey-io/valkey-glide/issues/6145))
+* Python: Add support for `SISMEMBER` with `XX` option (Valkey 9.2+) ([#7202](https://github.com/valkey-io/valkey-glide/issues/7202))
 * Python: Optionally propagate active OpenTelemetry parent span context to native command, batch and script spans with `enable_trace_context_propagation=True` (disabled by default) ([#7069](https://github.com/valkey-io/valkey-glide/pull/7069))
 * Core: Add client-side caching support for MGET. Fully cached requests return locally; partially cached requests fetch only misses and preserve duplicate-key and NIL response semantics. ([#6793](https://github.com/valkey-io/valkey-glide/issues/6793))
 * Rust: Add an initial native Rust client (preview) built directly on `glide-core` ([#6864](https://github.com/valkey-io/valkey-glide/pull/6864))

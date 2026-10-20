@@ -184,6 +184,7 @@ func (suite *GlideTestSuite) TestLatencyLatest() {
 	assert.GreaterOrEqual(t, commandInfo.MaxDuration, commandInfo.LatestDuration)
 
 	// Only Valkey 8.1+ populates Sum and Count.
+	// TODO #5368: Compare versions semantically, not as strings.
 	if suite.serverVersion >= "8.1.0" {
 		assert.False(t, commandInfo.Sum.IsNil())
 		assert.False(t, commandInfo.Count.IsNil())
@@ -324,6 +325,7 @@ func (suite *GlideTestSuite) TestLatencyLatest_Cluster() {
 	assert.GreaterOrEqual(t, commandInfo.MaxDuration, commandInfo.LatestDuration)
 
 	// Only Valkey 8.1+ populates Sum and Count.
+	// TODO #5368: Compare versions semantically, not as strings.
 	if suite.serverVersion >= "8.1.0" {
 		assert.False(t, commandInfo.Sum.IsNil())
 		assert.False(t, commandInfo.Count.IsNil())

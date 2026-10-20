@@ -332,6 +332,7 @@ func (suite *GlideTestSuite) assertMemoryStatsFields(result models.MemoryStats) 
 	assert.GreaterOrEqual(t, result.RssOverheadRatio, float64(0))
 
 	// Optional Redis 7.0+ fields
+	// TODO #5368: Compare versions semantically, not as strings.
 	if suite.serverVersion >= "7.0.0" {
 		assert.False(t, result.ClusterLinks.IsNil())
 		assert.False(t, result.FunctionsCaches.IsNil())
@@ -341,6 +342,7 @@ func (suite *GlideTestSuite) assertMemoryStatsFields(result models.MemoryStats) 
 	}
 
 	// Optional Valkey 8.0+ fields
+	// TODO #5368: Compare versions semantically, not as strings.
 	if suite.serverVersion >= "8.0.0" {
 		assert.False(t, result.AllocatorMuzzy.IsNil())
 		assert.False(t, result.OverheadDbHashtableLut.IsNil())
