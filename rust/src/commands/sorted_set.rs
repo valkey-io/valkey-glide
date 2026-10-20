@@ -83,11 +83,11 @@ impl ToSingleValkeyArg for LexBound {}
 /// Mirrors Python `AggregationType`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AggregationType {
-    /// Sum the scores.
+    /// Sum the scores (`SUM`).
     Sum,
-    /// Take the minimum score.
+    /// Take the minimum score (`MIN`).
     Min,
-    /// Take the maximum score.
+    /// Take the maximum score (`MAX`).
     Max,
 }
 
