@@ -55,7 +55,7 @@ python3 dev.py test --args --async-backend=asyncio    # Test with asyncio backen
 
 # Linting and Formatting
 python3 dev.py lint                                    # Auto-fix formatting (isort, black), then flake8 and mypy
-python3 dev.py lint --check                           # Check formatting only
+python3 dev.py lint --check                           # Same four tools; isort/black report instead of rewriting
 
 # Protobuf generation
 python3 dev.py protobuf                               # Regenerate protobuf files
@@ -175,7 +175,6 @@ cargo clippy --all-features --all-targets -- -D warnings
 - `build/`, `dist/`, `*.egg-info/` - Packaging artifacts
 - `__pycache__/`, `.pytest_cache/`, `.mypy_cache/` - Caches
 - `docs/` except `docs/index.rst` - Sphinx output and apidoc stubs
-- `docs/_build/` - Sphinx documentation build
 
 ### Python-Specific Rules
 

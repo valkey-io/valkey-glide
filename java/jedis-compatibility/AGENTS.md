@@ -62,7 +62,7 @@ Run from `java/`. Prerequisites and the `pkill valkey-server` build-finish hook 
 
 ### Raw Equivalents
 
-None: this is a plain Java module with no code generation. The native library is not copied into this module; tests load it from `../target/release` via `java.library.path`, which `build.gradle` sets on every Test task. On Alpine/musl the path is `../target/${arch}-unknown-linux-musl/release` instead.
+None: this is a plain Java module with no code generation. The native library is not copied into this module; it ships inside the `:client` jar under `natives/<os>/<arch>/` (`copyNativeLib` in `client/build.gradle`) and `NativeUtils.loadGlideLib()` extracts it from there at runtime, so `./gradlew :client:buildAll` must have run once before these tests. The `-Djava.library.path` jvmArgs in this module's `build.gradle` are not used by the loader.
 
 ### Test Execution Options
 
@@ -146,7 +146,7 @@ Use conventional commit format:
 
 - **Client Dependency:** `implementation project(':client')`; `api project(':jedis-compat-shared')` and `api commons-pool2` are part of the public API
 - **No Shadow JAR:** This module publishes a plain JAR. Protobuf relocation (`glide.com.google.protobuf`) happens in the client's shadow JAR, which is what `:client` resolves to
-- **Native Libraries:** Not bundled here; tests use `../target/release` (or `../target/${arch}-unknown-linux-musl/release` on Alpine/musl) via `java.library.path`. Run `./gradlew :client:buildAll` once so the library exists
+- **Native Libraries:** Not bundled here; loaded at runtime from the `:client` jar's `natives/<os>/<arch>/` resources by `NativeUtils.loadGlideLib()`. Run `./gradlew :client:buildAll` once so the library exists
 - **Classifier:** `osdetector.classifier` (e.g. `osx-aarch_64`); set `JEDIS_NO_CLASSIFIER_BUILD=true` for a classifier-less JAR
 
 ## Project Structure (Essential)
