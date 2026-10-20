@@ -15,7 +15,7 @@ import lombok.ToString;
  * <p>HSETEX sets hash fields with expiration times and supports:
  *
  * <ul>
- *   <li>Key conditional changes (NX/XX) - control when the command runs based on key existence
+ *   <li>Key conditional changes (NX/XX) - control when fields are set based on key existence
  *   <li>Field conditional changes (FNX/FXX) - control when fields are set based on existence
  *   <li>Standard expiry options (EX/PX/EXAT/PXAT/KEEPTTL) - set expiration times
  * </ul>
@@ -48,7 +48,7 @@ import lombok.ToString;
  *     .expiry(ExpirySet.UnixSeconds(1640995200L))
  *     .build();
  *
- * // Only run the command if the key already exists, and only set fields that don't exist yet
+ * // Set the fields only if the key already exists, and only if none of the fields already exist
  * HSetExOptions options4 = HSetExOptions.builder()
  *     .onlyIfKeyExists()
  *     .onlyIfNoneExist()
@@ -68,7 +68,7 @@ import lombok.ToString;
 public final class HSetExOptions {
 
     /**
-     * Key-level conditional change option (NX/XX) for controlling when the command runs, based on the
+     * Key-level conditional change option (NX/XX) for controlling when fields are set, based on the
      * existence of the hash key.
      *
      * @since Valkey 9.1.0
@@ -134,10 +134,10 @@ public final class HSetExOptions {
     public static class HSetExOptionsBuilder {
 
         /**
-         * Sets the key-level conditional change to only run the command if the key already exists.
+         * Sets the key-level conditional change to only set fields if the key already exists.
          *
-         * <p>This is equivalent to the XX option in the Valkey HSETEX command. When this option is
-         * used, the command will only run if the hash key already exists.
+         * <p>This is equivalent to the XX option in the Valkey HSETEX command. If the key does not
+         * exist, the entire operation fails.
          *
          * @return this builder instance for method chaining
          * @since Valkey 9.1.0
@@ -148,11 +148,10 @@ public final class HSetExOptions {
         }
 
         /**
-         * Sets the key-level conditional change to only run the command if the key does not already
-         * exist.
+         * Sets the key-level conditional change to only set fields if the key does not already exist.
          *
-         * <p>This is equivalent to the NX option in the Valkey HSETEX command. When this option is
-         * used, the command will only run if the hash key does not already exist.
+         * <p>This is equivalent to the NX option in the Valkey HSETEX command. If the key already
+         * exists, the entire operation fails.
          *
          * @return this builder instance for method chaining
          * @since Valkey 9.1.0

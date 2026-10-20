@@ -40,21 +40,27 @@ public class HSetExOptionsTest {
     }
 
     @Test
-    public void testKeyAndFieldConditionalChangeCombinedToArgs() {
-        HSetExOptions options = HSetExOptions.builder().onlyIfKeyExists().onlyIfNoneExist().build();
+    public void testCombinedOptionsToArgs() {
+        HSetExOptions options =
+                HSetExOptions.builder().onlyIfNoneExist().expiry(ExpirySet.Seconds(60L)).build();
         String[] args = options.toArgs();
+        assertArrayEquals(new String[] {"FNX", "EX", "60"}, args);
+
+        options =
+                HSetExOptions.builder().onlyIfAllExist().expiry(ExpirySet.Milliseconds(5000L)).build();
+        args = options.toArgs();
+        assertArrayEquals(new String[] {"FXX", "PX", "5000"}, args);
+
+        options = HSetExOptions.builder().onlyIfKeyExists().onlyIfNoneExist().build();
+        args = options.toArgs();
         assertArrayEquals(new String[] {"XX", "FNX"}, args);
 
         options = HSetExOptions.builder().onlyIfKeyDoesNotExist().onlyIfAllExist().build();
         args = options.toArgs();
         assertArrayEquals(new String[] {"NX", "FXX"}, args);
-    }
 
-    @Test
-    public void testKeyConditionalChangeWithExpiryToArgs() {
-        HSetExOptions options =
-                HSetExOptions.builder().onlyIfKeyExists().expiry(ExpirySet.Seconds(60L)).build();
-        String[] args = options.toArgs();
+        options = HSetExOptions.builder().onlyIfKeyExists().expiry(ExpirySet.Seconds(60L)).build();
+        args = options.toArgs();
         assertArrayEquals(new String[] {"XX", "EX", "60"}, args);
 
         options =
@@ -95,19 +101,6 @@ public class HSetExOptionsTest {
         options = HSetExOptions.builder().expiry(ExpirySet.KeepExisting()).build();
         args = options.toArgs();
         assertArrayEquals(new String[] {"KEEPTTL"}, args);
-    }
-
-    @Test
-    public void testCombinedOptionsToArgs() {
-        HSetExOptions options =
-                HSetExOptions.builder().onlyIfNoneExist().expiry(ExpirySet.Seconds(60L)).build();
-        String[] args = options.toArgs();
-        assertArrayEquals(new String[] {"FNX", "EX", "60"}, args);
-
-        options =
-                HSetExOptions.builder().onlyIfAllExist().expiry(ExpirySet.Milliseconds(5000L)).build();
-        args = options.toArgs();
-        assertArrayEquals(new String[] {"FXX", "PX", "5000"}, args);
     }
 
     @Test

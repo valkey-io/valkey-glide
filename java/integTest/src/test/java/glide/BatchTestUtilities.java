@@ -505,11 +505,8 @@ public class BatchTestUtilities {
             HSetExOptions hsetexNxOptions = HSetExOptions.builder().onlyIfKeyDoesNotExist().build();
             HSetExOptions hsetexXxOptions = HSetExOptions.builder().onlyIfKeyExists().build();
             batch
-                    // key does not exist yet -> NX succeeds
                     .hsetex(hashKey5, createMap(field1, value1), hsetexNxOptions)
-                    // key now exists -> second NX call fails (no-op)
                     .hsetex(hashKey5, createMap(field1, value2), hsetexNxOptions)
-                    // key exists -> XX succeeds
                     .hsetex(hashKey5, createMap(field1, value2), hsetexXxOptions)
                     .hget(hashKey5, field1);
         }

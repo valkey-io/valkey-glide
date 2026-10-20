@@ -58,7 +58,7 @@
 
 ### Changes
 
-* Java: Add key-level `NX`/`XX` condition support to `HSetExOptions` for the `HSETEX` command (Valkey 9.1+), distinct from the existing field-level `FNX`/`FXX` conditions ([#6154](https://github.com/valkey-io/valkey-glide/issues/6154), [#7340](https://github.com/valkey-io/valkey-glide/pull/7340))
+* Java: Add `NX`/`XX` support for the `HSETEX` command ([#6154](https://github.com/valkey-io/valkey-glide/issues/6154))
 * Java: add useMutualTlsFromKeyStore to load mTLS client identity ([#7258](https://github.com/valkey-io/valkey-glide/pull/7258))
 * Java: Add `HGETDEL` command support ([#6145](https://github.com/valkey-io/valkey-glide/issues/6145))
 * Node: Add `HGETDEL` command support ([#6145](https://github.com/valkey-io/valkey-glide/issues/6145))
