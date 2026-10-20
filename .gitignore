@@ -47,6 +47,9 @@ utils/*_package_list.txt
 # OSS Review Toolkit (ORT) files
 **/ort*/**
 **/ort_results/**
+# The ORT tool is checked out at ./ort as a nested git repo; git reports that as a
+# lone `ort/` entry that the contents-matching `**/ort*/**` above cannot suppress.
+/ort/
 
 # java compiled files.
 *.class
