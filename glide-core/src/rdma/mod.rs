@@ -23,7 +23,7 @@ pub(crate) fn handshake_refused(node: &str, error: redis::RedisError) -> redis::
         };
         return redis::RedisError::from((
             redis::ErrorKind::ReadOnly,
-            "An error was signalled by the server:",
+            redis::SERVER_ERROR_DESCRIPTION,
             reason.to_string(),
         ));
     }
@@ -396,7 +396,7 @@ mod tests {
     fn server_error(detail: &str) -> redis::RedisError {
         redis::RedisError::from((
             redis::ErrorKind::ResponseError,
-            "An error was signalled by the server",
+            redis::SERVER_ERROR_DESCRIPTION,
             detail.to_string(),
         ))
     }

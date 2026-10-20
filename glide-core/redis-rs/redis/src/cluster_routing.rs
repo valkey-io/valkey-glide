@@ -744,8 +744,8 @@ fn base_routing(cmd: &[u8]) -> RouteBy {
         b"MIGRATE" => RouteBy::ThirdArg,
 
         // The RDMA transfer commands are of the form:
-        // BLOB.RDMA_GET <key> <rkey> <remote-address> <length>
-        // BLOB.RDMA_SET <key> <length> <rkey> <remote-address> <length>
+        // BLOB.RDMA_GET <key> <rkey> <remote-address> <length> [<rkey> <remote-address> <length> ...]
+        // BLOB.RDMA_SET <key> <total-length> [CRC <crc32c>] <rkey> <remote-address> <length> [...]
         //
         // Both go to the key's primary: they are deliberately left out of
         // `is_readonly_cmd`, so no read-from-replica setting sends a read to a
@@ -1583,7 +1583,7 @@ mod tests_routing {
         command
     }
 
-    /// `BLOB.RDMA_SET <key> <length> <rkey> <remote-address> <length>`, the write half.
+    /// `BLOB.RDMA_SET <key> <total-length> <rkey> <remote-address> <length>`, the write half.
     fn rdma_set(key: &str) -> crate::Cmd {
         let mut command = cmd("BLOB.RDMA_SET");
         command
@@ -1595,10 +1595,26 @@ mod tests_routing {
         command
     }
 
+    /// `BLOB.RDMA_SET <key> <total-length> CRC <crc32c> <rkey> <remote-address> <length>`,
+    /// the write half with a checksum for the server to verify.
+    fn rdma_set_with_crc(key: &str) -> crate::Cmd {
+        let mut command = cmd("BLOB.RDMA_SET");
+        command
+            .arg(key)
+            .arg("262144") // payload length
+            .arg("CRC")
+            .arg("3632233996") // crc32c
+            .arg("439041101") // rkey
+            .arg("140229324210176") // remote-address
+            .arg("262144"); // window length
+        command
+    }
+
     fn rdma_cmd(name: &str, key: &str) -> crate::Cmd {
         match name {
             "BLOB.RDMA_GET" => rdma_get(key),
             "BLOB.RDMA_SET" => rdma_set(key),
+            "BLOB.RDMA_SET CRC" => rdma_set_with_crc(key),
             other => panic!("not a RDMA transfer command: {other}"),
         }
     }
@@ -1627,7 +1643,7 @@ mod tests_routing {
         plain.arg("foo");
         let expected = slot_of(&plain);
 
-        for name in ["BLOB.RDMA_GET", "BLOB.RDMA_SET"] {
+        for name in ["BLOB.RDMA_GET", "BLOB.RDMA_SET", "BLOB.RDMA_SET CRC"] {
             assert_eq!(
                 slot_of(&rdma_cmd(name, "foo")),
                 expected,
@@ -1646,6 +1662,7 @@ mod tests_routing {
 
         assert_eq!(slot_addr_of(&rdma_get("foo")), SlotAddr::Master);
         assert_eq!(slot_addr_of(&rdma_set("foo")), SlotAddr::Master);
+        assert_eq!(slot_addr_of(&rdma_set_with_crc("foo")), SlotAddr::Master);
     }
 
     #[test]
