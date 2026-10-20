@@ -2325,6 +2325,17 @@ class TestCommands:
         assert not glide_sync_client.sismember(key, get_random_string(5))
         assert not glide_sync_client.sismember("non_existing_key", member)
 
+    @pytest.mark.skip_if_version_below("9.2.0")
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_sismember_if_exists(self, glide_sync_client: TGlideClient):
+        key = get_random_string(10)
+        member = get_random_string(5)
+        assert glide_sync_client.sadd(key, [member]) == 1
+        assert glide_sync_client.sismember_if_exists(key, member) == 1
+        assert glide_sync_client.sismember_if_exists(key, get_random_string(5)) == 0
+        assert glide_sync_client.sismember_if_exists("non_existing_key", member) == -1
+
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     def test_sync_spop(self, glide_sync_client: TGlideClient):
