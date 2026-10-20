@@ -397,8 +397,8 @@ impl_to_valkey_args_tuple! {
 /// - bytes
 /// - references
 ///
-/// This trait should be implemented for every type that always writes exactly one
-/// argument, and never implements for types that can write zero or several arguments.
+/// Implement this trait for every type that always writes exactly one argument.
+/// Never implement it for a type that can write zero or several arguments.
 /// Implement it for your own types to pass them directly as command arguments.
 ///
 /// Mirrors redis-rs's `ToSingleRedisArg`.
