@@ -2236,6 +2236,27 @@ public class CommandTests {
                 .customCommand(new String[] {"WAIT", String.valueOf(replicaCount), "5000"}, primaryRoute)
                 .get();
 
+        // WAIT acknowledges the replication offset but does not guarantee the function is already
+        // queryable on the replica (and when connected_slaves is momentarily reported as 0, WAIT 0
+        // returns immediately without waiting at all). Until the write function is present on the
+        // replica, FCALL returns "Function not found" instead of the expected READONLY error, which
+        // is the source of the flakiness. Poll until the replica rejects the write function with a
+        // READONLY error so the assertions below are deterministic.
+        waitFor(
+                () -> {
+                    try {
+                        clusterClient.fcall(funcName, replicaRoute).get();
+                        return false; // unexpectedly succeeded - keep polling
+                    } catch (ExecutionException e) {
+                        return e.getCause() instanceof RequestException
+                                && e.getCause().getMessage() != null
+                                && e.getCause().getMessage().toLowerCase().contains("readonly");
+                    } catch (Exception e) {
+                        return false;
+                    }
+                },
+                "FCALL of a write function on a replica never returned a READONLY error");
+
         // fcall on a replica should fail with a readonly error, because the function
         // is not flagged as read-only
         ExecutionException fcallReplicaException =
