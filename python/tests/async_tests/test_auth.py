@@ -523,7 +523,10 @@ class TestAuthCommands:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_update_connection_password_with_acl_user(
-        self, acl_glide_client: TGlideClient, management_client: TGlideClient
+        self,
+        acl_glide_client: TGlideClient,
+        management_client: TGlideClient,
+        cluster_mode: bool,
     ):
         """
         Test replacing the connection password for an ACL user without immediate re-authentication.
@@ -557,7 +560,16 @@ class TestAuthCommands:
             except Exception:
                 return False
 
-        await wait_for(_reconnected, "Client did not reconnect with the new password")
+        reconnect_timeout = (
+            _CLUSTER_RECONNECT_TIMEOUT_SEC
+            if cluster_mode
+            else _STANDALONE_RECONNECT_TIMEOUT_SEC
+        )
+        await wait_for(
+            _reconnected,
+            "Client did not reconnect with the new password",
+            timeout=reconnect_timeout,
+        )
         value = await acl_glide_client.get("test_key")
         assert value == b"test_value"
 
