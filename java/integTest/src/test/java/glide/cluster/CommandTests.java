@@ -2296,6 +2296,19 @@ public class CommandTests {
                 .customCommand(new String[] {"WAIT", String.valueOf(replicaCount), "5000"}, primaryRoute)
                 .get();
 
+        // As above, WAIT does not fully guarantee the read-only function is queryable on the
+        // replica, so poll until the replica serves it successfully before asserting the result.
+        waitFor(
+                () -> {
+                    try {
+                        return Long.valueOf(42L)
+                                .equals(clusterClient.fcall(funcNameRO, replicaRoute).get().getSingleValue());
+                    } catch (Exception e) {
+                        return false;
+                    }
+                },
+                "FCALL of a read-only function on a replica never succeeded");
+
         // fcall should succeed now
         assertEquals(42L, clusterClient.fcall(funcNameRO, replicaRoute).get().getSingleValue());
 
