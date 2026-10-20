@@ -88,3 +88,7 @@ copilot-instructions.md
 __pycache__/
 test-report*.html
 node/test-report*.html
+# redis-rs CI steps tee their output into the worktree (bench-results* is above)
+**/test-output.log
+**/audit-results.txt
+**/machete-results.txt
