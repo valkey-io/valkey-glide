@@ -134,7 +134,7 @@ jobs:
         if: github.repository_owner == 'valkey-io'
         name: Publish packages to PyPi
         runs-on: ${{ matrix.build.RUNNER }}
-        timeout-minutes: 120
+        timeout-minutes: 240
         strategy:
             fail-fast: false
             matrix:
@@ -464,7 +464,10 @@ jobs:
                   # Bootstrap pip via get-pip.py to avoid the broken system pip
                   # (system pip imports distutils which was removed in Python 3.12+)
                   curl -sS https://bootstrap.pypa.io/get-pip.py | $PY
-                  $PY -m pip install "cibuildwheel>=4.0.0"
+                  # cibuildwheel 4.3.0 moved pp311 to PyPy 8.0 (pp80), which the
+                  # manylinux2014 image does not ship; the rest of this pipeline
+                  # builds and tests against PyPy 7.3 (pp73). See #7353.
+                  $PY -m pip install "cibuildwheel>=4.0.0,<4.3"
 
             - name: Determine cibuildwheel version and set enable flags
               id: cibw_config

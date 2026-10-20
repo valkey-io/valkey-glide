@@ -6,8 +6,18 @@
  */
 
 import { describe, expect, it, beforeAll, afterAll } from "@jest/globals";
-import { GlideClient, IsolatedScope } from "..";
-import { GlideClientConfiguration } from "..";
+import * as fs from "fs";
+import {
+    ClientPool,
+    ClosingError,
+    ConnectionError,
+    GlideClient,
+    GlideClusterClient,
+    IsolatedScope,
+    RequestError,
+    TimeoutError,
+} from "..";
+import { GlideClientConfiguration, GlideClusterClientConfiguration } from "..";
 import { connection_request } from "../build-ts/ProtobufMessage";
 import { ValkeyCluster } from "../../utils/TestUtils.js";
 import {
@@ -17,6 +27,17 @@ import {
 } from "./TestUtilities";
 
 const TIMEOUT = 30_000;
+
+// Any certificate serves as root material here: the client is lazy and never
+// dials, so the bytes are stored, not verified. Read the committed glide-core
+// fixture rather than utils/tls_crts/, which exists only after a TLS server start.
+const ANY_ROOT_CERT = fs.readFileSync(
+    `${process.cwd()}/../glide-core/src/tls_reload/test_data/cert_a.pem`,
+);
+
+// The scope pool holds at most this many connections per client (glide-core
+// ScopePoolConfig::default().max_total). Not configurable from Node.
+const SCOPE_POOL_MAX_TOTAL = 64;
 
 function makeKey(prefix: string): string {
     return `scope-test-${prefix}-${Math.random().toString(36).slice(2, 10)}`;
@@ -361,6 +382,489 @@ describe("IsolatedScope", () => {
             scope.release();
             db0Client.close();
             db2Client.close();
+        },
+        TIMEOUT,
+    );
+
+    // ─── Public acquisition API (issue #6962) ─────────────────────────────────
+    //
+    // A scope must be openable through the public API alone: no caller should
+    // have to build connection-request bytes from a non-exported protobuf.
+
+    it(
+        "scopedConnection() opens a scope without bytes",
+        async () => {
+            const scope = await client.scopedConnection();
+
+            try {
+                expect(await scope.ping()).toBe("PONG");
+                const key = makeKey("scoped-conn");
+                await scope.set(key, "value");
+                expect(await scope.get(key)).toBe("value");
+                await scope.del(key);
+            } finally {
+                scope.release();
+            }
+
+            expect(scope.isReleased).toBe(true);
+        },
+        TIMEOUT,
+    );
+
+    it(
+        "scopedConnection() accepts a routing key",
+        async () => {
+            // Write and read back through the same routing key so a cluster run
+            // catches a scope connected to the wrong node; PING alone would not.
+            const key = makeKey("route");
+            const scope = await client.scopedConnection(key);
+
+            try {
+                await scope.set(key, "routed-value");
+                expect(await scope.get(key)).toBe("routed-value");
+                await scope.del(key);
+            } finally {
+                scope.release();
+            }
+        },
+        TIMEOUT,
+    );
+
+    it(
+        "scopedConnection() on a closed client rejects with ClosingError",
+        async () => {
+            const closedClient = await GlideClient.createClient(config);
+            closedClient.close();
+
+            const attempt = closedClient.scopedConnection();
+            await expect(attempt).rejects.toBeInstanceOf(ClosingError);
+        },
+        TIMEOUT,
+    );
+
+    it(
+        "cached connection-request bytes cannot be reached from the client",
+        async () => {
+            // The bytes carry the connection's password or mTLS key. Prove a
+            // caller holding the client cannot recover them through any own or
+            // inherited, string- or symbol-keyed path, the way the earlier
+            // exported-symbol accessor allowed.
+            const probeClient = await GlideClient.createClient(config);
+
+            try {
+                // Internal code can still open a scope, so the bytes remain
+                // reachable where they should be.
+                const scope = await probeClient.scopedConnection();
+
+                try {
+                    expect(await scope.ping()).toBe("PONG");
+                } finally {
+                    scope.release();
+                }
+
+                // A reachable Uint8Array leaks the request only if it decodes to
+                // a ConnectionRequest carrying this cluster's addresses.
+                const leaksRequest = (value: unknown): boolean => {
+                    if (!(value instanceof Uint8Array)) return false;
+
+                    try {
+                        const req =
+                            connection_request.ConnectionRequest.decode(value);
+                        return (req.addresses?.length ?? 0) > 0;
+                    } catch {
+                        return false;
+                    }
+                };
+
+                // Walk the whole prototype chain plus the instance, reading
+                // every property and invoking symbol-keyed accessors (the covert
+                // channel the exploit used). String-named methods are the
+                // documented public API and are only read, not called.
+                let target: object | null = probeClient;
+                const seen = new Set<object>();
+
+                while (
+                    target &&
+                    target !== Object.prototype &&
+                    !seen.has(target)
+                ) {
+                    seen.add(target);
+
+                    const keys: (string | symbol)[] = [
+                        ...Object.getOwnPropertyNames(target),
+                        ...Object.getOwnPropertySymbols(target),
+                    ];
+
+                    for (const key of keys) {
+                        const isSymbol = typeof key === "symbol";
+
+                        if (isSymbol) {
+                            // The removed accessor keyed a method by this symbol.
+                            expect(key.toString()).not.toContain(
+                                "connectionRequestBytes",
+                            );
+                        }
+
+                        let value: unknown;
+
+                        try {
+                            value = Reflect.get(target, key);
+                        } catch {
+                            continue;
+                        }
+
+                        expect(leaksRequest(value)).toBe(false);
+
+                        if (isSymbol && typeof value === "function") {
+                            let returned: unknown;
+
+                            try {
+                                returned = (value as () => unknown).call(
+                                    probeClient,
+                                );
+                            } catch {
+                                returned = undefined;
+                            }
+
+                            expect(leaksRequest(returned)).toBe(false);
+                        }
+                    }
+
+                    target = Object.getPrototypeOf(target);
+                }
+            } finally {
+                probeClient.close();
+            }
+        },
+        TIMEOUT,
+    );
+
+    it(
+        "acquire(client) one-argument form derives the connection request",
+        async () => {
+            const scope = await IsolatedScope.acquire(client);
+
+            try {
+                expect(await scope.ping()).toBe("PONG");
+                const key = makeKey("one-arg");
+                await scope.set(key, "derived");
+                expect(await scope.get(key)).toBe("derived");
+                await scope.del(key);
+            } finally {
+                scope.release();
+            }
+        },
+        TIMEOUT,
+    );
+
+    it(
+        "explicit connectionRequestBytes still work (additive)",
+        async () => {
+            const scope = await IsolatedScope.acquire(client, connReqBytes);
+
+            try {
+                expect(await scope.ping()).toBe("PONG");
+            } finally {
+                scope.release();
+            }
+        },
+        TIMEOUT,
+    );
+
+    it(
+        "scopedConnection() works on a pool-borrowed client",
+        async () => {
+            const pool = await ClientPool.create(config, {
+                maxSize: 2,
+                minIdle: 1,
+            });
+
+            try {
+                const key = makeKey("pool-scope");
+                const result = await pool.borrow(async (borrowed) => {
+                    const scope = await borrowed.scopedConnection();
+
+                    try {
+                        await scope.watch(key);
+                        await scope.multi();
+                        await scope.set(key, "from-pool-scope");
+                        await scope.exec();
+                        return await scope.get(key);
+                    } finally {
+                        scope.release();
+                    }
+                });
+
+                expect(result).toBe("from-pool-scope");
+                await client.del([key]);
+            } finally {
+                pool.close();
+            }
+        },
+        TIMEOUT,
+    );
+
+    it(
+        "scopedConnection() works after a pool client is released and re-borrowed",
+        async () => {
+            // maxSize 1 forces the second acquire onto the same pooled
+            // connection, which is rebuilt via fromPoolClientId.
+            const pool = await ClientPool.create(config, {
+                maxSize: 1,
+                minIdle: 1,
+            });
+
+            try {
+                const key = makeKey("pool-reborrow");
+
+                const first = await pool.acquire();
+                const firstClientId = first.getClientId();
+
+                try {
+                    const firstScope = await first.scopedConnection();
+
+                    try {
+                        await firstScope.set(key, "first-borrow");
+                    } finally {
+                        firstScope.release();
+                    }
+                } finally {
+                    await pool.release(first);
+                }
+
+                const second = await pool.acquire();
+
+                try {
+                    expect(second.getClientId()).toBe(firstClientId);
+                    const secondScope = await second.scopedConnection();
+
+                    try {
+                        expect(await secondScope.get(key)).toBe("first-borrow");
+                    } finally {
+                        secondScope.release();
+                    }
+                } finally {
+                    await pool.release(second);
+                }
+
+                await client.del([key]);
+            } finally {
+                pool.close();
+            }
+        },
+        TIMEOUT,
+    );
+
+    it(
+        "scopedConnection() on a released pool client rejects with ClosingError",
+        async () => {
+            const pool = await ClientPool.create(config, {
+                maxSize: 1,
+                minIdle: 1,
+            });
+
+            try {
+                const borrowed = await pool.acquire();
+                await pool.release(borrowed);
+
+                await expect(borrowed.scopedConnection()).rejects.toThrow(
+                    ClosingError,
+                );
+            } finally {
+                pool.close();
+            }
+        },
+        TIMEOUT,
+    );
+
+    // An acquire stops as soon as its outcome is known: the error class names
+    // the cause, and a cause that waiting cannot fix is reported without waiting.
+    describe("acquire fails fast", () => {
+        async function holdWholePool(c: GlideClient): Promise<IsolatedScope[]> {
+            const held: IsolatedScope[] = [];
+
+            for (let i = 0; i < SCOPE_POOL_MAX_TOTAL; i++) {
+                held.push(await IsolatedScope.acquire(c, connReqBytes));
+            }
+
+            return held;
+        }
+
+        it(
+            "exhausted pool times out naming the cause",
+            async () => {
+                const held = await holdWholePool(client);
+
+                try {
+                    const started = Date.now();
+                    await expect(
+                        IsolatedScope.acquire(
+                            client,
+                            connReqBytes,
+                            undefined,
+                            500,
+                        ),
+                    ).rejects.toThrow(TimeoutError);
+                    const elapsed = Date.now() - started;
+                    expect(elapsed).toBeGreaterThanOrEqual(400);
+                    expect(elapsed).toBeLessThan(1000);
+
+                    await expect(
+                        IsolatedScope.acquire(
+                            client,
+                            connReqBytes,
+                            undefined,
+                            500,
+                        ),
+                    ).rejects.toThrow("pool exhausted");
+                } finally {
+                    held.forEach((s) => s.release());
+                }
+            },
+            TIMEOUT,
+        );
+
+        it(
+            "closing the client ends a waiting acquire",
+            async () => {
+                const c = await GlideClient.createClient(config);
+                await holdWholePool(c);
+
+                setTimeout(() => c.close(), 200);
+                const started = Date.now();
+                await expect(
+                    IsolatedScope.acquire(c, connReqBytes, undefined, 5000),
+                ).rejects.toThrow(ConnectionError);
+                expect(Date.now() - started).toBeLessThan(2000);
+            },
+            TIMEOUT,
+        );
+
+        it(
+            "lazy mTLS parent fails without waiting",
+            async () => {
+                // A lazily connected client with TLS material never dials, so
+                // there is nothing for a scoped connection to inherit.
+                const lazy = await GlideClient.createClient({
+                    addresses: [{ host: "127.0.0.1", port: 1 }],
+                    useTLS: true,
+                    lazyConnect: true,
+                    requestTimeout: 5000,
+                    advancedConfiguration: {
+                        tlsAdvancedConfiguration: {
+                            rootCertificates: ANY_ROOT_CERT,
+                        },
+                    },
+                });
+                const req = connection_request.ConnectionRequest.create({
+                    addresses: [{ host: "127.0.0.1", port: 1 }],
+                    requestTimeout: 5000,
+                    tlsMode: connection_request.TlsMode.SecureTls,
+                    rootCerts: [ANY_ROOT_CERT],
+                });
+                const bytes =
+                    connection_request.ConnectionRequest.encode(req).finish();
+
+                try {
+                    const started = Date.now();
+                    const attempt = IsolatedScope.acquire(
+                        lazy,
+                        bytes,
+                        undefined,
+                        5000,
+                    );
+                    await expect(attempt).rejects.toThrow(RequestError);
+                    await expect(attempt).rejects.toThrow(
+                        "certificate material",
+                    );
+                    expect(Date.now() - started).toBeLessThan(2000);
+                } finally {
+                    lazy.close();
+                }
+            },
+            TIMEOUT,
+        );
+    });
+});
+
+describe("IsolatedScope (cluster)", () => {
+    let cluster: ValkeyCluster;
+    let client: GlideClusterClient;
+    let config: GlideClusterClientConfiguration;
+
+    beforeAll(async () => {
+        const clusterAddresses = global.CLUSTER_ENDPOINTS as string;
+        cluster = clusterAddresses
+            ? await ValkeyCluster.initFromExistingCluster(
+                  true,
+                  parseEndpoints(clusterAddresses),
+                  getServerVersion,
+              )
+            : await ValkeyCluster.createCluster(true, 3, 1, getServerVersion);
+
+        config = getClientConfigurationOption(cluster.getAddresses(), 0, {
+            requestTimeout: 5000,
+        }) as GlideClusterClientConfiguration;
+
+        client = await GlideClusterClient.createClient(config);
+    }, 120_000);
+
+    afterAll(async () => {
+        client?.close();
+        await cluster?.close();
+    }, TIMEOUT);
+
+    // Keys in distinct hash tags land on different slots (and, across three
+    // shards, different nodes), so a scope routed to the wrong node fails
+    // with MOVED.
+    const routedKeys = ["{a}", "{b}", "{c}"].map((tag) => makeKey(tag));
+
+    it(
+        "scopedConnection(routingKey) routes on a cluster client",
+        async () => {
+            for (const key of routedKeys) {
+                const scope = await client.scopedConnection(key);
+
+                try {
+                    await scope.set(key, "direct");
+                    expect(await scope.get(key)).toBe("direct");
+                } finally {
+                    scope.release();
+                }
+            }
+
+            await Promise.all(routedKeys.map((key) => client.del([key])));
+        },
+        TIMEOUT,
+    );
+
+    it(
+        "scopedConnection(routingKey) routes on a pool-borrowed cluster client",
+        async () => {
+            const pool = await ClientPool.create(config, {
+                maxSize: 2,
+                minIdle: 1,
+                clusterMode: true,
+            });
+
+            try {
+                await pool.borrow(async (borrowed) => {
+                    for (const key of routedKeys) {
+                        const scope = await borrowed.scopedConnection(key);
+
+                        try {
+                            await scope.set(key, "pooled");
+                            expect(await scope.get(key)).toBe("pooled");
+                        } finally {
+                            scope.release();
+                        }
+                    }
+                });
+
+                await Promise.all(routedKeys.map((key) => client.del([key])));
+            } finally {
+                pool.close();
+            }
         },
         TIMEOUT,
     );
