@@ -90,7 +90,7 @@ mod dma_tests {
         let buffer = client
             .register_rdma_region(vec![0u8; 4096])
             .expect("the client has a fabric, so it registers");
-        let (_, result) = client.rdma_get(b"plain-key", buffer, 0, 4096).await;
+        let (buffer, result) = client.rdma_get(b"plain-key", buffer, 0, 4096).await;
         let error = result.expect_err("a node that refused the handshake cannot serve a transfer");
         let message = error.to_string();
         assert!(
@@ -101,6 +101,10 @@ mod dma_tests {
             message.contains(&port.to_string()),
             "and which node is missing it: {error}"
         );
+        // The transfer command was never sent, so the buffer comes back usable.
+        let buffer = buffer.expect("a refused handshake hands the buffer back");
+        assert!(!buffer.is_revoked());
+        assert_eq!(client.rdma_parked_bytes().unwrap(), 0);
     }
 
     #[tokio::test]
@@ -670,6 +674,64 @@ mod dma_tests {
             mock.get_number_of_received_commands(),
             3,
             "the retry handshook again and then transferred"
+        );
+    }
+
+    /// Any error the server answers the handshake with, not only `READONLY`, means
+    /// the transfer command was never sent, so the buffer comes back usable.
+    #[tokio::test]
+    async fn an_error_reply_to_the_handshake_hands_back_a_usable_buffer() {
+        let scripts = HashMap::from([(
+            "BLOB.RDMA_HELLO".to_string(),
+            vec!["-ERR not accepting sessions\r\n".to_string()],
+        )]);
+        let mock = ServerMock::new_with_command_scripts(primary_responses(), scripts);
+        let mut client = rdma_client_against(&mock).await;
+        let buffer = client
+            .register_rdma_region(vec![0u8; 4096])
+            .expect("registers");
+
+        let (buffer, result) = client.rdma_get(b"key", buffer, 0, 4096).await;
+
+        let refused = result.expect_err("a refused handshake cannot transfer");
+        assert!(
+            refused.to_string().contains("refused the RDMA handshake"),
+            "{refused}"
+        );
+        assert!(!buffer.expect("the buffer comes back").is_revoked());
+        assert_eq!(
+            mock.get_number_of_received_commands(),
+            1,
+            "only the handshake was sent"
+        );
+        assert_eq!(client.rdma_parked_bytes().unwrap(), 0);
+    }
+
+    /// A handshake reply this client cannot read still means the transfer command
+    /// was never sent, so the buffer comes back usable.
+    #[tokio::test]
+    async fn a_malformed_handshake_reply_hands_back_a_usable_buffer() {
+        let scripts = HashMap::from([("BLOB.RDMA_HELLO".to_string(), vec!["+OK\r\n".to_string()])]);
+        let mock = ServerMock::new_with_command_scripts(primary_responses(), scripts);
+        let mut client = rdma_client_against(&mock).await;
+        let buffer = client
+            .register_rdma_region(vec![0u8; 4096])
+            .expect("registers");
+
+        let (buffer, result) = client.rdma_get(b"key", buffer, 0, 4096).await;
+
+        let error = result.expect_err("OK is not a handshake reply");
+        assert!(
+            error
+                .to_string()
+                .contains("malformed BLOB.RDMA_HELLO reply"),
+            "{error}"
+        );
+        assert!(!buffer.expect("the buffer comes back").is_revoked());
+        assert_eq!(
+            mock.get_number_of_received_commands(),
+            1,
+            "only the handshake was sent"
         );
     }
 
