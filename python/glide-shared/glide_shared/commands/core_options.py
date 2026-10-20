@@ -142,56 +142,63 @@ class InfoSection(Enum):
     When no parameter is provided, the default option is assumed.
     """
 
-    SERVER = "server"
-    """ General information about the server """
+    ALL = "all"
+    """ Return all sections (excluding module generated ones) """
 
     CLIENTS = "clients"
     """ Client connections section """
 
-    MEMORY = "memory"
-    """ Memory consumption related information """
+    CLUSTER = "cluster"
+    """ Valkey Cluster section """
 
-    PERSISTENCE = "persistence"
-    """ RDB and AOF related information """
+    CLUSTER_INFO = "cluster_info"
+    """
+    Valkey Cluster information.
 
-    STATS = "stats"
-    """ General statistics """
-
-    REPLICATION = "replication"
-    """ Master/replica replication information """
-
-    CPU = "cpu"
-    """ CPU consumption statistics """
+    Since: Valkey version 9.1.0.
+    """
 
     COMMAND_STATS = "commandstats"
     """ Valkey command statistics """
 
-    LATENCY_STATS = "latencystats"
-    """ Valkey command latency percentile distribution statistics """
-
-    SENTINEL = "sentinel"
-    """ Valkey Sentinel section (only applicable to Sentinel instances) """
-
-    CLUSTER = "cluster"
-    """ Valkey Cluster section """
-
-    MODULES = "modules"
-    """ Modules section """
-
-    KEYSPACE = "keyspace"
-    """ Database related statistics """
-
-    ERROR_STATS = "errorstats"
-    """ Valkey error statistics """
-
-    ALL = "all"
-    """ Return all sections (excluding module generated ones) """
+    CPU = "cpu"
+    """ CPU consumption statistics """
 
     DEFAULT = "default"
     """ Return only the default set of sections """
 
+    ERROR_STATS = "errorstats"
+    """ Valkey error statistics """
+
     EVERYTHING = "everything"
     """ Includes all and modules """
+
+    KEYSPACE = "keyspace"
+    """ Database related statistics """
+
+    LATENCY_STATS = "latencystats"
+    """ Valkey command latency percentile distribution statistics """
+
+    MEMORY = "memory"
+    """ Memory consumption related information """
+
+    MODULES = "modules"
+    """ Modules section """
+
+    PERSISTENCE = "persistence"
+    """ RDB and AOF related information """
+
+    REPLICATION = "replication"
+    """ Master/replica replication information """
+
+    SENTINEL = "sentinel"
+    """ Valkey Sentinel section (only applicable to Sentinel instances) """
+
+    SERVER = "server"
+    """ General information about the server """
+
+    STATS = "stats"
+    """ General statistics """
 
 
 class ExpireOptions(Enum):
