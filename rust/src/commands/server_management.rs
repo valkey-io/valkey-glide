@@ -16,11 +16,13 @@ use std::collections::HashMap;
 /// Server-management commands (`INFO`, `DBSIZE`, `FLUSHALL`, `CONFIG ...`, `TIME`).
 #[async_trait]
 pub trait ServerManagementCommands: CommandExecutor {
+    // TODO #7362: Return per-node replies for cluster clients.
     /// Get server information and statistics (`INFO`).
     async fn info(&self) -> ValkeyResult<String> {
         String::from_owned_valkey_value(self.execute_command(cmd("INFO"), None).await?)
     }
 
+    // TODO #7362: Return per-node replies for cluster clients.
     /// Get server information for specific sections (`INFO section...`).
     async fn info_sections<S: ToValkeyArgs + Send + Sync>(
         &self,
@@ -99,12 +101,14 @@ pub trait ServerManagementCommands: CommandExecutor {
         String::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
+    // TODO #7362: Return per-node replies for cluster clients.
     /// Asynchronously rewrite the append-only file (`BGREWRITEAOF`). Returns the
     /// server's status message.
     async fn bgrewriteaof(&self) -> ValkeyResult<String> {
         String::from_owned_valkey_value(self.execute_command(cmd("BGREWRITEAOF"), None).await?)
     }
 
+    // TODO #7362: Return per-node replies for cluster clients.
     /// Asynchronously save the dataset to disk (`BGSAVE`). Set `schedule` to defer
     /// until no other save is running. Returns the server's status message.
     async fn bgsave(&self, schedule: bool) -> ValkeyResult<String> {
@@ -190,12 +194,14 @@ pub trait ServerManagementCommands: CommandExecutor {
         i64::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
+    // TODO #7362: Return per-node replies for cluster clients.
     /// Get a human-readable latency diagnosis report (`LATENCY DOCTOR`).
     async fn latency_doctor(&self) -> ValkeyResult<String> {
         let cmd = cmd("LATENCY").with_arg("DOCTOR");
         String::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
+    // TODO #7362: Return per-node replies for cluster clients.
     /// Get a latency graph for an event (`LATENCY GRAPH`).
     async fn latency_graph<E: ToValkeyArgs + Send>(&self, event: E) -> ValkeyResult<String> {
         let cmd = cmd("LATENCY").with_arg("GRAPH").with_arg(event);
