@@ -3348,6 +3348,11 @@ impl Client {
         let _ = self.cert_material.set(material);
     }
 
+    #[cfg(test)]
+    pub(crate) fn set_multi_active_for_test(&self, active: bool) {
+        self.multi_active.store(active, Ordering::Release);
+    }
+
     /// The configured custom address resolver, if any. Applied to a standalone
     /// scope's seed; see `scope::build_scope_connection_addr` for the cluster case.
     pub(crate) fn address_resolver(&self) -> Option<Arc<dyn AddressResolver>> {
@@ -3367,11 +3372,12 @@ impl Client {
     /// Reset connection state to a clean baseline after a pool borrow is returned.
     ///
     /// - DISCARD — always sent (not gated on the intent-tracked `multi_active`,
-    ///   which can desync under concurrent use). With no MULTI open it errors; we
-    ///   ignore it, so this is not a liveness check — a dead connection is caught
-    ///   on the next borrow or by `test_on_borrow`. Routed to `AllNodes` on cluster
-    ///   to reach every node a borrow may have opened a MULTI on; standalone takes
-    ///   its single connection.
+    ///   which can desync under concurrent use). With no MULTI open it errors
+    ///   harmlessly and we ignore it; but if a MULTI *was* open and DISCARD failed,
+    ///   the transaction may still be open, so we propagate the error and release
+    ///   discards the connection rather than reuse it with queued commands. Routed
+    ///   to `AllNodes` on cluster to reach every node a borrow may have opened a
+    ///   MULTI on; standalone takes its single connection.
     /// - SELECT <configured_db> — sent only when the database drifted
     ///   (`current_database() != configured_db`) or a SELECT may have applied
     ///   untracked during the borrow (`db_maybe_dirty`); a borrow that never sent
@@ -3384,13 +3390,24 @@ impl Client {
     /// parent client's pub/sub API, which keeps dedicated connections).
     pub async fn reset_connection_state(&mut self, configured_db: u32) -> RedisResult<()> {
         // See the doc comment for why DISCARD is unconditional and AllNodes on cluster.
+        // Capture multi_active first: send_command's track_transaction_state clears it
+        // on seeing DISCARD, so it must be read before dispatch.
+        let multi_was_open = self.multi_active.load(Ordering::Acquire);
         let discard_routing = self.is_cluster_mode().then_some(RoutingInfo::MultiNode((
             MultipleNodeRoutingInfo::AllNodes,
             None,
         )));
-        let _ = self
+        let discard_result = self
             .send_command(&mut redis::cmd("DISCARD"), discard_routing)
             .await;
+        // With no MULTI open, DISCARD errors ("DISCARD without MULTI", and on cluster
+        // on every node) — expected, ignored. But if a MULTI *was* open and DISCARD
+        // failed (circuit breaker, dead connection), the transaction may still be
+        // open; propagate so release discards the connection instead of reusing it
+        // with queued commands.
+        if multi_was_open && discard_result.is_err() {
+            return discard_result.map(|_| ());
+        }
 
         // `None` routing is intentional: SELECT is an AllNodes command, so it fans
         // out to every node without spelling it out like DISCARD above. Restore on
@@ -3473,6 +3490,13 @@ impl Client {
     /// reply position in the result array — the caller pairs it with
     /// [`batch_reply_applied`](Self::batch_reply_applied) to record the drift only
     /// if the server applied it. A pure read; never mutates db state.
+    ///
+    /// Only `SELECT` is tracked, not `RESET` (which also returns the connection to
+    /// db 0). A batch like `[SELECT 3, RESET]` therefore records db 3 while the live
+    /// connection is on db 0, leaving non-pooled scope/reconnect metadata stale.
+    /// Pooled release is unaffected — `db_maybe_dirty` forces the reset `SELECT`
+    /// regardless — and a `RESET` inside a pooled borrow is an unusual pattern, so
+    /// the narrow non-pooled gap is left as a known limitation rather than tracked.
     fn last_select_db(&self, pipeline: &redis::Pipeline) -> Option<(usize, u32)> {
         pipeline
             .cmd_iter()
@@ -3501,17 +3525,17 @@ impl Client {
         self.shared.current_database.store(db, Ordering::Release);
     }
 
-    /// Whether the batch command at `idx` applied, i.e. its reply exists and is not
-    /// a `ServerError`. The outer `Result` is not enough: with `raise_on_error=false`
-    /// a rejected `SELECT` is a `ServerError` inside an `Ok(Value::Array)`, and a
-    /// WATCH-aborted `EXEC` returns `Ok(Value::Nil)` — both must be treated as not
-    /// applied, or a `SELECT` the server rejected would poison `current_database`
+    /// Whether the `SELECT` at `idx` in the batch actually executed. An executed
+    /// `SELECT` replies `+OK` (`Value::Okay`); anything else means the db did not
+    /// change: a rejected `SELECT` is a `ServerError` (present in an `Ok` array when
+    /// `raise_on_error=false`), a `SELECT` merely *queued* inside a raw `MULTI` with
+    /// no `EXEC` replies `QUEUED` (`SimpleString`), and a WATCH-aborted `EXEC`
+    /// returns `Nil`. Recording any of these would poison `current_database`
     /// (authoritative for scope connections, which handshake into it).
     fn batch_reply_applied(result: &RedisResult<Value>, idx: usize) -> bool {
         matches!(
             result,
-            Ok(Value::Array(values))
-                if !matches!(values.get(idx), None | Some(Value::ServerError(_)))
+            Ok(Value::Array(values)) if matches!(values.get(idx), Some(Value::Okay))
         )
     }
 
