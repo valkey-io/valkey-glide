@@ -1665,7 +1665,6 @@ pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType<'_>>
         | b"EXPIREAT"
         | b"PEXPIRE"
         | b"PEXPIREAT"
-        | b"SISMEMBER"
         | b"PERSIST"
         | b"SMOVE"
         | b"PFADD"
@@ -1707,6 +1706,17 @@ pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType<'_>>
                 Some(ExpectedReturnType::Set)
             } else {
                 None
+            }
+        }
+        b"SISMEMBER" => {
+            // Match "XX" by position because the key or member may itself be "XX".
+            if cmd
+                .arg_idx(3)
+                .is_some_and(|arg| arg.eq_ignore_ascii_case(b"XX"))
+            {
+                None
+            } else {
+                Some(ExpectedReturnType::Boolean)
             }
         }
         b"LOLWUT" => Some(ExpectedReturnType::SingleOrMultiNode(
@@ -2978,6 +2988,30 @@ mod tests {
             convert_to_expected_type(response, Some(ExpectedReturnType::ArrayOfBools)).unwrap();
         let expected_response = Value::Array(vec![Value::Boolean(false), Value::Boolean(true)]);
         assert_eq!(expected_response, converted_response);
+    }
+
+    #[test]
+    fn convert_sismember() {
+        assert!(matches!(
+            expected_type_for_cmd(redis::cmd("SISMEMBER").arg("key").arg("member")),
+            Some(ExpectedReturnType::Boolean)
+        ));
+        assert!(matches!(
+            expected_type_for_cmd(redis::cmd("SISMEMBER").arg("key").arg("xx")),
+            Some(ExpectedReturnType::Boolean)
+        ));
+        assert!(matches!(
+            expected_type_for_cmd(redis::cmd("SISMEMBER").arg("xx").arg("member")),
+            Some(ExpectedReturnType::Boolean)
+        ));
+        assert!(
+            expected_type_for_cmd(redis::cmd("SISMEMBER").arg("key").arg("member").arg("XX"))
+                .is_none()
+        );
+        assert!(
+            expected_type_for_cmd(redis::cmd("SISMEMBER").arg("key").arg("member").arg("xx"))
+                .is_none()
+        );
     }
 
     #[test]

@@ -45,8 +45,10 @@ function toBuffersArray(args: GlideString[]) {
     return argsBytes;
 }
 
+// TODO #7368: Remove and inline in `getInfo`.
 /**
  * @test
+ * @deprecated This function is deprecated and should no longer be used.
  */
 export function parseInfoResponse(response: string): Record<string, string> {
     const lines = response.split("\n");
@@ -217,73 +219,79 @@ export function createSet(
  */
 export enum InfoOptions {
     /**
-     * SERVER: General information about the server
+     * ALL: Return all sections (excluding module generated ones)
      */
-    Server = "server",
+    All = "all",
     /**
      * CLIENTS: Client connections section
      */
     Clients = "clients",
     /**
-     * MEMORY: Memory consumption related information
+     * CLUSTER: Valkey Cluster section
      */
-    Memory = "memory",
+    Cluster = "cluster",
     /**
-     * PERSISTENCE: RDB and AOF related information
+     * CLUSTER_INFO: Valkey Cluster information.
+     *
+     * @remarks Since Valkey version 9.1.0.
      */
-    Persistence = "persistence",
-    /**
-     * STATS: General statistics
-     */
-    Stats = "stats",
-    /**
-     * REPLICATION: Master/replica replication information
-     */
-    Replication = "replication",
-    /**
-     * CPU: CPU consumption statistics
-     */
-    Cpu = "cpu",
+    ClusterInfo = "cluster_info",
     /**
      * COMMANDSTATS: Valkey command statistics
      */
     Commandstats = "commandstats",
     /**
-     * LATENCYSTATS: Valkey command latency percentile distribution statistics
+     * CPU: CPU consumption statistics
      */
-    Latencystats = "latencystats",
-    /**
-     * SENTINEL: Valkey Sentinel section (only applicable to Sentinel instances)
-     */
-    Sentinel = "sentinel",
-    /**
-     * CLUSTER: Valkey Cluster section
-     */
-    Cluster = "cluster",
-    /**
-     * MODULES: Modules section
-     */
-    Modules = "modules",
-    /**
-     * KEYSPACE: Database related statistics
-     */
-    Keyspace = "keyspace",
-    /**
-     * ERRORSTATS: Valkey error statistics
-     */
-    Errorstats = "errorstats",
-    /**
-     * ALL: Return all sections (excluding module generated ones)
-     */
-    All = "all",
+    Cpu = "cpu",
     /**
      * DEFAULT: Return only the default set of sections
      */
     Default = "default",
     /**
+     * ERRORSTATS: Valkey error statistics
+     */
+    Errorstats = "errorstats",
+    /**
      * EVERYTHING: Includes all and modules
      */
     Everything = "everything",
+    /**
+     * KEYSPACE: Database related statistics
+     */
+    Keyspace = "keyspace",
+    /**
+     * LATENCYSTATS: Valkey command latency percentile distribution statistics
+     */
+    Latencystats = "latencystats",
+    /**
+     * MEMORY: Memory consumption related information
+     */
+    Memory = "memory",
+    /**
+     * MODULES: Modules section
+     */
+    Modules = "modules",
+    /**
+     * PERSISTENCE: RDB and AOF related information
+     */
+    Persistence = "persistence",
+    /**
+     * REPLICATION: Master/replica replication information
+     */
+    Replication = "replication",
+    /**
+     * SENTINEL: Valkey Sentinel section (only applicable to Sentinel instances)
+     */
+    Sentinel = "sentinel",
+    /**
+     * SERVER: General information about the server
+     */
+    Server = "server",
+    /**
+     * STATS: General statistics
+     */
+    Stats = "stats",
 }
 
 /**

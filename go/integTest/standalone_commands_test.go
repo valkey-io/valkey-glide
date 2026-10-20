@@ -416,40 +416,44 @@ func (suite *GlideTestSuite) TestSortReadOnlyWithOptions_SuccessfulSortByWeightA
 }
 
 func (suite *GlideTestSuite) TestInfoStandalone() {
-	DEFAULT_INFO_SECTIONS := []string{
-		"Server",
-		"Clients",
-		"Memory",
-		"Persistence",
-		"Stats",
-		"Replication",
-		"CPU",
-		"Modules",
-		"Errorstats",
-		"Cluster",
-		"Keyspace",
-	}
-
 	client := suite.defaultClient()
 	t := suite.T()
 
 	// info without options
-	info, err := client.Info(context.Background())
-	assert.NoError(t, err)
-	for _, section := range DEFAULT_INFO_SECTIONS {
-		assert.Contains(t, info, "# "+section, "Section "+section+" is missing")
+	fields := getInfo(t, client)[0]
+	for _, field := range infoDefaultFields {
+		assert.Contains(t, fields, field)
 	}
 
 	// info with option or with multiple options
 	sections := []constants.Section{constants.Cpu}
+	// TODO #5368: Compare versions semantically, not as strings.
 	if suite.serverVersion >= "7.0.0" {
 		sections = append(sections, constants.Memory)
 	}
-	info, err = client.InfoWithOptions(context.Background(), options.InfoOptions{Sections: sections})
+	info, err := client.InfoWithOptions(context.Background(), options.InfoOptions{Sections: sections})
 	assert.NoError(t, err)
 	for _, section := range sections {
 		assert.Contains(t, strings.ToLower(info), strings.ToLower("# "+string(section)), "Section "+section+" is missing")
 	}
+
+	// Valkey 9.2+ fields
+	// ------------------
+
+	// TODO #5368: Compare versions semantically, not as strings.
+	if suite.serverVersion < "9.2.0" {
+		return
+	}
+
+	// Persistence fields
+	persistence := getInfo(t, client, constants.Persistence)[0]
+
+	assert.Contains(t, bgsaveTypes, persistence["rdb_current_bgsave_type"])
+	assert.Contains(t, bgsaveTypes, persistence["rdb_last_bgsave_type"])
+
+	remaining_name := "forkless_estimated_seconds_remaining"
+	remaining_value := AssertInt(t, persistence[remaining_name], remaining_name)
+	assert.GreaterOrEqual(t, remaining_value, int64(-1))
 }
 
 func (suite *GlideTestSuite) TestDBSize() {
@@ -851,6 +855,7 @@ func (suite *GlideTestSuite) TestLolwutWithOptions_EmptyArgs() {
 func (suite *GlideTestSuite) TestLolwutWithOptions_Version9_TwoParams() {
 	client := suite.defaultClient()
 	// Test LOLWUT version 9 (available in Valkey 9.0.0+)
+	// TODO #5368: Compare versions semantically, not as strings.
 	if suite.serverVersion >= "9.0.0" {
 		opts := options.NewLolwutOptions(9).SetArgs([]int{30, 4})
 		res, err := client.LolwutWithOptions(context.Background(), *opts)
@@ -865,6 +870,7 @@ func (suite *GlideTestSuite) TestLolwutWithOptions_Version9_TwoParams() {
 func (suite *GlideTestSuite) TestLolwutWithOptions_Version9_FourParams() {
 	client := suite.defaultClient()
 	// Test LOLWUT version 9 (available in Valkey 9.0.0+)
+	// TODO #5368: Compare versions semantically, not as strings.
 	if suite.serverVersion >= "9.0.0" {
 		opts := options.NewLolwutOptions(9).SetArgs([]int{40, 20, 1, 2})
 		res, err := client.LolwutWithOptions(context.Background(), *opts)
