@@ -171,11 +171,11 @@ func ExampleClient_SIsMemberIfExists() {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
 
-    fmt.Println(result1)
+	fmt.Println(result1)
 	fmt.Println(result2)
 	fmt.Println(result3)
 
-    // Output:
+	// Output:
 	// 1
 	// 0
 	// -1
@@ -201,7 +201,7 @@ func ExampleClusterClient_SIsMemberIfExists() {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
 
-    fmt.Println(result1)
+	fmt.Println(result1)
 	fmt.Println(result2)
 	fmt.Println(result3)
 
