@@ -178,22 +178,23 @@ public class VectorSearch13Tests {
     /**
      * Dispatches a raw custom command through whichever concrete client type was given, unwrapping a
      * cluster client's {@link ClusterValue}. A command routed to a single node (the default for most
-     * commands, including FT.CREATE/FT.SEARCH/FT.INFO) comes back as a single value; a command that
-     * fans out to every node by default (such as CONFIG GET with no explicit route) comes back as a
-     * per-node map, in which case the first node's reply is returned -- every node in this test
-     * harness's single-module-config cluster reports the same value, so any one node answers the
-     * question this helper is used for.
+     * commands, including FT.CREATE/FT.SEARCH/FT.INFO) comes back as a single value under {@link
+     * ClusterValue#getSingleValue()}. A command with no explicit route that still only gets answered
+     * by one node (such as CONFIG GET on this test harness's single-module-config cluster) also comes
+     * back from that one node, but {@link ClusterValue} stores its map-shaped reply under {@link
+     * ClusterValue#getMultiValue()} instead -- see the comment at the call site below for how that
+     * was confirmed. There is no real per-node breakdown to pick a node out of here.
      */
     private static Object customCommand(BaseClient client, GlideString[] args)
             throws InterruptedException, ExecutionException {
         if (client instanceof GlideClusterClient) {
             ClusterValue<Object> value = ((GlideClusterClient) client).customCommand(args).get();
-            // For an unrouted command like CONFIG GET or FT.INFO, the single node that answers
-            // returns its own map-shaped reply, and ClusterValue stores that single map under
-            // getMultiValue() rather than getSingleValue() (confirmed empirically against a live
-            // cluster: hasMultiData() is true with exactly one entry whose key is the config key
-            // itself, e.g. "search.emulate-release", not a node address) -- so the multi-value map
-            // IS the reply's own contents here, not a per-node breakdown.
+            // For an unrouted command like CONFIG GET, the single node that answers returns its own
+            // map-shaped reply, and ClusterValue stores that single map under getMultiValue() rather
+            // than getSingleValue() (confirmed empirically against a live cluster: hasMultiData() is
+            // true with exactly one entry whose key is the config key itself, e.g.
+            // "search.emulate-release", not a node address) -- so the multi-value map IS the reply's
+            // own contents here, not a per-node breakdown.
             if (value.hasMultiData()) {
                 return value.getMultiValue();
             }
