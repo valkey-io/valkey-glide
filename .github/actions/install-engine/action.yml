@@ -22,21 +22,24 @@ runs:
               ENGINE_VERSION: ${{ inputs.engine-version }}
           run: |
               echo "ENGINE_VERSION=$ENGINE_VERSION" >> $GITHUB_ENV
+              # Clone the engine outside the checkout so the build tree never dirties
+              # the worktree (the clean-tree check fails on an untracked valkey/ dir).
+              echo "VALKEY_DIR=${RUNNER_TEMP}/valkey-engine" >> $GITHUB_ENV
 
         # TODO: workflow improvements https://github.com/valkey-io/valkey-glide/issues/5211
         - name: Prepare Valkey sources
           id: prepare-sources
           shell: ${{ contains(inputs.target, 'windows') && 'wsl-bash {0}' || 'bash' }}
           env:
-              WSLENV: ENGINE_VERSION/u:GITHUB_OUTPUT/p
+              WSLENV: ENGINE_VERSION/u:GITHUB_OUTPUT/p:VALKEY_DIR/p
           run: |
               echo "Cloning and checking out Valkey $ENGINE_VERSION"
-              if [[ -d valkey ]]; then
+              if [[ -d "$VALKEY_DIR" ]]; then
                   echo "Removing existing valkey directory..."
-                  rm -fR valkey
+                  rm -fR "$VALKEY_DIR"
               fi
-              git clone https://github.com/valkey-io/valkey.git
-              cd valkey/src
+              git clone https://github.com/valkey-io/valkey.git "$VALKEY_DIR"
+              cd "$VALKEY_DIR/src"
               git checkout $ENGINE_VERSION
               SOURCES_VERSION=`grep ' VALKEY_VERSION ' version.h | grep -o -E '[0-9]+\.[0-9]\.[0-9]'` || :
               if [[ -z $SOURCES_VERSION ]]; then
@@ -71,10 +74,10 @@ runs:
           id: cache-valkey
           with:
               path: |
-                  valkey/src/valkey-server
-                  valkey/src/valkey-cli
-                  valkey/src/redis-server
-                  valkey/src/redis-cli
+                  ${{ runner.temp }}/valkey-engine/src/valkey-server
+                  ${{ runner.temp }}/valkey-engine/src/valkey-cli
+                  ${{ runner.temp }}/valkey-engine/src/redis-server
+                  ${{ runner.temp }}/valkey-engine/src/redis-cli
               key: valkey-${{ steps.prepare-sources.outputs.SOURCES_VERSION }}-${{ inputs.target }}-${{ steps.runner-image.outputs.IMAGE_ID }}
 
         # Manual install, because makefile target rebuilds everything, we want to avoid that
@@ -83,9 +86,9 @@ runs:
           if: ${{ steps.cache-valkey.outputs.cache-hit == 'true'}}
           shell: ${{ contains(inputs.target, 'windows') && 'wsl-bash {0}' || 'bash' }}
           env:
-              WSLENV: GITHUB_OUTPUT/p
+              WSLENV: GITHUB_OUTPUT/p:VALKEY_DIR/p
           run: |
-              cd valkey/src
+              cd "$VALKEY_DIR/src"
               if command -v sudo &> /dev/null
               then
                   echo "sudo command exists"
@@ -123,8 +126,10 @@ runs:
         - name: Build and install engine
           if: ${{ steps.cache-valkey.outputs.cache-hit != 'true' || steps.install-cached.outputs.usable != 'true' }}
           shell: ${{ contains(inputs.target, 'windows') && 'wsl-bash {0}' || 'bash' }}
+          env:
+              WSLENV: VALKEY_DIR/p
           run: |
-              cd valkey
+              cd "$VALKEY_DIR"
               make BUILD_TLS=yes -j4
               if command -v sudo &> /dev/null
               then
