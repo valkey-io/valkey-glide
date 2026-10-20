@@ -2623,6 +2623,42 @@ class CoreCommands(Protocol):
             await self._execute_command(RequestType.SIsMember, [key, member]),
         )
 
+    async def sismember_if_exists(
+        self,
+        key: TEncodable,
+        member: TEncodable,
+    ) -> int:
+        """
+        Returns if `member` is a member of the set stored at `key`,
+        or `-1` if the `key` does not exist.
+
+        See [valkey.io](https://valkey.io/commands/sismember/) for more details.
+
+        Args:
+            key (TEncodable): The key of the set.
+            member (TEncodable): The member to check for existence in the set.
+
+        Returns:
+            int: A status code indicating membership:
+            - `1`: The member exists in the set.
+            - `0`: The key exists but the member does not exist in the set.
+            - `-1`: The key does not exist.
+
+        Examples:
+            >>> await client.sismember_if_exists("my_set", "member1")
+                1  # Indicates that "member1" exists in the set "my_set".
+            >>> await client.sismember_if_exists("my_set", "non_existing_member")
+                0  # Indicates that "my_set" exists but "non_existing_member" does not exist in it.
+            >>> await client.sismember_if_exists("non_existing_set", "member1")
+                -1  # Indicates that "non_existing_set" does not exist.
+
+        Since: Valkey version 9.2.0.
+        """
+        return cast(
+            int,
+            await self._execute_command(RequestType.SIsMember, [key, member, "XX"]),
+        )
+
     async def smove(
         self,
         source: TEncodable,
