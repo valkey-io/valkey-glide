@@ -463,7 +463,6 @@ jobs:
                 host: ${{ fromJson(needs.get-containers.outputs.host-matrix-output) }}
         env:
             VALKEY_GLIDE_DNS_TESTS_ENABLED: "1"
-            CARGO_TARGET_DIR: ${{ github.workspace }}/python/target
             CARGO_INCREMENTAL: "0"
         container:
             image: ${{ matrix.host.IMAGE }}
@@ -479,6 +478,12 @@ jobs:
                   echo IMAGE=amazonlinux:latest | sed -r 's/:/-/g' >> $GITHUB_ENV
             # Replace `:` in the variable otherwise it can't be used in `upload-artifact`
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+            # Inside a container, `${{ github.workspace }}` is the host path, not
+            # the mounted one (actions/runner#2058); only the shell's
+            # $GITHUB_WORKSPACE matches where actions/cache resolves python/target.
+            - name: Point cargo at the cached target dir
+              run: echo "CARGO_TARGET_DIR=$GITHUB_WORKSPACE/python/target" >> "$GITHUB_ENV"
 
             - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
               with:
