@@ -597,6 +597,14 @@ describe("Compression", () => {
     it.each([false, true])(
         "compression_delifeq_incompatible cluster_mode=%p",
         async (clusterMode) => {
+            const versionCluster = clusterMode
+                ? clusterCluster
+                : standaloneCluster;
+
+            if (versionCluster.checkIfServerVersionLessThan("9.0.0")) {
+                return;
+            }
+
             client = await createCompressedClient(clusterMode, {
                 enabled: true,
             });
@@ -821,9 +829,11 @@ describe("Compression", () => {
             expect(await client.setrange(key, 6, "WORLD")).toBe(11);
 
             // DELIFEQ
-            await client.set(key, "delifeq_value");
-            expect(await client.delifeq(key, "delifeq_value")).toBe(true);
-            await client.set(key, "delifeq_value");
+            if (!standaloneCluster.checkIfServerVersionLessThan("9.0.0")) {
+                await client.set(key, "delifeq_value");
+                expect(await client.delifeq(key, "delifeq_value")).toBe(true);
+                await client.set(key, "delifeq_value");
+            }
 
             // GETBIT
             await client.set(key, "\x00");
