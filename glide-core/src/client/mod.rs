@@ -37,7 +37,7 @@ pub use types::*;
 
 use self::value_conversion::{convert_to_expected_type, expected_type_for_cmd, get_value_type};
 mod dispatch_permit;
-use dispatch_permit::DispatchPermit;
+use dispatch_permit::{Admission, DispatchPermit};
 #[cfg(feature = "rdma")]
 mod rdma;
 #[cfg(feature = "rdma")]
@@ -1304,13 +1304,14 @@ impl Client {
         cmd: &'a mut Cmd,
         routing: Option<RoutingInfo>,
     ) -> RedisResult<Value> {
-        let permit = DispatchPermit::take(self).await?;
+        let admission = Admission::check(self).await?;
 
-        // An intercepted command drops `permit` here, which frees its slot.
+        // Answered locally, so it never takes an in-flight slot.
         if let Some(result) = self.pubsub_synchronizer.intercept_pubsub_command(cmd).await {
             return result;
         }
 
+        let permit = admission.reserve(self)?;
         self.dispatch(permit, cmd, routing).await
     }
 
@@ -5332,5 +5333,47 @@ mod tests {
         sent.arg("key").arg("value");
         let reply = client.dispatch(permit, &mut sent, None).await;
         assert_eq!(reply, Ok(redis::Value::Okay));
+    }
+
+    /// A pubsub command the synchronizer answers locally never reaches the
+    /// network, so a full in-flight limit must not refuse it.
+    #[tokio::test]
+    async fn an_intercepted_pubsub_command_needs_no_inflight_slot() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        tokio::spawn(serve_as_a_primary(listener));
+        let request = ConnectionRequest {
+            addresses: vec![NodeAddress {
+                host: "127.0.0.1".to_string(),
+                port,
+            }],
+            inflight_requests_limit: Some(1),
+            ..Default::default()
+        };
+        let mut client = Client::new(request, None).await.expect("connects");
+
+        let _only_slot = super::DispatchPermit::take(&client)
+            .await
+            .expect("the one slot is free");
+
+        let mut refused = redis::cmd("SET");
+        refused.arg("key").arg("value");
+        let error = client
+            .send_command(&mut refused, None)
+            .await
+            .expect_err("no slot is left for a command that is sent");
+        assert!(
+            error
+                .to_string()
+                .contains("Reached maximum inflight requests"),
+            "{error}"
+        );
+
+        for name in ["SUBSCRIBE", "UNSUBSCRIBE"] {
+            let mut intercepted = redis::cmd(name);
+            intercepted.arg("channel");
+            let reply = client.send_command(&mut intercepted, None).await;
+            assert_eq!(reply, Ok(redis::Value::Nil), "{name}");
+        }
     }
 }
