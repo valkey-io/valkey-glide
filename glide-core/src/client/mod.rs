@@ -643,9 +643,11 @@ pub fn is_blocking_command_name(name: &[u8], args: &[Vec<u8>]) -> bool {
     match upper.as_slice() {
         b"BLPOP" | b"BRPOP" | b"BLMOVE" | b"BZPOPMAX" | b"BZPOPMIN" | b"BRPOPLPUSH" | b"BLMPOP"
         | b"BZMPOP" | b"WAIT" | b"WAITAOF" => true,
-        // An RDMA transfer is treated as blocking mainly so the client does not
-        // abandon it while it is in flight and leave the registered memory in
-        // an undefined state.
+        // An RDMA transfer is treated as blocking so that nothing which gives up
+        // on slow commands, such as the pool abandon monitor or the scope
+        // watchdog, cuts it short, and so that its wait is not tracked as latency.
+        // A transfer cut short ends without the server's reply, which revokes its
+        // region and loses the caller's buffer.
         b"BLOB.RDMA_GET" | b"BLOB.RDMA_SET" => true,
         // BLOCK is matched case-insensitively, mirroring `Cmd::position`.
         b"XREAD" | b"XREADGROUP" => args.iter().any(|a| a.eq_ignore_ascii_case(b"BLOCK")),
@@ -674,11 +676,11 @@ fn get_request_timeout(cmd: &Cmd, default_timeout: Duration) -> RedisResult<Opti
         }
         // An RDMA transfer should not have a timeout.
         //
-        // Timing out will abandon the request and ignore the reply which isn't
-        // safe because the server may still be writing into the caller's
-        // registered memory.
+        // Timing out would end the transfer without the server's reply, so its
+        // region would be revoked and the caller's buffer lost, even if the
+        // server was about to answer.
         //
-        // Close the client instead to abort a transfer and revoke the registration.
+        // To abort a transfer, revoke its region or call `Client::close_rdma`.
         b"BLOB.RDMA_GET" | b"BLOB.RDMA_SET" => Ok(RequestTimeoutOption::NoTimeout),
         _ => Ok(RequestTimeoutOption::ClientConfig),
     }?;
@@ -3115,7 +3117,7 @@ impl Client {
                 .is_some_and(|compression| compression.enabled)
         {
             return Err(ConnectionError::Configuration(
-                "RDMA and compression cannot be enabled on the same client: a RDMA \
+                "RDMA and compression cannot be enabled on the same client: an RDMA \
                  read transfers stored bytes directly and does not decompress them. \
                  Use separate clients, one per feature."
                     .to_string(),
@@ -3470,9 +3472,11 @@ impl Client {
     /// `Ok(None)` means the key does not exist. `Ok(Some(receipt))` means the
     /// bytes are already in the window by the time this returns.
     ///
-    /// Any error other than a reply the server sent means the server may not be
-    /// done with the memory, so the region is closed and no buffer comes back.
-    /// Register the memory again for the next transfer.
+    /// An error before the command was sent, such as a refused window or a full
+    /// in-flight limit, hands the buffer back, and so does any reply the server
+    /// sent. Any other error means the server may not be done with the memory,
+    /// so the region is closed and no buffer comes back. Register the memory
+    /// again for the next transfer.
     #[cfg(feature = "rdma")]
     pub async fn rdma_get(
         &mut self,
@@ -4636,7 +4640,7 @@ mod tests {
     #[test]
     fn test_rdma_transfers_have_no_timeout() {
         // `BLOB.RDMA_GET <key> <rkey> <remote-address> <len>`,
-        // `BLOB.RDMA_SET <key> <len> <rkey> <remote-address> <len>`
+        // `BLOB.RDMA_SET <key> <len> [CRC <crc32c>] <rkey> <remote-address> <len>`
         for name in ["BLOB.RDMA_GET", "BLOB.RDMA_SET"] {
             let mut cmd = Cmd::new();
             cmd.arg(name)

@@ -64,7 +64,7 @@ zstd = { version = "0.14" }
 
 [features]
 proto = ["protobuf"]
-# RDMA over fabric. libfabric is dynamically linked at runtime.
+# RDMA over fabric. libfabric is loaded at run time (dlopen).
 rdma = ["dep:glide-rdma", "glide-rdma/libfabric", "glide-core-engine/rdma"]
 socket-layer = [
     "proto",

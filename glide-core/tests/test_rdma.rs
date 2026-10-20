@@ -1,9 +1,11 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-//! RDMA integration tests that need a live server but no fabric hardware.
+//! RDMA integration tests that need no fabric hardware and no server module.
 //!
-//! Requires the `rdma` feature. Needs libfabric since these tests open a fabric,
-//! but over the `tcp` provider rather than a real card.
+//! Most run against a mock server, which can answer the `BLOB.*` commands with
+//! anything, including nothing. A few run against real servers without the
+//! module. Requires the `rdma` feature. Needs libfabric since these tests open a
+//! fabric, but over the `tcp` provider rather than a real card.
 
 #![cfg(feature = "rdma")]
 
@@ -333,7 +335,7 @@ mod dma_tests {
         assert_eq!(
             mock.get_number_of_received_commands(),
             3,
-            "one BLOB.RDMA_HELLO for the two BLOB.GETs, not one each"
+            "one BLOB.RDMA_HELLO for the two BLOB.RDMA_GETs, not one each"
         );
     }
 
@@ -397,11 +399,15 @@ mod dma_tests {
         true
     }
 
+    /// Revoking one region cancels the transfer using it without closing the
+    /// client, and the error says that is what happened.
+    ///
     /// The test fabric is tcp, where closing a region does not stop a write already
-    /// accepted, so a cancelled transfer's memory is parked until the fabric closes.
-    /// The caller can see how much, and a new client is the way to get it back.
+    /// accepted, so the cancelled transfer's memory is parked until the fabric
+    /// closes. The caller can see how much, and a new client is the way to get it
+    /// back.
     #[tokio::test]
-    async fn a_cancelled_read_parks_its_memory_until_the_client_is_dropped() {
+    async fn revoking_a_region_cancels_the_transfer_and_parks_its_memory() {
         let (_peer, mock) = server_that_never_answers("BLOB.RDMA_GET");
         let client = rdma_client_against(&mock).await;
         let (memory, freed) = tracked();
@@ -413,9 +419,19 @@ mod dma_tests {
             tokio::spawn(async move { transferring.rdma_get(b"key", buffer, 0, 4096).await });
         tokio::time::sleep(STUCK).await;
         revoker.revoke().expect("the region closes");
-        let _ = tokio::time::timeout(PROMPTLY, transfer)
+        let (buffer, outcome) = tokio::time::timeout(PROMPTLY, transfer)
             .await
-            .expect("the revoke ends the wait");
+            .expect("revoking the region ends the wait")
+            .unwrap();
+        assert!(
+            buffer.is_none(),
+            "a recalled loan's memory is parked until the fabric closes"
+        );
+        let cancelled = outcome.expect_err("a cancelled read is an error");
+        assert!(
+            cancelled.to_string().contains("region was revoked"),
+            "{cancelled}"
+        );
 
         mock.close().await;
         tokio::time::sleep(STUCK).await;
@@ -499,39 +515,6 @@ mod dma_tests {
         closing.await.unwrap().expect("the region closes");
         assert!(
             cancelled.to_string().contains("RDMA transfer cancelled"),
-            "{cancelled}"
-        );
-    }
-
-    /// Revoking one region is the same cancellation without closing the client,
-    /// and the error should say which of the two happened.
-    #[tokio::test]
-    async fn revoking_a_region_cancels_the_transfer_using_it() {
-        let (_peer, mock) = server_that_never_answers("BLOB.RDMA_GET");
-        let client = rdma_client_against(&mock).await;
-        let buffer = client
-            .register_rdma_region(vec![0u8; 4096])
-            .expect("registers");
-        let revoker = buffer.revoker();
-
-        let mut transferring = client.clone();
-        let transfer =
-            tokio::spawn(async move { transferring.rdma_get(b"key", buffer, 0, 4096).await });
-        tokio::time::sleep(STUCK).await;
-
-        revoker.revoke().expect("the region closes");
-
-        let (buffer, outcome) = tokio::time::timeout(PROMPTLY, transfer)
-            .await
-            .expect("revoking the region ends the wait")
-            .unwrap();
-        assert!(
-            buffer.is_none(),
-            "a recalled loan's memory is parked until the fabric closes"
-        );
-        let cancelled = outcome.expect_err("a cancelled read is an error");
-        assert!(
-            cancelled.to_string().contains("region was revoked"),
             "{cancelled}"
         );
     }
@@ -758,6 +741,27 @@ mod dma_tests {
             "{error}"
         );
         assert!(!buffer.expect("the buffer comes back").is_revoked());
+    }
+
+    /// `rdma_get` checks every read against the checksum in the reply. A mismatch
+    /// is an error, and since the server replied, the buffer comes back usable.
+    #[tokio::test]
+    async fn a_read_whose_checksum_does_not_match_is_an_error_and_keeps_the_buffer() {
+        // Eight bytes, with a checksum that is not that of eight zero bytes.
+        let (_peer, mock) = server_answering_reads(&["*2\r\n:8\r\n:1\r\n", READ_REPLY]);
+        let mut client = rdma_client_against(&mock).await;
+        let buffer = client
+            .register_rdma_region(vec![0u8; 4096])
+            .expect("registers");
+
+        let (buffer, result) = client.rdma_get(b"key", buffer, 0, 4096).await;
+
+        let error = result.expect_err("the bytes that landed do not match the reply");
+        assert_eq!(error.kind(), redis::ErrorKind::ClientError, "{error}");
+        assert!(error.to_string().contains("checksum mismatch"), "{error}");
+        let buffer = buffer.expect("the server replied, so the buffer comes back");
+        assert!(!buffer.is_revoked());
+        succeeded(client.rdma_get(b"key", buffer, 0, 4096).await, "retry");
     }
 
     /// The caller gave up on the reply, for example with a timeout. The server may

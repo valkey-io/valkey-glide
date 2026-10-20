@@ -13,7 +13,8 @@
 //! Loopback, the more accessible setup:
 //!
 //! ```sh
-//! valkey-server --port 6379 --loadmodule ./<rdma-module>.so <module arguments> &
+//! # The module defaults to `fabric-provider EfaDirect`; tcp needs `Emulated`.
+//! valkey-server --port 6379 --loadmodule ./<rdma-module>.so fabric-provider Emulated &
 //! export GLIDE_RDMA_SERVER=127.0.0.1:6379
 //! export GLIDE_RDMA_PROVIDER=tcp
 //! cargo test --features rdma --test test_rdma_remote -- --ignored --nocapture
@@ -93,9 +94,9 @@ mod remote_dma_tests {
 
     /// The round trip: stage a value, let the server read it out of registered
     /// memory, then let it write the value back into a second buffer, and
-    /// compare the bytes. The comparison, and the checksum the server sends with
-    /// the `BLOB.RDMA_GET` reply, make a misaddressed transfer fail here rather
-    /// than return plausible-looking bytes.
+    /// compare the bytes. The comparison, and the checksum `rdma_get` checks
+    /// against the `BLOB.RDMA_GET` reply, make a misaddressed transfer fail here
+    /// rather than return plausible-looking bytes.
     #[tokio::test]
     #[serial_test::serial]
     #[ignore = "needs a server serving the BLOB.* commands"]
@@ -139,10 +140,6 @@ mod remote_dma_tests {
         );
         let receipt = receipt.expect("the key was just written, so it must exist");
         assert_eq!(receipt.bytes_written, VALUE_BYTES);
-        assert_eq!(receipt.checksum, glide_rdma::checksum(&value));
-        receipt
-            .verify(destination.as_host())
-            .expect("the bytes that landed match the server's checksum");
 
         assert_eq!(
             &destination.as_host()[..VALUE_BYTES],
@@ -637,7 +634,8 @@ mod remote_dma_tests {
             .await
     }
 
-    /// Read `key` back over RDMA, verified against the server's checksum.
+    /// Read `key` back over RDMA. `rdma_get` verifies it against the server's
+    /// checksum.
     async fn read_back(client: &mut Client, key: &str) -> Option<Vec<u8>> {
         let destination = client
             .register_rdma_region(vec![0xAAu8; CRC_BYTES])
@@ -649,9 +647,6 @@ mod remote_dma_tests {
             "BLOB.RDMA_GET",
         );
         let receipt = receipt?;
-        receipt
-            .verify(destination.as_host())
-            .expect("the bytes that landed match the server's checksum");
         Some(destination.as_host()[..receipt.bytes_written].to_vec())
     }
 
@@ -826,8 +821,7 @@ mod remote_dma_tests {
                 client.rdma_get(key.as_bytes(), buffer, 0, size).await,
                 format!("cycle {cycle}: BLOB.RDMA_GET"),
             );
-            let receipt = receipt.expect("the key exists");
-            receipt.verify(buffer.as_host()).expect("checksum matches");
+            assert!(receipt.is_some(), "the key exists");
             assert_eq!(
                 &buffer.as_host()[..VALUE_BYTES],
                 &value[..],

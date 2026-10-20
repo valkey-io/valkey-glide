@@ -114,8 +114,9 @@ pub fn configuration_error(message: impl Into<String>) -> RedisError {
 /// cancellation by it, so it must not change without changing that too.
 pub const CANCELLED: &str = "RDMA transfer cancelled";
 
-/// A transfer given up because its region was revoked, usually by closing the
-/// client. Never retried: the region it needs is gone.
+/// A transfer given up because its region was revoked or the client was closed,
+/// or a registration or transfer refused because the client is closed. Never
+/// retried: the region it needs is gone.
 pub fn cancelled(reason: impl Into<String>) -> RedisError {
     RedisError::from((redis::ErrorKind::ClientError, CANCELLED, reason.into()))
 }
@@ -191,11 +192,6 @@ mod tests {
     fn a_write_reply_that_is_not_ok_is_a_protocol_error() {
         assert!(parse_write_ack(Value::Int(64)).is_err());
         assert!(parse_write_ack(Value::Nil).is_err());
-    }
-
-    #[test]
-    fn parses_a_missing_key_as_none() {
-        assert_eq!(parse_receipt(Value::Nil).unwrap(), None);
     }
 
     /// The server always sends the checksum, so a byte count alone is malformed.

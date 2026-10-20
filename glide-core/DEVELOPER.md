@@ -66,8 +66,9 @@ loaded when a client first opens a fabric, so it only has to be installed where 
 run. Set `GLIDE_LIBFABRIC_PATH` to the library file to use a copy the default search does
 not find. On Linux the search tries the EFA installer's copy under `/opt/amazon/efa` first.
 
-[`tests/test_rdma.rs`](tests/test_rdma.rs) needs no fabric hardware. It opens a fabric over
-the `tcp` provider and runs against the servers the test suite starts:
+[`tests/test_rdma.rs`](tests/test_rdma.rs) needs no fabric hardware or server module. It
+opens a fabric over the `tcp` provider and runs mostly against mock servers, plus a few servers
+the test suite starts:
 
 ```bash
 cargo test --features rdma --test test_rdma
@@ -79,11 +80,12 @@ and pick the provider:
 
 ```bash
 export GLIDE_RDMA_SERVER=<host>:<port>
-export GLIDE_RDMA_PROVIDER=efa-direct  # on a machine with an EFA device
+export GLIDE_RDMA_PROVIDER=efa-direct  # on a machine with an EFA device, or tcp
 cargo test --features rdma --test test_rdma_remote -- --ignored --nocapture
 ```
 
-Set `GLIDE_RDMA_INTERFACE` to choose a network interface when the machine has more than one.
+For `tcp`, load the module with `fabric-provider Emulated`; its default is `EfaDirect`. Set
+`GLIDE_RDMA_INTERFACE` to choose a network interface when the machine has more than one.
 
 ## Timeout Watchdog Diagnostics
 

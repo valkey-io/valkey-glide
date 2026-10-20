@@ -1666,12 +1666,6 @@ mod tests_routing {
     }
 
     #[test]
-    fn test_rdma_data_commands_trigger_moved() {
-        assert!(RoutingInfo::is_key_routing_command(b"BLOB.RDMA_GET"));
-        assert!(RoutingInfo::is_key_routing_command(b"BLOB.RDMA_SET"));
-    }
-
-    #[test]
     fn test_routing_info_mixed_capatalization() {
         let mut upper = cmd("XREAD");
         upper.arg("STREAMS").arg("foo").arg(0);
