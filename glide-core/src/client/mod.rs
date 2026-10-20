@@ -3372,12 +3372,11 @@ impl Client {
     /// Reset connection state to a clean baseline after a pool borrow is returned.
     ///
     /// - DISCARD — always sent (not gated on the intent-tracked `multi_active`,
-    ///   which can desync under concurrent use). With no MULTI open it errors
-    ///   harmlessly and we ignore it; but if a MULTI *was* open and DISCARD failed,
-    ///   the transaction may still be open, so we propagate the error and release
-    ///   discards the connection rather than reuse it with queued commands. Routed
-    ///   to `AllNodes` on cluster to reach every node a borrow may have opened a
-    ///   MULTI on; standalone takes its single connection.
+    ///   which can desync under concurrent use), to `AllNodes` on cluster. A
+    ///   "DISCARD without MULTI" reply is expected and ignored; any other failure,
+    ///   when a MULTI *was* open, is propagated so release discards the connection
+    ///   rather than reuse it with queued commands. See the error-classification
+    ///   note at the call site for why cluster forces matching by message.
     /// - SELECT <configured_db> — sent only when the database drifted
     ///   (`current_database() != configured_db`) or a SELECT may have applied
     ///   untracked during the borrow (`db_maybe_dirty`); a borrow that never sent
@@ -3389,9 +3388,8 @@ impl Client {
     /// Does not UNSUBSCRIBE: callers must not subscribe on a pooled client (use the
     /// parent client's pub/sub API, which keeps dedicated connections).
     pub async fn reset_connection_state(&mut self, configured_db: u32) -> RedisResult<()> {
-        // See the doc comment for why DISCARD is unconditional and AllNodes on cluster.
-        // Capture multi_active first: send_command's track_transaction_state clears it
-        // on seeing DISCARD, so it must be read before dispatch.
+        // Capture multi_active before dispatch: send_command's track_transaction_state
+        // clears it on seeing DISCARD.
         let multi_was_open = self.multi_active.load(Ordering::Acquire);
         let discard_routing = self.is_cluster_mode().then_some(RoutingInfo::MultiNode((
             MultipleNodeRoutingInfo::AllNodes,
@@ -3400,12 +3398,21 @@ impl Client {
         let discard_result = self
             .send_command(&mut redis::cmd("DISCARD"), discard_routing)
             .await;
-        // With no MULTI open, DISCARD errors ("DISCARD without MULTI", and on cluster
-        // on every node) — expected, ignored. But if a MULTI *was* open and DISCARD
-        // failed (circuit breaker, dead connection), the transaction may still be
-        // open; propagate so release discards the connection instead of reusing it
-        // with queued commands.
-        if multi_was_open && discard_result.is_err() {
+        // Classify the DISCARD outcome by message, not `is_err()`. "DISCARD without
+        // MULTI" (no transaction open) is expected and ignored. On cluster it is
+        // unavoidable even on success: DISCARD fans out to AllNodes but a borrow's
+        // MULTI lives on one node, so the others answer "DISCARD without MULTI" and
+        // the `None`-policy aggregate surfaces that as an Err. Any other failure
+        // (circuit breaker, dead connection, timeout), when a MULTI *was* open, is
+        // propagated so release discards the connection instead of reusing it with
+        // queued commands. A real owner-node failure cannot be masked by a sibling's
+        // no-MULTI error: transport failures short-circuit aggregation before the
+        // per-node reply loop, and an owner node with an open MULTI has no DISCARD
+        // error path (it returns +OK).
+        if multi_was_open
+            && let Err(e) = &discard_result
+            && !Self::is_discard_without_multi(e)
+        {
             return discard_result.map(|_| ());
         }
 
@@ -3424,6 +3431,14 @@ impl Client {
         self.shared.db_maybe_dirty.store(false, Ordering::Release);
 
         Ok(())
+    }
+
+    /// True when `e` is the server's "DISCARD without MULTI" reply (no transaction
+    /// open) — the one DISCARD error `reset_connection_state` tolerates.
+    fn is_discard_without_multi(e: &RedisError) -> bool {
+        e.detail()
+            .map(|d| d.contains("DISCARD without MULTI"))
+            .unwrap_or(false)
     }
 
     /// Refresh IAM authentication before dispatching a command, transaction, or

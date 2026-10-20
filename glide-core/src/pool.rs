@@ -1923,26 +1923,25 @@ mod client_pool_marking_tests {
         .expect("valid pool config")
     }
 
-    /// A client is not pool-managed until it enters the pool, and `add_client` must
-    /// mark it at the ownership boundary — this pins the marking that Java and Node's
-    /// Rust pool depend on (both reach the pool through `add_client`).
     /// `reset_connection_state` must fail (so release discards the connection) when
     /// DISCARD could not run while a MULTI was open — otherwise the connection is
     /// reused with a still-open transaction and the next borrower's commands queue
-    /// into it. With no MULTI open, a DISCARD error is the expected no-MULTI case
-    /// and is ignored. Uses a lazy client to a dead port so DISCARD always errors.
+    /// into it. With no MULTI open, the DISCARD outcome is not load-bearing and is
+    /// ignored. Uses a lazy client to a dead port so DISCARD fails with a connection
+    /// error (not the expected "DISCARD without MULTI"), which must propagate.
     #[tokio::test]
     async fn reset_fails_when_discard_fails_with_multi_open() {
-        // No MULTI open: DISCARD errors (dead connection) but that is the expected
-        // no-MULTI case, so reset still succeeds.
+        // No MULTI open: the DISCARD outcome is not load-bearing, so reset succeeds
+        // regardless of the connection error.
         let mut no_multi = lazy_client().await;
         assert!(
             no_multi.reset_connection_state(0).await.is_ok(),
             "a DISCARD error with no MULTI open must be ignored"
         );
 
-        // MULTI open: the same DISCARD error now means the transaction may still be
-        // open, so reset must fail and the caller discards the connection.
+        // MULTI open + a connection error (not "DISCARD without MULTI") means the
+        // transaction may still be open, so reset must fail and the caller discards
+        // the connection.
         let mut multi_open = lazy_client().await;
         multi_open.set_multi_active_for_test(true);
         assert!(
@@ -1951,6 +1950,9 @@ mod client_pool_marking_tests {
         );
     }
 
+    /// A client is not pool-managed until it enters the pool, and `add_client` must
+    /// mark it at the ownership boundary — this pins the marking that Java and Node's
+    /// Rust pool depend on (both reach the pool through `add_client`).
     #[tokio::test]
     async fn add_client_marks_pool_managed() {
         let client = lazy_client().await;
@@ -3538,6 +3540,37 @@ mod scope_pool_tests {
             info_after.contains(" db=0"),
             "reset must restore db 0 even though current_database showed no drift, got: {info_after}"
         );
+    }
+
+    /// A "DISCARD without MULTI" reply must be tolerated even with `multi_active`
+    /// set — the cluster case, where a successful AllNodes DISCARD still aggregates
+    /// to that error (see `reset_connection_state`). A standalone server with no
+    /// MULTI open stands in for the reply. A-B validated: the old `is_err()` gate
+    /// discarded the connection here.
+    #[tokio::test]
+    async fn reset_ignores_discard_without_multi_even_when_multi_flag_set() {
+        let server = TestServer::start();
+        wait_for_server_ready(server.port).await;
+
+        let mut client = {
+            let mut request = crate::client::ConnectionRequest::default();
+            request.addresses.push(crate::client::NodeAddress {
+                host: "127.0.0.1".into(),
+                port: server.port,
+            });
+            crate::client::Client::new(request, None)
+                .await
+                .expect("client connects to the test server")
+        };
+
+        // The tracker believes a MULTI is open, but the connection has none, so the
+        // server's DISCARD replies "DISCARD without MULTI" — the expected, ignorable
+        // error. Reset must still succeed (connection is clean, reusable).
+        client.set_multi_active_for_test(true);
+        client
+            .reset_connection_state(0)
+            .await
+            .expect("a DISCARD-without-MULTI reply must be ignored, not propagated");
     }
 
     /// End-to-end through the FFI entry `acquire_scope_outcome`, exercising the glue the
