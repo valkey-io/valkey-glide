@@ -39,6 +39,8 @@ logger-rs.linux-x64-gnu.node
 utils/clusters/
 utils/tls_crts/
 utils/TestUtils.js
+# ORT attribution step writes these package lists into utils/ (get_licenses_from_ort.py)
+utils/*_package_list.txt
 .build/
 .project
 
