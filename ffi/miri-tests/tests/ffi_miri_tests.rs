@@ -3,8 +3,7 @@
 use glide_core::connection_request::{ConnectionRequest, NodeAddress, TlsMode};
 use glide_core::request_type::RequestType;
 use miri_tests::{
-    ClientType, ConnectionResponse, PushKind, activate_client_async_pipe, close_client,
-    create_client, create_client_for_python_async, create_client_from_uri,
+    ClientType, ConnectionResponse, PushKind, close_client, create_client, create_client_from_uri,
     free_connection_response,
 };
 use miri_tests::{Level, LogResult, free_log_result, glide_log, init};
@@ -37,19 +36,6 @@ unsafe extern "C-unwind" fn pubsub_callback(
     _channel_len: i64,
     _pattern: *const u8,
     _pattern_len: i64,
-) {
-}
-
-unsafe extern "C-unwind" fn noop_command_success(
-    _request_id: usize,
-    _response: *const miri_tests::CommandResponse,
-) {
-}
-
-unsafe extern "C-unwind" fn noop_command_failure(
-    _request_id: usize,
-    _error_message: *const c_char,
-    _error_type: glide_core::errors::RequestErrorType,
 ) {
 }
 
@@ -99,40 +85,9 @@ fn create_client_test() {
             0usize,
         );
         let conn_ptr = (*connection_response_ptr).conn_ptr;
-        assert!(!activate_client_async_pipe(conn_ptr));
-        assert!(!activate_client_async_pipe(ptr::null()));
         close_client(conn_ptr);
         free_connection_response(connection_response_ptr as *mut ConnectionResponse);
         let _ = Box::from_raw(client_type_ptr);
-    }
-}
-
-#[test]
-fn explicit_python_async_pipe_is_dormant_without_pipe_setup_miri() {
-    let request = create_connection_request(6378);
-    let client_type = ClientType::AsyncClient {
-        success_callback: noop_command_success,
-        failure_callback: noop_command_failure,
-        allow_stack_response: false,
-    };
-
-    unsafe {
-        let response = create_client_for_python_async(
-            request.as_ptr(),
-            request.len(),
-            &client_type,
-            None,
-            None,
-            12345,
-            None,
-            67890,
-        );
-        assert!(!response.is_null());
-        assert!(!(*response).conn_ptr.is_null());
-        let client = (*response).conn_ptr;
-        assert!(!activate_client_async_pipe(client));
-        free_connection_response(response.cast_mut());
-        close_client(client);
     }
 }
 

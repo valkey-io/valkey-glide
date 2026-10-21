@@ -417,7 +417,7 @@ def test_sync_pool_shell_close_needs_no_provider_fields():
 
 
 @pytest.mark.parametrize("failure_point", ["pipe", "set_blocking"])
-def test_async_direct_pipe_oserror_rolls_back_native_and_provider(
+def test_async_direct_provider_pipe_oserror_rolls_back_only_provider(
     monkeypatch, failure_point
 ):
     import glide.glide_client as async_client_module
@@ -429,7 +429,6 @@ def test_async_direct_pipe_oserror_rolls_back_native_and_provider(
         close_client=MagicMock(),
         init_async_pipe=MagicMock(),
         reinit_async_pipe=MagicMock(),
-        activate_client_async_pipe=MagicMock(return_value=True),
     )
     created_fds = []
 
@@ -501,13 +500,10 @@ def test_async_direct_pipe_oserror_rolls_back_native_and_provider(
         with pytest.raises(OSError):
             os.fstat(fd)
 
-    with pytest.raises(OSError, match="injected pipe setup failure"):
-        ordinary_client._setup_pipe_after_creation(False)
-    assert ordinary_client._is_closed
-    assert ordinary_client._core_client is None
-    assert fake_lib.close_client.call_count == 2
-    fake_lib.close_client.assert_called_with(core_client)
-    fake_lib.activate_client_async_pipe.assert_not_called()
+    ordinary_client._setup_pipe_after_creation(False)
+    assert not ordinary_client._is_closed
+    assert ordinary_client._core_client == core_client
+    fake_lib.close_client.assert_called_once_with(core_client)
     assert async_client_module._async_pipe_read_fd == -1
     assert async_client_module._async_pipe_write_fd == -1
     assert async_client_module._async_pipe_init_pid == 0
@@ -515,155 +511,6 @@ def test_async_direct_pipe_oserror_rolls_back_native_and_provider(
     for fd in created_fds:
         with pytest.raises(OSError):
             os.fstat(fd)
-
-
-@pytest.mark.parametrize("provider_backed", [False, True])
-def test_async_late_activation_after_native_timeout_rolls_back_owned_resources(
-    monkeypatch, provider_backed
-):
-    import glide.glide_client as async_client_module
-
-    ffi = GlideFFI.ffi
-    core_client = ffi.cast("void*", 0xA771)
-    fake_lib = SimpleNamespace(
-        close_client=MagicMock(),
-        activate_client_async_pipe=MagicMock(return_value=False),
-    )
-    owner = MagicMock() if provider_backed else None
-    client = async_client_module.GlideClient.__new__(async_client_module.GlideClient)
-    client._lib = fake_lib
-    client._lock = threading.Lock()
-    client._is_closed = False
-    client._core_client = core_client
-    client._pipe_client_id = 771
-    client._create_pid = os.getpid()
-    client._credential_provider_callback_owner = owner
-    client._credential_provider_callback_ref = object() if provider_backed else None
-    client._setup_pipe = MagicMock(return_value=None)
-    monkeypatch.setattr(async_client_module, "_client_registry", {771: client})
-
-    with pytest.raises(Exception, match="Failed to activate async pipe delivery"):
-        client._setup_pipe_after_creation(provider_backed)
-
-    fake_lib.activate_client_async_pipe.assert_called_once_with(core_client)
-    assert client._is_closed
-    assert client._core_client is None
-    assert 771 not in async_client_module._client_registry
-    fake_lib.close_client.assert_called_once_with(core_client)
-    if provider_backed:
-        owner.close.assert_called_once_with()
-
-
-@pytest.mark.parametrize("provider_backed", [False, True])
-@pytest.mark.parametrize("anyio_backend", ["asyncio"])
-@pytest.mark.anyio
-async def test_async_direct_activates_only_after_pipe_reader_setup(
-    monkeypatch, anyio_backend, provider_backed
-):
-    import glide.glide_client as async_client_module
-
-    original_ffi = async_client_module._ASYNC_FFI
-    ffi = original_ffi.ffi
-    events = []
-    registry = {}
-
-    class FakeLib:
-        noop_success_callback = original_ffi.lib.noop_success_callback
-        noop_failure_callback = original_ffi.lib.noop_failure_callback
-
-        def __init__(self):
-            self.core_client = ffi.cast("void*", 0xA772)
-            self.response = ffi.new(
-                "ConnectionResponse*",
-                {
-                    "conn_ptr": self.core_client,
-                    "connection_error_message": ffi.NULL,
-                },
-            )
-            self.create_args = None
-
-        def create_client_for_python_async(self, *args):
-            events.append("create")
-            self.create_args = args
-            return self.response
-
-        def free_connection_response(self, _response):
-            return None
-
-        def init_async_pipe(self, _pipe_write_fd):
-            events.append("init")
-
-        def reinit_async_pipe(self, _pipe_write_fd):
-            events.append("reinit")
-
-        def activate_client_async_pipe(self, core_client):
-            pipe_id = int(self.create_args[-1])
-            registered_client = registry.get(pipe_id)
-            assert registered_client is not None
-            assert registered_client._core_client == core_client
-            assert core_client == self.core_client
-            events.append("activate")
-            return True
-
-        def close_client(self, _core_client):
-            events.append("close")
-
-    fake_lib = FakeLib()
-    loop = asyncio.get_running_loop()
-    read_fds = []
-
-    def add_reader(fd, _callback):
-        read_fds.append(fd)
-        events.append("reader")
-
-    monkeypatch.setattr(
-        async_client_module, "_ASYNC_FFI", SimpleNamespace(ffi=ffi, lib=fake_lib)
-    )
-    monkeypatch.setattr(async_client_module, "_client_registry", registry)
-    monkeypatch.setattr(async_client_module, "_async_pipe_read_fd", -1)
-    monkeypatch.setattr(async_client_module, "_async_pipe_write_fd", -1)
-    monkeypatch.setattr(async_client_module, "_async_pipe_registered", False)
-    monkeypatch.setattr(async_client_module, "_async_pipe_loop", None)
-    monkeypatch.setattr(async_client_module, "_async_pipe_init_pid", 0)
-    monkeypatch.setattr(loop, "add_reader", add_reader)
-
-    iam_config = None
-    if provider_backed:
-        iam_config = IamAuthConfig(
-            "cluster",
-            ServiceType.ELASTICACHE,
-            "us-east-1",
-            credential_provider=lambda: AwsCredentials("access", "secret"),
-        )
-    config = GlideClientConfiguration(
-        addresses=[NodeAddress("127.0.0.1", 1)],
-        lazy_connect=True,
-        credentials=(
-            ServerCredentials(username="iam-user", iam_config=iam_config)
-            if iam_config is not None
-            else None
-        ),
-    )
-
-    client = await async_client_module.GlideClient.create(config)
-    try:
-        assert events[:4] == ["create", "init", "reader", "activate"]
-        client_id = int(fake_lib.create_args[5])
-        pipe_id = int(fake_lib.create_args[7])
-        assert pipe_id == client_id
-        if provider_backed:
-            assert client_id >= 1 << (ffi.sizeof("uintptr_t") * 8 - 1)
-            assert fake_lib.create_args[6] != ffi.NULL
-        else:
-            assert fake_lib.create_args[6] == ffi.NULL
-    finally:
-        await client.close()
-        for fd in {
-            *read_fds,
-            async_client_module._async_pipe_write_fd,
-        }:
-            if fd >= 0:
-                os.close(fd)
 
 
 @pytest.mark.parametrize("anyio_backend", ["asyncio"])
@@ -692,7 +539,7 @@ async def test_async_direct_provider_partial_pipe_setup_failure_releases_ownersh
             self.closed = []
             self.pipe_write_fds = []
 
-        def create_client_for_python_async(self, *_args):
+        def create_client_with_credential_provider(self, *_args):
             return self.response
 
         def free_connection_response(self, _response):
@@ -706,9 +553,6 @@ async def test_async_direct_provider_partial_pipe_setup_failure_releases_ownersh
 
         def reinit_async_pipe(self, pipe_write_fd):
             self.pipe_write_fds.append(pipe_write_fd)
-
-        def activate_client_async_pipe(self, _core_client):
-            raise AssertionError("activation must follow successful reader setup")
 
     fake_lib = FakeLib()
     registry = {}

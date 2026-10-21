@@ -601,7 +601,7 @@ class _ProviderNativeCreate:
         self.error: Optional[ClosingError] = None
 
     def _run(self) -> None:
-        response_ptr = self.lib.create_client_for_python_async(*self.args)
+        response_ptr = self.lib.create_client_with_credential_provider(*self.args)
         core_client = None
         error: Optional[ClosingError] = None
         if response_ptr == self.ffi.NULL:
@@ -734,14 +734,12 @@ class BaseClient(CoreCommands):
         if credential_provider is None:
             # Preserve the ordinary latest-main creation path and low pipe-ID namespace.
             self._pipe_client_id = next(_next_client_id)
-            client_response_ptr = self._lib.create_client_for_python_async(
+            client_response_ptr = self._lib.create_client(
                 conn_req_bytes,
                 len(conn_req_bytes),
                 client_type,
                 pubsub_callback,
                 address_resolver_callback,
-                self._pipe_client_id,
-                self._ffi.cast("CredentialProviderCallback", 0),
                 self._pipe_client_id,
             )
 
@@ -783,9 +781,9 @@ class BaseClient(CoreCommands):
                 allow_async=True,
                 provider_owner=self,
             )
-            # The C ABI has separate client_id and pipe_client_id batons. A
-            # provider-backed async client uses its reserved high-half provider
-            # ID for both callback ownership and pipe routing.
+            # The C ABI has one client_id baton for provider callbacks and async
+            # pipe routing, so provider-backed async clients use their reserved
+            # high-half provider ID for both roles.
             self._pipe_client_id = credential_owner.callback_id
             state = _ProviderNativeCreate(
                 self._ffi,
@@ -798,7 +796,6 @@ class BaseClient(CoreCommands):
                     address_resolver_callback,
                     self._pipe_client_id,
                     credential_callback,
-                    self._pipe_client_id,
                 ),
             )
             try:
@@ -829,37 +826,27 @@ class BaseClient(CoreCommands):
         return self
 
     def _setup_pipe_after_creation(self, provider_backed: bool) -> None:
-        """Set up and activate pipe delivery, rolling back on either failure."""
+        """Set up delivery and roll back only provider-backed direct failures."""
         try:
             pipe_setup_error = self._setup_pipe()
-            if pipe_setup_error is not None:
+            if provider_backed and pipe_setup_error is not None:
                 raise pipe_setup_error
-            if self._core_client is None or not self._lib.activate_client_async_pipe(
-                self._core_client
-            ):
-                raise ClosingError("Failed to activate async pipe delivery.")
         except BaseException:
             if provider_backed:
                 self._cleanup_provider_after_setup_failure()
-            else:
-                self._cleanup_native_after_setup_failure()
             raise
 
-    def _cleanup_native_after_setup_failure(self) -> None:
-        """Release a native direct client after final pipe setup fails."""
+    def _cleanup_provider_after_setup_failure(self) -> None:
+        """Release a provider-backed direct client after final pipe setup fails."""
         _client_registry.pop(self._pipe_client_id, None)
         with self._lock:
             self._is_closed = True
             core_client, self._core_client = self._core_client, None
+            owner = self._credential_provider_callback_owner
+            self._credential_provider_callback_owner = None
+            self._credential_provider_callback_ref = None
         if core_client is not None and self._create_pid == os.getpid():
             self._lib.close_client(core_client)
-
-    def _cleanup_provider_after_setup_failure(self) -> None:
-        """Release provider ownership after native pipe setup cleanup."""
-        owner = self._credential_provider_callback_owner
-        self._credential_provider_callback_owner = None
-        self._credential_provider_callback_ref = None
-        self._cleanup_native_after_setup_failure()
         if owner is not None:
             owner.close()
 

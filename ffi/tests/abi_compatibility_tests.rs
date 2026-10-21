@@ -109,7 +109,7 @@ fn build_cdylib(manifest_dir: &Path) -> PathBuf {
 }
 
 #[test]
-fn generated_header_preserves_legacy_abis_and_adds_python_async_pipe() {
+fn generated_header_preserves_legacy_abi_and_adds_provider_suffix() {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let temp_dir = TempDir::new("glide-ffi-abi");
     let library = build_cdylib(&manifest_dir);
@@ -150,11 +150,10 @@ fn generated_header_preserves_legacy_abis_and_adds_python_async_pipe() {
         r#"#include <stdint.h>
 #include <stddef.h>
 #include <string.h>
-#include <unistd.h>
 #include "glide.h"
 
-/* Byte-for-byte copies of the stable declarations. Compatible redeclarations
- * prove existing six- and seven-argument callers still compile unchanged. */
+/* Byte-for-byte copy of the latest-main sibling declaration. A compatible
+ * redeclaration proves existing six-argument callers still compile. */
 const ConnectionResponse* create_client(
     const uint8_t* connection_request_bytes,
     size_t connection_request_len,
@@ -163,26 +162,6 @@ const ConnectionResponse* create_client(
     AddressResolverCallback address_resolver,
     uintptr_t client_id
 );
-const ConnectionResponse* create_client_with_credential_provider(
-    const uint8_t* connection_request_bytes,
-    size_t connection_request_len,
-    const ClientType* client_type,
-    PubSubCallback pubsub_callback,
-    AddressResolverCallback address_resolver,
-    uintptr_t client_id,
-    CredentialProviderCallback credential_provider
-);
-
-static void command_success(uintptr_t request_id, const CommandResponse *response) {{
-    (void)request_id;
-    (void)response;
-}}
-
-static void command_failure(uintptr_t request_id, const char *message, enum RequestErrorType type) {{
-    (void)request_id;
-    (void)message;
-    (void)type;
-}}
 
 static unsigned pubsub_calls = 0;
 static void pubsub(
@@ -256,15 +235,12 @@ static int expect_client(const ConnectionResponse *response) {{
 int main(void) {{
     const uint8_t request[] = {{ {request_literal} }};
     ClientType client_type = {{ .tag = SyncClient }};
-    ClientType async_type = {{
-        .tag = AsyncClient,
-        .async_client = {{ command_success, command_failure, false }}
-    }};
 
-    /* The nonzero sixth argument remains only client_id in both legacy ABIs. */
+    /* The nonzero sixth argument must remain client_id, never a provider pointer. */
     if (!expect_client(create_client(request, sizeof(request), &client_type, pubsub, resolver, 0x12345))) {{
         return 10;
     }}
+
     if (!expect_client(create_client_with_credential_provider(
             request, sizeof(request), &client_type, pubsub, resolver, 0x23456, NULL))) {{
         return 11;
@@ -282,51 +258,6 @@ int main(void) {{
         return 14;
     }}
     free_connection_response((ConnectionResponse *)failed);
-
-    /* The explicit Python constructor rejects sync use. */
-    failed = create_client_for_python_async(
-        request, sizeof(request), &client_type, NULL, NULL, 0x45678, NULL, 0x56789);
-    if (failed == NULL || failed->conn_ptr != NULL || failed->connection_error_message == NULL) {{
-        return 15;
-    }}
-    free_connection_response((ConnectionResponse *)failed);
-
-    const ConnectionResponse *explicit = create_client_for_python_async(
-        request, sizeof(request), &async_type, NULL, NULL, 0x6789A, NULL, 0x789AB);
-    if (explicit == NULL || explicit->conn_ptr == NULL || explicit->connection_error_message != NULL) {{
-        return 16;
-    }}
-    const void *explicit_client = explicit->conn_ptr;
-    free_connection_response((ConnectionResponse *)explicit);
-    if (activate_client_async_pipe(explicit_client)) {{
-        return 17;
-    }}
-    int pipe_fds[2];
-    if (pipe(pipe_fds) != 0) {{
-        return 18;
-    }}
-    init_async_pipe(pipe_fds[1]);
-    if (!activate_client_async_pipe(explicit_client)) {{
-        return 19;
-    }}
-    if (activate_client_async_pipe(explicit_client)) {{
-        return 20;
-    }}
-    close_client(explicit_client);
-
-    const ConnectionResponse *legacy_async = create_client(
-        request, sizeof(request), &async_type, NULL, NULL, 0x89ABC);
-    if (legacy_async == NULL || legacy_async->conn_ptr == NULL) {{
-        return 21;
-    }}
-    const void *legacy_async_client = legacy_async->conn_ptr;
-    free_connection_response((ConnectionResponse *)legacy_async);
-    if (activate_client_async_pipe(legacy_async_client)) {{
-        return 22;
-    }}
-    close_client(legacy_async_client);
-    close(pipe_fds[0]);
-    close(pipe_fds[1]);
     return 0;
 }}
 "#
