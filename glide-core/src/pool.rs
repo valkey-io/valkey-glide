@@ -2042,8 +2042,8 @@ mod client_pool_marking_tests {
         );
     }
 
-    /// Regression for #7338: an acquirer racing the warmup window must not spawn an
-    /// on-demand client redundant with a warmup connection still in flight.
+    /// An acquirer racing the warmup window must not spawn an on-demand client
+    /// redundant with a warmup connection still in flight.
     ///
     /// The defect is purely in the accounting `should_create()` reads, so this models
     /// it without the network. `run(reserve)` counts how many on-demand spawns
@@ -2082,22 +2082,15 @@ mod client_pool_marking_tests {
         );
 
         // B: fixed — reserved slots make the pool read as full, authorising none.
-        let mut pool = warmup_pool(max_size, max_size);
-        assert_eq!(pool.reserve_warmup_slots(max_size), max_size);
-        let mut surplus = 0;
-        for _ in 0..16 {
-            if pool.try_acquire() < 0 && pool.should_create() {
-                pool.total_count
-                    .fetch_add(1, std::sync::atomic::Ordering::AcqRel);
-                surplus += 1;
-            }
-        }
         assert_eq!(
-            surplus, 0,
+            surplus_spawns_during_warmup(max_size, true).await,
+            0,
             "no on-demand spawn may be authorised while warmup fills the pool"
         );
 
-        // Warmup connections land, consuming their reservations.
+        // Warmup connections then land on the reserved slots and settle at max_size.
+        let mut pool = warmup_pool(max_size, max_size);
+        assert_eq!(pool.reserve_warmup_slots(max_size), max_size);
         for _ in 0..max_size {
             let client = lazy_client().await;
             pool.add_client_reserved(client);

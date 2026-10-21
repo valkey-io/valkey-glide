@@ -371,6 +371,97 @@ func TestPoolConcurrentAccess(t *testing.T) {
 	}
 }
 
+// A burst of borrows racing the warmup window must not push the pool past
+// MaxSize. Deliberately no waitForPoolReady — the surplus clients only appear while the min_idle
+// connections are still in flight and the pool reads as having room. NewClientPool's connectivity
+// probe sometimes outruns the warmup and closes the window, so the race is repeated over several
+// fresh pools.
+func TestPoolDoesNotExceedMaxSizeUnderWarmupBurst(t *testing.T) {
+	const (
+		maxSize    = 16
+		goroutines = 64
+		rounds     = 3
+		attempts   = 5
+	)
+
+	for _, tc := range scopeModes() {
+		t.Run(tc.name, func(t *testing.T) {
+			skipMode(t, tc.cluster)
+
+			for attempt := 0; attempt < attempts; attempt++ {
+				func() {
+					pool := newPool(t, tc.cluster, glide.PoolConfig{
+						MaxSize:        maxSize,
+						MinIdle:        maxSize,
+						AcquireTimeout: 15 * time.Second,
+					})
+					defer pool.Close()
+
+					ctx := context.Background()
+					var wg sync.WaitGroup
+					errCh := make(chan error, goroutines)
+
+					for i := 0; i < goroutines; i++ {
+						wg.Add(1)
+						go func(idx int) {
+							defer wg.Done()
+							for round := 0; round < rounds; round++ {
+								clientID, err := pool.Acquire(ctx)
+								if err != nil {
+									errCh <- err
+									return
+								}
+
+								client, err := pool.GetClient(clientID)
+								if err != nil {
+									errCh <- err
+									return
+								}
+
+								key := scopeTestKey(fmt.Sprintf("pool-warmup-burst-%d-%d", idx, round), tc.cluster)
+								_, err = client.Set(ctx, key, fmt.Sprintf("val-%d-%d", idx, round))
+								if err != nil {
+									client.Close()
+									errCh <- err
+									return
+								}
+								client.Client.Del(ctx, []string{key})
+								client.Close()
+							}
+						}(i)
+					}
+
+					wg.Wait()
+					close(errCh)
+
+					for err := range errCh {
+						t.Fatalf("warmup burst error: %v", err)
+					}
+
+					// Quiesce so the counters are settled, not mid-release: a borrow still in
+					// flight would otherwise leave IdleCount lagging TotalCount. A zero total is
+					// not a settled pool — glide_pool_metrics leaves its out-param untouched when
+					// the pool lock is contended, which Go reports as 0 — so keep polling.
+					var total, idle int
+					deadline := time.Now().Add(5 * time.Second)
+					for time.Now().Before(deadline) {
+						total, idle = pool.TotalCount(), pool.IdleCount()
+						if total > 0 && pool.ActiveCount() == 0 && idle == total {
+							break
+						}
+						time.Sleep(50 * time.Millisecond)
+					}
+
+					require.Positivef(t, total, "attempt %d: pool counters never settled", attempt)
+					require.LessOrEqualf(t, total, maxSize,
+						"attempt %d: pool created more connections than MaxSize", attempt)
+					require.LessOrEqual(t, idle, maxSize)
+				}()
+			}
+		})
+	}
+}
+
 func TestPoolCloseRejectsAcquire(t *testing.T) {
 	for _, tc := range scopeModes() {
 		t.Run(tc.name, func(t *testing.T) {
