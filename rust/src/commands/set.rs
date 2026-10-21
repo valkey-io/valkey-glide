@@ -7,6 +7,7 @@ use crate::executor::CommandExecutor;
 use crate::value::FromValkeyValue;
 use crate::value::ValkeyValue;
 use crate::value::to_glide_error;
+use crate::write::ToSingleValkeyArg;
 use crate::write::ToValkeyArgs;
 use async_trait::async_trait;
 
@@ -44,7 +45,7 @@ pub trait SetCommands: CommandExecutor {
     /// [`SIsMemberStatusCode::KeyNotFound`] if `key` does not exist.
     ///
     /// Since Valkey 9.2.0.
-    async fn sismember_if_exists<K: ToValkeyArgs + Send, M: ToValkeyArgs + Send>(
+    async fn sismember_if_exists<K: ToSingleValkeyArg + Send, M: ToSingleValkeyArg + Send>(
         &self,
         key: K,
         member: M,
