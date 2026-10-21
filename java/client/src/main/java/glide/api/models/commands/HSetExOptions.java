@@ -16,7 +16,7 @@ import lombok.ToString;
  *
  * <ul>
  *   <li>Key conditional changes (NX/XX) - control when fields are set based on key existence
- *   <li>Field conditional changes (FNX/FXX) - control when fields are set based on existence
+ *   <li>Field conditional changes (FNX/FXX) - control when fields are set based on field existence
  *   <li>Standard expiry options (EX/PX/EXAT/PXAT/KEEPTTL) - set expiration times
  * </ul>
  *
@@ -110,19 +110,15 @@ public final class HSetExOptions {
     public String[] toArgs() {
         List<String> args = new ArrayList<>();
 
-        // Add key conditional change argument if specified
         if (conditionalChange != null) {
             args.add(conditionalChange.getValkeyApi());
         }
 
-        // Add field conditional change argument if specified
         if (fieldConditionalChange != null) {
             args.add(fieldConditionalChange.getValkeyApi());
         }
 
-        // Add expiry arguments if specified
         if (expiry != null) {
-            // Validate that expiry is compatible with HSETEX command
             expiry.validateForCommand("HSETEX");
             args.addAll(Arrays.asList(expiry.toArgs()));
         }
@@ -137,7 +133,7 @@ public final class HSetExOptions {
          * Sets the key-level conditional change to only set fields if the key already exists.
          *
          * <p>This is equivalent to the XX option in the Valkey HSETEX command. If the key does not
-         * exist, the entire operation fails.
+         * exist, the value is not set.
          *
          * @return this builder instance for method chaining
          * @since Valkey 9.1.0
@@ -151,7 +147,7 @@ public final class HSetExOptions {
          * Sets the key-level conditional change to only set fields if the key does not already exist.
          *
          * <p>This is equivalent to the NX option in the Valkey HSETEX command. If the key already
-         * exists, the entire operation fails.
+         * exists, the value is not set.
          *
          * @return this builder instance for method chaining
          * @since Valkey 9.1.0
