@@ -10,9 +10,9 @@ This is the Valkey GLIDE mono-repository containing a Rust core (`glide-core`) a
 
 **Clients in separate repositories** — each has its own `AGENTS.md`; load it from that repo when working on the client:
 
-- C# - [valkey-io/valkey-glide-csharp](https://github.com/valkey-io/valkey-glide-csharp)
-- PHP - [valkey-io/valkey-glide-php](https://github.com/valkey-io/valkey-glide-php)
-- Ruby - [valkey-io/valkey-glide-ruby](https://github.com/valkey-io/valkey-glide-ruby)
+- C# - [valkey-io/valkey-glide-csharp](https://github.com/valkey-io/valkey-glide-csharp) ([AGENTS.md](https://github.com/valkey-io/valkey-glide-csharp/blob/main/AGENTS.md), [DEVELOPER.md](https://github.com/valkey-io/valkey-glide-csharp/blob/main/DEVELOPER.md))
+- PHP - [valkey-io/valkey-glide-php](https://github.com/valkey-io/valkey-glide-php) ([AGENTS.md](https://github.com/valkey-io/valkey-glide-php/blob/main/AGENTS.md), [DEVELOPER.md](https://github.com/valkey-io/valkey-glide-php/blob/main/DEVELOPER.md))
+- Ruby - [valkey-io/valkey-glide-ruby](https://github.com/valkey-io/valkey-glide-ruby) ([AGENTS.md](https://github.com/valkey-io/valkey-glide-ruby/blob/main/AGENTS.md), [DEVELOPER.md](https://github.com/valkey-io/valkey-glide-ruby/blob/main/DEVELOPER.md))
 
 **Key Components:**
 
@@ -20,10 +20,10 @@ This is the Valkey GLIDE mono-repository containing a Rust core (`glide-core`) a
 - `glide-core/` - Core Rust implementation with async client logic. See [glide-core/AGENTS.md](./glide-core/AGENTS.md).
 - `glide-core/redis-rs/` - Vendored fork of redis-rs 0.25.2 (GLIDE-owned, not third-party).
 - `ffi/` - Foreign Function Interface layer (used by Go and both Python clients).
-- `java/` - Java client bindings with Gradle build system (JNI).
-- `python/` - Python async + sync client bindings (CFFI into `ffi/`; PyO3 for async response parsing).
-- `node/` - Node.js/TypeScript client bindings via NAPI-RS.
-- `go/` - Go client bindings (CGO).
+- `java/` - Java client bindings with Gradle build system (JNI). See [java/AGENTS.md](./java/AGENTS.md).
+- `python/` - Python async + sync client bindings (CFFI into `ffi/`; PyO3 for async response parsing). See [python/AGENTS.md](./python/AGENTS.md).
+- `node/` - Node.js/TypeScript client bindings via NAPI-RS. See [node/AGENTS.md](./node/AGENTS.md).
+- `go/` - Go client bindings (CGO). See [go/AGENTS.md](./go/AGENTS.md).
 - `glide-telemetry/` - OpenTelemetry integration crate.
 - `glide-logger/` - Shared logging infrastructure.
 - `glide-rdma/` - RDMA transfer layer over libfabric (not yet used by clients).
