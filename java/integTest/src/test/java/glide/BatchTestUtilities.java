@@ -785,6 +785,10 @@ public class BatchTestUtilities {
                     .sintercard(new String[] {setKey5, setKey6}, 2);
         }
 
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("9.2.0")) {
+            batch.sismemberIfExists(setKey2, "baz");
+        }
+
         Object[] expectedResults =
                 new Object[] {
                     2L, // sadd(setKey1, new String[] {"baz", "foo"});
@@ -810,6 +814,7 @@ public class BatchTestUtilities {
                     "foo", // spop(setKey4)
                     Collections.emptySet(), // spopCount(setKey4, 3)
                 };
+
         if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             expectedResults =
                     concatenateArrays(
@@ -819,6 +824,15 @@ public class BatchTestUtilities {
                                 4L, // sadd(setKey6, {"two", "three", "four", "five"})
                                 3L, // sintercard({setKey5, setKey6})
                                 2L, // sintercard({setKey5, setKey6}, 2)
+                            });
+        }
+
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("9.2.0")) {
+            expectedResults =
+                    concatenateArrays(
+                            expectedResults,
+                            new Object[] {
+                                1L, // sismemberIfExists(setKey2, "baz")
                             });
         }
 

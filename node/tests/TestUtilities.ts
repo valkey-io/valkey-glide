@@ -1551,8 +1551,14 @@ export async function batchTest(
     ]);
     baseBatch.scard(key7);
     responseData.push(["scard(key7)", 1]);
+
     baseBatch.sismember(key7, bar);
     responseData.push(['sismember(key7, "bar")', true]);
+
+    if (!cluster.checkIfServerVersionLessThan("9.2.0")) {
+        baseBatch.sismemberIfExists(key7, bar);
+        responseData.push(['sismemberIfExists(key7, "bar")', 1]);
+    }
 
     if (!cluster.checkIfServerVersionLessThan("6.2.0")) {
         baseBatch.smismember(key7, [bar, foo, baz]);

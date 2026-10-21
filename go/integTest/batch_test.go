@@ -1678,6 +1678,11 @@ func CreateSetCommandsTests(batch *pipeline.ClusterBatch, isAtomic bool, serverV
 	batch.SIsMember(key, "member1")
 	testData = append(testData, CommandTestData{ExpectedResponse: true, TestName: "SIsMember(key, member1)"})
 
+	if serverVer >= "9.2.0" {
+		batch.SIsMemberIfExists(key, "member1")
+		testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "SIsMemberIfExists(key, member1)"})
+	}
+
 	key2 := atomicKey + "key2-" + uuid.NewString()
 	batch.SAdd(key2, []string{"member1", "member3"})
 	testData = append(testData, CommandTestData{ExpectedResponse: int64(2), TestName: "SAdd(key2, [member1, member3])"})
