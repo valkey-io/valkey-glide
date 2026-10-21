@@ -5690,7 +5690,10 @@ mod cluster_async {
                     match requests.fetch_add(1, atomic::Ordering::SeqCst) {
                         // An I/O error that does not say whether the command was
                         // sent, such as a failed write of a later command.
-                        0 => Err(Err(RedisError::from(std::io::Error::other("io-error")))),
+                        0 => Err(Err(RedisError::from(std::io::Error::new(
+                            std::io::ErrorKind::Other,
+                            "io-error",
+                        )))),
                         _ => Err(Ok(Value::Array(vec![Value::Int(16), Value::Int(0)]))),
                     }
                 }
@@ -5752,7 +5755,10 @@ mod cluster_async {
                 move |cmd: &[u8], _port| {
                     respond_startup_two_nodes(name, cmd)?;
                     match requests.fetch_add(1, atomic::Ordering::SeqCst) {
-                        0 => Err(Err(RedisError::from(std::io::Error::other("io-error")))),
+                        0 => Err(Err(RedisError::from(std::io::Error::new(
+                            std::io::ErrorKind::Other,
+                            "io-error",
+                        )))),
                         _ => Err(Ok(Value::Int(1))),
                     }
                 }
