@@ -862,7 +862,7 @@ impl RequestType {
             RequestType::MGet => CommandCompressionBehavior::DecompressValues,
             RequestType::GetEx => CommandCompressionBehavior::DecompressValues,
             RequestType::GetDel => CommandCompressionBehavior::DecompressValues,
-            RequestType::GetSet => CommandCompressionBehavior::DecompressValues,
+            RequestType::GetSet => CommandCompressionBehavior::CompressAndDecompressValues,
             _ => CommandCompressionBehavior::NoCompression,
         }
     }

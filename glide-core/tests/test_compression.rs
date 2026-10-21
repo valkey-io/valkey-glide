@@ -254,6 +254,10 @@ mod compression_tests {
             "Decompress values after receiving from server"
         );
         assert_eq!(
+            CommandCompressionBehavior::CompressAndDecompressValues.description(),
+            "Compress values before sending and decompress response after receiving"
+        );
+        assert_eq!(
             CommandCompressionBehavior::NoCompression.description(),
             "No compression processing required"
         );
@@ -268,6 +272,10 @@ mod compression_tests {
             "DecompressValues"
         );
         assert_eq!(
+            CommandCompressionBehavior::CompressAndDecompressValues.to_string(),
+            "CompressAndDecompressValues"
+        );
+        assert_eq!(
             CommandCompressionBehavior::NoCompression.to_string(),
             "NoCompression"
         );
@@ -280,6 +288,10 @@ mod compression_tests {
         assert_eq!(
             RequestType::Get.compression_behavior(),
             CommandCompressionBehavior::DecompressValues
+        );
+        assert_eq!(
+            RequestType::GetSet.compression_behavior(),
+            CommandCompressionBehavior::CompressAndDecompressValues
         );
         assert_eq!(
             RequestType::Del.compression_behavior(),

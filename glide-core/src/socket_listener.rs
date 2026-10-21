@@ -439,6 +439,7 @@ fn process_command_for_compression(
         "SETEX" => crate::request_type::RequestType::SetEx,
         "PSETEX" => crate::request_type::RequestType::PSetEx,
         "SETNX" => crate::request_type::RequestType::SetNX,
+        "GETSET" => crate::request_type::RequestType::GetSet,
         // Incompatible commands - string manipulation
         "APPEND" => crate::request_type::RequestType::Append,
         "GETRANGE" => crate::request_type::RequestType::GetRange,
