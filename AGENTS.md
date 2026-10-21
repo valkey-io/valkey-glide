@@ -17,7 +17,7 @@ This is the Valkey GLIDE mono-repository containing a Rust core (`glide-core`) a
 - `node/` - Node.js/TypeScript client bindings with npm
 - `go/` - Go client bindings
 - `glide-logger/` - Shared logging infrastructure
-- `glide-rdma/` - RDMA transfer layer over libfabric (not yet used by clients)
+- `glide-rdma/` - RDMA transfer layer over libfabric (used by glide-core behind the `rdma` feature; not yet exposed by language bindings)
 - `utils/` - Shared utilities and cluster management tools
 - `benchmarks/` - Performance benchmarks across languages
 - `examples/` - Usage examples for each language binding
