@@ -79,13 +79,33 @@ impl RdmaRegion {
 
     /// Take the buffer out for a transfer, or say why there is none.
     fn take(&mut self) -> Result<glide_rdma::RdmaBuffer, RdmaResult> {
-        self.buffer.take().ok_or_else(|| {
-            RdmaResult::rejected(
+        self.buffer.take().ok_or_else(|| RdmaResult {
+            region_closed: true,
+            ..RdmaResult::rejected(
                 "the region was closed when a transfer ended without the server's reply; \
                  free it and register the memory again"
                     .to_string(),
             )
         })
+    }
+
+    /// Put back what a transfer handed back, and mark `result` with whether the
+    /// region can still transfer.
+    fn finish(&mut self, buffer: Option<glide_rdma::RdmaBuffer>, result: RdmaResult) -> RdmaResult {
+        self.buffer = buffer;
+        RdmaResult {
+            region_closed: self.is_closed(),
+            ..result
+        }
+    }
+
+    /// Whether no transfer can use this region again: a transfer ended without the
+    /// server's reply, so no buffer came back, or the region was revoked, for
+    /// example by [`close_client`].
+    fn is_closed(&self) -> bool {
+        self.buffer
+            .as_ref()
+            .is_none_or(glide_rdma::RdmaBuffer::is_revoked)
     }
 }
 
@@ -156,6 +176,11 @@ pub struct RdmaResult {
     pub has_checksum: bool,
     /// Read only: the CRC-32c the server reported over the transferred bytes.
     pub checksum: u32,
+    /// Whether the region can no longer be used for a transfer, because a transfer
+    /// ended without the server's reply or the region was revoked. Free it with
+    /// [`free_rdma_region`] and register the memory again. Any error may come with
+    /// this set or not, so check this rather than the error type.
+    pub region_closed: bool,
 }
 
 impl RdmaResult {
@@ -168,6 +193,7 @@ impl RdmaResult {
             bytes_written: 0,
             has_checksum: false,
             checksum: 0,
+            region_closed: false,
         }
     }
 
@@ -180,6 +206,7 @@ impl RdmaResult {
             bytes_written: 0,
             has_checksum: false,
             checksum: 0,
+            region_closed: false,
         }
     }
 
@@ -194,6 +221,7 @@ impl RdmaResult {
             // It stays in the struct because the Python client reads this C layout.
             has_checksum: true,
             checksum: receipt.checksum,
+            region_closed: false,
         }
     }
 
@@ -205,6 +233,7 @@ impl RdmaResult {
             bytes_written: 0,
             has_checksum: false,
             checksum: 0,
+            region_closed: false,
         }
     }
 
@@ -457,7 +486,7 @@ pub unsafe extern "C" fn rdma_region_capacity(region: *const RdmaRegion) -> usiz
 /// such as reaching the in-flight request limit, the region can be used again.
 /// If the transfer ends any other way, such as a lost connection, the server
 /// might still be using the memory, so the region is revoked first and cannot
-/// be used again either.
+/// be used again either. [`RdmaResult::region_closed`] says which happened.
 ///
 /// # Returns
 ///
@@ -508,15 +537,13 @@ pub unsafe extern "C-unwind" fn rdma_get(
         let mut client = adapter.core.client.clone();
         let (buffer, outcome) =
             block_on_transfer(&adapter, client.rdma_get(key, buffer, offset, length));
-        region.buffer = buffer;
 
-        match outcome {
-            Ok(Some(receipt)) => RdmaResult::transferred(&receipt).into_raw(),
-            Ok(None) => RdmaResult::missing().into_raw(),
-            Err(err) => {
-                RdmaResult::failed(errors::error_message(&err), errors::error_type(&err)).into_raw()
-            }
-        }
+        let result = match outcome {
+            Ok(Some(receipt)) => RdmaResult::transferred(&receipt),
+            Ok(None) => RdmaResult::missing(),
+            Err(err) => RdmaResult::failed(errors::error_message(&err), errors::error_type(&err)),
+        };
+        region.finish(buffer, result).into_raw()
     }
 }
 
@@ -580,14 +607,12 @@ pub unsafe extern "C-unwind" fn rdma_set(
             &adapter,
             client.rdma_set(key, buffer, offset, length, checksum_mode.with(checksum)),
         );
-        region.buffer = buffer;
 
-        match outcome {
-            Ok(()) => RdmaResult::stored().into_raw(),
-            Err(err) => {
-                RdmaResult::failed(errors::error_message(&err), errors::error_type(&err)).into_raw()
-            }
-        }
+        let result = match outcome {
+            Ok(()) => RdmaResult::stored(),
+            Err(err) => RdmaResult::failed(errors::error_message(&err), errors::error_type(&err)),
+        };
+        region.finish(buffer, result).into_raw()
     }
 }
 
@@ -1084,6 +1109,91 @@ mod tests {
             "closing the fabric lets it go"
         );
         unsafe { free_rdma_memory_hold(hold) };
+    }
+
+    #[cfg(feature = "rdma")]
+    #[test]
+    fn a_transfer_that_hands_the_buffer_back_leaves_the_region_open() {
+        let fabric = tcp_fabric();
+        let mut memory = vec![0u8; 64];
+        let mut region = foreign_region(&fabric, &mut memory);
+        let buffer = region.take().ok().expect("the region has its buffer");
+
+        let failed = RdmaResult::rejected("the server refused it".to_string());
+        let result = region.finish(Some(buffer), failed);
+
+        assert!(!result.region_closed);
+        assert!(
+            region.take().is_ok(),
+            "the next transfer can use the region"
+        );
+        unsafe { free_rdma_result(result.into_raw()) };
+    }
+
+    /// No buffer comes back when a transfer ends without the server's reply, so
+    /// both that transfer and every later one report the region closed.
+    #[cfg(feature = "rdma")]
+    #[test]
+    fn a_transfer_without_the_buffer_back_reports_the_region_closed() {
+        let fabric = tcp_fabric();
+        let mut memory = vec![0u8; 64];
+        let mut region = foreign_region(&fabric, &mut memory);
+        let (_command, loan) = region
+            .take()
+            .ok()
+            .expect("the region has its buffer")
+            .lend_for_get(b"key", 0, 64)
+            .expect("lends");
+        loan.recall().expect("the region closes");
+
+        let lost = RdmaResult::rejected("the connection was lost".to_string());
+        let result = region.finish(None, lost);
+        assert!(result.region_closed);
+
+        let next = match region.take() {
+            Ok(_) => panic!("a closed region has no buffer to lend"),
+            Err(rejection) => rejection,
+        };
+        assert!(next.region_closed);
+        assert!(!next.error_message.is_null());
+        unsafe {
+            free_rdma_result(result.into_raw());
+            free_rdma_result(next.into_raw());
+            free_rdma_memory_hold(free_rdma_region(Box::into_raw(region)));
+        }
+    }
+
+    #[cfg(feature = "rdma")]
+    #[test]
+    fn a_buffer_handed_back_revoked_reports_the_region_closed() {
+        let fabric = tcp_fabric();
+        let mut memory = vec![0u8; 64];
+        let mut region = foreign_region(&fabric, &mut memory);
+        let buffer = region.take().ok().expect("the region has its buffer");
+        buffer.revoke().expect("the region closes");
+
+        let cancelled = RdmaResult::rejected("the client was closed".to_string());
+        let result = region.finish(Some(buffer), cancelled);
+
+        assert!(result.region_closed);
+        unsafe { free_rdma_result(result.into_raw()) };
+    }
+
+    #[test]
+    fn a_rejected_transfer_does_not_report_the_region_closed() {
+        let key = b"key";
+        let result = unsafe {
+            rdma_get(
+                std::ptr::null(),
+                key.as_ptr(),
+                key.len(),
+                std::ptr::null_mut(),
+                0,
+                3,
+            )
+        };
+        assert!(!unsafe { (*result).region_closed });
+        unsafe { free_rdma_result(result) };
     }
 
     #[cfg(feature = "rdma")]
