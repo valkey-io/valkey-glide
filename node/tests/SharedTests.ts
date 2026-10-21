@@ -4854,6 +4854,35 @@ export function runBaseTests(config: {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `sismemberIfExists test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient, cluster) => {
+                if (cluster.checkIfServerVersionLessThan("9.2.0")) {
+                    return;
+                }
+
+                const key = getRandomKey();
+                const member = getRandomKey();
+                expect(await client.sadd(key, [member])).toEqual(1);
+                expect(await client.sismemberIfExists(key, member)).toEqual(1);
+                expect(
+                    await client.sismemberIfExists(
+                        Buffer.from(key),
+                        Buffer.from(member),
+                    ),
+                ).toEqual(1);
+                expect(
+                    await client.sismemberIfExists(key, getRandomKey()),
+                ).toEqual(0);
+                expect(
+                    await client.sismemberIfExists("nonExistingKey", member),
+                ).toEqual(-1);
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `smismember test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient, cluster) => {

@@ -4,7 +4,14 @@
 
 ### Features
 
-* All: Add `DELIFEQ` command support ([#6146](https://github.com/valkey-io/valkey-glide/issues/6146))
+* All: Add support for Valkey 9.0 commands:
+  * `DELIFEQ` ([#6146](https://github.com/valkey-io/valkey-glide/issues/6146))
+* Java, Node, Python, Go: Add support for Valkey 9.1 commands:
+  * `HGETDEL` ([#6145](https://github.com/valkey-io/valkey-glide/issues/6145))
+* All: Add support for Valkey 9.2 commands:
+  * `SISMEMBER` with `XX` option ([#7202](https://github.com/valkey-io/valkey-glide/issues/7202))
+* Rust: Implement `ToSingleValkeyArg` and `ToValkeyArgs` for option types ([#7381](https://github.com/valkey-io/valkey-glide/issues/7381))
+* Core: Add `glide-rdma` crate, an RDMA transfer layer over libfabric (loaded at runtime), for later RDMA support ([#7177](https://github.com/valkey-io/valkey-glide/pull/7177))
 
 ### Fixes
 
@@ -66,12 +73,9 @@
 
 * Python: Add valkey-search 1.3 support — `FtAggregateReducer.to_list`, `.first_value`, and `.random_sample` factory methods for the `TOLIST`, `FIRST_VALUE`, and `RANDOM_SAMPLE` FT.AGGREGATE reducers; an `in_keys` option on `FtSearchOptions` for FT.SEARCH's `INKEYS`; and test coverage for Vector Range queries (`VECTOR_RANGE`/`YIELD_DISTANCE_AS`) in FT.SEARCH and FT.AGGREGATE and for the bare `*` wildcard query. ([valkey-search#932](https://github.com/valkey-io/valkey-search/pull/932), [#946](https://github.com/valkey-io/valkey-search/pull/946), [#949](https://github.com/valkey-io/valkey-search/pull/949), [#967](https://github.com/valkey-io/valkey-search/pull/967), [#985](https://github.com/valkey-io/valkey-search/pull/985), [#960](https://github.com/valkey-io/valkey-search/pull/960))
 * Python: Add valkey-search 1.3 support — RediSearch-parity typed APIs for FT.CREATE (`FLOAT16`/`BFLOAT16` vectors, `FILTER`, `SORTABLE UNF`, `SCORE_FIELD`, `NOHL`), FT.SEARCH/FT.AGGREGATE scoring (`WITHSCORES`/`SCORER`/`ADDSCORES`), FT.AGGREGATE's `LOAD ... AS` renaming and `WITHCURSOR` paging (`ft.cursor_read`/`ft.cursor_del`), and a new `ft.hybrid` API fusing a text/tag/numeric SEARCH arm with a VSIM vector-similarity arm via `FtHybridCombine.RRF`/`.Linear`/`.Function`. See [#7335](https://github.com/valkey-io/valkey-glide/pull/7335) for the full feature list, including the `search.emulate-release` >= 1.3.0 server-side requirement for a few of these. ([valkey-search#1.3.0-rc1](https://github.com/valkey-io/valkey-search))
+* Java: Deprecate the Valkey API keywords on `BaseClient` and the command interfaces ([#7401](https://github.com/valkey-io/valkey-glide/issues/7401))
 * Go, Java, Node, Python: Add `cluster_info` `INFO` section (Valkey 9.1) ([#7199](https://github.com/valkey-io/valkey-glide/issues/7199))
 * Java: add useMutualTlsFromKeyStore to load mTLS client identity ([#7258](https://github.com/valkey-io/valkey-glide/pull/7258))
-* Java: Add `HGETDEL` command support ([#6145](https://github.com/valkey-io/valkey-glide/issues/6145))
-* Node: Add `HGETDEL` command support ([#6145](https://github.com/valkey-io/valkey-glide/issues/6145))
-* Python: Add `HGETDEL` command support ([#6145](https://github.com/valkey-io/valkey-glide/issues/6145))
-* Python: Add support for `SISMEMBER` with `XX` option (Valkey 9.2+) ([#7202](https://github.com/valkey-io/valkey-glide/issues/7202))
 * Python: Optionally propagate active OpenTelemetry parent span context to native command, batch and script spans with `enable_trace_context_propagation=True` (disabled by default) ([#7069](https://github.com/valkey-io/valkey-glide/pull/7069))
 * Core: Add client-side caching support for MGET. Fully cached requests return locally; partially cached requests fetch only misses and preserve duplicate-key and NIL response semantics. ([#6793](https://github.com/valkey-io/valkey-glide/issues/6793))
 * Rust: Add an initial native Rust client (preview) built directly on `glide-core` ([#6864](https://github.com/valkey-io/valkey-glide/pull/6864))
@@ -87,7 +91,6 @@
 * Node: Add `AZAffinityAllNodes` read strategy ([#7104](https://github.com/valkey-io/valkey-glide/pull/7104))
 * Core: Zero-copy receive path for GET/MGET ([#6559](https://github.com/valkey-io/valkey-glide/pull/6559))
 * Go: Expose `inflightRequestsLimit` configuration via `WithInflightRequestsLimit`, bringing the Go client to parity with Java, Python, and Node ([#6385](https://github.com/valkey-io/valkey-glide/issues/6385))
-* Go: Add `HGETDEL` command support, atomically getting and deleting one or more hash fields (Valkey 9.1+) ([#6145](https://github.com/valkey-io/valkey-glide/issues/6145))
 * Core, Java, Python, Node, Go: Add client-instance pooling and isolated execution scopes. Pools eliminate multiplexer contention under high concurrency; scopes provide dedicated connections for WATCH/MULTI/EXEC and CLIENT TRACKING. All languages share a unified Rust implementation via `send_scope_command()` and `release_client_async()`. Pool release resets state (DISCARD + SELECT). Scopes inherit parent's current database, credentials, and compression. Circuit breaker and inflight limits enforced. Abandon detection reclaims leaked borrows after configurable timeout (default 5 min, skips blocking commands, 0 to disable). ([#6338](https://github.com/valkey-io/valkey-glide/pull/6338))
 * Python: Add Python 3.14t free-threaded support to the test matrix. ([#5445](https://github.com/valkey-io/valkey-glide/issues/5445))
 * Core/FFI: Add `command_with_route_info` FFI entrypoint, accepting routing as a `RouteInfo` C-struct pointer instead of protobuf-encoded bytes — the same mechanism `batch()` already uses. Existing `command`, `command_with_buffer`, `command_with_buffers`, and `invoke_script` are unchanged. ([#6494](https://github.com/valkey-io/valkey-glide/pull/6494))

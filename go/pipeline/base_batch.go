@@ -1563,6 +1563,32 @@ func (b *BaseBatch[T]) SIsMember(key string, member string) *T {
 	return b.addCmdAndTypeChecker(C.SIsMember, []string{key, member}, reflect.Bool, false)
 }
 
+// Returns if member is a member of the set stored at key,
+// or -1 if key does not exist.
+//
+// Since:
+//
+//	Valkey 9.2 and above.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key    - The key of the set.
+//	member - The member to check for existence in the set.
+//
+// Command Response:
+//
+//	A status code indicating membership:
+//	- 1: The member exists in the set.
+//	- 0: The key exists but the member does not exist in the set.
+//	- -1: The key does not exist.
+//
+// [valkey.io]: https://valkey.io/commands/sismember/
+func (b *BaseBatch[T]) SIsMemberIfExists(key string, member string) *T {
+	return b.addCmdAndTypeChecker(C.SIsMember, []string{key, member, constants.IfExistsKeyword}, reflect.Int64, false)
+}
+
 // Computes the difference between the first set and all the successive sets in keys.
 //
 // See [valkey.io] for details.

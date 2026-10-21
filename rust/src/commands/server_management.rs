@@ -162,7 +162,7 @@ pub trait ServerManagementCommands: CommandExecutor {
         let cmd = cmd("CLIENT")
             .with_arg("PAUSE")
             .with_arg(timeout_ms)
-            .with_arg(mode.map(|m| m.as_arg()));
+            .with_arg(mode);
         <()>::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 

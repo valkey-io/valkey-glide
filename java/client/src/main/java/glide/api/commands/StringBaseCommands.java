@@ -16,20 +16,49 @@ import java.util.concurrent.CompletableFuture;
  */
 public interface StringBaseCommands {
 
-    /** Valkey API keyword used to indicate that the length of the lcs should be returned. */
-    public static final String LEN_VALKEY_API = "LEN";
+    /**
+     * Valkey API keyword used to indicate that the length of the lcs should be returned.
+     *
+     * @deprecated Valkey API keyword constants are internal and will be removed in a future major
+     *     release.
+     */
+    // TODO #7401: Move to glide.internal.ValkeyKeywords.
+    @Deprecated public static final String LEN_VALKEY_API = "LEN";
 
-    /** <code>IDX</code> option string to include in the <code>LCS</code> command. */
-    public static final String IDX_COMMAND_STRING = "IDX";
+    /**
+     * <code>IDX</code> option string to include in the <code>LCS</code> command.
+     *
+     * @deprecated Valkey API keyword constants are internal and will be removed in a future major
+     *     release.
+     */
+    // TODO #7401: Move to glide.internal.ValkeyKeywords.
+    @Deprecated public static final String IDX_COMMAND_STRING = "IDX";
 
-    /** <code>MINMATCHLEN</code> option string to include in the <code>LCS</code> command. */
-    public static final String MINMATCHLEN_COMMAND_STRING = "MINMATCHLEN";
+    /**
+     * <code>MINMATCHLEN</code> option string to include in the <code>LCS</code> command.
+     *
+     * @deprecated Valkey API keyword constants are internal and will be removed in a future major
+     *     release.
+     */
+    // TODO #7401: Move to glide.internal.ValkeyKeywords.
+    @Deprecated public static final String MINMATCHLEN_COMMAND_STRING = "MINMATCHLEN";
 
-    /** <code>WITHMATCHLEN</code> option string to include in the <code>LCS</code> command. */
-    public static final String WITHMATCHLEN_COMMAND_STRING = "WITHMATCHLEN";
+    /**
+     * <code>WITHMATCHLEN</code> option string to include in the <code>LCS</code> command.
+     *
+     * @deprecated Valkey API keyword constants are internal and will be removed in a future major
+     *     release.
+     */
+    // TODO #7401: Move to glide.internal.ValkeyKeywords.
+    @Deprecated public static final String WITHMATCHLEN_COMMAND_STRING = "WITHMATCHLEN";
 
-    /** Key for LCS matches result. */
-    public static final String LCS_MATCHES_RESULT_KEY = "matches";
+    /**
+     * Key for LCS matches result.
+     *
+     * @deprecated This reply key constant is internal and will be removed in a future major release.
+     */
+    // TODO #7401: Remove; BaseClient will use a private constant.
+    @Deprecated public static final String LCS_MATCHES_RESULT_KEY = "matches";
 
     /**
      * Gets the value associated with the given <code>key</code>, or <code>null</code> if no such
