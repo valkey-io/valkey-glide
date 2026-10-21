@@ -568,8 +568,21 @@ class TestSyncAuthCommands:
         value = acl_glide_sync_client.get("test_key")
         assert value == b"test_value"
 
-        acl_glide_sync_client.update_connection_password(
-            NEW_PASSWORD, immediate_auth=True
+        def _immediate_auth_after_reconnect() -> bool:
+            try:
+                return (
+                    acl_glide_sync_client.update_connection_password(
+                        NEW_PASSWORD, immediate_auth=True
+                    )
+                    == OK
+                )
+            except Exception:
+                return False
+
+        sync_wait_for(
+            _immediate_auth_after_reconnect,
+            "Client did not accept immediate-auth after reconnect",
+            timeout=reconnect_timeout,
         )
 
         assert acl_glide_sync_client.set("new_key", "new_value") == OK

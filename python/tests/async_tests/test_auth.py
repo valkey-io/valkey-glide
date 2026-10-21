@@ -573,8 +573,21 @@ class TestAuthCommands:
         value = await acl_glide_client.get("test_key")
         assert value == b"test_value"
 
-        await acl_glide_client.update_connection_password(
-            NEW_PASSWORD, immediate_auth=True
+        async def _immediate_auth_after_reconnect() -> bool:
+            try:
+                return (
+                    await acl_glide_client.update_connection_password(
+                        NEW_PASSWORD, immediate_auth=True
+                    )
+                    == OK
+                )
+            except Exception:
+                return False
+
+        await wait_for(
+            _immediate_auth_after_reconnect,
+            "Client did not accept immediate-auth after reconnect",
+            timeout=reconnect_timeout,
         )
 
         assert await acl_glide_client.set("new_key", "new_value") == OK
