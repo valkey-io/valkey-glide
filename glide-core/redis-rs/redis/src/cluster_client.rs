@@ -761,6 +761,7 @@ impl ClusterClient {
 
     /// Basically [`Self::get_async_connection`] over a connection type of the caller's
     /// choosing. Allows for pairing an RDMA session with a cluster connection.
+    #[cfg(feature = "cluster-async")]
     pub async fn get_generic_async_connection<C>(
         &self,
         push_sender: Option<mpsc::UnboundedSender<PushInfo>>,
