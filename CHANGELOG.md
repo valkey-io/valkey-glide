@@ -6,6 +6,7 @@
 
 * All: Add `DELIFEQ` command support ([#6146](https://github.com/valkey-io/valkey-glide/issues/6146))
 * Rust: Implement `ToSingleValkeyArg` and `ToValkeyArgs` for option types ([#7381](https://github.com/valkey-io/valkey-glide/issues/7381))
+* Core: Add `glide-rdma` crate, an RDMA transfer layer over libfabric (loaded at runtime), for later RDMA support ([#7177](https://github.com/valkey-io/valkey-glide/pull/7177))
 
 ### Fixes
 
