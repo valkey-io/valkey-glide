@@ -484,6 +484,7 @@ class TestGlideClients:
         probe = await create_client(
             request, cluster_mode, protocol=protocol, request_timeout=100
         )
+        nodes = pytest.valkey_cluster.nodes_addr if cluster_mode else None  # type: ignore
 
         async def run_debug_sleep():
             """
@@ -496,7 +497,7 @@ class TestGlideClients:
                 await client.custom_command(command)
 
         async def fail_to_connect_to_client():
-            await wait_for_server_blocked(probe)
+            await wait_for_server_blocked(probe, nodes)
             with pytest.raises(ClosingError) as e:
                 await create_client(
                     request,
@@ -510,7 +511,7 @@ class TestGlideClients:
             assert "timed out" in str(e).lower() or "timeout" in str(e).lower()
 
         async def connect_to_client():
-            await wait_for_server_blocked(probe)
+            await wait_for_server_blocked(probe, nodes)
             timeout_client = await create_client(
                 request,
                 cluster_mode,

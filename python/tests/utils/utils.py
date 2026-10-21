@@ -5,6 +5,7 @@ import string
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager, contextmanager
 from datetime import datetime, timezone
+from functools import partial
 from typing import (
     Any,
     AsyncIterator,
@@ -99,7 +100,7 @@ from glide_shared.constants import (
     TResult,
 )
 from glide_shared.exceptions import TimeoutError as GlideTimeoutError
-from glide_shared.routes import AllNodes, SlotKeyRoute, SlotType
+from glide_shared.routes import AllNodes, ByAddressRoute, SlotKeyRoute, SlotType
 from glide_sync import GlideClient as SyncGlideClient
 from glide_sync import GlideClusterClient as SyncGlideClusterClient
 from glide_sync import TGlideClient as TSyncGlideClient
@@ -491,46 +492,87 @@ def sync_low_busy_reply_threshold(client: TSyncGlideClient) -> Iterator[None]:
             )
 
 
-async def wait_for_server_blocked(probe: TGlideClient) -> None:
+async def wait_for_server_blocked(
+    probe: TGlideClient, nodes: Optional[List[NodeAddress]] = None
+) -> None:
     """``probe`` needs a request timeout well under the server's block duration.
 
     Two consecutive timeouts are required so one slow reply from a server that
     is merely loaded is not mistaken for the block.
+
+    A cluster ``probe`` is pinged node by node over ``nodes``: a fan-out PING
+    fails as soon as one node times out, which would report the block before
+    the nodes that have not started sleeping yet.
     """
-    consecutive_timeouts = 0
+    import anyio
 
-    async def ping_times_out_twice() -> bool:
-        nonlocal consecutive_timeouts
+    if isinstance(probe, GlideClusterClient):
+        if not nodes:
+            raise ValueError("a cluster probe needs the addresses of its nodes")
+        pings = [
+            partial(probe.ping, route=ByAddressRoute(node.host, node.port))
+            for node in nodes
+        ]
+    else:
+        pings = [probe.ping]
+    consecutive_timeouts = [0] * len(pings)
+
+    async def probe_node(i: int) -> None:
         try:
-            await probe.ping()
+            await pings[i]()
         except GlideTimeoutError:
-            consecutive_timeouts += 1
-            return consecutive_timeouts >= 2
-        consecutive_timeouts = 0
-        return False
+            consecutive_timeouts[i] += 1
+            return
+        consecutive_timeouts[i] = 0
 
-    await wait_for(ping_times_out_twice, "server never stopped answering PING")
+    async def every_node_times_out_twice() -> bool:
+        async with anyio.create_task_group() as tg:
+            for i, count in enumerate(consecutive_timeouts):
+                if count < 2:
+                    tg.start_soon(probe_node, i)
+        return all(count >= 2 for count in consecutive_timeouts)
+
+    await wait_for(every_node_times_out_twice, "server never stopped answering PING")
 
 
-def sync_wait_for_server_blocked(probe: TSyncGlideClient) -> None:
+def sync_wait_for_server_blocked(
+    probe: TSyncGlideClient, nodes: Optional[List[NodeAddress]] = None
+) -> None:
     """``probe`` needs a request timeout well under the server's block duration.
 
     Two consecutive timeouts are required so one slow reply from a server that
     is merely loaded is not mistaken for the block.
+
+    A cluster ``probe`` is pinged node by node over ``nodes``: a fan-out PING
+    fails as soon as one node times out, which would report the block before
+    the nodes that have not started sleeping yet.
     """
-    consecutive_timeouts = 0
+    if isinstance(probe, SyncGlideClusterClient):
+        if not nodes:
+            raise ValueError("a cluster probe needs the addresses of its nodes")
+        pings = [
+            partial(probe.ping, route=ByAddressRoute(node.host, node.port))
+            for node in nodes
+        ]
+    else:
+        pings = [probe.ping]
+    consecutive_timeouts = [0] * len(pings)
 
-    def ping_times_out_twice() -> bool:
-        nonlocal consecutive_timeouts
+    def probe_node(i: int) -> None:
         try:
-            probe.ping()
+            pings[i]()
         except GlideTimeoutError:
-            consecutive_timeouts += 1
-            return consecutive_timeouts >= 2
-        consecutive_timeouts = 0
-        return False
+            consecutive_timeouts[i] += 1
+            return
+        consecutive_timeouts[i] = 0
 
-    sync_wait_for(ping_times_out_twice, "server never stopped answering PING")
+    def every_node_times_out_twice() -> bool:
+        pending = [i for i, count in enumerate(consecutive_timeouts) if count < 2]
+        with ThreadPoolExecutor(max_workers=len(pending)) as pool:
+            list(pool.map(probe_node, pending))
+        return all(count >= 2 for count in consecutive_timeouts)
+
+    sync_wait_for(every_node_times_out_twice, "server never stopped answering PING")
 
 
 async def wait_for_save_not_in_progress(client: TGlideClient) -> None:
