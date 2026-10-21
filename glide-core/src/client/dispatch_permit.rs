@@ -1,6 +1,6 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-//! Kept in its own module so that [`DispatchPermit::take`] and
+//! Kept in its own module so that `DispatchPermit::take` and
 //! [`Admission::reserve`] are the only ways to get a permit, and so no permit
 //! skips its checks.
 
