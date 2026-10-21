@@ -542,6 +542,54 @@ mod dma_tests {
         );
     }
 
+    /// The handshake has no timeout either, so a node that never answers it keeps
+    /// the transfer waiting past the client's request timeout. Closing the client
+    /// ends the wait, and the buffer, lent before the handshake, does not come back.
+    #[tokio::test]
+    async fn closing_the_client_cancels_a_transfer_whose_handshake_is_never_answered() {
+        let scripts = HashMap::from([("BLOB.RDMA_HELLO".to_string(), vec![NO_REPLY.to_string()])]);
+        let mock = ServerMock::new_with_command_scripts(primary_responses(), scripts);
+        let request_timeout = std::time::Duration::from_millis(20);
+        assert!(request_timeout < STUCK);
+        let request = glide_core::client::ConnectionRequest {
+            addresses: vec![mock_address(&mock)],
+            rdma: RdmaSetting::Configured(FabricConfig::new(Provider::Tcp)),
+            request_timeout: Some(request_timeout.as_millis() as u32),
+            ..Default::default()
+        };
+        let client = Client::new(request, None).await.expect("builds");
+        let buffer = client
+            .register_rdma_region(vec![0u8; 4096])
+            .expect("registers");
+
+        let mut transferring = client.clone();
+        let transfer =
+            tokio::spawn(async move { transferring.rdma_get(b"key", buffer, 0, 4096).await });
+        tokio::time::sleep(STUCK).await;
+        assert!(
+            !transfer.is_finished(),
+            "the request timeout does not cut the handshake short"
+        );
+
+        client.close_rdma().expect("the region closes");
+
+        let (buffer, outcome) = tokio::time::timeout(PROMPTLY, transfer)
+            .await
+            .expect("closing the client ends the wait")
+            .unwrap();
+        assert!(buffer.is_none(), "the buffer was lent before the handshake");
+        let cancelled = outcome.expect_err("a cancelled read is an error");
+        assert!(
+            cancelled.to_string().contains("RDMA transfer cancelled"),
+            "{cancelled}"
+        );
+        assert_eq!(
+            mock.get_number_of_received_commands(),
+            1,
+            "only the handshake reached the server"
+        );
+    }
+
     #[tokio::test]
     async fn closing_the_client_cancels_a_write_the_server_never_answers() {
         let (_peer, mock) = server_that_never_answers("BLOB.RDMA_SET");

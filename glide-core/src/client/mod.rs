@@ -680,7 +680,8 @@ fn get_request_timeout(cmd: &Cmd, default_timeout: Duration) -> RedisResult<Opti
             };
             get_timeout_from_cmd_arg(cmd, idx, TimeUnit::Milliseconds)
         }
-        // An RDMA transfer should not have a timeout.
+        // An RDMA transfer should not have a timeout, and neither does the
+        // `BLOB.RDMA_HELLO` handshake the first transfer on a connection sends.
         //
         // Timing out would end the transfer without the server's reply, so its
         // region would be revoked and the caller's buffer lost, even if the
@@ -4227,9 +4228,10 @@ mod tests {
     }
 
     #[test]
-    fn test_rdma_handshake_keeps_the_default_timeout() {
-        // As do the TCP variants, which are ordinary round trips over RESP.
-        for name in ["BLOB.RDMA_HELLO", "BLOB.TCP_GET", "BLOB.TCP_SET"] {
+    fn test_blob_tcp_commands_keep_the_default_timeout() {
+        // The TCP variants are ordinary round trips over RESP. The RDMA handshake is
+        // not checked here: it never goes through `send_command`, which refuses it.
+        for name in ["BLOB.TCP_GET", "BLOB.TCP_SET"] {
             let mut cmd = Cmd::new();
             cmd.arg(name);
             let result = get_request_timeout(&cmd, Duration::from_millis(250)).unwrap();
@@ -5057,9 +5059,8 @@ mod tests {
             );
         }
 
-        // The handshake and the TCP variants are ordinary round trips with a
-        // request timeout.
-        for name in ["BLOB.RDMA_HELLO", "BLOB.TCP_GET", "BLOB.TCP_SET"] {
+        // The TCP variants are ordinary round trips with a request timeout.
+        for name in ["BLOB.TCP_GET", "BLOB.TCP_SET"] {
             let mut cmd = Cmd::new();
             cmd.arg(name);
             assert!(!is_blocking_command(&cmd), "{name}");

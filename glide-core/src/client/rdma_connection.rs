@@ -107,6 +107,12 @@ mod with_rdma {
 
     /// Run `BLOB.RDMA_HELLO` on this connection and open the session it reports.
     /// Should be run only once per RESP connection.
+    ///
+    /// The handshake has no timeout. It runs inside the dispatch of the transfer
+    /// that needs it, after that transfer lent its buffer, so it waits as the
+    /// transfer does. A timeout would not leave the connection usable anyway: the
+    /// server may still record the handshake after the client gave up on it, and
+    /// would then refuse a second one on the same connection.
     async fn handshake(
         connection: &mut MultiplexedConnection,
         rdma_fabric: &glide_rdma::RdmaFabric,
