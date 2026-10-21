@@ -34,6 +34,8 @@ This is the Python client binding for Valkey GLIDE, providing both async and syn
 
 ## Build and Test Rules (Agents)
 
+<!-- These commands are intentionally mirrored in python/DEVELOPER.md (human guide). Keep both in sync when the build/test/lint commands change. -->
+
 ### Preferred (dev.py CLI)
 ```bash
 # Build commands

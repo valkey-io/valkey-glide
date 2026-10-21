@@ -6,6 +6,8 @@ This document describes how to set up your development environment to build and 
 
 The GLIDE Node wrapper consists of both TypeScript and Rust code. Rust bindings for Node.js are implemented using [napi-rs](https://github.com/napi-rs/napi-rs). The Node and Rust components communicate using the [protobuf](https://github.com/protocolbuffers/protobuf) protocol.
 
+<!-- The build/test/lint commands below are intentionally mirrored in node/AGENTS.md (agent quick-reference). Keep both in sync when they change. -->
+
 ### Build from source
 
 #### Prerequisites

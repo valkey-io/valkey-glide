@@ -29,6 +29,8 @@ This file provides AI agents with the minimum but sufficient context to work pro
 
 ## Build and Test Rules (Agents)
 
+<!-- These commands are intentionally mirrored in glide-core/DEVELOPER.md (human guide). Keep both in sync when the build/test/lint commands change. -->
+
 All four crates share the same lint gate (`.github/workflows/lint-rust/action.yml`), run from the crate's own directory. The same gate also runs against `java/`, `node/rust-client/`, `python/glide-async/` (binding glue), `benchmarks/rust/`, and `rust/` (see `../AGENTS.md`). `cargo deny` uses the repo-root `deny.toml` (`--config ${GITHUB_WORKSPACE}/deny.toml` in CI; adjust the relative path to the repo root for the crate you're in — `../deny.toml` only works for a depth-1 crate):
 
 ```bash

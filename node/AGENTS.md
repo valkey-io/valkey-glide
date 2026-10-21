@@ -70,6 +70,8 @@ Other NAPI entry points: `sendBatch`, `invokeScript`, `clusterScan`, `updateConn
 
 ## Build and Test Rules (Agents)
 
+<!-- These commands are intentionally mirrored in node/DEVELOPER.md (human guide). Keep both in sync when the build/test/lint commands change. -->
+
 ### Preferred (npm Scripts)
 
 ```bash

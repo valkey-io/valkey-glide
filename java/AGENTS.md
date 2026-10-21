@@ -44,6 +44,8 @@ This is the Java client binding for Valkey GLIDE, providing both standalone and 
 
 ## Build and Test Rules (Agents)
 
+<!-- These commands are intentionally mirrored in java/DEVELOPER.md (human guide). Keep both in sync when the build/test/lint commands change. -->
+
 ### Environment
 
 - **Every `./gradlew` invocation in this directory kills servers machine-wide when the build finishes.** `integTest/build.gradle`'s `gradle.buildFinished` hook runs `pkill -f valkey-server` and `pkill -f redis-server` (via WSL on Windows) — even for unrelated tasks like `./gradlew tasks` — unless `GLIDE_DOCKER_SERVERS=true` is set. On a shared machine or in parallel sessions this kills test servers you did not start. Also, `:integTest:test`/`pubsubTest` stop every `cluster*` folder under `utils/clusters/` and start fresh ones before running.

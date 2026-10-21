@@ -6,6 +6,8 @@ This document describes how to set up your development environment to build and 
 
 The Valkey GLIDE Java wrapper consists of both Java and Rust code. Rust bindings for the Java Native Interface are implemented using [jni-rs](https://github.com/jni-rs/jni-rs), and the Java JAR is built using [Gradle](https://github.com/gradle/gradle). The Java and Rust components communicate using the [protobuf](https://github.com/protocolbuffers/protobuf) protocol.
 
+<!-- The build/test/lint commands below are intentionally mirrored in java/AGENTS.md (agent quick-reference). Keep both in sync when they change. -->
+
 ### Build from source
 
 **Note:** See the [Troubleshooting](#troubleshooting) section below for possible solutions to problems.

@@ -32,7 +32,7 @@ This is the Valkey GLIDE mono-repository containing a Rust core (`glide-core`) a
 - `examples/` - Usage examples for each language binding.
 - `docs/` - Internal/in-repo docs. The published docs live in [valkey-io/valkey-glide-docs](https://github.com/valkey-io/valkey-glide-docs).
 
-Each binding has its own `AGENTS.md` — read it after this file for the binding you're changing. `CLAUDE.md` at the repo root holds additional hard constraints that apply alongside this file. The Rust crates (`rust/`, `glide-core/`, `glide-core/redis-rs/redis/`, `ffi/`, `glide-telemetry/`, `glide-logger/`) are independent crates — each with its own `Cargo.toml`/`Cargo.lock`, no top-level cargo workspace; see [glide-core/AGENTS.md](./glide-core/AGENTS.md) for the crate dependency table.
+Each binding has its own `AGENTS.md` — read it after this file for the binding you're changing. `CLAUDE.md` at the repo root holds additional hard constraints that apply alongside this file. The Rust crates (`rust/`, `glide-core/`, `glide-core/redis-rs/redis/`, `ffi/`, `glide-telemetry/`, `glide-logger/`, `glide-rdma/`) are independent crates — each with its own `Cargo.toml`/`Cargo.lock`, no top-level cargo workspace; see [glide-core/AGENTS.md](./glide-core/AGENTS.md) for the crate dependency table.
 
 ## Architecture Quick Facts
 

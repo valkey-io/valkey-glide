@@ -38,6 +38,8 @@ This is the Go client binding for Valkey GLIDE, providing both standalone and cl
 
 ## Build and Test Rules (Agents)
 
+<!-- These commands are intentionally mirrored in go/DEVELOPER.md (human guide). Keep both in sync when the build/test/lint commands change. -->
+
 ### Preferred (Make Targets)
 ```bash
 # Build commands
