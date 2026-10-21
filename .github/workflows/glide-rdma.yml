@@ -20,6 +20,8 @@ on:
             - .github/actions/install-protoc/action.yml
             - .github/actions/install-rust/action.yml
             - .github/workflows/lint-rust/action.yml
+            - "!**/*.md"
+            - "!**/THIRD_PARTY_LICENSES*"
     pull_request:
         paths:
             - glide-rdma/**
@@ -32,6 +34,8 @@ on:
             - .github/actions/install-protoc/action.yml
             - .github/actions/install-rust/action.yml
             - .github/workflows/lint-rust/action.yml
+            - "!**/*.md"
+            - "!**/THIRD_PARTY_LICENSES*"
     workflow_dispatch:
     # TODO #7409: Add `workflow_call:` so fmt-all.yml, full-matrix-tests.yml, and rust-cd.yml can run this workflow.
 
