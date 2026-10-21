@@ -251,11 +251,16 @@ impl Client {
     /// recalled instead, which closes the region first. So is a revoke that wins
     /// the race against the reply.
     ///
+    /// A reply only speaks for the attempt it answers. It proves the server is done
+    /// because the cluster client never sends a transfer again after an error that
+    /// leaves open whether the server got it; it retries only after the server
+    /// refused the command before running it, or when the command was never sent.
+    /// So no earlier attempt can still be using the memory.
+    ///
     /// The client-side checks that can fail before anything is sent already ran in
     /// [`Self::rdma_preflight`], before the buffer was lent. A connection error that
-    /// says the command was not transmitted (`FatalSendError`) is still recalled:
-    /// the cluster client may have retried after an earlier attempt that did reach
-    /// the server, so it does not prove the server never saw the command.
+    /// says the command was not transmitted (`FatalSendError`) is still recalled.
+    /// That is more cautious than needed, and costs only a new registration.
     ///
     /// `permit` is what [`Self::rdma_preflight`] returned.
     ///

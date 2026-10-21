@@ -1001,6 +1001,12 @@ pub fn is_readonly(routable: &impl Routable) -> bool {
     }
 }
 
+/// Returns `true` if the given `cmd` is an RDMA transfer, which lends the
+/// client's memory to the server until the server replies.
+pub(crate) fn lends_memory(cmd: &[u8]) -> bool {
+    matches!(cmd, b"BLOB.RDMA_GET" | b"BLOB.RDMA_SET")
+}
+
 /// Returns `true` if the given `cmd` is a readonly command.
 pub fn is_readonly_cmd(cmd: &[u8]) -> bool {
     matches!(
