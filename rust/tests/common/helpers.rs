@@ -1,6 +1,7 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 //! Key generation and server capability/version helpers.
 
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 /// A process-and-thread-unique key with the given prefix, so tests never
@@ -28,6 +29,54 @@ pub fn tkey(tag: &str, name: &str) -> String {
         .unwrap()
         .as_nanos();
     format!("{{{tag}}}:{name}:{t}:{n}")
+}
+
+/// One field from each default INFO section.
+pub const INFO_DEFAULT_FIELDS: [&str; 8] = [
+    "redis_version",               // server
+    "connected_clients",           // clients
+    "used_memory",                 // memory
+    "rdb_changes_since_last_save", // persistence
+    "total_commands_processed",    // stats
+    "role",                        // replication
+    "used_cpu_sys",                // cpu
+    "cluster_enabled",             // cluster
+];
+
+/// Expected server responses for the `rdb_*_bgsave_type` INFO persistence fields.
+///
+/// Since Valkey 9.2.0.
+pub const BGSAVE_TYPES: [&str; 3] = ["fork", "forkless", "none"];
+
+/// Assert that `value` is an integer and return it.
+/// `name` identifies the value in the failure message.
+pub fn parse_int(value: &str, name: &str) -> i64 {
+    value
+        .parse()
+        .unwrap_or_else(|_| panic!("{name} is not an integer: {value:?}"))
+}
+
+/// Return the fields and values from the given `INFO` sections, with one map per node reply.
+// TODO #7362: Support cluster clients once the typed `INFO` methods return per-node replies.
+pub async fn get_info<C>(c: &C, sections: &[&str]) -> Vec<HashMap<String, String>>
+where
+    C: glide::ServerManagementCommands + Sync,
+{
+    let info = if sections.is_empty() {
+        c.info().await
+    } else {
+        c.info_sections(sections).await
+    };
+
+    let fields = info
+        .unwrap()
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty() && !line.starts_with('#'))
+        .filter_map(|line| line.split_once(':'))
+        .map(|(k, v)| (k.to_string(), v.to_string()))
+        .collect();
+    vec![fields]
 }
 
 /// Parse a `"major.minor.patch"` version string into a tuple.

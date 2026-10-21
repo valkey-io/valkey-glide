@@ -226,40 +226,43 @@ const (
 type Section string
 
 const (
-	// SERVER: General information about the server
-	Server Section = "server"
-	// CLIENTS: Client connections section
-	Clients Section = "clients"
-	// MEMORY: Memory consumption related information
-	Memory Section = "memory"
-	// PERSISTENCE: RDB and AOF related information
-	Persistence Section = "persistence"
-	// STATS: General statistics
-	Stats Section = "stats"
-	// REPLICATION: Master/replica replication information
-	Replication Section = "replication"
-	// CPU: CPU consumption statistics
-	Cpu Section = "cpu"
-	// COMMANDSTATS: Valkey command statistics
-	Commandstats Section = "commandstats"
-	// LATENCYSTATS: Valkey command latency percentile distribution statistics
-	Latencystats Section = "latencystats"
-	// SENTINEL: Valkey Sentinel section (only applicable to Sentinel instances)
-	Sentinel Section = "sentinel"
-	// CLUSTER: Valkey Cluster section
-	Cluster Section = "cluster"
-	// MODULES: Modules section
-	Modules Section = "modules"
-	// KEYSPACE: Database related statistics
-	Keyspace Section = "keyspace"
-	// ERRORSTATS: Valkey error statistics
-	Errorstats Section = "errorstats"
 	// ALL: Return all sections (excluding module generated ones)
 	All Section = "all"
+	// CLIENTS: Client connections section
+	Clients Section = "clients"
+	// CLUSTER: Valkey Cluster section
+	Cluster Section = "cluster"
+	// CLUSTER_INFO: Valkey Cluster information
+	// Since Valkey 9.1.0.
+	ClusterInfo Section = "cluster_info"
+	// COMMANDSTATS: Valkey command statistics
+	Commandstats Section = "commandstats"
+	// CPU: CPU consumption statistics
+	Cpu Section = "cpu"
 	// DEFAULT: Return only the default set of sections
 	Default Section = "default"
+	// ERRORSTATS: Valkey error statistics
+	Errorstats Section = "errorstats"
 	// EVERYTHING: Includes all and modules
 	Everything Section = "everything"
+	// KEYSPACE: Database related statistics
+	Keyspace Section = "keyspace"
+	// LATENCYSTATS: Valkey command latency percentile distribution statistics
+	Latencystats Section = "latencystats"
+	// MEMORY: Memory consumption related information
+	Memory Section = "memory"
+	// MODULES: Modules section
+	Modules Section = "modules"
+	// PERSISTENCE: RDB and AOF related information
+	Persistence Section = "persistence"
+	// REPLICATION: Master/replica replication information
+	Replication Section = "replication"
+	// SENTINEL: Valkey Sentinel section (only applicable to Sentinel instances)
+	Sentinel Section = "sentinel"
+	// SERVER: General information about the server
+	Server Section = "server"
+	// STATS: General statistics
+	Stats Section = "stats"
 )
 
 // Identifies Scan Type of ClusterScan command
