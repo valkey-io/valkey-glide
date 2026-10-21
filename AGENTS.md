@@ -46,7 +46,7 @@ Valkey supports two wire protocols (RESP2 and RESP3) that may return structurall
 
 The Rust core normalizes these differences in `glide-core/src/client/value_conversion.rs` so that language bindings receive a consistent data structure regardless of protocol version; language bindings should *not* need to handle RESP2/RESP3 differences themselves. When adding a new command whose RESP2 and RESP3 responses differ, add or reuse an `ExpectedReturnType` variant and implement the conversion logic in `convert_to_expected_type`.
 
-**Supported Engine Versions:** see the table in [README.md](./README.md#supported-engine-versions). The authoritative CI test matrix is `.github/json_matrices/engine-matrix.json` (currently adds a pre-release Valkey `9.2.0-rc1` not listed in the README table). Don't duplicate the version table here — it drifts.
+**Supported Engine Versions:** see the table in [README.md](./README.md#supported-engine-versions). The authoritative CI test matrix is `.github/json_matrices/engine-matrix.json`, which may test pre-release engine versions ahead of the README table. Don't duplicate the version table here — it drifts.
 
 ## Test Servers
 
@@ -347,10 +347,10 @@ Follow these development guidelines when applicable:
 - **Documentation:** [valkey-io/valkey-glide-docs](https://github.com/valkey-io/valkey-glide-docs) (published docs; in-repo `docs/` holds internal docs)
 - **Examples:** [examples/](./examples/)
 - **Language-Specific Guides:**
-  - [Rust Client Guide](./rust/AGENTS.md)
-  - [glide-core / Rust Core Guide](./glide-core/AGENTS.md)
+  - [Rust Client Guide](./rust/AGENTS.md) ([Rust Developer Guide](./rust/DEVELOPER.md))
+  - [Java Guide](./java/AGENTS.md) ([Java Developer Guide](./java/DEVELOPER.md))
+  - [Python Guide](./python/AGENTS.md) ([Python Developer Guide](./python/DEVELOPER.md))
+  - [Node.js Guide](./node/AGENTS.md) ([Node.js Developer Guide](./node/DEVELOPER.md))
+  - [Go Guide](./go/AGENTS.md) ([Go Developer Guide](./go/DEVELOPER.md))
+  - [glide-core / Rust Core Guide](./glide-core/AGENTS.md) ([glide-core Developer Guide](./glide-core/DEVELOPER.md))
   - [FFI crate notes](./ffi/DEVELOPER.md) (GLIDE_NAME/GLIDE_VERSION build variables for Go and Python)
-  - [Java Developer Guide](./java/DEVELOPER.md)
-  - [Python Developer Guide](./python/DEVELOPER.md)
-  - [Node.js Developer Guide](./node/DEVELOPER.md)
-  - [Go Developer Guide](./go/DEVELOPER.md)

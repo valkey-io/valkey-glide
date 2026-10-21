@@ -32,6 +32,8 @@ This is the native **Rust** client binding for Valkey GLIDE: package `valkey-gli
 
 ## Build and Test Rules (Agents)
 
+<!-- These commands are intentionally mirrored in rust/DEVELOPER.md (human guide). Keep both in sync when the build/test/lint commands change. -->
+
 ```bash
 cd rust
 
