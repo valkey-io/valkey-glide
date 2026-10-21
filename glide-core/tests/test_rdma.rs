@@ -297,6 +297,57 @@ mod dma_tests {
         assert_eq!(client.rdma_parked_bytes().unwrap(), 0);
     }
 
+    /// A transfer inside an open `MULTI` would be queued, and the `+QUEUED` reply
+    /// does not mean the server is done with the memory. So the transfer is refused
+    /// before anything is sent, and the buffer comes back untouched.
+    #[tokio::test]
+    async fn a_transfer_inside_an_open_multi_is_refused_before_it_is_sent() {
+        let (_peer, hello) = hello_reply();
+        let scripts = HashMap::from([
+            ("MULTI".to_string(), vec!["+OK\r\n".to_string()]),
+            ("EXEC".to_string(), vec!["*0\r\n".to_string()]),
+            ("BLOB.RDMA_HELLO".to_string(), vec![hello]),
+            // What a server answers for a command queued inside a transaction.
+            ("BLOB.RDMA_GET".to_string(), vec!["+QUEUED\r\n".to_string()]),
+        ]);
+        let mock = ServerMock::new_with_command_scripts(primary_responses(), scripts);
+        let mut client = rdma_client_against(&mock).await;
+
+        client
+            .send_command(&mut redis::cmd("MULTI"), None)
+            .await
+            .expect("MULTI is accepted");
+        let buffer = client.register_rdma_region(vec![0u8; 4096]).unwrap();
+        let (buffer, result) = client.rdma_get(b"key", buffer, 0, 4096).await;
+
+        let error = result.expect_err("a transfer cannot run inside a transaction");
+        assert!(error.to_string().contains("MULTI"), "{error}");
+        let buffer = buffer.expect("nothing was sent, so the buffer comes back");
+        assert!(!buffer.is_revoked(), "and it can be lent again");
+        assert_eq!(
+            mock.get_number_of_received_commands(),
+            1,
+            "only the MULTI reached the server: no handshake and no transfer"
+        );
+
+        // Once the transaction ends, transfers are allowed again.
+        client
+            .send_command(&mut redis::cmd("EXEC"), None)
+            .await
+            .expect("EXEC is accepted");
+        let (_buffer, result) = client.rdma_get(b"key", buffer, 0, 4096).await;
+        let error = result.expect_err("the mock queues the transfer, which is not a read reply");
+        assert!(
+            !error.to_string().contains("inside an open MULTI"),
+            "EXEC closed the transaction, so the transfer was sent: {error}"
+        );
+        assert_eq!(
+            mock.get_number_of_received_commands(),
+            4,
+            "EXEC, then the handshake and the transfer"
+        );
+    }
+
     /// A byte count and its checksum, which is what a read reply carries. The
     /// mock writes nothing, so the checksum is that of the eight zero bytes every
     /// test's region starts with.

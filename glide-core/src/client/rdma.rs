@@ -299,14 +299,25 @@ impl Client {
 
     /// The checks that can refuse a transfer before it is sent, run before the
     /// transfer lends its buffer, so that failing one hands the buffer straight back
-    /// instead of revoking it: the IAM reconcile, then [`DispatchPermit::take`]. The
-    /// send then uses the returned permit and does not repeat them.
+    /// instead of revoking it: no open `MULTI`, the IAM reconcile, then
+    /// [`DispatchPermit::take`]. The send then uses the returned permit and does not
+    /// repeat them.
+    ///
+    /// A transfer sent while a `MULTI` is open would be queued, and the server would
+    /// answer `+QUEUED` instead of replying to the transfer. The buffer would then come
+    /// back while the queued transfer can still write into it on `EXEC`.
     ///
     /// The rest of [`Self::send_command`] is skipped on purpose: `BLOB.*` is what
-    /// `refuse_direct_command` refuses, and is neither a transaction command nor a
-    /// pubsub one. A check added to `send_command` that a transfer also needs must be
-    /// added here too.
+    /// `refuse_direct_command` refuses, it does not open or close a transaction, and
+    /// it is not a pubsub command. A check added to `send_command` that a transfer
+    /// also needs must be added here too.
     async fn rdma_preflight(&mut self) -> Result<DispatchPermit, redis::RedisError> {
+        if self.multi_active.load(std::sync::atomic::Ordering::Acquire) {
+            return Err(crate::rdma::protocol::configuration_error(
+                "an RDMA transfer cannot run inside an open MULTI; send EXEC or DISCARD first"
+                    .to_string(),
+            ));
+        }
         self.reconcile_iam_before_dispatch().await?;
         DispatchPermit::take(self).await
     }
