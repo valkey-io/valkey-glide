@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import array
 import os
+import socket
 import threading
 import time
 
@@ -26,6 +27,7 @@ from glide_shared.config import (
 from glide_shared.exceptions import (
     ClosingError,
     ConnectionError,
+    GlideError,
     RdmaError,
     TimeoutError,
 )
@@ -63,6 +65,10 @@ class _FakeLib:
         # standing in for memory the fabric still keeps.
         self.holds = {}
         self.freed_holds = []
+        # The size of every buffer `register_rdma_region` was asked to register.
+        self.registrations = []
+        # What `rdma_set` reports, if not a success.
+        self.set_result = None
 
     def rdma_region_capacity(self, region):
         return region["capacity"]
@@ -77,11 +83,20 @@ class _FakeLib:
     def free_rdma_memory_hold(self, hold):
         self.freed_holds.append(hold)
 
+    def register_rdma_region(self, client, buffer, length):
+        self.registrations.append(length)
+        return _FakeRegistration({"capacity": length})
+
+    def free_rdma_registration(self, registration):
+        pass
+
     def free_rdma_result(self, result):
         self.freed_results.append(result)
 
     def rdma_set(self, *arguments):
         self.sets.append(arguments)
+        if self.set_result is not None:
+            return self.set_result
         return _FakeResult(_FakeFfi.NULL, 0, found=True)
 
 
@@ -106,16 +121,31 @@ def _offline_region(client: GlideClient, capacity: int = REGION_BYTES) -> RdmaRe
     return RdmaRegion(client, bytearray(capacity), {"capacity": capacity})
 
 
+class _FakeRegistration:
+    """A registration as the FFI reports one that succeeded."""
+
+    def __init__(self, region):
+        self.error_message = _FakeFfi.NULL
+        self.region = region
+
+
 class _FakeResult:
     """A transfer result as the FFI reports one: failed unless `found` is set."""
 
-    def __init__(self, error_message, error_type: int, found: bool = False):
+    def __init__(
+        self,
+        error_message,
+        error_type: int,
+        found: bool = False,
+        region_closed: bool = False,
+    ):
         self.error_message = error_message
         self.error_type = error_type
         self.found = found
         self.bytes_written = 0
         self.has_checksum = False
         self.checksum = 0
+        self.region_closed = region_closed
 
 
 def test_rdma_availability_is_reported_as_a_bool():
@@ -326,7 +356,7 @@ def test_a_failed_transfer_raises_the_class_its_type_names(error_type, expected)
     result = _FakeResult(b"transfer failed", error_type)
 
     with pytest.raises(expected, match="transfer failed"):
-        client._handle_rdma_result(result)
+        client._handle_rdma_result(result, _offline_region(client))
 
     assert client._lib.freed_results == [result]
 
@@ -343,9 +373,286 @@ def test_a_transfer_cancelled_by_closing_the_client_raises_closing_error(error_t
     )
 
     with pytest.raises(ClosingError, match="the client was closed"):
-        client._handle_rdma_result(result)
+        client._handle_rdma_result(result, _offline_region(client))
 
     assert client._lib.freed_results == [result]
+
+
+def test_an_open_region_has_not_released_its_memory():
+    region = _offline_region(_offline_client())
+
+    assert region.memory_released is False
+
+
+def test_a_closed_region_has_released_memory_the_fabric_let_go_of():
+    region = _offline_region(_offline_client())
+
+    region.close()
+
+    assert region.memory_released is True
+
+
+def test_memory_released_follows_the_fabric_after_close():
+    # On tcp the fabric holds the memory past the close, then lets go once the
+    # client's fabric closes. The property has to change when that happens.
+    client = _offline_client()
+    raw = {"capacity": REGION_BYTES}
+    hold = {"released": False}
+    client._lib.holds[id(raw)] = hold
+    region = RdmaRegion(client, bytearray(REGION_BYTES), raw)
+
+    region.close()
+    assert region.memory_released is False
+
+    hold["released"] = True
+    assert region.memory_released is True
+    assert client._lib.freed_holds == [hold]
+
+
+@pytest.mark.parametrize(
+    ("error_type", "expected"),
+    [
+        (3, ConnectionError),
+        (0, RdmaError),
+    ],
+)
+def test_a_transfer_that_closed_its_region_closes_the_python_region(
+    error_type, expected
+):
+    # The FFI says the region can no longer transfer, whatever the error class.
+    # Closing it here makes `region.closed` the one thing a caller checks.
+    client = _offline_client()
+    raw = {"capacity": REGION_BYTES}
+    region = RdmaRegion(client, bytearray(REGION_BYTES), raw)
+    result = _FakeResult(b"connection lost", error_type, region_closed=True)
+
+    with pytest.raises(expected):
+        client._handle_rdma_result(result, region)
+
+    assert region.closed is True
+    assert client._lib.freed == [raw]
+    assert client._lib.freed_results == [result]
+    assert region.memory_released is True
+
+
+def test_a_cancelled_transfer_closes_the_python_region():
+    client = _offline_client()
+    client._is_closed = True
+    region = _offline_region(client)
+    result = _FakeResult(
+        b"RDMA transfer cancelled - ClientError: the client was closed",
+        0,
+        region_closed=True,
+    )
+
+    with pytest.raises(ClosingError):
+        client._handle_rdma_result(result, region)
+
+    assert region.closed is True
+
+
+def test_a_region_closed_on_tcp_keeps_its_memory_until_the_fabric_lets_go():
+    client = _offline_client()
+    raw = {"capacity": REGION_BYTES}
+    hold = {"released": False}
+    client._lib.holds[id(raw)] = hold
+    memory = bytearray(REGION_BYTES)
+    region = RdmaRegion(client, memory, raw)
+    result = _FakeResult(b"connection lost", 3, region_closed=True)
+
+    with pytest.raises(ConnectionError):
+        client._handle_rdma_result(result, region)
+
+    assert region.closed is True
+    assert region.memory_released is False
+    assert _RETAINED_RDMA_MEMORY.holds(memory)
+    # Let the shared keeper go of it, so other tests start clean.
+    hold["released"] = True
+    assert region.memory_released is True
+
+
+def test_a_failure_that_leaves_the_region_usable_keeps_it_open():
+    # A server reply, such as a refused checksum, proves the server is done
+    # with the memory, so the same region serves the next transfer.
+    client = _offline_client()
+    region = _offline_region(client)
+    result = _FakeResult(b"CRC mismatch", 0)
+
+    with pytest.raises(RdmaError):
+        client._handle_rdma_result(result, region)
+
+    assert region.closed is False
+    assert client._lib.freed == []
+
+
+def test_a_success_that_closed_the_region_still_returns_its_receipt():
+    # A reply can win the race with a close that also revoked the region: the
+    # bytes landed, but the region cannot be used again.
+    client = _offline_client()
+    region = _offline_region(client)
+    result = _FakeResult(_FakeFfi.NULL, 0, found=True, region_closed=True)
+
+    receipt = client._handle_rdma_result(result, region)
+
+    assert receipt is not None
+    assert region.closed is True
+
+
+def _close_holding(client: GlideClient, memory) -> dict:
+    """Close a region over `memory` whose memory the fabric keeps holding.
+
+    Returns the hold. Set its ``"released"`` to let the memory go.
+    """
+    raw = {"capacity": memoryview(memory).nbytes}
+    hold = {"released": False}
+    client._lib.holds[id(raw)] = hold
+    RdmaRegion(client, memory, raw).close()
+    return hold
+
+
+@pytest.mark.parametrize(
+    "same_bytes",
+    [
+        pytest.param(lambda memory: memory, id="same-object"),
+        pytest.param(memoryview, id="other-view"),
+        pytest.param(lambda memory: memoryview(memory)[16:32], id="slice"),
+        pytest.param(lambda memory: memoryview(memory).cast("I"), id="cast"),
+    ],
+)
+def test_memory_still_held_is_refused_for_a_new_region(same_bytes):
+    # A late write from the closed region's transfer could land in a new
+    # transfer's data, so the memory must not be registered again, by any view.
+    client = _offline_client()
+    client._core_client = object()
+    memory = bytearray(REGION_BYTES)
+    hold = _close_holding(client, memory)
+    try:
+        with pytest.raises(RdmaError, match="could still write into it"):
+            client.register_rdma_region(same_bytes(memory))
+        assert client._lib.registrations == [], "refused before the fabric"
+    finally:
+        # Let the shared keeper go of it, so other tests start clean.
+        hold["released"] = True
+        _RETAINED_RDMA_MEMORY.release_what_is_free()
+
+
+def test_other_memory_registers_while_some_is_held():
+    client = _offline_client()
+    client._core_client = object()
+    memory = bytearray(2 * REGION_BYTES)
+    # Hold only the first half, so the second half sits right next to it.
+    hold = _close_holding(client, memoryview(memory)[:REGION_BYTES])
+    try:
+        client.register_rdma_region(memoryview(memory)[REGION_BYTES:]).close()
+        client.register_rdma_region(bytearray(REGION_BYTES)).close()
+        assert client._lib.registrations == [REGION_BYTES, REGION_BYTES]
+    finally:
+        hold["released"] = True
+        _RETAINED_RDMA_MEMORY.release_what_is_free()
+
+
+def test_memory_registers_again_once_the_fabric_lets_go():
+    client = _offline_client()
+    client._core_client = object()
+    memory = bytearray(REGION_BYTES)
+    hold = _close_holding(client, memory)
+
+    hold["released"] = True
+    region = client.register_rdma_region(memory)
+
+    assert region.capacity == REGION_BYTES
+    region.close()
+
+
+def _set_with_recovery(client: GlideClient, state: dict) -> None:
+    """The recovery the documentation recommends, exactly as a caller writes it.
+
+    `state` holds the caller's ``"slab"`` and its current ``"region"``, which this
+    replaces when it registers the slab again.
+    """
+    try:
+        client.rdma_set(b"key", state["region"].window(0, 8))
+    except GlideError:
+        if state["region"].closed and not client.closed:
+            state["region"] = client.register_rdma_region(state["slab"])
+        raise
+
+
+def _recovery_state(client: GlideClient) -> dict:
+    client._core_client = object()
+    slab = bytearray(REGION_BYTES)
+    return {"slab": slab, "region": client.register_rdma_region(slab)}
+
+
+def test_recovery_registers_the_memory_again_after_a_lost_connection():
+    client = _offline_client()
+    state = _recovery_state(client)
+    lost = state["region"]
+    client._lib.set_result = _FakeResult(b"connection lost", 3, region_closed=True)
+
+    with pytest.raises(ConnectionError, match="connection lost"):
+        _set_with_recovery(client, state)
+
+    assert lost.closed
+    assert state["region"] is not lost and not state["region"].closed
+    assert client._lib.registrations == [REGION_BYTES, REGION_BYTES]
+    state["region"].close()
+
+
+def test_recovery_keeps_a_region_the_failure_left_usable():
+    client = _offline_client()
+    state = _recovery_state(client)
+    usable = state["region"]
+    client._lib.set_result = _FakeResult(b"CRC mismatch", 0)
+
+    with pytest.raises(RdmaError, match="CRC mismatch"):
+        _set_with_recovery(client, state)
+
+    assert state["region"] is usable and not usable.closed
+    assert client._lib.registrations == [REGION_BYTES]
+    usable.close()
+
+
+def test_recovery_leaves_a_closed_client_alone():
+    # A transfer cancelled by closing the client: registering again could only
+    # raise ClosingError over the original error, so the recovery skips it.
+    client = _offline_client()
+    state = _recovery_state(client)
+    client._lib.set_result = _FakeResult(
+        b"RDMA transfer cancelled: the client was closed", 0, region_closed=True
+    )
+    transfer = client._lib.rdma_set
+
+    def closed_mid_transfer(*arguments):
+        # Another thread closes the client while this transfer is blocked.
+        client._is_closed = True
+        return transfer(*arguments)
+
+    client._lib.rdma_set = closed_mid_transfer
+
+    with pytest.raises(ClosingError, match="the client was closed"):
+        _set_with_recovery(client, state)
+
+    assert state["region"].closed
+    assert client._lib.registrations == [REGION_BYTES]
+
+
+def test_recovery_refuses_memory_the_fabric_still_holds():
+    # On tcp the lost transfer's memory stays held, so registering it again
+    # raises RdmaError, with the original failure as its context.
+    client = _offline_client()
+    state = _recovery_state(client)
+    hold = {"released": False}
+    client._lib.holds[id(state["region"]._region)] = hold
+    client._lib.set_result = _FakeResult(b"connection lost", 3, region_closed=True)
+    try:
+        with pytest.raises(RdmaError, match="could still write into it") as raised:
+            _set_with_recovery(client, state)
+        assert isinstance(raised.value.__context__, ConnectionError)
+        assert client._lib.registrations == [REGION_BYTES]
+    finally:
+        hold["released"] = True
+        _RETAINED_RDMA_MEMORY.release_what_is_free()
 
 
 def _offline_set(checksum=None):
@@ -425,7 +732,7 @@ def test_a_real_failure_is_reported_even_if_the_client_closed_meanwhile():
     )
 
     with pytest.raises(RdmaError, match="exceeds") as raised:
-        client._handle_rdma_result(result)
+        client._handle_rdma_result(result, _offline_region(client))
 
     assert not isinstance(raised.value, ClosingError)
 
@@ -531,10 +838,104 @@ def test_an_rdma_client_against_a_plain_server_still_works(
                 client.rdma_get(b"plain-key", region.window(0, REGION_BYTES))
             message = str(caught.value)
             assert "no RDMA module loaded" in message, message
+            assert region.closed is False, "a refusal is a reply, so it stays open"
         finally:
             region.close()
     finally:
         client.close()
+
+
+class _DroppingProxy:
+    """
+    Forwards one server's connections, but drops a connection instead of
+    forwarding a command that contains `trigger`, so the command is never
+    answered and the client sees the connection lost.
+    """
+
+    def __init__(self, server: NodeAddress, trigger: bytes):
+        self._server = (server.host, server.port)
+        self._trigger = trigger
+        self._listener = socket.create_server(("127.0.0.1", 0))
+        self.address = NodeAddress("127.0.0.1", self._listener.getsockname()[1])
+        self.dropped = threading.Event()
+        threading.Thread(target=self._accept, daemon=True).start()
+
+    def _accept(self):
+        while True:
+            try:
+                client, _ = self._listener.accept()
+            except OSError:
+                return
+            server = socket.create_connection(self._server)
+            threading.Thread(
+                target=self._pipe, args=(client, server, True), daemon=True
+            ).start()
+            threading.Thread(
+                target=self._pipe, args=(server, client, False), daemon=True
+            ).start()
+
+    def _pipe(self, source, sink, from_client):
+        try:
+            while data := source.recv(65536):
+                if from_client and self._trigger in data:
+                    self.dropped.set()
+                    break
+                sink.sendall(data)
+        except OSError:
+            pass
+        for end in (source, sink):
+            try:
+                end.shutdown(socket.SHUT_RDWR)
+            except OSError:
+                pass
+            end.close()
+
+    def close(self):
+        self._listener.close()
+
+
+@pytest.mark.parametrize("cluster_mode", [False])
+@pytest.mark.parametrize("protocol", [ProtocolVersion.RESP3])
+def test_a_transfer_whose_connection_is_lost_closes_its_region(
+    glide_sync_client: GlideClient,
+):
+    # Losing the connection mid-transfer says nothing about whether the server
+    # got the command, so the core closes the region. The caller sees that on
+    # the region itself, and the client keeps working: a new region is all the
+    # next transfer needs. The transfer's first command is the handshake, which
+    # the proxy drops, and the plain server behind it would refuse anyway.
+    if not GlideClient.rdma_usable():
+        pytest.skip("needs libfabric to open a tcp fabric")
+    proxy = _DroppingProxy(glide_sync_client._config.addresses[0], b"BLOB.RDMA")
+    client = GlideClient.create(
+        GlideClientConfiguration(
+            addresses=[proxy.address],
+            rdma=RdmaConfiguration(provider=RdmaProvider.Tcp()),
+        )
+    )
+    try:
+        region = client.register_rdma_region(bytearray(REGION_BYTES))
+
+        with pytest.raises(ConnectionError):
+            client.rdma_get(b"glide-py-rdma-lost", region.window())
+
+        assert proxy.dropped.is_set()
+        assert region.closed is True
+        # On tcp a write could still land, so the memory stays held until the
+        # client's fabric closes.
+        assert region.memory_released is False
+        with pytest.raises(RdmaError, match="closed"):
+            region.window()
+
+        client.set(b"glide-py-rdma-lost", b"still works")
+        assert client.get(b"glide-py-rdma-lost") == b"still works"
+        fresh = client.register_rdma_region(bytearray(REGION_BYTES))
+        fresh.close()
+        client.delete([b"glide-py-rdma-lost"])
+    finally:
+        client.close()
+        proxy.close()
+    assert region.memory_released is True, "closing the client lets it go"
 
 
 @pytest.mark.parametrize("cluster_mode", [False])
@@ -747,5 +1148,6 @@ class TestRdmaTransfers:
             time.sleep(max(0.0, pause_seconds + 0.2 - (time.monotonic() - paused_at)))
             pauser.close()
         assert isinstance(outcome.get("raised"), ClosingError), outcome
-        # The transfer has returned, so the region can be released.
+        # The transfer ended without the server's reply, so it closed the region.
+        assert region.closed is True
         region.close()

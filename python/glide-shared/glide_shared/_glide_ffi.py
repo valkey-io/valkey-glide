@@ -456,6 +456,7 @@ class _GlideFFI:
                 size_t bytes_written;
                 bool has_checksum;
                 uint32_t checksum;
+                bool region_closed;
             } RdmaResult;
 
             bool rdma_available(void);

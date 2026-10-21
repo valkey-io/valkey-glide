@@ -143,6 +143,14 @@ class RdmaWindow:
         return self.region.memoryview()[self.offset : self.offset + self.length]
 
 
+def _memory_span(memory: Any) -> Tuple[int, int]:
+    """The address range ``[start, end)`` that `memory`'s bytes occupy."""
+    ffi = _SYNC_FFI.ffi
+    view = memoryview(memory)
+    start = int(ffi.cast("uintptr_t", ffi.from_buffer(view)))
+    return start, start + view.nbytes
+
+
 class _RetainedRdmaMemory:
     """
     Caller memory the fabric still holds after its region was closed.
@@ -155,12 +163,13 @@ class _RetainedRdmaMemory:
 
     def __init__(self):
         self._lock = threading.Lock()
-        # (lib, hold, memory, view) for each region whose memory is still held.
-        self._held: List[Tuple[Any, Any, Any, Any]] = []
+        # (lib, hold, memory, view, span) for each region whose memory is still
+        # held, where span is the memory's address range.
+        self._held: List[Tuple[Any, Any, Any, Any, Tuple[int, int]]] = []
 
-    def keep(self, lib, hold, memory, view) -> None:
+    def keep(self, lib, hold, memory, view, span: Tuple[int, int]) -> None:
         with self._lock:
-            self._held.append((lib, hold, memory, view))
+            self._held.append((lib, hold, memory, view, span))
 
     def release_what_is_free(self) -> None:
         """Drop the references to memory the fabric has let go of."""
@@ -178,6 +187,27 @@ class _RetainedRdmaMemory:
         """Whether `memory` is being kept here."""
         with self._lock:
             return any(entry[2] is memory for entry in self._held)
+
+    def overlaps(self, span: Tuple[int, int]) -> bool:
+        """
+        Whether any byte of the address range `span` is in memory kept here.
+
+        Compares addresses, not objects, so a different view of a kept buffer,
+        or a slice of one, counts too.
+        """
+        self.release_what_is_free()
+        start, end = span
+        with self._lock:
+            return any(
+                start < kept_end and kept_start < end
+                for (kept_start, kept_end) in (entry[4] for entry in self._held)
+            )
+
+    def released(self, hold) -> bool:
+        """Whether the fabric has let go of the memory `hold` kept."""
+        self.release_what_is_free()
+        with self._lock:
+            return not any(entry[1] is hold for entry in self._held)
 
 
 _RETAINED_RDMA_MEMORY = _RetainedRdmaMemory()
@@ -206,6 +236,27 @@ class RdmaRegion:
 
         with client.register_rdma_region(bytearray(1 << 20)) as region:
             client.rdma_set(b"key", region.window(0, 4096))
+
+    Handling a failed transfer: some failures leave the region usable, such as
+    a value too large for its window or a checksum mismatch. Others close it,
+    because the server might still be using the memory: a lost connection, or a
+    client closed to cancel the transfer. Check :attr:`closed` after any error
+    rather than the error's class, and register the memory again if the client
+    is still open::
+
+        try:
+            receipt = client.rdma_get(key, region.window(offset, length))
+        except GlideError:
+            if region.closed and not client.closed:
+                region = client.register_rdma_region(slab)
+            raise
+
+    Whether to retry is left to the caller, since only the caller knows whether
+    sending a value again is safe. On efa-direct the same memory can be
+    registered again at once. GLIDE refuses it, raising ``RdmaError``, only
+    while it still holds the memory: on the tcp provider, which is for
+    development only, or after a failed deregistration. See
+    :attr:`memory_released`.
     """
 
     def __init__(self, client: "BaseClient", memory: Any, region):
@@ -214,9 +265,12 @@ class RdmaRegion:
         # made of it.
         self._memory = memory
         self._view = client._ffi.from_buffer(memory)
+        self._span = _memory_span(memory)
         self._client = client
         self._region = region
         self._capacity = client._lib.rdma_region_capacity(region)
+        # Set by `close` when the fabric still kept the memory.
+        self._hold = None
 
     @property
     def capacity(self) -> int:
@@ -225,8 +279,36 @@ class RdmaRegion:
 
     @property
     def closed(self) -> bool:
-        """Whether the region has been deregistered."""
+        """
+        Whether the region has been deregistered, by :meth:`close` or by a
+        transfer that ended without the server's reply.
+        """
         return self._region is None
+
+    @property
+    def memory_released(self) -> bool:
+        """
+        Whether the caller may reuse or free the registered memory.
+
+        False while the region is open. After it closes, False while GLIDE
+        still holds the memory because a write could still land in it: after
+        a transfer ended without the server's reply on the tcp provider, until
+        the client and all its regions are closed, or after a failed
+        deregistration, for good. True otherwise, which on efa-direct is as
+        soon as the region closes.
+
+        Registering memory GLIDE still holds is refused, so a caller who only
+        wants to register the same memory again can try that and handle the
+        error rather than check this first.
+
+        Example:
+            >>> region.close()
+            >>> if not region.memory_released:
+            ...     slab = bytearray(len(slab))  # the old one may still be written
+        """
+        if not self.closed:
+            return False
+        return self._hold is None or _RETAINED_RDMA_MEMORY.released(self._hold)
 
     def window(self, offset: int = 0, length: Optional[int] = None) -> RdmaWindow:
         """
@@ -289,8 +371,9 @@ class RdmaRegion:
         write may still land in it, so GLIDE keeps the buffer referenced until the
         fabric is done with it, and the caller should not reuse it either. On tcp
         that is once the client and all its regions are closed; after a failed
-        deregistration, which is logged as an error, it is never. Closing twice is
-        a no-op, so this is safe in a ``finally``.
+        deregistration, which is logged as an error, it is never.
+        :attr:`memory_released` says which. Closing twice is a no-op, so this is
+        safe in a ``finally``.
 
         Any transfer against the region must have finished first. This is not
         a way to cancel one: the server may still be moving bytes into these
@@ -303,8 +386,9 @@ class RdmaRegion:
             hold = self._client._lib.free_rdma_region(region)
             if hold != self._client._ffi.NULL:
                 _RETAINED_RDMA_MEMORY.keep(
-                    self._client._lib, hold, self._memory, self._view
+                    self._client._lib, hold, self._memory, self._view, self._span
                 )
+                self._hold = hold
         # Closing this region may have been what let the fabric go of others'.
         _RETAINED_RDMA_MEMORY.release_what_is_free()
         self._view = None
@@ -1442,6 +1526,12 @@ class BaseClient(CoreCommands):
         Register one large region and address windows of it per transfer rather
         than registering per operation.
 
+        Memory that GLIDE still holds from a closed region, which
+        :attr:`RdmaRegion.memory_released` reports, is refused, because a write
+        from that region's last transfer could still land in it. That includes
+        any other view or slice of the same bytes. On efa-direct this does not
+        happen.
+
         Args:
             memory (Any): A writable, C-contiguous buffer to register.
 
@@ -1450,7 +1540,8 @@ class BaseClient(CoreCommands):
 
         Raises:
             RdmaError: If this build has no RDMA support, the client was not
-                configured for RDMA, or the fabric refused the registration.
+                configured for RDMA, the memory is still held from a closed
+                region, or the fabric refused the registration.
             ClosingError: If the client is closed.
             TypeError: If the buffer is not writable and C-contiguous.
 
@@ -1466,6 +1557,11 @@ class BaseClient(CoreCommands):
             raise TypeError("memory must be writable")
         if not view.c_contiguous:
             raise TypeError("memory must be C-contiguous")
+        if _RETAINED_RDMA_MEMORY.overlaps(_memory_span(view)):
+            raise RdmaError(
+                "this memory belongs to a closed RDMA region whose last transfer "
+                "could still write into it; register different memory"
+            )
 
         buffer = self._ffi.from_buffer(view)
         registration = self._lib.register_rdma_region(
@@ -1502,7 +1598,12 @@ class BaseClient(CoreCommands):
         thread. That first cuts the server off from every region the client
         registered, then this call returns raising ``ClosingError``. Bytes
         that landed before the close stay, so the window then holds an
-        unknown mix of old and new bytes. Close the region afterwards.
+        unknown mix of old and new bytes.
+
+        A transfer that ends without the server's reply, such as one cancelled
+        that way or one whose connection was lost, closes the region, because
+        the server might still be using the memory. See :class:`RdmaRegion` for
+        how to recover.
 
         Args:
             key (TEncodable): The key to read.
@@ -1535,7 +1636,7 @@ class BaseClient(CoreCommands):
             offset,
             length,
         )
-        return self._handle_rdma_result(result)
+        return self._handle_rdma_result(result, window.region)
 
     def rdma_set(
         self,
@@ -1549,8 +1650,10 @@ class BaseClient(CoreCommands):
         Store a value the server reads directly out of a window of registered
         memory.
 
-        As with ``rdma_get``, there is no timeout, and closing the client from
-        another thread cancels the call, raising ``ClosingError``.
+        As with ``rdma_get``, there is no timeout, closing the client from
+        another thread cancels the call, raising ``ClosingError``, and a
+        transfer that ends without the server's reply closes the region. See
+        :class:`RdmaRegion` for how to recover.
 
         Args:
             key (TEncodable): The key to write.
@@ -1591,7 +1694,7 @@ class BaseClient(CoreCommands):
             checksum_mode,
             checksum_value,
         )
-        self._handle_rdma_result(result)
+        self._handle_rdma_result(result, window.region)
 
     @staticmethod
     def rdma_checksum(data: Any) -> int:
@@ -1685,9 +1788,13 @@ class BaseClient(CoreCommands):
 
         return window.region._require_open(), window.offset, window.length
 
-    def _handle_rdma_result(self, result) -> Optional[RdmaReadReceipt]:
+    def _handle_rdma_result(
+        self, result, region: RdmaRegion
+    ) -> Optional[RdmaReadReceipt]:
         """
         Turn a transfer result into a receipt and free it, raising on failure.
+        Close `region` if the transfer left it unusable, so ``region.closed``
+        says so.
 
         None means the key was absent, meaning nothing was transferred and
         the window is untouched.
@@ -1699,6 +1806,7 @@ class BaseClient(CoreCommands):
         """
         if result == self._ffi.NULL:
             raise RdmaError("Internal error: received NULL as an RDMA result")
+        region_closed = bool(result.region_closed)
         try:
             if result.error_message != self._ffi.NULL:
                 message = self._ffi.string(result.error_message).decode(ENCODING)
@@ -1716,6 +1824,23 @@ class BaseClient(CoreCommands):
             )
         finally:
             self._lib.free_rdma_result(result)
+            if region_closed:
+                region.close()
+
+    @property
+    def closed(self) -> bool:
+        """
+        Whether :meth:`close` has been called. A closed client refuses every
+        later command, registration, and transfer, so a new client is needed.
+        After a failed RDMA transfer this says whether the region can be
+        registered again on this client; see :class:`RdmaRegion`.
+
+        Example:
+            >>> client.close()
+            >>> client.closed
+            True
+        """
+        return self._is_closed
 
     def close(self) -> None:
         """
