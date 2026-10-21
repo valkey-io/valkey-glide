@@ -216,7 +216,7 @@ class _ScopeAcquireResponse:
             if not self._abandoned and not self._future.done():
                 self._future.set_exception(exception)
 
-    def abandon(self) -> None:
+    def _abandon(self) -> None:
         with self._lock:
             if self._abandoned:
                 return
@@ -225,7 +225,7 @@ class _ScopeAcquireResponse:
                 self._lib.glide_scope_release(self._scope_id, self._client_id)
 
 
-TPendingFuture = Union[TFuture, _ScopeAcquireResponse]
+_TPendingFuture = Union[TFuture, _ScopeAcquireResponse]
 
 
 def _slot_for_key(key: bytes) -> int:
@@ -409,7 +409,7 @@ def _handle_pointer_pubsub(client, ptr_val: int, payload_len: int):
         ffi = client._ffi
         buf_ptr = ffi.cast("uint8_t*", ptr_val)
         payload = bytes(ffi.buffer(buf_ptr, payload_len))
-        _handle_inline_pubsub(client, payload)
+        _dispatch_pubsub(client, payload)
     except Exception as e:
         ClientLogger.log(
             LogLevel.ERROR, "pubsub_pipe", f"Error handling pointer pubsub: {e}"
@@ -420,8 +420,20 @@ def _handle_pointer_pubsub(client, ptr_val: int, payload_len: int):
         )
 
 
+def _dispatch_pubsub(client, payload: bytes) -> None:
+    """Deliver copied PubSub payloads on their client's event-loop thread."""
+    if client._loop is not None and client._loop is not _async_pipe_loop:
+        client._loop.call_soon_threadsafe(_handle_inline_pubsub, client, payload)
+    elif client._trio_token is not None and client._trio_token is not _trio_pipe_token:
+        client._trio_token.run_sync_soon(_handle_inline_pubsub, client, payload)
+    else:
+        _handle_inline_pubsub(client, payload)
+
+
 def _handle_inline_pubsub(client, payload: bytes):
-    """Handle inline pubsub data from the pipe (no native pointers)."""
+    """Handle pubsub data on the owning event loop (no native pointers)."""
+    if client._is_closed:
+        return
     try:
         from glide_shared.ffi_helpers import parse_inline_pubsub
 
@@ -512,7 +524,7 @@ def _handle_pipe_frame(client, request_id, response_ptr, arena_or_err, payload=b
                     client, response_ptr, arena_or_err & 0x7FFFFFFFFFFFFFFF
                 )
             else:
-                _handle_inline_pubsub(client, payload)
+                _dispatch_pubsub(client, payload)
         elif response_ptr != 0:
             _handle_pipe_success(client, request_id, response_ptr, arena_or_err)
         else:
@@ -535,21 +547,21 @@ def _handle_pipe_frame(client, request_id, response_ptr, arena_or_err, payload=b
 def _submit_pipe_frame(client, request_id, response_ptr, arena_or_err):
     claimed = threading.Lock()
 
-    def handle_once():
+    def _handle_once():
         # submit() can enqueue work before failing to start a thread. Keep this
         # claim locked so the queued worker and fallback cannot free it twice.
         if claimed.acquire(blocking=False):
             _handle_pipe_frame(client, request_id, response_ptr, arena_or_err)
 
     try:
-        _response_thread_pool.submit(handle_once)
+        _response_thread_pool.submit(_handle_once)
     except Exception as error:
         ClientLogger.log(
             LogLevel.ERROR,
             "async_pipe",
             f"Response dispatch failed; handling frame inline: {error}",
         )
-        handle_once()
+        _handle_once()
 
 
 def _on_async_pipe_readable() -> bool:
@@ -647,7 +659,8 @@ class BaseClient(CoreCommands):
         self._conn_req_bytes: bytes = b""
         self._pubsub_callback_ref = None
         self._loop: Optional[asyncio.AbstractEventLoop] = None  # set in create()
-        self._pending_futures: Dict[int, TPendingFuture] = {}
+        self._trio_token: Optional["trio.lowlevel.TrioToken"] = None
+        self._pending_futures: Dict[int, _TPendingFuture] = {}
         self._callback_id_gen = itertools.count(1)
         self._lock = threading.Lock()
         self._address_resolver_callback_ref = None
@@ -762,6 +775,7 @@ class BaseClient(CoreCommands):
             import trio
 
             trio_token = trio.lowlevel.current_trio_token()
+        self._trio_token = trio_token
         with _async_pipe_lock:
             _detect_fork_and_reset()
             current_pid = os.getpid()
@@ -848,7 +862,7 @@ class BaseClient(CoreCommands):
     def _get_callback_id(self) -> int:
         return next(self._callback_id_gen)
 
-    def _register_future(self, callback_id: int, fut: TPendingFuture) -> None:
+    def _register_future(self, callback_id: int, fut: _TPendingFuture) -> None:
         """Register a pending future when responses may complete off-loop."""
         if _PENDING_FUTURES_REQUIRE_LOCK:
             with self._lock:
@@ -857,7 +871,7 @@ class BaseClient(CoreCommands):
             self._pending_futures[callback_id] = fut
 
     def _replace_pending_future(
-        self, callback_id: int, expected: TPendingFuture, replacement: Any
+        self, callback_id: int, expected: _TPendingFuture, replacement: Any
     ) -> None:
         """The pipe reader may already have popped and resolved this entry;
         swapping only while it is still ``expected`` leaves that result where
@@ -1382,7 +1396,7 @@ class BaseClient(CoreCommands):
             # frame can arrive; keep the documented class.
             raise ConnectionError(str(e) or "Client closed while waiting") from e
         except BaseException:
-            response.abandon()
+            response._abandon()
             raise
 
         return AsyncIsolatedScope(

@@ -79,6 +79,8 @@ Pull requests build CPython 3.14 on both architectures; a manual workflow run
 builds the full matrix. PyPy and free-threaded Python wheels are not included.
 The workflow checks wheel imports, connection-error and timeout handling, FFI
 layouts, and response-pipe regressions under asyncio and trio.
+Async PubSub callbacks run on the client's owning asyncio loop or trio run,
+not on the Windows response-pipe reader thread.
 
 These are **build-only CI artifacts**, named `windows-ci-*`, not published
 Windows packages. Successful commands against a real Valkey server on Windows

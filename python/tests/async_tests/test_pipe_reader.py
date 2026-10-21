@@ -1,6 +1,7 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 import asyncio
+import struct
 import threading
 from concurrent.futures import Future, ThreadPoolExecutor
 from types import SimpleNamespace
@@ -18,6 +19,7 @@ def pipe_client(monkeypatch):
         _ffi=Mock(),
         _lib=Mock(),
         _loop=None,
+        _trio_token=None,
         _lock=threading.Lock(),
         _pending_futures={1: Future(), 2: Future()},
     )
@@ -224,6 +226,98 @@ def anyio_backend(request):
     return request.param
 
 
+@pytest.fixture
+async def pubsub_client(monkeypatch, pipe_client, anyio_backend):
+    client = pipe.BaseClient(Mock())
+    client._lib = Mock()
+    client._is_asyncio = anyio_backend == "asyncio"
+    if client._is_asyncio:
+        client._loop = asyncio.get_running_loop()
+    client._pipe_client_id = 7
+    monkeypatch.setattr(
+        pipe, "os", SimpleNamespace(name="nt", getpid=pipe.os.getpid, read=Mock())
+    )
+    monkeypatch.setattr(pipe, "_async_pipe_registered", True)
+    monkeypatch.setattr(pipe, "_trio_pipe_token", None)
+    client._setup_pipe()
+    return client
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("pointer_mode", [False, True])
+@pytest.mark.parametrize("callback_fails", [False, True])
+async def test_windows_pubsub_callback_runs_on_owning_loop(
+    pubsub_client, pointer_mode, callback_fails
+):
+    client = pubsub_client
+    owner_thread = threading.get_ident()
+    received = []
+    delivered = anyio.Event()
+    context = object()
+
+    def callback(message, callback_context):
+        received.append((threading.get_ident(), message, callback_context))
+        if len(received) == 2:
+            delivered.set()
+        elif callback_fails:
+            raise RuntimeError("callback failed")
+
+    client.config._get_pubsub_callback_and_context.return_value = (callback, context)
+    frames = b""
+    buffers = []
+    for message in (b"first", b"second"):
+        payload = struct.pack("=I", 3) + b"".join(
+            struct.pack("=I", len(value)) + value
+            for value in (message, b"channel", b"")
+        )
+        if pointer_mode:
+            buffer = client._ffi.new("uint8_t[]", payload)
+            buffers.append(buffer)
+            frames += pipe._FRAME_STRUCT.pack(
+                7,
+                pipe._PUBSUB_SENTINEL,
+                int(client._ffi.cast("uintptr_t", buffer)),
+                (1 << 63) | len(payload),
+            )
+        else:
+            frames += (
+                pipe._FRAME_STRUCT.pack(7, pipe._PUBSUB_SENTINEL, len(payload), 0)
+                + payload
+            )
+
+    def free_payload(pointer, length):
+        client._ffi.buffer(pointer, length)[:] = b"\0" * length
+
+    client._lib.free_pubsub_pointer_payload.side_effect = free_payload
+    pipe.os.read.side_effect = [frames, b""]
+    # Keep the owning loop parked until the reader has copied and freed payloads.
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        pool.submit(pipe._windows_pipe_reader, 123).result(timeout=5)
+    assert not received
+    assert client._lib.free_pubsub_pointer_payload.call_count == (
+        2 if pointer_mode else 0
+    )
+    with anyio.fail_after(5):
+        await delivered.wait()
+    assert received == [
+        (owner_thread, pipe.PubSubMsg(message, b"channel", None), context)
+        for message in (b"first", b"second")
+    ]
+    if callback_fails:
+        pipe.ClientLogger.log.assert_called_once()
+        assert "callback failed" in pipe.ClientLogger.log.call_args.args[2]
+    else:
+        pipe.ClientLogger.log.assert_not_called()
+
+
+def test_queued_pubsub_is_discarded_after_client_close():
+    client = pipe.BaseClient(Mock())
+    client._is_closed = True
+    payload = struct.pack("=II", 3, 0) + struct.pack("=II", 0, 0)
+    pipe._handle_inline_pubsub(client, payload)
+    client.config._get_pubsub_callback_and_context.assert_not_called()
+
+
 @pytest.mark.anyio
 async def test_failed_frame_wakes_owning_loop(monkeypatch, pipe_client, anyio_backend):
     if anyio_backend == "asyncio":
@@ -357,8 +451,8 @@ async def test_abandon_delivered_scope_releases_once(failed):
         response.set_result(42)
         assert await future == 42
     assert response.done()
-    response.abandon()
-    response.abandon()
+    response._abandon()
+    response._abandon()
     if failed:
         lib.glide_scope_release.assert_not_called()
     else:
