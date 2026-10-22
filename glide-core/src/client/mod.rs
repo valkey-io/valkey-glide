@@ -467,8 +467,9 @@ pub struct ClientShared {
     // has not connected" — the scope guard needs that distinction.
     configures_cert_material: bool,
     // Written where the Client pushes a new password or username down for
-    // reconnect; read by scope connections, which are built outside those layers.
-    // Unused by IAM clients, whose scopes read the token manager.
+    // reconnect; read by scope connections, which are built and re-authenticated
+    // outside those layers. Unused by IAM clients, whose scopes read the token
+    // manager.
     credentials: credentials::CredentialsHandle,
 }
 
@@ -1583,8 +1584,10 @@ impl Client {
     /// logic as `send_command`, but routes the command to the given
     /// `MultiplexedConnection` instead of the client's internal managed connection.
     ///
-    /// IAM change-detection here uses `last_auth_generation` (owned by the caller)
+    /// Rotation detection here uses `last_auth_generation` (owned by the caller)
     /// instead of the shared `token_changed` flag — see `IAMTokenManager::token_generation`.
+    /// The bookmark is compared against the IAM token generation for an IAM client,
+    /// otherwise against `credentials()`.
     ///
     /// Note: OTel spans and inflight tracking are not applied here because scoped
     /// connections operate outside the multiplexer's pipeline. OTel support for
@@ -1596,51 +1599,43 @@ impl Client {
         last_auth_generation: &AtomicU64,
         defer_reauth: bool,
     ) -> RedisResult<Value> {
-        // IAM token refresh: re-authenticate when the token rotated (generation
-        // advanced since this connection last applied one). `defer_reauth` skips it
-        // where AUTH can't run — an open transaction (queued, corrupting the EXEC
-        // reply) or RESP2 subscribed mode (rejected outright). The bookmark stays
+        // Re-authenticate when the credential rotated (generation advanced since
+        // this connection last applied one). `defer_reauth` skips it where AUTH
+        // can't run — an open transaction (queued, corrupting the EXEC reply) or
+        // RESP2 subscribed mode (rejected outright). The bookmark stays
         // unadvanced, so it retries after EXEC/DISCARD, or on the next borrow for
         // subscribed mode (subscriptions clear only on release).
-        if !defer_reauth && let Some(iam_manager) = &self.iam_token_manager {
-            let current_generation = iam_manager.token_generation();
-            if current_generation != last_auth_generation.load(Ordering::Acquire) {
-                let current_token = iam_manager.get_token().await;
-                if current_token.is_empty() {
-                    return Err(RedisError::from((
-                        ErrorKind::ClientError,
-                        "IAM token not available",
-                    )));
-                }
-                let auth_cmd = redis::cmd("AUTH")
-                    .arg(iam_manager.username())
-                    .arg(current_token.as_str())
-                    .to_owned();
-                // Signals both failure modes as AuthenticationFailed so the caller
-                // discards the connection. The server never produces this kind
-                // itself, so it can't be confused with a command's own auth error.
-                match tokio::time::timeout(
-                    self.request_timeout,
-                    connection.send_packed_command(&auth_cmd),
-                )
-                .await
-                {
-                    Ok(Ok(_)) => {}
-                    Ok(Err(e)) => {
+        if !defer_reauth {
+            if let Some(iam_manager) = &self.iam_token_manager {
+                let current_generation = iam_manager.token_generation();
+                if current_generation != last_auth_generation.load(Ordering::Acquire) {
+                    let current_token = iam_manager.get_token().await;
+                    if current_token.is_empty() {
                         return Err(RedisError::from((
-                            ErrorKind::AuthenticationFailed,
-                            "IAM re-authentication failed",
-                            e.to_string(),
+                            ErrorKind::ClientError,
+                            "IAM token not available",
                         )));
                     }
-                    Err(_) => {
-                        return Err(RedisError::from((
-                            ErrorKind::AuthenticationFailed,
-                            "IAM re-authentication timed out",
-                        )));
-                    }
+                    let auth_cmd = redis::cmd("AUTH")
+                        .arg(iam_manager.username())
+                        .arg(current_token.as_str())
+                        .to_owned();
+                    self.reauth_connection(connection, &auth_cmd, "IAM").await?;
+                    last_auth_generation.store(current_generation, Ordering::Release);
                 }
-                last_auth_generation.store(current_generation, Ordering::Release);
+            } else {
+                let handle = self.credentials();
+                let current_generation = handle.generation();
+                if current_generation != last_auth_generation.load(Ordering::Acquire) {
+                    // A removed password (`update_connection_password(None)`) has
+                    // nothing to AUTH with; the bookmark still advances so the
+                    // compare is not repeated on every command.
+                    if let Some(auth_cmd) = handle.current().auth_command() {
+                        self.reauth_connection(connection, &auth_cmd, "password")
+                            .await?;
+                    }
+                    last_auth_generation.store(current_generation, Ordering::Release);
+                }
             }
         }
 
@@ -1713,6 +1708,36 @@ impl Client {
         // Type conversion
         let expected_type = expected_type_for_cmd(cmd);
         convert_to_expected_type(processed_value, expected_type)
+    }
+
+    /// Send a rotation re-AUTH on a scope connection. Both failure modes come back
+    /// as `AuthenticationFailed` so the caller discards the connection; the server
+    /// never produces this kind itself, so it can't be confused with a command's
+    /// own auth error.
+    async fn reauth_connection(
+        &self,
+        connection: &mut redis::aio::MultiplexedConnection,
+        auth_cmd: &Cmd,
+        what: &str,
+    ) -> RedisResult<()> {
+        match tokio::time::timeout(
+            self.request_timeout,
+            connection.send_packed_command(auth_cmd),
+        )
+        .await
+        {
+            Ok(Ok(_)) => Ok(()),
+            Ok(Err(e)) => Err(RedisError::from((
+                ErrorKind::AuthenticationFailed,
+                "re-authentication failed",
+                format!("{what}: {e}"),
+            ))),
+            Err(_) => Err(RedisError::from((
+                ErrorKind::AuthenticationFailed,
+                "re-authentication timed out",
+                what.to_string(),
+            ))),
+        }
     }
 
     /// Get the primary node address for a given hash slot (cluster mode).

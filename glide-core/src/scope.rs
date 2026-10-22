@@ -230,7 +230,7 @@ fn slot_of_unanimous_keys(keys: &[&[u8]]) -> ScopeSlot {
 /// - `cmd_name`: The command name (e.g., "GET", "SET", "WATCH")
 /// - `args`: Command arguments as byte slices
 /// - `client`: The parent Client. `None` sends the command raw — no timeout, no
-///   decompression and no IAM re-authentication — which is only useful for tests
+///   decompression and no rotation re-authentication — which is only useful for tests
 ///   that need to observe a connection's state before any re-auth can mask it.
 ///
 /// # Returns
@@ -605,7 +605,9 @@ struct PreparedScopeConnection {
     /// Database the connection was SELECTed into (parent runtime DB, else config).
     database_id: u32,
     /// Credential generation the initial AUTH was built from: the IAM token
-    /// generation for an IAM client (0 when IAM is not in use).
+    /// generation for an IAM client, otherwise `CredentialsHandle::generation`
+    /// (0 when the credentials came from the request bytes, i.e. no owning Client
+    /// was passed).
     initial_auth_generation: u64,
 }
 
@@ -786,9 +788,10 @@ async fn build_scope_connection(
     let mut init_count = 0;
 
     // Generation observed at AUTH-build time, so send_command_on_connection can
-    // detect whether the token has rotated again since this connection's initial
-    // AUTH (rather than always re-authenticating on the very first command, or
-    // missing a rotation that lands between here and the first command).
+    // detect whether the credential has rotated again since this connection's
+    // initial AUTH (rather than always re-authenticating on the very first
+    // command, or missing a rotation that lands between here and the first
+    // command).
     let mut initial_auth_generation: u64 = 0;
 
     // AUTH: IAM authentication takes priority when configured on the parent client
@@ -816,6 +819,7 @@ async fn build_scope_connection(
             .arg(current_token.as_str());
         init_count += 1;
     } else if let Some(handle) = client.map(|c| c.credentials()) {
+        initial_auth_generation = handle.generation();
         if let Some(auth_cmd) = handle.current().auth_command() {
             init_pipe.add_command(auth_cmd);
             init_count += 1;

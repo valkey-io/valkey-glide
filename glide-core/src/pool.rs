@@ -805,8 +805,9 @@ pub struct ConnectionState {
     /// server-side waiter armed. A still-set connection is discarded on release;
     /// clean protocol errors clear it so the connection is reused.
     pub blocking_in_flight: bool,
-    /// Set when IAM re-authentication failed. The generation bookmark advances only
-    /// on success, so reusing this connection would retry the same failing AUTH.
+    /// Set when a rotation re-AUTH (IAM or password) failed. The generation bookmark
+    /// advances only on success, so reusing this connection would retry the same
+    /// failing AUTH.
     pub must_discard: bool,
 }
 
@@ -1030,9 +1031,10 @@ pub struct ScopedConnection {
     pub target: ScopeTarget,
     /// Generation of the client's credentials this connection's AUTH was applied
     /// at: the IAM token generation (see `IAMTokenManager::token_generation`) for
-    /// an IAM client. Per-connection rather than on the shared `Client` since
-    /// scoped connections are reused independently. Starts at 0 so a fresh
-    /// connection re-authenticates on first use if needed.
+    /// an IAM client, otherwise `CredentialsHandle::generation`. Per-connection
+    /// rather than on the shared `Client` since scoped connections are reused
+    /// independently. Starts at 0 so a fresh connection re-authenticates on first
+    /// use if needed.
     pub last_auth_generation: AtomicU64,
 }
 

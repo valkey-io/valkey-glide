@@ -4991,6 +4991,13 @@ pub(crate) mod shared_client_tests {
             .send_packed_command(&info_cmd)
             .await
             .expect("INFO commandstats should succeed");
+        auth_calls_from_info(raw)
+    }
+
+    /// `cmdstat_auth`'s `calls=` counter in an `INFO commandstats` reply, 0 when
+    /// no AUTH has been seen.
+    #[cfg(feature = "proto")]
+    fn auth_calls_from_info(raw: Value) -> u64 {
         let text = match raw {
             Value::BulkString(bytes) => String::from_utf8_lossy(&bytes).to_string(),
             Value::VerbatimString { text, .. } => text,
@@ -5403,6 +5410,152 @@ pub(crate) mod shared_client_tests {
             );
 
             scope.release();
+        });
+    }
+
+    /// Scope connections authenticate with the owning Client's current password,
+    /// not the password the pool was seeded with. After
+    /// `update_connection_password`, a scope connection built afterwards AUTHs
+    /// with the new password, and an idle scope connection re-AUTHs before its
+    /// next command.
+    ///
+    /// The server keeps an already-authenticated session valid across a password
+    /// change, so command success on the reused connection proves nothing by
+    /// itself; the idle half is observed on the node's `cmdstat_auth` counter,
+    /// read raw through the scope (`client: None`, which cannot re-AUTH). Both
+    /// halves also check the session's identity with `ACL WHOAMI`: the old
+    /// password is removed from the server, but `default` is `nopass`, so a build
+    /// that skipped AUTH would still answer commands.
+    #[cfg(feature = "proto")]
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_scope_authenticates_with_the_updated_password(
+        #[values(false, true)] use_cluster: bool,
+        #[values(false, true)] immediate_auth: bool,
+    ) {
+        use glide_core::scope;
+
+        // A dedicated ACL user, so the rotation never touches `default`: the
+        // cluster teardown script authenticates as `default`.
+        const USERNAME: &str = "scopeuser";
+        const OLD_PASSWORD: &str = "ReallySecurePassword";
+        const NEW_PASSWORD: &str = "EvenMoreSecurePassword";
+
+        block_on_all(async move {
+            let configuration = TestConfiguration {
+                shared_server: false,
+                connection_info: Some(RedisConnectionInfo {
+                    username: Some(USERNAME.to_string()),
+                    password: Some(OLD_PASSWORD.to_string()),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            };
+            let mut test_basics = setup_test_basics(use_cluster, configuration.clone()).await;
+            let bytes = scope_request_bytes(&test_basics.server, &configuration);
+            let client = test_basics.client.clone();
+
+            let client_id = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("system clock after epoch")
+                .as_nanos() as u64;
+            scope::register_client(client_id, client.clone());
+            let runtime = tokio::runtime::Handle::current();
+            let acquire =
+                || acquire_scope_within(client_id, &bytes, std::time::Duration::from_secs(5));
+            let whoami = |scope_id: u64| async move {
+                match scope::execute_scope_command(scope_id, "ACL", &[b"WHOAMI".to_vec()], None)
+                    .await
+                    .expect("raw ACL WHOAMI through the scope")
+                {
+                    Value::BulkString(bytes) => String::from_utf8_lossy(&bytes).to_string(),
+                    Value::SimpleString(s) => s,
+                    other => panic!("Unexpected ACL WHOAMI reply shape: {other:?}"),
+                }
+            };
+
+            // Scope A is released so it sits idle across the rotation.
+            let scope_a = acquire()
+                .await
+                .expect("scope acquirable with the seeded password");
+            scope::send_scope_command(scope_a, "PING", &mut [], &client)
+                .await
+                .expect("scope works before the password changes");
+            scope::release_scope(scope_a, client_id, &runtime);
+            let pool = glide_core::pool::get_or_create_scope_pool(client_id, bytes.clone()).pool;
+            retry(|| async { (pool.lock().await.idle.len() == 1).then_some(()) }).await;
+
+            // `<OLD_PASSWORD` removes the old password, so any later AUTH with it
+            // is rejected.
+            let mut rotate = redis::cmd("ACL");
+            rotate
+                .arg("SETUSER")
+                .arg(USERNAME)
+                .arg(format!(">{NEW_PASSWORD}"))
+                .arg(format!("<{OLD_PASSWORD}"));
+            assert_eq!(
+                test_basics
+                    .client
+                    .send_command(&mut rotate, None)
+                    .await
+                    .unwrap(),
+                Value::Okay
+            );
+            test_basics
+                .client
+                .update_connection_password(Some(NEW_PASSWORD.to_string()), immediate_auth)
+                .await
+                .expect("update_connection_password should succeed");
+
+            // Build half: holding the reused idle connection forces the second
+            // acquire to build a new one.
+            let reused_a = acquire()
+                .await
+                .expect("the idle scope connection is reusable");
+            let scope_b = acquire().await.expect(
+                "a scope connection built after the rotation must AUTH with the new password",
+            );
+            scope::send_scope_command(scope_b, "PING", &mut [], &client)
+                .await
+                .expect("the newly built scope connection works");
+            assert_eq!(
+                whoami(scope_b).await,
+                USERNAME,
+                "the newly built scope connection must be authenticated as the client's user"
+            );
+
+            // Idle half: the first command on the reused connection re-AUTHs, and
+            // only once. Both INFO reads go through the raw path on the same
+            // connection, so the counter is that node's and the reads add no AUTH.
+            let info_args: Vec<Vec<u8>> = vec![b"commandstats".to_vec()];
+            let auth_calls_before = auth_calls_from_info(
+                scope::execute_scope_command(reused_a, "INFO", &info_args, None)
+                    .await
+                    .expect("raw INFO through the reused scope"),
+            );
+            scope::send_scope_command(reused_a, "PING", &mut [], &client)
+                .await
+                .expect("the reused scope connection works after the rotation");
+            let auth_calls_after = auth_calls_from_info(
+                scope::execute_scope_command(reused_a, "INFO", &info_args, None)
+                    .await
+                    .expect("raw INFO through the reused scope"),
+            );
+            assert_eq!(
+                auth_calls_after - auth_calls_before,
+                1,
+                "the reused scope connection must re-AUTH exactly once with the new password"
+            );
+            assert_eq!(
+                whoami(reused_a).await,
+                USERNAME,
+                "the reused scope connection must still be authenticated as the client's user"
+            );
+
+            scope::release_scope(reused_a, client_id, &runtime);
+            scope::release_scope(scope_b, client_id, &runtime);
+            scope::unregister_client(client_id);
         });
     }
 
