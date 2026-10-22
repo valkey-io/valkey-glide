@@ -837,6 +837,16 @@ async def test_live_async_sync_provider_ids_coexist_without_registry_leaks(
     async_clients = []
     sync_clients = []
 
+    # IAM auth requires TLS; the direct sync client must use the same TLS
+    # cluster fixture create_iam_client resolves for the async side. Under
+    # external endpoints conftest provisions none, so skip rather than error.
+    tls_attr = "valkey_tls_cluster" if cluster_mode else "standalone_tls_cluster"
+    tls_cluster = getattr(pytest, tls_attr, None)
+    if tls_cluster is None:
+        pytest.skip(
+            "IAM tests require a TLS server; none provisioned for external endpoints"
+        )
+
     def _credentials():
         return ServerCredentials(
             username=IAM_USERNAME,
@@ -868,6 +878,9 @@ async def test_live_async_sync_provider_ids_coexist_without_registry_leaks(
                 cluster_mode=cluster_mode,
                 protocol=protocol,
                 credentials=_credentials(),
+                valkey_cluster=tls_cluster,
+                use_tls=True,
+                tls_insecure=True,
             )
         )
         sync_clients.append(client)

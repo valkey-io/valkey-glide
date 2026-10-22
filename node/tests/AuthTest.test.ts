@@ -1064,7 +1064,7 @@ describe("IAM Auth: Direct Custom Credential Providers", () => {
                     credentialProvider,
                 },
             },
-            useTLS: global.TLS,
+            ...IAM_TLS_CONFIG,
         };
 
         const advancedConfiguration =
@@ -1081,20 +1081,25 @@ describe("IAM Auth: Direct Custom Credential Providers", () => {
     beforeAll(async () => {
         if (!iamEnabled) return;
 
-        standaloneServer = global.STAND_ALONE_ENDPOINT
-            ? await ValkeyCluster.initFromExistingCluster(
-                  false,
-                  parseEndpoints(global.STAND_ALONE_ENDPOINT),
-                  getServerVersion,
-              )
-            : await ValkeyCluster.createCluster(false, 1, 0, getServerVersion);
-        clusterServer = global.CLUSTER_ENDPOINTS
-            ? await ValkeyCluster.initFromExistingCluster(
-                  true,
-                  parseEndpoints(global.CLUSTER_ENDPOINTS),
-                  getServerVersion,
-              )
-            : await ValkeyCluster.createCluster(true, 3, 1, getServerVersion);
+        // IAM requires TLS, and external endpoints (STAND_ALONE_ENDPOINT /
+        // CLUSTER_ENDPOINTS) are plaintext, so always create dedicated TLS
+        // clusters here, as the mock-credentials suite does.
+        standaloneServer = await ValkeyCluster.createCluster(
+            false,
+            1,
+            0,
+            getServerVersion,
+            true,
+            IAM_TLS_CONFIG,
+        );
+        clusterServer = await ValkeyCluster.createCluster(
+            true,
+            3,
+            1,
+            getServerVersion,
+            true,
+            IAM_TLS_CONFIG,
+        );
     }, TIMEOUT);
 
     afterAll(async () => {
@@ -1376,9 +1381,7 @@ describe("IAM Auth: Direct Custom Credential Providers", () => {
             );
             const request = connection_request.ConnectionRequest.create({
                 addresses: addressesFor(false),
-                tlsMode: global.TLS
-                    ? connection_request.TlsMode.SecureTls
-                    : connection_request.TlsMode.NoTls,
+                tlsMode: connection_request.TlsMode.InsecureTls,
                 authenticationInfo: {
                     username: IAM_USERNAME,
                     iamCredentials: {
