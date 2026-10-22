@@ -513,6 +513,7 @@ pub enum ScopeCreateErrorKind {
     InvalidLibName,
     NoSeedAddress,
     InvalidClusterTarget,
+    InvalidUnixSocketAddress,
     ParentCertMaterialUnavailable,
     ClientOpenFailed,
     ConnectFailed,
@@ -536,7 +537,8 @@ impl ScopeCreateErrorKind {
             Self::InvalidConnectionRequest
             | Self::InvalidLibName
             | Self::NoSeedAddress
-            | Self::InvalidClusterTarget => Some(ScopeFailCause::InvalidConfiguration),
+            | Self::InvalidClusterTarget
+            | Self::InvalidUnixSocketAddress => Some(ScopeFailCause::InvalidConfiguration),
             Self::ParentCertMaterialUnavailable => {
                 Some(ScopeFailCause::ParentCertMaterialUnavailable)
             }
@@ -561,6 +563,7 @@ impl ScopeCreateError {
             Self::InvalidLibName => ScopeCreateErrorKind::InvalidLibName,
             Self::NoSeedAddress => ScopeCreateErrorKind::NoSeedAddress,
             Self::InvalidClusterTarget(_) => ScopeCreateErrorKind::InvalidClusterTarget,
+            Self::InvalidUnixSocketAddress(_) => ScopeCreateErrorKind::InvalidUnixSocketAddress,
             Self::ParentCertMaterialUnavailable => {
                 ScopeCreateErrorKind::ParentCertMaterialUnavailable
             }
