@@ -10,10 +10,12 @@ anywhere, including on a build with no RDMA compiled in.
 from __future__ import annotations
 
 import array
+import gc
 import os
 import socket
 import threading
 import time
+import warnings
 
 import pytest
 from glide_shared.config import (
@@ -423,6 +425,87 @@ def test_a_transfer_cancelled_by_closing_the_client_raises_closing_error(error_t
         client._handle_rdma_result(result)
 
     assert client._lib.freed_results == [result]
+
+
+def test_a_region_collected_without_close_is_freed_with_a_warning():
+    # Otherwise its pages stay pinned until the client closes, and the caller's
+    # memory could be freed while it is still registered.
+    client = _offline_client()
+    region = _offline_region(client)
+    raw = region._region
+
+    with pytest.warns(ResourceWarning, match="without being closed"):
+        del region
+        gc.collect()
+
+    assert client._lib.freed == [raw]
+
+
+def test_a_collected_region_keeps_memory_the_fabric_still_holds():
+    # The same rule as for a closed region: a write could still land, so Python
+    # must not free the memory until the fabric lets go.
+    client = _offline_client()
+    raw = {"capacity": REGION_BYTES}
+    hold = {"released": False}
+    client._lib.holds[id(raw)] = hold
+    memory = bytearray(REGION_BYTES)
+    region = RdmaRegion(client, memory, raw)
+
+    with pytest.warns(ResourceWarning):
+        del region
+        gc.collect()
+
+    assert client._lib.freed == [raw]
+    assert _RETAINED_RDMA_MEMORY.holds(memory)
+    # Let the shared keeper go of it, so other tests start clean.
+    hold["released"] = True
+    _RETAINED_RDMA_MEMORY.release_what_is_free()
+    assert not _RETAINED_RDMA_MEMORY.holds(memory)
+
+
+def test_a_region_collected_while_its_keeper_is_locked_does_not_hang():
+    # The cycle collector can run during any allocation, including one made
+    # while this thread holds the keeper's lock. A finalizer that took the lock
+    # then would wait on its own thread forever, so it must not take it.
+    client = _offline_client()
+    raw = {"capacity": REGION_BYTES}
+    hold = {"released": False}
+    client._lib.holds[id(raw)] = hold
+    memory = bytearray(REGION_BYTES)
+    region = RdmaRegion(client, memory, raw)
+    finished = threading.Event()
+
+    def collect_while_locked():
+        nonlocal region
+        with _RETAINED_RDMA_MEMORY._lock:
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", ResourceWarning)
+                del region
+                gc.collect()
+        finished.set()
+
+    collector = threading.Thread(target=collect_while_locked, daemon=True)
+    collector.start()
+    assert finished.wait(5), "the finalizer waited on a lock its thread held"
+
+    assert client._lib.freed == [raw]
+    assert _RETAINED_RDMA_MEMORY.holds(memory), "the memory is still kept"
+    hold["released"] = True
+    _RETAINED_RDMA_MEMORY.release_what_is_free()
+    assert not _RETAINED_RDMA_MEMORY.holds(memory)
+
+
+def test_a_closed_region_is_not_freed_again_when_collected():
+    client = _offline_client()
+    region = _offline_region(client)
+    region.close()
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", ResourceWarning)
+        del region
+        gc.collect()
+
+    assert len(client._lib.freed) == 1
 
 
 def test_an_open_region_has_not_released_its_memory():
@@ -1067,6 +1150,9 @@ def test_closing_an_idle_region_lets_go_of_the_memory_at_once(
         memory = bytearray(REGION_BYTES)
         region = client.register_rdma_region(memory)
         raw, region._region = region._region, None
+        # This test frees the region itself, so the region must not free it
+        # again when it is collected.
+        region._finalizer.detach()
         hold = client._lib.free_rdma_region(raw)
         if hold != client._ffi.NULL:
             client._lib.free_rdma_memory_hold(hold)

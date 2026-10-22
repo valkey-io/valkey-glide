@@ -1,8 +1,11 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
+import collections
 import os
 import sys
 import threading
+import warnings
+import weakref
 from dataclasses import dataclass
 from types import TracebackType
 from typing import TYPE_CHECKING, Any, Callable, List, Optional, Tuple, Union
@@ -167,14 +170,37 @@ class _RetainedRdmaMemory:
         # (lib, hold, memory, view, span) for each region whose memory is still
         # held, where span is the memory's address range.
         self._held: List[Tuple[Any, Any, Any, Any, Tuple[int, int]]] = []
+        # Entries kept by a region's finalizer, not yet moved into `_held`. A
+        # finalizer can run during any allocation, including one made while this
+        # thread holds `_lock`, so it must not take the lock. Appending to a
+        # deque is atomic, and every method below that reads `_held` moves these
+        # in first, under the lock.
+        self._pending: (
+            "collections.deque[Tuple[Any, Any, Any, Any, Tuple[int, int]]]"
+        ) = collections.deque()
 
     def keep(self, lib, hold, memory, view, span: Tuple[int, int]) -> None:
         with self._lock:
             self._held.append((lib, hold, memory, view, span))
 
+    def keep_from_finalizer(
+        self, lib, hold, memory, view, span: Tuple[int, int]
+    ) -> None:
+        """:meth:`keep`, without taking the lock; see `_pending`."""
+        self._pending.append((lib, hold, memory, view, span))
+
+    def _take_pending_locked(self) -> None:
+        """Move what finalizers kept into `_held`. Call with `_lock` held."""
+        while True:
+            try:
+                self._held.append(self._pending.popleft())
+            except IndexError:
+                return
+
     def release_what_is_free(self) -> None:
         """Drop the references to memory the fabric has let go of."""
         with self._lock:
+            self._take_pending_locked()
             still_held = []
             for entry in self._held:
                 lib, hold = entry[0], entry[1]
@@ -187,6 +213,7 @@ class _RetainedRdmaMemory:
     def holds(self, memory: Any) -> bool:
         """Whether `memory` is being kept here."""
         with self._lock:
+            self._take_pending_locked()
             return any(entry[2] is memory for entry in self._held)
 
     def overlaps(self, span: Tuple[int, int]) -> bool:
@@ -199,6 +226,7 @@ class _RetainedRdmaMemory:
         self.release_what_is_free()
         start, end = span
         with self._lock:
+            self._take_pending_locked()
             return any(
                 start < kept_end and kept_start < end
                 for (kept_start, kept_end) in (entry[4] for entry in self._held)
@@ -208,10 +236,47 @@ class _RetainedRdmaMemory:
         """Whether the fabric has let go of the memory `hold` kept."""
         self.release_what_is_free()
         with self._lock:
+            self._take_pending_locked()
             return not any(entry[1] is hold for entry in self._held)
 
 
 _RETAINED_RDMA_MEMORY = _RetainedRdmaMemory()
+
+
+def _free_rdma_region(lib, ffi, region, memory, view, span: Tuple[int, int]):
+    """
+    Free `region` and return the hold the fabric hands back, or None.
+
+    A hold means the fabric still keeps the memory, so `memory` and `view` go to
+    ``_RETAINED_RDMA_MEMORY`` to keep Python from freeing it until the fabric
+    lets go.
+    """
+    hold = lib.free_rdma_region(region)
+    if hold == ffi.NULL:
+        hold = None
+    else:
+        _RETAINED_RDMA_MEMORY.keep(lib, hold, memory, view, span)
+    # Closing this region may have been what let the fabric go of others'.
+    _RETAINED_RDMA_MEMORY.release_what_is_free()
+    return hold
+
+
+def _finalize_rdma_region(lib, ffi, region, memory, view, span) -> None:
+    """
+    Free a region that was garbage-collected without being closed.
+
+    Unlike :func:`_free_rdma_region`, this takes no lock: a finalizer can run
+    while this thread already holds one, and would then wait on itself.
+    """
+    warnings.warn(
+        "an RdmaRegion was garbage-collected without being closed; close it, "
+        "or use it in a with block, to release its pinned pages promptly",
+        ResourceWarning,
+        stacklevel=2,
+    )
+    hold = lib.free_rdma_region(region)
+    if hold != ffi.NULL:
+        _RETAINED_RDMA_MEMORY.keep_from_finalizer(lib, hold, memory, view, span)
 
 
 class RdmaRegion:
@@ -233,8 +298,10 @@ class RdmaRegion:
     region. A transfer that finds the region already in use by another raises
     ``RdmaError``, and so does :meth:`close` while a transfer is using it.
 
-    Create one with :meth:`BaseClient.register_rdma_region`.
-    Can be used as a context manager::
+    Create one with :meth:`BaseClient.register_rdma_region`. Close it with
+    :meth:`close`, or use it as a context manager. A region garbage-collected
+    without being closed is freed then, with a ``ResourceWarning``; until
+    then its pages stay pinned. It can be used as a context manager::
 
         with client.register_rdma_region(bytearray(1 << 20)) as region:
             client.rdma_set(b"key", region.window(0, 4096))
@@ -291,6 +358,24 @@ class RdmaRegion:
         # `free_rdma_region` and takes it exclusively for each transfer, so a
         # second transfer or a close while this is set would corrupt memory.
         self._busy = False
+        # Frees the region if this object is collected without `close`. Its
+        # arguments keep the caller's memory alive until then, so the memory is
+        # never freed while still registered. A transfer in flight keeps this
+        # object reachable, so the finalizer never runs under one. Skipped at
+        # interpreter exit, when the library may already be gone and the
+        # process's teardown releases the memory anyway.
+        self._finalizer = weakref.finalize(
+            self,
+            _finalize_rdma_region,
+            client._lib,
+            client._ffi,
+            region,
+            memory,
+            self._view,
+            self._span,
+        )
+        # A documented writable property that typeshed's stub leaves out.
+        self._finalizer.atexit = False  # type: ignore[misc]
 
     @property
     def capacity(self) -> int:
@@ -413,16 +498,15 @@ class RdmaRegion:
 
     def _close_locked(self) -> None:
         """:meth:`close`, with `_lock` held and no transfer using the region."""
-        region, self._region = self._region, None
-        if region is not None:
-            hold = self._client._lib.free_rdma_region(region)
-            if hold != self._client._ffi.NULL:
-                _RETAINED_RDMA_MEMORY.keep(
-                    self._client._lib, hold, self._memory, self._view, self._span
-                )
-                self._hold = hold
-        # Closing this region may have been what let the fabric go of others'.
-        _RETAINED_RDMA_MEMORY.release_what_is_free()
+        self._region = None
+        # `detach` hands back the finalizer's arguments only the first time,
+        # so the region is freed exactly once, by this or by the finalizer.
+        detached = self._finalizer.detach()
+        if detached is not None:
+            _, _, arguments, _ = detached
+            self._hold = _free_rdma_region(*arguments)
+        else:
+            _RETAINED_RDMA_MEMORY.release_what_is_free()
         self._view = None
         self._memory = None
 
