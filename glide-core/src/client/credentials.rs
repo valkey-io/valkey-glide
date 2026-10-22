@@ -126,6 +126,7 @@ impl CredentialsHandle {
 /// Proof that `store_password` ran. Consumed by `accepted`, so one store is at
 /// most one generation advance, and an advance without a store cannot be
 /// written. Dropping it is the store-only update.
+#[must_use = "dropping is the store-only update; call accepted() once the server took the password"]
 pub(crate) struct StoredPassword<'a> {
     handle: &'a CredentialsHandle,
 }
@@ -199,7 +200,7 @@ mod tests {
     }
 
     #[test]
-    fn accepted_advances_the_generation_once_per_store() {
+    fn accepted_advances_the_generation() {
         let handle = CredentialsHandle::new(PasswordCredentials::default());
         let stored = handle.store_password(Some("p".into()));
         assert_eq!(handle.generation(), AuthGeneration(1));
