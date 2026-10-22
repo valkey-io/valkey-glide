@@ -304,11 +304,9 @@ class CoreCommands(Protocol):
                 Equivalent to `GET` in the Valkey API. Defaults to False.
 
         Returns:
-            Optional[Union[TOK, bytes]]: If the value is successfully set, return OK (a `str`).
-
-            If value isn't set because `conditional_set` is not met, return `None`.
-
-            If return_old_value is set, return the old value as a bytes string.
+            Optional[Union[TOK, bytes]]: If `return_old_value` is false, return "OK" if the value was set, or `None`
+            if it was not. If `return_old_value` is true, return the previous value as `bytes`, or `None` if the key
+            did not exist.
 
         Example:
             >>> await client.set(b"key", b"value")
