@@ -27,7 +27,7 @@ This is the Python client binding for Valkey GLIDE, providing both async and syn
 
 **Supported Platforms:** see the System Requirements section of [README.md](./README.md). Alpine Linux/MUSL is not supported.
 
-**Python Versions:** 3.9–3.14, plus 3.14t (free-threaded). CI's always-run set is 3.9, 3.13, 3.14t (`.github/json_matrices/supported-languages-versions.json`). Free-threaded 3.14t has extra concurrency rules — see "Python Free-Threading" below.
+**Python Versions:** 3.9–3.15, plus 3.14t (free-threaded). CI's always-run set is 3.9, 3.15, and 3.14t (`.github/json_matrices/supported-languages-versions.json`). Free-threaded 3.14t has extra concurrency rules — see "Python Free-Threading" below.
 **Async Frameworks:** asyncio, trio, uvloop
 
 **Packages:** `valkey-glide` (async), `valkey-glide-sync` (sync)
