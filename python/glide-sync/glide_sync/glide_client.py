@@ -5,7 +5,7 @@ import sys
 import threading
 from dataclasses import dataclass
 from types import TracebackType
-from typing import TYPE_CHECKING, Any, List, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Any, Callable, List, Optional, Tuple, Union
 
 if TYPE_CHECKING:
     from .isolated_scope import IsolatedScope
@@ -228,9 +228,10 @@ class RdmaRegion:
     caller does not control, so a transfer must not overlap any other use of the
     same window.
 
-    A region is not thread-safe. Only one transfer may use a region at a time,
-    even when each transfer uses a different window. Threads that transfer
-    concurrently each need their own region.
+    Only one transfer may use a region at a time, even when each transfer uses
+    a different window. Threads that transfer concurrently each need their own
+    region. A transfer that finds the region already in use by another raises
+    ``RdmaError``, and so does :meth:`close` while a transfer is using it.
 
     Create one with :meth:`BaseClient.register_rdma_region`.
     Can be used as a context manager::
@@ -283,6 +284,13 @@ class RdmaRegion:
         self._capacity = client._lib.rdma_region_capacity(region)
         # Set by `close` when the fabric still kept the memory.
         self._hold = None
+        # Guards `_region` and `_busy`. Held only briefly, never for the length
+        # of a transfer, so closing the client can still cancel one.
+        self._lock = threading.Lock()
+        # Whether a transfer is using the region. The FFI frees the region in
+        # `free_rdma_region` and takes it exclusively for each transfer, so a
+        # second transfer or a close while this is set would corrupt memory.
+        self._busy = False
 
     @property
     def capacity(self) -> int:
@@ -306,8 +314,8 @@ class RdmaRegion:
         False while the region is open. After it closes, False while GLIDE
         still holds the memory because a write could still land in it: after
         a transfer closed the region on the tcp provider, until the client and
-        all its regions are closed, or after a failed deregistration, for good. True otherwise, which on efa-direct is as
-        soon as the region closes.
+        all its regions are closed, or after a failed deregistration, for good.
+        True otherwise, which on efa-direct is as soon as the region closes.
 
         Registering memory GLIDE still holds is refused, so a caller who only
         wants to register the same memory again can try that and handle the
@@ -379,22 +387,32 @@ class RdmaRegion:
 
         The caller's buffer is not freed. Usually it can be reused or freed once
         this returns. The exception is a region a transfer closed on the tcp
-        provider, or whose deregistration failed: a
-        write may still land in it, so GLIDE keeps the buffer referenced until the
-        fabric is done with it, and the caller should not reuse it either. On tcp
-        that is once the client and all its regions are closed; after a failed
-        deregistration, which is logged as an error, it is never.
-        :attr:`memory_released` says which. Closing twice is a no-op, so this is
-        safe in a ``finally``.
+        provider, or whose deregistration failed: a write may still land in it,
+        so GLIDE keeps the buffer referenced until the fabric is done with it,
+        and the caller should not reuse it either. On tcp that is once the
+        client and all its regions are closed; after a failed deregistration,
+        which is logged as an error, it is never. :attr:`memory_released` says
+        which. Closing twice is a no-op, so this is safe in a ``finally``.
 
-        Every transfer call using the region must have returned first, on every
-        thread. This is not a way to cancel one: the server may still be moving
-        bytes into these pages, and the region may still be in use by the call.
-        To cancel a transfer in flight, close the client from another thread,
-        then close the region once the transfer call has returned. A cancelled
-        transfer closes its region on the way out, so closing it again is then
-        a no-op.
+        This is not a way to cancel a transfer. To cancel one in flight, close
+        the client from another thread: the transfer then closes its region on
+        the way out, so closing it again is a no-op.
+
+        Raises:
+            RdmaError: If a transfer is using the region. Closing it then would
+                free the region under the transfer.
         """
+        with self._lock:
+            if self._busy:
+                raise RdmaError(
+                    "this RDMA region is in use by a transfer, so it cannot be "
+                    "closed yet; close the client to cancel the transfer, which "
+                    "then closes the region itself"
+                )
+            self._close_locked()
+
+    def _close_locked(self) -> None:
+        """:meth:`close`, with `_lock` held and no transfer using the region."""
         region, self._region = self._region, None
         if region is not None:
             hold = self._client._lib.free_rdma_region(region)
@@ -413,6 +431,31 @@ class RdmaRegion:
         if self._region is None:
             raise RdmaError("this RDMA region is closed")
         return self._region
+
+    def _begin_transfer(self):
+        """
+        Mark the region in use by a transfer and return its pointer. Every call
+        must be paired with :meth:`_end_transfer`.
+        """
+        with self._lock:
+            if self._busy:
+                raise RdmaError(
+                    "this RDMA region is in use by another transfer; only one "
+                    "transfer may use a region at a time"
+                )
+            region = self._require_open()
+            self._busy = True
+            return region
+
+    def _end_transfer(self, close: bool) -> None:
+        """
+        Mark the transfer done, first closing the region if the transfer left
+        it unusable, so no other call can use the region in between.
+        """
+        with self._lock:
+            self._busy = False
+            if close:
+                self._close_locked()
 
     def __enter__(self) -> "RdmaRegion":
         return self
@@ -1649,15 +1692,13 @@ class BaseClient(CoreCommands):
             >>> receipt = client.rdma_get(b"key", region.window(4096, 4096))
             >>> receipt.bytes_written if receipt else "missing"
         """
-        region_ptr, offset, length = self._rdma_window(window)
-        result = self._lib.rdma_get(
-            self._require_open_client(),
-            *self._to_c_key(key),
-            region_ptr,
-            offset,
-            length,
+        c_key = self._to_c_key(key)
+        return self._rdma_transfer(
+            window,
+            lambda client, region: self._lib.rdma_get(
+                client, *c_key, region, window.offset, window.length
+            ),
         )
-        return self._handle_rdma_result(result, window.region)
 
     def rdma_set(
         self,
@@ -1709,17 +1750,19 @@ class BaseClient(CoreCommands):
             >>> client.rdma_set(b"key", window, checksum=RdmaSetChecksum.Compute())
         """
         checksum_mode, checksum_value = self._rdma_set_checksum(checksum)
-        region_ptr, offset, length = self._rdma_window(window)
-        result = self._lib.rdma_set(
-            self._require_open_client(),
-            *self._to_c_key(key),
-            region_ptr,
-            offset,
-            length,
-            checksum_mode,
-            checksum_value,
+        c_key = self._to_c_key(key)
+        self._rdma_transfer(
+            window,
+            lambda client, region: self._lib.rdma_set(
+                client,
+                *c_key,
+                region,
+                window.offset,
+                window.length,
+                checksum_mode,
+                checksum_value,
+            ),
         )
-        self._handle_rdma_result(result, window.region)
 
     @staticmethod
     def rdma_checksum(data: Any) -> int:
@@ -1794,32 +1837,46 @@ class BaseClient(CoreCommands):
             f"got {type(checksum).__name__}"
         )
 
-    def _rdma_window(self, window: RdmaWindow) -> Tuple[Any, int, int]:
+    def _rdma_transfer(
+        self, window: RdmaWindow, call: Callable[[Any, Any], Any]
+    ) -> Optional[RdmaReadReceipt]:
         """
-        Unpack a window for the transfer, rejecting what cannot be used.
+        Run one transfer through `window`'s region with `call`, which takes the
+        client and region pointers and makes the FFI call.
 
-        Checks that its region is still open and belongs to this client.
+        Refuses a window that is not one, or whose region belongs to another
+        client, then a closed client, then a region that is closed or already
+        in use. The region stays marked in use until the FFI call returns, and
+        is closed before it is released if the transfer left it unusable, so
+        ``region.closed`` says so.
         """
         if not isinstance(window, RdmaWindow):
             raise TypeError(
                 "window must be an RdmaWindow from region.window(), got "
                 f"{type(window).__name__}"
             )
-        if window.region._client is not self:
+        region = window.region
+        if region._client is not self:
             raise RdmaError(
                 "this region is registered with a different client, so this "
                 "client cannot transfer with it"
             )
+        client_ptr = self._require_open_client()
+        region_ptr = region._begin_transfer()
+        region_closed = False
+        try:
+            result = call(client_ptr, region_ptr)
+            if result == self._ffi.NULL:
+                raise RdmaError("Internal error: received NULL as an RDMA result")
+            region_closed = bool(result.region_closed)
+            return self._handle_rdma_result(result)
+        finally:
+            region._end_transfer(close=region_closed)
 
-        return window.region._require_open(), window.offset, window.length
-
-    def _handle_rdma_result(
-        self, result, region: RdmaRegion
-    ) -> Optional[RdmaReadReceipt]:
+    def _handle_rdma_result(self, result) -> Optional[RdmaReadReceipt]:
         """
-        Turn a transfer result into a receipt and free it, raising on failure.
-        Close `region` if the transfer left it unusable, so ``region.closed``
-        says so.
+        Turn a non-null transfer result into a receipt and free it, raising on
+        failure.
 
         None means the key was absent, meaning nothing was transferred and
         the window is untouched.
@@ -1829,9 +1886,6 @@ class BaseClient(CoreCommands):
         so a reply larger than the window or a checksum mismatch that happened
         just before the close is still reported.
         """
-        if result == self._ffi.NULL:
-            raise RdmaError("Internal error: received NULL as an RDMA result")
-        region_closed = bool(result.region_closed)
         try:
             if result.error_message != self._ffi.NULL:
                 message = self._ffi.string(result.error_message).decode(ENCODING)
@@ -1849,8 +1903,6 @@ class BaseClient(CoreCommands):
             )
         finally:
             self._lib.free_rdma_result(result)
-            if region_closed:
-                region.close()
 
     @property
     def closed(self) -> bool:

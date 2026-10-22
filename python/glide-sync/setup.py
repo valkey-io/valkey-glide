@@ -209,9 +209,14 @@ class build_ext(build_ext_orig):
         # Builds the RDMA support in. libfabric is dynamically loaded only
         # when a client provides an optional RDMA configuration.
         rdma = os.environ.get("GLIDE_SYNC_RDMA", "0") == "1"
-        cargo_cmd = ["cargo", "rustc", "--lib", "--crate-type", "cdylib", "--locked"] + (
-            ["--release"] if release else []
-        )
+        cargo_cmd = [
+            "cargo",
+            "rustc",
+            "--lib",
+            "--crate-type",
+            "cdylib",
+            "--locked",
+        ] + (["--release"] if release else [])
         if rdma:
             cargo_cmd += ["--features", "rdma"]
 

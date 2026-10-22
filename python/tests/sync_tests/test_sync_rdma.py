@@ -69,6 +69,10 @@ class _FakeLib:
         self.registrations = []
         # What `rdma_set` reports, if not a success.
         self.set_result = None
+        # When set, `rdma_set` sets `set_started` and then waits for this, so a
+        # test can act while a transfer is inside the FFI.
+        self.set_gate = None
+        self.set_started = threading.Event()
 
     def rdma_region_capacity(self, region):
         return region["capacity"]
@@ -93,8 +97,15 @@ class _FakeLib:
     def free_rdma_result(self, result):
         self.freed_results.append(result)
 
+    def rdma_get(self, *arguments):
+        """Answers as `rdma_set` does, so a test can read the receipt back."""
+        return self.rdma_set(*arguments)
+
     def rdma_set(self, *arguments):
         self.sets.append(arguments)
+        if self.set_gate is not None:
+            self.set_started.set()
+            assert self.set_gate.wait(5), "the test never released the transfer"
         if self.set_result is not None:
             return self.set_result
         return _FakeResult(_FakeFfi.NULL, 0, found=True)
@@ -146,6 +157,38 @@ class _FakeResult:
         self.has_checksum = False
         self.checksum = 0
         self.region_closed = region_closed
+
+
+def _transfer(client: GlideClient, region: RdmaRegion, result: _FakeResult):
+    """Run ``rdma_get`` on `region` with the FFI answering `result`."""
+    client._core_client = object()
+    client._lib.set_result = result
+    return client.rdma_get(b"key", region.window())
+
+
+class _BlockedTransfer:
+    """An ``rdma_set`` held inside the FFI on another thread until released."""
+
+    def __init__(self, client: GlideClient, region: RdmaRegion):
+        self._client = client
+        self.outcome: dict = {}
+        client._lib.set_gate = threading.Event()
+        self._thread = threading.Thread(target=self._run, args=(region,))
+        self._thread.start()
+        assert client._lib.set_started.wait(5), "the transfer reached the FFI"
+
+    def _run(self, region: RdmaRegion) -> None:
+        try:
+            self._client.rdma_set(b"key", region.window())
+            self.outcome["returned"] = None
+        except Exception as error:  # noqa: BLE001 - recorded for the assert
+            self.outcome["raised"] = error
+
+    def finish(self) -> dict:
+        self._client._lib.set_gate.set()
+        self._thread.join(5)
+        assert not self._thread.is_alive(), "the transfer returned"
+        return self.outcome
 
 
 def test_rdma_availability_is_reported_as_a_bool():
@@ -279,8 +322,10 @@ def test_a_closed_region_cannot_be_transferred_with():
 
     # A window outlives the close that invalidates it, so the region is checked
     # again at the transfer rather than trusted because the window exists.
+    client._core_client = object()
     with pytest.raises(RdmaError, match="closed"):
-        client._rdma_window(window)
+        client.rdma_set(b"key", window)
+    assert client._lib.sets == [], "refused before the FFI"
 
 
 def test_a_region_from_another_client_is_refused():
@@ -289,10 +334,12 @@ def test_a_region_from_another_client_is_refused():
     # "registered on a different fabric".
     owner = _offline_client()
     other = _offline_client()
+    other._core_client = object()
     window = _offline_region(owner).window()
 
     with pytest.raises(RdmaError, match="different client"):
-        other._rdma_window(window)
+        other.rdma_set(b"key", window)
+    assert other._lib.sets == [], "refused before the FFI"
 
 
 def test_a_missing_length_covers_the_rest_of_the_region():
@@ -356,7 +403,7 @@ def test_a_failed_transfer_raises_the_class_its_type_names(error_type, expected)
     result = _FakeResult(b"transfer failed", error_type)
 
     with pytest.raises(expected, match="transfer failed"):
-        client._handle_rdma_result(result, _offline_region(client))
+        client._handle_rdma_result(result)
 
     assert client._lib.freed_results == [result]
 
@@ -373,7 +420,7 @@ def test_a_transfer_cancelled_by_closing_the_client_raises_closing_error(error_t
     )
 
     with pytest.raises(ClosingError, match="the client was closed"):
-        client._handle_rdma_result(result, _offline_region(client))
+        client._handle_rdma_result(result)
 
     assert client._lib.freed_results == [result]
 
@@ -427,7 +474,7 @@ def test_a_transfer_that_closed_its_region_closes_the_python_region(
     result = _FakeResult(b"connection lost", error_type, region_closed=True)
 
     with pytest.raises(expected):
-        client._handle_rdma_result(result, region)
+        _transfer(client, region, result)
 
     assert region.closed is True
     assert client._lib.freed == [raw]
@@ -436,19 +483,26 @@ def test_a_transfer_that_closed_its_region_closes_the_python_region(
 
 
 def test_a_cancelled_transfer_closes_the_python_region():
+    # Closing the client is the way to cancel: the FFI call then returns with
+    # the region closed, and the transfer closes the Python region itself,
+    # exactly once, while it still has the region marked in use.
     client = _offline_client()
-    client._is_closed = True
+    client._core_client = object()
     region = _offline_region(client)
-    result = _FakeResult(
+    transfer = _BlockedTransfer(client, region)
+    client._lib.set_result = _FakeResult(
         b"RDMA transfer cancelled - ClientError: the client was closed",
         0,
         region_closed=True,
     )
 
-    with pytest.raises(ClosingError):
-        client._handle_rdma_result(result, region)
+    outcome = transfer.finish()
 
+    assert isinstance(outcome.get("raised"), ClosingError), outcome
     assert region.closed is True
+    assert len(client._lib.freed) == 1
+    region.close()
+    assert len(client._lib.freed) == 1, "closing again is a no-op"
 
 
 def test_a_region_closed_on_tcp_keeps_its_memory_until_the_fabric_lets_go():
@@ -461,7 +515,7 @@ def test_a_region_closed_on_tcp_keeps_its_memory_until_the_fabric_lets_go():
     result = _FakeResult(b"connection lost", 3, region_closed=True)
 
     with pytest.raises(ConnectionError):
-        client._handle_rdma_result(result, region)
+        _transfer(client, region, result)
 
     assert region.closed is True
     assert region.memory_released is False
@@ -479,7 +533,7 @@ def test_a_failure_that_leaves_the_region_usable_keeps_it_open():
     result = _FakeResult(b"CRC mismatch", 0)
 
     with pytest.raises(RdmaError):
-        client._handle_rdma_result(result, region)
+        _transfer(client, region, result)
 
     assert region.closed is False
     assert client._lib.freed == []
@@ -492,7 +546,7 @@ def test_a_success_that_closed_the_region_still_returns_its_receipt():
     region = _offline_region(client)
     result = _FakeResult(_FakeFfi.NULL, 0, found=True, region_closed=True)
 
-    receipt = client._handle_rdma_result(result, region)
+    receipt = _transfer(client, region, result)
 
     assert receipt is not None
     assert region.closed is True
@@ -562,6 +616,57 @@ def test_memory_registers_again_once_the_fabric_lets_go():
 
     assert region.capacity == REGION_BYTES
     region.close()
+
+
+def test_a_second_transfer_on_a_region_in_use_is_refused():
+    # Both FFI calls would take the region exclusively at once, so the second
+    # is refused in Python before it reaches the FFI.
+    client = _offline_client()
+    client._core_client = object()
+    region = _offline_region(client)
+    first = _BlockedTransfer(client, region)
+
+    with pytest.raises(RdmaError, match="in use by another transfer"):
+        client.rdma_set(b"key", region.window())
+    assert len(client._lib.sets) == 1, "only the first transfer reached the FFI"
+
+    assert first.finish() == {"returned": None}
+    client._lib.set_gate = None
+    client.rdma_set(b"key", region.window())
+    assert len(client._lib.sets) == 2, "the region is free again once it returns"
+    region.close()
+
+
+def test_closing_a_region_in_use_is_refused():
+    # Freeing the region under the transfer would corrupt memory, so the close
+    # raises and leaves the region alone.
+    client = _offline_client()
+    client._core_client = object()
+    region = _offline_region(client)
+    transfer = _BlockedTransfer(client, region)
+
+    with pytest.raises(RdmaError, match="close the client to cancel"):
+        region.close()
+    assert client._lib.freed == [], "the region was not freed under the transfer"
+    assert region.closed is False
+
+    assert transfer.finish() == {"returned": None}
+    region.close()
+    assert len(client._lib.freed) == 1
+
+
+def test_a_transfer_on_a_closed_client_raises_closing_error_first():
+    # A cancel closes both the client and the region, and a retry should say
+    # the client is gone rather than that the region is.
+    client = _offline_client()
+    client._core_client = object()
+    region = _offline_region(client)
+    window = region.window()
+    region.close()
+    client._is_closed = True
+
+    with pytest.raises(ClosingError):
+        client.rdma_set(b"key", window)
 
 
 def _set_with_recovery(client: GlideClient, state: dict) -> None:
@@ -732,7 +837,7 @@ def test_a_real_failure_is_reported_even_if_the_client_closed_meanwhile():
     )
 
     with pytest.raises(RdmaError, match="exceeds") as raised:
-        client._handle_rdma_result(result, _offline_region(client))
+        client._handle_rdma_result(result)
 
     assert not isinstance(raised.value, ClosingError)
 
@@ -760,12 +865,15 @@ def test_a_non_window_is_refused():
     client = _offline_client()
     region = _offline_region(client)
 
+    client._core_client = object()
+
     with pytest.raises(TypeError, match="must be an RdmaWindow"):
-        client._rdma_window(object())
+        client.rdma_get(b"key", object())
 
     # A region is not a window: the transfer needs bounds, not a whole region.
     with pytest.raises(TypeError, match="must be an RdmaWindow"):
-        client._rdma_window(region)
+        client.rdma_get(b"key", region)
+    assert client._lib.sets == [], "refused before the FFI"
 
 
 @pytest.mark.parametrize("cluster_mode", [True, False])
