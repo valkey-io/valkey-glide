@@ -1662,6 +1662,60 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void hsetex_with_key_conditional_options(BaseClient client) {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("9.1.0"),
+                "HSETEX key-level NX/XX condition requires Valkey 9.1.0 or higher");
+
+        String key = "test_hsetex_key_conditional_" + UUID.randomUUID();
+        Map<String, String> fieldValueMap = new LinkedHashMap<>();
+        fieldValueMap.put("field1", "value1");
+
+        // NX: key does not exist yet, so the command should succeed
+        HSetExOptions nxOptions = HSetExOptions.builder().onlyIfKeyDoesNotExist().build();
+        Long result = client.hsetex(key, fieldValueMap, nxOptions).get();
+        assertEquals(1L, result);
+        assertEquals("value1", client.hget(key, "field1").get());
+
+        // NX: key now exists, so a second NX call should fail (return 0) and not modify the hash
+        Map<String, String> otherFieldValueMap = new LinkedHashMap<>();
+        otherFieldValueMap.put("field1", "should_not_be_set");
+        result = client.hsetex(key, otherFieldValueMap, nxOptions).get();
+        assertEquals(0L, result);
+        assertEquals("value1", client.hget(key, "field1").get());
+
+        // XX: key exists, so the command should succeed and update the field
+        HSetExOptions xxOptions = HSetExOptions.builder().onlyIfKeyExists().build();
+        Map<String, String> updateFieldValueMap = new LinkedHashMap<>();
+        updateFieldValueMap.put("field1", "updated_value1");
+        result = client.hsetex(key, updateFieldValueMap, xxOptions).get();
+        assertEquals(1L, result);
+        assertEquals("updated_value1", client.hget(key, "field1").get());
+
+        // XX: key does not exist, so the command should fail (return 0) and not create the hash
+        String missingKey = "test_hsetex_key_conditional_missing_" + UUID.randomUUID();
+        result = client.hsetex(missingKey, fieldValueMap, xxOptions).get();
+        assertEquals(0L, result);
+        assertEquals(0L, client.exists(new String[] {missingKey}).get());
+
+        // Key-level and field-level conditions can be combined, together with expiry
+        String combinedKey = "test_hsetex_key_and_field_conditional_" + UUID.randomUUID();
+        HSetExOptions combinedOptions =
+                HSetExOptions.builder()
+                        .onlyIfKeyDoesNotExist()
+                        .onlyIfNoneExist()
+                        .expiry(ExpirySet.Seconds(60L))
+                        .build();
+        result = client.hsetex(combinedKey, fieldValueMap, combinedOptions).get();
+        assertEquals(1L, result);
+        Long[] ttlResult = client.httl(combinedKey, new String[] {"field1"}).get();
+        assertEquals(1, ttlResult.length);
+        assertTrue(ttlResult[0] > 0 && ttlResult[0] <= 60);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void hsetex_with_different_expiry_types(BaseClient client) {
         assumeTrue(
                 SERVER_VERSION.isGreaterThanOrEqualTo("9.0.0"),
