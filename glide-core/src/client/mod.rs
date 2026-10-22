@@ -4,6 +4,8 @@ pub mod circuit_breaker;
 mod credentials;
 mod types;
 
+pub use credentials::AuthGeneration;
+
 use crate::cluster_scan_container::insert_cluster_scan_cursor;
 use crate::compression::CompressionBackendType;
 use crate::compression::lz4_backend::Lz4Backend;
@@ -1594,7 +1596,7 @@ impl Client {
         &self,
         cmd: &Cmd,
         connection: &mut redis::aio::MultiplexedConnection,
-        last_auth_generation: &AtomicU64,
+        last_auth_generation: &mut AuthGeneration,
         defer_reauth: bool,
     ) -> RedisResult<Value> {
         // Re-authenticate when the credential rotated (generation advanced since
@@ -1605,8 +1607,9 @@ impl Client {
         // subscribed mode (subscriptions clear only on release).
         if !defer_reauth {
             if let Some(iam_manager) = &self.iam_token_manager {
-                let current_generation = iam_manager.token_generation();
-                if current_generation != last_auth_generation.load(Ordering::Acquire) {
+                let current_generation =
+                    AuthGeneration::from_source(iam_manager.token_generation());
+                if current_generation != *last_auth_generation {
                     let current_token = iam_manager.get_token().await;
                     if current_token.is_empty() {
                         return Err(RedisError::from((
@@ -1619,12 +1622,12 @@ impl Client {
                         .arg(current_token.as_str())
                         .to_owned();
                     self.reauth_connection(connection, &auth_cmd, "IAM").await?;
-                    last_auth_generation.store(current_generation, Ordering::Release);
+                    *last_auth_generation = current_generation;
                 }
             } else {
                 let handle = self.credentials();
                 let current_generation = handle.generation();
-                if current_generation != last_auth_generation.load(Ordering::Acquire) {
+                if current_generation != *last_auth_generation {
                     // A removed password (`update_connection_password(None)`) has
                     // nothing to AUTH with; the bookmark still advances so the
                     // compare is not repeated on every command.
@@ -1632,7 +1635,7 @@ impl Client {
                         self.reauth_connection(connection, &auth_cmd, "password")
                             .await?;
                     }
-                    last_auth_generation.store(current_generation, Ordering::Release);
+                    *last_auth_generation = current_generation;
                 }
             }
         }

@@ -13,6 +13,25 @@
 use std::sync::RwLock;
 use std::sync::atomic::{AtomicU64, Ordering};
 
+/// Which credentials a connection's `AUTH` was built from. A credential source
+/// (this module's handle, or `IAMTokenManager::token_generation`) advances its
+/// generation on every accepted change; a connection keeps the generation it
+/// last authenticated at and re-AUTHs when the source has moved past it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct AuthGeneration(u64);
+
+impl AuthGeneration {
+    /// A connection that has not authenticated from any source. No source ever
+    /// produces this value (sources start at 1), so a connection holding it
+    /// re-AUTHs on its first command.
+    pub const NEVER: Self = Self(0);
+
+    pub(crate) fn from_source(generation: u64) -> Self {
+        debug_assert_ne!(generation, 0, "a credential source never reports 0");
+        Self(generation)
+    }
+}
+
 /// A username/password pair at one point in time. No `Debug`: it holds the password.
 #[derive(Clone, Default)]
 pub(crate) struct PasswordCredentials {
@@ -41,8 +60,8 @@ impl PasswordCredentials {
 ///
 /// Readers compare the generation against a per-connection bookmark and
 /// re-AUTH on mismatch, the way `ScopedConnection::last_auth_generation` tracks
-/// `IAMTokenManager::token_generation`. The generation starts at 1 so a
-/// bookmark of 0 always mismatches.
+/// `IAMTokenManager::token_generation`. The generation starts at 1, past
+/// `AuthGeneration::NEVER`.
 ///
 /// A pair the server has not accepted is stored without advancing the
 /// generation (`store_password`): it is for connections built from now on,
@@ -70,8 +89,8 @@ impl CredentialsHandle {
     /// *before* `current()` and bookmark it: a write landing between the two
     /// leaves the bookmark stale, so the next compare re-AUTHs again rather than
     /// missing the rotation.
-    pub(crate) fn generation(&self) -> u64 {
-        self.generation.load(Ordering::Acquire)
+    pub(crate) fn generation(&self) -> AuthGeneration {
+        AuthGeneration::from_source(self.generation.load(Ordering::Acquire))
     }
 
     pub(crate) fn current(&self) -> PasswordCredentials {
@@ -159,24 +178,25 @@ mod tests {
         let current = handle.current();
         assert_eq!(current.username.as_deref(), Some("u"));
         assert_eq!(current.password.as_deref(), Some("new"));
-        assert_eq!(handle.generation(), 1);
+        assert_eq!(handle.generation(), AuthGeneration(1));
         handle.store_password(None);
         assert_eq!(handle.current().password, None);
-        assert_eq!(handle.generation(), 1);
+        assert_eq!(handle.generation(), AuthGeneration(1));
     }
 
     #[test]
     fn generation_starts_at_one_and_advances_once_per_accepted_write() {
         let handle = CredentialsHandle::new(PasswordCredentials::default());
-        assert_eq!(handle.generation(), 1);
+        assert_eq!(handle.generation(), AuthGeneration(1));
+        assert_ne!(handle.generation(), AuthGeneration::NEVER);
         handle.advance_generation();
-        assert_eq!(handle.generation(), 2);
+        assert_eq!(handle.generation(), AuthGeneration(2));
         handle.update(|credentials| credentials.password = Some("p".into()));
-        assert_eq!(handle.generation(), 3);
+        assert_eq!(handle.generation(), AuthGeneration(3));
         handle.update(|credentials| credentials.password = Some("p".into()));
         assert_eq!(
             handle.generation(),
-            4,
+            AuthGeneration(4),
             "an unchanged value still counts as a rotation"
         );
         handle.update(|credentials| {
@@ -185,7 +205,7 @@ mod tests {
         });
         assert_eq!(
             handle.generation(),
-            5,
+            AuthGeneration(5),
             "a username+password edit is one generation"
         );
     }

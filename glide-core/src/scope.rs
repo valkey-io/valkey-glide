@@ -30,7 +30,7 @@
 //! [`execute_scope_command`]) so every queued command reaches the server and its
 //! own EXECABORT governs the transaction, as on the non-scoped path.
 
-use crate::client::Client;
+use crate::client::{AuthGeneration, Client};
 use crate::errors::RequestErrorType;
 use crate::pool::{
     ScopedConnection, get_client_scope_pools, get_scope_registry, slot_for_key,
@@ -606,9 +606,9 @@ struct PreparedScopeConnection {
     database_id: u32,
     /// Credential generation the initial AUTH was built from: the IAM token
     /// generation for an IAM client, otherwise `CredentialsHandle::generation`
-    /// (0 when the credentials came from the request bytes, i.e. no owning Client
-    /// was passed).
-    initial_auth_generation: u64,
+    /// (`AuthGeneration::NEVER` when the credentials came from the request bytes,
+    /// i.e. no owning Client was passed).
+    initial_auth_generation: AuthGeneration,
 }
 
 /// Strip surrounding `[ ]` from an IPv6 host. A bracketed literal is a URL-authority
@@ -792,7 +792,7 @@ async fn build_scope_connection(
     // initial AUTH (rather than always re-authenticating on the very first
     // command, or missing a rotation that lands between here and the first
     // command).
-    let mut initial_auth_generation: u64 = 0;
+    let mut initial_auth_generation = AuthGeneration::NEVER;
 
     // AUTH: IAM authentication takes priority when configured on the parent client
     // (matching the documented priority in `AuthenticationInfo`'s doc comment).
@@ -807,7 +807,7 @@ async fn build_scope_connection(
         // reauthentication. Reading generation after the token could otherwise
         // suppress it — a refresh landing there would mean the initial AUTH used
         // the old token, but the recorded generation already matches the new one.
-        let generation_before_auth = manager.token_generation();
+        let generation_before_auth = AuthGeneration::from_source(manager.token_generation());
         let current_token = manager.get_token().await;
         if current_token.is_empty() {
             return Err(ScopeCreateError::IamTokenUnavailable);
@@ -951,9 +951,7 @@ pub async fn create_scope_connection(
                 // a borrow picks it up.
                 acquisition_slot: None,
                 target,
-                last_auth_generation: std::sync::atomic::AtomicU64::new(
-                    prepared.initial_auth_generation,
-                ),
+                last_auth_generation: prepared.initial_auth_generation,
             });
             reservation.commit();
             Ok(())

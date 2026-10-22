@@ -32,6 +32,7 @@
 //! └─────────────────────────────────────┘
 //! ```
 
+use crate::client::AuthGeneration;
 use crate::client::Client as GlideClient;
 use dashmap::DashMap;
 use std::collections::VecDeque;
@@ -1033,9 +1034,8 @@ pub struct ScopedConnection {
     /// at: the IAM token generation (see `IAMTokenManager::token_generation`) for
     /// an IAM client, otherwise `CredentialsHandle::generation`. Per-connection
     /// rather than on the shared `Client` since scoped connections are reused
-    /// independently. Starts at 0 so a fresh connection re-authenticates on first
-    /// use if needed.
-    pub last_auth_generation: AtomicU64,
+    /// independently.
+    pub last_auth_generation: AuthGeneration,
 }
 
 /// Per-client scope pool.
@@ -1428,9 +1428,7 @@ impl ScopePool {
                         // Idle: not borrowed, so no acquisition slot. Set per borrow.
                         acquisition_slot: None,
                         target: conn.target.clone(),
-                        last_auth_generation: AtomicU64::new(
-                            conn.last_auth_generation.load(Ordering::Relaxed),
-                        ),
+                        last_auth_generation: conn.last_auth_generation,
                     };
                     drop(conn);
                     self.idle.push_back(idle_conn);
@@ -1566,9 +1564,7 @@ impl ScopePool {
                                     // Idle: not borrowed, so no acquisition slot. Set per borrow.
                                     acquisition_slot: None,
                                     target: guard.target.clone(),
-                                    last_auth_generation: AtomicU64::new(
-                                        guard.last_auth_generation.load(Ordering::Relaxed),
-                                    ),
+                                    last_auth_generation: guard.last_auth_generation,
                                 };
                                 drop(guard);
 

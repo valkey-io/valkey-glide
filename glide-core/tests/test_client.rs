@@ -5660,7 +5660,7 @@ pub(crate) mod shared_client_tests {
     /// Regression test for the scope path's IAM rotation re-authentication.
     ///
     /// Drives the real consumer, `Client::send_command_on_connection`, with two
-    /// independent `AtomicU64` generation bookmarks on two separate connections,
+    /// independent `AuthGeneration` bookmarks on two separate connections,
     /// and asserts that a single token rotation makes each connection send its own
     /// `AUTH`. That is precisely what the shared `token_changed` flag could not do:
     /// whichever consumer looked first cleared it and the other silently missed the
@@ -5669,7 +5669,7 @@ pub(crate) mod shared_client_tests {
     #[rstest]
     #[serial_test::serial]
     fn test_iam_rotation_reauthenticates_each_connection_independently() {
-        use std::sync::atomic::AtomicU64;
+        use glide_core::client::AuthGeneration;
 
         block_on_all(async {
             setup_test_credentials();
@@ -5702,10 +5702,9 @@ pub(crate) mod shared_client_tests {
             let mut admin_conn = open_conn().await;
 
             // Each connection owns its own bookmark, exactly as `ScopedConnection`
-            // does. A fresh manager sits at generation 1, so 0 always mismatches
-            // and the first command on each connection authenticates.
-            let bookmark_a = AtomicU64::new(0);
-            let bookmark_b = AtomicU64::new(0);
+            // does; `NEVER` makes the first command on each connection authenticate.
+            let mut bookmark_a = AuthGeneration::NEVER;
+            let mut bookmark_b = AuthGeneration::NEVER;
 
             let whoami_cmd = redis::cmd("ACL").arg("WHOAMI").to_owned();
             let whoami = |value: redis::RedisResult<Value>| -> String {
@@ -5720,11 +5719,11 @@ pub(crate) mod shared_client_tests {
             // malformed single-argument `AUTH` bug: a one-arg AUTH is rejected by
             // the server, so an identity assertion here fails without the username.
             let a_initial = client
-                .send_command_on_connection(&whoami_cmd, &mut conn_a, &bookmark_a, false)
+                .send_command_on_connection(&whoami_cmd, &mut conn_a, &mut bookmark_a, false)
                 .await;
             assert_eq!(whoami(a_initial), iam_username);
             let b_initial = client
-                .send_command_on_connection(&whoami_cmd, &mut conn_b, &bookmark_b, false)
+                .send_command_on_connection(&whoami_cmd, &mut conn_b, &mut bookmark_b, false)
                 .await;
             assert_eq!(whoami(b_initial), iam_username);
 
@@ -5738,7 +5737,7 @@ pub(crate) mod shared_client_tests {
 
             // Connection A observes the rotation first and updates its bookmark.
             let a_after = client
-                .send_command_on_connection(&whoami_cmd, &mut conn_a, &bookmark_a, false)
+                .send_command_on_connection(&whoami_cmd, &mut conn_a, &mut bookmark_a, false)
                 .await;
             assert_eq!(whoami(a_after), iam_username);
 
@@ -5746,7 +5745,7 @@ pub(crate) mod shared_client_tests {
             // `token_changed` flag, A's re-auth above cleared it and this connection
             // sends no AUTH at all.
             let b_after = client
-                .send_command_on_connection(&whoami_cmd, &mut conn_b, &bookmark_b, false)
+                .send_command_on_connection(&whoami_cmd, &mut conn_b, &mut bookmark_b, false)
                 .await;
             assert_eq!(whoami(b_after), iam_username);
 
@@ -5760,7 +5759,7 @@ pub(crate) mod shared_client_tests {
 
             // And no further AUTH once both bookmarks are current again.
             let a_settled = client
-                .send_command_on_connection(&whoami_cmd, &mut conn_a, &bookmark_a, false)
+                .send_command_on_connection(&whoami_cmd, &mut conn_a, &mut bookmark_a, false)
                 .await;
             assert_eq!(whoami(a_settled), iam_username);
             assert_eq!(
