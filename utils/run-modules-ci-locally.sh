@@ -1,15 +1,14 @@
 #!/usr/bin/env bash
 # Reproduces the "Modules Tests (Linux)" job from
 # .github/workflows/python-modules.yml on this machine, as closely as
-# possible, against an overridable module image. Written for
-# BRIEF-R1-FIXES.md Group 8 (operator decision D1 = option c: do not pin a
-# new CI image; prove 1.3 support via a local run of the SAME job against a
-# 1.3-bearing image instead).
+# possible, against an overridable module image. Written to avoid pinning a
+# new CI image; this proves 1.3 support via a local run of the SAME job against a
+# 1.3-bearing image instead.
 #
 # Shares the docker start/verify logic with
 # .github/actions/start-valkey-docker/action.yml via
 # utils/start-valkey-docker-modules.sh on EVERY path, including the
-# emulate-release override (QA round 2, R2-H-1: an earlier version hand-
+# emulate-release override (an earlier version hand-
 # rolled a second bring-up for that case, so the 9.2.0-rc2 proof didn't
 # actually exercise CI's startup code -- fixed by giving the shared script
 # a SEARCH_MODULE_ARGS hook instead of forking the bring-up logic).
@@ -23,7 +22,7 @@
 # independent axis.)
 #   utils/run-modules-ci-locally.sh                                       # 1: 9.2.0-rc2, emulate-release 1.3.0 (default; run-proof)
 #   IMAGE=valkey/valkey-bundle:9.1.3 EMULATE_RELEASE="" utils/run-modules-ci-locally.sh   # 2: 9.1.3, search 1.2.1 (skip-proof)
-#   EMULATE_RELEASE="" utils/run-modules-ci-locally.sh                    # 3: 9.2.0-rc2, module's own default emulate-release (1.0.0) -- E-2 (D22)
+#   EMULATE_RELEASE="" utils/run-modules-ci-locally.sh                    # 3: 9.2.0-rc2, module's own default emulate-release (1.0.0)
 #
 # See BUILD-MODULES-1.3.md for narrated example runs and Mac-vs-CI-runner
 # differences (notably: Docker Desktop on macOS shares /Users by default,
@@ -59,12 +58,12 @@ STANDALONE_PORT="${STANDALONE_PORT:-6389}"
 # Confirmed by source (src/valkey_search_options.cc:883,
 # vmsdk/src/module_config.cc:179) and empirically against both a local
 # macOS build and the valkey/valkey-bundle:9.2.0-rc2 Docker image.
-# D4 baseline = 1.3.0. Set to an empty string to start at the module's own
+# The 1.3.0 baseline. Set to an empty string to start at the module's own
 # default instead (useful for the 9.1.3 skip-proof run, where the module is
 # too old to accept this arg at all).
 EMULATE_RELEASE="${EMULATE_RELEASE-1.3.0}"
 
-# R2-SEC-2: a newline (or anything else outside X.Y.Z) in EMULATE_RELEASE
+# A newline (or anything else outside X.Y.Z) in EMULATE_RELEASE
 # would be interpolated into a generated .conf line. This script runs
 # locally as the operator against the operator's own containers (not a
 # cross-trust-boundary input), but the check is one line and closes it
@@ -107,7 +106,7 @@ done
 echo "=== Running modules tests ==="
 cd "${REPO_ROOT}/python"
 # Single-sourced from .github/workflows/python-modules.yml's "Run modules
-# tests" step (R2-H-1 fix #3: these must not drift independently -- see
+# tests" step (these must not drift independently -- see
 # tests/test_ci_workflow_sync.py, which greps the workflow file for this
 # exact arg list and fails the test suite if it ever changes there without
 # a matching update here).

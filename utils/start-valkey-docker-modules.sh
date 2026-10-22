@@ -3,7 +3,7 @@
 # Bloom, LDAP) via Docker, on dedicated ports, and verifies MODULE LIST on
 # every node. Shared by .github/actions/start-valkey-docker/action.yml (CI)
 # and utils/run-modules-ci-locally.sh (local reproduction) so the two paths
-# cannot silently drift apart (BRIEF-R1-FIXES.md Group 8).
+# cannot silently drift apart.
 #
 # Every container runs with --network host, which Docker Desktop on macOS
 # requires enabling separately (Settings > Resources > Network > "Enable
@@ -20,12 +20,14 @@
 #   CLUSTER_PORT_START  First of 6 consecutive cluster ports (default 8001)
 #   STANDALONE_PORT     Standalone port (default 6389)
 #   SEARCH_MODULE_ARGS  Extra args appended to the search module's loadmodule
-#                       line, e.g. "--emulate-release 1.3.0" (QA round 2,
-#                       R2-H-1). CI never sets this (empty by default) --
+#                       line, e.g. "--emulate-release 1.3.0". CI never sets
+#                       this (empty by default) --
 #                       it exists so the local runner's non-default
 #                       emulate-release path can still call this exact
-#                       script instead of hand-rolling its own bring-up, the
-#                       gap R2-H-1 found. The arg name must be the BARE
+#                       script instead of hand-rolling its own bring-up --
+#                       an earlier version split those into two separate
+#                       bring-up implementations that could drift. The arg
+#                       name must be the BARE
 #                       config name (e.g. "emulate-release", not
 #                       "search.emulate-release" -- that longer form only
 #                       exists at the CONFIG GET/SET surface, where Valkey
@@ -88,7 +90,7 @@ docker pull "$IMAGE"
 # image ships (json, bf, ldap) is left to the image's own auto-discovery,
 # exactly as before this file started generating conf files at all. This
 # is the one code path for both the empty-SEARCH_MODULE_ARGS (CI) and
-# non-empty (local emulate-release override) cases -- R2-H-1 found that an
+# non-empty (local emulate-release override) cases -- an
 # earlier version of this split into two bring-up implementations that
 # could drift.
 #
@@ -237,7 +239,7 @@ echo "Cluster with modules ready on ports ${PORT_START}-${PORT_END}"
 
 echo "=== Module server verification ==="
 # PING proves the server is up; MODULE LIST proves the modules this workflow
-# exists for are actually loaded (runbook Trap 0/3 -- a reachable server is
+# exists for are actually loaded (a reachable server is
 # not evidence of a loaded module, and a module-absent test run must never
 # look identical to a green run). Checks the FULL set the bundle image
 # ships (search, json, bf, ldap), not just search+json -- a QA round 2
