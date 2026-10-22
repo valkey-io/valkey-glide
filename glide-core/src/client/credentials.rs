@@ -35,14 +35,20 @@ impl PasswordCredentials {
     }
 }
 
-/// The owning `Client`'s current credentials plus a generation that advances on
-/// every write. The lock is held only to copy or edit the pair, never across an
-/// `.await`.
+/// The owning `Client`'s current credentials plus a generation that advances
+/// when the server has accepted a new pair. The lock is held only to copy or
+/// edit the pair, never across an `.await`.
 ///
 /// Readers compare the generation against a per-connection bookmark and
 /// re-AUTH on mismatch, the way `ScopedConnection::last_auth_generation` tracks
 /// `IAMTokenManager::token_generation`. The generation starts at 1 so a
 /// bookmark of 0 always mismatches.
+///
+/// A pair the server has not accepted is stored without advancing the
+/// generation (`store_password`): it is for connections built from now on,
+/// and an existing connection must not re-AUTH with it, because the server
+/// may not hold it yet and the failed re-AUTH would discard a connection whose
+/// session is still valid.
 ///
 /// No `Debug`: this holds the password.
 pub(crate) struct CredentialsHandle {
@@ -72,22 +78,30 @@ impl CredentialsHandle {
         self.current.read().expect(LOCK_POISONED).clone()
     }
 
-    /// Apply one edit to the credentials and advance the generation once. A
-    /// username and password that change together must land in the same write:
-    /// published one field at a time, a reader between the two would AUTH with
-    /// the new username and the old password and fail for a rotation that was
-    /// valid.
+    /// Apply one edit the server has already accepted and advance the
+    /// generation once. A username and password that change together must land
+    /// in the same write: published one field at a time, a reader between the
+    /// two would AUTH with the new username and the old password and fail for a
+    /// rotation that was valid.
     ///
     /// Always advances the generation, even for an unchanged value: one redundant
     /// AUTH on a live scope connection is cheaper than reasoning about which
     /// writes count as a rotation.
     pub(crate) fn update(&self, edit: impl FnOnce(&mut PasswordCredentials)) {
         edit(&mut self.current.write().expect(LOCK_POISONED));
-        self.generation.fetch_add(1, Ordering::AcqRel);
+        self.advance_generation();
     }
 
-    pub(crate) fn set_password(&self, password: Option<String>) {
-        self.update(|credentials| credentials.password = password);
+    /// Record the password a reconnect will use, without advancing the
+    /// generation (see the type doc).
+    pub(crate) fn store_password(&self, password: Option<String>) {
+        self.current.write().expect(LOCK_POISONED).password = password;
+    }
+
+    /// The server has accepted the stored pair: existing connections may now
+    /// re-AUTH with it.
+    pub(crate) fn advance_generation(&self) {
+        self.generation.fetch_add(1, Ordering::AcqRel);
     }
 }
 
@@ -136,29 +150,33 @@ mod tests {
     }
 
     #[test]
-    fn set_password_keeps_the_username() {
+    fn store_password_keeps_the_username_and_the_generation() {
         let handle = CredentialsHandle::new(PasswordCredentials {
             username: Some("u".into()),
             password: Some("old".into()),
         });
-        handle.set_password(Some("new".into()));
+        handle.store_password(Some("new".into()));
         let current = handle.current();
         assert_eq!(current.username.as_deref(), Some("u"));
         assert_eq!(current.password.as_deref(), Some("new"));
-        handle.set_password(None);
+        assert_eq!(handle.generation(), 1);
+        handle.store_password(None);
         assert_eq!(handle.current().password, None);
+        assert_eq!(handle.generation(), 1);
     }
 
     #[test]
-    fn generation_starts_at_one_and_advances_on_every_write() {
+    fn generation_starts_at_one_and_advances_once_per_accepted_write() {
         let handle = CredentialsHandle::new(PasswordCredentials::default());
         assert_eq!(handle.generation(), 1);
-        handle.set_password(Some("p".into()));
+        handle.advance_generation();
         assert_eq!(handle.generation(), 2);
-        handle.set_password(Some("p".into()));
+        handle.update(|credentials| credentials.password = Some("p".into()));
+        assert_eq!(handle.generation(), 3);
+        handle.update(|credentials| credentials.password = Some("p".into()));
         assert_eq!(
             handle.generation(),
-            3,
+            4,
             "an unchanged value still counts as a rotation"
         );
         handle.update(|credentials| {
@@ -167,7 +185,7 @@ mod tests {
         });
         assert_eq!(
             handle.generation(),
-            4,
+            5,
             "a username+password edit is one generation"
         );
     }

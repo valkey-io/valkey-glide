@@ -5416,8 +5416,14 @@ pub(crate) mod shared_client_tests {
     /// Scope connections authenticate with the owning Client's current password,
     /// not the password the pool was seeded with. After
     /// `update_connection_password`, a scope connection built afterwards AUTHs
-    /// with the new password, and an idle scope connection re-AUTHs before its
-    /// next command.
+    /// with the new password. An idle scope connection re-AUTHs before its next
+    /// command only after `immediate_auth` succeeded; a store-only update is for
+    /// reconnects, so it leaves the idle connection's session alone, exactly as
+    /// it leaves the client's own connection, and the connection keeps working
+    /// even while the server does not hold the new password yet.
+    ///
+    /// The store-only case therefore updates the client *before* rotating the
+    /// server; the `immediate_auth` case must rotate the server first.
     ///
     /// The server keeps an already-authenticated session valid across a password
     /// change, so command success on the reused connection proves nothing by
@@ -5488,31 +5494,63 @@ pub(crate) mod shared_client_tests {
 
             // `<OLD_PASSWORD` removes the old password, so any later AUTH with it
             // is rejected.
-            let mut rotate = redis::cmd("ACL");
-            rotate
-                .arg("SETUSER")
-                .arg(USERNAME)
-                .arg(format!(">{NEW_PASSWORD}"))
-                .arg(format!("<{OLD_PASSWORD}"));
-            assert_eq!(
-                test_basics
-                    .client
-                    .send_command(&mut rotate, None)
-                    .await
-                    .unwrap(),
-                Value::Okay
-            );
+            async fn rotate_server_password(client: &mut Client) {
+                let mut rotate = redis::cmd("ACL");
+                rotate
+                    .arg("SETUSER")
+                    .arg(USERNAME)
+                    .arg(format!(">{NEW_PASSWORD}"))
+                    .arg(format!("<{OLD_PASSWORD}"));
+                assert_eq!(
+                    client.send_command(&mut rotate, None).await.unwrap(),
+                    Value::Okay
+                );
+            }
+            if immediate_auth {
+                rotate_server_password(&mut test_basics.client).await;
+            }
             test_basics
                 .client
                 .update_connection_password(Some(NEW_PASSWORD.to_string()), immediate_auth)
                 .await
                 .expect("update_connection_password should succeed");
 
-            // Build half: holding the reused idle connection forces the second
-            // acquire to build a new one.
+            // Idle half. Both INFO reads go through the raw path on the same
+            // connection, so the counter is that node's and the reads add no AUTH.
             let reused_a = acquire()
                 .await
                 .expect("the idle scope connection is reusable");
+            let info_args: Vec<Vec<u8>> = vec![b"commandstats".to_vec()];
+            let auth_calls_before = auth_calls_from_info(
+                scope::execute_scope_command(reused_a, "INFO", &info_args, None)
+                    .await
+                    .expect("raw INFO through the reused scope"),
+            );
+            scope::send_scope_command(reused_a, "PING", &mut [], &client)
+                .await
+                .expect("the reused scope connection works after the password update");
+            let auth_calls_after = auth_calls_from_info(
+                scope::execute_scope_command(reused_a, "INFO", &info_args, None)
+                    .await
+                    .expect("raw INFO through the reused scope"),
+            );
+            assert_eq!(
+                auth_calls_after - auth_calls_before,
+                u64::from(immediate_auth),
+                "the reused scope connection re-AUTHs once after immediate_auth and never after a store-only update"
+            );
+            assert_eq!(
+                whoami(reused_a).await,
+                USERNAME,
+                "the reused scope connection must still be authenticated as the client's user"
+            );
+
+            if !immediate_auth {
+                rotate_server_password(&mut test_basics.client).await;
+            }
+
+            // Build half: holding the reused idle connection forces the second
+            // acquire to build a new one.
             let scope_b = acquire().await.expect(
                 "a scope connection built after the rotation must AUTH with the new password",
             );
@@ -5523,34 +5561,6 @@ pub(crate) mod shared_client_tests {
                 whoami(scope_b).await,
                 USERNAME,
                 "the newly built scope connection must be authenticated as the client's user"
-            );
-
-            // Idle half: the first command on the reused connection re-AUTHs, and
-            // only once. Both INFO reads go through the raw path on the same
-            // connection, so the counter is that node's and the reads add no AUTH.
-            let info_args: Vec<Vec<u8>> = vec![b"commandstats".to_vec()];
-            let auth_calls_before = auth_calls_from_info(
-                scope::execute_scope_command(reused_a, "INFO", &info_args, None)
-                    .await
-                    .expect("raw INFO through the reused scope"),
-            );
-            scope::send_scope_command(reused_a, "PING", &mut [], &client)
-                .await
-                .expect("the reused scope connection works after the rotation");
-            let auth_calls_after = auth_calls_from_info(
-                scope::execute_scope_command(reused_a, "INFO", &info_args, None)
-                    .await
-                    .expect("raw INFO through the reused scope"),
-            );
-            assert_eq!(
-                auth_calls_after - auth_calls_before,
-                1,
-                "the reused scope connection must re-AUTH exactly once with the new password"
-            );
-            assert_eq!(
-                whoami(reused_a).await,
-                USERNAME,
-                "the reused scope connection must still be authenticated as the client's user"
             );
 
             scope::release_scope(reused_a, client_id, &runtime);

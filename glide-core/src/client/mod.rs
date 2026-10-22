@@ -2199,8 +2199,11 @@ impl Client {
     /// The default behavior is to update the password without authenticating immediately.
     /// If the password is empty or None, and `immediate_auth` is true, the password will be updated and an error will be returned.
     ///
-    /// Scope connections re-authenticate with the new password on their next
-    /// command, so a password the server rejects fails them there, not here.
+    /// Scope connections built after this call use the new password. Existing
+    /// scope connections re-authenticate on their next command only once
+    /// `immediate_auth` has succeeded; a store-only update leaves them
+    /// authenticated as they are, like this client's own connection, because
+    /// the server may not hold the new password yet.
     pub async fn update_connection_password(
         &mut self,
         password: Option<String>,
@@ -2229,7 +2232,7 @@ impl Client {
                 if result.is_ok()
                     && let Some(handle) = self.static_credentials()
                 {
-                    handle.set_password(password.clone());
+                    handle.store_password(password.clone());
                 }
                 if immediate_auth {
                     // Fail before AUTHing if storing the password for reconnect failed:
@@ -2238,7 +2241,13 @@ impl Client {
                     // (and clears token_changed) while the reconnect password was never
                     // updated — so the next reconnect would use the stale password.
                     result?;
-                    self.send_immediate_auth(password).await
+                    let authenticated = self.send_immediate_auth(password).await;
+                    if authenticated.is_ok()
+                        && let Some(handle) = self.static_credentials()
+                    {
+                        handle.advance_generation();
+                    }
+                    authenticated
                 } else {
                     result
                 }
