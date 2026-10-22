@@ -92,7 +92,7 @@
         "CD_RUNNER": "windows-2022",
         "ARCH": "x64",
         "TARGET": "x86_64-pc-windows-msvc",
-        "PACKAGE_MANAGERS": ["maven", "npm"],
+        "PACKAGE_MANAGERS": ["maven"],
         "languages": ["java"],
         "run": "always"
     }
