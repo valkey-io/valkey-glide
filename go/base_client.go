@@ -3097,6 +3097,38 @@ func (client *baseClient) SIsMember(ctx context.Context, key string, member stri
 	return handleBoolResponse(result)
 }
 
+// SIsMemberIfExists returns if member is a member of the set stored at key,
+// or -1 if key does not exist.
+//
+// Since:
+//
+//	Valkey 9.2 and above.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx    - The context for controlling the command execution.
+//	key    - The key of the set.
+//	member - The member to check for existence in the set.
+//
+// Return value:
+//
+//	A status code indicating membership:
+//	- 1: The member exists in the set.
+//	- 0: The key exists but the member does not exist in the set.
+//	- -1: The key does not exist.
+//
+// [valkey.io]: https://valkey.io/commands/sismember/
+func (client *baseClient) SIsMemberIfExists(ctx context.Context, key string, member string) (int64, error) {
+	result, err := client.executeCommand(ctx, C.SIsMember, []string{key, member, constants.IfExistsKeyword})
+	if err != nil {
+		return models.DefaultIntResponse, err
+	}
+
+	return handleIntResponse(result)
+}
+
 // SDiff computes the difference between the first set and all the successive sets in keys.
 //
 // Note:

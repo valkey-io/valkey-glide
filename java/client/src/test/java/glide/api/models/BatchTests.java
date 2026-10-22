@@ -444,6 +444,21 @@ public class BatchTests {
                                 "key", "FXX", "PX", "5000", "FIELDS", "2", "field1", "value1", "field2",
                                 "value2")));
 
+        batch.hsetex(
+                "key",
+                fieldValueMap,
+                HSetExOptions.builder()
+                        .onlyIfKeyExists()
+                        .fieldConditionalChange(FieldConditionalChange.ONLY_IF_NONE_EXIST)
+                        .expiry(ExpirySet.Seconds(10L))
+                        .build());
+        results.add(
+                Pair.of(
+                        HSetEx,
+                        buildArgs(
+                                "key", "XX", "FNX", "EX", "10", "FIELDS", "2", "field1", "value1", "field2",
+                                "value2")));
+
         batch.hsetnx("key", "field", "value");
         results.add(Pair.of(HSetNX, buildArgs("key", "field", "value")));
 
@@ -642,6 +657,9 @@ public class BatchTests {
 
         batch.sismember("key", "member");
         results.add(Pair.of(SIsMember, buildArgs("key", "member")));
+
+        batch.sismemberIfExists("key", "member");
+        results.add(Pair.of(SIsMember, buildArgs("key", "member", "XX")));
 
         batch.srem("key", new String[] {"value"});
         results.add(Pair.of(SRem, buildArgs("key", "value")));

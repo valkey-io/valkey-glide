@@ -397,7 +397,10 @@ impl_to_valkey_args_tuple! {
 /// - bytes
 /// - references
 ///
-/// Implement it for your own types to pass them directly as command arguments.
+/// Implement this trait for every type that always writes exactly one argument,
+/// and never for a type that can write zero or several. It is the bound on
+/// single-value command parameters like keys (e.g. `get<K: ToSingleValkeyArg>`),
+/// so a wrong implementation shifts every later argument of the command.
 ///
 /// Mirrors redis-rs's `ToSingleRedisArg`.
 pub trait ToSingleValkeyArg: ToValkeyArgs {}
@@ -857,5 +860,46 @@ mod to_single_arg {
             assert_single(&"k");
             assert_single(&&5i64);
         }
+    }
+
+    #[test]
+    fn to_single_valkey_arg_option_impls_encode_one_arg() {
+        use crate::commands::bitmap::BitEncoding;
+        use crate::commands::bitmap::BitFieldOffset;
+        use crate::commands::bitmap::BitOverflow;
+        use crate::commands::bitmap::BitmapIndexType;
+        use crate::commands::geo::GeoUnit;
+        use crate::commands::options::ClientPauseMode;
+        use crate::commands::options::Direction;
+        use crate::commands::options::ExistenceCheck;
+        use crate::commands::options::FieldExistenceCheck;
+        use crate::commands::options::FlushAllOptions;
+        use crate::commands::options::FunctionRestorePolicy;
+        // TODO #7082: Uncomment with the `ObjectType` `ToSingleValkeyArg` impl.
+        // use crate::commands::options::ObjectType;
+        use crate::commands::options::OrderBy;
+        use crate::commands::sorted_set::AggregationType;
+        use crate::commands::sorted_set::LexBound;
+        use crate::commands::sorted_set::ScoreBound;
+        use crate::commands::stream::StreamTrimmingMode;
+
+        assert_single(AggregationType::Sum);
+        assert_single(BitEncoding::Signed(8));
+        assert_single(BitFieldOffset::Multiplier(2));
+        assert_single(BitmapIndexType::Bit);
+        assert_single(BitOverflow::Wrap);
+        assert_single(ClientPauseMode::All);
+        assert_single(Direction::Left);
+        assert_single(ExistenceCheck::NX);
+        assert_single(FieldExistenceCheck::FNX);
+        assert_single(FlushAllOptions::default());
+        assert_single(FunctionRestorePolicy::Append);
+        assert_single(GeoUnit::Meters);
+        assert_single(LexBound::Inclusive(b"a".to_vec()));
+        // TODO #7082: Uncomment with the `ObjectType` `ToSingleValkeyArg` impl.
+        // assert_single(ObjectType::ZSet);
+        assert_single(OrderBy::Asc);
+        assert_single(ScoreBound::Exclusive(1.5));
+        assert_single(StreamTrimmingMode::Approx);
     }
 }

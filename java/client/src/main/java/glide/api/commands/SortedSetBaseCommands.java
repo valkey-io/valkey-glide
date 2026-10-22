@@ -34,17 +34,41 @@ import java.util.concurrent.CompletableFuture;
  * @see <a href="https://valkey.io/commands/?group=sorted-set">Sorted Set Commands</a>
  */
 public interface SortedSetBaseCommands {
-    /** Valkey API keyword used to query sorted set members with their scores. */
-    String WITH_SCORES_VALKEY_API = "WITHSCORES";
+    /**
+     * Valkey API keyword used to query sorted set members with their scores.
+     *
+     * @deprecated Valkey API keyword constants are internal and will be removed in a future major
+     *     release.
+     */
+    // TODO #7401: Move to glide.internal.ValkeyKeywords.
+    @Deprecated String WITH_SCORES_VALKEY_API = "WITHSCORES";
 
-    /** Valkey API keyword used to query a sorted set member with its score. */
-    String WITH_SCORE_VALKEY_API = "WITHSCORE";
+    /**
+     * Valkey API keyword used to query a sorted set member with its score.
+     *
+     * @deprecated Valkey API keyword constants are internal and will be removed in a future major
+     *     release.
+     */
+    // TODO #7401: Move to glide.internal.ValkeyKeywords.
+    @Deprecated String WITH_SCORE_VALKEY_API = "WITHSCORE";
 
-    /** Valkey API keyword used to extract specific count of members from a sorted set. */
-    String COUNT_VALKEY_API = "COUNT";
+    /**
+     * Valkey API keyword used to extract specific count of members from a sorted set.
+     *
+     * @deprecated Valkey API keyword constants are internal and will be removed in a future major
+     *     release.
+     */
+    // TODO #7401: Move to glide.internal.ValkeyKeywords.
+    @Deprecated String COUNT_VALKEY_API = "COUNT";
 
-    /** Valkey API keyword used to limit calculation of intersection of sorted sets. */
-    String LIMIT_VALKEY_API = "LIMIT";
+    /**
+     * Valkey API keyword used to limit calculation of intersection of sorted sets.
+     *
+     * @deprecated Valkey API keyword constants are internal and will be removed in a future major
+     *     release.
+     */
+    // TODO #7401: Move to glide.internal.ValkeyKeywords.
+    @Deprecated String LIMIT_VALKEY_API = "LIMIT";
 
     /**
      * Adds members with their scores to the sorted set stored at <code>key</code>.<br>

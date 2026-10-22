@@ -4111,6 +4111,54 @@ public class GlideClientTest {
 
     @SneakyThrows
     @Test
+    public void sismemberIfExists_returns_success() {
+        // setup
+        String key = "testKey";
+        String member = "testMember";
+        String[] arguments = new String[] {key, member, "XX"};
+
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(-1L);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(SIsMember), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.sismemberIfExists(key, member);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(-1L, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void sismemberIfExists_binary_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        GlideString member = gs("testMember");
+        GlideString[] arguments = new GlideString[] {key, member, gs("XX")};
+
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(-1L);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(SIsMember), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.sismemberIfExists(key, member);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(-1L, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void srem_returns_success() {
         // setup
         String key = "testKey";

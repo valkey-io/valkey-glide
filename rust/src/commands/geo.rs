@@ -392,7 +392,7 @@ fn write_order_count_any<W: ?Sized + ValkeyWrite>(
     any: bool,
 ) {
     if let Some(order) = order {
-        out.write_arg(order.as_arg().as_bytes());
+        order.write_valkey_args(out);
     }
     if let Some(count) = count {
         out.write_arg(b"COUNT");
