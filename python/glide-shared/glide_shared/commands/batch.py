@@ -5134,7 +5134,7 @@ class BaseBatch:
 
         Args:
             key (TEncodable): The key to get.
-            expiry (Optional[ExpirySet]): set expiration to the given key.
+            expiry (Optional[ExpiryGetEx]): set expiration to the given key.
                 Equivalent to [`EX` | `PX` | `EXAT` | `PXAT` | `PERSIST`] in the Valkey API.
 
         Command Response:
