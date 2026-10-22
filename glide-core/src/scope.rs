@@ -330,13 +330,13 @@ pub async fn execute_scope_command(
         Some(c) => {
             let ScopedConnection {
                 connection,
-                last_iam_generation,
+                last_auth_generation,
                 ..
             } = &mut *conn;
             c.send_command_on_connection(
                 &cmd,
                 connection,
-                last_iam_generation,
+                last_auth_generation,
                 multi_active_before_command || subscribed_before_command,
             )
             .await
@@ -604,8 +604,9 @@ struct PreparedScopeConnection {
     connection: redis::aio::MultiplexedConnection,
     /// Database the connection was SELECTed into (parent runtime DB, else config).
     database_id: u32,
-    /// IAM token generation the initial AUTH was built from (0 when IAM is not in use).
-    initial_iam_generation: u64,
+    /// Credential generation the initial AUTH was built from: the IAM token
+    /// generation for an IAM client (0 when IAM is not in use).
+    initial_auth_generation: u64,
 }
 
 /// Strip surrounding `[ ]` from an IPv6 host. A bracketed literal is a URL-authority
@@ -788,7 +789,7 @@ async fn build_scope_connection(
     // detect whether the token has rotated again since this connection's initial
     // AUTH (rather than always re-authenticating on the very first command, or
     // missing a rotation that lands between here and the first command).
-    let mut initial_iam_generation: u64 = 0;
+    let mut initial_auth_generation: u64 = 0;
 
     // AUTH: IAM authentication takes priority when configured on the parent client
     // (matching the documented priority in `AuthenticationInfo`'s doc comment).
@@ -798,7 +799,7 @@ async fn build_scope_connection(
     // Client is passed (the raw test path).
     if let Some(manager) = client.and_then(|c| c.iam_token_manager()) {
         // Read the generation before the token: if a refresh lands in this gap,
-        // `initial_iam_generation` records the (now-stale) pre-refresh generation,
+        // `initial_auth_generation` records the (now-stale) pre-refresh generation,
         // so the mismatch on the first scope command still triggers a
         // reauthentication. Reading generation after the token could otherwise
         // suppress it — a refresh landing there would mean the initial AUTH used
@@ -808,7 +809,7 @@ async fn build_scope_connection(
         if current_token.is_empty() {
             return Err(ScopeCreateError::IamTokenUnavailable);
         }
-        initial_iam_generation = generation_before_auth;
+        initial_auth_generation = generation_before_auth;
         init_pipe
             .cmd("AUTH")
             .arg(manager.username())
@@ -887,7 +888,7 @@ async fn build_scope_connection(
     Ok(PreparedScopeConnection {
         connection: conn,
         database_id,
-        initial_iam_generation,
+        initial_auth_generation,
     })
 }
 
@@ -946,8 +947,8 @@ pub async fn create_scope_connection(
                 // a borrow picks it up.
                 acquisition_slot: None,
                 target,
-                last_iam_generation: std::sync::atomic::AtomicU64::new(
-                    prepared.initial_iam_generation,
+                last_auth_generation: std::sync::atomic::AtomicU64::new(
+                    prepared.initial_auth_generation,
                 ),
             });
             reservation.commit();

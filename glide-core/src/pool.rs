@@ -1028,11 +1028,12 @@ pub struct ScopedConnection {
     pub acquisition_slot: Option<u16>,
     /// The topology-aware destination this connection was created for.
     pub target: ScopeTarget,
-    /// Last IAM token generation this connection's AUTH was applied at (see
-    /// `IAMTokenManager::token_generation`). Per-connection rather than on the
-    /// shared `Client` since scoped connections are reused independently.
-    /// Starts at 0 so a fresh connection re-authenticates on first use if needed.
-    pub last_iam_generation: AtomicU64,
+    /// Generation of the client's credentials this connection's AUTH was applied
+    /// at: the IAM token generation (see `IAMTokenManager::token_generation`) for
+    /// an IAM client. Per-connection rather than on the shared `Client` since
+    /// scoped connections are reused independently. Starts at 0 so a fresh
+    /// connection re-authenticates on first use if needed.
+    pub last_auth_generation: AtomicU64,
 }
 
 /// Per-client scope pool.
@@ -1425,8 +1426,8 @@ impl ScopePool {
                         // Idle: not borrowed, so no acquisition slot. Set per borrow.
                         acquisition_slot: None,
                         target: conn.target.clone(),
-                        last_iam_generation: AtomicU64::new(
-                            conn.last_iam_generation.load(Ordering::Relaxed),
+                        last_auth_generation: AtomicU64::new(
+                            conn.last_auth_generation.load(Ordering::Relaxed),
                         ),
                     };
                     drop(conn);
@@ -1563,8 +1564,8 @@ impl ScopePool {
                                     // Idle: not borrowed, so no acquisition slot. Set per borrow.
                                     acquisition_slot: None,
                                     target: guard.target.clone(),
-                                    last_iam_generation: AtomicU64::new(
-                                        guard.last_iam_generation.load(Ordering::Relaxed),
+                                    last_auth_generation: AtomicU64::new(
+                                        guard.last_auth_generation.load(Ordering::Relaxed),
                                     ),
                                 };
                                 drop(guard);

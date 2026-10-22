@@ -1583,7 +1583,7 @@ impl Client {
     /// logic as `send_command`, but routes the command to the given
     /// `MultiplexedConnection` instead of the client's internal managed connection.
     ///
-    /// IAM change-detection here uses `last_seen_generation` (owned by the caller)
+    /// IAM change-detection here uses `last_auth_generation` (owned by the caller)
     /// instead of the shared `token_changed` flag — see `IAMTokenManager::token_generation`.
     ///
     /// Note: OTel spans and inflight tracking are not applied here because scoped
@@ -1593,7 +1593,7 @@ impl Client {
         &self,
         cmd: &Cmd,
         connection: &mut redis::aio::MultiplexedConnection,
-        last_seen_generation: &AtomicU64,
+        last_auth_generation: &AtomicU64,
         defer_reauth: bool,
     ) -> RedisResult<Value> {
         // IAM token refresh: re-authenticate when the token rotated (generation
@@ -1604,7 +1604,7 @@ impl Client {
         // subscribed mode (subscriptions clear only on release).
         if !defer_reauth && let Some(iam_manager) = &self.iam_token_manager {
             let current_generation = iam_manager.token_generation();
-            if current_generation != last_seen_generation.load(Ordering::Acquire) {
+            if current_generation != last_auth_generation.load(Ordering::Acquire) {
                 let current_token = iam_manager.get_token().await;
                 if current_token.is_empty() {
                     return Err(RedisError::from((
@@ -1640,7 +1640,7 @@ impl Client {
                         )));
                     }
                 }
-                last_seen_generation.store(current_generation, Ordering::Release);
+                last_auth_generation.store(current_generation, Ordering::Release);
             }
         }
 
