@@ -335,7 +335,11 @@ mod dma_tests {
             .send_command(&mut redis::cmd("EXEC"), None)
             .await
             .expect("EXEC is accepted");
-        let (_buffer, result) = client.rdma_get(b"key", buffer, 0, 4096).await;
+        let (buffer, result) = client.rdma_get(b"key", buffer, 0, 4096).await;
+        assert!(
+            buffer.is_none(),
+            "the transfer was queued, so the server may still write into the memory"
+        );
         let error = result.expect_err("the mock queues the transfer, which is not a read reply");
         assert!(
             !error.to_string().contains("inside an open MULTI"),
@@ -870,9 +874,11 @@ mod dma_tests {
         assert_eq!(receipt.map(|receipt| receipt.bytes_written), Some(8));
     }
 
-    /// A reply is a reply even when it cannot be read.
+    /// A reply that is neither a result nor an error does not prove the server is
+    /// done: it may have queued the transfer to run later. So the buffer does not
+    /// come back, and on tcp its memory is parked until the fabric closes.
     #[tokio::test]
-    async fn a_malformed_reply_hands_back_a_usable_buffer() {
+    async fn a_reply_that_is_not_a_read_result_recalls_the_buffer() {
         let (_peer, mock) = server_answering_reads(&["+OK\r\n"]);
         let mut client = rdma_client_against(&mock).await;
         let buffer = client
@@ -882,7 +888,57 @@ mod dma_tests {
         let (buffer, result) = client.rdma_get(b"key", buffer, 0, 4096).await;
 
         result.expect_err("OK is not a read reply");
-        assert!(!buffer.expect("the buffer comes back").is_revoked());
+        assert!(
+            buffer.is_none(),
+            "the server may not be done with the memory"
+        );
+        assert_eq!(client.rdma_parked_bytes().unwrap(), 4096);
+    }
+
+    /// A clone can open a `MULTI` on the shared connection after this transfer's
+    /// check for one, so the transfer gets queued without the client knowing. The
+    /// `+QUEUED` reply means the server will run it on `EXEC`, so the buffer must
+    /// not come back.
+    #[tokio::test]
+    async fn a_queued_read_recalls_the_buffer() {
+        let (_peer, mock) = server_answering_reads(&["+QUEUED\r\n"]);
+        let mut client = rdma_client_against(&mock).await;
+        let buffer = client
+            .register_rdma_region(vec![0u8; 4096])
+            .expect("registers");
+
+        let (buffer, result) = client.rdma_get(b"key", buffer, 0, 4096).await;
+
+        result.expect_err("QUEUED is not a read reply");
+        assert!(
+            buffer.is_none(),
+            "the server may still write into the memory"
+        );
+        assert_eq!(client.rdma_parked_bytes().unwrap(), 4096);
+    }
+
+    /// The same for a write: a queued `BLOB.RDMA_SET` would read the memory on
+    /// `EXEC`, after the caller might have changed it.
+    #[tokio::test]
+    async fn a_queued_write_recalls_the_buffer() {
+        let (_peer, hello) = hello_reply();
+        let scripts = HashMap::from([
+            ("BLOB.RDMA_HELLO".to_string(), vec![hello]),
+            ("BLOB.RDMA_SET".to_string(), vec!["+QUEUED\r\n".to_string()]),
+        ]);
+        let mock = ServerMock::new_with_command_scripts(primary_responses(), scripts);
+        let mut client = rdma_client_against(&mock).await;
+        let buffer = client
+            .register_rdma_region(vec![1u8; 4096])
+            .expect("registers");
+
+        let (buffer, result) = client
+            .rdma_set(b"key", buffer, 0, 4096, glide_rdma::SetChecksum::Skip)
+            .await;
+
+        result.expect_err("QUEUED is not a write reply");
+        assert!(buffer.is_none(), "the server may still read the memory");
+        assert_eq!(client.rdma_parked_bytes().unwrap(), 4096);
     }
 
     #[tokio::test]

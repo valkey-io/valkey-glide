@@ -12,32 +12,43 @@ use super::{Client, DispatchPermit};
 
 /// What an RDMA transfer hands back: the buffer, and how the transfer went.
 ///
-/// The buffer comes back whenever the server is known to be done with it: the
-/// server replied, even with an error or to the handshake, or the transfer was
-/// refused before the buffer was lent (a revoked or foreign buffer, a closed
-/// client, a full in-flight limit, an open circuit breaker, a window out of
-/// bounds). It is `None` when the transfer ended without a reply, for example
-/// because it was cancelled or its connection failed, even if the command may
-/// never have reached the server. Its region is then closed, and its memory is
-/// freed on efa-direct, held until the fabric closes on tcp, or kept for good if
-/// the close failed; see [`Client::rdma_parked_bytes`] and
-/// [`Client::rdma_leaked_bytes`].
+/// The buffer comes back only when the server is known to be done with it:
+///
+/// - The transfer was refused before the buffer was lent: a revoked or foreign
+///   buffer, a closed client, a full in-flight limit, an open circuit breaker,
+///   or a window out of bounds.
+/// - The server refused the handshake, or sent a handshake reply this client
+///   cannot read, so the transfer was never sent.
+/// - The server answered the transfer with its result or with an error.
+///
+/// Otherwise the buffer is `None`, because the server may still be using it:
+///
+/// - The transfer was cancelled, or its connection failed, before any answer.
+///   This holds even if the command never reached the server.
+/// - The server's reply is neither a result nor an error. For example, inside
+///   a `MULTI` the server answers `+QUEUED` and runs the transfer later, on
+///   `EXEC`.
+///
+/// When the buffer is `None`, its region is closed and its memory is:
+///
+/// - freed, on efa-direct;
+/// - held until the fabric closes, on tcp (see [`Client::rdma_parked_bytes`]);
+/// - kept until the process exits, if closing the region failed (see
+///   [`Client::rdma_leaked_bytes`]).
 pub type RdmaOutcome<T> = (Option<glide_rdma::RdmaBuffer>, Result<T, redis::RedisError>);
 
-/// End a loan the server replied to, with `reply` as parsed from that reply.
+/// End a loan the server is done with, with `reply` as what the server answered.
+/// Returns [`glide_rdma::TransferReply::Failed`] with `error`  when the server
+/// refused it or never got it.
 fn reclaim_rdma_loan(
     loan: glide_rdma::LentBuffer,
-    reply: redis::RedisResult<glide_rdma::TransferReply>,
+    reply: glide_rdma::TransferReply,
+    error: Option<redis::RedisError>,
 ) -> RdmaOutcome<Option<glide_rdma::ReadReceipt>> {
-    // A reply that could not be parsed is still a reply, so the server is done.
-    let (transfer_reply, parse_error) = match reply {
-        Ok(reply) => (reply, None),
-        Err(error) => (glide_rdma::TransferReply::Failed, Some(error)),
-    };
     // SAFETY: `reply` is the server's answer to this loan's command, so the server
     // is done with the window.
-    match unsafe { loan.reclaim(transfer_reply) } {
-        Ok((buffer, receipt)) => (Some(buffer), parse_error.map_or(Ok(receipt), Err)),
+    match unsafe { loan.reclaim(reply) } {
+        Ok((buffer, receipt)) => (Some(buffer), error.map_or(Ok(receipt), Err)),
         Err((buffer, error)) => (
             Some(buffer),
             Err(crate::rdma::protocol::as_redis_error(error)),
@@ -239,30 +250,34 @@ impl Client {
         (buffer, result.map(|_| ()))
     }
 
-    /// Send a lent buffer's command and end the loan.
+    /// Send a lent buffer's command and end the loan, as [`RdmaOutcome`] describes.
     ///
-    /// The loan is reclaimed when the server has provably stopped using the
-    /// memory: it sent a reply, even an error reply or one `parse` rejects, or it
-    /// answered the handshake with an error or a reply this client cannot read,
-    /// so the transfer command was never sent. Both are server replies to
-    /// `RedisError::is_server_reply`; `handshake_refused` and
-    /// `malformed_handshake` build them that way on purpose. Any other
-    /// error proves nothing about what the server is doing, so the loan is
-    /// recalled instead, which closes the region first. So is a revoke that wins
-    /// the race against the reply.
+    /// The loan ends one of two ways:
     ///
-    /// A reply only speaks for the attempt it answers. It proves the server is done
-    /// because the cluster client never sends a transfer again after an error that
-    /// leaves open whether the server got it; it retries only after the server
-    /// refused the command before running it, or when the command was never sent.
-    /// So no earlier attempt can still be using the memory.
+    /// - Reclaimed, handing the buffer back, when `parse` accepts the reply or the
+    ///   error is a server reply (`RedisError::is_server_reply`). A refused or
+    ///   unreadable handshake counts as a server reply, because
+    ///   `handshake_refused` and `malformed_handshake` build it that way.
+    /// - Recalled, closing the region first, in every other case: a reply `parse`
+    ///   rejects, any other error, or a revoke that wins the race against the
+    ///   reply.
     ///
-    /// The client-side checks that can fail before anything is sent already ran in
-    /// [`Self::rdma_preflight`], before the buffer was lent. A connection error that
-    /// says the command was not transmitted (`FatalSendError`) is still recalled.
-    /// That is more cautious than needed, and costs only a new registration.
+    /// A reply `parse` rejects is recalled because the server may have queued the
+    /// transfer rather than run it, as it does inside a `MULTI` (`+QUEUED`).
+    /// [`Self::rdma_preflight`] refuses an open `MULTI`, but cannot catch one that
+    /// a clone opens on the same connection while this transfer waits to be sent.
     ///
-    /// `permit` is what [`Self::rdma_preflight`] returned.
+    /// A reply proves the server is done only with the attempt it answers. That
+    /// is enough, because the cluster client sends a transfer again only when the
+    /// server refused it without running it, or when it was never sent. So no
+    /// earlier attempt can still be using the memory.
+    ///
+    /// A connection error saying the command was never sent (`FatalSendError`) is
+    /// still recalled. That is more cautious than needed, but costs only a new
+    /// registration.
+    ///
+    /// `permit` is what [`Self::rdma_preflight`] returned, after its checks ran and
+    /// before the buffer was lent.
     ///
     /// If this future is dropped, so is the loan, which also closes the region.
     async fn rdma_transfer(
@@ -281,7 +296,10 @@ impl Client {
             () = loan.revoked() => None,
         };
         match reply {
-            Some(Ok(value)) => reclaim_rdma_loan(loan, parse(value)),
+            Some(Ok(value)) => match parse(value) {
+                Ok(reply) => reclaim_rdma_loan(loan, reply, None),
+                Err(error) => recall_rdma_loan(loan, error),
+            },
             Some(Err(error)) => {
                 // Decided before the error is rewritten as a cancellation below.
                 let server_replied = error.is_server_reply();
@@ -290,7 +308,7 @@ impl Client {
                     crate::rdma::cancelled_if_revoked(Err(error), loan.is_revoked(), client_closed)
                         .expect_err("an error stays an error");
                 if server_replied {
-                    reclaim_rdma_loan(loan, Err(error))
+                    reclaim_rdma_loan(loan, glide_rdma::TransferReply::Failed, Some(error))
                 } else {
                     recall_rdma_loan(loan, error)
                 }
@@ -309,8 +327,9 @@ impl Client {
     /// repeat them.
     ///
     /// A transfer sent while a `MULTI` is open would be queued, and the server would
-    /// answer `+QUEUED` instead of replying to the transfer. The buffer would then come
-    /// back while the queued transfer can still write into it on `EXEC`.
+    /// answer `+QUEUED` instead of replying to the transfer. [`Self::rdma_transfer`]
+    /// would then have to recall the buffer, since the queued transfer can still use
+    /// it on `EXEC`. Refusing here hands it back instead.
     ///
     /// The rest of [`Self::send_command`] is skipped on purpose: `BLOB.*` is what
     /// `refuse_direct_command` refuses, it does not open or close a transaction, and
