@@ -1890,5 +1890,5 @@ def assert_incompatible(exc_info: pytest.ExceptionInfo[Exception]) -> None:
     """Asserts that the command failed because it is incompatible with compression."""
     error_msg = str(exc_info.value).lower()
     assert (
-        "incompatible" in error_msg or "compression" in error_msg
+        "incompatible with compression" in error_msg
     ), f"Error should mention incompatibility with compression: {exc_info.value}"
