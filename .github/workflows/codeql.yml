@@ -25,7 +25,7 @@ jobs:
     # Run CodeQL analysis for each language
     analyze:
         name: Analyze (${{ matrix.language }})
-        runs-on: ${{ (matrix.language == 'swift' && 'macos-latest') || 'ubuntu-latest' }}
+        runs-on: ${{ (matrix.language == 'swift' && 'macos-latest') || 'ubuntu-24.04' }}
         permissions:
             security-events: write
 

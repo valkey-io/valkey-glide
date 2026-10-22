@@ -34,7 +34,7 @@ env:
 jobs:
     load-platform-matrix:
         if: github.repository_owner == 'valkey-io'
-        runs-on: ubuntu-latest
+        runs-on: ubuntu-24.04
         environment: AWS_ACTIONS
         outputs:
             PLATFORM_MATRIX: ${{ steps.load-platform-matrix.outputs.PLATFORM_MATRIX }}
@@ -59,7 +59,7 @@ jobs:
                   echo "PLATFORM_MATRIX=${PLATFORM_MATRIX}" >> $GITHUB_OUTPUT
 
     validate-release-version:
-        runs-on: ubuntu-latest
+        runs-on: ubuntu-24.04
         outputs:
             RELEASE_VERSION: ${{ steps.release-tag.outputs.RELEASE_VERSION }}
         env:
@@ -155,7 +155,7 @@ jobs:
     commit-auto-gen-files-with-tag:
         if: ${{ github.event_name == 'push' || inputs.pkg_go_dev_publish == true }}
         needs: [validate-release-version, create-binaries]
-        runs-on: ubuntu-latest
+        runs-on: ubuntu-24.04
         environment: AWS_ACTIONS
         permissions:
             contents: write
