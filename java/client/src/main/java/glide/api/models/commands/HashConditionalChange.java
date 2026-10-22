@@ -20,7 +20,7 @@ public enum HashConditionalChange {
      * Only set fields if the key already exists. Equivalent to <code>XX</code> in the Valkey API.
      *
      * <p>When this option is used, the HSETEX command will only set fields if the hash key already
-     * exists. If the key does not exist, the entire operation fails.
+     * exists. If the key does not exist, the value is not set.
      */
     ONLY_IF_KEY_EXISTS("XX"),
 
@@ -29,7 +29,7 @@ public enum HashConditionalChange {
      * API.
      *
      * <p>When this option is used, the HSETEX command will only set fields if the hash key does not
-     * already exist. If the key already exists, the entire operation fails.
+     * already exist. If the key already exists, the value is not set.
      */
     ONLY_IF_KEY_DOES_NOT_EXIST("NX");
 

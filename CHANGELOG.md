@@ -8,6 +8,8 @@
   * `DELIFEQ` ([#6146](https://github.com/valkey-io/valkey-glide/issues/6146))
 * Java, Node, Python, Go: Add support for Valkey 9.1 commands:
   * `HGETDEL` ([#6145](https://github.com/valkey-io/valkey-glide/issues/6145))
+* Java: Add support for Valkey 9.1 commands:
+  * `NX`/`XX` support for `HSETEX` ([#6154](https://github.com/valkey-io/valkey-glide/issues/6154))
 * All: Add support for Valkey 9.2 commands:
   * `SISMEMBER` with `XX` option ([#7202](https://github.com/valkey-io/valkey-glide/issues/7202))
 * Rust: Implement `ToSingleValkeyArg` and `ToValkeyArgs` for option types ([#7381](https://github.com/valkey-io/valkey-glide/issues/7381))
@@ -71,7 +73,6 @@
 
 ### Changes
 
-* Java: Add `NX`/`XX` support for the `HSETEX` command ([#6154](https://github.com/valkey-io/valkey-glide/issues/6154))
 * Java: Deprecate the Valkey API keywords on `BaseClient` and the command interfaces ([#7401](https://github.com/valkey-io/valkey-glide/issues/7401))
 * Go, Java, Node, Python: Add `cluster_info` `INFO` section (Valkey 9.1) ([#7199](https://github.com/valkey-io/valkey-glide/issues/7199))
 * Java: add useMutualTlsFromKeyStore to load mTLS client identity ([#7258](https://github.com/valkey-io/valkey-glide/pull/7258))
