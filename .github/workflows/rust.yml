@@ -29,6 +29,9 @@ on:
             - utils/cluster_manager.py
             - "!**/*.md"
             - "!**/THIRD_PARTY_LICENSES*"
+            # Re-include: compiled as doctests by rust/src/lib.rs
+            - rust/README.md
+            - rust/migration.md
     pull_request:
         paths:
             - rust/**
@@ -50,6 +53,9 @@ on:
             - utils/cluster_manager.py
             - "!**/*.md"
             - "!**/THIRD_PARTY_LICENSES*"
+            # Re-include: compiled as doctests by rust/src/lib.rs
+            - rust/README.md
+            - rust/migration.md
     workflow_dispatch:
     workflow_call:
 
