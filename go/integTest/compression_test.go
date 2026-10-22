@@ -1494,7 +1494,7 @@ func (suite *GlideTestSuite) TestCompressionIncompatibleCommandsWorkWithoutCompr
 	assert.Equal(t, int64(11), appendResult)
 
 	// DELIFEQ
-	if suite.serverVersion >= "9.0.0" {
+	if compareServerVersions(suite.serverVersion, "9.0.0") >= 0 {
 		delIfEqKey := fmt.Sprintf("no_compression_delifeq_%s", randomString(8))
 		_, err = client.Set(context.Background(), delIfEqKey, "hello world")
 		assert.NoError(t, err)
