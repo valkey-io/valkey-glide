@@ -4179,9 +4179,21 @@ fn apply_json_options(
 /// `client_adapter_ptr` is a pointer to a valid `GlideClient` returned in the `ConnectionResponse` from [`create_client`].
 ///
 /// With RDMA, this also cancels every transfer in flight on the client by
-/// revoking every region the client registered. It does not free the
-/// regions. The caller still owns each one and must call `free_rdma_region`
-/// after this function returns.
+/// revoking every region the client registered. It does not free the regions:
+/// the caller still owns each one and frees it with `free_rdma_region`.
+///
+/// This returns once the regions are revoked, without waiting for the transfers
+/// it cancelled. Each cancelled `rdma_get` or `rdma_set` returns shortly after
+/// on its own thread, with `region_closed` set. Free a region only after every
+/// transfer using it has returned. Freeing it while one is still running is
+/// undefined behavior.
+///
+/// If libfabric cannot close a region, which takes a device or driver error,
+/// the failure is only logged. A transfer using that region is not cancelled:
+/// it keeps waiting until the server replies or its connection fails, since
+/// the server could still reach the memory. That memory is kept for the life
+/// of the process, so `free_rdma_region` returns a hold that is never
+/// released.
 ///
 /// # Panics
 ///

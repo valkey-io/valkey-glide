@@ -38,13 +38,17 @@ pub extern "C" fn rdma_usable() -> bool {
 /// A registered region of caller-owned memory.
 ///
 /// Not thread-safe: a transfer takes the region exclusively, so two threads must
-/// not use one region concurrently. Freed with [`free_rdma_region`].
+/// not use one region concurrently. That includes freeing it: free it with
+/// [`free_rdma_region`] only after every transfer using it has returned, even
+/// one that [`close_client`] cancelled.
 #[cfg(feature = "rdma")]
 pub struct RdmaRegion {
     /// Taken out for the length of each transfer, which lends it to the server,
     /// and put back when the transfer hands it back. Stays empty once a transfer
-    /// ends without the server's reply: the fabric then decides when the memory
-    /// is safe to let go, and [`Self::released`] says when it has.
+    /// ends before the server is known to be done with the memory, for example
+    /// without the server's reply or with a `+QUEUED` reply inside a `MULTI`. The
+    /// fabric then decides when the memory is safe to let go, and
+    /// [`Self::released`] says when it has.
     buffer: Option<glide_rdma::RdmaBuffer>,
     capacity: usize,
     /// Set once the fabric has let go of the caller's memory; see [`ForeignRegion`].
@@ -82,8 +86,8 @@ impl RdmaRegion {
         self.buffer.take().ok_or_else(|| RdmaResult {
             region_closed: true,
             ..RdmaResult::rejected(
-                "the region was closed when a transfer ended without the server's reply; \
-                 free it and register the memory again"
+                "the region was closed when a transfer ended before the server was known to be \
+                 done with it; free it and register the memory again"
                     .to_string(),
             )
         })
@@ -99,9 +103,9 @@ impl RdmaRegion {
         }
     }
 
-    /// Whether no transfer can use this region again: a transfer ended without the
-    /// server's reply, so no buffer came back, or the region was revoked, for
-    /// example by [`close_client`].
+    /// Whether no transfer can use this region again: a transfer ended before the
+    /// server was known to be done with the memory, so no buffer came back, or the
+    /// region was revoked, for example by [`close_client`].
     fn is_closed(&self) -> bool {
         self.buffer
             .as_ref()
@@ -177,9 +181,10 @@ pub struct RdmaResult {
     /// Read only: the CRC-32c the server reported over the transferred bytes.
     pub checksum: u32,
     /// Whether the region can no longer be used for a transfer, because a transfer
-    /// ended without the server's reply or the region was revoked. Free it with
-    /// [`free_rdma_region`] and register the memory again. Any error may come with
-    /// this set or not, so check this rather than the error type.
+    /// ended before the server was known to be done with the memory, or the region
+    /// was revoked. Free it with [`free_rdma_region`] and register the memory
+    /// again. Any error may come with this set or not, so check this rather than
+    /// the error type.
     pub region_closed: bool,
 }
 
@@ -306,11 +311,11 @@ fn block_on_transfer<F: Future>(adapter: &ClientAdapter, future: F) -> F::Output
 
 /// Caller-owned memory presented to the fabric as a registerable region.
 ///
-/// The fabric drops this when it is done with the memory: at once, after the
-/// server's reply or a region close that stops writes in flight; only when the
-/// fabric closes, if a write could still land; never, if the region failed to
-/// close. Dropping sets `released`, which is how the caller learns it may free the
-/// memory.
+/// The fabric drops this when it is done with the memory: at once, once the
+/// server is known to be done with it or a region close stops writes in flight;
+/// only when the fabric closes, if a write could still land; never, if the region
+/// failed to close. Dropping sets `released`, which is how the caller learns it
+/// may free the memory.
 #[cfg(feature = "rdma")]
 struct ForeignRegion {
     memory: *mut u8,
@@ -477,10 +482,16 @@ pub unsafe extern "C" fn rdma_region_capacity(region: *const RdmaRegion) -> usiz
 /// Has no timeout, waits for the server to complete the transfer so memory
 /// is not left in an undefined state.
 ///
-/// To cancel a transfer, call [`close_client`] to revoke registered regions
-/// so the server can no longer reach them. Bytes that landed before the close
-/// stay, so the window then holds an unknown mix of old and new bytes. The
-/// region cannot be used for another transfer; free it with [`free_rdma_region`].
+/// To cancel a transfer, call [`close_client`] from another thread to revoke
+/// registered regions so the server can no longer reach them. This call then
+/// returns shortly after, with [`RdmaResult::region_closed`] set. Bytes that
+/// landed before the close stay, so the window then holds an unknown mix of old
+/// and new bytes. The region cannot be used for another transfer; free it with
+/// [`free_rdma_region`], but only once this call has returned.
+///
+/// If libfabric cannot close the region, [`close_client`] cannot cancel this
+/// call, which keeps waiting until the server replies or the connection fails;
+/// see [`close_client`].
 ///
 /// After an error the server sent, or one raised before the command was sent
 /// such as reaching the in-flight request limit, the region can be used again.
@@ -551,7 +562,8 @@ pub unsafe extern "C-unwind" fn rdma_get(
 /// `[offset, offset + length)` window of a registered region.
 ///
 /// Like [`rdma_get`], it has no timeout, and calling [`close_client`] from
-/// another thread cancels it.
+/// another thread cancels it, with the same rules for freeing the region
+/// afterwards.
 ///
 /// `checksum_mode` decides whether the server checks the bytes it read before
 /// storing them; see [`RdmaSetChecksumMode`]. `checksum` is read only for
@@ -649,10 +661,10 @@ fn reject_bad_transfer_args(
 /// # Returns
 ///
 /// Null when the caller may free or reuse the memory as soon as this returns. A
-/// hold when the fabric still keeps it: a transfer on this region ended without
-/// the server's reply and a write could still land, or the region failed to
-/// close. The caller must then keep the memory alive until
-/// [`rdma_memory_released`] returns true, and free the hold with
+/// hold when the fabric still keeps it: a transfer on this region ended before
+/// the server was known to be done with the memory and a write could still land,
+/// or the region failed to close. The caller must then keep the memory alive
+/// until [`rdma_memory_released`] returns true, and free the hold with
 /// [`free_rdma_memory_hold`]. A hold for a region that failed to close is never
 /// released. Null is a no-op that returns null.
 ///
@@ -660,7 +672,8 @@ fn reject_bad_transfer_args(
 ///
 /// * `region` must be null or a region from [`register_rdma_region`].
 /// * `free_rdma_region` may be called only once per region.
-/// * No transfer against the region may be in flight.
+/// * No transfer against the region may be in flight, including one that
+///   [`close_client`] cancelled but that has not returned yet.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn free_rdma_region(region: *mut RdmaRegion) -> *mut RdmaMemoryHold {
     // Without the `rdma` feature no region can ever have been handed out, so
@@ -1082,9 +1095,9 @@ mod tests {
         assert!(hold.is_null(), "nothing holds the memory any more");
     }
 
-    /// On tcp a transfer that ended without a reply leaves the memory parked in the
-    /// fabric, because a write could still land. The caller has to keep it until
-    /// the fabric closes.
+    /// On tcp a transfer whose buffer did not come back leaves the memory parked in
+    /// the fabric, because a write could still land. The caller has to keep it
+    /// until the fabric closes.
     #[cfg(feature = "rdma")]
     #[test]
     fn a_parked_region_holds_the_memory_until_the_fabric_closes() {
@@ -1130,8 +1143,9 @@ mod tests {
         unsafe { free_rdma_result(result.into_raw()) };
     }
 
-    /// No buffer comes back when a transfer ends without the server's reply, so
-    /// both that transfer and every later one report the region closed.
+    /// No buffer comes back when a transfer ends before the server is known to be
+    /// done with the memory, so both that transfer and every later one report the
+    /// region closed.
     #[cfg(feature = "rdma")]
     #[test]
     fn a_transfer_without_the_buffer_back_reports_the_region_closed() {
