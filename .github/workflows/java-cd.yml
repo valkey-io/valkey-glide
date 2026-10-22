@@ -29,7 +29,7 @@ permissions:
 
 jobs:
     load-platform-matrix:
-        runs-on: ubuntu-latest
+        runs-on: ubuntu-24.04
         environment: AWS_ACTIONS
         outputs:
             PLATFORM_MATRIX: ${{ steps.load-platform-matrix.outputs.PLATFORM_MATRIX }}
@@ -54,7 +54,7 @@ jobs:
                   echo "PLATFORM_MATRIX=${PLATFORM_MATRIX}" >> $GITHUB_OUTPUT
 
     set-release-version:
-        runs-on: ubuntu-latest
+        runs-on: ubuntu-24.04
         outputs:
             RELEASE_VERSION: ${{ steps.release-version.outputs.RELEASE_VERSION }}
         steps:
@@ -286,7 +286,7 @@ jobs:
         needs: [set-release-version, create-binaries-to-publish]
         if: github.repository_owner == 'valkey-io'
         timeout-minutes: 25
-        runs-on: ubuntu-latest
+        runs-on: ubuntu-24.04
         env:
             JAVA_VERSION: "11"
             RELEASE_VERSION: ${{ needs.set-release-version.outputs.RELEASE_VERSION }}
@@ -499,7 +499,7 @@ jobs:
         if: ${{ inputs.maven_publish == true || github.event_name == 'push' }}
         needs:
             [set-release-version, create-binaries-to-publish, create-uber-jar]
-        runs-on: ubuntu-latest
+        runs-on: ubuntu-24.04
         outputs:
             DEPLOYMENT_ID: ${{ steps.maven-deployment.outputs.DEPLOYMENT_ID }}
         env:
@@ -717,7 +717,7 @@ jobs:
                 publish-to-maven-central-deployment,
                 test-deployment-on-all-architectures,
             ]
-        runs-on: ubuntu-latest
+        runs-on: ubuntu-24.04
         environment: AWS_ACTIONS
         env:
             DEPLOYMENT_ID: ${{ needs.publish-to-maven-central-deployment.outputs.DEPLOYMENT_ID }}
@@ -735,7 +735,7 @@ jobs:
                 publish-to-maven-central-deployment,
                 test-deployment-on-all-architectures,
             ]
-        runs-on: ubuntu-latest
+        runs-on: ubuntu-24.04
         env:
             DEPLOYMENT_ID: ${{ needs.publish-to-maven-central-deployment.outputs.DEPLOYMENT_ID }}
         steps:
