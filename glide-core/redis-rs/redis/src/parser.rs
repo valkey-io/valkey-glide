@@ -958,6 +958,15 @@ mod tests {
     }
 
     #[test]
+    fn a_command_never_sent_counts_as_a_server_reply() {
+        let error = RedisError::command_not_sent(ErrorKind::FatalSendError, "reason".to_string());
+
+        assert!(error.is_server_reply(), "{error}");
+        assert_eq!(error.kind(), ErrorKind::FatalSendError);
+        assert_eq!(error.detail(), Some("reason"));
+    }
+
+    #[test]
     fn parse_nested_error_and_handle_more_inputs() {
         // from https://redis.io/docs/interact/transactions/ -
         // "EXEC returned two-element bulk string reply where one is an OK code and the other an error reply. It's up to the client library to find a sensible way to provide the error to the user."

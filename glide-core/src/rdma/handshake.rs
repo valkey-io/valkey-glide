@@ -3,8 +3,30 @@
 //! What a failed `BLOB.RDMA_HELLO` tells the caller: whether the node lacks the
 //! module, refused the handshake, or may hold a session this client could not
 //! open, which means the connection has to be replaced.
+//!
+//! Also which failed transfers leave the server done with their buffer; see
+//! [`server_is_done_with`].
 
 use super::RdmaUnavailable;
+
+/// Whether a transfer that failed with `error` left the server done with its
+/// buffer, so the buffer can be handed back.
+///
+/// Two kinds of error prove that:
+///
+/// - An error reply to the transfer. The server answered, so it is done. Only
+///   the reply parser builds these.
+/// - A failed handshake, built in this module. The transfer was never sent, so
+///   the server never had the buffer. These are built with
+///   [`redis::RedisError::command_not_sent`].
+///
+/// Both pass [`redis::RedisError::is_server_reply`], which is all this checks.
+/// So any other code that builds an error with `command_not_sent` must also
+/// mean the server cannot be using the memory. Otherwise a transfer would hand
+/// back a buffer the server may still write into.
+pub(crate) fn server_is_done_with(error: &redis::RedisError) -> bool {
+    error.is_server_reply()
+}
 
 /// Why a `BLOB.RDMA_HELLO` was refused by the server.
 pub(crate) fn handshake_refused(node: &str, error: redis::RedisError) -> redis::RedisError {
@@ -35,10 +57,9 @@ pub(crate) fn handshake_refused(node: &str, error: redis::RedisError) -> redis::
         };
         (error.kind(), reason)
     };
-    // The server answered, so the transfer command was never sent on this
-    // connection. Keeping the server's description is what tells
-    // `rdma_transfer` that, and it hands the buffer back.
-    redis::RedisError::from((kind, redis::SERVER_ERROR_DESCRIPTION, reason.to_string()))
+    // The server answered the handshake, so the transfer command was never sent
+    // on this connection, and `rdma_transfer` hands the buffer back.
+    redis::RedisError::command_not_sent(kind, reason.to_string())
 }
 
 /// A `BLOB.RDMA_HELLO` reply this client could not read.
@@ -83,14 +104,11 @@ pub(crate) fn handshake_unsettled(node: &str) -> redis::RedisError {
 ///   replaced. A standalone client reconnects. A cluster client reconnects and
 ///   sends the transfer again on the new connection, which is safe because the
 ///   first attempt never sent it.
-/// - The server's description tells `rdma_transfer` that the server is done with
-///   the buffer, since the transfer was never sent, so it hands the buffer back.
+/// - [`redis::RedisError::command_not_sent`] tells `rdma_transfer` that the
+///   server is done with the buffer, since the transfer was never sent, so it
+///   hands the buffer back.
 fn connection_needs_replacing(reason: RdmaUnavailable) -> redis::RedisError {
-    redis::RedisError::from((
-        redis::ErrorKind::FatalSendError,
-        redis::SERVER_ERROR_DESCRIPTION,
-        reason.to_string(),
-    ))
+    redis::RedisError::command_not_sent(redis::ErrorKind::FatalSendError, reason.to_string())
 }
 
 /// Whether the server answered the handshake at all.
@@ -151,10 +169,10 @@ mod tests {
             .expect_err("a READONLY reply is an error")
     }
 
-    /// A refusal is the server's own reply, so it must stay one: that is how a
-    /// transfer whose handshake was refused knows its command was never sent.
+    /// A refused handshake means the transfer was never sent, so its buffer must
+    /// come back.
     #[test]
-    fn every_refusal_stays_a_server_reply() {
+    fn every_refusal_leaves_the_server_done_with_the_buffer() {
         for (refusal, kind) in [
             (
                 server_error("unknown command 'BLOB.RDMA_HELLO'"),
@@ -168,8 +186,24 @@ mod tests {
         ] {
             let failure = handshake_refused("10.0.0.1:6379", refusal);
 
-            assert!(failure.is_server_reply(), "{failure}");
+            assert!(server_is_done_with(&failure), "{failure}");
             assert_eq!(failure.kind(), kind, "{failure}");
+        }
+    }
+
+    /// An error the client raised itself, such as a lost connection, says nothing
+    /// about whether the server is still using the buffer.
+    #[test]
+    fn a_local_error_does_not_leave_the_server_done_with_the_buffer() {
+        for local in [
+            redis::RedisError::from(std::io::Error::from(std::io::ErrorKind::BrokenPipe)),
+            redis::RedisError::from((redis::ErrorKind::FatalSendError, "connection closed")),
+            redis::RedisError::from((
+                redis::ErrorKind::ResponseError,
+                "Internal failure: receiver was dropped before delivering a response",
+            )),
+        ] {
+            assert!(!server_is_done_with(&local), "{local}");
         }
     }
 
@@ -212,7 +246,7 @@ mod tests {
 
             assert_eq!(failure.kind(), kind, "{failure}");
             assert_ne!(failure.kind(), redis::ErrorKind::InvalidClientConfig);
-            assert!(failure.is_server_reply(), "{failure}");
+            assert!(server_is_done_with(&failure), "{failure}");
             assert!(
                 failure.to_string().contains("refused the RDMA handshake"),
                 "{failure}"
@@ -230,7 +264,7 @@ mod tests {
 
         assert_eq!(failure.kind(), redis::ErrorKind::FatalSendError);
         assert!(
-            failure.is_server_reply(),
+            server_is_done_with(&failure),
             "the transfer was never sent: {failure}"
         );
         let message = failure.to_string();
@@ -258,7 +292,7 @@ mod tests {
                 "{failure}"
             );
             assert!(failure.is_unrecoverable_error(), "reconnects: {failure}");
-            assert!(failure.is_server_reply(), "{failure}");
+            assert!(server_is_done_with(&failure), "{failure}");
             assert!(failure.to_string().contains("10.0.0.1:6379"), "{failure}");
         }
     }

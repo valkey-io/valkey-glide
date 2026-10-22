@@ -12,7 +12,8 @@
 //!   methods.
 //!
 //! With the `rdma` feature only:
-//! - `handshake`: what a failed `BLOB.RDMA_HELLO` means.
+//! - `handshake`: what a failed `BLOB.RDMA_HELLO` means, and which failed
+//!   transfers leave the server done with their buffer.
 //! - `regions`: every registered region, closing them, and cancellation errors.
 //! - `protocol`: the RESP side of the RDMA commands.
 
@@ -28,7 +29,8 @@ mod setting;
 pub(crate) use guard::{refuse_direct, refuse_direct_command, refuse_direct_in_batch};
 #[cfg(feature = "rdma")]
 pub(crate) use handshake::{
-    handshake_refused, handshake_unsettled, malformed_handshake, session_not_opened,
+    handshake_refused, handshake_unsettled, malformed_handshake, server_is_done_with,
+    session_not_opened,
 };
 #[cfg(feature = "rdma")]
 pub(crate) use regions::{Regions, cancellation, cancelled_if_revoked};

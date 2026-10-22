@@ -402,6 +402,9 @@ impl From<tokio::time::error::Elapsed> for RedisError {
 
 /// How every error parsed from a server's error reply is described, which is how
 /// [`RedisError::is_server_reply`] tells those apart from errors raised locally.
+///
+/// To raise an error locally that should count as a server reply, use
+/// [`RedisError::command_not_sent`] rather than this description.
 pub const SERVER_ERROR_DESCRIPTION: &str = "An error was signalled by the server:";
 
 impl From<ServerError> for RedisError {
@@ -1022,6 +1025,8 @@ impl RedisError {
     /// An error reply proves the server answered the command. A client-side error
     /// proves nothing about what the server did, even when it has the same kind:
     /// some local failures are reported as `ResponseError` too.
+    ///
+    /// Also true for an error built with [`Self::command_not_sent`].
     pub fn is_server_reply(&self) -> bool {
         match self.repr {
             ErrorRepr::ExtensionError(_, _) => true,
@@ -1029,6 +1034,17 @@ impl RedisError {
             | ErrorRepr::WithDescriptionAndDetail(_, desc, _) => desc == SERVER_ERROR_DESCRIPTION,
             ErrorRepr::IoError(_) => false,
         }
+    }
+
+    /// An error for a command this client never sent.
+    ///
+    /// [`Self::is_server_reply`] is true for this error. That is safe because
+    /// the server never saw the command, so it cannot be using the buffer.
+    /// Treat the response as if the server replied "done with this buffer".
+    ///
+    /// Use this only when the command was never written to the connection.
+    pub fn command_not_sent(kind: ErrorKind, reason: String) -> Self {
+        RedisError::from((kind, SERVER_ERROR_DESCRIPTION, reason))
     }
 
     /// Returns the error detail.

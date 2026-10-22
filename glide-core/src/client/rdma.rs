@@ -171,8 +171,9 @@ fn reclaim_rdma_loan(
         Ok(reply) => (reply, None),
         Err(error) => (glide_rdma::TransferReply::Failed, Some(error)),
     };
-    // SAFETY: `reply` is the server's answer to this loan's command, so the server
-    // is done with the window.
+    // SAFETY: `reply` is the server's answer to this loan's command or an error
+    // that `crate::rdma::server_is_done_with` accepts, so the server is done with
+    // the window.
     let (buffer, result) = match unsafe { loan.reclaim(reply) } {
         Ok((buffer, receipt)) => (buffer, error.map_or(Ok(receipt), Err)),
         Err((buffer, error)) => (buffer, Err(crate::rdma::protocol::as_redis_error(error))),
@@ -363,10 +364,8 @@ impl Client {
     ///
     /// The loan ends one of two ways:
     ///
-    /// - Reclaimed, handing the buffer back, when `parse` accepts the reply or the
-    ///   error is a server reply (`RedisError::is_server_reply`). Every handshake
-    ///   failure that kept the transfer from being sent counts as a server reply,
-    ///   because the errors in `crate::rdma::handshake` are built that way.
+    /// - Reclaimed, handing the buffer back, when `parse` accepts the reply or
+    ///   [`crate::rdma::server_is_done_with`] accepts the error.
     /// - Recalled, closing the region first, in every other case: a reply `parse`
     ///   rejects, any other error, or a revoke that wins the race against the
     ///   reply.
@@ -411,12 +410,12 @@ impl Client {
             },
             Some(Err(error)) => {
                 // Decided before the error is rewritten as a cancellation below.
-                let server_replied = error.is_server_reply();
+                let server_is_done = crate::rdma::server_is_done_with(&error);
                 let client_closed = self.rdma_wait_if_closing().await;
                 let error =
                     crate::rdma::cancelled_if_revoked(Err(error), loan.is_revoked(), client_closed)
                         .expect_err("an error stays an error");
-                if server_replied {
+                if server_is_done {
                     reclaim_rdma_loan(loan, Err(error))
                 } else {
                     recall_rdma_loan(loan, error)
