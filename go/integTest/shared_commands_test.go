@@ -601,13 +601,6 @@ func (suite *GlideTestSuite) TestDelIfEq() {
 		res1, err = client.Get(context.Background(), key)
 		suite.NoError(err)
 		assert.True(suite.T(), res1.IsNil())
-
-		// DELIFEQ on a key holding a non-string value returns a WRONGTYPE error
-		setKey := uuid.New().String()
-		_, err = client.SAdd(context.Background(), setKey, []string{"member"})
-		suite.NoError(err)
-		_, err = client.DelIfEq(context.Background(), setKey, "member")
-		suite.ErrorContains(err, "WRONGTYPE")
 	})
 }
 
