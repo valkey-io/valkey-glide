@@ -8,6 +8,7 @@ import {
     GlideMonitorClient,
     MonitorLine,
     ProtocolVersion,
+    ServiceType,
 } from "../build-ts";
 import {
     getClientConfigurationOption,
@@ -70,6 +71,26 @@ describe("GlideMonitorClient", () => {
               )
             : await ValkeyCluster.createCluster(false, 1, 1, getServerVersion);
     }, 40000);
+
+    it("rejects IAM providers before native monitor creation", async () => {
+        await expect(
+            GlideMonitorClient.create({
+                addresses: [{ host: "invalid.example", port: 1 }],
+                credentials: {
+                    username: "iam-user",
+                    iamConfig: {
+                        clusterName: "cluster",
+                        service: ServiceType.Elasticache,
+                        region: "us-east-1",
+                        credentialProvider: () => ({
+                            accessKeyId: "access",
+                            secretAccessKey: "secret",
+                        }),
+                    },
+                },
+            }),
+        ).rejects.toThrow("do not support IAM authentication");
+    });
 
     afterAll(async () => {
         await cluster.close();
