@@ -22,6 +22,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -93,6 +94,42 @@ public class ClientPoolIntegrationTest {
                                     .build())
                     .build();
         }
+    }
+
+    /**
+     * Pool config with {@code maxSize == minIdle}, so every connection the pool will ever hold is
+     * created during warmup and a concurrent borrow burst races the whole warmup window.
+     */
+    private ClientPoolConfig warmupBurstPoolConfig(boolean clusterMode, int size) {
+        assumeMode(clusterMode);
+        if (clusterMode) {
+            GlideClusterClientConfiguration.GlideClusterClientConfigurationBuilder<?, ?> builder =
+                    GlideClusterClientConfiguration.builder();
+            for (String host : CLUSTER_HOSTS) {
+                String[] parts = host.split(":");
+                builder.address(
+                        NodeAddress.builder().host(parts[0]).port(Integer.parseInt(parts[1])).build());
+            }
+            builder.requestTimeout(5000);
+            return ClientPoolConfig.builder()
+                    .maxSize(size)
+                    .minIdle(size)
+                    .acquireTimeout(Duration.ofSeconds(20))
+                    .clientConfig(builder.build())
+                    .build();
+        }
+        String[] parts = STANDALONE_HOSTS[0].split(":");
+        return ClientPoolConfig.builder()
+                .maxSize(size)
+                .minIdle(size)
+                .acquireTimeout(Duration.ofSeconds(20))
+                .clientConfig(
+                        GlideClientConfiguration.builder()
+                                .address(
+                                        NodeAddress.builder().host(parts[0]).port(Integer.parseInt(parts[1])).build())
+                                .requestTimeout(5000)
+                                .build())
+                .build();
     }
 
     /** Create a standalone or cluster client outside of any pool. */
@@ -465,6 +502,138 @@ public class ClientPoolIntegrationTest {
 
         pool.close();
         System.out.println("testPoolConcurrentAccess PASSED (cluster=" + clusterMode + ")");
+    }
+
+    /**
+     * A borrow burst racing pool warmup must not push the pool past {@code maxSize}. Covers the JNI
+     * warmup wiring ({@code jni_pool.rs}), which reserves the warmup slots up front so a concurrent
+     * acquire cannot create a client against a slot a warmup task already owns.
+     *
+     * <p>The race is narrow, so two things force it: threads park on a start gate until the pool
+     * exists (no thread-spawn latency), and each holds its client through round 0 — {@code
+     * should_create()} only fires on an empty idle list, so one holder per slot drains idle as fast
+     * as warmup fills it. Repeated over fresh pools because {@link ClientPool#create}'s probe
+     * sometimes closes the window first.
+     */
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testPoolDoesNotExceedMaxSizeUnderWarmupBurst(boolean clusterMode) throws Exception {
+        assumeMode(clusterMode);
+
+        final int maxSize = 64;
+        // One holder per slot: enough to drain the idle list, few enough that every holder is
+        // eventually served even when the pool holds exactly maxSize clients.
+        final int numThreads = maxSize;
+        final int rounds = 3;
+        final int attempts = 12;
+
+        for (int attempt = 0; attempt < attempts; attempt++) {
+            final int attemptIdx = attempt;
+            final AtomicReference<ClientPool> poolRef = new AtomicReference<>();
+            CountDownLatch startGate = new CountDownLatch(1);
+            CountDownLatch allHolding = new CountDownLatch(numThreads);
+            CountDownLatch releaseGate = new CountDownLatch(1);
+            CountDownLatch done = new CountDownLatch(numThreads);
+            AtomicInteger errorCount = new AtomicInteger(0);
+
+            for (int t = 0; t < numThreads; t++) {
+                final int threadIdx = t;
+                new Thread(
+                                () -> {
+                                    boolean holding = false;
+                                    try {
+                                        assertTrue(startGate.await(30, TimeUnit.SECONDS), "start gate");
+                                        ClientPool p = poolRef.get();
+                                        for (int round = 0; round < rounds; round++) {
+                                            try (glide.api.models.pool.PooledGlideClient client =
+                                                    p.acquire().get(30, TimeUnit.SECONDS)) {
+                                                String key =
+                                                        testKey(clusterMode, "warmup-burst-" + threadIdx + "-" + round);
+                                                client.set(key, "val-" + threadIdx).get(5, TimeUnit.SECONDS);
+                                                client.get(key).get(5, TimeUnit.SECONDS);
+                                                client.del(new String[] {key}).get(5, TimeUnit.SECONDS);
+                                                if (round == 0) {
+                                                    // Keep the slot borrowed until every holder has one, so the
+                                                    // idle list stays empty for the whole warmup window.
+                                                    holding = true;
+                                                    allHolding.countDown();
+                                                    assertTrue(releaseGate.await(60, TimeUnit.SECONDS), "release gate");
+                                                }
+                                            }
+                                        }
+                                    } catch (Throwable e) {
+                                        System.err.println(
+                                                "Warmup burst attempt "
+                                                        + attemptIdx
+                                                        + " thread "
+                                                        + threadIdx
+                                                        + " error: "
+                                                        + e);
+                                        errorCount.incrementAndGet();
+                                    } finally {
+                                        if (!holding) {
+                                            // Never reached the hold, so release the main thread's wait.
+                                            allHolding.countDown();
+                                        }
+                                        done.countDown();
+                                    }
+                                })
+                        .start();
+            }
+
+            ClientPool pool = ClientPool.create(warmupBurstPoolConfig(clusterMode, maxSize));
+            try {
+                poolRef.set(pool);
+                startGate.countDown();
+
+                assertTrue(
+                        allHolding.await(90, TimeUnit.SECONDS),
+                        "All burst threads should borrow a slot in attempt " + attempt);
+                releaseGate.countDown();
+                assertTrue(
+                        done.await(120, TimeUnit.SECONDS),
+                        "All burst threads should finish in attempt " + attempt);
+                assertEquals(0, errorCount.get(), "Burst threads hit errors in attempt " + attempt);
+
+                // Read the bound only once the pool has quiesced: a borrow still mid-release leaves
+                // idle lagging total, which would read as a spurious pass.
+                long deadline = System.currentTimeMillis() + 15000;
+                while (System.currentTimeMillis() < deadline) {
+                    int[] m = pool.getMetrics();
+                    if (m != null && m[2] > 0 && m[1] == 0 && m[0] == m[2]) {
+                        break;
+                    }
+                    Thread.sleep(50);
+                }
+
+                int total = pool.getTotalCount();
+                int idle = pool.getIdleCount();
+
+                assertTrue(total > 0, "attempt " + attempt + ": pool counters never settled");
+                assertTrue(
+                        total <= maxSize,
+                        "attempt "
+                                + attempt
+                                + ": pool created more connections than maxSize: total="
+                                + total
+                                + ", maxSize="
+                                + maxSize);
+                assertTrue(
+                        idle <= maxSize,
+                        "attempt "
+                                + attempt
+                                + ": idle exceeded maxSize: idle="
+                                + idle
+                                + ", maxSize="
+                                + maxSize);
+            } finally {
+                releaseGate.countDown();
+                pool.close();
+            }
+        }
+
+        System.out.println(
+                "testPoolDoesNotExceedMaxSizeUnderWarmupBurst PASSED (cluster=" + clusterMode + ")");
     }
 
     @ParameterizedTest

@@ -2008,6 +2008,8 @@ mod client_pool_marking_tests {
         }
     }
 
+    /// A pool configured for the warmup-reservation tests: short timeouts, no
+    /// live connections (warmup is simulated by the test, not dialed).
     fn warmup_pool(max_size: u32, min_idle: u32) -> ClientPool {
         ClientPool::new(PoolConfig {
             max_size,
@@ -2055,9 +2057,10 @@ mod client_pool_marking_tests {
     async fn warmup_window_does_not_authorise_surplus_on_demand() {
         let max_size = 4u32;
 
-        // Count the on-demand spawns `should_create()` authorises while `max_size`
-        // warmup connections are still in flight, mirroring the binding's fetch_add
-        // so a wrong spawn over-shoots.
+        /// Returns how many on-demand spawns `should_create()` authorises during
+        /// warmup. With `reserve=true` the slots are reserved up front (fixed path)
+        /// so it authorises none; with `reserve=false` (pre-fix) it over-authorises.
+        // Mirrors the binding's fetch_add so a wrong spawn over-shoots.
         async fn surplus_spawns_during_warmup(max_size: u32, reserve: bool) -> u32 {
             let mut pool = warmup_pool(max_size, max_size);
             if reserve {
