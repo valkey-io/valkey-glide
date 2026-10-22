@@ -791,8 +791,11 @@ async fn build_scope_connection(
     let mut initial_iam_generation: u64 = 0;
 
     // AUTH: IAM authentication takes priority when configured on the parent client
-    // (matching the documented priority in `AuthenticationInfo`'s doc comment), otherwise
-    // fall back to the protobuf-configured password/username.
+    // (matching the documented priority in `AuthenticationInfo`'s doc comment).
+    // Otherwise the owning Client's current credentials: the request bytes are
+    // the pool's first-acquire snapshot and never see a later
+    // `update_connection_password`. The bytes are the fallback only when no
+    // Client is passed (the raw test path).
     if let Some(manager) = client.and_then(|c| c.iam_token_manager()) {
         // Read the generation before the token: if a refresh lands in this gap,
         // `initial_iam_generation` records the (now-stale) pre-refresh generation,
@@ -811,6 +814,11 @@ async fn build_scope_connection(
             .arg(manager.username())
             .arg(current_token.as_str());
         init_count += 1;
+    } else if let Some(handle) = client.map(|c| c.credentials()) {
+        if let Some(auth_cmd) = handle.current().auth_command() {
+            init_pipe.add_command(auth_cmd);
+            init_count += 1;
+        }
     } else if let Some(ref auth_info) = proto.authentication_info.0 {
         let password = &auth_info.password;
         let username = &auth_info.username;

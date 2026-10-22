@@ -1,6 +1,7 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 pub mod circuit_breaker;
+mod credentials;
 mod types;
 
 use crate::cluster_scan_container::insert_cluster_scan_cursor;
@@ -465,6 +466,10 @@ pub struct ClientShared {
     // it cannot distinguish "nothing configured" from "configured but the parent
     // has not connected" — the scope guard needs that distinction.
     configures_cert_material: bool,
+    // Written where the Client pushes a new password or username down for
+    // reconnect; read by scope connections, which are built outside those layers.
+    // Unused by IAM clients, whose scopes read the token manager.
+    credentials: credentials::CredentialsHandle,
 }
 
 /// Why [`Client::address_for_slot`] / [`Client::try_address_for_slot`] could not
@@ -852,14 +857,15 @@ impl Client {
 
         // Update username if provided
         if username.is_some() {
-            self.update_stored_username(username).await?;
+            self.update_stored_username(username.clone()).await?;
         }
 
         // Update password if provided (updateConnectionPassword handles this, so we track it too)
         if password.is_some() {
-            self.update_stored_password(password).await?;
+            self.update_stored_password(password.clone()).await?;
         }
 
+        self.record_credentials(username, password);
         Ok(())
     }
 
@@ -869,16 +875,15 @@ impl Client {
         match &mut *guard {
             ClientWrapper::Standalone(client) => {
                 client.update_connection_username(username).await?;
-                Ok(())
             }
             ClientWrapper::Cluster { client, .. } => {
                 client.update_connection_username(username).await?;
-                Ok(())
             }
             ClientWrapper::Lazy(_) => {
                 unreachable!("Lazy client should have been initialized")
             }
         }
+        Ok(())
     }
 
     /// Updates the stored password for different client types.
@@ -887,15 +892,42 @@ impl Client {
         match &mut *guard {
             ClientWrapper::Standalone(client) => {
                 client.update_connection_password(password).await?;
-                Ok(())
             }
             ClientWrapper::Cluster { client, .. } => {
                 client.update_connection_password(password).await?;
-                Ok(())
             }
             ClientWrapper::Lazy(_) => {
                 unreachable!("Lazy client should have been initialized")
             }
+        }
+        Ok(())
+    }
+
+    /// The handle scope connections read, or `None` for an IAM client: its scopes
+    /// AUTH with the token manager, and the borrow-time reconcile routes the token
+    /// through `update_connection_password`, which would otherwise keep a second
+    /// copy of it that nothing reads.
+    fn static_credentials(&self) -> Option<&credentials::CredentialsHandle> {
+        self.iam_token_manager
+            .is_none()
+            .then_some(&self.credentials)
+    }
+
+    /// Mirror the credentials a user-issued `AUTH`/`HELLO` carried, as one write
+    /// (`None` leaves a field as it was).
+    fn record_credentials(&self, username: Option<String>, password: Option<String>) {
+        if username.is_none() && password.is_none() {
+            return;
+        }
+        if let Some(handle) = self.static_credentials() {
+            handle.update(|credentials| {
+                if username.is_some() {
+                    credentials.username = username;
+                }
+                if password.is_some() {
+                    credentials.password = password;
+                }
+            });
         }
     }
 
@@ -981,13 +1013,15 @@ impl Client {
 
         // Update username if provided
         if username.is_some() {
-            self.update_stored_username(username).await?;
+            self.update_stored_username(username.clone()).await?;
         }
 
         // Update password if provided
         if password.is_some() {
-            self.update_stored_password(password).await?;
+            self.update_stored_password(password.clone()).await?;
         }
+
+        self.record_credentials(username, password);
 
         // Update client name if provided
         if client_name.is_some() {
@@ -2166,6 +2200,11 @@ impl Client {
         .await
         {
             Ok(result) => {
+                if result.is_ok()
+                    && let Some(handle) = self.static_credentials()
+                {
+                    handle.set_password(password.clone());
+                }
                 if immediate_auth {
                     // Fail before AUTHing if storing the password for reconnect failed:
                     // otherwise a transient store failure is swallowed, the AUTH runs
@@ -3084,6 +3123,18 @@ impl Client {
                     cert_material: cert_material_cell.clone(),
                     address_resolver: request.address_resolver.clone(),
                     configures_cert_material: request_configures_cert_material(&request),
+                    credentials: credentials::CredentialsHandle::new(
+                        credentials::PasswordCredentials {
+                            username: request
+                                .authentication_info
+                                .as_ref()
+                                .and_then(|info| info.username.clone()),
+                            password: request
+                                .authentication_info
+                                .as_ref()
+                                .and_then(|info| info.password.clone()),
+                        },
+                    ),
                 }),
                 iam_token_manager: None,
                 otel_metadata: Arc::new(otel_metadata),
@@ -3236,6 +3287,11 @@ impl Client {
     /// Whether this client configured custom certificate material (see the field).
     pub(crate) fn configures_cert_material(&self) -> bool {
         self.configures_cert_material
+    }
+
+    /// See `credentials`.
+    pub(crate) fn credentials(&self) -> &credentials::CredentialsHandle {
+        &self.credentials
     }
 
     /// Returns a reference to the per-client latency tracker (for watchdog diagnostics).
@@ -3530,6 +3586,9 @@ impl Client {
                 cert_material: Arc::default(),
                 address_resolver: None,
                 configures_cert_material: false,
+                credentials: credentials::CredentialsHandle::new(
+                    credentials::PasswordCredentials::default(),
+                ),
             }),
             iam_token_manager: None,
             otel_metadata: Arc::new(OTelMetadata {
@@ -3604,6 +3663,9 @@ pub fn create_test_glide_client() -> Client {
             cert_material: Arc::default(),
             address_resolver: None,
             configures_cert_material: false,
+            credentials: credentials::CredentialsHandle::new(
+                credentials::PasswordCredentials::default(),
+            ),
         }),
         iam_token_manager: None,
         otel_metadata: Arc::new(OTelMetadata {
@@ -3631,7 +3693,7 @@ mod tests {
     };
 
     use super::{
-        Client, ClientWrapper, ConnectionError, LazyClient, get_connection_info,
+        Client, ClientWrapper, ConnectionError, LazyClient, credentials, get_connection_info,
         get_timeout_from_cmd_arg, validate_effective_lib_name, validate_effective_lib_ver,
     };
     use std::sync::Weak;
@@ -4106,6 +4168,9 @@ mod tests {
                 cert_material: Arc::default(),
                 address_resolver: None,
                 configures_cert_material: false,
+                credentials: credentials::CredentialsHandle::new(
+                    credentials::PasswordCredentials::default(),
+                ),
             }),
             iam_token_manager: None,
             otel_metadata: Arc::new(OTelMetadata {
