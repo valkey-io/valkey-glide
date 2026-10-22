@@ -353,24 +353,6 @@ class BaseBatch:
         """
         return self.append_command(RequestType.Del, keys)
 
-    def delex(self: TBatch, key: TEncodable, condition: ValueComparison) -> TBatch:
-        """
-        Deletes `key` if its value satisfies `condition`.
-
-        See [valkey.io](https://valkey.io/commands/delex/) for more details.
-
-        Args:
-            key (TEncodable): The key to delete. Must hold a string value.
-            condition (ValueComparison): The condition that must be met for `key`
-                to be deleted.
-
-        Command response:
-            bool: `True` if `key` was deleted, `False` otherwise.
-
-        Since: Valkey 9.2.0.
-        """
-        return self.append_command(RequestType.DelEx, [key, *condition._to_args()])
-
     def config_get(self: TBatch, parameters: List[TEncodable]) -> TBatch:
         """
         Get the values of configuration parameters.

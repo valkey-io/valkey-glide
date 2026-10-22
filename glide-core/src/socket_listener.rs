@@ -443,7 +443,6 @@ fn process_command_for_compression(
         "SETNX" => crate::request_type::RequestType::SetNX,
         // Incompatible commands - string manipulation
         "APPEND" => crate::request_type::RequestType::Append,
-        "DELEX" => crate::request_type::RequestType::DelEx,
         "DELIFEQ" => crate::request_type::RequestType::DelIfEq,
         "GETRANGE" => crate::request_type::RequestType::GetRange,
         "LCS" => crate::request_type::RequestType::LCS,

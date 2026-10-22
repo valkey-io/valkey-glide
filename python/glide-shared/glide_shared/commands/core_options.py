@@ -97,7 +97,7 @@ class OnlyIfEqual(ValueComparison):
     """
     A condition that is met if the current value of a key is equal to the comparison value.
 
-    Used by the `SET` and `DELEX` commands.
+    Used by the `SET` command.
     Equivalent to the `IFEQ comparison_value` in the Valkey API.
     """
 
@@ -109,7 +109,7 @@ class OnlyIfNotEqual(ValueComparison):
     """
     A condition that is met if the current value of a key is not equal to the comparison value.
 
-    Used by the `SET` and `DELEX` commands.
+    Used by the `SET` command.
     Equivalent to the `IFNE comparison_value` in the Valkey API.
     """
 

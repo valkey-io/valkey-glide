@@ -426,52 +426,6 @@ class TestSyncBatch:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     @pytest.mark.parametrize("is_atomic", [True, False])
-    def test_sync_delex_if_equal_batch(
-        self, glide_sync_client: TGlideClient, is_atomic: bool
-    ):
-        key = get_random_string(10)
-
-        batch = (
-            Batch(is_atomic=is_atomic)
-            if isinstance(glide_sync_client, GlideClient)
-            else ClusterBatch(is_atomic=is_atomic)
-        )
-
-        batch.set(key, "value")
-        batch.delex(key, OnlyIfEqual("other"))
-        batch.delex(key, OnlyIfEqual("value"))
-        batch.delex(key, OnlyIfEqual("value"))
-
-        result = exec_batch(glide_sync_client, batch)
-        assert result == [OK, False, True, False]
-
-    @pytest.mark.skip_if_version_below("9.2.0")
-    @pytest.mark.parametrize("cluster_mode", [True, False])
-    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    @pytest.mark.parametrize("is_atomic", [True, False])
-    def test_sync_delex_if_not_equal_batch(
-        self, glide_sync_client: TGlideClient, is_atomic: bool
-    ):
-        key = get_random_string(10)
-
-        batch = (
-            Batch(is_atomic=is_atomic)
-            if isinstance(glide_sync_client, GlideClient)
-            else ClusterBatch(is_atomic=is_atomic)
-        )
-
-        batch.set(key, "value")
-        batch.delex(key, OnlyIfNotEqual("value"))
-        batch.delex(key, OnlyIfNotEqual("other"))
-        batch.delex(key, OnlyIfNotEqual("other"))
-
-        result = exec_batch(glide_sync_client, batch)
-        assert result == [OK, False, True, False]
-
-    @pytest.mark.skip_if_version_below("9.2.0")
-    @pytest.mark.parametrize("cluster_mode", [True, False])
-    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    @pytest.mark.parametrize("is_atomic", [True, False])
     def test_sync_set_value_comparison_batch(
         self, glide_sync_client: TGlideClient, is_atomic: bool
     ):

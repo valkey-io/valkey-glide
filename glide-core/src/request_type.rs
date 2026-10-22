@@ -397,7 +397,6 @@ pub enum RequestType {
     Strlen = 1521,
     Substr = 1522,
     DelIfEq = 1523,
-    DelEx = 1524,
 
     //// Transaction commands
     Discard = 1601,
@@ -587,7 +586,6 @@ impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
             ProtobufRequestType::ZLexCount => RequestType::ZLexCount,
             ProtobufRequestType::Append => RequestType::Append,
             ProtobufRequestType::DelIfEq => RequestType::DelIfEq,
-            ProtobufRequestType::DelEx => RequestType::DelEx,
             ProtobufRequestType::SDiffStore => RequestType::SDiffStore,
             ProtobufRequestType::SInter => RequestType::SInter,
             ProtobufRequestType::SInterStore => RequestType::SInterStore,
@@ -883,9 +881,6 @@ impl RequestType {
             RequestType::Append => Some(
                 "APPEND modifies string data on the server, which would corrupt compressed values",
             ),
-            RequestType::DelEx => Some(
-                "DELEX compares the stored value against raw bytes on the server, which would compare against compressed data instead of the original value",
-            ),
             RequestType::DelIfEq => Some(
                 "DELIFEQ compares the stored value against raw bytes on the server, which would compare against compressed data instead of the original value",
             ),
@@ -977,7 +972,6 @@ impl RequestType {
             RequestType::BitPos => Some("BITPOS"),
             RequestType::Decr => Some("DECR"),
             RequestType::DecrBy => Some("DECRBY"),
-            RequestType::DelEx => Some("DELEX"),
             RequestType::DelIfEq => Some("DELIFEQ"),
             RequestType::Get => Some("GET"),
             RequestType::GetBit => Some("GETBIT"),
@@ -1025,7 +1019,6 @@ impl RequestType {
             "SETNX" => Some(RequestType::SetNX),
             // Incompatible commands - string manipulation
             "APPEND" => Some(RequestType::Append),
-            "DELEX" => Some(RequestType::DelEx),
             "DELIFEQ" => Some(RequestType::DelIfEq),
             "GETRANGE" => Some(RequestType::GetRange),
             "LCS" => Some(RequestType::LCS),
@@ -1190,7 +1183,6 @@ impl RequestType {
             RequestType::ZLexCount => Some(cmd("ZLEXCOUNT")),
             RequestType::Append => Some(cmd("APPEND")),
             RequestType::DelIfEq => Some(cmd("DELIFEQ")),
-            RequestType::DelEx => Some(cmd("DELEX")),
             RequestType::SDiffStore => Some(cmd("SDIFFSTORE")),
             RequestType::SInter => Some(cmd("SINTER")),
             RequestType::SInterStore => Some(cmd("SINTERSTORE")),

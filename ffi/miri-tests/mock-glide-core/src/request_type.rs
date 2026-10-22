@@ -57,7 +57,6 @@ pub enum RequestType {
     LCS = 1522,
     Substr = 1523,
     DelIfEq = 1531,
-    DelEx = 1532,
 
     // Incompatible commands - numeric operations
     Incr = 1510,
@@ -90,7 +89,6 @@ impl RequestType {
         match self {
             // String manipulation commands
             RequestType::Append => Some("APPEND modifies string data on the server"),
-            RequestType::DelEx => Some("DELEX compares the stored value against raw bytes"),
             RequestType::DelIfEq => Some("DELIFEQ compares the stored value against raw bytes"),
             RequestType::GetRange => Some("GETRANGE returns a substring of raw bytes"),
             RequestType::LCS => Some("LCS compares raw bytes between strings"),
@@ -137,7 +135,6 @@ impl RequestType {
             "SETNX" => Some(RequestType::SetNX),
             // Incompatible commands - string manipulation
             "APPEND" => Some(RequestType::Append),
-            "DELEX" => Some(RequestType::DelEx),
             "DELIFEQ" => Some(RequestType::DelIfEq),
             "GETRANGE" => Some(RequestType::GetRange),
             "LCS" => Some(RequestType::LCS),
@@ -178,7 +175,6 @@ impl RequestType {
             RequestType::Decr => Some("DECR"),
             RequestType::DecrBy => Some("DECRBY"),
             RequestType::Del => Some("DEL"),
-            RequestType::DelEx => Some("DELEX"),
             RequestType::DelIfEq => Some("DELIFEQ"),
             RequestType::Exists => Some("EXISTS"),
             RequestType::Expire => Some("EXPIRE"),

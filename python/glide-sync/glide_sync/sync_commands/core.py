@@ -583,34 +583,6 @@ class CoreCommands(Protocol):
         """
         return cast(int, self._execute_command(RequestType.Del, keys))
 
-    def delex(self, key: TEncodable, condition: ValueComparison) -> bool:
-        """
-        Deletes `key` if its value satisfies `condition`.
-
-        See [valkey.io](https://valkey.io/commands/delex/) for more details.
-
-        Args:
-            key (TEncodable): The key to delete. Must hold a string value.
-            condition (ValueComparison): The condition that must be met for `key`
-                to be deleted.
-
-        Returns:
-            bool: `True` if `key` was deleted, `False` otherwise.
-
-        Examples:
-            >>> client.set("lock", "token1")
-            >>> client.delex("lock", OnlyIfEqual("token2"))
-                False  # Value differs, so "lock" is not deleted.
-            >>> client.delex("lock", OnlyIfEqual("token1"))
-                True  # "lock" is deleted.
-
-        Since: Valkey 9.2.0.
-        """
-        return cast(
-            bool,
-            self._execute_command(RequestType.DelEx, [key, *condition._to_args()]),
-        )
-
     def incr(self, key: TEncodable) -> int:
         """
         Increments the number stored at `key` by one. If the key does not exist, it is set to 0 before performing the

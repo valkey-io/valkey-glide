@@ -1127,40 +1127,6 @@ class TestCommands:
         assert glide_sync_client.delete(delete_keys) == 3
         assert glide_sync_client.delete(keys) == 0
 
-    @pytest.mark.skip_if_version_below("9.2.0")
-    @pytest.mark.parametrize("cluster_mode", [True, False])
-    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    def test_sync_delex_if_equal(self, glide_sync_client: TGlideClient):
-        key = get_random_string(10)
-        assert glide_sync_client.set(key, "value") == OK
-
-        cond = OnlyIfEqual("other")
-        assert glide_sync_client.delex(key, cond) is False
-        assert glide_sync_client.get(key) == b"value"
-
-        cond = OnlyIfEqual("value")
-        assert glide_sync_client.delex(key, cond) is True
-        assert glide_sync_client.exists([key]) == 0
-
-        assert glide_sync_client.delex(key, cond) is False
-
-    @pytest.mark.skip_if_version_below("9.2.0")
-    @pytest.mark.parametrize("cluster_mode", [True, False])
-    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    def test_sync_delex_if_not_equal(self, glide_sync_client: TGlideClient):
-        key = get_random_string(10)
-        assert glide_sync_client.set(key, "value") == OK
-
-        cond = OnlyIfNotEqual("value")
-        assert glide_sync_client.delex(key, cond) is False
-        assert glide_sync_client.get(key) == b"value"
-
-        cond = OnlyIfNotEqual("other")
-        assert glide_sync_client.delex(key, cond) is True
-        assert glide_sync_client.exists([key]) == 0
-
-        assert glide_sync_client.delex(key, cond) is False
-
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     def test_sync_getdel(self, glide_sync_client: TGlideClient):

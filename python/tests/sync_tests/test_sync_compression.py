@@ -1487,7 +1487,6 @@ class TestCompressionIncompatibleCommands:
             param("bitpos", ["key", 1], id="bitpos"),
             param("decr", ["key"], id="decr"),
             param("decrby", ["key", 10], id="decrby"),
-            param("delex", ["key", OnlyIfEqual("value")], id="delex"),
             param("getbit", ["key", 0], id="getbit"),
             param("getrange", ["key", 0, 10], id="getrange"),
             param("incr", ["key"], id="incr"),
@@ -1575,7 +1574,6 @@ class TestCompressionIncompatibleCommands:
         "command",
         [
             param(["APPEND", "key", "value"], id="append"),
-            param(["DELEX", "key", "IFEQ", "value"], id="delex"),
             param(["INCR", "key"], id="incr"),
             param(["SET", "key", "value", "IFEQ", "value"], id="set_ifeq"),
             param(["SET", "key", "value", "IFNE", "value"], id="set_ifne"),

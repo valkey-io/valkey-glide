@@ -539,7 +539,6 @@ fn process_command_for_compression(
         "BITPOS" => RequestType::BitPos,
         "DECR" => RequestType::Decr,
         "DECRBY" => RequestType::DecrBy,
-        "DELEX" => RequestType::DelEx,
         "DELIFEQ" => RequestType::DelIfEq,
         "GETBIT" => RequestType::GetBit,
         "GETRANGE" => RequestType::GetRange,

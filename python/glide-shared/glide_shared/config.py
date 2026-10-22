@@ -223,7 +223,7 @@ class CompressionConfiguration:
 
     Compression is NOT compatible with commands that manipulate or compare string data on the server side:
     - APPEND, GETRANGE, SETRANGE, STRLEN, LCS, SUBSTR
-    - DELEX, DELIFEQ, and SET with IFEQ or IFNE
+    - DELIFEQ and SET with IFEQ or IFNE
     - INCR, INCRBY, INCRBYFLOAT, DECR, DECRBY
     - GETBIT, SETBIT, BITCOUNT, BITPOS, BITFIELD, BITFIELD_RO, BITOP
 

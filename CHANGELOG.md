@@ -11,7 +11,6 @@
 * All: Add support for Valkey 9.2 commands:
   * `SISMEMBER` with `XX` option ([#7202](https://github.com/valkey-io/valkey-glide/issues/7202))
 * Python: Add support for Valkey 9.2 commands:
-  * `DELEX` ([#7238](https://github.com/valkey-io/valkey-glide/issues/7238))
   * `SET` with `IFNE` option ([#7237](https://github.com/valkey-io/valkey-glide/issues/7237))
 * Rust: Implement `ToSingleValkeyArg` and `ToValkeyArgs` for option types ([#7381](https://github.com/valkey-io/valkey-glide/issues/7381))
 * Core: Add `glide-rdma` crate, an RDMA transfer layer over libfabric (loaded at runtime), for later RDMA support ([#7177](https://github.com/valkey-io/valkey-glide/pull/7177))
