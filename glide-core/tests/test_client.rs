@@ -5094,8 +5094,8 @@ pub(crate) mod shared_client_tests {
     }
 
     /// A scope created after the owning Client's password was rotated must
-    /// authenticate with the new password. The pool keeps the request bytes of the
-    /// first acquire, so the request here still carries the old password.
+    /// authenticate with the new password. The request bytes passed to the acquire
+    /// were serialized before the rotation, so they carry the old password.
     #[cfg(feature = "proto")]
     #[rstest]
     #[case::immediate_auth(true)]

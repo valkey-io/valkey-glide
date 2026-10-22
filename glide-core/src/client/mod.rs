@@ -1586,8 +1586,6 @@ impl Client {
     ///
     /// Rotation detection here uses `last_auth_generation` (owned by the caller)
     /// instead of the shared `token_changed` flag — see `IAMTokenManager::token_generation`.
-    /// The bookmark is compared against the IAM token generation for an IAM client,
-    /// otherwise against `credentials()`.
     ///
     /// Note: OTel spans and inflight tracking are not applied here because scoped
     /// connections operate outside the multiplexer's pipeline. OTel support for
@@ -2200,6 +2198,9 @@ impl Client {
     /// If `immediate_auth` is true, the password will be used to authenticate with the servers immediately using the `AUTH` command.
     /// The default behavior is to update the password without authenticating immediately.
     /// If the password is empty or None, and `immediate_auth` is true, the password will be updated and an error will be returned.
+    ///
+    /// Scope connections re-authenticate with the new password on their next
+    /// command, so a password the server rejects fails them there, not here.
     pub async fn update_connection_password(
         &mut self,
         password: Option<String>,

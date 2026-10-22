@@ -798,8 +798,8 @@ async fn build_scope_connection(
     // (matching the documented priority in `AuthenticationInfo`'s doc comment).
     // Otherwise the owning Client's current credentials: the request bytes are
     // the pool's first-acquire snapshot and never see a later
-    // `update_connection_password`. The bytes are the fallback only when no
-    // Client is passed (the raw test path).
+    // `update_connection_password`. Only the raw test path, which has no Client,
+    // reads them.
     if let Some(manager) = client.and_then(|c| c.iam_token_manager()) {
         // Read the generation before the token: if a refresh lands in this gap,
         // `initial_auth_generation` records the (now-stale) pre-refresh generation,
