@@ -294,13 +294,10 @@ class CoreCommands(Protocol):
             key (TEncodable): the key to store.
             value (TEncodable): the value to store with the given key.
             conditional_set (Optional[Union[ConditionalChange, ValueComparison]]): set the key only if the
-                given condition is met. Equivalent to [`XX` | `NX` | `IFEQ` comparison-value | `IFNE` comparison-value]
-                in the Valkey API. Defaults to None.
-            expiry (Optional[ExpirySet]): set expiration to the given key.
-                Equivalent to [`EX` | `PX` | `EXAT` | `PXAT` | `KEEPTTL`] in the Valkey API. Defaults to None.
+                given condition is met. Defaults to None.
+            expiry (Optional[ExpirySet]): set expiration to the given key. Defaults to None.
             return_old_value (bool): Return the old value stored at key, or None if key did not exist.
-                An error is returned and SET aborted if the value stored at key is not a string.
-                Equivalent to `GET` in the Valkey API. Defaults to False.
+                An error is returned and SET aborted if the value stored at key is not a string. Defaults to False.
 
         Returns:
             Optional[Union[TOK, bytes]]: If `return_old_value` is false, return "OK" if the value was set, or `None`
