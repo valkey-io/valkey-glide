@@ -25,6 +25,7 @@ from glide_shared.commands.core_options import (
     InsertPosition,
     MigrateOptions,
     UpdateOptions,
+    ValueComparison,
     _build_sort_args,
 )
 from glide_shared.commands.sorted_set import (
@@ -173,7 +174,7 @@ class BaseBatch:
         self: TBatch,
         key: TEncodable,
         value: TEncodable,
-        conditional_set: Union[ConditionalChange, None] = None,
+        conditional_set: Union[ConditionalChange, ValueComparison, None] = None,
         expiry: Union[ExpirySet, None] = None,
         return_old_value: bool = False,
     ) -> TBatch:
@@ -185,11 +186,12 @@ class BaseBatch:
         Args:
             key (TEncodable): the key to store.
             value (TEncodable): the value to store with the given key.
-            conditional_set (Optional[ConditionalChange], optional): set the key only if the given condition is met.
-                Equivalent to [`XX` | `NX`] in the Valkey API. Defaults to None.
-            expiry (Optional[ExpirySet], optional): set expiriation to the given key.
+            conditional_set (Optional[Union[ConditionalChange, ValueComparison]]): set the key only if the
+                given condition is met. Equivalent to [`XX` | `NX` | `IFEQ` comparison-value | `IFNE` comparison-value]
+                in the Valkey API. Defaults to None.
+            expiry (Optional[ExpirySet]): set expiration to the given key.
                 Equivalent to [`EX` | `PX` | `EXAT` | `PXAT` | `KEEPTTL`] in the Valkey API. Defaults to None.
-            return_old_value (bool, optional): Return the old value stored at key, or None if key did not exist.
+            return_old_value (bool): Return the old value stored at key, or None if key did not exist.
                 An error is returned and SET aborted if the value stored at key is not a string.
                 Equivalent to `GET` in the Valkey API. Defaults to False.
 
@@ -197,7 +199,7 @@ class BaseBatch:
             Optional[Union[TOK, bytes]]:
                 If the value is successfully set, return OK (a `str`).
 
-                If value isn't set because of only_if_exists or only_if_does_not_exist conditions, return None.
+                If value isn't set because `conditional_set` is not met, return None.
 
                 If return_old_value is set, return the old value as a bytes string.
 
@@ -208,11 +210,8 @@ class BaseBatch:
             ... expiry=Expiry(ExpiryType.SEC, 5))
         """
         args = [key, value]
-        if conditional_set:
-            if conditional_set == ConditionalChange.ONLY_IF_EXISTS:
-                args.append("XX")
-            if conditional_set == ConditionalChange.ONLY_IF_DOES_NOT_EXIST:
-                args.append("NX")
+        if conditional_set is not None:
+            args.extend(conditional_set._to_args())
         if return_old_value:
             args.append("GET")
         if expiry is not None:
@@ -353,6 +352,24 @@ class BaseBatch:
             int: The number of keys that were deleted.
         """
         return self.append_command(RequestType.Del, keys)
+
+    def delex(self: TBatch, key: TEncodable, condition: ValueComparison) -> TBatch:
+        """
+        Deletes `key` if its value satisfies `condition`.
+
+        See [valkey.io](https://valkey.io/commands/delex/) for more details.
+
+        Args:
+            key (TEncodable): The key to delete. Must hold a string value.
+            condition (ValueComparison): The condition that must be met for `key`
+                to be deleted.
+
+        Command response:
+            bool: `True` if `key` was deleted, `False` otherwise.
+
+        Since: Valkey 9.2.0.
+        """
+        return self.append_command(RequestType.DelEx, [key, *condition._to_args()])
 
     def config_get(self: TBatch, parameters: List[TEncodable]) -> TBatch:
         """
@@ -5141,7 +5158,7 @@ class BaseBatch:
 
         Args:
             key (TEncodable): The key to get.
-            expiry (Optional[ExpirySet], optional): set expiriation to the given key.
+            expiry (Optional[ExpirySet]): set expiration to the given key.
                 Equivalent to [`EX` | `PX` | `EXAT` | `PXAT` | `PERSIST`] in the Valkey API.
 
         Command Response:

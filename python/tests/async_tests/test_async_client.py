@@ -53,6 +53,7 @@ from glide_shared.commands.core_options import (
     InsertPosition,
     MigrateOptions,
     OnlyIfEqual,
+    OnlyIfNotEqual,
     UpdateOptions,
 )
 from glide_shared.commands.latency import LatencyEntry
@@ -805,27 +806,43 @@ class TestCommands:
         assert await glide_client.get(key) == value.encode()
         # Tests for ONLY_IF_EQUAL below in test_set_only_if_equal()
 
+    @pytest.mark.skip_if_version_below("8.1.0")
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    @pytest.mark.skip_if_version_below("8.1.0")
     async def test_set_only_if_equal(self, glide_client: TGlideClient):
         key = get_random_string(10)
-        value = get_random_string(10)
-        value2 = get_random_string(10)
-        wrong_comparison_value = get_random_string(10)
-        while wrong_comparison_value == value:
-            wrong_comparison_value = get_random_string(10)
+        assert await glide_client.set(key, "value") == OK
 
-        await glide_client.set(key, value)
+        cond = OnlyIfEqual("other")
+        assert await glide_client.set(key, "other", conditional_set=cond) is None
+        assert await glide_client.get(key) == b"value"
 
-        res = await glide_client.set(
-            key, "foobar", conditional_set=OnlyIfEqual(wrong_comparison_value)
-        )
-        assert res is None
-        assert await glide_client.get(key) == value.encode()
-        res = await glide_client.set(key, value2, conditional_set=OnlyIfEqual(value))
-        assert res == OK
-        assert await glide_client.get(key) == value2.encode()
+        cond = OnlyIfEqual("value")
+        assert await glide_client.set(key, "other", conditional_set=cond) == OK
+        assert await glide_client.get(key) == b"other"
+
+        missing = get_random_string(10)
+        assert await glide_client.set(missing, "value", conditional_set=cond) is None
+        assert await glide_client.exists([missing]) == 0
+
+    @pytest.mark.skip_if_version_below("9.2.0")
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_set_only_if_not_equal(self, glide_client: TGlideClient):
+        key = get_random_string(10)
+        assert await glide_client.set(key, "value") == OK
+
+        cond = OnlyIfNotEqual("value")
+        assert await glide_client.set(key, "other", conditional_set=cond) is None
+        assert await glide_client.get(key) == b"value"
+
+        cond = OnlyIfNotEqual("other")
+        assert await glide_client.set(key, "other", conditional_set=cond) == OK
+        assert await glide_client.get(key) == b"other"
+
+        missing = get_random_string(10)
+        assert await glide_client.set(missing, "value", conditional_set=cond) == OK
+        assert await glide_client.get(missing) == b"value"
 
     @pytest.mark.skip_if_version_below("6.2.0")
     @pytest.mark.parametrize("cluster_mode", [True, False])
@@ -1057,6 +1074,40 @@ class TestCommands:
         delete_keys = keys + [get_random_string(10)]
         assert await glide_client.delete(delete_keys) == 3
         assert await glide_client.delete(keys) == 0
+
+    @pytest.mark.skip_if_version_below("9.2.0")
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_delex_if_equal(self, glide_client: TGlideClient):
+        key = get_random_string(10)
+        assert await glide_client.set(key, "value") == OK
+
+        cond = OnlyIfEqual("other")
+        assert await glide_client.delex(key, cond) is False
+        assert await glide_client.get(key) == b"value"
+
+        cond = OnlyIfEqual("value")
+        assert await glide_client.delex(key, cond) is True
+        assert await glide_client.exists([key]) == 0
+
+        assert await glide_client.delex(key, cond) is False
+
+    @pytest.mark.skip_if_version_below("9.2.0")
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_delex_if_not_equal(self, glide_client: TGlideClient):
+        key = get_random_string(10)
+        assert await glide_client.set(key, "value") == OK
+
+        cond = OnlyIfNotEqual("value")
+        assert await glide_client.delex(key, cond) is False
+        assert await glide_client.get(key) == b"value"
+
+        cond = OnlyIfNotEqual("other")
+        assert await glide_client.delex(key, cond) is True
+        assert await glide_client.exists([key]) == 0
+
+        assert await glide_client.delex(key, cond) is False
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])

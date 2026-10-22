@@ -47,8 +47,8 @@ class NodeAddress:
     Represents the address and port of a node in the cluster.
 
     Attributes:
-        host (str, optional): The server host. Defaults to "localhost".
-        port (int, optional): The server port. Defaults to 6379.
+        host (str): The server host. Defaults to "localhost".
+        port (int): The server port. Defaults to 6379.
     """
 
     def __init__(self, host: str = "localhost", port: int = 6379):
@@ -221,8 +221,9 @@ class CompressionConfiguration:
 
     WARNING: This feature is experimental and not recommended for production use.
 
-    Compression is NOT compatible with commands that manipulate string data on the server side:
-    - APPEND, GETRANGE, SETRANGE, STRLEN, LCS
+    Compression is NOT compatible with commands that manipulate or compare string data on the server side:
+    - APPEND, GETRANGE, SETRANGE, STRLEN, LCS, SUBSTR
+    - DELEX, DELIFEQ, and SET with IFEQ or IFNE
     - INCR, INCRBY, INCRBYFLOAT, DECR, DECRBY
     - GETBIT, SETBIT, BITCOUNT, BITPOS, BITFIELD, BITFIELD_RO, BITOP
 
@@ -1118,7 +1119,7 @@ class BaseClientConfiguration:
         Generates a Protobuf ConnectionRequest using the values from this ClientConfiguration.
 
         Args:
-            cluster_mode (bool, optional): The cluster mode of the client. Defaults to False.
+            cluster_mode (bool): The cluster mode of the client. Defaults to False.
 
         Returns:
             ConnectionRequest: Protobuf ConnectionRequest.

@@ -97,6 +97,7 @@ pub fn cmd_name_from_bytes(bytes: &[u8]) -> &'static str {
                 (b"BITOP", "BITOP"),
                 (b"BLPOP", "BLPOP"),
                 (b"BRPOP", "BRPOP"),
+                (b"DELEX", "DELEX"),
                 (b"FCALL", "FCALL"),
                 (b"GETEX", "GETEX"),
                 (b"HELLO", "HELLO"),

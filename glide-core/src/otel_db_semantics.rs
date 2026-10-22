@@ -43,7 +43,7 @@ fn masking_pattern(cmd_name: &str) -> MaskingPattern {
         }
 
         // -- ShowFirst(2): key + TTL/field visible, value masked --
-        "SETEX" | "PSETEX" | "HSETNX" | "LSET" | "LPOS" => MaskingPattern::ShowFirst(2),
+        "SETEX" | "PSETEX" | "HSETNX" | "LSET" | "LPOS" | "DELEX" => MaskingPattern::ShowFirst(2),
 
         // LINSERT key BEFORE|AFTER pivot element — key, keyword, pivot are non-sensitive
         "LINSERT" => MaskingPattern::ShowFirst(3),

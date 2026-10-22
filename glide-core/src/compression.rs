@@ -370,10 +370,29 @@ impl Default for CompressionConfig {
 pub enum CommandCompressionBehavior {
     CompressValues,
     DecompressValues,
+    CompressAndDecompressValues,
     NoCompression,
 }
 
 impl CommandCompressionBehavior {
+    /// Returns `true` if values in the request should be compressed before sending.
+    pub fn is_request_compressed(self) -> bool {
+        matches!(
+            self,
+            CommandCompressionBehavior::CompressValues
+                | CommandCompressionBehavior::CompressAndDecompressValues
+        )
+    }
+
+    /// Returns `true` if values in the response should be decompressed after receiving.
+    pub fn is_response_decompressed(self) -> bool {
+        matches!(
+            self,
+            CommandCompressionBehavior::DecompressValues
+                | CommandCompressionBehavior::CompressAndDecompressValues
+        )
+    }
+
     pub fn description(&self) -> &'static str {
         match self {
             CommandCompressionBehavior::CompressValues => {
@@ -381,6 +400,9 @@ impl CommandCompressionBehavior {
             }
             CommandCompressionBehavior::DecompressValues => {
                 "Decompress values after receiving from server"
+            }
+            CommandCompressionBehavior::CompressAndDecompressValues => {
+                "Compress values before sending to server and decompress values after receiving from server"
             }
             CommandCompressionBehavior::NoCompression => "No compression processing required",
         }
@@ -392,6 +414,9 @@ impl std::fmt::Display for CommandCompressionBehavior {
         match self {
             CommandCompressionBehavior::CompressValues => write!(f, "CompressValues"),
             CommandCompressionBehavior::DecompressValues => write!(f, "DecompressValues"),
+            CommandCompressionBehavior::CompressAndDecompressValues => {
+                write!(f, "CompressAndDecompressValues")
+            }
             CommandCompressionBehavior::NoCompression => write!(f, "NoCompression"),
         }
     }
@@ -862,53 +887,27 @@ pub fn process_command_args_for_compression(
     }
 
     // Check if the command is incompatible with compression
-    if let Some(reason) = request_type.compression_incompatibility_reason() {
+    if let Some(reason) = request_type.compression_incompatibility_reason(args) {
         return Err(CompressionError::incompatible_command(
             request_type.command_name().unwrap_or("unknown"),
             reason,
         ));
     }
 
-    let behavior = request_type.compression_behavior();
-    if behavior != CommandCompressionBehavior::CompressValues {
+    if !request_type.compression_behavior().is_request_compressed() {
         return Ok(());
     }
 
     match request_type {
-        // TODO #7365: Add SET here so that the comparison value is compressed
-        // when called with IFEQ.
-        RequestType::Set => compress_single_value_command(args, manager, 1),
-        RequestType::MSet | RequestType::MSetNX => compress_mset_command(args, manager),
-        RequestType::SetEx => compress_single_value_command(args, manager, 2),
+        RequestType::GetSet => compress_single_value_command(args, manager, 1),
+        RequestType::MSet => compress_mset_command(args, manager),
+        RequestType::MSetNX => compress_mset_command(args, manager),
         RequestType::PSetEx => compress_single_value_command(args, manager, 2),
+        RequestType::Set => compress_single_value_command(args, manager, 1),
+        RequestType::SetEx => compress_single_value_command(args, manager, 2),
         RequestType::SetNX => compress_single_value_command(args, manager, 1),
         _ => Ok(()),
     }
-}
-
-/// Validates that a command is compatible with compression.
-/// Returns an error if the command is incompatible with compression when compression is enabled.
-pub fn validate_command_compression_compatibility(
-    request_type: RequestType,
-    compression_manager: Option<&CompressionManager>,
-) -> CompressionResult<()> {
-    let Some(manager) = compression_manager else {
-        return Ok(());
-    };
-
-    if !manager.is_enabled() {
-        return Ok(());
-    }
-
-    // Check if the command is incompatible with compression
-    if let Some(reason) = request_type.compression_incompatibility_reason() {
-        return Err(CompressionError::incompatible_command(
-            request_type.command_name().unwrap_or("unknown"),
-            reason,
-        ));
-    }
-
-    Ok(())
 }
 
 fn compress_single_value_command(
@@ -955,8 +954,10 @@ pub fn process_response_for_decompression(
         return Ok(value);
     }
 
-    let behavior = request_type.compression_behavior();
-    if behavior != CommandCompressionBehavior::DecompressValues {
+    if !request_type
+        .compression_behavior()
+        .is_response_decompressed()
+    {
         return Ok(value);
     }
 

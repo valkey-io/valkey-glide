@@ -29,9 +29,9 @@ from glide_shared.commands.core_options import (
     HashFieldConditionalChange,
     InsertPosition,
     MigrateOptions,
-    OnlyIfEqual,
     PubSubMsg,
     UpdateOptions,
+    ValueComparison,
     _build_sort_args,
 )
 from glide_shared.commands.sorted_set import (
@@ -282,7 +282,7 @@ class CoreCommands(Protocol):
         self,
         key: TEncodable,
         value: TEncodable,
-        conditional_set: Optional[Union[ConditionalChange, OnlyIfEqual]] = None,
+        conditional_set: Optional[Union[ConditionalChange, ValueComparison]] = None,
         expiry: Optional[ExpirySet] = None,
         return_old_value: bool = False,
     ) -> Optional[Union[TOK, bytes]]:
@@ -294,18 +294,19 @@ class CoreCommands(Protocol):
         Args:
             key (TEncodable): the key to store.
             value (TEncodable): the value to store with the given key.
-            conditional_set (Optional[ConditionalChange], optional): set the key only if the given condition is met.
-                Equivalent to [`XX` | `NX` | `IFEQ` comparison-value] in the Valkey API. Defaults to None.
-            expiry (Optional[ExpirySet], optional): set expiriation to the given key.
+            conditional_set (Optional[Union[ConditionalChange, ValueComparison]]): set the key only if the
+                given condition is met. Equivalent to [`XX` | `NX` | `IFEQ` comparison-value | `IFNE` comparison-value]
+                in the Valkey API. Defaults to None.
+            expiry (Optional[ExpirySet]): set expiration to the given key.
                 Equivalent to [`EX` | `PX` | `EXAT` | `PXAT` | `KEEPTTL`] in the Valkey API. Defaults to None.
-            return_old_value (bool, optional): Return the old value stored at key, or None if key did not exist.
+            return_old_value (bool): Return the old value stored at key, or None if key did not exist.
                 An error is returned and SET aborted if the value stored at key is not a string.
                 Equivalent to `GET` in the Valkey API. Defaults to False.
 
         Returns:
             Optional[Union[TOK, bytes]]: If the value is successfully set, return OK (a `str`).
 
-            If value isn't set because of `only_if_exists` or `only_if_does_not_exist` conditions, return `None`.
+            If value isn't set because `conditional_set` is not met, return `None`.
 
             If return_old_value is set, return the old value as a bytes string.
 
@@ -334,22 +335,23 @@ class CoreCommands(Protocol):
                 # ONLY_IF_EQUAL -> Only set key if provided value is equal to current value of the key
             >>> await client.set("key", "value")
                 'OK' # Reset "key" to "value"
-            >>> await client.set("key", "new_value", conditional_set=OnlyIfEqual("different_value")
-                'None' # Did not rewrite value of "key" because provided value was not equal to the previous value of "key"
+            >>> await client.set("key", "new_value", conditional_set=OnlyIfEqual("different_value"))
+                None # Did not rewrite value of "key" because provided value was not equal to the previous value of "key"
             >>> await client.get("key")
                 b'value' # Still the original value because nothing got rewritten in the last call
-            >>> await client.set("key", "new_value", conditional_set=OnlyIfEqual("value")
+            >>> await client.set("key", "new_value", conditional_set=OnlyIfEqual("value"))
                 'OK'
             >>> await client.get("key")
-                b'newest_value" # Set "key" to "new_value" because the provided value was equal to the previous value of "key"
+                b'new_value' # Set "key" to "new_value" because the provided value was equal to the previous value of "key"
+                # ONLY_IF_NOT_EQUAL -> Only set key if provided value is not equal to current value of the key
+            >>> await client.set("key", "newest_value", conditional_set=OnlyIfNotEqual("new_value"))
+                None # Did not rewrite value of "key" because provided value was equal to the current value of "key"
+            >>> await client.set("key", "newest_value", conditional_set=OnlyIfNotEqual("value"))
+                'OK' # Set "key" to "newest_value" because provided value was not equal to the current value of "key"
         """
         args = [key, value]
-        if isinstance(conditional_set, ConditionalChange):
-            args.append(conditional_set.value)
-
-        elif isinstance(conditional_set, OnlyIfEqual):
-            args.extend(["IFEQ", conditional_set.comparison_value])
-
+        if conditional_set is not None:
+            args.extend(conditional_set._to_args())
         if return_old_value:
             args.append("GET")
         if expiry is not None:
@@ -571,6 +573,36 @@ class CoreCommands(Protocol):
                 0 # No keys we're deleted since "key" doesn't exist.
         """
         return cast(int, await self._execute_command(RequestType.Del, keys))
+
+    async def delex(self, key: TEncodable, condition: ValueComparison) -> bool:
+        """
+        Deletes `key` if its value satisfies `condition`.
+
+        See [valkey.io](https://valkey.io/commands/delex/) for more details.
+
+        Args:
+            key (TEncodable): The key to delete. Must hold a string value.
+            condition (ValueComparison): The condition that must be met for `key`
+                to be deleted.
+
+        Returns:
+            bool: `True` if `key` was deleted, `False` otherwise.
+
+        Examples:
+            >>> await client.set("lock", "token1")
+            >>> await client.delex("lock", OnlyIfEqual("token2"))
+                False  # Value differs, so "lock" is not deleted.
+            >>> await client.delex("lock", OnlyIfEqual("token1"))
+                True  # "lock" is deleted.
+
+        Since: Valkey 9.2.0.
+        """
+        return cast(
+            bool,
+            await self._execute_command(
+                RequestType.DelEx, [key, *condition._to_args()]
+            ),
+        )
 
     async def move(self, key: TEncodable, db_index: int) -> bool:
         """
@@ -3086,7 +3118,7 @@ class CoreCommands(Protocol):
         Args:
             key (TEncodable): The key to set a timeout on.
             seconds (int): The timeout in seconds.
-            option (ExpireOptions, optional): The expire option.
+            option (Optional[ExpireOptions]): The expire option.
 
         Returns:
             bool: `True` if the timeout was set.
@@ -6954,7 +6986,7 @@ class CoreCommands(Protocol):
 
         Args:
             key (TEncodable): The key to get.
-            expiry (Optional[ExpiryGetEx], optional): set expiriation to the given key.
+            expiry (Optional[ExpiryGetEx]): set expiration to the given key.
                 Equivalent to [`EX` | `PX` | `EXAT` | `PXAT` | `PERSIST`] in the Valkey API.
 
         Returns:

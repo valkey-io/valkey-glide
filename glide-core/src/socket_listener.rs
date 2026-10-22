@@ -433,42 +433,39 @@ fn process_command_for_compression(
     let command_name = &all_args[0];
     let command_str = String::from_utf8_lossy(command_name).to_uppercase();
     let request_type = match command_str.as_str() {
-        "SET" => crate::request_type::RequestType::Set,
+        // Commands that support compression
+        "GETSET" => crate::request_type::RequestType::GetSet,
         "MSET" => crate::request_type::RequestType::MSet,
         "MSETNX" => crate::request_type::RequestType::MSetNX,
-        "SETEX" => crate::request_type::RequestType::SetEx,
         "PSETEX" => crate::request_type::RequestType::PSetEx,
+        "SET" => crate::request_type::RequestType::Set,
+        "SETEX" => crate::request_type::RequestType::SetEx,
         "SETNX" => crate::request_type::RequestType::SetNX,
         // Incompatible commands - string manipulation
         "APPEND" => crate::request_type::RequestType::Append,
+        "DELEX" => crate::request_type::RequestType::DelEx,
+        "DELIFEQ" => crate::request_type::RequestType::DelIfEq,
         "GETRANGE" => crate::request_type::RequestType::GetRange,
+        "LCS" => crate::request_type::RequestType::LCS,
         "SETRANGE" => crate::request_type::RequestType::SetRange,
         "STRLEN" => crate::request_type::RequestType::Strlen,
-        "LCS" => crate::request_type::RequestType::LCS,
         "SUBSTR" => crate::request_type::RequestType::Substr,
-        "DELIFEQ" => crate::request_type::RequestType::DelIfEq,
         // Incompatible commands - numeric operations
+        "DECR" => crate::request_type::RequestType::Decr,
+        "DECRBY" => crate::request_type::RequestType::DecrBy,
         "INCR" => crate::request_type::RequestType::Incr,
         "INCRBY" => crate::request_type::RequestType::IncrBy,
         "INCRBYFLOAT" => crate::request_type::RequestType::IncrByFloat,
-        "DECR" => crate::request_type::RequestType::Decr,
-        "DECRBY" => crate::request_type::RequestType::DecrBy,
         // Incompatible commands - bit operations
-        "GETBIT" => crate::request_type::RequestType::GetBit,
-        "SETBIT" => crate::request_type::RequestType::SetBit,
         "BITCOUNT" => crate::request_type::RequestType::BitCount,
-        "BITPOS" => crate::request_type::RequestType::BitPos,
         "BITFIELD" => crate::request_type::RequestType::BitField,
         "BITFIELD_RO" => crate::request_type::RequestType::BitFieldReadOnly,
         "BITOP" => crate::request_type::RequestType::BitOp,
+        "BITPOS" => crate::request_type::RequestType::BitPos,
+        "GETBIT" => crate::request_type::RequestType::GetBit,
+        "SETBIT" => crate::request_type::RequestType::SetBit,
         _ => return Ok(()), // Unknown command, no compression processing needed
     };
-
-    // Check if the command is incompatible with compression - this should error out
-    crate::compression::validate_command_compression_compatibility(
-        request_type,
-        compression_manager_ref,
-    )?;
 
     // Get arguments excluding the command name
     let mut args: Vec<Vec<u8>> = all_args[1..].to_vec();
