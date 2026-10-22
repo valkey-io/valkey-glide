@@ -79,17 +79,48 @@ mod remote_dma_tests {
     }
 
     /// Unwrap a transfer that must succeed, and the buffer it hands back.
-    fn succeeded<T>(
-        (buffer, result): RdmaOutcome<T>,
-        what: impl std::fmt::Display,
-    ) -> (RdmaBuffer, T) {
-        let value = result.unwrap_or_else(|error| panic!("{what}: {error}"));
-        let buffer = buffer.expect("a finished transfer hands the buffer back");
+    fn succeeded<T>(outcome: RdmaOutcome<T>, what: impl std::fmt::Display) -> (RdmaBuffer, T) {
+        let (buffer, value) = match outcome {
+            RdmaOutcome::Settled {
+                buffer,
+                result: Ok(value),
+            } => (buffer, value),
+            RdmaOutcome::Settled {
+                result: Err(error), ..
+            } => panic!("{what}: {error}"),
+            RdmaOutcome::Recalled(error) => panic!("{what}: recalled: {error}"),
+        };
         assert!(
             !buffer.is_revoked(),
             "{what}: a finished transfer keeps its region"
         );
         (buffer, value)
+    }
+
+    /// Unwrap a transfer that must fail and still hand its buffer back.
+    fn handed_back<T>(
+        outcome: RdmaOutcome<T>,
+        what: impl std::fmt::Display,
+    ) -> (RdmaBuffer, redis::RedisError) {
+        match outcome {
+            RdmaOutcome::Settled {
+                buffer,
+                result: Err(error),
+            } => (buffer, error),
+            RdmaOutcome::Settled { result: Ok(_), .. } => panic!("{what}: it succeeded"),
+            RdmaOutcome::Recalled(error) => panic!("{what}: recalled: {error}"),
+        }
+    }
+
+    /// Unwrap a transfer that must fail without handing its buffer back.
+    fn recalled<T>(outcome: RdmaOutcome<T>, what: impl std::fmt::Display) -> redis::RedisError {
+        match outcome {
+            RdmaOutcome::Recalled(error) => error,
+            RdmaOutcome::Settled { result: Ok(_), .. } => panic!("{what}: it succeeded"),
+            RdmaOutcome::Settled {
+                result: Err(error), ..
+            } => panic!("{what}: the buffer came back: {error}"),
+        }
     }
 
     /// The round trip: stage a value, let the server read it out of registered
@@ -324,13 +355,13 @@ mod remote_dma_tests {
             let destination = client
                 .register_rdma_region(vec![0u8; registered])
                 .expect("registering the destination region");
-            let (buffer, result) = client
-                .rdma_get(key.as_bytes(), destination, 0, WINDOW)
-                .await;
-            let error = result.expect_err("the value does not fit the window");
+            let (buffer, error) = handed_back(
+                client
+                    .rdma_get(key.as_bytes(), destination, 0, WINDOW)
+                    .await,
+                format!("{label}: the value does not fit the window"),
+            );
             assert!(error.is_server_reply(), "{label}: {error}");
-            let buffer =
-                buffer.unwrap_or_else(|| panic!("{label}: an error reply hands the buffer back"));
             assert!(
                 !buffer.is_revoked(),
                 "{label}: an error reply keeps the region"
@@ -420,13 +451,11 @@ mod remote_dma_tests {
         )
         .await;
 
-        let (buffer, outcome) = finished.expect("closing the client ends the wait").unwrap();
-        let error = outcome.expect_err("a cancelled transfer is an error");
-        assert!(is_cancellation(&error), "{error}");
-        assert!(
-            buffer.is_none(),
-            "a transfer that ends without a reply hands back no buffer"
+        let error = recalled(
+            finished.expect("closing the client ends the wait").unwrap(),
+            "a transfer that ends without a reply hands back no buffer",
         );
+        assert!(is_cancellation(&error), "{error}");
     }
 
     /// The hole lending closes: a caller that stops waiting, here with a timeout,
@@ -623,7 +652,7 @@ mod remote_dma_tests {
         value: &[u8],
         offset: usize,
         checksum: SetChecksum,
-    ) -> (Option<RdmaBuffer>, redis::RedisResult<()>) {
+    ) -> RdmaOutcome<()> {
         let mut memory = vec![0x5Au8; offset + value.len() + 4096];
         memory[offset..offset + value.len()].copy_from_slice(value);
         let source = client
@@ -705,28 +734,30 @@ mod remote_dma_tests {
         let value = crc_value(1);
         let wrong = glide_rdma::checksum(&value) ^ 1;
 
-        let (buffer, result) =
-            set_with(&mut client, &key, &value, 0, SetChecksum::Known(wrong)).await;
-        let error = result.expect_err("a wrong CRC must be refused");
+        let (buffer, error) = handed_back(
+            set_with(&mut client, &key, &value, 0, SetChecksum::Known(wrong)).await,
+            "a wrong CRC must be refused",
+        );
         assert!(
             error.to_string().contains("CRC mismatch after transfer"),
             "{error}"
         );
-        let buffer = buffer.expect("an error reply hands the buffer back");
         assert!(!buffer.is_revoked(), "an error reply keeps the region");
         assert_eq!(read_back(&mut client, &key).await, None, "nothing stored");
 
         // The returned buffer still works: retry with the right CRC.
-        let (_, result) = client
-            .rdma_set(
-                key.as_bytes(),
-                buffer,
-                0,
-                value.len(),
-                SetChecksum::Known(glide_rdma::checksum(&value)),
-            )
-            .await;
-        result.expect("the retry with the right CRC succeeds");
+        succeeded(
+            client
+                .rdma_set(
+                    key.as_bytes(),
+                    buffer,
+                    0,
+                    value.len(),
+                    SetChecksum::Known(glide_rdma::checksum(&value)),
+                )
+                .await,
+            "the retry with the right CRC",
+        );
         assert_eq!(
             read_back(&mut client, &key).await.as_deref(),
             Some(&value[..])
@@ -747,15 +778,17 @@ mod remote_dma_tests {
             set_with(&mut client, &key, &old, 0, SetChecksum::Compute).await,
             "storing the original value",
         );
-        let (_, result) = set_with(
-            &mut client,
-            &key,
-            &new,
-            0,
-            SetChecksum::Known(glide_rdma::checksum(&new) ^ 0x8000_0000),
-        )
-        .await;
-        result.expect_err("a wrong CRC must be refused");
+        handed_back(
+            set_with(
+                &mut client,
+                &key,
+                &new,
+                0,
+                SetChecksum::Known(glide_rdma::checksum(&new) ^ 0x8000_0000),
+            )
+            .await,
+            "a wrong CRC must be refused",
+        );
         assert_eq!(
             read_back(&mut client, &key).await.as_deref(),
             Some(&old[..])
@@ -810,9 +843,8 @@ mod remote_dma_tests {
                 .await
                 {
                     Err(_) => abandoned += 1,
-                    Ok((buffer, result)) => {
-                        result.unwrap_or_else(|error| panic!("cycle {cycle}: {error}"));
-                        drop(buffer);
+                    Ok(outcome) => {
+                        succeeded(outcome, format!("cycle {cycle}"));
                     }
                 }
                 continue;

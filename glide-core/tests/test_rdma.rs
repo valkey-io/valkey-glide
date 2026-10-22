@@ -16,24 +16,57 @@ mod utilities;
 mod dma_tests {
     use crate::utilities::mocks::{Mock, ServerMock};
     use crate::utilities::*;
+    use glide_core::client::RdmaOutcome;
     use glide_core::client::{Client, NodeAddress};
     use glide_core::rdma::{FabricConfig, Provider, RdmaSetting};
+    use glide_rdma::RdmaBuffer;
     use redis::FromRedisValue;
     use redis::{ConnectionAddr, Value};
     use std::collections::HashMap;
 
     /// Unwrap a transfer that must succeed, and the buffer it hands back.
-    fn succeeded<T>(
-        (buffer, result): glide_core::client::RdmaOutcome<T>,
-        what: impl std::fmt::Display,
-    ) -> (glide_rdma::RdmaBuffer, T) {
-        let value = result.unwrap_or_else(|error| panic!("{what}: {error}"));
-        let buffer = buffer.expect("a finished transfer hands the buffer back");
+    fn succeeded<T>(outcome: RdmaOutcome<T>, what: impl std::fmt::Display) -> (RdmaBuffer, T) {
+        let (buffer, value) = match outcome {
+            RdmaOutcome::Settled {
+                buffer,
+                result: Ok(value),
+            } => (buffer, value),
+            RdmaOutcome::Settled {
+                result: Err(error), ..
+            } => panic!("{what}: {error}"),
+            RdmaOutcome::Recalled(error) => panic!("{what}: recalled: {error}"),
+        };
         assert!(
             !buffer.is_revoked(),
             "{what}: a finished transfer keeps its region"
         );
         (buffer, value)
+    }
+
+    /// Unwrap a transfer that must fail and still hand its buffer back.
+    fn handed_back<T>(
+        outcome: RdmaOutcome<T>,
+        what: impl std::fmt::Display,
+    ) -> (RdmaBuffer, redis::RedisError) {
+        match outcome {
+            RdmaOutcome::Settled {
+                buffer,
+                result: Err(error),
+            } => (buffer, error),
+            RdmaOutcome::Settled { result: Ok(_), .. } => panic!("{what}: it succeeded"),
+            RdmaOutcome::Recalled(error) => panic!("{what}: recalled: {error}"),
+        }
+    }
+
+    /// Unwrap a transfer that must fail without handing its buffer back.
+    fn recalled<T>(outcome: RdmaOutcome<T>, what: impl std::fmt::Display) -> redis::RedisError {
+        match outcome {
+            RdmaOutcome::Recalled(error) => error,
+            RdmaOutcome::Settled { result: Ok(_), .. } => panic!("{what}: it succeeded"),
+            RdmaOutcome::Settled {
+                result: Err(error), ..
+            } => panic!("{what}: the buffer came back: {error}"),
+        }
     }
 
     fn extract_port(addr: &redis::ConnectionAddr) -> u16 {
@@ -90,8 +123,10 @@ mod dma_tests {
         let buffer = client
             .register_rdma_region(vec![0u8; 4096])
             .expect("the client has a fabric, so it registers");
-        let (buffer, result) = client.rdma_get(b"plain-key", buffer, 0, 4096).await;
-        let error = result.expect_err("a node that refused the handshake cannot serve a transfer");
+        let (buffer, error) = handed_back(
+            client.rdma_get(b"plain-key", buffer, 0, 4096).await,
+            "a node that refused the handshake cannot serve a transfer",
+        );
         let message = error.to_string();
         assert!(
             message.contains("no RDMA module loaded"),
@@ -102,7 +137,6 @@ mod dma_tests {
             "and which node is missing it: {error}"
         );
         // The transfer command was never sent, so the buffer comes back usable.
-        let buffer = buffer.expect("a refused handshake hands the buffer back");
         assert!(!buffer.is_revoked());
         assert_eq!(client.rdma_parked_bytes().unwrap(), 0);
     }
@@ -197,11 +231,9 @@ mod dma_tests {
             glide_rdma::RdmaFabric::open(&glide_rdma::FabricConfig::new(glide_rdma::Provider::Tcp))
                 .expect("tcp fabric opens");
         let buffer = fabric.register(vec![0u8; 4096]).expect("registers");
-        let (buffer, result) = client.rdma_get(b"key", buffer, 0, 4096).await;
-        let error = result.expect_err("a client without a fabric cannot transfer");
-        assert!(
-            buffer.is_some(),
-            "a transfer that never started hands the buffer back"
+        let (_, error) = handed_back(
+            client.rdma_get(b"key", buffer, 0, 4096).await,
+            "a transfer that never started hands the buffer back",
         );
         assert!(error.to_string().contains("RdmaConfiguration"), "{error}");
     }
@@ -288,11 +320,11 @@ mod dma_tests {
 
         let mut refused = client.clone();
         let second = client.register_rdma_region(vec![0u8; 4096]).unwrap();
-        let (buffer, result) = refused.rdma_get(b"key", second, 0, 4096).await;
-
-        let error = result.expect_err("no in-flight slot is free");
+        let (buffer, error) = handed_back(
+            refused.rdma_get(b"key", second, 0, 4096).await,
+            "no in-flight slot is free",
+        );
         assert!(error.to_string().contains("inflight"), "{error}");
-        let buffer = buffer.expect("nothing was sent, so the buffer comes back");
         assert!(!buffer.is_revoked(), "and it can be lent again");
         assert_eq!(client.rdma_parked_bytes().unwrap(), 0);
     }
@@ -318,11 +350,11 @@ mod dma_tests {
             .await
             .expect("MULTI is accepted");
         let buffer = client.register_rdma_region(vec![0u8; 4096]).unwrap();
-        let (buffer, result) = client.rdma_get(b"key", buffer, 0, 4096).await;
-
-        let error = result.expect_err("a transfer cannot run inside a transaction");
+        let (buffer, error) = handed_back(
+            client.rdma_get(b"key", buffer, 0, 4096).await,
+            "a transfer cannot run inside a transaction",
+        );
         assert!(error.to_string().contains("MULTI"), "{error}");
-        let buffer = buffer.expect("nothing was sent, so the buffer comes back");
         assert!(!buffer.is_revoked(), "and it can be lent again");
         assert_eq!(
             mock.get_number_of_received_commands(),
@@ -335,12 +367,10 @@ mod dma_tests {
             .send_command(&mut redis::cmd("EXEC"), None)
             .await
             .expect("EXEC is accepted");
-        let (buffer, result) = client.rdma_get(b"key", buffer, 0, 4096).await;
-        assert!(
-            buffer.is_none(),
-            "the transfer was queued, so the server may still write into the memory"
+        let error = recalled(
+            client.rdma_get(b"key", buffer, 0, 4096).await,
+            "the transfer was queued, so the server may still write into the memory",
         );
-        let error = result.expect_err("the mock queues the transfer, which is not a read reply");
         assert!(
             !error.to_string().contains("inside an open MULTI"),
             "EXEC closed the transaction, so the transfer was sent: {error}"
@@ -478,15 +508,13 @@ mod dma_tests {
             tokio::spawn(async move { transferring.rdma_get(b"key", buffer, 0, 4096).await });
         tokio::time::sleep(STUCK).await;
         revoker.revoke().expect("the region closes");
-        let (buffer, outcome) = tokio::time::timeout(PROMPTLY, transfer)
-            .await
-            .expect("revoking the region ends the wait")
-            .unwrap();
-        assert!(
-            buffer.is_none(),
-            "a recalled loan's memory is parked until the fabric closes"
+        let cancelled = recalled(
+            tokio::time::timeout(PROMPTLY, transfer)
+                .await
+                .expect("revoking the region ends the wait")
+                .unwrap(),
+            "a recalled loan's memory is parked until the fabric closes",
         );
-        let cancelled = outcome.expect_err("a cancelled read is an error");
         assert!(
             cancelled.to_string().contains("region was revoked"),
             "{cancelled}"
@@ -530,15 +558,13 @@ mod dma_tests {
 
         client.close_rdma().expect("the region closes");
 
-        let (buffer, outcome) = tokio::time::timeout(PROMPTLY, transfer)
-            .await
-            .expect("closing the client ends the wait")
-            .unwrap();
-        assert!(
-            buffer.is_none(),
-            "a recalled loan's memory is parked until the fabric closes"
+        let cancelled = recalled(
+            tokio::time::timeout(PROMPTLY, transfer)
+                .await
+                .expect("closing the client ends the wait")
+                .unwrap(),
+            "a recalled loan's memory is parked until the fabric closes",
         );
-        let cancelled = outcome.expect_err("a cancelled read is an error");
         assert_eq!(cancelled.kind(), redis::ErrorKind::ClientError);
         assert!(
             cancelled.to_string().contains("RDMA transfer cancelled"),
@@ -577,12 +603,13 @@ mod dma_tests {
 
         client.close_rdma().expect("the region closes");
 
-        let (buffer, outcome) = tokio::time::timeout(PROMPTLY, transfer)
-            .await
-            .expect("closing the client ends the wait")
-            .unwrap();
-        assert!(buffer.is_none(), "the buffer was lent before the handshake");
-        let cancelled = outcome.expect_err("a cancelled read is an error");
+        let cancelled = recalled(
+            tokio::time::timeout(PROMPTLY, transfer)
+                .await
+                .expect("closing the client ends the wait")
+                .unwrap(),
+            "the buffer was lent before the handshake",
+        );
         assert!(
             cancelled.to_string().contains("RDMA transfer cancelled"),
             "{cancelled}"
@@ -615,8 +642,10 @@ mod dma_tests {
             .register_rdma_region(vec![0u8; 4096])
             .expect("registers");
 
-        let (buffer, result) = client.rdma_get(b"key", buffer, 0, 4096).await;
-        let error = result.expect_err("OK is not a handshake reply");
+        let (buffer, error) = handed_back(
+            client.rdma_get(b"key", buffer, 0, 4096).await,
+            "OK is not a handshake reply",
+        );
         assert_eq!(error.kind(), redis::ErrorKind::FatalSendError, "{error}");
         assert!(
             error
@@ -624,7 +653,6 @@ mod dma_tests {
                 .contains("malformed BLOB.RDMA_HELLO reply"),
             "{error}"
         );
-        let buffer = buffer.expect("nothing was sent, so the buffer comes back");
         assert!(!buffer.is_revoked(), "and it can be lent again");
 
         let (_, receipt) = succeeded(
@@ -677,23 +705,25 @@ mod dma_tests {
         });
         tokio::time::sleep(STUCK).await;
         revoker.revoke().expect("the region closes");
-        let (_, outcome) = tokio::time::timeout(PROMPTLY, transfer)
-            .await
-            .expect("revoking the region ends the wait")
-            .unwrap();
-        outcome.expect_err("the handshake was cancelled");
+        recalled(
+            tokio::time::timeout(PROMPTLY, transfer)
+                .await
+                .expect("revoking the region ends the wait")
+                .unwrap(),
+            "the handshake was cancelled",
+        );
 
         let buffer = client
             .register_rdma_region(vec![0u8; 4096])
             .expect("registers");
-        let (buffer, result) =
+        let (buffer, error) = handed_back(
             tokio::time::timeout(PROMPTLY, client.rdma_get(b"key", buffer, 0, 4096))
                 .await
-                .expect("the transfer does not wait on the cancelled handshake");
-        let error = result.expect_err("the old connection cannot carry a transfer");
+                .expect("the transfer does not wait on the cancelled handshake"),
+            "the old connection cannot carry a transfer",
+        );
         assert_eq!(error.kind(), redis::ErrorKind::FatalSendError, "{error}");
         assert!(error.to_string().contains("did not finish"), "{error}");
-        let buffer = buffer.expect("nothing was sent, so the buffer comes back");
         assert!(!buffer.is_revoked(), "and it can be lent again");
 
         let (_, receipt) = succeeded(
@@ -729,9 +759,10 @@ mod dma_tests {
             .register_rdma_region(vec![0u8; 4096])
             .expect("registers");
 
-        let (buffer, result) = client.rdma_get(b"key", buffer, 0, 4096).await;
-
-        let error = result.expect_err("the session could not be opened");
+        let (buffer, error) = handed_back(
+            client.rdma_get(b"key", buffer, 0, 4096).await,
+            "the session could not be opened",
+        );
         assert_eq!(error.kind(), redis::ErrorKind::FatalSendError, "{error}");
         assert!(
             error
@@ -739,7 +770,7 @@ mod dma_tests {
                 .contains("could not open the RDMA session"),
             "{error}"
         );
-        assert!(!buffer.expect("the buffer comes back").is_revoked());
+        assert!(!buffer.is_revoked());
         assert_eq!(
             mock.get_number_of_received_commands(),
             1,
@@ -761,17 +792,15 @@ mod dma_tests {
             closer.close_rdma()
         });
 
-        let (buffer, outcome) = tokio::time::timeout(
-            STUCK + PROMPTLY,
-            client.rdma_set(b"key", buffer, 0, 4096, glide_rdma::SetChecksum::Skip),
-        )
-        .await
-        .expect("closing the client ends the wait");
-        assert!(
-            buffer.is_none(),
-            "a recalled loan's memory is parked until the fabric closes"
+        let cancelled = recalled(
+            tokio::time::timeout(
+                STUCK + PROMPTLY,
+                client.rdma_set(b"key", buffer, 0, 4096, glide_rdma::SetChecksum::Skip),
+            )
+            .await
+            .expect("closing the client ends the wait"),
+            "a recalled loan's memory is parked until the fabric closes",
         );
-        let cancelled = outcome.expect_err("a cancelled write is an error");
         closing.await.unwrap().expect("the region closes");
         assert!(
             cancelled.to_string().contains("RDMA transfer cancelled"),
@@ -860,8 +889,10 @@ mod dma_tests {
             .register_rdma_region(vec![0u8; 4096])
             .expect_err("no registration after close");
         assert!(refused.to_string().contains("closed"), "{refused}");
-        let (_, result) = client.rdma_get(b"key", registered_before, 0, 4096).await;
-        let refused = result.expect_err("no transfer after close");
+        let (_, refused) = handed_back(
+            client.rdma_get(b"key", registered_before, 0, 4096).await,
+            "no transfer after close",
+        );
         assert!(refused.to_string().contains("closed"), "{refused}");
         assert_eq!(
             mock.get_number_of_received_commands(),
@@ -899,11 +930,12 @@ mod dma_tests {
             .register_rdma_region(vec![0u8; 4096])
             .expect("registers");
 
-        let (buffer, result) = client.rdma_get(b"key", buffer, 0, 4096).await;
-        let refused = result.expect_err("a node that refuses the handshake cannot transfer");
+        let (buffer, refused) = handed_back(
+            client.rdma_get(b"key", buffer, 0, 4096).await,
+            "a node that refuses the handshake cannot transfer",
+        );
         // The transfer command was never sent, so the server never touched the
         // memory and the buffer is still usable.
-        let buffer = buffer.expect("the buffer comes back");
         assert!(!buffer.is_revoked());
         assert!(
             refused.to_string().contains("refused the RDMA handshake"),
@@ -947,14 +979,15 @@ mod dma_tests {
             .register_rdma_region(vec![0u8; 4096])
             .expect("registers");
 
-        let (buffer, result) = client.rdma_get(b"key", buffer, 0, 4096).await;
-
-        let refused = result.expect_err("a refused handshake cannot transfer");
+        let (buffer, refused) = handed_back(
+            client.rdma_get(b"key", buffer, 0, 4096).await,
+            "a refused handshake cannot transfer",
+        );
         assert!(
             refused.to_string().contains("refused the RDMA handshake"),
             "{refused}"
         );
-        assert!(!buffer.expect("the buffer comes back").is_revoked());
+        assert!(!buffer.is_revoked());
         assert_eq!(
             mock.get_number_of_received_commands(),
             1,
@@ -989,10 +1022,11 @@ mod dma_tests {
             .register_rdma_region(vec![0u8; 4096])
             .expect("registers");
 
-        let (buffer, result) = client.rdma_get(b"key", buffer, 0, 4096).await;
-        let error = result.expect_err("the server said no");
+        let (buffer, error) = handed_back(
+            client.rdma_get(b"key", buffer, 0, 4096).await,
+            "the server said no",
+        );
         assert!(error.to_string().contains("no room"), "{error}");
-        let buffer = buffer.expect("the buffer comes back");
         assert!(!buffer.is_revoked(), "the server replied, so it is done");
 
         let (_, receipt) = succeeded(client.rdma_get(b"key", buffer, 0, 4096).await, "retry");
@@ -1010,12 +1044,9 @@ mod dma_tests {
             .register_rdma_region(vec![0u8; 4096])
             .expect("registers");
 
-        let (buffer, result) = client.rdma_get(b"key", buffer, 0, 4096).await;
-
-        result.expect_err("OK is not a read reply");
-        assert!(
-            buffer.is_none(),
-            "the server may not be done with the memory"
+        recalled(
+            client.rdma_get(b"key", buffer, 0, 4096).await,
+            "OK is not a read reply, so the server may not be done with the memory",
         );
         assert_eq!(client.rdma_parked_bytes().unwrap(), 4096);
     }
@@ -1032,12 +1063,9 @@ mod dma_tests {
             .register_rdma_region(vec![0u8; 4096])
             .expect("registers");
 
-        let (buffer, result) = client.rdma_get(b"key", buffer, 0, 4096).await;
-
-        result.expect_err("QUEUED is not a read reply");
-        assert!(
-            buffer.is_none(),
-            "the server may still write into the memory"
+        recalled(
+            client.rdma_get(b"key", buffer, 0, 4096).await,
+            "QUEUED is not a read reply, so the server may still write into the memory",
         );
         assert_eq!(client.rdma_parked_bytes().unwrap(), 4096);
     }
@@ -1057,12 +1085,12 @@ mod dma_tests {
             .register_rdma_region(vec![1u8; 4096])
             .expect("registers");
 
-        let (buffer, result) = client
-            .rdma_set(b"key", buffer, 0, 4096, glide_rdma::SetChecksum::Skip)
-            .await;
-
-        result.expect_err("QUEUED is not a write reply");
-        assert!(buffer.is_none(), "the server may still read the memory");
+        recalled(
+            client
+                .rdma_set(b"key", buffer, 0, 4096, glide_rdma::SetChecksum::Skip)
+                .await,
+            "QUEUED is not a write reply, so the server may still read the memory",
+        );
         assert_eq!(client.rdma_parked_bytes().unwrap(), 4096);
     }
 
@@ -1074,15 +1102,16 @@ mod dma_tests {
             .register_rdma_region(vec![0u8; 8192])
             .expect("registers");
 
-        let (buffer, result) = client.rdma_get(b"key", buffer, 0, 4096).await;
-
-        let error = result.expect_err("more than the window held");
+        let (buffer, error) = handed_back(
+            client.rdma_get(b"key", buffer, 0, 4096).await,
+            "more than the window held",
+        );
         assert_eq!(
             error.kind(),
             redis::ErrorKind::UserOperationError,
             "{error}"
         );
-        assert!(!buffer.expect("the buffer comes back").is_revoked());
+        assert!(!buffer.is_revoked());
     }
 
     /// `rdma_get` checks every read against the checksum in the reply. A mismatch
@@ -1096,12 +1125,12 @@ mod dma_tests {
             .register_rdma_region(vec![0u8; 4096])
             .expect("registers");
 
-        let (buffer, result) = client.rdma_get(b"key", buffer, 0, 4096).await;
-
-        let error = result.expect_err("the bytes that landed do not match the reply");
+        let (buffer, error) = handed_back(
+            client.rdma_get(b"key", buffer, 0, 4096).await,
+            "the bytes that landed do not match the reply",
+        );
         assert_eq!(error.kind(), redis::ErrorKind::ClientError, "{error}");
         assert!(error.to_string().contains("checksum mismatch"), "{error}");
-        let buffer = buffer.expect("the server replied, so the buffer comes back");
         assert!(!buffer.is_revoked());
         succeeded(client.rdma_get(b"key", buffer, 0, 4096).await, "retry");
     }
@@ -1141,11 +1170,12 @@ mod dma_tests {
             .register_rdma_region(vec![0u8; 1024])
             .expect("registers");
 
-        let (buffer, result) = client.rdma_get(b"key", buffer, 768, 512).await;
-
-        let error = result.expect_err("the window runs past the end");
+        let (buffer, error) = handed_back(
+            client.rdma_get(b"key", buffer, 768, 512).await,
+            "the window runs past the end",
+        );
         assert!(error.to_string().contains("1024"), "{error}");
-        assert!(!buffer.expect("the buffer comes back").is_revoked());
+        assert!(!buffer.is_revoked());
         assert_eq!(
             mock.get_number_of_received_commands(),
             0,
