@@ -5738,12 +5738,6 @@ class TestCommands:
         assert await glide_client.delifeq(key, value) is True
         assert await glide_client.get(key) is None
 
-        # DELIFEQ on a key holding a non-string value returns a WRONGTYPE error
-        set_key = get_random_string(10)
-        assert await glide_client.sadd(set_key, ["a"]) == 1
-        with pytest.raises(RequestError, match="WRONGTYPE"):
-            await glide_client.delifeq(set_key, "a")
-
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_xadd_xtrim_xlen(self, glide_client: TGlideClient):

@@ -1431,6 +1431,17 @@ class TestCompressionCompatibility:
         await compression_client.delete([key])
 
 
+async def assert_incompatible_with_compression(coro: object) -> None:
+    """Assert that awaiting `coro` raises an error reporting compression incompatibility."""
+    with pytest.raises(Exception) as exc_info:
+        await coro  # type: ignore[misc]
+
+    error_msg = str(exc_info.value).lower()
+    assert (
+        "incompatible" in error_msg or "compression" in error_msg
+    ), f"Error should mention incompatibility with compression: {exc_info.value}"
+
+
 @pytest.mark.anyio
 class TestCompressionIncompatibleCommands:
     """Test that incompatible commands error out when compression is enabled.
@@ -1472,20 +1483,11 @@ class TestCompressionIncompatibleCommands:
         """Test that DELIFEQ command errors out when compression is enabled."""
         key = f"delifeq_test_{get_random_string(8)}"
 
-        # First set a value
-        await compression_client.set(key, "initial_value")
-
-        # DELIFEQ should fail with compression enabled
-        with pytest.raises(Exception) as exc_info:
-            await compression_client.delifeq(key, "initial_value")
-
-        error_msg = str(exc_info.value).lower()
-        assert (
-            "incompatible" in error_msg or "compression" in error_msg
-        ), f"Error should mention incompatibility with compression: {exc_info.value}"
-
-        # Cleanup
-        await compression_client.delete([key])
+        # DELIFEQ is rejected based on the command type alone, before any server
+        # round-trip, so no key setup is needed to trigger the error.
+        await assert_incompatible_with_compression(
+            compression_client.delifeq(key, "initial_value")
+        )
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])

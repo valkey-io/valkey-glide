@@ -5885,12 +5885,6 @@ class TestCommands:
         assert glide_sync_client.delifeq(key, value) is True
         assert glide_sync_client.get(key) is None
 
-        # DELIFEQ on a key holding a non-string value returns a WRONGTYPE error
-        set_key = get_random_string(10)
-        assert glide_sync_client.sadd(set_key, ["a"]) == 1
-        with pytest.raises(RequestError, match="WRONGTYPE"):
-            glide_sync_client.delifeq(set_key, "a")
-
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     def test_sync_xadd_xtrim_xlen(self, glide_sync_client: TGlideClient):

@@ -6,7 +6,7 @@ import base64
 import json
 import os
 import random
-from typing import List, Optional, Union, cast
+from typing import Callable, List, Optional, Union, cast
 
 import pytest
 from glide_shared.commands.batch import Batch, ClusterBatch
@@ -1467,6 +1467,17 @@ class TestCompressionCompatibility:
         compression_client.delete([key])
 
 
+def assert_incompatible_with_compression(call: Callable[[], object]) -> None:
+    """Assert that invoking `call` raises an error reporting compression incompatibility."""
+    with pytest.raises(Exception) as exc_info:
+        call()
+
+    error_msg = str(exc_info.value).lower()
+    assert (
+        "incompatible" in error_msg or "compression" in error_msg
+    ), f"Error should mention incompatibility with compression: {exc_info.value}"
+
+
 class TestCompressionIncompatibleCommands:
     """Test that incompatible commands error out when compression is enabled.
 
@@ -1507,20 +1518,11 @@ class TestCompressionIncompatibleCommands:
         """Test that DELIFEQ command errors out when compression is enabled."""
         key = f"delifeq_test_{get_random_string(8)}"
 
-        # First set a value
-        compression_client.set(key, "initial_value")
-
-        # DELIFEQ should fail with compression enabled
-        with pytest.raises(Exception) as exc_info:
-            compression_client.delifeq(key, "initial_value")
-
-        error_msg = str(exc_info.value).lower()
-        assert (
-            "incompatible" in error_msg or "compression" in error_msg
-        ), f"Error should mention incompatibility with compression: {exc_info.value}"
-
-        # Cleanup
-        compression_client.delete([key])
+        # DELIFEQ is rejected based on the command type alone, before any server
+        # round-trip, so no key setup is needed to trigger the error.
+        assert_incompatible_with_compression(
+            lambda: compression_client.delifeq(key, "initial_value")
+        )
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
