@@ -1,7 +1,8 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 //! What a failed `BLOB.RDMA_HELLO` tells the caller: whether the node lacks the
-//! module, refused the handshake, or answered in a shape this client cannot read.
+//! module, refused the handshake, or may hold a session this client could not
+//! open, which means the connection has to be replaced.
 
 use super::RdmaUnavailable;
 
@@ -25,11 +26,14 @@ pub(crate) fn handshake_refused(node: &str, error: redis::RedisError) -> redis::
         };
         (redis::ErrorKind::InvalidClientConfig, reason)
     } else {
+        // Keeps the server's kind, so that a passing state such as `CLUSTERDOWN`,
+        // `MASTERDOWN` or `NOAUTH` is retried or reconnected as it would be for
+        // any other command.
         let reason = RdmaUnavailable::HandshakeRefused {
             node: node.to_string(),
             reason: error.to_string(),
         };
-        (redis::ErrorKind::InvalidClientConfig, reason)
+        (error.kind(), reason)
     };
     // The server answered, so the transfer command was never sent on this
     // connection. Keeping the server's description is what tells
@@ -39,19 +43,51 @@ pub(crate) fn handshake_refused(node: &str, error: redis::RedisError) -> redis::
 
 /// A `BLOB.RDMA_HELLO` reply this client could not read.
 ///
-/// Different from a refusal because it indicates the node has the
-/// module and answered, but the two disagree about the reply's shape.
-///
-/// Carries the server's description although the reply was not an error: the
-/// server answered, so the transfer command was never sent on this connection,
-/// and `rdma_transfer` hands the buffer back.
+/// Different from a refusal because it indicates the node has the module and
+/// answered, but the two disagree about the reply's shape. The server opened a
+/// session that this client cannot open, so the connection has to be replaced;
+/// see [`connection_needs_replacing`].
 pub(crate) fn malformed_handshake(node: &str, error: redis::RedisError) -> redis::RedisError {
-    let reason = RdmaUnavailable::MalformedHandshake {
+    connection_needs_replacing(RdmaUnavailable::MalformedHandshake {
         node: node.to_string(),
         reason: error.to_string(),
-    };
+    })
+}
+
+/// The server answered the handshake, but this client failed to open its side
+/// of the session, for example because the fabric would not take the server's
+/// address. The server's side is open, so the connection has to be replaced; see
+/// [`connection_needs_replacing`].
+pub(crate) fn session_not_opened(node: &str, error: glide_rdma::RdmaError) -> redis::RedisError {
+    connection_needs_replacing(RdmaUnavailable::SessionNotOpened {
+        node: node.to_string(),
+        reason: error.to_string(),
+    })
+}
+
+/// An earlier handshake on this connection may have opened a session on the
+/// server that this client never opened, for example because that handshake
+/// was cancelled before its reply arrived. The server refuses a second
+/// handshake, so the connection has to be replaced; see
+/// [`connection_needs_replacing`].
+pub(crate) fn handshake_unsettled(node: &str) -> redis::RedisError {
+    connection_needs_replacing(RdmaUnavailable::HandshakeUnsettled {
+        node: node.to_string(),
+    })
+}
+
+/// The error for a handshake that leaves its connection unable to carry a
+/// transfer.
+///
+/// - `FatalSendError` says the transfer was not sent and the connection must be
+///   replaced. A standalone client reconnects. A cluster client reconnects and
+///   sends the transfer again on the new connection, which is safe because the
+///   first attempt never sent it.
+/// - The server's description tells `rdma_transfer` that the server is done with
+///   the buffer, since the transfer was never sent, so it hands the buffer back.
+fn connection_needs_replacing(reason: RdmaUnavailable) -> redis::RedisError {
     redis::RedisError::from((
-        redis::ErrorKind::TypeError,
+        redis::ErrorKind::FatalSendError,
         redis::SERVER_ERROR_DESCRIPTION,
         reason.to_string(),
     ))
@@ -126,7 +162,7 @@ mod tests {
             ),
             (
                 server_error("ERR not accepting sessions"),
-                redis::ErrorKind::InvalidClientConfig,
+                redis::ErrorKind::ResponseError,
             ),
             (replica_refusal(), redis::ErrorKind::ReadOnly),
         ] {
@@ -157,21 +193,73 @@ mod tests {
         }
     }
 
+    /// A refusal that means the node is passing through a state, rather than that
+    /// it will never take the handshake, keeps its kind so it is retried or
+    /// reconnected like any other command.
     #[test]
-    fn an_unreadable_reply_names_the_node_and_stays_a_protocol_error() {
+    fn a_passing_refusal_keeps_its_kind() {
+        for wire in [
+            &b"-CLUSTERDOWN The cluster is down\r\n"[..],
+            &b"-MASTERDOWN Link with MASTER is down\r\n"[..],
+            &b"-NOAUTH Authentication required.\r\n"[..],
+        ] {
+            let refusal = redis::parse_redis_value(wire)
+                .and_then(|reply| reply.extract_error())
+                .expect_err("an error reply");
+            let kind = refusal.kind();
+
+            let failure = handshake_refused("10.0.0.1:6379", refusal);
+
+            assert_eq!(failure.kind(), kind, "{failure}");
+            assert_ne!(failure.kind(), redis::ErrorKind::InvalidClientConfig);
+            assert!(failure.is_server_reply(), "{failure}");
+            assert!(
+                failure.to_string().contains("refused the RDMA handshake"),
+                "{failure}"
+            );
+        }
+    }
+
+    #[test]
+    fn an_unreadable_reply_names_the_node_and_replaces_the_connection() {
         let unreadable = protocol::as_redis_error(glide_rdma::RdmaError::Protocol(
             "blob.rdma_hello returned no addresses".to_string(),
         ));
 
         let failure = malformed_handshake("10.0.0.1:6379", unreadable);
 
-        assert_eq!(failure.kind(), redis::ErrorKind::TypeError);
-        assert!(failure.is_server_reply(), "the server answered: {failure}");
+        assert_eq!(failure.kind(), redis::ErrorKind::FatalSendError);
+        assert!(
+            failure.is_server_reply(),
+            "the transfer was never sent: {failure}"
+        );
         let message = failure.to_string();
         assert!(message.contains("10.0.0.1:6379"), "{message}");
         assert!(
             message.contains("malformed BLOB.RDMA_HELLO reply"),
             "{message}"
         );
+    }
+
+    /// Every failure that leaves the server holding a session this client does
+    /// not have replaces the connection, and hands the buffer back.
+    #[test]
+    fn an_out_of_step_session_replaces_the_connection() {
+        for failure in [
+            session_not_opened(
+                "10.0.0.1:6379",
+                glide_rdma::RdmaError::Configuration("bad address".to_string()),
+            ),
+            handshake_unsettled("10.0.0.1:6379"),
+        ] {
+            assert_eq!(
+                failure.kind(),
+                redis::ErrorKind::FatalSendError,
+                "{failure}"
+            );
+            assert!(failure.is_unrecoverable_error(), "reconnects: {failure}");
+            assert!(failure.is_server_reply(), "{failure}");
+            assert!(failure.to_string().contains("10.0.0.1:6379"), "{failure}");
+        }
     }
 }

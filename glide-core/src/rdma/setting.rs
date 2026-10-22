@@ -65,6 +65,28 @@ pub enum RdmaUnavailable {
         reason: String,
     },
 
+    /// The node accepted the handshake, but this client could not open its side
+    /// of the session.
+    #[error("could not open the RDMA session with node {node}: {reason}")]
+    SessionNotOpened {
+        /// The node that accepted the handshake.
+        node: String,
+        /// Why the session could not be opened.
+        reason: String,
+    },
+
+    /// An earlier handshake on the same connection ended without this client
+    /// learning whether the node opened a session, for example because it was
+    /// cancelled. The node refuses a second handshake on that connection.
+    #[error(
+        "an earlier RDMA handshake with node {node} on this connection did not finish; \
+         the connection is being replaced"
+    )]
+    HandshakeUnsettled {
+        /// The node the handshake was sent to.
+        node: String,
+    },
+
     /// The fabric refused the configuration.
     #[cfg(feature = "rdma")]
     #[error("{0}")]

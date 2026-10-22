@@ -27,7 +27,9 @@ mod setting;
 
 pub(crate) use guard::{refuse_direct, refuse_direct_command, refuse_direct_in_batch};
 #[cfg(feature = "rdma")]
-pub(crate) use handshake::{handshake_refused, malformed_handshake};
+pub(crate) use handshake::{
+    handshake_refused, handshake_unsettled, malformed_handshake, session_not_opened,
+};
 #[cfg(feature = "rdma")]
 pub(crate) use regions::{Regions, cancellation, cancelled_if_revoked};
 pub use setting::{RdmaSetting, RdmaUnavailable};

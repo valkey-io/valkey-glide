@@ -5738,6 +5738,47 @@ mod cluster_async {
         assert_eq!(requests.load(atomic::Ordering::SeqCst), 2);
     }
 
+    /// A transfer whose connection could not send it, such as one whose RDMA
+    /// handshake left the connection unusable, is sent again once the connection
+    /// is replaced: the first attempt never reached the server, so it cannot still
+    /// be using the client's memory.
+    #[test]
+    #[serial_test::parallel(otel)]
+    fn test_async_cluster_rdma_transfer_is_retried_after_a_fatal_send_error() {
+        let name = "test_async_cluster_rdma_transfer_is_retried_after_a_fatal_send_error";
+        let requests = Arc::new(atomic::AtomicUsize::new(0));
+        let MockEnv {
+            runtime,
+            async_connection: mut connection,
+            ..
+        } = MockEnv::with_client_builder(
+            ClusterClient::builder(vec![&*format!("redis://{name}")]).retries(3),
+            name,
+            {
+                let requests = requests.clone();
+                move |cmd: &[u8], _port| {
+                    respond_startup_two_nodes(name, cmd)?;
+                    match requests.fetch_add(1, atomic::Ordering::SeqCst) {
+                        // What glide-core's RDMA connection returns for a
+                        // handshake that leaves the connection unusable.
+                        0 => Err(Err(RedisError::from((
+                            ErrorKind::FatalSendError,
+                            redis::SERVER_ERROR_DESCRIPTION,
+                            "the connection is being replaced".to_string(),
+                        )))),
+                        _ => Err(Ok(Value::Array(vec![Value::Int(16), Value::Int(0)]))),
+                    }
+                }
+            },
+        );
+        let result = runtime.block_on(rdma_get_cmd().query_async::<_, Value>(&mut connection));
+        assert_eq!(
+            result,
+            Ok(Value::Array(vec![Value::Int(16), Value::Int(0)]))
+        );
+        assert_eq!(requests.load(atomic::Ordering::SeqCst), 2);
+    }
+
     #[test]
     #[serial_test::parallel(otel)]
     fn test_async_cluster_io_error_still_retries_other_commands() {

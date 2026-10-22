@@ -17,8 +17,11 @@ use super::{Client, DispatchPermit};
 /// - The transfer was refused before the buffer was lent: a revoked or foreign
 ///   buffer, a closed client, a full in-flight limit, an open circuit breaker,
 ///   or a window out of bounds.
-/// - The server refused the handshake, or sent a handshake reply this client
-///   cannot read, so the transfer was never sent.
+/// - The handshake failed, so the transfer was never sent. The server refused
+///   it, its reply could not be read, this client could not open its side of
+///   the session, or an earlier handshake on the same connection never
+///   finished. In the last three cases the connection is also replaced, and a
+///   cluster client sends the transfer again on the new one.
 /// - The server answered the transfer with its result or with an error.
 ///
 /// Otherwise the buffer is `None`, because the server may still be using it:
@@ -255,9 +258,9 @@ impl Client {
     /// The loan ends one of two ways:
     ///
     /// - Reclaimed, handing the buffer back, when `parse` accepts the reply or the
-    ///   error is a server reply (`RedisError::is_server_reply`). A refused or
-    ///   unreadable handshake counts as a server reply, because
-    ///   `handshake_refused` and `malformed_handshake` build it that way.
+    ///   error is a server reply (`RedisError::is_server_reply`). Every handshake
+    ///   failure that kept the transfer from being sent counts as a server reply,
+    ///   because the errors in `crate::rdma::handshake` are built that way.
     /// - Recalled, closing the region first, in every other case: a reply `parse`
     ///   rejects, any other error, or a revoke that wins the race against the
     ///   reply.
@@ -273,8 +276,8 @@ impl Client {
     /// earlier attempt can still be using the memory.
     ///
     /// A connection error saying the command was never sent (`FatalSendError`) is
-    /// still recalled. That is more cautious than needed, but costs only a new
-    /// registration.
+    /// still recalled, unless the handshake built it. That is more cautious than
+    /// needed, but costs only a new registration.
     ///
     /// `permit` is what [`Self::rdma_preflight`] returned, after its checks ran and
     /// before the buffer was lent.

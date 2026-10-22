@@ -22,6 +22,7 @@ mod with_rdma {
     use std::net::{IpAddr, SocketAddr};
     use std::ops::{Deref, DerefMut};
     use std::sync::Arc;
+    use std::sync::atomic::{AtomicBool, Ordering};
     use std::time::Duration;
 
     use redis::aio::MultiplexedConnection;
@@ -47,6 +48,13 @@ mod with_rdma {
         /// Only for error messages: a failed handshake has to say which node.
         node: String,
         session: OnceCell<glide_rdma::RdmaSession>,
+        /// Whether a `BLOB.RDMA_HELLO` sent on this connection may have opened a
+        /// session on the server that this client never opened on its side.
+        ///
+        /// The server refuses a second handshake on a connection that has a
+        /// session, so once this is set, the connection can never carry a
+        /// transfer and has to be replaced.
+        unsettled: AtomicBool,
     }
 
     impl Rdma {
@@ -60,9 +68,40 @@ mod with_rdma {
                 return Ok(());
             }
             self.session
-                .get_or_try_init(|| handshake(connection, &self.fabric, &self.node))
+                .get_or_try_init(|| self.handshake_once(connection))
                 .await?;
             Ok(())
+        }
+
+        /// Run the handshake, unless an earlier one on this connection may have
+        /// opened a session on the server.
+        ///
+        /// The check is here rather than before `get_or_try_init` because a
+        /// transfer waiting on the cell takes over the handshake when the one
+        /// running it is dropped, and must not send a second `BLOB.RDMA_HELLO`.
+        ///
+        /// The handshake is unsettled from the moment it is sent. It settles in
+        /// only two ways:
+        ///
+        /// - The session opens on both sides.
+        /// - The server answers with an error, which means it opened nothing.
+        ///
+        /// Anything else leaves it unsettled: the future was dropped while waiting
+        /// for the reply, the reply could not be read, the client failed to open
+        /// its side of the session, or the connection failed.
+        async fn handshake_once(
+            &self,
+            connection: &mut MultiplexedConnection,
+        ) -> RedisResult<glide_rdma::RdmaSession> {
+            if self.unsettled.load(Ordering::Acquire) {
+                return Err(crate::rdma::handshake_unsettled(&self.node));
+            }
+            self.unsettled.store(true, Ordering::Release);
+            let result = handshake(connection, &self.fabric, &self.node).await;
+            if matches!(&result, Err(HandshakeFailure::Refused(_)) | Ok(_)) {
+                self.unsettled.store(false, Ordering::Release);
+            }
+            result.map_err(HandshakeFailure::into_error)
         }
     }
 
@@ -87,6 +126,7 @@ mod with_rdma {
                         fabric,
                         node: node.to_string(),
                         session: OnceCell::new(),
+                        unsettled: AtomicBool::new(false),
                     })
                 }),
             }
@@ -105,8 +145,24 @@ mod with_rdma {
         }
     }
 
+    /// Why a handshake failed, split by whether the server may hold a session.
+    enum HandshakeFailure {
+        /// The server answered with an error, so it opened no session.
+        Refused(RedisError),
+        /// The server may hold a session this client does not.
+        Unsettled(RedisError),
+    }
+
+    impl HandshakeFailure {
+        fn into_error(self) -> RedisError {
+            match self {
+                Self::Refused(error) | Self::Unsettled(error) => error,
+            }
+        }
+    }
+
     /// Run `BLOB.RDMA_HELLO` on this connection and open the session it reports.
-    /// Should be run only once per RESP connection.
+    /// Should be run only once per RESP connection; see [`Rdma::handshake_once`].
     ///
     /// The handshake has no timeout. It runs inside the dispatch of the transfer
     /// that needs it, after that transfer lent its buffer, so it waits as the
@@ -117,18 +173,29 @@ mod with_rdma {
         connection: &mut MultiplexedConnection,
         rdma_fabric: &glide_rdma::RdmaFabric,
         node: &str,
-    ) -> RedisResult<glide_rdma::RdmaSession> {
+    ) -> Result<glide_rdma::RdmaSession, HandshakeFailure> {
         use crate::rdma::protocol;
 
         let reply = protocol::hello_command(rdma_fabric.local_address())
             .query_async(connection)
             .await
-            .map_err(|error| crate::rdma::handshake_refused(node, error))?;
-        let handshake = protocol::parse_hello(reply)
-            .map_err(|error| crate::rdma::malformed_handshake(node, error))?;
-        rdma_fabric
-            .open_session(&handshake)
-            .map_err(protocol::as_redis_error)
+            .map_err(|error| {
+                if error.is_server_reply() {
+                    HandshakeFailure::Refused(crate::rdma::handshake_refused(node, error))
+                } else {
+                    // The connection failed, so the server may have opened a
+                    // session before it could answer.
+                    HandshakeFailure::Unsettled(error)
+                }
+            })?;
+        // The server answered without an error, so it opened its side of the
+        // session. Every failure from here on leaves the two sides out of step.
+        let handshake = protocol::parse_hello(reply).map_err(|error| {
+            HandshakeFailure::Unsettled(crate::rdma::malformed_handshake(node, error))
+        })?;
+        rdma_fabric.open_session(&handshake).map_err(|error| {
+            HandshakeFailure::Unsettled(crate::rdma::session_not_opened(node, error))
+        })
     }
 
     impl Deref for GlideConnectionWithRdma {
