@@ -22,9 +22,30 @@ part of the crate's public API.
 - **Tests:** The option must have an encoding test in its module's `tests`
   that covers every variant, using `assert_args` and `assert_args_empty` from
   the [test utilities](../../src/test_utils.rs).
-- **Docs:** The option must have a doc comment on the type and on each variant
-  naming its wire keyword. If it mirrors a redis-rs or Python type, the doc
-  comment must say so.
+- **Documentation:** The option must have doc comments that include:
+  - A description of the type, including the relevant command(s).
+  - A description of each variant, including the relevant keyword(s).
+  - Whether the type mirrors a redis-rs one or another GLIDE client type.
+  - TODO #7402: Whether the type or variant requires a server that is newer
+    than the minimum supported version.
+
+  For example:
+
+  <!-- TODO #7237: Update once `IFNE` is supported. -->
+
+  ```rust
+  /// Value comparison for `SET` — whether the key's current value must equal
+  /// the given one.
+  ///
+  /// Mirrors redis-rs's `ValueComparison` type.
+  ///
+  /// Since Valkey 8.1.0.
+  pub enum ValueComparison {
+      /// Only set if the current value equals the given value (`IFEQ`).
+      IFEQ(Vec<u8>),
+  }
+  ```
+
 - **Exports:** The option must be re-exported from the
   [crate root](../../src/lib.rs), under "Shared command options" or "Command
   group-specific options".
