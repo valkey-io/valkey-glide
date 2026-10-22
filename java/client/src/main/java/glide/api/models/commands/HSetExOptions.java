@@ -15,7 +15,8 @@ import lombok.ToString;
  * <p>HSETEX sets hash fields with expiration times and supports:
  *
  * <ul>
- *   <li>Field conditional changes (FNX/FXX) - control when fields are set based on existence
+ *   <li>Key conditional changes (NX/XX) - control when fields are set based on key existence
+ *   <li>Field conditional changes (FNX/FXX) - control when fields are set based on field existence
  *   <li>Standard expiry options (EX/PX/EXAT/PXAT/KEEPTTL) - set expiration times
  * </ul>
  *
@@ -46,10 +47,18 @@ import lombok.ToString;
  * HSetExOptions options3 = HSetExOptions.builder()
  *     .expiry(ExpirySet.UnixSeconds(1640995200L))
  *     .build();
+ *
+ * // Set the fields only if the key already exists, and only if none of the fields already exist
+ * HSetExOptions options4 = HSetExOptions.builder()
+ *     .onlyIfKeyExists()
+ *     .onlyIfNoneExist()
+ *     .expiry(ExpirySet.Seconds(60L))
+ *     .build();
  * }</pre>
  *
  * @since Valkey 9.0.0
  * @see <a href="https://valkey.io/commands/hsetex/">HSETEX Command Documentation</a>
+ * @see HashConditionalChange
  * @see FieldConditionalChange
  * @see ExpirySet
  */
@@ -57,6 +66,14 @@ import lombok.ToString;
 @EqualsAndHashCode
 @ToString
 public final class HSetExOptions {
+
+    /**
+     * Key-level conditional change option (NX/XX) for controlling when fields are set, based on the
+     * existence of the hash key.
+     *
+     * @since Valkey 9.1.0
+     */
+    private final HashConditionalChange conditionalChange;
 
     /** Field conditional change option (FNX/FXX) for controlling when fields are set. */
     private final FieldConditionalChange fieldConditionalChange;
@@ -73,6 +90,7 @@ public final class HSetExOptions {
      * <p>The argument order follows the HSETEX command specification:
      *
      * <ol>
+     *   <li>Key conditional change (NX/XX) if specified
      *   <li>Field conditional change (FNX/FXX) if specified
      *   <li>Expiry options (EX/PX/EXAT/PXAT/KEEPTTL) if specified
      * </ol>
@@ -92,14 +110,15 @@ public final class HSetExOptions {
     public String[] toArgs() {
         List<String> args = new ArrayList<>();
 
-        // Add field conditional change argument if specified
+        if (conditionalChange != null) {
+            args.add(conditionalChange.getValkeyApi());
+        }
+
         if (fieldConditionalChange != null) {
             args.add(fieldConditionalChange.getValkeyApi());
         }
 
-        // Add expiry arguments if specified
         if (expiry != null) {
-            // Validate that expiry is compatible with HSETEX command
             expiry.validateForCommand("HSETEX");
             args.addAll(Arrays.asList(expiry.toArgs()));
         }
@@ -109,6 +128,34 @@ public final class HSetExOptions {
 
     /** Builder class for {@link HSetExOptions}. */
     public static class HSetExOptionsBuilder {
+
+        /**
+         * Sets the key-level conditional change to only set fields if the key already exists.
+         *
+         * <p>This is equivalent to the XX option in the Valkey HSETEX command. If the key does not
+         * exist, the value is not set.
+         *
+         * @return this builder instance for method chaining
+         * @since Valkey 9.1.0
+         * @see HashConditionalChange#ONLY_IF_KEY_EXISTS
+         */
+        public HSetExOptionsBuilder onlyIfKeyExists() {
+            return conditionalChange(HashConditionalChange.ONLY_IF_KEY_EXISTS);
+        }
+
+        /**
+         * Sets the key-level conditional change to only set fields if the key does not already exist.
+         *
+         * <p>This is equivalent to the NX option in the Valkey HSETEX command. If the key already
+         * exists, the value is not set.
+         *
+         * @return this builder instance for method chaining
+         * @since Valkey 9.1.0
+         * @see HashConditionalChange#ONLY_IF_KEY_DOES_NOT_EXIST
+         */
+        public HSetExOptionsBuilder onlyIfKeyDoesNotExist() {
+            return conditionalChange(HashConditionalChange.ONLY_IF_KEY_DOES_NOT_EXIST);
+        }
 
         /**
          * Sets the field conditional change to only set fields if all of them already exist.
