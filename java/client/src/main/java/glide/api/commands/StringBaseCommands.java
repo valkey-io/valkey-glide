@@ -699,6 +699,42 @@ public interface StringBaseCommands {
     CompletableFuture<Long> append(GlideString key, GlideString value);
 
     /**
+     * Deletes <code>key</code> if its value equals <code>value</code>.
+     *
+     * @since Valkey 9.0 and above.
+     * @see <a href="https://valkey.io/commands/delifeq/">valkey.io</a> for details.
+     * @param key The key to delete.
+     * @param value The comparison value. The key is only deleted if its current value matches
+     *     exactly.
+     * @return <code>true</code> if <code>key</code> was deleted, <code>false</code> if <code>key
+     *     </code> did not exist or its value did not match <code>value</code>.
+     * @example
+     *     <pre>{@code
+     * Boolean deleted = client.delifeq("key", "value").get();
+     * assert deleted;
+     * }</pre>
+     */
+    CompletableFuture<Boolean> delifeq(String key, String value);
+
+    /**
+     * Deletes <code>key</code> if its value equals <code>value</code>.
+     *
+     * @since Valkey 9.0 and above.
+     * @see <a href="https://valkey.io/commands/delifeq/">valkey.io</a> for details.
+     * @param key The key to delete.
+     * @param value The comparison value. The key is only deleted if its current value matches
+     *     exactly.
+     * @return <code>true</code> if <code>key</code> was deleted, <code>false</code> if <code>key
+     *     </code> did not exist or its value did not match <code>value</code>.
+     * @example
+     *     <pre>{@code
+     * Boolean deleted = client.delifeq(gs("key"), gs("value")).get();
+     * assert deleted;
+     * }</pre>
+     */
+    CompletableFuture<Boolean> delifeq(GlideString key, GlideString value);
+
+    /**
      * Returns all the longest common subsequences combined between strings stored at <code>key1
      * </code> and <code>key2</code>.
      *

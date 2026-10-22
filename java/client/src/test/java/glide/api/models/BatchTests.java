@@ -27,6 +27,7 @@ import static command_request.CommandRequestOuterClass.RequestType.DBSize;
 import static command_request.CommandRequestOuterClass.RequestType.Decr;
 import static command_request.CommandRequestOuterClass.RequestType.DecrBy;
 import static command_request.CommandRequestOuterClass.RequestType.Del;
+import static command_request.CommandRequestOuterClass.RequestType.DelIfEq;
 import static command_request.CommandRequestOuterClass.RequestType.Dump;
 import static command_request.CommandRequestOuterClass.RequestType.Echo;
 import static command_request.CommandRequestOuterClass.RequestType.Exists;
@@ -362,6 +363,9 @@ public class BatchTests {
 
         batch.append("key", "value");
         results.add(Pair.of(Append, buildArgs("key", "value")));
+
+        batch.delifeq("key", "value");
+        results.add(Pair.of(DelIfEq, buildArgs("key", "value")));
 
         batch.del(new String[] {"key1", "key2"});
         results.add(Pair.of(Del, buildArgs("key1", "key2")));

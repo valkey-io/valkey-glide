@@ -10260,16 +10260,19 @@ export class BaseClient {
      * @param routingKey - In cluster mode, the key whose hash slot decides which
      *     node the scope connects to. Every key used in the scope must hash to the
      *     same slot. Defaults to slot 0.
-     * @param maxRetries - Maximum acquisition retries with exponential backoff
-     *     before giving up. Default: 10.
+     * @param timeoutMs - Maximum time to wait for a scope, in milliseconds.
+     *     Default: 5000.
      * @returns A new {@link IsolatedScope}.
+     * @throws {TimeoutError} if no scope became available within `timeoutMs`.
+     * @throws {ConnectionError} if the client was closed while waiting.
+     * @throws {RequestError} if the client's configuration cannot produce a scoped connection.
      */
     public async scopedConnection(
         routingKey?: string,
-        maxRetries = 10,
+        timeoutMs = 5000,
     ): Promise<IsolatedScope> {
         this.ensureClientIsUsable();
-        return IsolatedScope.acquire(this, routingKey, maxRetries);
+        return IsolatedScope.acquire(this, routingKey, timeoutMs);
     }
 
     /**

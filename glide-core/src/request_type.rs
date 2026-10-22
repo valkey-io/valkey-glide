@@ -396,6 +396,7 @@ pub enum RequestType {
     SetRange = 1520,
     Strlen = 1521,
     Substr = 1522,
+    DelIfEq = 1523,
 
     //// Transaction commands
     Discard = 1601,
@@ -584,6 +585,7 @@ impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
             ProtobufRequestType::ZRemRangeByLex => RequestType::ZRemRangeByLex,
             ProtobufRequestType::ZLexCount => RequestType::ZLexCount,
             ProtobufRequestType::Append => RequestType::Append,
+            ProtobufRequestType::DelIfEq => RequestType::DelIfEq,
             ProtobufRequestType::SDiffStore => RequestType::SDiffStore,
             ProtobufRequestType::SInter => RequestType::SInter,
             ProtobufRequestType::SInterStore => RequestType::SInterStore,
@@ -869,9 +871,9 @@ impl RequestType {
     /// Returns `None` if the command is compatible with compression.
     ///
     /// Commands that are incompatible with compression are those that:
-    /// - Manipulate string data on the server side (APPEND, GETRANGE, SETRANGE, STRLEN, LCS)
-    /// - Perform numeric operations on string values (INCR, INCRBY, INCRBYFLOAT, DECR, DECRBY)
-    /// - Perform bit operations on string values (GETBIT, SETBIT, BITCOUNT, BITPOS, BITFIELD, BITFIELD_RO, BITOP)
+    /// - Manipulate string data on the server side (e.g. APPEND)
+    /// - Perform numeric operations on string values (e.g. INCR)
+    /// - Perform bit operations on string values (e.g. GETBIT)
     pub fn compression_incompatibility_reason(self) -> Option<&'static str> {
         match self {
             // String manipulation commands - operate on raw bytes server-side
@@ -892,6 +894,9 @@ impl RequestType {
             ),
             RequestType::Substr => Some(
                 "SUBSTR (deprecated alias for GETRANGE) returns a substring of raw bytes, which would return compressed data",
+            ),
+            RequestType::DelIfEq => Some(
+                "DELIFEQ compares the stored value against raw bytes on the server, which would compare against compressed data instead of the original value",
             ),
 
             // Numeric operations - expect numeric string values
@@ -940,39 +945,45 @@ impl RequestType {
     }
 
     /// Returns the command name as a string, if available.
+    ///
+    /// Note: this only contains the commands relevant to compression (see
+    /// `from_command_name` and `compression_incompatibility_reason`), not every
+    /// `RequestType` variant. Entries below `InvalidRequest`/`CustomCommand` are
+    /// ordered alphabetically by command name.
     pub fn command_name(self) -> Option<&'static str> {
         match self {
             RequestType::InvalidRequest => None,
             RequestType::CustomCommand => Some("CUSTOM"),
-            RequestType::Get => Some("GET"),
-            RequestType::Set => Some("SET"),
             RequestType::Append => Some("APPEND"),
-            RequestType::GetRange => Some("GETRANGE"),
-            RequestType::SetRange => Some("SETRANGE"),
-            RequestType::Strlen => Some("STRLEN"),
-            RequestType::LCS => Some("LCS"),
-            RequestType::Substr => Some("SUBSTR"),
-            RequestType::Incr => Some("INCR"),
-            RequestType::IncrBy => Some("INCRBY"),
-            RequestType::IncrByFloat => Some("INCRBYFLOAT"),
-            RequestType::Decr => Some("DECR"),
-            RequestType::DecrBy => Some("DECRBY"),
-            RequestType::GetBit => Some("GETBIT"),
-            RequestType::SetBit => Some("SETBIT"),
             RequestType::BitCount => Some("BITCOUNT"),
-            RequestType::BitPos => Some("BITPOS"),
             RequestType::BitField => Some("BITFIELD"),
             RequestType::BitFieldReadOnly => Some("BITFIELD_RO"),
             RequestType::BitOp => Some("BITOP"),
+            RequestType::BitPos => Some("BITPOS"),
+            RequestType::Decr => Some("DECR"),
+            RequestType::DecrBy => Some("DECRBY"),
+            RequestType::DelIfEq => Some("DELIFEQ"),
+            RequestType::Get => Some("GET"),
+            RequestType::GetBit => Some("GETBIT"),
+            RequestType::GetDel => Some("GETDEL"),
+            RequestType::GetEx => Some("GETEX"),
+            RequestType::GetRange => Some("GETRANGE"),
+            RequestType::GetSet => Some("GETSET"),
+            RequestType::Incr => Some("INCR"),
+            RequestType::IncrBy => Some("INCRBY"),
+            RequestType::IncrByFloat => Some("INCRBYFLOAT"),
+            RequestType::LCS => Some("LCS"),
             RequestType::MGet => Some("MGET"),
             RequestType::MSet => Some("MSET"),
             RequestType::MSetNX => Some("MSETNX"),
-            RequestType::SetEx => Some("SETEX"),
             RequestType::PSetEx => Some("PSETEX"),
+            RequestType::Set => Some("SET"),
+            RequestType::SetBit => Some("SETBIT"),
+            RequestType::SetEx => Some("SETEX"),
             RequestType::SetNX => Some("SETNX"),
-            RequestType::GetEx => Some("GETEX"),
-            RequestType::GetDel => Some("GETDEL"),
-            RequestType::GetSet => Some("GETSET"),
+            RequestType::SetRange => Some("SETRANGE"),
+            RequestType::Strlen => Some("STRLEN"),
+            RequestType::Substr => Some("SUBSTR"),
             _ => None, // For other commands, return None
         }
     }
@@ -1003,6 +1014,7 @@ impl RequestType {
             "STRLEN" => Some(RequestType::Strlen),
             "LCS" => Some(RequestType::LCS),
             "SUBSTR" => Some(RequestType::Substr),
+            "DELIFEQ" => Some(RequestType::DelIfEq),
             // Incompatible commands - numeric operations
             "INCR" => Some(RequestType::Incr),
             "INCRBY" => Some(RequestType::IncrBy),
@@ -1160,6 +1172,7 @@ impl RequestType {
             RequestType::ZRemRangeByLex => Some(cmd("ZREMRANGEBYLEX")),
             RequestType::ZLexCount => Some(cmd("ZLEXCOUNT")),
             RequestType::Append => Some(cmd("APPEND")),
+            RequestType::DelIfEq => Some(cmd("DELIFEQ")),
             RequestType::SDiffStore => Some(cmd("SDIFFSTORE")),
             RequestType::SInter => Some(cmd("SINTER")),
             RequestType::SInterStore => Some(cmd("SINTERSTORE")),

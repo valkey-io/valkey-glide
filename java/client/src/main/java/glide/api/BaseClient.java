@@ -31,6 +31,7 @@ import static command_request.CommandRequestOuterClass.RequestType.Copy;
 import static command_request.CommandRequestOuterClass.RequestType.Decr;
 import static command_request.CommandRequestOuterClass.RequestType.DecrBy;
 import static command_request.CommandRequestOuterClass.RequestType.Del;
+import static command_request.CommandRequestOuterClass.RequestType.DelIfEq;
 import static command_request.CommandRequestOuterClass.RequestType.Dump;
 import static command_request.CommandRequestOuterClass.RequestType.EvalReadOnly;
 import static command_request.CommandRequestOuterClass.RequestType.EvalShaReadOnly;
@@ -1350,6 +1351,18 @@ public abstract class BaseClient
     public CompletableFuture<Long> append(@NonNull GlideString key, @NonNull GlideString value) {
         return commandManager.submitNewCommand(
                 Append, new GlideString[] {key, value}, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Boolean> delifeq(@NonNull String key, @NonNull String value) {
+        return commandManager.submitNewCommand(
+                DelIfEq, new String[] {key, value}, this::handleBooleanResponse);
+    }
+
+    @Override
+    public CompletableFuture<Boolean> delifeq(@NonNull GlideString key, @NonNull GlideString value) {
+        return commandManager.submitNewCommand(
+                DelIfEq, new GlideString[] {key, value}, this::handleBooleanResponse);
     }
 
     @Override

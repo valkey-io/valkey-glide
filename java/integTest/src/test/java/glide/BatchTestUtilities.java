@@ -361,6 +361,14 @@ public class BatchTestUtilities {
             batch.set(stringKey9, value1).getex(stringKey9).getex(stringKey9, GetExOptions.Seconds(20L));
         }
 
+        String stringKey10 = generateKey("StringKey", isAtomic);
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("9.0.0")) {
+            batch
+                    .set(stringKey10, value1)
+                    .delifeq(stringKey10, "wrong-value")
+                    .delifeq(stringKey10, value1);
+        }
+
         Object[] expectedResults =
                 new Object[] {
                     OK, // flushall()
@@ -414,6 +422,17 @@ public class BatchTestUtilities {
                                 OK, // set(stringKey9, value1)
                                 value1, // getex(stringKey1)
                                 value1, // getex(stringKey1,GetExOptions.Seconds(20L))
+                            });
+        }
+
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("9.0.0")) {
+            expectedResults =
+                    concatenateArrays(
+                            expectedResults,
+                            new Object[] {
+                                OK, // set(stringKey10, value1)
+                                false, // delifeq(stringKey10, "wrong-value")
+                                true, // delifeq(stringKey10, value1)
                             });
         }
 
