@@ -1207,18 +1207,15 @@ func (suite *GlideTestSuite) TestCompressionAppendIncompatible() {
 	client := suite.compressionClient()
 	defer client.Close()
 
-	t := suite.T()
-
 	key := fmt.Sprintf("append_test_%s", randomString(8))
 	_, err := client.Set(context.Background(), key, "initial_value")
-	assert.NoError(t, err)
+	assert.NoError(suite.T(), err)
 
 	// APPEND should fail with compression enabled
-	_, err = client.Append(context.Background(), key, "_appended")
-	assert.Error(t, err)
-	errMsg := strings.ToLower(err.Error())
-	assert.True(t, strings.Contains(errMsg, "incompatible") || strings.Contains(errMsg, "compression"),
-		"Error should mention incompatibility: %v", err)
+	suite.assertCompressionIncompatible(client, func() error {
+		_, err := client.Append(context.Background(), key, "_appended")
+		return err
+	})
 
 	client.Del(context.Background(), []string{key})
 }
