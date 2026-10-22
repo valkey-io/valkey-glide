@@ -1498,13 +1498,9 @@ class TestCompressionIncompatibleCommands:
         compression_client.set(key, "initial_value")
 
         # APPEND should fail with compression enabled
-        with pytest.raises(Exception) as exc_info:
-            compression_client.append(key, "_appended")
-
-        error_msg = str(exc_info.value).lower()
-        assert (
-            "incompatible" in error_msg or "compression" in error_msg
-        ), f"Error should mention incompatibility with compression: {exc_info.value}"
+        assert_incompatible_with_compression(
+            lambda: compression_client.append(key, "_appended")
+        )
 
         # Cleanup
         compression_client.delete([key])
@@ -1537,13 +1533,9 @@ class TestCompressionIncompatibleCommands:
         compression_client.set(key, value)
 
         # GETRANGE should fail with compression enabled
-        with pytest.raises(Exception) as exc_info:
-            compression_client.getrange(key, 0, 10)
-
-        error_msg = str(exc_info.value).lower()
-        assert (
-            "incompatible" in error_msg or "compression" in error_msg
-        ), f"Error should mention incompatibility with compression: {exc_info.value}"
+        assert_incompatible_with_compression(
+            lambda: compression_client.getrange(key, 0, 10)
+        )
 
         # Cleanup
         compression_client.delete([key])
@@ -1561,13 +1553,9 @@ class TestCompressionIncompatibleCommands:
         compression_client.set(key, value)
 
         # SETRANGE should fail with compression enabled
-        with pytest.raises(Exception) as exc_info:
-            compression_client.setrange(key, 5, "replacement")
-
-        error_msg = str(exc_info.value).lower()
-        assert (
-            "incompatible" in error_msg or "compression" in error_msg
-        ), f"Error should mention incompatibility with compression: {exc_info.value}"
+        assert_incompatible_with_compression(
+            lambda: compression_client.setrange(key, 5, "replacement")
+        )
 
         # Cleanup
         compression_client.delete([key])
@@ -1585,13 +1573,7 @@ class TestCompressionIncompatibleCommands:
         compression_client.set(key, value)
 
         # STRLEN should fail with compression enabled
-        with pytest.raises(Exception) as exc_info:
-            compression_client.strlen(key)
-
-        error_msg = str(exc_info.value).lower()
-        assert (
-            "incompatible" in error_msg or "compression" in error_msg
-        ), f"Error should mention incompatibility with compression: {exc_info.value}"
+        assert_incompatible_with_compression(lambda: compression_client.strlen(key))
 
         # Cleanup
         compression_client.delete([key])
@@ -1606,13 +1588,7 @@ class TestCompressionIncompatibleCommands:
         compression_client.set(key, "100")
 
         # INCR should fail with compression enabled
-        with pytest.raises(Exception) as exc_info:
-            compression_client.incr(key)
-
-        error_msg = str(exc_info.value).lower()
-        assert (
-            "incompatible" in error_msg or "compression" in error_msg
-        ), f"Error should mention incompatibility with compression: {exc_info.value}"
+        assert_incompatible_with_compression(lambda: compression_client.incr(key))
 
         # Cleanup
         compression_client.delete([key])
@@ -1629,13 +1605,7 @@ class TestCompressionIncompatibleCommands:
         compression_client.set(key, "100")
 
         # INCRBY should fail with compression enabled
-        with pytest.raises(Exception) as exc_info:
-            compression_client.incrby(key, 10)
-
-        error_msg = str(exc_info.value).lower()
-        assert (
-            "incompatible" in error_msg or "compression" in error_msg
-        ), f"Error should mention incompatibility with compression: {exc_info.value}"
+        assert_incompatible_with_compression(lambda: compression_client.incrby(key, 10))
 
         # Cleanup
         compression_client.delete([key])
@@ -1652,13 +1622,9 @@ class TestCompressionIncompatibleCommands:
         compression_client.set(key, "100.5")
 
         # INCRBYFLOAT should fail with compression enabled
-        with pytest.raises(Exception) as exc_info:
-            compression_client.incrbyfloat(key, 0.5)
-
-        error_msg = str(exc_info.value).lower()
-        assert (
-            "incompatible" in error_msg or "compression" in error_msg
-        ), f"Error should mention incompatibility with compression: {exc_info.value}"
+        assert_incompatible_with_compression(
+            lambda: compression_client.incrbyfloat(key, 0.5)
+        )
 
         # Cleanup
         compression_client.delete([key])
@@ -1673,13 +1639,7 @@ class TestCompressionIncompatibleCommands:
         compression_client.set(key, "100")
 
         # DECR should fail with compression enabled
-        with pytest.raises(Exception) as exc_info:
-            compression_client.decr(key)
-
-        error_msg = str(exc_info.value).lower()
-        assert (
-            "incompatible" in error_msg or "compression" in error_msg
-        ), f"Error should mention incompatibility with compression: {exc_info.value}"
+        assert_incompatible_with_compression(lambda: compression_client.decr(key))
 
         # Cleanup
         compression_client.delete([key])
@@ -1696,13 +1656,7 @@ class TestCompressionIncompatibleCommands:
         compression_client.set(key, "100")
 
         # DECRBY should fail with compression enabled
-        with pytest.raises(Exception) as exc_info:
-            compression_client.decrby(key, 10)
-
-        error_msg = str(exc_info.value).lower()
-        assert (
-            "incompatible" in error_msg or "compression" in error_msg
-        ), f"Error should mention incompatibility with compression: {exc_info.value}"
+        assert_incompatible_with_compression(lambda: compression_client.decrby(key, 10))
 
         # Cleanup
         compression_client.delete([key])
@@ -1719,13 +1673,7 @@ class TestCompressionIncompatibleCommands:
         compression_client.set(key, "test_value")
 
         # GETBIT should fail with compression enabled
-        with pytest.raises(Exception) as exc_info:
-            compression_client.getbit(key, 0)
-
-        error_msg = str(exc_info.value).lower()
-        assert (
-            "incompatible" in error_msg or "compression" in error_msg
-        ), f"Error should mention incompatibility with compression: {exc_info.value}"
+        assert_incompatible_with_compression(lambda: compression_client.getbit(key, 0))
 
         # Cleanup
         compression_client.delete([key])
@@ -1742,13 +1690,9 @@ class TestCompressionIncompatibleCommands:
         compression_client.set(key, "test_value")
 
         # SETBIT should fail with compression enabled
-        with pytest.raises(Exception) as exc_info:
-            compression_client.setbit(key, 0, 1)
-
-        error_msg = str(exc_info.value).lower()
-        assert (
-            "incompatible" in error_msg or "compression" in error_msg
-        ), f"Error should mention incompatibility with compression: {exc_info.value}"
+        assert_incompatible_with_compression(
+            lambda: compression_client.setbit(key, 0, 1)
+        )
 
         # Cleanup
         compression_client.delete([key])
@@ -1765,13 +1709,7 @@ class TestCompressionIncompatibleCommands:
         compression_client.set(key, "test_value")
 
         # BITCOUNT should fail with compression enabled
-        with pytest.raises(Exception) as exc_info:
-            compression_client.bitcount(key)
-
-        error_msg = str(exc_info.value).lower()
-        assert (
-            "incompatible" in error_msg or "compression" in error_msg
-        ), f"Error should mention incompatibility with compression: {exc_info.value}"
+        assert_incompatible_with_compression(lambda: compression_client.bitcount(key))
 
         # Cleanup
         compression_client.delete([key])
@@ -1788,13 +1726,7 @@ class TestCompressionIncompatibleCommands:
         compression_client.set(key, "test_value")
 
         # BITPOS should fail with compression enabled
-        with pytest.raises(Exception) as exc_info:
-            compression_client.bitpos(key, 1)
-
-        error_msg = str(exc_info.value).lower()
-        assert (
-            "incompatible" in error_msg or "compression" in error_msg
-        ), f"Error should mention incompatibility with compression: {exc_info.value}"
+        assert_incompatible_with_compression(lambda: compression_client.bitpos(key, 1))
 
         # Cleanup
         compression_client.delete([key])
@@ -1872,37 +1804,25 @@ class TestCompressionIncompatibleCommands:
         compression_client.set(key, "100")
 
         # INCR via custom_command should fail
-        with pytest.raises(Exception) as exc_info:
-            compression_client.custom_command(
+        assert_incompatible_with_compression(
+            lambda: compression_client.custom_command(
                 cast(List[Union[str, bytes]], ["INCR", key])
             )
-
-        error_msg = str(exc_info.value).lower()
-        assert (
-            "incompatible" in error_msg or "compression" in error_msg
-        ), f"Error should mention incompatibility with compression: {exc_info.value}"
+        )
 
         # APPEND via custom_command should fail
-        with pytest.raises(Exception) as exc_info:
-            compression_client.custom_command(
+        assert_incompatible_with_compression(
+            lambda: compression_client.custom_command(
                 cast(List[Union[str, bytes]], ["APPEND", key, "_suffix"])
             )
-
-        error_msg = str(exc_info.value).lower()
-        assert (
-            "incompatible" in error_msg or "compression" in error_msg
-        ), f"Error should mention incompatibility with compression: {exc_info.value}"
+        )
 
         # STRLEN via custom_command should fail
-        with pytest.raises(Exception) as exc_info:
-            compression_client.custom_command(
+        assert_incompatible_with_compression(
+            lambda: compression_client.custom_command(
                 cast(List[Union[str, bytes]], ["STRLEN", key])
             )
-
-        error_msg = str(exc_info.value).lower()
-        assert (
-            "incompatible" in error_msg or "compression" in error_msg
-        ), f"Error should mention incompatibility with compression: {exc_info.value}"
+        )
 
         # Cleanup
         compression_client.delete([key])
@@ -1927,7 +1847,7 @@ class TestCompressionIncompatibleCommands:
         batch.incr(key)  # This should cause an error
 
         # Execute batch - should fail due to incompatible command
-        with pytest.raises(Exception) as exc_info:
+        def exec_batch() -> None:
             if isinstance(compression_client, GlideClient):
                 cast(GlideClient, compression_client).exec(
                     cast(Batch, batch), raise_on_error=True
@@ -1937,10 +1857,7 @@ class TestCompressionIncompatibleCommands:
                     cast(ClusterBatch, batch), raise_on_error=True
                 )
 
-        error_msg = str(exc_info.value).lower()
-        assert (
-            "incompatible" in error_msg or "compression" in error_msg
-        ), f"Error should mention incompatibility with compression: {exc_info.value}"
+        assert_incompatible_with_compression(exec_batch)
 
         # Cleanup
         compression_client.delete([key])
