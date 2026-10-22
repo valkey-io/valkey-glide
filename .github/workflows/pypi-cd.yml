@@ -158,7 +158,7 @@ jobs:
                   if ! command -v python3.15 &> /dev/null; then
                       sudo apt update
                       sudo apt install -y python3.15 python3.15-dev
-                      python3.15 -m ensurepip --upgrade
+                      curl -sS https://bootstrap.pypa.io/get-pip.py | python3.15
                       python3.15 -m pip install --upgrade pip
                   fi
 
@@ -366,8 +366,8 @@ jobs:
                       # maturin-action will later build a separate async wheel per interpreter,
                       # and each wheel bundles all .so files from the include glob.
                       # Python will load the one matching its ABI at runtime.
-                      maturin build --release --out /tmp/glide_shared_wheels -i python3.9 python3.10 python3.11 python3.12 python3.13 python3.14 python3.15 pypy3.11 2>/dev/null || \
-                      maturin build --release --out /tmp/glide_shared_wheels -i python3.15
+                      maturin build --release --out /tmp/glide_shared_wheels \
+                        -i ${{ github.event_name != 'pull_request' && 'python3.9 python3.10 python3.11 python3.12 python3.13 python3.14 python3.15 pypy3.11' || 'python3.15' }}
                       for WHEEL in /tmp/glide_shared_wheels/*.whl; do
                         unzip -jo "$WHEEL" "glide_shared/_fast_response*.so" -d ../glide-async/python/glide_shared/ 2>/dev/null || true
                       done
