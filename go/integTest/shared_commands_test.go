@@ -2455,40 +2455,47 @@ func (suite *GlideTestSuite) TestSCard_WithNotExistingKey() {
 func (suite *GlideTestSuite) TestSIsMember() {
 	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
 		key := uuid.NewString()
-		members := []string{"member1", "member2", "member3"}
+		member := uuid.NewString()
 
-		res1, err := client.SAdd(context.Background(), key, members)
+		res1, err := client.SAdd(context.Background(), key, []string{member})
 		suite.NoError(err)
-		assert.Equal(suite.T(), int64(3), res1)
+		assert.Equal(suite.T(), int64(1), res1)
 
-		res2, err := client.SIsMember(context.Background(), key, "member2")
+		res2, err := client.SIsMember(context.Background(), key, member)
 		suite.NoError(err)
 		assert.True(suite.T(), res2)
+
+		res3, err := client.SIsMember(context.Background(), key, uuid.NewString())
+		suite.NoError(err)
+		assert.False(suite.T(), res3)
+
+		res4, err := client.SIsMember(context.Background(), uuid.NewString(), member)
+		suite.NoError(err)
+		assert.False(suite.T(), res4)
 	})
 }
 
-func (suite *GlideTestSuite) TestSIsMember_WithNotExistingKey() {
+func (suite *GlideTestSuite) TestSIsMemberIfExists() {
+	suite.SkipIfServerVersionLowerThan("9.2.0", suite.T())
 	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
 		key := uuid.NewString()
+		member := uuid.NewString()
 
-		res, err := client.SIsMember(context.Background(), key, "member2")
+		res1, err := client.SAdd(context.Background(), key, []string{member})
 		suite.NoError(err)
-		assert.False(suite.T(), res)
-	})
-}
+		assert.Equal(suite.T(), int64(1), res1)
 
-func (suite *GlideTestSuite) TestSIsMember_WithNotExistingMember() {
-	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
-		key := uuid.NewString()
-		members := []string{"member1", "member2", "member3"}
-
-		res1, err := client.SAdd(context.Background(), key, members)
+		res2, err := client.SIsMemberIfExists(context.Background(), key, member)
 		suite.NoError(err)
-		assert.Equal(suite.T(), int64(3), res1)
+		assert.Equal(suite.T(), int64(1), res2)
 
-		res2, err := client.SIsMember(context.Background(), key, "nonExistingMember")
+		res3, err := client.SIsMemberIfExists(context.Background(), key, uuid.NewString())
 		suite.NoError(err)
-		assert.False(suite.T(), res2)
+		assert.Equal(suite.T(), int64(0), res3)
+
+		res4, err := client.SIsMemberIfExists(context.Background(), uuid.NewString(), member)
+		suite.NoError(err)
+		assert.Equal(suite.T(), int64(-1), res4)
 	})
 }
 

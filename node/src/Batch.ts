@@ -1874,6 +1874,23 @@ export class BaseBatch<T extends BaseBatch<T>> {
         return this.addAndReturn(createSIsMember(key, member));
     }
 
+    /** Returns if `member` is a member of the set stored at `key`,
+     * or `-1` if `key` does not exist.
+     * @see {@link https://valkey.io/commands/sismember/|valkey.io} for details.
+     * @remarks Since Valkey version 9.2.0.
+     *
+     * @param key - The key of the set.
+     * @param member - The member to check for existence in the set.
+     *
+     * Command Response - A status code indicating membership:
+     * - `1`: The member exists in the set.
+     * - `0`: The key exists but the member does not exist in the set.
+     * - `-1`: The key does not exist.
+     */
+    public sismemberIfExists(key: GlideString, member: GlideString): T {
+        return this.addAndReturn(createSIsMember(key, member, true));
+    }
+
     /**
      * Checks whether each member is contained in the members of the set stored at `key`.
      *

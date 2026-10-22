@@ -18,11 +18,23 @@ import java.util.concurrent.CompletableFuture;
  * @see <a href="https://valkey.io/commands/?group=hash">Hash Commands</a>
  */
 public interface HashBaseCommands {
-    /** Valkey API keyword used to query hash members with their values. */
-    String WITH_VALUES_VALKEY_API = "WITHVALUES";
+    /**
+     * Valkey API keyword used to query hash members with their values.
+     *
+     * @deprecated Valkey API keyword constants are internal and will be removed in a future major
+     *     release.
+     */
+    // TODO #7401: Move to glide.internal.ValkeyKeywords.
+    @Deprecated String WITH_VALUES_VALKEY_API = "WITHVALUES";
 
-    /** Valkey API keyword used to specify fields in hash commands. */
-    String FIELDS_VALKEY_API = "FIELDS";
+    /**
+     * Valkey API keyword used to specify fields in hash commands.
+     *
+     * @deprecated Valkey API keyword constants are internal and will be removed in a future major
+     *     release.
+     */
+    // TODO #7401: Move to glide.internal.ValkeyKeywords.
+    @Deprecated String FIELDS_VALKEY_API = "FIELDS";
 
     /**
      * Retrieves the value associated with <code>field</code> in the hash stored at <code>key</code>.

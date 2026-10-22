@@ -56,6 +56,7 @@ examples/       # Usage examples for each language
 ffi/            # Foreign function interface for language bindings
 glide-core/     # Rust core driver - handles connection, protocol, clustering
 glide-logger/    # Rust logging infrastructure
+glide-rdma/     # Rust RDMA transfer layer over libfabric
 go/             # Go client wrapper
 java/           # Java client wrapper
 node/           # Node.js client wrapper
@@ -143,5 +144,12 @@ FFI wrappers → `glide-core` → Valkey/Redis
     <start-with>ffi/src/lib.rs</start-with>
     <entry>ffi/Cargo.toml</entry>
     <bindings>ffi/src/lib.rs</bindings>
+  </language>
+  <language name="rdma">
+    <triggers>rdma, libfabric, efa, glide-rdma</triggers>
+    <start-with>glide-rdma/src/lib.rs</start-with>
+    <entry>glide-rdma/Cargo.toml</entry>
+    <bindings>glide-rdma/glide-libfabric-sys/src/lib.rs</bindings>
+    <tests>glide-rdma/tests/</tests>
   </language>
 </context-sources>

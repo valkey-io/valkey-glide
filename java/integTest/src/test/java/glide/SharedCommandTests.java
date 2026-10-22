@@ -4764,6 +4764,36 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void sismemberIfExists(BaseClient client) {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("9.2.0"), "This feature added in version 9.2.0");
+        String key = UUID.randomUUID().toString();
+        String member = UUID.randomUUID().toString();
+
+        assertEquals(1, client.sadd(key, new String[] {member}).get());
+        assertEquals(1L, client.sismemberIfExists(key, member).get());
+        assertEquals(0L, client.sismemberIfExists(key, UUID.randomUUID().toString()).get());
+        assertEquals(-1L, client.sismemberIfExists(UUID.randomUUID().toString(), member).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void sismemberIfExists_binary(BaseClient client) {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("9.2.0"), "This feature added in version 9.2.0");
+        GlideString key = gs(UUID.randomUUID().toString());
+        GlideString member = gs(UUID.randomUUID().toString());
+
+        assertEquals(1, client.sadd(key, new GlideString[] {member}).get());
+        assertEquals(1L, client.sismemberIfExists(key, member).get());
+        assertEquals(0L, client.sismemberIfExists(key, gs(UUID.randomUUID().toString())).get());
+        assertEquals(-1L, client.sismemberIfExists(gs(UUID.randomUUID().toString()), member).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void sinterstore(BaseClient client) {
         String key1 = "{key}-1-" + UUID.randomUUID();
         String key2 = "{key}-2-" + UUID.randomUUID();

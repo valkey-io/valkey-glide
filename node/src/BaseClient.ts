@@ -5370,6 +5370,50 @@ export class BaseClient {
         return this.createWritePromise(createSIsMember(key, member));
     }
 
+    /** Returns if `member` is a member of the set stored at `key`,
+     * or `-1` if `key` does not exist.
+     *
+     * @see {@link https://valkey.io/commands/sismember/|valkey.io} for more details.
+     * @remarks Since Valkey version 9.2.0.
+     *
+     * @param key - The key of the set.
+     * @param member - The member to check for existence in the set.
+     * @returns A status code indicating membership:
+     * - `1`: The member exists in the set.
+     * - `0`: The key exists but the member does not exist in the set.
+     * - `-1`: The key does not exist.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.sismemberIfExists("my_set", "member1");
+     * console.log(result);
+     * // Output: 1
+     * // Indicates that `member1` exists in the set `my_set`.
+     * ```
+     *
+     * @example
+     * ```typescript
+     * const result = await client.sismemberIfExists("my_set", "non_existing_member");
+     * console.log(result);
+     * // Output: 0
+     * // Indicates that `my_set` exists but `non_existing_member` does not exist in it.
+     * ```
+     *
+     * @example
+     * ```typescript
+     * const result = await client.sismemberIfExists("non_existing_set", "member1");
+     * console.log(result);
+     * // Output: -1
+     * // Indicates that `non_existing_set` does not exist.
+     * ```
+     */
+    public async sismemberIfExists(
+        key: GlideString,
+        member: GlideString,
+    ): Promise<number> {
+        return this.createWritePromise(createSIsMember(key, member, true));
+    }
+
     /**
      * Checks whether each member is contained in the members of the set stored at `key`.
      *
