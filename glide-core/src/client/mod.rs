@@ -2232,11 +2232,11 @@ impl Client {
         .await
         {
             Ok(result) => {
-                if result.is_ok()
-                    && let Some(handle) = self.static_credentials()
-                {
-                    handle.store_password(password.clone());
-                }
+                // The token borrows this local `Arc`, not `self`, so
+                // `send_immediate_auth` can take `&mut self` while it is alive.
+                let shared = Arc::clone(&self.shared);
+                let stored = (result.is_ok() && self.static_credentials().is_some())
+                    .then(|| shared.credentials.store_password(password.clone()));
                 if immediate_auth {
                     // Fail before AUTHing if storing the password for reconnect failed:
                     // otherwise a transient store failure is swallowed, the AUTH runs
@@ -2244,13 +2244,11 @@ impl Client {
                     // (and clears token_changed) while the reconnect password was never
                     // updated — so the next reconnect would use the stale password.
                     result?;
-                    let authenticated = self.send_immediate_auth(password).await;
-                    if authenticated.is_ok()
-                        && let Some(handle) = self.static_credentials()
-                    {
-                        handle.advance_generation();
+                    let authenticated = self.send_immediate_auth(password).await?;
+                    if let Some(stored) = stored {
+                        stored.accepted();
                     }
-                    authenticated
+                    Ok(authenticated)
                 } else {
                     result
                 }

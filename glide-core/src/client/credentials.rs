@@ -108,19 +108,33 @@ impl CredentialsHandle {
     /// writes count as a rotation.
     pub(crate) fn update(&self, edit: impl FnOnce(&mut PasswordCredentials)) {
         edit(&mut self.current.write().expect(LOCK_POISONED));
-        self.advance_generation();
+        self.advance();
     }
 
     /// Record the password a reconnect will use, without advancing the
-    /// generation (see the type doc).
-    pub(crate) fn store_password(&self, password: Option<String>) {
+    /// generation (see the type doc); `StoredPassword::accepted` advances it.
+    pub(crate) fn store_password(&self, password: Option<String>) -> StoredPassword<'_> {
         self.current.write().expect(LOCK_POISONED).password = password;
+        StoredPassword { handle: self }
     }
 
-    /// The server has accepted the stored pair: existing connections may now
-    /// re-AUTH with it.
-    pub(crate) fn advance_generation(&self) {
+    fn advance(&self) {
         self.generation.fetch_add(1, Ordering::AcqRel);
+    }
+}
+
+/// Proof that `store_password` ran. Consumed by `accepted`, so one store is at
+/// most one generation advance, and an advance without a store cannot be
+/// written. Dropping it is the store-only update.
+pub(crate) struct StoredPassword<'a> {
+    handle: &'a CredentialsHandle,
+}
+
+impl StoredPassword<'_> {
+    /// The server has accepted the stored password: existing connections may now
+    /// re-AUTH with it.
+    pub(crate) fn accepted(self) {
+        self.handle.advance();
     }
 }
 
@@ -174,14 +188,24 @@ mod tests {
             username: Some("u".into()),
             password: Some("old".into()),
         });
-        handle.store_password(Some("new".into()));
+        let _store_only = handle.store_password(Some("new".into()));
         let current = handle.current();
         assert_eq!(current.username.as_deref(), Some("u"));
         assert_eq!(current.password.as_deref(), Some("new"));
         assert_eq!(handle.generation(), AuthGeneration(1));
-        handle.store_password(None);
+        let _store_only = handle.store_password(None);
         assert_eq!(handle.current().password, None);
         assert_eq!(handle.generation(), AuthGeneration(1));
+    }
+
+    #[test]
+    fn accepted_advances_the_generation_once_per_store() {
+        let handle = CredentialsHandle::new(PasswordCredentials::default());
+        let stored = handle.store_password(Some("p".into()));
+        assert_eq!(handle.generation(), AuthGeneration(1));
+        stored.accepted();
+        assert_eq!(handle.generation(), AuthGeneration(2));
+        assert_eq!(handle.current().password.as_deref(), Some("p"));
     }
 
     #[test]
@@ -189,7 +213,7 @@ mod tests {
         let handle = CredentialsHandle::new(PasswordCredentials::default());
         assert_eq!(handle.generation(), AuthGeneration(1));
         assert_ne!(handle.generation(), AuthGeneration::NEVER);
-        handle.advance_generation();
+        handle.store_password(Some("p".into())).accepted();
         assert_eq!(handle.generation(), AuthGeneration(2));
         handle.update(|credentials| credentials.password = Some("p".into()));
         assert_eq!(handle.generation(), AuthGeneration(3));
