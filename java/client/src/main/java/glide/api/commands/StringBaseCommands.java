@@ -16,20 +16,49 @@ import java.util.concurrent.CompletableFuture;
  */
 public interface StringBaseCommands {
 
-    /** Valkey API keyword used to indicate that the length of the lcs should be returned. */
-    public static final String LEN_VALKEY_API = "LEN";
+    /**
+     * Valkey API keyword used to indicate that the length of the lcs should be returned.
+     *
+     * @deprecated Valkey API keyword constants are internal and will be removed in a future major
+     *     release.
+     */
+    // TODO #7401: Move to glide.internal.ValkeyKeywords.
+    @Deprecated public static final String LEN_VALKEY_API = "LEN";
 
-    /** <code>IDX</code> option string to include in the <code>LCS</code> command. */
-    public static final String IDX_COMMAND_STRING = "IDX";
+    /**
+     * <code>IDX</code> option string to include in the <code>LCS</code> command.
+     *
+     * @deprecated Valkey API keyword constants are internal and will be removed in a future major
+     *     release.
+     */
+    // TODO #7401: Move to glide.internal.ValkeyKeywords.
+    @Deprecated public static final String IDX_COMMAND_STRING = "IDX";
 
-    /** <code>MINMATCHLEN</code> option string to include in the <code>LCS</code> command. */
-    public static final String MINMATCHLEN_COMMAND_STRING = "MINMATCHLEN";
+    /**
+     * <code>MINMATCHLEN</code> option string to include in the <code>LCS</code> command.
+     *
+     * @deprecated Valkey API keyword constants are internal and will be removed in a future major
+     *     release.
+     */
+    // TODO #7401: Move to glide.internal.ValkeyKeywords.
+    @Deprecated public static final String MINMATCHLEN_COMMAND_STRING = "MINMATCHLEN";
 
-    /** <code>WITHMATCHLEN</code> option string to include in the <code>LCS</code> command. */
-    public static final String WITHMATCHLEN_COMMAND_STRING = "WITHMATCHLEN";
+    /**
+     * <code>WITHMATCHLEN</code> option string to include in the <code>LCS</code> command.
+     *
+     * @deprecated Valkey API keyword constants are internal and will be removed in a future major
+     *     release.
+     */
+    // TODO #7401: Move to glide.internal.ValkeyKeywords.
+    @Deprecated public static final String WITHMATCHLEN_COMMAND_STRING = "WITHMATCHLEN";
 
-    /** Key for LCS matches result. */
-    public static final String LCS_MATCHES_RESULT_KEY = "matches";
+    /**
+     * Key for LCS matches result.
+     *
+     * @deprecated This reply key constant is internal and will be removed in a future major release.
+     */
+    // TODO #7401: Remove; BaseClient will use a private constant.
+    @Deprecated public static final String LCS_MATCHES_RESULT_KEY = "matches";
 
     /**
      * Gets the value associated with the given <code>key</code>, or <code>null</code> if no such
@@ -697,6 +726,42 @@ public interface StringBaseCommands {
      * }</pre>
      */
     CompletableFuture<Long> append(GlideString key, GlideString value);
+
+    /**
+     * Deletes <code>key</code> if its value equals <code>value</code>.
+     *
+     * @since Valkey 9.0 and above.
+     * @see <a href="https://valkey.io/commands/delifeq/">valkey.io</a> for details.
+     * @param key The key to delete.
+     * @param value The comparison value. The key is only deleted if its current value matches
+     *     exactly.
+     * @return <code>true</code> if <code>key</code> was deleted, <code>false</code> if <code>key
+     *     </code> did not exist or its value did not match <code>value</code>.
+     * @example
+     *     <pre>{@code
+     * Boolean deleted = client.delifeq("key", "value").get();
+     * assert deleted;
+     * }</pre>
+     */
+    CompletableFuture<Boolean> delifeq(String key, String value);
+
+    /**
+     * Deletes <code>key</code> if its value equals <code>value</code>.
+     *
+     * @since Valkey 9.0 and above.
+     * @see <a href="https://valkey.io/commands/delifeq/">valkey.io</a> for details.
+     * @param key The key to delete.
+     * @param value The comparison value. The key is only deleted if its current value matches
+     *     exactly.
+     * @return <code>true</code> if <code>key</code> was deleted, <code>false</code> if <code>key
+     *     </code> did not exist or its value did not match <code>value</code>.
+     * @example
+     *     <pre>{@code
+     * Boolean deleted = client.delifeq(gs("key"), gs("value")).get();
+     * assert deleted;
+     * }</pre>
+     */
+    CompletableFuture<Boolean> delifeq(GlideString key, GlideString value);
 
     /**
      * Returns all the longest common subsequences combined between strings stored at <code>key1

@@ -29,6 +29,7 @@ import static command_request.CommandRequestOuterClass.RequestType.DBSize;
 import static command_request.CommandRequestOuterClass.RequestType.Decr;
 import static command_request.CommandRequestOuterClass.RequestType.DecrBy;
 import static command_request.CommandRequestOuterClass.RequestType.Del;
+import static command_request.CommandRequestOuterClass.RequestType.DelIfEq;
 import static command_request.CommandRequestOuterClass.RequestType.Dump;
 import static command_request.CommandRequestOuterClass.RequestType.Echo;
 import static command_request.CommandRequestOuterClass.RequestType.Exists;
@@ -237,6 +238,7 @@ import static glide.api.models.commands.stream.StreamGroupOptions.ENTRIES_READ_V
 import static glide.api.models.commands.stream.StreamReadOptions.READ_COUNT_VALKEY_API;
 import static glide.api.models.commands.stream.XInfoStreamOptions.COUNT;
 import static glide.api.models.commands.stream.XInfoStreamOptions.FULL;
+import static glide.internal.ValkeyKeywords.XX;
 import static glide.utils.ArgsBuilder.checkTypeOrThrow;
 import static glide.utils.ArgsBuilder.newArgsBuilder;
 import static glide.utils.ArrayTransformUtils.flattenAllKeysFollowedByAllValues;
@@ -616,6 +618,26 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
     public <ArgType> T append(@NonNull ArgType key, @NonNull ArgType value) {
         checkTypeOrThrow(key);
         addCommand(Append, newArgsBuilder().add(key).add(value));
+        return getThis();
+    }
+
+    /**
+     * Deletes <code>key</code> if its value equals <code>value</code>.
+     *
+     * @since Valkey 9.0 and above.
+     * @see <a href="https://valkey.io/commands/delifeq/">valkey.io</a> for details.
+     * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
+     *     will throw {@link IllegalArgumentException}.
+     * @param key The key to delete.
+     * @param value The comparison value. The key is only deleted if its current value matches
+     *     exactly.
+     * @return Command Response - <code>true</code> if <code>key</code> was deleted, <code>false
+     *     </code> if <code>key</code> did not exist or its value did not match <code>value</code>.
+     */
+    public <ArgType> T delifeq(@NonNull ArgType key, @NonNull ArgType value) {
+        checkTypeOrThrow(key);
+        checkTypeOrThrow(value);
+        addCommand(DelIfEq, newArgsBuilder().add(key).add(value));
         return getThis();
     }
 
@@ -1914,6 +1936,29 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
     public <ArgType> T sismember(@NonNull ArgType key, @NonNull ArgType member) {
         checkTypeOrThrow(key);
         addCommand(SIsMember, newArgsBuilder().add(key).add(member));
+        return getThis();
+    }
+
+    /**
+     * Returns if <code>member</code> is a member of the set stored at <code>key</code>, or <code>-1
+     * </code> if <code>key</code> does not exist.
+     *
+     * @since Valkey 9.2.0 and above.
+     * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
+     *     will throw {@link IllegalArgumentException}.
+     * @see <a href="https://valkey.io/commands/sismember/">valkey.io</a> for details.
+     * @param key The key of the set.
+     * @param member The member to check for existence in the set.
+     * @return Command Response - A status code indicating membership:
+     *     <ul>
+     *       <li><code>1</code> if the member exists in the set.
+     *       <li><code>0</code> if <code>key</code> exists but the member does not exist in the set.
+     *       <li><code>-1</code> if <code>key</code> does not exist.
+     *     </ul>
+     */
+    public <ArgType> T sismemberIfExists(@NonNull ArgType key, @NonNull ArgType member) {
+        checkTypeOrThrow(key);
+        addCommand(SIsMember, newArgsBuilder().add(key).add(member).add(XX));
         return getThis();
     }
 

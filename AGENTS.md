@@ -17,6 +17,7 @@ This is the Valkey GLIDE mono-repository containing a Rust core (`glide-core`) a
 - `node/` - Node.js/TypeScript client bindings with npm
 - `go/` - Go client bindings
 - `glide-logger/` - Shared logging infrastructure
+- `glide-rdma/` - RDMA transfer layer over libfabric (not yet used by clients)
 - `utils/` - Shared utilities and cluster management tools
 - `benchmarks/` - Performance benchmarks across languages
 - `examples/` - Usage examples for each language binding
@@ -266,6 +267,7 @@ valkey-glide/
 ├── ffi/                 # Foreign Function Interface layer
 ├── glide-core/          # Core Rust implementation
 ├── glide-logger/        # Shared logging infrastructure
+├── glide-rdma/          # RDMA transfer layer (libfabric)
 ├── go/                  # Go client bindings
 ├── java/                # Java client bindings (Gradle)
 ├── node/                # Node.js/TypeScript bindings (npm)
@@ -291,6 +293,12 @@ valkey-glide/
 **Key Features:** AZ Affinity, PubSub auto-reconnection, sharded PubSub, cluster-aware multi-key commands, cluster scan, batching (pipeline/transaction), OpenTelemetry integration
 **Architecture:** Rust core with FFI bindings, async-first design, cluster and standalone support
 **Performance:** Optimized for high throughput and low latency with connection pooling
+
+## Guidelines
+
+Follow these development guidelines when applicable:
+
+- **Rust:** [Options](./rust/docs/dev/options.md)
 
 ## If You Need More
 

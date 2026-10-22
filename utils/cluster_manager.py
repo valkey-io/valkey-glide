@@ -426,6 +426,7 @@ def start_server(
     tls_args: List[str],
     cluster_mode: bool,
     load_module: Optional[List[str]] = None,
+    cluster_node_timeout: Optional[int] = None,
 ) -> Tuple[Server, str]:
     port = port if port else next_free_port()
     logging.debug(f"Creating server {host}:{port}")
@@ -470,6 +471,11 @@ def start_server(
         "no",
         "--save",
         "",
+        # Start a replica's full sync as soon as it asks. The default 5s delay
+        # batches replicas to save forks on large datasets; test clusters have
+        # one replica per shard and an empty dataset, so the delay is pure wait.
+        "--repl-diskless-sync-delay",
+        "0",
     ]
 
     cmd_args.extend(["--bind", *get_bind_addresses(host)])
@@ -477,6 +483,8 @@ def start_server(
     # If host is a DNS hostname, set cluster-announce-hostname so
     # the cluster topology reports DNS names instead of IP addresses.
     if cluster_mode:
+        if cluster_node_timeout is not None:
+            cmd_args.extend(["--cluster-node-timeout", str(cluster_node_timeout)])
         try:
             import ipaddress
             ipaddress.ip_address(host)
@@ -535,6 +543,7 @@ def create_servers(
     tls_key_file: Optional[str] = None,
     tls_ca_cert_file: Optional[str] = None,
     tls_auth_clients: bool = False,
+    cluster_node_timeout: Optional[int] = None,
 ) -> List[Server]:
     tic = time.perf_counter()
     logging.debug("## Creating servers")
@@ -582,7 +591,14 @@ def create_servers(
         port = ports[i] if ports else None
         servers_to_check.add(
             start_server(
-                host, port, cluster_folder, tls, tls_args, cluster_mode, load_module
+                host,
+                port,
+                cluster_folder,
+                tls,
+                tls_args,
+                cluster_mode,
+                load_module,
+                cluster_node_timeout,
             )
         )
     # Check all servers
@@ -606,6 +622,7 @@ def create_servers(
                     tls_args,
                     cluster_mode,
                     load_module,
+                    cluster_node_timeout,
                 )
             )
             continue
@@ -1417,6 +1434,16 @@ def main():
     )
 
     parser_start.add_argument(
+        "--cluster-node-timeout",
+        type=int,
+        help="cluster-node-timeout (ms) for cluster-mode nodes. Defaults to the "
+        "server default (15000). Must exceed the longest Lua script a test suite "
+        "runs: a node busy in a script cannot answer cluster-bus pings, and its "
+        "replica is promoted once the timeout elapses.",
+        required=False,
+    )
+
+    parser_start.add_argument(
         "--tls-cert-file",
         type=str,
         help="Path to TLS certificate file (default: uses generated certificates)",
@@ -1617,6 +1644,8 @@ def main():
             ]
             if args.cluster_mode:
                 cm_args.append("--cluster-mode")
+            if args.cluster_node_timeout is not None:
+                cm_args += ["--cluster-node-timeout", str(args.cluster_node_timeout)]
             if args.ports:
                 # Explicit ports requested - pass them through
                 cm_args += ["-p"] + [str(p) for p in args.ports]
@@ -1672,6 +1701,7 @@ def main():
                 getattr(args, 'tls_key_file', None),
                 getattr(args, 'tls_ca_cert_file', None),
                 getattr(args, 'tls_auth_clients', False),
+                args.cluster_node_timeout,
             )
             if args.cluster_mode:
                 # Create a cluster

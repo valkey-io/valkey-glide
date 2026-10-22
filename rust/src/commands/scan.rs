@@ -39,15 +39,10 @@ struct PageSpec {
 
 impl PageSpec {
     fn to_cmd(&self, cursor: u64) -> Cmd {
-        let mut cmd = Cmd::new();
-        for a in &self.prefix {
-            cmd.arg(&a[..]);
-        }
-        cmd.arg(cursor);
-        for a in &self.suffix {
-            cmd.arg(&a[..]);
-        }
-        cmd
+        Cmd::default()
+            .with_arg(&self.prefix)
+            .with_arg(cursor)
+            .with_arg(&self.suffix)
     }
 }
 

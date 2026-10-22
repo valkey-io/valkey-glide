@@ -10,18 +10,30 @@ on:
             - release-*
             - v*
         paths:
-            - glide-logger/**
             - glide-telemetry/**
-            - .github/workflows/glide-telemetry.yml
-            - .github/workflows/lint-rust/action.yml
+
+            # Rust dependencies
+            - glide-logger/**
             - deny.toml
+
+            # GitHub workflows
+            - .github/workflows/glide-telemetry.yml
+            - .github/actions/install-protoc/action.yml
+            - .github/actions/install-rust/action.yml
+            - .github/workflows/lint-rust/action.yml
     pull_request:
         paths:
-            - glide-logger/**
             - glide-telemetry/**
-            - .github/workflows/glide-telemetry.yml
-            - .github/workflows/lint-rust/action.yml
+
+            # Rust dependencies
+            - glide-logger/**
             - deny.toml
+
+            # GitHub workflows
+            - .github/workflows/glide-telemetry.yml
+            - .github/actions/install-protoc/action.yml
+            - .github/actions/install-rust/action.yml
+            - .github/workflows/lint-rust/action.yml
     workflow_dispatch:
     workflow_call:
 

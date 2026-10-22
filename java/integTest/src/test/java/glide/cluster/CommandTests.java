@@ -5,6 +5,8 @@ import static glide.TestConfiguration.SERVER_VERSION;
 import static glide.TestUtilities.BGREWRITEAOF_RESPONSES;
 import static glide.TestUtilities.BGSAVE_NOT_CANCELLED_RESPONSE;
 import static glide.TestUtilities.BGSAVE_RESPONSES;
+import static glide.TestUtilities.BGSAVE_TYPES;
+import static glide.TestUtilities.INFO_DEFAULT_FIELDS;
 import static glide.TestUtilities.PRIMARY_SLOT_ROUTE;
 import static glide.TestUtilities.assertClientTrackingInfo;
 import static glide.TestUtilities.assertDeepEquals;
@@ -22,11 +24,12 @@ import static glide.TestUtilities.generateLuaLibCode;
 import static glide.TestUtilities.generateLuaLibCodeBinary;
 import static glide.TestUtilities.getFirstEntryFromMultiValue;
 import static glide.TestUtilities.getFirstKeyFromMultiValue;
+import static glide.TestUtilities.getInfo;
 import static glide.TestUtilities.getReplicaCount;
 import static glide.TestUtilities.getUnixSeconds;
 import static glide.TestUtilities.getValueFromInfo;
 import static glide.TestUtilities.isWindows;
-import static glide.TestUtilities.parseInfoResponseToMap;
+import static glide.TestUtilities.parseLong;
 import static glide.TestUtilities.waitFor;
 import static glide.TestUtilities.waitForNotBusy;
 import static glide.TestUtilities.waitForSaveNotInProgress;
@@ -36,10 +39,12 @@ import static glide.api.models.commands.FlushMode.ASYNC;
 import static glide.api.models.commands.FlushMode.SYNC;
 import static glide.api.models.commands.InfoOptions.Section.CLIENTS;
 import static glide.api.models.commands.InfoOptions.Section.CLUSTER;
+import static glide.api.models.commands.InfoOptions.Section.CLUSTER_INFO;
 import static glide.api.models.commands.InfoOptions.Section.COMMANDSTATS;
 import static glide.api.models.commands.InfoOptions.Section.CPU;
 import static glide.api.models.commands.InfoOptions.Section.EVERYTHING;
 import static glide.api.models.commands.InfoOptions.Section.MEMORY;
+import static glide.api.models.commands.InfoOptions.Section.PERSISTENCE;
 import static glide.api.models.commands.InfoOptions.Section.REPLICATION;
 import static glide.api.models.commands.InfoOptions.Section.SERVER;
 import static glide.api.models.commands.InfoOptions.Section.STATS;
@@ -139,19 +144,6 @@ public class CommandTests {
 
     private static final List<Arguments> clients = new ArrayList<>();
 
-    public static final List<String> DEFAULT_INFO_SECTIONS =
-            Arrays.asList(
-                    "Server",
-                    "Clients",
-                    "Memory",
-                    "Persistence",
-                    "Stats",
-                    "Replication",
-                    "CPU",
-                    "Modules",
-                    "Errorstats",
-                    "Cluster",
-                    "Keyspace");
     public static final List<String> EVERYTHING_INFO_SECTIONS =
             SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")
                     // Latencystats was added in Valkey 7
@@ -425,36 +417,9 @@ public class CommandTests {
     @MethodSource("getClients")
     @SneakyThrows
     public void info_without_options(GlideClusterClient clusterClient) {
-        ClusterValue<String> data = clusterClient.info().get();
-        assertTrue(data.hasMultiData());
-        for (String info : data.getMultiValue().values()) {
-            for (String section : DEFAULT_INFO_SECTIONS) {
-                assertTrue(info.contains("# " + section), "Section " + section + " is missing");
-            }
-        }
-    }
-
-    @ParameterizedTest(autoCloseArguments = false)
-    @MethodSource("getClients")
-    @SneakyThrows
-    public void info_with_single_node_route(GlideClusterClient clusterClient) {
-        ClusterValue<String> data = clusterClient.info(RANDOM).get();
-        assertTrue(data.hasSingleData());
-        String infoData = data.getSingleValue();
-        for (String section : DEFAULT_INFO_SECTIONS) {
-            assertTrue(infoData.contains("# " + section), "Section " + section + " is missing");
-        }
-    }
-
-    @ParameterizedTest(autoCloseArguments = false)
-    @MethodSource("getClients")
-    @SneakyThrows
-    public void info_with_multi_node_route(GlideClusterClient clusterClient) {
-        ClusterValue<String> data = clusterClient.info(ALL_NODES).get();
-        assertTrue(data.hasMultiData());
-        for (String info : data.getMultiValue().values()) {
-            for (String section : DEFAULT_INFO_SECTIONS) {
-                assertTrue(info.contains("# " + section), "Section " + section + " is missing");
+        for (Map<String, String> fields : getInfo(clusterClient)) {
+            for (String field : INFO_DEFAULT_FIELDS) {
+                assertTrue(fields.containsKey(field), field);
             }
         }
     }
@@ -487,6 +452,30 @@ public class CommandTests {
             for (String section : EVERYTHING_INFO_SECTIONS) {
                 assertTrue(info.contains("# " + section), "Section " + section + " is missing");
             }
+        }
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void info_valkey_9_2_fields(GlideClusterClient clusterClient) {
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("9.2.0"), "This feature added in version 9.2");
+
+        // Persistence fields
+        for (Map<String, String> persistence : getInfo(clusterClient, PERSISTENCE)) {
+            assertTrue(BGSAVE_TYPES.contains(persistence.get("rdb_current_bgsave_type")));
+            assertTrue(BGSAVE_TYPES.contains(persistence.get("rdb_last_bgsave_type")));
+
+            String remainingName = "forkless_estimated_seconds_remaining";
+            long remainingValue = parseLong(persistence.get(remainingName), remainingName);
+            assertTrue(remainingValue >= -1);
+        }
+
+        // Cluster info fields
+        for (Map<String, String> clusterInfo : getInfo(clusterClient, CLUSTER_INFO)) {
+            String fallbacksName = "cluster_io_main_thread_fallbacks";
+            long fallbacksValue = parseLong(clusterInfo.get(fallbacksName), fallbacksName);
+            assertTrue(fallbacksValue >= 0);
         }
     }
 
@@ -691,8 +680,7 @@ public class CommandTests {
     @MethodSource("getClients")
     @SneakyThrows
     public void config_rewrite_non_existent_config_file(GlideClusterClient clusterClient) {
-        ClusterValue<String> info = clusterClient.info(new Section[] {SERVER}, RANDOM).get();
-        String configFile = parseInfoResponseToMap(info.getSingleValue()).get("config_file");
+        String configFile = getInfo(clusterClient, SERVER).get(0).get("config_file");
 
         if (configFile == null || configFile.isEmpty()) {
             ExecutionException executionException =

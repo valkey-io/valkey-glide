@@ -91,6 +91,8 @@ import static glide.api.models.commands.function.FunctionListOptions.LIBRARY_NAM
 import static glide.api.models.commands.function.FunctionListOptions.WITH_CODE_VALKEY_API;
 import static glide.api.models.commands.function.FunctionLoadOptions.REPLACE;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleMultiNodeRoute.ALL_PRIMARIES;
+import static glide.internal.ValkeyKeywords.CANCEL;
+import static glide.internal.ValkeyKeywords.SCHEDULE;
 import static glide.utils.ArrayTransformUtils.castArray;
 import static glide.utils.ArrayTransformUtils.castMapOfArrays;
 import static glide.utils.ArrayTransformUtils.concatenateArrays;
@@ -239,8 +241,12 @@ public class GlideClusterClient extends BaseClient
      * The scope is pinned to a single slot after the first keyed command.
      *
      * @param timeout maximum time to wait for a scope to become available
-     * @param routingKey the key whose hash slot determines which node the scope connects to. All keys
-     *     used in the scope must hash to the same slot. May be null (defaults to slot 0).
+     * @param routingKey the key whose hash slot determines which node the scope connects to, and
+     *     against which the scope's first keyed command is validated (a command for a different slot
+     *     is rejected locally with CROSSSLOT). May be null, in which case the scope starts
+     *     unconstrained (slot 0 selects only the initial connection target): the first keyed command
+     *     may target any slot and pins the scope to it, after which later keyed commands for a
+     *     different slot receive CROSSSLOT.
      * @return a Future resolving to an {@link glide.api.models.scope.IsolatedScope}
      */
     public CompletableFuture<glide.api.models.scope.IsolatedScope> scopedConnection(
@@ -253,39 +259,40 @@ public class GlideClusterClient extends BaseClient
             return f;
         }
 
-        int routingSlot =
-                routingKey != null ? slotForKey(routingKey.getBytes(StandardCharsets.UTF_8)) : 0;
-        long timeoutMs = timeout.toMillis();
-        long deadline = System.currentTimeMillis() + timeoutMs;
-        // One logical acquire: one stable attempt token across the retry loop.
-        long attemptToken = glide.ffi.resolvers.GlideScopeResolver.glideScopeNextAttemptToken();
+        // A routing key is optional; when absent, a cluster scope stays
+        // unconstrained (any primary) rather than being pinned to a slot. Presence
+        // is carried in a separate flag so slot 0 is a real value, not "unset".
+        boolean hasRoutingSlot = routingKey != null;
+        int routingSlot = hasRoutingSlot ? slotForKey(routingKey.getBytes(StandardCharsets.UTF_8)) : 0;
 
-        return CompletableFuture.supplyAsync(
-                () -> {
-                    while (true) {
-                        long scopeId =
-                                glide.ffi.resolvers.GlideScopeResolver.glideScopeTryAcquire(
-                                        clientId, connBytes, routingSlot, attemptToken);
-                        if (scopeId >= 0) {
-                            return new glide.api.models.scope.IsolatedScope(scopeId, clientId);
-                        }
-                        long remaining = deadline - System.currentTimeMillis();
-                        if (remaining <= 0) {
-                            throw new java.util.concurrent.CompletionException(
-                                    new java.util.concurrent.TimeoutException(
-                                            "Timed out waiting for isolated scope (pool exhausted)"));
-                        }
-                        try {
-                            Thread.sleep(Math.min(10, remaining));
-                        } catch (InterruptedException e) {
-                            Thread.currentThread().interrupt();
-                            throw new java.util.concurrent.CompletionException(e);
-                        }
+        CompletableFuture<Object> future = new CompletableFuture<>();
+        long callbackId = glide.internal.AsyncRegistry.register(future, 0, clientId, 0);
+        int rc =
+                glide.ffi.resolvers.GlideScopeResolver.glideScopeAcquire(
+                        clientId, connBytes, hasRoutingSlot, routingSlot, timeout.toMillis(), callbackId);
+        if (rc != 0) {
+            future.completeExceptionally(
+                    new IllegalArgumentException("Invalid connection request bytes"));
+        }
+        // The core keeps waiting after the caller cancels. Give back a scope it is
+        // later granted, or its slot stays in use until the client closes.
+        CompletableFuture<glide.api.models.scope.IsolatedScope> result = new CompletableFuture<>();
+        future.whenComplete(
+                (scopeId, err) -> {
+                    if (err != null) {
+                        result.completeExceptionally(err);
+                        return;
+                    }
+                    glide.api.models.scope.IsolatedScope scope =
+                            new glide.api.models.scope.IsolatedScope((Long) scopeId, clientId);
+                    if (!result.complete(scope)) {
+                        scope.close();
                     }
                 });
+        return result;
     }
 
-    /** Convenience overload — defaults to slot 0 (standalone mode). */
+    /** Convenience overload — no routing key, so the scope is unconstrained. */
     public CompletableFuture<glide.api.models.scope.IsolatedScope> scopedConnection(
             @NonNull java.time.Duration timeout) {
         return scopedConnection(timeout, null);
@@ -874,16 +881,14 @@ public class GlideClusterClient extends BaseClient
     @Override
     public CompletableFuture<ClusterValue<String>> bgsaveSchedule() {
         return commandManager.submitNewCommand(
-                BgSave,
-                new String[] {SCHEDULE_VALKEY_API},
-                response -> ClusterValue.of(handleMapResponse(response)));
+                BgSave, new String[] {SCHEDULE}, response -> ClusterValue.of(handleMapResponse(response)));
     }
 
     @Override
     public CompletableFuture<ClusterValue<String>> bgsaveSchedule(@NonNull Route route) {
         return commandManager.submitNewCommand(
                 BgSave,
-                new String[] {SCHEDULE_VALKEY_API},
+                new String[] {SCHEDULE},
                 route,
                 response ->
                         route instanceof SingleNodeRoute
@@ -894,16 +899,14 @@ public class GlideClusterClient extends BaseClient
     @Override
     public CompletableFuture<ClusterValue<String>> bgsaveCancel() {
         return commandManager.submitNewCommand(
-                BgSave,
-                new String[] {CANCEL_VALKEY_API},
-                response -> ClusterValue.of(handleMapResponse(response)));
+                BgSave, new String[] {CANCEL}, response -> ClusterValue.of(handleMapResponse(response)));
     }
 
     @Override
     public CompletableFuture<ClusterValue<String>> bgsaveCancel(@NonNull Route route) {
         return commandManager.submitNewCommand(
                 BgSave,
-                new String[] {CANCEL_VALKEY_API},
+                new String[] {CANCEL},
                 route,
                 response ->
                         route instanceof SingleNodeRoute

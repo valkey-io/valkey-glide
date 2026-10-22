@@ -11,29 +11,41 @@ on:
             - v*
         paths:
             - rust/**
-            - glide-logger/**
-            - glide-telemetry/**
+
+            # Rust dependencies
             - glide-core/**
+            - glide-telemetry/**
+            - glide-logger/**
             - deny.toml
-            - utils/cluster_manager.py
+
+            # GitHub workflows
+            - .github/workflows/rust.yml
             - .github/actions/install-engine/action.yml
+            - .github/actions/install-protoc/action.yml
             - .github/actions/install-rust/action.yml
             - .github/actions/install-shared-dependencies/action.yml
+            - .github/actions/install-zig/action.yml
             - .github/workflows/lint-rust/action.yml
-            - .github/workflows/rust.yml
+            - utils/cluster_manager.py
     pull_request:
         paths:
             - rust/**
-            - glide-logger/**
-            - glide-telemetry/**
+
+            # Rust dependencies
             - glide-core/**
+            - glide-telemetry/**
+            - glide-logger/**
             - deny.toml
-            - utils/cluster_manager.py
+
+            # GitHub workflows
+            - .github/workflows/rust.yml
             - .github/actions/install-engine/action.yml
+            - .github/actions/install-protoc/action.yml
             - .github/actions/install-rust/action.yml
             - .github/actions/install-shared-dependencies/action.yml
+            - .github/actions/install-zig/action.yml
             - .github/workflows/lint-rust/action.yml
-            - .github/workflows/rust.yml
+            - utils/cluster_manager.py
     workflow_dispatch:
     workflow_call:
 
@@ -76,8 +88,9 @@ jobs:
                       runner: ubuntu-24.04-arm
                       target: aarch64-unknown-linux-gnu
                 engine:
+                    # TODO #7312: Bump to 9.2.0 once released
                     - type: valkey
-                      version: "9.0"
+                      version: "9.2.0-rc1"
                     - type: redis
                       version: "6.2"
         steps:

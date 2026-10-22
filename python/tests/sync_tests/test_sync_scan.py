@@ -97,6 +97,8 @@ class TestSyncScan:
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     def test_sync_cluster_scan_simple(self, glide_sync_client: GlideClusterClient):
+        # Full-keyspace scan compared for set equality: start from an empty keyspace.
+        glide_sync_client.flushall()
         key = get_random_string(10)
         expected_keys = [f"{key}{i}" for i in range(100)]
         glide_sync_client.mset({k: "value" for k in expected_keys})
@@ -116,6 +118,8 @@ class TestSyncScan:
     def test_sync_cluster_scan_with_object_type_and_pattern(
         self, glide_sync_client: GlideClusterClient
     ):
+        # Full-keyspace scan compared for set equality: start from an empty keyspace.
+        glide_sync_client.flushall()
         key = get_random_string(10)
         expected_keys = [f"key-{key}-{i}" for i in range(100)]
         glide_sync_client.mset({k: "value" for k in expected_keys})
@@ -146,6 +150,8 @@ class TestSyncScan:
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     def test_sync_cluster_scan_with_count(self, glide_sync_client: GlideClusterClient):
+        # Full-keyspace scan compared for set equality: start from an empty keyspace.
+        glide_sync_client.flushall()
         key = get_random_string(10)
         expected_keys = [f"{key}{i}" for i in range(100)]
         glide_sync_client.mset({k: "value" for k in expected_keys})
@@ -173,6 +179,8 @@ class TestSyncScan:
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     def test_sync_cluster_scan_with_match(self, glide_sync_client: GlideClusterClient):
+        # Full-keyspace scan compared for set equality: start from an empty keyspace.
+        glide_sync_client.flushall()
         unexpected_keys = [f"{i}" for i in range(100)]
         glide_sync_client.mset({k: "value" for k in unexpected_keys})
         encoded_unexpected_keys = map(lambda k: k.encode(), unexpected_keys)
@@ -196,6 +204,8 @@ class TestSyncScan:
     def test_sync_cluster_scan_cleaning_cursor(
         self, glide_sync_client: GlideClusterClient
     ):
+        # Full-keyspace scan compared for set equality: start from an empty keyspace.
+        glide_sync_client.flushall()
         key = get_random_string(10)
         glide_sync_client.mset({k: "value" for k in [f"{key}{i}" for i in range(100)]})
         cursor = cast(
@@ -211,6 +221,8 @@ class TestSyncScan:
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     def test_sync_cluster_scan_all_types(self, glide_sync_client: GlideClusterClient):
+        # Full-keyspace scan compared for set equality: start from an empty keyspace.
+        glide_sync_client.flushall()
         # We test that the scan command work for all types of keys
         key = get_random_string(10)
         string_keys = [f"{key}{i}" for i in range(100)]
@@ -402,6 +414,8 @@ class TestSyncScan:
     @pytest.mark.parametrize("cluster_mode", [False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     def test_sync_standalone_scan_simple(self, glide_sync_client: GlideClient):
+        # Full-keyspace scan compared for set equality: start from an empty keyspace.
+        glide_sync_client.flushall()
         key = get_random_string(10)
         expected_keys = [f"{key}{i}" for i in range(100)]
         glide_sync_client.mset({k: "value" for k in expected_keys})
@@ -423,6 +437,8 @@ class TestSyncScan:
     def test_sync_standalone_scan_with_object_type_and_pattern(
         self, glide_sync_client: GlideClient
     ):
+        # Full-keyspace scan compared for set equality: start from an empty keyspace.
+        glide_sync_client.flushall()
         key = get_random_string(10)
         expected_keys = [f"key-{key}-{i}" for i in range(100)]
         glide_sync_client.mset({k: "value" for k in expected_keys})
@@ -449,6 +465,8 @@ class TestSyncScan:
     @pytest.mark.parametrize("cluster_mode", [False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     def test_sync_standalone_scan_with_count(self, glide_sync_client: GlideClient):
+        # Full-keyspace scan compared for set equality: start from an empty keyspace.
+        glide_sync_client.flushall()
         key = get_random_string(10)
         expected_keys = [f"{key}{i}" for i in range(100)]
         glide_sync_client.mset({k: "value" for k in expected_keys})
@@ -477,6 +495,8 @@ class TestSyncScan:
     @pytest.mark.parametrize("cluster_mode", [False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     def test_sync_standalone_scan_with_match(self, glide_sync_client: GlideClient):
+        # Full-keyspace scan compared for set equality: start from an empty keyspace.
+        glide_sync_client.flushall()
         key = get_random_string(10)
         expected_keys = [f"key-{key}-{i}" for i in range(100)]
         glide_sync_client.mset({k: "value" for k in expected_keys})
@@ -500,6 +520,8 @@ class TestSyncScan:
     @pytest.mark.parametrize("cluster_mode", [False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     def test_sync_standalone_scan_all_types(self, glide_sync_client: GlideClient):
+        # Full-keyspace scan compared for set equality: start from an empty keyspace.
+        glide_sync_client.flushall()
         # We test that the scan command work for all types of keys
         (
             encoded_string_keys,

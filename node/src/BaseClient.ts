@@ -298,6 +298,11 @@ import {
     response,
 } from "../build-ts/ProtobufMessage";
 import { resolveClientLibraryName } from "./ClientLibraryNameResolver.js";
+import { IsolatedScope } from "./IsolatedScope.js";
+import {
+    clearScopeConnectionRequest,
+    setScopeConnectionRequest,
+} from "./ScopeInternal.js";
 /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
 type PromiseFunction = (value?: any) => void;
 type ErrorFunction = (error: ValkeyError) => void;
@@ -1831,6 +1836,20 @@ export class BaseClient {
     }
 
     /**
+     * Like {@link ensureClientIsOpen}, but also rejects a client with no native
+     * handle, such as one released back to a `ClientPool`.
+     */
+    private ensureClientIsUsable() {
+        this.ensureClientIsOpen();
+
+        if (!this.clientHandle) {
+            throw new ClosingError(
+                "Client handle not initialized. Please create a new client.",
+            );
+        }
+    }
+
+    /**
      * @internal
      *
      * Creates a promise that resolves or rejects based on the result of a command request.
@@ -1850,13 +1869,7 @@ export class BaseClient {
 
         raiseOnError = false,
     ): Promise<T> {
-        this.ensureClientIsOpen();
-
-        if (!this.clientHandle) {
-            throw new ClosingError(
-                "Client handle not initialized. Please create a new client.",
-            );
-        }
+        this.ensureClientIsUsable();
 
         if (!Array.isArray(command)) {
             return this.sendCommand<T>(command, options);
@@ -2410,13 +2423,7 @@ export class BaseClient {
 
             const messageKind = nextPushNotificationValue["kind"];
 
-            if (messageKind === "Disconnect") {
-                Logger.log(
-                    "warn",
-                    "disconnect notification",
-                    "Transport disconnected, messages might be lost",
-                );
-            } else if (
+            if (
                 messageKind === "Message" ||
                 messageKind === "PMessage" ||
                 messageKind === "SMessage"
@@ -5361,6 +5368,50 @@ export class BaseClient {
         member: GlideString,
     ): Promise<boolean> {
         return this.createWritePromise(createSIsMember(key, member));
+    }
+
+    /** Returns if `member` is a member of the set stored at `key`,
+     * or `-1` if `key` does not exist.
+     *
+     * @see {@link https://valkey.io/commands/sismember/|valkey.io} for more details.
+     * @remarks Since Valkey version 9.2.0.
+     *
+     * @param key - The key of the set.
+     * @param member - The member to check for existence in the set.
+     * @returns A status code indicating membership:
+     * - `1`: The member exists in the set.
+     * - `0`: The key exists but the member does not exist in the set.
+     * - `-1`: The key does not exist.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.sismemberIfExists("my_set", "member1");
+     * console.log(result);
+     * // Output: 1
+     * // Indicates that `member1` exists in the set `my_set`.
+     * ```
+     *
+     * @example
+     * ```typescript
+     * const result = await client.sismemberIfExists("my_set", "non_existing_member");
+     * console.log(result);
+     * // Output: 0
+     * // Indicates that `my_set` exists but `non_existing_member` does not exist in it.
+     * ```
+     *
+     * @example
+     * ```typescript
+     * const result = await client.sismemberIfExists("non_existing_set", "member1");
+     * console.log(result);
+     * // Output: -1
+     * // Indicates that `non_existing_set` does not exist.
+     * ```
+     */
+    public async sismemberIfExists(
+        key: GlideString,
+        member: GlideString,
+    ): Promise<number> {
+        return this.createWritePromise(createSIsMember(key, member, true));
     }
 
     /**
@@ -10168,6 +10219,9 @@ export class BaseClient {
                 ).finish(),
             );
 
+            // Keep the exact bytes used to connect for scopedConnection().
+            setScopeConnectionRequest(this, connectionRequestBytes);
+
             this.clientHandle = await CreateDirectClient(
                 connectionRequestBytes,
                 this.handleResponsesAvailable,
@@ -10221,6 +10275,51 @@ export class BaseClient {
     }
 
     /**
+     * Acquire an isolated execution scope on this client: a dedicated connection
+     * for operations that need per-connection state, such as `WATCH`/`MULTI`/`EXEC`
+     * transactions, `CLIENT TRACKING`, and blocking commands.
+     *
+     * The scope runs on its own connection through glide-core rather than the
+     * shared multiplexed one, so its state does not affect other commands on this
+     * client. This works on both a standalone client and a pool-borrowed client;
+     * the connection request captured at connect time is reused, so the caller
+     * does not have to produce any bytes.
+     *
+     * Release the scope when finished, or wrap it in a `try`/`finally`.
+     *
+     * @example
+     * ```typescript
+     * const scope = await client.scopedConnection();
+     * try {
+     *     await scope.watch("key");
+     *     const value = await scope.get("key");
+     *     await scope.multi();
+     *     await scope.set("key", String(Number(value ?? "0") + 1));
+     *     await scope.exec();
+     * } finally {
+     *     scope.release();
+     * }
+     * ```
+     *
+     * @param routingKey - In cluster mode, the key whose hash slot decides which
+     *     node the scope connects to. Every key used in the scope must hash to the
+     *     same slot. Defaults to slot 0.
+     * @param timeoutMs - Maximum time to wait for a scope, in milliseconds.
+     *     Default: 5000.
+     * @returns A new {@link IsolatedScope}.
+     * @throws {TimeoutError} if no scope became available within `timeoutMs`.
+     * @throws {ConnectionError} if the client was closed while waiting.
+     * @throws {RequestError} if the client's configuration cannot produce a scoped connection.
+     */
+    public async scopedConnection(
+        routingKey?: string,
+        timeoutMs = 5000,
+    ): Promise<IsolatedScope> {
+        this.ensureClientIsUsable();
+        return IsolatedScope.acquire(this, routingKey, timeoutMs);
+    }
+
+    /**
      *  Terminate the client by closing all associated resources and any active promises.
      *  All open promises will be closed with an exception.
      * @param errorMessage - If defined, this error message will be passed along with the exceptions when closing all open promises.
@@ -10235,6 +10334,10 @@ export class BaseClient {
         this.pubsubFutures.forEach(([, reject]) => {
             reject(new ClosingError(errorMessage || ""));
         });
+
+        // Drop the cached connection request so its credentials do not outlive
+        // the client.
+        clearScopeConnectionRequest(this);
 
         // Clean up address resolver from the global registry
         if (this.addressResolverKey) {

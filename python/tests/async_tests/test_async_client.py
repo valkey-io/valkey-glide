@@ -123,6 +123,8 @@ from tests.utils.utils import (
     BGREWRITEAOF_RESPONSES,
     BGSAVE_NOT_CANCELLED_RESPONSE,
     BGSAVE_RESPONSES,
+    BGSAVE_TYPES,
+    INFO_DEFAULT_FIELDS,
     PRIMARY_SLOT_ROUTE,
     assert_client_tracking_info,
     assert_connected,
@@ -141,10 +143,11 @@ from tests.utils.utils import (
     flatten_cluster_response_lists,
     generate_lua_lib_code,
     get_first_result,
+    get_info,
     get_random_string,
     get_unix_seconds,
     get_version,
-    parse_info_response,
+    parse_int,
     round_values,
     trigger_latency_spike,
     wait_for,
@@ -983,16 +986,45 @@ class TestCommands:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_info_default(self, glide_client: TGlideClient):
-        cluster_mode = isinstance(glide_client, GlideClusterClient)
-        info_result = await glide_client.info()
-        if cluster_mode:
+        infos = await get_info(glide_client)
+
+        # Verify that there is one response for each node.
+        if isinstance(glide_client, GlideClusterClient):
             cluster_nodes = await glide_client.custom_command(["CLUSTER", "NODES"])
             assert isinstance(cluster_nodes, (bytes, list))
             cluster_nodes = get_first_result(cluster_nodes)
-            expected_num_of_results = cluster_nodes.count(b"master")
-            assert len(info_result) == expected_num_of_results
-        info_result = get_first_result(info_result)
-        assert b"# Memory" in info_result
+            assert len(infos) == cluster_nodes.count(b"master")
+
+        # Default fields
+        for info in infos:
+            for field in INFO_DEFAULT_FIELDS:
+                assert field in info
+
+        # Valkey 9.2+ fields
+        # ------------------
+
+        if await check_if_server_version_lt(glide_client, "9.2.0"):
+            return
+
+        # Persistence fields
+        for persistence in await get_info(glide_client, [InfoSection.PERSISTENCE]):
+            assert persistence.get("rdb_current_bgsave_type") in BGSAVE_TYPES
+            assert persistence.get("rdb_last_bgsave_type") in BGSAVE_TYPES
+
+            remaining_name = "forkless_estimated_seconds_remaining"
+            remaining_value = parse_int(persistence.get(remaining_name), remaining_name)
+            assert remaining_value >= -1
+
+        # Cluster info fields
+        if isinstance(glide_client, GlideClusterClient):
+            for cluster_info in await get_info(
+                glide_client, [InfoSection.CLUSTER_INFO]
+            ):
+                fallbacks_name = "cluster_io_main_thread_fallbacks"
+                fallbacks_value = parse_int(
+                    cluster_info.get(fallbacks_name), fallbacks_name
+                )
+                assert fallbacks_value >= 0
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -1140,9 +1172,7 @@ class TestCommands:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_config_rewrite(self, glide_client: TGlideClient):
-        info_server = parse_info_response(
-            get_first_result(await glide_client.info([InfoSection.SERVER]))
-        )
+        info_server = (await get_info(glide_client, [InfoSection.SERVER]))[0]
         if len(info_server["config_file"]) > 0:
             assert await glide_client.config_rewrite() == OK
         else:
@@ -1311,6 +1341,9 @@ class TestCommands:
         # Verify client recovers after reset
         pong = await glide_client.ping()
         assert pong == b"PONG"
+        # RESET downgrades the glide client to RESP2 for the rest of its life
+        # (glide-core stores RESP2 for reconnects too); keep it out of the pool.
+        await glide_client.close()
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -2311,6 +2344,17 @@ class TestCommands:
         assert await glide_client.sismember(key, member)
         assert not await glide_client.sismember(key, get_random_string(5))
         assert not await glide_client.sismember("non_existing_key", member)
+
+    @pytest.mark.skip_if_version_below("9.2.0")
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_sismember_if_exists(self, glide_client: TGlideClient):
+        key = get_random_string(10)
+        member = get_random_string(5)
+        assert await glide_client.sadd(key, [member]) == 1
+        assert await glide_client.sismember_if_exists(key, member) == 1
+        assert await glide_client.sismember_if_exists(key, get_random_string(5)) == 0
+        assert await glide_client.sismember_if_exists("non_existing_key", member) == -1
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -8316,10 +8360,15 @@ class TestCommands:
         assert await glide_client.object_encoding(string_key) == "embstr".encode()
 
         assert await glide_client.lpush(list_key, ["1"]) == 1
-        if await check_if_server_version_lt(glide_client, "7.2.0"):
-            assert await glide_client.object_encoding(list_key) == "quicklist".encode()
-        else:
-            assert await glide_client.object_encoding(list_key) == "listpack".encode()
+        expected_list_encoding = (
+            "quicklist"
+            if await check_if_server_version_lt(glide_client, "7.2.0")
+            else "listpack"
+        )
+        assert (
+            await glide_client.object_encoding(list_key)
+            == expected_list_encoding.encode()
+        )
 
         # The default value of set-max-intset-entries is 512
         for i in range(0, 513):
@@ -8330,16 +8379,15 @@ class TestCommands:
         assert await glide_client.object_encoding(intset_key) == "intset".encode()
 
         assert await glide_client.sadd(set_listpack_key, ["foo"]) == 1
-        if await check_if_server_version_lt(glide_client, "7.2.0"):
-            assert (
-                await glide_client.object_encoding(set_listpack_key)
-                == "hashtable".encode()
-            )
-        else:
-            assert (
-                await glide_client.object_encoding(set_listpack_key)
-                == "listpack".encode()
-            )
+        expected_small_set_encoding = (
+            "hashtable"
+            if await check_if_server_version_lt(glide_client, "7.2.0")
+            else "listpack"
+        )
+        assert (
+            await glide_client.object_encoding(set_listpack_key)
+            == expected_small_set_encoding.encode()
+        )
 
         # The default value of hash-max-listpack-entries is 512
         for i in range(0, 513):
@@ -8350,33 +8398,39 @@ class TestCommands:
         )
 
         assert await glide_client.hset(hash_listpack_key, {"1": "2"}) == 1
-        if await check_if_server_version_lt(glide_client, "7.0.0"):
-            assert (
-                await glide_client.object_encoding(hash_listpack_key)
-                == "ziplist".encode()
-            )
-        else:
-            assert (
-                await glide_client.object_encoding(hash_listpack_key)
-                == "listpack".encode()
-            )
+        expected_small_hash_encoding = (
+            "ziplist"
+            if await check_if_server_version_lt(glide_client, "7.0.0")
+            else "listpack"
+        )
+        assert (
+            await glide_client.object_encoding(hash_listpack_key)
+            == expected_small_hash_encoding.encode()
+        )
 
         # The default value of zset-max-listpack-entries is 128
         for i in range(0, 129):
             assert await glide_client.zadd(skiplist_key, {str(i): 2.0}) == 1
-        assert await glide_client.object_encoding(skiplist_key) == "skiplist".encode()
+        expected_sorted_set_encoding = (
+            "skiplist"
+            if await check_if_server_version_lt(glide_client, "9.2.0")
+            else "btree"
+        )
+        assert (
+            await glide_client.object_encoding(skiplist_key)
+            == expected_sorted_set_encoding.encode()
+        )
 
         assert await glide_client.zadd(zset_listpack_key, {"1": 2.0}) == 1
-        if await check_if_server_version_lt(glide_client, "7.0.0"):
-            assert (
-                await glide_client.object_encoding(zset_listpack_key)
-                == "ziplist".encode()
-            )
-        else:
-            assert (
-                await glide_client.object_encoding(zset_listpack_key)
-                == "listpack".encode()
-            )
+        expected_small_sorted_set_encoding = (
+            "ziplist"
+            if await check_if_server_version_lt(glide_client, "7.0.0")
+            else "listpack"
+        )
+        assert (
+            await glide_client.object_encoding(zset_listpack_key)
+            == expected_small_sorted_set_encoding.encode()
+        )
 
         assert await glide_client.xadd(stream_key, [("field", "value")]) is not None
         assert await glide_client.object_encoding(stream_key) == "stream".encode()
