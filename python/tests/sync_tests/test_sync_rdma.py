@@ -221,8 +221,8 @@ def test_closing_a_region_lets_go_of_the_memory_when_the_fabric_has():
 
 
 def test_a_closed_region_keeps_memory_the_fabric_still_holds():
-    # On tcp a transfer that ended without the server's reply leaves the memory
-    # parked, and a write could still land in it. Python must not free it until
+    # On tcp a transfer that closed its region leaves the memory parked, and a
+    # write could still land in it. Python must not free it until
     # the fabric lets go, even though the region is closed.
     client = _offline_client()
     memory = bytearray(REGION_BYTES)

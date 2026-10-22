@@ -155,8 +155,9 @@ class _RetainedRdmaMemory:
     """
     Caller memory the fabric still holds after its region was closed.
 
-    That happens when a transfer ended without the server's reply on a provider
-    where a write could still land (tcp), or when the region failed to close.
+    That happens when a transfer ended before the server was known to be done
+    with the memory on a provider where a write could still land (tcp), or when
+    the region failed to close.
     The memory is kept referenced here so Python cannot free it until the
     fabric reports it released. For a region that failed to close, that is never.
     """
@@ -238,11 +239,22 @@ class RdmaRegion:
             client.rdma_set(b"key", region.window(0, 4096))
 
     Handling a failed transfer: some failures leave the region usable, such as
-    a value too large for its window or a checksum mismatch. Others close it,
-    because the server might still be using the memory: a lost connection, or a
-    client closed to cancel the transfer. Check :attr:`closed` after any error
-    rather than the error's class, and register the memory again if the client
-    is still open::
+    a value too large for its window, a checksum mismatch, or a refusal from
+    the server. Others close it, because the server might still be using the
+    memory:
+
+    - the connection was lost while the transfer was in flight;
+    - the client was closed to cancel the transfer;
+    - the server's reply was neither a result nor an error, such as the
+      ``+QUEUED`` a server sends when another thread has a ``MULTI`` open on
+      this client, which means the server may still run the transfer on
+      ``EXEC``.
+
+    The error's class does not say which happened. For example, a handshake
+    that leaves the connection unusable raises ``ConnectionError`` but keeps
+    the region open, since the transfer was never sent, and the client
+    reconnects for the next one. So check :attr:`closed` after any error, and
+    register the memory again if the client is still open::
 
         try:
             receipt = client.rdma_get(key, region.window(offset, length))
@@ -281,7 +293,8 @@ class RdmaRegion:
     def closed(self) -> bool:
         """
         Whether the region has been deregistered, by :meth:`close` or by a
-        transfer that ended without the server's reply.
+        transfer that ended before the server was known to be done with the
+        memory; see :class:`RdmaRegion`.
         """
         return self._region is None
 
@@ -292,9 +305,8 @@ class RdmaRegion:
 
         False while the region is open. After it closes, False while GLIDE
         still holds the memory because a write could still land in it: after
-        a transfer ended without the server's reply on the tcp provider, until
-        the client and all its regions are closed, or after a failed
-        deregistration, for good. True otherwise, which on efa-direct is as
+        a transfer closed the region on the tcp provider, until the client and
+        all its regions are closed, or after a failed deregistration, for good. True otherwise, which on efa-direct is as
         soon as the region closes.
 
         Registering memory GLIDE still holds is refused, so a caller who only
@@ -366,8 +378,8 @@ class RdmaRegion:
         Deregister the memory and release the pinned pages.
 
         The caller's buffer is not freed. Usually it can be reused or freed once
-        this returns. The exception is a region whose transfer ended without the
-        server's reply on the tcp provider, or whose deregistration failed: a
+        this returns. The exception is a region a transfer closed on the tcp
+        provider, or whose deregistration failed: a
         write may still land in it, so GLIDE keeps the buffer referenced until the
         fabric is done with it, and the caller should not reuse it either. On tcp
         that is once the client and all its regions are closed; after a failed
@@ -375,11 +387,13 @@ class RdmaRegion:
         :attr:`memory_released` says which. Closing twice is a no-op, so this is
         safe in a ``finally``.
 
-        Any transfer against the region must have finished first. This is not
-        a way to cancel one: the server may still be moving bytes into these
-        pages and the memory may become undefined for both ends. To cancel a
-        transfer in flight, close the client from another thread, then close
-        the region once the transfer call has returned.
+        Every transfer call using the region must have returned first, on every
+        thread. This is not a way to cancel one: the server may still be moving
+        bytes into these pages, and the region may still be in use by the call.
+        To cancel a transfer in flight, close the client from another thread,
+        then close the region once the transfer call has returned. A cancelled
+        transfer closes its region on the way out, so closing it again is then
+        a no-op.
         """
         region, self._region = self._region, None
         if region is not None:
@@ -1596,13 +1610,15 @@ class BaseClient(CoreCommands):
 
         To cancel a transfer, call :meth:`close` on the client from another
         thread. That first cuts the server off from every region the client
-        registered, then this call returns raising ``ClosingError``. Bytes
-        that landed before the close stay, so the window then holds an
-        unknown mix of old and new bytes.
+        registered, then this call returns raising ``ClosingError``, unless
+        the server's reply was already arriving, in which case it returns as
+        usual. Bytes that landed before the close stay, so the window then
+        holds an unknown mix of old and new bytes. See :meth:`close` for the
+        rare case where the close cannot cancel the transfer.
 
-        A transfer that ends without the server's reply, such as one cancelled
-        that way or one whose connection was lost, closes the region, because
-        the server might still be using the memory. See :class:`RdmaRegion` for
+        A transfer that ends before the server is known to be done with the
+        memory closes the region, for example one cancelled that way or one
+        whose connection was lost. See :class:`RdmaRegion` for every case and
         how to recover.
 
         Args:
@@ -1619,8 +1635,13 @@ class BaseClient(CoreCommands):
 
         Raises:
             RdmaError: If the region is closed or belongs to another client, the
-                value was larger than the window (the region stays usable), or
-                the landed bytes did not match the checksum.
+                value was larger than the window (the region stays usable), the
+                landed bytes did not match the checksum, or the server refused
+                the transfer or its handshake.
+            ConnectionError: If the connection failed, or has to be replaced
+                because its handshake left it unusable. Check
+                ``region.closed``: the region stays open when the transfer was
+                never sent.
             ClosingError: If the client is closed, including when it is closed
                 during the transfer to cancel it.
 
@@ -1652,8 +1673,8 @@ class BaseClient(CoreCommands):
 
         As with ``rdma_get``, there is no timeout, closing the client from
         another thread cancels the call, raising ``ClosingError``, and a
-        transfer that ends without the server's reply closes the region. See
-        :class:`RdmaRegion` for how to recover.
+        transfer that ends before the server is known to be done with the
+        memory closes the region. See :class:`RdmaRegion` for how to recover.
 
         Args:
             key (TEncodable): The key to write.
@@ -1670,9 +1691,13 @@ class BaseClient(CoreCommands):
 
         Raises:
             RdmaError: If the region is closed or belongs to another client, or
-                the server refused the write, including when the bytes it read
-                do not match the checksum. A refused write stores nothing and
-                leaves the region usable.
+                the server refused the write or its handshake, including when
+                the bytes it read do not match the checksum. A refused write
+                stores nothing and leaves the region usable. If the region
+                closed instead, the outcome is unknown: for example, a write
+                the server queued inside another thread's ``MULTI`` may still
+                be stored on ``EXEC``.
+            ConnectionError: As for ``rdma_get``.
             ClosingError: If the client is closed, including when it is closed
                 during the transfer to cancel it.
             TypeError: If ``checksum`` is not an ``RdmaSetChecksum`` choice.
@@ -1848,8 +1873,20 @@ class BaseClient(CoreCommands):
 
         With RDMA, this also cancels every transfer in flight on another thread:
         it cuts the server off from every region the client registered, and
-        each blocked ``rdma_get`` or ``rdma_set`` then raises ``ClosingError``.
-        Close the regions after this returns.
+        each blocked ``rdma_get`` or ``rdma_set`` then raises ``ClosingError``,
+        unless its reply was already arriving, in which case it returns as
+        usual.
+
+        This returns without waiting for those calls. Close a region only after
+        every transfer call using it has returned; closing it while one is
+        still running corrupts memory. A cancelled transfer closes its own
+        region on the way out, so there is usually nothing left to close.
+
+        If deregistering a region fails, which takes a device or driver error
+        and is logged as an error, a transfer using it is not cancelled. It
+        keeps waiting until the server replies or the connection fails, since
+        the server could still reach the memory, and that memory is never
+        released; see :attr:`RdmaRegion.memory_released`.
         """
         if _is_credential_provider_executing(self):
             raise RuntimeError(
