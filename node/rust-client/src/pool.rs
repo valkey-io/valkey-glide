@@ -122,6 +122,13 @@ pub fn create_pool<'a>(
         )
     })?;
 
+    if proto_req.credential_provider_key.is_some() {
+        return Err(Error::new(
+            Status::InvalidArg,
+            "Pool clients cannot use a custom IAM credentials provider. Configure IAM without a credentialProvider to use the default AWS credential chain.",
+        ));
+    }
+
     if proto_req.pubsub_subscriptions.is_some() {
         return Err(Error::new(
             Status::InvalidArg,

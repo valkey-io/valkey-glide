@@ -82,7 +82,7 @@ fn parse_error_msg(err_msg_ptr: *const c_char) -> String {
 
 // Helper to get null PubSubCallback
 fn null_pubsub_callback() -> PubSubCallback {
-    unsafe { std::mem::transmute::<*mut std::ffi::c_void, PubSubCallback>(std::ptr::null_mut()) }
+    None
 }
 
 #[test]

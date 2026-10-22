@@ -14,8 +14,13 @@ import uuid
 
 import pytest
 from glide_shared.config import (
+    AwsCredentials,
     GlideClientConfiguration,
     GlideClusterClientConfiguration,
+    IamAuthConfig,
+    NodeAddress,
+    ServerCredentials,
+    ServiceType,
 )
 from glide_shared.routes import AllNodes
 from glide_sync.client_pool import ClientPool, PoolConfig
@@ -490,6 +495,28 @@ class TestPoolPubsubRejection:
         )
         with pytest.raises(ValueError, match="pubsub"):
             ClientPool(config, PoolConfig(max_size=2, min_idle=1))
+
+    def test_pool_rejects_custom_credential_provider_before_native_call(
+        self, monkeypatch
+    ):
+        """Custom providers are direct-client-only in this release."""
+        import glide_sync.client_pool as pool_module
+
+        monkeypatch.setattr(pool_module, "_GlideFFI", None)
+        config = GlideClientConfiguration(
+            addresses=[NodeAddress()],
+            credentials=ServerCredentials(
+                username="user",
+                iam_config=IamAuthConfig(
+                    cluster_name="cluster",
+                    service=ServiceType.ELASTICACHE,
+                    region="us-east-1",
+                    credential_provider=lambda: AwsCredentials("access", "secret"),
+                ),
+            ),
+        )
+        with pytest.raises(ValueError, match="cannot use a custom IAM"):
+            ClientPool(config, PoolConfig(max_size=1, min_idle=0))
 
 
 class TestPoolErrorHandling:
