@@ -40,9 +40,9 @@ use super::{Client, DispatchPermit};
 ///   [`Client::rdma_leaked_bytes`]).
 pub type RdmaOutcome<T> = (Option<glide_rdma::RdmaBuffer>, Result<T, redis::RedisError>);
 
-/// End a loan the server is done with, with `reply` as what the server answered.
-/// Returns [`glide_rdma::TransferReply::Failed`] with `error`  when the server
-/// refused it or never got it.
+/// End a loan the server is done with. `reply` is what the server answered: the
+/// transfer's result, or [`glide_rdma::TransferReply::Failed`] with `error` when
+/// the server refused the transfer or never got it.
 fn reclaim_rdma_loan(
     loan: glide_rdma::LentBuffer,
     reply: glide_rdma::TransferReply,
@@ -66,13 +66,11 @@ fn recall_rdma_loan(
     loan: glide_rdma::LentBuffer,
     error: redis::RedisError,
 ) -> RdmaOutcome<Option<glide_rdma::ReadReceipt>> {
-    match loan.recall() {
-        Ok(()) => (None, Err(error)),
-        // The region failed to close, so the server may still reach the memory.
-        // Dropping the loan keeps that memory for the life of the process and
-        // counts it as leaked; the close is never tried again.
-        Err((_loan, _)) => (None, Err(error)),
-    }
+    // If the region fails to close, the server may still reach the memory. The
+    // loan that comes back is dropped here, which keeps that memory for the life
+    // of the process and counts it as leaked; the close is never tried again.
+    let _ = loan.recall();
+    (None, Err(error))
 }
 
 /// Check the checksum a `BLOB.RDMA_GET` reported against the bytes that landed.
@@ -103,13 +101,14 @@ impl Client {
     }
 
     /// Bytes of registered memory this client is holding back because transfers
-    /// ended without the server's reply, so the server might still write into them.
-    /// Only grows while the client lives.
+    /// ended before the server was known to be done with them, so the server might
+    /// still write into them. Only grows while the client lives.
     ///
     /// Stays at zero on efa-direct, where closing a region stops the server's writes.
-    /// On tcp, which is for development, every transfer that ends without the
-    /// server's reply holds its memory: one that was cancelled, abandoned, or lost its
-    /// connection.
+    /// On tcp, which is for development, every transfer whose buffer does not come
+    /// back holds its memory: one that was cancelled, abandoned, lost its
+    /// connection, or got a reply that was neither a result nor an error; see
+    /// [`RdmaOutcome`].
     ///
     /// If this passes a threshold of your own, create a new client and register your
     /// memory again. The held memory is freed once this client and all its clones are
@@ -165,11 +164,10 @@ impl Client {
     /// `Ok(None)` means the key does not exist. `Ok(Some(receipt))` means the
     /// bytes are already in the window by the time this returns.
     ///
-    /// A transfer refused before the buffer is lent, such as for a window out of
-    /// bounds or a full in-flight limit, hands the buffer back, and so does any
-    /// reply the server sent, including one to the handshake. Any other error
-    /// means the server may not be done with the memory, so the region is closed
-    /// and no buffer comes back. Register the memory again for the next transfer.
+    /// When no buffer comes back, register the memory again for the next transfer.
+    // As in glide-rdma: a failed lend returns the buffer inside the `Err`, so the
+    // caller never loses memory it registered.
+    #[allow(clippy::result_large_err)]
     pub async fn rdma_get(
         &mut self,
         key: &[u8],
@@ -177,27 +175,10 @@ impl Client {
         offset: usize,
         length: usize,
     ) -> RdmaOutcome<Option<glide_rdma::ReadReceipt>> {
-        if let Err(error) = self.check_rdma_buffer(&buffer) {
-            return (Some(buffer), Err(error));
-        }
-        let permit = match self.rdma_preflight().await {
-            Ok(permit) => permit,
-            Err(error) => return (Some(buffer), Err(error)),
-        };
-        let (command, loan) = match buffer.lend_for_get(key, offset, length) {
-            Ok(lent) => lent,
-            Err((buffer, error)) => {
-                return (
-                    Some(buffer),
-                    Err(crate::rdma::protocol::as_redis_error(error)),
-                );
-            }
-        };
         let (buffer, result) = self
-            .rdma_transfer(
-                command,
-                loan,
-                permit,
+            .lend_and_transfer(
+                buffer,
+                |buffer| buffer.lend_for_get(key, offset, length),
                 crate::rdma::protocol::parse_read_reply,
             )
             .await;
@@ -218,6 +199,9 @@ impl Client {
     /// [`glide_rdma::SetChecksum`].
     ///
     /// Hands the buffer back as [`Self::rdma_get`] does.
+    // As in glide-rdma: a failed lend returns the buffer inside the `Err`, so the
+    // caller never loses memory it registered.
+    #[allow(clippy::result_large_err)]
     pub async fn rdma_set(
         &mut self,
         key: &[u8],
@@ -226,6 +210,36 @@ impl Client {
         length: usize,
         checksum: glide_rdma::SetChecksum,
     ) -> RdmaOutcome<()> {
+        let (buffer, result) = self
+            .lend_and_transfer(
+                buffer,
+                |buffer| buffer.lend_for_set(key, offset, length, checksum),
+                crate::rdma::protocol::parse_write_reply,
+            )
+            .await;
+        (buffer, result.map(|_| ()))
+    }
+
+    /// The steps every transfer runs, in this order:
+    ///
+    /// 1. [`Self::check_rdma_buffer`], then [`Self::rdma_preflight`].
+    /// 2. `lend`, which builds the command and lends the buffer, or refuses a
+    ///    window out of bounds.
+    /// 3. [`Self::rdma_transfer`], which sends the command and ends the loan.
+    ///
+    /// A refusal in step 1 or 2 hands the buffer straight back, since nothing has
+    /// been lent yet. So a check that every transfer needs belongs in step 1.
+    async fn lend_and_transfer(
+        &mut self,
+        buffer: glide_rdma::RdmaBuffer,
+        lend: impl FnOnce(
+            glide_rdma::RdmaBuffer,
+        ) -> Result<
+            (glide_rdma::RdmaCommand, glide_rdma::LentBuffer),
+            (glide_rdma::RdmaBuffer, glide_rdma::RdmaError),
+        >,
+        parse: fn(redis::Value) -> redis::RedisResult<glide_rdma::TransferReply>,
+    ) -> RdmaOutcome<Option<glide_rdma::ReadReceipt>> {
         if let Err(error) = self.check_rdma_buffer(&buffer) {
             return (Some(buffer), Err(error));
         }
@@ -233,7 +247,7 @@ impl Client {
             Ok(permit) => permit,
             Err(error) => return (Some(buffer), Err(error)),
         };
-        let (command, loan) = match buffer.lend_for_set(key, offset, length, checksum) {
+        let (command, loan) = match lend(buffer) {
             Ok(lent) => lent,
             Err((buffer, error)) => {
                 return (
@@ -242,15 +256,7 @@ impl Client {
                 );
             }
         };
-        let (buffer, result) = self
-            .rdma_transfer(
-                command,
-                loan,
-                permit,
-                crate::rdma::protocol::parse_write_reply,
-            )
-            .await;
-        (buffer, result.map(|_| ()))
+        self.rdma_transfer(command, loan, permit, parse).await
     }
 
     /// Send a lent buffer's command and end the loan, as [`RdmaOutcome`] describes.
@@ -279,8 +285,8 @@ impl Client {
     /// still recalled, unless the handshake built it. That is more cautious than
     /// needed, but costs only a new registration.
     ///
-    /// `permit` is what [`Self::rdma_preflight`] returned, after its checks ran and
-    /// before the buffer was lent.
+    /// `permit` is what [`Self::rdma_preflight`] returned in
+    /// [`Self::lend_and_transfer`], before the buffer was lent.
     ///
     /// If this future is dropped, so is the loan, which also closes the region.
     async fn rdma_transfer(
@@ -323,11 +329,11 @@ impl Client {
         }
     }
 
-    /// The checks that can refuse a transfer before it is sent, run before the
-    /// transfer lends its buffer, so that failing one hands the buffer straight back
-    /// instead of revoking it: no open `MULTI`, the IAM reconcile, then
-    /// [`DispatchPermit::take`]. The send then uses the returned permit and does not
-    /// repeat them.
+    /// The checks that can refuse a transfer before it is sent: no open `MULTI`,
+    /// the IAM reconcile, then [`DispatchPermit::take`]. [`Self::lend_and_transfer`]
+    /// runs them before it lends the buffer, so failing one hands the buffer
+    /// straight back instead of revoking it. The send then uses the returned permit
+    /// and does not repeat them.
     ///
     /// A transfer sent while a `MULTI` is open would be queued, and the server would
     /// answer `+QUEUED` instead of replying to the transfer. [`Self::rdma_transfer`]

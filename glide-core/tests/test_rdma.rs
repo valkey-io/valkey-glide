@@ -594,62 +594,10 @@ mod dma_tests {
         );
     }
 
-    /// A handshake cancelled before its reply arrived may still have opened a
-    /// session on the server, which refuses a second one on the same connection.
-    /// So the next transfer sends no second handshake there: it fails with an
-    /// error that replaces the connection, and hands its buffer back, since its
-    /// command was never sent.
-    #[tokio::test]
-    async fn a_cancelled_handshake_is_not_sent_again_on_the_same_connection() {
-        let scripts = HashMap::from([("BLOB.RDMA_HELLO".to_string(), vec![NO_REPLY.to_string()])]);
-        let mock = ServerMock::new_with_command_scripts(primary_responses(), scripts);
-        let mut client = rdma_client_against(&mock).await;
-        let cancelled_buffer = client
-            .register_rdma_region(vec![0u8; 4096])
-            .expect("registers");
-        let revoker = cancelled_buffer.revoker();
-
-        let mut transferring = client.clone();
-        let transfer = tokio::spawn(async move {
-            transferring
-                .rdma_get(b"key", cancelled_buffer, 0, 4096)
-                .await
-        });
-        tokio::time::sleep(STUCK).await;
-        revoker.revoke().expect("the region closes");
-        let (_, outcome) = tokio::time::timeout(PROMPTLY, transfer)
-            .await
-            .expect("revoking the region ends the wait")
-            .unwrap();
-        outcome.expect_err("the handshake was cancelled");
-
-        let buffer = client
-            .register_rdma_region(vec![0u8; 4096])
-            .expect("registers");
-        let (buffer, result) =
-            tokio::time::timeout(PROMPTLY, client.rdma_get(b"key", buffer, 0, 4096))
-                .await
-                .expect("the transfer does not wait on the cancelled handshake");
-
-        let error = result.expect_err("the connection cannot carry a transfer");
-        assert_eq!(error.kind(), redis::ErrorKind::FatalSendError, "{error}");
-        assert!(error.to_string().contains("did not finish"), "{error}");
-        assert!(
-            !buffer
-                .expect("nothing was sent, so the buffer comes back")
-                .is_revoked(),
-            "and it can be lent again"
-        );
-        assert_eq!(
-            mock.get_number_of_received_commands(),
-            1,
-            "only the cancelled handshake reached the server"
-        );
-    }
-
-    /// After a handshake that may have left a session on the server, the client
-    /// replaces the connection, and the next transfer handshakes and runs on the
-    /// new one.
+    /// A handshake reply this client cannot read means the server opened a session
+    /// this client cannot use. The transfer was never sent, so its buffer comes
+    /// back, and the connection is replaced: the next transfer handshakes and runs
+    /// on the new one.
     #[tokio::test]
     async fn a_malformed_handshake_reply_is_followed_by_a_transfer_on_a_new_connection() {
         let (_peer, hello) = hello_reply();
@@ -670,7 +618,14 @@ mod dma_tests {
         let (buffer, result) = client.rdma_get(b"key", buffer, 0, 4096).await;
         let error = result.expect_err("OK is not a handshake reply");
         assert_eq!(error.kind(), redis::ErrorKind::FatalSendError, "{error}");
+        assert!(
+            error
+                .to_string()
+                .contains("malformed BLOB.RDMA_HELLO reply"),
+            "{error}"
+        );
         let buffer = buffer.expect("nothing was sent, so the buffer comes back");
+        assert!(!buffer.is_revoked(), "and it can be lent again");
 
         let (_, receipt) = succeeded(
             tokio::time::timeout(PROMPTLY, client.rdma_get(b"key", buffer, 0, 4096))
@@ -692,8 +647,10 @@ mod dma_tests {
     }
 
     /// The same after a cancelled handshake, which is the realistic way to get
-    /// here: the transfer after it fails and replaces the connection, and the one
-    /// after that handshakes and runs on the new connection.
+    /// here. The handshake may still have opened a session on the server, which
+    /// refuses a second one on the same connection. So the next transfer sends no
+    /// handshake there: it fails, hands its buffer back, and replaces the
+    /// connection. The one after that handshakes and runs on the new connection.
     #[tokio::test]
     async fn a_cancelled_handshake_is_followed_by_a_transfer_on_a_new_connection() {
         let (_peer, hello) = hello_reply();
@@ -729,10 +686,15 @@ mod dma_tests {
         let buffer = client
             .register_rdma_region(vec![0u8; 4096])
             .expect("registers");
-        let (buffer, result) = client.rdma_get(b"key", buffer, 0, 4096).await;
+        let (buffer, result) =
+            tokio::time::timeout(PROMPTLY, client.rdma_get(b"key", buffer, 0, 4096))
+                .await
+                .expect("the transfer does not wait on the cancelled handshake");
         let error = result.expect_err("the old connection cannot carry a transfer");
         assert_eq!(error.kind(), redis::ErrorKind::FatalSendError, "{error}");
+        assert!(error.to_string().contains("did not finish"), "{error}");
         let buffer = buffer.expect("nothing was sent, so the buffer comes back");
+        assert!(!buffer.is_revoked(), "and it can be lent again");
 
         let (_, receipt) = succeeded(
             tokio::time::timeout(PROMPTLY, client.rdma_get(b"key", buffer, 0, 4096))
@@ -999,39 +961,6 @@ mod dma_tests {
             "only the handshake was sent"
         );
         assert_eq!(client.rdma_parked_bytes().unwrap(), 0);
-    }
-
-    /// A handshake reply this client cannot read still means the transfer command
-    /// was never sent, so the buffer comes back usable.
-    #[tokio::test]
-    async fn a_malformed_handshake_reply_hands_back_a_usable_buffer() {
-        let scripts = HashMap::from([("BLOB.RDMA_HELLO".to_string(), vec!["+OK\r\n".to_string()])]);
-        let mock = ServerMock::new_with_command_scripts(primary_responses(), scripts);
-        let mut client = rdma_client_against(&mock).await;
-        let buffer = client
-            .register_rdma_region(vec![0u8; 4096])
-            .expect("registers");
-
-        let (buffer, result) = client.rdma_get(b"key", buffer, 0, 4096).await;
-
-        let error = result.expect_err("OK is not a handshake reply");
-        assert!(
-            error
-                .to_string()
-                .contains("malformed BLOB.RDMA_HELLO reply"),
-            "{error}"
-        );
-        assert_eq!(
-            error.kind(),
-            redis::ErrorKind::FatalSendError,
-            "the server opened a session this client cannot use, so the connection is replaced"
-        );
-        assert!(!buffer.expect("the buffer comes back").is_revoked());
-        assert_eq!(
-            mock.get_number_of_received_commands(),
-            1,
-            "only the handshake was sent"
-        );
     }
 
     /// A mock that handshakes and then answers `BLOB.RDMA_GET` with each reply in turn.
