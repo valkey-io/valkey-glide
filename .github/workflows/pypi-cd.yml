@@ -155,11 +155,10 @@ jobs:
                   # Note: We currently only have Linux persistent self-hosted runner. If persistent self-hosted macOS runners
                   # are added to the matrix for CD pipelines, update this step to conditionally use:
                   #     brew install python@3.15 && brew link python@3.15
+                  # pip is bootstrapped later in the Install cibuildwheel step.
                   if ! command -v python3.15 &> /dev/null; then
                       sudo apt update
                       sudo apt install -y python3.15 python3.15-dev
-                      curl -sS https://bootstrap.pypa.io/get-pip.py | python3.15
-                      python3.15 -m pip install --upgrade pip
                   fi
 
             - name: Set up Python 3.15
