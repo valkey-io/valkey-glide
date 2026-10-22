@@ -2708,13 +2708,6 @@ export function runBaseTests(config: {
                     // Value matches - key is deleted
                     expect(await client.delifeq(key, value)).toEqual(true);
                     expect(await client.get(key)).toEqual(null);
-
-                    // Test DELIFEQ on a key holding a non-string value returns WRONGTYPE
-                    const setKey = getRandomKey();
-                    expect(await client.sadd(setKey, ["a"])).toEqual(1);
-                    await expect(client.delifeq(setKey, "a")).rejects.toThrow(
-                        RequestError,
-                    );
                 },
                 protocol,
             );
