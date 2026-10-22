@@ -2,8 +2,22 @@
 
 ## Pending 2.6
 
+### Features
+
+* All: Add support for Valkey 9.0 commands:
+  * `DELIFEQ` ([#6146](https://github.com/valkey-io/valkey-glide/issues/6146))
+* Java, Node, Python, Go: Add support for Valkey 9.1 commands:
+  * `HGETDEL` ([#6145](https://github.com/valkey-io/valkey-glide/issues/6145))
+* Java: Add support for Valkey 9.1 commands:
+  * `NX`/`XX` support for `HSETEX` ([#6154](https://github.com/valkey-io/valkey-glide/issues/6154))
+* All: Add support for Valkey 9.2 commands:
+  * `SISMEMBER` with `XX` option ([#7202](https://github.com/valkey-io/valkey-glide/issues/7202))
+* Rust: Implement `ToSingleValkeyArg` and `ToValkeyArgs` for option types ([#7381](https://github.com/valkey-io/valkey-glide/issues/7381))
+* Core: Add `glide-rdma` crate, an RDMA transfer layer over libfabric (loaded at runtime), for later RDMA support ([#7177](https://github.com/valkey-io/valkey-glide/pull/7177))
+
 ### Fixes
 
+* Core/All: Scope acquire waits inside glide-core instead of each binding polling `glide_scope_try_acquire` in its own retry loop. A cause that waiting cannot fix (parent closed mid-wait, lazily connected mTLS parent with no certificate material yet, a connection request that cannot produce a scoped connection) now raises the binding's disconnect or request-error class immediately instead of a "pool exhausted" timeout after the full deadline, and a deadline error names the cause of the final attempt. One acquire makes one dial: the acquire awaits the connection it reserved a slot for, so the attempt-token dedupe that let a binding's repeat poll recognise its own in-flight creation is removed along with the loops. `glide_scope_try_acquire` and `glide_scope_next_attempt_token` (and the JNI and napi counterparts) are replaced by `glide_scope_acquire_async` / `glide_scope_acquire_blocking` / `glide_scope_acquire_pipe` (the last delivers to the Python async client's shared pipe); Node's `IsolatedScope.acquire` takes `timeoutMs` where it took `maxRetries` ([#7112](https://github.com/valkey-io/valkey-glide/issues/7112))
 * Node: Log the disconnect warning when the Disconnection push arrives ([#7277](https://github.com/valkey-io/valkey-glide/pull/7277))
 * Core, Go, Java, Node, Python, Rust: use uint32 for Go BackoffStrategy fields and harden reconnect RetryStrategy against out-of-range values; in Java an all-zero BackoffStrategy now means zero retries, matching the other clients ([#6680](https://github.com/valkey-io/valkey-glide/pull/6680))
 * Java, Node: An ordinary client and a pooled client could be handed the same id because ordinary-client handles and pooled `client_id`s came from separate counters that both started at 1, so closing an ordinary client (including `ClientPool.create`'s own connectivity probe) evicted a pooled client sharing its id — killing it outright, invalidating its scopes, or polluting its inflight accounting. Ordinary-client handles now draw from the same global allocator pooled ids use, so every id in the shared registry is unique ([#6968](https://github.com/valkey-io/valkey-glide/issues/6968))
@@ -60,10 +74,9 @@
 ### Changes
 
 * Core/FFI, Python: Add Unix domain socket support for standalone clients with `NodeAddress(unix_socket_path=...)`, and accept `valkey+unix://` URIs in `create_client_from_uri` ([#4878](https://github.com/valkey-io/valkey-glide/issues/4878))
+* Java: Deprecate the Valkey API keywords on `BaseClient` and the command interfaces ([#7401](https://github.com/valkey-io/valkey-glide/issues/7401))
+* Go, Java, Node, Python: Add `cluster_info` `INFO` section (Valkey 9.1) ([#7199](https://github.com/valkey-io/valkey-glide/issues/7199))
 * Java: add useMutualTlsFromKeyStore to load mTLS client identity ([#7258](https://github.com/valkey-io/valkey-glide/pull/7258))
-* Java: Add `HGETDEL` command support ([#6145](https://github.com/valkey-io/valkey-glide/issues/6145))
-* Node: Add `HGETDEL` command support ([#6145](https://github.com/valkey-io/valkey-glide/issues/6145))
-* Python: Add `HGETDEL` command support ([#6145](https://github.com/valkey-io/valkey-glide/issues/6145))
 * Python: Optionally propagate active OpenTelemetry parent span context to native command, batch and script spans with `enable_trace_context_propagation=True` (disabled by default) ([#7069](https://github.com/valkey-io/valkey-glide/pull/7069))
 * Core: Add client-side caching support for MGET. Fully cached requests return locally; partially cached requests fetch only misses and preserve duplicate-key and NIL response semantics. ([#6793](https://github.com/valkey-io/valkey-glide/issues/6793))
 * Rust: Add an initial native Rust client (preview) built directly on `glide-core` ([#6864](https://github.com/valkey-io/valkey-glide/pull/6864))
@@ -79,7 +92,6 @@
 * Node: Add `AZAffinityAllNodes` read strategy ([#7104](https://github.com/valkey-io/valkey-glide/pull/7104))
 * Core: Zero-copy receive path for GET/MGET ([#6559](https://github.com/valkey-io/valkey-glide/pull/6559))
 * Go: Expose `inflightRequestsLimit` configuration via `WithInflightRequestsLimit`, bringing the Go client to parity with Java, Python, and Node ([#6385](https://github.com/valkey-io/valkey-glide/issues/6385))
-* Go: Add `HGETDEL` command support, atomically getting and deleting one or more hash fields (Valkey 9.1+) ([#6145](https://github.com/valkey-io/valkey-glide/issues/6145))
 * Core, Java, Python, Node, Go: Add client-instance pooling and isolated execution scopes. Pools eliminate multiplexer contention under high concurrency; scopes provide dedicated connections for WATCH/MULTI/EXEC and CLIENT TRACKING. All languages share a unified Rust implementation via `send_scope_command()` and `release_client_async()`. Pool release resets state (DISCARD + SELECT). Scopes inherit parent's current database, credentials, and compression. Circuit breaker and inflight limits enforced. Abandon detection reclaims leaked borrows after configurable timeout (default 5 min, skips blocking commands, 0 to disable). ([#6338](https://github.com/valkey-io/valkey-glide/pull/6338))
 * Python: Add Python 3.14t free-threaded support to the test matrix. ([#5445](https://github.com/valkey-io/valkey-glide/issues/5445))
 * Core/FFI: Add `command_with_route_info` FFI entrypoint, accepting routing as a `RouteInfo` C-struct pointer instead of protobuf-encoded bytes — the same mechanism `batch()` already uses. Existing `command`, `command_with_buffer`, `command_with_buffers`, and `invoke_script` are unchanged. ([#6494](https://github.com/valkey-io/valkey-glide/pull/6494))

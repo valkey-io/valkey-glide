@@ -543,6 +543,7 @@ fn process_command_for_compression(
         "STRLEN" => RequestType::Strlen,
         "LCS" => RequestType::LCS,
         "SUBSTR" => RequestType::Substr,
+        "DELIFEQ" => RequestType::DelIfEq,
         "INCR" => RequestType::Incr,
         "INCRBY" => RequestType::IncrBy,
         "INCRBYFLOAT" => RequestType::IncrByFloat,
@@ -797,7 +798,6 @@ pub struct GlideClientHandle {
     /// Wrapped in Option to allow explicit drop during close(), which allows Node.js to exit.
     wake_callback: Option<Arc<ThreadsafeFunction<(), (), (), Status, false>>>,
     /// Unique client ID registered in the glide-core scope registry.
-    /// Used for scope operations (try_acquire, execute, release).
     client_id: u64,
 }
 

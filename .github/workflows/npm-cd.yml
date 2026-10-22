@@ -31,7 +31,7 @@ permissions:
 
 jobs:
     get-build-parameters:
-        runs-on: ubuntu-latest
+        runs-on: ubuntu-24.04
         environment: AWS_ACTIONS
         outputs:
             release_version: ${{ steps.get-params.outputs.release_version }}
@@ -145,14 +145,15 @@ jobs:
               id: load-platform-matrix
               shell: bash
               run: |
-                  # Filter entries with npm in PACKAGE_MANAGERS and use CD_RUNNER if available, replace "ephemeral" with "persistent" in RUNNER
+                  # Filter entries with npm in PACKAGE_MANAGERS and use CD_RUNNER if available, replace "ephemeral" with "persistent" in RUNNER.
+                  # x86_64-apple-darwin builds on CD_RUNNER (macos-15, arm64) but tests on macos-15-intel: npm resolves the native package by the runner arch, so testing on arm64 would validate the wrong build.
                   export PLATFORM_MATRIX=$(jq 'map(
                       select(.PACKAGE_MANAGERS != null and (.PACKAGE_MANAGERS | contains(["npm"])))
-                      | .runner = (
+                      | .RUNNER = (
                           if (.CD_RUNNER != null)
                           then .CD_RUNNER
                           elif (.RUNNER != null and (.RUNNER | type != "array")) then .RUNNER
-                          else "ubuntu-latest"
+                          else "ubuntu-24.04"
                           end
                       )
                       | .build_type = (
@@ -165,7 +166,7 @@ jobs:
                           else "mac"
                           end
                       )
-                      | if .RUNNER == "macos13" then .["test-runner"] = "macos13" else . end
+                      | if .TARGET == "x86_64-apple-darwin" then .["test-runner"] = "macos-15-intel" else . end
                   )' < .github/json_matrices/build-matrix.json | jq -c .)
                   echo "platform_matrix=${PLATFORM_MATRIX}" >> $GITHUB_OUTPUT
                   echo "Platform matrix loaded: ${PLATFORM_MATRIX}"
@@ -176,7 +177,7 @@ jobs:
             matrix:
                 include: ${{ fromJson(needs.get-build-parameters.outputs.platform_matrix) }}
             fail-fast: false
-        runs-on: ${{ matrix.runner }}
+        runs-on: ${{ matrix.RUNNER }}
         name: Build for ${{ matrix.TARGET }} (${{ matrix.build_type }})
         steps:
             - name: Checkout repository
@@ -303,7 +304,7 @@ jobs:
         environment: AWS_ACTIONS
         if: github.repository_owner == 'valkey-io' && needs.get-build-parameters.outputs.should_publish == 'true'
         needs: [get-build-parameters, build-native-modules]
-        runs-on: ubuntu-latest
+        runs-on: ubuntu-24.04
         outputs:
             release_package_artifact_name: "release-packages-${{ github.run_id }}"
         steps:
@@ -435,6 +436,8 @@ jobs:
               working-directory: ./node
               env:
                   NAPI_RS_VERSION_FROM_TAG: ${{ needs.get-build-parameters.outputs.release_version }}
+                  # napi prepublish has no --tag flag; set the dist-tag via npm config env instead.
+                  npm_config_tag: ${{ needs.get-build-parameters.outputs.npm_tag }}
               run: |
                   node_modules/.bin/napi prepublish \
                     --package-json-path npm/glide/package.json \
@@ -482,7 +485,7 @@ jobs:
             matrix:
                 include: ${{ fromJson(needs.get-build-parameters.outputs.platform_matrix) }}
             fail-fast: true
-        runs-on: ${{ matrix.test-runner || matrix.runner }}
+        runs-on: ${{ matrix.test-runner || matrix.RUNNER }}
         container:
             image: ${{ matrix.IMAGE || ''}}
             options: ${{ matrix.CONTAINER_OPTIONS || 'none' }}
@@ -609,7 +612,7 @@ jobs:
     cleanup-artifacts:
         needs: [test-published-release, get-build-parameters]
         if: always() && needs.get-build-parameters.outputs.should_publish == 'true'
-        runs-on: ubuntu-latest
+        runs-on: ubuntu-24.04
         steps:
             - name: Delete artifacts
               uses: geekyeggo/delete-artifact@54ab544f12cdb7b71613a16a2b5a37a9ade990af # v2
@@ -622,7 +625,7 @@ jobs:
     deprecate-on-failure:
         needs: [test-published-release, get-build-parameters]
         if: failure() && needs.get-build-parameters.outputs.should_publish == 'true'
-        runs-on: ubuntu-latest
+        runs-on: ubuntu-24.04
         steps:
             - name: Setup Node.js
               uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
