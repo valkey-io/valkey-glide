@@ -3,12 +3,16 @@ import os
 import random
 import string
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import asynccontextmanager, contextmanager
 from datetime import datetime, timezone
+from functools import partial
 from typing import (
     Any,
+    AsyncIterator,
     Awaitable,
     Callable,
     Dict,
+    Iterator,
     List,
     Mapping,
     Optional,
@@ -96,7 +100,7 @@ from glide_shared.constants import (
     TResult,
 )
 from glide_shared.exceptions import TimeoutError as GlideTimeoutError
-from glide_shared.routes import AllNodes, SlotKeyRoute, SlotType
+from glide_shared.routes import AllNodes, ByAddressRoute, SlotKeyRoute, SlotType
 from glide_sync import GlideClient as SyncGlideClient
 from glide_sync import GlideClusterClient as SyncGlideClusterClient
 from glide_sync import TGlideClient as TSyncGlideClient
@@ -428,6 +432,149 @@ def sync_wait_for(
     raise TimeoutError(failure)
 
 
+# While a script or function runs, the server does not read other clients'
+# commands until busy-reply-threshold (default 5000 ms) elapses, so a kill or
+# stats poll against a running script cannot complete sooner than that.
+# lua-time-limit is the pre-7.0 name and remains an alias on later servers.
+# CONFIG SET is server-global; the suite starts separate servers per xdist
+# worker, so lowering it here cannot reach another worker's tests.
+_BUSY_REPLY_THRESHOLD_MS = "100"
+_DEFAULT_BUSY_REPLY_THRESHOLD_MS = "5000"
+
+
+def _busy_reply_threshold_args(ms: str) -> List[str]:
+    return ["CONFIG", "SET", "lua-time-limit", ms]
+
+
+@asynccontextmanager
+async def low_busy_reply_threshold(client: TGlideClient) -> AsyncIterator[None]:
+    """The pooled server outlives the test, so the default is restored on exit."""
+    if isinstance(client, GlideClusterClient):
+        await client.custom_command(
+            _busy_reply_threshold_args(_BUSY_REPLY_THRESHOLD_MS), AllNodes()
+        )
+    else:
+        await client.custom_command(
+            _busy_reply_threshold_args(_BUSY_REPLY_THRESHOLD_MS)
+        )
+    try:
+        yield
+    finally:
+        if isinstance(client, GlideClusterClient):
+            await client.custom_command(
+                _busy_reply_threshold_args(_DEFAULT_BUSY_REPLY_THRESHOLD_MS), AllNodes()
+            )
+        else:
+            await client.custom_command(
+                _busy_reply_threshold_args(_DEFAULT_BUSY_REPLY_THRESHOLD_MS)
+            )
+
+
+@contextmanager
+def sync_low_busy_reply_threshold(client: TSyncGlideClient) -> Iterator[None]:
+    """The pooled server outlives the test, so the default is restored on exit."""
+    if isinstance(client, SyncGlideClusterClient):
+        client.custom_command(
+            _busy_reply_threshold_args(_BUSY_REPLY_THRESHOLD_MS), AllNodes()
+        )
+    else:
+        client.custom_command(_busy_reply_threshold_args(_BUSY_REPLY_THRESHOLD_MS))
+    try:
+        yield
+    finally:
+        if isinstance(client, SyncGlideClusterClient):
+            client.custom_command(
+                _busy_reply_threshold_args(_DEFAULT_BUSY_REPLY_THRESHOLD_MS), AllNodes()
+            )
+        else:
+            client.custom_command(
+                _busy_reply_threshold_args(_DEFAULT_BUSY_REPLY_THRESHOLD_MS)
+            )
+
+
+async def wait_for_server_blocked(
+    probe: TGlideClient, nodes: Optional[List[NodeAddress]] = None
+) -> None:
+    """``probe`` needs a request timeout well under the server's block duration.
+
+    Two consecutive timeouts are required so one slow reply from a server that
+    is merely loaded is not mistaken for the block.
+
+    A cluster ``probe`` is pinged node by node over ``nodes``: a fan-out PING
+    fails as soon as one node times out, which would report the block before
+    the nodes that have not started sleeping yet.
+    """
+    import anyio
+
+    if isinstance(probe, GlideClusterClient):
+        if not nodes:
+            raise ValueError("a cluster probe needs the addresses of its nodes")
+        pings = [
+            partial(probe.ping, route=ByAddressRoute(node.host, node.port))
+            for node in nodes
+        ]
+    else:
+        pings = [probe.ping]
+    consecutive_timeouts = [0] * len(pings)
+
+    async def probe_node(i: int) -> None:
+        try:
+            await pings[i]()
+        except GlideTimeoutError:
+            consecutive_timeouts[i] += 1
+            return
+        consecutive_timeouts[i] = 0
+
+    async def every_node_times_out_twice() -> bool:
+        async with anyio.create_task_group() as tg:
+            for i, count in enumerate(consecutive_timeouts):
+                if count < 2:
+                    tg.start_soon(probe_node, i)
+        return all(count >= 2 for count in consecutive_timeouts)
+
+    await wait_for(every_node_times_out_twice, "server never stopped answering PING")
+
+
+def sync_wait_for_server_blocked(
+    probe: TSyncGlideClient, nodes: Optional[List[NodeAddress]] = None
+) -> None:
+    """``probe`` needs a request timeout well under the server's block duration.
+
+    Two consecutive timeouts are required so one slow reply from a server that
+    is merely loaded is not mistaken for the block.
+
+    A cluster ``probe`` is pinged node by node over ``nodes``: a fan-out PING
+    fails as soon as one node times out, which would report the block before
+    the nodes that have not started sleeping yet.
+    """
+    if isinstance(probe, SyncGlideClusterClient):
+        if not nodes:
+            raise ValueError("a cluster probe needs the addresses of its nodes")
+        pings = [
+            partial(probe.ping, route=ByAddressRoute(node.host, node.port))
+            for node in nodes
+        ]
+    else:
+        pings = [probe.ping]
+    consecutive_timeouts = [0] * len(pings)
+
+    def probe_node(i: int) -> None:
+        try:
+            pings[i]()
+        except GlideTimeoutError:
+            consecutive_timeouts[i] += 1
+            return
+        consecutive_timeouts[i] = 0
+
+    def every_node_times_out_twice() -> bool:
+        pending = [i for i, count in enumerate(consecutive_timeouts) if count < 2]
+        with ThreadPoolExecutor(max_workers=len(pending)) as pool:
+            list(pool.map(probe_node, pending))
+        return all(count >= 2 for count in consecutive_timeouts)
+
+    sync_wait_for(every_node_times_out_twice, "server never stopped answering PING")
+
+
 async def wait_for_save_not_in_progress(client: TGlideClient) -> None:
     """Waits until no save (RDB save or AOF rewrite) is in progress."""
 
@@ -662,7 +809,6 @@ def create_lua_lib_with_long_running_function(
 ) -> str:
     """
     Create a lua lib with a (optionally) RO function which runs an endless loop up to timeout sec.
-    Execution takes at least 5 sec regardless of the timeout configured.
     """
     code = (
         f"#!lua name={lib_name}\n"
@@ -692,7 +838,6 @@ def create_lua_lib_with_long_running_function(
 def create_long_running_lua_script(timeout: int) -> str:
     """
     Create a lua script which runs an endless loop up to timeout sec.
-    Execution takes at least 5 sec regardless of the timeout configured.
     """
     script = (
         "  local started = tonumber(redis.pcall('time')[1])\n"

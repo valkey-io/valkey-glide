@@ -529,7 +529,10 @@ class TestAuthCommands:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_update_connection_password_with_acl_user(
-        self, acl_glide_client: TGlideClient, management_client: TGlideClient
+        self,
+        acl_glide_client: TGlideClient,
+        management_client: TGlideClient,
+        cluster_mode: bool,
     ):
         """
         Test replacing the connection password for an ACL user without immediate re-authentication.
@@ -557,16 +560,40 @@ class TestAuthCommands:
             management_client, USERNAME, NEW_PASSWORD
         )
 
-        # Sleep to allow enough time for reconnecting
-        await anyio.sleep(2)
+        async def _reconnected() -> bool:
+            try:
+                return await acl_glide_client.get("test_key") == b"test_value"
+            except Exception:
+                return False
 
-        # The client should now reconnect with the new password automatically
-        # Verify that the client is still able to perform operations
+        reconnect_timeout = (
+            _CLUSTER_RECONNECT_TIMEOUT_SEC
+            if cluster_mode
+            else _STANDALONE_RECONNECT_TIMEOUT_SEC
+        )
+        await wait_for(
+            _reconnected,
+            "Client did not reconnect with the new password",
+            timeout=reconnect_timeout,
+        )
         value = await acl_glide_client.get("test_key")
         assert value == b"test_value"
 
-        await acl_glide_client.update_connection_password(
-            NEW_PASSWORD, immediate_auth=True
+        async def _immediate_auth_after_reconnect() -> bool:
+            try:
+                return (
+                    await acl_glide_client.update_connection_password(
+                        NEW_PASSWORD, immediate_auth=True
+                    )
+                    == OK
+                )
+            except Exception:
+                return False
+
+        await wait_for(
+            _immediate_auth_after_reconnect,
+            "Client did not accept immediate-auth after reconnect",
+            timeout=reconnect_timeout,
         )
 
         assert await acl_glide_client.set("new_key", "new_value") == OK
@@ -591,9 +618,6 @@ class TestAuthCommands:
         await set_new_acl_username_with_password(
             management_client, USERNAME, NEW_PASSWORD
         )
-
-        # Sleep to allow enough time for reconnecting
-        await anyio.sleep(2)
 
         # This command right after disconnection requires the acl_glide_client to have a request timeout of 2000 ms
         # for full matrix tests to pass (otherwise failing on linux-aarch64 architecture).

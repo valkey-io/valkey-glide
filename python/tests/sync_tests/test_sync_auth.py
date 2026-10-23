@@ -523,7 +523,10 @@ class TestSyncAuthCommands:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     def test_sync_update_connection_password_with_acl_user(
-        self, acl_glide_sync_client: TGlideClient, management_sync_client: TGlideClient
+        self,
+        acl_glide_sync_client: TGlideClient,
+        management_sync_client: TGlideClient,
+        cluster_mode: bool,
     ):
         """
         Test replacing the connection password for an ACL user without immediate re-authentication.
@@ -551,16 +554,40 @@ class TestSyncAuthCommands:
             management_sync_client, USERNAME, NEW_PASSWORD
         )
 
-        # Sleep to allow enough time for reconnecting
-        time.sleep(2)
+        def _reconnected() -> bool:
+            try:
+                return acl_glide_sync_client.get("test_key") == b"test_value"
+            except Exception:
+                return False
 
-        # The client should now reconnect with the new password automatically
-        # Verify that the client is still able to perform operations
+        reconnect_timeout = (
+            _CLUSTER_RECONNECT_TIMEOUT_SEC
+            if cluster_mode
+            else _STANDALONE_RECONNECT_TIMEOUT_SEC
+        )
+        sync_wait_for(
+            _reconnected,
+            "Client did not reconnect with the new password",
+            timeout=reconnect_timeout,
+        )
         value = acl_glide_sync_client.get("test_key")
         assert value == b"test_value"
 
-        acl_glide_sync_client.update_connection_password(
-            NEW_PASSWORD, immediate_auth=True
+        def _immediate_auth_after_reconnect() -> bool:
+            try:
+                return (
+                    acl_glide_sync_client.update_connection_password(
+                        NEW_PASSWORD, immediate_auth=True
+                    )
+                    == OK
+                )
+            except Exception:
+                return False
+
+        sync_wait_for(
+            _immediate_auth_after_reconnect,
+            "Client did not accept immediate-auth after reconnect",
+            timeout=reconnect_timeout,
         )
 
         assert acl_glide_sync_client.set("new_key", "new_value") == OK
@@ -585,9 +612,6 @@ class TestSyncAuthCommands:
         set_new_acl_username_with_password(
             management_sync_client, USERNAME, NEW_PASSWORD
         )
-
-        # Sleep to allow enough time for reconnecting
-        time.sleep(2)
 
         # This command right after disconnection requires the acl_glide_sync_client to have a request timeout of 2000 ms
         # for full matrix tests to pass (otherwise failing on linux-aarch64 architecture).
