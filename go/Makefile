@@ -105,7 +105,7 @@ libglide_ffi:
 	mkdir -p $(DEST_PATH)
 	cd $(GLIDE_FFI_PATH) && \
 	$(CARGO_FIX_CMD) && \
-    GLIDE_NAME=$(GLIDE_NAME) GLIDE_VERSION=$(GLIDE_VERSION) cargo $(BUILD_CMD) $(BUILD_FLAGS) && \
+    GLIDE_NAME=$(GLIDE_NAME) GLIDE_VERSION=$(GLIDE_VERSION) cargo $(BUILD_CMD) --locked $(BUILD_FLAGS) && \
 	$(CARGO_POSTFIX_CMD) && \
 	$(STRIP_CMD) $(TARGET_DIR)/libglide_ffi.a && \
 	cp $(TARGET_DIR)/libglide_ffi.a $(GO_DIR)/$(DEST_PATH)

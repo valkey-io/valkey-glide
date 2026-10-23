@@ -73,7 +73,7 @@ VENDORED_DEPENDENCIES = {
     ),
 }
 
-# Rust source for the _fast_response PyO3 extension (only Cargo.toml + src/)
+# Rust source for the _fast_response PyO3 extension
 GLIDE_SHARED_RS_SOURCE = ROOT.parent / "glide-shared"
 GLIDE_SHARED_RS_DIST = ROOT / "glide-shared-rs"
 
