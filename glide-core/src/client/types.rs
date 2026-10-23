@@ -16,7 +16,7 @@ use crate::compression::CompressionConfig;
 use crate::connection_request as protobuf;
 use crate::iam::CredentialsProvider;
 use crate::iam::ServiceType;
-use crate::rdma::RdmaSetting;
+use crate::rdma::{IncompatibleSetting, RdmaSetting};
 #[cfg(feature = "proto")]
 #[allow(unused_imports)]
 use ::protobuf::EnumOrUnknown;
@@ -79,9 +79,11 @@ impl ConnectionRequest {
             .unwrap_or(DEFAULT_CONNECTION_TIMEOUT)
     }
 
-    /// Why a setting of this request cannot be combined with RDMA, or `None` when
-    /// RDMA was not requested or nothing conflicts with it.
-    pub(crate) fn rdma_conflict(&self) -> Option<&'static str> {
+    /// The setting of this request that cannot be combined with RDMA, if any.
+    ///
+    /// - `None` when RDMA was not requested.
+    /// - `None` when RDMA was requested and no other setting conflicts with it.
+    pub(crate) fn rdma_conflict(&self) -> Option<IncompatibleSetting> {
         if !self.rdma.is_requested() {
             return None;
         }
@@ -90,28 +92,17 @@ impl ConnectionRequest {
             .as_ref()
             .is_some_and(|compression| compression.enabled)
         {
-            return Some(
-                "RDMA and compression cannot be enabled on the same client: an RDMA \
-                 read transfers stored bytes directly and does not decompress them. \
-                 Use separate clients, one per feature.",
-            );
+            return Some(IncompatibleSetting::Compression);
         }
         if self.lazy_connect {
-            return Some("RDMA is not yet supported with lazy_connect.");
+            return Some(IncompatibleSetting::LazyConnect);
         }
         if self.read_only {
-            return Some(
-                "RDMA cannot be combined with read-only mode: the transfer commands \
-                 are not recognised as readonly commands, so a read-only client \
-                 rejects them. RDMA transfers run against the primary.",
-            );
+            return Some(IncompatibleSetting::ReadOnly);
         }
         // `Static` discovery exists mainly for clients that connect through a proxy.
         if self.node_discovery_mode == NodeDiscoveryMode::Static {
-            return Some(
-                "RDMA cannot be combined with static node discovery, which is meant \
-                 for proxies.",
-            );
+            return Some(IncompatibleSetting::StaticDiscovery);
         }
         None
     }

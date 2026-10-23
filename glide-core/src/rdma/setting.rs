@@ -87,10 +87,47 @@ pub enum RdmaUnavailable {
         node: String,
     },
 
+    /// Another setting of the same request cannot be used together with RDMA.
+    #[error("RDMA cannot be combined with {0}")]
+    IncompatibleSetting(IncompatibleSetting),
+
     /// The fabric refused the configuration.
     #[cfg(feature = "rdma")]
     #[error("{0}")]
     Fabric(#[from] glide_rdma::RdmaError),
+}
+
+/// A connection setting that cannot be used on the same client as RDMA.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum IncompatibleSetting {
+    /// Compression is enabled.
+    Compression,
+    /// `lazy_connect` is set.
+    LazyConnect,
+    /// The client is in read-only mode.
+    ReadOnly,
+    /// Nodes are found by static discovery.
+    StaticDiscovery,
+}
+
+impl std::fmt::Display for IncompatibleSetting {
+    /// Names the setting and says why it conflicts, to follow
+    /// "RDMA cannot be combined with ".
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::Compression => {
+                "compression: an RDMA read transfers stored bytes directly and does \
+                 not decompress them. Use separate clients, one per feature."
+            }
+            Self::LazyConnect => "lazy_connect yet.",
+            Self::ReadOnly => {
+                "read-only mode: the transfer commands are not recognised as readonly \
+                 commands, so a read-only client rejects them. RDMA transfers run \
+                 against the primary."
+            }
+            Self::StaticDiscovery => "static node discovery, which is meant for proxies.",
+        })
+    }
 }
 
 impl RdmaSetting {
@@ -127,5 +164,24 @@ mod tests {
     #[test]
     fn an_absent_setting_logs_nothing() {
         assert_eq!(RdmaSetting::Absent.log_summary(), "");
+    }
+
+    #[test]
+    fn each_incompatible_setting_is_named_in_its_error() {
+        for (setting, name) in [
+            (IncompatibleSetting::Compression, "compression"),
+            (IncompatibleSetting::LazyConnect, "lazy_connect"),
+            (IncompatibleSetting::ReadOnly, "read-only"),
+            (
+                IncompatibleSetting::StaticDiscovery,
+                "static node discovery",
+            ),
+        ] {
+            let message = RdmaUnavailable::IncompatibleSetting(setting).to_string();
+            assert!(
+                message.starts_with(&format!("RDMA cannot be combined with {name}")),
+                "{message}"
+            );
+        }
     }
 }

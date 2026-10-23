@@ -3011,7 +3011,7 @@ impl Client {
         }
 
         if let Some(conflict) = request.rdma_conflict() {
-            return Err(ConnectionError::Configuration(conflict.to_string()));
+            return Err(crate::rdma::RdmaUnavailable::IncompatibleSetting(conflict).into());
         }
 
         // Open the fabric before connecting, or fail fast with the root cause.
@@ -3813,7 +3813,7 @@ mod tests {
     #[tokio::test]
     async fn test_new_rejects_rdma_combined_with_compression() {
         use crate::compression::{CompressionBackendType, CompressionConfig};
-        use crate::rdma::{RdmaSetting, RdmaUnavailable};
+        use crate::rdma::{IncompatibleSetting, RdmaSetting, RdmaUnavailable};
 
         let request = ConnectionRequest {
             addresses: vec![NodeAddress {
@@ -3832,14 +3832,13 @@ mod tests {
         };
 
         assert!(
-            matches!(error, ConnectionError::Configuration(_)),
+            matches!(
+                error,
+                ConnectionError::Rdma(RdmaUnavailable::IncompatibleSetting(
+                    IncompatibleSetting::Compression
+                ))
+            ),
             "{error:?}"
-        );
-        let message = error.to_string();
-        assert!(message.contains("compression"), "{message}");
-        assert!(
-            !message.contains("no RDMA support compiled in"),
-            "the conflict must be reported, not RDMA availability: {message}"
         );
     }
 
@@ -3856,7 +3855,6 @@ mod tests {
                 host: "127.0.0.1".to_string(),
                 port: 1,
             }],
-            lazy_connect: true,
             rdma: RdmaSetting::Rejected(RdmaUnavailable::NotCompiledIn),
             compression_config: Some(compression),
             ..Default::default()
@@ -3868,14 +3866,14 @@ mod tests {
         };
 
         assert!(
-            !error.to_string().contains("compression"),
-            "disabled compression must not be reported as a conflict: {error}"
+            matches!(error, ConnectionError::Rdma(RdmaUnavailable::NotCompiledIn)),
+            "disabled compression must not be reported as a conflict: {error:?}"
         );
     }
 
     #[tokio::test]
     async fn test_new_rejects_rdma_combined_with_lazy_connect() {
-        use crate::rdma::{RdmaSetting, RdmaUnavailable};
+        use crate::rdma::{IncompatibleSetting, RdmaSetting, RdmaUnavailable};
 
         let request = ConnectionRequest {
             addresses: vec![NodeAddress {
@@ -3893,15 +3891,19 @@ mod tests {
         };
 
         assert!(
-            matches!(error, ConnectionError::Configuration(_)),
+            matches!(
+                error,
+                ConnectionError::Rdma(RdmaUnavailable::IncompatibleSetting(
+                    IncompatibleSetting::LazyConnect
+                ))
+            ),
             "{error:?}"
         );
-        assert!(error.to_string().contains("lazy_connect"), "{error}");
     }
 
     #[tokio::test]
     async fn test_new_rejects_rdma_combined_with_static_node_discovery() {
-        use crate::rdma::{RdmaSetting, RdmaUnavailable};
+        use crate::rdma::{IncompatibleSetting, RdmaSetting, RdmaUnavailable};
 
         let request = ConnectionRequest {
             addresses: vec![NodeAddress {
@@ -3919,19 +3921,19 @@ mod tests {
         };
 
         assert!(
-            matches!(error, ConnectionError::Configuration(_)),
+            matches!(
+                error,
+                ConnectionError::Rdma(RdmaUnavailable::IncompatibleSetting(
+                    IncompatibleSetting::StaticDiscovery
+                ))
+            ),
             "{error:?}"
-        );
-        let message = error.to_string();
-        assert!(
-            message.contains("static node discovery") && message.contains("proxies"),
-            "the message must name the conflict and why it matters: {message}"
         );
     }
 
     #[tokio::test]
     async fn test_new_rejects_rdma_combined_with_read_only() {
-        use crate::rdma::{RdmaSetting, RdmaUnavailable};
+        use crate::rdma::{IncompatibleSetting, RdmaSetting, RdmaUnavailable};
 
         let request = ConnectionRequest {
             addresses: vec![NodeAddress {
@@ -3950,14 +3952,13 @@ mod tests {
         };
 
         assert!(
-            matches!(error, ConnectionError::Configuration(_)),
+            matches!(
+                error,
+                ConnectionError::Rdma(RdmaUnavailable::IncompatibleSetting(
+                    IncompatibleSetting::ReadOnly
+                ))
+            ),
             "{error:?}"
-        );
-        let message = error.to_string();
-        assert!(message.contains("read-only"), "{message}");
-        assert!(
-            !message.contains("no RDMA support compiled in"),
-            "the conflict must be reported, not RDMA availability: {message}"
         );
     }
 

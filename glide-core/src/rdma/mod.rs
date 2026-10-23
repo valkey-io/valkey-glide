@@ -34,7 +34,7 @@ pub(crate) use handshake::{
 };
 #[cfg(feature = "rdma")]
 pub(crate) use regions::{CancelCause, Regions, cancellation, cancelled_if};
-pub use setting::{RdmaSetting, RdmaUnavailable};
+pub use setting::{IncompatibleSetting, RdmaSetting, RdmaUnavailable};
 
 #[cfg(feature = "rdma")]
 pub use glide_rdma::{FabricConfig, Provider};
