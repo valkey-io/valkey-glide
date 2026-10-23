@@ -1055,9 +1055,7 @@ describe("GlideFt", () => {
                         }
                     });
 
-                    it.each<
-                        [string, FtHybridOptions["combine"], string]
-                    >([
+                    it.each<[string, FtHybridOptions["combine"], string]>([
                         [
                             "LINEAR-text-only",
                             { method: "LINEAR", alpha: 1.0, beta: 0.0 },
