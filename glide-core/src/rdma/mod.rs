@@ -33,7 +33,7 @@ pub(crate) use handshake::{
     session_not_opened,
 };
 #[cfg(feature = "rdma")]
-pub(crate) use regions::{Regions, cancellation, cancelled_if_revoked};
+pub(crate) use regions::{CancelCause, Regions, cancellation, cancelled_if};
 pub use setting::{RdmaSetting, RdmaUnavailable};
 
 #[cfg(feature = "rdma")]

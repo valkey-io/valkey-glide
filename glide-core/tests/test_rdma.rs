@@ -570,6 +570,11 @@ mod dma_tests {
             cancelled.to_string().contains("RDMA transfer cancelled"),
             "{cancelled}"
         );
+        // Closing also revoked the region, but the close is what gets named.
+        assert!(
+            cancelled.to_string().contains("the client was closed"),
+            "{cancelled}"
+        );
     }
 
     /// The handshake has no timeout either, so a node that never answers it keeps

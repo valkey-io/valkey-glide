@@ -411,10 +411,9 @@ impl Client {
             Some(Err(error)) => {
                 // Decided before the error is rewritten as a cancellation below.
                 let server_is_done = crate::rdma::server_is_done_with(&error);
-                let client_closed = self.rdma_wait_if_closing().await;
-                let error =
-                    crate::rdma::cancelled_if_revoked(Err(error), loan.is_revoked(), client_closed)
-                        .expect_err("an error stays an error");
+                let cause = self.rdma_cancel_cause(&loan).await;
+                let error = crate::rdma::cancelled_if(Err(error), cause)
+                    .expect_err("an error stays an error");
                 if server_is_done {
                     reclaim_rdma_loan(loan, Err(error))
                 } else {
@@ -422,7 +421,11 @@ impl Client {
                 }
             }
             None => {
-                let error = self.rdma_cancellation();
+                // The revoke fired, so something cancelled the transfer.
+                let cause = self.rdma_cancel_cause(&loan).await;
+                let error = crate::rdma::cancellation(
+                    cause.unwrap_or(crate::rdma::CancelCause::RegionRevoked),
+                );
                 recall_rdma_loan(loan, error)
             }
         }
@@ -454,18 +457,29 @@ impl Client {
         DispatchPermit::take(self).await
     }
 
-    /// Whether the client is closing, and if so, once the close has tried every
-    /// region, so a failed transfer can tell whether it was cancelled.
-    async fn rdma_wait_if_closing(&self) -> bool {
+    /// What cancelled the transfer that lent `loan`, if anything.
+    ///
+    /// A closing client wins over a revoked region, since closing is what revoked
+    /// it. While the client is closing, this waits until the close has tried every
+    /// region.
+    fn rdma_cancel_cause(
+        &self,
+        loan: &glide_rdma::LentBuffer,
+    ) -> impl std::future::Future<Output = Option<crate::rdma::CancelCause>> + '_ {
+        // Both are read before the wait: a `LentBuffer` is not `Sync`, so holding
+        // `loan` across an `.await` would stop the transfer's future being `Send`.
         let client_closed = self.rdma_regions.is_closed();
-        if client_closed {
-            self.rdma_regions.close_finished().await;
+        let region_revoked = loan.is_revoked();
+        async move {
+            if client_closed {
+                self.rdma_regions.close_finished().await;
+                Some(crate::rdma::CancelCause::ClientClosed)
+            } else if region_revoked {
+                Some(crate::rdma::CancelCause::RegionRevoked)
+            } else {
+                None
+            }
         }
-        client_closed
-    }
-
-    fn rdma_cancellation(&self) -> redis::RedisError {
-        crate::rdma::cancellation(self.rdma_regions.is_closed())
     }
 
     /// Refuse a buffer this client cannot transfer through, naming why.

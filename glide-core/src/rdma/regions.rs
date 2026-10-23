@@ -121,25 +121,42 @@ impl Regions {
     }
 }
 
-/// The error a cancelled transfer returns, naming what cancelled it.
-pub(crate) fn cancellation(client_closed: bool) -> redis::RedisError {
-    protocol::cancelled(if client_closed {
-        "the client was closed"
-    } else {
-        "its region was revoked"
-    })
+/// What cancelled a transfer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum CancelCause {
+    /// The client was closed, which revokes every region.
+    ClientClosed,
+    /// The transfer's own region was revoked.
+    RegionRevoked,
 }
 
-/// Convert a failed transfer reply into a cancelled error, or report a successful
-/// reply if it completed before the region was revoked or the client started closing.
-pub(crate) fn cancelled_if_revoked(
+impl std::fmt::Display for CancelCause {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::ClientClosed => "the client was closed",
+            Self::RegionRevoked => "its region was revoked",
+        })
+    }
+}
+
+/// The error a cancelled transfer returns, naming what cancelled it.
+pub(crate) fn cancellation(cause: CancelCause) -> redis::RedisError {
+    protocol::cancelled(cause.to_string())
+}
+
+/// The reply a transfer reports given what cancelled it, if anything.
+///
+/// - A failed reply with a CancelCause becomes a cancellation error since the
+///   cancel is what made it fail.
+/// - A successful reply is kept since the transfer finished before the cancel.
+/// - With no cause, the reply is kept as it is.
+pub(crate) fn cancelled_if(
     reply: redis::RedisResult<redis::Value>,
-    region_revoked: bool,
-    client_closed: bool,
+    cause: Option<CancelCause>,
 ) -> redis::RedisResult<redis::Value> {
-    match reply {
-        Err(_) if region_revoked || client_closed => Err(cancellation(client_closed)),
-        reply => reply,
+    match (reply, cause) {
+        (Err(_), Some(cause)) => Err(cancellation(cause)),
+        (reply, _) => reply,
     }
 }
 
@@ -224,39 +241,34 @@ mod tests {
 
     #[test]
     fn a_failure_on_a_revoked_region_is_the_cancellation() {
-        let closed = cancelled_if_revoked(failed_rma(), true, true).unwrap_err();
-        assert!(
-            closed.to_string().contains("the client was closed"),
-            "{closed}"
-        );
-        assert_eq!(closed.kind(), redis::ErrorKind::ClientError);
-
-        let revoked = cancelled_if_revoked(failed_rma(), true, false).unwrap_err();
+        let revoked = cancelled_if(failed_rma(), Some(CancelCause::RegionRevoked)).unwrap_err();
         assert!(
             revoked.to_string().contains("region was revoked"),
             "{revoked}"
         );
+        assert_eq!(revoked.kind(), redis::ErrorKind::ClientError);
     }
 
     #[test]
     fn a_failure_while_the_client_closes_is_the_cancellation() {
-        let closing = cancelled_if_revoked(failed_rma(), false, true).unwrap_err();
+        let closing = cancelled_if(failed_rma(), Some(CancelCause::ClientClosed)).unwrap_err();
         assert!(
             closing.to_string().contains("the client was closed"),
             "{closing}"
         );
+        assert_eq!(closing.kind(), redis::ErrorKind::ClientError);
     }
 
     #[test]
-    fn a_failure_on_a_live_region_is_the_servers_own() {
-        let failure = cancelled_if_revoked(failed_rma(), false, false).unwrap_err();
+    fn a_failure_with_nothing_cancelled_is_the_servers_own() {
+        let failure = cancelled_if(failed_rma(), None).unwrap_err();
         assert!(failure.to_string().contains("EFA write"), "{failure}");
     }
 
-    /// The transfer finished before the revoke reached it, so it succeeded.
+    /// The transfer finished before the cancel reached it, so it succeeded.
     #[test]
-    fn a_success_on_a_revoked_region_stays_a_success() {
-        let reply = cancelled_if_revoked(Ok(redis::Value::Int(8)), true, true);
+    fn a_success_on_a_cancelled_transfer_stays_a_success() {
+        let reply = cancelled_if(Ok(redis::Value::Int(8)), Some(CancelCause::ClientClosed));
         assert_eq!(reply.unwrap(), redis::Value::Int(8));
     }
 
