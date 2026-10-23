@@ -374,7 +374,8 @@ impl ClientPool {
 /// This is the shared implementation used by all language bindings (FFI, JNI).
 /// It performs:
 /// 1. Takes the client out of `in_use`
-/// 2. Sends DISCARD + SELECT (batched reset) with a timeout of 2× request_timeout
+/// 2. Resets dirtied connection state (`reset_connection_state`) with a timeout
+///    of 2× request_timeout
 /// 3. Returns the client to idle on success, or discards it on failure
 /// 4. A `LeakGuard` ensures `discard_client(client_id)` is called if the future is cancelled
 ///
@@ -426,7 +427,9 @@ pub async fn release_client_async(pool_arc: Arc<TokioMutex<ClientPool>>, client_
         client_id: guard_client_id,
     };
 
-    // Reset state: DISCARD (cancel MULTI/WATCH) + SELECT <configured_db>
+    // Reset only the state the borrow dirtied: DISCARD a still-open MULTI, and
+    // SELECT back to the configured db if the borrow drifted off it. See
+    // `reset_connection_state`.
     let reset_result = tokio::time::timeout(
         timeout_duration,
         entry.client.reset_connection_state(configured_db),
@@ -1920,6 +1923,33 @@ mod client_pool_marking_tests {
         .expect("valid pool config")
     }
 
+    /// `reset_connection_state` must fail (so release discards the connection) when
+    /// DISCARD could not run while a MULTI was open — otherwise the connection is
+    /// reused with a still-open transaction and the next borrower's commands queue
+    /// into it. With no MULTI open, the DISCARD outcome is not load-bearing and is
+    /// ignored. Uses a lazy client to a dead port so DISCARD fails with a connection
+    /// error (not the expected "DISCARD without MULTI"), which must propagate.
+    #[tokio::test]
+    async fn reset_fails_when_discard_fails_with_multi_open() {
+        // No MULTI open: the DISCARD outcome is not load-bearing, so reset succeeds
+        // regardless of the connection error.
+        let mut no_multi = lazy_client().await;
+        assert!(
+            no_multi.reset_connection_state(0).await.is_ok(),
+            "a DISCARD error with no MULTI open must be ignored"
+        );
+
+        // MULTI open + a connection error (not "DISCARD without MULTI") means the
+        // transaction may still be open, so reset must fail and the caller discards
+        // the connection.
+        let mut multi_open = lazy_client().await;
+        multi_open.set_multi_active_for_test(true);
+        assert!(
+            multi_open.reset_connection_state(0).await.is_err(),
+            "a DISCARD failure with MULTI open must propagate so the connection is not reused"
+        );
+    }
+
     /// A client is not pool-managed until it enters the pool, and `add_client` must
     /// mark it at the ownership boundary — this pins the marking that Java and Node's
     /// Rust pool depend on (both reach the pool through `add_client`).
@@ -3366,6 +3396,184 @@ mod scope_pool_tests {
         }
 
         crate::pool::get_client_scope_pools().remove(&client_id);
+    }
+
+    /// A batch `SELECT` must move `current_database()` when the server applies it,
+    /// and must NOT move it when the server rejects it — the pool-release drift
+    /// check reads `current_database`, and scope connections handshake into it, so a
+    /// poisoned value breaks later acquires. Pins both the store-on-applied wiring in
+    /// `send_pipeline` and the reply-validation (`batch_reply_applied`) that rejects
+    /// an out-of-range SELECT returned inside an Ok array. Uses a real standalone
+    /// server (db 4 valid, db 99 out of range); the companion unit test covers the
+    /// dispatch-failure direction.
+    #[tokio::test]
+    async fn batch_select_moves_current_database_after_successful_dispatch() {
+        let server = TestServer::start();
+        wait_for_server_ready(server.port).await;
+
+        let mut client = {
+            let mut request = crate::client::ConnectionRequest::default();
+            request.addresses.push(crate::client::NodeAddress {
+                host: "127.0.0.1".into(),
+                port: server.port,
+                unix_socket_path: None,
+            });
+            crate::client::Client::new(request, None)
+                .await
+                .expect("client connects to the test server")
+        };
+        assert_eq!(client.current_database(), 0, "starts on db 0");
+
+        // Drift via a pipeline (non-atomic batch) rather than a bare SELECT.
+        let mut pipe = redis::pipe();
+        pipe.cmd("SELECT").arg(4).cmd("PING");
+        client
+            .send_pipeline(&pipe, None, false, None, Default::default())
+            .await
+            .expect("pipeline with SELECT 4 dispatches on a standalone server");
+        assert_eq!(
+            client.current_database(),
+            4,
+            "a successful batch SELECT must move current_database so release sees the drift"
+        );
+
+        // Drift back to db 0 via a second pipeline, confirming the tracking follows
+        // the last SELECT rather than latching the first.
+        let mut back = redis::pipe();
+        back.cmd("SELECT").arg(0).cmd("PING");
+        client
+            .send_pipeline(&back, None, false, None, Default::default())
+            .await
+            .expect("pipeline with SELECT 0 dispatches");
+        assert_eq!(client.current_database(), 0, "the last batch SELECT wins");
+
+        // A rejected SELECT must NOT move current_database: with raise_on_error=false
+        // an out-of-range `SELECT 99` comes back as a ServerError *inside* an Ok array,
+        // so the outer Result is Ok but the db was never applied. Storing it would
+        // poison every later scope acquire (they handshake SELECT <current_database>).
+        let mut bad = redis::pipe();
+        bad.cmd("SELECT").arg(99).cmd("PING");
+        let _ = client
+            .send_pipeline(&bad, None, false, None, Default::default())
+            .await;
+        assert_eq!(
+            client.current_database(),
+            0,
+            "a rejected SELECT reply must not move current_database"
+        );
+
+        // A SELECT merely *queued* inside a raw MULTI (no EXEC) replies QUEUED, not
+        // OK — the db never changed, so it must not move current_database either.
+        let mut queued = redis::pipe();
+        queued.cmd("MULTI").cmd("SELECT").arg(5);
+        let _ = client
+            .send_pipeline(&queued, None, false, None, Default::default())
+            .await;
+        assert_eq!(
+            client.current_database(),
+            0,
+            "a QUEUED (un-executed) SELECT must not move current_database"
+        );
+        // Close the dangling transaction so the connection is clean for drop.
+        let _ = client.send_command(&mut redis::cmd("DISCARD"), None).await;
+    }
+
+    /// `reset_connection_state` must restore the configured db when a SELECT may
+    /// have landed untracked — not only when `current_database` shows drift. An
+    /// earlier batch SELECT that the server applied, followed by a rejected one,
+    /// leaves the connection on the new db while `current_database` still reads the
+    /// configured value; the `db_maybe_dirty` flag is what makes release fail safe
+    /// here. A-B: without the flag (drift-only check) this leaks the wrong db.
+    #[tokio::test]
+    async fn release_restores_db_when_current_database_underreports() {
+        use redis::FromRedisValue as _;
+        let server = TestServer::start();
+        wait_for_server_ready(server.port).await;
+
+        let mut client = {
+            let mut request = crate::client::ConnectionRequest::default();
+            request.addresses.push(crate::client::NodeAddress {
+                host: "127.0.0.1".into(),
+                port: server.port,
+                unix_socket_path: None,
+            });
+            crate::client::Client::new(request, None)
+                .await
+                .expect("client connects to the test server")
+        };
+
+        // SELECT 3 applies; SELECT 99 is rejected. `last_select_db` sees only the
+        // last (99 → ServerError → not recorded), so current_database stays 0 while
+        // the connection is really on db 3.
+        let mut pipe = redis::pipe();
+        pipe.cmd("SELECT").arg(3).cmd("SELECT").arg(99);
+        let _ = client
+            .send_pipeline(&pipe, None, false, None, Default::default())
+            .await;
+        assert_eq!(
+            client.current_database(),
+            0,
+            "current_database under-reports: it still reads the configured db"
+        );
+
+        // Confirm the connection really drifted to db 3.
+        let info_before = client
+            .send_command(redis::cmd("CLIENT").arg("INFO"), None)
+            .await
+            .expect("CLIENT INFO");
+        let info_before = String::from_redis_value(&info_before).unwrap_or_default();
+        assert!(
+            info_before.contains(" db=3"),
+            "connection should be on db 3 after the applied SELECT, got: {info_before}"
+        );
+
+        // Release reset must restore db 0 despite no tracked drift, driven by the
+        // db_maybe_dirty flag.
+        client
+            .reset_connection_state(0)
+            .await
+            .expect("reset restores the configured db");
+        let info_after = client
+            .send_command(redis::cmd("CLIENT").arg("INFO"), None)
+            .await
+            .expect("CLIENT INFO");
+        let info_after = String::from_redis_value(&info_after).unwrap_or_default();
+        assert!(
+            info_after.contains(" db=0"),
+            "reset must restore db 0 even though current_database showed no drift, got: {info_after}"
+        );
+    }
+
+    /// A "DISCARD without MULTI" reply must be tolerated even with `multi_active`
+    /// set — the cluster case, where a successful AllNodes DISCARD still aggregates
+    /// to that error (see `reset_connection_state`). A standalone server with no
+    /// MULTI open stands in for the reply. A-B validated: the old `is_err()` gate
+    /// discarded the connection here.
+    #[tokio::test]
+    async fn reset_ignores_discard_without_multi_even_when_multi_flag_set() {
+        let server = TestServer::start();
+        wait_for_server_ready(server.port).await;
+
+        let mut client = {
+            let mut request = crate::client::ConnectionRequest::default();
+            request.addresses.push(crate::client::NodeAddress {
+                host: "127.0.0.1".into(),
+                port: server.port,
+                unix_socket_path: None,
+            });
+            crate::client::Client::new(request, None)
+                .await
+                .expect("client connects to the test server")
+        };
+
+        // The tracker believes a MULTI is open, but the connection has none, so the
+        // server's DISCARD replies "DISCARD without MULTI" — the expected, ignorable
+        // error. Reset must still succeed (connection is clean, reusable).
+        client.set_multi_active_for_test(true);
+        client
+            .reset_connection_state(0)
+            .await
+            .expect("a DISCARD-without-MULTI reply must be ignored, not propagated");
     }
 
     /// End-to-end through the FFI entry `acquire_scope_outcome`, exercising the glue the

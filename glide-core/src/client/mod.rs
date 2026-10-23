@@ -497,6 +497,13 @@ pub struct ClientShared {
     // Tracks the current database selected at runtime (updated on SELECT commands).
     // Used by scope connections to inherit the parent's current database.
     current_database: Arc<AtomicU32>,
+    // Set before dispatching any SELECT-bearing command (single or batch); cleared
+    // only by a successful release reset. `current_database` can under-report the
+    // live db — a SELECT can apply on the connection even when the call errors or
+    // times out, or when an earlier batch SELECT applied but a later one was
+    // rejected. The flag makes `reset_connection_state` fail safe: restore whenever
+    // a SELECT may have been issued, not only on observed drift.
+    db_maybe_dirty: Arc<AtomicBool>,
     // IAM token generation the live connection last authenticated at. Compared by
     // `prepare_for_borrow` on the first command after a borrow to detect a rotation
     // that landed while the client sat idle in a pool, triggering a re-AUTH before
@@ -754,7 +761,10 @@ impl Client {
     /// Handles cases where command() returns None gracefully.
     /// Note: The underlying redis-rs library normalizes commands to uppercase.
     fn is_select_command(&self, cmd: &Cmd) -> bool {
-        cmd.command().is_some_and(|bytes| bytes == b"SELECT")
+        // arg_idx(0) borrows the command name; cmd.command() would allocate an
+        // uppercased Vec on every call, and this runs on the hot send_command path.
+        cmd.arg_idx(0)
+            .is_some_and(|name| name.eq_ignore_ascii_case(b"SELECT"))
     }
 
     /// Extracts the database ID from a SELECT command.
@@ -1119,6 +1129,9 @@ impl Client {
         //   Turns off NO-EVICT mode                  -> not tracked; per-connection hint
         //   Turns off NO-TOUCH mode                  -> not tracked; per-connection hint
         self.update_stored_database_id(0).await?;
+        // RESET returns the connection to db 0; keep the drift signal the pool
+        // release check reads (`current_database`) in sync, not just the resync db.
+        self.shared.current_database.store(0, Ordering::Release);
         self.update_stored_client_name(None).await?;
         self.update_stored_protocol(redis::ProtocolVersion::RESP2)
             .await?;
@@ -1327,6 +1340,10 @@ impl Client {
             self.reconcile_iam_before_dispatch().await?;
             // Track MULTI/EXEC/DISCARD for the borrow-time re-AUTH defer.
             self.track_transaction_state(cmd);
+            // Flag a possible db change before dispatch (see `db_maybe_dirty`).
+            if self.is_select_command(cmd) {
+                self.shared.db_maybe_dirty.store(true, Ordering::Release);
+            }
             self.send_command_ungated(cmd, routing).await
         })
     }
@@ -2010,8 +2027,15 @@ impl Client {
     ) -> redis::RedisFuture<'a, Value> {
         Box::pin(async move {
             self.reconcile_iam_before_dispatch().await?;
+            // Capture the batch's last SELECT now; apply it after dispatch if the
+            // reply shows the server took it, and flag a possible db change (see
+            // `db_maybe_dirty`). No MULTI tracking here: redis-rs brackets MULTI/EXEC
+            // at pack time and it always closes.
+            let drifted_db = self.last_select_db(pipeline);
+            if drifted_db.is_some() {
+                self.shared.db_maybe_dirty.store(true, Ordering::Release);
+            }
             let client = self.get_or_initialize_client().await?;
-
             let command_count = pipeline.cmd_iter().count();
             // The offset is set to command_count + 1 to account for:
             // 1. The first command, which is the "MULTI" command, that returns "OK"
@@ -2020,7 +2044,7 @@ impl Client {
             // which is an array containing the results of all the commands in the pipeline.
             let offset = command_count + 1;
 
-            run_with_timeout(
+            let result = run_with_timeout(
                 Some(to_duration(transaction_timeout, self.request_timeout)),
                 async move {
                     match client {
@@ -2061,7 +2085,15 @@ impl Client {
                     }
                 },
             )
-            .await
+            .await;
+            // Record the drift only if the SELECT reply applied (see
+            // `batch_reply_applied`).
+            if let Some((idx, db)) = drifted_db
+                && Self::batch_reply_applied(&result, idx)
+            {
+                self.apply_batch_select_db(db).await;
+            }
+            result
         })
     }
 
@@ -2088,10 +2120,15 @@ impl Client {
     ) -> redis::RedisFuture<'a, Value> {
         Box::pin(async move {
             self.reconcile_iam_before_dispatch().await?;
-            // Non-atomic: a raw MULTI here stays open on the connection after the
-            // pipeline returns, so the defer in `prepare_for_borrow` must see it.
+            // A raw MULTI stays open after a non-atomic pipeline returns, so track
+            // it pre-dispatch for `prepare_for_borrow`'s defer. The SELECT drift is
+            // applied post-dispatch instead (see the store below).
             for cmd in pipeline.cmd_iter() {
                 self.track_transaction_state(cmd);
+            }
+            let drifted_db = self.last_select_db(pipeline);
+            if drifted_db.is_some() {
+                self.shared.db_maybe_dirty.store(true, Ordering::Release);
             }
             let client = self.get_or_initialize_client().await?;
 
@@ -2103,7 +2140,7 @@ impl Client {
                 )));
             }
 
-            run_with_timeout(
+            let result = run_with_timeout(
                 Some(to_duration(pipeline_timeout, self.request_timeout)),
                 async move {
                     let values = match client {
@@ -2148,7 +2185,15 @@ impl Client {
                     )
                 },
             )
-            .await
+            .await;
+            // Record the drift only if the SELECT reply applied (see
+            // `batch_reply_applied`).
+            if let Some((idx, db)) = drifted_db
+                && Self::batch_reply_applied(&result, idx)
+            {
+                self.apply_batch_select_db(db).await;
+            }
+            result
         })
     }
 
@@ -3176,6 +3221,7 @@ impl Client {
                         ))
                     }),
                     current_database: Arc::new(AtomicU32::new(request.database_id as u32)),
+                    db_maybe_dirty: Arc::new(AtomicBool::new(false)),
                     last_iam_generation: Arc::new(AtomicU64::new(0)),
                     is_pool_managed: Arc::new(AtomicBool::new(false)),
                     iam_reconcile_lock: Arc::new(tokio::sync::Mutex::new(())),
@@ -3328,6 +3374,11 @@ impl Client {
         let _ = self.cert_material.set(material);
     }
 
+    #[cfg(test)]
+    pub(crate) fn set_multi_active_for_test(&self, active: bool) {
+        self.multi_active.store(active, Ordering::Release);
+    }
+
     /// The configured custom address resolver, if any. Applied to a standalone
     /// scope's seed; see `scope::build_scope_connection_addr` for the cluster case.
     pub(crate) fn address_resolver(&self) -> Option<Arc<dyn AddressResolver>> {
@@ -3346,29 +3397,74 @@ impl Client {
 
     /// Reset connection state to a clean baseline after a pool borrow is returned.
     ///
-    /// Sends a batched pipeline (single round-trip) that selectively issues:
-    /// - DISCARD — cancels any pending MULTI and implicitly UNWATCHes
-    /// - SELECT <configured_db> — resets to the pool's configured database
+    /// - DISCARD — always sent (not gated on the intent-tracked `multi_active`,
+    ///   which can desync under concurrent use), to `AllNodes` on cluster. A
+    ///   "DISCARD without MULTI" reply is expected and ignored; any other failure,
+    ///   when a MULTI *was* open, is propagated so release discards the connection
+    ///   rather than reuse it with queued commands. See the error-classification
+    ///   note at the call site for why cluster forces matching by message.
+    /// - SELECT <configured_db> — sent only when the database drifted
+    ///   (`current_database() != configured_db`) or a SELECT may have applied
+    ///   untracked during the borrow (`db_maybe_dirty`); a borrow that never sent
+    ///   SELECT skips the round-trip. This is the fix for the cluster discard bug: a
+    ///   clean db-0 pool no longer sends a `SELECT` the cluster server rejects.
+    ///   Topology-independent — cluster supports multiple databases since Valkey 9.0
+    ///   (`cluster-databases`), so a drift must be undone there too.
     ///
-    /// DISCARD is always safe to send (returns ERR if no MULTI active — we ignore it).
-    /// SELECT is always sent to guarantee the connection is on the correct database.
-    ///
-    /// This ensures the next borrower gets a connection in a known-good state.
-    ///
-    /// Does not send UNSUBSCRIBE, so a borrower that subscribed leaves the
-    /// connection in push-message mode for whoever gets it next. Callers must not
-    /// subscribe on a pooled client; use the parent client's pub/sub API, which
-    /// keeps its own dedicated connections.
+    /// Does not UNSUBSCRIBE: callers must not subscribe on a pooled client (use the
+    /// parent client's pub/sub API, which keeps dedicated connections).
     pub async fn reset_connection_state(&mut self, configured_db: u32) -> RedisResult<()> {
-        // Send DISCARD — ignore ERR if no MULTI is active
-        let _ = self.send_command(&mut redis::cmd("DISCARD"), None).await;
+        // Capture multi_active before dispatch: send_command's track_transaction_state
+        // clears it on seeing DISCARD.
+        let multi_was_open = self.multi_active.load(Ordering::Acquire);
+        let discard_routing = self.is_cluster_mode().then_some(RoutingInfo::MultiNode((
+            MultipleNodeRoutingInfo::AllNodes,
+            None,
+        )));
+        let discard_result = self
+            .send_command(&mut redis::cmd("DISCARD"), discard_routing)
+            .await;
+        // Classify the DISCARD outcome by message, not `is_err()`. "DISCARD without
+        // MULTI" (no transaction open) is expected and ignored. On cluster it is
+        // unavoidable even on success: DISCARD fans out to AllNodes but a borrow's
+        // MULTI lives on one node, so the others answer "DISCARD without MULTI" and
+        // the `None`-policy aggregate surfaces that as an Err. Any other failure
+        // (circuit breaker, dead connection, timeout), when a MULTI *was* open, is
+        // propagated so release discards the connection instead of reusing it with
+        // queued commands. A real owner-node failure cannot be masked by a sibling's
+        // no-MULTI error: transport failures short-circuit aggregation before the
+        // per-node reply loop, and an owner node with an open MULTI has no DISCARD
+        // error path (it returns +OK).
+        if multi_was_open
+            && let Err(e) = &discard_result
+            && !Self::is_discard_without_multi(e)
+        {
+            return discard_result.map(|_| ());
+        }
 
-        // Send SELECT — this must succeed
-        let mut select_cmd = redis::cmd("SELECT");
-        select_cmd.arg(configured_db.to_string());
-        self.send_command(&mut select_cmd, None).await?;
+        // `None` routing is intentional: SELECT is an AllNodes command, so it fans
+        // out to every node without spelling it out like DISCARD above. Restore on
+        // tracked drift OR a possible untracked SELECT (see `db_maybe_dirty`).
+        if self.current_database() != configured_db
+            || self.shared.db_maybe_dirty.load(Ordering::Acquire)
+        {
+            let mut select_cmd = redis::cmd("SELECT");
+            select_cmd.arg(configured_db.to_string());
+            self.send_command(&mut select_cmd, None).await?;
+        }
+        // Cleared only after a successful reset: the connection is now on the
+        // configured db.
+        self.shared.db_maybe_dirty.store(false, Ordering::Release);
 
         Ok(())
+    }
+
+    /// True when `e` is the server's "DISCARD without MULTI" reply (no transaction
+    /// open) — the one DISCARD error `reset_connection_state` tolerates.
+    fn is_discard_without_multi(e: &RedisError) -> bool {
+        e.detail()
+            .map(|d| d.contains("DISCARD without MULTI"))
+            .unwrap_or(false)
     }
 
     /// Refresh IAM authentication before dispatching a command, transaction, or
@@ -3428,6 +3524,60 @@ impl Client {
             Some(b"EXEC") | Some(b"DISCARD") => self.multi_active.store(false, Ordering::Release),
             _ => {}
         }
+    }
+
+    /// The command index and database id of the last `SELECT` in a batch (or
+    /// `None`). The index is the command's `cmd_iter()` position, which is also its
+    /// reply position in the result array — the caller pairs it with
+    /// [`batch_reply_applied`](Self::batch_reply_applied) to record the drift only
+    /// if the server applied it. A pure read; never mutates db state.
+    ///
+    /// Only `SELECT` is tracked, not `RESET` (which also returns the connection to
+    /// db 0). A batch like `[SELECT 3, RESET]` therefore records db 3 while the live
+    /// connection is on db 0, leaving non-pooled scope/reconnect metadata stale.
+    /// Pooled release is unaffected — `db_maybe_dirty` forces the reset `SELECT`
+    /// regardless — and a `RESET` inside a pooled borrow is an unusual pattern, so
+    /// the narrow non-pooled gap is left as a known limitation rather than tracked.
+    fn last_select_db(&self, pipeline: &redis::Pipeline) -> Option<(usize, u32)> {
+        pipeline
+            .cmd_iter()
+            .enumerate()
+            .filter(|(_, cmd)| self.is_select_command(cmd))
+            .filter_map(|(idx, cmd)| {
+                self.extract_database_id_from_select(cmd)
+                    .ok()
+                    .map(|db| (idx, db as u32))
+            })
+            .last()
+    }
+
+    /// Record a batch `SELECT`'s db, mirroring the single-command
+    /// `handle_select_command` so all three db trackers stay in step: the reconnect
+    /// db (`update_stored_database_id`), the OTel `db_namespace`, and
+    /// `current_database` (read by scope connections).
+    async fn apply_batch_select_db(&mut self, db: u32) {
+        if let Err(e) = self.update_stored_database_id(db as i64).await {
+            log_warn(
+                "apply_batch_select_db",
+                format!("failed to update reconnect database to {db}: {e}"),
+            );
+        }
+        Arc::make_mut(&mut self.otel_metadata).db_namespace = db.to_string();
+        self.shared.current_database.store(db, Ordering::Release);
+    }
+
+    /// Whether the `SELECT` at `idx` in the batch actually executed. An executed
+    /// `SELECT` replies `+OK` (`Value::Okay`); anything else means the db did not
+    /// change: a rejected `SELECT` is a `ServerError` (present in an `Ok` array when
+    /// `raise_on_error=false`), a `SELECT` merely *queued* inside a raw `MULTI` with
+    /// no `EXEC` replies `QUEUED` (`SimpleString`), and a WATCH-aborted `EXEC`
+    /// returns `Nil`. Recording any of these would poison `current_database`
+    /// (authoritative for scope connections, which handshake into it).
+    fn batch_reply_applied(result: &RedisResult<Value>, idx: usize) -> bool {
+        matches!(
+            result,
+            Ok(Value::Array(values)) if matches!(values.get(idx), Some(Value::Okay))
+        )
     }
 
     /// Reconcile per-borrow IAM authentication on the first command after a borrow.
@@ -3623,6 +3773,7 @@ impl Client {
                 latency_tracker: Arc::new(crate::timeout_watchdog::LatencyTracker::new(64)),
                 circuit_breaker: None,
                 current_database: Arc::new(AtomicU32::new(0)),
+                db_maybe_dirty: Arc::new(AtomicBool::new(false)),
                 last_iam_generation: Arc::new(AtomicU64::new(0)),
                 is_pool_managed: Arc::new(AtomicBool::new(false)),
                 iam_reconcile_lock: Arc::new(tokio::sync::Mutex::new(())),
@@ -3696,6 +3847,7 @@ pub fn create_test_glide_client() -> Client {
             latency_tracker: Arc::new(crate::timeout_watchdog::LatencyTracker::new(64)),
             circuit_breaker: None,
             current_database: Arc::new(AtomicU32::new(0)),
+            db_maybe_dirty: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             last_iam_generation: Arc::new(std::sync::atomic::AtomicU64::new(0)),
             is_pool_managed: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             iam_reconcile_lock: Arc::new(tokio::sync::Mutex::new(())),
@@ -4458,6 +4610,7 @@ mod tests {
                 latency_tracker: Arc::new(crate::timeout_watchdog::LatencyTracker::new(64)),
                 circuit_breaker: None,
                 current_database: Arc::new(AtomicU32::new(0)),
+                db_maybe_dirty: Arc::new(AtomicBool::new(false)),
                 last_iam_generation: Arc::new(AtomicU64::new(0)),
                 is_pool_managed: Arc::new(AtomicBool::new(false)),
                 iam_reconcile_lock: Arc::new(tokio::sync::Mutex::new(())),
@@ -4738,6 +4891,82 @@ mod tests {
         assert!(
             !client.shared.multi_active.load(Ordering::Acquire),
             "DISCARD must clear the open-transaction flag"
+        );
+    }
+
+    /// `last_select_db` returns the command index and db of the last `SELECT` in a
+    /// batch (or `None`), as a pure read — it must never touch `current_database`
+    /// (authoritative for scope connections, so it must not move for a SELECT the
+    /// server never applied). The index lets the caller validate the SELECT's reply.
+    #[test]
+    fn last_select_db_extracts_trailing_select() {
+        use std::sync::atomic::Ordering;
+        let client = create_test_client();
+
+        let mut no_select = redis::pipe();
+        no_select.cmd("SET").arg("k").arg("v").cmd("GET").arg("k");
+        assert_eq!(
+            client.last_select_db(&no_select),
+            None,
+            "a batch with no SELECT must report no drift"
+        );
+
+        let mut with_select = redis::pipe();
+        with_select
+            .cmd("SELECT")
+            .arg("3")
+            .cmd("SET")
+            .arg("k")
+            .arg("v")
+            .cmd("SELECT")
+            .arg("7");
+        assert_eq!(
+            client.last_select_db(&with_select),
+            Some((2, 7)),
+            "the last SELECT's db (at command index 2) is the one left on the connection"
+        );
+        assert_eq!(
+            client.shared.current_database.load(Ordering::Acquire),
+            0,
+            "last_select_db must not mutate current_database"
+        );
+    }
+
+    /// A batch SELECT that fails to dispatch must NOT move `current_database` --
+    /// pins the store-on-`Ok` wiring, since a poisoned flag breaks every later
+    /// scope acquire. A non-IAM lazy client reconciles Ok then fails to connect,
+    /// so dispatch returns Err and the tracked db must stay put.
+    #[test]
+    fn failed_batch_select_does_not_move_current_database() {
+        use std::sync::atomic::Ordering;
+        let mut client = create_test_client(); // non-IAM, lazy (no network)
+        let rt = borrow_test_runtime();
+        let strategy = redis::PipelineRetryStrategy::default();
+
+        let mut pipe = redis::pipe();
+        pipe.cmd("SELECT").arg("7").cmd("GET").arg("k");
+        let res = rt.block_on(client.send_pipeline(&pipe, None, false, None, strategy));
+        assert!(
+            res.is_err(),
+            "lazy client has no connection; dispatch fails"
+        );
+        assert_eq!(
+            client.shared.current_database.load(Ordering::Acquire),
+            0,
+            "a SELECT that never dispatched must not poison current_database"
+        );
+
+        let mut txn = redis::pipe();
+        txn.cmd("SELECT").arg("7").cmd("GET").arg("k");
+        let res = rt.block_on(client.send_transaction(&txn, None, None, false));
+        assert!(
+            res.is_err(),
+            "lazy client has no connection; dispatch fails"
+        );
+        assert_eq!(
+            client.shared.current_database.load(Ordering::Acquire),
+            0,
+            "a transaction SELECT that never dispatched must not poison current_database"
         );
     }
 
