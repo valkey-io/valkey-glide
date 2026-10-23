@@ -980,9 +980,8 @@ impl Client {
             .then_some(&self.credentials)
     }
 
-    /// Mirror the credentials a successful `AUTH`/`HELLO` carried, as one write.
-    /// Both fields are set: an `AUTH` with no username authenticated the default
-    /// user, so a previously stored username must not survive it.
+    /// Mirror the credentials a successful `AUTH`/`HELLO` carried, as one write
+    /// that sets both fields.
     fn record_credentials(&self, username: Option<String>, password: Option<String>) {
         if password.is_none() {
             return;
