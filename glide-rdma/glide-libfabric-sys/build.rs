@@ -166,12 +166,6 @@ fn main() {
     // TODO: https://github.com/rust-lang/rust-bindgen/discussions/2405
     let mut builder = cc::Build::new();
     builder.file(format!("{}/wrapper.c", manifest_dir.display()));
-    // DIVERGENCE FROM UPSTREAM: the wrapper covers every static inline function,
-    // including ones libfabric marks deprecated, such as `fi_poll` and
-    // `fi_rx_size_left`. Each of those printed a warning on every build. glide-rdma
-    // calls none of them, and the warning only concerns this one file.
-    // TODO #7408: Lint this crate in CI and remove the deprecated wrappers, then drop this flag.
-    builder.flag_if_supported("-Wno-deprecated-declarations");
     for path in &include_paths {
         builder.include(format!("{}", path.display()));
     }
