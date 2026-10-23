@@ -174,6 +174,36 @@ test_standalone_client()
 
 ---
 
+### Unix Domain Socket
+
+Standalone clients can connect through the server's `unixsocket` instead of TCP. Cluster mode and TLS are not supported.
+
+```python
+import asyncio
+from glide import GlideClientConfiguration, NodeAddress, GlideClient
+
+async def test_unix_socket_client():
+    config = GlideClientConfiguration(
+        [NodeAddress(unix_socket_path="/run/valkey/valkey.sock")]
+    )
+    client = await GlideClient.create(config)
+    print(await client.ping())
+
+asyncio.run(test_unix_socket_client())
+```
+
+```python
+from glide_sync import GlideClientConfiguration, NodeAddress, GlideClient
+
+config = GlideClientConfiguration(
+    [NodeAddress(unix_socket_path="/run/valkey/valkey.sock")]
+)
+client = GlideClient.create(config)
+print(client.ping())
+```
+
+---
+
 ## PubSub Configuration
 
 Valkey GLIDE supports dynamic PubSub with automatic subscription reconciliation. Configure the reconciliation interval to ensure subscriptions remain synchronized:

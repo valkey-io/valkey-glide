@@ -4,6 +4,9 @@ package connection_request;
 message NodeAddress {
     string host = 1;
     uint32 port = 2;
+    // Absolute Unix domain socket path to use instead of `host` and `port`, which must be unset.
+    // Standalone only, and not with TLS, `DiscoverAll` or TCP addresses.
+    optional string unix_socket_path = 3;
 }
 
 enum ReadFrom {
