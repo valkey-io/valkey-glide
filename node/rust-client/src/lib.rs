@@ -3801,6 +3801,7 @@ mod tests {
                 addresses: vec![NodeAddress {
                     host: "127.0.0.1".to_string(),
                     port: 1,
+                    unix_socket_path: None,
                 }],
                 lazy_connect: true,
                 ..request
