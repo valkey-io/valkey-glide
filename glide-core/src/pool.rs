@@ -253,6 +253,31 @@ impl ClientPool {
         client_id
     }
 
+    /// Reserve `n` slots against `max_size` up front, before any warmup connection
+    /// is attempted. Returns the number actually reserved (capped so `total_count`
+    /// never exceeds `max_size`).
+    ///
+    /// Warmup connects asynchronously; without reserving, an acquirer racing the
+    /// warmup window sees `total_count` still low, `should_create()` returns true, and
+    /// it spawns an on-demand client redundant with the warmup client already in
+    /// flight. Each warmup task consumes its reservation via `add_client_reserved` on
+    /// success or returns it via `release_reservation` on failure.
+    pub fn reserve_warmup_slots(&self, n: u32) -> u32 {
+        let max = self.config.max_size;
+        let mut reserved = 0;
+        //TODO: (#7175) `fetch_update` is deprecated for `try_update` since Rust 1.99, but `try_update`
+        // needs 1.95 and the MSRV is 1.94.1.
+        #[allow(deprecated)]
+        let _ = self
+            .total_count
+            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |cur| {
+                let room = max.saturating_sub(cur);
+                reserved = room.min(n);
+                (reserved > 0).then_some(cur + reserved)
+            });
+        reserved
+    }
+
     /// Release a client back to the idle pool by client_id.
     ///
     /// Removes the client from `in_use` and returns it as `Some(entry)` for the
@@ -289,7 +314,7 @@ impl ClientPool {
     /// `drain_discarded_ids` so every binding reclaims the adapter / handle it
     /// holds for that id. Also clears both core registries, so callers need not.
     pub fn discard_client(&mut self, client_id: u64) {
-        self.total_count.fetch_sub(1, Ordering::AcqRel);
+        saturating_dec(&self.total_count);
         self.discarded_ids.push(client_id);
         unregister_pool_client(client_id);
         unregister_blocking_flag(client_id);
@@ -300,7 +325,7 @@ impl ClientPool {
     /// Give back a slot reserved by a binding that never became a client.
     /// No id exists, so there is nothing for a binding to reclaim.
     pub fn release_reservation(&mut self) {
-        self.total_count.fetch_sub(1, Ordering::AcqRel);
+        saturating_dec(&self.total_count);
         let (_, condvar) = &*self.release_notify;
         condvar.notify_one();
     }
@@ -2011,6 +2036,104 @@ mod client_pool_marking_tests {
                 "allocate_client_id collided with a pooled id"
             );
         }
+    }
+
+    /// A pool configured for the warmup-reservation tests: short timeouts, no
+    /// live connections (warmup is simulated by the test, not dialed).
+    fn warmup_pool(max_size: u32, min_idle: u32) -> ClientPool {
+        ClientPool::new(PoolConfig {
+            max_size,
+            min_idle,
+            idle_timeout: Duration::from_secs(60),
+            request_timeout: Duration::from_secs(1),
+            test_on_borrow: false,
+            connection_request: Vec::new(),
+            is_async: true,
+            configured_database_id: 0,
+            abandon_timeout: Duration::from_secs(300),
+        })
+        .expect("valid pool config")
+    }
+
+    /// `reserve_warmup_slots` counts the warmed connections against `max_size` the
+    /// instant warmup is decided, never over-reserving past the bound.
+    #[test]
+    fn warmup_reservation_counts_against_max_size() {
+        let pool = warmup_pool(4, 4);
+        assert_eq!(pool.reserve_warmup_slots(4), 4, "all 4 warmup slots fit");
+        assert_eq!(
+            pool.total_count.load(std::sync::atomic::Ordering::Acquire),
+            4,
+            "total_count reflects the reservation immediately"
+        );
+        // A second request has no room — the bound is never exceeded.
+        assert_eq!(pool.reserve_warmup_slots(4), 0, "pool already at max_size");
+        assert_eq!(
+            pool.total_count.load(std::sync::atomic::Ordering::Acquire),
+            4
+        );
+    }
+
+    /// An acquirer racing the warmup window must not spawn an on-demand client
+    /// redundant with a warmup connection still in flight.
+    ///
+    /// The defect is purely in the accounting `should_create()` reads, so this models
+    /// it without the network. `run(reserve)` counts how many on-demand spawns
+    /// `should_create()` authorises during warmup: with `reserve=true` (the fix) the
+    /// pool reads as full and authorises none; with `reserve=false` (pre-fix) it keeps
+    /// returning true and authorises `max_size` surplus spawns. Both arms run here, so
+    /// the A-B lives in the test itself rather than depending on hand-editing the fix.
+    #[tokio::test]
+    async fn warmup_window_does_not_authorise_surplus_on_demand() {
+        let max_size = 4u32;
+
+        /// Returns how many on-demand spawns `should_create()` authorises during
+        /// warmup. With `reserve=true` the slots are reserved up front (fixed path)
+        /// so it authorises none; with `reserve=false` (pre-fix) it over-authorises.
+        // Mirrors the binding's fetch_add so a wrong spawn over-shoots.
+        async fn surplus_spawns_during_warmup(max_size: u32, reserve: bool) -> u32 {
+            let mut pool = warmup_pool(max_size, max_size);
+            if reserve {
+                assert_eq!(pool.reserve_warmup_slots(max_size), max_size);
+            }
+            let mut surplus = 0;
+            for _ in 0..16 {
+                if pool.try_acquire() < 0 && pool.should_create() {
+                    pool.total_count
+                        .fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+                    surplus += 1;
+                }
+            }
+            surplus
+        }
+
+        // A: pre-fix — warmup slots uncounted, so every racing acquirer over-creates.
+        assert_eq!(
+            surplus_spawns_during_warmup(max_size, false).await,
+            max_size,
+            "pre-fix: unreserved warmup window authorises max_size surplus spawns"
+        );
+
+        // B: fixed — reserved slots make the pool read as full, authorising none.
+        assert_eq!(
+            surplus_spawns_during_warmup(max_size, true).await,
+            0,
+            "no on-demand spawn may be authorised while warmup fills the pool"
+        );
+
+        // Warmup connections then land on the reserved slots and settle at max_size.
+        let mut pool = warmup_pool(max_size, max_size);
+        assert_eq!(pool.reserve_warmup_slots(max_size), max_size);
+        for _ in 0..max_size {
+            let client = lazy_client().await;
+            pool.add_client_reserved(client);
+        }
+        assert_eq!(
+            pool.total_count.load(std::sync::atomic::Ordering::Acquire),
+            max_size,
+            "after quiescing, total_count must settle at exactly max_size"
+        );
+        assert_eq!(pool.idle.len() as u32, max_size);
     }
 }
 
