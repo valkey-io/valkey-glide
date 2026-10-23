@@ -1067,15 +1067,18 @@ describe("IAM Auth: Direct Custom Credential Providers", () => {
             ...IAM_TLS_CONFIG,
         };
 
-        const advancedConfiguration =
-            connectionTimeout === undefined ? undefined : { connectionTimeout };
+        // Merge connectionTimeout into IAM_TLS_CONFIG's advancedConfiguration
+        // instead of replacing it, so tlsAdvancedConfiguration.insecure stays.
+        if (connectionTimeout !== undefined) {
+            options.advancedConfiguration = {
+                ...options.advancedConfiguration,
+                connectionTimeout,
+            };
+        }
 
         return clusterMode
-            ? GlideClusterClient.createClient({
-                  ...options,
-                  advancedConfiguration,
-              })
-            : GlideClient.createClient({ ...options, advancedConfiguration });
+            ? GlideClusterClient.createClient(options)
+            : GlideClient.createClient(options);
     };
 
     beforeAll(async () => {
