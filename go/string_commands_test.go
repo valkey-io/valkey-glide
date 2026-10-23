@@ -604,7 +604,6 @@ func ExampleClusterClient_Append() {
 }
 
 func ExampleClient_DelIfEq() {
-	// This command requires Valkey 9.0+
 	var client *Client = getExampleClient() // example helper function
 
 	client.Set(context.Background(), "my_key", "my_value")
@@ -618,7 +617,6 @@ func ExampleClient_DelIfEq() {
 }
 
 func ExampleClusterClient_DelIfEq() {
-	// This command requires Valkey 9.0+
 	var client *ClusterClient = getExampleClusterClient() // example helper function
 
 	client.Set(context.Background(), "my_key", "my_value")

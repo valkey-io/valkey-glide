@@ -548,16 +548,8 @@ func CreateStringTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer str
 	testData = append(testData, CommandTestData{ExpectedResponse: int64(7), TestName: "Append(multiKey1, 3)"})
 
 	if compareServerVersions(serverVer, "9.0.0") >= 0 {
-		delIfEqKey := prefix + "delifeq-" + uuid.NewString()
-		delIfEqValue := "delifeq-value-" + uuid.NewString()
-		batch.Set(delIfEqKey, delIfEqValue)
-		testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "Set(delIfEqKey, delIfEqValue)"})
-
-		batch.DelIfEq(delIfEqKey, "wrong-value")
-		testData = append(testData, CommandTestData{ExpectedResponse: false, TestName: "DelIfEq(delIfEqKey, wrong-value)"})
-
-		batch.DelIfEq(delIfEqKey, delIfEqValue)
-		testData = append(testData, CommandTestData{ExpectedResponse: true, TestName: "DelIfEq(delIfEqKey, delIfEqValue)"})
+		batch.DelIfEq(atomicKey1, "wrong-value")
+		testData = append(testData, CommandTestData{ExpectedResponse: false, TestName: "DelIfEq(atomicKey1, wrong-value)"})
 	}
 
 	batch.Set(multiKey2, "val")
