@@ -3,11 +3,15 @@
  */
 
 /**
- * Live tests for the valkey-search 1.3 stable surface (wave 1 of the ports).
- * Scope: INKEYS, the typed reducer factories, FLOAT16/BFLOAT16, FT.CREATE
- * FILTER/UNF/NOHL/SCORE_FIELD, and count -> LIMIT 0 0. WITHSCORES/SCORER,
- * ADDSCORES, WITHCURSOR/FT.CURSOR, FT.HYBRID and LoadField aliases are wave 2
- * (after the Python reference PR merges) and are out of scope here.
+ * Live tests for the valkey-search 1.3 stable surface (wave 1 of the ports)
+ * and wave 2 (scoring, cursors, FT.HYBRID).
+ * Wave 1 scope: INKEYS, the typed reducer factories, FLOAT16/BFLOAT16, FT.CREATE
+ * FILTER/UNF/NOHL/SCORE_FIELD, and count -> LIMIT 0 0.
+ * Wave 2 scope: WITHSCORES/SCORER on FT.SEARCH, ADDSCORES/SCORER on
+ * FT.AGGREGATE, FT.AGGREGATE/FT.HYBRID WITHCURSOR plus FT.CURSOR READ/DEL
+ * (primary-pinned routing), and FT.HYBRID (SEARCH/VSIM arms, COMBINE
+ * RRF/LINEAR/FUNCTION, VSIM FILTER/POLICY/BATCH_SIZE, LOCALONLY, LOAD,
+ * per-arm and COMBINE yield-score-as aliases).
  *
  * Mirrors the Python reference's two-stage gate:
  *   1. A capability probe (real command + a 1.3-only argument, classified by
@@ -27,7 +31,8 @@
  * unrelated to LIMIT or count, confirmed directly against both engine
  * versions (matches Java's ft_search_count_maps_to_limit_zero_zero).
  * The 1.3-gated variant covers only the INKEYS/reducer/vector-type/parity
- * additions that genuinely need 1.3.
+ * additions that genuinely need 1.3, plus every wave-2 test below (all of
+ * which genuinely need 1.3).
  */
 
 import {
@@ -42,13 +47,16 @@ import { ValkeyCluster } from "../../utils/TestUtils";
 import {
     FtAggregateReducer,
     FtCreateOptions,
+    FtHybridOptions,
     FtSearchOptions,
     GlideClient,
     GlideClusterClient,
     GlideFt,
+    GlideReturnType,
     GlideString,
     NumericField,
     ProtocolVersion,
+    SortOrder,
     TextField,
     VectorField,
 } from "../build-ts";
@@ -73,6 +81,42 @@ const DATA_PROCESSING_TIMEOUT = 1000;
 function sleep(ms: number = DATA_PROCESSING_TIMEOUT): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));
 }
+
+/**
+ * Packs two 32-bit floats as little-endian bytes, matching the vector blob
+ * format `struct.pack("2f", x, y)` produces in the Python reference.
+ */
+function packVector2f(x: number, y: number): Buffer {
+    const buf = Buffer.alloc(8);
+    buf.writeFloatLE(x, 0);
+    buf.writeFloatLE(y, 4);
+    return buf;
+}
+
+/** Reads a flat `GlideRecord<GlideReturnType>` row's field by key, as a string. */
+function readRowField(
+    row: { key: GlideString; value: GlideReturnType }[],
+    field: string,
+): string | undefined {
+    const entry = row.find((e) => e.key.toString() === field);
+
+    if (
+        entry === undefined ||
+        entry.value === undefined ||
+        entry.value === null
+    ) {
+        return undefined;
+    }
+
+    return Buffer.isBuffer(entry.value)
+        ? entry.value.toString()
+        : String(entry.value);
+}
+
+const HYBRID_DOC_TEXT_WINNER = "hybrid-text-winner";
+const HYBRID_DOC_VECTOR_WINNER = "hybrid-vector-winner";
+const HYBRID_SEARCH_ALIAS = "ss";
+const HYBRID_VSIM_ALIAS = "vs";
 
 describe("GlideFt", () => {
     describe("1.3 stable surface", () => {
@@ -463,6 +507,1046 @@ describe("GlideFt", () => {
                             filter: "",
                         } as FtCreateOptions),
                     ).rejects.toThrow(/filter cannot be empty/);
+                });
+
+                it("FT.SEARCH WITHSCORES and SCORER rank by relevance", async () => {
+                    if (!capability) return;
+
+                    client = await GlideClusterClient.createClient(
+                        getClientConfigurationOption(
+                            cluster.getAddresses(),
+                            protocol,
+                        ),
+                    );
+                    const prefix = "{" + getRandomKey() + "}:";
+                    const indexName = prefix + "scores_idx";
+                    await GlideFt.create(
+                        client,
+                        indexName,
+                        [{ type: "TEXT", name: "title" }],
+                        {
+                            dataType: "HASH",
+                            prefixes: [prefix],
+                        } as FtCreateOptions,
+                    );
+
+                    try {
+                        await client.hset(prefix + "1", {
+                            title: "hello hello hello world",
+                        });
+                        await client.hset(prefix + "2", {
+                            title: "hello there",
+                        });
+                        await sleep();
+
+                        const result = await GlideFt.search(
+                            client,
+                            indexName,
+                            "hello",
+                            {
+                                withScores: true,
+                                scorer: "BM25STD",
+                            } as FtSearchOptions,
+                        );
+                        expect(result[0]).toBe(2);
+                        const resultMap = result[1];
+                        expect(resultMap.length).toBe(2);
+                        const scoresByKey = new Map<string, number>();
+
+                        for (const entry of resultMap) {
+                            const scoreAndFields = entry.value as unknown as [
+                                GlideString,
+                                { key: GlideString; value: GlideString }[],
+                            ];
+                            expect(scoreAndFields.length).toBe(2);
+                            const score = Number(scoreAndFields[0].toString());
+                            expect(score).toBeGreaterThan(0);
+                            scoresByKey.set(entry.key.toString(), score);
+                            const fields = scoreAndFields[1];
+                            expect(
+                                fields.some(
+                                    (f) => f.key.toString() === "title",
+                                ),
+                            ).toBe(true);
+                        }
+
+                        expect(scoresByKey.get(prefix + "1")!).toBeGreaterThan(
+                            scoresByKey.get(prefix + "2")!,
+                        );
+                    } finally {
+                        await client.customCommand(["FT.DROPINDEX", indexName]);
+                    }
+                });
+
+                it("FT.SEARCH WITHSCORES + WITHSORTKEYS combined shape", async () => {
+                    if (!capability) return;
+
+                    client = await GlideClusterClient.createClient(
+                        getClientConfigurationOption(
+                            cluster.getAddresses(),
+                            protocol,
+                        ),
+                    );
+                    const prefix = "{" + getRandomKey() + "}:";
+                    const indexName = prefix + "scores_sortkeys_idx";
+                    await GlideFt.create(
+                        client,
+                        indexName,
+                        [
+                            {
+                                type: "TEXT",
+                                name: "title",
+                                sortable: true,
+                            },
+                            {
+                                type: "NUMERIC",
+                                name: "price",
+                                sortable: true,
+                            },
+                        ],
+                        {
+                            dataType: "HASH",
+                            prefixes: [prefix],
+                        } as FtCreateOptions,
+                    );
+
+                    try {
+                        await client.hset(prefix + "1", {
+                            title: "hello",
+                            price: "10",
+                        });
+                        await client.hset(prefix + "2", {
+                            title: "world",
+                            price: "20",
+                        });
+                        await sleep();
+
+                        const result = await GlideFt.search(
+                            client,
+                            indexName,
+                            "*",
+                            {
+                                withScores: true,
+                                sortby: "price",
+                                sortbyOrder: "ASC",
+                                withsortkeys: true,
+                            } as FtSearchOptions,
+                        );
+                        expect(result[0]).toBe(2);
+                        const resultMap = result[1];
+                        expect(resultMap.length).toBe(2);
+
+                        for (const entry of resultMap) {
+                            const triple = entry.value as unknown as [
+                                GlideString,
+                                GlideString,
+                                { key: GlideString; value: GlideString }[],
+                            ];
+                            expect(triple.length).toBe(3);
+                            const [score, sortKey, fields] = triple;
+                            expect(
+                                Number(score.toString()),
+                            ).toBeGreaterThanOrEqual(0);
+                            expect(sortKey).not.toBeUndefined();
+                            expect(sortKey).not.toBeNull();
+                            expect(
+                                fields.some(
+                                    (f) => f.key.toString() === "title",
+                                ),
+                            ).toBe(true);
+                        }
+                    } finally {
+                        await client.customCommand(["FT.DROPINDEX", indexName]);
+                    }
+                });
+
+                it("FT.AGGREGATE ADDSCORES exposes __score, sortable", async () => {
+                    if (!capability) return;
+
+                    client = await GlideClusterClient.createClient(
+                        getClientConfigurationOption(
+                            cluster.getAddresses(),
+                            protocol,
+                        ),
+                    );
+                    const prefix = "{" + getRandomKey() + "}:";
+                    const indexName = prefix + "addscores_idx";
+                    await GlideFt.create(
+                        client,
+                        indexName,
+                        [{ type: "TEXT", name: "title" }],
+                        {
+                            dataType: "HASH",
+                            prefixes: [prefix],
+                        } as FtCreateOptions,
+                    );
+
+                    try {
+                        await client.hset(prefix + "1", {
+                            title: "hello world",
+                        });
+                        await client.hset(prefix + "2", {
+                            title: "hello there friend",
+                        });
+                        await sleep();
+
+                        const result = await GlideFt.aggregate(
+                            client,
+                            indexName,
+                            "hello",
+                            {
+                                addScores: true,
+                                loadFields: ["title"],
+                                clauses: [
+                                    {
+                                        type: "SORTBY",
+                                        properties: [
+                                            {
+                                                property: "@__score",
+                                                order: SortOrder.DESC,
+                                            },
+                                        ],
+                                    },
+                                ],
+                            },
+                        );
+                        expect(result.length).toBe(2);
+                        const scores: number[] = [];
+
+                        for (const row of result) {
+                            const flat = row as unknown as {
+                                key: GlideString;
+                                value: GlideString;
+                            }[];
+                            const scoreField = readRowField(flat, "__score");
+                            expect(scoreField).not.toBeUndefined();
+                            const score = Number(scoreField);
+                            expect(score).toBeGreaterThan(0);
+                            scores.push(score);
+                        }
+
+                        expect(scores).toEqual(
+                            [...scores].sort((a, b) => b - a),
+                        );
+                    } finally {
+                        await client.customCommand(["FT.DROPINDEX", indexName]);
+                    }
+                });
+
+                it("FT.AGGREGATE WITHCURSOR + FT.CURSOR READ/DEL affinity (PRIMARY, never a replica)", async () => {
+                    if (!capability) return;
+
+                    client = await GlideClusterClient.createClient(
+                        getClientConfigurationOption(
+                            cluster.getAddresses(),
+                            protocol,
+                        ),
+                    );
+                    const prefix = "{" + getRandomKey() + "}:";
+                    const indexName = prefix + "cursor_idx";
+                    await GlideFt.create(
+                        client,
+                        indexName,
+                        [{ type: "NUMERIC", name: "n", sortable: true }],
+                        {
+                            dataType: "HASH",
+                            prefixes: [prefix],
+                        } as FtCreateOptions,
+                    );
+
+                    try {
+                        for (let i = 1; i <= 20; i++) {
+                            await client.hset(prefix + `d${i}`, {
+                                n: i.toString(),
+                            });
+                        }
+
+                        await sleep();
+
+                        let totalRows = 0;
+                        const seenNValues = new Set<number>();
+                        const page = await GlideFt.aggregate(
+                            client,
+                            indexName,
+                            "*",
+                            {
+                                loadFields: ["n"],
+                                withCursor: { count: 5 },
+                            },
+                        );
+                        let cursorId = page[1] as unknown as number;
+                        let rows = page[0] as unknown as {
+                            key: GlideString;
+                            value: GlideString;
+                        }[][];
+                        totalRows += rows.length;
+
+                        for (const row of rows) {
+                            seenNValues.add(Number(readRowField(row, "n")));
+                        }
+
+                        let pagesRead = 1;
+
+                        while (cursorId !== 0) {
+                            const nextPage = await GlideFt.cursorRead(
+                                client,
+                                indexName,
+                                cursorId,
+                            );
+                            rows = nextPage[0] as unknown as {
+                                key: GlideString;
+                                value: GlideString;
+                            }[][];
+                            totalRows += rows.length;
+
+                            for (const row of rows) {
+                                seenNValues.add(Number(readRowField(row, "n")));
+                            }
+
+                            cursorId = nextPage[1] as unknown as number;
+                            pagesRead++;
+                            expect(pagesRead).toBeLessThanOrEqual(10);
+                        }
+
+                        expect(totalRows).toBe(20);
+                        expect(seenNValues).toEqual(
+                            new Set(
+                                Array.from({ length: 20 }, (_, i) => i + 1),
+                            ),
+                        );
+                    } finally {
+                        await client.customCommand(["FT.DROPINDEX", indexName]);
+                    }
+                });
+
+                it("FT.CURSOR DEL discards an open cursor; reading it or an unknown id errors", async () => {
+                    if (!capability) return;
+
+                    client = await GlideClusterClient.createClient(
+                        getClientConfigurationOption(
+                            cluster.getAddresses(),
+                            protocol,
+                        ),
+                    );
+                    const prefix = "{" + getRandomKey() + "}:";
+                    const indexName = prefix + "cursor_del_idx";
+                    await GlideFt.create(
+                        client,
+                        indexName,
+                        [{ type: "NUMERIC", name: "n", sortable: true }],
+                        {
+                            dataType: "HASH",
+                            prefixes: [prefix],
+                        } as FtCreateOptions,
+                    );
+
+                    try {
+                        for (let i = 1; i <= 5; i++) {
+                            await client.hset(prefix + `d${i}`, {
+                                n: i.toString(),
+                            });
+                        }
+
+                        await sleep();
+
+                        const page = await GlideFt.aggregate(
+                            client,
+                            indexName,
+                            "*",
+                            {
+                                loadFields: ["n"],
+                                withCursor: { count: 1 },
+                            },
+                        );
+                        const openCursorId = page[1] as unknown as number;
+                        expect(openCursorId).not.toBe(0);
+
+                        expect(
+                            await GlideFt.cursorDel(
+                                client,
+                                indexName,
+                                openCursorId,
+                            ),
+                        ).toBe("OK");
+
+                        await expect(
+                            GlideFt.cursorRead(client, indexName, openCursorId),
+                        ).rejects.toThrow(/Cursor/);
+
+                        await expect(
+                            GlideFt.cursorRead(client, indexName, 999999999),
+                        ).rejects.toThrow(/Cursor/);
+                    } finally {
+                        await client.customCommand(["FT.DROPINDEX", indexName]);
+                    }
+                });
+
+                describe("FT.HYBRID", () => {
+                    /**
+                     * Creates an index with a TEXT field (`title`) and a 2-dimensional FLAT
+                     * FLOAT32 VECTOR field (`vec`), seeds the shared hybrid-docs fixture, and
+                     * waits for both documents to be indexed. Returns the index name.
+                     */
+                    async function createHybridIndex(
+                        testClient: GlideClusterClient,
+                        prefix: string,
+                    ): Promise<string> {
+                        const indexName = prefix + "index";
+                        await GlideFt.create(
+                            testClient,
+                            indexName,
+                            [
+                                { type: "TEXT", name: "title" },
+                                {
+                                    type: "VECTOR",
+                                    name: "vec",
+                                    attributes: {
+                                        algorithm: "FLAT",
+                                        dimensions: 2,
+                                        distanceMetric: "L2",
+                                        type: "FLOAT32",
+                                    },
+                                },
+                            ],
+                            {
+                                dataType: "HASH",
+                                prefixes: [prefix],
+                            } as FtCreateOptions,
+                        );
+                        await testClient.hset(prefix + HYBRID_DOC_TEXT_WINNER, {
+                            title: "hello hello hello world",
+                            vec: packVector2f(100.0, 100.0),
+                        });
+                        await testClient.hset(
+                            prefix + HYBRID_DOC_VECTOR_WINNER,
+                            {
+                                title: "goodbye",
+                                vec: packVector2f(1.0, 1.0),
+                            },
+                        );
+                        await sleep();
+                        return indexName;
+                    }
+
+                    it("basic query: default reply is just the document key and the fused score", async () => {
+                        if (!capability) return;
+
+                        client = await GlideClusterClient.createClient(
+                            getClientConfigurationOption(
+                                cluster.getAddresses(),
+                                protocol,
+                            ),
+                        );
+                        const prefix = "{" + getRandomKey() + "}:";
+                        const indexName = await createHybridIndex(
+                            client,
+                            prefix,
+                        );
+
+                        try {
+                            const result = await GlideFt.hybrid(
+                                client,
+                                indexName,
+                                { query: "hello" },
+                                {
+                                    field: "vec",
+                                    vector: packVector2f(1.0, 1.0),
+                                    k: 5,
+                                },
+                            );
+                            expect(result.length).toBe(2);
+                            const keys = new Set(
+                                result.map((row) =>
+                                    readRowField(
+                                        row as unknown as {
+                                            key: GlideString;
+                                            value: GlideString;
+                                        }[],
+                                        "__key",
+                                    ),
+                                ),
+                            );
+                            expect(keys).toEqual(
+                                new Set([
+                                    prefix + HYBRID_DOC_TEXT_WINNER,
+                                    prefix + HYBRID_DOC_VECTOR_WINNER,
+                                ]),
+                            );
+
+                            for (const row of result) {
+                                expect(
+                                    readRowField(
+                                        row as unknown as {
+                                            key: GlideString;
+                                            value: GlideString;
+                                        }[],
+                                        "__score",
+                                    ),
+                                ).not.toBeUndefined();
+                            }
+                        } finally {
+                            await client.customCommand([
+                                "FT.DROPINDEX",
+                                indexName,
+                            ]);
+                        }
+                    });
+
+                    it("a post-fusion FILTER clause (no LOAD) filters after both arms, never misread as a VSIM pre-filter", async () => {
+                        if (!capability) return;
+
+                        client = await GlideClusterClient.createClient(
+                            getClientConfigurationOption(
+                                cluster.getAddresses(),
+                                protocol,
+                            ),
+                        );
+                        const prefix = "{" + getRandomKey() + "}:";
+                        const indexName = await createHybridIndex(
+                            client,
+                            prefix,
+                        );
+
+                        try {
+                            // SEARCH arm yields its own score under "ss", only
+                            // matching HYBRID_DOC_VECTOR_WINNER's query
+                            // ("goodbye"). The VSIM arm (k=5) matches both
+                            // documents, so the union going into the aggregate
+                            // tail is both documents. A FILTER keeping only
+                            // rows where "ss" is positive, applied correctly
+                            // (post-fusion, not misread as a VSIM pre-filter),
+                            // keeps only HYBRID_DOC_VECTOR_WINNER.
+                            const result = await GlideFt.hybrid(
+                                client,
+                                indexName,
+                                {
+                                    query: "goodbye",
+                                    yieldScoreAs: HYBRID_SEARCH_ALIAS,
+                                },
+                                {
+                                    field: "vec",
+                                    vector: packVector2f(1.0, 1.0),
+                                    k: 5,
+                                },
+                                {
+                                    clauses: [
+                                        {
+                                            type: "FILTER",
+                                            expression: `@${HYBRID_SEARCH_ALIAS} > 0`,
+                                        },
+                                    ],
+                                } as FtHybridOptions,
+                            );
+                            expect(result.length).toBe(1);
+                            expect(
+                                readRowField(
+                                    result[0] as unknown as {
+                                        key: GlideString;
+                                        value: GlideString;
+                                    }[],
+                                    "__key",
+                                ),
+                            ).toBe(prefix + HYBRID_DOC_VECTOR_WINNER);
+                        } finally {
+                            await client.customCommand([
+                                "FT.DROPINDEX",
+                                indexName,
+                            ]);
+                        }
+                    });
+
+                    it.each<
+                        [string, FtHybridOptions["combine"], string]
+                    >([
+                        [
+                            "LINEAR-text-only",
+                            { method: "LINEAR", alpha: 1.0, beta: 0.0 },
+                            HYBRID_DOC_TEXT_WINNER,
+                        ],
+                        [
+                            "LINEAR-vector-only",
+                            { method: "LINEAR", alpha: 0.0, beta: 1.0 },
+                            HYBRID_DOC_VECTOR_WINNER,
+                        ],
+                        [
+                            "FUNCTION-text",
+                            {
+                                method: "FUNCTION",
+                                expr: `@${HYBRID_SEARCH_ALIAS}`,
+                            },
+                            HYBRID_DOC_TEXT_WINNER,
+                        ],
+                        [
+                            "FUNCTION-vec",
+                            {
+                                method: "FUNCTION",
+                                expr: `@${HYBRID_VSIM_ALIAS}`,
+                            },
+                            HYBRID_DOC_VECTOR_WINNER,
+                        ],
+                    ])(
+                        "COMBINE %s fuses results so the expected arm wins",
+                        async (_label, combine, expectedFirst) => {
+                            if (!capability) return;
+
+                            client = await GlideClusterClient.createClient(
+                                getClientConfigurationOption(
+                                    cluster.getAddresses(),
+                                    protocol,
+                                ),
+                            );
+                            const prefix = "{" + getRandomKey() + "}:";
+                            const indexName = await createHybridIndex(
+                                client,
+                                prefix,
+                            );
+
+                            try {
+                                const result = await GlideFt.hybrid(
+                                    client,
+                                    indexName,
+                                    {
+                                        query: "hello",
+                                        yieldScoreAs: HYBRID_SEARCH_ALIAS,
+                                    },
+                                    {
+                                        field: "vec",
+                                        vector: packVector2f(1.0, 1.0),
+                                        k: 5,
+                                        yieldScoreAs: HYBRID_VSIM_ALIAS,
+                                    },
+                                    {
+                                        combine,
+                                    },
+                                );
+                                expect(result.length).toBeGreaterThan(0);
+                                expect(
+                                    readRowField(
+                                        result[0] as unknown as {
+                                            key: GlideString;
+                                            value: GlideString;
+                                        }[],
+                                        "__key",
+                                    ),
+                                ).toBe(prefix + expectedFirst);
+                            } finally {
+                                await client.customCommand([
+                                    "FT.DROPINDEX",
+                                    indexName,
+                                ]);
+                            }
+                        },
+                    );
+
+                    it("vector as inline bytes and as a $-reference produce the same result", async () => {
+                        if (!capability) return;
+
+                        client = await GlideClusterClient.createClient(
+                            getClientConfigurationOption(
+                                cluster.getAddresses(),
+                                protocol,
+                            ),
+                        );
+                        const prefix = "{" + getRandomKey() + "}:";
+                        const indexName = await createHybridIndex(
+                            client,
+                            prefix,
+                        );
+                        const vectorBytes = packVector2f(1.0, 1.0);
+
+                        try {
+                            const inlineResult = await GlideFt.hybrid(
+                                client,
+                                indexName,
+                                { query: "hello" },
+                                {
+                                    field: "vec",
+                                    vector: vectorBytes,
+                                    k: 1,
+                                    yieldScoreAs: HYBRID_VSIM_ALIAS,
+                                },
+                            );
+                            const paramResult = await GlideFt.hybrid(
+                                client,
+                                indexName,
+                                { query: "hello" },
+                                {
+                                    field: "vec",
+                                    vector: "$myvec",
+                                    k: 1,
+                                    yieldScoreAs: HYBRID_VSIM_ALIAS,
+                                },
+                                {
+                                    params: [
+                                        { key: "myvec", value: vectorBytes },
+                                    ],
+                                },
+                            );
+
+                            const inlineKeys = new Set(
+                                inlineResult.map((row) =>
+                                    readRowField(
+                                        row as unknown as {
+                                            key: GlideString;
+                                            value: GlideString;
+                                        }[],
+                                        "__key",
+                                    ),
+                                ),
+                            );
+                            const paramKeys = new Set(
+                                paramResult.map((row) =>
+                                    readRowField(
+                                        row as unknown as {
+                                            key: GlideString;
+                                            value: GlideString;
+                                        }[],
+                                        "__key",
+                                    ),
+                                ),
+                            );
+                            expect(inlineKeys).toEqual(paramKeys);
+                            expect(inlineResult.length).toBe(2);
+                            expect(paramResult.length).toBe(2);
+
+                            for (const result of [inlineResult, paramResult]) {
+                                const rowsWithVs = result.filter(
+                                    (row) =>
+                                        readRowField(
+                                            row as unknown as {
+                                                key: GlideString;
+                                                value: GlideString;
+                                            }[],
+                                            HYBRID_VSIM_ALIAS,
+                                        ) !== undefined,
+                                );
+                                expect(rowsWithVs.length).toBe(1);
+                                expect(
+                                    readRowField(
+                                        rowsWithVs[0] as unknown as {
+                                            key: GlideString;
+                                            value: GlideString;
+                                        }[],
+                                        "__key",
+                                    ),
+                                ).toBe(prefix + HYBRID_DOC_VECTOR_WINNER);
+                            }
+                        } finally {
+                            await client.customCommand([
+                                "FT.DROPINDEX",
+                                indexName,
+                            ]);
+                        }
+                    });
+
+                    it.each(["ADHOC", "BATCHES"] as const)(
+                        "VSIM FILTER with POLICY %s narrows the vector candidate set",
+                        async (policy) => {
+                            if (!capability) return;
+
+                            client = await GlideClusterClient.createClient(
+                                getClientConfigurationOption(
+                                    cluster.getAddresses(),
+                                    protocol,
+                                ),
+                            );
+                            const prefix = "{" + getRandomKey() + "}:";
+                            const indexName = await createHybridIndex(
+                                client,
+                                prefix,
+                            );
+
+                            try {
+                                // SEARCH arm matches nothing; the VSIM
+                                // arm's own pre-filter narrows the vector
+                                // candidate set down to only the
+                                // text-winner document via its title.
+                                const result = await GlideFt.hybrid(
+                                    client,
+                                    indexName,
+                                    { query: "nonexistentterm12345" },
+                                    {
+                                        field: "vec",
+                                        vector: packVector2f(1.0, 1.0),
+                                        k: 5,
+                                        filter: {
+                                            expression: "@title:hello",
+                                            policy,
+                                        },
+                                    },
+                                );
+                                expect(result.length).toBe(1);
+                                expect(
+                                    readRowField(
+                                        result[0] as unknown as {
+                                            key: GlideString;
+                                            value: GlideString;
+                                        }[],
+                                        "__key",
+                                    ),
+                                ).toBe(prefix + HYBRID_DOC_TEXT_WINNER);
+                            } finally {
+                                await client.customCommand([
+                                    "FT.DROPINDEX",
+                                    indexName,
+                                ]);
+                            }
+                        },
+                    );
+
+                    it("both arms' and COMBINE's yieldScoreAs are distinct, independently reachable columns", async () => {
+                        if (!capability) return;
+
+                        client = await GlideClusterClient.createClient(
+                            getClientConfigurationOption(
+                                cluster.getAddresses(),
+                                protocol,
+                            ),
+                        );
+                        const prefix = "{" + getRandomKey() + "}:";
+                        const indexName = await createHybridIndex(
+                            client,
+                            prefix,
+                        );
+
+                        try {
+                            const result = await GlideFt.hybrid(
+                                client,
+                                indexName,
+                                {
+                                    query: "hello",
+                                    yieldScoreAs: HYBRID_SEARCH_ALIAS,
+                                },
+                                {
+                                    field: "vec",
+                                    vector: packVector2f(1.0, 1.0),
+                                    k: 5,
+                                    yieldScoreAs: HYBRID_VSIM_ALIAS,
+                                },
+                                {
+                                    combine: {
+                                        method: "RRF",
+                                        yieldScoreAs: "fused",
+                                    },
+                                },
+                            );
+                            expect(result.length).toBeGreaterThan(0);
+
+                            for (const row of result) {
+                                const flat = row as unknown as {
+                                    key: GlideString;
+                                    value: GlideString;
+                                }[];
+                                expect(
+                                    readRowField(flat, HYBRID_VSIM_ALIAS),
+                                ).not.toBeUndefined();
+                                expect(
+                                    readRowField(flat, "fused"),
+                                ).not.toBeUndefined();
+                                expect(
+                                    readRowField(flat, "__score"),
+                                ).toBeUndefined();
+                            }
+
+                            const textWinnerRow = result.find(
+                                (row) =>
+                                    readRowField(
+                                        row as unknown as {
+                                            key: GlideString;
+                                            value: GlideString;
+                                        }[],
+                                        "__key",
+                                    ) ===
+                                    prefix + HYBRID_DOC_TEXT_WINNER,
+                            );
+                            expect(textWinnerRow).not.toBeUndefined();
+                            expect(
+                                readRowField(
+                                    textWinnerRow as unknown as {
+                                        key: GlideString;
+                                        value: GlideString;
+                                    }[],
+                                    HYBRID_SEARCH_ALIAS,
+                                ),
+                            ).not.toBeUndefined();
+                        } finally {
+                            await client.customCommand([
+                                "FT.DROPINDEX",
+                                indexName,
+                            ]);
+                        }
+                    });
+
+                    it("LOCALONLY is accepted, no shape change on a single shard", async () => {
+                        if (!capability) return;
+
+                        client = await GlideClusterClient.createClient(
+                            getClientConfigurationOption(
+                                cluster.getAddresses(),
+                                protocol,
+                            ),
+                        );
+                        const prefix = "{" + getRandomKey() + "}:";
+                        const indexName = await createHybridIndex(
+                            client,
+                            prefix,
+                        );
+
+                        try {
+                            const result = await GlideFt.hybrid(
+                                client,
+                                indexName,
+                                { query: "hello" },
+                                {
+                                    field: "vec",
+                                    vector: packVector2f(1.0, 1.0),
+                                    k: 5,
+                                },
+                                { localOnly: true } as FtHybridOptions,
+                            );
+                            expect(result.length).toBe(2);
+                        } finally {
+                            await client.customCommand([
+                                "FT.DROPINDEX",
+                                indexName,
+                            ]);
+                        }
+                    });
+
+                    it("WITHCURSOR paging on FT.HYBRID is pinned to PRIMARY and reaches exhaustion", async () => {
+                        if (!capability) return;
+
+                        client = await GlideClusterClient.createClient(
+                            getClientConfigurationOption(
+                                cluster.getAddresses(),
+                                protocol,
+                            ),
+                        );
+                        const prefix = "{" + getRandomKey() + "}:";
+                        const indexName = await createHybridIndex(
+                            client,
+                            prefix,
+                        );
+
+                        try {
+                            let totalRows = 0;
+                            const seenKeys = new Set<string | undefined>();
+                            const page = await GlideFt.hybrid(
+                                client,
+                                indexName,
+                                { query: "hello" },
+                                {
+                                    field: "vec",
+                                    vector: packVector2f(1.0, 1.0),
+                                    k: 5,
+                                },
+                                {
+                                    withCursor: { count: 1 },
+                                } as FtHybridOptions,
+                            );
+                            let cursorId = page[1] as unknown as number;
+                            let rows = page[0] as unknown as {
+                                key: GlideString;
+                                value: GlideString;
+                            }[][];
+                            totalRows += rows.length;
+                            rows.forEach((r) =>
+                                seenKeys.add(readRowField(r, "__key")),
+                            );
+
+                            let pagesRead = 1;
+
+                            while (cursorId !== 0) {
+                                const nextPage = await GlideFt.cursorRead(
+                                    client,
+                                    indexName,
+                                    cursorId,
+                                );
+                                rows = nextPage[0] as unknown as {
+                                    key: GlideString;
+                                    value: GlideString;
+                                }[][];
+                                totalRows += rows.length;
+                                rows.forEach((r) =>
+                                    seenKeys.add(readRowField(r, "__key")),
+                                );
+                                cursorId = nextPage[1] as unknown as number;
+                                pagesRead++;
+                                expect(pagesRead).toBeLessThanOrEqual(10);
+                            }
+
+                            expect(totalRows).toBe(2);
+                            expect(seenKeys).toEqual(
+                                new Set([
+                                    prefix + HYBRID_DOC_TEXT_WINNER,
+                                    prefix + HYBRID_DOC_VECTOR_WINNER,
+                                ]),
+                            );
+                        } finally {
+                            await client.customCommand([
+                                "FT.DROPINDEX",
+                                indexName,
+                            ]);
+                        }
+                    });
+
+                    it("without k, the VSIM arm uses the engine default K=10", async () => {
+                        if (!capability) return;
+
+                        client = await GlideClusterClient.createClient(
+                            getClientConfigurationOption(
+                                cluster.getAddresses(),
+                                protocol,
+                            ),
+                        );
+                        const prefix = "{" + getRandomKey() + "}:";
+                        const indexName = prefix + "index";
+                        await GlideFt.create(
+                            client,
+                            indexName,
+                            [
+                                { type: "TEXT", name: "title" },
+                                {
+                                    type: "VECTOR",
+                                    name: "vec",
+                                    attributes: {
+                                        algorithm: "FLAT",
+                                        dimensions: 2,
+                                        distanceMetric: "L2",
+                                        type: "FLOAT32",
+                                    },
+                                },
+                            ],
+                            {
+                                dataType: "HASH",
+                                prefixes: [prefix],
+                            } as FtCreateOptions,
+                        );
+
+                        try {
+                            for (let i = 0; i < 15; i++) {
+                                await client.hset(prefix + `d${i}`, {
+                                    title: "nonexistentterm",
+                                    vec: packVector2f(i, i),
+                                });
+                            }
+
+                            await sleep();
+
+                            const result = await GlideFt.hybrid(
+                                client,
+                                indexName,
+                                { query: "nonexistentterm2" },
+                                { field: "vec", vector: packVector2f(0, 0) },
+                            );
+                            expect(result.length).toBe(10);
+                        } finally {
+                            await client.customCommand([
+                                "FT.DROPINDEX",
+                                indexName,
+                            ]);
+                        }
+                    });
                 });
             },
         );
