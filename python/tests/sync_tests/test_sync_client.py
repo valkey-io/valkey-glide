@@ -13133,7 +13133,21 @@ class TestSyncScripts:
         # Event to signal when a thread receives the inflight limit error
         max_reached = threading.Event()
 
+        # To reliably exceed the inflight-request limit, all N+1 requests must be
+        # in flight at the same instant. Previously each thread was started in a
+        # loop and issued its blpop independently; on a loaded (and free-threaded)
+        # runner, spawning all threads could take longer than the blpop block, so
+        # early requests timed out and freed slots before later ones were
+        # submitted, and the limit was never reached. Use a barrier so every
+        # thread submits its blpop together — the overflow request is then
+        # rejected immediately and sets max_reached.
+        start_barrier = threading.Barrier(inflight_requests_limit + 1)
+
         def _blpop():
+            try:
+                start_barrier.wait(timeout=10)
+            except threading.BrokenBarrierError:
+                return
             try:
                 test_client.blpop([key1], 3)
             except RequestError as e:
@@ -13151,11 +13165,11 @@ class TestSyncScripts:
         # Wait for the max inflight error to occur
         assert max_reached.wait(timeout=10), "Expected inflight request limit error"
 
-        # Wait for threads to complete (they'll timeout after 3 seconds)
+        # Close the client first so any still-blocked requests are aborted
+        # promptly, then join the (daemon) threads.
+        test_client.close()
         for thread in threads:
             thread.join(timeout=4)
-
-        test_client.close()
 
     @pytest.mark.parametrize("cluster_mode", [False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
