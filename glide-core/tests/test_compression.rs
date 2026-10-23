@@ -1,7 +1,10 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
+use glide_core::compression::lz4_backend::Lz4Backend;
+use glide_core::compression::zstd_backend::ZstdBackend;
 use glide_core::compression::*;
 use glide_core::request_type::RequestType;
+use redis::Value;
 use std::str::FromStr;
 
 #[cfg(test)]
@@ -10,9 +13,6 @@ mod compression_tests {
 
     #[test]
     fn test_descriptive_errors() {
-        use glide_core::compression::lz4_backend::Lz4Backend;
-        use glide_core::compression::zstd_backend::ZstdBackend;
-
         // Scenario 1: Invalid compression level for Zstd (triggers InvalidConfiguration)
         let backend = Box::new(ZstdBackend::new());
         let config =
@@ -254,9 +254,23 @@ mod compression_tests {
             "Decompress values after receiving from server"
         );
         assert_eq!(
+            CommandCompressionBehavior::CompressAndDecompressValues.description(),
+            "Compress values before sending to server and decompress values after receiving from server"
+        );
+        assert_eq!(
             CommandCompressionBehavior::NoCompression.description(),
             "No compression processing required"
         );
+
+        // Test is_request_compressed() and is_response_decompressed()
+        assert!(CommandCompressionBehavior::CompressValues.is_request_compressed());
+        assert!(!CommandCompressionBehavior::CompressValues.is_response_decompressed());
+        assert!(!CommandCompressionBehavior::DecompressValues.is_request_compressed());
+        assert!(CommandCompressionBehavior::DecompressValues.is_response_decompressed());
+        assert!(CommandCompressionBehavior::CompressAndDecompressValues.is_request_compressed());
+        assert!(CommandCompressionBehavior::CompressAndDecompressValues.is_response_decompressed());
+        assert!(!CommandCompressionBehavior::NoCompression.is_request_compressed());
+        assert!(!CommandCompressionBehavior::NoCompression.is_response_decompressed());
 
         // Test Display
         assert_eq!(
@@ -266,6 +280,10 @@ mod compression_tests {
         assert_eq!(
             CommandCompressionBehavior::DecompressValues.to_string(),
             "DecompressValues"
+        );
+        assert_eq!(
+            CommandCompressionBehavior::CompressAndDecompressValues.to_string(),
+            "CompressAndDecompressValues"
         );
         assert_eq!(
             CommandCompressionBehavior::NoCompression.to_string(),
@@ -280,6 +298,10 @@ mod compression_tests {
         assert_eq!(
             RequestType::Get.compression_behavior(),
             CommandCompressionBehavior::DecompressValues
+        );
+        assert_eq!(
+            RequestType::GetSet.compression_behavior(),
+            CommandCompressionBehavior::CompressAndDecompressValues
         );
         assert_eq!(
             RequestType::Del.compression_behavior(),
@@ -422,7 +444,6 @@ mod compression_tests {
         assert_eq!(extract_version(&header_v255), Some(max_version));
 
         // Test version detection on compressed data
-        use glide_core::compression::zstd_backend::ZstdBackend;
         let backend = Box::new(ZstdBackend::new());
         let config =
             CompressionConfig::new(CompressionBackendType::Zstd).with_min_compression_size(10); // Lower threshold to ensure compression
@@ -501,8 +522,6 @@ mod compression_tests {
 
     #[test]
     fn test_zstd_backend_compress_decompress_roundtrip() {
-        use glide_core::compression::zstd_backend::ZstdBackend;
-
         let backend = ZstdBackend::new();
         let original_data = b"Hello, World! This is a test of Zstd compression.
             Here is a long string of repetitive dataaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
@@ -548,8 +567,6 @@ mod compression_tests {
 
     #[test]
     fn test_lz4_backend_compress_decompress_roundtrip() {
-        use glide_core::compression::lz4_backend::Lz4Backend;
-
         let backend = Lz4Backend::new();
         let original_data = b"Hello, World! This is a test of LZ4 compression.
             Here is a long string of repetitive dataaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
@@ -608,7 +625,6 @@ mod compression_tests {
 
     #[test]
     fn test_compression_manager_min_compression_scenarios() {
-        use glide_core::compression::zstd_backend::ZstdBackend;
         let min_compression_size = 50;
         let backend = Box::new(ZstdBackend::new());
         let config = CompressionConfig::new(CompressionBackendType::Zstd)
@@ -653,9 +669,80 @@ mod compression_tests {
     }
 
     #[test]
-    fn test_compression_manager_decompress_scenarios() {
-        use glide_core::compression::zstd_backend::ZstdBackend;
+    fn test_compress_values() {
+        let backend = Box::new(ZstdBackend::new());
+        let config = CompressionConfig::new(CompressionBackendType::Zstd);
+        let manager = CompressionManager::new(backend, config).unwrap();
+        let key = b"key".to_vec();
+        let original_data = "A".repeat(100).into_bytes();
 
+        let mut args = vec![key.clone(), original_data.clone()];
+        process_command_args_for_compression(&mut args, RequestType::Set, Some(&manager)).unwrap();
+        assert_eq!(args[0], key);
+        assert!(has_magic_header(&args[1]), "Value should be compressed");
+        assert!(args[1].len() < original_data.len());
+
+        let response = Value::BulkString(args[1].clone().into());
+        let result =
+            process_response_for_decompression(response.clone(), RequestType::Set, Some(&manager))
+                .unwrap();
+        assert_eq!(result, response);
+    }
+
+    #[test]
+    fn test_decompress_values() {
+        let backend = Box::new(ZstdBackend::new());
+        let config = CompressionConfig::new(CompressionBackendType::Zstd);
+        let manager = CompressionManager::new(backend, config).unwrap();
+        let key = b"key".to_vec();
+        let original_data = "A".repeat(100).into_bytes();
+
+        let mut args = vec![key.clone()];
+        process_command_args_for_compression(&mut args, RequestType::Get, Some(&manager)).unwrap();
+        assert_eq!(args, vec![key]);
+
+        let compressed = manager.compress_value(&original_data);
+        assert!(has_magic_header(&compressed), "Value should be compressed");
+        let response = Value::BulkString(compressed.into_owned().into());
+        let result =
+            process_response_for_decompression(response, RequestType::Get, Some(&manager)).unwrap();
+        assert_eq!(result, Value::BulkString(original_data.into()));
+
+        let result =
+            process_response_for_decompression(Value::Nil, RequestType::Get, Some(&manager))
+                .unwrap();
+        assert_eq!(result, Value::Nil);
+    }
+
+    #[test]
+    fn test_compress_and_decompress_values() {
+        let backend = Box::new(ZstdBackend::new());
+        let config = CompressionConfig::new(CompressionBackendType::Zstd);
+        let manager = CompressionManager::new(backend, config).unwrap();
+        let key = b"key".to_vec();
+        let original_data = "A".repeat(100).into_bytes();
+
+        let mut args = vec![key.clone(), original_data.clone()];
+        process_command_args_for_compression(&mut args, RequestType::GetSet, Some(&manager))
+            .unwrap();
+        assert_eq!(args[0], key);
+        assert!(has_magic_header(&args[1]), "Value should be compressed");
+        assert!(args[1].len() < original_data.len());
+
+        let response = Value::BulkString(args[1].clone().into());
+        let result =
+            process_response_for_decompression(response, RequestType::GetSet, Some(&manager))
+                .unwrap();
+        assert_eq!(result, Value::BulkString(original_data.into()));
+
+        let result =
+            process_response_for_decompression(Value::Nil, RequestType::GetSet, Some(&manager))
+                .unwrap();
+        assert_eq!(result, Value::Nil);
+    }
+
+    #[test]
+    fn test_compression_manager_decompress_scenarios() {
         let backend = Box::new(ZstdBackend::new());
         let config = CompressionConfig::new(CompressionBackendType::Zstd);
         let manager = CompressionManager::new(backend, config).unwrap();
@@ -698,9 +785,6 @@ mod compression_tests {
 
     #[test]
     fn test_cross_backend_decompression() {
-        use glide_core::compression::lz4_backend::Lz4Backend;
-        use glide_core::compression::zstd_backend::ZstdBackend;
-
         let original_data = b"Test data for cross-backend decompression that is long enough to ensure compression occurs
             Here is a long string of repetitive dataaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 
@@ -738,8 +822,6 @@ mod compression_tests {
 
     #[test]
     fn test_unsupported_backend_fallback() {
-        use glide_core::compression::zstd_backend::ZstdBackend;
-
         // Create data with an unsupported backend ID (0xFF)
         let mut unsupported_data = create_header(0xFF).to_vec();
         unsupported_data.extend_from_slice(b"some compressed data");
@@ -800,192 +882,82 @@ mod compression_tests {
     #[test]
     fn test_compression_incompatibility_reason() {
         // Test string manipulation commands
-        assert!(
-            RequestType::Append
-                .compression_incompatibility_reason()
-                .is_some()
-        );
-        assert!(
-            RequestType::GetRange
-                .compression_incompatibility_reason()
-                .is_some()
-        );
-        assert!(
-            RequestType::SetRange
-                .compression_incompatibility_reason()
-                .is_some()
-        );
-        assert!(
-            RequestType::Strlen
-                .compression_incompatibility_reason()
-                .is_some()
-        );
-        assert!(
-            RequestType::LCS
-                .compression_incompatibility_reason()
-                .is_some()
-        );
-        assert!(
-            RequestType::Substr
-                .compression_incompatibility_reason()
-                .is_some()
-        );
-        assert!(
-            RequestType::DelIfEq
-                .compression_incompatibility_reason()
-                .is_some()
-        );
+        assert_compression_incompatible(RequestType::Append, &["key", "value"]);
+        assert_compression_incompatible(RequestType::DelIfEq, &["key", "value"]);
+        assert_compression_incompatible(RequestType::GetRange, &["key", "0", "-1"]);
+        assert_compression_incompatible(RequestType::LCS, &["key", "key2"]);
+        assert_compression_incompatible(RequestType::Set, &["key", "value", "IFEQ", "value"]);
+        assert_compression_incompatible(RequestType::SetRange, &["key", "0", "value"]);
+        assert_compression_incompatible(RequestType::Strlen, &["key"]);
+        assert_compression_incompatible(RequestType::Substr, &["key", "0", "-1"]);
 
         // Test numeric operations
-        assert!(
-            RequestType::Incr
-                .compression_incompatibility_reason()
-                .is_some()
-        );
-        assert!(
-            RequestType::IncrBy
-                .compression_incompatibility_reason()
-                .is_some()
-        );
-        assert!(
-            RequestType::IncrByFloat
-                .compression_incompatibility_reason()
-                .is_some()
-        );
-        assert!(
-            RequestType::Decr
-                .compression_incompatibility_reason()
-                .is_some()
-        );
-        assert!(
-            RequestType::DecrBy
-                .compression_incompatibility_reason()
-                .is_some()
-        );
+        assert_compression_incompatible(RequestType::Decr, &["key"]);
+        assert_compression_incompatible(RequestType::DecrBy, &["key", "1"]);
+        assert_compression_incompatible(RequestType::Incr, &["key"]);
+        assert_compression_incompatible(RequestType::IncrBy, &["key", "1"]);
+        assert_compression_incompatible(RequestType::IncrByFloat, &["key", "1.5"]);
 
         // Test bit operations
-        assert!(
-            RequestType::GetBit
-                .compression_incompatibility_reason()
-                .is_some()
-        );
-        assert!(
-            RequestType::SetBit
-                .compression_incompatibility_reason()
-                .is_some()
-        );
-        assert!(
-            RequestType::BitCount
-                .compression_incompatibility_reason()
-                .is_some()
-        );
-        assert!(
-            RequestType::BitPos
-                .compression_incompatibility_reason()
-                .is_some()
-        );
-        assert!(
-            RequestType::BitField
-                .compression_incompatibility_reason()
-                .is_some()
-        );
-        assert!(
-            RequestType::BitFieldReadOnly
-                .compression_incompatibility_reason()
-                .is_some()
-        );
-        assert!(
-            RequestType::BitOp
-                .compression_incompatibility_reason()
-                .is_some()
-        );
+        assert_compression_incompatible(RequestType::BitCount, &["key"]);
+        assert_compression_incompatible(RequestType::BitField, &["key", "GET", "u8", "0"]);
+        assert_compression_incompatible(RequestType::BitFieldReadOnly, &["key", "GET", "u8", "0"]);
+        assert_compression_incompatible(RequestType::BitOp, &["AND", "key", "key2"]);
+        assert_compression_incompatible(RequestType::BitPos, &["key", "1"]);
+        assert_compression_incompatible(RequestType::GetBit, &["key", "0"]);
+        assert_compression_incompatible(RequestType::SetBit, &["key", "0", "1"]);
 
         // Test compatible commands
-        assert!(
-            RequestType::Set
-                .compression_incompatibility_reason()
-                .is_none()
-        );
-        assert!(
-            RequestType::Get
-                .compression_incompatibility_reason()
-                .is_none()
-        );
-        assert!(
-            RequestType::MSet
-                .compression_incompatibility_reason()
-                .is_none()
-        );
-        assert!(
-            RequestType::MGet
-                .compression_incompatibility_reason()
-                .is_none()
-        );
-        assert!(
-            RequestType::SetEx
-                .compression_incompatibility_reason()
-                .is_none()
-        );
-        assert!(
-            RequestType::GetEx
-                .compression_incompatibility_reason()
-                .is_none()
-        );
-        assert!(
-            RequestType::Del
-                .compression_incompatibility_reason()
-                .is_none()
-        );
-        assert!(
-            RequestType::Ping
-                .compression_incompatibility_reason()
-                .is_none()
-        );
+        assert_compression_compatible(RequestType::Del, &["key"]);
+        assert_compression_compatible(RequestType::Get, &["key"]);
+        assert_compression_compatible(RequestType::GetEx, &["key"]);
+        assert_compression_compatible(RequestType::MGet, &["key", "key2"]);
+        assert_compression_compatible(RequestType::MSet, &["key", "value"]);
+        assert_compression_compatible(RequestType::Ping, &[]);
+        assert_compression_compatible(RequestType::Set, &["key", "value"]);
+        assert_compression_compatible(RequestType::SetEx, &["key", "10", "value"]);
     }
 
     #[test]
-    fn test_validate_command_compression_compatibility() {
-        use glide_core::compression::zstd_backend::ZstdBackend;
+    fn test_compression_incompatibility_reason_set() {
+        let set = RequestType::Set;
 
+        assert_compression_incompatible(set, &["key", "value", "IFEQ", "value"]);
+        assert_compression_incompatible(set, &["key", "value", "IFNE", "value"]);
+        assert_compression_incompatible(set, &["key", "value", "ifne", "value"]);
+        assert_compression_incompatible(set, &["key", "value", "GET", "IFEQ", "value"]);
+
+        assert_compression_compatible(set, &["key", "value"]);
+        assert_compression_compatible(set, &["key", "value", "GET"]);
+        assert_compression_compatible(set, &["key", "value", "XX", "EX", "10"]);
+        assert_compression_compatible(set, &["IFEQ", "IFNE"]);
+    }
+
+    #[test]
+    fn test_process_command_args_for_compression_compatibility() {
         // Create an enabled compression manager
         let backend = Box::new(ZstdBackend::new());
         let config = CompressionConfig::new(CompressionBackendType::Zstd);
         let manager = CompressionManager::new(backend, config).unwrap();
 
         // Test incompatible commands return errors
-        let result =
-            validate_command_compression_compatibility(RequestType::Append, Some(&manager));
-        assert!(result.is_err());
-        let err = result.unwrap_err();
-        assert!(matches!(err, CompressionError::IncompatibleCommand { .. }));
-        assert!(err.to_string().contains("APPEND"));
-
-        let result = validate_command_compression_compatibility(RequestType::Incr, Some(&manager));
-        assert!(result.is_err());
-        let err = result.unwrap_err();
-        assert!(matches!(err, CompressionError::IncompatibleCommand { .. }));
-        assert!(err.to_string().contains("INCR"));
-
-        let result =
-            validate_command_compression_compatibility(RequestType::BitCount, Some(&manager));
-        assert!(result.is_err());
-        let err = result.unwrap_err();
-        assert!(matches!(err, CompressionError::IncompatibleCommand { .. }));
-        assert!(err.to_string().contains("BITCOUNT"));
+        assert_process_args_incompatible(RequestType::Append, &["key", "value"], Some(&manager));
+        assert_process_args_incompatible(RequestType::BitCount, &["key"], Some(&manager));
+        assert_process_args_incompatible(RequestType::Incr, &["key"], Some(&manager));
+        assert_process_args_incompatible(
+            RequestType::Set,
+            &["key", "value", "IFNE", "value"],
+            Some(&manager),
+        );
 
         // Test compatible commands succeed
-        let result = validate_command_compression_compatibility(RequestType::Set, Some(&manager));
-        assert!(result.is_ok());
-
-        let result = validate_command_compression_compatibility(RequestType::Get, Some(&manager));
-        assert!(result.is_ok());
-
-        let result = validate_command_compression_compatibility(RequestType::Del, Some(&manager));
-        assert!(result.is_ok());
+        assert_process_args_compatible(RequestType::Del, &["key"], Some(&manager));
+        assert_process_args_compatible(RequestType::Get, &["key"], Some(&manager));
+        assert_process_args_compatible(RequestType::Set, &["key", "value"], Some(&manager));
+        assert_process_args_compatible(RequestType::Set, &["key", "value", "GET"], Some(&manager));
 
         // Test with no compression manager (should always succeed)
-        let result = validate_command_compression_compatibility(RequestType::Append, None);
-        assert!(result.is_ok());
+        assert_process_args_compatible(RequestType::Append, &["key", "value"], None);
 
         // Test with disabled compression manager (should always succeed)
         let backend = Box::new(ZstdBackend::new());
@@ -998,44 +970,51 @@ mod compression_tests {
             max_decompressed_size: Some(DEFAULT_MAX_DECOMPRESSED_SIZE),
         };
         let disabled_manager = CompressionManager::new(backend, disabled_config).unwrap();
-        let result = validate_command_compression_compatibility(
+        assert_process_args_compatible(
             RequestType::Append,
+            &["key", "value"],
             Some(&disabled_manager),
         );
-        assert!(result.is_ok());
     }
 
     #[test]
     fn test_command_name() {
         // Test incompatible commands have names
         assert_eq!(RequestType::Append.command_name(), Some("APPEND"));
-        assert_eq!(RequestType::GetRange.command_name(), Some("GETRANGE"));
-        assert_eq!(RequestType::SetRange.command_name(), Some("SETRANGE"));
-        assert_eq!(RequestType::Strlen.command_name(), Some("STRLEN"));
-        assert_eq!(RequestType::LCS.command_name(), Some("LCS"));
-        assert_eq!(RequestType::Substr.command_name(), Some("SUBSTR"));
-        assert_eq!(RequestType::DelIfEq.command_name(), Some("DELIFEQ"));
-        assert_eq!(RequestType::Incr.command_name(), Some("INCR"));
-        assert_eq!(RequestType::IncrBy.command_name(), Some("INCRBY"));
-        assert_eq!(RequestType::IncrByFloat.command_name(), Some("INCRBYFLOAT"));
-        assert_eq!(RequestType::Decr.command_name(), Some("DECR"));
-        assert_eq!(RequestType::DecrBy.command_name(), Some("DECRBY"));
-        assert_eq!(RequestType::GetBit.command_name(), Some("GETBIT"));
-        assert_eq!(RequestType::SetBit.command_name(), Some("SETBIT"));
         assert_eq!(RequestType::BitCount.command_name(), Some("BITCOUNT"));
-        assert_eq!(RequestType::BitPos.command_name(), Some("BITPOS"));
         assert_eq!(RequestType::BitField.command_name(), Some("BITFIELD"));
         assert_eq!(
             RequestType::BitFieldReadOnly.command_name(),
             Some("BITFIELD_RO")
         );
         assert_eq!(RequestType::BitOp.command_name(), Some("BITOP"));
+        assert_eq!(RequestType::BitPos.command_name(), Some("BITPOS"));
+        assert_eq!(RequestType::Decr.command_name(), Some("DECR"));
+        assert_eq!(RequestType::DecrBy.command_name(), Some("DECRBY"));
+        assert_eq!(RequestType::DelIfEq.command_name(), Some("DELIFEQ"));
+        assert_eq!(RequestType::GetBit.command_name(), Some("GETBIT"));
+        assert_eq!(RequestType::GetRange.command_name(), Some("GETRANGE"));
+        assert_eq!(RequestType::Incr.command_name(), Some("INCR"));
+        assert_eq!(RequestType::IncrBy.command_name(), Some("INCRBY"));
+        assert_eq!(RequestType::IncrByFloat.command_name(), Some("INCRBYFLOAT"));
+        assert_eq!(RequestType::LCS.command_name(), Some("LCS"));
+        assert_eq!(RequestType::SetBit.command_name(), Some("SETBIT"));
+        assert_eq!(RequestType::SetRange.command_name(), Some("SETRANGE"));
+        assert_eq!(RequestType::Strlen.command_name(), Some("STRLEN"));
+        assert_eq!(RequestType::Substr.command_name(), Some("SUBSTR"));
 
         // Test compatible commands have names
-        assert_eq!(RequestType::Set.command_name(), Some("SET"));
         assert_eq!(RequestType::Get.command_name(), Some("GET"));
-        assert_eq!(RequestType::MSet.command_name(), Some("MSET"));
+        assert_eq!(RequestType::GetDel.command_name(), Some("GETDEL"));
+        assert_eq!(RequestType::GetEx.command_name(), Some("GETEX"));
+        assert_eq!(RequestType::GetSet.command_name(), Some("GETSET"));
         assert_eq!(RequestType::MGet.command_name(), Some("MGET"));
+        assert_eq!(RequestType::MSet.command_name(), Some("MSET"));
+        assert_eq!(RequestType::MSetNX.command_name(), Some("MSETNX"));
+        assert_eq!(RequestType::PSetEx.command_name(), Some("PSETEX"));
+        assert_eq!(RequestType::Set.command_name(), Some("SET"));
+        assert_eq!(RequestType::SetEx.command_name(), Some("SETEX"));
+        assert_eq!(RequestType::SetNX.command_name(), Some("SETNX"));
 
         // Test invalid request has no name
         assert_eq!(RequestType::InvalidRequest.command_name(), None);
@@ -1044,169 +1023,61 @@ mod compression_tests {
     #[test]
     fn test_from_command_name() {
         // Test commands that support compression
-        assert!(matches!(
-            RequestType::from_command_name("SET"),
-            Some(RequestType::Set)
-        ));
-        assert!(matches!(
-            RequestType::from_command_name("MSET"),
-            Some(RequestType::MSet)
-        ));
-        assert!(matches!(
-            RequestType::from_command_name("MSETNX"),
-            Some(RequestType::MSetNX)
-        ));
-        assert!(matches!(
-            RequestType::from_command_name("SETEX"),
-            Some(RequestType::SetEx)
-        ));
-        assert!(matches!(
-            RequestType::from_command_name("PSETEX"),
-            Some(RequestType::PSetEx)
-        ));
-        assert!(matches!(
-            RequestType::from_command_name("SETNX"),
-            Some(RequestType::SetNX)
-        ));
-        assert!(matches!(
-            RequestType::from_command_name("GET"),
-            Some(RequestType::Get)
-        ));
-        assert!(matches!(
-            RequestType::from_command_name("MGET"),
-            Some(RequestType::MGet)
-        ));
-        assert!(matches!(
-            RequestType::from_command_name("GETEX"),
-            Some(RequestType::GetEx)
-        ));
-        assert!(matches!(
-            RequestType::from_command_name("GETDEL"),
-            Some(RequestType::GetDel)
-        ));
-        assert!(matches!(
-            RequestType::from_command_name("GETSET"),
-            Some(RequestType::GetSet)
-        ));
+        assert_from_command_name("GET", RequestType::Get);
+        assert_from_command_name("GETDEL", RequestType::GetDel);
+        assert_from_command_name("GETEX", RequestType::GetEx);
+        assert_from_command_name("GETSET", RequestType::GetSet);
+        assert_from_command_name("MGET", RequestType::MGet);
+        assert_from_command_name("MSET", RequestType::MSet);
+        assert_from_command_name("MSETNX", RequestType::MSetNX);
+        assert_from_command_name("PSETEX", RequestType::PSetEx);
+        assert_from_command_name("SET", RequestType::Set);
+        assert_from_command_name("SETEX", RequestType::SetEx);
+        assert_from_command_name("SETNX", RequestType::SetNX);
 
         // Test incompatible commands - string manipulation
-        assert!(matches!(
-            RequestType::from_command_name("APPEND"),
-            Some(RequestType::Append)
-        ));
-        assert!(matches!(
-            RequestType::from_command_name("GETRANGE"),
-            Some(RequestType::GetRange)
-        ));
-        assert!(matches!(
-            RequestType::from_command_name("SETRANGE"),
-            Some(RequestType::SetRange)
-        ));
-        assert!(matches!(
-            RequestType::from_command_name("STRLEN"),
-            Some(RequestType::Strlen)
-        ));
-        assert!(matches!(
-            RequestType::from_command_name("LCS"),
-            Some(RequestType::LCS)
-        ));
-        assert!(matches!(
-            RequestType::from_command_name("SUBSTR"),
-            Some(RequestType::Substr)
-        ));
-        assert!(matches!(
-            RequestType::from_command_name("DELIFEQ"),
-            Some(RequestType::DelIfEq)
-        ));
+        assert_from_command_name("APPEND", RequestType::Append);
+        assert_from_command_name("DELIFEQ", RequestType::DelIfEq);
+        assert_from_command_name("GETRANGE", RequestType::GetRange);
+        assert_from_command_name("LCS", RequestType::LCS);
+        assert_from_command_name("SETRANGE", RequestType::SetRange);
+        assert_from_command_name("STRLEN", RequestType::Strlen);
+        assert_from_command_name("SUBSTR", RequestType::Substr);
 
         // Test incompatible commands - numeric operations
-        assert!(matches!(
-            RequestType::from_command_name("INCR"),
-            Some(RequestType::Incr)
-        ));
-        assert!(matches!(
-            RequestType::from_command_name("INCRBY"),
-            Some(RequestType::IncrBy)
-        ));
-        assert!(matches!(
-            RequestType::from_command_name("INCRBYFLOAT"),
-            Some(RequestType::IncrByFloat)
-        ));
-        assert!(matches!(
-            RequestType::from_command_name("DECR"),
-            Some(RequestType::Decr)
-        ));
-        assert!(matches!(
-            RequestType::from_command_name("DECRBY"),
-            Some(RequestType::DecrBy)
-        ));
+        assert_from_command_name("DECR", RequestType::Decr);
+        assert_from_command_name("DECRBY", RequestType::DecrBy);
+        assert_from_command_name("INCR", RequestType::Incr);
+        assert_from_command_name("INCRBY", RequestType::IncrBy);
+        assert_from_command_name("INCRBYFLOAT", RequestType::IncrByFloat);
 
         // Test incompatible commands - bit operations
-        assert!(matches!(
-            RequestType::from_command_name("GETBIT"),
-            Some(RequestType::GetBit)
-        ));
-        assert!(matches!(
-            RequestType::from_command_name("SETBIT"),
-            Some(RequestType::SetBit)
-        ));
-        assert!(matches!(
-            RequestType::from_command_name("BITCOUNT"),
-            Some(RequestType::BitCount)
-        ));
-        assert!(matches!(
-            RequestType::from_command_name("BITPOS"),
-            Some(RequestType::BitPos)
-        ));
-        assert!(matches!(
-            RequestType::from_command_name("BITFIELD"),
-            Some(RequestType::BitField)
-        ));
-        assert!(matches!(
-            RequestType::from_command_name("BITFIELD_RO"),
-            Some(RequestType::BitFieldReadOnly)
-        ));
-        assert!(matches!(
-            RequestType::from_command_name("BITOP"),
-            Some(RequestType::BitOp)
-        ));
+        assert_from_command_name("BITCOUNT", RequestType::BitCount);
+        assert_from_command_name("BITFIELD", RequestType::BitField);
+        assert_from_command_name("BITFIELD_RO", RequestType::BitFieldReadOnly);
+        assert_from_command_name("BITOP", RequestType::BitOp);
+        assert_from_command_name("BITPOS", RequestType::BitPos);
+        assert_from_command_name("GETBIT", RequestType::GetBit);
+        assert_from_command_name("SETBIT", RequestType::SetBit);
 
         // Test case insensitivity
-        assert!(matches!(
-            RequestType::from_command_name("set"),
-            Some(RequestType::Set)
-        ));
-        assert!(matches!(
-            RequestType::from_command_name("Set"),
-            Some(RequestType::Set)
-        ));
-        assert!(matches!(
-            RequestType::from_command_name("sEt"),
-            Some(RequestType::Set)
-        ));
-        assert!(matches!(
-            RequestType::from_command_name("append"),
-            Some(RequestType::Append)
-        ));
-        assert!(matches!(
-            RequestType::from_command_name("APPEND"),
-            Some(RequestType::Append)
-        ));
+        assert_from_command_name("append", RequestType::Append);
+        assert_from_command_name("sEt", RequestType::Set);
+        assert_from_command_name("Set", RequestType::Set);
+        assert_from_command_name("set", RequestType::Set);
 
         // Test unknown commands return None
-        assert!(RequestType::from_command_name("UNKNOWN").is_none());
+        assert!(RequestType::from_command_name("").is_none());
+        assert!(RequestType::from_command_name("DEL").is_none());
+        assert!(RequestType::from_command_name("HGET").is_none());
         assert!(RequestType::from_command_name("HSET").is_none());
         assert!(RequestType::from_command_name("LPUSH").is_none());
+        assert!(RequestType::from_command_name("UNKNOWN").is_none());
         assert!(RequestType::from_command_name("ZADD").is_none());
-        assert!(RequestType::from_command_name("").is_none());
     }
 
     #[test]
     fn test_decompress_batch_response() {
-        use glide_core::compression::decompress_batch_response;
-        use glide_core::compression::zstd_backend::ZstdBackend;
-        use redis::Value;
-
         // Create an enabled compression manager
         let backend = Box::new(ZstdBackend::new());
         let config = CompressionConfig::new(CompressionBackendType::Zstd);
@@ -1291,10 +1162,6 @@ mod compression_tests {
 
     #[test]
     fn test_decompress_batch_response_nested_arrays() {
-        use glide_core::compression::decompress_batch_response;
-        use glide_core::compression::zstd_backend::ZstdBackend;
-        use redis::Value;
-
         // Create an enabled compression manager
         let backend = Box::new(ZstdBackend::new());
         let config = CompressionConfig::new(CompressionBackendType::Zstd);
@@ -1419,9 +1286,6 @@ mod compression_tests {
 
     #[test]
     fn test_max_decompressed_size_limit() {
-        use glide_core::compression::lz4_backend::Lz4Backend;
-        use glide_core::compression::zstd_backend::ZstdBackend;
-
         // Test ZSTD with size limit
         let zstd_backend = ZstdBackend::new();
         let test_data = b"test data for compression that is long enough to be compressed - value 1";
@@ -1487,8 +1351,6 @@ mod compression_tests {
 
     #[test]
     fn test_compression_manager_respects_max_decompressed_size() {
-        use glide_core::compression::zstd_backend::ZstdBackend;
-
         // Create test data that's large enough to be compressed
         let test_data = "A".repeat(200); // Large enough to exceed min_compression_size
         let test_data_bytes = test_data.as_bytes();
@@ -1522,5 +1384,62 @@ mod compression_tests {
         let result = manager.decompress_value(&compressed);
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), test_data_bytes);
+    }
+
+    // Assertion helpers --------------------------------------------------------------------------
+
+    fn assert_compression_compatible(request_type: RequestType, args: &[&str]) {
+        let args: Vec<Vec<u8>> = args.iter().map(|arg| arg.as_bytes().to_vec()).collect();
+        let reason = request_type.compression_incompatibility_reason(&args);
+        assert!(
+            reason.is_none(),
+            "expected {request_type:?} with {args:?} to be compatible with compression, got {reason:?}"
+        );
+    }
+
+    fn assert_compression_incompatible(request_type: RequestType, args: &[&str]) {
+        let args: Vec<Vec<u8>> = args.iter().map(|arg| arg.as_bytes().to_vec()).collect();
+        assert!(
+            request_type
+                .compression_incompatibility_reason(&args)
+                .is_some(),
+            "expected {request_type:?} with {args:?} to be incompatible with compression"
+        );
+    }
+
+    fn assert_from_command_name(name: &str, expected: RequestType) {
+        let actual = RequestType::from_command_name(name);
+        assert!(
+            actual.is_some_and(|actual| actual as u32 == expected as u32),
+            "from_command_name({name:?}) returned {actual:?}, expected Some({expected:?})"
+        );
+    }
+
+    fn assert_process_args_compatible(
+        request_type: RequestType,
+        args: &[&str],
+        manager: Option<&CompressionManager>,
+    ) {
+        let mut args: Vec<Vec<u8>> = args.iter().map(|arg| arg.as_bytes().to_vec()).collect();
+        let result = process_command_args_for_compression(&mut args, request_type, manager);
+        assert!(
+            result.is_ok(),
+            "expected {request_type:?} to be accepted, got {result:?}"
+        );
+    }
+
+    fn assert_process_args_incompatible(
+        request_type: RequestType,
+        args: &[&str],
+        manager: Option<&CompressionManager>,
+    ) {
+        let mut args: Vec<Vec<u8>> = args.iter().map(|arg| arg.as_bytes().to_vec()).collect();
+        let err = process_command_args_for_compression(&mut args, request_type, manager)
+            .expect_err(&format!("expected {request_type:?} to be rejected"));
+        assert!(matches!(err, CompressionError::IncompatibleCommand { .. }));
+        assert!(
+            err.to_string()
+                .contains(request_type.command_name().unwrap())
+        );
     }
 }
