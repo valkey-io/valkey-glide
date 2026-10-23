@@ -1565,7 +1565,7 @@ func (suite *GlideTestSuite) TestHSetEx_WithKeyConditionalSet() {
 		combinedKey := "test_hsetex_key_and_field_conditional_" + uuid.NewString()
 		combinedOptions := options.NewHSetExOptions().
 			SetConditionalSet(constants.OnlyIfDoesNotExist).
-			SetFieldConditionalSet(constants.OnlyIfFieldsDoNotExist).
+			SetFieldConditionalSet(constants.HashFieldsDoNotExist).
 			SetExpiry(options.NewExpiryIn(60 * time.Second))
 		result, err = client.HSetEx(ctx, combinedKey, fields, combinedOptions)
 		assert.NoError(suite.T(), err)

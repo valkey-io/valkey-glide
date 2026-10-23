@@ -20,13 +20,12 @@ type HSetExOptions struct {
 	// ConditionalSet is the key-level condition: [constants.OnlyIfExists] (XX) or [constants.OnlyIfDoesNotExist] (NX).
 	// Key-level conditions require Valkey 9.1 and above.
 	//
-	// For backward compatibility, the field-level conditions [constants.OnlyIfAllFieldsExist] (FXX) and
-	// [constants.OnlyIfFieldsDoNotExist] (FNX) are still accepted here, but are deprecated in favor of
-	// FieldConditionalSet.
+	// For backward compatibility, the deprecated field-level constants [constants.OnlyIfAllFieldsExist] (FXX) and
+	// [constants.OnlyIfFieldsDoNotExist] (FNX) are still accepted here; use FieldConditionalSet instead.
 	ConditionalSet constants.ConditionalSet
-	// FieldConditionalSet is the field-level condition: [constants.OnlyIfAllFieldsExist] (FXX) or
-	// [constants.OnlyIfFieldsDoNotExist] (FNX).
-	FieldConditionalSet constants.ConditionalSet
+	// FieldConditionalSet is the field-level condition: [constants.HashAllFieldsExist] (FXX) or
+	// [constants.HashFieldsDoNotExist] (FNX).
+	FieldConditionalSet constants.HashFieldConditionalSet
 	Expiry              *Expiry
 }
 
@@ -42,16 +41,16 @@ func NewHSetExOptions() HSetExOptions {
 //
 //	Valkey 9.1 and above for key-level conditions.
 //
-// Passing a field-level condition ([constants.OnlyIfAllFieldsExist] or [constants.OnlyIfFieldsDoNotExist]) is
-// deprecated; use [HSetExOptions.SetFieldConditionalSet] instead.
+// Passing the deprecated field-level constants ([constants.OnlyIfAllFieldsExist] or
+// [constants.OnlyIfFieldsDoNotExist]) is still supported; use [HSetExOptions.SetFieldConditionalSet] instead.
 func (opts HSetExOptions) SetConditionalSet(conditionalSet constants.ConditionalSet) HSetExOptions {
 	opts.ConditionalSet = conditionalSet
 	return opts
 }
 
-// SetFieldConditionalSet sets the field-level conditional set option: [constants.OnlyIfAllFieldsExist] (FXX) or
-// [constants.OnlyIfFieldsDoNotExist] (FNX).
-func (opts HSetExOptions) SetFieldConditionalSet(fieldConditionalSet constants.ConditionalSet) HSetExOptions {
+// SetFieldConditionalSet sets the field-level conditional set option: [constants.HashAllFieldsExist] (FXX) or
+// [constants.HashFieldsDoNotExist] (FNX).
+func (opts HSetExOptions) SetFieldConditionalSet(fieldConditionalSet constants.HashFieldConditionalSet) HSetExOptions {
 	opts.FieldConditionalSet = fieldConditionalSet
 	return opts
 }
@@ -70,13 +69,14 @@ func (opts *HSetExOptions) ToArgs() ([]string, error) {
 	fieldCondition := opts.FieldConditionalSet
 
 	// Backward compatibility: field-level conditions were previously passed via ConditionalSet.
-	if keyCondition == constants.OnlyIfAllFieldsExist || keyCondition == constants.OnlyIfFieldsDoNotExist {
+	if legacy := constants.HashFieldConditionalSet(keyCondition); legacy == constants.HashAllFieldsExist ||
+		legacy == constants.HashFieldsDoNotExist {
 		if fieldCondition != "" {
 			return nil, errors.New(
 				"HSetExOptions: field-level condition set in both ConditionalSet and FieldConditionalSet",
 			)
 		}
-		fieldCondition, keyCondition = keyCondition, ""
+		fieldCondition, keyCondition = legacy, ""
 	}
 
 	switch keyCondition {
@@ -89,7 +89,7 @@ func (opts *HSetExOptions) ToArgs() ([]string, error) {
 
 	switch fieldCondition {
 	case "":
-	case constants.OnlyIfAllFieldsExist, constants.OnlyIfFieldsDoNotExist:
+	case constants.HashAllFieldsExist, constants.HashFieldsDoNotExist:
 		args = append(args, string(fieldCondition))
 	default:
 		return nil, errors.New("HSetExOptions: invalid field-level condition " + string(fieldCondition))

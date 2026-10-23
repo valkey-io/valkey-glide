@@ -18,12 +18,12 @@ func TestHSetExOptionsToArgs_NoOptions(t *testing.T) {
 }
 
 func TestHSetExOptionsToArgs_OnlyFieldConditionalSet(t *testing.T) {
-	opts := NewHSetExOptions().SetFieldConditionalSet(constants.OnlyIfFieldsDoNotExist)
+	opts := NewHSetExOptions().SetFieldConditionalSet(constants.HashFieldsDoNotExist)
 	args, err := opts.ToArgs()
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"FNX"}, args)
 
-	opts = NewHSetExOptions().SetFieldConditionalSet(constants.OnlyIfAllFieldsExist)
+	opts = NewHSetExOptions().SetFieldConditionalSet(constants.HashAllFieldsExist)
 	args, err = opts.ToArgs()
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"FXX"}, args)
@@ -43,14 +43,14 @@ func TestHSetExOptionsToArgs_OnlyKeyConditionalSet(t *testing.T) {
 
 func TestHSetExOptionsToArgs_CombinedOptions(t *testing.T) {
 	opts := NewHSetExOptions().
-		SetFieldConditionalSet(constants.OnlyIfFieldsDoNotExist).
+		SetFieldConditionalSet(constants.HashFieldsDoNotExist).
 		SetExpiry(NewExpiryIn(60 * time.Second))
 	args, err := opts.ToArgs()
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"FNX", "EX", "60"}, args)
 
 	opts = NewHSetExOptions().
-		SetFieldConditionalSet(constants.OnlyIfAllFieldsExist).
+		SetFieldConditionalSet(constants.HashAllFieldsExist).
 		SetExpiry(NewExpiryIn(5500 * time.Millisecond))
 	args, err = opts.ToArgs()
 	assert.NoError(t, err)
@@ -58,14 +58,14 @@ func TestHSetExOptionsToArgs_CombinedOptions(t *testing.T) {
 
 	opts = NewHSetExOptions().
 		SetConditionalSet(constants.OnlyIfExists).
-		SetFieldConditionalSet(constants.OnlyIfFieldsDoNotExist)
+		SetFieldConditionalSet(constants.HashFieldsDoNotExist)
 	args, err = opts.ToArgs()
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"XX", "FNX"}, args)
 
 	opts = NewHSetExOptions().
 		SetConditionalSet(constants.OnlyIfDoesNotExist).
-		SetFieldConditionalSet(constants.OnlyIfAllFieldsExist)
+		SetFieldConditionalSet(constants.HashAllFieldsExist)
 	args, err = opts.ToArgs()
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"NX", "FXX"}, args)
@@ -79,7 +79,7 @@ func TestHSetExOptionsToArgs_CombinedOptions(t *testing.T) {
 
 	opts = NewHSetExOptions().
 		SetConditionalSet(constants.OnlyIfDoesNotExist).
-		SetFieldConditionalSet(constants.OnlyIfFieldsDoNotExist).
+		SetFieldConditionalSet(constants.HashFieldsDoNotExist).
 		SetExpiry(NewExpiryIn(60 * time.Second))
 	args, err = opts.ToArgs()
 	assert.NoError(t, err)
@@ -99,12 +99,14 @@ func TestHSetExOptionsToArgs_OnlyExpiry(t *testing.T) {
 }
 
 func TestHSetExOptionsToArgs_LegacyFieldConditionInConditionalSet(t *testing.T) {
+	//lint:ignore SA1019 exercising the deprecated backward-compatible path
 	opts := NewHSetExOptions().SetConditionalSet(constants.OnlyIfFieldsDoNotExist)
 	args, err := opts.ToArgs()
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"FNX"}, args)
 
 	opts = NewHSetExOptions().
+		//lint:ignore SA1019 exercising the deprecated backward-compatible path
 		SetConditionalSet(constants.OnlyIfAllFieldsExist).
 		SetExpiry(NewExpiryIn(60 * time.Second))
 	args, err = opts.ToArgs()
@@ -114,8 +116,9 @@ func TestHSetExOptionsToArgs_LegacyFieldConditionInConditionalSet(t *testing.T) 
 
 func TestHSetExOptionsToArgs_InvalidConditions(t *testing.T) {
 	opts := NewHSetExOptions().
+		//lint:ignore SA1019 exercising the deprecated backward-compatible path
 		SetConditionalSet(constants.OnlyIfFieldsDoNotExist).
-		SetFieldConditionalSet(constants.OnlyIfAllFieldsExist)
+		SetFieldConditionalSet(constants.HashAllFieldsExist)
 	_, err := opts.ToArgs()
 	assert.ErrorContains(t, err, "field-level condition set in both")
 
@@ -123,7 +126,7 @@ func TestHSetExOptionsToArgs_InvalidConditions(t *testing.T) {
 	_, err = opts.ToArgs()
 	assert.ErrorContains(t, err, "invalid key-level condition")
 
-	opts = NewHSetExOptions().SetFieldConditionalSet(constants.OnlyIfExists)
+	opts = NewHSetExOptions().SetFieldConditionalSet(constants.HashFieldConditionalSet("XX"))
 	_, err = opts.ToArgs()
 	assert.ErrorContains(t, err, "invalid field-level condition")
 }
