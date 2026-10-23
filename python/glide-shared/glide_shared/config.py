@@ -5,7 +5,18 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from enum import Enum, IntEnum
-from typing import Any, Callable, Dict, List, Optional, Protocol, Set, Tuple, Union
+from typing import (
+    Any,
+    Awaitable,
+    Callable,
+    Dict,
+    List,
+    Optional,
+    Protocol,
+    Set,
+    Tuple,
+    Union,
+)
 
 from glide_shared.cache import ClientSideCache
 from glide_shared.commands.core_options import PubSubMsg
@@ -347,16 +358,93 @@ class ServiceType(Enum):
     """Amazon MemoryDB service."""
 
 
-class IamAuthConfig:
+class AwsCredentials:
+    """AWS credentials used to sign IAM authentication tokens.
+
+    ``access_key_id`` and ``secret_access_key`` must be nonblank strings.
+    ``expires_at_epoch_millis``, when supplied, must be an integer that fits in
+    a signed 64-bit value. Values less than or equal to 0 mean no expiry.
+
+    Attributes:
+        access_key_id (str): The AWS access key ID.
+        secret_access_key (str): The AWS secret access key.
+        session_token (Optional[str]): An optional AWS session token.
+        expires_at_epoch_millis (Optional[int]): Optional expiration time as Unix
+            epoch milliseconds. A nonpositive value is treated as no expiration
+            by the core.
     """
-    Configuration settings for IAM authentication.
+
+    def __init__(
+        self,
+        access_key_id: str,
+        secret_access_key: str,
+        session_token: Optional[str] = None,
+        expires_at_epoch_millis: Optional[int] = None,
+    ):
+        if not isinstance(access_key_id, str) or not access_key_id.strip():
+            raise ValueError("access_key_id must be a nonblank string")
+        if not isinstance(secret_access_key, str) or not secret_access_key.strip():
+            raise ValueError("secret_access_key must be a nonblank string")
+        if session_token is not None and not isinstance(session_token, str):
+            raise ValueError("session_token must be a string or None")
+        if expires_at_epoch_millis is not None and (
+            not isinstance(expires_at_epoch_millis, int)
+            or isinstance(expires_at_epoch_millis, bool)
+            or expires_at_epoch_millis < -(2**63)
+            or expires_at_epoch_millis > 2**63 - 1
+        ):
+            raise ValueError("expires_at_epoch_millis must be a signed 64-bit integer")
+
+        self.access_key_id = access_key_id
+        self.secret_access_key = secret_access_key
+        self.session_token = session_token
+        self.expires_at_epoch_millis = expires_at_epoch_millis
+
+
+#: A thread-safe callable that returns AWS credentials for IAM token signing.
+#:
+#: Direct async clients accept synchronous and asynchronous providers. Direct
+#: sync clients accept synchronous providers only. The native core admits one
+#: logical fetch at a time per direct client/provider; separate providers have
+#: independent admission. A provider may still be called twice sequentially
+#: within one fetch when a field does not fit in the initial native buffers, so
+#: each invocation must return a complete, coherent set of credentials.
+#: Providers should return promptly and cooperate with any application
+#: cancellation mechanism. The Python async bridge times out after 9 seconds,
+#: before the Rust core's 10-second outer deadline. These deadlines bound how
+#: long the client waits, but cannot forcibly stop synchronous user code; a
+#: timed-out synchronous provider may finish on a detached background worker
+#: after the request fails or the client closes. Close does not wait for or
+#: retain ownership of that worker. Until the actual invocation returns, later
+#: fetches for that direct provider fail immediately rather than queueing or
+#: starting additional callback workers.
+GlideCredentialProvider = Union[
+    Callable[[], AwsCredentials], Callable[[], Awaitable[AwsCredentials]]
+]
+
+
+def _is_async_callable(provider: object) -> bool:
+    """Return whether a function or callable object's ``__call__`` is async."""
+    import inspect
+
+    return inspect.iscoroutinefunction(provider) or inspect.iscoroutinefunction(
+        getattr(provider, "__call__", None)
+    )
+
+
+class IamAuthConfig:
+    """Configuration settings for IAM authentication.
 
     Attributes:
         cluster_name (str): The name of the ElastiCache/MemoryDB cluster.
-        service (ServiceType): The type of service being used (ElastiCache or MemoryDB).
-        region (str): The AWS region where the ElastiCache/MemoryDB cluster is located.
-        refresh_interval_seconds (Optional[int]): Optional refresh interval in seconds for renewing IAM authentication tokens.
-            If not provided, the core will use a default value of 300 seconds (5 min).
+        service (ServiceType): The service type (ElastiCache or MemoryDB).
+        region (str): The AWS region containing the cluster.
+        refresh_interval_seconds (Optional[int]): Optional token refresh interval.
+            If omitted, the core uses 300 seconds (5 minutes).
+        credential_provider (Optional[GlideCredentialProvider]): Optional custom
+            AWS credential source. Direct clients use it instead of the default
+            AWS credential chain. Python client pools do not support custom
+            providers.
     """
 
     def __init__(
@@ -365,11 +453,19 @@ class IamAuthConfig:
         service: ServiceType,
         region: str,
         refresh_interval_seconds: Optional[int] = None,
+        credential_provider: Optional[GlideCredentialProvider] = None,
     ):
+        if credential_provider is not None and not callable(credential_provider):
+            raise ValueError("credential_provider must be callable")
+
         self.cluster_name = cluster_name
         self.service = service
         self.region = region
         self.refresh_interval_seconds = refresh_interval_seconds
+        self.credential_provider = credential_provider
+        self._credential_provider_is_async = (
+            credential_provider is not None and _is_async_callable(credential_provider)
+        )
 
 
 class ServerCredentials:

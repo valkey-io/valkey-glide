@@ -56,7 +56,7 @@ env:
 
 jobs:
     test:
-        runs-on: ubuntu-latest
+        runs-on: ubuntu-24.04
         timeout-minutes: 35
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -74,8 +74,12 @@ jobs:
             - name: Cache dependencies
               uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
               with:
+                  cache-bin: true
                   cache-on-failure: true
                   workspaces: ./ffi
+
+            - name: Install cbindgen
+              run: cargo install --locked cbindgen@0.29.4
 
             - name: Run glide-ffi tests
               working-directory: ./ffi
@@ -86,7 +90,7 @@ jobs:
               run: cargo miri test
 
     lint:
-        runs-on: ubuntu-latest
+        runs-on: ubuntu-24.04
         timeout-minutes: 30
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

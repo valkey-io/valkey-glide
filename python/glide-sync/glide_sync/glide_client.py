@@ -16,6 +16,7 @@ from glide_shared.config import (
     BaseClientConfiguration,
     GlideClientConfiguration,
     GlideClusterClientConfiguration,
+    _is_async_callable,
 )
 from glide_shared.connection_request import _create_sync_connection_request
 from glide_shared.constants import OK, TEncodable, TResult
@@ -25,7 +26,11 @@ from glide_shared.exceptions import (
     RequestError,
     get_request_error_class,
 )
-from glide_shared.ffi_helpers import handle_command_result
+from glide_shared.ffi_helpers import (
+    _is_credential_provider_executing,
+    create_credential_provider_callback,
+    handle_command_result,
+)
 from glide_shared.opentelemetry import _create_batch_span, _create_command_span
 from glide_shared.protobuf.command_request_pb2 import RequestType
 from glide_shared.routes import (
@@ -105,6 +110,9 @@ class BaseClient(CoreCommands):
         self._pubsub_lock = threading.Lock()
         self._pubsub_condition = threading.Condition(self._pubsub_lock)
         self._pubsub_callback_ref = None  # Keep callback alive
+        self._credential_provider_callback_ref = None
+        self._credential_provider_callback_owner = None
+        self._core_client = self._ffi.NULL
         # Lock protecting _core_client and _is_closed for free-threading safety.
         # Under GIL builds this is a no-op (GIL serializes access).
         # Under free-threaded builds this prevents use-after-free on concurrent close.
@@ -130,7 +138,25 @@ class BaseClient(CoreCommands):
 
         return self
 
-    def _create_core_client(self):
+    def _create_core_client(self):  # noqa: C901
+        previous_owner = self._credential_provider_callback_owner
+        if previous_owner is not None:
+            previous_owner.close()
+        self._credential_provider_callback_owner = None
+        self._credential_provider_callback_ref = None
+        credential_provider = None
+        if (
+            self._config.credentials is not None
+            and self._config.credentials.iam_config is not None
+        ):
+            credential_provider = (
+                self._config.credentials.iam_config.credential_provider
+            )
+        if credential_provider is not None and _is_async_callable(credential_provider):
+            raise ConfigurationError(
+                "The sync client does not support async credential providers; use the async client"
+            )
+
         # This check is needed in case a fork happens after the client already closed
         # In that case the registered fork function will kick in even if the
         # client already closed, and recreate it anyway.
@@ -187,42 +213,99 @@ class BaseClient(CoreCommands):
             # Store reference to prevent garbage collection
             self._address_resolver_callback_ref = address_resolver_callback
 
-        client_response_ptr = self._lib.create_client(
-            conn_req_bytes,
-            len(conn_req_bytes),
-            client_type,
-            pubsub_callback,
-            address_resolver_callback,
-            0,  # client_id is not used by the Python client
+        if credential_provider is None:
+            # Preserve the ordinary latest-main creation path exactly.
+            client_response_ptr = self._lib.create_client(
+                conn_req_bytes,
+                len(conn_req_bytes),
+                client_type,
+                pubsub_callback,
+                address_resolver_callback,
+                0,  # client_id is not used by the Python client
+            )
+
+            Logger.log(Level.INFO, "connection info", "new connection established")
+
+            # Handle the connection response
+            if client_response_ptr != self._ffi.NULL:
+                client_response = self._try_ffi_cast(
+                    "ConnectionResponse*", client_response_ptr
+                )
+                if client_response.conn_ptr != self._ffi.NULL:
+                    self._core_client = client_response.conn_ptr
+                else:
+                    error_message = (
+                        self._ffi.string(
+                            client_response.connection_error_message
+                        ).decode(ENCODING)
+                        if client_response.connection_error_message != self._ffi.NULL
+                        else "Unknown error"
+                    )
+                    raise ClosingError(error_message)
+
+                # Free the connection response to avoid memory leaks
+                self._lib.free_connection_response(client_response_ptr)
+
+                # Note: scope prewarm is deferred to first scoped_connection() call
+                # to avoid creating extra connections at client startup (which breaks
+                # lazy connection tests and connection count assertions).
+            else:
+                raise ClosingError("Failed to create client, response pointer is NULL.")
+            return
+
+        credential_callback, credential_owner = create_credential_provider_callback(
+            self._ffi,
+            credential_provider,
+            allow_async=False,
+            provider_owner=self,
         )
+        try:
+            client_response_ptr = self._lib.create_client_with_credential_provider(
+                conn_req_bytes,
+                len(conn_req_bytes),
+                client_type,
+                pubsub_callback,
+                address_resolver_callback,
+                credential_owner.callback_id,
+                credential_callback,
+            )
+        except BaseException:
+            credential_owner.close()
+            raise
 
         Logger.log(Level.INFO, "connection info", "new connection established")
 
-        # Handle the connection response
-        if client_response_ptr != self._ffi.NULL:
-            client_response = self._try_ffi_cast(
-                "ConnectionResponse*", client_response_ptr
-            )
-            if client_response.conn_ptr != self._ffi.NULL:
-                self._core_client = client_response.conn_ptr
-            else:
-                error_message = (
-                    self._ffi.string(client_response.connection_error_message).decode(
-                        ENCODING
-                    )
-                    if client_response.connection_error_message != self._ffi.NULL
-                    else "Unknown error"
-                )
-                raise ClosingError(error_message)
-
-            # Free the connection response to avoid memory leaks
-            self._lib.free_connection_response(client_response_ptr)
-
-            # Note: scope prewarm is deferred to first scoped_connection() call
-            # to avoid creating extra connections at client startup (which breaks
-            # lazy connection tests and connection count assertions).
-        else:
+        if client_response_ptr == self._ffi.NULL:
+            credential_owner.close()
             raise ClosingError("Failed to create client, response pointer is NULL.")
+
+        client_response = self._try_ffi_cast("ConnectionResponse*", client_response_ptr)
+        if client_response.conn_ptr == self._ffi.NULL:
+            error_message = (
+                self._ffi.string(client_response.connection_error_message).decode(
+                    ENCODING
+                )
+                if client_response.connection_error_message != self._ffi.NULL
+                else "Unknown error"
+            )
+            credential_owner.close()
+            self._lib.free_connection_response(client_response_ptr)
+            raise ClosingError(error_message)
+
+        core_client = client_response.conn_ptr
+        self._lib.free_connection_response(client_response_ptr)
+        with self._client_lock:
+            if self._is_closed:
+                adopt_client = False
+            else:
+                self._core_client = core_client
+                self._credential_provider_callback_ref = credential_callback
+                self._credential_provider_callback_owner = credential_owner
+                adopt_client = True
+        if not adopt_client:
+            credential_owner.close()
+            self._lib.close_client(core_client)
+            raise ClosingError("Client was closed during native creation.")
 
     def _create_push_handle_callback(self):
         """Create the FFI pubsub callback function"""
@@ -618,6 +701,19 @@ class BaseClient(CoreCommands):
             0,  # Request ID (0 for sync use)
             c_password,
             immediate_auth,
+        )
+        return self._handle_cmd_result(result)
+
+    def _refresh_iam_token(self) -> TResult:
+        if self._is_closed:
+            raise ClosingError("Client is closed.")
+        client_adapter_ptr = self._core_client
+        if client_adapter_ptr == self._ffi.NULL:
+            raise ValueError("Invalid client pointer.")
+
+        result = self._lib.refresh_iam_token(
+            client_adapter_ptr,
+            0,  # Request ID (0 for sync use)
         )
         return self._handle_cmd_result(result)
 
@@ -1061,14 +1157,25 @@ class BaseClient(CoreCommands):
         return self._handle_cmd_result(result)
 
     def close(self) -> None:
+        if _is_credential_provider_executing(self):
+            raise RuntimeError(
+                "Cannot close a client from its own credential provider callback"
+            )
         with self._client_lock:
             if not self._is_closed:
                 self._is_closed = True
                 with self._pubsub_condition:
                     self._pubsub_condition.notify_all()
-                self._lib.close_client(self._core_client)
-                self._core_client = self._ffi.NULL
+                core_client = getattr(self, "_core_client", self._ffi.NULL)
+                if core_client != self._ffi.NULL:
+                    self._lib.close_client(core_client)
+                    self._core_client = self._ffi.NULL
                 self._pubsub_callback_ref = None
+                owner = getattr(self, "_credential_provider_callback_owner", None)
+                if owner is not None:
+                    owner.close()
+                self._credential_provider_callback_owner = None
+                self._credential_provider_callback_ref = None
 
     def __enter__(self) -> Self:
         return self
