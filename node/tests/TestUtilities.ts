@@ -1227,8 +1227,6 @@ export async function batchTest(
     responseData.push(["del([key1])", 1]);
 
     if (!cluster.checkIfServerVersionLessThan("9.0.0")) {
-        // DELIFEQ tests - only run if server version is 9.0.0 or higher
-        // Use a fresh key so the test is independent of earlier commands on key1.
         const delIfEqKey = decodeString("{key}" + getRandomKey(), decoder);
         baseBatch.set(delIfEqKey, value);
         responseData.push(["set(delIfEqKey, value)", "OK"]);

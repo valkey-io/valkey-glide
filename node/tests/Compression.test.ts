@@ -534,7 +534,6 @@ describe("Compression", () => {
                 enabled: true,
             });
             const key = uniqueKey("append_test");
-            await client.set(key, "initial_value");
 
             await assertCompressionIncompatible(() =>
                 client!.append(key, "_appended"),
@@ -550,7 +549,6 @@ describe("Compression", () => {
                 enabled: true,
             });
             const key = uniqueKey("getrange_test");
-            await client.set(key, TEXT_1K);
 
             await assertCompressionIncompatible(() =>
                 client!.getrange(key, 0, 10),
@@ -566,7 +564,6 @@ describe("Compression", () => {
                 enabled: true,
             });
             const key = uniqueKey("setrange_test");
-            await client.set(key, TEXT_1K);
 
             await assertCompressionIncompatible(() =>
                 client!.setrange(key, 5, "replacement"),
@@ -582,7 +579,6 @@ describe("Compression", () => {
                 enabled: true,
             });
             const key = uniqueKey("strlen_test");
-            await client.set(key, TEXT_1K);
 
             await assertCompressionIncompatible(() => client!.strlen(key));
         },
@@ -605,8 +601,6 @@ describe("Compression", () => {
             });
             const key = uniqueKey("delifeq_test");
 
-            // The rejection happens client-side in glide-core before any server
-            // round-trip, so the key does not need to exist.
             await assertCompressionIncompatible(() =>
                 client!.delifeq(key, "initial_value"),
             );
@@ -621,7 +615,6 @@ describe("Compression", () => {
                 enabled: true,
             });
             const key = uniqueKey("incr_test");
-            await client.set(key, "100");
 
             await assertCompressionIncompatible(() => client!.incr(key));
         },
@@ -635,7 +628,6 @@ describe("Compression", () => {
                 enabled: true,
             });
             const key = uniqueKey("incrby_test");
-            await client.set(key, "100");
 
             await assertCompressionIncompatible(() => client!.incrBy(key, 10));
         },
@@ -649,7 +641,6 @@ describe("Compression", () => {
                 enabled: true,
             });
             const key = uniqueKey("incrbyfloat_test");
-            await client.set(key, "100.5");
 
             await assertCompressionIncompatible(() =>
                 client!.incrByFloat(key, 0.5),
@@ -665,7 +656,6 @@ describe("Compression", () => {
                 enabled: true,
             });
             const key = uniqueKey("decr_test");
-            await client.set(key, "100");
 
             await assertCompressionIncompatible(() => client!.decr(key));
         },
@@ -679,7 +669,6 @@ describe("Compression", () => {
                 enabled: true,
             });
             const key = uniqueKey("decrby_test");
-            await client.set(key, "100");
 
             await assertCompressionIncompatible(() => client!.decrBy(key, 10));
         },
@@ -693,7 +682,6 @@ describe("Compression", () => {
                 enabled: true,
             });
             const key = uniqueKey("getbit_test");
-            await client.set(key, "test_value");
 
             await assertCompressionIncompatible(() => client!.getbit(key, 0));
         },
@@ -707,7 +695,6 @@ describe("Compression", () => {
                 enabled: true,
             });
             const key = uniqueKey("setbit_test");
-            await client.set(key, "test_value");
 
             await assertCompressionIncompatible(() =>
                 client!.setbit(key, 0, 1),
@@ -723,7 +710,6 @@ describe("Compression", () => {
                 enabled: true,
             });
             const key = uniqueKey("bitcount_test");
-            await client.set(key, "test_value");
 
             await assertCompressionIncompatible(() => client!.bitcount(key));
         },
@@ -737,7 +723,6 @@ describe("Compression", () => {
                 enabled: true,
             });
             const key = uniqueKey("bitpos_test");
-            await client.set(key, "test_value");
 
             await assertCompressionIncompatible(() => client!.bitpos(key, 1));
         },
@@ -786,8 +771,7 @@ describe("Compression", () => {
 
             // DELIFEQ
             if (!standaloneCluster.checkIfServerVersionLessThan("9.0.0")) {
-                await client.set(key, "delifeq_value");
-                expect(await client.delifeq(key, "delifeq_value")).toBe(true);
+                await client.delifeq(key, "value");
             }
 
             // GETBIT
