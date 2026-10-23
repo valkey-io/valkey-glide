@@ -2316,10 +2316,35 @@ impl Client {
     /// Create an `IAMTokenManager` when IAM auth is configured.
     ///
     /// Client retrieves tokens on-demand during command execution.
+    ///
+    /// An IAM token is a bearer credential: it must never be sent over plaintext.
+    /// Reject an IAM-configured client when TLS is disabled before the manager (and
+    /// thus any token) is created, so initial AUTH, background refresh, and reconnect
+    /// all fail closed rather than leaking the token in a cleartext `AUTH`.
     async fn create_iam_token_manager(
         auth_info: &crate::client::types::AuthenticationInfo,
+        tls_mode: TlsMode,
     ) -> Result<Option<std::sync::Arc<crate::iam::IAMTokenManager>>, ConnectionError> {
         if let Some(iam_config) = &auth_info.iam_config {
+            if tls_mode == TlsMode::NoTls {
+                return Err(ConnectionError::IAMError(
+                    "IAM authentication requires TLS; refusing to send an IAM token over a plaintext connection".to_string(),
+                ));
+            }
+            // Fail fast on blank identifiers: an empty (or whitespace-only)
+            // cluster_name otherwise surfaces only as a connect timeout and a
+            // blank region as a server-side auth error, neither of which names
+            // the real problem.
+            if iam_config.cluster_name.trim().is_empty() {
+                return Err(ConnectionError::IAMError(
+                    "IAM authentication requires a non-empty cluster name".to_string(),
+                ));
+            }
+            if iam_config.region.trim().is_empty() {
+                return Err(ConnectionError::IAMError(
+                    "IAM authentication requires a non-empty region".to_string(),
+                ));
+            }
             if let Some(username) = &auth_info.username {
                 match crate::iam::IAMTokenManager::new(
                     iam_config.cluster_name.clone(),
@@ -3168,7 +3193,8 @@ impl Client {
 
             // Create IAM token manager if needed
             let iam_token_manager = if let Some(auth_info) = &request.authentication_info {
-                Self::create_iam_token_manager(auth_info).await?
+                Self::create_iam_token_manager(auth_info, request.tls_mode.unwrap_or_default())
+                    .await?
             } else {
                 None
             };
@@ -3695,7 +3721,7 @@ mod tests {
     use redis::Cmd;
 
     use crate::client::types::{
-        ConnectionRequest, ConnectionRetryStrategy, NodeAddress, OTelMetadata,
+        ConnectionRequest, ConnectionRetryStrategy, NodeAddress, OTelMetadata, TlsMode,
     };
     use crate::client::{
         BLOCKING_CMD_TIMEOUT_EXTENSION, ClientShared, RequestTimeoutOption, TimeUnit,
@@ -3703,9 +3729,9 @@ mod tests {
     };
 
     use super::{
-        AddressResolver, Client, ClientWrapper, ConnectionError, LazyClient, TlsMode,
-        get_connection_info, get_timeout_from_cmd_arg, sanitized_request_string,
-        validate_effective_lib_name, validate_effective_lib_ver, validate_unix_socket_addresses,
+        AddressResolver, Client, ClientWrapper, ConnectionError, LazyClient, get_connection_info,
+        get_timeout_from_cmd_arg, sanitized_request_string, validate_effective_lib_name,
+        validate_effective_lib_ver, validate_unix_socket_addresses,
     };
     use std::sync::{Arc, Weak};
 
@@ -5276,6 +5302,8 @@ mod tests {
                 unix_socket_path: None,
             }],
             lazy_connect: true,
+            // IAM auth requires TLS (an IAM token must never traverse plaintext).
+            tls_mode: Some(TlsMode::SecureTls),
             authentication_info: Some(crate::client::types::AuthenticationInfo {
                 username: Some("iam-test-user".to_string()),
                 password: None,
@@ -5316,5 +5344,125 @@ mod tests {
             non_iam_client.iam_token_manager().is_none(),
             "iam_token_manager() should return None when IAM is not configured"
         );
+    }
+
+    /// `Client::new` rejects an IAM-configured request when TLS is disabled, before
+    /// any token manager (and therefore any AUTH) exists, so initial AUTH, refresh
+    /// and reconnect all fail closed.
+    ///
+    /// A-B: the same request over TLS succeeds, so the failure is the `NoTls` guard
+    /// firing, not IAM config being rejected unconditionally.
+    #[tokio::test]
+    #[cfg(feature = "proto")]
+    async fn test_iam_without_tls_is_rejected() {
+        setup_test_credentials();
+
+        let make_request = |tls_mode: TlsMode| ConnectionRequest {
+            addresses: vec![NodeAddress {
+                host: "127.0.0.1".to_string(),
+                port: 1,
+                unix_socket_path: None,
+            }],
+            lazy_connect: true,
+            tls_mode: Some(tls_mode),
+            authentication_info: Some(crate::client::types::AuthenticationInfo {
+                username: Some("iam-test-user".to_string()),
+                password: None,
+                iam_config: Some(crate::client::types::IamAuthenticationConfig {
+                    cluster_name: "test-cluster".to_string(),
+                    region: "us-east-1".to_string(),
+                    service_type: crate::iam::ServiceType::ElastiCache,
+                    refresh_interval_seconds: None,
+                    credentials_provider: None,
+                }),
+            }),
+            ..Default::default()
+        };
+
+        let err = match Client::new(make_request(TlsMode::NoTls), None).await {
+            Err(e) => e,
+            Ok(_) => panic!("IAM + NoTls must be rejected before any token is obtained"),
+        };
+        let msg = format!("{err:?}");
+        assert!(
+            msg.contains("IAM authentication requires TLS"),
+            "error should name the TLS requirement, got: {msg}"
+        );
+
+        // A: the same config over TLS is accepted (lazy, so no network touched).
+        if Client::new(make_request(TlsMode::SecureTls), None)
+            .await
+            .is_err()
+        {
+            panic!("IAM + TLS must still be accepted");
+        }
+    }
+
+    /// A blank `cluster_name` or `region` (empty or whitespace-only) otherwise
+    /// fails late and opaquely (connect timeout / server auth error); these must
+    /// be rejected at creation with an error that names the missing field.
+    ///
+    /// A-B: the fully-populated config over the same TLS mode is accepted, so the
+    /// failure is the blank-field guard firing, not IAM being rejected outright.
+    #[tokio::test]
+    #[cfg(feature = "proto")]
+    async fn test_iam_rejects_blank_cluster_name_and_region() {
+        setup_test_credentials();
+
+        let make_request = |cluster_name: &str, region: &str| ConnectionRequest {
+            addresses: vec![NodeAddress {
+                host: "127.0.0.1".to_string(),
+                port: 1,
+                unix_socket_path: None,
+            }],
+            lazy_connect: true,
+            tls_mode: Some(TlsMode::SecureTls),
+            authentication_info: Some(crate::client::types::AuthenticationInfo {
+                username: Some("iam-test-user".to_string()),
+                password: None,
+                iam_config: Some(crate::client::types::IamAuthenticationConfig {
+                    cluster_name: cluster_name.to_string(),
+                    region: region.to_string(),
+                    service_type: crate::iam::ServiceType::ElastiCache,
+                    refresh_interval_seconds: None,
+                    credentials_provider: None,
+                }),
+            }),
+            ..Default::default()
+        };
+
+        let assert_rejected = |err: ConnectionError, expected: &str| {
+            let msg = format!("{err:?}");
+            assert!(
+                msg.contains(expected),
+                "error should name the empty field, got: {msg}"
+            );
+        };
+
+        match Client::new(make_request("", "us-east-1"), None).await {
+            Err(e) => assert_rejected(e, "IAM authentication requires a non-empty cluster name"),
+            Ok(_) => panic!("empty cluster name must be rejected"),
+        }
+        match Client::new(make_request("test-cluster", ""), None).await {
+            Err(e) => assert_rejected(e, "IAM authentication requires a non-empty region"),
+            Ok(_) => panic!("empty region must be rejected"),
+        }
+        // Whitespace-only values are blank too and fail the same opaque way.
+        match Client::new(make_request("   ", "us-east-1"), None).await {
+            Err(e) => assert_rejected(e, "IAM authentication requires a non-empty cluster name"),
+            Ok(_) => panic!("whitespace-only cluster name must be rejected"),
+        }
+        match Client::new(make_request("test-cluster", "\t"), None).await {
+            Err(e) => assert_rejected(e, "IAM authentication requires a non-empty region"),
+            Ok(_) => panic!("whitespace-only region must be rejected"),
+        }
+
+        // A: a fully-populated config over the same TLS mode is accepted.
+        if Client::new(make_request("test-cluster", "us-east-1"), None)
+            .await
+            .is_err()
+        {
+            panic!("IAM with non-empty cluster name and region must be accepted");
+        }
     }
 }

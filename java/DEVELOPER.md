@@ -399,6 +399,8 @@ export AWS_SESSION_TOKEN=test_session_token
 
 If any of these environment variables are not set, IAM authentication tests will be skipped.
 
+**Note:** IAM auth requires TLS, so these tests connect over TLS to the TLS test servers the `integTest` task always starts, trusting the harness CA (`utils/tls_crts/ca.crt`). No extra setup or `-Dtls=true` is needed.
+
 **Note:** The credential values shown above (`test_access_key`, etc.) are arbitrary placeholder strings. The AWS SDK uses them to generate an authentication token, but the local test server doesn't validate the token. These tests verify that the IAM authentication flow works correctly (token generation, connection establishment, and token refresh), not that the credentials are valid.
 
 **Important:** `System.setProperty()` does NOT work for setting AWS credentials because the Rust AWS SDK reads from the OS process environment, not JVM properties. Credentials must be set as OS environment variables **before** the JVM starts.

@@ -246,18 +246,20 @@ resources. Without endpoint options, they use the local Valkey servers started a
 Run them from the `go/` directory:
 
 ```bash
-make integ-test test-filter="TestIam\(Authentication\|CustomCredentialProvider\)"
+make integ-test tls=true test-filter="TestTlsIam\(Authentication\|CustomCredentialProvider\)"
 ```
+
+IAM auth requires TLS, so these tests only run under a TLS run (`tls=true`); a plaintext run skips them.
 
 The regex matches exactly these seven direct-client custom-provider methods:
 
-- `TestIamAuthenticationWithMockCredentials`
-- `TestIamAuthenticationAutomaticTokenRefresh`
-- `TestIamAuthenticationWithMockCredentialsStandalone`
-- `TestIamAuthenticationAutomaticTokenRefreshStandalone`
-- `TestIamCustomCredentialProviderFailure`
-- `TestIamCustomCredentialProviderRejectsWhitespaceRequiredValues`
-- `TestIamCustomCredentialProviderNegotiatesLargeSessionToken`
+- `TestTlsIamAuthenticationWithMockCredentials`
+- `TestTlsIamAuthenticationAutomaticTokenRefresh`
+- `TestTlsIamAuthenticationWithMockCredentialsStandalone`
+- `TestTlsIamAuthenticationAutomaticTokenRefreshStandalone`
+- `TestTlsIamCustomCredentialProviderFailure`
+- `TestTlsIamCustomCredentialProviderRejectsWhitespaceRequiredValues`
+- `TestTlsIamCustomCredentialProviderNegotiatesLargeSessionToken`
 
 This filter excludes pool behavior. These integration methods do not test default-chain IAM credential behavior.
 

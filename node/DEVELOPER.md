@@ -187,6 +187,8 @@ npm test -- --testNamePattern="iam"
 
 If any of these environment variables are not set, IAM authentication tests will be skipped.
 
+IAM auth requires TLS, so these tests always run over TLS: each starts its own TLS cluster with certificate verification disabled, so no `--tls` flag is needed.
+
 **Note:** The credential values shown above (`test_access_key`, etc.) are arbitrary placeholder strings. The AWS SDK uses them to generate an authentication token, but the local test server doesn't validate the token. These tests verify that the IAM authentication flow works correctly (token generation, connection establishment, and token refresh), not that the credentials are valid.
 
 #### Running Specific Tests
