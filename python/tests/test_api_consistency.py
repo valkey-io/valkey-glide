@@ -25,12 +25,16 @@ EXCLUDED_API_FUNCTIONS = {
         # RdmaRegion and RdmaWindow members, declared in the same module.
         "capacity",
         "closed",
+        "memory_released",
         "memoryview",
         "window",
         # Members of the private tracker that keeps memory the fabric still holds.
         "holds",
         "keep",
+        "keep_from_finalizer",
+        "overlaps",
         "release_what_is_free",
+        "released",
     ],
 }
 
@@ -131,6 +135,9 @@ EXCLUDED_TESTS = {
         "test_sync_fork",
         # RDMA is sync-only, and async clients refuse it at creation
         "test_pool_rejects_rdma_config",
+        # `closed` exists so RDMA callers can tell whether a region can be
+        # registered again; RDMA is sync-only, so the async client has no twin.
+        "test_sync_closed_reports_whether_the_client_was_closed",
         "sync_poll_for_timestamp_change",
         "get_min_compressed_size",
         # get() with buffer — sync-only FFI path, no async equivalent

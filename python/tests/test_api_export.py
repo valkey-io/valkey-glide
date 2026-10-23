@@ -149,7 +149,14 @@ excluded_shared_symbols = [
 
 allowed_missing_re_exports_in_async = [
     # python/glide-shared/glide_shared/exceptions.py
-    "LoggerError"
+    "LoggerError",
+    # RDMA is sync-only, and the async client refuses an RDMA configuration.
+    # python/glide-shared/glide_shared/config.py
+    "RdmaConfiguration",
+    "RdmaProvider",
+    "RdmaSetChecksum",
+    # python/glide-shared/glide_shared/exceptions.py
+    "RdmaError",
 ]
 
 allowed_missing_re_exports_in_sync: list[str] = []
