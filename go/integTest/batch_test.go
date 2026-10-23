@@ -551,6 +551,11 @@ func CreateStringTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer str
 	batch.Append(multiKey1, "3")
 	testData = append(testData, CommandTestData{ExpectedResponse: int64(7), TestName: "Append(multiKey1, 3)"})
 
+	if compareServerVersions(serverVer, "9.0.0") >= 0 {
+		batch.DelIfEq(atomicKey1, "wrong-value")
+		testData = append(testData, CommandTestData{ExpectedResponse: false, TestName: "DelIfEq(atomicKey1, wrong-value)"})
+	}
+
 	batch.Set(multiKey2, "val")
 	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "Set(multiKey2, val)"})
 
@@ -1007,8 +1012,7 @@ func CreateGenericCommandTests(batch *pipeline.ClusterBatch, isAtomic bool, serv
 			TestName:         "CopyWithOptions(slotHashedKey1, slotHashedKey2, ReplaceDestination)",
 		},
 	)
-	// TODO #5368: Compare versions semantically, not as strings.
-	if serverVer >= "9.0.0" {
+	if compareServerVersions(serverVer, "9.0.0") >= 0 {
 		batch.CopyWithOptions(slotHashedKey1, slotHashedKey2, *options.NewCopyOptions().SetDBDestination(1))
 		testData = append(
 			testData,
@@ -1263,8 +1267,7 @@ func CreateHashTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer strin
 	)
 
 	// Hash field expiration commands (Valkey 9.0+)
-	// TODO #5368: Compare versions semantically, not as strings.
-	if serverVer >= "9.0.0" {
+	if compareServerVersions(serverVer, "9.0.0") >= 0 {
 		// Test HSetEx - Set fields with expiration
 		expiryKey := prefix + "expiry-" + uuid.NewString()
 		fields := map[string]string{"field1": "value1", "field2": "value2"}

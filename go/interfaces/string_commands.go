@@ -49,6 +49,8 @@ type StringCommands interface {
 
 	Append(ctx context.Context, key string, value string) (int64, error)
 
+	DelIfEq(ctx context.Context, key string, value string) (bool, error)
+
 	LCS(ctx context.Context, key1 string, key2 string) (*models.LCSMatch, error)
 
 	LCSLen(ctx context.Context, key1 string, key2 string) (*models.LCSMatch, error)
