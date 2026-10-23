@@ -13,6 +13,9 @@ import array
 import gc
 import os
 import socket
+import subprocess
+import sys
+import textwrap
 import threading
 import time
 import warnings
@@ -37,6 +40,45 @@ from glide_sync import GlideClient, RdmaRegion, RdmaWindow
 from glide_sync.glide_client import _RETAINED_RDMA_MEMORY
 
 REGION_BYTES = 1024
+
+
+def _survives_collecting_a_kept_error(failing_call: str, setup: str = "") -> None:
+    """
+    Run `failing_call` in a fresh interpreter, keep the error it raises in a
+    reference cycle, and collect it. On Python 3.9 the collector crashes if the
+    failing frame still held a CFFI export on a memoryview, so this runs in a
+    subprocess: a crash fails the test instead of ending the session.
+    """
+    script = textwrap.dedent(f"""
+        import gc
+        import sys
+
+        from glide_sync import GlideClient
+        from glide_shared.exceptions import RdmaError
+
+        {setup}
+
+        def fail_and_keep_the_error():
+            try:
+                {failing_call}
+            except RdmaError as error:
+                # An ordinary cycle: the frame holds the error, whose traceback
+                # holds the frame.
+                kept = error
+                kept.frame = sys._getframe()
+            else:
+                raise SystemExit("expected RdmaError")
+
+        fail_and_keep_the_error()
+        gc.collect()
+        print("survived")
+        """)
+    finished = subprocess.run(
+        [sys.executable, "-c", script], capture_output=True, text=True, timeout=60
+    )
+    assert (
+        finished.returncode == 0 and "survived" in finished.stdout
+    ), f"exit {finished.returncode}\n{finished.stdout}\n{finished.stderr}"
 
 
 class _FakeFfi:
@@ -990,6 +1032,25 @@ def test_registering_without_a_fabric_names_the_cause(glide_sync_client: GlideCl
     )
     with pytest.raises(RdmaError, match=cause):
         glide_sync_client.register_rdma_region(bytearray(REGION_BYTES))
+
+
+@pytest.mark.parametrize("cluster_mode", [False])
+@pytest.mark.parametrize("protocol", [ProtocolVersion.RESP3])
+def test_a_kept_registration_error_is_collected_safely(
+    glide_sync_client: GlideClient,
+):
+    # Keeping an error is ordinary, for example to report it later. Its
+    # traceback keeps the failed registration's frame alive, and collecting
+    # that frame used to crash Python 3.9.
+    address = glide_sync_client._config.addresses[0]
+    _survives_collecting_a_kept_error(
+        "client.register_rdma_region(bytearray(64))",
+        setup=(
+            "from glide_shared.config import GlideClientConfiguration, NodeAddress; "
+            "client = GlideClient.create(GlideClientConfiguration("
+            f"addresses=[NodeAddress({address.host!r}, {address.port})]))"
+        ),
+    )
 
 
 @pytest.mark.parametrize("cluster_mode", [True, False])

@@ -1705,19 +1705,29 @@ class BaseClient(CoreCommands):
             )
 
         buffer = self._ffi.from_buffer(view)
-        registration = self._lib.register_rdma_region(
-            client_adapter_ptr, buffer, view.nbytes
-        )
-        if registration == self._ffi.NULL:
-            raise RdmaError("Internal error: received NULL from register_rdma_region")
         try:
-            if registration.error_message != self._ffi.NULL:
+            registration = self._lib.register_rdma_region(
+                client_adapter_ptr, buffer, view.nbytes
+            )
+            if registration == self._ffi.NULL:
                 raise RdmaError(
-                    self._ffi.string(registration.error_message).decode(ENCODING)
+                    "Internal error: received NULL from register_rdma_region"
                 )
-            return RdmaRegion(self, memory, registration.region)
-        finally:
-            self._lib.free_rdma_registration(registration)
+            try:
+                if registration.error_message != self._ffi.NULL:
+                    raise RdmaError(
+                        self._ffi.string(registration.error_message).decode(ENCODING)
+                    )
+                return RdmaRegion(self, memory, registration.region)
+            finally:
+                self._lib.free_rdma_registration(registration)
+        except BaseException:
+            # The error's traceback keeps this frame alive, and with it `view`.
+            # If the error ends up in a reference cycle, Python 3.9's garbage
+            # collector crashes freeing a memoryview that `buffer` still holds
+            # an export on, so let go of the export before the error leaves.
+            del buffer
+            raise
 
     def rdma_get(
         self,
