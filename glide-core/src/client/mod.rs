@@ -229,6 +229,66 @@ pub(crate) fn validate_effective_lib_ver(lib_ver: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// Validate a Unix domain socket address: an absolute path that fits in a socket address,
+/// no host or port, and no TLS, which the server does not offer on its socket.
+pub(crate) fn validate_unix_socket_address(address: &NodeAddress, tls: bool) -> Result<(), String> {
+    let Some(path) = &address.unix_socket_path else {
+        return Ok(());
+    };
+    if !cfg!(unix) {
+        return Err("Unix domain sockets are not supported on this platform".to_string());
+    }
+    // A relative path would resolve against the working directory at each reconnect.
+    if !path.is_absolute() {
+        return Err(format!("Unix domain socket path {path:?} must be absolute"));
+    }
+    // Rejects NUL bytes and paths longer than the platform's `sun_path`.
+    #[cfg(unix)]
+    std::os::unix::net::SocketAddr::from_pathname(path)
+        .map_err(|err| format!("Invalid Unix domain socket path {path:?}: {err}"))?;
+    if !address.host.is_empty() || address.port != 0 {
+        return Err(format!(
+            "Unix domain socket address {path:?} must not also set a host or port"
+        ));
+    }
+    if tls {
+        return Err("TLS is not supported over Unix domain sockets".to_string());
+    }
+    Ok(())
+}
+
+/// Validate a request's Unix domain socket addresses. They are standalone only, since
+/// cluster topology and replica discovery only advertise IP/port endpoints.
+pub(crate) fn validate_unix_socket_addresses(request: &ConnectionRequest) -> Result<(), String> {
+    let socket_addresses = request
+        .addresses
+        .iter()
+        .filter(|address| address.unix_socket_path.is_some())
+        .count();
+    if socket_addresses == 0 {
+        return Ok(());
+    }
+    if request.cluster_mode_enabled {
+        return Err("Unix domain socket addresses are not supported in cluster mode".to_string());
+    }
+    if socket_addresses != request.addresses.len() {
+        return Err(
+            "Unix domain socket addresses cannot be combined with TCP addresses".to_string(),
+        );
+    }
+    if request.node_discovery_mode == NodeDiscoveryMode::DiscoverAll {
+        return Err(
+            "DiscoverAll node discovery is not supported with Unix domain socket addresses"
+                .to_string(),
+        );
+    }
+    let tls = request.tls_mode.unwrap_or_default() != TlsMode::NoTls;
+    request
+        .addresses
+        .iter()
+        .try_for_each(|address| validate_unix_socket_address(address, tls))
+}
+
 /// Get Valkey connection info with IAM token integration
 ///
 /// If IAM config + token manager exist, use the IAM token as the password; otherwise use the provided password.
@@ -324,6 +384,14 @@ pub(super) fn get_connection_info(
     tls_params: Option<redis::TlsConnParams>,
     address_resolver: Option<&Arc<dyn AddressResolver>>,
 ) -> redis::ConnectionInfo {
+    // Client creation has already rejected TLS for socket addresses, and the resolver
+    // only maps host/port pairs.
+    if let Some(path) = &address.unix_socket_path {
+        return redis::ConnectionInfo {
+            addr: redis::ConnectionAddr::Unix(path.clone()),
+            redis: redis_connection_info,
+        };
+    }
     // Trim an IPv6 host's `[ ]` before use (and before the resolver sees it), so a
     // configured `[::1]` reaches redis-rs's tuple `lookup_host` as a bare `::1`.
     let host = crate::scope::strip_host_brackets(&address.host);
@@ -437,6 +505,13 @@ pub struct ClientShared {
     // Tracks the current database selected at runtime (updated on SELECT commands).
     // Used by scope connections to inherit the parent's current database.
     current_database: Arc<AtomicU32>,
+    // Set before dispatching any SELECT-bearing command (single or batch); cleared
+    // only by a successful release reset. `current_database` can under-report the
+    // live db — a SELECT can apply on the connection even when the call errors or
+    // times out, or when an earlier batch SELECT applied but a later one was
+    // rejected. The flag makes `reset_connection_state` fail safe: restore whenever
+    // a SELECT may have been issued, not only on observed drift.
+    db_maybe_dirty: Arc<AtomicBool>,
     // IAM token generation the live connection last authenticated at. Compared by
     // `prepare_for_borrow` on the first command after a borrow to detect a rotation
     // that landed while the client sat idle in a pool, triggering a re-AUTH before
@@ -715,7 +790,10 @@ impl Client {
     /// Handles cases where command() returns None gracefully.
     /// Note: The underlying redis-rs library normalizes commands to uppercase.
     fn is_select_command(&self, cmd: &Cmd) -> bool {
-        cmd.command().is_some_and(|bytes| bytes == b"SELECT")
+        // arg_idx(0) borrows the command name; cmd.command() would allocate an
+        // uppercased Vec on every call, and this runs on the hot send_command path.
+        cmd.arg_idx(0)
+            .is_some_and(|name| name.eq_ignore_ascii_case(b"SELECT"))
     }
 
     /// Extracts the database ID from a SELECT command.
@@ -1080,6 +1158,9 @@ impl Client {
         //   Turns off NO-EVICT mode                  -> not tracked; per-connection hint
         //   Turns off NO-TOUCH mode                  -> not tracked; per-connection hint
         self.update_stored_database_id(0).await?;
+        // RESET returns the connection to db 0; keep the drift signal the pool
+        // release check reads (`current_database`) in sync, not just the resync db.
+        self.shared.current_database.store(0, Ordering::Release);
         self.update_stored_client_name(None).await?;
         self.update_stored_protocol(redis::ProtocolVersion::RESP2)
             .await?;
@@ -1291,6 +1372,10 @@ impl Client {
             self.reconcile_iam_before_dispatch().await?;
             // Track MULTI/EXEC/DISCARD for the borrow-time re-AUTH defer.
             self.track_transaction_state(cmd);
+            // Flag a possible db change before dispatch (see `db_maybe_dirty`).
+            if self.is_select_command(cmd) {
+                self.shared.db_maybe_dirty.store(true, Ordering::Release);
+            }
             self.send_command_ungated(cmd, routing).await
         })
     }
@@ -1962,8 +2047,15 @@ impl Client {
         Box::pin(async move {
             crate::rdma::refuse_direct_in_batch(pipeline)?;
             self.reconcile_iam_before_dispatch().await?;
+            // Capture the batch's last SELECT now; apply it after dispatch if the
+            // reply shows the server took it, and flag a possible db change (see
+            // `db_maybe_dirty`). No MULTI tracking here: redis-rs brackets MULTI/EXEC
+            // at pack time and it always closes.
+            let drifted_db = self.last_select_db(pipeline);
+            if drifted_db.is_some() {
+                self.shared.db_maybe_dirty.store(true, Ordering::Release);
+            }
             let client = self.get_or_initialize_client().await?;
-
             let command_count = pipeline.cmd_iter().count();
             // The offset is set to command_count + 1 to account for:
             // 1. The first command, which is the "MULTI" command, that returns "OK"
@@ -1972,7 +2064,7 @@ impl Client {
             // which is an array containing the results of all the commands in the pipeline.
             let offset = command_count + 1;
 
-            run_with_timeout(
+            let result = run_with_timeout(
                 Some(to_duration(transaction_timeout, self.request_timeout)),
                 async move {
                     match client {
@@ -2013,7 +2105,15 @@ impl Client {
                     }
                 },
             )
-            .await
+            .await;
+            // Record the drift only if the SELECT reply applied (see
+            // `batch_reply_applied`).
+            if let Some((idx, db)) = drifted_db
+                && Self::batch_reply_applied(&result, idx)
+            {
+                self.apply_batch_select_db(db).await;
+            }
+            result
         })
     }
 
@@ -2041,10 +2141,15 @@ impl Client {
         Box::pin(async move {
             crate::rdma::refuse_direct_in_batch(pipeline)?;
             self.reconcile_iam_before_dispatch().await?;
-            // Non-atomic: a raw MULTI here stays open on the connection after the
-            // pipeline returns, so the defer in `prepare_for_borrow` must see it.
+            // A raw MULTI stays open after a non-atomic pipeline returns, so track
+            // it pre-dispatch for `prepare_for_borrow`'s defer. The SELECT drift is
+            // applied post-dispatch instead (see the store below).
             for cmd in pipeline.cmd_iter() {
                 self.track_transaction_state(cmd);
+            }
+            let drifted_db = self.last_select_db(pipeline);
+            if drifted_db.is_some() {
+                self.shared.db_maybe_dirty.store(true, Ordering::Release);
             }
             let client = self.get_or_initialize_client().await?;
 
@@ -2056,7 +2161,7 @@ impl Client {
                 )));
             }
 
-            run_with_timeout(
+            let result = run_with_timeout(
                 Some(to_duration(pipeline_timeout, self.request_timeout)),
                 async move {
                     let values = match client {
@@ -2101,7 +2206,15 @@ impl Client {
                     )
                 },
             )
-            .await
+            .await;
+            // Record the drift only if the SELECT reply applied (see
+            // `batch_reply_applied`).
+            if let Some((idx, db)) = drifted_db
+                && Self::batch_reply_applied(&result, idx)
+            {
+                self.apply_batch_select_db(db).await;
+            }
+            result
         })
     }
 
@@ -2283,10 +2396,35 @@ impl Client {
     /// Create an `IAMTokenManager` when IAM auth is configured.
     ///
     /// Client retrieves tokens on-demand during command execution.
+    ///
+    /// An IAM token is a bearer credential: it must never be sent over plaintext.
+    /// Reject an IAM-configured client when TLS is disabled before the manager (and
+    /// thus any token) is created, so initial AUTH, background refresh, and reconnect
+    /// all fail closed rather than leaking the token in a cleartext `AUTH`.
     async fn create_iam_token_manager(
         auth_info: &crate::client::types::AuthenticationInfo,
+        tls_mode: TlsMode,
     ) -> Result<Option<std::sync::Arc<crate::iam::IAMTokenManager>>, ConnectionError> {
         if let Some(iam_config) = &auth_info.iam_config {
+            if tls_mode == TlsMode::NoTls {
+                return Err(ConnectionError::IAMError(
+                    "IAM authentication requires TLS; refusing to send an IAM token over a plaintext connection".to_string(),
+                ));
+            }
+            // Fail fast on blank identifiers: an empty (or whitespace-only)
+            // cluster_name otherwise surfaces only as a connect timeout and a
+            // blank region as a server-side auth error, neither of which names
+            // the real problem.
+            if iam_config.cluster_name.trim().is_empty() {
+                return Err(ConnectionError::IAMError(
+                    "IAM authentication requires a non-empty cluster name".to_string(),
+                ));
+            }
+            if iam_config.region.trim().is_empty() {
+                return Err(ConnectionError::IAMError(
+                    "IAM authentication requires a non-empty region".to_string(),
+                ));
+            }
             if let Some(username) = &auth_info.username {
                 match crate::iam::IAMTokenManager::new(
                     iam_config.cluster_name.clone(),
@@ -2829,7 +2967,7 @@ fn sanitized_request_string(request: &ConnectionRequest) -> String {
     let addresses = request
         .addresses
         .iter()
-        .map(|address| format!("{}:{}", address.host, address.port))
+        .map(NodeAddress::endpoint)
         .collect::<Vec<_>>()
         .join(", ");
     let tls_mode = request
@@ -3016,6 +3154,7 @@ impl Client {
                 })
             })?;
         }
+        validate_unix_socket_addresses(&request).map_err(ConnectionError::Configuration)?;
 
         if let Some(conflict) = request.rdma_conflict() {
             return Err(crate::rdma::RdmaUnavailable::IncompatibleSetting(conflict).into());
@@ -3079,19 +3218,18 @@ impl Client {
             .await;
 
             // Extract connection metadata for OTel span attributes.
-            // Port 0 is normalized to the default (6379) for OTel reporting.
+            // Port 0 is normalized to the default (6379) for OTel reporting. A Unix
+            // socket address reports its path as the address and has no port.
+            let (server_address, server_port) = match request.addresses.first() {
+                Some(addr) => match &addr.unix_socket_path {
+                    Some(path) => (path.display().to_string(), None),
+                    None => (addr.host.clone(), Some(get_port(addr))),
+                },
+                None => ("unknown".to_string(), Some(6379)),
+            };
             let otel_metadata = types::OTelMetadata {
-                address: request
-                    .addresses
-                    .first()
-                    .map(|addr| types::NodeAddress {
-                        host: addr.host.clone(),
-                        port: get_port(addr),
-                    })
-                    .unwrap_or_else(|| types::NodeAddress {
-                        host: "unknown".to_string(),
-                        port: 6379,
-                    }),
+                server_address,
+                server_port,
                 db_namespace: request.database_id.to_string(),
             };
 
@@ -3152,6 +3290,7 @@ impl Client {
                         ))
                     }),
                     current_database: Arc::new(AtomicU32::new(request.database_id as u32)),
+                    db_maybe_dirty: Arc::new(AtomicBool::new(false)),
                     last_iam_generation: Arc::new(AtomicU64::new(0)),
                     is_pool_managed: Arc::new(AtomicBool::new(false)),
                     iam_reconcile_lock: Arc::new(tokio::sync::Mutex::new(())),
@@ -3169,7 +3308,8 @@ impl Client {
 
             // Create IAM token manager if needed
             let iam_token_manager = if let Some(auth_info) = &request.authentication_info {
-                Self::create_iam_token_manager(auth_info).await?
+                Self::create_iam_token_manager(auth_info, request.tls_mode.unwrap_or_default())
+                    .await?
             } else {
                 None
             };
@@ -3305,6 +3445,11 @@ impl Client {
         let _ = self.cert_material.set(material);
     }
 
+    #[cfg(test)]
+    pub(crate) fn set_multi_active_for_test(&self, active: bool) {
+        self.multi_active.store(active, Ordering::Release);
+    }
+
     /// The configured custom address resolver, if any. Applied to a standalone
     /// scope's seed; see `scope::build_scope_connection_addr` for the cluster case.
     pub(crate) fn address_resolver(&self) -> Option<Arc<dyn AddressResolver>> {
@@ -3323,29 +3468,74 @@ impl Client {
 
     /// Reset connection state to a clean baseline after a pool borrow is returned.
     ///
-    /// Sends a batched pipeline (single round-trip) that selectively issues:
-    /// - DISCARD — cancels any pending MULTI and implicitly UNWATCHes
-    /// - SELECT <configured_db> — resets to the pool's configured database
+    /// - DISCARD — always sent (not gated on the intent-tracked `multi_active`,
+    ///   which can desync under concurrent use), to `AllNodes` on cluster. A
+    ///   "DISCARD without MULTI" reply is expected and ignored; any other failure,
+    ///   when a MULTI *was* open, is propagated so release discards the connection
+    ///   rather than reuse it with queued commands. See the error-classification
+    ///   note at the call site for why cluster forces matching by message.
+    /// - SELECT <configured_db> — sent only when the database drifted
+    ///   (`current_database() != configured_db`) or a SELECT may have applied
+    ///   untracked during the borrow (`db_maybe_dirty`); a borrow that never sent
+    ///   SELECT skips the round-trip. This is the fix for the cluster discard bug: a
+    ///   clean db-0 pool no longer sends a `SELECT` the cluster server rejects.
+    ///   Topology-independent — cluster supports multiple databases since Valkey 9.0
+    ///   (`cluster-databases`), so a drift must be undone there too.
     ///
-    /// DISCARD is always safe to send (returns ERR if no MULTI active — we ignore it).
-    /// SELECT is always sent to guarantee the connection is on the correct database.
-    ///
-    /// This ensures the next borrower gets a connection in a known-good state.
-    ///
-    /// Does not send UNSUBSCRIBE, so a borrower that subscribed leaves the
-    /// connection in push-message mode for whoever gets it next. Callers must not
-    /// subscribe on a pooled client; use the parent client's pub/sub API, which
-    /// keeps its own dedicated connections.
+    /// Does not UNSUBSCRIBE: callers must not subscribe on a pooled client (use the
+    /// parent client's pub/sub API, which keeps dedicated connections).
     pub async fn reset_connection_state(&mut self, configured_db: u32) -> RedisResult<()> {
-        // Send DISCARD — ignore ERR if no MULTI is active
-        let _ = self.send_command(&mut redis::cmd("DISCARD"), None).await;
+        // Capture multi_active before dispatch: send_command's track_transaction_state
+        // clears it on seeing DISCARD.
+        let multi_was_open = self.multi_active.load(Ordering::Acquire);
+        let discard_routing = self.is_cluster_mode().then_some(RoutingInfo::MultiNode((
+            MultipleNodeRoutingInfo::AllNodes,
+            None,
+        )));
+        let discard_result = self
+            .send_command(&mut redis::cmd("DISCARD"), discard_routing)
+            .await;
+        // Classify the DISCARD outcome by message, not `is_err()`. "DISCARD without
+        // MULTI" (no transaction open) is expected and ignored. On cluster it is
+        // unavoidable even on success: DISCARD fans out to AllNodes but a borrow's
+        // MULTI lives on one node, so the others answer "DISCARD without MULTI" and
+        // the `None`-policy aggregate surfaces that as an Err. Any other failure
+        // (circuit breaker, dead connection, timeout), when a MULTI *was* open, is
+        // propagated so release discards the connection instead of reusing it with
+        // queued commands. A real owner-node failure cannot be masked by a sibling's
+        // no-MULTI error: transport failures short-circuit aggregation before the
+        // per-node reply loop, and an owner node with an open MULTI has no DISCARD
+        // error path (it returns +OK).
+        if multi_was_open
+            && let Err(e) = &discard_result
+            && !Self::is_discard_without_multi(e)
+        {
+            return discard_result.map(|_| ());
+        }
 
-        // Send SELECT — this must succeed
-        let mut select_cmd = redis::cmd("SELECT");
-        select_cmd.arg(configured_db.to_string());
-        self.send_command(&mut select_cmd, None).await?;
+        // `None` routing is intentional: SELECT is an AllNodes command, so it fans
+        // out to every node without spelling it out like DISCARD above. Restore on
+        // tracked drift OR a possible untracked SELECT (see `db_maybe_dirty`).
+        if self.current_database() != configured_db
+            || self.shared.db_maybe_dirty.load(Ordering::Acquire)
+        {
+            let mut select_cmd = redis::cmd("SELECT");
+            select_cmd.arg(configured_db.to_string());
+            self.send_command(&mut select_cmd, None).await?;
+        }
+        // Cleared only after a successful reset: the connection is now on the
+        // configured db.
+        self.shared.db_maybe_dirty.store(false, Ordering::Release);
 
         Ok(())
+    }
+
+    /// True when `e` is the server's "DISCARD without MULTI" reply (no transaction
+    /// open) — the one DISCARD error `reset_connection_state` tolerates.
+    fn is_discard_without_multi(e: &RedisError) -> bool {
+        e.detail()
+            .map(|d| d.contains("DISCARD without MULTI"))
+            .unwrap_or(false)
     }
 
     /// Refresh IAM authentication before dispatching a command, transaction, or
@@ -3405,6 +3595,60 @@ impl Client {
             Some(b"EXEC") | Some(b"DISCARD") => self.multi_active.store(false, Ordering::Release),
             _ => {}
         }
+    }
+
+    /// The command index and database id of the last `SELECT` in a batch (or
+    /// `None`). The index is the command's `cmd_iter()` position, which is also its
+    /// reply position in the result array — the caller pairs it with
+    /// [`batch_reply_applied`](Self::batch_reply_applied) to record the drift only
+    /// if the server applied it. A pure read; never mutates db state.
+    ///
+    /// Only `SELECT` is tracked, not `RESET` (which also returns the connection to
+    /// db 0). A batch like `[SELECT 3, RESET]` therefore records db 3 while the live
+    /// connection is on db 0, leaving non-pooled scope/reconnect metadata stale.
+    /// Pooled release is unaffected — `db_maybe_dirty` forces the reset `SELECT`
+    /// regardless — and a `RESET` inside a pooled borrow is an unusual pattern, so
+    /// the narrow non-pooled gap is left as a known limitation rather than tracked.
+    fn last_select_db(&self, pipeline: &redis::Pipeline) -> Option<(usize, u32)> {
+        pipeline
+            .cmd_iter()
+            .enumerate()
+            .filter(|(_, cmd)| self.is_select_command(cmd))
+            .filter_map(|(idx, cmd)| {
+                self.extract_database_id_from_select(cmd)
+                    .ok()
+                    .map(|db| (idx, db as u32))
+            })
+            .last()
+    }
+
+    /// Record a batch `SELECT`'s db, mirroring the single-command
+    /// `handle_select_command` so all three db trackers stay in step: the reconnect
+    /// db (`update_stored_database_id`), the OTel `db_namespace`, and
+    /// `current_database` (read by scope connections).
+    async fn apply_batch_select_db(&mut self, db: u32) {
+        if let Err(e) = self.update_stored_database_id(db as i64).await {
+            log_warn(
+                "apply_batch_select_db",
+                format!("failed to update reconnect database to {db}: {e}"),
+            );
+        }
+        Arc::make_mut(&mut self.otel_metadata).db_namespace = db.to_string();
+        self.shared.current_database.store(db, Ordering::Release);
+    }
+
+    /// Whether the `SELECT` at `idx` in the batch actually executed. An executed
+    /// `SELECT` replies `+OK` (`Value::Okay`); anything else means the db did not
+    /// change: a rejected `SELECT` is a `ServerError` (present in an `Ok` array when
+    /// `raise_on_error=false`), a `SELECT` merely *queued* inside a raw `MULTI` with
+    /// no `EXEC` replies `QUEUED` (`SimpleString`), and a WATCH-aborted `EXEC`
+    /// returns `Nil`. Recording any of these would poison `current_database`
+    /// (authoritative for scope connections, which handshake into it).
+    fn batch_reply_applied(result: &RedisResult<Value>, idx: usize) -> bool {
+        matches!(
+            result,
+            Ok(Value::Array(values)) if matches!(values.get(idx), Some(Value::Okay))
+        )
     }
 
     /// Reconcile per-borrow IAM authentication on the first command after a borrow.
@@ -3519,16 +3763,16 @@ impl Client {
             .unwrap_or(false)
     }
 
-    /// Returns the initial connection address, used as the default
-    /// OTel `server.address` span attribute.
+    /// Returns the initial connection address (the socket path for a Unix domain
+    /// socket), used as the default OTel `server.address` span attribute.
     pub fn server_address(&self) -> &str {
-        &self.otel_metadata.address.host
+        &self.otel_metadata.server_address
     }
 
-    /// Returns the initial connection port, used as the default
-    /// OTel `server.port` span attribute.
-    pub fn server_port(&self) -> u16 {
-        self.otel_metadata.address.port
+    /// Returns the initial connection port, used as the default OTel `server.port`
+    /// span attribute. `None` for a Unix domain socket, which has no port.
+    pub fn server_port(&self) -> Option<u16> {
+        self.otel_metadata.server_port
     }
 
     pub fn db_namespace(&self) -> &str {
@@ -3586,7 +3830,7 @@ impl Client {
         internal_client: Arc<RwLock<ClientWrapper>>,
         pubsub_synchronizer: Arc<dyn PubSubSynchronizer>,
     ) -> Self {
-        use crate::client::types::{NodeAddress, OTelMetadata};
+        use crate::client::types::OTelMetadata;
         Client {
             shared: Arc::new(ClientShared {
                 internal_client,
@@ -3600,6 +3844,7 @@ impl Client {
                 latency_tracker: Arc::new(crate::timeout_watchdog::LatencyTracker::new(64)),
                 circuit_breaker: None,
                 current_database: Arc::new(AtomicU32::new(0)),
+                db_maybe_dirty: Arc::new(AtomicBool::new(false)),
                 last_iam_generation: Arc::new(AtomicU64::new(0)),
                 is_pool_managed: Arc::new(AtomicBool::new(false)),
                 iam_reconcile_lock: Arc::new(tokio::sync::Mutex::new(())),
@@ -3615,10 +3860,8 @@ impl Client {
             }),
             iam_token_manager: None,
             otel_metadata: Arc::new(OTelMetadata {
-                address: NodeAddress {
-                    host: "localhost".to_string(),
-                    port: 6379,
-                },
+                server_address: "localhost".to_string(),
+                server_port: Some(6379),
                 db_namespace: "0".to_string(),
             }),
         }
@@ -3644,6 +3887,7 @@ pub fn create_test_glide_client() -> Client {
         addresses: vec![NodeAddress {
             host: "127.0.0.1".to_string(),
             port: 6379,
+            unix_socket_path: None,
         }],
         lazy_connect: true,
         ..Default::default()
@@ -3678,6 +3922,7 @@ pub fn create_test_glide_client() -> Client {
             latency_tracker: Arc::new(crate::timeout_watchdog::LatencyTracker::new(64)),
             circuit_breaker: None,
             current_database: Arc::new(AtomicU32::new(0)),
+            db_maybe_dirty: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             last_iam_generation: Arc::new(std::sync::atomic::AtomicU64::new(0)),
             is_pool_managed: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             iam_reconcile_lock: Arc::new(tokio::sync::Mutex::new(())),
@@ -3693,10 +3938,8 @@ pub fn create_test_glide_client() -> Client {
         }),
         iam_token_manager: None,
         otel_metadata: Arc::new(OTelMetadata {
-            address: NodeAddress {
-                host: "127.0.0.1".to_string(),
-                port: 6379,
-            },
+            server_address: "127.0.0.1".to_string(),
+            server_port: Some(6379),
             db_namespace: "0".to_string(),
         }),
     }
@@ -3709,7 +3952,7 @@ mod tests {
     use redis::Cmd;
 
     use crate::client::types::{
-        ConnectionRequest, ConnectionRetryStrategy, NodeAddress, OTelMetadata,
+        ConnectionRequest, ConnectionRetryStrategy, NodeAddress, OTelMetadata, TlsMode,
     };
     use crate::client::{
         BLOCKING_CMD_TIMEOUT_EXTENSION, ClientShared, RequestTimeoutOption, TimeUnit,
@@ -3717,10 +3960,11 @@ mod tests {
     };
 
     use super::{
-        Client, ClientWrapper, ConnectionError, LazyClient, get_connection_info,
-        get_timeout_from_cmd_arg, validate_effective_lib_name, validate_effective_lib_ver,
+        AddressResolver, Client, ClientWrapper, ConnectionError, LazyClient, get_connection_info,
+        get_timeout_from_cmd_arg, sanitized_request_string, validate_effective_lib_name,
+        validate_effective_lib_ver, validate_unix_socket_addresses,
     };
-    use std::sync::Weak;
+    use std::sync::{Arc, Weak};
 
     #[test]
     fn test_validate_effective_lib_name_accepts_supported_values() {
@@ -3753,6 +3997,7 @@ mod tests {
             let address = NodeAddress {
                 host: configured.to_string(),
                 port: 6379,
+                unix_socket_path: None,
             };
             let info = get_connection_info(
                 &address,
@@ -3769,6 +4014,262 @@ mod tests {
                 other => panic!("expected Tcp addr, got {other:?}"),
             }
         }
+    }
+
+    fn unix_address(path: &str) -> NodeAddress {
+        NodeAddress {
+            host: String::new(),
+            port: 0,
+            unix_socket_path: Some(std::path::PathBuf::from(path)),
+        }
+    }
+
+    #[test]
+    fn test_get_connection_info_unix_socket_bypasses_resolver() {
+        #[derive(Debug)]
+        struct PanickingResolver;
+        impl AddressResolver for PanickingResolver {
+            fn resolve(&self, _host: &str, _port: u16) -> (String, u16) {
+                panic!("the address resolver must not be called for a Unix socket address");
+            }
+        }
+
+        let resolver: Arc<dyn AddressResolver> = Arc::new(PanickingResolver);
+        let info = get_connection_info(
+            &unix_address("/tmp/valkey.sock"),
+            TlsMode::NoTls,
+            redis::RedisConnectionInfo::default(),
+            None,
+            Some(&resolver),
+        );
+        assert_eq!(
+            info.addr,
+            redis::ConnectionAddr::Unix(std::path::PathBuf::from("/tmp/valkey.sock"))
+        );
+    }
+
+    #[cfg(unix)]
+    fn tcp_address() -> NodeAddress {
+        NodeAddress {
+            host: "10.0.0.1".to_string(),
+            port: 6380,
+            unix_socket_path: None,
+        }
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn test_validate_unix_socket_addresses_rejects_socket_on_windows() {
+        let request = ConnectionRequest {
+            addresses: vec![unix_address("/tmp/valkey.sock")],
+            ..Default::default()
+        };
+        assert_eq!(
+            validate_unix_socket_addresses(&request),
+            Err("Unix domain sockets are not supported on this platform".to_string())
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_validate_unix_socket_addresses_accepts_supported_requests() {
+        for (name, request) in [
+            (
+                "tcp only",
+                ConnectionRequest {
+                    addresses: vec![tcp_address()],
+                    cluster_mode_enabled: true,
+                    tls_mode: Some(TlsMode::SecureTls),
+                    ..Default::default()
+                },
+            ),
+            (
+                "single socket",
+                ConnectionRequest {
+                    addresses: vec![unix_address("/tmp/valkey.sock")],
+                    ..Default::default()
+                },
+            ),
+            (
+                "several sockets, static discovery",
+                ConnectionRequest {
+                    addresses: vec![unix_address("/tmp/a.sock"), unix_address("/tmp/b.sock")],
+                    node_discovery_mode: crate::client::NodeDiscoveryMode::Static,
+                    tls_mode: Some(TlsMode::NoTls),
+                    ..Default::default()
+                },
+            ),
+        ] {
+            assert_eq!(validate_unix_socket_addresses(&request), Ok(()), "{name}");
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_validate_unix_socket_addresses_rejects_unsupported_requests() {
+        let unix_with_host = NodeAddress {
+            host: "localhost".to_string(),
+            ..unix_address("/tmp/valkey.sock")
+        };
+        let unix_with_port = NodeAddress {
+            port: 6379,
+            ..unix_address("/tmp/valkey.sock")
+        };
+        let too_long = format!("/tmp/{}.sock", "a".repeat(200));
+        for (request, expected) in [
+            (
+                ConnectionRequest {
+                    addresses: vec![tcp_address(), unix_address("/tmp/valkey.sock")],
+                    cluster_mode_enabled: true,
+                    ..Default::default()
+                },
+                "not supported in cluster mode",
+            ),
+            (
+                ConnectionRequest {
+                    addresses: vec![tcp_address(), unix_address("/tmp/valkey.sock")],
+                    ..Default::default()
+                },
+                "cannot be combined with TCP addresses",
+            ),
+            (
+                ConnectionRequest {
+                    addresses: vec![unix_address("/tmp/valkey.sock"), tcp_address()],
+                    ..Default::default()
+                },
+                "cannot be combined with TCP addresses",
+            ),
+            (
+                ConnectionRequest {
+                    addresses: vec![unix_address("/tmp/valkey.sock")],
+                    node_discovery_mode: crate::client::NodeDiscoveryMode::DiscoverAll,
+                    ..Default::default()
+                },
+                "DiscoverAll node discovery is not supported",
+            ),
+            (
+                ConnectionRequest {
+                    addresses: vec![unix_address("/tmp/a.sock"), unix_address("/tmp/b.sock")],
+                    tls_mode: Some(TlsMode::SecureTls),
+                    ..Default::default()
+                },
+                "TLS is not supported",
+            ),
+            (
+                ConnectionRequest {
+                    addresses: vec![unix_address("/tmp/valkey.sock")],
+                    tls_mode: Some(TlsMode::InsecureTls),
+                    ..Default::default()
+                },
+                "TLS is not supported",
+            ),
+            (
+                ConnectionRequest {
+                    addresses: vec![unix_address("/tmp/a.sock"), unix_address("")],
+                    ..Default::default()
+                },
+                "must be absolute",
+            ),
+            (
+                ConnectionRequest {
+                    addresses: vec![unix_address("run/valkey.sock")],
+                    ..Default::default()
+                },
+                "must be absolute",
+            ),
+            (
+                ConnectionRequest {
+                    addresses: vec![unix_address("/tmp/val\0key.sock")],
+                    ..Default::default()
+                },
+                "Invalid Unix domain socket path",
+            ),
+            (
+                ConnectionRequest {
+                    addresses: vec![unix_address(&too_long)],
+                    ..Default::default()
+                },
+                "Invalid Unix domain socket path",
+            ),
+            (
+                ConnectionRequest {
+                    addresses: vec![unix_with_host],
+                    ..Default::default()
+                },
+                "must not also set a host or port",
+            ),
+            (
+                ConnectionRequest {
+                    addresses: vec![unix_with_port],
+                    ..Default::default()
+                },
+                "must not also set a host or port",
+            ),
+        ] {
+            let error = validate_unix_socket_addresses(&request).expect_err(&format!(
+                "expected `{expected}` for {:?}",
+                request.addresses
+            ));
+            assert!(
+                error.contains(expected),
+                "expected `{expected}`, got `{error}`"
+            );
+            // Error text crosses the FFI as a C string, so it must never carry a raw NUL.
+            assert!(!error.contains('\0'), "raw NUL in `{error:?}`");
+        }
+    }
+
+    #[test]
+    fn test_sanitized_request_string_shows_unix_socket_path() {
+        let request = ConnectionRequest {
+            addresses: vec![
+                unix_address("/tmp/valkey.sock"),
+                NodeAddress {
+                    host: "10.0.0.1".to_string(),
+                    port: 6380,
+                    unix_socket_path: None,
+                },
+            ],
+            ..Default::default()
+        };
+        let sanitized = sanitized_request_string(&request);
+        assert!(
+            sanitized.contains("Addresses: unix:/tmp/valkey.sock, 10.0.0.1:6380"),
+            "{sanitized}"
+        );
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn test_otel_metadata_reports_unix_socket_path_without_port() {
+        let request = ConnectionRequest {
+            addresses: vec![unix_address("/tmp/valkey.sock")],
+            lazy_connect: true,
+            ..Default::default()
+        };
+        let client = Client::new(request, None)
+            .await
+            .expect("lazy client construction does not touch the network");
+        assert_eq!(client.server_address(), "/tmp/valkey.sock");
+        assert_eq!(client.server_port(), None);
+    }
+
+    #[tokio::test]
+    async fn test_otel_metadata_reports_tcp_host_and_default_port() {
+        let request = ConnectionRequest {
+            addresses: vec![NodeAddress {
+                host: "127.0.0.1".to_string(),
+                port: 0,
+                unix_socket_path: None,
+            }],
+            lazy_connect: true,
+            ..Default::default()
+        };
+        let client = Client::new(request, None)
+            .await
+            .expect("lazy client construction does not touch the network");
+        assert_eq!(client.server_address(), "127.0.0.1");
+        assert_eq!(client.server_port(), Some(6379));
     }
 
     #[test]
@@ -3802,6 +4303,7 @@ mod tests {
             addresses: vec![NodeAddress {
                 host: "127.0.0.1".to_string(),
                 port: 1,
+                unix_socket_path: None,
             }],
             lazy_connect: true,
             lib_name: Some("invalid name".to_string()),
@@ -3826,6 +4328,7 @@ mod tests {
             addresses: vec![NodeAddress {
                 host: "127.0.0.1".to_string(),
                 port: 1,
+                unix_socket_path: None,
             }],
             lazy_connect: true,
             rdma: RdmaSetting::Rejected(RdmaUnavailable::NotCompiledIn),
@@ -3861,6 +4364,7 @@ mod tests {
             addresses: vec![NodeAddress {
                 host: "127.0.0.1".to_string(),
                 port: 1,
+                unix_socket_path: None,
             }],
             rdma: RdmaSetting::Rejected(RdmaUnavailable::NotCompiledIn),
             compression_config: Some(compression),
@@ -3886,6 +4390,7 @@ mod tests {
             addresses: vec![NodeAddress {
                 host: "127.0.0.1".to_string(),
                 port: 1,
+                unix_socket_path: None,
             }],
             lazy_connect: true,
             rdma: RdmaSetting::Rejected(RdmaUnavailable::NotCompiledIn),
@@ -3916,6 +4421,7 @@ mod tests {
             addresses: vec![NodeAddress {
                 host: "127.0.0.1".to_string(),
                 port: 1,
+                unix_socket_path: None,
             }],
             node_discovery_mode: crate::client::NodeDiscoveryMode::Static,
             rdma: RdmaSetting::Rejected(RdmaUnavailable::NotCompiledIn),
@@ -3946,6 +4452,7 @@ mod tests {
             addresses: vec![NodeAddress {
                 host: "127.0.0.1".to_string(),
                 port: 1,
+                unix_socket_path: None,
             }],
             lazy_connect: false,
             read_only: true,
@@ -4000,6 +4507,7 @@ mod tests {
             addresses: vec![NodeAddress {
                 host: "127.0.0.1".to_string(),
                 port: 1,
+                unix_socket_path: None,
             }],
             lazy_connect: true,
             lib_ver: Some("bad version".to_string()),
@@ -4023,6 +4531,7 @@ mod tests {
                     addresses: vec![NodeAddress {
                         host: "127.0.0.1".to_string(),
                         port: 1,
+                        unix_socket_path: None,
                     }],
                     cluster_mode_enabled,
                     lazy_connect,
@@ -4331,6 +4840,7 @@ mod tests {
             addresses: vec![NodeAddress {
                 host: "127.0.0.1".to_string(),
                 port: 6379,
+                unix_socket_path: None,
             }],
             lazy_connect: true,
             ..Default::default()
@@ -4366,6 +4876,7 @@ mod tests {
                 latency_tracker: Arc::new(crate::timeout_watchdog::LatencyTracker::new(64)),
                 circuit_breaker: None,
                 current_database: Arc::new(AtomicU32::new(0)),
+                db_maybe_dirty: Arc::new(AtomicBool::new(false)),
                 last_iam_generation: Arc::new(AtomicU64::new(0)),
                 is_pool_managed: Arc::new(AtomicBool::new(false)),
                 iam_reconcile_lock: Arc::new(tokio::sync::Mutex::new(())),
@@ -4381,10 +4892,8 @@ mod tests {
             }),
             iam_token_manager: None,
             otel_metadata: Arc::new(OTelMetadata {
-                address: NodeAddress {
-                    host: "localhost".to_string(),
-                    port: 6379,
-                },
+                server_address: "localhost".to_string(),
+                server_port: Some(6379),
                 db_namespace: "0".to_string(),
             }),
         }
@@ -4652,6 +5161,82 @@ mod tests {
         assert!(
             !client.shared.multi_active.load(Ordering::Acquire),
             "DISCARD must clear the open-transaction flag"
+        );
+    }
+
+    /// `last_select_db` returns the command index and db of the last `SELECT` in a
+    /// batch (or `None`), as a pure read — it must never touch `current_database`
+    /// (authoritative for scope connections, so it must not move for a SELECT the
+    /// server never applied). The index lets the caller validate the SELECT's reply.
+    #[test]
+    fn last_select_db_extracts_trailing_select() {
+        use std::sync::atomic::Ordering;
+        let client = create_test_client();
+
+        let mut no_select = redis::pipe();
+        no_select.cmd("SET").arg("k").arg("v").cmd("GET").arg("k");
+        assert_eq!(
+            client.last_select_db(&no_select),
+            None,
+            "a batch with no SELECT must report no drift"
+        );
+
+        let mut with_select = redis::pipe();
+        with_select
+            .cmd("SELECT")
+            .arg("3")
+            .cmd("SET")
+            .arg("k")
+            .arg("v")
+            .cmd("SELECT")
+            .arg("7");
+        assert_eq!(
+            client.last_select_db(&with_select),
+            Some((2, 7)),
+            "the last SELECT's db (at command index 2) is the one left on the connection"
+        );
+        assert_eq!(
+            client.shared.current_database.load(Ordering::Acquire),
+            0,
+            "last_select_db must not mutate current_database"
+        );
+    }
+
+    /// A batch SELECT that fails to dispatch must NOT move `current_database` --
+    /// pins the store-on-`Ok` wiring, since a poisoned flag breaks every later
+    /// scope acquire. A non-IAM lazy client reconciles Ok then fails to connect,
+    /// so dispatch returns Err and the tracked db must stay put.
+    #[test]
+    fn failed_batch_select_does_not_move_current_database() {
+        use std::sync::atomic::Ordering;
+        let mut client = create_test_client(); // non-IAM, lazy (no network)
+        let rt = borrow_test_runtime();
+        let strategy = redis::PipelineRetryStrategy::default();
+
+        let mut pipe = redis::pipe();
+        pipe.cmd("SELECT").arg("7").cmd("GET").arg("k");
+        let res = rt.block_on(client.send_pipeline(&pipe, None, false, None, strategy));
+        assert!(
+            res.is_err(),
+            "lazy client has no connection; dispatch fails"
+        );
+        assert_eq!(
+            client.shared.current_database.load(Ordering::Acquire),
+            0,
+            "a SELECT that never dispatched must not poison current_database"
+        );
+
+        let mut txn = redis::pipe();
+        txn.cmd("SELECT").arg("7").cmd("GET").arg("k");
+        let res = rt.block_on(client.send_transaction(&txn, None, None, false));
+        assert!(
+            res.is_err(),
+            "lazy client has no connection; dispatch fails"
+        );
+        assert_eq!(
+            client.shared.current_database.load(Ordering::Acquire),
+            0,
+            "a transaction SELECT that never dispatched must not poison current_database"
         );
     }
 
@@ -5242,8 +5827,11 @@ mod tests {
             addresses: vec![NodeAddress {
                 host: "127.0.0.1".to_string(),
                 port: 1,
+                unix_socket_path: None,
             }],
             lazy_connect: true,
+            // IAM auth requires TLS (an IAM token must never traverse plaintext).
+            tls_mode: Some(TlsMode::SecureTls),
             authentication_info: Some(crate::client::types::AuthenticationInfo {
                 username: Some("iam-test-user".to_string()),
                 password: None,
@@ -5272,6 +5860,7 @@ mod tests {
             addresses: vec![NodeAddress {
                 host: "127.0.0.1".to_string(),
                 port: 1,
+                unix_socket_path: None,
             }],
             lazy_connect: true,
             ..Default::default()
@@ -5352,6 +5941,7 @@ mod tests {
             addresses: vec![NodeAddress {
                 host: "127.0.0.1".to_string(),
                 port,
+                unix_socket_path: None,
             }],
             // One error opens the breaker, and it stays open for the whole test.
             client_circuit_breaker: Some(crate::client::types::ClientCircuitBreakerConfig {
@@ -5402,6 +5992,7 @@ mod tests {
             addresses: vec![NodeAddress {
                 host: "127.0.0.1".to_string(),
                 port,
+                unix_socket_path: None,
             }],
             inflight_requests_limit: Some(1),
             ..Default::default()
@@ -5430,6 +6021,126 @@ mod tests {
             intercepted.arg("channel");
             let reply = client.send_command(&mut intercepted, None).await;
             assert_eq!(reply, Ok(redis::Value::Nil), "{name}");
+        }
+    }
+
+    /// `Client::new` rejects an IAM-configured request when TLS is disabled, before
+    /// any token manager (and therefore any AUTH) exists, so initial AUTH, refresh
+    /// and reconnect all fail closed.
+    ///
+    /// A-B: the same request over TLS succeeds, so the failure is the `NoTls` guard
+    /// firing, not IAM config being rejected unconditionally.
+    #[tokio::test]
+    #[cfg(feature = "proto")]
+    async fn test_iam_without_tls_is_rejected() {
+        setup_test_credentials();
+
+        let make_request = |tls_mode: TlsMode| ConnectionRequest {
+            addresses: vec![NodeAddress {
+                host: "127.0.0.1".to_string(),
+                port: 1,
+                unix_socket_path: None,
+            }],
+            lazy_connect: true,
+            tls_mode: Some(tls_mode),
+            authentication_info: Some(crate::client::types::AuthenticationInfo {
+                username: Some("iam-test-user".to_string()),
+                password: None,
+                iam_config: Some(crate::client::types::IamAuthenticationConfig {
+                    cluster_name: "test-cluster".to_string(),
+                    region: "us-east-1".to_string(),
+                    service_type: crate::iam::ServiceType::ElastiCache,
+                    refresh_interval_seconds: None,
+                    credentials_provider: None,
+                }),
+            }),
+            ..Default::default()
+        };
+
+        let err = match Client::new(make_request(TlsMode::NoTls), None).await {
+            Err(e) => e,
+            Ok(_) => panic!("IAM + NoTls must be rejected before any token is obtained"),
+        };
+        let msg = format!("{err:?}");
+        assert!(
+            msg.contains("IAM authentication requires TLS"),
+            "error should name the TLS requirement, got: {msg}"
+        );
+
+        // A: the same config over TLS is accepted (lazy, so no network touched).
+        if Client::new(make_request(TlsMode::SecureTls), None)
+            .await
+            .is_err()
+        {
+            panic!("IAM + TLS must still be accepted");
+        }
+    }
+
+    /// A blank `cluster_name` or `region` (empty or whitespace-only) otherwise
+    /// fails late and opaquely (connect timeout / server auth error); these must
+    /// be rejected at creation with an error that names the missing field.
+    ///
+    /// A-B: the fully-populated config over the same TLS mode is accepted, so the
+    /// failure is the blank-field guard firing, not IAM being rejected outright.
+    #[tokio::test]
+    #[cfg(feature = "proto")]
+    async fn test_iam_rejects_blank_cluster_name_and_region() {
+        setup_test_credentials();
+
+        let make_request = |cluster_name: &str, region: &str| ConnectionRequest {
+            addresses: vec![NodeAddress {
+                host: "127.0.0.1".to_string(),
+                port: 1,
+                unix_socket_path: None,
+            }],
+            lazy_connect: true,
+            tls_mode: Some(TlsMode::SecureTls),
+            authentication_info: Some(crate::client::types::AuthenticationInfo {
+                username: Some("iam-test-user".to_string()),
+                password: None,
+                iam_config: Some(crate::client::types::IamAuthenticationConfig {
+                    cluster_name: cluster_name.to_string(),
+                    region: region.to_string(),
+                    service_type: crate::iam::ServiceType::ElastiCache,
+                    refresh_interval_seconds: None,
+                    credentials_provider: None,
+                }),
+            }),
+            ..Default::default()
+        };
+
+        let assert_rejected = |err: ConnectionError, expected: &str| {
+            let msg = format!("{err:?}");
+            assert!(
+                msg.contains(expected),
+                "error should name the empty field, got: {msg}"
+            );
+        };
+
+        match Client::new(make_request("", "us-east-1"), None).await {
+            Err(e) => assert_rejected(e, "IAM authentication requires a non-empty cluster name"),
+            Ok(_) => panic!("empty cluster name must be rejected"),
+        }
+        match Client::new(make_request("test-cluster", ""), None).await {
+            Err(e) => assert_rejected(e, "IAM authentication requires a non-empty region"),
+            Ok(_) => panic!("empty region must be rejected"),
+        }
+        // Whitespace-only values are blank too and fail the same opaque way.
+        match Client::new(make_request("   ", "us-east-1"), None).await {
+            Err(e) => assert_rejected(e, "IAM authentication requires a non-empty cluster name"),
+            Ok(_) => panic!("whitespace-only cluster name must be rejected"),
+        }
+        match Client::new(make_request("test-cluster", "\t"), None).await {
+            Err(e) => assert_rejected(e, "IAM authentication requires a non-empty region"),
+            Ok(_) => panic!("whitespace-only region must be rejected"),
+        }
+
+        // A: a fully-populated config over the same TLS mode is accepted.
+        if Client::new(make_request("test-cluster", "us-east-1"), None)
+            .await
+            .is_err()
+        {
+            panic!("IAM with non-empty cluster name and region must be accepted");
         }
     }
 }

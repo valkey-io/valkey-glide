@@ -681,7 +681,9 @@ pub fn get_address_info(address: &ConnectionAddr) -> NodeAddress {
             address_info.host = host.to_string().into();
             address_info.port = *port as u32;
         }
-        ConnectionAddr::Unix(_) => unreachable!("Unix connection not tested"),
+        ConnectionAddr::Unix(path) => {
+            address_info.unix_socket_path = Some(path.to_string_lossy().into_owned().into());
+        }
     }
     address_info
 }

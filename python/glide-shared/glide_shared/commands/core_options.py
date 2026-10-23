@@ -1,4 +1,5 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import Enum
@@ -55,6 +56,12 @@ class ConditionalChange(Enum):
     ONLY_IF_DOES_NOT_EXIST = "NX"
     """ Only set key / add elements that does not already exist. Equivalent to `NX` in the Valkey API. """
 
+    def _to_args(self) -> List[TEncodable]:
+        """
+        Returns the condition as a list of command arguments.
+        """
+        return [self.value]
+
 
 class HashFieldConditionalChange(Enum):
     """
@@ -69,18 +76,42 @@ class HashFieldConditionalChange(Enum):
 
 
 @dataclass
-class OnlyIfEqual:
+class ValueComparison(ABC):
     """
-    Change condition to the `SET` command,
-    For additional conditonal options see ConditionalChange
+    A condition that compares the current value of a key to a comparison value.
 
-    - comparison_value - value to compare to the current value of a key.
-
-    If comparison_value is equal to the key, it will overwrite the value of key to the new provided value
-    Equivalent to the IFEQ comparison-value in the Valkey API
+    Attributes:
+        comparison_value (TEncodable): The value to compare to the current value of a key.
     """
 
     comparison_value: TEncodable
+
+    @abstractmethod
+    def _to_args(self) -> List[TEncodable]:
+        """
+        Returns the condition as a list of command arguments.
+        """
+        pass
+
+
+class OnlyIfEqual(ValueComparison):
+    """
+    A condition that is met if the current value of a key is equal to the comparison value.
+    Used by the `SET` command. Equivalent to the `IFEQ comparison-value` in the Valkey API.
+    """
+
+    def _to_args(self) -> List[TEncodable]:
+        return ["IFEQ", self.comparison_value]
+
+
+class OnlyIfNotEqual(ValueComparison):
+    """
+    A condition that is met if the current value of a key is not equal to the comparison value.
+    Used by the `SET` command. Equivalent to the `IFNE comparison-value` in the Valkey API.
+    """
+
+    def _to_args(self) -> List[TEncodable]:
+        return ["IFNE", self.comparison_value]
 
 
 class ExpiryType(Enum):

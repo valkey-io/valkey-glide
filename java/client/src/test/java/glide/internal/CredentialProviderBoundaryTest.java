@@ -10,6 +10,7 @@ import connection_request.ConnectionRequestOuterClass.ConnectionRequest;
 import connection_request.ConnectionRequestOuterClass.IamCredentials;
 import connection_request.ConnectionRequestOuterClass.NodeAddress;
 import connection_request.ConnectionRequestOuterClass.ServiceType;
+import connection_request.ConnectionRequestOuterClass.TlsMode;
 import glide.api.models.configuration.AwsCredentials;
 import glide.api.models.configuration.GlideCredentialProvider;
 import glide.ffi.resolvers.GlidePoolResolver;
@@ -44,6 +45,9 @@ public class CredentialProviderBoundaryTest {
                         .build();
         ConnectionRequest.Builder request =
                 lazyRequest()
+                        // IAM requires TLS; set it so the request reaches the
+                        // native handle logic under test instead of the TLS guard.
+                        .setTlsMode(TlsMode.SecureTls)
                         .setAuthenticationInfo(
                                 AuthenticationInfo.newBuilder().setUsername("test-user").setIamCredentials(iam));
         if (credentialProviderKey != null) {

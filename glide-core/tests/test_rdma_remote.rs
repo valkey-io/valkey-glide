@@ -69,7 +69,11 @@ mod remote_dma_tests {
             fabric = fabric.with_interface(interface);
         }
         let request = ConnectionRequest {
-            addresses: vec![NodeAddress { host, port }],
+            addresses: vec![NodeAddress {
+                host,
+                port,
+                unix_socket_path: None,
+            }],
             rdma: RdmaSetting::Configured(fabric),
             ..Default::default()
         };
@@ -385,7 +389,11 @@ mod remote_dma_tests {
         let (host, port) = server();
         Client::new(
             ConnectionRequest {
-                addresses: vec![NodeAddress { host, port }],
+                addresses: vec![NodeAddress {
+                    host,
+                    port,
+                    unix_socket_path: None,
+                }],
                 ..Default::default()
             },
             None,

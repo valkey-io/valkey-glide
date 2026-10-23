@@ -87,6 +87,7 @@ mod dma_tests {
             addresses: vec![NodeAddress {
                 host: "127.0.0.1".to_string(),
                 port,
+                unix_socket_path: None,
             }],
             // tcp is the development provider: it opens a real endpoint
             // without EFA hardware, which is all this test needs.
@@ -158,6 +159,7 @@ mod dma_tests {
                 .map(|port| NodeAddress {
                     host: "127.0.0.1".to_string(),
                     port: *port,
+                    unix_socket_path: None,
                 })
                 .collect(),
             cluster_mode_enabled: true,
@@ -203,6 +205,7 @@ mod dma_tests {
             addresses: vec![NodeAddress {
                 host: "127.0.0.1".to_string(),
                 port,
+                unix_socket_path: None,
             }],
             ..Default::default()
         };
@@ -282,6 +285,7 @@ mod dma_tests {
             ConnectionAddr::Tcp(host, port) => NodeAddress {
                 host: host.clone(),
                 port: *port,
+                unix_socket_path: None,
             },
             other => panic!("unexpected mock address: {other:?}"),
         }

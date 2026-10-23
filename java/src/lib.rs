@@ -79,12 +79,6 @@ fn process_command_for_compression(
         None => return Ok(()), // Unknown command - no compression processing needed
     };
 
-    // Check if the command is incompatible with compression - this should error out
-    glide_core::compression::validate_command_compression_compatibility(
-        request_type,
-        compression_manager_ref,
-    )?;
-
     let mut args: Vec<Vec<u8>> = all_args[1..].to_vec();
     glide_core::compression::process_command_args_for_compression(
         &mut args,
@@ -2853,10 +2847,7 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_createMonitorClient
                 .addresses
                 .first()
                 .ok_or_else(|| FFIError::Logger("No addresses in ConnectionRequest".to_string()))?;
-            let address = glide_core::client::NodeAddress {
-                host: addr_proto.host.to_string(),
-                port: addr_proto.port as u16,
-            };
+            let address = glide_core::client::NodeAddress::from(addr_proto);
 
             let lib_name = if proto_request.lib_name.is_empty() {
                 None

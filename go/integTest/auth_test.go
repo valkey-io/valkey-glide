@@ -45,9 +45,10 @@ func assertIamClientOperations(t require.TestingT, client interface {
 	assert.Equal(t, value, getResult.Value())
 }
 
-// TestIamAuthenticationWithMockCredentials verifies cluster initial authentication and manual refresh
+// TestTlsIamAuthenticationWithMockCredentials verifies cluster initial authentication and manual refresh
 // through the direct custom credential-provider callback.
-func (suite *GlideTestSuite) TestIamAuthenticationWithMockCredentials() {
+func (suite *GlideTestSuite) TestTlsIamAuthenticationWithMockCredentials() {
+	skipIfTlsDisabled(suite)
 	var invocations atomic.Int32
 	provider := func() (config.AwsCredentials, error) {
 		invocations.Add(1)
@@ -76,8 +77,9 @@ func (suite *GlideTestSuite) TestIamAuthenticationWithMockCredentials() {
 	assertIamClientOperations(suite.T(), client)
 }
 
-// TestIamAuthenticationAutomaticTokenRefresh verifies cluster automatic refresh uses the direct provider.
-func (suite *GlideTestSuite) TestIamAuthenticationAutomaticTokenRefresh() {
+// TestTlsIamAuthenticationAutomaticTokenRefresh verifies cluster automatic refresh uses the direct provider.
+func (suite *GlideTestSuite) TestTlsIamAuthenticationAutomaticTokenRefresh() {
+	skipIfTlsDisabled(suite)
 	var invocations atomic.Int32
 	provider := func() (config.AwsCredentials, error) {
 		invocations.Add(1)
@@ -99,9 +101,10 @@ func (suite *GlideTestSuite) TestIamAuthenticationAutomaticTokenRefresh() {
 	assertIamClientOperations(suite.T(), client)
 }
 
-// TestIamAuthenticationWithMockCredentialsStandalone verifies standalone initial auth and manual refresh
+// TestTlsIamAuthenticationWithMockCredentialsStandalone verifies standalone initial auth and manual refresh
 // with optional token and expiry omitted.
-func (suite *GlideTestSuite) TestIamAuthenticationWithMockCredentialsStandalone() {
+func (suite *GlideTestSuite) TestTlsIamAuthenticationWithMockCredentialsStandalone() {
+	skipIfTlsDisabled(suite)
 	var invocations atomic.Int32
 	provider := func() (config.AwsCredentials, error) {
 		invocations.Add(1)
@@ -125,8 +128,9 @@ func (suite *GlideTestSuite) TestIamAuthenticationWithMockCredentialsStandalone(
 	assertIamClientOperations(suite.T(), client)
 }
 
-// TestIamAuthenticationAutomaticTokenRefreshStandalone verifies standalone automatic refresh uses the direct provider.
-func (suite *GlideTestSuite) TestIamAuthenticationAutomaticTokenRefreshStandalone() {
+// TestTlsIamAuthenticationAutomaticTokenRefreshStandalone verifies standalone automatic refresh uses the direct provider.
+func (suite *GlideTestSuite) TestTlsIamAuthenticationAutomaticTokenRefreshStandalone() {
+	skipIfTlsDisabled(suite)
 	var invocations atomic.Int32
 	provider := func() (config.AwsCredentials, error) {
 		invocations.Add(1)
@@ -148,7 +152,8 @@ func (suite *GlideTestSuite) TestIamAuthenticationAutomaticTokenRefreshStandalon
 	assertIamClientOperations(suite.T(), client)
 }
 
-func (suite *GlideTestSuite) TestIamCustomCredentialProviderFailure() {
+func (suite *GlideTestSuite) TestTlsIamCustomCredentialProviderFailure() {
+	skipIfTlsDisabled(suite)
 	provider := func() (config.AwsCredentials, error) {
 		return config.AwsCredentials{}, errors.New("custom provider failed")
 	}
@@ -168,7 +173,8 @@ func (suite *GlideTestSuite) TestIamCustomCredentialProviderFailure() {
 	assert.Contains(suite.T(), err.Error(), "Custom credentials provider callback returned failure")
 }
 
-func (suite *GlideTestSuite) TestIamCustomCredentialProviderRejectsWhitespaceRequiredValues() {
+func (suite *GlideTestSuite) TestTlsIamCustomCredentialProviderRejectsWhitespaceRequiredValues() {
+	skipIfTlsDisabled(suite)
 	standaloneProvider := func() (config.AwsCredentials, error) {
 		return config.AwsCredentials{AccessKeyID: " \t\r\n", SecretAccessKey: "secret"}, nil
 	}
@@ -188,7 +194,8 @@ func (suite *GlideTestSuite) TestIamCustomCredentialProviderRejectsWhitespaceReq
 	require.Error(suite.T(), err)
 }
 
-func (suite *GlideTestSuite) TestIamCustomCredentialProviderNegotiatesLargeSessionToken() {
+func (suite *GlideTestSuite) TestTlsIamCustomCredentialProviderNegotiatesLargeSessionToken() {
+	skipIfTlsDisabled(suite)
 	largeSessionToken := strings.Repeat("t", 9*1024)
 
 	var standaloneInvocations atomic.Int32

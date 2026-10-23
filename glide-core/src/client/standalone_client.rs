@@ -198,6 +198,17 @@ impl StandaloneClient {
             return Err(StandaloneClientConnectionError::NoAddressesProvided);
         }
 
+        super::validate_unix_socket_addresses(&connection_request).map_err(|message| {
+            StandaloneClientConnectionError::FailedConnection(vec![(
+                None,
+                RedisError::from((
+                    redis::ErrorKind::InvalidClientConfig,
+                    "Invalid Unix domain socket address",
+                    message,
+                )),
+            )])
+        })?;
+
         // Validate read_only mode is not combined with AZAffinity strategies
         if connection_request.read_only
             && matches!(
@@ -398,7 +409,7 @@ impl StandaloneClient {
                         rdma_fabric.clone(),
                     )
                     .await
-                    .map_err(|err| (format!("{}:{}", address.host, address.port), err))
+                    .map_err(|err| (address.endpoint(), err))
                 }
             })
             .buffer_unordered(node_count);
@@ -458,7 +469,7 @@ impl StandaloneClient {
             let existing: Vec<String> = connection_request
                 .addresses
                 .iter()
-                .map(|a| format!("{}:{}", a.host, a.port))
+                .map(NodeAddress::endpoint)
                 .collect();
 
             // Phase 1: Parse initial INFO REPLICATION responses.
@@ -1333,7 +1344,11 @@ fn parse_replica_addresses(replication_info: &str) -> Vec<NodeAddress> {
             }
         }
         if let (Some(h), Some(p)) = (host, port) {
-            replicas.push(NodeAddress { host: h, port: p });
+            replicas.push(NodeAddress {
+                host: h,
+                port: p,
+                unix_socket_path: None,
+            });
         }
     }
     replicas
@@ -1352,7 +1367,11 @@ fn parse_primary_address(replication_info: &str) -> Option<NodeAddress> {
         }
     }
     match (host, port) {
-        (Some(h), Some(p)) => Some(NodeAddress { host: h, port: p }),
+        (Some(h), Some(p)) => Some(NodeAddress {
+            host: h,
+            port: p,
+            unix_socket_path: None,
+        }),
         _ => None,
     }
 }
@@ -1362,13 +1381,10 @@ fn is_primary_role(replication_info: &str) -> bool {
     replication_info.lines().any(|l| l.trim() == "role:master")
 }
 
-/// Check if an address is already in a list (by host:port string comparison).
+/// Check if an address is already in a list (by endpoint string comparison).
 fn address_is_known(addr: &NodeAddress, existing: &[String], discovered: &[NodeAddress]) -> bool {
-    let key = format!("{}:{}", addr.host, addr.port);
-    existing.contains(&key)
-        || discovered
-            .iter()
-            .any(|a| format!("{}:{}", a.host, a.port) == key)
+    let key = addr.endpoint();
+    existing.contains(&key) || discovered.iter().any(|a| a.endpoint() == key)
 }
 
 #[cfg(test)]
