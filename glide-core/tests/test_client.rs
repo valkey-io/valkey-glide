@@ -5209,6 +5209,78 @@ pub(crate) mod shared_client_tests {
             scope::unregister_client(client_id);
         });
     }
+    /// A one-argument `AUTH <password>` authenticates the default user. A scope
+    /// built afterwards must authenticate as `default` too, not pair the
+    /// previously stored username with the default user's password.
+    #[cfg(feature = "proto")]
+    #[rstest]
+    #[serial_test::serial]
+    fn test_new_scope_authenticates_as_default_after_a_one_argument_auth() {
+        use ::protobuf::Message as _;
+        use glide_core::scope;
+
+        block_on_all(async {
+            let (_server, mut admin_conn, proto_request) =
+                setup_password_local_server("old-password").await;
+            let bytes = proto_request
+                .write_to_bytes()
+                .expect("serialize scope connection request");
+            let client = Client::new(proto_request.into(), None)
+                .await
+                .expect("Client::new with the initial password should succeed");
+
+            let mut setuser = redis::cmd("ACL");
+            setuser
+                .arg("SETUSER")
+                .arg("rotated-user")
+                .arg("on")
+                .arg("allkeys")
+                .arg("+@all")
+                .arg(">user-password");
+            admin_conn
+                .send_packed_command(&setuser)
+                .await
+                .expect("ACL SETUSER should succeed");
+
+            let mut auth_user = redis::cmd("AUTH");
+            auth_user.arg("rotated-user").arg("user-password");
+            client
+                .clone()
+                .send_command(&mut auth_user, None)
+                .await
+                .expect("AUTH as the named user should succeed");
+
+            let mut auth_default = redis::cmd("AUTH");
+            auth_default.arg("old-password");
+            client
+                .clone()
+                .send_command(&mut auth_default, None)
+                .await
+                .expect("one-argument AUTH as the default user should succeed");
+
+            let client_id = 6u64;
+            scope::register_client(client_id, client.clone());
+            let runtime = tokio::runtime::Handle::current();
+            let scope_id = scope::acquire_scope(
+                client_id,
+                bytes,
+                &runtime,
+                None,
+                std::time::Duration::from_secs(10),
+            )
+            .await
+            .expect("scope acquire after a one-argument AUTH");
+
+            assert_eq!(
+                scope_whoami(scope_id).await,
+                "default",
+                "the scope must authenticate as the default user, like the Client"
+            );
+
+            scope::release_scope(scope_id, client_id, &runtime);
+            scope::unregister_client(client_id);
+        });
+    }
 
     /// `HELLO 3 AUTH <user> <password>` sent through the Client changes what a
     /// reconnect authenticates with, so it must change what a new scope

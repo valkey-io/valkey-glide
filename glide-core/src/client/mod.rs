@@ -925,14 +925,10 @@ impl Client {
     /// Updates username and password state for standalone, cluster, and lazy clients.
     async fn handle_auth_command(&mut self, cmd: &Cmd) -> RedisResult<()> {
         let (username, password) = self.extract_auth_info(cmd);
-
-        // Update username if provided
-        if username.is_some() {
-            self.update_stored_username(username.clone()).await?;
-        }
-
-        // Update password if provided (updateConnectionPassword handles this, so we track it too)
+        // A one-argument AUTH authenticates the default user, so the stored
+        // username is cleared, not kept.
         if password.is_some() {
+            self.update_stored_username(username.clone()).await?;
             self.update_stored_password(password.clone()).await?;
         }
 
@@ -984,20 +980,17 @@ impl Client {
             .then_some(&self.credentials)
     }
 
-    /// Mirror the credentials a user-issued `AUTH`/`HELLO` carried, as one write
-    /// (`None` leaves a field as it was).
+    /// Mirror the credentials a successful `AUTH`/`HELLO` carried, as one write.
+    /// Both fields are set: an `AUTH` with no username authenticated the default
+    /// user, so a previously stored username must not survive it.
     fn record_credentials(&self, username: Option<String>, password: Option<String>) {
-        if username.is_none() && password.is_none() {
+        if password.is_none() {
             return;
         }
         if let Some(handle) = self.static_credentials() {
             handle.update(|credentials| {
-                if username.is_some() {
-                    credentials.username = username;
-                }
-                if password.is_some() {
-                    credentials.password = password;
-                }
+                credentials.username = username;
+                credentials.password = password;
             });
         }
     }
