@@ -670,22 +670,18 @@ mod compression_tests {
 
     #[test]
     fn test_compress_values() {
-        // Test CompressValues with representative command (SET).
-
         let backend = Box::new(ZstdBackend::new());
         let config = CompressionConfig::new(CompressionBackendType::Zstd);
         let manager = CompressionManager::new(backend, config).unwrap();
         let key = b"key".to_vec();
         let original_data = "A".repeat(100).into_bytes();
 
-        // Test compressing the value - key should be unchanged
         let mut args = vec![key.clone(), original_data.clone()];
         process_command_args_for_compression(&mut args, RequestType::Set, Some(&manager)).unwrap();
         assert_eq!(args[0], key);
         assert!(has_magic_header(&args[1]), "Value should be compressed");
         assert!(args[1].len() < original_data.len());
 
-        // Test decompressing the response - should pass through
         let response = Value::BulkString(args[1].clone().into());
         let result =
             process_response_for_decompression(response.clone(), RequestType::Set, Some(&manager))
@@ -695,20 +691,16 @@ mod compression_tests {
 
     #[test]
     fn test_decompress_values() {
-        // Test DecompressValues with representative command (GET).
-
         let backend = Box::new(ZstdBackend::new());
         let config = CompressionConfig::new(CompressionBackendType::Zstd);
         let manager = CompressionManager::new(backend, config).unwrap();
         let key = b"key".to_vec();
         let original_data = "A".repeat(100).into_bytes();
 
-        // Test compressing the arguments - key should be unchanged
         let mut args = vec![key.clone()];
         process_command_args_for_compression(&mut args, RequestType::Get, Some(&manager)).unwrap();
         assert_eq!(args, vec![key]);
 
-        // Test decompressing the response
         let compressed = manager.compress_value(&original_data);
         assert!(has_magic_header(&compressed), "Value should be compressed");
         let response = Value::BulkString(compressed.into_owned().into());
@@ -716,7 +708,6 @@ mod compression_tests {
             process_response_for_decompression(response, RequestType::Get, Some(&manager)).unwrap();
         assert_eq!(result, Value::BulkString(original_data.into()));
 
-        // Test decompressing a nil response - should pass through
         let result =
             process_response_for_decompression(Value::Nil, RequestType::Get, Some(&manager))
                 .unwrap();
@@ -725,15 +716,12 @@ mod compression_tests {
 
     #[test]
     fn test_compress_and_decompress_values() {
-        // Test CompressAndDecompressValues with representative command (GETSET).
-
         let backend = Box::new(ZstdBackend::new());
         let config = CompressionConfig::new(CompressionBackendType::Zstd);
         let manager = CompressionManager::new(backend, config).unwrap();
         let key = b"key".to_vec();
         let original_data = "A".repeat(100).into_bytes();
 
-        // Test compressing the value - key should be unchanged
         let mut args = vec![key.clone(), original_data.clone()];
         process_command_args_for_compression(&mut args, RequestType::GetSet, Some(&manager))
             .unwrap();
@@ -741,14 +729,12 @@ mod compression_tests {
         assert!(has_magic_header(&args[1]), "Value should be compressed");
         assert!(args[1].len() < original_data.len());
 
-        // Test decompressing the response
         let response = Value::BulkString(args[1].clone().into());
         let result =
             process_response_for_decompression(response, RequestType::GetSet, Some(&manager))
                 .unwrap();
         assert_eq!(result, Value::BulkString(original_data.into()));
 
-        // Test decompressing a nil response - should pass through
         let result =
             process_response_for_decompression(Value::Nil, RequestType::GetSet, Some(&manager))
                 .unwrap();
@@ -939,7 +925,7 @@ mod compression_tests {
         assert_compression_incompatible(set, &["key", "value", "IFEQ", "value"]);
         assert_compression_incompatible(set, &["key", "value", "IFNE", "value"]);
         assert_compression_incompatible(set, &["key", "value", "ifne", "value"]);
-        assert_compression_incompatible(set,  &["key", "value", "GET", "IFEQ", "value"]);
+        assert_compression_incompatible(set, &["key", "value", "GET", "IFEQ", "value"]);
 
         assert_compression_compatible(set, &["key", "value"]);
         assert_compression_compatible(set, &["key", "value", "GET"]);
