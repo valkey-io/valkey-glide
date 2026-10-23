@@ -296,17 +296,25 @@ fn require_sync_client(adapter: &ClientAdapter) -> Result<(), String> {
     }
 }
 
-/// Run a transfer to completion on the calling thread.
+/// Run a transfer to completion on the calling thread. Returns the buffer, or
+/// `None` if it was recalled, along with the transfer's result.
 #[cfg(feature = "rdma")]
-fn block_on_transfer<F: Future>(adapter: &ClientAdapter, future: F) -> F::Output {
+fn block_on_transfer<T>(
+    adapter: &ClientAdapter,
+    future: impl Future<Output = glide_core::client::RdmaOutcome<T>>,
+) -> (Option<glide_rdma::RdmaBuffer>, Result<T, redis::RedisError>) {
     let background = adapter
         .background_runtime
         .as_ref()
         .map(|runtime| runtime.handle().clone());
-    adapter.runtime.block_on(async {
+    let outcome = adapter.runtime.block_on(async {
         let _guard = background.as_ref().map(|handle| handle.enter());
         future.await
-    })
+    });
+    match outcome {
+        glide_core::client::RdmaOutcome::Settled { buffer, result } => (Some(buffer), result),
+        glide_core::client::RdmaOutcome::Recalled(err) => (None, Err(err)),
+    }
 }
 
 /// Caller-owned memory presented to the fabric as a registerable region.
