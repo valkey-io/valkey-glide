@@ -184,6 +184,8 @@ git clone https://github.com/valkey-io/valkey-glide.git
 cd valkey-glide
 ```
 
+<!-- The build/test/lint commands below are intentionally mirrored in python/AGENTS.md (agent quick-reference). Keep both in sync when they change. -->
+
 ## Build
 
 ---

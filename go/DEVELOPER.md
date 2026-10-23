@@ -9,6 +9,8 @@ The Valkey GLIDE Go wrapper consists of both Go and Rust code. The Go and Rust c
 1. Using the [protobuf](https://github.com/protocolbuffers/protobuf) protocol.
 2. Using shared C objects. [cgo](https://pkg.go.dev/cmd/cgo) is used to interact with the C objects from Go code.
 
+<!-- The build/test/lint commands below are intentionally mirrored in go/AGENTS.md (agent quick-reference). Keep both in sync when they change. -->
+
 ### Build from source
 
 #### Prerequisites

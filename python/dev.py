@@ -493,8 +493,18 @@ def clean_clients(client: ClientTarget) -> None:
 
     # Clean sync-only artifacts.
     if client in (ClientTarget.SYNC, ClientTarget.ALL):
+        # Prefer the venv interpreter (it has setuptools; a system/Homebrew
+        # python3 that launched dev.py may not), but fall back to the current
+        # interpreter when no venv exists yet so `clean` never dies before
+        # removing SYNC_FFI_LIB.
+        venv_python = venv_ctx["python_exe"]
+        clean_python = (
+            str(venv_python)
+            if venv_python is not None and venv_python.exists()
+            else sys.executable
+        )
         run_command(
-            [sys.executable, "setup.py", "clean"],
+            [clean_python, "setup.py", "clean"],
             cwd=GLIDE_SYNC_DIR,
             label="setup.py clean",
         )

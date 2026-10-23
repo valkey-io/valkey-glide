@@ -1,6 +1,6 @@
 # AGENTS: Go Client Context for Agentic Tools
 
-This file provides AI agents with the minimum but sufficient context to work productively with the Valkey GLIDE Go client. It covers build commands, testing, contribution requirements, and essential guardrails specific to the Go implementation.
+This file provides AI agents with the minimum but sufficient context to work productively with the Valkey GLIDE Go client — build commands, testing, and Go-specific guardrails. It builds on [../AGENTS.md](../AGENTS.md) (repo-wide conventions, DCO, commit format, test servers) — read that first.
 
 ## Repository Overview
 
@@ -11,13 +11,15 @@ This is the Go client binding for Valkey GLIDE, providing both standalone and cl
 **Architecture:** Go wrapper around Rust FFI core with CGO bindings
 
 **Key Components:**
-- `./` - Main Go client library
+- `./` - Main Go client library (`glide_client.go`, `glide_cluster_client.go`, `base_client.go`; `*_test.go` here hold the runnable examples)
 - `interfaces/` - Public client and command interfaces (BaseClientCommands, GlideClientCommands, etc.)
+- `config/`, `options/`, `models/`, `pipeline/`, `constants/` - Public config, command options, result types, batches
+- `servermodules/` - JSON and FT (vector search) module commands
 - `integTest/` - Integration tests and test suites
-- `benchmarks/` - Performance benchmarking tool
-- `internal/` - Internal packages including protobuf definitions
-- `rustbin/` - Platform-specific Rust static libraries
-- `examples/` - Usage examples and documentation
+- `benchmarks/` - Performance benchmarking tool (separate Go module)
+- `internal/` - Internal packages including generated protobuf code
+- `rustbin/` - Platform-specific Rust static libraries (generated)
+- `examples/examples.md` - Index of the example files
 
 ## Architecture Quick Facts
 
@@ -31,10 +33,12 @@ This is the Go client binding for Valkey GLIDE, providing both standalone and cl
 - macOS: 13.7+ (x86_64), 14.7+ (aarch64)
 - **Note:** Alpine Linux/MUSL supported with `musl` build tag
 
-**Go Versions:** 1.22+
+**Go Versions:** 1.22+ (`go.mod`; CI runs 1.22 and 1.24)
 **Module:** `github.com/valkey-io/valkey-glide/go/v2`
 
 ## Build and Test Rules (Agents)
+
+<!-- These commands are intentionally mirrored in go/DEVELOPER.md (human guide). Keep both in sync when the build/test/lint commands change. -->
 
 ### Preferred (Make Targets)
 ```bash
@@ -73,7 +77,8 @@ go build ./...
 cd benchmarks && go build -ldflags="-w" ./...
 
 # Manual test execution
-go test -v ./... -skip 'Example|TestGlideTestSuite'
+go test -v ./... -skip 'Example|TestGlideTestSuite|TestPool|TestScope'   # matches `make unit-test`
+# NOTE: integ-tests run under AddressSanitizer in the Makefile: CC="gcc -fsanitize=address" go test -v ./integTest/... -skip 'TestGlideTestSuite/TestModule' (needs gcc; disabled on musl; the skip matches make integ-test, whose default servers have no modules)
 
 # Manual linting
 go vet ./...
@@ -85,9 +90,19 @@ golines --dry-run --shorten-comments -m 127 .
 gofumpt -w .
 golines -w --shorten-comments -m 127 .
 
-# Manual protobuf generation
-protoc --proto_path=../glide-core/src/protobuf --go_out=./internal/protobuf ../glide-core/src/protobuf/*.proto
+# Manual protobuf generation (the .proto files carry no go_package, so the M mappings are
+# required; the Makefile also rm -rf's internal/protobuf first). Prefer `make generate-protobuf`.
+protoc --proto_path=../glide-core/src/protobuf \
+  --go_opt=Mconnection_request.proto=github.com/valkey-io/valkey-glide/go/v2/internal/protobuf \
+  --go_opt=Mcommand_request.proto=github.com/valkey-io/valkey-glide/go/v2/internal/protobuf \
+  --go_opt=Mresponse.proto=github.com/valkey-io/valkey-glide/go/v2/internal/protobuf \
+  --go_opt=paths=source_relative --go_out=./internal/protobuf \
+  ../glide-core/src/protobuf/*.proto
 ```
+
+### Test Servers
+
+`make integ-test`, `make pubsub-test` etc. **auto-start** standalone + cluster servers via `utils/cluster_manager.py` and stop them afterward — nothing to start manually. **`make modules-test` is the exception:** it needs module-enabled servers `cluster_manager.py` doesn't provide, so `standalone-endpoints=`/`cluster-endpoints=` are **mandatory** there (CI starts them via Docker). The endpoint args on the non-module targets are only for pointing at a server you started yourself; see the root [../AGENTS.md](../AGENTS.md) "Test Servers" section. A `valkey-server`/`redis-server` on `PATH` is required either way. Note: the integration suite's `SetupSuite` stops every `cluster*` folder under `utils/clusters/` before starting fresh ones — including clusters left behind by an interrupted earlier run, so a crashed run self-heals on the next invocation but a concurrently-running suite's clusters can be caught too.
 
 ### Test Execution Options
 ```bash
@@ -100,11 +115,13 @@ make integ-test test-filter="Test\(Set\|Get\)"
 # Run with existing endpoints
 make integ-test standalone-endpoints=localhost:6379 cluster-endpoints=localhost:7000
 
-# Run with TLS
-make integ-test standalone-endpoints=localhost:6379 cluster-endpoints=localhost:7000 tls=true
+# Run with TLS (the suite starts its own servers — passing your own endpoints with TLS is
+# not supported; see DEVELOPER.md). The method-name filter selects the Tls-designated tests.
+make tls-test tls=true
 
-# Alpine/MUSL builds
-export GOFLAGS := -tags=musl
+# Alpine/MUSL builds (note: GOFLAGS=... is an env var — the `:=` form shown in some
+# notes is Makefile assignment syntax and will NOT work in a shell)
+export GOFLAGS=-tags=musl
 make build
 ```
 
@@ -125,35 +142,7 @@ CGO_ENABLED=1 GOOS=darwin GOARCH=arm64 go build -o myapp-darwin-arm64 ./...
 
 ## Contribution Requirements
 
-### Developer Certificate of Origin (DCO) Signoff REQUIRED
-
-All commits must include a `Signed-off-by` line:
-
-```bash
-# Add signoff to new commits
-git commit -s -m "feat(go): add new command implementation"
-
-# Configure automatic signoff
-git config --global format.signOff true
-
-# Add signoff to existing commit
-git commit --amend --signoff --no-edit
-
-# Add signoff to multiple commits
-git rebase -i HEAD~n --signoff
-```
-
-### Conventional Commits
-
-Use conventional commit format:
-
-```
-<type>(<scope>): <description>
-
-[optional body]
-```
-
-**Example:** `feat(go): implement cluster scan with context support`
+DCO signoff and Conventional Commits are required repo-wide — see [../AGENTS.md](../AGENTS.md#contribution-requirements) for the exact commands. Use the `go` scope, e.g. `feat(go): implement cluster scan with context support`.
 
 ### Code Quality Requirements
 
@@ -172,12 +161,12 @@ make format                            # Auto-fix formatting issues
 **License Headers:**
 All `.go` files must include: `// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0`
 
-**Rust Components:**
+**Rust Components** (Go has no Rust crate of its own — CI lints the `ffi/` crate it depends on via the shared Rust gate; there is no `go/Cargo.toml`):
 ```bash
-# From go/ directory
-rustup component add clippy rustfmt
+# From ffi/ — these are the common Rust checks; the full repo-wide gate
+# (fmt --check, clippy ×2, cargo deny, cargo doc) is in ../AGENTS.md. Run it there.
+cargo fmt --all -- --check
 cargo clippy --all-features --all-targets -- -D warnings
-cargo fmt --manifest-path ./Cargo.toml --all
 ```
 
 ## Guardrails & Policies
@@ -188,7 +177,7 @@ cargo fmt --manifest-path ./Cargo.toml --all
 - `lib.h` - Generated C header file
 - `reports/` - Test reports and coverage
 - `benchmarks/benchmarks` - Compiled benchmark binary
-- `target/` - Rust build artifacts (if present)
+- (`make clean` also removes the shared `ffi/target/` outside `go/` — note it wipes the Rust cache other bindings/CI reuse)
 
 ### Go-Specific Rules
 - **Go 1.22+ Required:** Minimum runtime and build version
@@ -198,6 +187,8 @@ cargo fmt --manifest-path ./Cargo.toml --all
 - **Naming Conventions:** Use PascalCase for exported functions (e.g., `BZPopMin`, `SetWithOptions`)
 - **MUSL Support:** Use `-tags=musl` for Alpine Linux builds
 - **Cross-Compilation:** Use Docker for Linux targets, native builds for macOS
+
+> **Environment gotcha (not universal):** On some Linux hosts (observed on Amazon Linux 2) a local `go build`/`go test` cgo link fails with `undefined reference to 'dlsym'` (the Rust static lib references `dlsym` via getrandom). If you hit it, prepend `CGO_LDFLAGS=-ldl`. CI does not set this, so most environments do not need it — treat it as a troubleshooting step, not a required flag.
 
 ### Documentation Standards
 - **Runnable Examples:** All examples must compile and execute successfully
@@ -210,8 +201,8 @@ cargo fmt --manifest-path ./Cargo.toml --all
 
 ```
 go/                             # Main Go client library
-├── client.go                   # Standalone client implementation
-├── cluster_client.go           # Cluster client implementation
+├── glide_client.go             # Standalone client implementation
+├── glide_cluster_client.go     # Cluster client implementation
 ├── interfaces/                 # Public client and command interfaces
 ├── integTest/                  # Integration test suites
 ├── benchmarks/                 # Performance benchmarking tool
@@ -258,4 +249,4 @@ go/                             # Main Go client library
 - **Integration Tests:** [integTest/](./integTest/) directory
 - **Benchmarks:** [benchmarks/](./benchmarks/) directory
 - **Cross-Compilation Guide:** [README.md#cross-compilation-guide](./README.md#cross-compilation-guide)
-- **Command Interfaces:** [api/commands/](./api/commands/) directory
+- **Command Interfaces:** [interfaces/](./interfaces/) directory

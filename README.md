@@ -29,10 +29,10 @@ Visit our official documentation at [glide.valkey.io](https://glide.valkey.io).
 
 Valkey GLIDE is API-compatible with the following engine versions:
 
-| Engine Type           |  6.2  |  7.0  |   7.1  |  7.2  |  8.0  |  8.1  |  9.0  |
-|-----------------------|-------|-------|--------|-------|-------|-------|-------|
-| Valkey                |   -   |   -   |   -   |   ✅   |   ✅   |   ✅   |   ✅   |
-| Redis                 |   ✅   |   ✅   |   ✅   |   ✅   |   -   |   -   |   -   |
+| Engine Type           |  6.2  |  7.0  |   7.1  |  7.2  |  8.0  |  8.1  |  9.0  |  9.1  |
+|-----------------------|-------|-------|--------|-------|-------|-------|-------|-------|
+| Valkey                |   -   |   -   |   -    |   ✅   |   ✅   |   ✅   |   ✅   |   ✅   |
+| Redis                 |   ✅   |   ✅   |   ✅   |   ✅   |   -   |   -   |   -   |   -   |
 
 ## Current Status and Upcoming Releases
 
