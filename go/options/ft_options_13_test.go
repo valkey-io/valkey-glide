@@ -74,7 +74,7 @@ func TestTextFieldToArgs_SortableThenUnf(t *testing.T) {
 func TestTextFieldToArgs_UnfWithoutSortableErrors(t *testing.T) {
 	f := NewTextField("title").SetUnf(true)
 	_, err := f.ToArgs()
-	assert.ErrorContains(t, err, "Unf requires Sortable")
+	assert.ErrorContains(t, err, "unf requires Sortable")
 }
 
 func TestTagFieldToArgs_SortableThenUnf(t *testing.T) {
@@ -89,7 +89,7 @@ func TestTagFieldToArgs_SortableThenUnf(t *testing.T) {
 func TestTagFieldToArgs_UnfWithoutSortableErrors(t *testing.T) {
 	f := NewTagField("tags").SetUnf(true)
 	_, err := f.ToArgs()
-	assert.ErrorContains(t, err, "Unf requires Sortable")
+	assert.ErrorContains(t, err, "unf requires Sortable")
 }
 
 func TestNumericFieldToArgs_SortableThenUnf(t *testing.T) {
@@ -104,7 +104,7 @@ func TestNumericFieldToArgs_SortableThenUnf(t *testing.T) {
 func TestNumericFieldToArgs_UnfWithoutSortableErrors(t *testing.T) {
 	f := NewNumericField("price").SetUnf(true)
 	_, err := f.ToArgs()
-	assert.ErrorContains(t, err, "Unf requires Sortable")
+	assert.ErrorContains(t, err, "unf requires Sortable")
 }
 
 func TestVectorFieldFlatToArgs_Float16Type(t *testing.T) {
