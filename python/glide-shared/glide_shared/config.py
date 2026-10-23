@@ -5,7 +5,18 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from enum import Enum, IntEnum
-from typing import Any, Callable, Dict, List, Optional, Protocol, Set, Tuple, Union
+from typing import (
+    Any,
+    Awaitable,
+    Callable,
+    Dict,
+    List,
+    Optional,
+    Protocol,
+    Set,
+    Tuple,
+    Union,
+)
 
 from glide_shared.cache import ClientSideCache
 from glide_shared.commands.core_options import PubSubMsg
@@ -44,16 +55,30 @@ MAX_UINT32 = 2**32 - 1
 
 class NodeAddress:
     """
-    Represents the address and port of a node in the cluster.
+    Represents the address of a node, either a TCP host and port or a Unix domain socket.
 
     Attributes:
         host (str, optional): The server host. Defaults to "localhost".
         port (int, optional): The server port. Defaults to 6379.
+        unix_socket_path (Optional[StrPath]): Absolute path of the server's Unix domain socket.
+            When set, ``host`` and ``port`` are ignored. Standalone clients only, without TLS.
+            For example::
+
+                NodeAddress(unix_socket_path="/run/valkey/valkey.sock")
     """
 
-    def __init__(self, host: str = "localhost", port: int = 6379):
+    def __init__(
+        self,
+        host: str = "localhost",
+        port: int = 6379,
+        *,
+        unix_socket_path: Optional[StrPath] = None,
+    ):
         self.host = host
         self.port = port
+        self.unix_socket_path = (
+            None if unix_socket_path is None else os.fspath(unix_socket_path)
+        )
 
 
 class AddressResolver(Protocol):
@@ -347,16 +372,93 @@ class ServiceType(Enum):
     """Amazon MemoryDB service."""
 
 
-class IamAuthConfig:
+class AwsCredentials:
+    """AWS credentials used to sign IAM authentication tokens.
+
+    ``access_key_id`` and ``secret_access_key`` must be nonblank strings.
+    ``expires_at_epoch_millis``, when supplied, must be an integer that fits in
+    a signed 64-bit value. Values less than or equal to 0 mean no expiry.
+
+    Attributes:
+        access_key_id (str): The AWS access key ID.
+        secret_access_key (str): The AWS secret access key.
+        session_token (Optional[str]): An optional AWS session token.
+        expires_at_epoch_millis (Optional[int]): Optional expiration time as Unix
+            epoch milliseconds. A nonpositive value is treated as no expiration
+            by the core.
     """
-    Configuration settings for IAM authentication.
+
+    def __init__(
+        self,
+        access_key_id: str,
+        secret_access_key: str,
+        session_token: Optional[str] = None,
+        expires_at_epoch_millis: Optional[int] = None,
+    ):
+        if not isinstance(access_key_id, str) or not access_key_id.strip():
+            raise ValueError("access_key_id must be a nonblank string")
+        if not isinstance(secret_access_key, str) or not secret_access_key.strip():
+            raise ValueError("secret_access_key must be a nonblank string")
+        if session_token is not None and not isinstance(session_token, str):
+            raise ValueError("session_token must be a string or None")
+        if expires_at_epoch_millis is not None and (
+            not isinstance(expires_at_epoch_millis, int)
+            or isinstance(expires_at_epoch_millis, bool)
+            or expires_at_epoch_millis < -(2**63)
+            or expires_at_epoch_millis > 2**63 - 1
+        ):
+            raise ValueError("expires_at_epoch_millis must be a signed 64-bit integer")
+
+        self.access_key_id = access_key_id
+        self.secret_access_key = secret_access_key
+        self.session_token = session_token
+        self.expires_at_epoch_millis = expires_at_epoch_millis
+
+
+#: A thread-safe callable that returns AWS credentials for IAM token signing.
+#:
+#: Direct async clients accept synchronous and asynchronous providers. Direct
+#: sync clients accept synchronous providers only. The native core admits one
+#: logical fetch at a time per direct client/provider; separate providers have
+#: independent admission. A provider may still be called twice sequentially
+#: within one fetch when a field does not fit in the initial native buffers, so
+#: each invocation must return a complete, coherent set of credentials.
+#: Providers should return promptly and cooperate with any application
+#: cancellation mechanism. The Python async bridge times out after 9 seconds,
+#: before the Rust core's 10-second outer deadline. These deadlines bound how
+#: long the client waits, but cannot forcibly stop synchronous user code; a
+#: timed-out synchronous provider may finish on a detached background worker
+#: after the request fails or the client closes. Close does not wait for or
+#: retain ownership of that worker. Until the actual invocation returns, later
+#: fetches for that direct provider fail immediately rather than queueing or
+#: starting additional callback workers.
+GlideCredentialProvider = Union[
+    Callable[[], AwsCredentials], Callable[[], Awaitable[AwsCredentials]]
+]
+
+
+def _is_async_callable(provider: object) -> bool:
+    """Return whether a function or callable object's ``__call__`` is async."""
+    import inspect
+
+    return inspect.iscoroutinefunction(provider) or inspect.iscoroutinefunction(
+        getattr(provider, "__call__", None)
+    )
+
+
+class IamAuthConfig:
+    """Configuration settings for IAM authentication.
 
     Attributes:
         cluster_name (str): The name of the ElastiCache/MemoryDB cluster.
-        service (ServiceType): The type of service being used (ElastiCache or MemoryDB).
-        region (str): The AWS region where the ElastiCache/MemoryDB cluster is located.
-        refresh_interval_seconds (Optional[int]): Optional refresh interval in seconds for renewing IAM authentication tokens.
-            If not provided, the core will use a default value of 300 seconds (5 min).
+        service (ServiceType): The service type (ElastiCache or MemoryDB).
+        region (str): The AWS region containing the cluster.
+        refresh_interval_seconds (Optional[int]): Optional token refresh interval.
+            If omitted, the core uses 300 seconds (5 minutes).
+        credential_provider (Optional[GlideCredentialProvider]): Optional custom
+            AWS credential source. Direct clients use it instead of the default
+            AWS credential chain. Python client pools do not support custom
+            providers.
     """
 
     def __init__(
@@ -365,11 +467,19 @@ class IamAuthConfig:
         service: ServiceType,
         region: str,
         refresh_interval_seconds: Optional[int] = None,
+        credential_provider: Optional[GlideCredentialProvider] = None,
     ):
+        if credential_provider is not None and not callable(credential_provider):
+            raise ValueError("credential_provider must be callable")
+
         self.cluster_name = cluster_name
         self.service = service
         self.region = region
         self.refresh_interval_seconds = refresh_interval_seconds
+        self.credential_provider = credential_provider
+        self._credential_provider_is_async = (
+            credential_provider is not None and _is_async_callable(credential_provider)
+        )
 
 
 class ServerCredentials:
@@ -1027,12 +1137,26 @@ class BaseClientConfiguration:
                 "client_az must be set when read_from is set to AZ_AFFINITY_ALL_NODES"
             )
 
+    def _validate_unix_socket_addresses(self, cluster_mode: bool) -> None:
+        """Reject common Unix domain socket misconfigurations; the core checks the rest."""
+        if all(address.unix_socket_path is None for address in self.addresses):
+            return
+        if cluster_mode:
+            raise ConfigurationError(
+                "Unix domain socket addresses are not supported in cluster mode"
+            )
+        if self.use_tls:
+            raise ConfigurationError("TLS is not supported over Unix domain sockets")
+
     def _set_addresses_in_request(self, request: ConnectionRequest) -> None:
-        """Set addresses in the protobuf request."""
+        """Set addresses in the protobuf request. An empty socket path is still sent so the core rejects it."""
         for address in self.addresses:
             address_info = request.addresses.add()
-            address_info.host = address.host
-            address_info.port = address.port
+            if address.unix_socket_path is not None:
+                address_info.unix_socket_path = address.unix_socket_path
+            else:
+                address_info.host = address.host
+                address_info.port = address.port
 
     def _set_reconnect_strategy_in_request(self, request: ConnectionRequest) -> None:
         """Set reconnect strategy in the protobuf request."""
@@ -1126,6 +1250,7 @@ class BaseClientConfiguration:
         request = ConnectionRequest()
 
         # Set basic configuration
+        self._validate_unix_socket_addresses(cluster_mode)
         self._set_addresses_in_request(request)
         request.tls_mode = TlsMode.SecureTls if self.use_tls else TlsMode.NoTls
         request.read_from = self.read_from.value
@@ -1467,6 +1592,7 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
     Attributes:
         addresses (List[NodeAddress]): DNS Addresses and ports of known nodes in the cluster.
             The list can be partial, as the client will attempt to map out the cluster and find all nodes.
+            Unix domain socket addresses are not supported in cluster mode.
             For example::
 
                 [

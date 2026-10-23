@@ -427,31 +427,8 @@ fn test_ffi_client_command_executions(#[values(false, true)] async_client: bool)
             connection_request_ptr,
             connection_request_len,
             client_type,
-            std::mem::transmute::<
-                *mut c_void,
-                unsafe extern "C-unwind" fn(
-                    client_ptr: usize,
-                    kind: PushKind,
-                    message: *const u8,
-                    message_len: i64,
-                    channel: *const u8,
-                    channel_len: i64,
-                    pattern: *const u8,
-                    pattern_len: i64,
-                ),
-            >(std::ptr::null_mut()),
-            std::mem::transmute::<
-                *mut c_void,
-                unsafe extern "C-unwind" fn(
-                    client_ptr: usize,
-                    host: *const u8,
-                    host_len: usize,
-                    port: u16,
-                    resolved_host_buf: *mut u8,
-                    resolved_host_buf_len: usize,
-                    resolved_host_len: *mut usize,
-                ) -> u16,
-            >(std::ptr::null_mut()),
+            None,
+            None,
             0,
         );
 
@@ -517,8 +494,8 @@ fn test_ffi_rejects_invalid_final_lib_name_before_lazy_creation() {
             request_bytes.as_ptr(),
             request_bytes.len(),
             &client_type,
-            no_op_pubsub_callback,
-            no_op_address_resolver,
+            Some(no_op_pubsub_callback),
+            Some(no_op_address_resolver),
             0,
         );
 
@@ -572,6 +549,52 @@ fn test_ffi_monitor_rejects_invalid_final_lib_name_before_connection() {
         let error = parse_error_msg(response.connection_error_message);
         assert!(
             error.to_ascii_lowercase().contains("library name"),
+            "{error}"
+        );
+
+        free_connection_response(response_ptr as *mut ConnectionResponse);
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn test_ffi_monitor_rejects_unix_socket_with_tls() {
+    unsafe extern "C-unwind" fn no_op_monitor_callback(
+        _client_ptr: usize,
+        _timestamp: f64,
+        _db: i64,
+        _client_addr: *const u8,
+        _client_addr_len: i64,
+        _command: *const u8,
+        _command_len: i64,
+        _args_json: *const u8,
+        _args_json_len: i64,
+    ) {
+    }
+
+    // The TLS rejection only fires if the socket path survived the protobuf-to-core
+    // address conversion in `create_monitor_client`.
+    let mut request = ConnectionRequest::new();
+    request.tls_mode = TlsMode::SecureTls.into();
+    let mut address = NodeAddress::new();
+    address.unix_socket_path = Some("/tmp/glide-ffi-monitor.sock".into());
+    request.addresses.push(address);
+    let request_bytes = request.write_to_bytes().expect("Failed to serialize");
+
+    unsafe {
+        let response_ptr = create_monitor_client(
+            request_bytes.as_ptr(),
+            request_bytes.len(),
+            no_op_monitor_callback,
+        );
+
+        assert!(!response_ptr.is_null());
+        let response = &*response_ptr;
+        assert!(response.conn_ptr.is_null());
+        assert!(!response.connection_error_message.is_null());
+        let error = parse_error_msg(response.connection_error_message);
+        assert!(
+            error.contains("TLS is not supported over Unix domain sockets"),
             "{error}"
         );
 
@@ -708,31 +731,8 @@ fn test_inflight_request_limit_sync_client() {
             connection_request_ptr,
             connection_request_len,
             client_type,
-            std::mem::transmute::<
-                *mut c_void,
-                unsafe extern "C-unwind" fn(
-                    client_ptr: usize,
-                    kind: PushKind,
-                    message: *const u8,
-                    message_len: i64,
-                    channel: *const u8,
-                    channel_len: i64,
-                    pattern: *const u8,
-                    pattern_len: i64,
-                ),
-            >(std::ptr::null_mut()),
-            std::mem::transmute::<
-                *mut c_void,
-                unsafe extern "C-unwind" fn(
-                    client_ptr: usize,
-                    host: *const u8,
-                    host_len: usize,
-                    port: u16,
-                    resolved_host_buf: *mut u8,
-                    resolved_host_buf_len: usize,
-                    resolved_host_len: *mut usize,
-                ) -> u16,
-            >(std::ptr::null_mut()),
+            None,
+            None,
             0,
         );
 
@@ -785,4 +785,53 @@ fn test_inflight_request_limit_sync_client() {
         free_connection_response(response_ptr as *mut ConnectionResponse);
         close_client(client_ptr);
     }
+}
+
+#[test]
+fn test_ffi_monitor_credential_boundary_fails_closed_before_address_conversion() {
+    unsafe extern "C-unwind" fn no_op_monitor_callback(
+        _client_ptr: usize,
+        _timestamp: f64,
+        _db: i64,
+        _client_addr: *const u8,
+        _client_addr_len: i64,
+        _command: *const u8,
+        _command_len: i64,
+        _args_json: *const u8,
+        _args_json_len: i64,
+    ) {
+    }
+
+    fn call(request: &ConnectionRequest) -> String {
+        let bytes = request.write_to_bytes().unwrap();
+        unsafe {
+            let response =
+                create_monitor_client(bytes.as_ptr(), bytes.len(), no_op_monitor_callback);
+            assert!(!response.is_null());
+            assert!((*response).conn_ptr.is_null());
+            let error = parse_error_msg((*response).connection_error_message);
+            free_connection_response(response.cast_mut());
+            error
+        }
+    }
+
+    for key in ["", "custom-provider"] {
+        let mut request = ConnectionRequest::new();
+        request.credential_provider_key = Some(key.to_string().into());
+        assert!(call(&request).contains("credential_provider_key"));
+    }
+
+    let mut iam_request = ConnectionRequest::new();
+    let mut auth = glide_core::connection_request::AuthenticationInfo::new();
+    auth.iam_credentials =
+        protobuf::MessageField::some(glide_core::connection_request::IamCredentials::new());
+    iam_request.authentication_info = protobuf::MessageField::some(auth);
+    assert!(call(&iam_request).contains("IAM authentication"));
+
+    let mut password_request = ConnectionRequest::new();
+    let mut auth = glide_core::connection_request::AuthenticationInfo::new();
+    auth.username = "user".into();
+    auth.password = "password".into();
+    password_request.authentication_info = protobuf::MessageField::some(auth);
+    assert_eq!(call(&password_request), "No addresses provided");
 }

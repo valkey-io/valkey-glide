@@ -74,6 +74,7 @@
 
 ### Changes
 
+* Core/FFI, Python: Add Unix domain socket support for standalone clients with `NodeAddress(unix_socket_path=...)`, and accept `valkey+unix://` URIs in `create_client_from_uri` ([#4878](https://github.com/valkey-io/valkey-glide/issues/4878))
 * Java: Deprecate the Valkey API keywords on `BaseClient` and the command interfaces ([#7401](https://github.com/valkey-io/valkey-glide/issues/7401))
 * Go, Java, Node, Python: Add `cluster_info` `INFO` section (Valkey 9.1) ([#7199](https://github.com/valkey-io/valkey-glide/issues/7199))
 * Java: add useMutualTlsFromKeyStore to load mTLS client identity ([#7258](https://github.com/valkey-io/valkey-glide/pull/7258))
@@ -82,7 +83,7 @@
 * Rust: Add an initial native Rust client (preview) built directly on `glide-core` ([#6864](https://github.com/valkey-io/valkey-glide/pull/6864))
 * Rust: Tracing target renamed from `logger_core` to `glide_logger` ([#7178](https://github.com/valkey-io/valkey-glide/pull/7178))
 * Java, Node, Python, Go: Add optional client information tags across standalone, cluster, pooled, async/sync, and standalone monitor clients, plus configurable library-name overrides in Node, Python, and Go. Tags are composed with the default or custom library name reported in server client metadata, with runtime library names preferred during connection setup and existing fallbacks retained. Non-empty library-name overrides and tags must contain only printable ASCII characters from ! (U+0021) through ~ (U+007E). ([#6755](https://github.com/valkey-io/valkey-glide/pull/6755))
-* Java: Add `GlideCredentialProvider` support to `IamAuthConfig`. When set, the Rust core calls back into Java to retrieve AWS credentials (via the new `AwsCredentials` builder, which supports optional expiry) for each IAM token signing operation. When not set, the default AWS credential chain is used — fully backwards compatible. ([#6825](https://github.com/valkey-io/valkey-glide/pull/6825))
+* Go, Java, Node, Python: Add `GlideCredentialProvider` support to `IamAuthConfig` for custom IAM credential sources on direct clients. Pool configurations with custom providers are rejected; IAM without a custom provider continues to use the default AWS credential chain. Go/Python use the bounded C FFI adapter, while Java/Node use checked object bridges. ([#7055](https://github.com/valkey-io/valkey-glide/pull/7055), [#6825](https://github.com/valkey-io/valkey-glide/pull/6825))
 * Java: Add `GlideString.asReadOnlyByteBuffer()` for zero-copy, read-only access to binary payloads ([#6600](https://github.com/valkey-io/valkey-glide/issues/6600))
 * CI: Add Windows CI support for the Node.js client. ([#7026](https://github.com/valkey-io/valkey-glide/pull/7026))
 * Go: Convert FFI string payloads with `GoStringN` (one copy, interior NULs preserved) instead of `GoBytes`+`string` in GET/MGET response parsing, pubsub callbacks, MONITOR client/command strings, and script hashes ([#6751](https://github.com/valkey-io/valkey-glide/issues/6751))
