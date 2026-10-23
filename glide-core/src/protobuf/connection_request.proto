@@ -107,6 +107,8 @@ enum EvictionPolicy {
 }
 
 // IMPORTANT - if you add fields here, you probably need to add them also in client/mod.rs:`sanitized_request_string`.
+// IMPORTANT - if the new field contains sensitive data (credentials, tokens, keys), make sure
+//             sanitized_request_string() in client/mod.rs redacts or omits it from logs.
 message ConnectionRequest {
     repeated NodeAddress addresses = 1;
     TlsMode tls_mode = 2;
@@ -149,6 +151,13 @@ message ConnectionRequest {
     optional string client_key_path = 32;
     optional ClientCertReloadConfig cert_reload = 33;
     optional uint32 recovery_requests_queue_size = 34;
+    // Registry key for a custom AWS credentials provider. When set, the Rust
+    // core looks up the provider in the credential_provider_registry by this
+    // key and uses it to obtain credentials for IAM token signing instead of
+    // the default AWS credential chain. Used by Node.js (NAPI registry pattern)
+    // and the socket-listener path. Go and Python pass the callback directly
+    // to create_client and do not set this field.
+    optional string credential_provider_key = 35;
 }
 
 // Configuration for automatic reloading of the mTLS client certificate and key

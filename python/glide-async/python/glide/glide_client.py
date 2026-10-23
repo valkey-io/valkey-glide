@@ -64,8 +64,10 @@ from glide_shared.exceptions import (
 from glide_shared.ffi_helpers import (
     ENCODING,
     FFIClientTypeEnum,
+    _is_credential_provider_executing,
     convert_commands_to_c_batch_info,
     create_c_batch_options,
+    create_credential_provider_callback,
     to_c_route_ptr_and_len,
     to_c_strings,
 )
@@ -258,6 +260,13 @@ _async_pipe_read_fd: int = -1
 _async_pipe_write_fd: int = -1
 _async_pipe_init_pid: int = -1
 _next_client_id = itertools.count(1)
+
+
+def _close_file_descriptors(*fds: int) -> None:
+    """Close every valid descriptor without masking an earlier failure."""
+    for fd in fds:
+        with contextlib.suppress(OSError):
+            os.close(fd)
 
 
 _async_pipe_registered: bool = False
@@ -647,6 +656,63 @@ async def _trio_pipe_reader(pipe_fd: int, token: object) -> None:
                 _async_pipe_registered = False
 
 
+class _ProviderNativeCreate:
+    """Own a provider-backed create result until the async caller adopts it."""
+
+    def __init__(self, ffi, lib, args) -> None:
+        self.ffi = ffi
+        self.lib = lib
+        self.args = args
+        self.lock = threading.Lock()
+        self.abandoned = False
+        self.core_client = None
+        self.error: Optional[ClosingError] = None
+
+    def _run(self) -> None:
+        response_ptr = self.lib.create_client_with_credential_provider(*self.args)
+        core_client = None
+        error: Optional[ClosingError] = None
+        if response_ptr == self.ffi.NULL:
+            error = ClosingError("Failed to create client, response pointer is NULL.")
+        else:
+            response = self.ffi.cast("ConnectionResponse*", response_ptr)
+            if response.conn_ptr != self.ffi.NULL:
+                core_client = response.conn_ptr
+            else:
+                message = (
+                    self.ffi.string(response.connection_error_message).decode(ENCODING)
+                    if response.connection_error_message != self.ffi.NULL
+                    else "Unknown error"
+                )
+                error = ClosingError(message)
+            self.lib.free_connection_response(response_ptr)
+        with self.lock:
+            if self.abandoned:
+                close_client = core_client
+            else:
+                self.core_client = core_client
+                self.error = error
+                close_client = None
+        if close_client is not None:
+            self.lib.close_client(close_client)
+
+    def _adopt(self):
+        with self.lock:
+            if self.error is not None:
+                raise self.error
+            core_client, self.core_client = self.core_client, None
+        if core_client is None:
+            raise ClosingError("Provider-backed client creation produced no client.")
+        return core_client
+
+    def _abandon(self) -> None:
+        with self.lock:
+            self.abandoned = True
+            core_client, self.core_client = self.core_client, None
+        if core_client is not None:
+            self.lib.close_client(core_client)
+
+
 class BaseClient(CoreCommands):
     def __init__(self, config: BaseClientConfiguration):
         """To create a new client, use the `create` classmethod"""
@@ -664,6 +730,8 @@ class BaseClient(CoreCommands):
         self._callback_id_gen = itertools.count(1)
         self._lock = threading.Lock()
         self._address_resolver_callback_ref = None
+        self._credential_provider_callback_ref = None
+        self._credential_provider_callback_owner = None
         self._pubsub_futures: List["TFuture"] = []
         self._pubsub_lock = threading.Lock()
         self._pending_push_notifications: List[PubSubMsg] = []
@@ -721,51 +789,143 @@ class BaseClient(CoreCommands):
         if self.config.address_resolver is not None:
             self._address_resolver_callback_ref = address_resolver_callback
 
-        # Set pipe_client_id before create_client so Rust routes responses
-        # through the pipe from the very first command — no race window.
-        self._pipe_client_id = next(_next_client_id)
+        # Record the creation process before entering provider-backed native creation.
         self._create_pid = os.getpid()
 
-        client_response_ptr = self._lib.create_client(
-            conn_req_bytes,
-            len(conn_req_bytes),
-            client_type,
-            pubsub_callback,
-            address_resolver_callback,
-            self._pipe_client_id,
+        iam_config = (
+            self.config.credentials.iam_config
+            if self.config.credentials is not None
+            else None
         )
-
-        ClientLogger.log(LogLevel.INFO, "connection info", "new connection established")
-
-        if client_response_ptr == self._ffi.NULL:
-            raise ClosingError("Failed to create client, response pointer is NULL.")
-
-        client_response = self._ffi.cast("ConnectionResponse*", client_response_ptr)
-        if client_response.conn_ptr != self._ffi.NULL:
-            self._core_client = client_response.conn_ptr
-        else:
-            error_msg = (
-                self._ffi.string(client_response.connection_error_message).decode(
-                    ENCODING
-                )
-                if client_response.connection_error_message != self._ffi.NULL
-                else "Unknown error"
+        credential_provider = (
+            iam_config.credential_provider if iam_config is not None else None
+        )
+        if credential_provider is None:
+            # Preserve the ordinary latest-main creation path and low pipe-ID namespace.
+            self._pipe_client_id = next(_next_client_id)
+            client_response_ptr = self._lib.create_client(
+                conn_req_bytes,
+                len(conn_req_bytes),
+                client_type,
+                pubsub_callback,
+                address_resolver_callback,
+                self._pipe_client_id,
             )
+
+            ClientLogger.log(
+                LogLevel.INFO, "connection info", "new connection established"
+            )
+
+            if client_response_ptr == self._ffi.NULL:
+                raise ClosingError("Failed to create client, response pointer is NULL.")
+
+            client_response = self._ffi.cast("ConnectionResponse*", client_response_ptr)
+            if client_response.conn_ptr != self._ffi.NULL:
+                self._core_client = client_response.conn_ptr
+            else:
+                error_msg = (
+                    self._ffi.string(client_response.connection_error_message).decode(
+                        ENCODING
+                    )
+                    if client_response.connection_error_message != self._ffi.NULL
+                    else "Unknown error"
+                )
+                self._lib.free_connection_response(client_response_ptr)
+                raise ClosingError(error_msg)
+
             self._lib.free_connection_response(client_response_ptr)
-            raise ClosingError(error_msg)
+        else:
+            import anyio
 
-        self._lib.free_connection_response(client_response_ptr)
+            trio_token = None
+            if not self._is_asyncio:
+                import trio
 
-        self._setup_pipe()
+                trio_token = trio.lowlevel.current_trio_token()
+            credential_callback, credential_owner = create_credential_provider_callback(
+                self._ffi,
+                credential_provider,
+                event_loop=self._loop,
+                trio_token=trio_token,
+                allow_async=True,
+                provider_owner=self,
+            )
+            # The C ABI has one client_id baton for provider callbacks and async
+            # pipe routing, so provider-backed async clients use their reserved
+            # high-half provider ID for both roles.
+            self._pipe_client_id = credential_owner.callback_id
+            state = _ProviderNativeCreate(
+                self._ffi,
+                self._lib,
+                (
+                    conn_req_bytes,
+                    len(conn_req_bytes),
+                    client_type,
+                    pubsub_callback,
+                    address_resolver_callback,
+                    self._pipe_client_id,
+                    credential_callback,
+                ),
+            )
+            try:
+                await anyio.to_thread.run_sync(state._run, abandon_on_cancel=True)
+                core_client = state._adopt()
+                with self._lock:
+                    if self._is_closed:
+                        adopt_client = False
+                    else:
+                        self._core_client = core_client
+                        self._credential_provider_callback_ref = credential_callback
+                        self._credential_provider_callback_owner = credential_owner
+                        adopt_client = True
+                if not adopt_client:
+                    self._lib.close_client(core_client)
+                    raise ClosingError("Client was closed during native creation.")
+            except BaseException:
+                state._abandon()
+                credential_owner.close()
+                raise
+
+            ClientLogger.log(
+                LogLevel.INFO, "connection info", "new connection established"
+            )
+
+        self._setup_pipe_after_creation(credential_provider is not None)
 
         return self
 
-    def _setup_pipe(self) -> None:  # noqa: C901
+    def _setup_pipe_after_creation(self, provider_backed: bool) -> None:
+        """Set up delivery and roll back only provider-backed direct failures."""
+        try:
+            pipe_setup_error = self._setup_pipe()
+            if provider_backed and pipe_setup_error is not None:
+                raise pipe_setup_error
+        except BaseException:
+            if provider_backed:
+                self._cleanup_provider_after_setup_failure()
+            raise
+
+    def _cleanup_provider_after_setup_failure(self) -> None:
+        """Release a provider-backed direct client after final pipe setup fails."""
+        _client_registry.pop(self._pipe_client_id, None)
+        with self._lock:
+            self._is_closed = True
+            core_client, self._core_client = self._core_client, None
+            owner = self._credential_provider_callback_owner
+            self._credential_provider_callback_owner = None
+            self._credential_provider_callback_ref = None
+        if core_client is not None and self._create_pid == os.getpid():
+            self._lib.close_client(core_client)
+        if owner is not None:
+            owner.close()
+
+    def _setup_pipe(self) -> Optional[OSError]:  # noqa: C901
         """Initialize and register the shared response pipe."""
         global _async_pipe_read_fd, _async_pipe_write_fd
         global _async_pipe_registered, _async_pipe_loop
         global _pipe_remainder, _trio_pipe_token, _async_pipe_init_pid
         global _windows_pipe_thread
+        pipe_setup_error = None
         # Identify the current trio.run() up front (outside the lock).  The
         # token uniquely names this run, so it both makes registration
         # idempotent within a run and tells a fresh run that a prior run's
@@ -781,19 +941,26 @@ class BaseClient(CoreCommands):
             current_pid = os.getpid()
 
             if _async_pipe_read_fd < 0:
+                created_read_fd = -1
+                created_write_fd = -1
                 try:
-                    _async_pipe_read_fd, pw = os.pipe()
+                    created_read_fd, created_write_fd = os.pipe()
                     if os.name != "nt":
-                        os.set_blocking(_async_pipe_read_fd, False)
+                        os.set_blocking(created_read_fd, False)
                     if _async_pipe_init_pid > 0 and current_pid != _async_pipe_init_pid:
-                        self._lib.reinit_async_pipe(pw)
+                        self._lib.reinit_async_pipe(created_write_fd)
                     else:
-                        self._lib.init_async_pipe(pw)
-                    _async_pipe_write_fd = pw
+                        self._lib.init_async_pipe(created_write_fd)
+                    _async_pipe_read_fd = created_read_fd
+                    _async_pipe_write_fd = created_write_fd
                     _async_pipe_init_pid = current_pid
-                except OSError:
+                except OSError as error:
+                    _close_file_descriptors(created_read_fd, created_write_fd)
                     _async_pipe_read_fd = -1
+                    _async_pipe_write_fd = -1
+                    _async_pipe_init_pid = 0
                     self._pipe_client_id = 0
+                    pipe_setup_error = error
             # Detect stale registration: the loop that originally called
             # add_reader has been closed/destroyed (e.g. between anyio.run()
             # calls in benchmarks).  Reset so we re-register below.
@@ -856,6 +1023,8 @@ class BaseClient(CoreCommands):
                             _trio_pipe_reader, _async_pipe_read_fd, trio_token
                         )
                     _async_pipe_registered = True
+
+        return pipe_setup_error
 
     # ==================== Callback Handling ====================
 
@@ -1277,29 +1446,41 @@ class BaseClient(CoreCommands):
         )
 
     async def close(self, err_message: Optional[str] = None) -> None:
-        if not self._is_closed:
+        if _is_credential_provider_executing(self):
+            raise RuntimeError(
+                "Cannot close a client from its own credential provider callback"
+            )
+        with self._lock:
+            if self._is_closed:
+                return
             self._is_closed = True
-            err_message = "" if err_message is None else err_message
 
-            with self._lock:
-                for fut in self._pending_futures.values():
-                    if not fut.done():
-                        fut.set_exception(ClosingError(err_message))
-                self._pending_futures.clear()
+        err_message = "" if err_message is None else err_message
 
-            with self._pubsub_lock:
-                for fut in self._pubsub_futures:
-                    if not fut.done():
-                        fut.set_exception(ClosingError(err_message))
-                self._pubsub_futures.clear()
+        with self._lock:
+            for fut in self._pending_futures.values():
+                if not fut.done():
+                    fut.set_exception(ClosingError(err_message))
+            self._pending_futures.clear()
 
-            _client_registry.pop(getattr(self, "_pipe_client_id", 0), None)
+        with self._pubsub_lock:
+            for fut in self._pubsub_futures:
+                if not fut.done():
+                    fut.set_exception(ClosingError(err_message))
+            self._pubsub_futures.clear()
 
-            # Skip FFI call if this client was created in a different process
-            # (the tokio Runtime doesn't survive fork; dropping it would hang).
-            if self._core_client is not None and self._create_pid == os.getpid():
-                self._lib.close_client(self._core_client)
-                self._core_client = None
+        _client_registry.pop(getattr(self, "_pipe_client_id", 0), None)
+
+        # Skip FFI call if this client was created in a different process
+        # (the tokio Runtime doesn't survive fork; dropping it would hang).
+        if self._core_client is not None and self._create_pid == os.getpid():
+            self._lib.close_client(self._core_client)
+            self._core_client = None
+        owner = getattr(self, "_credential_provider_callback_owner", None)
+        if owner is not None:
+            owner.close()
+        self._credential_provider_callback_owner = None
+        self._credential_provider_callback_ref = None
 
     async def aclose(self, err_message: Optional[str] = None) -> None:
         """Alias for close() for compatibility with async context managers."""

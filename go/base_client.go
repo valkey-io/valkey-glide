@@ -16,14 +16,22 @@ package glide
 //
 // void successCallback(uintptr_t requestID, struct CommandResponse *message);
 // void failureCallback(uintptr_t requestID, char *errMessage, RequestErrorType errType);
-// void pubSubCallback(void *clientPtr, enum PushKind kind,
-//                     const uint8_t *message, int64_t message_len,
-//                     const uint8_t *channel, int64_t channel_len,
-//                     const uint8_t *pattern, int64_t pattern_len);
+// void pubSubCallback(uintptr_t callbackID, enum PushKind kind,
+//                     void *message, int64_t messageLen,
+//                     void *channel, int64_t channelLen,
+//                     void *pattern, int64_t patternLen);
 // uint16_t addressResolverCallback(uintptr_t client_id, const uint8_t *host, uintptr_t host_len,
 //                                  uint16_t port,
 //                                  uint8_t *resolved_host_buf, uintptr_t resolved_host_buf_len,
 //                                  uintptr_t *resolved_host_len);
+// uint8_t credentialProviderCallback(uintptr_t client_id,
+//                                    uint8_t *access_key_id_buf, uintptr_t access_key_id_buf_len,
+//                                    uintptr_t *access_key_id_len,
+//                                    uint8_t *secret_access_key_buf, uintptr_t secret_access_key_buf_len,
+//                                    uintptr_t *secret_access_key_len,
+//                                    uint8_t *session_token_buf, uintptr_t session_token_buf_len,
+//                                    uintptr_t *session_token_len,
+//                                    int64_t *expires_at_epoch_millis);
 import "C"
 
 import (
@@ -59,6 +67,7 @@ type payload struct {
 type clientConfiguration interface {
 	ToProtobuf() (*protobuf.ConnectionRequest, error)
 	GetAddressResolver() config.AddressResolver
+	GetCredentialProvider() config.GlideCredentialProvider
 }
 
 type baseClient struct {
@@ -66,7 +75,10 @@ type baseClient struct {
 	coreClient     unsafe.Pointer
 	mu             *sync.Mutex
 	messageHandler *MessageHandler
-	resolverID     uintptr
+	// resolverID is the shared callback ID used for both the address-resolver and the
+	// credential-provider callbacks. Both are registered under the same clientID, so a
+	// single field suffices; no separate credentialProviderID is needed.
+	resolverID uintptr
 }
 
 // setMessageHandler assigns a message handler to the client for processing pub/sub messages
@@ -165,27 +177,51 @@ func createClient(cfg clientConfiguration) (*baseClient, error) {
 	}
 	client := &baseClient{pending: make(map[uintptr]struct{}), mu: &sync.Mutex{}}
 
-	// Determine resolver callback and client ID
+	// Determine resolver callback, credential provider callback, and shared client ID.
+	// A single clientID is passed to create_client and forwarded to both callbacks.
 	var resolverCallback C.AddressResolverCallback
+	var credProviderCallback C.CredentialProviderCallback
 	var clientID uintptr
-	if cfgWithResolver, ok := cfg.(interface{ GetAddressResolver() config.AddressResolver }); ok {
-		if resolver := cfgWithResolver.GetAddressResolver(); resolver != nil {
+	if resolver := cfg.GetAddressResolver(); resolver != nil {
+		if clientID == 0 {
 			clientID = uintptr(clientIDCounter.Add(1))
-			registerResolver(clientID, resolver)
-			resolverCallback = C.AddressResolverCallback(unsafe.Pointer(C.addressResolverCallback))
 		}
+		registerResolver(clientID, resolver)
+		resolverCallback = C.AddressResolverCallback(unsafe.Pointer(C.addressResolverCallback))
+	}
+	if provider := cfg.GetCredentialProvider(); provider != nil {
+		if clientID == 0 {
+			clientID = uintptr(clientIDCounter.Add(1))
+		}
+		registerCredentialProvider(clientID, provider)
+		credProviderCallback = C.CredentialProviderCallback(unsafe.Pointer(C.credentialProviderCallback))
 	}
 
-	cResponse := (*C.struct_ConnectionResponse)(
-		C.create_client(
-			(*C.uchar)(requestBytes),
-			C.uintptr_t(byteCount),
-			&clientType,
-			C.PubSubCallback(unsafe.Pointer(C.pubSubCallback)),
-			resolverCallback,
-			C.uintptr_t(clientID),
-		),
-	)
+	var cResponse *C.struct_ConnectionResponse
+	if credProviderCallback != nil {
+		cResponse = (*C.struct_ConnectionResponse)(
+			C.create_client_with_credential_provider(
+				(*C.uchar)(requestBytes),
+				C.uintptr_t(byteCount),
+				&clientType,
+				C.PubSubCallback(unsafe.Pointer(C.pubSubCallback)),
+				resolverCallback,
+				C.uintptr_t(clientID),
+				credProviderCallback,
+			),
+		)
+	} else {
+		cResponse = (*C.struct_ConnectionResponse)(
+			C.create_client(
+				(*C.uchar)(requestBytes),
+				C.uintptr_t(byteCount),
+				&clientType,
+				C.PubSubCallback(unsafe.Pointer(C.pubSubCallback)),
+				resolverCallback,
+				C.uintptr_t(clientID),
+			),
+		)
+	}
 
 	defer C.free_connection_response(cResponse)
 	cErr := cResponse.connection_error_message
@@ -193,6 +229,7 @@ func createClient(cfg clientConfiguration) (*baseClient, error) {
 		message := C.GoString(cErr)
 		if clientID != 0 {
 			unregisterResolver(clientID)
+			unregisterCredentialProvider(clientID)
 		}
 		return nil, NewConnectionError(message)
 	}
@@ -222,6 +259,7 @@ func (client *baseClient) Close() {
 
 	if client.resolverID != 0 {
 		unregisterResolver(client.resolverID)
+		unregisterCredentialProvider(client.resolverID)
 		client.resolverID = 0
 	}
 
@@ -3095,6 +3133,38 @@ func (client *baseClient) SIsMember(ctx context.Context, key string, member stri
 	}
 
 	return handleBoolResponse(result)
+}
+
+// SIsMemberIfExists returns if member is a member of the set stored at key,
+// or -1 if key does not exist.
+//
+// Since:
+//
+//	Valkey 9.2 and above.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx    - The context for controlling the command execution.
+//	key    - The key of the set.
+//	member - The member to check for existence in the set.
+//
+// Return value:
+//
+//	A status code indicating membership:
+//	- 1: The member exists in the set.
+//	- 0: The key exists but the member does not exist in the set.
+//	- -1: The key does not exist.
+//
+// [valkey.io]: https://valkey.io/commands/sismember/
+func (client *baseClient) SIsMemberIfExists(ctx context.Context, key string, member string) (int64, error) {
+	result, err := client.executeCommand(ctx, C.SIsMember, []string{key, member, constants.IfExistsKeyword})
+	if err != nil {
+		return models.DefaultIntResponse, err
+	}
+
+	return handleIntResponse(result)
 }
 
 // SDiff computes the difference between the first set and all the successive sets in keys.

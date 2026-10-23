@@ -238,6 +238,7 @@ import static glide.api.models.commands.stream.StreamGroupOptions.ENTRIES_READ_V
 import static glide.api.models.commands.stream.StreamReadOptions.READ_COUNT_VALKEY_API;
 import static glide.api.models.commands.stream.XInfoStreamOptions.COUNT;
 import static glide.api.models.commands.stream.XInfoStreamOptions.FULL;
+import static glide.internal.ValkeyKeywords.XX;
 import static glide.utils.ArgsBuilder.checkTypeOrThrow;
 import static glide.utils.ArgsBuilder.newArgsBuilder;
 import static glide.utils.ArrayTransformUtils.flattenAllKeysFollowedByAllValues;
@@ -1935,6 +1936,29 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
     public <ArgType> T sismember(@NonNull ArgType key, @NonNull ArgType member) {
         checkTypeOrThrow(key);
         addCommand(SIsMember, newArgsBuilder().add(key).add(member));
+        return getThis();
+    }
+
+    /**
+     * Returns if <code>member</code> is a member of the set stored at <code>key</code>, or <code>-1
+     * </code> if <code>key</code> does not exist.
+     *
+     * @since Valkey 9.2.0 and above.
+     * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
+     *     will throw {@link IllegalArgumentException}.
+     * @see <a href="https://valkey.io/commands/sismember/">valkey.io</a> for details.
+     * @param key The key of the set.
+     * @param member The member to check for existence in the set.
+     * @return Command Response - A status code indicating membership:
+     *     <ul>
+     *       <li><code>1</code> if the member exists in the set.
+     *       <li><code>0</code> if <code>key</code> exists but the member does not exist in the set.
+     *       <li><code>-1</code> if <code>key</code> does not exist.
+     *     </ul>
+     */
+    public <ArgType> T sismemberIfExists(@NonNull ArgType key, @NonNull ArgType member) {
+        checkTypeOrThrow(key);
+        addCommand(SIsMember, newArgsBuilder().add(key).add(member).add(XX));
         return getThis();
     }
 

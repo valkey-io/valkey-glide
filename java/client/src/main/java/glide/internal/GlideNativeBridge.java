@@ -47,6 +47,12 @@ public class GlideNativeBridge {
             AddressResolver addressResolver,
             GlideCredentialProvider credentialsProvider);
 
+    /** Creates the per-client Java executor used by the native IAM callback. */
+    static CredentialsProviderInvoker createCredentialsProviderInvoker(
+            GlideCredentialProvider credentialsProvider) {
+        return new CredentialsProviderInvoker(credentialsProvider);
+    }
+
     /** Execute a single command asynchronously, passing parameters directly via JNI. */
     public static native void executeCommandAsync(
             long clientPtr,

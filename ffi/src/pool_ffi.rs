@@ -140,6 +140,7 @@ fn create_pool_client(
         client_type,
         None, // no pubsub callback for pooled clients (managed at pool level)
         None, // no address resolver (uses the one in ConnectionRequest if any)
+        None, // custom credential providers are rejected by glide_pool_create
         client_id,
     )?;
 
@@ -206,6 +207,14 @@ pub unsafe extern "C" fn glide_pool_create(
         use protobuf::Message as _;
         let req = connection_request::ConnectionRequest::parse_from_bytes(&connection_request);
         if let Ok(ref r) = req {
+            if r.credential_provider_key.is_some() {
+                glide_logger::log_error(
+                    "pool",
+                    "Cannot create pool with a credential_provider_key. Custom IAM credential \
+                     providers are not supported for pools.",
+                );
+                return POOL_ERROR_UNSUPPORTED_CONFIG;
+            }
             // Reject pubsub subscriptions in pool config — pool state reset on release
             // sends DISCARD + SELECT to clean connection state, but cannot UNSUBSCRIBE
             // from channels/patterns. A subscribed connection enters a special mode where

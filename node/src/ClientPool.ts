@@ -132,6 +132,24 @@ export class ClientPool {
         const abandonTimeoutMs = poolConfig?.abandonTimeoutMs ?? 300_000;
         const isCluster = poolConfig?.clusterMode ?? false;
 
+        const credentialProvider =
+            clientConfig.credentials && "iamConfig" in clientConfig.credentials
+                ? clientConfig.credentials.iamConfig.credentialProvider
+                : undefined;
+
+        if (credentialProvider !== undefined) {
+            if (typeof credentialProvider !== "function") {
+                throw new TypeError(
+                    "credentialProvider must be a function when provided; custom providers are unsupported by ClientPool.",
+                );
+            }
+
+            throw new Error(
+                "Pool clients cannot use a custom IAM credentials provider. " +
+                    "Configure IAM without a credentialProvider to use the default AWS credential chain.",
+            );
+        }
+
         // Reject pubsub subscriptions.
         const cfg = clientConfig as
             GlideClientConfiguration | GlideClusterClientConfiguration;

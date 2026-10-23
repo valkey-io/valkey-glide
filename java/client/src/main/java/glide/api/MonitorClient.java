@@ -58,8 +58,8 @@ public class MonitorClient implements AutoCloseable {
      * @return A new {@link MonitorClient} instance.
      * @throws ConnectionException if the native monitor client cannot be created.
      * @throws NullPointerException if {@code config} is null.
-     * @throws IllegalArgumentException Not applicable - cluster configurations are rejected at
-     *     compile time since this method only accepts {@link GlideClientConfiguration}.
+     * @throws IllegalArgumentException if IAM authentication is configured. The monitor native ABI
+     *     does not support IAM authentication.
      */
     public static MonitorClient create(@NonNull GlideClientConfiguration config)
             throws ConnectionException {
@@ -73,10 +73,13 @@ public class MonitorClient implements AutoCloseable {
      * @param callback Optional callback invoked for each message. If null, messages are queued.
      * @return A new {@link MonitorClient} instance.
      * @throws ConnectionException if the native monitor client cannot be created.
+     * @throws IllegalArgumentException if IAM authentication is configured. The monitor native ABI
+     *     does not support IAM authentication.
      */
     public static MonitorClient create(
             @NonNull GlideClientConfiguration config, Consumer<MonitorMsg> callback)
             throws ConnectionException {
+        validateConfiguration(config);
         byte[] configBytes = serializeConfig(config);
 
         // Create the queue first so the JNI callback closure captures it directly.
@@ -154,6 +157,15 @@ public class MonitorClient implements AutoCloseable {
     }
 
     // ---- helpers ----
+
+    static void validateConfiguration(GlideClientConfiguration config) {
+        ServerCredentials credentials = config.getCredentials();
+        if (credentials != null && credentials.getIamConfig() != null) {
+            throw new IllegalArgumentException(
+                    "MonitorClient does not support IAM authentication, including custom IAM"
+                            + " credentials providers.");
+        }
+    }
 
     private static byte[] serializeConfig(GlideClientConfiguration config) {
         ConnectionRequest.Builder builder = ConnectionRequest.newBuilder();

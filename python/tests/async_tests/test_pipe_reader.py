@@ -221,6 +221,50 @@ def test_windows_reader_survives_unexpected_read_failure(monkeypatch, pipe_clien
     pipe.ClientLogger.log.assert_called_once()
 
 
+def test_windows_pipe_setup_starts_one_blocking_reader(monkeypatch):
+    client = pipe.BaseClient(Mock())
+    client._lib = Mock()
+    client._is_asyncio = True
+    client._loop = Mock()
+    client._pipe_client_id = 7
+    fake_os = SimpleNamespace(
+        name="nt",
+        getpid=pipe.os.getpid,
+        pipe=Mock(return_value=(123, 456)),
+        set_blocking=Mock(),
+    )
+    thread_factory = Mock()
+    monkeypatch.setattr(pipe, "os", fake_os)
+    monkeypatch.setattr(pipe, "threading", SimpleNamespace(Thread=thread_factory))
+    monkeypatch.setattr(pipe, "_client_registry", {})
+    monkeypatch.setattr(pipe, "_async_pipe_read_fd", -1)
+    monkeypatch.setattr(pipe, "_async_pipe_write_fd", -1)
+    monkeypatch.setattr(pipe, "_async_pipe_init_pid", 0)
+    monkeypatch.setattr(pipe, "_async_pipe_registered", False)
+    monkeypatch.setattr(pipe, "_async_pipe_loop", None)
+    monkeypatch.setattr(pipe, "_windows_pipe_thread", None)
+
+    client._setup_pipe_after_creation(True)
+    client._setup_pipe_after_creation(True)
+
+    fake_os.pipe.assert_called_once_with()
+    fake_os.set_blocking.assert_not_called()
+    client._lib.init_async_pipe.assert_called_once_with(456)
+    client._loop.add_reader.assert_not_called()
+    thread_factory.assert_called_once_with(
+        target=pipe._windows_pipe_reader,
+        args=(123,),
+        name="glide-response-pipe",
+        daemon=True,
+    )
+    thread_factory.return_value.start.assert_called_once_with()
+    assert pipe._async_pipe_read_fd == 123
+    assert pipe._async_pipe_write_fd == 456
+    assert pipe._async_pipe_init_pid == fake_os.getpid()
+    assert pipe._async_pipe_registered
+    assert pipe._client_registry == {7: client}
+
+
 @pytest.fixture(params=["asyncio", "trio"])
 def anyio_backend(request):
     return request.param
