@@ -244,9 +244,9 @@ def install_glide_shared(env: Dict[str, str], release: bool = False) -> None:
     # Build the FFI library and copy to glide_shared so it can be found
     # without requiring glide-sync to be installed.
     #
-    # Always runs `cargo build` and re-copies the result, rather than
-    # skipping the build whenever `dest` already exists. Cargo's own
-    # incremental build makes a no-op rebuild cheap, and the previous
+    # Always runs the build and re-copies the result, rather than skipping
+    # it whenever `dest` already exists. Cargo's own incremental build
+    # makes a no-op rebuild cheap, and the previous
     # exists()-only check meant any FFI/glide-core source change was
     # silently never picked up here once a copy had been produced once --
     # a stale cdylib that still LOOKED like it had been "installed" kept
@@ -255,8 +255,16 @@ def install_glide_shared(env: Dict[str, str], release: bool = False) -> None:
     # pyo3-based signal (module path, mtime of the pyo3 .so) looked fresh,
     # because the pyo3 extension and this cdylib are two separate build
     # artifacts entirely.
+    #
+    # `cargo rustc --lib --crate-type cdylib --locked` (not a plain `cargo
+    # build`) matches build_sync_client's own FFI build command below --
+    # `--crate-type cdylib` selects just the dynamic library target instead
+    # of whatever the crate's Cargo.toml's default crate-type list produces
+    # (relevant because this FFI crate is also built as a staticlib for
+    # some other callers), and `--locked` keeps every build here
+    # reproducible against Cargo.lock instead of silently re-resolving.
     ffi_output_dir = FFI_OUTPUT_DIR_RELEASE if release else FFI_OUTPUT_DIR_DEBUG
-    ffi_build_cmd = ["cargo", "build"]
+    ffi_build_cmd = ["cargo", "rustc", "--lib", "--crate-type", "cdylib", "--locked"]
     if release:
         ffi_build_cmd += ["--release"]
     run_command(
