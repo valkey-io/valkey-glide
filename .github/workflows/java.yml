@@ -21,6 +21,8 @@ on:
             - .github/actions/install-engine/action.yml
             - .github/workflows/create-test-matrices/action.yml
             - .github/json_matrices/**
+            - "!**/*.md"
+            - "!**/THIRD_PARTY_LICENSES*"
 
     pull_request:
         paths:
@@ -35,6 +37,8 @@ on:
             - .github/actions/install-engine/action.yml
             - .github/workflows/create-test-matrices/action.yml
             - .github/json_matrices/**
+            - "!**/*.md"
+            - "!**/THIRD_PARTY_LICENSES*"
 
     workflow_dispatch:
         inputs:
@@ -85,9 +89,12 @@ run-name:
     # Set custom name if job is started manually and name is given
     ${{ github.event_name == 'workflow_dispatch' && (inputs.name == '' && format('{0} @ {1} {2}', github.ref_name, github.sha, toJson(inputs)) || inputs.name) || '' }}
 
+env:
+    BASE_JAVA_VERSION: "17"
+
 jobs:
     get-matrices:
-        runs-on: ubuntu-latest
+        runs-on: ubuntu-24.04
         outputs:
             engine-matrix-output: ${{ steps.get-matrices.outputs.engine-matrix-output }}
             host-matrix-output: ${{ steps.filter-hosts.outputs.host-matrix }}
@@ -118,7 +125,7 @@ jobs:
 
     approve-self-hosted:
         if: inputs.use-self-hosted-linux == true || contains(github.event.pull_request.labels.*.name, 'ci/use-self-hosted')
-        runs-on: ubuntu-latest
+        runs-on: ubuntu-24.04
         environment: AWS_ACTIONS
         needs: get-matrices
         steps:
@@ -236,9 +243,12 @@ jobs:
                   fi
 
             - uses: ./.github/workflows/test-benchmark
-              if: ${{ matrix.engine.version == '8.0' && matrix.host.RUNNER == 'ubuntu-latest' && matrix.java == '17' }}
               with:
                   language-flag: -java
+                  engine-run: ${{ matrix.engine.run }}
+                  target: ${{ matrix.host.TARGET }}
+                  language-version: ${{ matrix.java }}
+                  base-language-version: ${{ env.BASE_JAVA_VERSION }}
 
             - name: Upload test & spotbugs reports
               if: always()
@@ -414,7 +424,7 @@ jobs:
     test-dns-failover:
         name: DNS Failover Test
         timeout-minutes: 30
-        runs-on: ubuntu-latest
+        runs-on: ubuntu-24.04
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -448,7 +458,7 @@ jobs:
               run: docker compose down -v
 
     get-containers:
-        runs-on: ubuntu-latest
+        runs-on: ubuntu-24.04
         if: ${{ inputs.windows-only != true && (github.event.inputs.full-matrix == 'true' || github.event_name == 'schedule' || inputs.full-matrix == true) }}
         outputs:
             engine-matrix-output: ${{ steps.get-matrices.outputs.engine-matrix-output }}
@@ -599,7 +609,7 @@ jobs:
 
     lint-rust:
         timeout-minutes: 15
-        runs-on: ubuntu-latest
+        runs-on: ubuntu-24.04
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 

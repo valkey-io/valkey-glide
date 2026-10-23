@@ -1,13 +1,18 @@
 import json
+import os
 import random
 import string
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import asynccontextmanager, contextmanager
 from datetime import datetime, timezone
+from functools import partial
 from typing import (
     Any,
+    AsyncIterator,
     Awaitable,
     Callable,
     Dict,
+    Iterator,
     List,
     Mapping,
     Optional,
@@ -35,7 +40,10 @@ from glide_shared.commands.bitmap import (
 )
 from glide_shared.commands.command_args import Limit, ListDirection, OrderBy
 from glide_shared.commands.core_options import (
+    ExpireOptions,
     ExpiryGetEx,
+    ExpirySet,
+    ExpiryType,
     ExpiryTypeGetEx,
     FlushMode,
     InfoSection,
@@ -92,7 +100,7 @@ from glide_shared.constants import (
     TResult,
 )
 from glide_shared.exceptions import TimeoutError as GlideTimeoutError
-from glide_shared.routes import AllNodes, SlotKeyRoute, SlotType
+from glide_shared.routes import AllNodes, ByAddressRoute, SlotKeyRoute, SlotType
 from glide_sync import GlideClient as SyncGlideClient
 from glide_sync import GlideClusterClient as SyncGlideClusterClient
 from glide_sync import TGlideClient as TSyncGlideClient
@@ -222,19 +230,79 @@ def trigger_latency_spike_sync(glide_client: TSyncGlideClient) -> None:
     glide_client.config_set({"latency-monitor-threshold": prev_threshold})
 
 
-def parse_info_response(res: Union[bytes, Dict[bytes, bytes]]) -> Dict[str, str]:
-    res_first = get_first_result(res)
-    res_decoded = res_first.decode() if isinstance(res_first, bytes) else res_first
-    info_lines = [
-        line for line in res_decoded.splitlines() if line and not line.startswith("#")
-    ]
-    info_dict = {}
-    for line in info_lines:
-        splitted_line = line.split(":")
-        key = splitted_line[0]
-        value = splitted_line[1]
-        info_dict[key] = value
-    return info_dict
+async def get_info(
+    client: TGlideClient, sections: Optional[List[InfoSection]] = None
+) -> List[Dict[str, str]]:
+    """
+    Returns the fields and values from the given INFO sections.
+    For cluster clients, the command is sent to all primary nodes.
+
+    Args:
+        client: A client that is connected to the server.
+        sections: The INFO sections to request. Defaults to the default sections.
+
+    Returns:
+        A list with one dictionary per node reply, mapping each INFO field name to its value.
+    """
+    info = await client.info(sections)
+    return _parse_info_replies(info)
+
+
+def sync_get_info(
+    client: TSyncGlideClient, sections: Optional[List[InfoSection]] = None
+) -> List[Dict[str, str]]:
+    """
+    Returns the fields and values from the given INFO sections.
+    For cluster clients, the command is sent to all primary nodes.
+
+    Args:
+        client: A client that is connected to the server.
+        sections: The INFO sections to request. Defaults to the default sections.
+
+    Returns:
+        A list with one dictionary per node reply, mapping each INFO field name to its value.
+    """
+    info = client.info(sections)
+    return _parse_info_replies(info)
+
+
+def _parse_info_replies(info: TClusterResponse[bytes]) -> List[Dict[str, str]]:
+    """
+    Parses the INFO reply from each node into a dictionary of field names to values.
+
+    Args:
+        info: The INFO response. For cluster clients, maps each node to its reply.
+
+    Returns:
+        A list with one dictionary per node reply, mapping each INFO field name to its value.
+    """
+    replies = info.values() if isinstance(info, dict) else [info]
+    result = []
+    for reply in replies:
+        fields = {}
+        for line in cast(bytes, reply).decode().splitlines():
+            if line and not line.startswith("#"):
+                key, _, value = line.partition(":")
+                fields[key] = value
+        result.append(fields)
+    return result
+
+
+def parse_int(value: Optional[str], name: str) -> int:
+    """
+    Asserts that value is an integer and returns it.
+
+    Args:
+        value: The value to parse.
+        name: The name that identifies the value in the failure message.
+
+    Returns:
+        The integer value.
+    """
+    try:
+        return int(cast(str, value))
+    except (TypeError, ValueError):
+        pytest.fail(f'{name} is not an integer: "{value}"')
 
 
 def get_random_string(length):
@@ -245,26 +313,26 @@ def get_random_string(length):
 async def check_if_server_version_lt(client: TGlideClient, min_version: str) -> bool:
     global version_str
     if not version_str:
-        info = parse_info_response(await client.info([InfoSection.SERVER]))
+        info = (await get_info(client, [InfoSection.SERVER]))[0]
         version_str = info.get("valkey_version") or info.get("redis_version")  # type: ignore
     assert version_str is not None, "Server version not found in INFO response"
     return version.parse(version_str) < version.parse(min_version)
 
 
 def sync_check_if_server_version_lt(client: TSyncGlideClient, min_version: str) -> bool:
-    info = parse_info_response(client.info([InfoSection.SERVER]))
+    info = sync_get_info(client, [InfoSection.SERVER])[0]
     version_str = info.get("valkey_version") or info.get("redis_version")
     assert version_str is not None, "Server version not found in INFO response"
     return version.parse(version_str) < version.parse(min_version)
 
 
 async def get_version(client: TGlideClient) -> str:
-    info = parse_info_response(await client.info([InfoSection.SERVER]))
+    info = (await get_info(client, [InfoSection.SERVER]))[0]
     return info.get("valkey_version") or info.get("redis_version")  # type: ignore
 
 
 def sync_get_version(client: TSyncGlideClient) -> str:
-    info = parse_info_response(client.info([InfoSection.SERVER]))
+    info = sync_get_info(client, [InfoSection.SERVER])[0]
     return info.get("valkey_version") or info.get("redis_version")  # type: ignore
 
 
@@ -273,6 +341,22 @@ BGSAVE_RESPONSES = {
     "Background saving started",
     "Background saving scheduled",
 }
+
+# One field from each default INFO section.
+INFO_DEFAULT_FIELDS = [
+    "redis_version",  # server
+    "connected_clients",  # clients
+    "used_memory",  # memory
+    "rdb_changes_since_last_save",  # persistence
+    "total_commands_processed",  # stats
+    "role",  # replication
+    "used_cpu_sys",  # cpu
+    "cluster_enabled",  # cluster
+]
+
+# Expected server responses for the "rdb_*_bgsave_type" INFO persistence fields.
+# Since Valkey 9.2.0.
+BGSAVE_TYPES = {"fork", "forkless", "none"}
 
 # Expected server responses for BGREWRITEAOF.
 BGREWRITEAOF_RESPONSES = {
@@ -348,6 +432,149 @@ def sync_wait_for(
     raise TimeoutError(failure)
 
 
+# While a script or function runs, the server does not read other clients'
+# commands until busy-reply-threshold (default 5000 ms) elapses, so a kill or
+# stats poll against a running script cannot complete sooner than that.
+# lua-time-limit is the pre-7.0 name and remains an alias on later servers.
+# CONFIG SET is server-global; the suite starts separate servers per xdist
+# worker, so lowering it here cannot reach another worker's tests.
+_BUSY_REPLY_THRESHOLD_MS = "100"
+_DEFAULT_BUSY_REPLY_THRESHOLD_MS = "5000"
+
+
+def _busy_reply_threshold_args(ms: str) -> List[str]:
+    return ["CONFIG", "SET", "lua-time-limit", ms]
+
+
+@asynccontextmanager
+async def low_busy_reply_threshold(client: TGlideClient) -> AsyncIterator[None]:
+    """The pooled server outlives the test, so the default is restored on exit."""
+    if isinstance(client, GlideClusterClient):
+        await client.custom_command(
+            _busy_reply_threshold_args(_BUSY_REPLY_THRESHOLD_MS), AllNodes()
+        )
+    else:
+        await client.custom_command(
+            _busy_reply_threshold_args(_BUSY_REPLY_THRESHOLD_MS)
+        )
+    try:
+        yield
+    finally:
+        if isinstance(client, GlideClusterClient):
+            await client.custom_command(
+                _busy_reply_threshold_args(_DEFAULT_BUSY_REPLY_THRESHOLD_MS), AllNodes()
+            )
+        else:
+            await client.custom_command(
+                _busy_reply_threshold_args(_DEFAULT_BUSY_REPLY_THRESHOLD_MS)
+            )
+
+
+@contextmanager
+def sync_low_busy_reply_threshold(client: TSyncGlideClient) -> Iterator[None]:
+    """The pooled server outlives the test, so the default is restored on exit."""
+    if isinstance(client, SyncGlideClusterClient):
+        client.custom_command(
+            _busy_reply_threshold_args(_BUSY_REPLY_THRESHOLD_MS), AllNodes()
+        )
+    else:
+        client.custom_command(_busy_reply_threshold_args(_BUSY_REPLY_THRESHOLD_MS))
+    try:
+        yield
+    finally:
+        if isinstance(client, SyncGlideClusterClient):
+            client.custom_command(
+                _busy_reply_threshold_args(_DEFAULT_BUSY_REPLY_THRESHOLD_MS), AllNodes()
+            )
+        else:
+            client.custom_command(
+                _busy_reply_threshold_args(_DEFAULT_BUSY_REPLY_THRESHOLD_MS)
+            )
+
+
+async def wait_for_server_blocked(
+    probe: TGlideClient, nodes: Optional[List[NodeAddress]] = None
+) -> None:
+    """``probe`` needs a request timeout well under the server's block duration.
+
+    Two consecutive timeouts are required so one slow reply from a server that
+    is merely loaded is not mistaken for the block.
+
+    A cluster ``probe`` is pinged node by node over ``nodes``: a fan-out PING
+    fails as soon as one node times out, which would report the block before
+    the nodes that have not started sleeping yet.
+    """
+    import anyio
+
+    if isinstance(probe, GlideClusterClient):
+        if not nodes:
+            raise ValueError("a cluster probe needs the addresses of its nodes")
+        pings = [
+            partial(probe.ping, route=ByAddressRoute(node.host, node.port))
+            for node in nodes
+        ]
+    else:
+        pings = [probe.ping]
+    consecutive_timeouts = [0] * len(pings)
+
+    async def probe_node(i: int) -> None:
+        try:
+            await pings[i]()
+        except GlideTimeoutError:
+            consecutive_timeouts[i] += 1
+            return
+        consecutive_timeouts[i] = 0
+
+    async def every_node_times_out_twice() -> bool:
+        async with anyio.create_task_group() as tg:
+            for i, count in enumerate(consecutive_timeouts):
+                if count < 2:
+                    tg.start_soon(probe_node, i)
+        return all(count >= 2 for count in consecutive_timeouts)
+
+    await wait_for(every_node_times_out_twice, "server never stopped answering PING")
+
+
+def sync_wait_for_server_blocked(
+    probe: TSyncGlideClient, nodes: Optional[List[NodeAddress]] = None
+) -> None:
+    """``probe`` needs a request timeout well under the server's block duration.
+
+    Two consecutive timeouts are required so one slow reply from a server that
+    is merely loaded is not mistaken for the block.
+
+    A cluster ``probe`` is pinged node by node over ``nodes``: a fan-out PING
+    fails as soon as one node times out, which would report the block before
+    the nodes that have not started sleeping yet.
+    """
+    if isinstance(probe, SyncGlideClusterClient):
+        if not nodes:
+            raise ValueError("a cluster probe needs the addresses of its nodes")
+        pings = [
+            partial(probe.ping, route=ByAddressRoute(node.host, node.port))
+            for node in nodes
+        ]
+    else:
+        pings = [probe.ping]
+    consecutive_timeouts = [0] * len(pings)
+
+    def probe_node(i: int) -> None:
+        try:
+            pings[i]()
+        except GlideTimeoutError:
+            consecutive_timeouts[i] += 1
+            return
+        consecutive_timeouts[i] = 0
+
+    def every_node_times_out_twice() -> bool:
+        pending = [i for i, count in enumerate(consecutive_timeouts) if count < 2]
+        with ThreadPoolExecutor(max_workers=len(pending)) as pool:
+            list(pool.map(probe_node, pending))
+        return all(count >= 2 for count in consecutive_timeouts)
+
+    sync_wait_for(every_node_times_out_twice, "server never stopped answering PING")
+
+
 async def wait_for_save_not_in_progress(client: TGlideClient) -> None:
     """Waits until no save (RDB save or AOF rewrite) is in progress."""
 
@@ -380,6 +607,30 @@ def _is_save_in_progress(result: Union[bytes, Dict[bytes, bytes]]) -> bool:
 
 def check_version_lt(version_str: str, min_version: str) -> bool:
     return version.parse(version_str) < version.parse(min_version)
+
+
+# The latest expiration time accepted by the server (LLONG_MAX milliseconds, in seconds).
+MAX_EXPIRE_TIME_SEC = (2**63 - 1) // 1000
+
+
+class Matches:
+    """
+    Compares equal to any value for which `predicate` returns True.
+    Use in expected results for replies that are not deterministic.
+
+    Example:
+        >>> assert [5] == [Matches(lambda ttl: 0 < ttl <= 10)]
+    """
+
+    def __init__(self, predicate: Callable[[Any], bool]):
+        self._predicate = predicate
+
+    def __eq__(self, other: object) -> bool:
+        return self._predicate(other)
+
+    def __repr__(self) -> str:
+        code = self._predicate.__code__
+        return f"Matches({os.path.basename(code.co_filename)}:{code.co_firstlineno})"
 
 
 def assert_responses_in(
@@ -558,7 +809,6 @@ def create_lua_lib_with_long_running_function(
 ) -> str:
     """
     Create a lua lib with a (optionally) RO function which runs an endless loop up to timeout sec.
-    Execution takes at least 5 sec regardless of the timeout configured.
     """
     code = (
         f"#!lua name={lib_name}\n"
@@ -588,7 +838,6 @@ def create_lua_lib_with_long_running_function(
 def create_long_running_lua_script(timeout: int) -> str:
     """
     Create a lua script which runs an endless loop up to timeout sec.
-    Execution takes at least 5 sec regardless of the timeout configured.
     """
     script = (
         "  local started = tonumber(redis.pcall('time')[1])\n"
@@ -1138,6 +1387,9 @@ def batch_test(
     key25 = generate_key(keyslot, batch.is_atomic)  # list
     key26 = generate_key(keyslot, batch.is_atomic)  # sort
     key27 = generate_key_same_slot(key26)  # sort
+    key28 = generate_key(keyslot, batch.is_atomic)  # hash field expiration
+    key29 = generate_key(keyslot, batch.is_atomic)  # hash
+    key30 = generate_key(keyslot, batch.is_atomic)  # string
     value = datetime.now(timezone.utc).strftime("%m/%d/%Y, %H:%M:%S")
     value_bytes = value.encode()
     value2 = get_random_string(5)
@@ -1218,7 +1470,7 @@ def batch_test(
                 }
             )
 
-    # To fix flake8's complexity analysis, we break down the argument appending into 6
+    # To fix flake8's complexity analysis, we break down the argument appending into
     # helper functions.
     helper1(
         batch,
@@ -1282,7 +1534,58 @@ def batch_test(
         args,
     )
 
+    if not check_version_lt(version, "9.0.0"):
+        helper_valkey_9_0(batch, key28, key30, args)
+
+    if not check_version_lt(version, "9.1.0"):
+        helper_valkey_9_1(batch, key29, args)
+
     return args
+
+
+def helper_valkey_9_0(transaction, key, string_key, args):
+    expiry = ExpirySet(ExpiryType.UNIX_SEC, MAX_EXPIRE_TIME_SEC)
+    transaction.hsetex(key, {"f1": "v1", "f2": "v2"}, expiry=expiry)
+
+    args.append(1)
+    transaction.hexpiretime(key, ["f1", "missing"])
+    args.append([MAX_EXPIRE_TIME_SEC, -2])
+    transaction.hpexpiretime(key, ["f1"])
+    args.append([MAX_EXPIRE_TIME_SEC * 1000])
+    transaction.hpersist(key, ["f1", "f2"])
+    args.append([1, 1])
+    transaction.httl(key, ["f1", "missing"])
+    args.append([-1, -2])
+    transaction.hpttl(key, ["f1"])
+    args.append([-1])
+    transaction.hexpireat(key, MAX_EXPIRE_TIME_SEC, ["f1"])
+    args.append([1])
+    transaction.hpexpireat(key, MAX_EXPIRE_TIME_SEC * 1000, ["f2"])
+    args.append([1])
+    transaction.hexpiretime(key, ["f1", "f2"])
+    args.append([MAX_EXPIRE_TIME_SEC, MAX_EXPIRE_TIME_SEC])
+    transaction.hexpire(key, 3600, ["f1"], option=ExpireOptions.HasExistingExpiry)
+    args.append([1])
+    transaction.hpexpire(key, 3600000, ["f2"])
+    args.append([1])
+    transaction.httl(key, ["f1"])
+    args.append([Matches(lambda ttl: 0 < ttl <= 3600)])
+    transaction.hgetex(key, ["f1"], expiry=ExpiryGetEx(ExpiryTypeGetEx.PERSIST, None))
+    args.append([b"v1"])
+
+    transaction.set(string_key, "value")
+    args.append(OK)
+    transaction.delifeq(string_key, "other")
+    args.append(False)
+    transaction.delifeq(string_key, "value")
+    args.append(True)
+
+
+def helper_valkey_9_1(transaction, key, args):
+    transaction.hset(key, {"f1": "v1"})
+    args.append(1)
+    transaction.hgetdel(key, ["f1", "missing"])
+    args.append([b"v1", None])
 
 
 def helper6(
@@ -1792,6 +2095,9 @@ def helper3(
     args.append(1)
     transaction.sismember(key7, "bar")
     args.append(True)
+    if not check_version_lt(version, "9.2.0"):
+        transaction.sismember_if_exists(key7, "bar")
+        args.append(1)
     transaction.spop(key7)
     args.append(b"bar")
     transaction.sadd(key7, ["foo", "bar"])

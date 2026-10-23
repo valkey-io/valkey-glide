@@ -41,10 +41,20 @@ PROTO_REL_PATH = "glide-core/src/protobuf"
 GLIDE_ROOT = find_project_root()
 PYTHON_DIR = GLIDE_ROOT / "python"
 
+
+def cargo_target_dir(crate_dir: Path) -> Path:
+    """Cargo honors CARGO_TARGET_DIR over the per-crate default; so must every
+    path that reads cargo's output, or a shared target dir (the CI cache)
+    breaks the build. A relative override is resolved against the crate dir,
+    which is cargo's cwd at every build site here."""
+    override = os.environ.get("CARGO_TARGET_DIR")
+    return crate_dir / override if override else crate_dir / "target"
+
+
 # Constants – FFI
 FFI_DIR = GLIDE_ROOT / "ffi"
-FFI_OUTPUT_DIR_DEBUG = FFI_DIR / "target" / "debug"
-FFI_OUTPUT_DIR_RELEASE = FFI_DIR / "target" / "release"
+FFI_OUTPUT_DIR_DEBUG = cargo_target_dir(FFI_DIR) / "debug"
+FFI_OUTPUT_DIR_RELEASE = cargo_target_dir(FFI_DIR) / "release"
 
 # Constants – Shared
 GLIDE_SHARED_DIR = PYTHON_DIR / "glide-shared"
@@ -219,7 +229,7 @@ def copy_readme_to_package(package_dir: Path) -> None:
 
 
 def install_glide_shared(env: Dict[str, str], release: bool = False) -> None:
-    cmd = [str(venv_ctx["python_exe"]), "-m", "maturin", "develop"]
+    cmd = [str(venv_ctx["python_exe"]), "-m", "maturin", "develop", "--locked"]
     if release:
         cmd += ["--release"]
     # Don't use zigbuild for glide-shared — it must match the host Python's ABI
@@ -243,7 +253,14 @@ def install_glide_shared(env: Dict[str, str], release: bool = False) -> None:
         dest = None
 
     if needs_build:
-        ffi_build_cmd = ["cargo", "build"]
+        ffi_build_cmd = [
+            "cargo",
+            "rustc",
+            "--lib",
+            "--crate-type",
+            "cdylib",
+            "--locked",
+        ]
         if release:
             ffi_build_cmd += ["--release"]
         run_command(
@@ -272,7 +289,7 @@ def build_async_client_wheel(
     copytree(SHARED_PACKAGE_DIR, dest_shared)
 
     # 2. Build wheel using maturin
-    maturin_cmd = ["maturin", "build"]
+    maturin_cmd = ["maturin", "build", "--locked"]
     if release:
         maturin_cmd += ["--release", "--strip"]
     if features:
@@ -287,7 +304,7 @@ def build_async_client_wheel(
     )
 
     # 3. Find and install wheel
-    wheel_dir = GLIDE_ASYNC_DIR / "target" / "wheels"
+    wheel_dir = cargo_target_dir(GLIDE_ASYNC_DIR) / "wheels"
     wheel_files = list(wheel_dir.glob("*.whl"))
     if not wheel_files:
         raise FileNotFoundError(f"No wheel found in {wheel_dir}")
@@ -333,7 +350,7 @@ def build_async_client(
     if wheel:
         return build_async_client_wheel(env, release, features)
 
-    cmd = [str(venv_ctx["python_exe"]), "-m", "maturin", "develop"]
+    cmd = [str(venv_ctx["python_exe"]), "-m", "maturin", "develop", "--locked"]
     if release:
         cmd += ["--release", "--strip"]
     if features:
@@ -412,7 +429,7 @@ def build_sync_client(
         }
     )
     # Build the FFI library
-    build_args = ["cargo", "build"]
+    build_args = ["cargo", "rustc", "--lib", "--crate-type", "cdylib", "--locked"]
     if release:
         build_args += ["--release"]
 
@@ -476,8 +493,18 @@ def clean_clients(client: ClientTarget) -> None:
 
     # Clean sync-only artifacts.
     if client in (ClientTarget.SYNC, ClientTarget.ALL):
+        # Prefer the venv interpreter (it has setuptools; a system/Homebrew
+        # python3 that launched dev.py may not), but fall back to the current
+        # interpreter when no venv exists yet so `clean` never dies before
+        # removing SYNC_FFI_LIB.
+        venv_python = venv_ctx["python_exe"]
+        clean_python = (
+            str(venv_python)
+            if venv_python is not None and venv_python.exists()
+            else sys.executable
+        )
         run_command(
-            [sys.executable, "setup.py", "clean"],
+            [clean_python, "setup.py", "clean"],
             cwd=GLIDE_SYNC_DIR,
             label="setup.py clean",
         )

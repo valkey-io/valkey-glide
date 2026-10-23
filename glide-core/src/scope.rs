@@ -482,6 +482,9 @@ pub enum ScopeCreateError {
     /// nothing to inherit. Connecting anyway would silently fall back to system
     /// trust roots with no client certificate.
     ParentCertMaterialUnavailable,
+    /// The standalone seed is an invalid Unix domain socket address (for example, one
+    /// combined with TLS).
+    InvalidUnixSocketAddress(String),
     /// `redis::Client::open` rejected the constructed `ConnectionInfo`.
     ClientOpenFailed(RedisError),
     /// The connect attempt failed.
@@ -490,6 +493,9 @@ pub enum ScopeCreateError {
     ConnectTimedOut,
     /// IAM is configured on the parent but no token is currently available.
     IamTokenUnavailable,
+    /// IAM authentication is configured but TLS is disabled. An IAM token is a
+    /// bearer credential and must never be sent over plaintext TCP.
+    IamRequiresTls,
     /// The AUTH/SELECT/CLIENT SETNAME init pipeline failed.
     InitFailed(RedisError),
     /// The init pipeline did not complete within `SCOPE_CONNECT_TIMEOUT`.
@@ -510,11 +516,13 @@ pub enum ScopeCreateErrorKind {
     InvalidLibName,
     NoSeedAddress,
     InvalidClusterTarget,
+    InvalidUnixSocketAddress,
     ParentCertMaterialUnavailable,
     ClientOpenFailed,
     ConnectFailed,
     ConnectTimedOut,
     IamTokenUnavailable,
+    IamRequiresTls,
     InitFailed,
     InitTimedOut,
     PoolClosed,
@@ -533,7 +541,9 @@ impl ScopeCreateErrorKind {
             Self::InvalidConnectionRequest
             | Self::InvalidLibName
             | Self::NoSeedAddress
-            | Self::InvalidClusterTarget => Some(ScopeFailCause::InvalidConfiguration),
+            | Self::InvalidClusterTarget
+            | Self::InvalidUnixSocketAddress => Some(ScopeFailCause::InvalidConfiguration),
+            Self::IamRequiresTls => Some(ScopeFailCause::IamRequiresTls),
             Self::ParentCertMaterialUnavailable => {
                 Some(ScopeFailCause::ParentCertMaterialUnavailable)
             }
@@ -558,6 +568,7 @@ impl ScopeCreateError {
             Self::InvalidLibName => ScopeCreateErrorKind::InvalidLibName,
             Self::NoSeedAddress => ScopeCreateErrorKind::NoSeedAddress,
             Self::InvalidClusterTarget(_) => ScopeCreateErrorKind::InvalidClusterTarget,
+            Self::InvalidUnixSocketAddress(_) => ScopeCreateErrorKind::InvalidUnixSocketAddress,
             Self::ParentCertMaterialUnavailable => {
                 ScopeCreateErrorKind::ParentCertMaterialUnavailable
             }
@@ -565,6 +576,7 @@ impl ScopeCreateError {
             Self::ConnectFailed(_) => ScopeCreateErrorKind::ConnectFailed,
             Self::ConnectTimedOut => ScopeCreateErrorKind::ConnectTimedOut,
             Self::IamTokenUnavailable => ScopeCreateErrorKind::IamTokenUnavailable,
+            Self::IamRequiresTls => ScopeCreateErrorKind::IamRequiresTls,
             Self::InitFailed(_) => ScopeCreateErrorKind::InitFailed,
             Self::InitTimedOut => ScopeCreateErrorKind::InitTimedOut,
             Self::PoolClosed => ScopeCreateErrorKind::PoolClosed,
@@ -585,10 +597,16 @@ impl std::fmt::Display for ScopeCreateError {
             Self::ParentCertMaterialUnavailable => f.write_str(
                 "parent client's TLS certificate material is not available; connect the parent client before taking a scope",
             ),
+            Self::InvalidUnixSocketAddress(reason) => {
+                write!(f, "invalid Unix domain socket address: {reason}")
+            }
             Self::ClientOpenFailed(e) => write!(f, "client open failed: {e}"),
             Self::ConnectFailed(e) => write!(f, "connect failed: {e}"),
             Self::ConnectTimedOut => write!(f, "connect timed out after {SCOPE_CONNECT_TIMEOUT:?}"),
             Self::IamTokenUnavailable => f.write_str("IAM token unavailable; cannot AUTH"),
+            Self::IamRequiresTls => f.write_str(
+                "IAM authentication requires TLS; refusing to send an IAM token over a plaintext connection",
+            ),
             Self::InitFailed(e) => write!(f, "init pipeline failed: {e}"),
             Self::InitTimedOut => {
                 write!(f, "init pipeline timed out after {SCOPE_CONNECT_TIMEOUT:?}")
@@ -657,6 +675,23 @@ fn build_scope_connection_addr(
     }
 }
 
+/// The address of a standalone scope whose seed is a Unix domain socket, or `None` for
+/// a TCP seed: a parent configured with a socket opens its scopes over the same socket.
+#[cfg(feature = "proto")]
+fn unix_socket_scope_addr(
+    seed: &crate::connection_request::NodeAddress,
+    tls_mode: crate::connection_request::TlsMode,
+) -> Result<Option<redis::ConnectionAddr>, ScopeCreateError> {
+    let address = crate::client::NodeAddress::from(seed);
+    let Some(path) = address.unix_socket_path.clone() else {
+        return Ok(None);
+    };
+    let tls = tls_mode != crate::connection_request::TlsMode::NoTls;
+    crate::client::validate_unix_socket_address(&address, tls)
+        .map_err(ScopeCreateError::InvalidUnixSocketAddress)?;
+    Ok(Some(redis::ConnectionAddr::Unix(path)))
+}
+
 /// The certificate material a scope inherits from its parent.
 ///
 /// The reload handle wins over the parent's `tls_params`: that snapshot is frozen
@@ -702,6 +737,15 @@ async fn build_scope_connection(
         .tls_mode
         .enum_value()
         .unwrap_or(crate::connection_request::TlsMode::SecureTls);
+    // An IAM token is a bearer credential: never transmit it over plaintext. When
+    // the parent authenticates as an IAM identity, reject a no-TLS scope before any
+    // connect or token fetch, so a misconfigured scope fails closed instead of
+    // leaking the token in a cleartext AUTH on the first command / reconnect.
+    if tls_mode == crate::connection_request::TlsMode::NoTls
+        && client.and_then(|c| c.iam_token_manager()).is_some()
+    {
+        return Err(ScopeCreateError::IamRequiresTls);
+    }
     let tls_params = inherited_tls_params(client).await;
     // The parent configured certificate material, but none is reachable yet (a
     // lazy parent that has not connected). Connecting would downgrade to system
@@ -716,32 +760,38 @@ async fn build_scope_connection(
     {
         return Err(ScopeCreateError::ParentCertMaterialUnavailable);
     }
-    let (host, port) = match target {
+    let connection_addr = match target {
         ScopeTarget::Standalone => {
             let addr = proto
                 .addresses
                 .first()
                 .ok_or(ScopeCreateError::NoSeedAddress)?;
-            let port = if addr.port == 0 {
-                6379
+            if let Some(unix_addr) = unix_socket_scope_addr(addr, tls_mode)? {
+                unix_addr
             } else {
-                addr.port as u16
-            };
-            // Trim brackets here too, so a configured `[::1]` standalone host works
-            // like the cluster branch — redis-rs's tuple `lookup_host` wants bare `::1`.
-            let host = strip_host_brackets(&addr.host);
-            // The seed is still the raw configured address, resolved here the same
-            // way `client::get_connection_info` does. The cluster arm must not.
-            match client.and_then(|c| c.address_resolver()) {
-                Some(resolver) => resolver.resolve(host, port),
-                None => (host.to_string(), port),
+                let port = if addr.port == 0 {
+                    6379
+                } else {
+                    addr.port as u16
+                };
+                // Trim brackets here too, so a configured `[::1]` standalone host works
+                // like the cluster branch — redis-rs's tuple `lookup_host` wants bare `::1`.
+                let host = strip_host_brackets(&addr.host);
+                // The seed is still the raw configured address, resolved here the same
+                // way `client::get_connection_info` does. The cluster arm must not.
+                let (host, port) = match client.and_then(|c| c.address_resolver()) {
+                    Some(resolver) => resolver.resolve(host, port),
+                    None => (host.to_string(), port),
+                };
+                build_scope_connection_addr(host, port, tls_mode, tls_params)
             }
         }
-        ScopeTarget::ClusterPrimary(addr) => parse_cluster_target(addr)
-            .ok_or_else(|| ScopeCreateError::InvalidClusterTarget(Arc::clone(addr)))?,
+        ScopeTarget::ClusterPrimary(addr) => {
+            let (host, port) = parse_cluster_target(addr)
+                .ok_or_else(|| ScopeCreateError::InvalidClusterTarget(Arc::clone(addr)))?;
+            build_scope_connection_addr(host, port, tls_mode, tls_params)
+        }
     };
-
-    let connection_addr = build_scope_connection_addr(host, port, tls_mode, tls_params);
     let redis_client = redis::Client::open(redis::ConnectionInfo {
         addr: connection_addr,
         // The old `redis://` URL carried no `resp3` param, so redis-rs parsed it
@@ -1002,6 +1052,10 @@ pub enum ScopeFailCause {
     /// The stored connection request cannot produce a scoped connection
     /// (unparseable, no seed address, invalid `lib_name` or cluster target).
     InvalidConfiguration,
+    /// IAM authentication is configured but the scope request disables TLS. Kept
+    /// distinct from `InvalidConfiguration` so the borrower-facing error names
+    /// the TLS requirement instead of a generic configuration failure.
+    IamRequiresTls,
     /// The pool is closing or closed; it will not serve again.
     PoolClosed,
 }
@@ -1106,7 +1160,8 @@ impl ScopeAcquireError {
             }
             Self::Terminal(
                 ScopeFailCause::ParentCertMaterialUnavailable
-                | ScopeFailCause::InvalidConfiguration,
+                | ScopeFailCause::InvalidConfiguration
+                | ScopeFailCause::IamRequiresTls,
             ) => RequestErrorType::Unspecified,
         }
     }
@@ -1158,6 +1213,9 @@ impl std::fmt::Display for ScopeFailCause {
             Self::InvalidConfiguration => {
                 f.write_str("connection configuration cannot produce a scoped connection")
             }
+            Self::IamRequiresTls => f.write_str(
+                "IAM authentication requires TLS; refusing to send an IAM token over a plaintext connection",
+            ),
             Self::PoolClosed => f.write_str("scope pool is closed"),
         }
     }
@@ -1946,6 +2004,7 @@ mod tests {
             addresses: vec![ClientAddress {
                 host: "127.0.0.1".to_string(),
                 port: 1,
+                unix_socket_path: None,
             }],
             lazy_connect: true,
             root_certs: vec![CERT_A.into()],
@@ -1965,6 +2024,7 @@ mod tests {
             addresses: vec![ClientAddress {
                 host: "127.0.0.1".to_string(),
                 port: 1,
+                unix_socket_path: None,
             }],
             cluster_mode_enabled: cluster,
             lazy_connect: true,
@@ -3184,6 +3244,7 @@ mod tests {
         parent_request.addresses.push(crate::client::NodeAddress {
             host: "127.0.0.1".into(),
             port,
+            unix_socket_path: None,
         });
         parent_request.lazy_connect = true;
         let parent = Client::new(parent_request, None)
@@ -3244,6 +3305,7 @@ mod tests {
         parent_request.addresses.push(crate::client::NodeAddress {
             host: "127.0.0.1".into(),
             port,
+            unix_socket_path: None,
         });
         parent_request.lazy_connect = true;
         let parent = Client::new(parent_request, None)
@@ -3580,6 +3642,77 @@ mod tests {
         assert!(
             !matches!(err, ScopeCreateError::ParentCertMaterialUnavailable),
             "system-trust TLS must still be allowed, got: {err}"
+        );
+    }
+
+    /// Fake AWS credentials so `IAMTokenManager::new` can locally sign a SigV4
+    /// token without reaching real AWS.
+    fn setup_iam_test_credentials() {
+        unsafe {
+            std::env::set_var("AWS_ACCESS_KEY_ID", "test_access_key");
+            std::env::set_var("AWS_SECRET_ACCESS_KEY", "test_secret_key");
+            std::env::set_var("AWS_SESSION_TOKEN", "test_session_token");
+        }
+    }
+
+    /// A lazy IAM parent built the way production does — `Client::new` with IAM
+    /// config and TLS enabled. This is the reachable state the scope guard defends
+    /// against: a TLS IAM parent whose scope request disables TLS. (A no-TLS IAM
+    /// parent cannot exist: `Client::new` rejects it.)
+    async fn lazy_iam_parent() -> Client {
+        setup_iam_test_credentials();
+        let request = ClientRequest {
+            addresses: vec![ClientAddress {
+                host: "127.0.0.1".to_string(),
+                port: 1,
+                unix_socket_path: None,
+            }],
+            lazy_connect: true,
+            tls_mode: Some(crate::client::TlsMode::SecureTls),
+            authentication_info: Some(crate::client::AuthenticationInfo {
+                username: Some("iam-test-user".to_string()),
+                password: None,
+                iam_config: Some(crate::client::IamAuthenticationConfig {
+                    cluster_name: "test-cluster".to_string(),
+                    region: "us-east-1".to_string(),
+                    service_type: crate::iam::ServiceType::ElastiCache,
+                    refresh_interval_seconds: None,
+                    credentials_provider: None,
+                }),
+            }),
+            ..Default::default()
+        };
+        Client::new(request, None)
+            .await
+            .expect("lazy IAM client construction does not touch the network")
+    }
+
+    /// A scope off an IAM parent whose request disables TLS must fail with
+    /// `IamRequiresTls` before obtaining or sending the token.
+    #[tokio::test]
+    async fn scope_rejects_iam_over_plaintext() {
+        let parent = lazy_iam_parent().await;
+
+        // `request_bytes` builds a standalone NoTls request (no tls_mode set).
+        let err = scope_connect_error(&parent, &request_bytes("GlideRust", 1)).await;
+        assert!(
+            matches!(err, ScopeCreateError::IamRequiresTls),
+            "IAM + NoTls scope must fail closed, got: {err}"
+        );
+    }
+
+    /// A-B companion: without an IAM manager, the same NoTls scope request is NOT
+    /// rejected by the IAM guard (it proceeds to the connect attempt and fails
+    /// there, since nothing listens on the seed port). This proves the guard keys
+    /// on IAM, not merely on `NoTls`.
+    #[tokio::test]
+    async fn scope_allows_plaintext_without_iam() {
+        let parent = lazy_parent(false).await;
+
+        let err = scope_connect_error(&parent, &request_bytes("GlideRust", 1)).await;
+        assert!(
+            !matches!(err, ScopeCreateError::IamRequiresTls),
+            "a non-IAM plaintext scope must not hit the IAM/TLS guard, got: {err}"
         );
     }
 
@@ -4021,5 +4154,39 @@ mod tests {
         server2.join().expect("mock server exits cleanly");
         get_client_scope_pools().remove(&client_id2);
         unregister_client(client_id2);
+    }
+
+    // ── Unix domain sockets (#4878) ─────────────────────────────────────────
+
+    #[cfg(unix)]
+    #[test]
+    fn unix_socket_scope_addr_uses_the_socket_seed() {
+        use super::unix_socket_scope_addr;
+        use crate::connection_request::TlsMode;
+        let unix = NodeAddress {
+            unix_socket_path: Some("/tmp/valkey.sock".into()),
+            ..Default::default()
+        };
+        let addr = unix_socket_scope_addr(&unix, TlsMode::NoTls).expect("valid socket seed");
+        assert_eq!(
+            addr,
+            Some(redis::ConnectionAddr::Unix("/tmp/valkey.sock".into()))
+        );
+
+        for tls_mode in [TlsMode::SecureTls, TlsMode::InsecureTls] {
+            let err = unix_socket_scope_addr(&unix, tls_mode)
+                .expect_err("TLS over a Unix socket must fail closed");
+            assert!(
+                matches!(&err, ScopeCreateError::InvalidUnixSocketAddress(reason) if reason.contains("TLS")),
+                "{tls_mode:?}: {err}"
+            );
+        }
+
+        let tcp = NodeAddress {
+            host: "127.0.0.1".into(),
+            port: 6379,
+            ..Default::default()
+        };
+        assert_eq!(unix_socket_scope_addr(&tcp, TlsMode::NoTls).unwrap(), None);
     }
 }

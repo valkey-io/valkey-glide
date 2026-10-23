@@ -11,8 +11,10 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/valkey-io/valkey-glide/go/v2/constants"
 	"github.com/valkey-io/valkey-glide/go/v2/interfaces"
 	"github.com/valkey-io/valkey-glide/go/v2/models"
+	"github.com/valkey-io/valkey-glide/go/v2/options"
 )
 
 // General function type that deals with context
@@ -218,4 +220,62 @@ func assertClientTrackingInfo(t *testing.T, info models.ClientTrackingInfo, on b
 		assert.Equal(t, int64(-1), info.Redirect)
 		assert.Empty(t, info.Prefixes)
 	}
+}
+
+// getInfo returns the fields and values from the given INFO sections, with one map per node reply.
+// For cluster clients, the command is sent to all primary nodes.
+func getInfo(t *testing.T, client interfaces.BaseClientCommands, sections ...constants.Section) []map[string]string {
+	ctx := context.Background()
+	infoOptions := options.InfoOptions{Sections: sections}
+
+	var replies []string
+	if clusterClient, ok := client.(interfaces.GlideClusterClientCommands); ok {
+		var response map[string]string
+		var err error
+		if len(sections) == 0 {
+			response, err = clusterClient.Info(ctx)
+		} else {
+			var value models.ClusterValue[string]
+			value, err = clusterClient.InfoWithOptions(ctx, options.ClusterInfoOptions{InfoOptions: &infoOptions})
+			response = value.MultiValue()
+		}
+		require.NoError(t, err)
+		for _, reply := range response {
+			replies = append(replies, reply)
+		}
+	} else {
+		glideClient := client.(interfaces.GlideClientCommands)
+		var reply string
+		var err error
+		if len(sections) == 0 {
+			reply, err = glideClient.Info(ctx)
+		} else {
+			reply, err = glideClient.InfoWithOptions(ctx, infoOptions)
+		}
+		require.NoError(t, err)
+		replies = []string{reply}
+	}
+
+	infos := make([]map[string]string, len(replies))
+	for i, reply := range replies {
+		fields := make(map[string]string)
+		for _, line := range strings.Split(reply, "\n") {
+			line = strings.TrimSpace(line)
+			if line == "" || strings.HasPrefix(line, "#") {
+				continue
+			}
+			if key, value, found := strings.Cut(line, ":"); found {
+				fields[key] = value
+			}
+		}
+		infos[i] = fields
+	}
+	return infos
+}
+
+// AssertInt asserts that value is an integer and returns it.
+func AssertInt(t *testing.T, value string, name string) int64 {
+	result, err := strconv.ParseInt(value, 10, 64)
+	assert.NoError(t, err, "%s is not an integer: %q", name, value)
+	return result
 }

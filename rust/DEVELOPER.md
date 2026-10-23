@@ -48,6 +48,8 @@ from crates.io after publishing.
 
 ## Build
 
+<!-- The build/test/lint commands below are intentionally mirrored in rust/AGENTS.md (agent quick-reference). Keep both in sync when they change. -->
+
 ```bash
 cargo build            # debug
 cargo build --release  # optimized
@@ -176,6 +178,12 @@ Otherwise, add it to the family's extension trait:
    in `src/mock_tests/<family>.rs`.
 
 Then run `cargo test && cargo clippy --all-targets`.
+
+## Guidelines
+
+Follow these development guidelines when applicable:
+
+- **Rust:** [Options](docs/dev/options.md)
 
 ## Extending value conversion
 

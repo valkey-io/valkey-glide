@@ -151,6 +151,66 @@ func ExampleClusterClient_SIsMember() {
 	// Output: true
 }
 
+func ExampleClient_SIsMemberIfExists() {
+	// This command requires Valkey 9.2+
+	var client *Client = getExampleClient() // example helper function
+	key := "my_set"
+
+	client.SAdd(context.Background(), key, []string{"member1", "member2"})
+
+	result1, err := client.SIsMemberIfExists(context.Background(), key, "member1")
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	result2, err := client.SIsMemberIfExists(context.Background(), key, "nonExistingMember")
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	result3, err := client.SIsMemberIfExists(context.Background(), "nonExistingKey", "member1")
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+
+	fmt.Println(result1)
+	fmt.Println(result2)
+	fmt.Println(result3)
+
+	// Output:
+	// 1
+	// 0
+	// -1
+}
+
+func ExampleClusterClient_SIsMemberIfExists() {
+	// This command requires Valkey 9.2+
+	var client *ClusterClient = getExampleClusterClient() // example helper function
+	key := "my_set"
+
+	client.SAdd(context.Background(), key, []string{"member1", "member2"})
+
+	result1, err := client.SIsMemberIfExists(context.Background(), key, "member1")
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	result2, err := client.SIsMemberIfExists(context.Background(), key, "nonExistingMember")
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	result3, err := client.SIsMemberIfExists(context.Background(), "nonExistingKey", "member1")
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+
+	fmt.Println(result1)
+	fmt.Println(result2)
+	fmt.Println(result3)
+
+	// Output:
+	// 1
+	// 0
+	// -1
+}
+
 func ExampleClient_SDiff() {
 	var client *Client = getExampleClient() // example helper function
 	key1 := "my_set_1"

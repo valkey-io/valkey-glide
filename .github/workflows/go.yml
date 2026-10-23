@@ -22,6 +22,8 @@ on:
             - .github/actions/install-engine/action.yml
             - .github/workflows/create-test-matrices/action.yml
             - .github/json_matrices/**
+            - "!**/*.md"
+            - "!**/THIRD_PARTY_LICENSES*"
     pull_request:
         paths:
             - glide-core/src/**
@@ -36,6 +38,8 @@ on:
             - .github/actions/install-engine/action.yml
             - .github/workflows/create-test-matrices/action.yml
             - .github/json_matrices/**
+            - "!**/*.md"
+            - "!**/THIRD_PARTY_LICENSES*"
     workflow_dispatch:
         inputs:
             full-matrix:
@@ -91,7 +95,7 @@ env:
 
 jobs:
     get-matrices:
-        runs-on: ubuntu-latest
+        runs-on: ubuntu-24.04
         outputs:
             engine-matrix-output: ${{ steps.get-matrices.outputs.engine-matrix-output }}
             host-matrix-output: ${{ steps.get-matrices.outputs.host-matrix-output }}
@@ -109,7 +113,7 @@ jobs:
 
     approve-self-hosted:
         if: inputs.use-self-hosted-linux == true || contains(github.event.pull_request.labels.*.name, 'ci/use-self-hosted')
-        runs-on: ubuntu-latest
+        runs-on: ubuntu-24.04
         environment: AWS_ACTIONS
         needs: get-matrices
         steps:
@@ -204,9 +208,12 @@ jobs:
                   make -k example-test
 
             - uses: ./.github/workflows/test-benchmark
-              if: ${{ matrix.engine.version == '8.0' && matrix.host.OS == 'ubuntu' && matrix.host.RUNNER == 'ubuntu-latest' && matrix.go == env.BASE_GO_VERSION }}
               with:
                   language-flag: -go
+                  engine-run: ${{ matrix.engine.run }}
+                  target: ${{ matrix.host.TARGET }}
+                  language-version: ${{ matrix.go }}
+                  base-language-version: ${{ env.BASE_GO_VERSION }}
 
             - name: Upload logs and reports
               if: always()
@@ -221,7 +228,7 @@ jobs:
 
     lint:
         timeout-minutes: 10
-        runs-on: ubuntu-latest
+        runs-on: ubuntu-24.04
         if: ${{ !github.event.inputs.rc-version }}
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -258,7 +265,7 @@ jobs:
                   make install-dev-tools install-build-tools gen-c-bindings generate-protobuf lint-ci
 
     get-containers:
-        runs-on: ubuntu-latest
+        runs-on: ubuntu-24.04
         if: ${{ github.event.inputs.full-matrix == 'true' || github.event_name == 'schedule' || inputs.full-matrix == true }}
         outputs:
             engine-matrix-output: ${{ steps.get-matrices.outputs.engine-matrix-output }}

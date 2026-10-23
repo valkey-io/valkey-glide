@@ -6,6 +6,7 @@ pub use glide_core::client::{GlideRt, get_or_init_runtime};
 pub struct NodeAddress {
     pub host: String,
     pub port: u16,
+    pub unix_socket_path: Option<std::path::PathBuf>,
 }
 
 /// Mirrors glide_core::client::TlsMode (internal type).

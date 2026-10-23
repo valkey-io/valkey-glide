@@ -23,18 +23,37 @@ on:
         - cron: "0 8 * * *" # Sets Semgrep to scan every day at 08:00 UTC.
 
 jobs:
+    changes:
+        runs-on: ubuntu-latest
+        permissions:
+            pull-requests: read
+        outputs:
+            code: ${{ steps.filter.outputs.code }}
+        steps:
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+              with:
+                  persist-credentials: false
+            - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+              id: filter
+              with:
+                  filters: .github/filters.yaml
+                  predicate-quantifier: some-with-excludes
+
     semgrep:
         # User definable name of this GitHub Actions job.
         name: semgrep/ci
+        needs: changes
         # If you are self-hosting, change the following `runs-on` value:
-        runs-on: ubuntu-latest
+        runs-on: ubuntu-24.04
 
         container:
             # A Docker image with Semgrep installed. Do not change this.
             image: semgrep/semgrep
 
-        # Skip any PR created by dependabot to avoid permission issues:
-        if: (github.actor != 'dependabot[bot]' && github.repository_owner == 'valkey-io')
+        # Skip any PR created by dependabot to avoid permission issues; skip doc-only PRs.
+        if: >
+            !cancelled() && github.actor != 'dependabot[bot]' && github.repository_owner == 'valkey-io' &&
+                (github.event_name != 'pull_request' || needs.changes.outputs.code != 'false')
 
         steps:
             # Fetch project source with GitHub Actions Checkout.

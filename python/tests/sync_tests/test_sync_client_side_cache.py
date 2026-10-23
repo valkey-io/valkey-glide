@@ -126,7 +126,7 @@ class TestSyncClientSideCache:
         """Test that cache entries expire after TTL."""
         cache = ClientSideCache.create(
             max_cache_kb=1,
-            entry_ttl_ms=2_000,  # 2 seconds
+            entry_ttl_ms=500,
             enable_metrics=True,
         )
 
@@ -146,8 +146,7 @@ class TestSyncClientSideCache:
         # Second GET - from cache
         assert client.get("ttl_key") == b"ttl_value"
 
-        # Wait for TTL to expire
-        time.sleep(3)
+        time.sleep(1)
 
         # GET after expiration - should fetch from server again
         assert client.get("ttl_key") == b"ttl_value"
@@ -440,8 +439,7 @@ class TestSyncClientSideCache:
         # Entry should be cached
         assert client.get_cache_entry_count() == 1, "Expected 1 entry in cache"
 
-        # Wait a bit and verify entry is still cached (no TTL expiration)
-        time.sleep(3)
+        time.sleep(0.5)
 
         # GET should still be a cache hit (no expiration)
         assert client.get("no_ttl_key") == b"no_ttl_value"

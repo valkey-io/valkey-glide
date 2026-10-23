@@ -551,6 +551,7 @@ func (suite *GlideTestSuite) verifyOK(result string, err error) {
 }
 
 func (suite *GlideTestSuite) SkipIfServerVersionLowerThan(version string, t *testing.T) {
+	// TODO #5368: Compare versions semantically, not as strings.
 	if suite.serverVersion < version {
 		t.Skipf("This feature is added in version %s", version)
 	}
@@ -560,6 +561,22 @@ func (suite *GlideTestSuite) SkipIfServerVersionLowerThan(version string, t *tes
 var bgsaveResponses = []string{
 	"Background saving started",
 	"Background saving scheduled",
+}
+
+// Expected valid responses for the "rdb_*_bgsave_type" INFO persistence fields.
+// Since Valkey 9.2.0.
+var bgsaveTypes = []string{"fork", "forkless", "none"}
+
+// One field from each default INFO section.
+var infoDefaultFields = []string{
+	"redis_version",               // server
+	"connected_clients",           // clients
+	"used_memory",                 // memory
+	"rdb_changes_since_last_save", // persistence
+	"total_commands_processed",    // stats
+	"role",                        // replication
+	"used_cpu_sys",                // cpu
+	"cluster_enabled",             // cluster
 }
 
 // Expected valid responses for BGREWRITEAOF.
