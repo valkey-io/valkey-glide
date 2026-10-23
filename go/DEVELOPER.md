@@ -238,19 +238,28 @@ Under TLS they attach the fixture CA only when the suite starts its own servers;
 
 #### IAM Authentication Tests
 
-To run [IAM authentication tests](integTest/auth_test.go) locally with mock credentials:
+All seven direct-client IAM integration methods listed below configure IAM authentication with
+`WithCredentialProvider`. Their providers use hard-coded local placeholder credential data (including deliberately
+invalid data or errors for validation cases), so the tests do not require AWS environment variables or external AWS
+resources. Without endpoint options, they use the local Valkey servers started and stopped by the integration suite.
+
+Run them from the `go/` directory:
 
 ```bash
-# Run from the `go/` directory
-AWS_ACCESS_KEY_ID=test_access_key \
-AWS_SECRET_ACCESS_KEY=test_secret_key \
-AWS_SESSION_TOKEN=test_session_token \
-make integ-test test-filter=TestIamAuthentication
+make integ-test test-filter="TestIam\(Authentication\|CustomCredentialProvider\)"
 ```
 
-If any of these environment variables are not set, IAM authentication tests will be skipped.
+The regex matches exactly these seven direct-client custom-provider methods:
 
-**Note:** The credential values shown above (`test_access_key`, etc.) are arbitrary placeholder strings. The AWS SDK uses them to generate an authentication token, but the local test server doesn't validate the token. These tests verify that the IAM authentication flow works correctly (token generation, connection establishment, and token refresh), not that the credentials are valid.
+- `TestIamAuthenticationWithMockCredentials`
+- `TestIamAuthenticationAutomaticTokenRefresh`
+- `TestIamAuthenticationWithMockCredentialsStandalone`
+- `TestIamAuthenticationAutomaticTokenRefreshStandalone`
+- `TestIamCustomCredentialProviderFailure`
+- `TestIamCustomCredentialProviderRejectsWhitespaceRequiredValues`
+- `TestIamCustomCredentialProviderNegotiatesLargeSessionToken`
+
+This filter excludes pool behavior. These integration methods do not test default-chain IAM credential behavior.
 
 #### DNS Tests
 

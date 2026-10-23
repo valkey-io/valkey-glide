@@ -827,6 +827,11 @@ public interface HashBaseCommands {
      * Sets the specified fields to their respective values in the hash stored at <code>key</code>
      * with optional expiration and conditional options.
      *
+     * <p>Note: the key-level conditional options {@link
+     * HSetExOptions.HSetExOptionsBuilder#onlyIfKeyExists() onlyIfKeyExists()} and {@link
+     * HSetExOptions.HSetExOptionsBuilder#onlyIfKeyDoesNotExist() onlyIfKeyDoesNotExist()} require
+     * Valkey 9.1 and above.
+     *
      * @since Valkey 9.0 and above.
      * @see <a href="https://valkey.io/commands/hsetex/">valkey.io</a> for details.
      * @param key The key of the hash.
@@ -859,6 +864,12 @@ public interface HashBaseCommands {
      *     .expiry(ExpirySet.KeepExisting())
      *     .build();
      * Long updateResult = client.hsetex("existing_hash", Map.of("field1", "newValue"), updateOptions).get();
+     *
+     * // Set the fields only if the key already exists
+     * HSetExOptions keyExistsOptions = HSetExOptions.builder()
+     *     .onlyIfKeyExists()
+     *     .build();
+     * Long keyExistsResult = client.hsetex("existing_hash", Map.of("field1", "newValue"), keyExistsOptions).get();
      * }</pre>
      */
     CompletableFuture<Long> hsetex(
@@ -867,6 +878,11 @@ public interface HashBaseCommands {
     /**
      * Sets the specified fields to their respective values in the hash stored at <code>key</code>
      * with optional expiration and conditional options.
+     *
+     * <p>Note: the key-level conditional options {@link
+     * HSetExOptions.HSetExOptionsBuilder#onlyIfKeyExists() onlyIfKeyExists()} and {@link
+     * HSetExOptions.HSetExOptionsBuilder#onlyIfKeyDoesNotExist() onlyIfKeyDoesNotExist()} require
+     * Valkey 9.1 and above.
      *
      * @since Valkey 9.0 and above.
      * @see <a href="https://valkey.io/commands/hsetex/">valkey.io</a> for details.
@@ -900,6 +916,12 @@ public interface HashBaseCommands {
      *     .expiry(ExpirySet.KeepExisting())
      *     .build();
      * Long updateResult = client.hsetex(gs("existing_hash"), Map.of(gs("field1"), gs("newValue")), updateOptions).get();
+     *
+     * // Set the fields only if the key does not already exist
+     * HSetExOptions keyDoesNotExistOptions = HSetExOptions.builder()
+     *     .onlyIfKeyDoesNotExist()
+     *     .build();
+     * Long keyDoesNotExistResult = client.hsetex(gs("new_hash"), Map.of(gs("field1"), gs("value1")), keyDoesNotExistOptions).get();
      * }</pre>
      */
     CompletableFuture<Long> hsetex(

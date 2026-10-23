@@ -1221,6 +1221,19 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_createClient(
             }
         };
 
+        if request.credential_provider_key.is_some() {
+            if iam_credentials_provider.is_null() {
+                log::error!(
+                    "The credential_provider_key protobuf field is not supported by direct Java JNI clients; pass a GlideCredentialProvider object instead."
+                );
+            } else {
+                log::error!(
+                    "Direct Java JNI clients cannot mix a GlideCredentialProvider object with the unsupported credential_provider_key protobuf field."
+                );
+            }
+            return Some(0);
+        }
+
         // Convert protobuf to glide_core ConnectionRequest
         let mut connection_request = glide_core::client::ConnectionRequest::from(request);
 
@@ -2823,15 +2836,24 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_createMonitorClient
                         FFIError::Logger(format!("Failed to parse ConnectionRequest: {e}"))
                     })?;
 
+            if proto_request.credential_provider_key.is_some()
+                || proto_request
+                    .authentication_info
+                    .as_ref()
+                    .is_some_and(|auth| auth.iam_credentials.is_some())
+            {
+                return Err(FFIError::Logger(
+                    "Monitor clients do not support IAM authentication or credential_provider_key"
+                        .to_string(),
+                ));
+            }
+
             // Extract first address
             let addr_proto = proto_request
                 .addresses
                 .first()
                 .ok_or_else(|| FFIError::Logger("No addresses in ConnectionRequest".to_string()))?;
-            let address = glide_core::client::NodeAddress {
-                host: addr_proto.host.to_string(),
-                port: addr_proto.port as u16,
-            };
+            let address = glide_core::client::NodeAddress::from(addr_proto);
 
             let lib_name = if proto_request.lib_name.is_empty() {
                 None
