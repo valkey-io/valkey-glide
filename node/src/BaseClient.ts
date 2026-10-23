@@ -107,6 +107,7 @@ import {
     createDecr,
     createDecrBy,
     createDel,
+    createDelIfEq,
     createDump,
     createExists,
     createExpire,
@@ -9719,6 +9720,32 @@ export class BaseClient {
      */
     public async append(key: GlideString, value: GlideString): Promise<number> {
         return this.createWritePromise(createAppend(key, value));
+    }
+
+    /**
+     * Deletes `key` if its value equals `value`.
+     *
+     * @see {@link https://valkey.io/commands/delifeq/|valkey.io} for more details.
+     *
+     * @param key - The key to delete.
+     * @param value - The comparison value. The key is only deleted if its current value matches
+     *     exactly.
+     * @returns `true` if `key` was deleted, or `false` if `key` did not exist or its value did
+     *     not match `value`.
+     *
+     * @example
+     * ```typescript
+     * const deleted = await client.delifeq("key", "value");
+     * console.log(deleted); // Output: true
+     * ```
+     *
+     * @since Valkey 9.0.0
+     */
+    public async delifeq(
+        key: GlideString,
+        value: GlideString,
+    ): Promise<boolean> {
+        return this.createWritePromise(createDelIfEq(key, value));
     }
 
     /**

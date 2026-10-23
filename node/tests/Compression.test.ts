@@ -516,6 +516,17 @@ describe("Compression", () => {
 
     // --- Incompatible commands tests ---
 
+    /**
+     * Calls `fn` against a compression-enabled client and asserts that it
+     * rejects with a `RequestError` mentioning the compression incompatibility.
+     */
+    async function assertCompressionIncompatible(
+        fn: () => Promise<unknown>,
+    ): Promise<void> {
+        await expect(fn()).rejects.toThrow(RequestError);
+        await expect(fn()).rejects.toThrow(/incompatible|compression/i);
+    }
+
     it.each([false, true])(
         "compression_append_incompatible cluster_mode=%p",
         async (clusterMode) => {
@@ -523,14 +534,9 @@ describe("Compression", () => {
                 enabled: true,
             });
             const key = uniqueKey("append_test");
-            await client.set(key, "initial_value");
 
-            // APPEND should fail with compression enabled
-            await expect(client.append(key, "_appended")).rejects.toThrow(
-                RequestError,
-            );
-            await expect(client.append(key, "_appended")).rejects.toThrow(
-                /incompatible|compression/i,
+            await assertCompressionIncompatible(() =>
+                client!.append(key, "_appended"),
             );
         },
         TIMEOUT,
@@ -543,14 +549,9 @@ describe("Compression", () => {
                 enabled: true,
             });
             const key = uniqueKey("getrange_test");
-            await client.set(key, TEXT_1K);
 
-            // GETRANGE should fail with compression enabled
-            await expect(client.getrange(key, 0, 10)).rejects.toThrow(
-                RequestError,
-            );
-            await expect(client.getrange(key, 0, 10)).rejects.toThrow(
-                /incompatible|compression/i,
+            await assertCompressionIncompatible(() =>
+                client!.getrange(key, 0, 10),
             );
         },
         TIMEOUT,
@@ -563,15 +564,10 @@ describe("Compression", () => {
                 enabled: true,
             });
             const key = uniqueKey("setrange_test");
-            await client.set(key, TEXT_1K);
 
-            // SETRANGE should fail with compression enabled
-            await expect(
-                client.setrange(key, 5, "replacement"),
-            ).rejects.toThrow(RequestError);
-            await expect(
-                client.setrange(key, 5, "replacement"),
-            ).rejects.toThrow(/incompatible|compression/i);
+            await assertCompressionIncompatible(() =>
+                client!.setrange(key, 5, "replacement"),
+            );
         },
         TIMEOUT,
     );
@@ -583,12 +579,30 @@ describe("Compression", () => {
                 enabled: true,
             });
             const key = uniqueKey("strlen_test");
-            await client.set(key, TEXT_1K);
 
-            // STRLEN should fail with compression enabled
-            await expect(client.strlen(key)).rejects.toThrow(RequestError);
-            await expect(client.strlen(key)).rejects.toThrow(
-                /incompatible|compression/i,
+            await assertCompressionIncompatible(() => client!.strlen(key));
+        },
+        TIMEOUT,
+    );
+
+    it.each([false, true])(
+        "compression_delifeq_incompatible cluster_mode=%p",
+        async (clusterMode) => {
+            const versionCluster = clusterMode
+                ? clusterCluster
+                : standaloneCluster;
+
+            if (versionCluster.checkIfServerVersionLessThan("9.0.0")) {
+                return;
+            }
+
+            client = await createCompressedClient(clusterMode, {
+                enabled: true,
+            });
+            const key = uniqueKey("delifeq_test");
+
+            await assertCompressionIncompatible(() =>
+                client!.delifeq(key, "initial_value"),
             );
         },
         TIMEOUT,
@@ -601,13 +615,8 @@ describe("Compression", () => {
                 enabled: true,
             });
             const key = uniqueKey("incr_test");
-            await client.set(key, "100");
 
-            // INCR should fail with compression enabled
-            await expect(client.incr(key)).rejects.toThrow(RequestError);
-            await expect(client.incr(key)).rejects.toThrow(
-                /incompatible|compression/i,
-            );
+            await assertCompressionIncompatible(() => client!.incr(key));
         },
         TIMEOUT,
     );
@@ -619,13 +628,8 @@ describe("Compression", () => {
                 enabled: true,
             });
             const key = uniqueKey("incrby_test");
-            await client.set(key, "100");
 
-            // INCRBY should fail with compression enabled
-            await expect(client.incrBy(key, 10)).rejects.toThrow(RequestError);
-            await expect(client.incrBy(key, 10)).rejects.toThrow(
-                /incompatible|compression/i,
-            );
+            await assertCompressionIncompatible(() => client!.incrBy(key, 10));
         },
         TIMEOUT,
     );
@@ -637,14 +641,9 @@ describe("Compression", () => {
                 enabled: true,
             });
             const key = uniqueKey("incrbyfloat_test");
-            await client.set(key, "100.5");
 
-            // INCRBYFLOAT should fail with compression enabled
-            await expect(client.incrByFloat(key, 0.5)).rejects.toThrow(
-                RequestError,
-            );
-            await expect(client.incrByFloat(key, 0.5)).rejects.toThrow(
-                /incompatible|compression/i,
+            await assertCompressionIncompatible(() =>
+                client!.incrByFloat(key, 0.5),
             );
         },
         TIMEOUT,
@@ -657,13 +656,8 @@ describe("Compression", () => {
                 enabled: true,
             });
             const key = uniqueKey("decr_test");
-            await client.set(key, "100");
 
-            // DECR should fail with compression enabled
-            await expect(client.decr(key)).rejects.toThrow(RequestError);
-            await expect(client.decr(key)).rejects.toThrow(
-                /incompatible|compression/i,
-            );
+            await assertCompressionIncompatible(() => client!.decr(key));
         },
         TIMEOUT,
     );
@@ -675,13 +669,8 @@ describe("Compression", () => {
                 enabled: true,
             });
             const key = uniqueKey("decrby_test");
-            await client.set(key, "100");
 
-            // DECRBY should fail with compression enabled
-            await expect(client.decrBy(key, 10)).rejects.toThrow(RequestError);
-            await expect(client.decrBy(key, 10)).rejects.toThrow(
-                /incompatible|compression/i,
-            );
+            await assertCompressionIncompatible(() => client!.decrBy(key, 10));
         },
         TIMEOUT,
     );
@@ -693,13 +682,8 @@ describe("Compression", () => {
                 enabled: true,
             });
             const key = uniqueKey("getbit_test");
-            await client.set(key, "test_value");
 
-            // GETBIT should fail with compression enabled
-            await expect(client.getbit(key, 0)).rejects.toThrow(RequestError);
-            await expect(client.getbit(key, 0)).rejects.toThrow(
-                /incompatible|compression/i,
-            );
+            await assertCompressionIncompatible(() => client!.getbit(key, 0));
         },
         TIMEOUT,
     );
@@ -711,14 +695,9 @@ describe("Compression", () => {
                 enabled: true,
             });
             const key = uniqueKey("setbit_test");
-            await client.set(key, "test_value");
 
-            // SETBIT should fail with compression enabled
-            await expect(client.setbit(key, 0, 1)).rejects.toThrow(
-                RequestError,
-            );
-            await expect(client.setbit(key, 0, 1)).rejects.toThrow(
-                /incompatible|compression/i,
+            await assertCompressionIncompatible(() =>
+                client!.setbit(key, 0, 1),
             );
         },
         TIMEOUT,
@@ -731,13 +710,8 @@ describe("Compression", () => {
                 enabled: true,
             });
             const key = uniqueKey("bitcount_test");
-            await client.set(key, "test_value");
 
-            // BITCOUNT should fail with compression enabled
-            await expect(client.bitcount(key)).rejects.toThrow(RequestError);
-            await expect(client.bitcount(key)).rejects.toThrow(
-                /incompatible|compression/i,
-            );
+            await assertCompressionIncompatible(() => client!.bitcount(key));
         },
         TIMEOUT,
     );
@@ -749,13 +723,8 @@ describe("Compression", () => {
                 enabled: true,
             });
             const key = uniqueKey("bitpos_test");
-            await client.set(key, "test_value");
 
-            // BITPOS should fail with compression enabled
-            await expect(client.bitpos(key, 1)).rejects.toThrow(RequestError);
-            await expect(client.bitpos(key, 1)).rejects.toThrow(
-                /incompatible|compression/i,
-            );
+            await assertCompressionIncompatible(() => client!.bitpos(key, 1));
         },
         TIMEOUT,
     );
@@ -799,6 +768,11 @@ describe("Compression", () => {
 
             // SETRANGE
             expect(await client.setrange(key, 6, "WORLD")).toBe(11);
+
+            // DELIFEQ
+            if (!standaloneCluster.checkIfServerVersionLessThan("9.0.0")) {
+                await client.delifeq(key, "value");
+            }
 
             // GETBIT
             await client.set(key, "\x00");

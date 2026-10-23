@@ -99,6 +99,7 @@ import {
     createDecr,
     createDecrBy,
     createDel,
+    createDelIfEq,
     createDump,
     createEcho,
     createExists,
@@ -4304,6 +4305,24 @@ export class BaseBatch<T extends BaseBatch<T>> {
      */
     public append(key: GlideString, value: GlideString): T {
         return this.addAndReturn(createAppend(key, value));
+    }
+
+    /**
+     * Deletes `key` if its value equals `value`.
+     *
+     * @see {@link https://valkey.io/commands/delifeq/|valkey.io} for details.
+     *
+     * @param key - The key to delete.
+     * @param value - The comparison value. The key is only deleted if its current value matches
+     *     exactly.
+     *
+     * Command Response - `true` if `key` was deleted, or `false` if `key` did not exist or its
+     *     value did not match `value`.
+     *
+     * @since Valkey 9.0.0
+     */
+    public delifeq(key: GlideString, value: GlideString): T {
+        return this.addAndReturn(createDelIfEq(key, value));
     }
 
     /**
