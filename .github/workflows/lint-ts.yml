@@ -14,12 +14,16 @@ on:
             - node/**
             - benchmarks/utilities/*
             - .github/workflows/lint-ts.yml
+            - "!**/*.md"
+            - "!**/THIRD_PARTY_LICENSES*"
     pull_request:
         paths:
             - benchmarks/node/**
             - node/**
             - benchmarks/utilities/*
             - .github/workflows/lint-ts.yml
+            - "!**/*.md"
+            - "!**/THIRD_PARTY_LICENSES*"
     workflow_dispatch:
 
 concurrency:
