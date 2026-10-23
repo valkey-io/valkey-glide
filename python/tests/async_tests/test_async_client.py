@@ -5781,6 +5781,27 @@ class TestCommands:
         assert await glide_client.append(key, value) == 10
         assert await glide_client.get(key) == (value * 2).encode()
 
+    @pytest.mark.skip_if_version_below("9.0.0")
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_delifeq(self, glide_client: TGlideClient):
+        key = get_random_string(10)
+        value = get_random_string(10)
+        wrong_value = get_random_string(10)
+
+        # key does not exist yet
+        assert await glide_client.delifeq(key, value) is False
+
+        assert await glide_client.set(key, value) == OK
+
+        # value does not match
+        assert await glide_client.delifeq(key, wrong_value) is False
+        assert await glide_client.get(key) == value.encode()
+
+        # value matches, key is deleted
+        assert await glide_client.delifeq(key, value) is True
+        assert await glide_client.get(key) is None
+
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_xadd_xtrim_xlen(self, glide_client: TGlideClient):

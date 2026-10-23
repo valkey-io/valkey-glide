@@ -1456,6 +1456,13 @@ class TestCompressionIncompatibleCommands:
         param("bitpos", [1], 2, id="bitpos"),
         param("decr", [], 9, id="decr"),
         param("decrby", [5], 5, id="decrby"),
+        param(
+            "delifeq",
+            ["10"],
+            True,
+            id="delifeq",
+            marks=pytest.mark.skip_if_version_below("9.0.0"),
+        ),
         param("getbit", [0], 0, id="getbit"),
         param("getrange", [0, 0], b"1", id="getrange"),
         param("incr", [], 11, id="incr"),

@@ -1389,6 +1389,7 @@ def batch_test(
     key27 = generate_key_same_slot(key26)  # sort
     key28 = generate_key(keyslot, batch.is_atomic)  # hash field expiration
     key29 = generate_key(keyslot, batch.is_atomic)  # hash
+    key30 = generate_key(keyslot, batch.is_atomic)  # string
     value = datetime.now(timezone.utc).strftime("%m/%d/%Y, %H:%M:%S")
     value_bytes = value.encode()
     value2 = get_random_string(5)
@@ -1534,7 +1535,7 @@ def batch_test(
     )
 
     if not check_version_lt(version, "9.0.0"):
-        helper_valkey_9_0(batch, key28, args)
+        helper_valkey_9_0(batch, key28, key30, args)
 
     if not check_version_lt(version, "9.1.0"):
         helper_valkey_9_1(batch, key29, args)
@@ -1542,7 +1543,7 @@ def batch_test(
     return args
 
 
-def helper_valkey_9_0(transaction, key, args):
+def helper_valkey_9_0(transaction, key, string_key, args):
     expiry = ExpirySet(ExpiryType.UNIX_SEC, MAX_EXPIRE_TIME_SEC)
     transaction.hsetex(key, {"f1": "v1", "f2": "v2"}, expiry=expiry)
 
@@ -1571,6 +1572,13 @@ def helper_valkey_9_0(transaction, key, args):
     args.append([Matches(lambda ttl: 0 < ttl <= 3600)])
     transaction.hgetex(key, ["f1"], expiry=ExpiryGetEx(ExpiryTypeGetEx.PERSIST, None))
     args.append([b"v1"])
+
+    transaction.set(string_key, "value")
+    args.append(OK)
+    transaction.delifeq(string_key, "other")
+    args.append(False)
+    transaction.delifeq(string_key, "value")
+    args.append(True)
 
 
 def helper_valkey_9_1(transaction, key, args):
