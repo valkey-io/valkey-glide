@@ -45,7 +45,6 @@ function toBuffersArray(args: GlideString[]) {
     return argsBytes;
 }
 
-
 function createCommand(
     requestType: command_request.RequestType,
     args: GlideString[],
