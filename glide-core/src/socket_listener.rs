@@ -446,6 +446,7 @@ fn process_command_for_compression(
         "STRLEN" => crate::request_type::RequestType::Strlen,
         "LCS" => crate::request_type::RequestType::LCS,
         "SUBSTR" => crate::request_type::RequestType::Substr,
+        "DELIFEQ" => crate::request_type::RequestType::DelIfEq,
         // Incompatible commands - numeric operations
         "INCR" => crate::request_type::RequestType::Incr,
         "INCRBY" => crate::request_type::RequestType::IncrBy,
@@ -899,32 +900,96 @@ pub fn close_socket(socket_path: &String) {
     let _ = std::fs::remove_file(socket_path);
 }
 
+struct CredentialProviderClaim {
+    key: String,
+    provider: Option<crate::iam::CredentialsProvider>,
+}
+
+impl CredentialProviderClaim {
+    fn commit(&mut self) {
+        self.provider = None;
+    }
+}
+
+impl Drop for CredentialProviderClaim {
+    fn drop(&mut self) {
+        let Some(provider) = self.provider.take() else {
+            return;
+        };
+        if crate::credential_provider_registry::register_if_absent(self.key.clone(), provider)
+            .is_err()
+        {
+            log_warn(
+                "credential_provider",
+                format!(
+                    "Did not restore credential_provider_key '{}' because a newer provider is registered",
+                    self.key
+                ),
+            );
+        }
+    }
+}
+
+fn take_credential_provider(
+    key: Option<String>,
+    request: &mut crate::client::ConnectionRequest,
+) -> Result<Option<CredentialProviderClaim>, ClientCreationError> {
+    if key.as_deref().is_some_and(|value| value.trim().is_empty()) {
+        return Err(ClientCreationError::ConfigurationError(
+            "credential_provider_key must not be empty or whitespace".to_string(),
+        ));
+    }
+    let Some(key) = key else {
+        return Ok(None);
+    };
+    let iam = request.authentication_info.as_mut()
+        .and_then(|auth| auth.iam_config.as_mut())
+        .ok_or_else(|| ClientCreationError::ConfigurationError(
+            "credential_provider_key was set but the connection request contains no IAM configuration".to_string(),
+        ))?;
+    let provider = crate::credential_provider_registry::remove(&key).ok_or_else(|| {
+        ClientCreationError::ConfigurationError(format!(
+            "credential_provider_key '{key}' was not found in the registry; it may have already been consumed"
+        ))
+    })?;
+    iam.credentials_provider = Some(provider.clone());
+    Ok(Some(CredentialProviderClaim {
+        key,
+        provider: Some(provider),
+    }))
+}
+
 async fn create_client(
     writer: &Rc<Writer>,
     request: ConnectionRequest,
     push_tx: Option<mpsc::UnboundedSender<PushInfo>>,
 ) -> Result<Client, ClientCreationError> {
-    // Extract the address resolver key before converting (protobuf field won't survive into())
+    // Extract protobuf-only registry keys before converting the request.
     let resolver_key = request
         .address_resolver_key
         .as_ref()
-        .filter(|k| !k.is_empty())
-        .map(|k| k.to_string());
-
+        .filter(|key| !key.is_empty())
+        .map(ToString::to_string);
+    let credential_provider_key = request
+        .credential_provider_key
+        .as_ref()
+        .map(ToString::to_string);
     let mut conn_request: crate::client::ConnectionRequest = request.into();
+    let mut provider_claim = take_credential_provider(credential_provider_key, &mut conn_request)?;
 
-    // Look up the address resolver from the global registry using the key
-    // provided in the connection request.
+    // Preserve ordinary address-resolver behavior from main.
     if let Some(key) = resolver_key
         && let Some(resolver) = crate::address_resolver_registry::remove(&key)
     {
         conn_request.address_resolver = Some(resolver);
     }
 
-    let client = match Client::new(conn_request, push_tx).await {
-        Ok(client) => client,
-        Err(err) => return Err(ClientCreationError::ConnectionError(err)),
-    };
+    let client = Client::new(conn_request, push_tx)
+        .await
+        .map_err(ClientCreationError::ConnectionError)?;
+    if let Some(claim) = provider_claim.as_mut() {
+        claim.commit();
+    }
     write_result(Ok(Value::Okay), 0, writer, None).await?;
     Ok(client)
 }
@@ -1036,6 +1101,7 @@ async fn listen_on_client_stream(socket: UnixStream) {
             return;
         }
         Err(e @ ClientCreationError::UnhandledError(_))
+        | Err(e @ ClientCreationError::ConfigurationError(_))
         | Err(e @ ClientCreationError::IO(_))
         | Err(e @ ClientCreationError::ConnectionError(_)) => {
             let err_message = e.to_string();
@@ -1095,6 +1161,9 @@ enum ClientCreationError {
     /// An error was returned during the client creation process.
     #[error("Unhandled error: {0}")]
     UnhandledError(String),
+    /// The request and its registered custom provider are inconsistent.
+    #[error("Configuration error: {0}")]
+    ConfigurationError(String),
     /// Socket listener was closed before receiving the server address.
     #[error("Closing error: {0:?}")]
     SocketListenerClosed(ClosingReason),

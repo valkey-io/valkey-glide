@@ -15,8 +15,14 @@ import lombok.NonNull;
  * @see <a href="https://valkey.io/commands/?group=list">List Commands</a>
  */
 public interface ListBaseCommands {
-    /** Valkey API keyword used to extract specific count of members from a sorted set. */
-    String COUNT_FOR_LIST_VALKEY_API = "COUNT";
+    /**
+     * Valkey API keyword used to extract specific count of members from a sorted set.
+     *
+     * @deprecated Valkey API keyword constants are internal and will be removed in a future major
+     *     release.
+     */
+    // TODO #7401: Move to glide.internal.ValkeyKeywords.
+    @Deprecated String COUNT_FOR_LIST_VALKEY_API = "COUNT";
 
     /**
      * Inserts all the specified values at the head of the list stored at <code>key</code>. <code>

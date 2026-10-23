@@ -64,7 +64,7 @@ endif
 
 install-build-tools:
 	go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.33.0
-	cargo install --locked cbindgen
+	cargo install --locked cbindgen@0.29.4
 
 install-dev-tools:
 	go install github.com/vakenbolt/go-test-report@v0.9.3

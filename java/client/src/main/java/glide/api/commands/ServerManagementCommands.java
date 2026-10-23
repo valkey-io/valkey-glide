@@ -15,8 +15,14 @@ import lombok.NonNull;
  */
 public interface ServerManagementCommands {
 
-    /** A keyword for {@link #lolwut(int)} and {@link #lolwut(int, int[])}. */
-    String VERSION_VALKEY_API = "VERSION";
+    /**
+     * A keyword for {@link #lolwut(int)} and {@link #lolwut(int, int[])}.
+     *
+     * @deprecated Valkey API keyword constants are internal and will be removed in a future major
+     *     release.
+     */
+    // TODO #7401: Move to glide.internal.ValkeyKeywords.
+    @Deprecated String VERSION_VALKEY_API = "VERSION";
 
     /**
      * Gets information and statistics about the server using the {@link Section#DEFAULT} option.

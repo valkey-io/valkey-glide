@@ -177,6 +177,12 @@ Otherwise, add it to the family's extension trait:
 
 Then run `cargo test && cargo clippy --all-targets`.
 
+## Guidelines
+
+Follow these development guidelines when applicable:
+
+- **Rust:** [Options](docs/dev/options.md)
+
 ## Extending value conversion
 
 Because the client negotiates **RESP3** by default, replies may arrive as

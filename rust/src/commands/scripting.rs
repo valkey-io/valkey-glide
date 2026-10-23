@@ -191,7 +191,7 @@ pub trait ScriptingCommands: CommandExecutor {
         let cmd = cmd("FUNCTION")
             .with_arg("RESTORE")
             .with_arg(payload)
-            .with_arg(policy.as_arg());
+            .with_arg(policy);
         <()>::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
