@@ -743,6 +743,17 @@ fn base_routing(cmd: &[u8]) -> RouteBy {
 
         b"MIGRATE" => RouteBy::ThirdArg,
 
+        // The RDMA transfer commands are of the form:
+        // BLOB.RDMA_GET <key> <rkey> <remote-address> <length> [<rkey> <remote-address> <length> ...]
+        // BLOB.RDMA_SET <key> <total-length> [CRC <crc32c>] <rkey> <remote-address> <length> [...]
+        //
+        // Both go to the key's primary: they are deliberately left out of
+        // `is_readonly_cmd`, so no read-from-replica setting sends a read to a
+        // replica. The large-object module does not replicate its objects yet, so a
+        // replica holds none of them and would answer every read as a missing key.
+        // Add `BLOB.RDMA_GET` there once the module replicates.
+        b"BLOB.RDMA_GET" | b"BLOB.RDMA_SET" => RouteBy::FirstKey,
+
         b"LMPOP" | b"SINTERCARD" | b"ZDIFF" | b"ZINTER" | b"ZINTERCARD" | b"ZMPOP" | b"ZUNION" => {
             RouteBy::SecondArgAfterKeyCount
         }
@@ -988,6 +999,12 @@ pub fn is_readonly(routable: &impl Routable) -> bool {
         Some(cmd) => is_readonly_cmd(cmd.as_slice()),
         None => false,
     }
+}
+
+/// Returns `true` if the given `cmd` is an RDMA transfer, which lends the
+/// client's memory to the server until the server replies.
+pub(crate) fn lends_memory(cmd: &[u8]) -> bool {
+    matches!(cmd, b"BLOB.RDMA_GET" | b"BLOB.RDMA_SET")
 }
 
 /// Returns `true` if the given `cmd` is a readonly command.
@@ -1559,6 +1576,100 @@ mod tests_routing {
     use crate::{cluster_topology::slot, cmd, parser::parse_redis_value, Value};
     use core::panic;
     use std::sync::{Arc, RwLock};
+
+    /// `BLOB.RDMA_GET <key> <rkey> <remote-address> <length>`, the read half of an RDMA
+    /// transfer.
+    fn rdma_get(key: &str) -> crate::Cmd {
+        let mut command = cmd("BLOB.RDMA_GET");
+        command
+            .arg(key)
+            .arg("439041101") // rkey
+            .arg("140229324210176") // remote-address
+            .arg("262144"); // window length
+        command
+    }
+
+    /// `BLOB.RDMA_SET <key> <total-length> <rkey> <remote-address> <length>`, the write half.
+    fn rdma_set(key: &str) -> crate::Cmd {
+        let mut command = cmd("BLOB.RDMA_SET");
+        command
+            .arg(key)
+            .arg("262144") // payload length
+            .arg("439041101") // rkey
+            .arg("140229324210176") // remote-address
+            .arg("262144"); // window length
+        command
+    }
+
+    /// `BLOB.RDMA_SET <key> <total-length> CRC <crc32c> <rkey> <remote-address> <length>`,
+    /// the write half with a checksum for the server to verify.
+    fn rdma_set_with_crc(key: &str) -> crate::Cmd {
+        let mut command = cmd("BLOB.RDMA_SET");
+        command
+            .arg(key)
+            .arg("262144") // payload length
+            .arg("CRC")
+            .arg("3632233996") // crc32c
+            .arg("439041101") // rkey
+            .arg("140229324210176") // remote-address
+            .arg("262144"); // window length
+        command
+    }
+
+    fn rdma_cmd(name: &str, key: &str) -> crate::Cmd {
+        match name {
+            "BLOB.RDMA_GET" => rdma_get(key),
+            "BLOB.RDMA_SET" => rdma_set(key),
+            "BLOB.RDMA_SET CRC" => rdma_set_with_crc(key),
+            other => panic!("not a RDMA transfer command: {other}"),
+        }
+    }
+
+    fn slot_of(routable: &impl Routable) -> u16 {
+        match RoutingInfo::for_routable(routable) {
+            Some(RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(route))) => {
+                route.slot()
+            }
+            other => panic!("expected a single specific node, got {other:?}"),
+        }
+    }
+
+    fn slot_addr_of(routable: &impl Routable) -> SlotAddr {
+        match RoutingInfo::for_routable(routable) {
+            Some(RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(route))) => {
+                route.slot_addr()
+            }
+            other => panic!("expected a single specific node, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_routing_info_rdma_routes_by_its_key() {
+        let mut plain = cmd("GET");
+        plain.arg("foo");
+        let expected = slot_of(&plain);
+
+        for name in ["BLOB.RDMA_GET", "BLOB.RDMA_SET", "BLOB.RDMA_SET CRC"] {
+            assert_eq!(
+                slot_of(&rdma_cmd(name, "foo")),
+                expected,
+                "{name} should hash the same key as GET"
+            );
+        }
+    }
+
+    #[test]
+    fn test_routing_info_rdma_reads_are_pinned_to_the_primary() {
+        // Unlike a plain GET: the large-object module does not replicate its
+        // objects yet, so only the primary can answer an RDMA read.
+        let mut plain_get = cmd("GET");
+        plain_get.arg("foo");
+        assert_eq!(slot_addr_of(&plain_get), SlotAddr::ReplicaOptional);
+
+        assert_eq!(slot_addr_of(&rdma_get("foo")), SlotAddr::Master);
+        assert_eq!(slot_addr_of(&rdma_set("foo")), SlotAddr::Master);
+        assert_eq!(slot_addr_of(&rdma_set_with_crc("foo")), SlotAddr::Master);
+    }
 
     #[test]
     fn test_routing_info_mixed_capatalization() {
