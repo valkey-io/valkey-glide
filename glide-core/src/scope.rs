@@ -542,8 +542,8 @@ impl ScopeCreateErrorKind {
             | Self::InvalidLibName
             | Self::NoSeedAddress
             | Self::InvalidClusterTarget
-            | Self::InvalidUnixSocketAddress
-            | Self::IamRequiresTls => Some(ScopeFailCause::InvalidConfiguration),
+            | Self::InvalidUnixSocketAddress => Some(ScopeFailCause::InvalidConfiguration),
+            Self::IamRequiresTls => Some(ScopeFailCause::IamRequiresTls),
             Self::ParentCertMaterialUnavailable => {
                 Some(ScopeFailCause::ParentCertMaterialUnavailable)
             }
@@ -1052,6 +1052,10 @@ pub enum ScopeFailCause {
     /// The stored connection request cannot produce a scoped connection
     /// (unparseable, no seed address, invalid `lib_name` or cluster target).
     InvalidConfiguration,
+    /// IAM authentication is configured but the scope request disables TLS. Kept
+    /// distinct from `InvalidConfiguration` so the borrower-facing error names
+    /// the TLS requirement instead of a generic configuration failure.
+    IamRequiresTls,
     /// The pool is closing or closed; it will not serve again.
     PoolClosed,
 }
@@ -1156,7 +1160,8 @@ impl ScopeAcquireError {
             }
             Self::Terminal(
                 ScopeFailCause::ParentCertMaterialUnavailable
-                | ScopeFailCause::InvalidConfiguration,
+                | ScopeFailCause::InvalidConfiguration
+                | ScopeFailCause::IamRequiresTls,
             ) => RequestErrorType::Unspecified,
         }
     }
@@ -1208,6 +1213,9 @@ impl std::fmt::Display for ScopeFailCause {
             Self::InvalidConfiguration => {
                 f.write_str("connection configuration cannot produce a scoped connection")
             }
+            Self::IamRequiresTls => f.write_str(
+                "IAM authentication requires TLS; refusing to send an IAM token over a plaintext connection",
+            ),
             Self::PoolClosed => f.write_str("scope pool is closed"),
         }
     }

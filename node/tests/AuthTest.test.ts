@@ -1067,18 +1067,20 @@ describe("IAM Auth: Direct Custom Credential Providers", () => {
             ...IAM_TLS_CONFIG,
         };
 
-        // Merge connectionTimeout into IAM_TLS_CONFIG's advancedConfiguration
-        // instead of replacing it, so tlsAdvancedConfiguration.insecure stays.
-        if (connectionTimeout !== undefined) {
-            options.advancedConfiguration = {
-                ...options.advancedConfiguration,
-                connectionTimeout,
-            };
-        }
+        // Keep IAM_TLS_CONFIG's advancedConfiguration (the insecure TLS flag) and
+        // merge connectionTimeout into it rather than replacing it. advancedConfiguration
+        // lives on the client-specific config types, so apply it at each createClient call.
+        const advancedConfiguration = {
+            ...IAM_TLS_CONFIG.advancedConfiguration,
+            ...(connectionTimeout === undefined ? {} : { connectionTimeout }),
+        };
 
         return clusterMode
-            ? GlideClusterClient.createClient(options)
-            : GlideClient.createClient(options);
+            ? GlideClusterClient.createClient({
+                  ...options,
+                  advancedConfiguration,
+              })
+            : GlideClient.createClient({ ...options, advancedConfiguration });
     };
 
     beforeAll(async () => {

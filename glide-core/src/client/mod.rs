@@ -2331,15 +2331,16 @@ impl Client {
                     "IAM authentication requires TLS; refusing to send an IAM token over a plaintext connection".to_string(),
                 ));
             }
-            // Fail fast on empty identifiers: an empty cluster_name otherwise
-            // surfaces only as a connect timeout and an empty region as a
-            // server-side auth error, neither of which names the real problem.
-            if iam_config.cluster_name.is_empty() {
+            // Fail fast on blank identifiers: an empty (or whitespace-only)
+            // cluster_name otherwise surfaces only as a connect timeout and a
+            // blank region as a server-side auth error, neither of which names
+            // the real problem.
+            if iam_config.cluster_name.trim().is_empty() {
                 return Err(ConnectionError::IAMError(
                     "IAM authentication requires a non-empty cluster name".to_string(),
                 ));
             }
-            if iam_config.region.is_empty() {
+            if iam_config.region.trim().is_empty() {
                 return Err(ConnectionError::IAMError(
                     "IAM authentication requires a non-empty region".to_string(),
                 ));
@@ -5397,15 +5398,15 @@ mod tests {
         }
     }
 
-    /// An empty `cluster_name` or `region` otherwise fails late and opaquely
-    /// (connect timeout / server auth error); these must be rejected at creation
-    /// with an error that names the missing field.
+    /// A blank `cluster_name` or `region` (empty or whitespace-only) otherwise
+    /// fails late and opaquely (connect timeout / server auth error); these must
+    /// be rejected at creation with an error that names the missing field.
     ///
     /// A-B: the fully-populated config over the same TLS mode is accepted, so the
-    /// failure is the empty-field guard firing, not IAM being rejected outright.
+    /// failure is the blank-field guard firing, not IAM being rejected outright.
     #[tokio::test]
     #[cfg(feature = "proto")]
-    async fn test_iam_rejects_empty_cluster_name_and_region() {
+    async fn test_iam_rejects_blank_cluster_name_and_region() {
         setup_test_credentials();
 
         let make_request = |cluster_name: &str, region: &str| ConnectionRequest {
@@ -5445,6 +5446,15 @@ mod tests {
         match Client::new(make_request("test-cluster", ""), None).await {
             Err(e) => assert_rejected(e, "IAM authentication requires a non-empty region"),
             Ok(_) => panic!("empty region must be rejected"),
+        }
+        // Whitespace-only values are blank too and fail the same opaque way.
+        match Client::new(make_request("   ", "us-east-1"), None).await {
+            Err(e) => assert_rejected(e, "IAM authentication requires a non-empty cluster name"),
+            Ok(_) => panic!("whitespace-only cluster name must be rejected"),
+        }
+        match Client::new(make_request("test-cluster", "\t"), None).await {
+            Err(e) => assert_rejected(e, "IAM authentication requires a non-empty region"),
+            Ok(_) => panic!("whitespace-only region must be rejected"),
         }
 
         // A: a fully-populated config over the same TLS mode is accepted.
