@@ -61,7 +61,7 @@ func (f *baseField) baseArgs(ft fieldType) []string {
 // valkey-search recognises UNF in. Returns an error if Unf is set without Sortable.
 func sortableUnfArgs(args []string, sortable bool, unf bool) ([]string, error) {
 	if unf && !sortable {
-		return nil, errors.New("Unf requires Sortable to be set")
+		return nil, errors.New("unf requires Sortable to be set")
 	}
 	if sortable {
 		args = append(args, "SORTABLE")

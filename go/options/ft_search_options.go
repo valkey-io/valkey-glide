@@ -125,7 +125,7 @@ func (o *FtSearchOptions) ToArgs() ([]string, error) {
 		return nil, errors.New("SortByOrder requires SortBy to be set")
 	}
 	if o.Count && o.Limit != nil {
-		return nil, errors.New("Count and Limit are mutually exclusive")
+		return nil, errors.New("count and Limit are mutually exclusive")
 	}
 	args := []string{}
 	if o.ShardScope != "" {

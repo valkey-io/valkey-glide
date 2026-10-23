@@ -2589,12 +2589,13 @@ func (suite *GlideTestSuite) TestModuleFtSearchInKeys() {
 
 // --- ft_search_count ---
 
+// TestModuleFtSearchCountMapsToLimitZeroZero is NOT gated behind the 1.3
+// capability probe: a bare COUNT token is invalid FT.SEARCH syntax on search
+// 1.2.x too, so this must run against whatever module version CI's own image
+// actually has (matches Node's and Java's equivalent tests).
 func (suite *GlideTestSuite) TestModuleFtSearchCountMapsToLimitZeroZero() {
 	client := suite.defaultClusterClient()
 	ctx := context.Background()
-	if !suite.probeSearch13CapabilityCluster(ctx, client) {
-		suite.T().Skip("search module present but pre-1.3 (INKEYS probe rejected it)")
-	}
 
 	prefix := "{" + uuid.New().String() + "}:"
 	index := prefix + "index"
@@ -2610,7 +2611,12 @@ func (suite *GlideTestSuite) TestModuleFtSearchCountMapsToLimitZeroZero() {
 	assert.NoError(suite.T(), err)
 	time.Sleep(time.Second)
 
-	result, err := glideft.ClusterFtSearch(ctx, client, index, "*", &options.FtSearchOptions{Count: true})
+	// A real field-filter query, not a bare "*" wildcard: search 1.2.x
+	// rejects a bare "*" for non-vector queries ("Invalid query string
+	// syntax") -- unrelated to this test's actual target, the COUNT ->
+	// LIMIT 0 0 serialization, so using "*" would fail on CI's pre-1.3
+	// image for the wrong reason.
+	result, err := glideft.ClusterFtSearch(ctx, client, index, "@title:hello", &options.FtSearchOptions{Count: true})
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), int64(2), result.TotalResults)
 	assert.Equal(suite.T(), 0, len(result.Documents))
