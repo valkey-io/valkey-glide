@@ -3416,6 +3416,7 @@ mod scope_pool_tests {
             request.addresses.push(crate::client::NodeAddress {
                 host: "127.0.0.1".into(),
                 port: server.port,
+                unix_socket_path: None,
             });
             crate::client::Client::new(request, None)
                 .await
@@ -3494,6 +3495,7 @@ mod scope_pool_tests {
             request.addresses.push(crate::client::NodeAddress {
                 host: "127.0.0.1".into(),
                 port: server.port,
+                unix_socket_path: None,
             });
             crate::client::Client::new(request, None)
                 .await
@@ -3557,6 +3559,7 @@ mod scope_pool_tests {
             request.addresses.push(crate::client::NodeAddress {
                 host: "127.0.0.1".into(),
                 port: server.port,
+                unix_socket_path: None,
             });
             crate::client::Client::new(request, None)
                 .await
