@@ -16,13 +16,14 @@ from glide_shared.commands.core_options import (
     ExpiryTypeGetEx,
     OnlyIfEqual,
     OnlyIfNotEqual,
+    ValueComparison,
 )
 from glide_shared.config import (
     CompressionBackend,
     CompressionConfiguration,
     ProtocolVersion,
 )
-from glide_shared.constants import OK
+from glide_shared.constants import OK, TEncodable
 from pytest import param
 
 from tests.async_tests.conftest import create_client
@@ -1446,131 +1447,94 @@ class TestCompressionIncompatibleCommands:
     of the original values.
     """
 
+    # Command name, arguments array, and expected result for incompatible commands.
+    # Expected results are used by test_incompatible_commands_compression_disabled,
+    # and depend on the test key being populated with "10".
+    INCOMPATIBLE_COMMANDS = [
+        param("append", ["0"], 3, id="append"),
+        param("bitcount", [], 5, id="bitcount"),
+        param("bitpos", [1], 2, id="bitpos"),
+        param("decr", [], 9, id="decr"),
+        param("decrby", [5], 5, id="decrby"),
+        param("getbit", [0], 0, id="getbit"),
+        param("getrange", [0, 0], b"1", id="getrange"),
+        param("incr", [], 11, id="incr"),
+        param("incrby", [5], 15, id="incrby"),
+        param("incrbyfloat", [0.5], 10.5, id="incrbyfloat"),
+        param(
+            "set",
+            ["20", OnlyIfEqual("10")],
+            OK,
+            id="set_ifeq",
+            marks=pytest.mark.skip_if_version_below("8.1.0"),
+        ),
+        param(
+            "set",
+            ["20", OnlyIfNotEqual("20")],
+            OK,
+            id="set_ifne",
+            marks=pytest.mark.skip_if_version_below("9.2.0"),
+        ),
+        param("setbit", [0, 1], 0, id="setbit"),
+        param("setrange", [1, "5"], 2, id="setrange"),
+        param("strlen", [], 2, id="strlen"),
+    ]
+
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    @pytest.mark.parametrize(
-        "method, args",
-        [
-            param("append", ["key", "value"], id="append"),
-            param("bitcount", ["key"], id="bitcount"),
-            param("bitpos", ["key", 1], id="bitpos"),
-            param("decr", ["key"], id="decr"),
-            param("decrby", ["key", 10], id="decrby"),
-            param("getbit", ["key", 0], id="getbit"),
-            param("getrange", ["key", 0, 10], id="getrange"),
-            param("incr", ["key"], id="incr"),
-            param("incrby", ["key", 10], id="incrby"),
-            param("incrbyfloat", ["key", 0.5], id="incrbyfloat"),
-            param("set", ["key", "value", OnlyIfEqual("value")], id="set_ifeq"),
-            param("set", ["key", "value", OnlyIfNotEqual("value")], id="set_ifne"),
-            param("setbit", ["key", 0, 1], id="setbit"),
-            param("setrange", ["key", 5, "value"], id="setrange"),
-            param("strlen", ["key"], id="strlen"),
-        ],
-    )
-    async def test_command_incompatible_with_compression(
-        self, compression_client: TGlideClient, method: str, args: List[Any]
+    @pytest.mark.parametrize("method, args, expected", INCOMPATIBLE_COMMANDS)
+    async def test_incompatible_commands(
+        self,
+        compression_client: TGlideClient,
+        method: str,
+        args: List[Any],
+        expected: Any,
     ):
-        """Test that the command errors out when compression is enabled."""
         with pytest.raises(Exception) as exc_info:
-            await getattr(compression_client, method)(*args)
+            await getattr(compression_client, method)("key", *args)
         assert_incompatible(exc_info)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_incompatible_commands_work_without_compression(
-        self, no_compression_client: TGlideClient
+    @pytest.mark.parametrize("method, args, expected", INCOMPATIBLE_COMMANDS)
+    async def test_incompatible_commands_custom(
+        self,
+        compression_client: TGlideClient,
+        method: str,
+        args: List[Any],
+        expected: Any,
     ):
-        """Test that incompatible commands work normally when compression is disabled."""
-        key = f"no_compression_test_{get_random_string(8)}"
+        command: List[TEncodable] = [method.upper(), "key"]
+        for arg in args:
+            if isinstance(arg, ValueComparison):
+                command.extend(arg._to_args())
+            else:
+                command.append(str(arg))
 
-        # Set initial value
-        await no_compression_client.set(key, "100")
-
-        # All these commands should work without compression
-        # INCR
-        result = await no_compression_client.incr(key)
-        assert result == 101
-
-        # INCRBY
-        result = await no_compression_client.incrby(key, 10)
-        assert result == 111
-
-        # DECR
-        result = await no_compression_client.decr(key)
-        assert result == 110
-
-        # DECRBY
-        result = await no_compression_client.decrby(key, 10)
-        assert result == 100
-
-        # STRLEN
-        await no_compression_client.set(key, "hello")
-        strlen_result = await no_compression_client.strlen(key)
-        assert strlen_result == 5
-
-        # APPEND
-        append_result = await no_compression_client.append(key, " world")
-        assert append_result == 11  # "hello world" = 11 chars
-
-        # GETRANGE
-        getrange_result = await no_compression_client.getrange(key, 0, 4)
-        assert getrange_result == b"hello"
-
-        # SETRANGE
-        setrange_result = await no_compression_client.setrange(key, 6, "WORLD")
-        assert setrange_result == 11
-
-        # GETBIT
-        await no_compression_client.set(key, "\x00")
-        getbit_result = await no_compression_client.getbit(key, 0)
-        assert getbit_result == 0
-
-        # SETBIT
-        setbit_result = await no_compression_client.setbit(key, 0, 1)
-        assert setbit_result == 0  # Previous value was 0
-
-        # BITCOUNT
-        bitcount_result = await no_compression_client.bitcount(key)
-        assert bitcount_result >= 0
-
-        # Cleanup
-        await no_compression_client.delete([key])
-
-    @pytest.mark.parametrize("cluster_mode", [True, False])
-    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    @pytest.mark.parametrize(
-        "command",
-        [
-            param(["APPEND", "key", "value"], id="append"),
-            param(["INCR", "key"], id="incr"),
-            param(["SET", "key", "value", "IFEQ", "value"], id="set_ifeq"),
-            param(["SET", "key", "value", "IFNE", "value"], id="set_ifne"),
-            param(["STRLEN", "key"], id="strlen"),
-        ],
-    )
-    async def test_incompatible_commands_via_custom_command(
-        self, compression_client: TGlideClient, command: List[Union[str, bytes]]
-    ):
-        """Test that incompatible commands also error out when called via custom_command."""
         with pytest.raises(Exception) as exc_info:
             await compression_client.custom_command(command)
         assert_incompatible(exc_info)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_incompatible_commands_in_batch(
-        self, compression_client: TGlideClient, cluster_mode: bool
+    @pytest.mark.parametrize("is_atomic", [True, False])
+    @pytest.mark.parametrize("method, args, expected", INCOMPATIBLE_COMMANDS)
+    async def test_incompatible_commands_batch(
+        self,
+        compression_client: TGlideClient,
+        is_atomic: bool,
+        method: str,
+        args: List[Any],
+        expected: Any,
     ):
-        """Test that incompatible commands in batch operations also error out."""
         # Create batch with incompatible command
         batch = (
-            Batch(is_atomic=False)
+            Batch(is_atomic=is_atomic)
             if isinstance(compression_client, GlideClient)
-            else ClusterBatch(is_atomic=False)
+            else ClusterBatch(is_atomic=is_atomic)
         )
 
-        batch.incr("key")  # This should cause an error
+        getattr(batch, method)("key", *args)
 
         # Execute batch - should fail due to incompatible command
         with pytest.raises(Exception) as exc_info:
@@ -1584,6 +1548,25 @@ class TestCompressionIncompatibleCommands:
                 )
 
         assert_incompatible(exc_info)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    @pytest.mark.parametrize("method, args, expected", INCOMPATIBLE_COMMANDS)
+    async def test_incompatible_commands_compression_disabled(
+        self,
+        no_compression_client: TGlideClient,
+        method: str,
+        args: List[Any],
+        expected: Any,
+    ):
+        """Test that incompatible commands work when compression is disabled."""
+        key = f"no_compression_test_{get_random_string(8)}"
+        assert await no_compression_client.set(key, "10") == OK
+
+        result = await getattr(no_compression_client, method)(key, *args)
+        assert result == expected
+
+        await no_compression_client.delete([key])
 
 
 @pytest.mark.anyio
