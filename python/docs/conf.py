@@ -118,6 +118,8 @@ def avoid_duplicate(app, what, name, obj, skip, options):
         "client_addr",
         "command",
         "args",
+        # ValueComparison
+        "comparison_value",
     )
     # Check if the attribute name itself is in exclusions
     if name in exclusions:
