@@ -128,7 +128,7 @@ pub struct AuthenticationInfo {
 /// AWS IAM authentication configuration for ElastiCache and MemoryDB
 ///
 /// Handles AWS credential resolution, SigV4 token signing, and automatic token refresh.
-/// Tokens are valid for 15 minutes and refreshed every 14 minutes by default.
+/// Tokens are valid for 15 minutes and refreshed every 5 minutes by default.
 #[derive(Clone)]
 pub struct IamAuthenticationConfig {
     /// AWS ElastiCache or MemoryDB cluster name
@@ -140,13 +140,13 @@ pub struct IamAuthenticationConfig {
     /// AWS service type (ElastiCache or MemoryDB)
     pub service_type: ServiceType,
 
-    /// Token refresh interval in seconds (1 second to 12 hours, default 14 minutes)
+    /// Token refresh interval in seconds (1 second to 12 hours exclusive, default 5 minutes)
     pub refresh_interval_seconds: Option<u32>,
 
     /// Optional custom credentials callback.
     ///
     /// When `Some`, this closure is invoked to retrieve AWS credentials
-    /// `(access_key_id, secret_access_key, session_token)` for SigV4 token signing
+    /// `(access_key_id, secret_access_key, session_token, expires_at)` for SigV4 token signing
     /// instead of the default AWS credential chain.
     pub credentials_provider: Option<CredentialsProvider>,
 }
