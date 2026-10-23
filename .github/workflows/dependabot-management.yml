@@ -30,7 +30,7 @@ permissions:
 
 jobs:
     manage-dependabot-prs:
-        runs-on: ubuntu-latest
+        runs-on: ubuntu-24.04
         name: Manage Dependabot PRs with timing constraints
 
         steps:
