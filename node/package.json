@@ -105,7 +105,7 @@
         "ts-node": "10",
         "typedoc": "0.28",
         "typedoc-plugin-markdown": "4",
-        "typescript": "5",
+        "typescript": "7",
         "uuid": "14"
     },
     "lint-staged": {
