@@ -8,7 +8,7 @@
   * `DELIFEQ` ([#6146](https://github.com/valkey-io/valkey-glide/issues/6146))
 * Java, Node, Python, Go: Add support for Valkey 9.1 commands:
   * `HGETDEL` ([#6145](https://github.com/valkey-io/valkey-glide/issues/6145))
-* Java: Add support for Valkey 9.1 commands:
+* Java, Node, Python, Go: Add support for Valkey 9.1 commands:
   * `NX`/`XX` support for `HSETEX` ([#6154](https://github.com/valkey-io/valkey-glide/issues/6154))
 * All: Add support for Valkey 9.2 commands:
   * `SISMEMBER` with `XX` option ([#7202](https://github.com/valkey-io/valkey-glide/issues/7202))

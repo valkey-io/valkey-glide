@@ -1129,7 +1129,7 @@ export class BaseBatch<T extends BaseBatch<T>> {
      *
      * @param key - The key of the hash.
      * @param fieldsAndValues - A map or array of field-value pairs to set.
-     * @param options - Optional parameters including field conditional changes and expiry settings.
+     * @param options - Optional parameters including key-level and field-level conditional changes and expiry settings.
      *                  See {@link HSetExOptions}.
      *
      * @example
@@ -1157,11 +1157,18 @@ export class BaseBatch<T extends BaseBatch<T>> {
      *     { field4: "value4" },
      *     { expiry: { type: TimeUnit.UnixSeconds, count: Math.floor(Date.now() / 1000) + 3600 } }
      * );
+     *
+     * // Set fields only if the key does not already exist (requires Valkey 9.1.0+)
+     * batch.hsetex(
+     *     "newHash",
+     *     { field1: "value1" },
+     *     { conditionalChange: ConditionalChange.ONLY_IF_DOES_NOT_EXIST }
+     * );
      * ```
      *
      * Command Response - The number of fields that were added to the hash.
      *
-     * @since Valkey 9.0.0
+     * @since Valkey 9.0.0. The key-level `conditionalChange` option requires Valkey 9.1.0 and above.
      * @see https://valkey.io/commands/hsetex/
      */
     public hsetex(

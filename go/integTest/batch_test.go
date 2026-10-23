@@ -1382,6 +1382,31 @@ func CreateHashTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer strin
 				TestName: "HGetDel(getdelKey, [field1, nonexistent])",
 			},
 		)
+
+		hsetexKey := prefix + "hsetex-key-cond-" + uuid.NewString()
+		nxOptions := options.NewHSetExOptions().SetConditionalSet(constants.OnlyIfDoesNotExist)
+		xxOptions := options.NewHSetExOptions().SetConditionalSet(constants.OnlyIfExists)
+
+		batch.HSetEx(hsetexKey, map[string]string{"field1": "value1"}, nxOptions)
+		testData = append(
+			testData,
+			CommandTestData{ExpectedResponse: int64(1), TestName: "HSetEx(hsetexKey, field1=value1, NX) - key absent"},
+		)
+		batch.HSetEx(hsetexKey, map[string]string{"field1": "value2"}, nxOptions)
+		testData = append(
+			testData,
+			CommandTestData{ExpectedResponse: int64(0), TestName: "HSetEx(hsetexKey, field1=value2, NX) - key exists"},
+		)
+		batch.HSetEx(hsetexKey, map[string]string{"field1": "value2"}, xxOptions)
+		testData = append(
+			testData,
+			CommandTestData{ExpectedResponse: int64(1), TestName: "HSetEx(hsetexKey, field1=value2, XX) - key exists"},
+		)
+		batch.HGet(hsetexKey, "field1")
+		testData = append(
+			testData,
+			CommandTestData{ExpectedResponse: "value2", TestName: "HGet(hsetexKey, field1)"},
+		)
 	}
 
 	return BatchTestData{CommandTestData: testData, TestName: "Hash commands"}

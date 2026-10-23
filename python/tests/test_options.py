@@ -1,15 +1,22 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 from datetime import datetime, timedelta, timezone
+from typing import List, Mapping
 
 import pytest
+from glide_shared.commands.batch import Batch
 from glide_shared.commands.core_options import (
+    ConditionalChange,
     ExpiryGetEx,
     ExpirySet,
     ExpiryType,
     ExpiryTypeGetEx,
+    HashFieldConditionalChange,
     MigrateOptions,
+    _build_hsetex_args,
 )
+from glide_shared.constants import TEncodable
+from glide_shared.protobuf.command_request_pb2 import RequestType
 
 from tests.utils.utils import is_single_response
 
@@ -145,3 +152,96 @@ class TestMigrateOptions:
         assert MigrateOptions(
             copy=True, replace=True, username="user", password="secret"
         ).to_args() == ["COPY", "REPLACE", "AUTH2", "user", "secret"]
+
+
+class TestHSetExArgs:
+    FIELDS: Mapping[TEncodable, TEncodable] = {"field1": "value1"}
+    FIELDS_ARGS = ["FIELDS", "1", "field1", "value1"]
+
+    def _args(self, **kwargs) -> List[TEncodable]:
+        return _build_hsetex_args("key", self.FIELDS, **kwargs)
+
+    def test_only_field_conditional_change(self):
+        assert self._args(
+            field_conditional_change=HashFieldConditionalChange.ONLY_IF_NONE_EXIST
+        ) == ["key", "FNX", *self.FIELDS_ARGS]
+        assert self._args(
+            field_conditional_change=HashFieldConditionalChange.ONLY_IF_ALL_EXIST
+        ) == ["key", "FXX", *self.FIELDS_ARGS]
+
+    def test_only_key_conditional_change(self):
+        assert self._args(conditional_change=ConditionalChange.ONLY_IF_EXISTS) == [
+            "key",
+            "XX",
+            *self.FIELDS_ARGS,
+        ]
+        assert self._args(
+            conditional_change=ConditionalChange.ONLY_IF_DOES_NOT_EXIST
+        ) == ["key", "NX", *self.FIELDS_ARGS]
+
+    def test_combined_options(self):
+        assert self._args(
+            field_conditional_change=HashFieldConditionalChange.ONLY_IF_NONE_EXIST,
+            expiry=ExpirySet(ExpiryType.SEC, 60),
+        ) == ["key", "FNX", "EX", "60", *self.FIELDS_ARGS]
+        assert self._args(
+            field_conditional_change=HashFieldConditionalChange.ONLY_IF_ALL_EXIST,
+            expiry=ExpirySet(ExpiryType.MILLSEC, 5000),
+        ) == ["key", "FXX", "PX", "5000", *self.FIELDS_ARGS]
+        assert self._args(
+            conditional_change=ConditionalChange.ONLY_IF_EXISTS,
+            field_conditional_change=HashFieldConditionalChange.ONLY_IF_NONE_EXIST,
+        ) == ["key", "XX", "FNX", *self.FIELDS_ARGS]
+        assert self._args(
+            conditional_change=ConditionalChange.ONLY_IF_DOES_NOT_EXIST,
+            field_conditional_change=HashFieldConditionalChange.ONLY_IF_ALL_EXIST,
+        ) == ["key", "NX", "FXX", *self.FIELDS_ARGS]
+        assert self._args(
+            conditional_change=ConditionalChange.ONLY_IF_EXISTS,
+            expiry=ExpirySet(ExpiryType.SEC, 60),
+        ) == ["key", "XX", "EX", "60", *self.FIELDS_ARGS]
+        assert self._args(
+            conditional_change=ConditionalChange.ONLY_IF_DOES_NOT_EXIST,
+            field_conditional_change=HashFieldConditionalChange.ONLY_IF_NONE_EXIST,
+            expiry=ExpirySet(ExpiryType.SEC, 60),
+        ) == ["key", "NX", "FNX", "EX", "60", *self.FIELDS_ARGS]
+
+    def test_only_expiry(self):
+        assert self._args(expiry=ExpirySet(ExpiryType.SEC, 60)) == [
+            "key",
+            "EX",
+            "60",
+            *self.FIELDS_ARGS,
+        ]
+        assert self._args(expiry=ExpirySet(ExpiryType.KEEP_TTL, None)) == [
+            "key",
+            "KEEPTTL",
+            *self.FIELDS_ARGS,
+        ]
+
+    def test_batch_builds_hsetex_command(self):
+        batch = Batch(is_atomic=False).hsetex(
+            "key",
+            {"field1": "value1", "field2": "value2"},
+            field_conditional_change=HashFieldConditionalChange.ONLY_IF_NONE_EXIST,
+            expiry=ExpirySet(ExpiryType.SEC, 10),
+            conditional_change=ConditionalChange.ONLY_IF_EXISTS,
+        )
+        assert batch.commands == [
+            (
+                RequestType.HSetEx,
+                [
+                    "key",
+                    "XX",
+                    "FNX",
+                    "EX",
+                    "10",
+                    "FIELDS",
+                    "2",
+                    "field1",
+                    "value1",
+                    "field2",
+                    "value2",
+                ],
+            )
+        ]

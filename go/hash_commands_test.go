@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/valkey-io/valkey-glide/go/v2/constants"
 	"github.com/valkey-io/valkey-glide/go/v2/models"
 	"github.com/valkey-io/valkey-glide/go/v2/options"
 )
@@ -790,6 +791,60 @@ func ExampleClient_HSetEx() {
 	fmt.Println(result)
 
 	// Output:
+	// 1
+}
+
+func ExampleClient_HSetEx_keyConditionalSet() {
+	// Key-level conditions require Valkey 9.1+
+	var client *Client = getExampleClient() // example helper function
+
+	fields := map[string]string{"field1": "value1"}
+
+	// Set the fields only if the key does not already exist
+	nxOptions := options.NewHSetExOptions().SetConditionalSet(constants.OnlyIfDoesNotExist)
+	result, err := client.HSetEx(context.Background(), "my_hash", fields, nxOptions)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(result)
+
+	// Set the fields only if the key already exists
+	xxOptions := options.NewHSetExOptions().SetConditionalSet(constants.OnlyIfExists)
+	result, err = client.HSetEx(context.Background(), "my_hash", map[string]string{"field1": "value2"}, xxOptions)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(result)
+
+	// Output:
+	// 1
+	// 1
+}
+
+func ExampleClusterClient_HSetEx_keyConditionalSet() {
+	// Key-level conditions require Valkey 9.1+
+	var client *ClusterClient = getExampleClusterClient() // example helper function
+
+	fields := map[string]string{"field1": "value1"}
+
+	// Set the fields only if the key does not already exist
+	nxOptions := options.NewHSetExOptions().SetConditionalSet(constants.OnlyIfDoesNotExist)
+	result, err := client.HSetEx(context.Background(), "my_hash", fields, nxOptions)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(result)
+
+	// Set the fields only if the key already exists
+	xxOptions := options.NewHSetExOptions().SetConditionalSet(constants.OnlyIfExists)
+	result, err = client.HSetEx(context.Background(), "my_hash", map[string]string{"field1": "value2"}, xxOptions)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(result)
+
+	// Output:
+	// 1
 	// 1
 }
 

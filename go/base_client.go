@@ -2267,7 +2267,8 @@ func (client *baseClient) HRandFieldWithCountWithValues(ctx context.Context, key
 //
 // Since:
 //
-//	Valkey 9.0 and above.
+//	Valkey 9.0 and above. Key-level conditions ([constants.OnlyIfExists] / [constants.OnlyIfDoesNotExist] via
+//	[options.HSetExOptions.SetConditionalSet]) require Valkey 9.1 and above.
 //
 // See [valkey.io] for details.
 //

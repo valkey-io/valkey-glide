@@ -549,6 +549,11 @@ export function createHSetEx(
 ): command_request.Command {
     const args: GlideString[] = [key];
 
+    // Add key-level conditional change option (NX | XX)
+    if (options?.conditionalChange) {
+        args.push(options.conditionalChange);
+    }
+
     // Add field conditional change options (FNX | FXX)
     if (options?.fieldConditionalChange) {
         args.push(options.fieldConditionalChange);
@@ -3618,7 +3623,8 @@ export function createDBSize(): command_request.Command {
 
 /**
  * An optional condition to the {@link BaseClient.geoadd | geoadd},
- * {@link BaseClient.zadd | zadd} and {@link BaseClient.set | set} commands.
+ * {@link BaseClient.zadd | zadd}, {@link BaseClient.set | set} and
+ * {@link BaseClient.hsetex | hsetex} commands.
  */
 export enum ConditionalChange {
     /**
@@ -3714,11 +3720,25 @@ export type HGetExExpiry =
  * const keepTtlOptions: HSetExOptions = {
  *     expiry: "KEEPTTL"
  * };
+ *
+ * // Set fields only if the key already exists, and only if none of the fields already exist
+ * const keyConditionOptions: HSetExOptions = {
+ *     conditionalChange: ConditionalChange.ONLY_IF_EXISTS,
+ *     fieldConditionalChange: HashFieldConditionalChange.ONLY_IF_NONE_EXIST,
+ *     expiry: { type: TimeUnit.Seconds, count: 60 }
+ * };
  * ```
  *
  * See https://valkey.io/commands/hsetex/ for more details.
  */
 export interface HSetExOptions {
+    /**
+     * Key-level condition: only set the fields if the hash key already exists (`XX`) or does not already
+     * exist (`NX`). See {@link ConditionalChange}.
+     *
+     * @since Valkey 9.1.0
+     */
+    conditionalChange?: ConditionalChange;
     /** Options for handling existing fields. See {@link HashFieldConditionalChange}. */
     fieldConditionalChange?: HashFieldConditionalChange;
     /** Expiry settings for the fields. See {@link HSetExExpiry}. */
