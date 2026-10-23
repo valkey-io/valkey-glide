@@ -19,6 +19,8 @@ class CommandNames:
     FT_AGGREGATE = "FT.AGGREGATE"
     FT_PROFILE = "FT.PROFILE"
     FT_ALIASLIST = "FT._ALIASLIST"
+    FT_HYBRID = "FT.HYBRID"
+    FT_CURSOR = "FT.CURSOR"
 
 
 class FtCreateKeywords:
@@ -30,7 +32,7 @@ class FtCreateKeywords:
     AS = "AS"
     SORTABLE = "SORTABLE"
     UNF = "UNF"
-    NO_INDEX = "NOINDEX"
+    FILTER = "FILTER"
     ON = "ON"
     PREFIX = "PREFIX"
     SEPARATOR = "SEPARATOR"
@@ -43,6 +45,7 @@ class FtCreateKeywords:
     EF_CONSTRUCTION = "EF_CONSTRUCTION"
     EF_RUNTIME = "EF_RUNTIME"
     SCORE = "SCORE"
+    SCORE_FIELD = "SCORE_FIELD"
     LANGUAGE = "LANGUAGE"
     SKIPINITIALSCAN = "SKIPINITIALSCAN"
     MINSTEMSIZE = "MINSTEMSIZE"
@@ -55,6 +58,7 @@ class FtCreateKeywords:
     WITHSUFFIXTRIE = "WITHSUFFIXTRIE"
     NOSUFFIXTRIE = "NOSUFFIXTRIE"
     WEIGHT = "WEIGHT"
+    NOHL = "NOHL"
 
 
 class FtSearchKeywords:
@@ -77,10 +81,13 @@ class FtSearchKeywords:
     ASC = "ASC"
     DESC = "DESC"
     WITHSORTKEYS = "WITHSORTKEYS"
+    WITHSCORES = "WITHSCORES"
+    SCORER = "SCORER"
     ALLSHARDS = "ALLSHARDS"
     SOMESHARDS = "SOMESHARDS"
     CONSISTENT = "CONSISTENT"
     INCONSISTENT = "INCONSISTENT"
+    INKEYS = "INKEYS"
 
 
 class FtAggregateKeywords:
@@ -103,6 +110,57 @@ class FtAggregateKeywords:
     INORDER = "INORDER"
     SLOP = "SLOP"
     DIALECT = "DIALECT"
+    BY = "BY"
+    ADDSCORES = "ADDSCORES"
+    SCORER = "SCORER"
+    WITHCURSOR = "WITHCURSOR"
+    COUNT = "COUNT"
+    MAXIDLE = "MAXIDLE"
+
+
+class FtAggregateReducerKeywords:
+    """
+    Reducer function names used with the REDUCE clause of the FT.AGGREGATE command.
+    """
+
+    TOLIST = "TOLIST"
+    FIRST_VALUE = "FIRST_VALUE"
+    RANDOM_SAMPLE = "RANDOM_SAMPLE"
+
+
+class FtHybridKeywords:
+    """
+    Keywords used in the FT.HYBRID command.
+    """
+
+    SEARCH = "SEARCH"
+    VSIM = "VSIM"
+    SCORER = "SCORER"
+    YIELD_SCORE_AS = "YIELD_SCORE_AS"
+    KNN = "KNN"
+    RANGE = "RANGE"
+    K = "K"
+    EF_RUNTIME = "EF_RUNTIME"
+    SHARD_K_RATIO = "SHARD_K_RATIO"
+    FILTER = "FILTER"
+    POLICY = "POLICY"
+    BATCH_SIZE = "BATCH_SIZE"
+    COMBINE = "COMBINE"
+    RRF = "RRF"
+    LINEAR = "LINEAR"
+    FUNCTION = "FUNCTION"
+    CONSTANT = "CONSTANT"
+    WINDOW = "WINDOW"
+    ALPHA = "ALPHA"
+    BETA = "BETA"
+    EXPR = "EXPR"
+    LOCALONLY = "LOCALONLY"
+    WITHCURSOR = "WITHCURSOR"
+    COUNT = "COUNT"
+    MAXIDLE = "MAXIDLE"
+    PARAMS = "PARAMS"
+    DIALECT = "DIALECT"
+    TIMEOUT = "TIMEOUT"
 
 
 class FtProfileKeywords:
@@ -112,3 +170,13 @@ class FtProfileKeywords:
 
     QUERY = "QUERY"
     LIMITED = "LIMITED"
+
+
+class FtCursorKeywords:
+    """
+    Keywords used in the FT.CURSOR command.
+    """
+
+    READ = "READ"
+    DEL = "DEL"
+    COUNT = "COUNT"
