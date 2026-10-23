@@ -3657,6 +3657,7 @@ mod tests {
             addresses: vec![ClientAddress {
                 host: "127.0.0.1".to_string(),
                 port: 1,
+                unix_socket_path: None,
             }],
             lazy_connect: true,
             tls_mode: Some(crate::client::TlsMode::SecureTls),
