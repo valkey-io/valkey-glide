@@ -890,15 +890,7 @@ impl RequestType {
             RequestType::LCS => Some(
                 "LCS compares raw bytes between strings, which would compare compressed data instead of original values",
             ),
-            RequestType::Set
-                if args.iter().skip(2).any(|arg| {
-                    arg.eq_ignore_ascii_case(b"IFEQ") || arg.eq_ignore_ascii_case(b"IFNE")
-                }) =>
-            {
-                Some(
-                    "SET with IFEQ or IFNE compares the stored value against raw bytes on the server, which would compare against compressed data instead of the original value",
-                )
-            }
+            RequestType::Set => Self::compression_incompatibility_reason_set(args),
             RequestType::SetRange => Some(
                 "SETRANGE modifies bytes at a specific offset, which would corrupt compressed values",
             ),
@@ -952,6 +944,16 @@ impl RequestType {
             // All other commands are compatible
             _ => None,
         }
+    }
+
+    /// Returns the reason why a `SET` command with these arguments is incompatible with compression, if any.
+    fn compression_incompatibility_reason_set(args: &[Vec<u8>]) -> Option<&'static str> {
+        args.iter()
+            .skip(2)
+            .any(|arg| arg.eq_ignore_ascii_case(b"IFEQ") || arg.eq_ignore_ascii_case(b"IFNE"))
+            .then_some(
+                "SET with IFEQ or IFNE compares the stored value against raw bytes on the server, which would compare against compressed data instead of the original value",
+            )
     }
 
     /// Returns the command name as a string, if available.

@@ -901,11 +901,6 @@ mod compression_tests {
         assert_compression_incompatible(RequestType::GetRange, &["key", "0", "-1"]);
         assert_compression_incompatible(RequestType::LCS, &["key", "key2"]);
         assert_compression_incompatible(RequestType::Set, &["key", "value", "IFEQ", "value"]);
-        assert_compression_incompatible(RequestType::Set, &["key", "value", "IFNE", "value"]);
-        assert_compression_incompatible(
-            RequestType::Set,
-            &["key", "value", "GET", "IFEQ", "value"],
-        );
         assert_compression_incompatible(RequestType::SetRange, &["key", "0", "value"]);
         assert_compression_incompatible(RequestType::Strlen, &["key"]);
         assert_compression_incompatible(RequestType::Substr, &["key", "0", "-1"]);
@@ -934,9 +929,22 @@ mod compression_tests {
         assert_compression_compatible(RequestType::MSet, &["key", "value"]);
         assert_compression_compatible(RequestType::Ping, &[]);
         assert_compression_compatible(RequestType::Set, &["key", "value"]);
-        assert_compression_compatible(RequestType::Set, &["key", "value", "GET"]);
-        assert_compression_compatible(RequestType::Set, &["key", "value", "XX", "EX", "10"]);
         assert_compression_compatible(RequestType::SetEx, &["key", "10", "value"]);
+    }
+
+    #[test]
+    fn test_compression_incompatibility_reason_set() {
+        let set = RequestType::Set;
+
+        assert_compression_incompatible(set, &["key", "value", "IFEQ", "value"]);
+        assert_compression_incompatible(set, &["key", "value", "IFNE", "value"]);
+        assert_compression_incompatible(set, &["key", "value", "ifne", "value"]);
+        assert_compression_incompatible(set,  &["key", "value", "GET", "IFEQ", "value"]);
+
+        assert_compression_compatible(set, &["key", "value"]);
+        assert_compression_compatible(set, &["key", "value", "GET"]);
+        assert_compression_compatible(set, &["key", "value", "XX", "EX", "10"]);
+        assert_compression_compatible(set, &["IFEQ", "IFNE"]);
     }
 
     #[test]
