@@ -755,11 +755,29 @@ jobs:
                   python -m venv venv
                   source venv/bin/activate
                   pip install -U pip
-                  if [[ "${{ env.PIP_PRE }}" == "true" ]]; then
-                    pip install "valkey-glide==${{ env.PYPI_VERSION }}"
-                  else
-                    pip install valkey-glide
-                  fi
+
+                  install_with_retry() {
+                      local pkg="$1"
+                      local max_attempts=8
+                      local delay=15
+                      for attempt in $(seq 1 $max_attempts); do
+                          echo "Attempt $attempt to install $pkg..."
+                          if pip install "$pkg"; then
+                              echo "Successfully installed $pkg"
+                              return 0
+                          fi
+                          if [[ $attempt -lt $max_attempts ]]; then
+                              echo "Install failed, waiting ${delay}s for PyPI index propagation..."
+                              sleep $delay
+                              delay=$((delay * 2))
+                              if [[ $delay -gt 60 ]]; then delay=60; fi
+                          fi
+                      done
+                      echo "Failed to install $pkg after $max_attempts attempts."
+                      return 1
+                  }
+
+                  install_with_retry "valkey-glide==${PYPI_VERSION}"
                   python async_rc_test.py
 
             - name: Run the Async Clients tests with PyPy
@@ -770,11 +788,29 @@ jobs:
                   pypy3 -m venv pypy_venv
                   source pypy_venv/bin/activate
                   pip install -U pip
-                  if [[ "${{ env.PIP_PRE }}" == "true" ]]; then
-                    pip install "valkey-glide==${{ env.PYPI_VERSION }}"
-                  else
-                    pip install valkey-glide
-                  fi
+
+                  install_with_retry() {
+                      local pkg="$1"
+                      local max_attempts=8
+                      local delay=15
+                      for attempt in $(seq 1 $max_attempts); do
+                          echo "Attempt $attempt to install $pkg..."
+                          if pip install "$pkg"; then
+                              echo "Successfully installed $pkg"
+                              return 0
+                          fi
+                          if [[ $attempt -lt $max_attempts ]]; then
+                              echo "Install failed, waiting ${delay}s for PyPI index propagation..."
+                              sleep $delay
+                              delay=$((delay * 2))
+                              if [[ $delay -gt 60 ]]; then delay=60; fi
+                          fi
+                      done
+                      echo "Failed to install $pkg after $max_attempts attempts."
+                      return 1
+                  }
+
+                  install_with_retry "valkey-glide==${PYPI_VERSION}"
                   pypy3 async_rc_test.py
 
             - name: Run the Sync Client tests
@@ -785,11 +821,29 @@ jobs:
                   python -m venv venv
                   source venv/bin/activate
                   pip install -U pip
-                  if [[ "${{ env.PIP_PRE }}" == "true" ]]; then
-                    pip install "valkey-glide-sync==${{ env.PYPI_VERSION }}"
-                  else
-                    pip install valkey-glide-sync
-                  fi
+
+                  install_with_retry() {
+                      local pkg="$1"
+                      local max_attempts=8
+                      local delay=15
+                      for attempt in $(seq 1 $max_attempts); do
+                          echo "Attempt $attempt to install $pkg..."
+                          if pip install "$pkg"; then
+                              echo "Successfully installed $pkg"
+                              return 0
+                          fi
+                          if [[ $attempt -lt $max_attempts ]]; then
+                              echo "Install failed, waiting ${delay}s for PyPI index propagation..."
+                              sleep $delay
+                              delay=$((delay * 2))
+                              if [[ $delay -gt 60 ]]; then delay=60; fi
+                          fi
+                      done
+                      echo "Failed to install $pkg after $max_attempts attempts."
+                      return 1
+                  }
+
+                  install_with_retry "valkey-glide-sync==${PYPI_VERSION}"
                   python sync_rc_test.py
 
             - name: Run the Sync Client tests with PyPy
@@ -800,11 +854,29 @@ jobs:
                   pypy3 -m venv pypy_venv
                   source pypy_venv/bin/activate
                   pip install -U pip
-                  if [[ "${{ env.PIP_PRE }}" == "true" ]]; then
-                    pip install "valkey-glide-sync==${{ env.PYPI_VERSION }}"
-                  else
-                    pip install valkey-glide-sync
-                  fi
+
+                  install_with_retry() {
+                      local pkg="$1"
+                      local max_attempts=8
+                      local delay=15
+                      for attempt in $(seq 1 $max_attempts); do
+                          echo "Attempt $attempt to install $pkg..."
+                          if pip install "$pkg"; then
+                              echo "Successfully installed $pkg"
+                              return 0
+                          fi
+                          if [[ $attempt -lt $max_attempts ]]; then
+                              echo "Install failed, waiting ${delay}s for PyPI index propagation..."
+                              sleep $delay
+                              delay=$((delay * 2))
+                              if [[ $delay -gt 60 ]]; then delay=60; fi
+                          fi
+                      done
+                      echo "Failed to install $pkg after $max_attempts attempts."
+                      return 1
+                  }
+
+                  install_with_retry "valkey-glide-sync==${PYPI_VERSION}"
                   pypy3 sync_rc_test.py
 
             # Reset the repository to make sure we get the clean checkout of the action later in other actions.
