@@ -149,25 +149,24 @@ jobs:
                     cat "./$package/pyproject.toml"
                   done
 
-            - name: Install Python 3.14 on persistent self-hosted runner
+            - name: Install Python 3.15 on persistent self-hosted runner
               if: ${{ contains(matrix.build.RUNNER, 'self-hosted') && contains(matrix.build.RUNNER, 'persistent') }}
               run: |
                   # Note: We currently only have Linux persistent self-hosted runner. If persistent self-hosted macOS runners
                   # are added to the matrix for CD pipelines, update this step to conditionally use:
-                  #     brew install python@3.14 && brew link python@3.14
-                  if ! command -v python3.14 &> /dev/null; then
+                  #     brew install python@3.15 && brew link python@3.15
+                  # pip is bootstrapped later in the Install cibuildwheel step.
+                  if ! command -v python3.15 &> /dev/null; then
                       sudo apt update
-                      sudo apt install -y python3.14 python3.14-dev
-                      python3.14 -m ensurepip --upgrade
-                      python3.14 -m pip install --upgrade pip
+                      sudo apt install -y python3.15 python3.15-dev
                   fi
 
-            - name: Set up Python 3.14
+            - name: Set up Python 3.15
               if: ${{ !contains(matrix.build.RUNNER, 'self-hosted') }}
               id: setup_python
               uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
               with:
-                  python-version: "3.14"
+                  python-version: "3.15"
 
             - name: Update package version in config.toml for the async client
               uses: ./.github/workflows/update-glide-version
@@ -305,7 +304,7 @@ jobs:
               with:
                   working-directory: ./python/glide-async
                   target: ${{ matrix.build.TARGET }}
-                  args: --release --strip --out wheels -i ${{ github.event_name != 'pull_request' && 'python3.9 python3.10 python3.11 python3.12 python3.13 python3.14 pypy3.11' || 'python3.14' }}
+                  args: --release --strip --out wheels -i ${{ github.event_name != 'pull_request' && 'python3.9 python3.10 python3.11 python3.12 python3.13 python3.14 python3.15 pypy3.11' || 'python3.15' }}
                   manylinux: auto
                   container: ${{ matrix.build.CONTAINER != '' && matrix.build.CONTAINER || '2014' }}
                   docker-options: --pull always --rm
@@ -315,7 +314,7 @@ jobs:
                       then
                         echo "installing unzip and curl"
                         apt-get update
-                        apt install unzip curl python3.14 pypy3 -y
+                        apt install unzip curl python3.15 pypy3 -y
                       fi
                       PB_REL="https://github.com/protocolbuffers/protobuf/releases"
                       ARCH=`uname -p`
@@ -366,8 +365,8 @@ jobs:
                       # maturin-action will later build a separate async wheel per interpreter,
                       # and each wheel bundles all .so files from the include glob.
                       # Python will load the one matching its ABI at runtime.
-                      maturin build --release --out /tmp/glide_shared_wheels -i python3.9 python3.10 python3.11 python3.12 python3.13 python3.14 pypy3.11 2>/dev/null || \
-                      maturin build --release --out /tmp/glide_shared_wheels -i python3.14
+                      maturin build --release --out /tmp/glide_shared_wheels \
+                        -i ${{ github.event_name != 'pull_request' && 'python3.9 python3.10 python3.11 python3.12 python3.13 python3.14 python3.15 pypy3.11' || 'python3.15' }}
                       for WHEEL in /tmp/glide_shared_wheels/*.whl; do
                         unzip -jo "$WHEEL" "glide_shared/_fast_response*.so" -d ../glide-async/python/glide_shared/ 2>/dev/null || true
                       done
@@ -389,7 +388,7 @@ jobs:
                   cd python/glide-shared
                   pip install maturin
                   maturin build --release --target ${{ matrix.build.TARGET }} --out /tmp/glide_shared_wheels \
-                    -i ${{ github.event_name != 'pull_request' && 'python3.9 python3.10 python3.11 python3.12 python3.13 python3.14 pypy3.11' || 'python3.14' }}
+                    -i ${{ github.event_name != 'pull_request' && 'python3.9 python3.10 python3.11 python3.12 python3.13 python3.14 python3.15 pypy3.11' || 'python3.15' }}
                   for WHEEL in /tmp/glide_shared_wheels/*.whl; do
                     unzip -jo "$WHEEL" "glide_shared/_fast_response*.so" -d ../glide-async/python/glide_shared/ 2>/dev/null || true
                   done
@@ -398,23 +397,23 @@ jobs:
               if: startsWith(matrix.build.NAMED_OS, 'darwin')
               uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1
               with:
-                  maturin-version: 0.14.17
+                  maturin-version: 1.14.1
                   working-directory: ./python/glide-async
                   target: ${{ matrix.build.TARGET }}
-                  args: --release --strip --out wheels -i  ${{ github.event_name != 'pull_request' && 'python3.9 python3.10 python3.11 python3.12 python3.13 python3.14 pypy3.11' || 'python3.14' }}
+                  args: --release --strip --out wheels -i  ${{ github.event_name != 'pull_request' && 'python3.9 python3.10 python3.11 python3.12 python3.13 python3.14 python3.15 pypy3.11' || 'python3.15' }}
 
             ### SYNC CLIENT ###
 
-            - name: Determine Python 3.14 path
+            - name: Determine Python 3.15 path
               id: python_cmd
               run: |
-                  # Use absolute path so python3.14 is never the default interpreter
+                  # Use absolute path so python3.15 is never the default interpreter
                   if [[ -n "${{ steps.setup_python.outputs.python-path }}" ]]; then
                       echo "cmd=${{ steps.setup_python.outputs.python-path }}" >> "$GITHUB_OUTPUT"
-                  elif command -v python3.14 &> /dev/null; then
-                      echo "cmd=$(which python3.14)" >> "$GITHUB_OUTPUT"
+                  elif command -v python3.15 &> /dev/null; then
+                      echo "cmd=$(which python3.15)" >> "$GITHUB_OUTPUT"
                   else
-                      echo "::error::python3.14 not found — required to build and test cp314 wheels"
+                      echo "::error::python3.15 not found — required to build and test cp315 wheels"
                       exit 1
                   fi
 
@@ -432,9 +431,10 @@ jobs:
             - name: Determine cibuildwheel version and set enable flags
               id: cibw_config
               run: |
-                  ${{ steps.python_cmd.outputs.cmd }} -m pip install setuptools
+                  PY="${{ steps.python_cmd.outputs.cmd }}"
+                  $PY -m pip install setuptools
                   # PyPy builds are disabled by default from version 3
-                  CIBW_VERSION=$(python3.14 -c "from importlib.metadata import version; print(version('cibuildwheel'))")
+                  CIBW_VERSION=$($PY -c "from importlib.metadata import version; print(version('cibuildwheel'))")
                   echo "Detected cibuildwheel version: $CIBW_VERSION"
 
                   ENABLE_FLAGS=""
@@ -449,7 +449,7 @@ jobs:
                   # we call cibuildwheel from the root folder in order to copy the whole folder tree to the docker
                   ${{ steps.python_cmd.outputs.cmd }} -m cibuildwheel python/glide-sync --output-dir python/glide-sync/wheels
               env:
-                  CIBW_BUILD: ${{ github.event_name != 'pull_request' && 'cp39-* cp310-* cp311-* cp312-* cp313-* cp314-* pp311-*' || 'cp314-*' }}
+                  CIBW_BUILD: ${{ github.event_name != 'pull_request' && 'cp39-* cp310-* cp311-* cp312-* cp313-* cp314-* cp315-* pp311-*' || 'cp315-*' }}
                   CIBW_SKIP: "*-musl* *i686* *i386*"
                   CIBW_MANYLINUX_X86_64_IMAGE: manylinux2014
                   CIBW_MANYLINUX_AARCH64_IMAGE: manylinux2014
@@ -460,8 +460,8 @@ jobs:
 
             - name: Smoke test wheels
               run: |
-                  # Use the same Python version used to build wheels (3.14) so pip selects
-                  # the local cp314 wheel instead of falling back to a PyPI-published version.
+                  # Use the same Python version used to build wheels (3.15) so pip selects
+                  # the local cp315 wheel instead of falling back to a PyPI-published version.
                   # Create venvs with --without-pip since ensurepip is broken on the
                   # self-hosted runner, then bootstrap pip via get-pip.py.
                   PYTHON=${{ steps.python_cmd.outputs.cmd }}

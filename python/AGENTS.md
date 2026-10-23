@@ -31,7 +31,7 @@ This is the Python client binding for Valkey GLIDE, providing both async and syn
 - macOS: 13.7+ (x86_64), 14.7+ (aarch64)
 - **Note:** Alpine Linux/MUSL not supported
 
-**Python Versions:** 3.9, 3.10, 3.11, 3.12, 3.13
+**Python Versions:** 3.9, 3.10, 3.11, 3.12, 3.13, 3.14, 3.15
 **Async Frameworks:** asyncio, trio, uvloop
 
 **Packages:** `valkey-glide` (async), `valkey-glide-sync` (sync)
