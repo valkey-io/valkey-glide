@@ -242,36 +242,28 @@ def install_glide_shared(env: Dict[str, str], release: bool = False) -> None:
     )
 
     # Build the FFI library and copy to glide_shared so it can be found
-    # without requiring glide-sync to be installed.
+    # without requiring glide-sync to be installed. Cargo builds incrementally,
+    # so running rustc ensures changes to glide-core/ffi are never stale in dev builds (fixes #7430).
     ffi_output_dir = FFI_OUTPUT_DIR_RELEASE if release else FFI_OUTPUT_DIR_DEBUG
-    try:
-        ffi_lib_path = find_libglide_ffi(ffi_output_dir)
-        dest = SHARED_PACKAGE_DIR / ffi_lib_path.name
-        needs_build = not dest.exists()
-    except FileNotFoundError:
-        needs_build = True
-        dest = None
-
-    if needs_build:
-        ffi_build_cmd = [
-            "cargo",
-            "rustc",
-            "--lib",
-            "--crate-type",
-            "cdylib",
-            "--locked",
-        ]
-        if release:
-            ffi_build_cmd += ["--release"]
-        run_command(
-            ffi_build_cmd,
-            cwd=FFI_DIR,
-            env=shared_env,
-            label="build FFI library",
-        )
-        ffi_lib_path = find_libglide_ffi(ffi_output_dir)
-        dest = SHARED_PACKAGE_DIR / ffi_lib_path.name
-        copy2(ffi_lib_path, dest)
+    ffi_build_cmd = [
+        "cargo",
+        "rustc",
+        "--lib",
+        "--crate-type",
+        "cdylib",
+        "--locked",
+    ]
+    if release:
+        ffi_build_cmd += ["--release"]
+    run_command(
+        ffi_build_cmd,
+        cwd=FFI_DIR,
+        env=shared_env,
+        label="build FFI library",
+    )
+    ffi_lib_path = find_libglide_ffi(ffi_output_dir)
+    dest = SHARED_PACKAGE_DIR / ffi_lib_path.name
+    copy2(ffi_lib_path, dest)
 
 
 def build_async_client_wheel(
