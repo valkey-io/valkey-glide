@@ -13078,39 +13078,51 @@ class TestSyncScripts:
         valkey_cluster = (
             pytest.valkey_cluster if cluster_mode else pytest.standalone_cluster  # type: ignore
         )
+        # Use a unique key per invocation so concurrently running parametrized
+        # variants (and parallel test workers sharing the same server) cannot
+        # clobber each other's value between set and get.
+        key = get_random_string(20)
 
         if cluster_mode:
             cluster_config = GlideClusterClientConfiguration(
                 addresses=valkey_cluster.nodes_addr,
                 advanced_config=AdvancedGlideClusterClientConfiguration(
-                    tcp_nodelay=tcp_nodelay
+                    tcp_nodelay=tcp_nodelay,
+                    # Use a generous connection timeout so that slow connection
+                    # establishment under CI load does not flake with
+                    # "connection attempt timed out" (the default is ~250ms).
+                    connection_timeout=2000,
                 ),
             )
             cluster_client = GlideClusterClient.create(cluster_config)
             try:
                 # Verify client can connect and execute commands
                 assert_connected_sync(cluster_client)
-                assert cluster_client.set("key", "value") == "OK"
-                assert cluster_client.get("key") == b"value"
+                assert cluster_client.set(key, "value") == "OK"
+                assert cluster_client.get(key) == b"value"
                 # Clean up test key
-                cluster_client.delete(["key"])
+                cluster_client.delete([key])
             finally:
                 cluster_client.close()
         else:
             standalone_config = GlideClientConfiguration(
                 addresses=valkey_cluster.nodes_addr,
                 advanced_config=AdvancedGlideClientConfiguration(
-                    tcp_nodelay=tcp_nodelay
+                    tcp_nodelay=tcp_nodelay,
+                    # Use a generous connection timeout so that slow connection
+                    # establishment under CI load does not flake with
+                    # "connection attempt timed out" (the default is ~250ms).
+                    connection_timeout=2000,
                 ),
             )
             standalone_client = GlideClient.create(standalone_config)
             try:
                 # Verify client can connect and execute commands
                 assert_connected_sync(standalone_client)
-                assert standalone_client.set("key", "value") == "OK"
-                assert standalone_client.get("key") == b"value"
+                assert standalone_client.set(key, "value") == "OK"
+                assert standalone_client.get(key) == b"value"
                 # Clean up test key
-                standalone_client.delete(["key"])
+                standalone_client.delete([key])
             finally:
                 standalone_client.close()
 

@@ -13047,39 +13047,51 @@ class TestScripts:
         valkey_cluster = (
             pytest.valkey_cluster if cluster_mode else pytest.standalone_cluster  # type: ignore
         )
+        # Use a unique key per invocation so concurrently running parametrized
+        # variants (and parallel test workers sharing the same server) cannot
+        # clobber each other's value between set and get.
+        key = get_random_string(20)
 
         if cluster_mode:
             cluster_config = GlideClusterClientConfiguration(
                 addresses=valkey_cluster.nodes_addr,
                 advanced_config=AdvancedGlideClusterClientConfiguration(
-                    tcp_nodelay=tcp_nodelay
+                    tcp_nodelay=tcp_nodelay,
+                    # Use a generous connection timeout so that slow connection
+                    # establishment under CI load does not flake with
+                    # "connection attempt timed out" (the default is ~250ms).
+                    connection_timeout=2000,
                 ),
             )
             cluster_client = await GlideClusterClient.create(cluster_config)
             try:
                 # Verify client can connect and execute commands
                 await assert_connected(cluster_client)
-                assert await cluster_client.set("key", "value") == "OK"
-                assert await cluster_client.get("key") == b"value"
+                assert await cluster_client.set(key, "value") == "OK"
+                assert await cluster_client.get(key) == b"value"
                 # Clean up test key
-                await cluster_client.delete(["key"])
+                await cluster_client.delete([key])
             finally:
                 await cluster_client.close()
         else:
             standalone_config = GlideClientConfiguration(
                 addresses=valkey_cluster.nodes_addr,
                 advanced_config=AdvancedGlideClientConfiguration(
-                    tcp_nodelay=tcp_nodelay
+                    tcp_nodelay=tcp_nodelay,
+                    # Use a generous connection timeout so that slow connection
+                    # establishment under CI load does not flake with
+                    # "connection attempt timed out" (the default is ~250ms).
+                    connection_timeout=2000,
                 ),
             )
             standalone_client = await GlideClient.create(standalone_config)
             try:
                 # Verify client can connect and execute commands
                 await assert_connected(standalone_client)
-                assert await standalone_client.set("key", "value") == "OK"
-                assert await standalone_client.get("key") == b"value"
+                assert await standalone_client.set(key, "value") == "OK"
+                assert await standalone_client.get(key) == b"value"
                 # Clean up test key
-                await standalone_client.delete(["key"])
+                await standalone_client.delete([key])
             finally:
                 await standalone_client.close()
 
