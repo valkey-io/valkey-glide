@@ -1,7 +1,10 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 pub mod circuit_breaker;
+mod credentials;
 mod types;
+
+pub use credentials::AuthGeneration;
 
 use crate::cluster_scan_container::insert_cluster_scan_cursor;
 use crate::compression::CompressionBackendType;
@@ -533,6 +536,11 @@ pub struct ClientShared {
     // it cannot distinguish "nothing configured" from "configured but the parent
     // has not connected" — the scope guard needs that distinction.
     configures_cert_material: bool,
+    // Written where the Client pushes a new password or username down for
+    // reconnect; read by scope connections, which are built and re-authenticated
+    // outside those layers. Unused by IAM clients, whose scopes read the token
+    // manager.
+    credentials: credentials::CredentialsHandle,
 }
 
 /// Why [`Client::address_for_slot`] / [`Client::try_address_for_slot`] could not
@@ -917,17 +925,14 @@ impl Client {
     /// Updates username and password state for standalone, cluster, and lazy clients.
     async fn handle_auth_command(&mut self, cmd: &Cmd) -> RedisResult<()> {
         let (username, password) = self.extract_auth_info(cmd);
-
-        // Update username if provided
-        if username.is_some() {
-            self.update_stored_username(username).await?;
-        }
-
-        // Update password if provided (updateConnectionPassword handles this, so we track it too)
+        // A one-argument AUTH authenticates the default user, so the stored
+        // username is cleared, not kept.
         if password.is_some() {
-            self.update_stored_password(password).await?;
+            self.update_stored_username(username.clone()).await?;
+            self.update_stored_password(password.clone()).await?;
         }
 
+        self.record_credentials(username, password);
         Ok(())
     }
 
@@ -937,16 +942,15 @@ impl Client {
         match &mut *guard {
             ClientWrapper::Standalone(client) => {
                 client.update_connection_username(username).await?;
-                Ok(())
             }
             ClientWrapper::Cluster { client, .. } => {
                 client.update_connection_username(username).await?;
-                Ok(())
             }
             ClientWrapper::Lazy(_) => {
                 unreachable!("Lazy client should have been initialized")
             }
         }
+        Ok(())
     }
 
     /// Updates the stored password for different client types.
@@ -955,15 +959,38 @@ impl Client {
         match &mut *guard {
             ClientWrapper::Standalone(client) => {
                 client.update_connection_password(password).await?;
-                Ok(())
             }
             ClientWrapper::Cluster { client, .. } => {
                 client.update_connection_password(password).await?;
-                Ok(())
             }
             ClientWrapper::Lazy(_) => {
                 unreachable!("Lazy client should have been initialized")
             }
+        }
+        Ok(())
+    }
+
+    /// The handle scope connections read, or `None` for an IAM client: its scopes
+    /// AUTH with the token manager, and the borrow-time reconcile routes the token
+    /// through `update_connection_password`, which would otherwise keep a second
+    /// copy of it that nothing reads.
+    fn static_credentials(&self) -> Option<&credentials::CredentialsHandle> {
+        self.iam_token_manager
+            .is_none()
+            .then_some(&self.credentials)
+    }
+
+    /// Mirror the credentials a successful `AUTH`/`HELLO` carried, as one write
+    /// that sets both fields.
+    fn record_credentials(&self, username: Option<String>, password: Option<String>) {
+        if password.is_none() {
+            return;
+        }
+        if let Some(handle) = self.static_credentials() {
+            handle.update(|credentials| {
+                credentials.username = username;
+                credentials.password = password;
+            });
         }
     }
 
@@ -1049,13 +1076,15 @@ impl Client {
 
         // Update username if provided
         if username.is_some() {
-            self.update_stored_username(username).await?;
+            self.update_stored_username(username.clone()).await?;
         }
 
         // Update password if provided
         if password.is_some() {
-            self.update_stored_password(password).await?;
+            self.update_stored_password(password.clone()).await?;
         }
+
+        self.record_credentials(username, password);
 
         // Update client name if provided
         if client_name.is_some() {
@@ -1617,7 +1646,7 @@ impl Client {
     /// logic as `send_command`, but routes the command to the given
     /// `MultiplexedConnection` instead of the client's internal managed connection.
     ///
-    /// IAM change-detection here uses `last_seen_generation` (owned by the caller)
+    /// Rotation detection here uses `last_auth_generation` (owned by the caller)
     /// instead of the shared `token_changed` flag — see `IAMTokenManager::token_generation`.
     ///
     /// Note: OTel spans and inflight tracking are not applied here because scoped
@@ -1627,54 +1656,47 @@ impl Client {
         &self,
         cmd: &Cmd,
         connection: &mut redis::aio::MultiplexedConnection,
-        last_seen_generation: &AtomicU64,
+        last_auth_generation: &mut AuthGeneration,
         defer_reauth: bool,
     ) -> RedisResult<Value> {
-        // IAM token refresh: re-authenticate when the token rotated (generation
-        // advanced since this connection last applied one). `defer_reauth` skips it
-        // where AUTH can't run — an open transaction (queued, corrupting the EXEC
-        // reply) or RESP2 subscribed mode (rejected outright). The bookmark stays
+        // Re-authenticate when the credential rotated (generation advanced since
+        // this connection last applied one). `defer_reauth` skips it where AUTH
+        // can't run — an open transaction (queued, corrupting the EXEC reply) or
+        // RESP2 subscribed mode (rejected outright). The bookmark stays
         // unadvanced, so it retries after EXEC/DISCARD, or on the next borrow for
         // subscribed mode (subscriptions clear only on release).
-        if !defer_reauth && let Some(iam_manager) = &self.iam_token_manager {
-            let current_generation = iam_manager.token_generation();
-            if current_generation != last_seen_generation.load(Ordering::Acquire) {
-                let current_token = iam_manager.get_token().await;
-                if current_token.is_empty() {
-                    return Err(RedisError::from((
-                        ErrorKind::ClientError,
-                        "IAM token not available",
-                    )));
-                }
-                let auth_cmd = redis::cmd("AUTH")
-                    .arg(iam_manager.username())
-                    .arg(current_token.as_str())
-                    .to_owned();
-                // Signals both failure modes as AuthenticationFailed so the caller
-                // discards the connection. The server never produces this kind
-                // itself, so it can't be confused with a command's own auth error.
-                match tokio::time::timeout(
-                    self.request_timeout,
-                    connection.send_packed_command(&auth_cmd),
-                )
-                .await
-                {
-                    Ok(Ok(_)) => {}
-                    Ok(Err(e)) => {
+        if !defer_reauth {
+            if let Some(iam_manager) = &self.iam_token_manager {
+                let current_generation =
+                    AuthGeneration::from_source(iam_manager.token_generation());
+                if current_generation != *last_auth_generation {
+                    let current_token = iam_manager.get_token().await;
+                    if current_token.is_empty() {
                         return Err(RedisError::from((
-                            ErrorKind::AuthenticationFailed,
-                            "IAM re-authentication failed",
-                            e.to_string(),
+                            ErrorKind::ClientError,
+                            "IAM token not available",
                         )));
                     }
-                    Err(_) => {
-                        return Err(RedisError::from((
-                            ErrorKind::AuthenticationFailed,
-                            "IAM re-authentication timed out",
-                        )));
-                    }
+                    let auth_cmd = redis::cmd("AUTH")
+                        .arg(iam_manager.username())
+                        .arg(current_token.as_str())
+                        .to_owned();
+                    self.reauth_connection(connection, &auth_cmd, "IAM").await?;
+                    *last_auth_generation = current_generation;
                 }
-                last_seen_generation.store(current_generation, Ordering::Release);
+            } else {
+                let handle = self.credentials();
+                let current_generation = handle.generation();
+                if current_generation != *last_auth_generation {
+                    // A removed password (`update_connection_password(None)`) has
+                    // nothing to AUTH with; the bookmark still advances so the
+                    // compare is not repeated on every command.
+                    if let Some(auth_cmd) = handle.current().auth_command() {
+                        self.reauth_connection(connection, &auth_cmd, "password")
+                            .await?;
+                    }
+                    *last_auth_generation = current_generation;
+                }
             }
         }
 
@@ -1747,6 +1769,36 @@ impl Client {
         // Type conversion
         let expected_type = expected_type_for_cmd(cmd);
         convert_to_expected_type(processed_value, expected_type)
+    }
+
+    /// Send a rotation re-AUTH on a scope connection. Both failure modes come back
+    /// as `AuthenticationFailed` so the caller discards the connection; the server
+    /// never produces this kind itself, so it can't be confused with a command's
+    /// own auth error.
+    async fn reauth_connection(
+        &self,
+        connection: &mut redis::aio::MultiplexedConnection,
+        auth_cmd: &Cmd,
+        what: &str,
+    ) -> RedisResult<()> {
+        match tokio::time::timeout(
+            self.request_timeout,
+            connection.send_packed_command(auth_cmd),
+        )
+        .await
+        {
+            Ok(Ok(_)) => Ok(()),
+            Ok(Err(e)) => Err(RedisError::from((
+                ErrorKind::AuthenticationFailed,
+                "re-authentication failed",
+                format!("{what}: {e}"),
+            ))),
+            Err(_) => Err(RedisError::from((
+                ErrorKind::AuthenticationFailed,
+                "re-authentication timed out",
+                what.to_string(),
+            ))),
+        }
     }
 
     /// Get the primary node address for a given hash slot (cluster mode).
@@ -2209,6 +2261,12 @@ impl Client {
     /// If `immediate_auth` is true, the password will be used to authenticate with the servers immediately using the `AUTH` command.
     /// The default behavior is to update the password without authenticating immediately.
     /// If the password is empty or None, and `immediate_auth` is true, the password will be updated and an error will be returned.
+    ///
+    /// Scope connections built after this call use the new password. Existing
+    /// scope connections re-authenticate on their next command only once
+    /// `immediate_auth` has succeeded; a store-only update leaves them
+    /// authenticated as they are, like this client's own connection, because
+    /// the server may not hold the new password yet.
     pub async fn update_connection_password(
         &mut self,
         password: Option<String>,
@@ -2234,6 +2292,11 @@ impl Client {
         .await
         {
             Ok(result) => {
+                // The token borrows this local `Arc`, not `self`, so
+                // `send_immediate_auth` can take `&mut self` while it is alive.
+                let shared = Arc::clone(&self.shared);
+                let stored = (result.is_ok() && self.static_credentials().is_some())
+                    .then(|| shared.credentials.store_password(password.clone()));
                 if immediate_auth {
                     // Fail before AUTHing if storing the password for reconnect failed:
                     // otherwise a transient store failure is swallowed, the AUTH runs
@@ -2241,7 +2304,11 @@ impl Client {
                     // (and clears token_changed) while the reconnect password was never
                     // updated — so the next reconnect would use the stale password.
                     result?;
-                    self.send_immediate_auth(password).await
+                    let authenticated = self.send_immediate_auth(password).await?;
+                    if let Some(stored) = stored {
+                        stored.accepted();
+                    }
+                    Ok(authenticated)
                 } else {
                     result
                 }
@@ -3159,6 +3226,18 @@ impl Client {
                     cert_material: cert_material_cell.clone(),
                     address_resolver: request.address_resolver.clone(),
                     configures_cert_material: request_configures_cert_material(&request),
+                    credentials: credentials::CredentialsHandle::new(
+                        credentials::PasswordCredentials {
+                            username: request
+                                .authentication_info
+                                .as_ref()
+                                .and_then(|info| info.username.clone()),
+                            password: request
+                                .authentication_info
+                                .as_ref()
+                                .and_then(|info| info.password.clone()),
+                        },
+                    ),
                 }),
                 iam_token_manager: None,
                 otel_metadata: Arc::new(otel_metadata),
@@ -3311,6 +3390,11 @@ impl Client {
     /// Whether this client configured custom certificate material (see the field).
     pub(crate) fn configures_cert_material(&self) -> bool {
         self.configures_cert_material
+    }
+
+    /// See `credentials`.
+    pub(crate) fn credentials(&self) -> &credentials::CredentialsHandle {
+        &self.credentials
     }
 
     /// Returns a reference to the per-client latency tracker (for watchdog diagnostics).
@@ -3605,6 +3689,9 @@ impl Client {
                 cert_material: Arc::default(),
                 address_resolver: None,
                 configures_cert_material: false,
+                credentials: credentials::CredentialsHandle::new(
+                    credentials::PasswordCredentials::default(),
+                ),
             }),
             iam_token_manager: None,
             otel_metadata: Arc::new(OTelMetadata {
@@ -3678,6 +3765,9 @@ pub fn create_test_glide_client() -> Client {
             cert_material: Arc::default(),
             address_resolver: None,
             configures_cert_material: false,
+            credentials: credentials::CredentialsHandle::new(
+                credentials::PasswordCredentials::default(),
+            ),
         }),
         iam_token_manager: None,
         otel_metadata: Arc::new(OTelMetadata {
@@ -3703,7 +3793,7 @@ mod tests {
     };
 
     use super::{
-        AddressResolver, Client, ClientWrapper, ConnectionError, LazyClient, TlsMode,
+        AddressResolver, Client, ClientWrapper, ConnectionError, LazyClient, TlsMode, credentials,
         get_connection_info, get_timeout_from_cmd_arg, sanitized_request_string,
         validate_effective_lib_name, validate_effective_lib_ver, validate_unix_socket_addresses,
     };
@@ -4440,6 +4530,9 @@ mod tests {
                 cert_material: Arc::default(),
                 address_resolver: None,
                 configures_cert_material: false,
+                credentials: credentials::CredentialsHandle::new(
+                    credentials::PasswordCredentials::default(),
+                ),
             }),
             iam_token_manager: None,
             otel_metadata: Arc::new(OTelMetadata {

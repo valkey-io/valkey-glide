@@ -32,6 +32,7 @@
 //! └─────────────────────────────────────┘
 //! ```
 
+use crate::client::AuthGeneration;
 use crate::client::Client as GlideClient;
 use dashmap::DashMap;
 use std::collections::VecDeque;
@@ -805,8 +806,9 @@ pub struct ConnectionState {
     /// server-side waiter armed. A still-set connection is discarded on release;
     /// clean protocol errors clear it so the connection is reused.
     pub blocking_in_flight: bool,
-    /// Set when IAM re-authentication failed. The generation bookmark advances only
-    /// on success, so reusing this connection would retry the same failing AUTH.
+    /// Set when a rotation re-AUTH (IAM or password) failed. The generation bookmark
+    /// advances only on success, so reusing this connection would retry the same
+    /// failing AUTH.
     pub must_discard: bool,
 }
 
@@ -1028,11 +1030,12 @@ pub struct ScopedConnection {
     pub acquisition_slot: Option<u16>,
     /// The topology-aware destination this connection was created for.
     pub target: ScopeTarget,
-    /// Last IAM token generation this connection's AUTH was applied at (see
-    /// `IAMTokenManager::token_generation`). Per-connection rather than on the
-    /// shared `Client` since scoped connections are reused independently.
-    /// Starts at 0 so a fresh connection re-authenticates on first use if needed.
-    pub last_iam_generation: AtomicU64,
+    /// Generation of the client's credentials this connection's AUTH was applied
+    /// at: the IAM token generation (see `IAMTokenManager::token_generation`) for
+    /// an IAM client, otherwise `CredentialsHandle::generation`. Per-connection
+    /// rather than on the shared `Client` since scoped connections are reused
+    /// independently.
+    pub last_auth_generation: AuthGeneration,
 }
 
 /// Per-client scope pool.
@@ -1425,9 +1428,7 @@ impl ScopePool {
                         // Idle: not borrowed, so no acquisition slot. Set per borrow.
                         acquisition_slot: None,
                         target: conn.target.clone(),
-                        last_iam_generation: AtomicU64::new(
-                            conn.last_iam_generation.load(Ordering::Relaxed),
-                        ),
+                        last_auth_generation: conn.last_auth_generation,
                     };
                     drop(conn);
                     self.idle.push_back(idle_conn);
@@ -1563,9 +1564,7 @@ impl ScopePool {
                                     // Idle: not borrowed, so no acquisition slot. Set per borrow.
                                     acquisition_slot: None,
                                     target: guard.target.clone(),
-                                    last_iam_generation: AtomicU64::new(
-                                        guard.last_iam_generation.load(Ordering::Relaxed),
-                                    ),
+                                    last_auth_generation: guard.last_auth_generation,
                                 };
                                 drop(guard);
 
