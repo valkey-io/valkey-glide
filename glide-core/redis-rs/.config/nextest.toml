@@ -1,0 +1,29 @@
+# nextest configuration for glide-core/redis-rs.
+# Scope: flaky-test handling only. No concurrency caps; defaults were measured
+# clean on ubuntu-latest (PR #7300).
+
+[profile.default]
+# A test still running after 4 x 60s is killed and reported as TIMEOUT by name
+# rather than wedging the run. Local worst case for a healthy test is ~16s.
+slow-timeout = { period = "60s", terminate-after = 4 }
+# Keep running after a failure so one run shows the whole flaky picture.
+fail-fast = false
+# Print every FLAKY and SLOW test in the end-of-run summary, not just failures.
+final-status-level = "flaky"
+# Flaky tests pass the run but are listed; flip to "fail" to make them red.
+flaky-result = "pass"
+
+# Retries only where nondeterminism is real: tests that boot valkey clusters
+# (port races, node shutdown timing). Unit and mock-only tests get no retry,
+# so a deterministic bug there cannot hide behind a second attempt.
+[[profile.default.overrides]]
+filter = "binary(test_cluster) | binary(test_cluster_async) | binary(test_cluster_scan) | binary(test_cluster_pipeline) | binary(test_support_cluster_startup)"
+retries = { backoff = "fixed", count = 2, delay = "2s", jitter = true }
+
+[profile.ci]
+inherits = "default"
+# Show failing output inline as it happens and again in the final summary.
+failure-output = "immediate-final"
+# JUnit marks flaky tests with <flakyFailure>/<flakyError> and tests that
+# failed every attempt with <rerunFailure>, so the two are distinguishable.
+junit = { path = "junit.xml" }
