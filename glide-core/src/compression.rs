@@ -370,6 +370,7 @@ impl Default for CompressionConfig {
 pub enum CommandCompressionBehavior {
     CompressValues,
     DecompressValues,
+    CompressAndDecompressValues,
     NoCompression,
 }
 
@@ -382,6 +383,9 @@ impl CommandCompressionBehavior {
             CommandCompressionBehavior::DecompressValues => {
                 "Decompress values after receiving from server"
             }
+            CommandCompressionBehavior::CompressAndDecompressValues => {
+                "Compress values before sending and decompress response after receiving"
+            }
             CommandCompressionBehavior::NoCompression => "No compression processing required",
         }
     }
@@ -392,6 +396,9 @@ impl std::fmt::Display for CommandCompressionBehavior {
         match self {
             CommandCompressionBehavior::CompressValues => write!(f, "CompressValues"),
             CommandCompressionBehavior::DecompressValues => write!(f, "DecompressValues"),
+            CommandCompressionBehavior::CompressAndDecompressValues => {
+                write!(f, "CompressAndDecompressValues")
+            }
             CommandCompressionBehavior::NoCompression => write!(f, "NoCompression"),
         }
     }
@@ -870,7 +877,9 @@ pub fn process_command_args_for_compression(
     }
 
     let behavior = request_type.compression_behavior();
-    if behavior != CommandCompressionBehavior::CompressValues {
+    if behavior != CommandCompressionBehavior::CompressValues
+        && behavior != CommandCompressionBehavior::CompressAndDecompressValues
+    {
         return Ok(());
     }
 
@@ -882,6 +891,7 @@ pub fn process_command_args_for_compression(
         RequestType::SetEx => compress_single_value_command(args, manager, 2),
         RequestType::PSetEx => compress_single_value_command(args, manager, 2),
         RequestType::SetNX => compress_single_value_command(args, manager, 1),
+        RequestType::GetSet => compress_single_value_command(args, manager, 1),
         _ => Ok(()),
     }
 }
@@ -956,7 +966,9 @@ pub fn process_response_for_decompression(
     }
 
     let behavior = request_type.compression_behavior();
-    if behavior != CommandCompressionBehavior::DecompressValues {
+    if behavior != CommandCompressionBehavior::DecompressValues
+        && behavior != CommandCompressionBehavior::CompressAndDecompressValues
+    {
         return Ok(value);
     }
 
