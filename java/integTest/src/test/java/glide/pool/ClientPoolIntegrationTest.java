@@ -10,6 +10,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import glide.api.GlideClient;
 import glide.api.GlideClusterClient;
 import glide.api.models.ClusterValue;
+import glide.api.models.configuration.BaseClientConfiguration;
 import glide.api.models.configuration.GlideClientConfiguration;
 import glide.api.models.configuration.GlideClusterClientConfiguration;
 import glide.api.models.configuration.NodeAddress;
@@ -62,8 +63,8 @@ public class ClientPoolIntegrationTest {
         return clusterMode ? "{pool-test}-" + prefix + "-" + id : prefix + "-" + id;
     }
 
-    private ClientPoolConfig poolConfig(boolean clusterMode) {
-        assumeMode(clusterMode);
+    /** Build the standalone or cluster client config shared by every pool/client in this suite. */
+    private BaseClientConfiguration clientConfig(boolean clusterMode) {
         if (clusterMode) {
             GlideClusterClientConfiguration.GlideClusterClientConfigurationBuilder<?, ?> builder =
                     GlideClusterClientConfiguration.builder();
@@ -72,28 +73,23 @@ public class ClientPoolIntegrationTest {
                 builder.address(
                         NodeAddress.builder().host(parts[0]).port(Integer.parseInt(parts[1])).build());
             }
-            builder.requestTimeout(5000);
-            return ClientPoolConfig.builder()
-                    .maxSize(3)
-                    .minIdle(1)
-                    .acquireTimeout(Duration.ofSeconds(10))
-                    .clientConfig(builder.build())
-                    .build();
-        } else {
-            String[] parts = STANDALONE_HOSTS[0].split(":");
-            String host = parts[0];
-            int port = Integer.parseInt(parts[1]);
-            return ClientPoolConfig.builder()
-                    .maxSize(3)
-                    .minIdle(1)
-                    .acquireTimeout(Duration.ofSeconds(10))
-                    .clientConfig(
-                            GlideClientConfiguration.builder()
-                                    .address(NodeAddress.builder().host(host).port(port).build())
-                                    .requestTimeout(5000)
-                                    .build())
-                    .build();
+            return builder.requestTimeout(5000).build();
         }
+        String[] parts = STANDALONE_HOSTS[0].split(":");
+        return GlideClientConfiguration.builder()
+                .address(NodeAddress.builder().host(parts[0]).port(Integer.parseInt(parts[1])).build())
+                .requestTimeout(5000)
+                .build();
+    }
+
+    private ClientPoolConfig poolConfig(boolean clusterMode) {
+        assumeMode(clusterMode);
+        return ClientPoolConfig.builder()
+                .maxSize(3)
+                .minIdle(1)
+                .acquireTimeout(Duration.ofSeconds(10))
+                .clientConfig(clientConfig(clusterMode))
+                .build();
     }
 
     /**
@@ -102,33 +98,11 @@ public class ClientPoolIntegrationTest {
      */
     private ClientPoolConfig warmupBurstPoolConfig(boolean clusterMode, int size) {
         assumeMode(clusterMode);
-        if (clusterMode) {
-            GlideClusterClientConfiguration.GlideClusterClientConfigurationBuilder<?, ?> builder =
-                    GlideClusterClientConfiguration.builder();
-            for (String host : CLUSTER_HOSTS) {
-                String[] parts = host.split(":");
-                builder.address(
-                        NodeAddress.builder().host(parts[0]).port(Integer.parseInt(parts[1])).build());
-            }
-            builder.requestTimeout(5000);
-            return ClientPoolConfig.builder()
-                    .maxSize(size)
-                    .minIdle(size)
-                    .acquireTimeout(Duration.ofSeconds(20))
-                    .clientConfig(builder.build())
-                    .build();
-        }
-        String[] parts = STANDALONE_HOSTS[0].split(":");
         return ClientPoolConfig.builder()
                 .maxSize(size)
                 .minIdle(size)
                 .acquireTimeout(Duration.ofSeconds(20))
-                .clientConfig(
-                        GlideClientConfiguration.builder()
-                                .address(
-                                        NodeAddress.builder().host(parts[0]).port(Integer.parseInt(parts[1])).build())
-                                .requestTimeout(5000)
-                                .build())
+                .clientConfig(clientConfig(clusterMode))
                 .build();
     }
 
@@ -597,14 +571,18 @@ public class ClientPoolIntegrationTest {
 
                 // Read the bound only once the pool has quiesced: a borrow still mid-release leaves
                 // idle lagging total, which would read as a spurious pass.
+                boolean settled = false;
                 long deadline = System.currentTimeMillis() + 15000;
                 while (System.currentTimeMillis() < deadline) {
                     int[] m = pool.getMetrics();
                     if (m != null && m[2] > 0 && m[1] == 0 && m[0] == m[2]) {
+                        settled = true;
                         break;
                     }
                     Thread.sleep(50);
                 }
+                assertTrue(
+                        settled, "attempt " + attempt + ": pool metrics did not settle before the deadline");
 
                 int total = pool.getTotalCount();
                 int idle = pool.getIdleCount();
