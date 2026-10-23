@@ -80,7 +80,8 @@ class ValueComparison(ABC):
     """
     A condition that compares the current value of a key to a comparison value.
 
-    - comparison_value - value to compare to the current value of a key.
+    Attributes:
+        comparison_value (TEncodable): The value to compare to the current value of a key.
     """
 
     comparison_value: TEncodable
@@ -96,7 +97,7 @@ class ValueComparison(ABC):
 class OnlyIfEqual(ValueComparison):
     """
     A condition that is met if the current value of a key is equal to the comparison value.
-    Used by the `SET` command. Equivalent to the `IFEQ comparison_value` in the Valkey API.
+    Used by the `SET` command. Equivalent to the `IFEQ comparison-value` in the Valkey API.
     """
 
     def _to_args(self) -> List[TEncodable]:
@@ -106,7 +107,7 @@ class OnlyIfEqual(ValueComparison):
 class OnlyIfNotEqual(ValueComparison):
     """
     A condition that is met if the current value of a key is not equal to the comparison value.
-    Used by the `SET` command. Equivalent to the `IFNE comparison_value` in the Valkey API.
+    Used by the `SET` command. Equivalent to the `IFNE comparison-value` in the Valkey API.
     """
 
     def _to_args(self) -> List[TEncodable]:
