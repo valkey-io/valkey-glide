@@ -41,6 +41,11 @@ import {
     parseEndpoints,
     validateBatchResponse,
 } from "./TestUtilities";
+import {
+    checkVersionLt,
+    probeCapabilityAndLevel,
+    readMapField,
+} from "./searchCapabilityHelpers";
 
 const TIMEOUT = 50000;
 /** Waiting interval to let server process the data before querying */
@@ -2363,6 +2368,44 @@ describe("Server Module Tests", () => {
 
     describe("GlideFt", () => {
         let client: GlideClusterClient;
+        // Session-memoized emulate-release level: this describe
+        // block's tests now run against modules at every level the local
+        // 3-config proof exercises, including >= 1.3.0 for the first
+        // time, so a pre-existing assertion about a compat-gated reply
+        // shape (e.g. FT.INFO's default_score/score_field, gated by
+        // ft_info_score_field) must branch on the level rather than
+        // hard-coding the legacy shape. undefined means "not yet probed";
+        // Capable=false (module present but pre-1.3) and the probe
+        // throwing (module missing) are both allowed outcomes recorded
+        // via searchModuleLevel below -- only a genuinely 1.3-capable
+        // module with an unparseable level throws, same as
+        // ServerModulesVs13.test.ts's own fixture.
+        let searchEmulateReleaseLevel: string | undefined | null = null;
+
+        async function getSearchEmulateReleaseLevel(): Promise<
+            string | undefined
+        > {
+            if (searchEmulateReleaseLevel !== null) {
+                return searchEmulateReleaseLevel;
+            }
+
+            const probeClient = await GlideClusterClient.createClient(
+                getClientConfigurationOption(
+                    cluster.getAddresses(),
+                    ProtocolVersion.RESP3,
+                ),
+            );
+
+            try {
+                const { emulateReleaseLevel } =
+                    await probeCapabilityAndLevel(probeClient);
+                searchEmulateReleaseLevel = emulateReleaseLevel ?? undefined;
+            } finally {
+                await probeClient.close();
+            }
+
+            return searchEmulateReleaseLevel;
+        }
 
         afterEach(async () => {
             await flushAndCloseClient(true, cluster?.getAddresses(), client);
@@ -2618,14 +2661,38 @@ describe("Server Module Tests", () => {
                 let response = await GlideFt.info(client, Buffer.from(index));
 
                 expect(response["index_name"]).toEqual(index);
-                expect(response["index_definition"]).toEqual(
-                    expect.arrayContaining([
-                        "key_type",
-                        "JSON",
-                        "default_score",
-                        "1",
-                    ]),
+                // ft_info_score_field: default_score and the presence of
+                // score_field in index_definition both change shape at search.emulate-release >= 1.3.0 (see
+                // searchCapabilityHelpers.ts and
+                // ServerModulesVs13.test.ts's "FT.CREATE FILTER, UNF,
+                // NOHL, SCORE_FIELD" test, which exercises this gate
+                // directly for an index that actually sets scoreField).
+                // This index doesn't set scoreField, so legacy and 1.3+
+                // only differ in default_score's wire type (bulk string
+                // "1" vs integer 1) and whether an empty score_field key
+                // is present at all.
+                const level = await getSearchEmulateReleaseLevel();
+                const defaultScore = readMapField(
+                    response["index_definition"],
+                    "default_score",
                 );
+
+                if (level !== undefined && !checkVersionLt(level, "1.3.0")) {
+                    expect(Number(defaultScore)).toEqual(1);
+                } else {
+                    expect(response["index_definition"]).toEqual(
+                        expect.arrayContaining([
+                            "key_type",
+                            "JSON",
+                            "default_score",
+                            "1",
+                        ]),
+                    );
+                }
+
+                expect(
+                    readMapField(response["index_definition"], "key_type"),
+                ).toEqual("JSON");
                 const attrs = response["attributes"] as unknown as unknown[][];
                 expect(attrs).toEqual(
                     expect.arrayContaining([

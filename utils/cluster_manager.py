@@ -3,6 +3,7 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 import argparse
+
 try:
     import fcntl  # POSIX only — not available on Windows
 except ImportError:
@@ -12,6 +13,7 @@ import logging
 import os
 import random
 import re
+import shlex
 import signal
 import socket
 import string
@@ -502,7 +504,27 @@ def start_server(
                 "Please provide the path(s) to the module(s) you want to load."
             )
         for module_path in load_module:
-            cmd_args.extend(["--loadmodule", module_path])
+            # Valkey's module loader requires each trailing config arg
+            # (e.g. --emulate-release 1.3.0) to be its own argv token
+            # starting with "--", not one combined string -- confirmed via
+            # valkey_search 1.3.0-rc1. Only the trailing "--..." config
+            # suffix is split into separate tokens; the module path itself
+            # stays a single token even if it contains spaces (e.g. a
+            # path under "Program Files" on Windows, or any directory with
+            # a space in its name).
+            module_args = shlex.split(module_path)
+            config_index = next(
+                (i for i, arg in enumerate(module_args) if arg.startswith("--")),
+                len(module_args),
+            )
+            if config_index == len(module_args):
+                module_args = [module_path]
+            else:
+                module_args = [
+                    " ".join(module_args[:config_index]),
+                    *module_args[config_index:],
+                ]
+            cmd_args.extend(["--loadmodule", *module_args])
     cmd_args += tls_args
     p = subprocess.Popen(
         cmd_args,
@@ -1429,7 +1451,13 @@ def main():
     parser_start.add_argument(
         "--load-module",
         action="append",
-        help="The paths of the server modules to load.",
+        help="The path of a server module to load. Use multiple times for "
+        "multiple modules. May include trailing module config args as one "
+        "space-separated string, e.g. "
+        "'/path/libsearch.dylib --emulate-release 1.3.0' or "
+        "'/path/libsearch.dylib --use-coordinator yes' -- each arg must "
+        "start with '--' (Valkey module-loader requirement) and is split "
+        "into its own argv token before exec.",
         required=False,
     )
 
