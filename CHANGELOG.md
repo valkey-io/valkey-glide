@@ -75,6 +75,7 @@
 ### Changes
 
 * Java: add useMutualTlsFromKeyStore to load mTLS client identity ([#7258](https://github.com/valkey-io/valkey-glide/pull/7258))
+* Core/FFI, Python: Add Unix domain socket support for standalone clients with `NodeAddress(unix_socket_path=...)`, and accept `valkey+unix://` URIs in `create_client_from_uri` ([#4878](https://github.com/valkey-io/valkey-glide/issues/4878))
 * Java: Deprecate the Valkey API keywords on `BaseClient` and the command interfaces ([#7401](https://github.com/valkey-io/valkey-glide/issues/7401))
 * Go, Java, Node, Python: Add `cluster_info` `INFO` section (Valkey 9.1) ([#7199](https://github.com/valkey-io/valkey-glide/issues/7199))
 * Python: Optionally propagate active OpenTelemetry parent span context to native command, batch and script spans with `enable_trace_context_propagation=True` (disabled by default) ([#7069](https://github.com/valkey-io/valkey-glide/pull/7069))
