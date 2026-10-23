@@ -20,6 +20,7 @@ import {
     BitwiseOperation,
     ClientTrackingInfo,
     ClusterBatch,
+    ConditionalChange,
     Decoder,
     FlushMode,
     FunctionListResponse,
@@ -1423,6 +1424,37 @@ export async function batchTest(
             "hgetdel(hgetdelKey, [field, field2])",
             [null, null],
         ]);
+
+        // HSETEX key-level NX/XX conditions; hgetdelKey no longer exists at this point
+        baseBatch.hsetex(
+            hgetdelKey,
+            { [field.toString()]: value },
+            { conditionalChange: ConditionalChange.ONLY_IF_DOES_NOT_EXIST },
+        );
+        responseData.push([
+            "hsetex(hgetdelKey, { [field]: value }, { conditionalChange: ONLY_IF_DOES_NOT_EXIST })",
+            1,
+        ]);
+        baseBatch.hsetex(
+            hgetdelKey,
+            { [field.toString()]: "value2" },
+            { conditionalChange: ConditionalChange.ONLY_IF_DOES_NOT_EXIST },
+        );
+        responseData.push([
+            "hsetex(hgetdelKey, { [field]: value2 }, { conditionalChange: ONLY_IF_DOES_NOT_EXIST })",
+            0,
+        ]);
+        baseBatch.hsetex(
+            hgetdelKey,
+            { [field.toString()]: "value2" },
+            { conditionalChange: ConditionalChange.ONLY_IF_EXISTS },
+        );
+        responseData.push([
+            "hsetex(hgetdelKey, { [field]: value2 }, { conditionalChange: ONLY_IF_EXISTS })",
+            1,
+        ]);
+        baseBatch.hget(hgetdelKey, field);
+        responseData.push(["hget(hgetdelKey, field)", "value2"]);
     }
 
     baseBatch.lpush(key5, [field1, field2, field3, field4]);

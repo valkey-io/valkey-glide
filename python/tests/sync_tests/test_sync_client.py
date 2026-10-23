@@ -12132,6 +12132,66 @@ class TestSyncScripts:
         ttl_results = glide_sync_client.httl(multi_key, list(multi_fields.keys()))
         assert all(0 < ttl <= 20 for ttl in ttl_results)
 
+    @pytest.mark.skip_if_version_below("9.1.0")
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_hsetex_with_key_conditional_change(
+        self, glide_sync_client: TGlideClient
+    ):
+        key = f"test_hsetex_key_conditional_{get_random_string(10)}"
+        field_value_map = {"field1": "value1"}
+
+        # NX: key does not exist yet, so the command should succeed
+        result = glide_sync_client.hsetex(
+            key,
+            field_value_map,
+            conditional_change=ConditionalChange.ONLY_IF_DOES_NOT_EXIST,
+        )
+        assert result == 1
+        assert glide_sync_client.hget(key, "field1") == b"value1"
+
+        # NX: key now exists, so a second NX call should fail and not modify the hash
+        result = glide_sync_client.hsetex(
+            key,
+            {"field1": "should_not_be_set"},
+            conditional_change=ConditionalChange.ONLY_IF_DOES_NOT_EXIST,
+        )
+        assert result == 0
+        assert glide_sync_client.hget(key, "field1") == b"value1"
+
+        # XX: key exists, so the command should succeed and update the field
+        result = glide_sync_client.hsetex(
+            key,
+            {"field1": "updated_value1"},
+            conditional_change=ConditionalChange.ONLY_IF_EXISTS,
+        )
+        assert result == 1
+        assert glide_sync_client.hget(key, "field1") == b"updated_value1"
+
+        # XX: key does not exist, so the command should fail and not create the hash
+        missing_key = f"test_hsetex_key_conditional_missing_{get_random_string(10)}"
+        result = glide_sync_client.hsetex(
+            missing_key,
+            field_value_map,
+            conditional_change=ConditionalChange.ONLY_IF_EXISTS,
+        )
+        assert result == 0
+        assert glide_sync_client.exists([missing_key]) == 0
+
+        # Key-level and field-level conditions can be combined, together with expiry
+        combined_key = f"test_hsetex_key_and_field_conditional_{get_random_string(10)}"
+        result = glide_sync_client.hsetex(
+            combined_key,
+            field_value_map,
+            field_conditional_change=HashFieldConditionalChange.ONLY_IF_NONE_EXIST,
+            expiry=ExpirySet(ExpiryType.SEC, 60),
+            conditional_change=ConditionalChange.ONLY_IF_DOES_NOT_EXIST,
+        )
+        assert result == 1
+        ttl_result = glide_sync_client.httl(combined_key, ["field1"])
+        assert len(ttl_result) == 1
+        assert 0 < ttl_result[0] <= 60
+
     @pytest.mark.skip_if_version_below("9.0.0")
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])

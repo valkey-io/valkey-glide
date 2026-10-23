@@ -902,7 +902,8 @@ func (b *BaseBatch[T]) HRandFieldWithCountWithValues(key string, count int64) *T
 //
 // Since:
 //
-//	Valkey 9.0 and above.
+//	Valkey 9.0 and above. Key-level conditions ([constants.OnlyIfExists] / [constants.OnlyIfDoesNotExist] via
+//	[options.HSetExOptions.SetConditionalSet]) require Valkey 9.1 and above.
 //
 // See [valkey.io] for details.
 //

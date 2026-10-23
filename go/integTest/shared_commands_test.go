@@ -1518,6 +1518,65 @@ func (suite *GlideTestSuite) TestHSetEx_WithExpiration() {
 	})
 }
 
+func (suite *GlideTestSuite) TestHSetEx_WithKeyConditionalSet() {
+	suite.SkipIfServerVersionLowerThan("9.1.0", suite.T())
+
+	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
+		ctx := context.Background()
+		key := "test_hsetex_key_conditional_" + uuid.NewString()
+		fields := map[string]string{"field1": "value1"}
+
+		// NX: key does not exist yet, so the command should succeed
+		nxOptions := options.NewHSetExOptions().SetConditionalSet(constants.OnlyIfDoesNotExist)
+		result, err := client.HSetEx(ctx, key, fields, nxOptions)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(1), result)
+		value, err := client.HGet(ctx, key, "field1")
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), "value1", value.Value())
+
+		// NX: key now exists, so a second NX call should fail (return 0) and not modify the hash
+		result, err = client.HSetEx(ctx, key, map[string]string{"field1": "should_not_be_set"}, nxOptions)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(0), result)
+		value, err = client.HGet(ctx, key, "field1")
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), "value1", value.Value())
+
+		// XX: key exists, so the command should succeed and update the field
+		xxOptions := options.NewHSetExOptions().SetConditionalSet(constants.OnlyIfExists)
+		result, err = client.HSetEx(ctx, key, map[string]string{"field1": "updated_value1"}, xxOptions)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(1), result)
+		value, err = client.HGet(ctx, key, "field1")
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), "updated_value1", value.Value())
+
+		// XX: key does not exist, so the command should fail (return 0) and not create the hash
+		missingKey := "test_hsetex_key_conditional_missing_" + uuid.NewString()
+		result, err = client.HSetEx(ctx, missingKey, fields, xxOptions)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(0), result)
+		exists, err := client.Exists(ctx, []string{missingKey})
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(0), exists)
+
+		// Key-level and field-level conditions can be combined, together with expiry
+		combinedKey := "test_hsetex_key_and_field_conditional_" + uuid.NewString()
+		combinedOptions := options.NewHSetExOptions().
+			SetConditionalSet(constants.OnlyIfDoesNotExist).
+			SetFieldConditionalSet(constants.HashFieldsDoNotExist).
+			SetExpiry(options.NewExpiryIn(60 * time.Second))
+		result, err = client.HSetEx(ctx, combinedKey, fields, combinedOptions)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(1), result)
+		ttls, err := client.HTtl(ctx, combinedKey, []string{"field1"})
+		assert.NoError(suite.T(), err)
+		assert.Len(suite.T(), ttls, 1)
+		assert.True(suite.T(), ttls[0] > 0 && ttls[0] <= 60)
+	})
+}
+
 func (suite *GlideTestSuite) TestHGetEx_WithExpiration() {
 	suite.SkipIfServerVersionLowerThan("9.0.0", suite.T())
 

@@ -79,10 +79,24 @@ const (
 	OnlyIfEquals ConditionalSet = "IFEQ"
 	// OnlyIfFieldsDoNotExist only sets the hash fields if none of them already exist. Equivalent to "FNX" in the valkey API.
 	// Used with hash field expiration commands.
+	//
+	// Deprecated: Use [HashFieldsDoNotExist] with options.HSetExOptions.SetFieldConditionalSet instead.
 	OnlyIfFieldsDoNotExist ConditionalSet = "FNX"
 	// OnlyIfAllFieldsExist only sets the hash fields if all of them already exist. Equivalent to "FXX" in the valkey API.
 	// Used with hash field expiration commands.
+	//
+	// Deprecated: Use [HashAllFieldsExist] with options.HSetExOptions.SetFieldConditionalSet instead.
 	OnlyIfAllFieldsExist ConditionalSet = "FXX"
+)
+
+// A HashFieldConditionalSet defines a field-level condition for setting hash fields, used by the HSETEX command.
+type HashFieldConditionalSet string
+
+const (
+	// HashFieldsDoNotExist only sets the hash fields if none of them already exist. Equivalent to "FNX" in the valkey API.
+	HashFieldsDoNotExist HashFieldConditionalSet = "FNX"
+	// HashAllFieldsExist only sets the hash fields if all of them already exist. Equivalent to "FXX" in the valkey API.
+	HashAllFieldsExist HashFieldConditionalSet = "FXX"
 )
 
 func (conditionalSet ConditionalSet) ToString() (string, error) {
