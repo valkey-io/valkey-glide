@@ -23,7 +23,7 @@ cargo test
 ## Generating the C Header File
 
 ```bash
-cargo install --locked cbindgen
+cargo install --locked cbindgen@0.29.4
 cbindgen --config cbindgen.toml --crate glide-ffi --output lib.h --lang c
 ```
 

@@ -3,7 +3,7 @@
 
 mod common;
 
-use glide::{AsyncTypedCommands, SetCommands, ValkeyResult};
+use glide::{AsyncTypedCommands, SIsMemberStatusCode, SetCommands, ValkeyResult};
 use std::collections::HashSet;
 
 matrix_test!(sadd_scard, c, {
@@ -45,10 +45,31 @@ matrix_test!(smembers_missing_empty, c, {
 matrix_test!(sismember, c, {
     let k = common::key("s");
     let _: usize = c.sadd(&k, "a").await.unwrap();
-    let yes: bool = c.sismember(&k, "a").await.unwrap();
-    assert!(yes);
-    let no: bool = c.sismember(&k, "b").await.unwrap();
-    assert!(!no);
+
+    assert!(c.sismember(&k, "a").await.unwrap());
+    assert!(!c.sismember(&k, "b").await.unwrap());
+});
+
+matrix_test!(sismember_if_exists, c, {
+    skip_if_version_below!(c, 9, 2, 0);
+
+    let k = common::key("s");
+    let _: usize = c.sadd(&k, "a").await.unwrap();
+
+    assert_eq!(
+        c.sismember_if_exists(&k, "a").await.unwrap(),
+        SIsMemberStatusCode::Member
+    );
+    assert_eq!(
+        c.sismember_if_exists(&k, "b").await.unwrap(),
+        SIsMemberStatusCode::NotMember
+    );
+    assert_eq!(
+        c.sismember_if_exists(common::key("missing"), "a")
+            .await
+            .unwrap(),
+        SIsMemberStatusCode::KeyNotFound
+    );
 });
 
 matrix_test!(smismember, c, {

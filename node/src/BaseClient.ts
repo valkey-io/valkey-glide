@@ -74,7 +74,9 @@ import {
     GlideClientHandle,
     createLeakedStringVec,
     registerAddressResolver,
+    registerCredentialProvider,
     removeAddressResolver,
+    removeCredentialProvider,
     StreamAddOptions,
     StreamClaimOptions,
     StreamGroupOptions,
@@ -843,6 +845,19 @@ export enum ServiceType {
     MemoryDB = "MemoryDB",
 }
 
+/** AWS credentials returned by a custom credential provider. */
+export interface AwsCredentials {
+    accessKeyId: string;
+    secretAccessKey: string;
+    sessionToken?: string;
+    /** Unix epoch milliseconds; omit when expiry is unknown. */
+    expiresAtEpochMillis?: number;
+}
+
+/** Supplies credentials synchronously or asynchronously for IAM token signing. */
+export type GlideCredentialProvider = () =>
+    AwsCredentials | Promise<AwsCredentials>;
+
 /** Configuration settings for IAM authentication. */
 export interface IamAuthConfig {
     /** The name of the ElastiCache/MemoryDB cluster. */
@@ -856,6 +871,8 @@ export interface IamAuthConfig {
      * If not provided, defaults to 300 seconds (5 min).
      */
     refreshIntervalSeconds?: number;
+    /** Optional direct-client credential source replacing the default AWS chain. */
+    credentialProvider?: GlideCredentialProvider;
 }
 
 /** Represents the credentials for connecting to a server. */
@@ -1537,6 +1554,12 @@ type WritePromiseOptions =
  * Base client interface for GLIDE
  */
 export class BaseClient {
+    private static nativeCreateDirectClient = CreateDirectClient;
+    private static nativeRegisterAddressResolver = registerAddressResolver;
+    private static nativeRemoveAddressResolver = removeAddressResolver;
+    private static nativeRegisterCredentialProvider =
+        registerCredentialProvider;
+    private static nativeRemoveCredentialProvider = removeCredentialProvider;
     protected readonly promiseCallbackFunctions:
         | [PromiseFunction, ErrorFunction, Decoder | undefined][]
         | [PromiseFunction, ErrorFunction][] = [];
@@ -1547,6 +1570,7 @@ export class BaseClient {
     private pendingPushNotification: response.Response[] = [];
     private config: BaseClientConfiguration | undefined;
     private addressResolverKey: string | undefined;
+    private credentialProviderKey: string | undefined;
     protected clientHandle: GlideClientHandle | null = null;
     /** Stores OTel span pointers keyed by callbackIndex for span lifecycle management. */
     private readonly otelSpanPointers = new Map<number, bigint>();
@@ -5368,6 +5392,50 @@ export class BaseClient {
         member: GlideString,
     ): Promise<boolean> {
         return this.createWritePromise(createSIsMember(key, member));
+    }
+
+    /** Returns if `member` is a member of the set stored at `key`,
+     * or `-1` if `key` does not exist.
+     *
+     * @see {@link https://valkey.io/commands/sismember/|valkey.io} for more details.
+     * @remarks Since Valkey version 9.2.0.
+     *
+     * @param key - The key of the set.
+     * @param member - The member to check for existence in the set.
+     * @returns A status code indicating membership:
+     * - `1`: The member exists in the set.
+     * - `0`: The key exists but the member does not exist in the set.
+     * - `-1`: The key does not exist.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.sismemberIfExists("my_set", "member1");
+     * console.log(result);
+     * // Output: 1
+     * // Indicates that `member1` exists in the set `my_set`.
+     * ```
+     *
+     * @example
+     * ```typescript
+     * const result = await client.sismemberIfExists("my_set", "non_existing_member");
+     * console.log(result);
+     * // Output: 0
+     * // Indicates that `my_set` exists but `non_existing_member` does not exist in it.
+     * ```
+     *
+     * @example
+     * ```typescript
+     * const result = await client.sismemberIfExists("non_existing_set", "member1");
+     * console.log(result);
+     * // Output: -1
+     * // Indicates that `non_existing_set` does not exist.
+     * ```
+     */
+    public async sismemberIfExists(
+        key: GlideString,
+        member: GlideString,
+    ): Promise<number> {
+        return this.createWritePromise(createSIsMember(key, member, true));
     }
 
     /**
@@ -10159,16 +10227,44 @@ export class BaseClient {
     protected async connectToServer(
         options: BaseClientConfiguration,
     ): Promise<void> {
-        const request = this.createClientRequest(options);
-
-        if (options.addressResolver) {
-            this.addressResolverKey = registerAddressResolver(
-                options.addressResolver,
-            );
-            request.addressResolverKey = this.addressResolverKey;
-        }
-
         try {
+            const credentials = options.credentials;
+            const credentialProvider =
+                credentials && "iamConfig" in credentials
+                    ? (
+                          credentials.iamConfig as {
+                              credentialProvider?: unknown;
+                          }
+                      ).credentialProvider
+                    : undefined;
+
+            if (
+                credentialProvider !== undefined &&
+                typeof credentialProvider !== "function"
+            ) {
+                throw new ConfigurationError(
+                    "credentialProvider must be a function or undefined.",
+                );
+            }
+
+            const request = this.createClientRequest(options);
+
+            if (options.addressResolver) {
+                this.addressResolverKey =
+                    BaseClient.nativeRegisterAddressResolver(
+                        options.addressResolver,
+                    );
+                request.addressResolverKey = this.addressResolverKey;
+            }
+
+            if (credentialProvider) {
+                this.credentialProviderKey =
+                    BaseClient.nativeRegisterCredentialProvider(
+                        credentialProvider as GlideCredentialProvider,
+                    );
+                request.credentialProviderKey = this.credentialProviderKey;
+            }
+
             const connectionRequestBytes = Buffer.from(
                 connection_request.ConnectionRequest.encode(
                     connection_request.ConnectionRequest.create(request),
@@ -10178,22 +10274,41 @@ export class BaseClient {
             // Keep the exact bytes used to connect for scopedConnection().
             setScopeConnectionRequest(this, connectionRequestBytes);
 
-            this.clientHandle = await CreateDirectClient(
+            this.clientHandle = await BaseClient.nativeCreateDirectClient(
                 connectionRequestBytes,
                 this.handleResponsesAvailable,
             );
+            // Native direct creation consumed the provider claim only after
+            // successful GlideClientHandle conversion.
+            this.credentialProviderKey = undefined;
             Logger.log(
                 "info",
                 "Client lifetime",
                 "Client connection established",
             );
         } catch (err) {
-            if (this.addressResolverKey) {
-                removeAddressResolver(this.addressResolverKey);
-                this.addressResolverKey = undefined;
-            }
-
+            this.cleanupConnectionRegistrations();
             throw err;
+        }
+    }
+
+    /** Remove setup registrations exactly once. */
+    private cleanupConnectionRegistrations(): void {
+        const addressResolverKey = this.addressResolverKey;
+        const credentialProviderKey = this.credentialProviderKey;
+        this.addressResolverKey = undefined;
+        this.credentialProviderKey = undefined;
+
+        try {
+            if (addressResolverKey) {
+                BaseClient.nativeRemoveAddressResolver(addressResolverKey);
+            }
+        } finally {
+            if (credentialProviderKey) {
+                BaseClient.nativeRemoveCredentialProvider(
+                    credentialProviderKey,
+                );
+            }
         }
     }
 
@@ -10295,11 +10410,9 @@ export class BaseClient {
         // the client.
         clearScopeConnectionRequest(this);
 
-        // Clean up address resolver from the global registry
-        if (this.addressResolverKey) {
-            removeAddressResolver(this.addressResolverKey);
-            this.addressResolverKey = undefined;
-        }
+        // Clean up setup registrations. A consumed provider key was cleared
+        // after successful handle conversion and is therefore not removed here.
+        this.cleanupConnectionRegistrations();
 
         // Clean up OTel spans for in-flight requests to prevent memory leaks
         for (const spanPtr of this.otelSpanPointers.values()) {

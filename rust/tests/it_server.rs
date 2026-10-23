@@ -7,21 +7,42 @@ use glide::FlushAllOptions;
 use glide::FlushDbOptions;
 use glide::{AsyncTypedCommands, ServerManagementCommands};
 
-resp_test!(info_non_empty, c, {
-    let info = c.info().await.unwrap();
+// TODO #7362: Change to `matrix_test!` once the typed `INFO` methods return per-node replies.
+resp_test!(info_returns_expected_fields, c, {
+    // Default fields
+    for info in common::get_info(&c, &[]).await {
+        for field in common::INFO_DEFAULT_FIELDS {
+            assert!(info.contains_key(field));
+        }
+    }
 
-    // INFO always contains the server section header.
-    assert!(!info.is_empty());
-    assert!(
-        info.contains("redis_version")
-            || info.contains("valkey_version")
-            || info.contains("# Server")
-    );
-});
+    // Valkey 9.2+ fields
+    // ------------------
 
-resp_test!(info_sections, c, {
-    let info = c.info_sections(&["server"]).await.unwrap();
-    assert!(!info.is_empty());
+    if common::version_below(&c, (9, 2, 0)).await {
+        return;
+    }
+
+    // Persistence fields
+    for persistence in common::get_info(&c, &["persistence"]).await {
+        assert!(common::BGSAVE_TYPES.contains(&persistence["rdb_current_bgsave_type"].as_str()));
+        assert!(common::BGSAVE_TYPES.contains(&persistence["rdb_last_bgsave_type"].as_str()));
+
+        let remaining_name = "forkless_estimated_seconds_remaining";
+        let remaining_value = common::parse_int(&persistence[remaining_name], remaining_name);
+        assert!(remaining_value >= -1);
+    }
+
+    // Cluster info fields
+    // TODO #7362: Uncomment once the typed `INFO` methods return per-node replies.
+    // let is_cluster = (&c as &dyn std::any::Any).is::<glide::GlideClusterClient>();
+    // if is_cluster {
+    //     for cluster_info in common::get_info(&c, &["cluster_info"]).await {
+    //         let fallbacks_name = "cluster_io_main_thread_fallbacks";
+    //         let fallbacks_value = common::parse_int(&cluster_info[fallbacks_name], fallbacks_name);
+    //         assert!(fallbacks_value >= 0);
+    //     }
+    // }
 });
 
 resp_test!(dbsize, c, {

@@ -16,11 +16,23 @@ import java.util.concurrent.CompletableFuture;
  * @see <a href="https://valkey.io/commands/?group=generic">Generic Commands</a>
  */
 public interface GenericBaseCommands {
-    /** Valkey API keyword used to replace the destination key. */
-    String REPLACE_VALKEY_API = "REPLACE";
+    /**
+     * Valkey API keyword used to replace the destination key.
+     *
+     * @deprecated Valkey API keyword constants are internal and will be removed in a future major
+     *     release.
+     */
+    // TODO #7401: Move to glide.internal.ValkeyKeywords.
+    @Deprecated String REPLACE_VALKEY_API = "REPLACE";
 
-    /** Valkey API keyword used to denote the destination db index. */
-    String DB_VALKEY_API = "DB";
+    /**
+     * Valkey API keyword used to denote the destination db index.
+     *
+     * @deprecated Valkey API keyword constants are internal and will be removed in a future major
+     *     release.
+     */
+    // TODO #7401: Move to glide.internal.ValkeyKeywords.
+    @Deprecated String DB_VALKEY_API = "DB";
 
     /**
      * Removes the specified <code>keys</code> from the database. A key is ignored if it does not
