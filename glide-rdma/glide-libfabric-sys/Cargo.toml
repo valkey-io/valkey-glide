@@ -11,8 +11,11 @@
 #   3. libfabric's public headers are vendored under `include/` and the bindgen
 #      output is generated once and kept as `src/bindings.rs`. Together these mean
 #      a build needs neither libfabric nor libclang on the machine.
-#   4. Upstream's `asan` feature and its tests are removed.
-#   5. Renamed from `ofi-libfabric-sys`, which upstream publishes on crates.io,
+#   4. The build prints no warnings: the `cargo:warning` lines listing include
+#      paths are removed, and `wrapper.c` has no wrappers for the functions
+#      libfabric marks deprecated, which glide-rdma does not use.
+#   5. Upstream's `asan` feature and its tests are removed.
+#   6. Renamed from `ofi-libfabric-sys`, which upstream publishes on crates.io,
 #      so that this copy can be published alongside glide-rdma.
 #
 # This software is available to you under a choice of one of two
