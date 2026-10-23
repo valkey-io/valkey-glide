@@ -65,6 +65,29 @@ ffi/
 - Each client is built and released independently, with its own isolated package name and pyproject.toml.
 - Shared logic remains fully decoupled from both clients and reusable between them.
 
+### Windows wheel CI (experimental)
+
+The `Python - Windows wheel builds` workflow builds both `valkey-glide` (async)
+and `valkey-glide-sync` on native Windows runners:
+
+| Architecture | CPython versions | Runner |
+| --- | --- | --- |
+| AMD64 | 3.9–3.14 | `windows-latest` |
+| ARM64 | 3.11–3.14 | `windows-11-arm` |
+
+Pull requests build CPython 3.14 on both architectures; a manual workflow run
+builds the full matrix. PyPy and free-threaded Python wheels are not included.
+The workflow checks wheel imports, connection-error and timeout handling, FFI
+layouts, and response-pipe regressions under asyncio and trio.
+Async PubSub callbacks run on the client's owning asyncio loop or trio run,
+not on the Windows response-pipe reader thread.
+
+These are **build-only CI artifacts**, named `windows-ci-*`, not published
+Windows packages. Successful commands against a real Valkey server on Windows
+are not yet covered. Windows integration CI must land before enabling PyPI
+publishing or claiming supported Windows releases. This workflow does not start
+the PyPI CD matrix or its self-hosted EC2 runner.
+
 ## Prerequisites
 
 ---
