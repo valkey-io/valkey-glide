@@ -190,12 +190,24 @@ async def create_iam_client(
 
     credentials = ServerCredentials(username=IAM_USERNAME, iam_config=iam_config)
 
-    # Note: use_tls is set from request which respects the --tls flag
+    # IAM auth requires TLS, so ignore --tls and always go over the TLS cluster
+    # fixture. Certs are self-signed, hence insecure TLS. Under
+    # --cluster-endpoints/--standalone-endpoints conftest provisions no TLS
+    # fixture (the endpoints are plaintext), so skip rather than error.
+    attr = "valkey_tls_cluster" if cluster_mode else "standalone_tls_cluster"
+    tls_cluster = getattr(pytest, attr, None)
+    if tls_cluster is None:
+        pytest.skip(
+            "IAM tests require a TLS server; none provisioned for external endpoints"
+        )
     return await create_client(
         request=request,
         cluster_mode=cluster_mode,
         protocol=protocol,
         credentials=credentials,
+        use_tls=True,
+        tls_insecure=True,
+        valkey_cluster=tls_cluster,
     )
 
 
@@ -849,6 +861,16 @@ async def test_live_async_sync_provider_ids_coexist_without_registry_leaks(
     async_clients = []
     sync_clients = []
 
+    # IAM auth requires TLS; the direct sync client must use the same TLS
+    # cluster fixture create_iam_client resolves for the async side. Under
+    # external endpoints conftest provisions none, so skip rather than error.
+    tls_attr = "valkey_tls_cluster" if cluster_mode else "standalone_tls_cluster"
+    tls_cluster = getattr(pytest, tls_attr, None)
+    if tls_cluster is None:
+        pytest.skip(
+            "IAM tests require a TLS server; none provisioned for external endpoints"
+        )
+
     def _credentials():
         return ServerCredentials(
             username=IAM_USERNAME,
@@ -880,6 +902,9 @@ async def test_live_async_sync_provider_ids_coexist_without_registry_leaks(
                 cluster_mode=cluster_mode,
                 protocol=protocol,
                 credentials=_credentials(),
+                valkey_cluster=tls_cluster,
+                use_tls=True,
+                tls_insecure=True,
             )
         )
         sync_clients.append(client)

@@ -21,6 +21,9 @@ const encodeRequest = (
         lazyConnect: true,
         ...(includeIam
             ? {
+                  // IAM requires TLS; set it so the request reaches the
+                  // native handle logic under test instead of the TLS guard.
+                  tlsMode: connection_request.TlsMode.SecureTls,
                   authenticationInfo: {
                       username: "iam-user",
                       iamCredentials: {

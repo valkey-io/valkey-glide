@@ -391,8 +391,11 @@ func TestDirectClientsRetainCredentialProviderUntilClose(t *testing.T) {
 	type factory func(config.GlideCredentialProvider) (*baseClient, error)
 	factories := map[string]factory{
 		"standalone": func(provider config.GlideCredentialProvider) (*baseClient, error) {
+			// IAM requires TLS; set it so the request reaches the
+			// handle-retention path under test instead of the TLS guard.
 			cfg := config.NewClientConfiguration().
 				WithAddress(&config.NodeAddress{Host: "127.0.0.1", Port: 1}).
+				WithUseTLS(true).
 				WithCredentials(testIamCredentials(t, provider)).
 				WithLazyConnect(true)
 			client, err := NewClient(cfg)
@@ -404,6 +407,7 @@ func TestDirectClientsRetainCredentialProviderUntilClose(t *testing.T) {
 		"cluster": func(provider config.GlideCredentialProvider) (*baseClient, error) {
 			cfg := config.NewClusterClientConfiguration().
 				WithAddress(&config.NodeAddress{Host: "127.0.0.1", Port: 1}).
+				WithUseTLS(true).
 				WithCredentials(testIamCredentials(t, provider)).
 				WithLazyConnect(true)
 			client, err := NewClusterClient(cfg)
@@ -474,8 +478,11 @@ func TestDirectClientCreationFailureUnregistersCredentialProvider(t *testing.T) 
 	type constructor func(config.GlideCredentialProvider) error
 	constructors := map[string]constructor{
 		"standalone": func(provider config.GlideCredentialProvider) error {
+			// IAM requires TLS; set it so the request reaches the
+			// provider-invocation path under test instead of the TLS guard.
 			cfg := config.NewClientConfiguration().
 				WithAddress(&config.NodeAddress{Host: "127.0.0.1", Port: 1}).
+				WithUseTLS(true).
 				WithCredentials(testIamCredentials(t, provider))
 			_, err := NewClient(cfg)
 			return err
@@ -483,6 +490,7 @@ func TestDirectClientCreationFailureUnregistersCredentialProvider(t *testing.T) 
 		"cluster": func(provider config.GlideCredentialProvider) error {
 			cfg := config.NewClusterClientConfiguration().
 				WithAddress(&config.NodeAddress{Host: "127.0.0.1", Port: 1}).
+				WithUseTLS(true).
 				WithCredentials(testIamCredentials(t, provider))
 			_, err := NewClusterClient(cfg)
 			return err

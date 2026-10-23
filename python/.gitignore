@@ -164,6 +164,7 @@ glide-sync/glide-core
 glide-sync/glide-logger
 glide-sync/glide-telemetry
 glide-sync/glide_shared
+glide-sync/glide-shared-rs
 glide-async/python/glide_shared
 
 # Copied README files for packaging
