@@ -21,6 +21,11 @@
  * probe above: a bare COUNT token is invalid FT.SEARCH syntax on search 1.2.x
  * too, so "count maps to LIMIT 0 0" below runs unconditionally and is the
  * test that actually exercises CI's own search 1.2.1 image for this change.
+ * It queries a real field-filter expression rather than a bare "*" wildcard,
+ * since "*" as a standalone query string is itself rejected by 1.2.x
+ * ("Invalid query string syntax") and only became valid there in 1.3 --
+ * unrelated to LIMIT or count, confirmed directly against both engine
+ * versions (matches Java's ft_search_count_maps_to_limit_zero_zero).
  * The 1.3-gated variant covers only the INKEYS/reducer/vector-type/parity
  * additions that genuinely need 1.3.
  */
@@ -225,10 +230,18 @@ describe("GlideFt", () => {
 
                         await sleep();
 
+                        // A bare "*" wildcard query is rejected outright by
+                        // search 1.2.x ("Invalid query string syntax") -- it
+                        // only became valid as a standalone token in 1.3. This
+                        // test runs unconditionally against both versions
+                        // (see the file docstring), so it uses a real
+                        // field-filter query instead, which both versions
+                        // accept identically (matches Java's
+                        // ft_search_count_maps_to_limit_zero_zero).
                         const result = await GlideFt.search(
                             client,
                             indexName,
-                            "*",
+                            "@title:hello",
                             { count: true } as FtSearchOptions,
                         );
                         expect(result[0]).toBe(2);
