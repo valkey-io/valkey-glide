@@ -5776,7 +5776,12 @@ pub(crate) mod shared_client_tests {
     ///    on release: re-acquire and assert `PING` to each primary returns `PONG`
     ///    (an open MULTI replies `QUEUED`). Fails deterministically on the pre-fix
     ///    single-node DISCARD, which leaves ≥2 of 3 primaries dirty.
-    /// 2. (Valkey 9.0+ multi-db clusters) A borrow that `SELECT`ed another db must
+    /// 2. (all versions) A MULTI opened on a SINGLE primary must still re-idle: the
+    ///    release DISCARD fans out to `AllNodes`, so the owner answers `+OK` while
+    ///    the siblings answer "DISCARD without MULTI" and the aggregate is `Err` —
+    ///    which must be tolerated, not read as a reset failure that discards the
+    ///    connection. Exercises the classify-by-message branch on a live cluster.
+    /// 3. (Valkey 9.0+ multi-db clusters) A borrow that `SELECT`ed another db must
     ///    be restored to the configured db on release — guards against the wrong
     ///    fix of skipping `SELECT` by topology, which would leak db 7.
     #[cfg(feature = "proto")]
@@ -5894,7 +5899,76 @@ pub(crate) mod shared_client_tests {
                 }
             }
 
-            // ── 2. db drift must be restored (Valkey 9.0+ multi-db cluster) ──
+            // ── 2. MULTI open on a SINGLE primary: release must still re-idle ──
+            // The production shape the AllNodes DISCARD aggregation must tolerate:
+            // the owning node answers +OK, every other node answers "DISCARD
+            // without MULTI", so the aggregate is Err even though the reset
+            // succeeded. Section 1's all-nodes MULTI makes every DISCARD succeed
+            // (aggregate Ok), so only this single-node case exercises the
+            // classify-by-message branch on a live cluster.
+            let client = Client::new(connection_request.clone().into(), None)
+                .await
+                .expect("cluster client creation");
+            let client_id = add_and_acquire(pool_arc.clone(), client).await;
+            let one_primary = {
+                let key = format!("{{{}}}:pool7301multi", generate_random_string(8));
+                RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(Route::new(
+                    get_slot(key.as_bytes()),
+                    SlotAddr::Master,
+                )))
+            };
+            {
+                let pool = pool_arc.lock().await;
+                let mut entry = pool.in_use.get_mut(&client_id).expect("borrowed entry");
+                entry
+                    .client
+                    .send_command(&mut redis::cmd("MULTI"), Some(one_primary.clone()))
+                    .await
+                    .expect("MULTI on a single primary");
+            }
+            release_client_async(pool_arc.clone(), client_id).await;
+            {
+                let mut pool = pool_arc.lock().await;
+                assert_eq!(
+                    pool.idle_count(),
+                    1,
+                    "a single-node-MULTI release must re-idle: the siblings' \
+                     \"DISCARD without MULTI\" aggregate error must be tolerated, not \
+                     treated as a reset failure"
+                );
+                assert!(
+                    pool.drain_discarded_ids().is_empty(),
+                    "nothing should be discarded"
+                );
+                assert_eq!(
+                    pool.try_acquire(),
+                    client_id as i64,
+                    "same connection reused"
+                );
+            }
+            {
+                let pool = pool_arc.lock().await;
+                let mut entry = pool.in_use.get_mut(&client_id).expect("reused entry");
+                let reply = entry
+                    .client
+                    .send_command(&mut redis::cmd("PING"), Some(all_nodes()))
+                    .await
+                    .expect("PING all primaries on the reused connection");
+                let nodes: Vec<Value> = match reply {
+                    Value::Map(m) => m.into_iter().map(|(_, v)| v).collect(),
+                    other => panic!("expected per-node map from AllNodes PING: {other:?}"),
+                };
+                for v in nodes {
+                    assert_eq!(
+                        v,
+                        Value::SimpleString("PONG".into()),
+                        "the owning primary still had MULTI open after release \
+                         (got {v:?} instead of PONG)"
+                    );
+                }
+            }
+
+            // ── 3. db drift must be restored (Valkey 9.0+ multi-db cluster) ──
             let mut version_probe = Client::new(connection_request.clone().into(), None)
                 .await
                 .expect("cluster client creation");
