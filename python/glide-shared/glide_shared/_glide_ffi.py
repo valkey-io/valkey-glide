@@ -223,6 +223,20 @@ class _GlideFFI:
                 size_t* resolved_host_len
             );
 
+            typedef uint8_t (*CredentialProviderCallback)(
+                uintptr_t client_id,
+                uint8_t* access_key_id_buf,
+                size_t access_key_id_buf_len,
+                size_t* access_key_id_len,
+                uint8_t* secret_access_key_buf,
+                size_t secret_access_key_buf_len,
+                size_t* secret_access_key_len,
+                uint8_t* session_token_buf,
+                size_t session_token_buf_len,
+                size_t* session_token_len,
+                int64_t* expires_at_epoch_millis
+            );
+
             typedef struct {
                 int _type;
                 union {
@@ -246,6 +260,15 @@ class _GlideFFI:
                 PubSubCallback pubsub_callback,
                 AddressResolverCallback address_resolver,
                 uintptr_t client_id
+            );
+            const ConnectionResponse* create_client_with_credential_provider(
+                const uint8_t* connection_request_bytes,
+                size_t connection_request_len,
+                const ClientType* client_type,
+                PubSubCallback pubsub_callback,
+                AddressResolverCallback address_resolver,
+                uintptr_t client_id,
+                CredentialProviderCallback credential_provider
             );
             void close_client(const void* client_adapter_ptr);
             void init_async_pipe(int pipe_write_fd);

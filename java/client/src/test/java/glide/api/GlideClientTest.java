@@ -28,6 +28,7 @@ import static command_request.CommandRequestOuterClass.RequestType.DBSize;
 import static command_request.CommandRequestOuterClass.RequestType.Decr;
 import static command_request.CommandRequestOuterClass.RequestType.DecrBy;
 import static command_request.CommandRequestOuterClass.RequestType.Del;
+import static command_request.CommandRequestOuterClass.RequestType.DelIfEq;
 import static command_request.CommandRequestOuterClass.RequestType.Dump;
 import static command_request.CommandRequestOuterClass.RequestType.Echo;
 import static command_request.CommandRequestOuterClass.RequestType.Exists;
@@ -4106,6 +4107,54 @@ public class GlideClientTest {
         // verify
         assertEquals(testResponse, response);
         assertTrue(payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void sismemberIfExists_returns_success() {
+        // setup
+        String key = "testKey";
+        String member = "testMember";
+        String[] arguments = new String[] {key, member, "XX"};
+
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(-1L);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(SIsMember), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.sismemberIfExists(key, member);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(-1L, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void sismemberIfExists_binary_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        GlideString member = gs("testMember");
+        GlideString[] arguments = new GlideString[] {key, member, gs("XX")};
+
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(-1L);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(SIsMember), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.sismemberIfExists(key, member);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(-1L, payload);
     }
 
     @SneakyThrows
@@ -11371,6 +11420,27 @@ public class GlideClientTest {
         // verify
         assertEquals(testResponse, response);
         assertEquals(1L, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void delifeq() {
+        // setup
+        String key = "testKey";
+        String value = "testValue";
+        CompletableFuture<Boolean> testResponse = new CompletableFuture<>();
+        testResponse.complete(true);
+        when(commandManager.<Boolean>submitNewCommand(
+                        eq(DelIfEq), eq(new String[] {key, value}), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Boolean> response = service.delifeq(key, value);
+        Boolean payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(true, payload);
     }
 
     @SneakyThrows

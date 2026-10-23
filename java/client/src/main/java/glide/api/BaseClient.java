@@ -31,6 +31,7 @@ import static command_request.CommandRequestOuterClass.RequestType.Copy;
 import static command_request.CommandRequestOuterClass.RequestType.Decr;
 import static command_request.CommandRequestOuterClass.RequestType.DecrBy;
 import static command_request.CommandRequestOuterClass.RequestType.Del;
+import static command_request.CommandRequestOuterClass.RequestType.DelIfEq;
 import static command_request.CommandRequestOuterClass.RequestType.Dump;
 import static command_request.CommandRequestOuterClass.RequestType.EvalReadOnly;
 import static command_request.CommandRequestOuterClass.RequestType.EvalShaReadOnly;
@@ -221,6 +222,7 @@ import static glide.api.models.commands.stream.StreamGroupOptions.ENTRIES_READ_V
 import static glide.api.models.commands.stream.StreamReadOptions.READ_COUNT_VALKEY_API;
 import static glide.api.models.commands.stream.XInfoStreamOptions.COUNT;
 import static glide.api.models.commands.stream.XInfoStreamOptions.FULL;
+import static glide.internal.ValkeyKeywords.XX;
 import static glide.utils.ArrayTransformUtils.cast3DArray;
 import static glide.utils.ArrayTransformUtils.castArray;
 import static glide.utils.ArrayTransformUtils.castArrayofArrays;
@@ -372,22 +374,84 @@ public abstract class BaseClient
     }
 
     // Constants for various commands
-    public static final String WITH_VALUES_VALKEY_API = "WITHVALUES";
-    public static final String COUNT_VALKEY_API = "COUNT";
-    public static final String WITH_SCORE_VALKEY_API = "WITHSCORE";
-    public static final String WITH_SCORES_VALKEY_API = "WITHSCORES";
-    public static final String LIMIT_VALKEY_API = "LIMIT";
-    public static final String SET_LIMIT_VALKEY_API = "LIMIT";
-    public static final String COUNT_FOR_LIST_VALKEY_API = "COUNT";
-    public static final String REPLACE_VALKEY_API = "REPLACE";
-    public static final String LEN_VALKEY_API = "LEN";
-    public static final String IDX_COMMAND_STRING = "IDX";
-    public static final String MINMATCHLEN_COMMAND_STRING = "MINMATCHLEN";
-    public static final String WITHMATCHLEN_COMMAND_STRING = "WITHMATCHLEN";
-    public static final String LCS_MATCHES_RESULT_KEY = "matches";
+    // TODO #7401: Move to glide.internal.ValkeyKeywords.
+    /**
+     * @deprecated Valkey API keyword constants are internal and will be removed in a future major
+     *     release.
+     */
+    @Deprecated public static final String WITH_VALUES_VALKEY_API = "WITHVALUES";
 
-    protected static final String SCHEDULE_VALKEY_API = "SCHEDULE";
-    protected static final String CANCEL_VALKEY_API = "CANCEL";
+    /**
+     * @deprecated Valkey API keyword constants are internal and will be removed in a future major
+     *     release.
+     */
+    @Deprecated public static final String COUNT_VALKEY_API = "COUNT";
+
+    /**
+     * @deprecated Valkey API keyword constants are internal and will be removed in a future major
+     *     release.
+     */
+    @Deprecated public static final String WITH_SCORE_VALKEY_API = "WITHSCORE";
+
+    /**
+     * @deprecated Valkey API keyword constants are internal and will be removed in a future major
+     *     release.
+     */
+    @Deprecated public static final String WITH_SCORES_VALKEY_API = "WITHSCORES";
+
+    /**
+     * @deprecated Valkey API keyword constants are internal and will be removed in a future major
+     *     release.
+     */
+    @Deprecated public static final String LIMIT_VALKEY_API = "LIMIT";
+
+    /**
+     * @deprecated Valkey API keyword constants are internal and will be removed in a future major
+     *     release.
+     */
+    @Deprecated public static final String SET_LIMIT_VALKEY_API = "LIMIT";
+
+    /**
+     * @deprecated Valkey API keyword constants are internal and will be removed in a future major
+     *     release.
+     */
+    @Deprecated public static final String COUNT_FOR_LIST_VALKEY_API = "COUNT";
+
+    /**
+     * @deprecated Valkey API keyword constants are internal and will be removed in a future major
+     *     release.
+     */
+    @Deprecated public static final String REPLACE_VALKEY_API = "REPLACE";
+
+    /**
+     * @deprecated Valkey API keyword constants are internal and will be removed in a future major
+     *     release.
+     */
+    @Deprecated public static final String LEN_VALKEY_API = "LEN";
+
+    /**
+     * @deprecated Valkey API keyword constants are internal and will be removed in a future major
+     *     release.
+     */
+    @Deprecated public static final String IDX_COMMAND_STRING = "IDX";
+
+    /**
+     * @deprecated Valkey API keyword constants are internal and will be removed in a future major
+     *     release.
+     */
+    @Deprecated public static final String MINMATCHLEN_COMMAND_STRING = "MINMATCHLEN";
+
+    /**
+     * @deprecated Valkey API keyword constants are internal and will be removed in a future major
+     *     release.
+     */
+    @Deprecated public static final String WITHMATCHLEN_COMMAND_STRING = "WITHMATCHLEN";
+
+    /**
+     * @deprecated This reply key constant is internal and will be removed in a future major release.
+     */
+    // TODO #7401: Replace with a private constant.
+    @Deprecated public static final String LCS_MATCHES_RESULT_KEY = "matches";
 
     // Constant empty arrays to reduce allocations
     protected static final String[] EMPTY_STRING_ARRAY = new String[0];
@@ -973,7 +1037,7 @@ public abstract class BaseClient
                     "LCS result does not contain the key \"" + LCS_MATCHES_RESULT_KEY + "\"");
         }
 
-        response.put("matches", convertedMatchesObject);
+        response.put(LCS_MATCHES_RESULT_KEY, convertedMatchesObject);
         return response;
     }
 
@@ -1350,6 +1414,18 @@ public abstract class BaseClient
     public CompletableFuture<Long> append(@NonNull GlideString key, @NonNull GlideString value) {
         return commandManager.submitNewCommand(
                 Append, new GlideString[] {key, value}, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Boolean> delifeq(@NonNull String key, @NonNull String value) {
+        return commandManager.submitNewCommand(
+                DelIfEq, new String[] {key, value}, this::handleBooleanResponse);
+    }
+
+    @Override
+    public CompletableFuture<Boolean> delifeq(@NonNull GlideString key, @NonNull GlideString value) {
+        return commandManager.submitNewCommand(
+                DelIfEq, new GlideString[] {key, value}, this::handleBooleanResponse);
     }
 
     @Override
@@ -2339,6 +2415,19 @@ public abstract class BaseClient
             @NonNull GlideString key, @NonNull GlideString member) {
         return commandManager.submitNewCommand(
                 SIsMember, new GlideString[] {key, member}, this::handleBooleanResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> sismemberIfExists(@NonNull String key, @NonNull String member) {
+        return commandManager.submitNewCommand(
+                SIsMember, new String[] {key, member, XX}, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> sismemberIfExists(
+            @NonNull GlideString key, @NonNull GlideString member) {
+        return commandManager.submitNewCommand(
+                SIsMember, new GlideString[] {key, member, gs(XX)}, this::handleLongResponse);
     }
 
     @Override

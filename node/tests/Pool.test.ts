@@ -6,7 +6,12 @@
  */
 
 import { afterAll, beforeAll, describe, expect, it } from "@jest/globals";
-import { ClientPool, GlideClient, GlideClientConfiguration } from "..";
+import {
+    ClientPool,
+    GlideClient,
+    GlideClientConfiguration,
+    ServiceType,
+} from "..";
 import { ValkeyCluster } from "../../utils/TestUtils.js";
 import {
     getClientConfigurationOption,
@@ -507,6 +512,39 @@ describe("ClientPool", () => {
                 pool.close();
             },
             TIMEOUT,
+        );
+    });
+});
+
+describe("Pool credential provider guard", () => {
+    const config = (provider: unknown) =>
+        ({
+            addresses: [{ host: "invalid.example", port: 1 }],
+            credentials: {
+                username: "iam-user",
+                iamConfig: {
+                    clusterName: "cluster",
+                    service: ServiceType.Elasticache,
+                    region: "us-east-1",
+                    credentialProvider: provider,
+                },
+            },
+        }) as unknown as GlideClientConfiguration;
+
+    it("rejects a custom provider before native pool creation", async () => {
+        await expect(
+            ClientPool.create(
+                config(() => ({
+                    accessKeyId: "access",
+                    secretAccessKey: "secret",
+                })),
+            ),
+        ).rejects.toThrow("cannot use a custom IAM credentials provider");
+    });
+
+    it("rejects a malformed provider before native pool creation", async () => {
+        await expect(ClientPool.create(config("invalid"))).rejects.toThrow(
+            "credentialProvider must be a function",
         );
     });
 });
