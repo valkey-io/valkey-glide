@@ -62,7 +62,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
-
 /**
  * Live tests for the valkey-search 1.3 stable surface: INKEYS, FLOAT16/BFLOAT16 vector types,
  * FT.CREATE FILTER/SCORE_FIELD/NOHL, per-field UNF, and count's LIMIT 0 0 serialization.
@@ -611,8 +610,8 @@ public class VectorSearch13Tests {
 
     /**
      * Creates an index with a TEXT field ("title") and a 2-dimensional FLAT FLOAT32 VECTOR field
-     * ("vec"), seeds the HYBRID_DOC_TEXT_WINNER/HYBRID_DOC_VECTOR_WINNER fixture (mirroring
-     * Python's HYBRID_DOCS), and waits for both documents to be indexed. Returns the index name.
+     * ("vec"), seeds the HYBRID_DOC_TEXT_WINNER/HYBRID_DOC_VECTOR_WINNER fixture (mirroring Python's
+     * HYBRID_DOCS), and waits for both documents to be indexed. Returns the index name.
      */
     @SneakyThrows
     private static String createHybridIndex(BaseClient client, String prefix) {
@@ -626,7 +625,10 @@ public class VectorSearch13Tests {
                                 client,
                                 index,
                                 new FieldInfo[] {new FieldInfo("title", new TextField()), vecField},
-                                FTCreateOptions.builder().dataType(DataType.HASH).prefixes(new String[] {prefix}).build())
+                                FTCreateOptions.builder()
+                                        .dataType(DataType.HASH)
+                                        .prefixes(new String[] {prefix})
+                                        .build())
                         .get());
         Map<String, Object> textWinnerFields = new HashMap<>();
         textWinnerFields.put("title", "hello hello hello world");
@@ -668,7 +670,10 @@ public class VectorSearch13Tests {
                                 client,
                                 index,
                                 new FieldInfo[] {new FieldInfo("title", new TextField())},
-                                FTCreateOptions.builder().dataType(DataType.HASH).prefixes(new String[] {prefix}).build())
+                                FTCreateOptions.builder()
+                                        .dataType(DataType.HASH)
+                                        .prefixes(new String[] {prefix})
+                                        .build())
                         .get());
         try {
             Map<String, String> doc1 = new HashMap<>();
@@ -733,7 +738,10 @@ public class VectorSearch13Tests {
                                     new FieldInfo("title", new TextField(true, null, false, false, false, false)),
                                     new FieldInfo("price", new NumericField(true))
                                 },
-                                FTCreateOptions.builder().dataType(DataType.HASH).prefixes(new String[] {prefix}).build())
+                                FTCreateOptions.builder()
+                                        .dataType(DataType.HASH)
+                                        .prefixes(new String[] {prefix})
+                                        .build())
                         .get());
         try {
             Map<String, String> doc1 = new HashMap<>();
@@ -796,7 +804,10 @@ public class VectorSearch13Tests {
                                 client,
                                 index,
                                 new FieldInfo[] {new FieldInfo("title", new TextField())},
-                                FTCreateOptions.builder().dataType(DataType.HASH).prefixes(new String[] {prefix}).build())
+                                FTCreateOptions.builder()
+                                        .dataType(DataType.HASH)
+                                        .prefixes(new String[] {prefix})
+                                        .build())
                         .get());
         try {
             Map<String, String> doc = new HashMap<>();
@@ -841,7 +852,10 @@ public class VectorSearch13Tests {
                                 client,
                                 index,
                                 new FieldInfo[] {new FieldInfo("title", new TextField())},
-                                FTCreateOptions.builder().dataType(DataType.HASH).prefixes(new String[] {prefix}).build())
+                                FTCreateOptions.builder()
+                                        .dataType(DataType.HASH)
+                                        .prefixes(new String[] {prefix})
+                                        .build())
                         .get());
         try {
             Map<String, String> doc1 = new HashMap<>();
@@ -906,7 +920,10 @@ public class VectorSearch13Tests {
                                 client,
                                 index,
                                 new FieldInfo[] {new FieldInfo("n", new NumericField(true))},
-                                FTCreateOptions.builder().dataType(DataType.HASH).prefixes(new String[] {prefix}).build())
+                                FTCreateOptions.builder()
+                                        .dataType(DataType.HASH)
+                                        .prefixes(new String[] {prefix})
+                                        .build())
                         .get());
         try {
             for (int i = 1; i <= 20; i++) {
@@ -974,7 +991,10 @@ public class VectorSearch13Tests {
                                 client,
                                 index,
                                 new FieldInfo[] {new FieldInfo("n", new NumericField(true))},
-                                FTCreateOptions.builder().dataType(DataType.HASH).prefixes(new String[] {prefix}).build())
+                                FTCreateOptions.builder()
+                                        .dataType(DataType.HASH)
+                                        .prefixes(new String[] {prefix})
+                                        .build())
                         .get());
         try {
             for (int i = 1; i <= 5; i++) {
@@ -1033,7 +1053,10 @@ public class VectorSearch13Tests {
                                 client,
                                 index,
                                 new FieldInfo[] {new FieldInfo("n", new NumericField(true))},
-                                FTCreateOptions.builder().dataType(DataType.HASH).prefixes(new String[] {prefix}).build())
+                                FTCreateOptions.builder()
+                                        .dataType(DataType.HASH)
+                                        .prefixes(new String[] {prefix})
+                                        .build())
                         .get());
         for (int i = 1; i <= 20; i++) {
             Map<String, String> fields = new HashMap<>();
@@ -1139,7 +1162,8 @@ public class VectorSearch13Tests {
                     }
                 }
             }
-            assertTrue(replicaAddrs.size() >= 1, "test fixture bug: no replica found for index's own shard");
+            assertTrue(
+                    replicaAddrs.size() >= 1, "test fixture bug: no replica found for index's own shard");
 
             Object[] anotherPage =
                     (Object[])
@@ -1261,7 +1285,8 @@ public class VectorSearch13Tests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void ft_hybrid_combine_methods_fuse_results_linear_text_only(BaseClient client) {
-        assertCombineWinner(client, new FTHybridCombine.Linear(1.0, 0.0, null, null), HYBRID_DOC_TEXT_WINNER);
+        assertCombineWinner(
+                client, new FTHybridCombine.Linear(1.0, 0.0, null, null), HYBRID_DOC_TEXT_WINNER);
     }
 
     @SneakyThrows
@@ -1277,9 +1302,7 @@ public class VectorSearch13Tests {
     @MethodSource("getClients")
     public void ft_hybrid_combine_methods_fuse_results_function_text(BaseClient client) {
         assertCombineWinner(
-                client,
-                new FTHybridCombine.Function("@" + HYBRID_SEARCH_ALIAS),
-                HYBRID_DOC_TEXT_WINNER);
+                client, new FTHybridCombine.Function("@" + HYBRID_SEARCH_ALIAS), HYBRID_DOC_TEXT_WINNER);
     }
 
     @SneakyThrows
@@ -1479,7 +1502,10 @@ public class VectorSearch13Tests {
                                 client,
                                 index,
                                 new FieldInfo[] {new FieldInfo("title", new TextField()), vecField},
-                                FTCreateOptions.builder().dataType(DataType.HASH).prefixes(new String[] {prefix}).build())
+                                FTCreateOptions.builder()
+                                        .dataType(DataType.HASH)
+                                        .prefixes(new String[] {prefix})
+                                        .build())
                         .get());
         try {
             for (int i = 1; i <= docCount; i++) {
@@ -1510,7 +1536,8 @@ public class VectorSearch13Tests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClustersOnly")
-    public void ft_hybrid_with_cursor_prefer_replica_client_paged_to_exhaustion(BaseClient clusterClient) {
+    public void ft_hybrid_with_cursor_prefer_replica_client_paged_to_exhaustion(
+            BaseClient clusterClient) {
         Assumptions.assumeTrue(
                 capability, "search module present but pre-1.3 (INKEYS probe rejected it)");
         GlideClusterClient client = (GlideClusterClient) clusterClient;
@@ -1609,4 +1636,3 @@ public class VectorSearch13Tests {
         }
     }
 }
-

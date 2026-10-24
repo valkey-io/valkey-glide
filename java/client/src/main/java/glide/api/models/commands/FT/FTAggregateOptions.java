@@ -32,9 +32,9 @@ public class FTAggregateOptions {
 
     /**
      * Entries for the LOAD clause that also rename their field via {@code AS}, reusing {@link
-     * LoadField} (valkey-search 1.3.0; see {@link LoadField}'s docstring for the compatibility gate).
-     * Can be freely mixed with {@link #loadFields} in the same {@link #toArgs()} call by calling both
-     * builder methods; the two lists are concatenated, plain fields first.
+     * LoadField} (valkey-search 1.3.0; see {@link LoadField}'s docstring for the compatibility
+     * gate). Can be freely mixed with {@link #loadFields} in the same {@link #toArgs()} call by
+     * calling both builder methods; the two lists are concatenated, plain fields first.
      */
     private final LoadField[] loadFieldsWithAlias;
 
@@ -60,22 +60,24 @@ public class FTAggregateOptions {
 
     /**
      * The scoring function used to compute {@code __score} and rank results (valkey-search 1.3.0,
-     * {@code src/indexes/scoring/scorer.h}). {@code "BM25STD"} is the only value currently registered
-     * and selectable; any other value is rejected by the server. Has no visible effect unless
-     * combined with {@link #addScores} (or inspected indirectly via a SORTBY on {@code __score}).
+     * {@code src/indexes/scoring/scorer.h}). {@code "BM25STD"} is the only value currently
+     * registered and selectable; any other value is rejected by the server. Has no visible effect
+     * unless combined with {@link #addScores} (or inspected indirectly via a SORTBY on {@code
+     * __score}).
      */
     private final GlideString scorer;
 
     /**
      * Requests a paged reply instead of the whole result set at once. See {@link FTWithCursor}. The
-     * reply shape becomes a two-element array of {@code [rows, cursorId]}, where {@code rows} is this
-     * same aggregate response shape and {@code cursorId} is passed to a subsequent {@link
+     * reply shape becomes a two-element array of {@code [rows, cursorId]}, where {@code rows} is
+     * this same aggregate response shape and {@code cursorId} is passed to a subsequent {@link
      * FT#cursorRead} call to fetch the next page ({@code 0} once exhausted).
      *
      * <p>A paged query, and every subsequent FT.CURSOR READ/DEL against the cursor it opens, always
      * reads from the PRIMARY of the index's slot, regardless of the client's {@code ReadFrom}
-     * configuration -- a cursor is a per-process, node-local resource on the server that opened it. A
-     * plain aggregate without {@code withCursor} is unaffected and still prefers replicas as normal.
+     * configuration -- a cursor is a per-process, node-local resource on the server that opened it.
+     * A plain aggregate without {@code withCursor} is unaffected and still prefers replicas as
+     * normal.
      */
     private final FTWithCursor withCursor;
 
@@ -201,8 +203,8 @@ public class FTAggregateOptions {
      * compatibility flag). Below {@code search.emulate-release 1.3.0}, the legacy branch does not
      * recognise {@code AS} as a rename keyword at all: it is consumed as just another LOAD field
      * token rather than a rename directive. GLIDE does not validate this client-side; against a
-     * pre-1.3.0 emulate-release the server rejects the command outright with a {@code
-     * RequestError} reading "Index: field `AS` does not exist".
+     * pre-1.3.0 emulate-release the server rejects the command outright with a {@code RequestError}
+     * reading "Index: field `AS` does not exist".
      */
     public static class LoadField {
         private final GlideString fieldIdentifier;
@@ -353,10 +355,10 @@ public class FTAggregateOptions {
         }
 
         /**
-         * Add {@link Filter}, {@link Limit}, {@link GroupBy}, {@link SortBy} or {@link Apply} clause to
-         * the pipeline, that can be repeated multiple times in any order and be freely intermixed. They
-         * are applied in the order specified, with the output of one clause feeding the input of the
-         * next clause.
+         * Add {@link Filter}, {@link Limit}, {@link GroupBy}, {@link SortBy} or {@link Apply}
+         * clause to the pipeline, that can be repeated multiple times in any order and be freely
+         * intermixed. They are applied in the order specified, with the output of one clause
+         * feeding the input of the next clause.
          */
         public FTAggregateOptionsBuilder addClause(@NonNull FTAggregateClause clause) {
             if (clauses == null) clauses = new ArrayList<>();
@@ -443,14 +445,16 @@ public class FTAggregateOptions {
         @Override
         GlideString[] toArgs() {
             return new GlideString[] {
-                gs(ClauseType.LIMIT.toString()), gs(Integer.toString(offset)), gs(Integer.toString(count))
+                gs(ClauseType.LIMIT.toString()),
+                gs(Integer.toString(offset)),
+                gs(Integer.toString(count))
             };
         }
     }
 
     /**
-     * Filter the results using predicate expression relating to values in each result. It is applied
-     * post query and relate to the current state of the pipeline.
+     * Filter the results using predicate expression relating to values in each result. It is
+     * applied post query and relate to the current state of the pipeline.
      */
     public static class Filter extends FTAggregateClause {
         private final GlideString expression;
@@ -487,9 +491,10 @@ public class FTAggregateOptions {
         /**
          * Initialize a new instance.
          *
-         * @param properties The list of properties to be used for grouping the results in the pipeline.
-         * @param reducers The list of functions that handles the group entries by performing multiple
-         *     aggregate operations.
+         * @param properties The list of properties to be used for grouping the results in the
+         *     pipeline.
+         * @param reducers The list of functions that handles the group entries by performing
+         *     multiple aggregate operations.
          */
         public GroupBy(@NonNull GlideString[] properties, @NonNull Reducer[] reducers) {
             this.properties = properties;
@@ -499,9 +504,10 @@ public class FTAggregateOptions {
         /**
          * Initialize a new instance.
          *
-         * @param properties The list of properties to be used for grouping the results in the pipeline.
-         * @param reducers The list of functions that handles the group entries by performing multiple
-         *     aggregate operations.
+         * @param properties The list of properties to be used for grouping the results in the
+         *     pipeline.
+         * @param reducers The list of functions that handles the group entries by performing
+         *     multiple aggregate operations.
          */
         public GroupBy(@NonNull String[] properties, @NonNull Reducer[] reducers) {
             this.properties = toGlideStringArray(properties);
@@ -537,7 +543,8 @@ public class FTAggregateOptions {
              * @param args The list of arguments for the reducer.
              * @param name User defined property name for the reducer.
              */
-            public Reducer(@NonNull String function, @NonNull GlideString[] args, @NonNull String name) {
+            public Reducer(
+                    @NonNull String function, @NonNull GlideString[] args, @NonNull String name) {
                 this.function = function;
                 this.args = args;
                 this.name = name;
@@ -583,15 +590,18 @@ public class FTAggregateOptions {
             GlideString[] toArgs() {
                 return concatenateArrays(
                         new GlideString[] {
-                            gs(ClauseType.REDUCE.toString()), gs(function), gs(Integer.toString(args.length))
+                            gs(ClauseType.REDUCE.toString()),
+                            gs(function),
+                            gs(Integer.toString(args.length))
                         },
                         args,
                         name == null ? new GlideString[0] : new GlideString[] {gs("AS"), gs(name)});
             }
 
             /**
-             * Creates a <code>TOLIST</code> reducer, which collects all values for <code>field</code>
-             * across the records in a group into a single array, removing duplicates and <code>nil
+             * Creates a <code>TOLIST</code> reducer, which collects all values for <code>field
+             * </code> across the records in a group into a single array, removing duplicates and
+             * <code>nil
              * </code> values. If a value is itself an array, it is flattened one level before being
              * added. Values are returned in the order they were first encountered.
              *
@@ -604,24 +614,29 @@ public class FTAggregateOptions {
             }
 
             /**
-             * Creates a <code>FIRST_VALUE</code> reducer, which returns the value of <code>field</code>
-             * from a single record in the group. Without <code>by</code>, the first record encountered
-             * wins. With <code>by</code>, the record whose <code>by</code> property is smallest (<code>
+             * Creates a <code>FIRST_VALUE</code> reducer, which returns the value of <code>field
+             * </code> from a single record in the group. Without <code>by</code>, the first record
+             * encountered wins. With <code>by</code>, the record whose <code>by</code> property is
+             * smallest (<code>
              * ASC</code>, the default) or largest (<code>DESC</code>) wins; ties keep the
              * first-encountered record.
              *
              * @param field The property whose value is returned.
              * @param by The property used to choose which record's value of <code>field</code> is
-             *     returned. May be <code>null</code> if <code>order</code> is also <code>null</code>.
-             * @param order The direction used to pick the winning record when <code>by</code> is set. May
-             *     be <code>null</code> to use the default (<code>ASC</code>).
+             *     returned. May be <code>null</code> if <code>order</code> is also <code>null
+             *     </code>.
+             * @param order The direction used to pick the winning record when <code>by</code> is
+             *     set. May be <code>null</code> to use the default (<code>ASC</code>).
              * @param name User defined property name for the reducer.
              * @return A new {@link Reducer} instance configured as <code>FIRST_VALUE</code>.
              * @throws IllegalArgumentException if <code>order</code> is specified without <code>by
              *     </code>.
              */
             public static Reducer firstValue(
-                    @NonNull String field, String by, SortBy.SortOrder order, @NonNull String name) {
+                    @NonNull String field,
+                    String by,
+                    SortBy.SortOrder order,
+                    @NonNull String name) {
                 if (order != null && by == null) {
                     throw new IllegalArgumentException("firstValue: order requires by to be set.");
                 }
@@ -642,9 +657,9 @@ public class FTAggregateOptions {
             }
 
             /**
-             * Creates a <code>RANDOM_SAMPLE</code> reducer, which returns a uniform random sample of up
-             * to <code>size</code> values of <code>field</code> from the records in a group, using
-             * reservoir sampling.
+             * Creates a <code>RANDOM_SAMPLE</code> reducer, which returns a uniform random sample
+             * of up to <code>size</code> values of <code>field</code> from the records in a group,
+             * using reservoir sampling.
              *
              * @param field The property to sample values from.
              * @param size The maximum number of values to sample. Must be a non-negative integer no
@@ -652,8 +667,10 @@ public class FTAggregateOptions {
              * @param name User defined property name for the reducer.
              * @return A new {@link Reducer} instance configured as <code>RANDOM_SAMPLE</code>.
              */
-            public static Reducer randomSample(@NonNull String field, int size, @NonNull String name) {
-                return new Reducer("RANDOM_SAMPLE", new String[] {field, Integer.toString(size)}, name);
+            public static Reducer randomSample(
+                    @NonNull String field, int size, @NonNull String name) {
+                return new Reducer(
+                        "RANDOM_SAMPLE", new String[] {field, Integer.toString(size)}, name);
             }
         }
     }
@@ -690,13 +707,16 @@ public class FTAggregateOptions {
         GlideString[] toArgs() {
             return concatenateArrays(
                     new GlideString[] {
-                        gs(ClauseType.SORTBY.toString()), gs(Integer.toString(properties.length * 2)),
+                        gs(ClauseType.SORTBY.toString()),
+                        gs(Integer.toString(properties.length * 2)),
                     },
                     Stream.of(properties)
                             .map(SortProperty::toArgs)
                             .flatMap(Stream::of)
                             .toArray(size -> new GlideString[size]),
-                    max == null ? new GlideString[0] : new GlideString[] {gs("MAX"), gs(max.toString())});
+                    max == null
+                            ? new GlideString[0]
+                            : new GlideString[] {gs("MAX"), gs(max.toString())});
         }
 
         public enum SortOrder {
