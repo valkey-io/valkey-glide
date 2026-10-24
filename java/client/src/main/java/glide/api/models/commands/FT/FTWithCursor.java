@@ -8,12 +8,12 @@ import java.util.ArrayList;
 
 /**
  * The WITHCURSOR option, requesting a paged reply instead of the whole result set at once. Shared
- * verbatim between FT.AGGREGATE and FT.HYBRID -- the option's own grammar ({@code WITHCURSOR
- * [COUNT n] [MAXIDLE ms]}) and reply shape are identical regardless of which command opened the
- * cursor. A paged query, and every subsequent {@code FT.CURSOR READ}/{@code FT.CURSOR DEL} against
- * the cursor it opens, is pinned to the PRIMARY of the index's slot regardless of {@code
- * ReadFrom} -- a cursor is a per-process, node-local resource, and this is a deliberate,
- * documented exception to GLIDE's normal read routing.
+ * verbatim between FT.AGGREGATE and FT.HYBRID -- the option's own grammar ({@code WITHCURSOR [COUNT
+ * n] [MAXIDLE ms]}) and reply shape are identical regardless of which command opened the cursor. A
+ * paged query, and every subsequent {@code FT.CURSOR READ}/{@code FT.CURSOR DEL} against the cursor
+ * it opens, is pinned to the PRIMARY of the index's slot regardless of {@code ReadFrom} -- a cursor
+ * is a per-process, node-local resource, and this is a deliberate, documented exception to GLIDE's
+ * normal read routing.
  */
 public class FTWithCursor {
     private final Integer count;

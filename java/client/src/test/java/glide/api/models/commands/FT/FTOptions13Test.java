@@ -200,10 +200,8 @@ public class FTOptions13Test {
 
     @Test
     public void testFTSearchOptions_withScoresAndScorerCombined() {
-        GlideString[] args =
-                FTSearchOptions.builder().withScores().scorer("BM25STD").build().toArgs();
-        assertArrayEquals(
-                new GlideString[] {gs("WITHSCORES"), gs("SCORER"), gs("BM25STD")}, args);
+        GlideString[] args = FTSearchOptions.builder().withScores().scorer("BM25STD").build().toArgs();
+        assertArrayEquals(new GlideString[] {gs("WITHSCORES"), gs("SCORER"), gs("BM25STD")}, args);
     }
 
     // ---- FTAggregateOptions scoring (ADDSCORES/SCORER) ----
@@ -252,7 +250,8 @@ public class FTOptions13Test {
 
     @Test
     public void testFTAggregateOptions_withCursorBare() {
-        GlideString[] args = FTAggregateOptions.builder().withCursor(new FTWithCursor()).build().toArgs();
+        GlideString[] args =
+                FTAggregateOptions.builder().withCursor(new FTWithCursor()).build().toArgs();
         assertArrayEquals(new GlideString[] {gs("WITHCURSOR")}, args);
     }
 
@@ -276,13 +275,7 @@ public class FTOptions13Test {
                         .toArgs();
         assertArrayEquals(
                 new GlideString[] {
-                    gs("LOAD"),
-                    gs("1"),
-                    gs("price"),
-                    gs("ADDSCORES"),
-                    gs("WITHCURSOR"),
-                    gs("COUNT"),
-                    gs("5")
+                    gs("LOAD"), gs("1"), gs("price"), gs("ADDSCORES"), gs("WITHCURSOR"), gs("COUNT"), gs("5")
                 },
                 args);
     }
@@ -294,9 +287,7 @@ public class FTOptions13Test {
         GlideString[] args =
                 FTAggregateOptions.builder()
                         .loadFields(
-                                new FTAggregateOptions.LoadField[] {
-                                    new FTAggregateOptions.LoadField("price")
-                                })
+                                new FTAggregateOptions.LoadField[] {new FTAggregateOptions.LoadField("price")})
                         .build()
                         .toArgs();
         assertArrayEquals(new GlideString[] {gs("LOAD"), gs("1"), gs("price")}, args);
@@ -307,9 +298,7 @@ public class FTOptions13Test {
         GlideString[] args =
                 FTAggregateOptions.builder()
                         .loadFields(
-                                new FTAggregateOptions.LoadField[] {
-                                    new FTAggregateOptions.LoadField("price", "p")
-                                })
+                                new FTAggregateOptions.LoadField[] {new FTAggregateOptions.LoadField("price", "p")})
                         .build()
                         .toArgs();
         assertArrayEquals(
@@ -322,16 +311,11 @@ public class FTOptions13Test {
                 FTAggregateOptions.builder()
                         .loadFields(new String[] {"title"})
                         .loadFields(
-                                new FTAggregateOptions.LoadField[] {
-                                    new FTAggregateOptions.LoadField("price", "p")
-                                })
+                                new FTAggregateOptions.LoadField[] {new FTAggregateOptions.LoadField("price", "p")})
                         .build()
                         .toArgs();
         assertArrayEquals(
-                new GlideString[] {
-                    gs("LOAD"), gs("4"), gs("title"), gs("price"), gs("AS"), gs("p")
-                },
-                args);
+                new GlideString[] {gs("LOAD"), gs("4"), gs("title"), gs("price"), gs("AS"), gs("p")}, args);
     }
 
     // ---- FTAggregateOptions.GroupBy.Reducer typed factories ----

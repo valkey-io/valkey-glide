@@ -29,8 +29,7 @@ public class FTHybridOptions13Test {
     @Test
     public void testSearchArm_bareQuery() {
         assertArrayEquals(
-                new GlideString[] {gs("SEARCH"), gs("hello")},
-                new FTHybridSearchArm("hello").toArgs());
+                new GlideString[] {gs("SEARCH"), gs("hello")}, new FTHybridSearchArm("hello").toArgs());
     }
 
     @Test
@@ -49,8 +48,7 @@ public class FTHybridOptions13Test {
 
     @Test
     public void testSearchArm_scorerAndYieldScoreAsCombined() {
-        GlideString[] args =
-                new FTHybridSearchArm(gs("hello"), gs("BM25STD"), gs("ss")).toArgs();
+        GlideString[] args = new FTHybridSearchArm(gs("hello"), gs("BM25STD"), gs("ss")).toArgs();
         assertArrayEquals(
                 new GlideString[] {
                     gs("SEARCH"), gs("hello"), gs("SCORER"), gs("BM25STD"), gs("YIELD_SCORE_AS"), gs("ss")
@@ -69,8 +67,7 @@ public class FTHybridOptions13Test {
 
     @Test
     public void testVsimArm_rawBytesVectorRequiresGeneratedParamName() {
-        GlideString[] args =
-                new FTHybridVsimArm("vec", "rawbytes".getBytes()).toArgs(gs("$generated"));
+        GlideString[] args = new FTHybridVsimArm("vec", "rawbytes".getBytes()).toArgs(gs("$generated"));
         assertArrayEquals(new GlideString[] {gs("VSIM"), gs("@vec"), gs("$generated")}, args);
     }
 
@@ -106,8 +103,7 @@ public class FTHybridOptions13Test {
 
     @Test
     public void testVsimArm_vectorParamRefMustStartWithDollar() {
-        assertThrows(
-                IllegalArgumentException.class, () -> new FTHybridVsimArm("vec", "notaparam"));
+        assertThrows(IllegalArgumentException.class, () -> new FTHybridVsimArm("vec", "notaparam"));
     }
 
     @Test
@@ -204,13 +200,7 @@ public class FTHybridOptions13Test {
     public void testVsimArm_filterAppendedAfterYieldScoreAs() {
         GlideString[] args =
                 new FTHybridVsimArm(
-                                "vec",
-                                "$q",
-                                null,
-                                null,
-                                null,
-                                gs("vs"),
-                                new FTHybridVsimFilter("@title:hello"))
+                                "vec", "$q", null, null, null, gs("vs"), new FTHybridVsimFilter("@title:hello"))
                         .toArgs();
         assertArrayEquals(
                 new GlideString[] {
@@ -236,8 +226,7 @@ public class FTHybridOptions13Test {
 
     @Test
     public void testVsimFilter_policyForcesCountedForm() {
-        GlideString[] args =
-                new FTHybridVsimFilter("@title:hello", HybridFilterPolicy.ADHOC).toArgs();
+        GlideString[] args = new FTHybridVsimFilter("@title:hello", HybridFilterPolicy.ADHOC).toArgs();
         assertArrayEquals(
                 new GlideString[] {gs("FILTER"), gs("3"), gs("@title:hello"), gs("POLICY"), gs("ADHOC")},
                 args);
@@ -246,8 +235,7 @@ public class FTHybridOptions13Test {
     @Test
     public void testVsimFilter_batchSizeRequiresPolicyBatches() {
         assertThrows(
-                IllegalArgumentException.class,
-                () -> new FTHybridVsimFilter(gs("@title:hello"), null, 10));
+                IllegalArgumentException.class, () -> new FTHybridVsimFilter(gs("@title:hello"), null, 10));
     }
 
     @Test
@@ -272,16 +260,14 @@ public class FTHybridOptions13Test {
     @Test
     public void testCombine_rrfBare() {
         assertArrayEquals(
-                new GlideString[] {gs("COMBINE"), gs("RRF"), gs("0")},
-                new FTHybridCombine.Rrf().toArgs());
+                new GlideString[] {gs("COMBINE"), gs("RRF"), gs("0")}, new FTHybridCombine.Rrf().toArgs());
     }
 
     @Test
     public void testCombine_rrfWithConstant() {
         GlideString[] args = new FTHybridCombine.Rrf(60.0, null, null).toArgs();
         assertArrayEquals(
-                new GlideString[] {gs("COMBINE"), gs("RRF"), gs("2"), gs("CONSTANT"), gs("60.0")},
-                args);
+                new GlideString[] {gs("COMBINE"), gs("RRF"), gs("2"), gs("CONSTANT"), gs("60.0")}, args);
     }
 
     @Test
@@ -387,8 +373,7 @@ public class FTHybridOptions13Test {
     public void testHybridOptions_loadFields() {
         GlideString[] args =
                 FTHybridOptions.builder().loadFields(new String[] {"title", "price"}).build().toArgs();
-        assertArrayEquals(
-                new GlideString[] {gs("LOAD"), gs("2"), gs("title"), gs("price")}, args);
+        assertArrayEquals(new GlideString[] {gs("LOAD"), gs("2"), gs("title"), gs("price")}, args);
     }
 
     @Test
@@ -409,8 +394,7 @@ public class FTHybridOptions13Test {
 
     @Test
     public void testHybridOptions_withCursor() {
-        GlideString[] args =
-                FTHybridOptions.builder().withCursor(new FTWithCursor(5)).build().toArgs();
+        GlideString[] args = FTHybridOptions.builder().withCursor(new FTWithCursor(5)).build().toArgs();
         assertArrayEquals(new GlideString[] {gs("WITHCURSOR"), gs("COUNT"), gs("5")}, args);
     }
 
@@ -458,10 +442,7 @@ public class FTHybridOptions13Test {
     @Test
     public void testHybridOptions_clausesAppliedInOrder() {
         GlideString[] args =
-                FTHybridOptions.builder()
-                        .addClause(new FTAggregateOptions.Limit(0, 10))
-                        .build()
-                        .toArgs();
+                FTHybridOptions.builder().addClause(new FTAggregateOptions.Limit(0, 10)).build().toArgs();
         assertArrayEquals(new GlideString[] {gs("LIMIT"), gs("0"), gs("10")}, args);
     }
 

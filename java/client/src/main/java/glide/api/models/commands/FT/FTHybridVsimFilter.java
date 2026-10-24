@@ -8,10 +8,10 @@ import java.util.ArrayList;
 import lombok.NonNull;
 
 /**
- * A pre-filter on the VSIM arm's vector search, written in the same query language the SEARCH
- * arm uses (e.g. {@code @title:hello}). With a filter present, the VSIM arm becomes an ordinary
- * FT.SEARCH-style vector query under the hood ({@code <filter>=>[KNN ...]}), so the filter
- * decides membership and the arm's score stays the vector distance -- it is never replaced by a
+ * A pre-filter on the VSIM arm's vector search, written in the same query language the SEARCH arm
+ * uses (e.g. {@code @title:hello}). With a filter present, the VSIM arm becomes an ordinary
+ * FT.SEARCH-style vector query under the hood ({@code <filter>=>[KNN ...]}), so the filter decides
+ * membership and the arm's score stays the vector distance -- it is never replaced by a
  * text-relevance score the way a plain hybrid text query's score would be.
  */
 public class FTHybridVsimFilter {
@@ -65,9 +65,9 @@ public class FTHybridVsimFilter {
      * @param expression The filter expression.
      * @param policy Controls how the filter is applied. See {@link HybridFilterPolicy}.
      * @param batchSize Tunes how many candidates {@code POLICY BATCHES} draws per batch. Requires
-     *     {@code policy == HybridFilterPolicy.BATCHES}. The value is accepted but currently
-     *     discarded by the server (valkey-search issue #1457), so this currently has no observable
-     *     effect; included for forward compatibility and because the server still validates its
+     *     {@code policy == HybridFilterPolicy.BATCHES}. The value is accepted but currently discarded
+     *     by the server (valkey-search issue #1457), so this currently has no observable effect;
+     *     included for forward compatibility and because the server still validates its
      *     presence/ordering against {@code policy}.
      * @throws IllegalArgumentException If {@code batchSize} is set without {@code policy ==
      *     HybridFilterPolicy.BATCHES}.
@@ -83,9 +83,9 @@ public class FTHybridVsimFilter {
      * @param expression The filter expression.
      * @param policy Controls how the filter is applied. See {@link HybridFilterPolicy}.
      * @param batchSize Tunes how many candidates {@code POLICY BATCHES} draws per batch. Requires
-     *     {@code policy == HybridFilterPolicy.BATCHES}. The value is accepted but currently
-     *     discarded by the server (valkey-search issue #1457), so this currently has no observable
-     *     effect; included for forward compatibility and because the server still validates its
+     *     {@code policy == HybridFilterPolicy.BATCHES}. The value is accepted but currently discarded
+     *     by the server (valkey-search issue #1457), so this currently has no observable effect;
+     *     included for forward compatibility and because the server still validates its
      *     presence/ordering against {@code policy}.
      * @throws IllegalArgumentException If {@code batchSize} is set without {@code policy ==
      *     HybridFilterPolicy.BATCHES}.

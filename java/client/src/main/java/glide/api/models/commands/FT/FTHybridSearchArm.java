@@ -8,10 +8,9 @@ import java.util.ArrayList;
 import lombok.NonNull;
 
 /**
- * The SEARCH arm of an FT.HYBRID query: an ordinary (non-vector) FT.SEARCH-style text/tag/
- * numeric query, run alongside the VSIM arm and fused with it. A vector query (e.g. a {@code
- * =>[KNN ...]} clause) is rejected here -- use {@link FTHybridVsimArm} for the vector half
- * instead.
+ * The SEARCH arm of an FT.HYBRID query: an ordinary (non-vector) FT.SEARCH-style text/tag/ numeric
+ * query, run alongside the VSIM arm and fused with it. A vector query (e.g. a {@code =>[KNN ...]}
+ * clause) is rejected here -- use {@link FTHybridVsimArm} for the vector half instead.
  */
 public class FTHybridSearchArm {
     private final GlideString query;
@@ -22,8 +21,8 @@ public class FTHybridSearchArm {
      * Initialize a new instance with no scoring or alias options.
      *
      * @param query The text/tag/numeric query, in the same language FT.SEARCH uses. Must not be a
-     *     vector query (e.g. must not contain a {@code =>[KNN ...]} clause); the server rejects
-     *     that combination.
+     *     vector query (e.g. must not contain a {@code =>[KNN ...]} clause); the server rejects that
+     *     combination.
      */
     public FTHybridSearchArm(@NonNull String query) {
         this(gs(query), null, null);
@@ -33,8 +32,8 @@ public class FTHybridSearchArm {
      * Initialize a new instance with no scoring or alias options.
      *
      * @param query The text/tag/numeric query, in the same language FT.SEARCH uses. Must not be a
-     *     vector query (e.g. must not contain a {@code =>[KNN ...]} clause); the server rejects
-     *     that combination.
+     *     vector query (e.g. must not contain a {@code =>[KNN ...]} clause); the server rejects that
+     *     combination.
      */
     public FTHybridSearchArm(@NonNull GlideString query) {
         this(query, null, null);
@@ -45,15 +44,14 @@ public class FTHybridSearchArm {
      *
      * @param query The text/tag/numeric query, in the same language FT.SEARCH uses.
      * @param scorer The scoring function used to rank this arm's results (valkey-search 1.3.0).
-     *     {@code "BM25STD"} is the only value currently registered and selectable; any other value
-     *     is rejected by the server.
+     *     {@code "BM25STD"} is the only value currently registered and selectable; any other value is
+     *     rejected by the server.
      * @param yieldScoreAs Exposes this arm's score under the given column name, reachable from
      *     aggregate-tail clauses. This alias cannot itself be named inside a {@link
      *     FTAggregateOptions.LoadField}/{@link FTHybridOptions} load-field entry -- it is already
      *     present in the default reply with no LOAD needed.
      */
-    public FTHybridSearchArm(
-            @NonNull String query, GlideString scorer, GlideString yieldScoreAs) {
+    public FTHybridSearchArm(@NonNull String query, GlideString scorer, GlideString yieldScoreAs) {
         this(gs(query), scorer, yieldScoreAs);
     }
 
@@ -62,8 +60,8 @@ public class FTHybridSearchArm {
      *
      * @param query The text/tag/numeric query, in the same language FT.SEARCH uses.
      * @param scorer The scoring function used to rank this arm's results (valkey-search 1.3.0).
-     *     {@code "BM25STD"} is the only value currently registered and selectable; any other value
-     *     is rejected by the server.
+     *     {@code "BM25STD"} is the only value currently registered and selectable; any other value is
+     *     rejected by the server.
      * @param yieldScoreAs Exposes this arm's score under the given column name, reachable from
      *     aggregate-tail clauses. This alias cannot itself be named inside a {@link
      *     FTAggregateOptions.LoadField}/{@link FTHybridOptions} load-field entry -- it is already

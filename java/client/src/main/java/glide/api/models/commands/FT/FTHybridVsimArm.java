@@ -15,19 +15,19 @@ import lombok.NonNull;
  * <p>The query vector can be given two ways:
  *
  * <ul>
- *   <li>As raw bytes (via the {@code byte[]} constructors): the client generates an internal
- *       {@code $}-prefixed PARAMS entry under the hood and references it on the wire.
- *       FT.HYBRID's VSIM clause has no wire-level inline vector literal at all -- the parameter
- *       token must start with {@code $} or the server rejects it outright, so an auto-generated
- *       PARAMS entry is the only way to offer a "just pass the bytes" call shape. A {@code
- *       byte[]} is ALWAYS treated as raw vector data, even if its first byte happens to equal the
- *       ASCII value of {@code $} (0x24) -- never as a parameter reference, regardless of content.
+ *   <li>As raw bytes (via the {@code byte[]} constructors): the client generates an internal {@code
+ *       $}-prefixed PARAMS entry under the hood and references it on the wire. FT.HYBRID's VSIM
+ *       clause has no wire-level inline vector literal at all -- the parameter token must start
+ *       with {@code $} or the server rejects it outright, so an auto-generated PARAMS entry is the
+ *       only way to offer a "just pass the bytes" call shape. A {@code byte[]} is ALWAYS treated as
+ *       raw vector data, even if its first byte happens to equal the ASCII value of {@code $}
+ *       (0x24) -- never as a parameter reference, regardless of content.
  *   <li>As an explicit {@code $name} string (via the {@code String} constructors): the caller
  *       manages their own entry in {@link FTHybridOptions}' params, exactly like {@code
  *       FTSearchOptions}/{@code FTAggregateOptions} params already work for every other
  *       PARAMS-driven query. Only a {@code String} starting with {@code $} is ever treated as a
- *       parameter reference -- this is decided by which constructor was called, not by
- *       inspecting the value's bytes.
+ *       parameter reference -- this is decided by which constructor was called, not by inspecting
+ *       the value's bytes.
  * </ul>
  */
 public class FTHybridVsimArm {
@@ -49,9 +49,7 @@ public class FTHybridVsimArm {
             Double shardKRatio,
             GlideString yieldScoreAs,
             FTHybridVsimFilter filter) {
-        if (efRuntime != null
-                && filter != null
-                && filter.getPolicy() == HybridFilterPolicy.ADHOC) {
+        if (efRuntime != null && filter != null && filter.getPolicy() == HybridFilterPolicy.ADHOC) {
             throw new IllegalArgumentException(
                     "efRuntime is not supported with filter.policy=HybridFilterPolicy.ADHOC "
                             + "(the server rejects this combination: "
@@ -97,11 +95,10 @@ public class FTHybridVsimArm {
      *
      * @param field The vector field's identifier, without the leading {@code @}.
      * @param vectorParamRef The {@code $name} parameter reference. Must start with {@code $}.
-     * @param k The number of nearest neighbours to return. Omitting the whole KNN block (when
-     *     {@code k}, {@code efRuntime} and {@code shardKRatio} are all {@code null}) defaults to
-     *     10 server-side.
-     * @param efRuntime HNSW search-time effort parameter. Only valid when the KNN block is
-     *     written.
+     * @param k The number of nearest neighbours to return. Omitting the whole KNN block (when {@code
+     *     k}, {@code efRuntime} and {@code shardKRatio} are all {@code null}) defaults to 10
+     *     server-side.
+     * @param efRuntime HNSW search-time effort parameter. Only valid when the KNN block is written.
      * @param shardKRatio Tunes how much of {@code k} each shard returns during a cluster fanout.
      */
     public FTHybridVsimArm(
@@ -140,8 +137,7 @@ public class FTHybridVsimArm {
      * @param k The number of nearest neighbours to return.
      * @param efRuntime HNSW search-time effort parameter.
      * @param shardKRatio Tunes how much of {@code k} each shard returns during a cluster fanout.
-     * @param yieldScoreAs Exposes this arm's score (the vector distance) under the given column
-     *     name.
+     * @param yieldScoreAs Exposes this arm's score (the vector distance) under the given column name.
      */
     public FTHybridVsimArm(
             @NonNull String field,
@@ -154,16 +150,15 @@ public class FTHybridVsimArm {
     }
 
     /**
-     * Initialize a new instance with raw vector bytes and every option. An internal PARAMS entry
-     * is generated automatically.
+     * Initialize a new instance with raw vector bytes and every option. An internal PARAMS entry is
+     * generated automatically.
      *
      * @param field The vector field's identifier, without the leading {@code @}.
      * @param vector The raw query vector bytes. Always treated as raw vector data.
      * @param k The number of nearest neighbours to return.
      * @param efRuntime HNSW search-time effort parameter.
      * @param shardKRatio Tunes how much of {@code k} each shard returns during a cluster fanout.
-     * @param yieldScoreAs Exposes this arm's score (the vector distance) under the given column
-     *     name.
+     * @param yieldScoreAs Exposes this arm's score (the vector distance) under the given column name.
      */
     public FTHybridVsimArm(
             @NonNull String field,
@@ -176,16 +171,15 @@ public class FTHybridVsimArm {
     }
 
     /**
-     * Initialize a new instance referencing a {@code $name} parameter, with every option
-     * including a VSIM pre-filter.
+     * Initialize a new instance referencing a {@code $name} parameter, with every option including a
+     * VSIM pre-filter.
      *
      * @param field The vector field's identifier, without the leading {@code @}.
      * @param vectorParamRef The {@code $name} parameter reference. Must start with {@code $}.
      * @param k The number of nearest neighbours to return.
      * @param efRuntime HNSW search-time effort parameter.
      * @param shardKRatio Tunes how much of {@code k} each shard returns during a cluster fanout.
-     * @param yieldScoreAs Exposes this arm's score (the vector distance) under the given column
-     *     name.
+     * @param yieldScoreAs Exposes this arm's score (the vector distance) under the given column name.
      * @param filter A pre-filter on the vector search. See {@link FTHybridVsimFilter}.
      * @throws IllegalArgumentException If {@code efRuntime} is set while {@code filter.policy} is
      *     {@code HybridFilterPolicy.ADHOC} -- the server rejects that combination outright.
@@ -210,17 +204,16 @@ public class FTHybridVsimArm {
     }
 
     /**
-     * Initialize a new instance with raw vector bytes and every option, including a VSIM
-     * pre-filter. An internal PARAMS entry is generated automatically.
+     * Initialize a new instance with raw vector bytes and every option, including a VSIM pre-filter.
+     * An internal PARAMS entry is generated automatically.
      *
      * @param field The vector field's identifier, without the leading {@code @}.
-     * @param vector The raw query vector bytes. Always treated as raw vector data, even if its
-     *     first byte happens to equal the ASCII value of {@code $} (0x24).
+     * @param vector The raw query vector bytes. Always treated as raw vector data, even if its first
+     *     byte happens to equal the ASCII value of {@code $} (0x24).
      * @param k The number of nearest neighbours to return.
      * @param efRuntime HNSW search-time effort parameter.
      * @param shardKRatio Tunes how much of {@code k} each shard returns during a cluster fanout.
-     * @param yieldScoreAs Exposes this arm's score (the vector distance) under the given column
-     *     name.
+     * @param yieldScoreAs Exposes this arm's score (the vector distance) under the given column name.
      * @param filter A pre-filter on the vector search. See {@link FTHybridVsimFilter}.
      * @throws IllegalArgumentException If {@code efRuntime} is set while {@code filter.policy} is
      *     {@code HybridFilterPolicy.ADHOC} -- the server rejects that combination outright.
@@ -246,14 +239,17 @@ public class FTHybridVsimArm {
     }
 
     /**
-     * {@code true} if this arm references an existing {@code $name} parameter rather than raw
-     * vector bytes requiring a generated parameter name.
+     * {@code true} if this arm references an existing {@code $name} parameter rather than raw vector
+     * bytes requiring a generated parameter name.
      */
     public boolean isParamReference() {
         return vectorParamRef != null;
     }
 
-    /** The raw vector bytes, if this arm was constructed with raw bytes rather than a {@code $name} reference. */
+    /**
+     * The raw vector bytes, if this arm was constructed with raw bytes rather than a {@code $name}
+     * reference.
+     */
     public byte[] getRawVector() {
         return rawVector == null ? null : rawVector.clone();
     }
@@ -271,9 +267,9 @@ public class FTHybridVsimArm {
     /**
      * Get the arguments for the VSIM clause.
      *
-     * @param generatedParamName The {@code $}-prefixed parameter name to reference on the wire
-     *     when this arm was given raw bytes rather than an explicit {@code $name} string. Ignored
-     *     if this arm is already a parameter reference.
+     * @param generatedParamName The {@code $}-prefixed parameter name to reference on the wire when
+     *     this arm was given raw bytes rather than an explicit {@code $name} string. Ignored if this
+     *     arm is already a parameter reference.
      */
     public GlideString[] toArgs(GlideString generatedParamName) {
         GlideString paramRef = isParamReference() ? vectorParamRef : generatedParamName;

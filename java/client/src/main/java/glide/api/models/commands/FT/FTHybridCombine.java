@@ -17,8 +17,8 @@ public abstract class FTHybridCombine {
     public abstract GlideString[] toArgs();
 
     /**
-     * Fuses the two arms' results using Reciprocal Rank Fusion: each arm's rank (not its raw
-     * score) contributes {@code 1 / (constant + rank)} to the fused score.
+     * Fuses the two arms' results using Reciprocal Rank Fusion: each arm's rank (not its raw score)
+     * contributes {@code 1 / (constant + rank)} to the fused score.
      */
     public static class Rrf extends FTHybridCombine {
         private final Double constant;
@@ -33,11 +33,11 @@ public abstract class FTHybridCombine {
         /**
          * Initialize a new instance.
          *
-         * @param constant The RRF constant. Must be non-negative -- the server rejects a negative
-         *     value (it places a pole at {@code rank == -constant}).
-         * @param window How many of each arm's results take part in fusion (and, in cluster mode,
-         *     how many each shard is asked to fetch). Bounded by the server's {@code
-         *     max-combine-window} config.
+         * @param constant The RRF constant. Must be non-negative -- the server rejects a negative value
+         *     (it places a pole at {@code rank == -constant}).
+         * @param window How many of each arm's results take part in fusion (and, in cluster mode, how
+         *     many each shard is asked to fetch). Bounded by the server's {@code max-combine-window}
+         *     config.
          * @param yieldScoreAs Exposes the fused score under the given column name instead of the
          *     default {@code __score}.
          * @throws IllegalArgumentException If {@code constant} is negative.
@@ -76,10 +76,10 @@ public abstract class FTHybridCombine {
     }
 
     /**
-     * Fuses the two arms' results linearly: {@code alpha * search_score + beta * vsim_score}.
-     * Writing neither {@code alpha} nor {@code beta} defaults both to 0.3/0.7 respectively;
-     * writing exactly one without the other is rejected by the server as more likely a typo than
-     * an intentional default.
+     * Fuses the two arms' results linearly: {@code alpha * search_score + beta * vsim_score}. Writing
+     * neither {@code alpha} nor {@code beta} defaults both to 0.3/0.7 respectively; writing exactly
+     * one without the other is rejected by the server as more likely a typo than an intentional
+     * default.
      */
     public static class Linear extends FTHybridCombine {
         private final Double alpha;
@@ -96,15 +96,14 @@ public abstract class FTHybridCombine {
          * Initialize a new instance.
          *
          * @param alpha The SEARCH arm's weight. Defaults (server-side) to {@code 0.3} when neither
-         *     {@code alpha} nor {@code beta} is set. Setting one without the other is rejected by
-         *     the server.
-         * @param beta The VSIM arm's weight. Defaults (server-side) to {@code 0.7} when neither is
-         *     set.
+         *     {@code alpha} nor {@code beta} is set. Setting one without the other is rejected by the
+         *     server.
+         * @param beta The VSIM arm's weight. Defaults (server-side) to {@code 0.7} when neither is set.
          * @param window How many of each arm's results take part in fusion.
          * @param yieldScoreAs Exposes the fused score under the given column name instead of the
          *     default {@code __score}.
-         * @throws IllegalArgumentException If exactly one of {@code alpha}/{@code beta} is set
-         *     without the other.
+         * @throws IllegalArgumentException If exactly one of {@code alpha}/{@code beta} is set without
+         *     the other.
          */
         public Linear(Double alpha, Double beta, Integer window, GlideString yieldScoreAs) {
             if ((alpha == null) != (beta == null)) {
@@ -147,12 +146,11 @@ public abstract class FTHybridCombine {
     }
 
     /**
-     * Fuses the two arms' results using a caller-supplied expression. {@code expr} is a raw
-     * string written in the same expression language an aggregate APPLY clause's expression
-     * uses -- the server compiles it against a context where each arm's score is reachable via
-     * its own {@code YIELD_SCORE_AS} alias (if any), a positional default {@code
-     * @__arm<i>_score}, and (for this SEARCH+VSIM two-arm shape) {@code @__search_score} / {@code
-     * @__vector_score} specifically.
+     * Fuses the two arms' results using a caller-supplied expression. {@code expr} is a raw string
+     * written in the same expression language an aggregate APPLY clause's expression uses -- the
+     * server compiles it against a context where each arm's score is reachable via its own {@code
+     * YIELD_SCORE_AS} alias (if any), a positional default {@code @__arm<i>_score}, and (for this
+     * SEARCH+VSIM two-arm shape) {@code @__search_score} / {@code @__vector_score} specifically.
      *
      * <p>This is a valkey-search extension not present in RediSearch's FT.HYBRID (included here
      * anyway rather than dropped).
@@ -165,8 +163,8 @@ public abstract class FTHybridCombine {
         /**
          * Initialize a new instance.
          *
-         * @param expr The fusion expression, as a raw string (e.g. {@code "@__search_score +
-         *     @__vector_score"} or, with explicit arm aliases, {@code "@ss + @vs"}).
+         * @param expr The fusion expression, as a raw string (e.g. {@code "@__search_score
+         *     + @__vector_score"} or, with explicit arm aliases, {@code "@ss + @vs"}).
          */
         public Function(@NonNull String expr) {
             this(gs(expr), null, null);
@@ -176,10 +174,10 @@ public abstract class FTHybridCombine {
          * Initialize a new instance.
          *
          * @param expr The fusion expression, as a raw string.
-         * @param window How many of each arm's results take part in fusion. If left unset, the
-         *     server defaults this to the widest window allowed rather than the usual RRF/LINEAR
-         *     default, since a caller-written expression typically expects to see every matching
-         *     candidate, not a top-window slice.
+         * @param window How many of each arm's results take part in fusion. If left unset, the server
+         *     defaults this to the widest window allowed rather than the usual RRF/LINEAR default,
+         *     since a caller-written expression typically expects to see every matching candidate, not
+         *     a top-window slice.
          * @param yieldScoreAs Exposes the fused score under the given column name instead of the
          *     default {@code __score}.
          */

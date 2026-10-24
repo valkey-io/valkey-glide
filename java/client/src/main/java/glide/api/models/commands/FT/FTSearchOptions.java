@@ -61,14 +61,14 @@ public class FTSearchOptions {
     private final ConsistencyMode consistency;
 
     /**
-     * If set, augments the output with each document's relevance score (valkey-search 1.3.0).
-     * This changes the result shape: each document value in the result map becomes a two-element
-     * list {@code [score, fieldMap]} instead of just {@code fieldMap} (a {@code GlideString}-
-     * encoded decimal string, not a float). With {@code nocontent} set, the shape becomes {@code
-     * [score, {}]}. Combining {@code withSortKeys} with {@code nocontent} gives the same {@code
-     * [score, {}]}, because the server drops the sort key in that combination. With both {@code
-     * withScores} and {@code withSortKeys} and content present, each row becomes a three-element
-     * list {@code [score, sortKey, fieldMap]}.
+     * If set, augments the output with each document's relevance score (valkey-search 1.3.0). This
+     * changes the result shape: each document value in the result map becomes a two-element list
+     * {@code [score, fieldMap]} instead of just {@code fieldMap} (a {@code GlideString}- encoded
+     * decimal string, not a float). With {@code nocontent} set, the shape becomes {@code [score,
+     * {}]}. Combining {@code withSortKeys} with {@code nocontent} gives the same {@code [score, {}]},
+     * because the server drops the sort key in that combination. With both {@code withScores} and
+     * {@code withSortKeys} and content present, each row becomes a three-element list {@code [score,
+     * sortKey, fieldMap]}.
      */
     @Builder.Default private final boolean withScores = false;
 
@@ -403,8 +403,8 @@ public class FTSearchOptions {
         }
 
         /**
-         * If set, augments the output with each document's relevance score. See {@link
-         * #withScores} for the resulting shape change.
+         * If set, augments the output with each document's relevance score. See {@link #withScores} for
+         * the resulting shape change.
          */
         public FTSearchOptionsBuilder withScores() {
             this.withScores$value = true;
@@ -413,8 +413,8 @@ public class FTSearchOptions {
         }
 
         /**
-         * Set the scoring function used to rank results. {@code "BM25STD"} is the only value
-         * currently registered and selectable.
+         * Set the scoring function used to rank results. {@code "BM25STD"} is the only value currently
+         * registered and selectable.
          *
          * @param scorer The scoring function name.
          */
@@ -424,8 +424,8 @@ public class FTSearchOptions {
         }
 
         /**
-         * Set the scoring function used to rank results. {@code "BM25STD"} is the only value
-         * currently registered and selectable.
+         * Set the scoring function used to rank results. {@code "BM25STD"} is the only value currently
+         * registered and selectable.
          *
          * @param scorer The scoring function name.
          */

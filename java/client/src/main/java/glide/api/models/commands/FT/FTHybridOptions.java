@@ -15,8 +15,8 @@ import lombok.NonNull;
 
 /**
  * This class represents the optional arguments for the FT.HYBRID command, applied to the
- * aggregate-suffix tail that follows the mandatory SEARCH, VSIM and optional COMBINE clauses
- * (which are passed directly to {@code FT#hybrid}, not through this class).
+ * aggregate-suffix tail that follows the mandatory SEARCH, VSIM and optional COMBINE clauses (which
+ * are passed directly to {@code FT#hybrid}, not through this class).
  */
 @Builder
 public class FTHybridOptions {
@@ -27,39 +27,37 @@ public class FTHybridOptions {
     private final GlideString[] loadFields;
 
     /**
-     * Entries for the LOAD clause that also rename their field via {@code AS}. Can be freely
-     * mixed with {@link #loadFields} in the same {@link #toArgs} call by setting both; the two
-     * lists are concatenated, plain fields first.
+     * Entries for the LOAD clause that also rename their field via {@code AS}. Can be freely mixed
+     * with {@link #loadFields} in the same {@link #toArgs} call by setting both; the two lists are
+     * concatenated, plain fields first.
      */
     private final FTAggregateOptions.LoadField[] loadFieldsWithAlias;
 
     /**
      * FILTER, LIMIT, GROUPBY, SORTBY and APPLY clauses, reusing {@link
-     * FTAggregateOptions.FTAggregateClause} and its subclasses verbatim from the FT.AGGREGATE
-     * options module. Every arm alias is freely reachable from these clauses (APPLY, SORTBY,
-     * GROUPBY/REDUCE) -- only the LOAD clause has the alias restriction described on {@link
-     * FTHybridSearchArm}. FT.HYBRID also applies its own default LIMIT of 10 rows when no {@link
-     * FTAggregateOptions.Limit} clause is given here -- FT.AGGREGATE has no such default and
-     * returns everything. {@link #toArgs} always emits {@code clauses} after {@code params}'s own
-     * serialized arguments (PARAMS is always present for FT.HYBRID, so this tail is never empty)
-     * -- emitting a leading FILTER clause right after the VSIM arm would otherwise let the
-     * server's VSIM parser claim it as a VSIM pre-filter instead.
+     * FTAggregateOptions.FTAggregateClause} and its subclasses verbatim from the FT.AGGREGATE options
+     * module. Every arm alias is freely reachable from these clauses (APPLY, SORTBY, GROUPBY/REDUCE)
+     * -- only the LOAD clause has the alias restriction described on {@link FTHybridSearchArm}.
+     * FT.HYBRID also applies its own default LIMIT of 10 rows when no {@link
+     * FTAggregateOptions.Limit} clause is given here -- FT.AGGREGATE has no such default and returns
+     * everything. {@link #toArgs} always emits {@code clauses} after {@code params}'s own serialized
+     * arguments (PARAMS is always present for FT.HYBRID, so this tail is never empty) -- emitting a
+     * leading FILTER clause right after the VSIM arm would otherwise let the server's VSIM parser
+     * claim it as a VSIM pre-filter instead.
      */
     private final List<FTAggregateOptions.FTAggregateClause> clauses;
 
-    /**
-     * Requests a paged reply. See {@link FTWithCursor}.
-     */
+    /** Requests a paged reply. See {@link FTWithCursor}. */
     private final FTWithCursor withCursor;
 
     /**
-     * Restricts the query to the local shard rather than fanning out across the cluster. This is
-     * a valkey-search extension not present in RediSearch's FT.HYBRID. LOCALONLY is accepted
-     * anywhere in this tail BEFORE PARAMS (including after DIALECT or a LOAD clause) but is
-     * rejected ("Unexpected argument `LOCALONLY`") once PARAMS has been parsed, regardless of what
-     * follows PARAMS. {@link #toArgs} always emits it before {@code params} and {@code clauses}
-     * (PARAMS always follows it immediately), so this restriction is handled transparently
-     * regardless of the order its own arguments were given in.
+     * Restricts the query to the local shard rather than fanning out across the cluster. This is a
+     * valkey-search extension not present in RediSearch's FT.HYBRID. LOCALONLY is accepted anywhere
+     * in this tail BEFORE PARAMS (including after DIALECT or a LOAD clause) but is rejected
+     * ("Unexpected argument `LOCALONLY`") once PARAMS has been parsed, regardless of what follows
+     * PARAMS. {@link #toArgs} always emits it before {@code params} and {@code clauses} (PARAMS
+     * always follows it immediately), so this restriction is handled transparently regardless of the
+     * order its own arguments were given in.
      */
     @Builder.Default private final boolean localOnly = false;
 
@@ -82,8 +80,10 @@ public class FTHybridOptions {
      */
     private final Integer dialect;
 
-    /** The COMBINE clause, if set. Package-visible to {@code FT#hybrid}, which emits it directly
-     * after the VSIM arm's own argv rather than through {@link #toArgs}. */
+    /**
+     * The COMBINE clause, if set. Package-visible to {@code FT#hybrid}, which emits it directly after
+     * the VSIM arm's own argv rather than through {@link #toArgs}.
+     */
     public FTHybridCombine getCombine() {
         return combine;
     }
@@ -116,9 +116,9 @@ public class FTHybridOptions {
     /**
      * Get the optional arguments for the FT.HYBRID command's aggregate-suffix tail.
      *
-     * @param generatedVsimParam An internally generated PARAMS entry for a {@link
-     *     FTHybridVsimArm} given raw vector bytes, merged with {@link #params} here. Supplied by
-     *     {@code FT#hybrid}; not intended to be set directly by callers.
+     * @param generatedVsimParam An internally generated PARAMS entry for a {@link FTHybridVsimArm}
+     *     given raw vector bytes, merged with {@link #params} here. Supplied by {@code FT#hybrid};
+     *     not intended to be set directly by callers.
      * @throws IllegalArgumentException If {@code generatedVsimParam}'s key collides with an entry
      *     already present in {@link #params}.
      */
@@ -134,16 +134,14 @@ public class FTHybridOptions {
             args.add(gs("*"));
         } else {
             args.addAll(
-                    Arrays.asList(
-                            FTAggregateOptions.loadFieldsToArgs(loadFields, loadFieldsWithAlias)));
+                    Arrays.asList(FTAggregateOptions.loadFieldsToArgs(loadFields, loadFieldsWithAlias)));
         }
         if (timeout != null) {
             args.add(gs("TIMEOUT"));
             args.add(gs(timeout.toString()));
         }
         args.addAll(
-                Arrays.asList(
-                        FTAggregateOptions.paramsToArgs(mergeParams(generatedVsimParam), "PARAMS")));
+                Arrays.asList(FTAggregateOptions.paramsToArgs(mergeParams(generatedVsimParam), "PARAMS")));
         if (clauses != null) {
             // Must come after PARAMS -- a leading FILTER clause emitted right after the VSIM
             // arm would otherwise be claimed by the server's VSIM parser as a VSIM pre-filter
@@ -192,9 +190,8 @@ public class FTHybridOptions {
         }
 
         /**
-         * Load specified fields from the index, each optionally renamed via {@code AS}. Can be
-         * freely mixed with {@link #loadFields(String[])}/{@link #loadFields(GlideString[])} in the
-         * same call.
+         * Load specified fields from the index, each optionally renamed via {@code AS}. Can be freely
+         * mixed with {@link #loadFields(String[])}/{@link #loadFields(GlideString[])} in the same call.
          */
         public FTHybridOptionsBuilder loadFields(@NonNull FTAggregateOptions.LoadField[] fields) {
             this.loadFieldsWithAlias = fields;
@@ -202,11 +199,10 @@ public class FTHybridOptions {
         }
 
         /**
-         * Add a FILTER, LIMIT, GROUPBY, SORTBY or APPLY clause to the aggregate-suffix tail, that
-         * can be repeated multiple times in any order and be freely intermixed.
+         * Add a FILTER, LIMIT, GROUPBY, SORTBY or APPLY clause to the aggregate-suffix tail, that can
+         * be repeated multiple times in any order and be freely intermixed.
          */
-        public FTHybridOptionsBuilder addClause(
-                @NonNull FTAggregateOptions.FTAggregateClause clause) {
+        public FTHybridOptionsBuilder addClause(@NonNull FTAggregateOptions.FTAggregateClause clause) {
             if (this.clauses == null) this.clauses = new ArrayList<>();
             this.clauses.add(clause);
             return this;
