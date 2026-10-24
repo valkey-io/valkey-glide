@@ -3647,19 +3647,25 @@ where
             }
             InternalSingleNodeRouting::ByAddress(address) => {
                 // The node may be missing while its connection is being refreshed, e.g. replaced
-                // after a circular MOVED. Wait for the refresh rather than failing the request.
-                // Register for the notification before the lookup, so that it can't be missed.
-                let refresh_notifier = core.conn_lock.read().notifier_for_address(&address);
-                let refreshed = refresh_notifier
-                    .as_ref()
-                    .map(|notifier| notifier.notified());
-                let mut conn_option = core.conn_lock.read().connection_for_address(&address);
-                if conn_option.is_none() {
-                    if let Some(refreshed) = refreshed {
-                        refreshed.await;
-                        conn_option = core.conn_lock.read().connection_for_address(&address);
+                // after a circular MOVED. Wait for the refresh rather than failing the request,
+                // and keep waiting if a newer refresh supersedes it. Register for each
+                // notification under the same read guard as the lookup, so that no refresh-state
+                // write can fire the notifier in between.
+                let conn_option = loop {
+                    let refreshed = {
+                        let conn_lock = core.conn_lock.read();
+                        if let Some(found) = conn_lock.connection_for_address(&address) {
+                            break Some(found);
+                        }
+                        conn_lock
+                            .notifier_for_address(&address)
+                            .map(|notifier| notifier.notified_owned())
+                    };
+                    match refreshed {
+                        Some(refreshed) => refreshed.await,
+                        None => break None,
                     }
-                }
+                };
                 if let Some((address, conn)) = conn_option {
                     return Ok((address, conn.await));
                 } else {
@@ -6631,21 +6637,38 @@ pub(super) mod refresh_task_resolution_tests {
         }
     }
 
+    /// Completes an in-progress refresh: installs the connection, then drops the task state,
+    /// which wakes the waiters.
+    fn complete_refresh(core: &Arc<InnerCore<RecordingConnection>>, address: &str, port: u16) {
+        core.conn_lock
+            .read()
+            .replace_or_add_connection_for_address(address, recording_node(port));
+        core.conn_lock
+            .write()
+            .refresh_conn_state
+            .refresh_address_in_progress
+            .remove(address);
+    }
+
+    fn get_connection_by_address(
+        core: &Arc<InnerCore<RecordingConnection>>,
+        address: &str,
+    ) -> Pin<Box<impl Future<Output = RedisResult<(String, RecordingConnection)>>>> {
+        Box::pin(ClusterConnInner::get_connection(
+            InternalSingleNodeRouting::ByAddress(address.to_owned()),
+            core.clone(),
+            None,
+        ))
+    }
+
     #[tokio::test]
     async fn by_address_routing_waits_for_in_progress_refresh() {
         let _guard = gated_test_guard().await;
         let core = core_with_non_idempotent_resolver();
         let address = "resolved-node:6381";
-        let by_address = || {
-            ClusterConnInner::get_connection(
-                InternalSingleNodeRouting::ByAddress(address.to_owned()),
-                core.clone(),
-                None,
-            )
-        };
 
         // Without a refresh in progress, a missing node fails right away.
-        let Err(err) = by_address().await else {
+        let Some(Err(err)) = get_connection_by_address(&core, address).now_or_never() else {
             panic!("expected no connection for the address");
         };
         assert_eq!(err.kind(), ErrorKind::ConnectionNotFoundForRoute);
@@ -6653,28 +6676,67 @@ pub(super) mod refresh_task_resolution_tests {
         // With a refresh in progress, e.g. replacing the connection after a circular MOVED,
         // the lookup waits for it instead of failing.
         insert_in_progress_refresh(&core, address, false);
-        let lookup = tokio::spawn(by_address());
-        tokio::time::sleep(Duration::from_millis(20)).await;
-        assert!(!lookup.is_finished(), "lookup should wait for the refresh");
+        let mut lookup = get_connection_by_address(&core, address);
+        assert!(
+            (&mut lookup).now_or_never().is_none(),
+            "lookup should wait for the refresh"
+        );
 
-        // Complete the refresh: install the connection, then drop the task state, which wakes
-        // the waiters.
-        {
-            let conn_lock = core.conn_lock.write();
-            conn_lock.replace_or_add_connection_for_address(address, recording_node(6381));
-        }
+        complete_refresh(&core, address, 6381);
+        let (found_address, connection) = lookup.await.expect("connection found after the refresh");
+        assert_eq!(found_address, address);
+        assert_eq!(connection.port, 6381);
+    }
+
+    #[tokio::test]
+    async fn by_address_routing_waits_across_superseded_refresh() {
+        let _guard = gated_test_guard().await;
+        let core = core_with_non_idempotent_resolver();
+        let address = "resolved-node:6381";
+        insert_in_progress_refresh(&core, address, true);
+        let mut lookup = get_connection_by_address(&core, address);
+        assert!((&mut lookup).now_or_never().is_none());
+
+        // A newer refresh supersedes the first one, which wakes the waiters before the new
+        // connection exists. The lookup keeps waiting for the newer refresh.
+        insert_in_progress_refresh(&core, address, false);
+        assert!(
+            (&mut lookup).now_or_never().is_none(),
+            "lookup should wait for the superseding refresh"
+        );
+
+        complete_refresh(&core, address, 6381);
+        let (_, connection) = lookup.await.expect("connection found after the refresh");
+        assert_eq!(connection.port, 6381);
+    }
+
+    #[tokio::test]
+    async fn replace_request_supersedes_reconnecting_too_long_refresh_that_holds_node() {
+        let _guard = gated_test_guard().await;
+        let core = core_with_non_idempotent_resolver();
+        let address = "resolved-node:6381";
+        let identity = insert_in_progress_refresh(&core, address, true);
         core.conn_lock
             .write()
             .refresh_conn_state
             .refresh_address_in_progress
-            .remove(address);
+            .get_mut(address)
+            .expect("refresh state inserted")
+            .status
+            .flip_status_to_too_long();
 
-        let (found_address, connection) = lookup
-            .await
-            .expect("lookup task completes")
-            .expect("connection found after the refresh");
-        assert_eq!(found_address, address);
-        assert_eq!(connection.port, 6381);
+        let notifiers = ClusterConnInner::trigger_refresh_connection_tasks(
+            core.clone(),
+            HashSet::from([ClusterAddress::ReadyToDial(address.to_owned())]),
+            RefreshConnectionType::AllConnections,
+            false,
+        )
+        .await;
+        assert_eq!(notifiers.len(), 1);
+        assert!(
+            !refresh_is_same_generation(&core, address, &identity),
+            "a replace request must not keep a task that may reuse the stale node"
+        );
     }
 
     #[tokio::test]
