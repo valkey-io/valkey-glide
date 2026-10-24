@@ -240,6 +240,8 @@ pub type FunctionFlushOptions = FlushAllOptions;
 //
 // TODO #7237: Add `IFNE` (and `ValueComparison::ifne`) for Valkey 9.2.
 // TODO #7238: Use for `del_ex` (`DELEX`, Valkey 9.2).
+// TODO #7365: Compress this comparison value when used with `SET` under
+// compression (see `glide-core/src/compression.rs`).
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum ValueComparison {
@@ -451,6 +453,77 @@ impl ToValkeyArgs for FunctionRestorePolicy {
 }
 
 impl ToSingleValkeyArg for FunctionRestorePolicy {}
+
+/// Section of information for the `INFO` command.
+///
+/// Mirrors Python `InfoSection`, Java `InfoOptions.Section`, Go `constants.Section`, and Node `InfoOptions`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum InfoSection {
+    /// Return all sections (excluding module-generated ones).
+    All,
+    /// Client connections section.
+    Clients,
+    /// Valkey Cluster section.
+    Cluster,
+    /// Cluster info section (Valkey 9.1.0+).
+    ClusterInfo,
+    /// Valkey command statistics.
+    CommandStats,
+    /// CPU consumption statistics.
+    Cpu,
+    /// Return only the default set of sections.
+    Default,
+    /// Valkey error statistics.
+    ErrorStats,
+    /// Includes all and modules sections.
+    Everything,
+    /// Database-related statistics.
+    Keyspace,
+    /// Valkey command latency percentile distribution statistics.
+    LatencyStats,
+    /// Memory consumption-related information.
+    Memory,
+    /// Modules section.
+    Modules,
+    /// RDB and AOF-related information.
+    Persistence,
+    /// Master/replica replication information.
+    Replication,
+    /// Valkey Sentinel section (only applicable to Sentinel instances).
+    Sentinel,
+    /// General information about the Valkey server.
+    Server,
+    /// General statistics.
+    Stats,
+}
+
+impl ToValkeyArgs for InfoSection {
+    fn write_valkey_args<W: ?Sized + ValkeyWrite>(&self, out: &mut W) {
+        out.write_arg(match self {
+            InfoSection::All => b"all".as_slice(),
+            InfoSection::Clients => b"clients".as_slice(),
+            InfoSection::Cluster => b"cluster".as_slice(),
+            InfoSection::ClusterInfo => b"cluster_info".as_slice(),
+            InfoSection::CommandStats => b"commandstats".as_slice(),
+            InfoSection::Cpu => b"cpu".as_slice(),
+            InfoSection::Default => b"default".as_slice(),
+            InfoSection::ErrorStats => b"errorstats".as_slice(),
+            InfoSection::Everything => b"everything".as_slice(),
+            InfoSection::Keyspace => b"keyspace".as_slice(),
+            InfoSection::LatencyStats => b"latencystats".as_slice(),
+            InfoSection::Memory => b"memory".as_slice(),
+            InfoSection::Modules => b"modules".as_slice(),
+            InfoSection::Persistence => b"persistence".as_slice(),
+            InfoSection::Replication => b"replication".as_slice(),
+            InfoSection::Sentinel => b"sentinel".as_slice(),
+            InfoSection::Server => b"server".as_slice(),
+            InfoSection::Stats => b"stats".as_slice(),
+        });
+    }
+}
+
+impl ToSingleValkeyArg for InfoSection {}
 
 /// Mode for the `CLIENT PAUSE` command.
 ///
@@ -869,5 +942,27 @@ mod tests {
         assert_args(FunctionRestorePolicy::Append, &["APPEND"]);
         assert_args(FunctionRestorePolicy::Flush, &["FLUSH"]);
         assert_args(FunctionRestorePolicy::Replace, &["REPLACE"]);
+    }
+
+    #[test]
+    fn info_section_args() {
+        assert_args(InfoSection::All, &["all"]);
+        assert_args(InfoSection::Clients, &["clients"]);
+        assert_args(InfoSection::Cluster, &["cluster"]);
+        assert_args(InfoSection::ClusterInfo, &["cluster_info"]);
+        assert_args(InfoSection::CommandStats, &["commandstats"]);
+        assert_args(InfoSection::Cpu, &["cpu"]);
+        assert_args(InfoSection::Default, &["default"]);
+        assert_args(InfoSection::ErrorStats, &["errorstats"]);
+        assert_args(InfoSection::Everything, &["everything"]);
+        assert_args(InfoSection::Keyspace, &["keyspace"]);
+        assert_args(InfoSection::LatencyStats, &["latencystats"]);
+        assert_args(InfoSection::Memory, &["memory"]);
+        assert_args(InfoSection::Modules, &["modules"]);
+        assert_args(InfoSection::Persistence, &["persistence"]);
+        assert_args(InfoSection::Replication, &["replication"]);
+        assert_args(InfoSection::Sentinel, &["sentinel"]);
+        assert_args(InfoSection::Server, &["server"]);
+        assert_args(InfoSection::Stats, &["stats"]);
     }
 }
