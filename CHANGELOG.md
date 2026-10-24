@@ -4,6 +4,7 @@
 
 ### Features
 
+* Java: valkey-search 1.3 stable surface for FT.SEARCH/FT.CREATE/FT.AGGREGATE — `inKeys` on `FTSearchOptions` (absent/`[]`/a list), a `VectorType` enum (`FLOAT32`/`FLOAT16`/`BFLOAT16`) replacing the hard-coded `FLOAT32` on vector field builders, `FTCreateOptions.filter`/`scoreField`/`noHighlight`, per-field `unf` (SORTABLE un-normalized sort, requires `sortable`) on `TextField`/`TagField`/`NumericField`, typed `FTAggregateOptions.GroupBy.Reducer.toList`/`firstValue`/`randomSample` factories over the existing generic `Reducer` constructor, and `count()` now serializes to `LIMIT 0 0` instead of a bare `COUNT` token the server's FT.SEARCH parser does not recognise (with `count`/`limit` guarded as mutually exclusive, which wasn't previously enforced)
 * All: Add support for Valkey 9.0 commands:
   * `DELIFEQ` ([#6146](https://github.com/valkey-io/valkey-glide/issues/6146))
 * Java, Node, Python, Go: Add support for Valkey 9.1 commands:
@@ -79,10 +80,10 @@
 
 ### Changes
 
+* Java: add useMutualTlsFromKeyStore to load mTLS client identity ([#7258](https://github.com/valkey-io/valkey-glide/pull/7258))
 * Core/FFI, Python: Add Unix domain socket support for standalone clients with `NodeAddress(unix_socket_path=...)`, and accept `valkey+unix://` URIs in `create_client_from_uri` ([#4878](https://github.com/valkey-io/valkey-glide/issues/4878))
 * Java: Deprecate the Valkey API keywords on `BaseClient` and the command interfaces ([#7401](https://github.com/valkey-io/valkey-glide/issues/7401))
 * Go, Java, Node, Python: Add `cluster_info` `INFO` section (Valkey 9.1) ([#7199](https://github.com/valkey-io/valkey-glide/issues/7199))
-* Java: add useMutualTlsFromKeyStore to load mTLS client identity ([#7258](https://github.com/valkey-io/valkey-glide/pull/7258))
 * Python: Optionally propagate active OpenTelemetry parent span context to native command, batch and script spans with `enable_trace_context_propagation=True` (disabled by default) ([#7069](https://github.com/valkey-io/valkey-glide/pull/7069))
 * Core: Add client-side caching support for MGET. Fully cached requests return locally; partially cached requests fetch only misses and preserve duplicate-key and NIL response semantics. ([#6793](https://github.com/valkey-io/valkey-glide/issues/6793))
 * Rust: Add an initial native Rust client (preview) built directly on `glide-core` ([#6864](https://github.com/valkey-io/valkey-glide/pull/6864))
