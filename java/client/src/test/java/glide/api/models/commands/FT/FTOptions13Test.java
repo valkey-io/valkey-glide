@@ -178,6 +178,162 @@ public class FTOptions13Test {
                 () -> FTSearchOptions.builder().count().limit(0, 10).build().toArgs());
     }
 
+    // ---- FTSearchOptions scoring (WITHSCORES/SCORER) ----
+
+    @Test
+    public void testFTSearchOptions_withScoresAbsentByDefault() {
+        GlideString[] args = FTSearchOptions.builder().build().toArgs();
+        assertFalse(Arrays.asList(args).contains(gs("WITHSCORES")));
+    }
+
+    @Test
+    public void testFTSearchOptions_withScoresEmitsFlag() {
+        GlideString[] args = FTSearchOptions.builder().withScores().build().toArgs();
+        assertTrue(Arrays.asList(args).contains(gs("WITHSCORES")));
+    }
+
+    @Test
+    public void testFTSearchOptions_scorerEmitsKeywordAndValue() {
+        GlideString[] args = FTSearchOptions.builder().scorer("BM25STD").build().toArgs();
+        assertArrayEquals(new GlideString[] {gs("SCORER"), gs("BM25STD")}, args);
+    }
+
+    @Test
+    public void testFTSearchOptions_withScoresAndScorerCombined() {
+        GlideString[] args =
+                FTSearchOptions.builder().withScores().scorer("BM25STD").build().toArgs();
+        assertArrayEquals(
+                new GlideString[] {gs("WITHSCORES"), gs("SCORER"), gs("BM25STD")}, args);
+    }
+
+    // ---- FTAggregateOptions scoring (ADDSCORES/SCORER) ----
+
+    @Test
+    public void testFTAggregateOptions_addScoresAbsentByDefault() {
+        GlideString[] args = FTAggregateOptions.builder().build().toArgs();
+        assertFalse(Arrays.asList(args).contains(gs("ADDSCORES")));
+    }
+
+    @Test
+    public void testFTAggregateOptions_addScoresEmitsFlag() {
+        GlideString[] args = FTAggregateOptions.builder().addScores().build().toArgs();
+        assertTrue(Arrays.asList(args).contains(gs("ADDSCORES")));
+    }
+
+    @Test
+    public void testFTAggregateOptions_scorerEmitsKeywordAndValue() {
+        GlideString[] args = FTAggregateOptions.builder().scorer("BM25STD").build().toArgs();
+        assertArrayEquals(new GlideString[] {gs("SCORER"), gs("BM25STD")}, args);
+    }
+
+    @Test
+    public void testFTAggregateOptions_addScoresAndScorerCombinedAfterOtherClauses() {
+        GlideString[] args =
+                FTAggregateOptions.builder()
+                        .addScores()
+                        .scorer("BM25STD")
+                        .loadFields(new String[] {"price"})
+                        .build()
+                        .toArgs();
+        assertArrayEquals(
+                new GlideString[] {
+                    gs("LOAD"), gs("1"), gs("price"), gs("ADDSCORES"), gs("SCORER"), gs("BM25STD")
+                },
+                args);
+    }
+
+    // ---- FTAggregateOptions WITHCURSOR ----
+
+    @Test
+    public void testFTAggregateOptions_withCursorAbsentByDefault() {
+        GlideString[] args = FTAggregateOptions.builder().build().toArgs();
+        assertFalse(Arrays.asList(args).contains(gs("WITHCURSOR")));
+    }
+
+    @Test
+    public void testFTAggregateOptions_withCursorBare() {
+        GlideString[] args = FTAggregateOptions.builder().withCursor(new FTWithCursor()).build().toArgs();
+        assertArrayEquals(new GlideString[] {gs("WITHCURSOR")}, args);
+    }
+
+    @Test
+    public void testFTAggregateOptions_withCursorCountAndMaxIdle() {
+        GlideString[] args =
+                FTAggregateOptions.builder().withCursor(new FTWithCursor(10, 5000)).build().toArgs();
+        assertArrayEquals(
+                new GlideString[] {gs("WITHCURSOR"), gs("COUNT"), gs("10"), gs("MAXIDLE"), gs("5000")},
+                args);
+    }
+
+    @Test
+    public void testFTAggregateOptions_withCursorCombinedWithLoadAndScoring() {
+        GlideString[] args =
+                FTAggregateOptions.builder()
+                        .loadFields(new String[] {"price"})
+                        .addScores()
+                        .withCursor(new FTWithCursor(5))
+                        .build()
+                        .toArgs();
+        assertArrayEquals(
+                new GlideString[] {
+                    gs("LOAD"),
+                    gs("1"),
+                    gs("price"),
+                    gs("ADDSCORES"),
+                    gs("WITHCURSOR"),
+                    gs("COUNT"),
+                    gs("5")
+                },
+                args);
+    }
+
+    // ---- FTAggregateOptions.LoadField (LOAD ... AS) ----
+
+    @Test
+    public void testLoadField_noAlias() {
+        GlideString[] args =
+                FTAggregateOptions.builder()
+                        .loadFields(
+                                new FTAggregateOptions.LoadField[] {
+                                    new FTAggregateOptions.LoadField("price")
+                                })
+                        .build()
+                        .toArgs();
+        assertArrayEquals(new GlideString[] {gs("LOAD"), gs("1"), gs("price")}, args);
+    }
+
+    @Test
+    public void testLoadField_withAlias() {
+        GlideString[] args =
+                FTAggregateOptions.builder()
+                        .loadFields(
+                                new FTAggregateOptions.LoadField[] {
+                                    new FTAggregateOptions.LoadField("price", "p")
+                                })
+                        .build()
+                        .toArgs();
+        assertArrayEquals(
+                new GlideString[] {gs("LOAD"), gs("3"), gs("price"), gs("AS"), gs("p")}, args);
+    }
+
+    @Test
+    public void testLoadField_mixedWithPlainFields() {
+        GlideString[] args =
+                FTAggregateOptions.builder()
+                        .loadFields(new String[] {"title"})
+                        .loadFields(
+                                new FTAggregateOptions.LoadField[] {
+                                    new FTAggregateOptions.LoadField("price", "p")
+                                })
+                        .build()
+                        .toArgs();
+        assertArrayEquals(
+                new GlideString[] {
+                    gs("LOAD"), gs("4"), gs("title"), gs("price"), gs("AS"), gs("p")
+                },
+                args);
+    }
+
     // ---- FTAggregateOptions.GroupBy.Reducer typed factories ----
 
     @Test

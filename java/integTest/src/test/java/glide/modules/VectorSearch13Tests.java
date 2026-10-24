@@ -5,7 +5,10 @@ import static glide.TestUtilities.commonClientConfig;
 import static glide.TestUtilities.commonClusterClientConfig;
 import static glide.api.BaseClient.OK;
 import static glide.api.models.GlideString.gs;
+import static glide.utils.ArrayTransformUtils.castArray;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Named.named;
 
@@ -25,14 +28,28 @@ import glide.api.models.commands.FT.FTCreateOptions.NumericField;
 import glide.api.models.commands.FT.FTCreateOptions.TextField;
 import glide.api.models.commands.FT.FTCreateOptions.VectorFieldFlat;
 import glide.api.models.commands.FT.FTCreateOptions.VectorType;
+import glide.api.models.commands.FT.FTHybridCombine;
+import glide.api.models.commands.FT.FTHybridOptions;
+import glide.api.models.commands.FT.FTHybridSearchArm;
+import glide.api.models.commands.FT.FTHybridVsimArm;
+import glide.api.models.commands.FT.FTHybridVsimFilter;
 import glide.api.models.commands.FT.FTSearchOptions;
+import glide.api.models.commands.FT.FTWithCursor;
+import glide.api.models.commands.FT.HybridFilterPolicy;
 import glide.api.models.commands.FlushMode;
+import glide.api.models.configuration.ReadFrom;
+import glide.api.models.configuration.RequestRoutingConfiguration.ByAddressRoute;
 import glide.api.models.configuration.RequestRoutingConfiguration.SimpleMultiNodeRoute;
+import glide.api.models.exceptions.RequestException;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Stream;
@@ -45,6 +62,7 @@ import org.junit.jupiter.api.Named;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+
 
 /**
  * Live tests for the valkey-search 1.3 stable surface: INKEYS, FLOAT16/BFLOAT16 vector types,
@@ -574,4 +592,1022 @@ public class VectorSearch13Tests {
             FT.dropindex(client, indexName).get();
         }
     }
+
+    // ---- Helpers shared by the scoring/cursor/FT.HYBRID tests below ----
+
+    private static final String HYBRID_DOC_TEXT_WINNER = "hybrid-text-winner";
+    private static final String HYBRID_DOC_VECTOR_WINNER = "hybrid-vector-winner";
+    private static final float[] HYBRID_QUERY_VECTOR = {1.0f, 1.0f};
+    private static final String HYBRID_SEARCH_QUERY = "hello";
+    private static final String HYBRID_SEARCH_ALIAS = "ss";
+    private static final String HYBRID_VSIM_ALIAS = "vs";
+
+    /** Packs 2 floats little-endian, mirroring Python's {@code struct.pack("2f", x, y)}. */
+    private static byte[] packVector(float x, float y) {
+        ByteBuffer buf = ByteBuffer.allocate(8).order(ByteOrder.LITTLE_ENDIAN);
+        buf.putFloat(x);
+        buf.putFloat(y);
+        return buf.array();
+    }
+
+    /**
+     * Creates an index with a TEXT field ("title") and a 2-dimensional FLAT FLOAT32 VECTOR field
+     * ("vec"), seeds the HYBRID_DOC_TEXT_WINNER/HYBRID_DOC_VECTOR_WINNER fixture (mirroring
+     * Python's HYBRID_DOCS), and waits for both documents to be indexed. Returns the index name.
+     */
+    @SneakyThrows
+    private static String createHybridIndex(BaseClient client, String prefix) {
+        String index = prefix + "index";
+        FieldInfo vecField =
+                new FieldInfo(
+                        "vec", VectorFieldFlat.builder(DistanceMetric.L2, 2).type(VectorType.FLOAT32).build());
+        assertEquals(
+                OK,
+                FT.create(
+                                client,
+                                index,
+                                new FieldInfo[] {new FieldInfo("title", new TextField()), vecField},
+                                FTCreateOptions.builder().dataType(DataType.HASH).prefixes(new String[] {prefix}).build())
+                        .get());
+        Map<String, Object> textWinnerFields = new HashMap<>();
+        textWinnerFields.put("title", "hello hello hello world");
+        Map<String, Object> vectorWinnerFields = new HashMap<>();
+        vectorWinnerFields.put("title", "goodbye");
+        Map<String, byte[]> vectors = new HashMap<>();
+        vectors.put(HYBRID_DOC_TEXT_WINNER, packVector(100.0f, 100.0f));
+        vectors.put(HYBRID_DOC_VECTOR_WINNER, packVector(1.0f, 1.0f));
+        for (String docName : new String[] {HYBRID_DOC_TEXT_WINNER, HYBRID_DOC_VECTOR_WINNER}) {
+            Map<String, Object> rawFields =
+                    docName.equals(HYBRID_DOC_TEXT_WINNER) ? textWinnerFields : vectorWinnerFields;
+            Map<GlideString, GlideString> hashFields = new HashMap<>();
+            hashFields.put(gs("title"), gs((String) rawFields.get("title")));
+            hashFields.put(gs("vec"), gs(vectors.get(docName)));
+            if (client instanceof GlideClusterClient) {
+                ((GlideClusterClient) client).hset(gs(prefix + docName), hashFields).get();
+            } else {
+                ((GlideClient) client).hset(gs(prefix + docName), hashFields).get();
+            }
+        }
+        Thread.sleep(1000);
+        return index;
+    }
+
+    // ---- Scoring: WITHSCORES/SCORER on FT.SEARCH ----
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void ft_search_with_scores_and_scorer(BaseClient client) {
+        Assumptions.assumeTrue(
+                capability, "search module present but pre-1.3 (INKEYS probe rejected it)");
+
+        String prefix = "{ft-with-scores-" + UUID.randomUUID() + "}:";
+        String index = prefix + "index";
+        assertEquals(
+                OK,
+                FT.create(
+                                client,
+                                index,
+                                new FieldInfo[] {new FieldInfo("title", new TextField())},
+                                FTCreateOptions.builder().dataType(DataType.HASH).prefixes(new String[] {prefix}).build())
+                        .get());
+        try {
+            Map<String, String> doc1 = new HashMap<>();
+            doc1.put("title", "hello hello hello world");
+            Map<String, String> doc2 = new HashMap<>();
+            doc2.put("title", "hello there");
+            if (client instanceof GlideClusterClient) {
+                ((GlideClusterClient) client).hset(prefix + "1", doc1).get();
+                ((GlideClusterClient) client).hset(prefix + "2", doc2).get();
+            } else {
+                ((GlideClient) client).hset(prefix + "1", doc1).get();
+                ((GlideClient) client).hset(prefix + "2", doc2).get();
+            }
+            Thread.sleep(1000);
+
+            Object[] result =
+                    FT.search(
+                                    client,
+                                    index,
+                                    "hello",
+                                    FTSearchOptions.builder().withScores().scorer("BM25STD").build())
+                            .get();
+            assertEquals(2L, result[0]);
+            @SuppressWarnings("unchecked")
+            Map<GlideString, Object> resultMap = (Map<GlideString, Object>) result[1];
+            assertEquals(2, resultMap.size());
+            Map<String, Double> scoresByKey = new HashMap<>();
+            for (Map.Entry<GlideString, Object> entry : resultMap.entrySet()) {
+                Object[] scoreAndFields = (Object[]) entry.getValue();
+                assertEquals(2, scoreAndFields.length);
+                double score = Double.parseDouble(scoreAndFields[0].toString());
+                assertTrue(score > 0);
+                scoresByKey.put(entry.getKey().toString(), score);
+                @SuppressWarnings("unchecked")
+                Map<GlideString, GlideString> fields = (Map<GlideString, GlideString>) scoreAndFields[1];
+                assertTrue(fields.containsKey(gs("title")));
+            }
+            assertTrue(
+                    scoresByKey.get(prefix + "1") > scoresByKey.get(prefix + "2"),
+                    "the document repeating the search term should score strictly higher under BM25STD: "
+                            + scoresByKey);
+        } finally {
+            FT.dropindex(client, index).get();
+        }
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void ft_search_with_scores_and_withsortkeys_combined_shape(BaseClient client) {
+        Assumptions.assumeTrue(
+                capability, "search module present but pre-1.3 (INKEYS probe rejected it)");
+
+        String prefix = "{ft-scores-sortkeys-" + UUID.randomUUID() + "}:";
+        String index = prefix + "index";
+        assertEquals(
+                OK,
+                FT.create(
+                                client,
+                                index,
+                                new FieldInfo[] {
+                                    new FieldInfo("title", new TextField(true, null, false, false, false, false)),
+                                    new FieldInfo("price", new NumericField(true))
+                                },
+                                FTCreateOptions.builder().dataType(DataType.HASH).prefixes(new String[] {prefix}).build())
+                        .get());
+        try {
+            Map<String, String> doc1 = new HashMap<>();
+            doc1.put("title", "hello");
+            doc1.put("price", "10");
+            Map<String, String> doc2 = new HashMap<>();
+            doc2.put("title", "world");
+            doc2.put("price", "20");
+            if (client instanceof GlideClusterClient) {
+                ((GlideClusterClient) client).hset(prefix + "1", doc1).get();
+                ((GlideClusterClient) client).hset(prefix + "2", doc2).get();
+            } else {
+                ((GlideClient) client).hset(prefix + "1", doc1).get();
+                ((GlideClient) client).hset(prefix + "2", doc2).get();
+            }
+            Thread.sleep(1000);
+
+            Object[] result =
+                    FT.search(
+                                    client,
+                                    index,
+                                    "*",
+                                    FTSearchOptions.builder()
+                                            .withScores()
+                                            .sortBy("price", FTSearchOptions.SortOrder.ASC)
+                                            .withSortKeys()
+                                            .build())
+                            .get();
+            assertEquals(2L, result[0]);
+            @SuppressWarnings("unchecked")
+            Map<GlideString, Object> resultMap = (Map<GlideString, Object>) result[1];
+            assertEquals(2, resultMap.size());
+            for (Object docValue : resultMap.values()) {
+                Object[] triple = (Object[]) docValue;
+                assertEquals(3, triple.length);
+                double score = Double.parseDouble(triple[0].toString());
+                assertTrue(score >= 0);
+                assertNotEquals(null, triple[1]);
+                @SuppressWarnings("unchecked")
+                Map<GlideString, GlideString> fields = (Map<GlideString, GlideString>) triple[2];
+                assertTrue(fields.containsKey(gs("title")));
+            }
+        } finally {
+            FT.dropindex(client, index).get();
+        }
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void ft_search_scorer_tfidf_rejected(BaseClient client) {
+        Assumptions.assumeTrue(
+                capability, "search module present but pre-1.3 (INKEYS probe rejected it)");
+
+        String prefix = "{ft-scorer-tfidf-" + UUID.randomUUID() + "}:";
+        String index = prefix + "index";
+        assertEquals(
+                OK,
+                FT.create(
+                                client,
+                                index,
+                                new FieldInfo[] {new FieldInfo("title", new TextField())},
+                                FTCreateOptions.builder().dataType(DataType.HASH).prefixes(new String[] {prefix}).build())
+                        .get());
+        try {
+            Map<String, String> doc = new HashMap<>();
+            doc.put("title", "hello world");
+            if (client instanceof GlideClusterClient) {
+                ((GlideClusterClient) client).hset(prefix + "1", doc).get();
+            } else {
+                ((GlideClient) client).hset(prefix + "1", doc).get();
+            }
+            Thread.sleep(1000);
+
+            ExecutionException e =
+                    assertThrows(
+                            ExecutionException.class,
+                            () ->
+                                    FT.search(
+                                                    client,
+                                                    index,
+                                                    "hello",
+                                                    FTSearchOptions.builder().withScores().scorer("TFIDF").build())
+                                            .get());
+            assertTrue(e.getCause().getMessage().contains("SCORER"));
+        } finally {
+            FT.dropindex(client, index).get();
+        }
+    }
+
+    // ---- Scoring: ADDSCORES/SCORER on FT.AGGREGATE ----
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void ft_aggregate_add_scores_sortable_by_score(BaseClient client) {
+        Assumptions.assumeTrue(
+                capability, "search module present but pre-1.3 (INKEYS probe rejected it)");
+
+        String prefix = "{ft-add-scores-" + UUID.randomUUID() + "}:";
+        String index = prefix + "index";
+        assertEquals(
+                OK,
+                FT.create(
+                                client,
+                                index,
+                                new FieldInfo[] {new FieldInfo("title", new TextField())},
+                                FTCreateOptions.builder().dataType(DataType.HASH).prefixes(new String[] {prefix}).build())
+                        .get());
+        try {
+            Map<String, String> doc1 = new HashMap<>();
+            doc1.put("title", "hello world");
+            Map<String, String> doc2 = new HashMap<>();
+            doc2.put("title", "hello there friend");
+            if (client instanceof GlideClusterClient) {
+                ((GlideClusterClient) client).hset(prefix + "1", doc1).get();
+                ((GlideClusterClient) client).hset(prefix + "2", doc2).get();
+            } else {
+                ((GlideClient) client).hset(prefix + "1", doc1).get();
+                ((GlideClient) client).hset(prefix + "2", doc2).get();
+            }
+            Thread.sleep(1000);
+
+            Map<GlideString, Object>[] result =
+                    FT.aggregate(
+                                    client,
+                                    index,
+                                    "hello",
+                                    FTAggregateOptions.builder()
+                                            .addScores()
+                                            .loadFields(new String[] {"title"})
+                                            .addClause(
+                                                    new FTAggregateOptions.SortBy(
+                                                            new FTAggregateOptions.SortBy.SortProperty[] {
+                                                                new FTAggregateOptions.SortBy.SortProperty(
+                                                                        "@__score", FTAggregateOptions.SortBy.SortOrder.DESC)
+                                                            }))
+                                            .build())
+                            .get();
+            assertEquals(2, result.length);
+            List<Double> scores = new ArrayList<>();
+            for (Map<GlideString, Object> row : result) {
+                assertTrue(row.containsKey(gs("__score")));
+                double score = Double.parseDouble(row.get(gs("__score")).toString());
+                assertTrue(score > 0);
+                scores.add(score);
+            }
+            List<Double> sorted = new ArrayList<>(scores);
+            sorted.sort((a, b) -> Double.compare(b, a));
+            assertEquals(sorted, scores);
+        } finally {
+            FT.dropindex(client, index).get();
+        }
+    }
+
+    // ---- Cursors: FT.AGGREGATE WITHCURSOR, FT.CURSOR READ/DEL, typed API ----
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void ft_aggregate_typed_cursor_paged_to_exhaustion(BaseClient client) {
+        Assumptions.assumeTrue(
+                capability, "search module present but pre-1.3 (INKEYS probe rejected it)");
+
+        String prefix = "{ft-typed-cursor-" + UUID.randomUUID() + "}:";
+        String index = prefix + "index";
+        assertEquals(
+                OK,
+                FT.create(
+                                client,
+                                index,
+                                new FieldInfo[] {new FieldInfo("n", new NumericField(true))},
+                                FTCreateOptions.builder().dataType(DataType.HASH).prefixes(new String[] {prefix}).build())
+                        .get());
+        try {
+            for (int i = 1; i <= 20; i++) {
+                Map<String, String> fields = new HashMap<>();
+                fields.put("n", Integer.toString(i));
+                if (client instanceof GlideClusterClient) {
+                    ((GlideClusterClient) client).hset(prefix + "d" + i, fields).get();
+                } else {
+                    ((GlideClient) client).hset(prefix + "d" + i, fields).get();
+                }
+            }
+            Thread.sleep(1000);
+
+            int totalRows = 0;
+            Set<Integer> seenNValues = new HashSet<>();
+            Object[] page =
+                    FT.aggregate(
+                                    client,
+                                    index,
+                                    "*",
+                                    FTAggregateOptions.builder()
+                                            .loadFields(new String[] {"n"})
+                                            .withCursor(new FTWithCursor(5))
+                                            .build())
+                            .get();
+            Map<GlideString, Object>[] rows = castArray((Object[]) page[0], Map.class);
+            long cursorId = (long) page[1];
+            totalRows += rows.length;
+            for (Map<GlideString, Object> row : rows) {
+                seenNValues.add(Integer.parseInt(row.get(gs("n")).toString()));
+            }
+            int pagesRead = 1;
+            while (cursorId != 0) {
+                Object[] nextPage = FT.cursorRead(client, index, cursorId).get();
+                Map<GlideString, Object>[] nextRows = castArray((Object[]) nextPage[0], Map.class);
+                totalRows += nextRows.length;
+                for (Map<GlideString, Object> row : nextRows) {
+                    seenNValues.add(Integer.parseInt(row.get(gs("n")).toString()));
+                }
+                cursorId = (long) nextPage[1];
+                pagesRead++;
+                assertTrue(pagesRead <= 10, "paging did not terminate as expected");
+            }
+            assertEquals(20, totalRows);
+            Set<Integer> expected = new HashSet<>();
+            for (int i = 1; i <= 20; i++) expected.add(i);
+            assertEquals(expected, seenNValues);
+        } finally {
+            FT.dropindex(client, index).get();
+        }
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void ft_aggregate_typed_cursor_del_and_errors(BaseClient client) {
+        Assumptions.assumeTrue(
+                capability, "search module present but pre-1.3 (INKEYS probe rejected it)");
+
+        String prefix = "{ft-typed-cursor-del-" + UUID.randomUUID() + "}:";
+        String index = prefix + "index";
+        assertEquals(
+                OK,
+                FT.create(
+                                client,
+                                index,
+                                new FieldInfo[] {new FieldInfo("n", new NumericField(true))},
+                                FTCreateOptions.builder().dataType(DataType.HASH).prefixes(new String[] {prefix}).build())
+                        .get());
+        try {
+            for (int i = 1; i <= 5; i++) {
+                Map<String, String> fields = new HashMap<>();
+                fields.put("n", Integer.toString(i));
+                if (client instanceof GlideClusterClient) {
+                    ((GlideClusterClient) client).hset(prefix + "d" + i, fields).get();
+                } else {
+                    ((GlideClient) client).hset(prefix + "d" + i, fields).get();
+                }
+            }
+            Thread.sleep(1000);
+
+            Object[] page =
+                    FT.aggregate(
+                                    client,
+                                    index,
+                                    "*",
+                                    FTAggregateOptions.builder()
+                                            .loadFields(new String[] {"n"})
+                                            .withCursor(new FTWithCursor(1))
+                                            .build())
+                            .get();
+            long openCursorId = (long) page[1];
+            assertNotEquals(0L, openCursorId);
+
+            assertEquals(OK, FT.cursorDel(client, index, openCursorId).get());
+
+            ExecutionException e1 =
+                    assertThrows(
+                            ExecutionException.class, () -> FT.cursorRead(client, index, openCursorId).get());
+            assertTrue(e1.getCause().getMessage().contains("Cursor"));
+
+            ExecutionException e2 =
+                    assertThrows(
+                            ExecutionException.class, () -> FT.cursorRead(client, index, 999999999L).get());
+            assertTrue(e2.getCause().getMessage().contains("Cursor"));
+        } finally {
+            FT.dropindex(client, index).get();
+        }
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClustersOnly")
+    public void ft_cursor_affinity_prefer_replica_client(BaseClient clusterClient) {
+        Assumptions.assumeTrue(
+                capability, "search module present but pre-1.3 (INKEYS probe rejected it)");
+        GlideClusterClient client = (GlideClusterClient) clusterClient;
+
+        String prefix = "{ft-cursor-affinity-" + UUID.randomUUID() + "}:";
+        String index = prefix + "index";
+        assertEquals(
+                OK,
+                FT.create(
+                                client,
+                                index,
+                                new FieldInfo[] {new FieldInfo("n", new NumericField(true))},
+                                FTCreateOptions.builder().dataType(DataType.HASH).prefixes(new String[] {prefix}).build())
+                        .get());
+        for (int i = 1; i <= 20; i++) {
+            Map<String, String> fields = new HashMap<>();
+            fields.put("n", Integer.toString(i));
+            client.hset(prefix + "d" + i, fields).get();
+        }
+        Thread.sleep(1000);
+
+        GlideClusterClient preferReplicaClient =
+                GlideClusterClient.createClient(
+                                commonClusterClientConfig()
+                                        .requestTimeout(5000)
+                                        .readFrom(ReadFrom.PREFER_REPLICA)
+                                        .build())
+                        .get();
+        try {
+            int totalRows = 0;
+            Object[] page =
+                    (Object[])
+                            preferReplicaClient
+                                    .customCommand(
+                                            new GlideString[] {
+                                                gs("FT.AGGREGATE"),
+                                                gs(index),
+                                                gs("*"),
+                                                gs("LOAD"),
+                                                gs("1"),
+                                                gs("n"),
+                                                gs("WITHCURSOR"),
+                                                gs("COUNT"),
+                                                gs("5")
+                                            })
+                                    .get()
+                                    .getSingleValue();
+            Map<GlideString, Object>[] rows = castArray((Object[]) page[0], Map.class);
+            long cursorId = (long) page[1];
+            totalRows += rows.length;
+            Set<Integer> seenNValues = new HashSet<>();
+            for (Map<GlideString, Object> row : rows) {
+                seenNValues.add(Integer.parseInt(row.get(gs("n")).toString()));
+            }
+            int pagesRead = 1;
+            while (cursorId != 0) {
+                Object[] nextPage =
+                        (Object[])
+                                preferReplicaClient
+                                        .customCommand(
+                                                new GlideString[] {
+                                                    gs("FT.CURSOR"), gs("READ"), gs(index), gs(Long.toString(cursorId))
+                                                })
+                                        .get()
+                                        .getSingleValue();
+                Map<GlideString, Object>[] nextRows = castArray((Object[]) nextPage[0], Map.class);
+                totalRows += nextRows.length;
+                for (Map<GlideString, Object> row : nextRows) {
+                    seenNValues.add(Integer.parseInt(row.get(gs("n")).toString()));
+                }
+                cursorId = (long) nextPage[1];
+                pagesRead++;
+                assertTrue(pagesRead <= 10, "paging did not terminate as expected");
+            }
+            assertEquals(20, totalRows);
+            Set<Integer> expected = new HashSet<>();
+            for (int i = 1; i <= 20; i++) expected.add(i);
+            assertEquals(expected, seenNValues);
+
+            // Negative control: a read explicitly routed to a REPLICA of the index's OWN slot
+            // fails, confirming the cursor really is node-local.
+            List<Object> shardsReply =
+                    Arrays.asList(
+                            (Object[])
+                                    preferReplicaClient
+                                            .customCommand(new GlideString[] {gs("CLUSTER"), gs("SHARDS")})
+                                            .get()
+                                            .getSingleValue());
+            long indexSlot =
+                    (long)
+                            preferReplicaClient
+                                    .customCommand(new GlideString[] {gs("CLUSTER"), gs("KEYSLOT"), gs(index)})
+                                    .get()
+                                    .getSingleValue();
+            List<String[]> replicaAddrs = new ArrayList<>();
+            for (Object shardObj : shardsReply) {
+                @SuppressWarnings("unchecked")
+                Map<GlideString, Object> shardMap = (Map<GlideString, Object>) shardObj;
+                Object[] slots = (Object[]) shardMap.get(gs("slots"));
+                boolean ownsSlot = false;
+                for (int i = 0; i + 1 < slots.length; i += 2) {
+                    long lo = (long) slots[i];
+                    long hi = (long) slots[i + 1];
+                    if (lo <= indexSlot && indexSlot <= hi) ownsSlot = true;
+                }
+                if (!ownsSlot) continue;
+                Object[] nodes = (Object[]) shardMap.get(gs("nodes"));
+                for (Object nodeObj : nodes) {
+                    @SuppressWarnings("unchecked")
+                    Map<GlideString, Object> nodeMap = (Map<GlideString, Object>) nodeObj;
+                    if (gs("replica").equals(nodeMap.get(gs("role")))) {
+                        replicaAddrs.add(
+                                new String[] {
+                                    nodeMap.get(gs("ip")).toString(), nodeMap.get(gs("port")).toString()
+                                });
+                    }
+                }
+            }
+            assertTrue(replicaAddrs.size() >= 1, "test fixture bug: no replica found for index's own shard");
+
+            Object[] anotherPage =
+                    (Object[])
+                            preferReplicaClient
+                                    .customCommand(
+                                            new GlideString[] {
+                                                gs("FT.AGGREGATE"),
+                                                gs(index),
+                                                gs("*"),
+                                                gs("LOAD"),
+                                                gs("1"),
+                                                gs("n"),
+                                                gs("WITHCURSOR"),
+                                                gs("COUNT"),
+                                                gs("5")
+                                            })
+                                    .get()
+                                    .getSingleValue();
+            long anotherCursorId = (long) anotherPage[1];
+            for (String[] addr : replicaAddrs) {
+                ExecutionException e =
+                        assertThrows(
+                                ExecutionException.class,
+                                () ->
+                                        preferReplicaClient
+                                                .customCommand(
+                                                        new GlideString[] {
+                                                            gs("FT.CURSOR"),
+                                                            gs("READ"),
+                                                            gs(index),
+                                                            gs(Long.toString(anotherCursorId))
+                                                        },
+                                                        new ByAddressRoute(addr[0], Integer.parseInt(addr[1])))
+                                                .get());
+                assertTrue(e.getCause().getMessage().contains("Cursor"));
+            }
+        } finally {
+            preferReplicaClient.close();
+            FT.dropindex(client, index).get();
+        }
+    }
+
+    static Stream<Arguments> getClustersOnly() {
+        return clients.stream()
+                .filter(
+                        args -> {
+                            @SuppressWarnings("unchecked")
+                            BaseClient c = ((Named<BaseClient>) args.get()[0]).getPayload();
+                            return c instanceof GlideClusterClient;
+                        });
+    }
+
+    // ---- FT.HYBRID ----
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void ft_hybrid_basic_query(BaseClient client) {
+        Assumptions.assumeTrue(
+                capability, "search module present but pre-1.3 (INKEYS probe rejected it)");
+
+        String prefix = "{ft-hybrid-basic-" + UUID.randomUUID() + "}:";
+        String index = createHybridIndex(client, prefix);
+        try {
+            Object[] result =
+                    FT.hybrid(
+                                    client,
+                                    index,
+                                    new FTHybridSearchArm("hello"),
+                                    new FTHybridVsimArm("vec", packVector(1.0f, 1.0f), 5, null, null))
+                            .get();
+            assertEquals(2, result.length);
+            Set<GlideString> keys = new HashSet<>();
+            for (Object rowObj : result) {
+                @SuppressWarnings("unchecked")
+                Map<GlideString, Object> row = (Map<GlideString, Object>) rowObj;
+                keys.add((GlideString) row.get(gs("__key")));
+                assertTrue(row.containsKey(gs("__score")));
+            }
+            Set<GlideString> expected = new HashSet<>();
+            expected.add(gs(prefix + HYBRID_DOC_TEXT_WINNER));
+            expected.add(gs(prefix + HYBRID_DOC_VECTOR_WINNER));
+            assertEquals(expected, keys);
+        } finally {
+            FT.dropindex(client, index).get();
+        }
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void ft_hybrid_aggregate_clause_filters_post_fusion(BaseClient client) {
+        Assumptions.assumeTrue(
+                capability, "search module present but pre-1.3 (INKEYS probe rejected it)");
+
+        String prefix = "{ft-hybrid-postfusion-filter-" + UUID.randomUUID() + "}:";
+        String index = createHybridIndex(client, prefix);
+        try {
+            Object[] result =
+                    FT.hybrid(
+                                    client,
+                                    index,
+                                    FTHybridSearchArm.withYieldScoreAs("goodbye", HYBRID_SEARCH_ALIAS),
+                                    new FTHybridVsimArm("vec", packVector(1.0f, 1.0f), 5, null, null),
+                                    FTHybridOptions.builder()
+                                            .addClause(new FTAggregateOptions.Filter("@" + HYBRID_SEARCH_ALIAS + " > 0"))
+                                            .build())
+                            .get();
+            assertEquals(1, result.length);
+            @SuppressWarnings("unchecked")
+            Map<GlideString, Object> row = (Map<GlideString, Object>) result[0];
+            assertEquals(gs(prefix + HYBRID_DOC_VECTOR_WINNER), row.get(gs("__key")));
+        } finally {
+            FT.dropindex(client, index).get();
+        }
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void ft_hybrid_combine_methods_fuse_results_linear_text_only(BaseClient client) {
+        assertCombineWinner(client, new FTHybridCombine.Linear(1.0, 0.0, null, null), HYBRID_DOC_TEXT_WINNER);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void ft_hybrid_combine_methods_fuse_results_linear_vector_only(BaseClient client) {
+        assertCombineWinner(
+                client, new FTHybridCombine.Linear(0.0, 1.0, null, null), HYBRID_DOC_VECTOR_WINNER);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void ft_hybrid_combine_methods_fuse_results_function_text(BaseClient client) {
+        assertCombineWinner(
+                client,
+                new FTHybridCombine.Function("@" + HYBRID_SEARCH_ALIAS),
+                HYBRID_DOC_TEXT_WINNER);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void ft_hybrid_combine_methods_fuse_results_function_vec(BaseClient client) {
+        assertCombineWinner(
+                client, new FTHybridCombine.Function("@" + HYBRID_VSIM_ALIAS), HYBRID_DOC_VECTOR_WINNER);
+    }
+
+    @SneakyThrows
+    private void assertCombineWinner(
+            BaseClient client, FTHybridCombine combine, String expectedFirst) {
+        Assumptions.assumeTrue(
+                capability, "search module present but pre-1.3 (INKEYS probe rejected it)");
+
+        String prefix = "{ft-hybrid-combine-" + UUID.randomUUID() + "}:";
+        String index = createHybridIndex(client, prefix);
+        try {
+            Object[] result =
+                    FT.hybrid(
+                                    client,
+                                    index,
+                                    FTHybridSearchArm.withYieldScoreAs(HYBRID_SEARCH_QUERY, HYBRID_SEARCH_ALIAS),
+                                    new FTHybridVsimArm(
+                                            "vec",
+                                            packVector(HYBRID_QUERY_VECTOR[0], HYBRID_QUERY_VECTOR[1]),
+                                            5,
+                                            null,
+                                            null,
+                                            gs(HYBRID_VSIM_ALIAS)),
+                                    FTHybridOptions.builder().combine(combine).build())
+                            .get();
+            assertEquals(2, result.length);
+            Map<GlideString, Map<GlideString, Object>> rowsByKey = new HashMap<>();
+            for (Object rowObj : result) {
+                @SuppressWarnings("unchecked")
+                Map<GlideString, Object> row = (Map<GlideString, Object>) rowObj;
+                rowsByKey.put((GlideString) row.get(gs("__key")), row);
+                assertTrue(row.containsKey(gs("__score")));
+                assertTrue(row.containsKey(gs(HYBRID_VSIM_ALIAS)));
+            }
+            assertTrue(rowsByKey.containsKey(gs(prefix + HYBRID_DOC_TEXT_WINNER)));
+            assertTrue(rowsByKey.containsKey(gs(prefix + HYBRID_DOC_VECTOR_WINNER)));
+            @SuppressWarnings("unchecked")
+            Map<GlideString, Object> firstRow = (Map<GlideString, Object>) result[0];
+            assertEquals(gs(prefix + expectedFirst), firstRow.get(gs("__key")));
+            assertTrue(
+                    rowsByKey.get(gs(prefix + HYBRID_DOC_TEXT_WINNER)).containsKey(gs(HYBRID_SEARCH_ALIAS)));
+            assertTrue(
+                    !rowsByKey
+                            .get(gs(prefix + HYBRID_DOC_VECTOR_WINNER))
+                            .containsKey(gs(HYBRID_SEARCH_ALIAS)));
+        } finally {
+            FT.dropindex(client, index).get();
+        }
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void ft_hybrid_vector_inline_bytes_and_param_reference(BaseClient client) {
+        Assumptions.assumeTrue(
+                capability, "search module present but pre-1.3 (INKEYS probe rejected it)");
+
+        String prefix = "{ft-hybrid-vecparam-" + UUID.randomUUID() + "}:";
+        String index = createHybridIndex(client, prefix);
+        try {
+            byte[] vec = packVector(HYBRID_QUERY_VECTOR[0], HYBRID_QUERY_VECTOR[1]);
+
+            Object[] inlineResult =
+                    FT.hybrid(
+                                    client,
+                                    index,
+                                    new FTHybridSearchArm(HYBRID_SEARCH_QUERY),
+                                    new FTHybridVsimArm("vec", vec, 1, null, null, gs(HYBRID_VSIM_ALIAS)))
+                            .get();
+
+            Map<String, GlideString> params = new HashMap<>();
+            params.put("myvec", gs(vec));
+            Object[] paramResult =
+                    FT.hybrid(
+                                    client,
+                                    index,
+                                    new FTHybridSearchArm(HYBRID_SEARCH_QUERY),
+                                    new FTHybridVsimArm("vec", "$myvec", 1, null, null, gs(HYBRID_VSIM_ALIAS)),
+                                    FTHybridOptions.builder().params(params).build())
+                            .get();
+
+            assertEquals(2, inlineResult.length);
+            assertEquals(2, paramResult.length);
+
+            for (Object[] result : new Object[][] {inlineResult, paramResult}) {
+                int rowsWithVs = 0;
+                GlideString vsKey = null;
+                for (Object rowObj : result) {
+                    @SuppressWarnings("unchecked")
+                    Map<GlideString, Object> row = (Map<GlideString, Object>) rowObj;
+                    if (row.containsKey(gs(HYBRID_VSIM_ALIAS))) {
+                        rowsWithVs++;
+                        vsKey = (GlideString) row.get(gs("__key"));
+                    }
+                }
+                assertEquals(1, rowsWithVs, "k=1 should select exactly one document");
+                assertEquals(gs(prefix + HYBRID_DOC_VECTOR_WINNER), vsKey);
+            }
+        } finally {
+            FT.dropindex(client, index).get();
+        }
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void ft_hybrid_vsim_filter_with_policy_adhoc(BaseClient client) {
+        assertVsimFilterWithPolicy(client, HybridFilterPolicy.ADHOC);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void ft_hybrid_vsim_filter_with_policy_batches(BaseClient client) {
+        assertVsimFilterWithPolicy(client, HybridFilterPolicy.BATCHES);
+    }
+
+    @SneakyThrows
+    private void assertVsimFilterWithPolicy(BaseClient client, HybridFilterPolicy policy) {
+        Assumptions.assumeTrue(
+                capability, "search module present but pre-1.3 (INKEYS probe rejected it)");
+
+        String prefix = "{ft-hybrid-filter-" + UUID.randomUUID() + "}:";
+        String index = createHybridIndex(client, prefix);
+        try {
+            Object[] result =
+                    FT.hybrid(
+                                    client,
+                                    index,
+                                    new FTHybridSearchArm("nonexistentterm12345"),
+                                    new FTHybridVsimArm(
+                                            "vec",
+                                            packVector(1.0f, 1.0f),
+                                            5,
+                                            null,
+                                            null,
+                                            null,
+                                            new FTHybridVsimFilter("@title:hello", policy)))
+                            .get();
+            assertEquals(1, result.length);
+            @SuppressWarnings("unchecked")
+            Map<GlideString, Object> row = (Map<GlideString, Object>) result[0];
+            assertEquals(gs(prefix + HYBRID_DOC_TEXT_WINNER), row.get(gs("__key")));
+        } finally {
+            FT.dropindex(client, index).get();
+        }
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void ft_hybrid_localonly_accepted(BaseClient client) {
+        Assumptions.assumeTrue(
+                capability, "search module present but pre-1.3 (INKEYS probe rejected it)");
+
+        String prefix = "{ft-hybrid-localonly-" + UUID.randomUUID() + "}:";
+        String index = createHybridIndex(client, prefix);
+        try {
+            Object[] result =
+                    FT.hybrid(
+                                    client,
+                                    index,
+                                    new FTHybridSearchArm("hello"),
+                                    new FTHybridVsimArm("vec", packVector(1.0f, 1.0f), 5, null, null),
+                                    FTHybridOptions.builder().localOnly().build())
+                            .get();
+            assertEquals(2, result.length);
+        } finally {
+            FT.dropindex(client, index).get();
+        }
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void ft_hybrid_without_k_uses_engine_default(BaseClient client) {
+        Assumptions.assumeTrue(
+                capability, "search module present but pre-1.3 (INKEYS probe rejected it)");
+
+        String prefix = "{ft-hybrid-default-k-" + UUID.randomUUID() + "}:";
+        String index = prefix + "index";
+        int docCount = 15;
+        FieldInfo vecField =
+                new FieldInfo(
+                        "vec", VectorFieldFlat.builder(DistanceMetric.L2, 2).type(VectorType.FLOAT32).build());
+        assertEquals(
+                OK,
+                FT.create(
+                                client,
+                                index,
+                                new FieldInfo[] {new FieldInfo("title", new TextField()), vecField},
+                                FTCreateOptions.builder().dataType(DataType.HASH).prefixes(new String[] {prefix}).build())
+                        .get());
+        try {
+            for (int i = 1; i <= docCount; i++) {
+                Map<GlideString, GlideString> fields = new HashMap<>();
+                fields.put(gs("title"), gs("goodbye"));
+                fields.put(gs("vec"), gs(packVector((float) i, (float) i)));
+                if (client instanceof GlideClusterClient) {
+                    ((GlideClusterClient) client).hset(gs(prefix + "d" + i), fields).get();
+                } else {
+                    ((GlideClient) client).hset(gs(prefix + "d" + i), fields).get();
+                }
+            }
+            Thread.sleep(1000);
+
+            Object[] result =
+                    FT.hybrid(
+                                    client,
+                                    index,
+                                    new FTHybridSearchArm("nonexistentterm12345"),
+                                    new FTHybridVsimArm("vec", packVector(1.0f, 1.0f)))
+                            .get();
+            assertEquals(10, result.length);
+        } finally {
+            FT.dropindex(client, index).get();
+        }
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClustersOnly")
+    public void ft_hybrid_with_cursor_prefer_replica_client_paged_to_exhaustion(BaseClient clusterClient) {
+        Assumptions.assumeTrue(
+                capability, "search module present but pre-1.3 (INKEYS probe rejected it)");
+        GlideClusterClient client = (GlideClusterClient) clusterClient;
+
+        String prefix = "{ft-hybrid-cursor-" + UUID.randomUUID() + "}:";
+        String index = createHybridIndex(client, prefix);
+
+        GlideClusterClient preferReplicaClient =
+                GlideClusterClient.createClient(
+                                commonClusterClientConfig()
+                                        .requestTimeout(5000)
+                                        .readFrom(ReadFrom.PREFER_REPLICA)
+                                        .build())
+                        .get();
+        try {
+            int totalRows = 0;
+            Object[] page =
+                    FT.hybrid(
+                                    preferReplicaClient,
+                                    index,
+                                    new FTHybridSearchArm("*"),
+                                    new FTHybridVsimArm("vec", packVector(1.0f, 1.0f), 5, null, null),
+                                    FTHybridOptions.builder().withCursor(new FTWithCursor(1)).build())
+                            .get();
+            Map<GlideString, Object>[] rows = castArray((Object[]) page[0], Map.class);
+            long cursorId = (long) page[1];
+            totalRows += rows.length;
+            Set<GlideString> seenKeys = new HashSet<>();
+            for (Map<GlideString, Object> row : rows) {
+                seenKeys.add((GlideString) row.get(gs("__key")));
+            }
+            int pagesRead = 1;
+            while (cursorId != 0) {
+                Object[] nextPage = FT.cursorRead(preferReplicaClient, index, cursorId).get();
+                Map<GlideString, Object>[] nextRows = castArray((Object[]) nextPage[0], Map.class);
+                totalRows += nextRows.length;
+                for (Map<GlideString, Object> row : nextRows) {
+                    seenKeys.add((GlideString) row.get(gs("__key")));
+                }
+                cursorId = (long) nextPage[1];
+                pagesRead++;
+                assertTrue(pagesRead <= 10, "paging did not terminate as expected");
+            }
+            assertEquals(2, totalRows);
+            Set<GlideString> expectedKeys = new HashSet<>();
+            expectedKeys.add(gs(prefix + HYBRID_DOC_TEXT_WINNER));
+            expectedKeys.add(gs(prefix + HYBRID_DOC_VECTOR_WINNER));
+            assertEquals(expectedKeys, seenKeys);
+        } finally {
+            preferReplicaClient.close();
+            FT.dropindex(client, index).get();
+        }
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void ft_hybrid_inside_multi_exec_rejected(BaseClient client) {
+        Assumptions.assumeTrue(
+                capability, "search module present but pre-1.3 (INKEYS probe rejected it)");
+
+        String prefix = "{ft-hybrid-multiexec-" + UUID.randomUUID() + "}:";
+        String index = createHybridIndex(client, prefix);
+        try {
+            GlideString[] cmd = {
+                gs("FT.HYBRID"),
+                gs(index),
+                gs("SEARCH"),
+                gs(HYBRID_SEARCH_QUERY),
+                gs("VSIM"),
+                gs("@vec"),
+                gs("$q"),
+                gs("PARAMS"),
+                gs("2"),
+                gs("q"),
+                gs(packVector(HYBRID_QUERY_VECTOR[0], HYBRID_QUERY_VECTOR[1]))
+            };
+            if (client instanceof GlideClusterClient) {
+                glide.api.models.ClusterBatch batch = new glide.api.models.ClusterBatch(true);
+                batch.customCommand(cmd);
+                ExecutionException e =
+                        assertThrows(
+                                ExecutionException.class,
+                                () -> ((GlideClusterClient) client).exec(batch, true).get());
+                assertTrue(e.getCause().getMessage().contains("FT.HYBRID"));
+            } else {
+                glide.api.models.Batch batch = new glide.api.models.Batch(true);
+                batch.customCommand(cmd);
+                ExecutionException e =
+                        assertThrows(
+                                ExecutionException.class, () -> ((GlideClient) client).exec(batch, true).get());
+                assertTrue(e.getCause().getMessage().contains("FT.HYBRID"));
+            }
+        } finally {
+            FT.dropindex(client, index).get();
+        }
+    }
 }
+

@@ -13,11 +13,17 @@ import glide.api.models.GlideString;
 import glide.api.models.commands.FT.FTAggregateOptions;
 import glide.api.models.commands.FT.FTCreateOptions;
 import glide.api.models.commands.FT.FTCreateOptions.FieldInfo;
+import glide.api.models.commands.FT.FTHybridOptions;
+import glide.api.models.commands.FT.FTHybridSearchArm;
+import glide.api.models.commands.FT.FTHybridVsimArm;
 import glide.api.models.commands.FT.FTInfoOptions;
 import glide.api.models.commands.FT.FTProfileOptions;
 import glide.api.models.commands.FT.FTSearchOptions;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -527,8 +533,269 @@ public class FT {
         GlideString[] args =
                 concatenateArrays(
                         new GlideString[] {gs("FT.AGGREGATE"), indexName, query}, options.toArgs());
+        if (options.hasWithCursor()) {
+            // WITHCURSOR wraps the normal per-document array shape in a [rows, cursorId]
+            // 2-tuple -- a structurally different array shape than Map<GlideString, Object>[].
+            // Materializing that 2-tuple as a value of this method's declared return type would
+            // require the JVM to perform a real array-component-type checkcast against
+            // Map<GlideString, Object>[] at the point this method returns, which fails with
+            // ClassCastException because the actual runtime array is a plain Object[]. Routing
+            // through executeCommand's own Object-typed (not Object[]-typed) erasure path avoids
+            // that checkcast ever being emitted -- the CompletableFuture's own type parameter is
+            // erased to Object, not to an array type, so no array-component check happens until a
+            // caller performs one explicitly. Callers paging a cursor must treat the result as
+            // the raw Object[] 2-tuple documented on this method and on FT#cursorRead/FT#hybrid,
+            // not as a true Map<GlideString, Object>[].
+            CompletableFuture<Object> raw = FT.<Object>executeCommand(client, args, false);
+            return (CompletableFuture<Map<GlideString, Object>[]>) (CompletableFuture<?>) raw;
+        }
         return FT.<Object[]>executeCommand(client, args, false)
                 .thenApply(res -> castArray(res, Map.class));
+    }
+
+    /**
+     * Reads the next page of results from a cursor opened by {@link #aggregate(BaseClient, String,
+     * String, FTAggregateOptions)} (with {@code FTAggregateOptions.builder().withCursor(...)}) or
+     * {@link #hybrid}.
+     *
+     * @param client The client to execute the command.
+     * @param indexName The index name the cursor was opened against.
+     * @param cursorId The cursor id, from the opening command's reply or a previous {@link
+     *     #cursorRead} call. {@code 0} means the cursor is already exhausted; calling this with
+     *     {@code 0} is a caller error, not something this function special-cases.
+     * @return A two-element array of {@code [rows, cursorId]}, where {@code rows} is the same
+     *     per-document mapping shape {@link #aggregate}/{@link #hybrid} return, and {@code
+     *     cursorId} is {@code 0} once the cursor is exhausted, or the id to pass to the next
+     *     {@link #cursorRead} call otherwise.
+     * @example
+     *     <pre>{@code
+     * Object[] page = FT.aggregate(client, "myIndex", "*",
+     *         FTAggregateOptions.builder().loadFields(new String[] {"__key"})
+     *             .withCursor(new FTWithCursor(10)).build())
+     *     .get();
+     * }</pre>
+     */
+    public static CompletableFuture<Object[]> cursorRead(
+            @NonNull BaseClient client, @NonNull String indexName, long cursorId) {
+        return cursorRead(client, gs(indexName), cursorId, null);
+    }
+
+    /**
+     * Reads the next page of results from a cursor opened by {@link #aggregate(BaseClient, String,
+     * String, FTAggregateOptions)} or {@link #hybrid}.
+     *
+     * @param client The client to execute the command.
+     * @param indexName The index name the cursor was opened against.
+     * @param cursorId The cursor id.
+     * @param count Overrides how many rows this page returns, instead of the count the cursor was
+     *     opened with.
+     * @return A two-element array of {@code [rows, cursorId]}.
+     */
+    public static CompletableFuture<Object[]> cursorRead(
+            @NonNull BaseClient client, @NonNull String indexName, long cursorId, Integer count) {
+        return cursorRead(client, gs(indexName), cursorId, count);
+    }
+
+    /**
+     * Reads the next page of results from a cursor opened by {@link #aggregate(BaseClient,
+     * GlideString, GlideString, FTAggregateOptions)} or {@link #hybrid}.
+     *
+     * @param client The client to execute the command.
+     * @param indexName The index name the cursor was opened against.
+     * @param cursorId The cursor id.
+     * @return A two-element array of {@code [rows, cursorId]}.
+     */
+    public static CompletableFuture<Object[]> cursorRead(
+            @NonNull BaseClient client, @NonNull GlideString indexName, long cursorId) {
+        return cursorRead(client, indexName, cursorId, null);
+    }
+
+    /**
+     * Reads the next page of results from a cursor opened by {@link #aggregate(BaseClient,
+     * GlideString, GlideString, FTAggregateOptions)} or {@link #hybrid}.
+     *
+     * <p>Always reads from the PRIMARY of the index's slot, regardless of the client's {@code
+     * ReadFrom} configuration -- a cursor is a per-process, node-local resource. A cursor opened
+     * by FT.HYBRID is read the same way as one opened by FT.AGGREGATE; the server does not
+     * distinguish which command created it.
+     *
+     * @param client The client to execute the command.
+     * @param indexName The index name the cursor was opened against.
+     * @param cursorId The cursor id, from the opening command's reply or a previous {@link
+     *     #cursorRead} call. {@code 0} means the cursor is already exhausted; calling this with
+     *     {@code 0} is a caller error, not something this function special-cases.
+     * @param count Overrides how many rows this page returns, instead of the count the cursor was
+     *     opened with.
+     * @return A two-element array of {@code [rows, cursorId]}, where {@code rows} is the same
+     *     per-document mapping shape {@link #aggregate}/{@link #hybrid} return, and {@code
+     *     cursorId} is {@code 0} once the cursor is exhausted, or the id to pass to the next
+     *     {@link #cursorRead} call otherwise.
+     */
+    public static CompletableFuture<Object[]> cursorRead(
+            @NonNull BaseClient client,
+            @NonNull GlideString indexName,
+            long cursorId,
+            Integer count) {
+        ArrayList<GlideString> argsList = new ArrayList<>();
+        argsList.add(gs("FT.CURSOR"));
+        argsList.add(gs("READ"));
+        argsList.add(indexName);
+        argsList.add(gs(Long.toString(cursorId)));
+        if (count != null) {
+            argsList.add(gs("COUNT"));
+            argsList.add(gs(count.toString()));
+        }
+        return executeCommand(client, argsList.toArray(new GlideString[0]), false);
+    }
+
+    /**
+     * Deletes an open cursor, discarding it before it would otherwise be exhausted or time out.
+     *
+     * @param client The client to execute the command.
+     * @param indexName The index name the cursor was opened against.
+     * @param cursorId The cursor id to delete.
+     * @return <code>"OK"</code>.
+     * @example
+     *     <pre>{@code
+     * FT.cursorDel(client, "myIndex", cursorId).get();
+     * }</pre>
+     */
+    public static CompletableFuture<String> cursorDel(
+            @NonNull BaseClient client, @NonNull String indexName, long cursorId) {
+        return cursorDel(client, gs(indexName), cursorId);
+    }
+
+    /**
+     * Deletes an open cursor, discarding it before it would otherwise be exhausted or time out.
+     *
+     * <p>Always reads from the PRIMARY of the index's slot, regardless of the client's {@code
+     * ReadFrom} configuration -- see {@link #cursorRead}'s note.
+     *
+     * @param client The client to execute the command.
+     * @param indexName The index name the cursor was opened against.
+     * @param cursorId The cursor id to delete.
+     * @return <code>"OK"</code>.
+     */
+    public static CompletableFuture<String> cursorDel(
+            @NonNull BaseClient client, @NonNull GlideString indexName, long cursorId) {
+        GlideString[] args = {
+            gs("FT.CURSOR"), gs("DEL"), indexName, gs(Long.toString(cursorId))
+        };
+        return executeCommand(client, args, false);
+    }
+
+    /**
+     * Combines a text/tag/numeric query (the SEARCH arm) with a vector similarity search (the VSIM
+     * arm) in a single query, fusing both arms' results into one ranked reply.
+     *
+     * @param client The client to execute the command.
+     * @param indexName The index name to query.
+     * @param searchArm The text/tag/numeric query arm. See {@link FTHybridSearchArm}.
+     * @param vsimArm The vector similarity search arm. See {@link FTHybridVsimArm}.
+     * @return An array containing a mapping of field name and associated value for each matching
+     *     document, after both arms' results have been fused and any clauses in {@code options}
+     *     applied. With no LOAD clause (the default), each mapping contains just the document key
+     *     and the fused score.
+     * @example
+     *     <pre>{@code
+     * Object[] result = FT.hybrid(client, "idx",
+     *         new FTHybridSearchArm("hello world"),
+     *         new FTHybridVsimArm("vec", queryVectorBytes, 10, null, null))
+     *     .get();
+     * }</pre>
+     */
+    public static CompletableFuture<Object[]> hybrid(
+            @NonNull BaseClient client,
+            @NonNull String indexName,
+            @NonNull FTHybridSearchArm searchArm,
+            @NonNull FTHybridVsimArm vsimArm) {
+        return hybrid(client, gs(indexName), searchArm, vsimArm, FTHybridOptions.builder().build());
+    }
+
+    /**
+     * Combines a text/tag/numeric query (the SEARCH arm) with a vector similarity search (the VSIM
+     * arm) in a single query, fusing both arms' results into one ranked reply.
+     *
+     * @param client The client to execute the command.
+     * @param indexName The index name to query.
+     * @param searchArm The text/tag/numeric query arm. See {@link FTHybridSearchArm}.
+     * @param vsimArm The vector similarity search arm. See {@link FTHybridVsimArm}.
+     * @param options The optional arguments for the FT.HYBRID command, covering COMBINE, LOAD,
+     *     FILTER/LIMIT/GROUPBY/SORTBY/APPLY clauses, WITHCURSOR, LOCALONLY, TIMEOUT, PARAMS and
+     *     DIALECT. See {@link FTHybridOptions}.
+     * @return An array containing a mapping of field name and associated value for each matching
+     *     document. When {@code options}' {@code withCursor} is set, the reply shape instead
+     *     matches FT.AGGREGATE's own WITHCURSOR shape: a two-element array of {@code [rows,
+     *     cursorId]}.
+     * @example
+     *     <pre>{@code
+     * Object[] result = FT.hybrid(client, "idx",
+     *         new FTHybridSearchArm("hello world", null, "ss"),
+     *         new FTHybridVsimArm("vec", queryVectorBytes, 10, null, null, "vs"),
+     *         FTHybridOptions.builder()
+     *             .combine(new FTHybridCombine.Rrf(60.0, null, null))
+     *             .loadFields(new String[] {"title"})
+     *             .withCursor(new FTWithCursor(10))
+     *             .build())
+     *     .get();
+     * }</pre>
+     */
+    public static CompletableFuture<Object[]> hybrid(
+            @NonNull BaseClient client,
+            @NonNull String indexName,
+            @NonNull FTHybridSearchArm searchArm,
+            @NonNull FTHybridVsimArm vsimArm,
+            @NonNull FTHybridOptions options) {
+        return hybrid(client, gs(indexName), searchArm, vsimArm, options);
+    }
+
+    /**
+     * Combines a text/tag/numeric query (the SEARCH arm) with a vector similarity search (the VSIM
+     * arm) in a single query, fusing both arms' results into one ranked reply.
+     *
+     * <p>Transactions: FT.HYBRID is an ordinary custom command as far as GLIDE's batch/transaction
+     * machinery is concerned, but the server itself rejects FT.HYBRID inside MULTI/EXEC outright
+     * (and inside a Lua script, or when the reader thread pool is disabled), because the per-arm
+     * results cannot be revalidated against concurrent mutations before fusion under forced
+     * synchronous execution.
+     *
+     * @param client The client to execute the command.
+     * @param indexName The index name to query.
+     * @param searchArm The text/tag/numeric query arm. See {@link FTHybridSearchArm}.
+     * @param vsimArm The vector similarity search arm. See {@link FTHybridVsimArm}.
+     * @param options The optional arguments for the FT.HYBRID command. See {@link
+     *     FTHybridOptions}.
+     * @return An array containing a mapping of field name and associated value for each matching
+     *     document, or a cursor-wrapped {@code [rows, cursorId]} pair when {@code options}' {@code
+     *     withCursor} is set.
+     */
+    public static CompletableFuture<Object[]> hybrid(
+            @NonNull BaseClient client,
+            @NonNull GlideString indexName,
+            @NonNull FTHybridSearchArm searchArm,
+            @NonNull FTHybridVsimArm vsimArm,
+            @NonNull FTHybridOptions options) {
+        ArrayList<GlideString> argsList = new ArrayList<>();
+        argsList.add(gs("FT.HYBRID"));
+        argsList.add(indexName);
+        argsList.addAll(Arrays.asList(searchArm.toArgs()));
+
+        Map<String, GlideString> generatedVsimParam = null;
+        if (vsimArm.isParamReference()) {
+            argsList.addAll(Arrays.asList(vsimArm.toArgs()));
+        } else {
+            String generatedName = "$" + UUID.randomUUID().toString().replace("-", "");
+            generatedVsimParam = new HashMap<>();
+            generatedVsimParam.put(generatedName.substring(1), gs(vsimArm.getRawVector()));
+            argsList.addAll(Arrays.asList(vsimArm.toArgs(gs(generatedName))));
+        }
+
+        if (options.getCombine() != null) {
+            argsList.addAll(Arrays.asList(options.getCombine().toArgs()));
+        }
+        argsList.addAll(Arrays.asList(options.toArgs(generatedVsimParam)));
+
+        return executeCommand(client, argsList.toArray(new GlideString[0]), false);
     }
 
     /**
