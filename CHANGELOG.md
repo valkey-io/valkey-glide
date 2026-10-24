@@ -4,6 +4,7 @@
 
 ### Features
 
+* Go: valkey-search 1.3 stable surface for FT.SEARCH/FT.CREATE/FT.AGGREGATE — `InKeys` on `FtSearchOptions` (nil/empty slice/a list), `Count` (serializes to `LIMIT 0 0`, the first count-only option Go has had for FT.SEARCH), `FLOAT16`/`BFLOAT16` `VectorDataType` constants, `FtCreateOptions.Filter`/`ScoreField`/`NoHighlight`, per-field `SetUnf` (SORTABLE un-normalized sort, requires `SetSortable(true)`) on `TextField`/`TagField`/`NumericField`, and typed `NewToListReducer`/`NewFirstValueReducer`/`NewRandomSampleReducer` factories over the existing generic `FtAggregateReducer`. Also adds a 1.3 capability probe (`probeSearch13CapabilityCluster`) to the integration suite, since the existing `SkipIfServerVersionLowerThan` server-version gate can't distinguish the module's own version from the server's
 * All: Add support for Valkey 9.0 commands:
   * `DELIFEQ` ([#6146](https://github.com/valkey-io/valkey-glide/issues/6146))
 * Java, Node, Python, Go: Add support for Valkey 9.1 commands:
@@ -79,6 +80,8 @@
 
 ### Changes
 
+* Python: Add valkey-search 1.3 support — `FtAggregateReducer.to_list`, `.first_value`, and `.random_sample` factory methods for the `TOLIST`, `FIRST_VALUE`, and `RANDOM_SAMPLE` FT.AGGREGATE reducers; an `in_keys` option on `FtSearchOptions` for FT.SEARCH's `INKEYS`; and test coverage for Vector Range queries (`VECTOR_RANGE`/`YIELD_DISTANCE_AS`) in FT.SEARCH and FT.AGGREGATE and for the bare `*` wildcard query. ([valkey-search#932](https://github.com/valkey-io/valkey-search/pull/932), [#946](https://github.com/valkey-io/valkey-search/pull/946), [#949](https://github.com/valkey-io/valkey-search/pull/949), [#967](https://github.com/valkey-io/valkey-search/pull/967), [#985](https://github.com/valkey-io/valkey-search/pull/985), [#960](https://github.com/valkey-io/valkey-search/pull/960))
+* Python: Add valkey-search 1.3 support — RediSearch-parity typed APIs for FT.CREATE (`FLOAT16`/`BFLOAT16` vectors, `FILTER`, `SORTABLE UNF`, `SCORE_FIELD`, `NOHL`), FT.SEARCH/FT.AGGREGATE scoring (`WITHSCORES`/`SCORER`/`ADDSCORES`), FT.AGGREGATE's `LOAD ... AS` renaming and `WITHCURSOR` paging (`ft.cursor_read`/`ft.cursor_del`), and a new `ft.hybrid` API fusing a text/tag/numeric SEARCH arm with a VSIM vector-similarity arm via `FtHybridCombine.RRF`/`.Linear`/`.Function`. See [#7335](https://github.com/valkey-io/valkey-glide/pull/7335) for the full feature list, including the `search.emulate-release` >= 1.3.0 server-side requirement for a few of these. ([valkey-search#1.3.0-rc1](https://github.com/valkey-io/valkey-search))
 * Core/FFI, Python: Add Unix domain socket support for standalone clients with `NodeAddress(unix_socket_path=...)`, and accept `valkey+unix://` URIs in `create_client_from_uri` ([#4878](https://github.com/valkey-io/valkey-glide/issues/4878))
 * Java: Deprecate the Valkey API keywords on `BaseClient` and the command interfaces ([#7401](https://github.com/valkey-io/valkey-glide/issues/7401))
 * Go, Java, Node, Python: Add `cluster_info` `INFO` section (Valkey 9.1) ([#7199](https://github.com/valkey-io/valkey-glide/issues/7199))

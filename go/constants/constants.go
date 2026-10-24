@@ -345,8 +345,20 @@ const (
 type VectorDataType string
 
 const (
-	// VectorDataTypeFloat32 is the FLOAT32 vector type (default).
+	// VectorDataTypeFloat32 is the FLOAT32 vector type (default). 4 bytes per element, IEEE 754
+	// single precision.
 	VectorDataTypeFloat32 VectorDataType = "FLOAT32"
+	// VectorDataTypeFloat16 is the FLOAT16 vector type (valkey-search 1.3.0). 2 bytes per
+	// element, IEEE 754 half precision. Callers must pass already-encoded bytes, the same way
+	// FLOAT32 works today -- GLIDE does not encode vectors on the caller's behalf.
+	VectorDataTypeFloat16 VectorDataType = "FLOAT16"
+	// VectorDataTypeBfloat16 is the BFLOAT16 vector type (valkey-search 1.3.0). 2 bytes per
+	// element, truncated IEEE 754 single precision (the top 16 bits of a FLOAT32 -- sign, 8-bit
+	// exponent, 7-bit mantissa). Callers must pass already-encoded bytes; there is no built-in Go
+	// packer for this format. The engine may refuse to create or load a BFLOAT16 index on a host
+	// whose CPU lacks a SIMD BF16 code path -- this is a server-side capability check, not a
+	// GLIDE-side restriction.
+	VectorDataTypeBfloat16 VectorDataType = "BFLOAT16"
 )
 
 // IndexDataType is the type of the index dataset.
@@ -389,6 +401,28 @@ const (
 	FtAggregateOrderByAsc FtAggregateOrderBy = "ASC"
 	// FtAggregateOrderByDesc sorts results in descending order.
 	FtAggregateOrderByDesc FtAggregateOrderBy = "DESC"
+)
+
+// HybridFilterPolicy controls how a VSIM pre-filter is applied against the vector search in
+// FT.HYBRID. Only meaningful inside a counted VSIM FILTER block -- valkey-search's uncounted
+// "FILTER <expr>" extension on VSIM (no leading token count) cannot carry a policy at all; the
+// server requires the counted form to accept POLICY.
+//
+// See [valkey.io] for details.
+//
+// [valkey.io]: https://valkey.io/commands/ft.hybrid/
+type HybridFilterPolicy string
+
+const (
+	// HybridFilterPolicyAdhoc evaluates the filter against every candidate as it is produced
+	// (brute-force), rather than pre-restricting the vector index's own search space. EfRuntime
+	// on the same VSIM arm is rejected when this policy is set ("EF_RUNTIME is irrelevant for
+	// POLICY ADHOC").
+	HybridFilterPolicyAdhoc HybridFilterPolicy = "ADHOC"
+	// HybridFilterPolicyBatches evaluates the filter in batches drawn from the vector index.
+	// Required for BatchSize to be set on FtHybridVsimFilter ("BATCH_SIZE requires POLICY
+	// BATCHES").
+	HybridFilterPolicyBatches HybridFilterPolicy = "BATCHES"
 )
 
 // FunctionRestorePolicy represents the policy to use when restoring functions.
