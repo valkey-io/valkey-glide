@@ -564,9 +564,9 @@ public class FT {
      *     #cursorRead} call. {@code 0} means the cursor is already exhausted; calling this with
      *     {@code 0} is a caller error, not something this function special-cases.
      * @return A two-element array of {@code [rows, cursorId]}, where {@code rows} is the same
-     *     per-document mapping shape {@link #aggregate}/{@link #hybrid} return, and {@code
-     *     cursorId} is {@code 0} once the cursor is exhausted, or the id to pass to the next
-     *     {@link #cursorRead} call otherwise.
+     *     per-document mapping shape {@link #aggregate}/{@link #hybrid} return, and {@code cursorId}
+     *     is {@code 0} once the cursor is exhausted, or the id to pass to the next {@link
+     *     #cursorRead} call otherwise.
      * @example
      *     <pre>{@code
      * Object[] page = FT.aggregate(client, "myIndex", "*",
@@ -615,9 +615,9 @@ public class FT {
      * GlideString, GlideString, FTAggregateOptions)} or {@link #hybrid}.
      *
      * <p>Always reads from the PRIMARY of the index's slot, regardless of the client's {@code
-     * ReadFrom} configuration -- a cursor is a per-process, node-local resource. A cursor opened
-     * by FT.HYBRID is read the same way as one opened by FT.AGGREGATE; the server does not
-     * distinguish which command created it.
+     * ReadFrom} configuration -- a cursor is a per-process, node-local resource. A cursor opened by
+     * FT.HYBRID is read the same way as one opened by FT.AGGREGATE; the server does not distinguish
+     * which command created it.
      *
      * @param client The client to execute the command.
      * @param indexName The index name the cursor was opened against.
@@ -627,15 +627,12 @@ public class FT {
      * @param count Overrides how many rows this page returns, instead of the count the cursor was
      *     opened with.
      * @return A two-element array of {@code [rows, cursorId]}, where {@code rows} is the same
-     *     per-document mapping shape {@link #aggregate}/{@link #hybrid} return, and {@code
-     *     cursorId} is {@code 0} once the cursor is exhausted, or the id to pass to the next
-     *     {@link #cursorRead} call otherwise.
+     *     per-document mapping shape {@link #aggregate}/{@link #hybrid} return, and {@code cursorId}
+     *     is {@code 0} once the cursor is exhausted, or the id to pass to the next {@link
+     *     #cursorRead} call otherwise.
      */
     public static CompletableFuture<Object[]> cursorRead(
-            @NonNull BaseClient client,
-            @NonNull GlideString indexName,
-            long cursorId,
-            Integer count) {
+            @NonNull BaseClient client, @NonNull GlideString indexName, long cursorId, Integer count) {
         ArrayList<GlideString> argsList = new ArrayList<>();
         argsList.add(gs("FT.CURSOR"));
         argsList.add(gs("READ"));
@@ -678,9 +675,7 @@ public class FT {
      */
     public static CompletableFuture<String> cursorDel(
             @NonNull BaseClient client, @NonNull GlideString indexName, long cursorId) {
-        GlideString[] args = {
-            gs("FT.CURSOR"), gs("DEL"), indexName, gs(Long.toString(cursorId))
-        };
+        GlideString[] args = {gs("FT.CURSOR"), gs("DEL"), indexName, gs(Long.toString(cursorId))};
         return executeCommand(client, args, false);
     }
 
@@ -694,8 +689,8 @@ public class FT {
      * @param vsimArm The vector similarity search arm. See {@link FTHybridVsimArm}.
      * @return An array containing a mapping of field name and associated value for each matching
      *     document, after both arms' results have been fused and any clauses in {@code options}
-     *     applied. With no LOAD clause (the default), each mapping contains just the document key
-     *     and the fused score.
+     *     applied. With no LOAD clause (the default), each mapping contains just the document key and
+     *     the fused score.
      * @example
      *     <pre>{@code
      * Object[] result = FT.hybrid(client, "idx",
@@ -724,9 +719,8 @@ public class FT {
      *     FILTER/LIMIT/GROUPBY/SORTBY/APPLY clauses, WITHCURSOR, LOCALONLY, TIMEOUT, PARAMS and
      *     DIALECT. See {@link FTHybridOptions}.
      * @return An array containing a mapping of field name and associated value for each matching
-     *     document. When {@code options}' {@code withCursor} is set, the reply shape instead
-     *     matches FT.AGGREGATE's own WITHCURSOR shape: a two-element array of {@code [rows,
-     *     cursorId]}.
+     *     document. When {@code options}' {@code withCursor} is set, the reply shape instead matches
+     *     FT.AGGREGATE's own WITHCURSOR shape: a two-element array of {@code [rows, cursorId]}.
      * @example
      *     <pre>{@code
      * Object[] result = FT.hybrid(client, "idx",
@@ -754,17 +748,16 @@ public class FT {
      * arm) in a single query, fusing both arms' results into one ranked reply.
      *
      * <p>Transactions: FT.HYBRID is an ordinary custom command as far as GLIDE's batch/transaction
-     * machinery is concerned, but the server itself rejects FT.HYBRID inside MULTI/EXEC outright
-     * (and inside a Lua script, or when the reader thread pool is disabled), because the per-arm
-     * results cannot be revalidated against concurrent mutations before fusion under forced
-     * synchronous execution.
+     * machinery is concerned, but the server itself rejects FT.HYBRID inside MULTI/EXEC outright (and
+     * inside a Lua script, or when the reader thread pool is disabled), because the per-arm results
+     * cannot be revalidated against concurrent mutations before fusion under forced synchronous
+     * execution.
      *
      * @param client The client to execute the command.
      * @param indexName The index name to query.
      * @param searchArm The text/tag/numeric query arm. See {@link FTHybridSearchArm}.
      * @param vsimArm The vector similarity search arm. See {@link FTHybridVsimArm}.
-     * @param options The optional arguments for the FT.HYBRID command. See {@link
-     *     FTHybridOptions}.
+     * @param options The optional arguments for the FT.HYBRID command. See {@link FTHybridOptions}.
      * @return An array containing a mapping of field name and associated value for each matching
      *     document, or a cursor-wrapped {@code [rows, cursorId]} pair when {@code options}' {@code
      *     withCursor} is set.

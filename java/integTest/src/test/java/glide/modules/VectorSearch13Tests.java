@@ -40,7 +40,6 @@ import glide.api.models.commands.FlushMode;
 import glide.api.models.configuration.ReadFrom;
 import glide.api.models.configuration.RequestRoutingConfiguration.ByAddressRoute;
 import glide.api.models.configuration.RequestRoutingConfiguration.SimpleMultiNodeRoute;
-import glide.api.models.exceptions.RequestException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.ArrayList;
