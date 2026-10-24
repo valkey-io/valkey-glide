@@ -167,6 +167,33 @@ type FtAggregateParam struct {
 	Value string
 }
 
+// FtWithCursor requests a paged reply instead of the whole result set at once, for
+// FT.AGGREGATE and FT.HYBRID -- the two commands share this option's grammar and reply shape
+// verbatim, since both forward WITHCURSOR to the same aggregate-suffix parser.
+//
+// A paged query, and every subsequent FT.CURSOR READ/DEL against the cursor it opens, is pinned
+// to the PRIMARY of the index's slot regardless of a cluster client's ReadFrom configuration --
+// a cursor is a per-process, node-local resource, and this is a deliberate exception to the
+// client's normal read routing.
+type FtWithCursor struct {
+	// Count is the number of rows to return per page.
+	Count *int
+	// MaxIdle is how long (in milliseconds) the cursor may sit idle between reads before the
+	// server discards it.
+	MaxIdle *int
+}
+
+func (c *FtWithCursor) toArgs() []string {
+	args := []string{"WITHCURSOR"}
+	if c.Count != nil {
+		args = append(args, "COUNT", strconv.Itoa(*c.Count))
+	}
+	if c.MaxIdle != nil {
+		args = append(args, "MAXIDLE", strconv.Itoa(*c.MaxIdle))
+	}
+	return args
+}
+
 // FtAggregateOptions holds optional arguments for the FT.AGGREGATE command.
 //
 // See [valkey.io] for details.
@@ -191,6 +218,21 @@ type FtAggregateOptions struct {
 	Slop *int
 	// Dialect sets the query dialect version.
 	Dialect *int
+	// AddScores exposes the relevance score as a pipeline field named "__score" (valkey-search
+	// 1.3.0). "__score" can then be referenced like any other pipeline field in a LoadFields
+	// entry, an FtAggregateApply expression, or an FtAggregateSortProperty.
+	AddScores bool
+	// Scorer is the scoring function used to compute "__score" and rank results (valkey-search
+	// 1.3.0). "BM25STD" is the only value currently registered and selectable; any other value
+	// is rejected by the server. Has no visible effect unless combined with AddScores (or
+	// inspected indirectly via a SORTBY on "__score").
+	Scorer string
+	// WithCursor requests a paged reply instead of the whole result set at once. See
+	// [FtWithCursor]. The reply shape becomes a two-element array of [rows, cursorId], where rows
+	// is this same aggregate response shape and cursorId is passed to a subsequent
+	// [github.com/valkey-io/valkey-glide/go/v2/servermodules/glideft.FtCursorRead] call to fetch
+	// the next page (0 once exhausted).
+	WithCursor *FtWithCursor
 }
 
 // ToArgs returns the command arguments for FtAggregateOptions.
@@ -228,6 +270,15 @@ func (o *FtAggregateOptions) ToArgs() ([]string, error) {
 	}
 	if o.Dialect != nil {
 		args = append(args, "DIALECT", strconv.Itoa(*o.Dialect))
+	}
+	if o.AddScores {
+		args = append(args, "ADDSCORES")
+	}
+	if o.Scorer != "" {
+		args = append(args, "SCORER", o.Scorer)
+	}
+	if o.WithCursor != nil {
+		args = append(args, o.WithCursor.toArgs()...)
 	}
 	return args, nil
 }

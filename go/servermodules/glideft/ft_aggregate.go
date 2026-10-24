@@ -18,7 +18,10 @@ import (
 //	client    - The Valkey GLIDE client to execute the command.
 //	indexName - The name of the index to aggregate.
 //	query     - The filter query string.
-//	opts      - Optional aggregation parameters. Pass nil to use defaults.
+//	opts      - Optional aggregation parameters. Pass nil to use defaults. If opts.WithCursor is
+//	            set, use [FtAggregateWithCursor]/[ClusterFtAggregateWithCursor] instead -- the
+//	            reply shape becomes a two-element [rows, cursorId] array rather than this plain
+//	            row slice.
 //
 // Return value:
 //
@@ -54,6 +57,43 @@ func ClusterFtAggregate(
 	}
 	result, execErr := execCluster(client, ctx, args)
 	return parseFtAggregateResponse(result, execErr)
+}
+
+// FtAggregateWithCursor is [FtAggregate] for an opts.WithCursor query, returning the
+// [rows, cursorId] pair directly. cursorId is 0 once the cursor is exhausted; otherwise pass it
+// to [FtCursorRead]/[ClusterFtCursorRead] to fetch the next page.
+func FtAggregateWithCursor(
+	ctx context.Context,
+	client standaloneClient,
+	indexName string,
+	query string,
+	opts *options.FtAggregateOptions,
+) ([]map[string]any, int64, error) {
+	args, err := buildAggregateArgs(indexName, query, opts)
+	if err != nil {
+		return nil, 0, err
+	}
+	result, execErr := execStandalone(client, ctx, args)
+	return parseCursorWrappedAggregateResponse(result, execErr)
+}
+
+// ClusterFtAggregateWithCursor is the cluster variant of [FtAggregateWithCursor]. Routed to the
+// PRIMARY of indexName's slot regardless of the client's ReadFrom configuration -- a cursor is
+// a per-process, node-local resource, so every subsequent page must be read from the same node
+// that opened it.
+func ClusterFtAggregateWithCursor(
+	ctx context.Context,
+	client clusterClient,
+	indexName string,
+	query string,
+	opts *options.FtAggregateOptions,
+) ([]map[string]any, int64, error) {
+	args, err := buildAggregateArgs(indexName, query, opts)
+	if err != nil {
+		return nil, 0, err
+	}
+	result, execErr := execClusterPrimaryPinned(client, ctx, indexName, args)
+	return parseCursorWrappedAggregateResponse(result, execErr)
 }
 
 func buildAggregateArgs(indexName, query string, opts *options.FtAggregateOptions) ([]string, error) {

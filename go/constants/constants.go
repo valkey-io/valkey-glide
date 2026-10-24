@@ -403,6 +403,28 @@ const (
 	FtAggregateOrderByDesc FtAggregateOrderBy = "DESC"
 )
 
+// HybridFilterPolicy controls how a VSIM pre-filter is applied against the vector search in
+// FT.HYBRID. Only meaningful inside a counted VSIM FILTER block -- valkey-search's uncounted
+// "FILTER <expr>" extension on VSIM (no leading token count) cannot carry a policy at all; the
+// server requires the counted form to accept POLICY.
+//
+// See [valkey.io] for details.
+//
+// [valkey.io]: https://valkey.io/commands/ft.hybrid/
+type HybridFilterPolicy string
+
+const (
+	// HybridFilterPolicyAdhoc evaluates the filter against every candidate as it is produced
+	// (brute-force), rather than pre-restricting the vector index's own search space. EfRuntime
+	// on the same VSIM arm is rejected when this policy is set ("EF_RUNTIME is irrelevant for
+	// POLICY ADHOC").
+	HybridFilterPolicyAdhoc HybridFilterPolicy = "ADHOC"
+	// HybridFilterPolicyBatches evaluates the filter in batches drawn from the vector index.
+	// Required for BatchSize to be set on FtHybridVsimFilter ("BATCH_SIZE requires POLICY
+	// BATCHES").
+	HybridFilterPolicyBatches HybridFilterPolicy = "BATCHES"
+)
+
 // FunctionRestorePolicy represents the policy to use when restoring functions.
 // See https://valkey.io/commands/function-restore/ for details.
 type FunctionRestorePolicy string

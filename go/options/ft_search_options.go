@@ -114,6 +114,18 @@ type FtSearchOptions struct {
 	ShardScope FtSearchShardScope
 	// Consistency controls consistency requirements in cluster mode.
 	Consistency FtSearchConsistencyMode
+	// WithScores augments the output with each document's relevance score (valkey-search 1.3.0).
+	// This changes the result shape: each document's [models.FtSearchDocument.Score] is populated
+	// instead of being nil. With NoContent set, Fields is empty but Score is still populated.
+	// Combining WithSortKeys with NoContent drops the sort key -- confirmed live, the server's
+	// reply reverts to the plain WITHSCORES-only shape in that combination, so
+	// [models.FtSearchDocument.SortKey] stays empty even though WithSortKeys was requested.
+	WithScores bool
+	// Scorer is the scoring function used to rank results (valkey-search 1.3.0). "BM25STD" is
+	// the only value currently registered and selectable; any other value is rejected by the
+	// server. Has no visible effect unless combined with WithScores (or inspected indirectly via
+	// SortBy).
+	Scorer string
 }
 
 // ToArgs returns the command arguments for FtSearchOptions.
@@ -187,6 +199,12 @@ func (o *FtSearchOptions) ToArgs() ([]string, error) {
 		// token outright. The count-only form the server actually recognises is LIMIT 0 0; the
 		// guard at the top of this method already confirmed Limit is unset.
 		args = append(args, "LIMIT", "0", "0")
+	}
+	if o.WithScores {
+		args = append(args, "WITHSCORES")
+	}
+	if o.Scorer != "" {
+		args = append(args, "SCORER", o.Scorer)
 	}
 	if o.Dialect != nil {
 		args = append(args, "DIALECT", strconv.Itoa(*o.Dialect))
