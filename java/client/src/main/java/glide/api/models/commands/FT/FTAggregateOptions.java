@@ -32,9 +32,9 @@ public class FTAggregateOptions {
 
     /**
      * Entries for the LOAD clause that also rename their field via {@code AS}, reusing {@link
-     * LoadField} (valkey-search 1.3.0; see {@link LoadField}'s docstring for the compatibility
-     * gate). Can be freely mixed with {@link #loadFields} in the same {@link #toArgs()} call by
-     * calling both builder methods; the two lists are concatenated, plain fields first.
+     * LoadField} (valkey-search 1.3.0; see {@link LoadField}'s docstring for the compatibility gate).
+     * Can be freely mixed with {@link #loadFields} in the same {@link #toArgs()} call by calling both
+     * builder methods; the two lists are concatenated, plain fields first.
      */
     private final LoadField[] loadFieldsWithAlias;
 
@@ -50,34 +50,32 @@ public class FTAggregateOptions {
     private final Integer dialect;
 
     /**
-     * If set, exposes the relevance score as a pipeline field named {@code __score}
-     * (valkey-search 1.3.0, {@code src/commands/ft_aggregate_parser.cc} {@code kAddScoresParam},
-     * {@code src/commands/ft_aggregate_exec.cc}). {@code __score} can then be referenced like any
-     * other pipeline field in a {@link LoadField}, {@link Apply} expression, or a {@link
+     * If set, exposes the relevance score as a pipeline field named {@code __score} (valkey-search
+     * 1.3.0, {@code src/commands/ft_aggregate_parser.cc} {@code kAddScoresParam}, {@code
+     * src/commands/ft_aggregate_exec.cc}). {@code __score} can then be referenced like any other
+     * pipeline field in a {@link LoadField}, {@link Apply} expression, or a {@link
      * SortBy.SortProperty}.
      */
     @Builder.Default private final boolean addScores = false;
 
     /**
      * The scoring function used to compute {@code __score} and rank results (valkey-search 1.3.0,
-     * {@code src/indexes/scoring/scorer.h}). {@code "BM25STD"} is the only value currently
-     * registered and selectable; any other value is rejected by the server. Has no visible effect
-     * unless combined with {@link #addScores} (or inspected indirectly via a SORTBY on {@code
-     * __score}).
+     * {@code src/indexes/scoring/scorer.h}). {@code "BM25STD"} is the only value currently registered
+     * and selectable; any other value is rejected by the server. Has no visible effect unless
+     * combined with {@link #addScores} (or inspected indirectly via a SORTBY on {@code __score}).
      */
     private final GlideString scorer;
 
     /**
-     * Requests a paged reply instead of the whole result set at once. See {@link FTWithCursor}.
-     * The reply shape becomes a two-element array of {@code [rows, cursorId]}, where {@code rows}
-     * is this same aggregate response shape and {@code cursorId} is passed to a subsequent {@link
+     * Requests a paged reply instead of the whole result set at once. See {@link FTWithCursor}. The
+     * reply shape becomes a two-element array of {@code [rows, cursorId]}, where {@code rows} is this
+     * same aggregate response shape and {@code cursorId} is passed to a subsequent {@link
      * FT#cursorRead} call to fetch the next page ({@code 0} once exhausted).
      *
-     * <p>A paged query, and every subsequent FT.CURSOR READ/DEL against the cursor it opens,
-     * always reads from the PRIMARY of the index's slot, regardless of the client's {@code
-     * ReadFrom} configuration -- a cursor is a per-process, node-local resource on the server that
-     * opened it. A plain aggregate without {@code withCursor} is unaffected and still prefers
-     * replicas as normal.
+     * <p>A paged query, and every subsequent FT.CURSOR READ/DEL against the cursor it opens, always
+     * reads from the PRIMARY of the index's slot, regardless of the client's {@code ReadFrom}
+     * configuration -- a cursor is a per-process, node-local resource on the server that opened it. A
+     * plain aggregate without {@code withCursor} is unaffected and still prefers replicas as normal.
      */
     private final FTWithCursor withCursor;
 
