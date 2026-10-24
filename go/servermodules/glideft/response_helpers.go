@@ -280,7 +280,10 @@ func parseCursorWrappedAggregateResponse(result any, err error) ([]map[string]an
 		return nil, 0, fmt.Errorf("unexpected WITHCURSOR response type: %T, expected []any", result)
 	}
 	if len(arr) != 2 {
-		return nil, 0, fmt.Errorf("unexpected WITHCURSOR response: expected a 2-element [rows, cursorId] array, got %d elements", len(arr))
+		return nil, 0, fmt.Errorf(
+			"unexpected WITHCURSOR response: expected a 2-element [rows, cursorId] array, got %d elements",
+			len(arr),
+		)
 	}
 
 	cursorID, ok := arr[1].(int64)
