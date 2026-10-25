@@ -229,6 +229,12 @@ def copy_readme_to_package(package_dir: Path) -> None:
 
 
 def install_glide_shared(env: Dict[str, str], release: bool = False) -> None:
+    """Build and install glide-shared and the FFI cdylib library into the local environment.
+
+    Args:
+        env: Environment variable dictionary for subprocesses.
+        release: Whether to compile release (optimized) artifacts instead of debug.
+    """
     cmd = [str(venv_ctx["python_exe"]), "-m", "maturin", "develop", "--locked"]
     if release:
         cmd += ["--release"]
@@ -271,6 +277,13 @@ def build_async_client_wheel(
     release: bool,
     features: Optional[str] = "",
 ) -> None:
+    """Build the async client wheel with vendored shared modules and install it.
+
+    Args:
+        env: Environment variable dictionary for subprocesses.
+        release: Whether to build in release mode with symbols stripped.
+        features: Comma-separated list of optional cargo features.
+    """
     # 1. Copy shared module
     dest_shared = ASYNC_VENDORED_SHARED_DIR
     if dest_shared.exists():
