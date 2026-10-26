@@ -1543,48 +1543,48 @@ def batch_test(
     return args
 
 
-def helper_valkey_9_0(transaction, key, string_key, args):
+def helper_valkey_9_0(transaction, key28, key30, args):
     expiry = ExpirySet(ExpiryType.UNIX_SEC, MAX_EXPIRE_TIME_SEC)
-    transaction.hsetex(key, {"f1": "v1", "f2": "v2"}, expiry=expiry)
+    transaction.hsetex(key28, {"f1": "v1", "f2": "v2"}, expiry=expiry)
 
     args.append(1)
-    transaction.hexpiretime(key, ["f1", "missing"])
+    transaction.hexpiretime(key28, ["f1", "missing"])
     args.append([MAX_EXPIRE_TIME_SEC, -2])
-    transaction.hpexpiretime(key, ["f1"])
+    transaction.hpexpiretime(key28, ["f1"])
     args.append([MAX_EXPIRE_TIME_SEC * 1000])
-    transaction.hpersist(key, ["f1", "f2"])
+    transaction.hpersist(key28, ["f1", "f2"])
     args.append([1, 1])
-    transaction.httl(key, ["f1", "missing"])
+    transaction.httl(key28, ["f1", "missing"])
     args.append([-1, -2])
-    transaction.hpttl(key, ["f1"])
+    transaction.hpttl(key28, ["f1"])
     args.append([-1])
-    transaction.hexpireat(key, MAX_EXPIRE_TIME_SEC, ["f1"])
+    transaction.hexpireat(key28, MAX_EXPIRE_TIME_SEC, ["f1"])
     args.append([1])
-    transaction.hpexpireat(key, MAX_EXPIRE_TIME_SEC * 1000, ["f2"])
+    transaction.hpexpireat(key28, MAX_EXPIRE_TIME_SEC * 1000, ["f2"])
     args.append([1])
-    transaction.hexpiretime(key, ["f1", "f2"])
+    transaction.hexpiretime(key28, ["f1", "f2"])
     args.append([MAX_EXPIRE_TIME_SEC, MAX_EXPIRE_TIME_SEC])
-    transaction.hexpire(key, 3600, ["f1"], option=ExpireOptions.HasExistingExpiry)
+    transaction.hexpire(key28, 3600, ["f1"], option=ExpireOptions.HasExistingExpiry)
     args.append([1])
-    transaction.hpexpire(key, 3600000, ["f2"])
+    transaction.hpexpire(key28, 3600000, ["f2"])
     args.append([1])
-    transaction.httl(key, ["f1"])
+    transaction.httl(key28, ["f1"])
     args.append([Matches(lambda ttl: 0 < ttl <= 3600)])
-    transaction.hgetex(key, ["f1"], expiry=ExpiryGetEx(ExpiryTypeGetEx.PERSIST, None))
+    transaction.hgetex(key28, ["f1"], expiry=ExpiryGetEx(ExpiryTypeGetEx.PERSIST, None))
     args.append([b"v1"])
 
-    transaction.set(string_key, "value")
+    transaction.set(key30, "value")
     args.append(OK)
-    transaction.delifeq(string_key, "other")
+    transaction.delifeq(key30, "other")
     args.append(False)
-    transaction.delifeq(string_key, "value")
+    transaction.delifeq(key30, "value")
     args.append(True)
 
 
-def helper_valkey_9_1(transaction, key, args):
-    transaction.hset(key, {"f1": "v1"})
+def helper_valkey_9_1(transaction, key29, args):
+    transaction.hset(key29, {"f1": "v1"})
     args.append(1)
-    transaction.hgetdel(key, ["f1", "missing"])
+    transaction.hgetdel(key29, ["f1", "missing"])
     args.append([b"v1", None])
 
 
