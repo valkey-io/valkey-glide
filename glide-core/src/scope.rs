@@ -30,7 +30,7 @@
 //! [`execute_scope_command`]) so every queued command reaches the server and its
 //! own EXECABORT governs the transaction, as on the non-scoped path.
 
-use crate::client::Client;
+use crate::client::{AuthGeneration, Client};
 use crate::errors::RequestErrorType;
 use crate::pool::{
     ScopedConnection, get_client_scope_pools, get_scope_registry, slot_for_key,
@@ -230,7 +230,7 @@ fn slot_of_unanimous_keys(keys: &[&[u8]]) -> ScopeSlot {
 /// - `cmd_name`: The command name (e.g., "GET", "SET", "WATCH")
 /// - `args`: Command arguments as byte slices
 /// - `client`: The parent Client. `None` sends the command raw — no timeout, no
-///   decompression and no IAM re-authentication — which is only useful for tests
+///   decompression and no rotation re-authentication — which is only useful for tests
 ///   that need to observe a connection's state before any re-auth can mask it.
 ///
 /// # Returns
@@ -330,13 +330,13 @@ pub async fn execute_scope_command(
         Some(c) => {
             let ScopedConnection {
                 connection,
-                last_iam_generation,
+                last_auth_generation,
                 ..
             } = &mut *conn;
             c.send_command_on_connection(
                 &cmd,
                 connection,
-                last_iam_generation,
+                last_auth_generation,
                 multi_active_before_command || subscribed_before_command,
             )
             .await
@@ -622,8 +622,11 @@ struct PreparedScopeConnection {
     connection: redis::aio::MultiplexedConnection,
     /// Database the connection was SELECTed into (parent runtime DB, else config).
     database_id: u32,
-    /// IAM token generation the initial AUTH was built from (0 when IAM is not in use).
-    initial_iam_generation: u64,
+    /// Credential generation the initial AUTH was built from: the IAM token
+    /// generation for an IAM client, otherwise `CredentialsHandle::generation`
+    /// (`AuthGeneration::NEVER` when the credentials came from the request bytes,
+    /// i.e. no owning Client was passed).
+    initial_auth_generation: AuthGeneration,
 }
 
 /// Strip surrounding `[ ]` from an IPv6 host. A bracketed literal is a URL-authority
@@ -835,32 +838,42 @@ async fn build_scope_connection(
     let mut init_count = 0;
 
     // Generation observed at AUTH-build time, so send_command_on_connection can
-    // detect whether the token has rotated again since this connection's initial
-    // AUTH (rather than always re-authenticating on the very first command, or
-    // missing a rotation that lands between here and the first command).
-    let mut initial_iam_generation: u64 = 0;
+    // detect whether the credential has rotated again since this connection's
+    // initial AUTH (rather than always re-authenticating on the very first
+    // command, or missing a rotation that lands between here and the first
+    // command).
+    let mut initial_auth_generation = AuthGeneration::NEVER;
 
     // AUTH: IAM authentication takes priority when configured on the parent client
-    // (matching the documented priority in `AuthenticationInfo`'s doc comment), otherwise
-    // fall back to the protobuf-configured password/username.
+    // (matching the documented priority in `AuthenticationInfo`'s doc comment).
+    // Otherwise the owning Client's current credentials: the request bytes are
+    // the pool's first-acquire snapshot and never see a later
+    // `update_connection_password`. Only the raw test path, which has no Client,
+    // reads them.
     if let Some(manager) = client.and_then(|c| c.iam_token_manager()) {
         // Read the generation before the token: if a refresh lands in this gap,
-        // `initial_iam_generation` records the (now-stale) pre-refresh generation,
+        // `initial_auth_generation` records the (now-stale) pre-refresh generation,
         // so the mismatch on the first scope command still triggers a
         // reauthentication. Reading generation after the token could otherwise
         // suppress it — a refresh landing there would mean the initial AUTH used
         // the old token, but the recorded generation already matches the new one.
-        let generation_before_auth = manager.token_generation();
+        let generation_before_auth = AuthGeneration::from_source(manager.token_generation());
         let current_token = manager.get_token().await;
         if current_token.is_empty() {
             return Err(ScopeCreateError::IamTokenUnavailable);
         }
-        initial_iam_generation = generation_before_auth;
+        initial_auth_generation = generation_before_auth;
         init_pipe
             .cmd("AUTH")
             .arg(manager.username())
             .arg(current_token.as_str());
         init_count += 1;
+    } else if let Some(handle) = client.map(|c| c.credentials()) {
+        initial_auth_generation = handle.generation();
+        if let Some(auth_cmd) = handle.current().auth_command() {
+            init_pipe.add_command(auth_cmd);
+            init_count += 1;
+        }
     } else if let Some(ref auth_info) = proto.authentication_info.0 {
         let password = &auth_info.password;
         let username = &auth_info.username;
@@ -929,7 +942,7 @@ async fn build_scope_connection(
     Ok(PreparedScopeConnection {
         connection: conn,
         database_id,
-        initial_iam_generation,
+        initial_auth_generation,
     })
 }
 
@@ -988,9 +1001,7 @@ pub async fn create_scope_connection(
                 // a borrow picks it up.
                 acquisition_slot: None,
                 target,
-                last_iam_generation: std::sync::atomic::AtomicU64::new(
-                    prepared.initial_iam_generation,
-                ),
+                last_auth_generation: prepared.initial_auth_generation,
             });
             reservation.commit();
             Ok(())
