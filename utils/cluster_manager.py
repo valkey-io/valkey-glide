@@ -638,6 +638,14 @@ def create_servers(
         server, node_folder = servers_to_check.pop()
         logging.debug(f"Checking server {server.host}:{server.port}")
         if is_address_already_in_use(server, f"{node_folder}/server.log"):
+            # A node that lost the bind race exited on its own; one that was still
+            # starting when the check gave up has not, and would keep running
+            # with its data directory deleted underneath it.
+            if server.process_id() > 0:
+                try:
+                    os.kill(server.process_id(), signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
             remove_folder(node_folder)
             if ports is not None:
                 # The user passed a taken port, exit with an error
@@ -980,8 +988,13 @@ def wait_for_regex_in_log(
 def is_address_already_in_use(
     server: Server,
     log_file: str,
-    timeout: int = 10,
+    timeout: float = 10,
 ):
+    """True when the node must be replaced: its log reports the bind error, or
+    reports neither that nor "Ready" within ``timeout``. The caller passes an
+    unreplaced node straight to ``--cluster create``, which fails on CLUSTER MEET
+    if the node is not listening, so an unknown state is treated as unusable.
+    """
     logging.debug(f"checking is address already bind for: {server}")
     timeout_start = time.time()
     address_in_use_errors = [
@@ -1006,10 +1019,10 @@ def is_address_already_in_use(
             else:
                 time.sleep(0.1)
                 continue
-    logging.warn(
-        f"Timeout exceeded trying to check if address already in use for server {server}!"
+    logging.warning(
+        f"Server {server} reported neither Ready nor a bind error within {timeout}s; replacing it"
     )
-    return False
+    return True
 
 
 def dir_path(path: str):
