@@ -47,6 +47,7 @@ import {
     Score,
     ScoreFilter,
     Script,
+    SetOptions,
     SignedEncoding,
     SingleNodeRoute,
     SortOrder,
@@ -9652,30 +9653,56 @@ export function runBaseTests(config: {
 
     async function setWithOnlyIfEquals(client: BaseClient) {
         const key = getRandomKey();
-        const initialValue = getRandomKey();
-        const newValue = getRandomKey();
-        const setKey = await client.set(key, initialValue);
-        expect(setKey).toEqual("OK");
-        const getRes = await client.get(key);
-        expect(getRes).toEqual(initialValue);
+        expect(await client.set(key, "value")).toEqual("OK");
 
-        // Attempt to set with a non-matching value (should fail -> return null)
-        const conditionalSetFailResponse = await client.set(key, newValue, {
+        // Value not equal
+        expect(
+            await client.set(key, "other", {
+                conditionalSet: "onlyIfEqual",
+                comparisonValue: "other",
+            }),
+        ).toEqual(null);
+        expect(await client.get(key)).toEqual("value");
+
+        // Value equal
+        const options: SetOptions = {
             conditionalSet: "onlyIfEqual",
-            comparisonValue: newValue,
-        });
-        expect(conditionalSetFailResponse).toEqual(null);
+            comparisonValue: "value",
+        };
+        expect(await client.set(key, "other", options)).toEqual("OK");
+        expect(await client.get(key)).toEqual("other");
 
-        // Attempt to set with a matching value (should succeed -> return OK)
-        const conditionalSetSuccessResponse = await client.set(key, newValue, {
-            conditionalSet: "onlyIfEqual",
-            comparisonValue: initialValue,
-        });
-        expect(conditionalSetSuccessResponse).toEqual("OK");
+        // Non-existent key
+        const missing = getRandomKey();
+        expect(await client.set(missing, "value", options)).toEqual(null);
+        expect(await client.exists([missing])).toEqual(0);
+    }
 
-        // Retrieve the updated value of the key
-        const updatedGetResponse = await client.get(key);
-        expect(updatedGetResponse).toEqual(newValue);
+    async function setWithOnlyIfNotEquals(client: BaseClient) {
+        const key = getRandomKey();
+        expect(await client.set(key, "value")).toEqual("OK");
+
+        // Value equal
+        expect(
+            await client.set(key, "other", {
+                conditionalSet: "onlyIfNotEqual",
+                comparisonValue: "value",
+            }),
+        ).toEqual(null);
+        expect(await client.get(key)).toEqual("value");
+
+        // Value not equal
+        const options: SetOptions = {
+            conditionalSet: "onlyIfNotEqual",
+            comparisonValue: "other",
+        };
+        expect(await client.set(key, "other", options)).toEqual("OK");
+        expect(await client.get(key)).toEqual("other");
+
+        // Non-existent key
+        const missing = getRandomKey();
+        expect(await client.set(missing, "value", options)).toEqual("OK");
+        expect(await client.get(missing)).toEqual("value");
     }
 
     async function setWithOnlyIfNotExistOptions(client: BaseClient) {
@@ -9778,6 +9805,47 @@ export function runBaseTests(config: {
             },
             conditionalSet: "onlyIfEqual",
             comparisonValue: wrongValue,
+            returnOldValue: true,
+        });
+        // current value of key should be newValue
+        expect(setResFailedWithAllOptions).toEqual(newValue);
+        // key should not be set. it remains the same
+        expect(await client.get(key)).toEqual(newValue);
+    }
+
+    async function setIfneWithAllOptions(client: BaseClient) {
+        const key = getRandomKey();
+        const initialValue = getRandomKey();
+        const newValue = getRandomKey();
+
+        await client.set(key, initialValue);
+        // set with multiple options:
+        // * only apply SET if the provided value does not equal oldValue
+        // * expires after 10 seconds
+        // * returns the old value
+        const wrongValue = "wrong value";
+        const setResWithAllOptions = await client.set(key, newValue, {
+            expiry: {
+                type: TimeUnit.UnixSeconds,
+                count: Math.floor(Date.now() / 1000) + 10,
+            },
+            conditionalSet: "onlyIfNotEqual",
+            comparisonValue: wrongValue,
+            returnOldValue: true,
+        });
+        // initialValue should be get from the key
+        expect(setResWithAllOptions).toEqual(initialValue);
+        // newValue should be set as the key value
+        expect(await client.get(key)).toEqual(newValue);
+
+        // fail command
+        const setResFailedWithAllOptions = await client.set(key, wrongValue, {
+            expiry: {
+                type: TimeUnit.UnixSeconds,
+                count: Math.floor(Date.now() / 1000) + 10,
+            },
+            conditionalSet: "onlyIfNotEqual",
+            comparisonValue: newValue,
             returnOldValue: true,
         });
         // current value of key should be newValue
@@ -9896,6 +9964,11 @@ export function runBaseTests(config: {
                 if (!cluster.checkIfServerVersionLessThan("8.1.0")) {
                     await setWithOnlyIfEquals(client);
                     await setIfeqWithAllOptions(client);
+                }
+
+                if (!cluster.checkIfServerVersionLessThan("9.2.0")) {
+                    await setWithOnlyIfNotEquals(client);
+                    await setIfneWithAllOptions(client);
                 }
 
                 await testSetWithAllCombination(client, cluster);

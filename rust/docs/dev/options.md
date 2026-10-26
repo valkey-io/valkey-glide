@@ -31,18 +31,19 @@ part of the crate's public API.
 
   For example:
 
-  <!-- TODO #7237: Update once `IFNE` is supported. -->
-
   ```rust
-  /// Value comparison for `SET` — whether the key's current value must equal
-  /// the given one.
+  /// Value comparison for `SET` — whether the key's current value must equal,
+  /// or must not equal, the given one.
   ///
   /// Mirrors redis-rs's `ValueComparison` type.
-  ///
-  /// Since Valkey 8.1.0.
   pub enum ValueComparison {
       /// Only set if the current value equals the given value (`IFEQ`).
+      /// Since Valkey 8.1.0.
       IFEQ(Vec<u8>),
+
+      /// Only set if the current value does not equal the given value (`IFNE`).
+      /// Since Valkey 9.2.0.
+      IFNE(Vec<u8>),
   }
   ```
 

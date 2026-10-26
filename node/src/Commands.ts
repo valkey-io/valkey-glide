@@ -114,22 +114,27 @@ export function createGetRange(
 export type SetOptions = (
     | {
           /**
-           * `onlyIfDoesNotExist` - Only set the key if it does not already exist.
-           * `NX` in the Valkey API.
+           * `onlyIfExists` - Only set the key if it already exists (`XX`).
            *
-           * `onlyIfExists` - Only set the key if it already exists.
-           * `EX` in the Valkey API.
+           * `onlyIfDoesNotExist` - Only set the key if it does not already exist (`NX`).
            */
           conditionalSet?: "onlyIfExists" | "onlyIfDoesNotExist";
       }
     | {
           /**
-           * `onlyIfEqual` - Only set the key if the comparison value equals the current value of key.
-           * `IFEQ` in the Valkey API.
+           * `onlyIfEqual` - Only set the value if the key exists and its value equals `comparisonValue` (`IFEQ`).
+           * Since Valkey 8.1.0.
+           *
+           * `onlyIfNotEqual` - Only set the value if the key does not exist or if its value does not equal
+           * `comparisonValue` (`IFNE`).
+           * Since Valkey 9.2.0.
+           *
+           * Not supported when compression is enabled. See
+           * {@link https://glide.valkey.io/concepts/client-features/compression/#incompatible-commands|Valkey GLIDE - Data Compression}.
            */
-          conditionalSet: "onlyIfEqual";
+          conditionalSet: "onlyIfEqual" | "onlyIfNotEqual";
           /**
-           * The value to compare the existing value with.
+           * The value to compare the current value against.
            */
           comparisonValue: GlideString;
       }
@@ -184,6 +189,8 @@ export function createSet(
             args.push("NX");
         } else if (options.conditionalSet === "onlyIfEqual") {
             args.push("IFEQ", options.comparisonValue);
+        } else if (options.conditionalSet === "onlyIfNotEqual") {
+            args.push("IFNE", options.comparisonValue);
         }
 
         if (options.returnOldValue) {
