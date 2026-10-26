@@ -98,8 +98,11 @@ def _pool_teardown(client, cluster_mode: bool, cache_key: tuple) -> None:
         )
         batch.custom_command(["CLIENT", "UNPAUSE"])
         batch.custom_command(["CONFIG", "SET", "timeout", "0"])
-        if not cluster_mode:
-            batch.custom_command(["SELECT", "0"])
+        # Both reach every node in cluster mode. SELECT 0 is legal in cluster mode
+        # on every engine (only a non-zero index is refused), and Valkey 9 cluster
+        # tests do select other databases; the empty name clears a CLIENT SETNAME.
+        batch.custom_command(["SELECT", "0"])
+        batch.custom_command(["CLIENT", "SETNAME", ""])
         batch.custom_command(["UNWATCH"])
         batch.custom_command(["FLUSHALL", "ASYNC"])
         client.exec(batch, raise_on_error=True)
