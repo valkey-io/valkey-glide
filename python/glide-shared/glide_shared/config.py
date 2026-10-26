@@ -404,6 +404,9 @@ class RdmaConfiguration:
     :meth:`BaseClient.rdma_usable` first. Leaving this unset means that
     no fabric is opened and libfabric is never loaded.
 
+    Creating a client fails if RDMA is combined with enabled compression,
+    ``lazy_connect``, read-only mode, or static node discovery.
+
     Attributes:
         provider (Union[RdmaProvider.EfaDirect, RdmaProvider.Tcp]): The fabric
             provider to open, ``RdmaProvider.EfaDirect()`` or ``RdmaProvider.Tcp()``.
@@ -1156,8 +1159,8 @@ class BaseClientConfiguration:
             Compression is NOT compatible with server-side string manipulation commands (APPEND, GETRANGE, etc.).
             If not set, compression is disabled.
 
-        rdma (Optional[RdmaConfiguration]): Configuration for RDMA direct memory access transfers.
-            ⚠️ WARNING: This feature is experimental and not recommended for production use.
+        rdma (Optional[RdmaConfiguration]): Configuration for remote direct memory access (RDMA) transfers.
+            ⚠️ WARNING: This feature is experimental and its API may change in a future release.
             When set, the client opens a fabric endpoint, so ``rdma_get`` and ``rdma_set`` can move
             values directly between server memory and memory the caller registered. Only the synchronous
             client compiled with the RDMA feature supports this. Transfers always run against a primary,

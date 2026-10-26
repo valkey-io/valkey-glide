@@ -295,13 +295,14 @@ class RdmaRegion:
 
     Only one transfer may use a region at a time, even when each transfer uses
     a different window. Threads that transfer concurrently each need their own
-    region. A transfer that finds the region already in use by another raises
+    region, for example one per non-overlapping slice of the same buffer. A
+    transfer that finds the region already in use by another raises
     ``RdmaError``, and so does :meth:`close` while a transfer is using it.
 
     Create one with :meth:`BaseClient.register_rdma_region`. Close it with
     :meth:`close`, or use it as a context manager. A region garbage-collected
     without being closed is freed then, with a ``ResourceWarning``; until
-    then its pages stay pinned. It can be used as a context manager::
+    then its pages stay pinned::
 
         with client.register_rdma_region(bytearray(1 << 20)) as region:
             client.rdma_set(b"key", region.window(0, 4096))
@@ -1670,8 +1671,8 @@ class BaseClient(CoreCommands):
         Memory that GLIDE still holds from a closed region, which
         :attr:`RdmaRegion.memory_released` reports, is refused, because a write
         from that region's last transfer could still land in it. That includes
-        any other view or slice of the same bytes. On efa-direct this does not
-        happen.
+        any other view or slice of the same bytes. On efa-direct this happens
+        only after a failed deregistration.
 
         Args:
             memory (Any): A writable, C-contiguous buffer to register.
@@ -1771,16 +1772,18 @@ class BaseClient(CoreCommands):
             against the receipt's ``checksum``.
 
         Raises:
-            RdmaError: If the region is closed or belongs to another client, the
-                value was larger than the window (the region stays usable), the
-                landed bytes did not match the checksum, or the server refused
-                the transfer or its handshake.
+            RdmaError: If the region is closed, in use by another transfer, or
+                belongs to another client; a ``MULTI`` is open on this client;
+                the value was larger than the window (the region stays usable);
+                the landed bytes did not match the checksum; or the server
+                refused the transfer or its handshake.
             ConnectionError: If the connection failed, or has to be replaced
                 because its handshake left it unusable. Check
                 ``region.closed``: the region stays open when the transfer was
                 never sent.
             ClosingError: If the client is closed, including when it is closed
                 during the transfer to cancel it.
+            TypeError: If ``window`` is not an ``RdmaWindow``.
 
         Example:
             >>> receipt = client.rdma_get(b"key", region.window(4096, 4096))
@@ -1825,8 +1828,9 @@ class BaseClient(CoreCommands):
             fails the transfer and raises instead.
 
         Raises:
-            RdmaError: If the region is closed or belongs to another client, or
-                the server refused the write or its handshake, including when
+            RdmaError: If the region is closed, in use by another transfer, or
+                belongs to another client; a ``MULTI`` is open on this client;
+                or the server refused the write or its handshake, including when
                 the bytes it read do not match the checksum. A refused write
                 stores nothing and leaves the region usable. If the region
                 closed instead, the outcome is unknown: for example, a write
@@ -1835,7 +1839,8 @@ class BaseClient(CoreCommands):
             ConnectionError: As for ``rdma_get``.
             ClosingError: If the client is closed, including when it is closed
                 during the transfer to cancel it.
-            TypeError: If ``checksum`` is not an ``RdmaSetChecksum`` choice.
+            TypeError: If ``window`` is not an ``RdmaWindow``, or ``checksum``
+                is not an ``RdmaSetChecksum`` choice.
             ValueError: If a known checksum is not an unsigned 32-bit integer.
 
         Example:
@@ -2024,9 +2029,10 @@ class BaseClient(CoreCommands):
         usual.
 
         This returns without waiting for those calls. Close a region only after
-        every transfer call using it has returned; closing it while one is
-        still running corrupts memory. A cancelled transfer closes its own
-        region on the way out, so there is usually nothing left to close.
+        every transfer call using it has returned; while one is still running,
+        :meth:`RdmaRegion.close` raises ``RdmaError``. A cancelled transfer
+        closes its own region on the way out, so there is usually nothing left
+        to close.
 
         If deregistering a region fails, which takes a device or driver error
         and is logged as an error, a transfer using it is not cancelled. It
