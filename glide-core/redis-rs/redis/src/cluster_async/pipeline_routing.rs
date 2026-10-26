@@ -982,7 +982,7 @@ where
         .iter()
         .map(|(_, address, _)| crate::cluster::ClusterAddress::ReadyToDial(address.clone()))
         .collect();
-    let (conn_type, check_existing_conn) = mode.refresh_args();
+    let (conn_type, existing_conn) = mode.refresh_args();
 
     // If we're supposed to retry, refresh connections and retry commands.
     // Since the commands are marked for retry, we will wait fot the refresh to complete, and then retry the commands.
@@ -991,7 +991,7 @@ where
             core.clone(),
             addresses,
             conn_type,
-            check_existing_conn,
+            existing_conn,
         )
         .await;
 
@@ -1010,7 +1010,7 @@ where
             core.clone(),
             addresses.clone(),
             conn_type,
-            check_existing_conn,
+            existing_conn,
         )
         .await;
     }
@@ -1140,8 +1140,6 @@ where
             pipeline,
             pipeline_responses,
             true, // should_retry = true, we want to retry after reconnect
-            // The node may still answer health checks (e.g. an old instance behind the same
-            // endpoint), so replace the connection instead of reusing it.
             ReconnectMode::Replace,
             pipeline_map,
             response_policies,

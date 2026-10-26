@@ -1312,14 +1312,33 @@ pub(crate) enum ReconnectMode {
 }
 
 impl ReconnectMode {
-    /// The `(conn_type, check_existing_conn)` arguments for `trigger_refresh_connection_tasks`.
+    /// The `(conn_type, existing_conn)` arguments for `trigger_refresh_connection_tasks`.
     /// Replacing also replaces the management connection, which is attached to the same node.
-    pub(crate) fn refresh_args(self) -> (RefreshConnectionType, bool) {
+    pub(crate) fn refresh_args(self) -> (RefreshConnectionType, ExistingConnection) {
         match self {
-            Self::CheckExisting => (RefreshConnectionType::OnlyUserConnection, true),
-            Self::Replace => (RefreshConnectionType::AllConnections, false),
+            Self::CheckExisting => (
+                RefreshConnectionType::OnlyUserConnection,
+                ExistingConnection::HealthCheck,
+            ),
+            Self::Replace => (
+                RefreshConnectionType::AllConnections,
+                ExistingConnection::Replace,
+            ),
         }
     }
+}
+
+/// What a connection refresh does with the node's existing connections.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum ExistingConnection {
+    /// Keep the existing connections if they pass a health check.
+    HealthCheck,
+    /// Don't reuse the existing connections, e.g. because there are none or they are closed;
+    /// join a refresh already in progress for the address.
+    Ignore,
+    /// Replace the existing connections even if they are healthy, superseding a refresh in
+    /// progress that may keep them.
+    Replace,
 }
 
 #[must_use]
@@ -1542,9 +1561,7 @@ where
                         // Check for circular MOVED and trigger reconnect if detected.
                         // The redirect is already resolved; normalize only the current address.
                         if core.is_circular_moved(resolved_redirect_node.as_ref(), &address) {
-                            // Reset routing and reconnect with retry. The node that answered may
-                            // still be healthy (e.g. an old instance kept alive behind the same
-                            // endpoint), so don't reuse its connection: open a new one.
+                            // Reset routing and reconnect with retry
                             request.info.reset_routing();
                             return Next::Reconnect {
                                 request: Some(request),
@@ -2036,7 +2053,7 @@ where
                 inner.clone(),
                 addrs_to_refresh,
                 RefreshConnectionType::AllConnections,
-                false,
+                ExistingConnection::Ignore,
             )
             .await;
         }
@@ -2048,7 +2065,7 @@ where
         inner: Arc<InnerCore<C>>,
         addresses: HashSet<ClusterAddress>,
         conn_type: RefreshConnectionType,
-        check_existing_conn: bool,
+        existing_conn: ExistingConnection,
     ) {
         log_trace_lazy!(
             "cluster",
@@ -2058,7 +2075,7 @@ where
             inner.clone(),
             addresses,
             conn_type,
-            check_existing_conn,
+            existing_conn,
         )
         .await;
 
@@ -2082,7 +2099,7 @@ where
         inner: Arc<InnerCore<C>>,
         addresses: HashSet<ClusterAddress>,
         conn_type: RefreshConnectionType,
-        check_existing_conn: bool,
+        existing_conn: ExistingConnection,
     ) -> Vec<Arc<Notify>> {
         log_debug_lazy!(
             "cluster",
@@ -2106,7 +2123,9 @@ where
                 .refresh_conn_state
                 .refresh_address_in_progress
                 .get(&address)
-                .filter(|task| check_existing_conn || !task.may_keep_existing_conn)
+                .filter(|task| {
+                    existing_conn != ExistingConnection::Replace || !task.may_keep_existing_conn
+                })
                 .map(|task| match &task.status {
                     RefreshTaskStatus::Reconnecting(notifier) => Some(notifier.get_notifier()),
                     RefreshTaskStatus::ReconnectingTooLong => {
@@ -2134,7 +2153,7 @@ where
 
             let mut node_option = conn_lock.remove_node(&address);
 
-            if !check_existing_conn {
+            if existing_conn != ExistingConnection::HealthCheck {
                 node_option = None;
             }
             let may_keep_existing_conn = node_option.is_some();
@@ -2873,7 +2892,7 @@ where
                     inner,
                     failed,
                     RefreshConnectionType::OnlyManagementConnection,
-                    true,
+                    ExistingConnection::HealthCheck,
                 )
                 .await;
             }
@@ -3690,7 +3709,7 @@ where
                     core.clone(),
                     HashSet::from([ClusterAddress::ReadyToDial(address.clone())]),
                     RefreshConnectionType::AllConnections,
-                    false,
+                    ExistingConnection::Ignore,
                 )
                 .await;
 
@@ -4445,12 +4464,12 @@ where
                 let inner = self.inner.clone();
                 let handle = tokio::spawn(async move {
                     for (mode, addresses) in addresses_by_mode {
-                        let (conn_type, check_existing_conn) = mode.refresh_args();
+                        let (conn_type, existing_conn) = mode.refresh_args();
                         ClusterConnInner::trigger_refresh_connection_tasks(
                             inner.clone(),
                             addresses,
                             conn_type,
-                            check_existing_conn,
+                            existing_conn,
                         )
                         .await;
                     }
@@ -4584,7 +4603,7 @@ where
                 inner.clone(),
                 addresses_needing_refresh.clone(),
                 RefreshConnectionType::AllConnections,
-                true,
+                ExistingConnection::HealthCheck,
             ),
         )
         .await;
@@ -6351,7 +6370,7 @@ pub(super) mod refresh_task_resolution_tests {
             core.clone(),
             HashSet::from([ClusterAddress::Raw(address.clone())]),
             RefreshConnectionType::AllConnections,
-            false,
+            ExistingConnection::Ignore,
         )
         .await;
 
@@ -6381,7 +6400,7 @@ pub(super) mod refresh_task_resolution_tests {
             core.clone(),
             HashSet::from([ClusterAddress::ReadyToDial(address.clone())]),
             RefreshConnectionType::AllConnections,
-            false,
+            ExistingConnection::Ignore,
         )
         .await;
 
@@ -6393,7 +6412,7 @@ pub(super) mod refresh_task_resolution_tests {
             core.clone(),
             HashSet::from([ClusterAddress::ReadyToDial(address.clone())]),
             RefreshConnectionType::AllConnections,
-            false,
+            ExistingConnection::Ignore,
         )
         .await;
 
@@ -6453,7 +6472,7 @@ pub(super) mod refresh_task_resolution_tests {
             core.clone(),
             HashSet::from([ClusterAddress::ReadyToDial(address.clone())]),
             RefreshConnectionType::AllConnections,
-            false,
+            ExistingConnection::Ignore,
         )
         .await;
         tokio::time::timeout(Duration::from_secs(1), POISON_CONNECT_STARTED.notified())
@@ -6473,7 +6492,7 @@ pub(super) mod refresh_task_resolution_tests {
             core.clone(),
             HashSet::from([ClusterAddress::ReadyToDial(address.clone())]),
             RefreshConnectionType::AllConnections,
-            false,
+            ExistingConnection::Ignore,
         )
         .await;
         assert_eq!(old.len(), 1);
@@ -6555,7 +6574,7 @@ pub(super) mod refresh_task_resolution_tests {
             core,
             HashSet::from([ClusterAddress::ReadyToDial(address)]),
             RefreshConnectionType::AllConnections,
-            false,
+            ExistingConnection::Ignore,
         )
         .await;
         assert!(notifiers.is_empty());
@@ -6597,43 +6616,35 @@ pub(super) mod refresh_task_resolution_tests {
     }
 
     #[tokio::test]
-    async fn replace_request_supersedes_in_progress_check_existing_refresh() {
+    async fn only_replace_supersedes_refresh_that_may_keep_existing_connection() {
         let _guard = gated_test_guard().await;
-        let core = core_with_non_idempotent_resolver();
         let address = "resolved-node:6381";
-        let identity = insert_in_progress_refresh(&core, address, true);
+        for may_keep_existing_conn in [true, false] {
+            for existing_conn in [
+                ExistingConnection::HealthCheck,
+                ExistingConnection::Ignore,
+                ExistingConnection::Replace,
+            ] {
+                let core = core_with_non_idempotent_resolver();
+                let identity = insert_in_progress_refresh(&core, address, may_keep_existing_conn);
 
-        let notifiers = ClusterConnInner::trigger_refresh_connection_tasks(
-            core.clone(),
-            HashSet::from([ClusterAddress::ReadyToDial(address.to_owned())]),
-            RefreshConnectionType::AllConnections,
-            false,
-        )
-        .await;
-        assert_eq!(notifiers.len(), 1);
-        assert!(
-            !refresh_is_same_generation(&core, address, &identity),
-            "a replace request must not join a task that may keep the existing connection"
-        );
-    }
+                let notifiers = ClusterConnInner::trigger_refresh_connection_tasks(
+                    core.clone(),
+                    HashSet::from([ClusterAddress::ReadyToDial(address.to_owned())]),
+                    RefreshConnectionType::AllConnections,
+                    existing_conn,
+                )
+                .await;
 
-    #[tokio::test]
-    async fn refresh_requests_join_in_progress_replace_refresh() {
-        let _guard = gated_test_guard().await;
-        let core = core_with_non_idempotent_resolver();
-        let address = "resolved-node:6381";
-        let identity = insert_in_progress_refresh(&core, address, false);
-
-        for check_existing_conn in [true, false] {
-            let notifiers = ClusterConnInner::trigger_refresh_connection_tasks(
-                core.clone(),
-                HashSet::from([ClusterAddress::ReadyToDial(address.to_owned())]),
-                RefreshConnectionType::OnlyUserConnection,
-                check_existing_conn,
-            )
-            .await;
-            assert_eq!(notifiers.len(), 1);
-            assert!(refresh_is_same_generation(&core, address, &identity));
+                let superseded =
+                    existing_conn == ExistingConnection::Replace && may_keep_existing_conn;
+                assert_eq!(notifiers.len(), 1);
+                assert_eq!(
+                    !refresh_is_same_generation(&core, address, &identity),
+                    superseded,
+                    "{existing_conn:?} with may_keep_existing_conn={may_keep_existing_conn}"
+                );
+            }
         }
     }
 
@@ -6729,7 +6740,7 @@ pub(super) mod refresh_task_resolution_tests {
             core.clone(),
             HashSet::from([ClusterAddress::ReadyToDial(address.to_owned())]),
             RefreshConnectionType::AllConnections,
-            false,
+            ExistingConnection::Replace,
         )
         .await;
         assert_eq!(notifiers.len(), 1);
@@ -6753,7 +6764,7 @@ pub(super) mod refresh_task_resolution_tests {
             core.clone(),
             addresses,
             RefreshConnectionType::AllConnections,
-            false,
+            ExistingConnection::Ignore,
         )
         .await;
         assert_eq!(
