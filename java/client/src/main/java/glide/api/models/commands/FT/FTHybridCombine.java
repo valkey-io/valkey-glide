@@ -51,6 +51,63 @@ public abstract class FTHybridCombine {
             this.yieldScoreAs = yieldScoreAs;
         }
 
+        /** Returns a new builder for {@link Rrf}. */
+        public static RrfBuilder builder() {
+            return new RrfBuilder();
+        }
+
+        /** Builder for {@link Rrf}. */
+        public static final class RrfBuilder {
+            private Double constant;
+            private Integer window;
+            private GlideString yieldScoreAs;
+
+            private RrfBuilder() {}
+
+            /**
+             * The RRF constant. Must be non-negative -- the server rejects a negative value (it places a
+             * pole at {@code rank == -constant}).
+             */
+            public RrfBuilder constant(double constant) {
+                this.constant = constant;
+                return this;
+            }
+
+            /**
+             * How many of each arm's results take part in fusion (and, in cluster mode, how many each
+             * shard is asked to fetch). Bounded by the server's {@code max-combine-window} config.
+             */
+            public RrfBuilder window(int window) {
+                this.window = window;
+                return this;
+            }
+
+            /**
+             * Exposes the fused score under the given column name instead of the default {@code __score}.
+             */
+            public RrfBuilder yieldScoreAs(@NonNull String yieldScoreAs) {
+                this.yieldScoreAs = gs(yieldScoreAs);
+                return this;
+            }
+
+            /**
+             * Exposes the fused score under the given column name instead of the default {@code __score}.
+             */
+            public RrfBuilder yieldScoreAs(@NonNull GlideString yieldScoreAs) {
+                this.yieldScoreAs = yieldScoreAs;
+                return this;
+            }
+
+            /**
+             * Builds the {@link Rrf}.
+             *
+             * @throws IllegalArgumentException If {@code constant} is negative.
+             */
+            public Rrf build() {
+                return new Rrf(constant, window, yieldScoreAs);
+            }
+        }
+
         @Override
         public GlideString[] toArgs() {
             ArrayList<GlideString> subArgs = new ArrayList<>();
@@ -115,6 +172,72 @@ public abstract class FTHybridCombine {
             this.beta = beta;
             this.window = window;
             this.yieldScoreAs = yieldScoreAs;
+        }
+
+        /** Returns a new builder for {@link Linear}. */
+        public static LinearBuilder builder() {
+            return new LinearBuilder();
+        }
+
+        /** Builder for {@link Linear}. */
+        public static final class LinearBuilder {
+            private Double alpha;
+            private Double beta;
+            private Integer window;
+            private GlideString yieldScoreAs;
+
+            private LinearBuilder() {}
+
+            /**
+             * The SEARCH arm's weight. Defaults (server-side) to {@code 0.3} when neither {@code alpha}
+             * nor {@code beta} is set. Setting one without the other is rejected by the server, so this
+             * must be paired with {@link #beta}.
+             */
+            public LinearBuilder alpha(double alpha) {
+                this.alpha = alpha;
+                return this;
+            }
+
+            /**
+             * The VSIM arm's weight. Defaults (server-side) to {@code 0.7} when neither is set. Must be
+             * paired with {@link #alpha}.
+             */
+            public LinearBuilder beta(double beta) {
+                this.beta = beta;
+                return this;
+            }
+
+            /** How many of each arm's results take part in fusion. */
+            public LinearBuilder window(int window) {
+                this.window = window;
+                return this;
+            }
+
+            /**
+             * Exposes the fused score under the given column name instead of the default {@code __score}.
+             */
+            public LinearBuilder yieldScoreAs(@NonNull String yieldScoreAs) {
+                this.yieldScoreAs = gs(yieldScoreAs);
+                return this;
+            }
+
+            /**
+             * Exposes the fused score under the given column name instead of the default {@code __score}.
+             */
+            public LinearBuilder yieldScoreAs(@NonNull GlideString yieldScoreAs) {
+                this.yieldScoreAs = yieldScoreAs;
+                return this;
+            }
+
+            /**
+             * Builds the {@link Linear}.
+             *
+             * @throws IllegalArgumentException If exactly one of {@code alpha}/{@code beta} is set
+             *     without the other.
+             */
+            public Linear build() {
+                return new Linear(alpha, beta, window, yieldScoreAs);
+            }
         }
 
         @Override
@@ -197,6 +320,68 @@ public abstract class FTHybridCombine {
             this.expr = expr;
             this.window = window;
             this.yieldScoreAs = yieldScoreAs;
+        }
+
+        /**
+         * Returns a new builder for {@link Function}.
+         *
+         * @param expr The fusion expression, as a raw string (e.g. {@code "@__search_score
+         *     + @__vector_score"} or, with explicit arm aliases, {@code "@ss + @vs"}).
+         */
+        public static FunctionBuilder builder(@NonNull String expr) {
+            return new FunctionBuilder(gs(expr));
+        }
+
+        /**
+         * Returns a new builder for {@link Function}.
+         *
+         * @param expr The fusion expression.
+         */
+        public static FunctionBuilder builder(@NonNull GlideString expr) {
+            return new FunctionBuilder(expr);
+        }
+
+        /** Builder for {@link Function}. */
+        public static final class FunctionBuilder {
+            private final GlideString expr;
+            private Integer window;
+            private GlideString yieldScoreAs;
+
+            private FunctionBuilder(GlideString expr) {
+                this.expr = expr;
+            }
+
+            /**
+             * How many of each arm's results take part in fusion. If left unset, the server defaults this
+             * to the widest window allowed rather than the usual RRF/LINEAR default, since a
+             * caller-written expression typically expects to see every matching candidate, not a
+             * top-window slice.
+             */
+            public FunctionBuilder window(int window) {
+                this.window = window;
+                return this;
+            }
+
+            /**
+             * Exposes the fused score under the given column name instead of the default {@code __score}.
+             */
+            public FunctionBuilder yieldScoreAs(@NonNull String yieldScoreAs) {
+                this.yieldScoreAs = gs(yieldScoreAs);
+                return this;
+            }
+
+            /**
+             * Exposes the fused score under the given column name instead of the default {@code __score}.
+             */
+            public FunctionBuilder yieldScoreAs(@NonNull GlideString yieldScoreAs) {
+                this.yieldScoreAs = yieldScoreAs;
+                return this;
+            }
+
+            /** Builds the {@link Function}. */
+            public Function build() {
+                return new Function(expr, window, yieldScoreAs);
+            }
         }
 
         @Override

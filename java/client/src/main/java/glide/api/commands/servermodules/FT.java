@@ -25,6 +25,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import lombok.NonNull;
@@ -397,11 +398,16 @@ public class FT {
     /**
      * Runs a search query on an index, and perform aggregate transformations on the results.
      *
+     * <p>Rejects {@code options} with {@code withCursor} set -- use {@link
+     * #aggregateWithCursor(BaseClient, String, String, FTAggregateOptions)} instead, which returns
+     * the honestly-typed {@code [rows, cursorId]} 2-tuple that WITHCURSOR actually produces.
+     *
      * @param client The client to execute the command.
      * @param indexName The index name.
      * @param query The text query to search.
      * @param options Additional parameters for the command - see {@link FTAggregateOptions}.
      * @return Results of the last stage of the pipeline.
+     * @throws IllegalArgumentException If {@code options} has {@code withCursor} set.
      * @example
      *     <pre>{@code
      * // example of using the API:
@@ -489,11 +495,16 @@ public class FT {
     /**
      * Runs a search query on an index, and perform aggregate transformations on the results.
      *
+     * <p>Rejects {@code options} with {@code withCursor} set -- use {@link
+     * #aggregateWithCursor(BaseClient, GlideString, GlideString, FTAggregateOptions)} instead, which
+     * returns the honestly-typed {@code [rows, cursorId]} 2-tuple that WITHCURSOR actually produces.
+     *
      * @param client The client to execute the command.
      * @param indexName The index name.
      * @param query The text query to search.
      * @param options Additional parameters for the command - see {@link FTAggregateOptions}.
      * @return Results of the last stage of the pipeline.
+     * @throws IllegalArgumentException If {@code options} has {@code withCursor} set.
      * @example
      *     <pre>{@code
      * // example of using the API:
@@ -530,27 +541,83 @@ public class FT {
             @NonNull GlideString indexName,
             @NonNull GlideString query,
             @NonNull FTAggregateOptions options) {
+        if (options.hasWithCursor()) {
+            throw new IllegalArgumentException(
+                    "FT.aggregate's declared return type Map<GlideString, Object>[] cannot represent"
+                            + " WITHCURSOR's own [rows, cursorId] 2-tuple reply shape; call"
+                            + " FT.aggregateWithCursor(...) instead, which returns that shape honestly as"
+                            + " Object[].");
+        }
         GlideString[] args =
                 concatenateArrays(
                         new GlideString[] {gs("FT.AGGREGATE"), indexName, query}, options.toArgs());
-        if (options.hasWithCursor()) {
-            // WITHCURSOR wraps the normal per-document array shape in a [rows, cursorId]
-            // 2-tuple -- a structurally different array shape than Map<GlideString, Object>[].
-            // Materializing that 2-tuple as a value of this method's declared return type would
-            // require the JVM to perform a real array-component-type checkcast against
-            // Map<GlideString, Object>[] at the point this method returns, which fails with
-            // ClassCastException because the actual runtime array is a plain Object[]. Routing
-            // through executeCommand's own Object-typed (not Object[]-typed) erasure path avoids
-            // that checkcast ever being emitted -- the CompletableFuture's own type parameter is
-            // erased to Object, not to an array type, so no array-component check happens until a
-            // caller performs one explicitly. Callers paging a cursor must treat the result as
-            // the raw Object[] 2-tuple documented on this method and on FT#cursorRead/FT#hybrid,
-            // not as a true Map<GlideString, Object>[].
-            CompletableFuture<Object> raw = FT.<Object>executeCommand(client, args, false);
-            return (CompletableFuture<Map<GlideString, Object>[]>) (CompletableFuture<?>) raw;
-        }
         return FT.<Object[]>executeCommand(client, args, false)
                 .thenApply(res -> castArray(res, Map.class));
+    }
+
+    /**
+     * Runs a search query on an index with a paged ({@code WITHCURSOR}) reply, and perform aggregate
+     * transformations on the results.
+     *
+     * @param client The client to execute the command.
+     * @param indexName The index name.
+     * @param query The text query to search.
+     * @param options Additional parameters for the command - see {@link FTAggregateOptions}. Must
+     *     have {@code withCursor} set; see {@link
+     *     FTAggregateOptions.FTAggregateOptionsBuilder#withCursor}.
+     * @return A two-element {@code Object[]} of {@code [rows, cursorId]}, where {@code rows} is a
+     *     {@code Map<GlideString, Object>[]} (the same per-document mapping shape {@link #aggregate}
+     *     returns) and {@code cursorId} is a {@code Long}, {@code 0} once the cursor is exhausted, or
+     *     the id to pass to a subsequent {@link #cursorRead} call otherwise. Declared as {@code
+     *     Object[]} rather than a more specific generic type because the two elements have different
+     *     runtime types -- see {@link #cursorRead} for the same shape returned by the paging call.
+     * @throws IllegalArgumentException If {@code options} does not have {@code withCursor} set.
+     * @example
+     *     <pre>{@code
+     * Object[] page = FT.aggregateWithCursor(client, "myIndex", "*",
+     *         FTAggregateOptions.builder().loadFields(new String[] {"__key"})
+     *             .withCursor(new FTWithCursor(10)).build())
+     *     .get();
+     * Map<GlideString, Object>[] rows = (Map<GlideString, Object>[]) page[0];
+     * long cursorId = (long) page[1];
+     * }</pre>
+     */
+    public static CompletableFuture<Object[]> aggregateWithCursor(
+            @NonNull BaseClient client,
+            @NonNull String indexName,
+            @NonNull String query,
+            @NonNull FTAggregateOptions options) {
+        return aggregateWithCursor(client, gs(indexName), gs(query), options);
+    }
+
+    /**
+     * Runs a search query on an index with a paged ({@code WITHCURSOR}) reply, and perform aggregate
+     * transformations on the results.
+     *
+     * @param client The client to execute the command.
+     * @param indexName The index name.
+     * @param query The text query to search.
+     * @param options Additional parameters for the command - see {@link FTAggregateOptions}. Must
+     *     have {@code withCursor} set; see {@link
+     *     FTAggregateOptions.FTAggregateOptionsBuilder#withCursor}.
+     * @return A two-element {@code Object[]} of {@code [rows, cursorId]}. See the {@code String}
+     *     overload's {@code @return} for the shape of each element.
+     * @throws IllegalArgumentException If {@code options} does not have {@code withCursor} set.
+     */
+    public static CompletableFuture<Object[]> aggregateWithCursor(
+            @NonNull BaseClient client,
+            @NonNull GlideString indexName,
+            @NonNull GlideString query,
+            @NonNull FTAggregateOptions options) {
+        if (!options.hasWithCursor()) {
+            throw new IllegalArgumentException(
+                    "FT.aggregateWithCursor requires options.withCursor to be set; call FT.aggregate"
+                            + " instead for a plain (non-paged) aggregate.");
+        }
+        GlideString[] args =
+                concatenateArrays(
+                        new GlideString[] {gs("FT.AGGREGATE"), indexName, query}, options.toArgs());
+        return FT.executeCommand(client, args, false);
     }
 
     /**
@@ -695,7 +762,7 @@ public class FT {
      *     <pre>{@code
      * Object[] result = FT.hybrid(client, "idx",
      *         new FTHybridSearchArm("hello world"),
-     *         new FTHybridVsimArm("vec", queryVectorBytes, 10, null, null))
+     *         FTHybridVsimArm.builder("vec", queryVectorBytes).k(10).build())
      *     .get();
      * }</pre>
      */
@@ -724,10 +791,10 @@ public class FT {
      * @example
      *     <pre>{@code
      * Object[] result = FT.hybrid(client, "idx",
-     *         new FTHybridSearchArm("hello world", null, "ss"),
-     *         new FTHybridVsimArm("vec", queryVectorBytes, 10, null, null, "vs"),
+     *         new FTHybridSearchArm(gs("hello world"), null, gs("ss")),
+     *         FTHybridVsimArm.builder("vec", queryVectorBytes).k(10).yieldScoreAs("vs").build(),
      *         FTHybridOptions.builder()
-     *             .combine(new FTHybridCombine.Rrf(60.0, null, null))
+     *             .combine(FTHybridCombine.Rrf.builder().constant(60.0).build())
      *             .loadFields(new String[] {"title"})
      *             .withCursor(new FTWithCursor(10))
      *             .build())
@@ -768,6 +835,38 @@ public class FT {
             @NonNull FTHybridSearchArm searchArm,
             @NonNull FTHybridVsimArm vsimArm,
             @NonNull FTHybridOptions options) {
+        GlideString[] args =
+                hybridArgs(indexName, searchArm, vsimArm, options, FT::generatedVsimParamName);
+        return executeCommand(client, args, false);
+    }
+
+    /**
+     * Generates a fresh {@code $}-prefixed PARAMS name for a VSIM arm given raw vector bytes rather
+     * than an explicit {@code $name} reference. Broken out from {@link #hybridArgs} so tests can
+     * substitute a deterministic supplier instead of a random UUID.
+     */
+    private static String generatedVsimParamName() {
+        return "$" + UUID.randomUUID().toString().replace("-", "");
+    }
+
+    /**
+     * Builds the full FT.HYBRID argv: the command name and index, the SEARCH arm, the VSIM arm (with
+     * a generated PARAMS entry merged in when the arm was given raw vector bytes rather than a {@code
+     * $name} reference), the COMBINE clause (if any), and {@code options}' own aggregate-suffix tail
+     * (LOCALONLY, LOAD, TIMEOUT, PARAMS, clauses, WITHCURSOR, DIALECT). Package-private and separated
+     * from command dispatch specifically so this assembly can be unit-tested end to end without a
+     * live client.
+     *
+     * @param generatedVsimParamNameSupplier Supplies the {@code $name} to generate for a raw-bytes
+     *     VSIM arm. Production callers pass {@link #generatedVsimParamName}; tests pass a
+     *     deterministic supplier so the generated name in the expected argv is known ahead of time.
+     */
+    static GlideString[] hybridArgs(
+            @NonNull GlideString indexName,
+            @NonNull FTHybridSearchArm searchArm,
+            @NonNull FTHybridVsimArm vsimArm,
+            @NonNull FTHybridOptions options,
+            @NonNull Supplier<String> generatedVsimParamNameSupplier) {
         ArrayList<GlideString> argsList = new ArrayList<>();
         argsList.add(gs("FT.HYBRID"));
         argsList.add(indexName);
@@ -777,7 +876,7 @@ public class FT {
         if (vsimArm.isParamReference()) {
             argsList.addAll(Arrays.asList(vsimArm.toArgs()));
         } else {
-            String generatedName = "$" + UUID.randomUUID().toString().replace("-", "");
+            String generatedName = generatedVsimParamNameSupplier.get();
             generatedVsimParam = new HashMap<>();
             generatedVsimParam.put(generatedName.substring(1), gs(vsimArm.getRawVector()));
             argsList.addAll(Arrays.asList(vsimArm.toArgs(gs(generatedName))));
@@ -788,7 +887,7 @@ public class FT {
         }
         argsList.addAll(Arrays.asList(options.toArgs(generatedVsimParam)));
 
-        return executeCommand(client, argsList.toArray(new GlideString[0]), false);
+        return argsList.toArray(new GlideString[0]);
     }
 
     /**

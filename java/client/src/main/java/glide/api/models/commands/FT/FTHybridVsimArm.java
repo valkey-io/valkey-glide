@@ -74,7 +74,7 @@ public class FTHybridVsimArm {
      * @param vectorParamRef The {@code $name} parameter reference. Must start with {@code $}.
      */
     public FTHybridVsimArm(@NonNull String field, @NonNull String vectorParamRef) {
-        this(field, vectorParamRef, null, null, null, null);
+        this(gs(field), requireParamReference(vectorParamRef), null, null, null, null, null, null);
     }
 
     /**
@@ -87,7 +87,7 @@ public class FTHybridVsimArm {
      *     parameter reference, regardless of content.
      */
     public FTHybridVsimArm(@NonNull String field, @NonNull byte[] vector) {
-        this(field, vector, null, null, null, null);
+        this(gs(field), null, vector.clone(), null, null, null, null, null);
     }
 
     /**
@@ -107,7 +107,15 @@ public class FTHybridVsimArm {
             Integer k,
             Integer efRuntime,
             Double shardKRatio) {
-        this(field, vectorParamRef, k, efRuntime, shardKRatio, null);
+        this(
+                gs(field),
+                requireParamReference(vectorParamRef),
+                null,
+                k,
+                efRuntime,
+                shardKRatio,
+                null,
+                null);
     }
 
     /**
@@ -126,7 +134,7 @@ public class FTHybridVsimArm {
             Integer k,
             Integer efRuntime,
             Double shardKRatio) {
-        this(field, vector, k, efRuntime, shardKRatio, null);
+        this(gs(field), null, vector.clone(), k, efRuntime, shardKRatio, null, null);
     }
 
     /**
@@ -146,7 +154,15 @@ public class FTHybridVsimArm {
             Integer efRuntime,
             Double shardKRatio,
             GlideString yieldScoreAs) {
-        this(field, vectorParamRef, k, efRuntime, shardKRatio, yieldScoreAs, null);
+        this(
+                gs(field),
+                requireParamReference(vectorParamRef),
+                null,
+                k,
+                efRuntime,
+                shardKRatio,
+                yieldScoreAs,
+                null);
     }
 
     /**
@@ -167,7 +183,7 @@ public class FTHybridVsimArm {
             Integer efRuntime,
             Double shardKRatio,
             GlideString yieldScoreAs) {
-        this(field, vector, k, efRuntime, shardKRatio, yieldScoreAs, null);
+        this(gs(field), null, vector.clone(), k, efRuntime, shardKRatio, yieldScoreAs, null);
     }
 
     /**
@@ -227,6 +243,104 @@ public class FTHybridVsimArm {
             GlideString yieldScoreAs,
             FTHybridVsimFilter filter) {
         this(gs(field), null, vector.clone(), k, efRuntime, shardKRatio, yieldScoreAs, filter);
+    }
+
+    /**
+     * Returns a builder referencing a {@code $name} parameter the caller manages in {@link
+     * FTHybridOptions}' params. Keeps the type-split entry point (this overload vs {@link
+     * #builder(String, byte[])}) so the param-reference-by-type rule still holds: only this {@code
+     * String} overload can ever produce a {@code $name} reference.
+     *
+     * @param field The vector field's identifier, without the leading {@code @} (added
+     *     automatically).
+     * @param vectorParamRef The {@code $name} parameter reference. Must start with {@code $}.
+     */
+    public static Builder builder(@NonNull String field, @NonNull String vectorParamRef) {
+        return new Builder(gs(field), requireParamReference(vectorParamRef), null);
+    }
+
+    /**
+     * Returns a builder with raw vector bytes. An internal PARAMS entry is generated automatically. A
+     * {@code byte[]} is always treated as raw vector data, never as a parameter reference, regardless
+     * of content -- see {@link #builder(String, String)} for the {@code $name} form.
+     *
+     * @param field The vector field's identifier, without the leading {@code @} (added
+     *     automatically).
+     * @param vector The raw query vector bytes.
+     */
+    public static Builder builder(@NonNull String field, @NonNull byte[] vector) {
+        return new Builder(gs(field), null, vector.clone());
+    }
+
+    /**
+     * Builder for {@link FTHybridVsimArm}, returned by {@link #builder(String, String)}/{@link
+     * #builder(String, byte[])} to keep the type-split vector entry points.
+     */
+    public static final class Builder {
+        private final GlideString field;
+        private final GlideString vectorParamRef;
+        private final byte[] rawVector;
+        private Integer k;
+        private Integer efRuntime;
+        private Double shardKRatio;
+        private GlideString yieldScoreAs;
+        private FTHybridVsimFilter filter;
+
+        private Builder(GlideString field, GlideString vectorParamRef, byte[] rawVector) {
+            this.field = field;
+            this.vectorParamRef = vectorParamRef;
+            this.rawVector = rawVector;
+        }
+
+        /**
+         * The number of nearest neighbours to return. Omitting the whole KNN block (when {@code k},
+         * {@code efRuntime} and {@code shardKRatio} are all unset) defaults to 10 server-side.
+         */
+        public Builder k(int k) {
+            this.k = k;
+            return this;
+        }
+
+        /** HNSW search-time effort parameter. Only valid when the KNN block is written. */
+        public Builder efRuntime(int efRuntime) {
+            this.efRuntime = efRuntime;
+            return this;
+        }
+
+        /** Tunes how much of {@code k} each shard returns during a cluster fanout. */
+        public Builder shardKRatio(double shardKRatio) {
+            this.shardKRatio = shardKRatio;
+            return this;
+        }
+
+        /** Exposes this arm's score (the vector distance) under the given column name. */
+        public Builder yieldScoreAs(@NonNull String yieldScoreAs) {
+            this.yieldScoreAs = gs(yieldScoreAs);
+            return this;
+        }
+
+        /** Exposes this arm's score (the vector distance) under the given column name. */
+        public Builder yieldScoreAs(@NonNull GlideString yieldScoreAs) {
+            this.yieldScoreAs = yieldScoreAs;
+            return this;
+        }
+
+        /** A pre-filter on the vector search. See {@link FTHybridVsimFilter}. */
+        public Builder filter(@NonNull FTHybridVsimFilter filter) {
+            this.filter = filter;
+            return this;
+        }
+
+        /**
+         * Builds the {@link FTHybridVsimArm}.
+         *
+         * @throws IllegalArgumentException If {@code efRuntime} is set while {@code filter.policy} is
+         *     {@code HybridFilterPolicy.ADHOC} -- the server rejects that combination outright.
+         */
+        public FTHybridVsimArm build() {
+            return new FTHybridVsimArm(
+                    field, vectorParamRef, rawVector, k, efRuntime, shardKRatio, yieldScoreAs, filter);
+        }
     }
 
     private static GlideString requireParamReference(String vectorParamRef) {
