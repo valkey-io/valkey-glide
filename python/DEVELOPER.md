@@ -184,6 +184,8 @@ git clone https://github.com/valkey-io/valkey-glide.git
 cd valkey-glide
 ```
 
+<!-- The build/test/lint commands below are intentionally mirrored in python/AGENTS.md (agent quick-reference). Keep both in sync when they change. -->
+
 ## Build
 
 ---
@@ -274,6 +276,8 @@ pytest -v -k test_iam_authentication
 ```
 
 If any of these environment variables are not set, IAM authentication tests will be skipped.
+
+IAM auth requires TLS, so these tests always run over TLS against the TLS cluster fixture that every local run provisions. No `--tls` flag needed.
 
 **Note:** The credential values shown above (`test_access_key`, etc.) are arbitrary placeholder strings. The AWS SDK uses them to generate an authentication token, but the local test server doesn't validate the token. These tests verify that the IAM authentication flow works correctly (token generation, connection establishment, and token refresh), not that the credentials are valid.
 

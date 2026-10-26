@@ -493,6 +493,9 @@ pub enum ScopeCreateError {
     ConnectTimedOut,
     /// IAM is configured on the parent but no token is currently available.
     IamTokenUnavailable,
+    /// IAM authentication is configured but TLS is disabled. An IAM token is a
+    /// bearer credential and must never be sent over plaintext TCP.
+    IamRequiresTls,
     /// The AUTH/SELECT/CLIENT SETNAME init pipeline failed.
     InitFailed(RedisError),
     /// The init pipeline did not complete within `SCOPE_CONNECT_TIMEOUT`.
@@ -519,6 +522,7 @@ pub enum ScopeCreateErrorKind {
     ConnectFailed,
     ConnectTimedOut,
     IamTokenUnavailable,
+    IamRequiresTls,
     InitFailed,
     InitTimedOut,
     PoolClosed,
@@ -539,6 +543,7 @@ impl ScopeCreateErrorKind {
             | Self::NoSeedAddress
             | Self::InvalidClusterTarget
             | Self::InvalidUnixSocketAddress => Some(ScopeFailCause::InvalidConfiguration),
+            Self::IamRequiresTls => Some(ScopeFailCause::IamRequiresTls),
             Self::ParentCertMaterialUnavailable => {
                 Some(ScopeFailCause::ParentCertMaterialUnavailable)
             }
@@ -571,6 +576,7 @@ impl ScopeCreateError {
             Self::ConnectFailed(_) => ScopeCreateErrorKind::ConnectFailed,
             Self::ConnectTimedOut => ScopeCreateErrorKind::ConnectTimedOut,
             Self::IamTokenUnavailable => ScopeCreateErrorKind::IamTokenUnavailable,
+            Self::IamRequiresTls => ScopeCreateErrorKind::IamRequiresTls,
             Self::InitFailed(_) => ScopeCreateErrorKind::InitFailed,
             Self::InitTimedOut => ScopeCreateErrorKind::InitTimedOut,
             Self::PoolClosed => ScopeCreateErrorKind::PoolClosed,
@@ -598,6 +604,9 @@ impl std::fmt::Display for ScopeCreateError {
             Self::ConnectFailed(e) => write!(f, "connect failed: {e}"),
             Self::ConnectTimedOut => write!(f, "connect timed out after {SCOPE_CONNECT_TIMEOUT:?}"),
             Self::IamTokenUnavailable => f.write_str("IAM token unavailable; cannot AUTH"),
+            Self::IamRequiresTls => f.write_str(
+                "IAM authentication requires TLS; refusing to send an IAM token over a plaintext connection",
+            ),
             Self::InitFailed(e) => write!(f, "init pipeline failed: {e}"),
             Self::InitTimedOut => {
                 write!(f, "init pipeline timed out after {SCOPE_CONNECT_TIMEOUT:?}")
@@ -731,6 +740,15 @@ async fn build_scope_connection(
         .tls_mode
         .enum_value()
         .unwrap_or(crate::connection_request::TlsMode::SecureTls);
+    // An IAM token is a bearer credential: never transmit it over plaintext. When
+    // the parent authenticates as an IAM identity, reject a no-TLS scope before any
+    // connect or token fetch, so a misconfigured scope fails closed instead of
+    // leaking the token in a cleartext AUTH on the first command / reconnect.
+    if tls_mode == crate::connection_request::TlsMode::NoTls
+        && client.and_then(|c| c.iam_token_manager()).is_some()
+    {
+        return Err(ScopeCreateError::IamRequiresTls);
+    }
     let tls_params = inherited_tls_params(client).await;
     // The parent configured certificate material, but none is reachable yet (a
     // lazy parent that has not connected). Connecting would downgrade to system
@@ -1045,6 +1063,10 @@ pub enum ScopeFailCause {
     /// The stored connection request cannot produce a scoped connection
     /// (unparseable, no seed address, invalid `lib_name` or cluster target).
     InvalidConfiguration,
+    /// IAM authentication is configured but the scope request disables TLS. Kept
+    /// distinct from `InvalidConfiguration` so the borrower-facing error names
+    /// the TLS requirement instead of a generic configuration failure.
+    IamRequiresTls,
     /// The pool is closing or closed; it will not serve again.
     PoolClosed,
 }
@@ -1149,7 +1171,8 @@ impl ScopeAcquireError {
             }
             Self::Terminal(
                 ScopeFailCause::ParentCertMaterialUnavailable
-                | ScopeFailCause::InvalidConfiguration,
+                | ScopeFailCause::InvalidConfiguration
+                | ScopeFailCause::IamRequiresTls,
             ) => RequestErrorType::Unspecified,
         }
     }
@@ -1201,6 +1224,9 @@ impl std::fmt::Display for ScopeFailCause {
             Self::InvalidConfiguration => {
                 f.write_str("connection configuration cannot produce a scoped connection")
             }
+            Self::IamRequiresTls => f.write_str(
+                "IAM authentication requires TLS; refusing to send an IAM token over a plaintext connection",
+            ),
             Self::PoolClosed => f.write_str("scope pool is closed"),
         }
     }
@@ -3627,6 +3653,77 @@ mod tests {
         assert!(
             !matches!(err, ScopeCreateError::ParentCertMaterialUnavailable),
             "system-trust TLS must still be allowed, got: {err}"
+        );
+    }
+
+    /// Fake AWS credentials so `IAMTokenManager::new` can locally sign a SigV4
+    /// token without reaching real AWS.
+    fn setup_iam_test_credentials() {
+        unsafe {
+            std::env::set_var("AWS_ACCESS_KEY_ID", "test_access_key");
+            std::env::set_var("AWS_SECRET_ACCESS_KEY", "test_secret_key");
+            std::env::set_var("AWS_SESSION_TOKEN", "test_session_token");
+        }
+    }
+
+    /// A lazy IAM parent built the way production does — `Client::new` with IAM
+    /// config and TLS enabled. This is the reachable state the scope guard defends
+    /// against: a TLS IAM parent whose scope request disables TLS. (A no-TLS IAM
+    /// parent cannot exist: `Client::new` rejects it.)
+    async fn lazy_iam_parent() -> Client {
+        setup_iam_test_credentials();
+        let request = ClientRequest {
+            addresses: vec![ClientAddress {
+                host: "127.0.0.1".to_string(),
+                port: 1,
+                unix_socket_path: None,
+            }],
+            lazy_connect: true,
+            tls_mode: Some(crate::client::TlsMode::SecureTls),
+            authentication_info: Some(crate::client::AuthenticationInfo {
+                username: Some("iam-test-user".to_string()),
+                password: None,
+                iam_config: Some(crate::client::IamAuthenticationConfig {
+                    cluster_name: "test-cluster".to_string(),
+                    region: "us-east-1".to_string(),
+                    service_type: crate::iam::ServiceType::ElastiCache,
+                    refresh_interval_seconds: None,
+                    credentials_provider: None,
+                }),
+            }),
+            ..Default::default()
+        };
+        Client::new(request, None)
+            .await
+            .expect("lazy IAM client construction does not touch the network")
+    }
+
+    /// A scope off an IAM parent whose request disables TLS must fail with
+    /// `IamRequiresTls` before obtaining or sending the token.
+    #[tokio::test]
+    async fn scope_rejects_iam_over_plaintext() {
+        let parent = lazy_iam_parent().await;
+
+        // `request_bytes` builds a standalone NoTls request (no tls_mode set).
+        let err = scope_connect_error(&parent, &request_bytes("GlideRust", 1)).await;
+        assert!(
+            matches!(err, ScopeCreateError::IamRequiresTls),
+            "IAM + NoTls scope must fail closed, got: {err}"
+        );
+    }
+
+    /// A-B companion: without an IAM manager, the same NoTls scope request is NOT
+    /// rejected by the IAM guard (it proceeds to the connect attempt and fails
+    /// there, since nothing listens on the seed port). This proves the guard keys
+    /// on IAM, not merely on `NoTls`.
+    #[tokio::test]
+    async fn scope_allows_plaintext_without_iam() {
+        let parent = lazy_parent(false).await;
+
+        let err = scope_connect_error(&parent, &request_bytes("GlideRust", 1)).await;
+        assert!(
+            !matches!(err, ScopeCreateError::IamRequiresTls),
+            "a non-IAM plaintext scope must not hit the IAM/TLS guard, got: {err}"
         );
     }
 

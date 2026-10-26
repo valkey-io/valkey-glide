@@ -874,7 +874,8 @@ pub(crate) mod shared_client_tests {
             let test_basics = setup_test_basics(
                 use_cluster,
                 TestConfiguration {
-                    shared_server: true,
+                    use_tls: true,
+                    shared_server: false,
                     ..Default::default()
                 },
             )
@@ -918,7 +919,7 @@ pub(crate) mod shared_client_tests {
 
             let connection_request = glide_core::connection_request::ConnectionRequest {
                 addresses: addresses_info,
-                tls_mode: TlsMode::NoTls.into(),
+                tls_mode: TlsMode::InsecureTls.into(),
                 cluster_mode_enabled: use_cluster,
                 request_timeout: 10000,
                 authentication_info: protobuf::MessageField::some(auth_info),
@@ -1217,7 +1218,8 @@ pub(crate) mod shared_client_tests {
             let test_basics = setup_test_basics(
                 use_cluster,
                 TestConfiguration {
-                    shared_server: true,
+                    use_tls: true,
+                    shared_server: false,
                     ..Default::default()
                 },
             )
@@ -1261,7 +1263,7 @@ pub(crate) mod shared_client_tests {
 
             let connection_request = glide_core::connection_request::ConnectionRequest {
                 addresses: addresses_info,
-                tls_mode: TlsMode::NoTls.into(),
+                tls_mode: TlsMode::InsecureTls.into(),
                 cluster_mode_enabled: use_cluster,
                 request_timeout: 10000,
                 authentication_info: protobuf::MessageField::some(auth_info),
@@ -4915,32 +4917,57 @@ pub(crate) mod shared_client_tests {
     async fn setup_iam_local_server(
         iam_username: &str,
     ) -> (
+        tempfile::TempDir,
         RedisServer,
         redis::ConnectionAddr,
         glide_core::connection_request::ConnectionRequest,
     ) {
         use ::protobuf::MessageField;
         use glide_core::connection_request as protobuf;
-        use protobuf::TlsMode;
         use protobuf::{AuthenticationInfo as ProtoAuthInfo, IamCredentials, NodeAddress};
         use protobuf::{
             ConnectionRequest as ProtoConnectionRequest, ServiceType as ProtoServiceType,
         };
 
-        // `nopass` means ACL ignores the supplied password entirely (verified
-        // empirically: `AUTH iamuser <anything>` succeeds), which is the closest
-        // local stand-in for how a real ElastiCache/MemoryDB IAM-enabled user
-        // accepts a valid-looking SigV4-signed token without the test having
-        // real AWS access.
-        let server = RedisServer::new(ServerType::Tcp { tls: false });
+        // IAM auth requires TLS, so the server is TLS-enabled and the request
+        // verifies it against the test CA — the scope exercises IAM `AUTH` over an
+        // encrypted channel. `nopass` means ACL ignores the supplied password
+        // entirely (verified empirically: `AUTH iamuser <anything>` succeeds), the
+        // closest local stand-in for how a real ElastiCache/MemoryDB IAM-enabled
+        // user accepts a valid-looking SigV4-signed token without real AWS access.
+        let tempdir = tempfile::tempdir().expect("Failed to create temp dir");
+        let tls_paths = build_tls_file_paths(&tempdir);
+        let ca_cert_bytes = tls_paths.read_ca_cert_as_bytes();
+        let server = RedisServer::new_with_addr_tls_modules_and_spawner(
+            redis::ConnectionAddr::TcpTls {
+                host: "127.0.0.1".to_string(),
+                port: get_available_port(),
+                insecure: false,
+                tls_params: None,
+            },
+            Some(tls_paths),
+            &[],
+            // No mTLS: IAM authenticates with a password-style AUTH, not a client
+            // certificate, so the server must not require one.
+            false,
+            |cmd| cmd.spawn().expect("Failed to spawn server"),
+        );
         let addr = server.get_client_addr();
+        tokio::time::sleep(std::time::Duration::from_millis(300)).await;
         let (host, port) = match &addr {
-            redis::ConnectionAddr::Tcp(host, port) => (host.clone(), *port),
-            other => panic!("Expected a plain TCP test server address, got: {other:?}"),
+            redis::ConnectionAddr::TcpTls { host, port, .. } => (host.clone(), *port),
+            other => panic!("Expected a TLS test server address, got: {other:?}"),
         };
 
+        // Connect the ACL-setup client over TLS too (insecure: skip verification —
+        // this raw helper connection is not the subject under test).
         let setup_client = redis::Client::open(redis::ConnectionInfo {
-            addr: addr.clone(),
+            addr: redis::ConnectionAddr::TcpTls {
+                host: host.clone(),
+                port,
+                insecure: true,
+                tls_params: None,
+            },
             redis: RedisConnectionInfo::default(),
         })
         .unwrap();
@@ -4970,7 +4997,9 @@ pub(crate) mod shared_client_tests {
             port: port.into(),
             ..Default::default()
         });
-        proto_request.tls_mode = TlsMode::NoTls.into();
+        // Verify the server against the test CA (SecureTls); IAM auth requires TLS.
+        proto_request.root_certs.push(ca_cert_bytes.into());
+        proto_request.tls_mode = protobuf::TlsMode::SecureTls.into();
         let mut iam_credentials = IamCredentials::new();
         iam_credentials.cluster_name = "test-scope-iam-cluster".into();
         iam_credentials.region = "us-east-1".into();
@@ -4980,7 +5009,7 @@ pub(crate) mod shared_client_tests {
         auth_info.iam_credentials = MessageField(Some(Box::new(iam_credentials)));
         proto_request.authentication_info = MessageField(Some(Box::new(auth_info)));
 
-        (server, addr, proto_request)
+        (tempdir, server, addr, proto_request)
     }
 
     /// Reads `cmdstat_auth`'s `calls=` counter from `INFO commandstats`.
@@ -5370,7 +5399,8 @@ pub(crate) mod shared_client_tests {
             setup_test_credentials();
 
             let iam_username = "iamuser";
-            let (_server, _addr, proto_request) = setup_iam_local_server(iam_username).await;
+            let (_tempdir, _server, _addr, proto_request) =
+                setup_iam_local_server(iam_username).await;
             let connection_request_bytes = proto_request
                 .write_to_bytes()
                 .expect("serialize scope connection request");
@@ -5429,7 +5459,8 @@ pub(crate) mod shared_client_tests {
             setup_test_credentials();
 
             let iam_username = "iamuser";
-            let (_server, addr, proto_request) = setup_iam_local_server(iam_username).await;
+            let (_tempdir, _server, addr, proto_request) =
+                setup_iam_local_server(iam_username).await;
             let bytes = proto_request
                 .clone()
                 .write_to_bytes()
@@ -5654,7 +5685,8 @@ pub(crate) mod shared_client_tests {
             setup_test_credentials();
 
             let iam_username = "iamuser";
-            let (_server, addr, proto_request) = setup_iam_local_server(iam_username).await;
+            let (_tempdir, _server, addr, proto_request) =
+                setup_iam_local_server(iam_username).await;
             let bytes = proto_request
                 .clone()
                 .write_to_bytes()
@@ -5747,7 +5779,8 @@ pub(crate) mod shared_client_tests {
             setup_test_credentials();
 
             let iam_username = "iamuser";
-            let (_server, addr, proto_request) = setup_iam_local_server(iam_username).await;
+            let (_tempdir, _server, addr, proto_request) =
+                setup_iam_local_server(iam_username).await;
 
             let mut client = Client::new(proto_request.into(), None)
                 .await
@@ -5859,7 +5892,8 @@ pub(crate) mod shared_client_tests {
             setup_test_credentials();
 
             let iam_username = "iamuser";
-            let (_server, addr, proto_request) = setup_iam_local_server(iam_username).await;
+            let (_tempdir, _server, addr, proto_request) =
+                setup_iam_local_server(iam_username).await;
 
             let mut client = Client::new(proto_request.into(), None)
                 .await
@@ -5949,7 +5983,8 @@ pub(crate) mod shared_client_tests {
             setup_test_credentials();
 
             let iam_username = "iamuser";
-            let (_server, addr, proto_request) = setup_iam_local_server(iam_username).await;
+            let (_tempdir, _server, addr, proto_request) =
+                setup_iam_local_server(iam_username).await;
 
             let mut client = Client::new(proto_request.into(), None)
                 .await
@@ -6029,7 +6064,8 @@ pub(crate) mod shared_client_tests {
             setup_test_credentials();
 
             let iam_username = "iamuser";
-            let (_server, addr, proto_request) = setup_iam_local_server(iam_username).await;
+            let (_tempdir, _server, addr, proto_request) =
+                setup_iam_local_server(iam_username).await;
 
             let mut client = Client::new(proto_request.into(), None)
                 .await
@@ -6111,16 +6147,29 @@ pub(crate) mod shared_client_tests {
             setup_test_credentials();
 
             let iam_username = "iamuser";
+            // IAM auth requires TLS, so stand up a TLS cluster. The request uses
+            // InsecureTls (skip verification) so no CA has to be threaded through.
+            let tempdir = tempfile::tempdir().expect("Failed to create temp dir");
+            let tls_paths = build_tls_file_paths(&tempdir);
             let cluster =
-                crate::utilities::cluster::RedisCluster::new(false, &None, Some(3), Some(0));
+                crate::utilities::cluster::RedisCluster::new_with_tls(3, 0, Some(tls_paths));
             let addresses = cluster.get_server_addresses();
 
             // Grant the `nopass` IAM user on every node (mirrors the standalone
             // `setup_iam_local_server`; `nopass` lets a valid-looking token AUTH
             // without real AWS).
             for addr in &addresses {
+                let (host, port) = match addr {
+                    redis::ConnectionAddr::TcpTls { host, port, .. } => (host.clone(), *port),
+                    other => panic!("Expected a TLS cluster node address, got: {other:?}"),
+                };
                 let admin = redis::Client::open(redis::ConnectionInfo {
-                    addr: addr.clone(),
+                    addr: redis::ConnectionAddr::TcpTls {
+                        host,
+                        port,
+                        insecure: true,
+                        tls_params: None,
+                    },
                     redis: RedisConnectionInfo::default(),
                 })
                 .unwrap();
@@ -6154,7 +6203,7 @@ pub(crate) mod shared_client_tests {
                 };
                 let mut req = ProtoConnectionRequest::new();
                 for addr in &addresses {
-                    if let redis::ConnectionAddr::Tcp(host, port) = addr {
+                    if let redis::ConnectionAddr::TcpTls { host, port, .. } = addr {
                         req.addresses.push(NodeAddress {
                             host: host.clone().into(),
                             port: (*port as u32),
@@ -6162,7 +6211,7 @@ pub(crate) mod shared_client_tests {
                         });
                     }
                 }
-                req.tls_mode = TlsMode::NoTls.into();
+                req.tls_mode = TlsMode::InsecureTls.into();
                 req.cluster_mode_enabled = true;
                 req.request_timeout = 10000;
                 let mut iam = IamCredentials::new();
@@ -6263,6 +6312,270 @@ pub(crate) mod shared_client_tests {
                  (before={auth_before}, after={auth_after}); if equal, the \
                  cluster_scan path did not run the reconcile"
             );
+        });
+    }
+
+    /// Regression test for #7301, on a real 3-shard cluster (so AllNodes routing
+    /// spans multiple primaries):
+    ///
+    /// 1. (all versions) A MULTI opened on `AllNodes` must be cleared on every node
+    ///    on release: re-acquire and assert `PING` to each primary returns `PONG`
+    ///    (an open MULTI replies `QUEUED`). Fails deterministically on the pre-fix
+    ///    single-node DISCARD, which leaves ≥2 of 3 primaries dirty.
+    /// 2. (all versions) A MULTI opened on a SINGLE primary must still re-idle: the
+    ///    release DISCARD fans out to `AllNodes`, so the owner answers `+OK` while
+    ///    the siblings answer "DISCARD without MULTI" and the aggregate is `Err` —
+    ///    which must be tolerated, not read as a reset failure that discards the
+    ///    connection. Exercises the classify-by-message branch on a live cluster.
+    /// 3. (Valkey 9.0+ multi-db clusters) A borrow that `SELECT`ed another db must
+    ///    be restored to the configured db on release — guards against the wrong
+    ///    fix of skipping `SELECT` by topology, which would leak db 7.
+    #[cfg(feature = "proto")]
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_cluster_pool_release_returns_clean_connection_to_idle() {
+        use glide_core::pool::{ClientPool, PoolConfig, release_client_async};
+        use protobuf::Message as _;
+        use std::sync::Arc;
+        use std::time::Duration;
+        use tokio::sync::Mutex as TokioMutex;
+
+        block_on_all(async {
+            // Dedicated 3-shard cluster: a known N≥2 so the AllNodes-vs-one-node
+            // DISCARD difference is deterministic (not dependent on shared-cluster
+            // size or which node Random happened to pick).
+            let cluster =
+                crate::utilities::cluster::RedisCluster::new(false, &None, Some(3), Some(0));
+            let addresses = cluster.get_server_addresses();
+            let configuration = TestConfiguration {
+                cluster_mode: ClusterMode::Enabled,
+                request_timeout: Some(10_000),
+                ..Default::default()
+            };
+            let connection_request = create_connection_request(&addresses, &configuration);
+            let request_bytes = connection_request
+                .write_to_bytes()
+                .expect("serialize cluster connection request");
+
+            // configured db 0 — the same bytes the client connects with, exactly
+            // as every binding derives PoolConfig.configured_database_id.
+            let pool_config = PoolConfig {
+                max_size: 4,
+                min_idle: 0,
+                idle_timeout: Duration::from_secs(300),
+                request_timeout: Duration::from_secs(10),
+                test_on_borrow: false,
+                connection_request: request_bytes.clone(),
+                is_async: true,
+                configured_database_id: 0,
+                abandon_timeout: Duration::ZERO,
+            };
+            let pool_arc = Arc::new(TokioMutex::new(
+                ClientPool::new(pool_config).expect("valid pool config"),
+            ));
+
+            // ── borrow helpers ──────────────────────────────────────────────
+            let add_and_acquire = |pool_arc: Arc<TokioMutex<ClientPool>>, client: Client| async move {
+                let mut pool = pool_arc.lock().await;
+                let id = pool.add_client(client);
+                assert_eq!(pool.try_acquire(), id as i64, "the fresh client is idle");
+                id
+            };
+
+            let all_nodes = || RoutingInfo::MultiNode((MultipleNodeRoutingInfo::AllNodes, None));
+
+            // ── 1. open MULTI on every primary, release, require all clean ──
+            let client = Client::new(connection_request.clone().into(), None)
+                .await
+                .expect("cluster client creation");
+            let client_id = add_and_acquire(pool_arc.clone(), client).await;
+            {
+                let pool = pool_arc.lock().await;
+                let mut entry = pool.in_use.get_mut(&client_id).expect("borrowed entry");
+                entry
+                    .client
+                    .send_command(&mut redis::cmd("MULTI"), Some(all_nodes()))
+                    .await
+                    .expect("MULTI on all primaries");
+            }
+            release_client_async(pool_arc.clone(), client_id).await;
+            {
+                let mut pool = pool_arc.lock().await;
+                assert_eq!(
+                    pool.idle_count(),
+                    1,
+                    "a clean cluster release must return the connection to idle, not discard it"
+                );
+                assert!(
+                    pool.drain_discarded_ids().is_empty(),
+                    "nothing should be discarded"
+                );
+                assert_eq!(
+                    pool.try_acquire(),
+                    client_id as i64,
+                    "same connection reused"
+                );
+            }
+            {
+                let pool = pool_arc.lock().await;
+                let mut entry = pool.in_use.get_mut(&client_id).expect("reused entry");
+                let reply = entry
+                    .client
+                    .send_command(&mut redis::cmd("PING"), Some(all_nodes()))
+                    .await
+                    .expect("PING all primaries on the reused connection");
+                // Every per-node reply must be PONG. A primary that still had the
+                // prior borrow's MULTI open would answer QUEUED.
+                let nodes: Vec<Value> = match reply {
+                    Value::Map(m) => m.into_iter().map(|(_, v)| v).collect(),
+                    other => panic!("expected per-node map from AllNodes PING: {other:?}"),
+                };
+                assert!(
+                    nodes.len() >= 2,
+                    "need ≥2 primaries to distinguish AllNodes from single-node DISCARD"
+                );
+                for v in nodes {
+                    assert_eq!(
+                        v,
+                        Value::SimpleString("PONG".into()),
+                        "a primary still had MULTI open after release — DISCARD did not reach \
+                         every node (got {v:?} instead of PONG)"
+                    );
+                }
+            }
+
+            // ── 2. MULTI open on a SINGLE primary: release must still re-idle ──
+            // The production shape the AllNodes DISCARD aggregation must tolerate:
+            // the owning node answers +OK, every other node answers "DISCARD
+            // without MULTI", so the aggregate is Err even though the reset
+            // succeeded. Section 1's all-nodes MULTI makes every DISCARD succeed
+            // (aggregate Ok), so only this single-node case exercises the
+            // classify-by-message branch on a live cluster.
+            let client = Client::new(connection_request.clone().into(), None)
+                .await
+                .expect("cluster client creation");
+            let client_id = add_and_acquire(pool_arc.clone(), client).await;
+            let one_primary = {
+                let key = format!("{{{}}}:pool7301multi", generate_random_string(8));
+                RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(Route::new(
+                    get_slot(key.as_bytes()),
+                    SlotAddr::Master,
+                )))
+            };
+            {
+                let pool = pool_arc.lock().await;
+                let mut entry = pool.in_use.get_mut(&client_id).expect("borrowed entry");
+                entry
+                    .client
+                    .send_command(&mut redis::cmd("MULTI"), Some(one_primary.clone()))
+                    .await
+                    .expect("MULTI on a single primary");
+            }
+            release_client_async(pool_arc.clone(), client_id).await;
+            {
+                let mut pool = pool_arc.lock().await;
+                assert_eq!(
+                    pool.idle_count(),
+                    1,
+                    "a single-node-MULTI release must re-idle: the siblings' \
+                     \"DISCARD without MULTI\" aggregate error must be tolerated, not \
+                     treated as a reset failure"
+                );
+                assert!(
+                    pool.drain_discarded_ids().is_empty(),
+                    "nothing should be discarded"
+                );
+                assert_eq!(
+                    pool.try_acquire(),
+                    client_id as i64,
+                    "same connection reused"
+                );
+            }
+            {
+                let pool = pool_arc.lock().await;
+                let mut entry = pool.in_use.get_mut(&client_id).expect("reused entry");
+                let reply = entry
+                    .client
+                    .send_command(&mut redis::cmd("PING"), Some(all_nodes()))
+                    .await
+                    .expect("PING all primaries on the reused connection");
+                let nodes: Vec<Value> = match reply {
+                    Value::Map(m) => m.into_iter().map(|(_, v)| v).collect(),
+                    other => panic!("expected per-node map from AllNodes PING: {other:?}"),
+                };
+                for v in nodes {
+                    assert_eq!(
+                        v,
+                        Value::SimpleString("PONG".into()),
+                        "the owning primary still had MULTI open after release \
+                         (got {v:?} instead of PONG)"
+                    );
+                }
+            }
+
+            // ── 3. db drift must be restored (Valkey 9.0+ multi-db cluster) ──
+            let mut version_probe = Client::new(connection_request.clone().into(), None)
+                .await
+                .expect("cluster client creation");
+            if utilities::version_greater_or_equal(&mut version_probe, "9.0.0").await {
+                let client = Client::new(connection_request.into(), None)
+                    .await
+                    .expect("cluster client creation");
+                let client_id = add_and_acquire(pool_arc.clone(), client).await;
+                // Drift to db 7 on a single primary (reachable in production via
+                // customCommand), using a hash-tagged key's slot.
+                let key = format!("{{{}}}:pool7301", generate_random_string(8));
+                let route = RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(
+                    Route::new(get_slot(key.as_bytes()), SlotAddr::Master),
+                ));
+                {
+                    let pool = pool_arc.lock().await;
+                    let mut entry = pool.in_use.get_mut(&client_id).expect("borrowed entry");
+                    let mut select7 = redis::cmd("SELECT");
+                    select7.arg("7");
+                    entry
+                        .client
+                        .send_command(&mut select7, Some(route.clone()))
+                        .await
+                        .expect("SELECT 7 on a 9.0+ cluster");
+                }
+                release_client_async(pool_arc.clone(), client_id).await;
+                {
+                    let mut pool = pool_arc.lock().await;
+                    assert_eq!(
+                        pool.idle_count(),
+                        1,
+                        "drifted-db release must still re-idle"
+                    );
+                    assert_eq!(
+                        pool.try_acquire(),
+                        client_id as i64,
+                        "same connection reused"
+                    );
+                }
+                {
+                    let pool = pool_arc.lock().await;
+                    let mut entry = pool.in_use.get_mut(&client_id).expect("reused entry");
+                    let mut info = redis::cmd("CLIENT");
+                    info.arg("INFO");
+                    let reply = entry
+                        .client
+                        .send_command(&mut info, Some(route))
+                        .await
+                        .expect("CLIENT INFO on the reused connection");
+                    let info = match reply {
+                        Value::BulkString(b) => String::from_utf8_lossy(&b).to_string(),
+                        Value::VerbatimString { text, .. } => text,
+                        other => panic!("unexpected CLIENT INFO reply: {other:?}"),
+                    };
+                    assert!(
+                        info.contains("db=0"),
+                        "release must restore the configured db 0 after a borrow drifted to \
+                         db 7, not leak the drifted db to the next borrower: {info}"
+                    );
+                }
+            }
         });
     }
 }
