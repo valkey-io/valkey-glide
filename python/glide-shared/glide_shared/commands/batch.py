@@ -179,7 +179,7 @@ class BaseBatch:
         return_old_value: bool = False,
     ) -> TBatch:
         """
-        Set the given key with the given value. Return value is dependent on the passed options.
+        Set the value of a key with the given options.
 
         See [valkey.io](https://valkey.io/commands/set/) for details.
 
