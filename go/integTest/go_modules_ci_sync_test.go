@@ -47,8 +47,12 @@ func TestGoModulesCiSync(t *testing.T) {
 
 	// CI invokes `make modules-test standalone-endpoints=... cluster-endpoints=...`; the local
 	// runner bypasses the Makefile's HTML-report pipe (a flaky third-party module fetch) but must
-	// run the exact same underlying `go test ./integTest/... -testify.m "^TestModule"` with the
-	// same two endpoint flags (spelled --standalone-endpoints/--cluster-endpoints at that layer).
+	// run the exact same underlying `go test ./integTest/... -run TestGlideTestSuite -testify.m
+	// "^TestModule"` with the same two endpoint flags (spelled --standalone-endpoints/
+	// --cluster-endpoints at that layer). -run TestGlideTestSuite scopes the package to the one
+	// top-level function that hosts every TestModule* method, so other top-level Test* functions
+	// in the package (which need their own non-Docker server bring-up this script doesn't do)
+	// don't run and fail with an unrelated connection error.
 	for _, flag := range []string{"standalone-endpoints", "cluster-endpoints"} {
 		assert.Contains(
 			t, workflowText, flag,

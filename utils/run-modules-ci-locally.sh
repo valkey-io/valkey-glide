@@ -158,7 +158,15 @@ case "$MODULES_TEST_LANG" in
         # (go-test-report), which depends on a flaky third-party module fetch
         # unrelated to test correctness; this runs the same underlying `go test`
         # invocation the Makefile's modules-test target does, directly.
+        # -run TestGlideTestSuite scopes `go test` to the one top-level function
+        # that hosts every TestModule* method (glide_test_suite_test.go). Without
+        # it, `go test ./integTest/...` also runs every OTHER top-level Test*
+        # function in the package (for example pool_scope_test.go's pool/scope
+        # tests), which need their own standalone server bring-up this script
+        # doesn't do and fail with connection-refused -- a false top-level FAIL
+        # unrelated to the modules this script actually proves out.
         CC="gcc -fsanitize=address" go test -v ./integTest/... \
+            -run TestGlideTestSuite \
             -testify.m "^TestModule" \
             --standalone-endpoints="${MODULES_STANDALONE_ENDPOINT}" \
             --cluster-endpoints="${MODULES_CLUSTER_ENDPOINTS}"
