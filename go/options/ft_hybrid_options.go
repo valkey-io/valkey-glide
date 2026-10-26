@@ -338,9 +338,11 @@ type FtHybridOptions struct {
 	// clause has the restriction described above. FT.HYBRID also applies its own default LIMIT
 	// of 10 rows when no FtAggregateLimit clause is given here -- FT.AGGREGATE has no such
 	// default and returns everything. ToArgs always emits Clauses after Params's own serialized
-	// arguments (PARAMS is always present for FT.HYBRID, so this tail is never empty) --
-	// emitting a leading FILTER clause right after the VSIM arm would otherwise let the server's
-	// VSIM parser claim it as a VSIM pre-filter instead.
+	// arguments -- PARAMS is only actually written to the wire when len(Params) > 0 (plus any
+	// internally generated VSIM entry) is non-empty, so this tail is not unconditionally
+	// preceded by a PARAMS token; what matters is the relative order ToArgs guarantees, not
+	// PARAMS's unconditional presence. Emitting a leading FILTER clause right after the VSIM
+	// arm would otherwise let the server's VSIM parser claim it as a VSIM pre-filter instead.
 	Clauses []FtAggregateClause
 	// WithCursor requests a paged reply. See [FtWithCursor].
 	WithCursor *FtWithCursor

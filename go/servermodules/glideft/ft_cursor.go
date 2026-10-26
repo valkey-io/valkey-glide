@@ -73,6 +73,10 @@ func buildCursorReadArgs(indexName string, cursorID int64, count *int) []string 
 	return args
 }
 
+func buildCursorDelArgs(indexName string, cursorID int64) []string {
+	return []string{ftCursorCommand, ftCursorDelKeyword, indexName, strconv.FormatInt(cursorID, 10)}
+}
+
 // FtCursorDel deletes an open cursor, discarding it before it would otherwise be exhausted or
 // time out.
 //
@@ -96,7 +100,7 @@ func FtCursorDel(
 	indexName string,
 	cursorID int64,
 ) (string, error) {
-	args := []string{ftCursorCommand, ftCursorDelKeyword, indexName, strconv.FormatInt(cursorID, 10)}
+	args := buildCursorDelArgs(indexName, cursorID)
 	return toStringResult(execStandalone(client, ctx, args))
 }
 
@@ -109,6 +113,6 @@ func ClusterFtCursorDel(
 	indexName string,
 	cursorID int64,
 ) (string, error) {
-	args := []string{ftCursorCommand, ftCursorDelKeyword, indexName, strconv.FormatInt(cursorID, 10)}
+	args := buildCursorDelArgs(indexName, cursorID)
 	return toStringResult(execClusterPrimaryPinned(client, ctx, indexName, args))
 }
