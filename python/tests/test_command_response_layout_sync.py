@@ -3,13 +3,13 @@
 ffi/src/lib.rs (the real struct) and python/glide-shared/src/lib.rs (used
 by the async pipe's _c_parse_response/convert() to walk the same struct
 from the Python-loaded side). A hand-computed field-offset check during
-the 1.3 D9 investigation found both copies byte-identical -- the live bug
-that round surfaced turned out to be a stale build artifact (dev.py's
-install_glide_shared skipped rebuilding the FFI cdylib whenever a prior
-copy already existed, regardless of source changes), not a layout
-mismatch -- but nothing before this test automatically re-checked that by
-itself, so a future change to one copy without the other would only be
-caught by review, not by a test run.
+investigation of a build-staleness bug found both copies byte-identical --
+the live bug that investigation surfaced turned out to be a stale build
+artifact (dev.py's install_glide_shared skipped rebuilding the FFI cdylib
+whenever a prior copy already existed, regardless of source changes), not
+a layout mismatch -- but nothing before this test automatically re-checked
+that by itself, so a future change to one copy without the other would
+only be caught by review, not by a test run.
 
 This cannot be a Rust-level test in either crate: glide-shared's pyo3
 dependency uses the "extension-module" feature, which deliberately omits

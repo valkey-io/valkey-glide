@@ -1,6 +1,6 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-"""Unit coverage for `_parse_emulate_release_level` (E-2, D22): the dict and
+"""Unit coverage for `_parse_emulate_release_level`: the dict and
 flat-list `CONFIG GET` reply shapes, and the empty/missing-key reply from a
 pre-1.3 module where `search.emulate-release` doesn't exist."""
 
@@ -40,7 +40,7 @@ def test_dict_reply_missing_key_returns_none():
 
 
 def test_scalar_reply_returns_none():
-    """QA R4-L-1: a scalar reply (neither dict nor list/tuple) must return
+    """A scalar reply (neither dict nor list/tuple) must return
     None rather than raise, so emulate_release_level can fail loudly with
     a clear message instead of a bare TypeError."""
     assert _parse_emulate_release_level(b"1.3.0") is None

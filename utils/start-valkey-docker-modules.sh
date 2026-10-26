@@ -21,11 +21,14 @@
 #   STANDALONE_PORT     Standalone port (default 6389)
 #   SEARCH_MODULE_ARGS  Extra args appended to the search module's loadmodule
 #                       line, e.g. "--emulate-release 1.3.0". CI never sets
-#                       this (empty by default) -- it exists so the local
-#                       runner's non-default emulate-release path can still
-#                       call this exact script instead of hand-rolling its
-#                       own bring-up. The arg name must be the BARE config
-#                       name (e.g. "emulate-release", not
+#                       this (empty by default) --
+#                       it exists so the local runner's non-default
+#                       emulate-release path can still call this exact
+#                       script instead of hand-rolling its own bring-up --
+#                       an earlier version split those into two separate
+#                       bring-up implementations that could drift. The arg
+#                       name must be the BARE
+#                       config name (e.g. "emulate-release", not
 #                       "search.emulate-release" -- that longer form only
 #                       exists at the CONFIG GET/SET surface, where Valkey
 #                       core namespaces every module config by module name;
@@ -87,10 +90,12 @@ docker pull "$IMAGE"
 # image ships (json, bf, ldap) is left to the image's own auto-discovery,
 # exactly as before this file started generating conf files at all. This
 # is the one code path for both the empty-SEARCH_MODULE_ARGS (CI) and
-# non-empty (local emulate-release override) cases -- an earlier version
-# split this into two bring-up implementations that could drift.
+# non-empty (local emulate-release override) cases -- an
+# earlier version of this split into two bring-up implementations that
+# could drift.
 #
-# IMPORTANT, found during a later audit: naming EVERY module explicitly in the conf (an earlier version of this function
+# IMPORTANT, found during a later audit (QA round 2 follow-up): naming
+# EVERY module explicitly in the conf (an earlier version of this function
 # did, listing both search and json) is NOT equivalent to the original
 # CLI-flags-only invocation this replaced -- confirmed empirically that the
 # original relied on the bundle image's auto-discovery loading all FOUR
@@ -234,7 +239,7 @@ echo "Cluster with modules ready on ports ${PORT_START}-${PORT_END}"
 
 echo "=== Module server verification ==="
 # PING proves the server is up; MODULE LIST proves the modules this workflow
-# exists for are actually loaded (runbook Trap 0/3 -- a reachable server is
+# exists for are actually loaded (a reachable server is
 # not evidence of a loaded module, and a module-absent test run must never
 # look identical to a green run). Checks the FULL set the bundle image
 # ships (search, json, bf, ldap), not just search+json -- a QA round 2
