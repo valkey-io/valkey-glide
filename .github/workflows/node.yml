@@ -21,6 +21,8 @@ on:
             - .github/actions/install-engine/action.yml
             - .github/json_matrices/**
             - .github/workflows/create-test-matrices/action.yml
+            - "!**/*.md"
+            - "!**/THIRD_PARTY_LICENSES*"
     pull_request:
         paths:
             - glide-core/src/**
@@ -34,6 +36,8 @@ on:
             - .github/actions/install-engine/action.yml
             - .github/json_matrices/**
             - .github/workflows/create-test-matrices/action.yml
+            - "!**/*.md"
+            - "!**/THIRD_PARTY_LICENSES*"
     workflow_dispatch:
         inputs:
             full-matrix:

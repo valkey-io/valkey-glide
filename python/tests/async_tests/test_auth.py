@@ -190,12 +190,24 @@ async def create_iam_client(
 
     credentials = ServerCredentials(username=IAM_USERNAME, iam_config=iam_config)
 
-    # Note: use_tls is set from request which respects the --tls flag
+    # IAM auth requires TLS, so ignore --tls and always go over the TLS cluster
+    # fixture. Certs are self-signed, hence insecure TLS. Under
+    # --cluster-endpoints/--standalone-endpoints conftest provisions no TLS
+    # fixture (the endpoints are plaintext), so skip rather than error.
+    attr = "valkey_tls_cluster" if cluster_mode else "standalone_tls_cluster"
+    tls_cluster = getattr(pytest, attr, None)
+    if tls_cluster is None:
+        pytest.skip(
+            "IAM tests require a TLS server; none provisioned for external endpoints"
+        )
     return await create_client(
         request=request,
         cluster_mode=cluster_mode,
         protocol=protocol,
         credentials=credentials,
+        use_tls=True,
+        tls_insecure=True,
+        valkey_cluster=tls_cluster,
     )
 
 
@@ -529,7 +541,10 @@ class TestAuthCommands:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_update_connection_password_with_acl_user(
-        self, acl_glide_client: TGlideClient, management_client: TGlideClient
+        self,
+        acl_glide_client: TGlideClient,
+        management_client: TGlideClient,
+        cluster_mode: bool,
     ):
         """
         Test replacing the connection password for an ACL user without immediate re-authentication.
@@ -557,16 +572,40 @@ class TestAuthCommands:
             management_client, USERNAME, NEW_PASSWORD
         )
 
-        # Sleep to allow enough time for reconnecting
-        await anyio.sleep(2)
+        async def _reconnected() -> bool:
+            try:
+                return await acl_glide_client.get("test_key") == b"test_value"
+            except Exception:
+                return False
 
-        # The client should now reconnect with the new password automatically
-        # Verify that the client is still able to perform operations
+        reconnect_timeout = (
+            _CLUSTER_RECONNECT_TIMEOUT_SEC
+            if cluster_mode
+            else _STANDALONE_RECONNECT_TIMEOUT_SEC
+        )
+        await wait_for(
+            _reconnected,
+            "Client did not reconnect with the new password",
+            timeout=reconnect_timeout,
+        )
         value = await acl_glide_client.get("test_key")
         assert value == b"test_value"
 
-        await acl_glide_client.update_connection_password(
-            NEW_PASSWORD, immediate_auth=True
+        async def _immediate_auth_after_reconnect() -> bool:
+            try:
+                return (
+                    await acl_glide_client.update_connection_password(
+                        NEW_PASSWORD, immediate_auth=True
+                    )
+                    == OK
+                )
+            except Exception:
+                return False
+
+        await wait_for(
+            _immediate_auth_after_reconnect,
+            "Client did not accept immediate-auth after reconnect",
+            timeout=reconnect_timeout,
         )
 
         assert await acl_glide_client.set("new_key", "new_value") == OK
@@ -591,9 +630,6 @@ class TestAuthCommands:
         await set_new_acl_username_with_password(
             management_client, USERNAME, NEW_PASSWORD
         )
-
-        # Sleep to allow enough time for reconnecting
-        await anyio.sleep(2)
 
         # This command right after disconnection requires the acl_glide_client to have a request timeout of 2000 ms
         # for full matrix tests to pass (otherwise failing on linux-aarch64 architecture).
@@ -825,6 +861,16 @@ async def test_live_async_sync_provider_ids_coexist_without_registry_leaks(
     async_clients = []
     sync_clients = []
 
+    # IAM auth requires TLS; the direct sync client must use the same TLS
+    # cluster fixture create_iam_client resolves for the async side. Under
+    # external endpoints conftest provisions none, so skip rather than error.
+    tls_attr = "valkey_tls_cluster" if cluster_mode else "standalone_tls_cluster"
+    tls_cluster = getattr(pytest, tls_attr, None)
+    if tls_cluster is None:
+        pytest.skip(
+            "IAM tests require a TLS server; none provisioned for external endpoints"
+        )
+
     def _credentials():
         return ServerCredentials(
             username=IAM_USERNAME,
@@ -856,6 +902,9 @@ async def test_live_async_sync_provider_ids_coexist_without_registry_leaks(
                 cluster_mode=cluster_mode,
                 protocol=protocol,
                 credentials=_credentials(),
+                valkey_cluster=tls_cluster,
+                use_tls=True,
+                tls_insecure=True,
             )
         )
         sync_clients.append(client)

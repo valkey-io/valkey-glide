@@ -121,7 +121,7 @@ class TestFt:
         expected_count: int,
         timeout_secs: float = 10,
     ) -> None:
-        """Poll ``FT.INFO``'s ``num_docs`` (M-4) until it reaches
+        """Poll ``FT.INFO``'s ``num_docs`` until it reaches
         `expected_count`, instead of a fixed sleep. Indexing is async in
         valkey-search, so a fixed sleep is a race whose window just happens
         to be wide enough on this box today. Raises AssertionError with the
@@ -143,7 +143,7 @@ class TestFt:
         src/commands/ft_info_parser.cc, during the Round-1 FT.INFO
         investigation).
 
-        R2-L-3: raises immediately (not after the full timeout) if
+        Raises immediately (not after the full timeout) if
         ``num_docs`` is absent from the reply -- a reply-shape regression
         there should surface as its own clear failure, not get folded into
         "did not reach N documents" after a 10s wait that was never going
@@ -953,7 +953,7 @@ class TestFt:
         )
 
         # The GROUPBY output column name for a JSON-indexed field is gated by
-        # search.emulate-release (M-3, D4=1.3.0 baseline) -- see
+        # search.emulate-release (baseline 1.3.0) -- see
         # json_groupby_column's docstring for the exact source citation.
         # Pre-1.3 modules (e.g. 1.2.1, confirmed via live CONFIG GET during
         # Group 6 evidence collection) don't define this config at all --
@@ -962,7 +962,7 @@ class TestFt:
         # (and for any other shape it can't decode), so default to "1.0.0"
         # (the module's own documented default) in that case -- this test
         # isn't gated by search_1_3_capability, so it must behave correctly
-        # on a pre-1.3 module too, unlike emulate_release_level (QA R4-L-2:
+        # on a pre-1.3 module too, unlike emulate_release_level (both use
         # one decoder shared with conftest.py's fixture rather than a
         # second inline reader with its own rule).
         emulate_release_raw = await glide_client.custom_command(
@@ -1002,7 +1002,7 @@ class TestFt:
         assert sorted_result == expected_result
 
         # FT.PROFILE is not implemented by valkey-search (confirmed absent via
-        # COMMAND INFO on 1.3.0-rc1). Assert the rejection directly (M-2)
+        # COMMAND INFO on 1.3.0-rc1). Assert the rejection directly
         # rather than try/except: swallowing the error here would also hide
         # unrelated failures, and once FT.PROFILE ships this turns into a
         # loud failure instead of a silent no-op.
@@ -1116,7 +1116,7 @@ class TestFt:
         assert expected_result == sorted_result
 
         # FT.PROFILE is not implemented by valkey-search (confirmed absent via
-        # COMMAND INFO on 1.3.0-rc1). Assert the rejection directly (M-2)
+        # COMMAND INFO on 1.3.0-rc1). Assert the rejection directly
         # rather than try/except: swallowing the error here would also hide
         # unrelated failures, and once FT.PROFILE ships this turns into a
         # loud failure instead of a silent no-op.
@@ -1924,20 +1924,20 @@ class TestFt:
         " real gRPC coordinator/metadata-manager infrastructure wired across"
         " actual cluster nodes -- not just a load-time flag. Confirmed: passing"
         " --use-coordinator yes to a single ad-hoc cluster_manager.py-started"
-        " node (even after the M-5/B3 shlex fix, which only solved the"
+        " node (even after the shlex fix for module args, which only solved the"
         " module-arg *syntax* problem) fails module init outright ('FATAL"
         " CONFIG FILE ERROR... Bad directive or wrong number of arguments')."
         " cluster_manager.py has no mechanism to stand up the coordinator"
-        " service itself. Owner: harness/CI (GAP-ANALYSIS PG-13); until a"
+        " service itself. Until a"
         " coordinator-enabled cluster is available this records PRIMARY/"
-        "CLUSTER as accepted-but-effect-unverified, matching M-5."
+        "CLUSTER as accepted-but-effect-unverified, matching the PRIMARY case."
     )
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_ft_info_primary_cluster_scope_with_coordinator(
         self, glide_client: GlideClusterClient
     ):
-        """Positive case for FT.INFO PRIMARY/CLUSTER scope (M-5): asserts the
+        """Positive case for FT.INFO PRIMARY/CLUSTER scope: asserts the
         scopes actually return PRIMARY/CLUSTER-shaped data when the module is
         loaded with a working coordinator. Skipped (not run) in this harness
         -- see the skip reason for exactly what's missing and why.
@@ -1970,7 +1970,7 @@ class TestFt:
     async def test_ft_info_primary_cluster_scope_without_coordinator(
         self, glide_client: GlideClusterClient
     ):
-        """Negative case for FT.INFO PRIMARY/CLUSTER scope (M-5): without the
+        """Negative case for FT.INFO PRIMARY/CLUSTER scope: without the
         coordinator (this harness's default -- see
         test_ft_info_primary_cluster_scope_with_coordinator's skip reason),
         both scopes are rejected outright. Runs whenever the coordinator is
@@ -2280,15 +2280,15 @@ class TestFt:
     async def test_ft_aggregate_load_as(
         self, glide_client: TGlideClient, emulate_release_level: str
     ):
-        """P4: FT.AGGREGATE LOAD ... AS (valkey-search 1.3.0,
+        """FT.AGGREGATE LOAD ... AS (valkey-search 1.3.0,
         src/commands/ft_aggregate_parser.cc, compat flag
-        `ft_aggregate_load_as`). Confirmed via D4's 1.3.0 baseline that the
+        `ft_aggregate_load_as`). Confirmed via the 1.3.0 baseline that the
         alias takes effect as the output column name. Mixes a plain string
         LOAD entry with a `LoadField` entry in the same list to confirm the
         two forms compose correctly (non-breaking addition: existing
         plain-string callers keep working unchanged).
 
-        E-2 (D22): below `search.emulate-release` 1.3.0, the
+        Below `search.emulate-release` 1.3.0, the
         `ft_aggregate_load_as` gate stays on its legacy branch, which never
         consumes the `AS` keyword -- it falls through and gets parsed as its
         own LOAD field, which doesn't exist on the schema, failing the
@@ -2613,7 +2613,7 @@ class TestFt:
         assert len(sample) == len(REDUCERS_DOCS)  # sample size >= group count
 
         # RANDOM_SAMPLE with size < count: the reservoir must cap at exactly
-        # `size`, not merely tolerate a larger size (M-1: a server that
+        # `size`, not merely tolerate a larger size (a server that
         # ignored `size` entirely would still pass the size>=count case
         # above). Every sampled value must also be a genuine member of the
         # group, i.e. a subset of the full population, not a server bug
@@ -2835,7 +2835,7 @@ class TestFt:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_ft_hybrid_vsim_range_rejected(self, glide_client: TGlideClient):
-        """D10: FT.HYBRID's VSIM ... RANGE form parses for shape but is
+        """FT.HYBRID's VSIM ... RANGE form parses for shape but is
         rejected at execution on valkey-search 1.3.0-rc1 -- confirmed live
         (ParseFtHybridCommand's own comment in
         src/commands/ft_hybrid_parser.cc: "Validate the RANGE shape;
@@ -2912,7 +2912,7 @@ class TestFt:
     async def test_ft_aggregate_sortby_adjacent_limit_widens_retained_rows(
         self, glide_client: TGlideClient, emulate_release_level: str
     ):
-        """G-1: valkey-search 1.3.0's "LIMIT widens an adjacent SORTBY"
+        """valkey-search 1.3.0's "LIMIT widens an adjacent SORTBY"
         compatibility fix (src/commands/ft_aggregate_parser.cc
         ResolveSortByBounds(), "sortby_max_follows_limit"). Before 1.3, a
         bare SORTBY always truncated to its own default (10 rows) or
@@ -2931,11 +2931,11 @@ class TestFt:
                                                       not widen SORTBY)
 
         No existing test exercised FtAggregateLimit or FtSearchLimit at all
-        before this (glissader, Q0 rc1 surface inventory) -- this test uses
+        before this (Q0 rc1 surface inventory) -- this test uses
         both typed classes rather than hand-built argv, so the typed API
         itself is exercised, not just the raw wire behaviour.
 
-        E-2 (D22): below `search.emulate-release` 1.3.0, the
+        Below `search.emulate-release` 1.3.0, the
         `sortby_max_follows_limit` gate stays on its legacy branch
         (`sortby->max_` keeps the explicit MAX, or the SORTBY default if
         none was given, regardless of any adjacent LIMIT). Only the two
@@ -3051,7 +3051,7 @@ class TestFt:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_ft_search_limit_pagination(self, glide_client: TGlideClient):
-        """G-1: FtSearchLimit exercised directly -- offset/count pagination
+        """FtSearchLimit exercised directly -- offset/count pagination
         on FT.SEARCH, unaffected by the SORTBY-specific 1.3 fix above (FT.
         SEARCH's LIMIT is the server's ordinary offset/count pagination,
         with no analogous MAX-widening behaviour to verify)."""
@@ -3092,7 +3092,7 @@ class TestFt:
         # Offset past the end returns the total count with no rows -- a
         # bare single-element [count] array, not [count, {}] (confirmed
         # live, same zero-match passthrough shape documented for WITHSCORES
-        # during the D9 investigation).
+        # during earlier investigation).
         result_past_end = await ft.search(
             glide_client,
             index,
@@ -3126,7 +3126,7 @@ class TestFt:
         vector_type: VectorType,
         encode,
     ):
-        """P1: FLOAT16 and BFLOAT16 vector types (valkey-search 1.3,
+        """FLOAT16 and BFLOAT16 vector types (valkey-search 1.3,
         src/indexes/vector_base.h -- 2-byte-per-element formats). GLIDE does
         not encode vectors on the caller's behalf for any type, FLOAT32
         included; callers must pass pre-encoded bytes. Test values (0.0,
@@ -3192,7 +3192,7 @@ class TestFt:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_ft_create_filter(self, glide_client: TGlideClient):
-        """P2: FT.CREATE FILTER (valkey-search 1.3.0,
+        """FT.CREATE FILTER (valkey-search 1.3.0,
         src/commands/ft_create_parser.cc -- ParseFilter() genuinely sets
         index_schema_proto.set_filter(), confirmed functional (not a no-op
         like NOHL) during Group 7 triage. A document whose key matches a
@@ -3233,7 +3233,7 @@ class TestFt:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_ft_create_sortable_unf(self, glide_client: TGlideClient):
-        """P2: FT.CREATE SORTABLE UNF (valkey-search 1.3.0,
+        """FT.CREATE SORTABLE UNF (valkey-search 1.3.0,
         src/commands/ft_create_parser.cc -- UNF is only recognized directly
         after SORTABLE, as in Redis).
 
@@ -3299,13 +3299,13 @@ class TestFt:
     async def test_ft_create_score_field_in_index_definition(
         self, glide_client: TGlideClient, emulate_release_level: str
     ):
-        """R3a-L-8 (G-4): FT.CREATE's SCORE_FIELD option (P3,
+        """FT.CREATE's SCORE_FIELD option (
         FtCreateOptions(score_field=...)) is reported back under FT.INFO's
         `index_definition`, alongside a `default_score` entry -- confirmed
         live. No existing test converted or asserted either field even
-        though P3 added SCORE_FIELD; this closes that gap.
+        though SCORE_FIELD support was added; this closes that gap.
 
-        E-2 (D22): below `search.emulate-release` 1.3.0, the
+        Below `search.emulate-release` 1.3.0, the
         `ft_info_score_field` gate stays on its legacy branch
         (`src/index_schema.cc` `RespondWithInfo()`): `index_definition`
         never gains a `score_field` pair at all (6 elements, not 8, before
@@ -3377,13 +3377,13 @@ class TestFt:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_ft_search_with_scores_and_scorer(self, glide_client: TGlideClient):
-        """M-2: P3 scoring had no live integration test. FtSearchOptions(
+        """Scoring had no live integration test before this. FtSearchOptions(
         with_scores=True, scorer="BM25STD") -- confirmed live BM25STD is
         the only registered/selectable scorer name, and WITHSCORES changes
         each document's value from a plain field map to a [score,
         field_map] pair.
 
-        R3b L-6: the original version of this test seeded two documents
+        The original version of this test seeded two documents
         with an equal number of occurrences of the search term ("hello
         world" / "hello there"), so BM25STD gave them identical scores and
         a scorer that always returned a constant (or that silently fell
@@ -3441,7 +3441,7 @@ class TestFt:
     async def test_ft_search_with_scores_and_withsortkeys_combined_shape(
         self, glide_client: TGlideClient
     ):
-        """M-2: the combined WITHSCORES+WITHSORTKEYS reply-shape converter
+        """The combined WITHSCORES+WITHSORTKEYS reply-shape converter
         (glide-core's FTSearchWithScoresAndSortKeysReturnType) had no live
         integration test. Confirmed live: each document's value becomes a
         [score, sort_key, field_map] triple, a genuinely different shape
@@ -3496,7 +3496,7 @@ class TestFt:
     async def test_ft_aggregate_add_scores_sortable_by_score(
         self, glide_client: TGlideClient
     ):
-        """M-2: FtAggregateOptions(add_scores=True) exposes __score as a
+        """FtAggregateOptions(add_scores=True) exposes __score as a
         pipeline field usable in SORTBY, confirmed live. No live
         integration test existed for ADDSCORES before this."""
         prefix = "{ft-add-scores-" + str(uuid.uuid4()) + "}:"
@@ -3546,7 +3546,7 @@ class TestFt:
     async def test_ft_create_score_field_affects_ranking(
         self, glide_client: TGlideClient
     ):
-        """M-2: FtCreateOptions(score_field=...) had no live integration
+        """FtCreateOptions(score_field=...) had no live integration
         test confirming it actually affects ranking, as opposed to merely
         being accepted. Two otherwise-identical documents, one with a much
         higher score_field value, must rank first and score higher under
@@ -3599,15 +3599,15 @@ class TestFt:
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_ft_multi_shard_no_hashtag(self, glide_client: GlideClusterClient):
-        """M-6: a cross-shard FT.CREATE/FT.SEARCH/FT.AGGREGATE test with no
+        """A cross-shard FT.CREATE/FT.SEARCH/FT.AGGREGATE test with no
         hashtag co-location, re-checking on 1.3.0-rc1 whether FT.CREATE
         broadcasts cluster-wide and whether ALLSHARDS makes search/aggregate
-        see documents on every shard (runbook C.6 case study; the 1.2.1
+        see documents on every shard (the 1.2.1
         baseline found FT.CREATE single-node and ALLSHARDS non-aggregating).
 
-        This test verifies per-node placement directly (runbook sec5: "run
+        This test verifies per-node placement directly (running
         the module's list-objects command on every primary, not just the node
-        you connected to") rather than inferring it from search results, and
+        you connected to) rather than inferring it from search results, and
         asserts the OBSERVED cross-shard behaviour rather than reshaping the
         fixture to force a pass. If the result below ever changes (i.e. a
         future valkey-search version makes FT.CREATE broadcast or ALLSHARDS
@@ -3661,7 +3661,7 @@ class TestFt:
                     return shard_idx
             raise AssertionError(f"slot {slot} not covered by any shard range")
 
-        # Per-node placement check (runbook sec5): ask every PRIMARY directly
+        # Per-node placement check: ask every PRIMARY directly
         # which indexes it has, rather than inferring placement from search
         # results (which is exactly the ambiguity this check exists to
         # resolve -- "object missing on this node" vs "object present but the
@@ -3697,7 +3697,7 @@ class TestFt:
         # Confirmed on 1.3.0-rc1 (owner: valkey-search engine, not GLIDE):
         # FT.CREATE is NOT broadcast cluster-wide -- it lands on exactly the
         # one primary the client happened to route the command to, matching
-        # the 1.2.1 baseline (runbook C.6). If this list ever contains more
+        # the 1.2.1 baseline. If this list ever contains more
         # than one primary, valkey-search has started broadcasting FT.CREATE
         # and this assertion (and the rest of the test) should be revisited
         # with a source citation.
@@ -3726,8 +3726,8 @@ class TestFt:
         # (the cross-shard spread this test is actually about), so the two
         # lists concatenate to exactly MULTI_SHARD_DOC_COUNT keys with no
         # truncation risk either way. No hashtag is used on any key:
-        # letting the cluster's own hashing decide placement (M-6's whole
-        # point) is still exactly what happens here, just checked and
+        # letting the cluster's own hashing decide placement is still
+        # exactly what happens here, just checked and
         # topped up as needed instead of assumed.
         on_owning_shard: List[str] = []
         elsewhere: List[str] = []
@@ -3821,7 +3821,7 @@ class TestFt:
     async def test_ft_cursor_affinity_prefer_replica_client(
         self, request, glide_client: GlideClusterClient, protocol: ProtocolVersion
     ):
-        """P5 (Q2, Jon's decision: option 4): FT.AGGREGATE/FT.HYBRID
+        """FT.AGGREGATE/FT.HYBRID
         WITHCURSOR and every FT.CURSOR now route to the PRIMARY of the
         index-name slot regardless of ReadFrom (glide-core/redis-rs/redis/
         src/cluster_routing.rs). This is the client-visible consequence of
@@ -3891,7 +3891,7 @@ class TestFt:
             )
             cursor_id = page[1]
             total_rows += len(page[0])
-            # R3a-L-6: track the actual n values seen across all pages, not
+            # Track the actual n values seen across all pages, not
             # just a row count -- a bug that duplicated or dropped specific
             # rows while still returning 20 total rows (e.g. a paging
             # off-by-one landing on the same page twice) would pass a
@@ -4066,7 +4066,7 @@ class TestFt:
         )
         cursor_id = page[1]
         total_rows += len(page[0])
-        # R3b M-3(c): track the actual n values seen across all pages, not
+        # Track the actual n values seen across all pages, not
         # just a row count -- mirrors the same guard already applied to
         # this test's raw sibling, test_ft_cursor_affinity_prefer_replica_
         # client, for the identical reason (a paging bug that duplicates
@@ -4143,9 +4143,9 @@ class TestFt:
     async def _create_hybrid_index(
         self, glide_client: TGlideClient, prefix: str
     ) -> TEncodable:
-        """P6 helper: creates an index with a TEXT field (``title``) and a
+        """Helper that creates an index with a TEXT field (``title``) and a
         2-dimensional FLAT FLOAT32 VECTOR field (``vec``), seeds the shared
-        HYBRID_DOCS fixture (R3b M-1/M-3: moved into ft_test_helpers.py so
+        HYBRID_DOCS fixture (moved into ft_test_helpers.py so
         the async and sync suites assert against the identical corpus), and
         waits for both documents to be indexed. Returns the index name."""
         index = prefix + "index"
@@ -4187,7 +4187,7 @@ class TestFt:
     async def test_ft_hybrid_basic_query(
         self, glide_client: TGlideClient, protocol: ProtocolVersion
     ):
-        """P6: a basic FT.HYBRID query with no COMBINE/LOAD/options --
+        """A basic FT.HYBRID query with no COMBINE/LOAD/options --
         confirmed live, the default reply is just the document key and the
         fused score."""
         prefix = "{ft-hybrid-basic-" + str(uuid.uuid4()) + "}:"
@@ -4281,12 +4281,12 @@ class TestFt:
         combine: FtHybridCombine,
         expected_first: str,
     ):
-        """P6: different COMBINE weightings genuinely change the fused
-        ranking, not just the fused score's numeric value -- R3b M-3(a):
+        """Different COMBINE weightings genuinely change the fused
+        ranking, not just the fused score's numeric value --
         the HYBRID_DOCS fixture (one doc the SEARCH arm strongly favours,
         one the VSIM arm strongly favours) lets LINEAR's ALPHA/BETA and
         FUNCTION's expr each be driven to a method-specific winner and
-        checked by key, not just by shape. R3b M-3(b): the SEARCH arm's own
+        checked by key, not just by shape. The SEARCH arm's own
         YIELD_SCORE_AS alias is only ever present on the row the SEARCH
         arm's text query actually matched (confirmed live: FT.HYBRID's
         UNION semantics still surface the other document via the VSIM arm
@@ -4345,13 +4345,13 @@ class TestFt:
     async def test_ft_hybrid_vector_inline_bytes_and_param_reference(
         self, glide_client: TGlideClient, protocol: ProtocolVersion
     ):
-        """P6: the query vector can be given as raw bytes (the client
+        """The query vector can be given as raw bytes (the client
         auto-generates an internal PARAMS entry) or as an explicit $name
         string (the caller manages their own params entry) -- confirmed
         live both forms reach the server identically since FT.HYBRID's
         VSIM clause has no wire-level inline vector literal at all.
 
-        R3b L-6: the original version of this test used k >= the corpus
+        The original version of this test used k >= the corpus
         size, so a mis-encoded vector (e.g. a byte-order or field-order
         swap) would still return the same keys and pass undetected --
         FT.HYBRID's UNION semantics mean every document surfaces via the
@@ -4416,7 +4416,7 @@ class TestFt:
         protocol: ProtocolVersion,
         policy: HybridFilterPolicy,
     ):
-        """P6: a VSIM pre-filter with an explicit POLICY (forcing the
+        """A VSIM pre-filter with an explicit POLICY (forcing the
         counted wire form) narrows the VSIM arm's own candidate set.
         Confirmed live: FT.HYBRID fuses the UNION of both arms' matches, so
         the SEARCH arm is given a query that matches nothing here --
@@ -4451,9 +4451,9 @@ class TestFt:
     async def test_ft_hybrid_per_arm_and_combine_yield_score_as_columns(
         self, glide_client: TGlideClient, protocol: ProtocolVersion
     ):
-        """P6: both arms' YIELD_SCORE_AS aliases and COMBINE's own
+        """Both arms' YIELD_SCORE_AS aliases and COMBINE's own
         YIELD_SCORE_AS all appear as distinctly-named columns in the same
-        reply. R3b M-3(b): the SEARCH arm's own alias is only ever present
+        reply. The SEARCH arm's own alias is only ever present
         on the row the SEARCH arm actually matched (same reasoning as
         test_ft_hybrid_combine_methods_fuse_results's docstring), so this
         checks it specifically on HYBRID_DOC_TEXT_WINNER's row rather than
@@ -4503,9 +4503,9 @@ class TestFt:
     async def test_ft_hybrid_with_cursor_prefer_replica_client_paged_to_exhaustion(
         self, request, glide_client: GlideClusterClient, protocol: ProtocolVersion
     ):
-        """P6 + P5 (Q2): FT.HYBRID WITHCURSOR, paged to exhaustion via a
+        """FT.HYBRID WITHCURSOR, paged to exhaustion via a
         PREFER_REPLICA client, mirroring the same cursor-affinity scenario
-        P5 already covers for FT.AGGREGATE -- confirmed live, FT.HYBRID's
+        already covered for FT.AGGREGATE -- confirmed live, FT.HYBRID's
         own cursor is pinned to the primary the same way, with zero
         "Cursor not found" errors mid-paging."""
         prefix = "{ft-hybrid-cursor-" + str(uuid.uuid4()) + "}:"
@@ -4577,8 +4577,8 @@ class TestFt:
     async def test_ft_hybrid_localonly_accepted(
         self, glide_client: TGlideClient, protocol: ProtocolVersion
     ):
-        """P6: LOCALONLY (a valkey-search extension not present in
-        RediSearch, included per Jon's D17 override) is accepted and does
+        """LOCALONLY (a valkey-search extension not present in
+        RediSearch) is accepted and does
         not change the result shape on a single-shard/standalone test
         cluster."""
         prefix = "{ft-hybrid-localonly-" + str(uuid.uuid4()) + "}:"
@@ -4604,7 +4604,7 @@ class TestFt:
     async def test_ft_search_scorer_tfidf_rejected(
         self, glide_client: TGlideClient, protocol: ProtocolVersion
     ):
-        """R3b L-7: no test exercised an unregistered SCORER value.
+        """No test exercised an unregistered SCORER value.
         BM25STD is the only scorer valkey-search 1.3.0-rc1 registers
         (confirmed live, see test_ft_search_with_scores_and_scorer); TFIDF
         is the classic RediSearch default elsewhere, which makes it a
@@ -4642,7 +4642,7 @@ class TestFt:
     async def test_ft_hybrid_without_k_uses_engine_default(
         self, glide_client: TGlideClient, protocol: ProtocolVersion
     ):
-        """R3b L-7: no test exercised a VSIM arm with no `k` at all.
+        """No test exercised a VSIM arm with no `k` at all.
         Confirmed live: valkey-search 1.3.0-rc1's own engine default is
         K=10 when the caller omits it (not "no limit", and not an error),
         so this seeds a corpus larger than 10 and confirms the VSIM arm's
@@ -4701,7 +4701,7 @@ class TestFt:
     async def test_ft_hybrid_inside_multi_exec_rejected(
         self, glide_client: TGlideClient, protocol: ProtocolVersion
     ):
-        """R3b L-7: no test exercised FT.HYBRID inside a MULTI/EXEC
+        """No test exercised FT.HYBRID inside a MULTI/EXEC
         transaction. Confirmed in source (valkey-search 1.3.0-rc1
         src/query/multi_search.h:54, MultiSearchParameters::
         ExecuteSyncLocal) and live: FT.HYBRID is rejected outright inside

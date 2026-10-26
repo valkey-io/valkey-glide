@@ -263,10 +263,13 @@ pub unsafe extern "C" fn glide_pool_create(
     // Store the ClientType for background creation
     get_pool_client_types().insert(pool_id, ct.clone());
 
-    // Spawn min_idle background client creation
+    // Reserve the warmup slots up front so should_create() reads the pool as full
+    // while these connections are still in flight; see ClientPool::reserve_warmup_slots.
     if min_idle > 0 {
         let pool_arc = pool::get_pool(pool_id).unwrap();
-        for _ in 0..min_idle {
+        let reserved = get_pool_runtime()
+            .block_on(async { pool_arc.lock().await.reserve_warmup_slots(min_idle) });
+        for _ in 0..reserved {
             let pool_clone = pool_arc.clone();
             let bytes = connection_request.clone();
             let ct_clone = ct.clone();
@@ -281,6 +284,8 @@ pub unsafe extern "C" fn glide_pool_create(
                         rt.block_on(async {
                             let mut pool = pool_clone.lock().await;
                             if pool.state.load(AtomicOrdering::Acquire) != POOL_RUNNING {
+                                // Give the reserved slot back; the pool is gone.
+                                pool.release_reservation();
                                 // Never stored in get_pool_clients(), so glide_pool_destroy cannot reclaim it.
                                 drop_orphaned_adapter!(adapter_ptr);
                                 return;
@@ -298,8 +303,8 @@ pub unsafe extern "C" fn glide_pool_create(
                                 state: ClientState::Idle,
                                 is_blocking: flag.clone(),
                             };
+                            // Slot already reserved above — do NOT increment total_count.
                             pool.idle.push_back(entry);
-                            pool.total_count.fetch_add(1, AtomicOrdering::AcqRel);
                             glide_core::pool::register_blocking_flag(client_id, flag);
                             // Store adapter mapping
                             get_pool_clients().insert(
@@ -318,6 +323,11 @@ pub unsafe extern "C" fn glide_pool_create(
                             "pool",
                             format!("Background client creation failed: {}", e)
                         );
+                        // Return the slot this warmup task reserved but never filled.
+                        let rt = get_pool_runtime();
+                        rt.block_on(async {
+                            pool_clone.lock().await.release_reservation();
+                        });
                     }
                 }
             });

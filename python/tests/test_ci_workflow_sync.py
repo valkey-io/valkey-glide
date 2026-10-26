@@ -1,5 +1,5 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
-"""R2-H-1 fix #3: single-source utils/run-modules-ci-locally.sh's pytest
+"""Single-source utils/run-modules-ci-locally.sh's pytest
 invocation against .github/workflows/python-modules.yml's "Run modules
 tests" step, so the two cannot silently drift apart. This test does not
 run either script -- it just asserts that run-modules-ci-locally.sh's
@@ -16,7 +16,7 @@ REPO_ROOT = Path(__file__).parent.parent.parent
 WORKFLOW_FILE = REPO_ROOT / ".github" / "workflows" / "python-modules.yml"
 LOCAL_RUNNER_FILE = REPO_ROOT / "utils" / "run-modules-ci-locally.sh"
 
-# R3b-L-2: the extraction helper below lets us compare the TWO SIDES'
+# The extraction helper below lets us compare the TWO SIDES'
 # actual pytest invocations directly (by walking each script's own text),
 # rather than comparing one side against this hand-maintained Python
 # constant. CI_PYTEST_FLAGS stays as the DOCUMENTED expectation (and the
@@ -54,8 +54,8 @@ def test_local_runner_pytest_args_match_ci_workflow():
     for flag in CI_PYTEST_FLAGS:
         assert flag in runner_text, (
             f"utils/run-modules-ci-locally.sh is missing {flag!r}, which "
-            "CI's 'Run modules tests' step passes. This is the exact "
-            "drift R2-H-1 found -- the local proof must run the same "
+            "CI's 'Run modules tests' step passes. The local proof must "
+            "run the same "
             "pytest invocation CI does, not a hand-rolled approximation."
         )
 
@@ -65,7 +65,7 @@ def test_local_runner_pytest_args_match_ci_workflow():
     assert "-k server_modules" in runner_text
 
 
-# R3a-L-7: the checks above only verify runner ⊇ CI_PYTEST_FLAGS (every flag
+# The checks above only verify runner ⊇ CI_PYTEST_FLAGS (every flag
 # this test already knows about is present on both sides) -- a flag added
 # ONLY to the local runner, never mirrored into CI's own step (or vice
 # versa), would drift undetected as long as it isn't one of the flags this
@@ -129,7 +129,7 @@ def test_local_runner_has_no_undeclared_extra_pytest_flags():
 
 
 def test_runner_and_workflow_flags_match_exactly():
-    """R3b-L-2: the two tests above both compare one side's actual pytest
+    """The two tests above both compare one side's actual pytest
     invocation against CI_PYTEST_FLAGS, a hand-maintained Python constant
     -- so a flag added to BOTH the workflow file and the runner script,
     but never mirrored into CI_PYTEST_FLAGS, would still pass them both

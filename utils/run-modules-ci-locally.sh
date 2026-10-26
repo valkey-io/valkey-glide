@@ -1,43 +1,42 @@
 #!/usr/bin/env bash
-# Reproduces the "Modules Tests (Linux)" job from each language's own
-# <lang>-modules.yml on this machine, as closely as possible, against an
-# overridable module image (prove 1.3 support via a local run of the SAME
-# job against a 1.3-bearing image, rather than pinning a new CI image).
-# Shared across language port branches so this file is a single source of
-# truth per language, selected via MODULES_TEST_LANG, rather than each
-# branch overwriting the whole script and colliding with each other and
-# with Python's own CI-sync guard (tests/test_ci_workflow_sync.py pins
-# this file's Python invocation verbatim).
+# Reproduces the "Modules Tests (Linux)" job from
+# .github/workflows/python-modules.yml on this machine, as closely as
+# possible, against an overridable module image. Written to avoid pinning a
+# new CI image; this proves 1.3 support via a local run of the SAME job against a
+# 1.3-bearing image instead.
 #
 # Shares the docker start/verify logic with
 # .github/actions/start-valkey-docker/action.yml via
 # utils/start-valkey-docker-modules.sh on EVERY path, including the
-# emulate-release override.
+# emulate-release override (an earlier version hand-
+# rolled a second bring-up for that case, so the 9.2.0-rc2 proof didn't
+# actually exercise CI's startup code -- fixed by giving the shared script
+# a SEARCH_MODULE_ARGS hook instead of forking the bring-up logic).
 #
-# Usage: three image/release combinations cover the cases this script
-# needs to prove:
-#   utils/run-modules-ci-locally.sh                                       # 1: 9.2.0-rc2, emulate-release 1.3.0 (default)
-#   IMAGE=valkey/valkey-bundle:9.1.3 EMULATE_RELEASE="" utils/run-modules-ci-locally.sh   # 2: 9.1.3, search 1.2.1
+# Usage: three image/release combinations are used across this file's
+# proof runs, named in BUILD-MODULES-1.3.md and PR-DRAFT-PYTHON-VS13.md's
+# Testing table as "1.", "2." and "3." below. (A fourth combination --
+# 9.1.3 at its own default -- isn't listed as its own config: that image's
+# module predates the `--emulate-release` arg and aborts boot if given one,
+# so EMULATE_RELEASE="" is mandatory whenever IMAGE=9.1.3, not an
+# independent axis.)
+#   utils/run-modules-ci-locally.sh                                       # 1: 9.2.0-rc2, emulate-release 1.3.0 (default; run-proof)
+#   IMAGE=valkey/valkey-bundle:9.1.3 EMULATE_RELEASE="" utils/run-modules-ci-locally.sh   # 2: 9.1.3, search 1.2.1 (skip-proof)
 #   EMULATE_RELEASE="" utils/run-modules-ci-locally.sh                    # 3: 9.2.0-rc2, module's own default emulate-release (1.0.0)
 #
-# MODULES_TEST_LANG selects which language's test tail runs (default
-# "python", preserving every existing caller's behaviour byte-for-byte):
-#   MODULES_TEST_LANG=python utils/run-modules-ci-locally.sh   # default
-#   MODULES_TEST_LANG=java utils/run-modules-ci-locally.sh
+# See BUILD-MODULES-1.3.md for narrated example runs and Mac-vs-CI-runner
+# differences (notably: Docker Desktop on macOS shares /Users by default,
+# not /tmp -- any file this script bind-mounts into a container MUST live
+# under a /Users path or the mount silently becomes an empty directory
+# instead of the file, with no error).
 #
-# Docker Desktop on macOS shares /Users by default, not /tmp -- any file
-# this script bind-mounts into a container MUST live under a /Users path
-# or the mount silently becomes an empty directory instead of the file,
-# with no error.
-#
-# Requires, per MODULES_TEST_LANG:
-#   python (default): the Python client already built (python3 dev.py
-#     build --client async && --client sync) -- this script does not
-#     rebuild the wrapper, matching the CI job's "Build Python wrapper"
-#     step only in effect, not in mechanism.
-#   java: protoc 29.1 pinned under tools/protoc-29.1/ (a newer system
-#     protoc generates code the project's pinned 4.29.6 runtime can't
-#     compile).
+# Requires: docker, valkey-cli (Homebrew: `brew install valkey`), and the
+# Python client already built (python3 dev.py build --client async && ...
+# --client sync) -- this script does not rebuild the wrapper, matching the
+# CI job's "Build Python wrapper" step only in effect, not in mechanism (see
+# BUILD-MODULES-1.3.md for why: the CI step runs on a fresh runner and must
+# build from scratch, this script assumes a dev checkout that's already
+# built).
 
 set -euo pipefail
 
@@ -59,15 +58,16 @@ STANDALONE_PORT="${STANDALONE_PORT:-6389}"
 # Confirmed by source (src/valkey_search_options.cc:883,
 # vmsdk/src/module_config.cc:179) and empirically against both a local
 # macOS build and the valkey/valkey-bundle:9.2.0-rc2 Docker image.
-# Baseline emulate-release is 1.3.0. Set to an empty string to start at the
-# module's own default instead (useful for the 9.1.3 run, where the module
-# is too old to accept this arg at all).
+# The 1.3.0 baseline. Set to an empty string to start at the module's own
+# default instead (useful for the 9.1.3 skip-proof run, where the module is
+# too old to accept this arg at all).
 EMULATE_RELEASE="${EMULATE_RELEASE-1.3.0}"
 
-# A newline (or anything else outside X.Y.Z) in EMULATE_RELEASE would be
-# interpolated into a generated .conf line. This script runs locally as the
-# operator against the operator's own containers (not a cross-trust-boundary
-# input), but the check is one line and closes it regardless.
+# A newline (or anything else outside X.Y.Z) in EMULATE_RELEASE
+# would be interpolated into a generated .conf line. This script runs
+# locally as the operator against the operator's own containers (not a
+# cross-trust-boundary input), but the check is one line and closes it
+# regardless.
 if [ -n "$EMULATE_RELEASE" ] && ! [[ "$EMULATE_RELEASE" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
     echo "ERROR: EMULATE_RELEASE must be X.Y.Z (e.g. 1.3.0) or empty, got: ${EMULATE_RELEASE}" >&2
     exit 1
@@ -109,7 +109,7 @@ case "$MODULES_TEST_LANG" in
     python)
         cd "${REPO_ROOT}/python"
         # Single-sourced from .github/workflows/python-modules.yml's "Run modules
-        # tests" step -- these must not drift independently -- see
+        # tests" step (these must not drift independently -- see
         # tests/test_ci_workflow_sync.py, which greps the workflow file for this
         # exact arg list and fails the test suite if it ever changes there without
         # a matching update here).

@@ -27,6 +27,8 @@ from glide_shared.commands.core_options import (
     FunctionRestorePolicy,
     InfoSection,
     MigrateOptions,
+    OnlyIfEqual,
+    OnlyIfNotEqual,
 )
 from glide_shared.commands.stream import StreamAddOptions
 from glide_shared.config import NodeAddress, ProtocolVersion
@@ -419,6 +421,52 @@ class TestSyncBatch:
 
         result = exec_batch(glide_sync_client, transaction)
         assert result == [OK, b"value", 1]
+
+    @pytest.mark.skip_if_version_below("8.1.0")
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    @pytest.mark.parametrize("is_atomic", [True, False])
+    def test_sync_set_only_if_equal_batch(
+        self, glide_sync_client: TGlideClient, is_atomic: bool
+    ):
+        key = get_random_string(10)
+
+        batch = (
+            Batch(is_atomic=is_atomic)
+            if isinstance(glide_sync_client, GlideClient)
+            else ClusterBatch(is_atomic=is_atomic)
+        )
+
+        batch.set(key, "value")
+        batch.set(key, "other", conditional_set=OnlyIfEqual("other"))
+        batch.set(key, "other", conditional_set=OnlyIfEqual("value"))
+        batch.get(key)
+
+        result = exec_batch(glide_sync_client, batch)
+        assert result == [OK, None, OK, b"other"]
+
+    @pytest.mark.skip_if_version_below("9.2.0")
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    @pytest.mark.parametrize("is_atomic", [True, False])
+    def test_sync_set_only_if_not_equal_batch(
+        self, glide_sync_client: TGlideClient, is_atomic: bool
+    ):
+        key = get_random_string(10)
+
+        batch = (
+            Batch(is_atomic=is_atomic)
+            if isinstance(glide_sync_client, GlideClient)
+            else ClusterBatch(is_atomic=is_atomic)
+        )
+
+        batch.set(key, "value")
+        batch.set(key, "other", conditional_set=OnlyIfNotEqual("value"))
+        batch.set(key, "other", conditional_set=OnlyIfNotEqual("other"))
+        batch.get(key)
+
+        result = exec_batch(glide_sync_client, batch)
+        assert result == [OK, None, OK, b"other"]
 
     # The object commands are tested here instead of transaction_test because they have special requirements:
     # - OBJECT FREQ and OBJECT IDLETIME require specific maxmemory policies to be set on the config

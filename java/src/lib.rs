@@ -79,12 +79,6 @@ fn process_command_for_compression(
         None => return Ok(()), // Unknown command - no compression processing needed
     };
 
-    // Check if the command is incompatible with compression - this should error out
-    glide_core::compression::validate_command_compression_compatibility(
-        request_type,
-        compression_manager_ref,
-    )?;
-
     let mut args: Vec<Vec<u8>> = all_args[1..].to_vec();
     glide_core::compression::process_command_args_for_compression(
         &mut args,

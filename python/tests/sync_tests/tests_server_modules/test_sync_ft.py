@@ -120,7 +120,7 @@ class TestSyncFt:
         expected_count: int,
         timeout_secs: float = 10,
     ) -> None:
-        """Poll ``FT.INFO``'s ``num_docs`` (M-4) until it reaches
+        """Poll ``FT.INFO``'s ``num_docs`` until it reaches
         `expected_count`, instead of a fixed sleep. Indexing is async in
         valkey-search, so a fixed sleep is a race whose window just happens
         to be wide enough on this box today. Raises AssertionError with the
@@ -142,7 +142,7 @@ class TestSyncFt:
         src/commands/ft_info_parser.cc, during the Round-1 FT.INFO
         investigation).
 
-        R2-L-3: raises immediately (not after the full timeout) if
+        Raises immediately (not after the full timeout) if
         ``num_docs`` is absent from the reply -- a reply-shape regression
         there should surface as its own clear failure, not get folded into
         "did not reach N documents" after a 10s wait that was never going
@@ -172,7 +172,7 @@ class TestSyncFt:
     def _create_hybrid_index(
         self, glide_sync_client: TSyncGlideClient, prefix: str
     ) -> TEncodable:
-        """M-1: sync mirror of the async _create_hybrid_index helper.
+        """Sync mirror of the async _create_hybrid_index helper.
         Creates an index with a TEXT field (``title``) and a 2-dimensional
         FLAT FLOAT32 VECTOR field (``vec``), seeds the shared HYBRID_DOCS
         fixture (so the async and sync suites assert against the identical
@@ -1011,7 +1011,7 @@ class TestSyncFt:
         )
 
         # The GROUPBY output column name for a JSON-indexed field is gated by
-        # search.emulate-release (M-3, D4=1.3.0 baseline) -- see
+        # search.emulate-release (baseline 1.3.0) -- see
         # json_groupby_column's docstring for the exact source citation.
         # Pre-1.3 modules (e.g. 1.2.1, confirmed via live CONFIG GET during
         # Group 6 evidence collection) don't define this config at all --
@@ -1020,7 +1020,7 @@ class TestSyncFt:
         # (and for any other shape it can't decode), so default to "1.0.0"
         # (the module's own documented default) in that case -- this test
         # isn't gated by search_1_3_capability, so it must behave correctly
-        # on a pre-1.3 module too, unlike emulate_release_level (QA R4-L-2:
+        # on a pre-1.3 module too, unlike emulate_release_level (both use
         # one decoder shared with conftest.py's fixture rather than a
         # second inline reader with its own rule).
         emulate_release_raw = glide_sync_client.custom_command(
@@ -1060,7 +1060,7 @@ class TestSyncFt:
         assert sorted_result == expected_result
 
         # FT.PROFILE is not implemented by valkey-search (confirmed absent via
-        # COMMAND INFO on 1.3.0-rc1). Assert the rejection directly (M-2)
+        # COMMAND INFO on 1.3.0-rc1). Assert the rejection directly
         # rather than try/except: swallowing the error here would also hide
         # unrelated failures, and once FT.PROFILE ships this turns into a
         # loud failure instead of a silent no-op.
@@ -1174,7 +1174,7 @@ class TestSyncFt:
         assert expected_result == sorted_result
 
         # FT.PROFILE is not implemented by valkey-search (confirmed absent via
-        # COMMAND INFO on 1.3.0-rc1). Assert the rejection directly (M-2)
+        # COMMAND INFO on 1.3.0-rc1). Assert the rejection directly
         # rather than try/except: swallowing the error here would also hide
         # unrelated failures, and once FT.PROFILE ships this turns into a
         # loud failure instead of a silent no-op.
@@ -1992,20 +1992,20 @@ class TestSyncFt:
         " real gRPC coordinator/metadata-manager infrastructure wired across"
         " actual cluster nodes -- not just a load-time flag. Confirmed: passing"
         " --use-coordinator yes to a single ad-hoc cluster_manager.py-started"
-        " node (even after the M-5/B3 shlex fix, which only solved the"
+        " node (even after the shlex fix for module args, which only solved the"
         " module-arg *syntax* problem) fails module init outright ('FATAL"
         " CONFIG FILE ERROR... Bad directive or wrong number of arguments')."
         " cluster_manager.py has no mechanism to stand up the coordinator"
-        " service itself. Owner: harness/CI (GAP-ANALYSIS PG-13); until a"
+        " service itself. Until a"
         " coordinator-enabled cluster is available this records PRIMARY/"
-        "CLUSTER as accepted-but-effect-unverified, matching M-5."
+        "CLUSTER as accepted-but-effect-unverified, matching the PRIMARY case."
     )
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     def test_sync_ft_info_primary_cluster_scope_with_coordinator(
         self, glide_sync_client: GlideClusterClient
     ):
-        """Positive case for FT.INFO PRIMARY/CLUSTER scope (M-5): asserts the
+        """Positive case for FT.INFO PRIMARY/CLUSTER scope: asserts the
         scopes actually return PRIMARY/CLUSTER-shaped data when the module is
         loaded with a working coordinator. Skipped (not run) in this harness
         -- see the skip reason for exactly what's missing and why.
@@ -2038,7 +2038,7 @@ class TestSyncFt:
     def test_sync_ft_info_primary_cluster_scope_without_coordinator(
         self, glide_sync_client: GlideClusterClient
     ):
-        """Negative case for FT.INFO PRIMARY/CLUSTER scope (M-5): without the
+        """Negative case for FT.INFO PRIMARY/CLUSTER scope: without the
         coordinator (this harness's default -- see
         test_sync_ft_info_primary_cluster_scope_with_coordinator's skip
         reason), both scopes are rejected outright. Runs whenever the
@@ -2351,15 +2351,15 @@ class TestSyncFt:
     def test_sync_ft_aggregate_load_as(
         self, glide_sync_client: TSyncGlideClient, emulate_release_level: str
     ):
-        """P4: FT.AGGREGATE LOAD ... AS (valkey-search 1.3.0,
+        """FT.AGGREGATE LOAD ... AS (valkey-search 1.3.0,
         src/commands/ft_aggregate_parser.cc, compat flag
-        `ft_aggregate_load_as`). Confirmed via D4's 1.3.0 baseline that the
+        `ft_aggregate_load_as`). Confirmed via the 1.3.0 baseline that the
         alias takes effect as the output column name. Mixes a plain string
         LOAD entry with a `LoadField` entry in the same list to confirm the
         two forms compose correctly (non-breaking addition: existing
         plain-string callers keep working unchanged).
 
-        E-2 (D22): sync mirror of the async test's branch below
+        Sync mirror of the async test's branch below
         `search.emulate-release` 1.3.0 -- see that docstring for the gate
         and legacy-failure mechanism.
         """
@@ -2680,7 +2680,7 @@ class TestSyncFt:
         assert len(sample) == len(REDUCERS_DOCS)  # sample size >= group count
 
         # RANDOM_SAMPLE with size < count: the reservoir must cap at exactly
-        # `size`, not merely tolerate a larger size (M-1: a server that
+        # `size`, not merely tolerate a larger size (a server that
         # ignored `size` entirely would still pass the size>=count case
         # above). Every sampled value must also be a genuine member of the
         # group, i.e. a subset of the full population, not a server bug
@@ -2921,7 +2921,7 @@ class TestSyncFt:
         vector_type: VectorType,
         encode,
     ):
-        """P1: FLOAT16 and BFLOAT16 vector types (valkey-search 1.3,
+        """FLOAT16 and BFLOAT16 vector types (valkey-search 1.3,
         src/indexes/vector_base.h -- 2-byte-per-element formats). GLIDE does
         not encode vectors on the caller's behalf for any type, FLOAT32
         included; callers must pass pre-encoded bytes. Test values (0.0,
@@ -2987,7 +2987,7 @@ class TestSyncFt:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     def test_sync_ft_create_filter(self, glide_sync_client: TSyncGlideClient):
-        """P2: FT.CREATE FILTER (valkey-search 1.3.0,
+        """FT.CREATE FILTER (valkey-search 1.3.0,
         src/commands/ft_create_parser.cc -- ParseFilter() genuinely sets
         index_schema_proto.set_filter(), confirmed functional (not a no-op
         like NOHL) during Group 7 triage. A document whose key matches a
@@ -3028,7 +3028,7 @@ class TestSyncFt:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     def test_sync_ft_create_sortable_unf(self, glide_sync_client: TSyncGlideClient):
-        """P2: FT.CREATE SORTABLE UNF (valkey-search 1.3.0,
+        """FT.CREATE SORTABLE UNF (valkey-search 1.3.0,
         src/commands/ft_create_parser.cc -- UNF is only recognized directly
         after SORTABLE, as in Redis).
 
@@ -3107,15 +3107,15 @@ class TestSyncFt:
     def test_sync_ft_multi_shard_no_hashtag(
         self, glide_sync_client: GlideClusterClient
     ):
-        """M-6: a cross-shard FT.CREATE/FT.SEARCH/FT.AGGREGATE test with no
+        """A cross-shard FT.CREATE/FT.SEARCH/FT.AGGREGATE test with no
         hashtag co-location, re-checking on 1.3.0-rc1 whether FT.CREATE
         broadcasts cluster-wide and whether ALLSHARDS makes search/aggregate
-        see documents on every shard (runbook C.6 case study; the 1.2.1
+        see documents on every shard (the 1.2.1
         baseline found FT.CREATE single-node and ALLSHARDS non-aggregating).
 
-        This test verifies per-node placement directly (runbook sec5: "run
+        This test verifies per-node placement directly (running
         the module's list-objects command on every primary, not just the node
-        you connected to") rather than inferring it from search results, and
+        you connected to) rather than inferring it from search results, and
         asserts the OBSERVED cross-shard behaviour rather than reshaping the
         fixture to force a pass. If the result below ever changes (i.e. a
         future valkey-search version makes FT.CREATE broadcast or ALLSHARDS
@@ -3169,7 +3169,7 @@ class TestSyncFt:
                     return shard_idx
             raise AssertionError(f"slot {slot} not covered by any shard range")
 
-        # Per-node placement check (runbook sec5): ask every PRIMARY directly
+        # Per-node placement check: ask every PRIMARY directly
         # which indexes it has, rather than inferring placement from search
         # results (which is exactly the ambiguity this check exists to
         # resolve -- "object missing on this node" vs "object present but the
@@ -3205,7 +3205,7 @@ class TestSyncFt:
         # Confirmed on 1.3.0-rc1 (owner: valkey-search engine, not GLIDE):
         # FT.CREATE is NOT broadcast cluster-wide -- it lands on exactly the
         # one primary the client happened to route the command to, matching
-        # the 1.2.1 baseline (runbook C.6). If this list ever contains more
+        # the 1.2.1 baseline. If this list ever contains more
         # than one primary, valkey-search has started broadcasting FT.CREATE
         # and this assertion (and the rest of the test) should be revisited
         # with a source citation.
@@ -3234,8 +3234,8 @@ class TestSyncFt:
         # (the cross-shard spread this test is actually about), so the two
         # lists concatenate to exactly MULTI_SHARD_DOC_COUNT keys with no
         # truncation risk either way. No hashtag is used on any key:
-        # letting the cluster's own hashing decide placement (M-6's whole
-        # point) is still exactly what happens here, just checked and
+        # letting the cluster's own hashing decide placement is still
+        # exactly what happens here, just checked and
         # topped up as needed instead of assumed.
         on_owning_shard: List[str] = []
         elsewhere: List[str] = []
@@ -3327,13 +3327,13 @@ class TestSyncFt:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     def test_ft_hybrid_vsim_range_rejected(self, glide_sync_client: TSyncGlideClient):
-        """M-1: sync mirror of the async test_ft_hybrid_vsim_range_rejected
-        (D10). FT.HYBRID's VSIM ... RANGE form parses for shape but is
+        """Sync mirror of the async test_ft_hybrid_vsim_range_rejected.
+        FT.HYBRID's VSIM ... RANGE form parses for shape but is
         rejected at execution on valkey-search 1.3.0-rc1 -- confirmed live
         (ParseFtHybridCommand's own comment in
         src/commands/ft_hybrid_parser.cc: ParseFtHybridCommand returns
-        UnimplementedError after parse completes). Per Jon's decision,
-        RANGE stays excluded from any typed FT.HYBRID API entirely -- this
+        UnimplementedError after parse completes). RANGE stays excluded
+        from any typed FT.HYBRID API entirely -- this
         test exists so that if rc1's limitation is ever lifted upstream,
         this fails loudly instead of the exclusion silently going stale.
 
@@ -3399,17 +3399,17 @@ class TestSyncFt:
     def test_ft_aggregate_sortby_adjacent_limit_widens_retained_rows(
         self, glide_sync_client: TSyncGlideClient, emulate_release_level: str
     ):
-        """M-1: sync mirror of the async test_ft_aggregate_sortby_adjacent_
-        limit_widens_retained_rows (G-1). valkey-search 1.3.0's "LIMIT
+        """Sync mirror of the async test_ft_aggregate_sortby_adjacent_
+        limit_widens_retained_rows. valkey-search 1.3.0's "LIMIT
         widens an adjacent SORTBY" compatibility fix
         (src/commands/ft_aggregate_parser.cc ResolveSortByBounds(),
         "sortby_max_follows_limit"). See the async test's docstring for the
         full measured table this reproduces; this is the same scenario
         exercised through the sync client.
 
-        E-2 (D22): this test was missing the `requires_search_1_3` marker
+        This test was missing the `requires_search_1_3` marker
         entirely (it ran, and would have failed, on a pre-1.3 module even
-        before E-2) -- added here alongside the legacy/fixed branch split.
+        before this fix) -- added here alongside the legacy/fixed branch split.
         See the async test's docstring for the gate and the exact rows
         that differ between the two `search.emulate-release` branches.
         """
@@ -3515,8 +3515,8 @@ class TestSyncFt:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     def test_ft_search_limit_pagination(self, glide_sync_client: TSyncGlideClient):
-        """M-1: sync mirror of the async test_ft_search_limit_pagination
-        (G-1). FtSearchLimit exercised directly -- offset/count pagination
+        """Sync mirror of the async test_ft_search_limit_pagination
+        . FtSearchLimit exercised directly -- offset/count pagination
         on FT.SEARCH, unaffected by the SORTBY-specific 1.3 fix above."""
         prefix = "{ft-search-limit-" + str(uuid.uuid4()) + "}:"
         index = prefix + "index"
@@ -3569,7 +3569,7 @@ class TestSyncFt:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     def test_ft_create_no_highlight(self, glide_sync_client: TSyncGlideClient):
-        """M-1: sync mirror of the async test_ft_create_no_highlight (Q9).
+        """Sync mirror of the async test_ft_create_no_highlight (Q9).
         FT.CREATE NOHL (FtCreateOptions(no_highlight=)). Confirmed live and
         in source that this is a genuine no-op on valkey-search <=
         1.3.0-rc1 -- unlike SORTABLE UNF, NOHL is not even stored, so this
@@ -3598,8 +3598,8 @@ class TestSyncFt:
     def test_ft_cursor_affinity_prefer_replica_client(
         self, request, glide_sync_client: GlideClusterClient, protocol: ProtocolVersion
     ):
-        """M-1: sync mirror of the async test_ft_cursor_affinity_prefer_
-        replica_client (P5, Q2 option 4). FT.AGGREGATE/FT.HYBRID WITHCURSOR
+        """Sync mirror of the async test_ft_cursor_affinity_prefer_
+        replica_client. FT.AGGREGATE/FT.HYBRID WITHCURSOR
         and every FT.CURSOR route to the PRIMARY of the index-name slot
         regardless of ReadFrom -- see the async original's docstring for
         the full rationale (cursors are node-local by server design,
@@ -3651,7 +3651,7 @@ class TestSyncFt:
             )
             cursor_id = page[1]
             total_rows += len(page[0])
-            # R3a-L-6: track the actual n values seen across all pages, not
+            # Track the actual n values seen across all pages, not
             # just a row count -- see the async original's comment for why.
             seen_n_values = {int(row[b"n"]) for row in page[0]}
             pages_read = 1
@@ -3774,12 +3774,12 @@ class TestSyncFt:
     def test_sync_ft_create_score_field_in_index_definition(
         self, glide_sync_client: TSyncGlideClient, emulate_release_level: str
     ):
-        """M-1: sync mirror of the async test_ft_create_score_field_in_
-        index_definition (R3a-L-8/G-4). FT.CREATE's SCORE_FIELD option
-        (P3, FtCreateOptions(score_field=...)) is reported back under
+        """Sync mirror of the async test_ft_create_score_field_in_
+        index_definition. FT.CREATE's SCORE_FIELD option
+        (FtCreateOptions(score_field=...)) is reported back under
         FT.INFO's `index_definition`, alongside a `default_score` entry.
 
-        E-2 (D22): sync mirror of the async test's legacy-vs-fixed branch
+        Sync mirror of the async test's legacy-vs-fixed branch
         split below `search.emulate-release` 1.3.0 -- see that docstring
         for the gate and the exact shape difference."""
         prefix = "{ft-score-field-info-" + str(uuid.uuid4()) + "}:"
@@ -3817,8 +3817,8 @@ class TestSyncFt:
     def test_sync_ft_search_with_scores_and_scorer(
         self, glide_sync_client: TSyncGlideClient
     ):
-        """M-1: sync mirror of the async test_ft_search_with_scores_and_
-        scorer (M-2, R3b L-6). FtSearchOptions(with_scores=True,
+        """Sync mirror of the async test_ft_search_with_scores_and_
+        scorer. FtSearchOptions(with_scores=True,
         scorer="BM25STD") -- seeds one document that repeats the search
         term so the two scores are confirmed to differ, and asserts the
         repeated-term document scores strictly higher."""
@@ -3872,8 +3872,8 @@ class TestSyncFt:
     def test_sync_ft_search_with_scores_and_withsortkeys_combined_shape(
         self, glide_sync_client: TSyncGlideClient
     ):
-        """M-1: sync mirror of the async test_ft_search_with_scores_and_
-        withsortkeys_combined_shape (M-2). The combined WITHSCORES+
+        """Sync mirror of the async test_ft_search_with_scores_and_
+        withsortkeys_combined_shape. The combined WITHSCORES+
         WITHSORTKEYS reply shape is a [score, sort_key, field_map] triple
         per document."""
         prefix = "{ft-scores-sortkeys-" + str(uuid.uuid4()) + "}:"
@@ -3925,8 +3925,8 @@ class TestSyncFt:
     def test_sync_ft_aggregate_add_scores_sortable_by_score(
         self, glide_sync_client: TSyncGlideClient
     ):
-        """M-1: sync mirror of the async test_ft_aggregate_add_scores_
-        sortable_by_score (M-2). FtAggregateOptions(add_scores=True)
+        """Sync mirror of the async test_ft_aggregate_add_scores_
+        sortable_by_score. FtAggregateOptions(add_scores=True)
         exposes __score as a pipeline field usable in SORTBY."""
         prefix = "{ft-add-scores-" + str(uuid.uuid4()) + "}:"
         index = prefix + "index"
@@ -3973,8 +3973,8 @@ class TestSyncFt:
     def test_sync_ft_create_score_field_affects_ranking(
         self, glide_sync_client: TSyncGlideClient
     ):
-        """M-1: sync mirror of the async test_ft_create_score_field_
-        affects_ranking (M-2). Confirms FtCreateOptions(score_field=...)
+        """Sync mirror of the async test_ft_create_score_field_
+        affects_ranking. Confirms FtCreateOptions(score_field=...)
         is a real multiplicative boost on relevance score, not a no-op."""
         prefix = "{ft-score-field-" + str(uuid.uuid4()) + "}:"
         index = prefix + "index"
@@ -4020,11 +4020,11 @@ class TestSyncFt:
     def test_sync_ft_aggregate_typed_cursor_paged_to_exhaustion(
         self, glide_sync_client: TSyncGlideClient
     ):
-        """M-1: sync mirror of the async test_ft_aggregate_typed_cursor_
+        """Sync mirror of the async test_ft_aggregate_typed_cursor_
         paged_to_exhaustion. Pages an FT.AGGREGATE WITHCURSOR to
         exhaustion using the typed functions (FtAggregateOptions(
         with_cursor=...), ft.cursor_read) rather than raw custom_command.
-        R3b M-3(c): tracks the actual n values seen across all pages, not
+        Tracks the actual n values seen across all pages, not
         just a row count."""
         prefix = "{ft-typed-cursor-" + str(uuid.uuid4()) + "}:"
         index = prefix + "index"
@@ -4079,7 +4079,7 @@ class TestSyncFt:
     def test_sync_ft_aggregate_typed_cursor_del_and_errors(
         self, glide_sync_client: TSyncGlideClient
     ):
-        """M-1: sync mirror of the async test_ft_aggregate_typed_cursor_
+        """Sync mirror of the async test_ft_aggregate_typed_cursor_
         del_and_errors. The typed cursor API's error paths: ft.cursor_del
         on an open cursor, then reading the just-deleted cursor errors,
         and reading an unknown cursor id errors."""
@@ -4129,7 +4129,7 @@ class TestSyncFt:
     def test_sync_ft_hybrid_basic_query(
         self, glide_sync_client: TSyncGlideClient, protocol: ProtocolVersion
     ):
-        """M-1: sync mirror of the async test_ft_hybrid_basic_query (P6).
+        """Sync mirror of the async test_ft_hybrid_basic_query.
         A basic FT.HYBRID query with no COMBINE/LOAD/options -- the default
         reply is just the document key and the fused score."""
         prefix = "{ft-hybrid-basic-" + str(uuid.uuid4()) + "}:"
@@ -4161,7 +4161,7 @@ class TestSyncFt:
     def test_sync_ft_hybrid_aggregate_clause_filters_post_fusion(
         self, glide_sync_client: TSyncGlideClient, protocol: ProtocolVersion
     ):
-        """M-1: sync mirror of the async
+        """Sync mirror of the async
         test_ft_hybrid_aggregate_clause_filters_post_fusion. Regression
         test: with no combine/local_only/load_*/timeout set, a leading
         aggregate-tail clause used to be emitted right after the VSIM
@@ -4219,8 +4219,8 @@ class TestSyncFt:
         combine: FtHybridCombine,
         expected_first: str,
     ):
-        """M-1: sync mirror of the async test_ft_hybrid_combine_methods_
-        fuse_results (P6, R3b M-3(a)/(b)). Different COMBINE weightings
+        """Sync mirror of the async test_ft_hybrid_combine_methods_
+        fuse_results. Different COMBINE weightings
         genuinely change the fused ranking, checked by key; the SEARCH
         arm's own alias is present only on the row it actually matched."""
         prefix = "{ft-hybrid-combine-" + str(uuid.uuid4()) + "}:"
@@ -4268,8 +4268,8 @@ class TestSyncFt:
     def test_sync_ft_hybrid_vector_inline_bytes_and_param_reference(
         self, glide_sync_client: TSyncGlideClient, protocol: ProtocolVersion
     ):
-        """M-1: sync mirror of the async test_ft_hybrid_vector_inline_
-        bytes_and_param_reference (P6, R3b L-6). Uses k=1 and checks the
+        """Sync mirror of the async test_ft_hybrid_vector_inline_
+        bytes_and_param_reference. Uses k=1 and checks the
         VSIM arm's own `vs` alias lands on exactly the right document for
         both the inline-bytes and param-reference forms."""
         prefix = "{ft-hybrid-vecparam-" + str(uuid.uuid4()) + "}:"
@@ -4325,8 +4325,8 @@ class TestSyncFt:
         protocol: ProtocolVersion,
         policy: HybridFilterPolicy,
     ):
-        """M-1: sync mirror of the async test_ft_hybrid_vsim_filter_with_
-        policy (P6). A VSIM pre-filter with an explicit POLICY narrows the
+        """Sync mirror of the async test_ft_hybrid_vsim_filter_with_
+        policy. A VSIM pre-filter with an explicit POLICY narrows the
         VSIM arm's own candidate set; the SEARCH arm is given a query that
         matches nothing so only the filtered VSIM match surfaces."""
         prefix = "{ft-hybrid-filter-" + str(uuid.uuid4()) + "}:"
@@ -4357,8 +4357,8 @@ class TestSyncFt:
     def test_sync_ft_hybrid_per_arm_and_combine_yield_score_as_columns(
         self, glide_sync_client: TSyncGlideClient, protocol: ProtocolVersion
     ):
-        """M-1: sync mirror of the async test_ft_hybrid_per_arm_and_
-        combine_yield_score_as_columns (P6, R3b M-3(b)). Both arms'
+        """Sync mirror of the async test_ft_hybrid_per_arm_and_
+        combine_yield_score_as_columns. Both arms'
         YIELD_SCORE_AS aliases and COMBINE's own YIELD_SCORE_AS appear as
         distinctly-named columns; the SEARCH arm's alias is present only
         on the row it actually matched."""
@@ -4407,8 +4407,8 @@ class TestSyncFt:
     def test_sync_ft_hybrid_with_cursor_prefer_replica_client_paged_to_exhaustion(
         self, request, glide_sync_client: GlideClusterClient, protocol: ProtocolVersion
     ):
-        """M-1: sync mirror of the async test_ft_hybrid_with_cursor_
-        prefer_replica_client_paged_to_exhaustion (P6 + P5/Q2). FT.HYBRID
+        """Sync mirror of the async test_ft_hybrid_with_cursor_
+        prefer_replica_client_paged_to_exhaustion. FT.HYBRID
         WITHCURSOR, paged to exhaustion via a PREFER_REPLICA client --
         FT.HYBRID's own cursor is pinned to the primary the same way as
         FT.AGGREGATE's."""
@@ -4478,8 +4478,8 @@ class TestSyncFt:
     def test_sync_ft_hybrid_localonly_accepted(
         self, glide_sync_client: TSyncGlideClient, protocol: ProtocolVersion
     ):
-        """M-1: sync mirror of the async test_ft_hybrid_localonly_accepted
-        (P6). LOCALONLY is accepted and does not change the result shape
+        """Sync mirror of the async test_ft_hybrid_localonly_accepted.
+        LOCALONLY is accepted and does not change the result shape
         on a single-shard/standalone test cluster."""
         prefix = "{ft-hybrid-localonly-" + str(uuid.uuid4()) + "}:"
         index = self._create_hybrid_index(glide_sync_client, prefix)
@@ -4504,8 +4504,8 @@ class TestSyncFt:
     def test_sync_ft_search_scorer_tfidf_rejected(
         self, glide_sync_client: TSyncGlideClient, protocol: ProtocolVersion
     ):
-        """M-1: sync mirror of the async test_ft_search_scorer_tfidf_
-        rejected (R3b L-7). BM25STD is the only scorer valkey-search
+        """Sync mirror of the async test_ft_search_scorer_tfidf_
+        rejected. BM25STD is the only scorer valkey-search
         1.3.0-rc1 registers; TFIDF is rejected outright."""
         prefix = "{ft-scorer-tfidf-" + str(uuid.uuid4()) + "}:"
         index = prefix + "index"
@@ -4538,8 +4538,8 @@ class TestSyncFt:
     def test_sync_ft_hybrid_without_k_uses_engine_default(
         self, glide_sync_client: TSyncGlideClient, protocol: ProtocolVersion
     ):
-        """M-1: sync mirror of the async test_ft_hybrid_without_k_uses_
-        engine_default (R3b L-7). Confirmed live the engine default is
+        """Sync mirror of the async test_ft_hybrid_without_k_uses_
+        engine_default. Confirmed live the engine default is
         K=10 when the VSIM arm's `k` is omitted entirely."""
         prefix = "{ft-hybrid-default-k-" + str(uuid.uuid4()) + "}:"
         index = prefix + "index"
@@ -4591,8 +4591,8 @@ class TestSyncFt:
     def test_sync_ft_hybrid_inside_multi_exec_rejected(
         self, glide_sync_client: TSyncGlideClient, protocol: ProtocolVersion
     ):
-        """M-1: sync mirror of the async test_ft_hybrid_inside_multi_exec_
-        rejected (R3b L-7). FT.HYBRID is rejected outright inside
+        """Sync mirror of the async test_ft_hybrid_inside_multi_exec_
+        rejected. FT.HYBRID is rejected outright inside
         MULTI/EXEC (valkey-search 1.3.0-rc1 src/query/multi_search.h:54)."""
         prefix = "{ft-hybrid-multiexec-" + str(uuid.uuid4()) + "}:"
         index = self._create_hybrid_index(glide_sync_client, prefix)
