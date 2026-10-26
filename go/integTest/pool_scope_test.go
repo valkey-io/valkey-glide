@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -366,6 +367,161 @@ func TestPoolConcurrentAccess(t *testing.T) {
 
 			for err := range errCh {
 				t.Fatalf("concurrent access error: %v", err)
+			}
+		})
+	}
+}
+
+// awaitSignals receives n signals from ch, reporting false if the timeout elapses first.
+func awaitSignals(ch <-chan struct{}, n int, timeout time.Duration) bool {
+	deadline := time.After(timeout)
+	for i := 0; i < n; i++ {
+		select {
+		case <-ch:
+		case <-deadline:
+			return false
+		}
+	}
+	return true
+}
+
+// A burst of borrows racing warmup must not push the pool past MaxSize. The race is narrow, so two
+// things force it: goroutines park on startGate until the pool exists (no goroutine-spawn latency),
+// and each holds its client through round 0 — should_create() only fires on an empty idle list, so
+// one holder per slot drains idle as fast as warmup fills it. Repeated over fresh pools because the
+// connectivity probe in NewClientPool sometimes closes the window first.
+func TestPoolDoesNotExceedMaxSizeUnderWarmupBurst(t *testing.T) {
+	const (
+		maxSize = 64
+		// One holder per slot: more would deadlock against a pool that holds exactly MaxSize.
+		goroutines = maxSize
+		rounds     = 3
+		attempts   = 12
+	)
+
+	for _, tc := range scopeModes() {
+		t.Run(tc.name, func(t *testing.T) {
+			skipMode(t, tc.cluster)
+
+			for attempt := 0; attempt < attempts; attempt++ {
+				func() {
+					ctx := context.Background()
+					var poolRef atomic.Pointer[glide.ClientPool]
+
+					startGate := make(chan struct{})
+					releaseGate := make(chan struct{})
+					var startOnce, releaseOnce sync.Once
+					openStart := func() { startOnce.Do(func() { close(startGate) }) }
+					openRelease := func() { releaseOnce.Do(func() { close(releaseGate) }) }
+
+					holdingCh := make(chan struct{}, goroutines)
+					doneCh := make(chan struct{}, goroutines)
+					errCh := make(chan error, goroutines)
+
+					for i := 0; i < goroutines; i++ {
+						go func(idx int) {
+							holding := false
+							defer func() {
+								if !holding {
+									// Never reached the hold, so release the barrier anyway.
+									holdingCh <- struct{}{}
+								}
+								doneCh <- struct{}{}
+							}()
+
+							<-startGate
+							pool := poolRef.Load()
+							if pool == nil { // pool creation failed; the test goroutine has already aborted
+								return
+							}
+
+							for round := 0; round < rounds; round++ {
+								clientID, err := pool.Acquire(ctx)
+								if err != nil {
+									errCh <- fmt.Errorf("goroutine %d round %d acquire: %w", idx, round, err)
+									return
+								}
+
+								client, err := pool.GetClient(clientID)
+								if err != nil {
+									pool.Release(clientID)
+									errCh <- fmt.Errorf("goroutine %d round %d get client: %w", idx, round, err)
+									return
+								}
+
+								key := scopeTestKey(fmt.Sprintf("pool-warmup-burst-%d-%d", idx, round), tc.cluster)
+								if _, err = client.Set(ctx, key, fmt.Sprintf("val-%d-%d", idx, round)); err != nil {
+									client.Close()
+									errCh <- fmt.Errorf("goroutine %d round %d set: %w", idx, round, err)
+									return
+								}
+								if _, err = client.Get(ctx, key); err != nil {
+									client.Close()
+									errCh <- fmt.Errorf("goroutine %d round %d get: %w", idx, round, err)
+									return
+								}
+								client.Client.Del(ctx, []string{key})
+
+								if round == 0 {
+									// Keep the slot borrowed until every goroutine holds one, so the
+									// idle list stays empty for the whole warmup window.
+									holding = true
+									holdingCh <- struct{}{}
+									select {
+									case <-releaseGate:
+									case <-time.After(60 * time.Second):
+										client.Close()
+										errCh <- fmt.Errorf("goroutine %d: release gate timed out", idx)
+										return
+									}
+								}
+								client.Close()
+							}
+						}(i)
+					}
+
+					pool := newPool(t, tc.cluster, glide.PoolConfig{
+						MaxSize:        maxSize,
+						MinIdle:        maxSize,
+						AcquireTimeout: 20 * time.Second,
+					})
+					defer pool.Close()
+					defer openRelease()
+					poolRef.Store(pool)
+					openStart()
+
+					require.Truef(t, awaitSignals(holdingCh, goroutines, 90*time.Second),
+						"attempt %d: not every burst goroutine borrowed a slot", attempt)
+					openRelease()
+					require.Truef(t, awaitSignals(doneCh, goroutines, 120*time.Second),
+						"attempt %d: burst goroutines did not finish", attempt)
+
+					close(errCh)
+					for err := range errCh {
+						t.Fatalf("attempt %d: warmup burst error: %v", attempt, err)
+					}
+
+					// Quiesce so the counters are settled, not mid-release: a borrow still in
+					// flight would otherwise leave IdleCount lagging TotalCount. A zero total is
+					// not a settled pool — glide_pool_metrics leaves its out-param untouched when
+					// the pool lock is contended, which Go reports as 0 — so keep polling.
+					var total, idle int
+					deadline := time.Now().Add(15 * time.Second)
+					for time.Now().Before(deadline) {
+						total, idle = pool.TotalCount(), pool.IdleCount()
+						if total > 0 && pool.ActiveCount() == 0 && idle == total {
+							break
+						}
+						time.Sleep(50 * time.Millisecond)
+					}
+
+					require.Positivef(t, total, "attempt %d: pool counters never settled", attempt)
+					require.LessOrEqualf(t, total, maxSize,
+						"attempt %d: pool created more connections than MaxSize: total=%d, MaxSize=%d",
+						attempt, total, maxSize)
+					require.LessOrEqualf(t, idle, maxSize,
+						"attempt %d: idle exceeded MaxSize: idle=%d, MaxSize=%d", attempt, idle, maxSize)
+				}()
 			}
 		})
 	}
