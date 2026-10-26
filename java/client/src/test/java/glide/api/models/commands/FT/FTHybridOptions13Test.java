@@ -215,6 +215,69 @@ public class FTHybridOptions13Test {
                 args);
     }
 
+    // ---- FTHybridVsimArm.Builder (consistent with FTHybridOptions' existing @Builder usage) ----
+
+    @Test
+    public void testVsimArmBuilder_paramReferenceEquivalentToConstructor() {
+        GlideString[] args = FTHybridVsimArm.builder("vec", "$myvec").build().toArgs();
+        assertArrayEquals(new GlideString[] {gs("VSIM"), gs("@vec"), gs("$myvec")}, args);
+    }
+
+    @Test
+    public void testVsimArmBuilder_rawBytesEquivalentToConstructor() {
+        GlideString[] args =
+                FTHybridVsimArm.builder("vec", "rawbytes".getBytes()).build().toArgs(gs("$generated"));
+        assertArrayEquals(new GlideString[] {gs("VSIM"), gs("@vec"), gs("$generated")}, args);
+    }
+
+    @Test
+    public void testVsimArmBuilder_byteArrayAlwaysRawVectorDataEvenStartingWithDollarByte() {
+        byte[] rawVectorStartingWithDollarByte = {0x24, 0x01, 0x02, 0x03};
+        FTHybridVsimArm arm = FTHybridVsimArm.builder("vec", rawVectorStartingWithDollarByte).build();
+        assertFalse(arm.isParamReference());
+        assertArrayEquals(rawVectorStartingWithDollarByte, arm.getRawVector());
+    }
+
+    @Test
+    public void testVsimArmBuilder_everyOptionChained() {
+        GlideString[] args =
+                FTHybridVsimArm.builder("vec", "$q")
+                        .k(5)
+                        .efRuntime(100)
+                        .shardKRatio(0.5)
+                        .yieldScoreAs("vs")
+                        .build()
+                        .toArgs();
+        assertArrayEquals(
+                new GlideString[] {
+                    gs("VSIM"),
+                    gs("@vec"),
+                    gs("$q"),
+                    gs("KNN"),
+                    gs("6"),
+                    gs("K"),
+                    gs("5"),
+                    gs("EF_RUNTIME"),
+                    gs("100"),
+                    gs("SHARD_K_RATIO"),
+                    gs("0.5"),
+                    gs("YIELD_SCORE_AS"),
+                    gs("vs")
+                },
+                args);
+    }
+
+    @Test
+    public void testVsimArmBuilder_efRuntimeRejectedWithAdhocFilterPolicy() {
+        assertThrows(
+                IllegalArgumentException.class,
+                () ->
+                        FTHybridVsimArm.builder("vec", "$q")
+                                .efRuntime(100)
+                                .filter(new FTHybridVsimFilter("@title:hello", HybridFilterPolicy.ADHOC))
+                                .build());
+    }
+
     // ---- FTHybridVsimFilter ----
 
     @Test
@@ -336,6 +399,79 @@ public class FTHybridOptions13Test {
                     gs("@ss + @vs"),
                     gs("WINDOW"),
                     gs("1000")
+                },
+                args);
+    }
+
+    // ---- FTHybridCombine builders (consistent with FTHybridOptions' existing @Builder usage) ----
+
+    @Test
+    public void testCombineBuilder_rrfWithConstantAndWindowAndYieldScoreAs() {
+        GlideString[] args =
+                FTHybridCombine.Rrf.builder()
+                        .constant(60.0)
+                        .window(50)
+                        .yieldScoreAs("fused")
+                        .build()
+                        .toArgs();
+        assertArrayEquals(
+                new GlideString[] {
+                    gs("COMBINE"),
+                    gs("RRF"),
+                    gs("6"),
+                    gs("CONSTANT"),
+                    gs("60.0"),
+                    gs("WINDOW"),
+                    gs("50"),
+                    gs("YIELD_SCORE_AS"),
+                    gs("fused")
+                },
+                args);
+    }
+
+    @Test
+    public void testCombineBuilder_rrfNegativeConstantRejected() {
+        assertThrows(
+                IllegalArgumentException.class, () -> FTHybridCombine.Rrf.builder().constant(-1.0).build());
+    }
+
+    @Test
+    public void testCombineBuilder_linearWithBothWeights() {
+        GlideString[] args = FTHybridCombine.Linear.builder().alpha(0.5).beta(0.5).build().toArgs();
+        assertArrayEquals(
+                new GlideString[] {
+                    gs("COMBINE"), gs("LINEAR"), gs("4"), gs("ALPHA"), gs("0.5"), gs("BETA"), gs("0.5")
+                },
+                args);
+    }
+
+    @Test
+    public void testCombineBuilder_linearOneWeightWithoutTheOtherRejected() {
+        assertThrows(
+                IllegalArgumentException.class, () -> FTHybridCombine.Linear.builder().alpha(0.5).build());
+        assertThrows(
+                IllegalArgumentException.class, () -> FTHybridCombine.Linear.builder().beta(0.5).build());
+    }
+
+    @Test
+    public void testCombineBuilder_functionWithWindowAndYieldScoreAs() {
+        GlideString[] args =
+                FTHybridCombine.Function.builder("@ss + @vs")
+                        .window(1000)
+                        .yieldScoreAs("fused")
+                        .build()
+                        .toArgs();
+        assertArrayEquals(
+                new GlideString[] {
+                    gs("COMBINE"),
+                    gs("FUNCTION"),
+                    gs("6"),
+                    gs("EXPR"),
+                    gs("@ss + @vs"),
+                    gs("WINDOW"),
+                    gs("1000"),
+                    gs("YIELD_SCORE_AS"),
+                    gs("fused")
                 },
                 args);
     }

@@ -37,6 +37,7 @@ import glide.api.models.commands.FT.FTSearchOptions;
 import glide.api.models.commands.FT.FTWithCursor;
 import glide.api.models.commands.FT.HybridFilterPolicy;
 import glide.api.models.commands.FlushMode;
+import glide.api.models.configuration.ProtocolVersion;
 import glide.api.models.configuration.ReadFrom;
 import glide.api.models.configuration.RequestRoutingConfiguration.ByAddressRoute;
 import glide.api.models.configuration.RequestRoutingConfiguration.SimpleMultiNodeRoute;
@@ -64,9 +65,9 @@ import org.junit.jupiter.params.provider.MethodSource;
 
 /**
  * Live tests for the valkey-search 1.3 stable surface: INKEYS, FLOAT16/BFLOAT16 vector types,
- * FT.CREATE FILTER/SCORE_FIELD/NOHL, per-field UNF, and count's LIMIT 0 0 serialization.
- * WITHSCORES/SCORER, ADDSCORES, WITHCURSOR/FT.CURSOR, FT.HYBRID and LoadField aliases are not
- * covered here.
+ * FT.CREATE FILTER/SCORE_FIELD/NOHL, per-field UNF, and count's LIMIT 0 0 serialization, plus
+ * scoring (WITHSCORES/SCORER, ADDSCORES), cursors (WITHCURSOR/FT.CURSOR), FT.HYBRID and LoadField
+ * aliases.
  *
  * <p>Carries its own 1.3 capability probe (real command + a 1.3-only argument, classified by error
  * text, never a version string), unlike {@link VectorSearchTests}, which has none: that file's
@@ -76,6 +77,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 public class VectorSearch13Tests {
 
     private static final List<Arguments> clients = new ArrayList<>();
+    private static final List<Arguments> resp2Clients = new ArrayList<>();
     private static boolean capability;
 
     @BeforeAll
@@ -95,6 +97,26 @@ public class VectorSearch13Tests {
         }
 
         capability = probeSearch13Capability(clusterClient);
+
+        // RESP2 coverage (M4): a representative subset of the wave-2 live tests (scoring, cursor,
+        // FT.HYBRID) is parametrized over both protocols via getResp2Clients(); the rest of this
+        // suite exercises RESP3/default only via getClients(), same as before this fixture was
+        // added.
+        GlideClusterClient resp2ClusterClient =
+                GlideClusterClient.createClient(
+                                commonClusterClientConfig()
+                                        .requestTimeout(5000)
+                                        .protocol(ProtocolVersion.RESP2)
+                                        .build())
+                        .get();
+        resp2Clients.add(Arguments.of(named("cluster-resp2", resp2ClusterClient)));
+        if (!TestConfiguration.STANDALONE_HOSTS[0].isEmpty()) {
+            GlideClient resp2StandaloneClient =
+                    GlideClient.createClient(
+                                    commonClientConfig().requestTimeout(5000).protocol(ProtocolVersion.RESP2).build())
+                            .get();
+            resp2Clients.add(Arguments.of(named("standalone-resp2", resp2StandaloneClient)));
+        }
     }
 
     @AfterAll
@@ -110,6 +132,10 @@ public class VectorSearch13Tests {
             } else {
                 ((GlideClient) client).flushall(FlushMode.SYNC).get();
             }
+            client.close();
+        }
+        for (Arguments args : resp2Clients) {
+            BaseClient client = ((Named<BaseClient>) args.get()[0]).getPayload();
             client.close();
         }
     }
@@ -132,6 +158,10 @@ public class VectorSearch13Tests {
 
     static Stream<Arguments> getClients() {
         return clients.stream();
+    }
+
+    static Stream<Arguments> getResp2Clients() {
+        return resp2Clients.stream();
     }
 
     /**
@@ -722,6 +752,16 @@ public class VectorSearch13Tests {
 
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getResp2Clients")
+    public void ft_search_with_scores_and_scorer_resp2(BaseClient client) {
+        // RESP2 coverage (M4) for scoring: the same WITHSCORES+SCORER shape as
+        // ft_search_with_scores_and_scorer, run over a RESP2 client to confirm glide-core's
+        // conversion of this reply shape is unaffected by protocol version.
+        ft_search_with_scores_and_scorer(client);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void ft_search_with_scores_and_withsortkeys_combined_shape(BaseClient client) {
         Assumptions.assumeTrue(
@@ -903,6 +943,67 @@ public class VectorSearch13Tests {
         }
     }
 
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void ft_aggregate_load_as(BaseClient client) {
+        Assumptions.assumeTrue(
+                capability, "search module present but pre-1.3 (INKEYS probe rejected it)");
+
+        String prefix = "{ft-load-as-" + UUID.randomUUID() + "}:";
+        String index = prefix + "index";
+        assertEquals(
+                OK,
+                FT.create(
+                                client,
+                                index,
+                                new FieldInfo[] {
+                                    new FieldInfo("title", new TextField()),
+                                    new FieldInfo("price", new NumericField())
+                                },
+                                FTCreateOptions.builder()
+                                        .dataType(DataType.HASH)
+                                        .prefixes(new String[] {prefix})
+                                        .build())
+                        .get());
+        try {
+            Map<String, String> doc = new HashMap<>();
+            doc.put("title", "widget");
+            doc.put("price", "9");
+            if (client instanceof GlideClusterClient) {
+                ((GlideClusterClient) client).hset(prefix + "1", doc).get();
+            } else {
+                ((GlideClient) client).hset(prefix + "1", doc).get();
+            }
+            Thread.sleep(1000);
+
+            FTAggregateOptions options =
+                    FTAggregateOptions.builder()
+                            .loadFields(new String[] {"title"})
+                            .loadFields(
+                                    new FTAggregateOptions.LoadField[] {
+                                        new FTAggregateOptions.LoadField("price", "cost")
+                                    })
+                            .build();
+
+            String level = getEmulateReleaseLevel(client);
+            if (checkVersionLt(level, "1.3.0")) {
+                ExecutionException e =
+                        assertThrows(
+                                ExecutionException.class, () -> FT.aggregate(client, index, "*", options).get());
+                assertTrue(e.getCause().getMessage().contains("Index: field `AS` does not exist"));
+            } else {
+                Map<GlideString, Object>[] result = FT.aggregate(client, index, "*", options).get();
+                assertEquals(1, result.length);
+                assertEquals(gs("widget"), result[0].get(gs("title")));
+                assertEquals(gs("9"), result[0].get(gs("cost")));
+                assertTrue(!result[0].containsKey(gs("price")));
+            }
+        } finally {
+            FT.dropindex(client, index).get();
+        }
+    }
+
     // ---- Cursors: FT.AGGREGATE WITHCURSOR, FT.CURSOR READ/DEL, typed API ----
 
     @SneakyThrows
@@ -940,7 +1041,7 @@ public class VectorSearch13Tests {
             int totalRows = 0;
             Set<Integer> seenNValues = new HashSet<>();
             Object[] page =
-                    FT.aggregate(
+                    FT.aggregateWithCursor(
                                     client,
                                     index,
                                     "*",
@@ -978,6 +1079,15 @@ public class VectorSearch13Tests {
 
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getResp2Clients")
+    public void ft_aggregate_typed_cursor_paged_to_exhaustion_resp2(BaseClient client) {
+        // RESP2 coverage (M4) for cursors: the same WITHCURSOR paging shape as
+        // ft_aggregate_typed_cursor_paged_to_exhaustion, run over a RESP2 client.
+        ft_aggregate_typed_cursor_paged_to_exhaustion(client);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void ft_aggregate_typed_cursor_del_and_errors(BaseClient client) {
         Assumptions.assumeTrue(
@@ -1009,7 +1119,7 @@ public class VectorSearch13Tests {
             Thread.sleep(1000);
 
             Object[] page =
-                    FT.aggregate(
+                    FT.aggregateWithCursor(
                                     client,
                                     index,
                                     "*",
@@ -1233,7 +1343,7 @@ public class VectorSearch13Tests {
                                     client,
                                     index,
                                     new FTHybridSearchArm("hello"),
-                                    new FTHybridVsimArm("vec", packVector(1.0f, 1.0f), 5, null, null))
+                                    FTHybridVsimArm.builder("vec", packVector(1.0f, 1.0f)).k(5).build())
                             .get();
             assertEquals(2, result.length);
             Set<GlideString> keys = new HashSet<>();
@@ -1254,6 +1364,16 @@ public class VectorSearch13Tests {
 
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getResp2Clients")
+    public void ft_hybrid_basic_query_resp2(BaseClient client) {
+        // RESP2 coverage (M4) for FT.HYBRID: the same basic-query shape as ft_hybrid_basic_query,
+        // run over a RESP2 client to confirm glide-core's conversion of FT.HYBRID's reply is
+        // unaffected by protocol version.
+        ft_hybrid_basic_query(client);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void ft_hybrid_aggregate_clause_filters_post_fusion(BaseClient client) {
         Assumptions.assumeTrue(
@@ -1267,7 +1387,7 @@ public class VectorSearch13Tests {
                                     client,
                                     index,
                                     FTHybridSearchArm.withYieldScoreAs("goodbye", HYBRID_SEARCH_ALIAS),
-                                    new FTHybridVsimArm("vec", packVector(1.0f, 1.0f), 5, null, null),
+                                    FTHybridVsimArm.builder("vec", packVector(1.0f, 1.0f)).k(5).build(),
                                     FTHybridOptions.builder()
                                             .addClause(new FTAggregateOptions.Filter("@" + HYBRID_SEARCH_ALIAS + " > 0"))
                                             .build())
@@ -1286,7 +1406,9 @@ public class VectorSearch13Tests {
     @MethodSource("getClients")
     public void ft_hybrid_combine_methods_fuse_results_linear_text_only(BaseClient client) {
         assertCombineWinner(
-                client, new FTHybridCombine.Linear(1.0, 0.0, null, null), HYBRID_DOC_TEXT_WINNER);
+                client,
+                FTHybridCombine.Linear.builder().alpha(1.0).beta(0.0).build(),
+                HYBRID_DOC_TEXT_WINNER);
     }
 
     @SneakyThrows
@@ -1294,7 +1416,9 @@ public class VectorSearch13Tests {
     @MethodSource("getClients")
     public void ft_hybrid_combine_methods_fuse_results_linear_vector_only(BaseClient client) {
         assertCombineWinner(
-                client, new FTHybridCombine.Linear(0.0, 1.0, null, null), HYBRID_DOC_VECTOR_WINNER);
+                client,
+                FTHybridCombine.Linear.builder().alpha(0.0).beta(1.0).build(),
+                HYBRID_DOC_VECTOR_WINNER);
     }
 
     @SneakyThrows
@@ -1302,7 +1426,9 @@ public class VectorSearch13Tests {
     @MethodSource("getClients")
     public void ft_hybrid_combine_methods_fuse_results_function_text(BaseClient client) {
         assertCombineWinner(
-                client, new FTHybridCombine.Function("@" + HYBRID_SEARCH_ALIAS), HYBRID_DOC_TEXT_WINNER);
+                client,
+                FTHybridCombine.Function.builder("@" + HYBRID_SEARCH_ALIAS).build(),
+                HYBRID_DOC_TEXT_WINNER);
     }
 
     @SneakyThrows
@@ -1310,7 +1436,9 @@ public class VectorSearch13Tests {
     @MethodSource("getClients")
     public void ft_hybrid_combine_methods_fuse_results_function_vec(BaseClient client) {
         assertCombineWinner(
-                client, new FTHybridCombine.Function("@" + HYBRID_VSIM_ALIAS), HYBRID_DOC_VECTOR_WINNER);
+                client,
+                FTHybridCombine.Function.builder("@" + HYBRID_VSIM_ALIAS).build(),
+                HYBRID_DOC_VECTOR_WINNER);
     }
 
     @SneakyThrows
@@ -1327,13 +1455,11 @@ public class VectorSearch13Tests {
                                     client,
                                     index,
                                     FTHybridSearchArm.withYieldScoreAs(HYBRID_SEARCH_QUERY, HYBRID_SEARCH_ALIAS),
-                                    new FTHybridVsimArm(
-                                            "vec",
-                                            packVector(HYBRID_QUERY_VECTOR[0], HYBRID_QUERY_VECTOR[1]),
-                                            5,
-                                            null,
-                                            null,
-                                            gs(HYBRID_VSIM_ALIAS)),
+                                    FTHybridVsimArm.builder(
+                                                    "vec", packVector(HYBRID_QUERY_VECTOR[0], HYBRID_QUERY_VECTOR[1]))
+                                            .k(5)
+                                            .yieldScoreAs(gs(HYBRID_VSIM_ALIAS))
+                                            .build(),
                                     FTHybridOptions.builder().combine(combine).build())
                             .get();
             assertEquals(2, result.length);
@@ -1378,7 +1504,10 @@ public class VectorSearch13Tests {
                                     client,
                                     index,
                                     new FTHybridSearchArm(HYBRID_SEARCH_QUERY),
-                                    new FTHybridVsimArm("vec", vec, 1, null, null, gs(HYBRID_VSIM_ALIAS)))
+                                    FTHybridVsimArm.builder("vec", vec)
+                                            .k(1)
+                                            .yieldScoreAs(gs(HYBRID_VSIM_ALIAS))
+                                            .build())
                             .get();
 
             Map<String, GlideString> params = new HashMap<>();
@@ -1388,7 +1517,10 @@ public class VectorSearch13Tests {
                                     client,
                                     index,
                                     new FTHybridSearchArm(HYBRID_SEARCH_QUERY),
-                                    new FTHybridVsimArm("vec", "$myvec", 1, null, null, gs(HYBRID_VSIM_ALIAS)),
+                                    FTHybridVsimArm.builder("vec", "$myvec")
+                                            .k(1)
+                                            .yieldScoreAs(gs(HYBRID_VSIM_ALIAS))
+                                            .build(),
                                     FTHybridOptions.builder().params(params).build())
                             .get();
 
@@ -1409,6 +1541,51 @@ public class VectorSearch13Tests {
                 assertEquals(1, rowsWithVs, "k=1 should select exactly one document");
                 assertEquals(gs(prefix + HYBRID_DOC_VECTOR_WINNER), vsKey);
             }
+        } finally {
+            FT.dropindex(client, index).get();
+        }
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void ft_hybrid_per_arm_and_combine_yield_score_as_columns(BaseClient client) {
+        Assumptions.assumeTrue(
+                capability, "search module present but pre-1.3 (INKEYS probe rejected it)");
+
+        String prefix = "{ft-hybrid-yieldscore-" + UUID.randomUUID() + "}:";
+        String index = createHybridIndex(client, prefix);
+        try {
+            Object[] result =
+                    FT.hybrid(
+                                    client,
+                                    index,
+                                    FTHybridSearchArm.withYieldScoreAs(HYBRID_SEARCH_QUERY, HYBRID_SEARCH_ALIAS),
+                                    FTHybridVsimArm.builder(
+                                                    "vec", packVector(HYBRID_QUERY_VECTOR[0], HYBRID_QUERY_VECTOR[1]))
+                                            .k(5)
+                                            .yieldScoreAs(gs(HYBRID_VSIM_ALIAS))
+                                            .build(),
+                                    FTHybridOptions.builder()
+                                            .combine(FTHybridCombine.Rrf.builder().yieldScoreAs("fused").build())
+                                            .build())
+                            .get();
+            assertEquals(2, result.length);
+            Map<GlideString, Map<GlideString, Object>> rowsByKey = new HashMap<>();
+            for (Object rowObj : result) {
+                @SuppressWarnings("unchecked")
+                Map<GlideString, Object> row = (Map<GlideString, Object>) rowObj;
+                rowsByKey.put((GlideString) row.get(gs("__key")), row);
+                assertTrue(row.containsKey(gs(HYBRID_VSIM_ALIAS)));
+                assertTrue(row.containsKey(gs("fused")));
+                assertTrue(!row.containsKey(gs("__score")));
+            }
+            assertTrue(
+                    rowsByKey.get(gs(prefix + HYBRID_DOC_TEXT_WINNER)).containsKey(gs(HYBRID_SEARCH_ALIAS)));
+            assertTrue(
+                    !rowsByKey
+                            .get(gs(prefix + HYBRID_DOC_VECTOR_WINNER))
+                            .containsKey(gs(HYBRID_SEARCH_ALIAS)));
         } finally {
             FT.dropindex(client, index).get();
         }
@@ -1441,14 +1618,10 @@ public class VectorSearch13Tests {
                                     client,
                                     index,
                                     new FTHybridSearchArm("nonexistentterm12345"),
-                                    new FTHybridVsimArm(
-                                            "vec",
-                                            packVector(1.0f, 1.0f),
-                                            5,
-                                            null,
-                                            null,
-                                            null,
-                                            new FTHybridVsimFilter("@title:hello", policy)))
+                                    FTHybridVsimArm.builder("vec", packVector(1.0f, 1.0f))
+                                            .k(5)
+                                            .filter(new FTHybridVsimFilter("@title:hello", policy))
+                                            .build())
                             .get();
             assertEquals(1, result.length);
             @SuppressWarnings("unchecked")
@@ -1474,7 +1647,7 @@ public class VectorSearch13Tests {
                                     client,
                                     index,
                                     new FTHybridSearchArm("hello"),
-                                    new FTHybridVsimArm("vec", packVector(1.0f, 1.0f), 5, null, null),
+                                    FTHybridVsimArm.builder("vec", packVector(1.0f, 1.0f)).k(5).build(),
                                     FTHybridOptions.builder().localOnly().build())
                             .get();
             assertEquals(2, result.length);
@@ -1525,7 +1698,7 @@ public class VectorSearch13Tests {
                                     client,
                                     index,
                                     new FTHybridSearchArm("nonexistentterm12345"),
-                                    new FTHybridVsimArm("vec", packVector(1.0f, 1.0f)))
+                                    FTHybridVsimArm.builder("vec", packVector(1.0f, 1.0f)).build())
                             .get();
             assertEquals(10, result.length);
         } finally {
@@ -1559,7 +1732,7 @@ public class VectorSearch13Tests {
                                     preferReplicaClient,
                                     index,
                                     new FTHybridSearchArm("*"),
-                                    new FTHybridVsimArm("vec", packVector(1.0f, 1.0f), 5, null, null),
+                                    FTHybridVsimArm.builder("vec", packVector(1.0f, 1.0f)).k(5).build(),
                                     FTHybridOptions.builder().withCursor(new FTWithCursor(1)).build())
                             .get();
             Map<GlideString, Object>[] rows = castArray((Object[]) page[0], Map.class);
