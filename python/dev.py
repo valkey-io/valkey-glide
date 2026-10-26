@@ -228,7 +228,11 @@ def copy_readme_to_package(package_dir: Path) -> None:
     copy2(source, dest)
 
 
-def install_glide_shared(env: Dict[str, str], release: bool = False) -> None:
+def install_glide_shared(env: Dict[str, str], release: bool = False) -> Path:
+    """
+    Installs glide-shared, builds the FFI library, and copies it into glide_shared.
+    Returns the path of the built FFI library.
+    """
     cmd = [str(venv_ctx["python_exe"]), "-m", "maturin", "develop", "--locked"]
     if release:
         cmd += ["--release"]
@@ -267,6 +271,8 @@ def install_glide_shared(env: Dict[str, str], release: bool = False) -> None:
     ffi_output_dir = FFI_OUTPUT_DIR_RELEASE if release else FFI_OUTPUT_DIR_DEBUG
     ffi_lib_path = find_libglide_ffi(ffi_output_dir)
     copy2(ffi_lib_path, SHARED_PACKAGE_DIR / ffi_lib_path.name)
+
+    return ffi_lib_path
 
 
 def build_async_client_wheel(
@@ -417,34 +423,12 @@ def build_sync_client(
     if wheel:
         return build_sync_client_wheel(env)
 
-    install_glide_shared(env, release=release)
+    libglide_ffi_path = install_glide_shared(env, release=release)
     env.update(
         {  # Update it with your GLIDE variables
             "GLIDE_VERSION": glide_version,
         }
     )
-    # Build the FFI library
-    build_args = ["cargo", "rustc", "--lib", "--crate-type", "cdylib", "--locked"]
-    if release:
-        build_args += ["--release"]
-
-    run_command(
-        build_args,
-        cwd=FFI_DIR,
-        label="Build the FFI rust library",
-        env=env,
-    )
-
-    # Locate the FFI library output file
-    libglide_ffi_path = (
-        find_libglide_ffi(FFI_OUTPUT_DIR_RELEASE)
-        if release
-        else find_libglide_ffi(FFI_OUTPUT_DIR_DEBUG)
-    )
-    if not libglide_ffi_path.exists():
-        raise FileNotFoundError(
-            f"Expected shared object not found at {libglide_ffi_path}"
-        )
 
     # Copy to glide_sync package dir
     dest_path = SYNC_FFI_LIB
