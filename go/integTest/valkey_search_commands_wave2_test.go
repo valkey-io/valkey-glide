@@ -24,11 +24,13 @@ import (
 
 // Wave 2 of the valkey-search 1.3 stable surface: scoring (WITHSCORES/SCORER on FT.SEARCH,
 // ADDSCORES/SCORER on FT.AGGREGATE), cursors (FT.AGGREGATE/FT.HYBRID WITHCURSOR, FT.CURSOR
-// READ/DEL, primary-pinned routing regardless of ReadFrom), and FT.HYBRID. Gated behind the
-// same probeSearch13CapabilityCluster/getEmulateReleaseLevel helpers wave 1 already established
-// in this file. Mirrors python/tests/async_tests/tests_server_modules/test_ft.py's
-// test_ft_search_with_scores*, test_ft_aggregate_add_scores*, test_ft_cursor_affinity*,
-// test_ft_aggregate_typed_cursor*, and test_ft_hybrid_* live tests.
+// READ/DEL, primary-pinned routing regardless of ReadFrom), and FT.HYBRID. Gated behind
+// probeSearch13CapabilityCluster, the same capability probe wave 1 already established in this
+// file -- no wave-2 test here calls getEmulateReleaseLevel, since this wave reports the same
+// pass/skip counts at both the default and the 1.3.0 emulate-release level. Mirrors
+// python/tests/async_tests/tests_server_modules/test_ft.py's test_ft_search_with_scores*,
+// test_ft_aggregate_add_scores*, test_ft_cursor_affinity*, test_ft_aggregate_typed_cursor*, and
+// test_ft_hybrid_* live tests.
 
 // packFloat32Vector packs a sequence of float32 values into a little-endian byte string, the
 // same wire representation FT.CREATE's FLOAT32 vector fields expect. Go's HSet takes
@@ -161,6 +163,13 @@ func (suite *GlideTestSuite) TestModuleFtSearchWithScoresAndWithSortKeysCombined
 		assert.NotEmpty(suite.T(), doc.SortKey)
 		assert.Contains(suite.T(), doc.Fields, "title")
 	}
+	// L2: assert the actual SORTBY price ASC order and the SortKey values, not just that
+	// Score/SortKey/Fields are present.
+	assert.Equal(suite.T(), []string{prefix + "1", prefix + "2"}, []string{
+		result.Documents[0].Key, result.Documents[1].Key,
+	}, "must be sorted by price ascending (10 before 20)")
+	assert.Equal(suite.T(), "#10", result.Documents[0].SortKey)
+	assert.Equal(suite.T(), "#20", result.Documents[1].SortKey)
 
 	glideft.ClusterFtDropIndex(ctx, client, index)
 }
@@ -905,6 +914,47 @@ func (suite *GlideTestSuite) TestModuleFtHybridInsideMultiExecRejected() {
 	})
 	_, err := client.Exec(ctx, *batch, true)
 	assert.ErrorContains(suite.T(), err, "FT.HYBRID")
+
+	glideft.ClusterFtDropIndex(ctx, client, index)
+}
+
+// TestModuleFtHybridVsimRangeRejected ports Python's test_ft_hybrid_vsim_range_rejected
+// tripwire: FT.HYBRID's VSIM ... RANGE form parses for shape but is rejected at execution
+// (ParseFtHybridCommand returns an UnimplementedError after parse completes). RANGE stays
+// excluded from the typed FtHybridVsimArm API entirely (EfRuntime's own docstring notes "RANGE
+// is not currently supported by this typed API"), so this goes through CustomCommand directly
+// rather than the typed glideft.FtHybrid wrapper -- this test exists so that if this
+// limitation is ever lifted upstream, it fails loudly instead of the exclusion silently going
+// stale.
+func (suite *GlideTestSuite) TestModuleFtHybridVsimRangeRejected() {
+	client := suite.defaultClusterClient()
+	ctx := context.Background()
+	if !suite.probeSearch13CapabilityCluster(ctx, client) {
+		suite.T().Skip("search module present but pre-1.3 (INKEYS probe rejected it)")
+	}
+
+	prefix := "{ft-hybrid-range-" + uuid.New().String() + "}:"
+	index := prefix + "index"
+
+	_, err := glideft.ClusterFtCreate(
+		ctx, client, index,
+		[]options.Field{
+			options.NewTextField("title"),
+			options.NewVectorFieldFlat("vec", constants.DistanceMetricL2, 2),
+		},
+		&options.FtCreateOptions{DataType: constants.IndexDataTypeHash, Prefixes: []string{prefix}},
+	)
+	require.NoError(suite.T(), err)
+
+	queryBlob := packFloat32Vector(1.0, 2.0)
+	_, err = client.CustomCommand(ctx, []string{
+		"FT.HYBRID", index,
+		"SEARCH", "hello",
+		"VSIM", "@vec", "$blob",
+		"RANGE", "2", "RADIUS", "5.0",
+		"PARAMS", "2", "blob", queryBlob,
+	})
+	assert.ErrorContains(suite.T(), err, "RANGE")
 
 	glideft.ClusterFtDropIndex(ctx, client, index)
 }
