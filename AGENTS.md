@@ -26,7 +26,7 @@ This is the Valkey GLIDE mono-repository containing a Rust core (`glide-core`) a
 - `go/` - Go client bindings (CGO). See [go/AGENTS.md](./go/AGENTS.md).
 - `glide-telemetry/` - OpenTelemetry integration crate.
 - `glide-logger/` - Shared logging infrastructure.
-- `glide-rdma/` - RDMA transfer layer over libfabric (used by glide-core behind the `rdma` feature; not yet exposed by language bindings).
+- `glide-rdma/` - RDMA transfer layer over libfabric (used by glide-core behind the `rdma` feature, and exposed over the C ABI by glide-ffi behind its own `rdma` feature).
 - `utils/` - Shared utilities and cluster management tools (`cluster_manager.py`).
 - `benchmarks/` - Performance benchmarks across languages.
 - `examples/` - Usage examples for each language binding.
