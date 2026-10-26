@@ -71,12 +71,38 @@ class DistanceMetricType(Enum):
 
 class VectorType(Enum):
     """
-    Type type for the vector field type.
+    Type for the vector field type.
     """
 
     FLOAT32 = "FLOAT32"
     """
-    FLOAT32 type of vector. The only supported type.
+    FLOAT32 type of vector: 4 bytes per element, IEEE 754 single precision.
+    """
+    FLOAT16 = "FLOAT16"
+    """
+    FLOAT16 type of vector: 2 bytes per element, IEEE 754 half precision.
+    Added in valkey-search 1.3.0 (``src/indexes/vector_base.h``). Callers
+    must pass already-encoded bytes, the same way ``FLOAT32`` works today --
+    GLIDE does not encode vectors on the client's behalf. Python has no
+    built-in float16 packer; ``numpy.float16`` (``numpy.array(values,
+    dtype=numpy.float16).tobytes()``) or the ``struct`` module's ``e`` format
+    code both produce the correct byte layout.
+    """
+    BFLOAT16 = "BFLOAT16"
+    """
+    BFLOAT16 type of vector: 2 bytes per element, truncated IEEE 754 single
+    precision (the top 16 bits of a FLOAT32 -- sign, 8-bit exponent, 7-bit
+    mantissa). Added in valkey-search 1.3.0 (``src/indexes/vector_base.h``).
+    Callers must pass already-encoded bytes; there is no built-in Python
+    packer for this format. Encode by taking the high 16 bits of each
+    FLOAT32 element's big-endian representation, e.g. for a little-endian
+    FLOAT32 ``struct.pack("<f", value)``, the BFLOAT16 bytes are
+    ``struct.pack("<f", value)[2:4]``.
+
+    The engine may refuse to create or load a BFLOAT16 index on a host
+    whose CPU lacks a SIMD BF16 code path (``CheckSimsimdBf16Capability()``
+    in ``src/indexes/vector_base.h``); this is a server-side capability
+    check, not a GLIDE-side restriction.
     """
 
 
@@ -122,6 +148,21 @@ class Field(ABC):
         return args
 
 
+def _append_sortable_unf_args(
+    args: List[TEncodable], sortable: bool, unf: bool
+) -> None:
+    """Append SORTABLE and, immediately after it, UNF -- the only position
+    valkey-search recognises UNF in (``src/commands/ft_create_parser.cc``:
+    ``// UNF is only recognized directly after SORTABLE, as in Redis``).
+    Shared by the TEXT/TAG/NUMERIC field classes (the field types the
+    ``Field`` base class's own docstring says SORTABLE applies to).
+    """
+    if sortable:
+        args.append(FtCreateKeywords.SORTABLE)
+        if unf:
+            args.append(FtCreateKeywords.UNF)
+
+
 class TextField(Field):
     """
     Field contains any blob of data.
@@ -136,6 +177,7 @@ class TextField(Field):
         withsuffixtrie: bool = False,
         nosuffixtrie: bool = False,
         sortable: bool = False,
+        unf: bool = False,
     ):
         """
         Initialize a new TextField instance.
@@ -151,12 +193,18 @@ class TextField(Field):
             nosuffixtrie (bool): If set, disables the suffix trie for the field.
                 Mutually exclusive with ``withsuffixtrie``.
             sortable (bool): If set, the field value can be used for sorting.
+            unf (bool): If set, keeps the sorted value in its original (un-normalized) form, e.g. preserving case
+                for TEXT/TAG fields that would otherwise be lowercased for sorting (valkey-search 1.3.0,
+                ``src/commands/ft_create_parser.cc``). Requires ``sortable=True``; raises ``ValueError`` otherwise.
         """
+        if unf and not sortable:
+            raise ValueError("unf requires sortable=True.")
         super().__init__(name, FieldType.TEXT, alias, sortable)
         self.nostem = nostem
         self.weight = weight
         self.withsuffixtrie = withsuffixtrie
         self.nosuffixtrie = nosuffixtrie
+        self.unf = unf
 
     def to_args(self) -> List[TEncodable]:
         args = super().to_args()
@@ -168,8 +216,7 @@ class TextField(Field):
             args.append(FtCreateKeywords.WITHSUFFIXTRIE)
         elif self.nosuffixtrie:
             args.append(FtCreateKeywords.NOSUFFIXTRIE)
-        if self.sortable:
-            args.append(FtCreateKeywords.SORTABLE)
+        _append_sortable_unf_args(args, self.sortable, self.unf)
         return args
 
 
@@ -189,6 +236,7 @@ class TagField(Field):
         separator: Optional[TEncodable] = None,
         case_sensitive: bool = False,
         sortable: bool = False,
+        unf: bool = False,
     ):
         """
         Initialize a new TagField instance.
@@ -201,10 +249,16 @@ class TagField(Field):
             case_sensitive (bool): Preserve the original letter cases of tags. If set to False, characters are converted to
                 lowercase by default.
             sortable (bool): If set, the field value can be used for sorting.
+            unf (bool): If set, keeps the sorted value in its original (un-normalized) form, e.g. preserving case
+                for TEXT/TAG fields that would otherwise be lowercased for sorting (valkey-search 1.3.0,
+                ``src/commands/ft_create_parser.cc``). Requires ``sortable=True``; raises ``ValueError`` otherwise.
         """
+        if unf and not sortable:
+            raise ValueError("unf requires sortable=True.")
         super().__init__(name, FieldType.TAG, alias, sortable)
         self.separator = separator
         self.case_sensitive = case_sensitive
+        self.unf = unf
 
     def to_args(self) -> List[TEncodable]:
         args = super().to_args()
@@ -212,8 +266,7 @@ class TagField(Field):
             args.extend([FtCreateKeywords.SEPARATOR, self.separator])
         if self.case_sensitive:
             args.append(FtCreateKeywords.CASESENSITIVE)
-        if self.sortable:
-            args.append(FtCreateKeywords.SORTABLE)
+        _append_sortable_unf_args(args, self.sortable, self.unf)
         return args
 
 
@@ -227,6 +280,7 @@ class NumericField(Field):
         name: TEncodable,
         alias: Optional[TEncodable] = None,
         sortable: bool = False,
+        unf: bool = False,
     ):
         """
         Initialize a new NumericField instance.
@@ -235,13 +289,19 @@ class NumericField(Field):
             name (TEncodable): The name of the numeric field.
             alias (Optional[TEncodable]): An alias for the field.
             sortable (bool): If set, the field value can be used for sorting.
+            unf (bool): If set, keeps the sorted value in its original (un-normalized) form (valkey-search 1.3.0,
+                ``src/commands/ft_create_parser.cc``). NUMERIC fields are never normalized for sorting, so this has
+                no observable effect beyond emitting the keyword, but it's accepted here for API symmetry with
+                TEXT/TAG. Requires ``sortable=True``; raises ``ValueError`` otherwise.
         """
+        if unf and not sortable:
+            raise ValueError("unf requires sortable=True.")
         super().__init__(name, FieldType.NUMERIC, alias, sortable)
+        self.unf = unf
 
     def to_args(self) -> List[TEncodable]:
         args = super().to_args()
-        if self.sortable:
-            args.append(FtCreateKeywords.SORTABLE)
+        _append_sortable_unf_args(args, self.sortable, self.unf)
         return args
 
 
@@ -261,7 +321,7 @@ class VectorFieldAttributes(ABC):
             dimensions (int): Number of dimensions in the vector. Equivalent to `DIM` on the module API.
             distance_metric (DistanceMetricType): The distance metric used in vector type field. Can be one of
                 `[L2 | IP | COSINE]`. Equivalent to `DISTANCE_METRIC` on the module API.
-            type (VectorType): Vector type. The only supported type is `FLOAT32`. Equivalent to `TYPE` on the module API.
+            type (VectorType): Vector type: `FLOAT32`, `FLOAT16`, or `BFLOAT16`. Equivalent to `TYPE` on the module API.
         """
         self.dimensions = dimensions
         self.distance_metric = distance_metric
@@ -279,9 +339,9 @@ class VectorFieldAttributes(ABC):
         if self.dimensions:
             args.extend([FtCreateKeywords.DIM, str(self.dimensions)])
         if self.distance_metric:
-            args.extend([FtCreateKeywords.DISTANCE_METRIC, self.distance_metric.name])
+            args.extend([FtCreateKeywords.DISTANCE_METRIC, self.distance_metric.value])
         if self.type:
-            args.extend([FtCreateKeywords.TYPE, self.type.name])
+            args.extend([FtCreateKeywords.TYPE, self.type.value])
         return args
 
 
@@ -304,7 +364,7 @@ class VectorFieldAttributesFlat(VectorFieldAttributes):
             dimensions (int): Number of dimensions in the vector. Equivalent to `DIM` on the module API.
             distance_metric (DistanceMetricType): The distance metric used in vector type field. Can be one of
                 `[L2 | IP | COSINE]`. Equivalent to `DISTANCE_METRIC` on the module API.
-            type (VectorType): Vector type. The only supported type is `FLOAT32`. Equivalent to `TYPE` on the module API.
+            type (VectorType): Vector type: `FLOAT32`, `FLOAT16`, or `BFLOAT16`. Equivalent to `TYPE` on the module API.
             initial_cap (Optional[int]): Initial vector capacity in the index affecting memory allocation size of the index.
                 Defaults to `1024`. Equivalent to `INITIAL_CAP` on the module API.
         """
@@ -340,7 +400,7 @@ class VectorFieldAttributesHnsw(VectorFieldAttributes):
             dimensions (int): Number of dimensions in the vector. Equivalent to `DIM` on the module API.
             distance_metric (DistanceMetricType): The distance metric used in vector type field. Can be one of
                 `[L2 | IP | COSINE]`. Equivalent to `DISTANCE_METRIC` on the module API.
-            type (VectorType): Vector type. The only supported type is `FLOAT32`. Equivalent to `TYPE` on the module API.
+            type (VectorType): Vector type: `FLOAT32`, `FLOAT16`, or `BFLOAT16`. Equivalent to `TYPE` on the module API.
             initial_cap (Optional[int]): Initial vector capacity in the index affecting memory allocation size of the index.
                 Defaults to `1024`. Equivalent to `INITIAL_CAP` on the module API.
             number_of_edges (Optional[int]): Number of maximum allowed outgoing edges for each node in the graph in each layer.
@@ -452,6 +512,9 @@ class FtCreateOptions:
         nostopwords: bool = False,
         stopwords: Optional[List[TEncodable]] = None,
         punctuation: Optional[TEncodable] = None,
+        filter: Optional[TEncodable] = None,
+        score_field: Optional[TEncodable] = None,
+        no_highlight: bool = False,
     ):
         """
         Initialize the FT.CREATE optional fields.
@@ -460,7 +523,11 @@ class FtCreateOptions:
             data_type (Optional[DataType]): The index data type. If not defined a ``HASH`` index is created.
             prefixes (Optional[List[TEncodable]]): A list of prefixes of index definitions.
             score (Optional[float]): Default score for documents in the index. Default is 1.0.
-            language (Optional[TEncodable]): Default language for documents in the index.
+            language (Optional[TEncodable]): Default language for documents in the index, used for stemming. Passed
+                through verbatim -- GLIDE does not validate it client-side. valkey-search 1.3.0-rc1 recognises 12
+                values (``src/indexes/text/languages/``): ``arabic``, ``dutch``, ``english``, ``french``, ``german``,
+                ``indonesian``, ``italian``, ``portuguese``, ``russian``, ``spanish``, ``swedish``, ``turkish``. An
+                unrecognised value is rejected by the server, not by GLIDE.
             skipinitialscan (bool): If set, does not scan and index existing documents on index creation.
             minstemsize (Optional[int]): Minimum word length to stem. Words shorter than this are not stemmed.
             withoffsets (bool): If set, stores term offsets for document fields. Mutually exclusive with ``nooffsets``.
@@ -468,6 +535,28 @@ class FtCreateOptions:
             nostopwords (bool): If set, disables stop-word filtering. Mutually exclusive with ``stopwords``.
             stopwords (Optional[List[TEncodable]]): Custom list of stop words. Mutually exclusive with ``nostopwords``.
             punctuation (Optional[TEncodable]): Custom punctuation characters to use during tokenization.
+            filter (Optional[TEncodable]): A filter expression limiting which documents the index applies to
+                (valkey-search 1.3.0, ``src/commands/ft_create_parser.cc``). A document that doesn't match this
+                expression is excluded from the index even if its key matches a configured prefix. The expression
+                cannot be empty.
+            score_field (Optional[TEncodable]): The name of a document field whose numeric value is used as the
+                document's custom score, multiplying into the final relevance score (valkey-search 1.3.0,
+                ``src/commands/ft_create_parser.cc``: "the name of the document field whose numeric value is used
+                as the document's custom score. Only one per index."). The field must already exist in the
+                document; it is not itself a schema definition. Confirmed live: a document with a higher value in
+                this field ranks correspondingly higher under the same query. Separately, FT.INFO only reports this
+                option back under `index_definition`'s `score_field` key when `search.emulate-release` is at least
+                1.3.0 (``ft_info_score_field`` compatibility flag, ``src/index_schema.cc`` `RespondWithInfo()`) --
+                below that level the pair is omitted entirely and `default_score` reports the literal string "1"
+                regardless of this option. The scoring behavior itself (above) is unaffected by this flag; only
+                FT.INFO's reporting of it is gated. See upstream COMPATIBILITY.md's "Sunsetting of Incompatible
+                Behavior" section.
+            no_highlight (bool): Emits NOHL. valkey-search does not support highlighting at all, so this is a
+                genuine no-op on this engine (confirmed live and in source: ``src/commands/ft_create_parser.cc``
+                "Highlighting is not supported, so NOHL is accepted and the match result deliberately discarded" --
+                the token is accepted but not even stored for FT.INFO to report, unlike SORTABLE UNF which IS
+                stored and reported despite also being a no-op). Implemented for wire compatibility with
+                RediSearch clients.
         """
         self.data_type = data_type
         self.prefixes = prefixes
@@ -480,6 +569,9 @@ class FtCreateOptions:
         self.nostopwords = nostopwords
         self.stopwords = stopwords
         self.punctuation = punctuation
+        self.filter = filter
+        self.score_field = score_field
+        self.no_highlight = no_highlight
 
     def _validate_options(self) -> None:
         """Validate mutually exclusive options."""
@@ -487,6 +579,8 @@ class FtCreateOptions:
             raise ValueError("withoffsets and nooffsets are mutually exclusive.")
         if self.nostopwords and self.stopwords is not None:
             raise ValueError("nostopwords and stopwords are mutually exclusive.")
+        if self.filter is not None and not self.filter:
+            raise ValueError("filter cannot be empty.")
 
     def _append_offset_args(self, args: List[TEncodable]) -> None:
         """Append offset-related arguments."""
@@ -532,4 +626,10 @@ class FtCreateOptions:
         self._append_stopword_args(args)
         if self.punctuation is not None:
             args.extend([FtCreateKeywords.PUNCTUATION, self.punctuation])
+        if self.filter is not None:
+            args.extend([FtCreateKeywords.FILTER, self.filter])
+        if self.score_field is not None:
+            args.extend([FtCreateKeywords.SCORE_FIELD, self.score_field])
+        if self.no_highlight:
+            args.append(FtCreateKeywords.NOHL)
         return args
