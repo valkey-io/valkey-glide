@@ -353,7 +353,7 @@ def skip_if_version_below(request):
 
 
 def classify_inkeys_probe_error(msg: str) -> bool:
-    """R2-M-1: pure classification function extracted from
+    """Pure classification function extracted from
     ``_probe_search_1_3_capability`` so the skip-or-run decision for every
     1.3-only test has a server-free unit test (see
     ``tests/test_options.py::TestClassifyInkeysProbeError``).
@@ -373,9 +373,9 @@ def _probe_search_1_3_capability(client) -> bool:
     """Classify the connected search module as 1.3+-capable or not.
 
     Uses a real-command, fake-argument probe rather than a version-string
-    compare (runbook Trap 5: a version string can be present and still not
-    answer the question that matters -- whether the specific capability a
-    test needs is live). ``INKEYS`` is used as the capability marker because
+    compare: a version string can be present and still not answer the
+    question that matters -- whether the specific capability a test needs
+    is live. ``INKEYS`` is used as the capability marker because
     it is new in 1.3.0-rc1 (PR #967) and is parsed by the same shared
     ``vmsdk::ParamParser`` keyword-dispatch machinery as every other
     FT.SEARCH option, so a module that doesn't understand it rejects it with
@@ -405,7 +405,7 @@ def _probe_search_1_3_capability(client) -> bool:
         client.custom_command(["FT.CREATE", probe_index, "SCHEMA", "title", "TEXT"])
     except RequestError as e:
         # Module entirely absent, or FT.CREATE itself unavailable. This must
-        # be a hard, loud failure -- never a silent skip (runbook Trap 3).
+        # be a hard, loud failure -- never a silent skip.
         raise RuntimeError(
             "search 1.3 capability probe could not create a test index "
             f"(is the search module loaded at all?): {e}"
@@ -476,7 +476,7 @@ def _parse_emulate_release_level(config_get_raw: object) -> Optional[str]:
     shape entirely (a scalar, a nested per-node dict from a non-GLIDE
     caller, an odd-length flat list): the caller is responsible for
     deciding whether a ``None`` here means "pre-1.3" or "unparseable
-    reply from a 1.3-capable module" (QA R4-L-1) -- this function only
+    reply from a 1.3-capable module" -- this function only
     reports "no value found", it does not have enough context to tell
     those apart.
     """
@@ -500,7 +500,7 @@ def emulate_release_level(request, search_1_3_capability: bool) -> str:
     level (e.g. ``"1.0.0"`` at the module's own default, ``"1.3.0"`` when
     explicitly raised), read once via ``CONFIG GET search.emulate-release``.
 
-    E-2 (D22): ``requires_search_1_3`` (the ``search_1_3_capability`` probe
+    ``requires_search_1_3`` (the ``search_1_3_capability`` probe
     above) answers "is this binary 1.3-capable at all", not "is the 1.3
     RediSearch-compatible behavior actually active right now" -- those are
     different questions, because `search.emulate-release` defaults to the
@@ -519,21 +519,21 @@ def emulate_release_level(request, search_1_3_capability: bool) -> str:
     module ``search.emulate-release`` doesn't exist, so this skips with a
     reason instead of raising.
 
-    QA R4-L-1: once ``search_1_3_capability`` is True, a ``None`` from
+    Once ``search_1_3_capability`` is True, a ``None`` from
     ``_parse_emulate_release_level`` can no longer mean "pre-1.3" -- it
     means the harness got a reply shape it couldn't decode from a module
     that IS 1.3-capable (a nested per-node dict, an odd-length flat list,
     a scalar). Skipping in that state would be a false green: every gated
     test would skip as "pre-1.3" against a module that actually is 1.3.
-    This fails loudly instead, per the runbook's Trap 3 rule that a
-    harness misread must never present as a skip.
+    This fails loudly instead, since a harness misread must never present
+    as a skip.
 
     Connects the same way as `search_1_3_capability` (cluster mode if
     cluster endpoints are available, else standalone) for the same reason:
     a standalone-only run has no `pytest.valkey_cluster` to connect
     through.
 
-    QA R4-L-4: this is session-scoped and reads the level from ONE
+    This fixture is session-scoped and reads the level from ONE
     deployment (cluster, when available) -- the resulting value is then
     reused for every test regardless of that test's own `cluster_mode`
     parametrization, including `cluster_mode=False` tests. This is only
@@ -592,8 +592,8 @@ def _apply_requires_search_1_3(request):
             pytest.skip(
                 reason="search module is present but pre-1.3 (INKEYS probe "
                 "rejected with 'Unexpected argument `INKEYS`'); this test "
-                "exercises a valkey-search 1.3 feature (runbook Trap 3: "
-                "attributed, not silent)."
+                "exercises a valkey-search 1.3 feature and is skipped with "
+                "an attributed reason rather than silently."
             )
 
 

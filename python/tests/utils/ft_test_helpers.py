@@ -2,7 +2,7 @@
 """Shared, server-agnostic test helpers for the valkey-search 1.3 feature
 tests (async and sync). Fixtures and expectations that do not depend on
 whether the client is async or sync live here so both test files assert the
-same thing from one place (M-7). Does not restructure the legacy (pre-1.3)
+same thing from one place. Does not restructure the legacy (pre-1.3)
 test suites -- only the NEW 1.3 tests use this module.
 """
 
@@ -16,9 +16,9 @@ T = TypeVar("T")
 def pair_flat_list(raw: object) -> Mapping[TEncodable, Any]:
     """Normalises a server reply that may come back as either a RESP3 map
     or a RESP2 flat alternating key/value list into a plain mapping, so
-    callers don't reinvent this pairing inline at each call site (R3a-L-11:
+    callers don't reinvent this pairing inline at each call site (
     a reinvented inline version in a new test reintroduced the odd-length
-    silent-drop hazard R2-L-4 fixed in `normalize_cluster_shards_entry`/
+    silent-drop hazard fixed in `normalize_cluster_shards_entry`/
     `normalize_cluster_shards_node` -- this is the FT.INFO-shaped
     equivalent of those two, generalised since FT.INFO's `attributes`
     entries and `index_definition` need the exact same normalisation).
@@ -44,7 +44,7 @@ def _parse_emulate_release(
     below. Raises ValueError (never a bare parse exception or silent
     fallback) on anything that isn't a dotted X.Y.Z version string (an
     optional ``-suffix``, e.g. ``-rc1``, is stripped before parsing and
-    otherwise ignored -- R2-L-2: a module build whose own `emulate-release`
+    otherwise ignored -- a module build whose own `emulate-release`
     reports a pre-release suffix should still parse, since the X.Y.Z part
     is all these helpers compare against), so a test using one of these
     helpers fails loudly if the harness's active emulate-release can't be
@@ -66,7 +66,7 @@ def _parse_emulate_release(
 def json_groupby_column(path: T, alias: T, emulate_release: str) -> T:
     """The FT.AGGREGATE GROUPBY output column name for a JSON-indexed field,
     which valkey-search names differently depending on `search.emulate-release`
-    (M-3, D4=1.3.0 baseline):
+    (baseline 1.3.0):
 
       * < 1.3.0 (the module's own default is 1.0.0): the raw schema
         identifier, i.e. the JSON path itself (e.g. "$.condition").
@@ -88,7 +88,7 @@ def json_groupby_column(path: T, alias: T, emulate_release: str) -> T:
 
 
 # --- Shared seed data / expected values for the NEW 1.3 feature tests ---
-# M-7: the async and sync test files duplicate these tests near-verbatim
+# The async and sync test files duplicate these tests near-verbatim
 # (same schema, same seed values, same expected results, differing only in
 # await/client-variable-name boilerplate). Centralising the data literals
 # here means a transcription slip can no longer make the two files assert
@@ -157,7 +157,7 @@ VECTOR_RANGE_AGGREGATE_EXPECTED_DISTANCES: List[float] = [0.0, 1.0]
 
 MULTI_SHARD_DOC_COUNT = 12
 
-# FT.HYBRID fixture (R3b M-1/M-3): two docs where the SEARCH arm and the
+# FT.HYBRID fixture: two docs where the SEARCH arm and the
 # VSIM arm rank them in OPPOSITE order, so a COMBINE method that is actually
 # weighting the two arms differently (not just always picking the same
 # winner regardless of method) can be told apart from one that isn't.
@@ -203,10 +203,10 @@ def normalize_cluster_shards_entry(
     """
     if isinstance(shard, Mapping):
         return dict(shard)
-    # R2-L-4: zip(x[0::2], x[1::2]) on an odd-length list silently drops the
+    # zip(x[0::2], x[1::2]) on an odd-length list silently drops the
     # trailing element instead of raising -- a genuine reply-shape
     # regression (an unpaired key with no value) would otherwise disappear
-    # instead of failing loudly. R3a-L-10: a bare `assert` is stripped
+    # instead of failing loudly. A bare `assert` is stripped
     # entirely under `python -O`, silently disabling this guard in that
     # mode -- raise ValueError instead so it can never be optimized away.
     if len(shard) % 2 != 0:  # type: ignore[arg-type]
@@ -223,7 +223,7 @@ def normalize_cluster_shards_node(node: object) -> Dict[bytes, Any]:
     distinction, independent of the shard entry's own)."""
     if isinstance(node, Mapping):
         return dict(node)
-    # R3a-L-10: see normalize_cluster_shards_entry's comment above -- raise
+    # See normalize_cluster_shards_entry's comment above -- raise
     # rather than assert so python -O can't silently strip this guard.
     if len(node) % 2 != 0:  # type: ignore[arg-type]
         raise ValueError(

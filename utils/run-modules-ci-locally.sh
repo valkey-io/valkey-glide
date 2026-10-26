@@ -1,47 +1,42 @@
 #!/usr/bin/env bash
-# Reproduces the "Modules Tests (Linux)" job from each language's own
-# <lang>-modules.yml on this machine, as closely as possible, against an
-# overridable module image (deliberately not pinning a new CI image --
-# proves 1.3 support via a local run of the SAME job against a
-# 1.3-bearing image instead). Shared across every language's port branch,
-# so this file is a single source of truth per language, selected via
-# MODULES_TEST_LANG, rather than N language branches each overwriting the
-# whole script and colliding with each other and with Python's own
-# CI-sync guard (tests/test_ci_workflow_sync.py pins this file's Python
-# invocation verbatim).
+# Reproduces the "Modules Tests (Linux)" job from
+# .github/workflows/python-modules.yml on this machine, as closely as
+# possible, against an overridable module image. Written to avoid pinning a
+# new CI image; this proves 1.3 support via a local run of the SAME job against a
+# 1.3-bearing image instead.
 #
 # Shares the docker start/verify logic with
 # .github/actions/start-valkey-docker/action.yml via
 # utils/start-valkey-docker-modules.sh on EVERY path, including the
-# emulate-release override.
+# emulate-release override (an earlier version hand-
+# rolled a second bring-up for that case, so the 9.2.0-rc2 proof didn't
+# actually exercise CI's startup code -- fixed by giving the shared script
+# a SEARCH_MODULE_ARGS hook instead of forking the bring-up logic).
 #
 # Usage: three image/release combinations are used across this file's
-# proof runs:
+# proof runs, named in BUILD-MODULES-1.3.md and PR-DRAFT-PYTHON-VS13.md's
+# Testing table as "1.", "2." and "3." below. (A fourth combination --
+# 9.1.3 at its own default -- isn't listed as its own config: that image's
+# module predates the `--emulate-release` arg and aborts boot if given one,
+# so EMULATE_RELEASE="" is mandatory whenever IMAGE=9.1.3, not an
+# independent axis.)
 #   utils/run-modules-ci-locally.sh                                       # 1: 9.2.0-rc2, emulate-release 1.3.0 (default; run-proof)
 #   IMAGE=valkey/valkey-bundle:9.1.3 EMULATE_RELEASE="" utils/run-modules-ci-locally.sh   # 2: 9.1.3, search 1.2.1 (skip-proof)
 #   EMULATE_RELEASE="" utils/run-modules-ci-locally.sh                    # 3: 9.2.0-rc2, module's own default emulate-release (1.0.0)
 #
-# MODULES_TEST_LANG selects which language's test tail runs (default
-# "python", preserving every existing caller's behaviour byte-for-byte):
-#   MODULES_TEST_LANG=python utils/run-modules-ci-locally.sh   # default
-#   MODULES_TEST_LANG=go utils/run-modules-ci-locally.sh
+# See BUILD-MODULES-1.3.md for narrated example runs and Mac-vs-CI-runner
+# differences (notably: Docker Desktop on macOS shares /Users by default,
+# not /tmp -- any file this script bind-mounts into a container MUST live
+# under a /Users path or the mount silently becomes an empty directory
+# instead of the file, with no error).
 #
-# Notable Mac-vs-CI-runner difference: Docker Desktop on macOS shares
-# /Users by default, not /tmp -- any file this script bind-mounts into a
-# container MUST live under a /Users path or the mount silently becomes an
-# empty directory instead of the file, with no error).
-#
-# Requires, per MODULES_TEST_LANG:
-#   python (default): the Python client already built (python3 dev.py
-#     build --client async && --client sync) -- this script does not
-#     rebuild the wrapper, matching the CI job's "Build Python wrapper"
-#     step only in effect, not in mechanism.
-#   go: docker, the Rust toolchain + cbindgen (`cargo install cbindgen`),
-#     and `protoc-gen-go` (`go install
-#     google.golang.org/protobuf/cmd/protoc-gen-go@v1.33.0`). This script
-#     runs `make build-glide-client generate-protobuf` itself before
-#     testing, so a stale native lib or stale generated protobuf can't
-#     produce a false green.
+# Requires: docker, valkey-cli (Homebrew: `brew install valkey`), and the
+# Python client already built (python3 dev.py build --client async && ...
+# --client sync) -- this script does not rebuild the wrapper, matching the
+# CI job's "Build Python wrapper" step only in effect, not in mechanism (see
+# BUILD-MODULES-1.3.md for why: the CI step runs on a fresh runner and must
+# build from scratch, this script assumes a dev checkout that's already
+# built).
 
 set -euo pipefail
 
@@ -63,7 +58,7 @@ STANDALONE_PORT="${STANDALONE_PORT:-6389}"
 # Confirmed by source (src/valkey_search_options.cc:883,
 # vmsdk/src/module_config.cc:179) and empirically against both a local
 # macOS build and the valkey/valkey-bundle:9.2.0-rc2 Docker image.
-# Default baseline is 1.3.0. Set to an empty string to start at the module's own
+# The 1.3.0 baseline. Set to an empty string to start at the module's own
 # default instead (useful for the 9.1.3 skip-proof run, where the module is
 # too old to accept this arg at all).
 EMULATE_RELEASE="${EMULATE_RELEASE-1.3.0}"

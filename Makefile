@@ -90,8 +90,8 @@ prettier-fix:
 go: .build/go_deps
 	$(MAKE) -C go build
 
-go-test: .build/go_deps
-	$(MAKE) -C go test
+go-test: .build/go_deps check-valkey-server
+	$(MAKE) -C go integ-test
 
 go-lint: .build/go_deps
 	$(MAKE) -C go lint

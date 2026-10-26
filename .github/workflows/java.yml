@@ -21,6 +21,8 @@ on:
             - .github/actions/install-engine/action.yml
             - .github/workflows/create-test-matrices/action.yml
             - .github/json_matrices/**
+            - "!**/*.md"
+            - "!**/THIRD_PARTY_LICENSES*"
 
     pull_request:
         paths:
@@ -35,6 +37,8 @@ on:
             - .github/actions/install-engine/action.yml
             - .github/workflows/create-test-matrices/action.yml
             - .github/json_matrices/**
+            - "!**/*.md"
+            - "!**/THIRD_PARTY_LICENSES*"
 
     workflow_dispatch:
         inputs:

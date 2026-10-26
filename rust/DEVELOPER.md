@@ -48,6 +48,8 @@ from crates.io after publishing.
 
 ## Build
 
+<!-- The build/test/lint commands below are intentionally mirrored in rust/AGENTS.md (agent quick-reference). Keep both in sync when they change. -->
+
 ```bash
 cargo build            # debug
 cargo build --release  # optimized

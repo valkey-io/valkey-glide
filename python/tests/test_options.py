@@ -297,8 +297,8 @@ class TestFtSearchOptionsInKeys:
 
 
 class TestFtSearchOptionsScoring:
-    """Unit tests for P3: WITHSCORES/SCORER on FtSearchOptions, and the
-    D11/L-9 count=True fix (COUNT is not a real FT.SEARCH keyword --
+    """Unit tests for WITHSCORES/SCORER on FtSearchOptions, and the
+    count=True fix (COUNT is not a real FT.SEARCH keyword --
     confirmed live the server rejects it outright -- so it now maps to the
     LIMIT 0 0 count-only form instead)."""
 
@@ -318,7 +318,7 @@ class TestFtSearchOptionsScoring:
         assert args == ["WITHSCORES", "SCORER", "BM25STD"]
 
     def test_count_maps_to_limit_0_0_not_count_keyword(self):
-        # D11/L-9: COUNT used to be emitted literally, but
+        # COUNT used to be emitted literally, but
         # src/commands/ft_search_parser.cc has no COUNT keyword at all --
         # confirmed live, the server rejects a bare COUNT token with
         # "Unexpected argument `COUNT`". LIMIT 0 0 is the server's actual
@@ -338,11 +338,10 @@ class TestFtSearchOptionsScoring:
 
 
 class TestFtAggregateOptionsScoring:
-    """Unit tests for P3: ADDSCORES/SCORER on FtAggregateOptions. Both
+    """Unit tests for ADDSCORES/SCORER on FtAggregateOptions. Both
     exist on FT.AGGREGATE's parser table (src/commands/ft_aggregate_parser.cc
     kAddScoresParam/kScorerParam) even though ft.aggregate.json's documented
-    argument spec omits them -- confirmed by reading the parser directly,
-    per glissader's P3 input finding."""
+    argument spec omits them -- confirmed by reading the parser directly."""
 
     def test_add_scores_absent_by_default(self):
         assert "ADDSCORES" not in FtAggregateOptions().to_args()
@@ -399,7 +398,7 @@ class TestFtAggregateOptionsWithCursor:
 
 
 class TestFtHybridSearchArm:
-    """Unit tests for P6: FtHybridSearchArm.to_args()."""
+    """Unit tests for FtHybridSearchArm.to_args()."""
 
     def test_bare_query(self):
         assert FtHybridSearchArm("hello").to_args() == ["SEARCH", "hello"]
@@ -427,9 +426,9 @@ class TestFtHybridSearchArm:
 
 
 class TestFtHybridVsimArm:
-    """Unit tests for P6: FtHybridVsimArm.to_args(), including the raw-bytes
-    vs. $param-reference vector handling (confirmed live, see FT.HYBRID
-    parity brief P6: FT.HYBRID's VSIM clause has no wire-level inline
+    """Unit tests for FtHybridVsimArm.to_args(), including the raw-bytes
+    vs. $param-reference vector handling (confirmed live: FT.HYBRID's
+    VSIM clause has no wire-level inline
     vector literal at all -- a $-prefixed PARAMS reference is the only form
     the server accepts, so raw bytes need a generated parameter name)."""
 
@@ -579,7 +578,7 @@ class TestFtHybridVsimArm:
 
 
 class TestFtHybridVsimFilter:
-    """Unit tests for P6: FtHybridVsimFilter.to_args(), covering the
+    """Unit tests for FtHybridVsimFilter.to_args(), covering the
     uncounted extension form vs. the counted form POLICY/BATCH_SIZE force."""
 
     def test_bare_expression_uses_uncounted_extension_form(self):
@@ -614,7 +613,7 @@ class TestFtHybridVsimFilter:
 
 
 class TestFtHybridCombine:
-    """Unit tests for P6: FtHybridCombine.RRF/.Linear/.Function to_args(),
+    """Unit tests for FtHybridCombine.RRF/.Linear/.Function to_args(),
     including the defaulting and mutual-exclusivity rules confirmed live
     against src/commands/ft_hybrid_parser.cc."""
 
@@ -700,7 +699,7 @@ class TestFtWithCursor:
 
 
 class TestFtHybridOptions:
-    """Unit tests for P6: FtHybridOptions.to_args(), including the
+    """Unit tests for FtHybridOptions.to_args(), including the
     LOCALONLY-must-be-first ordering fix (confirmed live: writing it after
     LOAD/PARAMS/any other clause is rejected outright, unlike DIALECT)."""
 
@@ -805,7 +804,7 @@ class TestFtHybridOptions:
 
 
 class TestFtCreateOptionsScoreField:
-    """Unit tests for P3: FtCreateOptions(score_field=)."""
+    """Unit tests for FtCreateOptions(score_field=)."""
 
     def test_score_field_absent_by_default(self):
         assert "SCORE_FIELD" not in FtCreateOptions().to_args()
@@ -841,7 +840,7 @@ class TestFtCreateOptionsNoHighlight:
 
 
 class TestJsonGroupbyColumnCompatHelper:
-    """Unit tests for the M-3 compat-expectation helper (tests/utils/ft_test_helpers.py)."""
+    """Unit tests for the compat-expectation helper (tests/utils/ft_test_helpers.py)."""
 
     def test_below_1_3_0_returns_path(self):
         assert json_groupby_column("$.c", "c", "1.0.0") == "$.c"
@@ -859,14 +858,14 @@ class TestJsonGroupbyColumnCompatHelper:
             json_groupby_column("$.c", "c", "1.3")
 
     def test_rc_suffix_tolerated(self):
-        # R2-L-2: a "-suffix" (e.g. "-rc1") is stripped before parsing the
+        # A "-suffix" (e.g. "-rc1") is stripped before parsing the
         # X.Y.Z part, rather than making the whole string unparseable.
         assert json_groupby_column("$.c", "c", "1.3.0-rc1") == "c"
         assert json_groupby_column("$.c", "c", "1.2.1-rc1") == "$.c"
 
 
 class TestClassifyInkeysProbeError:
-    """Unit tests for R2-M-1: the pure classification function the search
+    """Unit tests for the pure classification function the search
     1.3 capability gate uses to decide skip-vs-run for 16 tests
     (tests/conftest.py, extracted from _probe_search_1_3_capability)."""
 

@@ -24,6 +24,8 @@ on:
             - .github/actions/install-rust/action.yml
             - .github/actions/install-shared-dependencies/action.yml
             - .github/actions/install-zig/action.yml
+            - "!**/*.md"
+            - "!**/THIRD_PARTY_LICENSES*"
     pull_request:
         paths:
             - glide-core/redis-rs/**
@@ -40,6 +42,8 @@ on:
             - .github/actions/install-rust/action.yml
             - .github/actions/install-shared-dependencies/action.yml
             - .github/actions/install-zig/action.yml
+            - "!**/*.md"
+            - "!**/THIRD_PARTY_LICENSES*"
     workflow_dispatch:
         inputs:
             use-self-hosted-linux:

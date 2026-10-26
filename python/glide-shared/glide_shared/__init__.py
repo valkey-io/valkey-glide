@@ -48,8 +48,10 @@ from .commands.core_options import (
     MigrateOptions,
     MonitorMsg,
     OnlyIfEqual,
+    OnlyIfNotEqual,
     PubSubMsg,
     UpdateOptions,
+    ValueComparison,
 )
 from .commands.latency import LatencyEntry, LatencyEventInfo
 from .commands.memory import MemoryStats, MemoryStatsDb
@@ -293,6 +295,7 @@ __all__ = [
     "ConditionalChange",
     "HashFieldConditionalChange",
     "OnlyIfEqual",
+    "OnlyIfNotEqual",
     "ExpireOptions",
     "ExpiryGetEx",
     "ExpirySet",
@@ -338,6 +341,7 @@ __all__ = [
     "TrimByMaxLen",
     "TrimByMinId",
     "UpdateOptions",
+    "ValueComparison",
     # PubSub
     "PubSubMsg",
     "ALL_CHANNELS",

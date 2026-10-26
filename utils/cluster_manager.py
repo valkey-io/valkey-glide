@@ -420,6 +420,36 @@ def get_bind_addresses(host: str) -> List[str]:
     return list(dict.fromkeys(resolved + [DEFAULT_HOST_IPV4]))
 
 
+def build_loadmodule_args(module_path: str) -> List[str]:
+    """Build the ``--loadmodule`` argv for one ``--load-module`` entry.
+
+    Valkey's module loader requires each trailing config arg (e.g.
+    ``--emulate-release 1.3.0``) to be its own argv token starting with
+    ``--``, not one combined string -- confirmed via valkey_search
+    1.3.0-rc1. Only a trailing ``--...`` config suffix, if present, is
+    split into separate tokens; a plain module path (the common case, and
+    the only case when no config suffix is given) is passed through
+    unchanged.
+
+    Splitting every path through ``shlex.split`` unconditionally, even
+    when there is no config suffix to split out, is wrong: ``shlex.split``
+    tokenizes its input as shell syntax, so a path containing a single
+    apostrophe (e.g. a directory named after a user called ``o'brien``,
+    legal on both Linux and macOS) raises ``ValueError: No closing
+    quotation`` even though nothing needed splitting. A module path is
+    only run through ``shlex.split`` when it actually contains a trailing
+    ``--`` config token to isolate -- detected by a literal, un-tokenized
+    search for ``" --"`` in the path, so a plain path is never shell-
+    tokenized at all, apostrophes included.
+    """
+    config_start = module_path.find(" --")
+    if config_start == -1:
+        return [module_path]
+    path_part = module_path[:config_start]
+    config_part = module_path[config_start:]
+    return [path_part, *shlex.split(config_part)]
+
+
 def start_server(
     host: str,
     port: Optional[int],
@@ -504,27 +534,7 @@ def start_server(
                 "Please provide the path(s) to the module(s) you want to load."
             )
         for module_path in load_module:
-            # Valkey's module loader requires each trailing config arg
-            # (e.g. --emulate-release 1.3.0) to be its own argv token
-            # starting with "--", not one combined string -- confirmed via
-            # valkey_search 1.3.0-rc1. Only the trailing "--..." config
-            # suffix is split into separate tokens; the module path itself
-            # stays a single token even if it contains spaces (e.g. a
-            # path under "Program Files" on Windows, or any directory with
-            # a space in its name).
-            module_args = shlex.split(module_path)
-            config_index = next(
-                (i for i, arg in enumerate(module_args) if arg.startswith("--")),
-                len(module_args),
-            )
-            if config_index == len(module_args):
-                module_args = [module_path]
-            else:
-                module_args = [
-                    " ".join(module_args[:config_index]),
-                    *module_args[config_index:],
-                ]
-            cmd_args.extend(["--loadmodule", *module_args])
+            cmd_args.extend(["--loadmodule", *build_loadmodule_args(module_path)])
     cmd_args += tls_args
     p = subprocess.Popen(
         cmd_args,

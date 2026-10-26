@@ -33,6 +33,8 @@ on:
             - benchmarks/install_and_test.sh
             - benchmarks/utilities/**
             - utils/cluster_manager.py
+            - "!**/*.md"
+            - "!**/THIRD_PARTY_LICENSES*"
     pull_request:
         paths:
             - glide-core/**
@@ -58,6 +60,8 @@ on:
             - benchmarks/install_and_test.sh
             - benchmarks/utilities/**
             - utils/cluster_manager.py
+            - "!**/*.md"
+            - "!**/THIRD_PARTY_LICENSES*"
     workflow_dispatch:
         inputs:
             full-matrix:
