@@ -22,6 +22,7 @@ import {
     FtInfoOptions,
     FtSearchOptions,
     FtWithCursor,
+    LoadField,
 } from "..";
 
 /** Response type of {@link GlideFt.info | ft.info} command. */
@@ -1137,6 +1138,21 @@ function _addFtHybridVsimArm(
     arm: FtHybridVsimArm,
     paramRef: GlideString,
 ): GlideString[] {
+    if (arm.efRuntime !== undefined && arm.filter?.policy === "ADHOC") {
+        throw new Error(
+            "efRuntime is not supported with filter.policy: 'ADHOC' " +
+                "(the server rejects this combination: " +
+                '"EF_RUNTIME is irrelevant for POLICY ADHOC").',
+        );
+    }
+
+    if (
+        arm.filter?.batchSize !== undefined &&
+        arm.filter?.policy !== "BATCHES"
+    ) {
+        throw new Error("batchSize requires filter.policy: 'BATCHES'.");
+    }
+
     const fieldRef = Buffer.isBuffer(arm.field)
         ? Buffer.concat([Buffer.from("@"), arm.field])
         : `@${arm.field}`;
@@ -1195,6 +1211,10 @@ function _addFtHybridCombine(
 
     switch (combine.method) {
         case "RRF": {
+            if (combine.constant !== undefined && combine.constant < 0) {
+                throw new Error("constant must not be negative.");
+            }
+
             const subArgs: GlideString[] = [];
             if (combine.constant !== undefined)
                 subArgs.push("CONSTANT", combine.constant.toString());
@@ -1206,6 +1226,16 @@ function _addFtHybridCombine(
         }
 
         case "LINEAR": {
+            if (
+                (combine.alpha === undefined) !==
+                (combine.beta === undefined)
+            ) {
+                throw new Error(
+                    "alpha and beta must both be set, or both left unset -- " +
+                        "the server rejects writing exactly one of them.",
+                );
+            }
+
             const subArgs: GlideString[] = [];
             if (combine.alpha !== undefined)
                 subArgs.push("ALPHA", combine.alpha.toString());
@@ -1259,12 +1289,8 @@ function _addFtHybridOptions(
 
     if (options?.loadAll) {
         args.push("LOAD", "*");
-    } else if (options?.loadFields) {
-        args.push(
-            "LOAD",
-            options.loadFields.length.toString(),
-            ...options.loadFields,
-        );
+    } else {
+        args.push(..._loadFieldsToArgs(options?.loadFields));
     }
 
     if (options?.timeout !== undefined) {
@@ -1326,12 +1352,7 @@ function _addFtAggregateOptions(options?: FtAggregateOptions): GlideString[] {
     if (options.slop !== undefined) args.push("SLOP", options.slop.toString());
 
     if (options.loadAll) args.push("LOAD", "*");
-    else if (options.loadFields)
-        args.push(
-            "LOAD",
-            options.loadFields.length.toString(),
-            ...options.loadFields,
-        );
+    else args.push(..._loadFieldsToArgs(options.loadFields));
 
     if (options.timeout) args.push("TIMEOUT", options.timeout.toString());
 
@@ -1417,6 +1438,41 @@ function _addAggregateClauses(
     }
 
     return args;
+}
+
+/**
+ * @internal
+ *
+ * Serializes a LOAD clause's field list for FT.AGGREGATE and FT.HYBRID (shared, since the two
+ * commands' LOAD clause grammar is byte-identical). The count is a token budget, not an entry
+ * count -- each {@link LoadField} with an alias contributes 3 tokens (field, AS, alias) rather
+ * than 1, matching the parser's own accounting. An empty or `undefined` list emits nothing
+ * (not `LOAD 0`), matching the Python reference.
+ */
+function _loadFieldsToArgs(
+    loadFields: (GlideString | LoadField)[] | undefined,
+): GlideString[] {
+    if (!loadFields || loadFields.length === 0) return [];
+
+    const loadFieldArgs: GlideString[] = [];
+
+    for (const entry of loadFields) {
+        if (
+            typeof entry === "object" &&
+            !Buffer.isBuffer(entry) &&
+            "fieldIdentifier" in entry
+        ) {
+            loadFieldArgs.push(entry.fieldIdentifier);
+
+            if (entry.alias !== undefined) {
+                loadFieldArgs.push("AS", entry.alias);
+            }
+        } else {
+            loadFieldArgs.push(entry as GlideString);
+        }
+    }
+
+    return ["LOAD", loadFieldArgs.length.toString(), ...loadFieldArgs];
 }
 
 /**

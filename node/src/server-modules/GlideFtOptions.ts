@@ -261,8 +261,8 @@ export type FtAggregateOptions = {
     withCursor?: FtWithCursor;
 } & (
     | {
-          /** List of fields to load from the index. */
-          loadFields?: GlideString[];
+          /** List of fields to load from the index, either a plain identifier or a {@link LoadField} for an aliased entry. */
+          loadFields?: (GlideString | LoadField)[];
           /** `loadAll` and `loadFields` are mutually exclusive. */
           loadAll?: never;
       }
@@ -445,6 +445,31 @@ export interface FtAggregateApply {
 }
 
 /**
+ * A single entry in the LOAD clause of {@link GlideFt.aggregate | FT.AGGREGATE} or
+ * {@link GlideFt.hybrid | FT.HYBRID}, optionally renaming the loaded field via `AS`. Modelled on
+ * the `{ fieldIdentifier, alias }` shape {@link FtSearchOptions.returnFields} already uses for
+ * FT.SEARCH's RETURN option.
+ *
+ * `AS <alias>` in the LOAD clause is a compatibility fix introduced in valkey-search 1.3.0
+ * (gated by the `ft_aggregate_load_as` compatibility flag). Below `search.emulate-release
+ * 1.3.0`, the legacy branch does not recognise `AS` as a rename keyword at all: it is consumed
+ * as just another LOAD field token rather than a rename directive. GLIDE does not validate this
+ * client-side; against a pre-1.3.0 emulate-release the server rejects the command outright with
+ * a `RequestError` reading "Index: field `AS` does not exist" (confirmed live against
+ * 1.3.0-rc1). Any code path that relies on the alias actually renaming the column needs
+ * `search.emulate-release` >= 1.3.0.
+ */
+export interface LoadField {
+    /** The identifier for the field to load. */
+    fieldIdentifier: GlideString;
+    /**
+     * The alias to emit the field's column under. Requires `search.emulate-release` >= 1.3.0 to
+     * take effect.
+     */
+    alias?: GlideString;
+}
+
+/**
  * Represents the input options to be used in the FT.SEARCH command.
  * All fields in this class are optional inputs for FT.SEARCH.
  */
@@ -579,6 +604,14 @@ export interface FtInfoOptions {
  * grammar axis from {@link FtHybridCombine}'s RRF/LINEAR/FUNCTION method -- one controls how the
  * vector search itself is pre-filtered, the other controls how the SEARCH and VSIM arms' scores
  * are fused after both arms have already run.
+ *
+ * - `"ADHOC"`: Evaluates the filter against every candidate as it is produced (brute-force),
+ *   rather than pre-restricting the vector index's own search space. {@link FtHybridVsimArm.efRuntime}
+ *   on the same VSIM arm is rejected when this policy is set (confirmed live and guarded
+ *   client-side: "EF_RUNTIME is irrelevant for POLICY ADHOC").
+ * - `"BATCHES"`: Evaluates the filter in batches drawn from the vector index. Required for
+ *   {@link FtHybridVsimFilter.batchSize} to be set (confirmed live and guarded client-side:
+ *   "BATCH_SIZE requires POLICY BATCHES").
  */
 export type HybridFilterPolicy = "ADHOC" | "BATCHES";
 
@@ -602,7 +635,10 @@ export interface FtHybridVsimFilter {
      * Tunes how many candidates `POLICY BATCHES` draws per batch. Requires
      * `policy: "BATCHES"`. Confirmed live: the value is accepted but currently discarded by the
      * server, so this currently has no observable effect; included for forward compatibility
-     * and because the server still validates its presence/ordering against `policy`.
+     * and because the server still validates its presence/ordering against `policy`. Validated
+     * client-side too: {@link GlideFt.hybrid} throws an `Error` if `batchSize` is set without
+     * `policy: "BATCHES"`, rather than serializing the invalid combination and relying on a
+     * server round trip to reject it.
      */
     batchSize?: number;
 }
@@ -679,7 +715,10 @@ export interface FtHybridVsimArm {
     k?: number;
     /**
      * HNSW search-time effort parameter. Only valid when the KNN block is written (RANGE is not
-     * currently supported by this typed API).
+     * currently supported by this typed API). Rejected by the server when `filter.policy` is
+     * `"ADHOC"` ("EF_RUNTIME is irrelevant for POLICY ADHOC"). Validated client-side too:
+     * {@link GlideFt.hybrid} throws an `Error` for that combination, rather than serializing the
+     * invalid combination and relying on a server round trip to reject it.
      */
     efRuntime?: number;
     /**
@@ -707,7 +746,9 @@ export interface FtHybridRrf {
     method: "RRF";
     /**
      * The RRF constant. Must be non-negative (confirmed live: the server rejects a negative
-     * value -- it places a pole at `rank == -constant`).
+     * value -- it places a pole at `rank == -constant`). Validated client-side too:
+     * {@link GlideFt.hybrid} throws an `Error` for a negative `constant`, rather than
+     * serializing the invalid value and relying on a server round trip to reject it.
      */
     constant?: number;
     /**
@@ -729,7 +770,10 @@ export interface FtHybridLinear {
     method: "LINEAR";
     /**
      * The SEARCH arm's weight. Defaults (server-side) to `0.3` when neither `alpha` nor `beta`
-     * is set. Setting one without the other is rejected by the server.
+     * is set. Setting one without the other is rejected by the server. Validated client-side
+     * too: {@link GlideFt.hybrid} throws an `Error` if exactly one of `alpha`/`beta` is set,
+     * rather than serializing the invalid combination and relying on a server round trip to
+     * reject it.
      */
     alpha?: number;
     /** The VSIM arm's weight. Defaults (server-side) to `0.7` when neither `alpha` nor `beta` is set. */
@@ -839,8 +883,8 @@ export type FtHybridOptions = {
     dialect?: number;
 } & (
     | {
-          /** List of fields to load from the index. */
-          loadFields?: GlideString[];
+          /** List of fields to load from the index, either a plain identifier or a {@link LoadField} for an aliased entry. */
+          loadFields?: (GlideString | LoadField)[];
           /** `loadAll` and `loadFields` are mutually exclusive. */
           loadAll?: never;
       }

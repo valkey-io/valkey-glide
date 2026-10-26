@@ -167,6 +167,29 @@ describe("GlideFt 1.3 argv serialization", () => {
             ]);
         });
 
+        it("emits LOAD with a LoadField alias as a 3-token budget entry (field AS alias)", async () => {
+            const { client, customCommand } = mockClient();
+            await GlideFt.aggregate(client, "idx", "*", {
+                loadFields: ["price", { fieldIdentifier: "title", alias: "t" }],
+            });
+            const args = customCommand.mock.calls[0][0] as string[];
+            expect(args.slice(3, 10)).toEqual([
+                "LOAD",
+                "4",
+                "price",
+                "title",
+                "AS",
+                "t",
+            ]);
+        });
+
+        it("omits LOAD entirely for an empty loadFields array (never LOAD 0)", async () => {
+            const { client, customCommand } = mockClient();
+            await GlideFt.aggregate(client, "idx", "*", { loadFields: [] });
+            const args = customCommand.mock.calls[0][0] as string[];
+            expect(args).not.toContain("LOAD");
+        });
+
         it("emits a bare WITHCURSOR when FtWithCursor has no fields set", async () => {
             const { client, customCommand } = mockClient();
             await GlideFt.aggregate(client, "idx", "*", { withCursor: {} });
@@ -317,24 +340,31 @@ describe("GlideFt 1.3 argv serialization", () => {
         });
 
         it("throws if a generated VSIM param name collides with a caller-supplied one", async () => {
+            jest.resetModules();
+            const fixedUuid = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+            jest.doMock("crypto", () => ({
+                randomUUID: () => "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+            }));
+
+            // Re-require after mocking "crypto" so GlideFt picks up the
+            // fixed UUID (the module caches `randomUUID` on import).
+            const { GlideFt: MockedGlideFt } = await import("../build-ts");
             const { client } = mockClient();
-            // Force a collision by using the same vector twice with a
-            // caller-supplied param matching the (random) generated name is
-            // not practical to engineer deterministically; instead verify
-            // the collision path by using an explicit $-reference whose
-            // name the caller also places in params with a different value
-            // is allowed (no collision check applies to explicit
-            // references), confirming collision detection is specific to
-            // the generated-name path.
-            await expect(
-                GlideFt.hybrid(
-                    client,
-                    "idx",
-                    { query: "hello" },
-                    { field: "vec", vector: "$q" },
-                    { params: [{ key: "q", value: "explicit" }] },
-                ),
-            ).resolves.toBeDefined();
+
+            try {
+                await expect(
+                    MockedGlideFt.hybrid(
+                        client,
+                        "idx",
+                        { query: "hello" },
+                        { field: "vec", vector: Buffer.from([1, 2]) },
+                        { params: [{ key: fixedUuid, value: "explicit" }] },
+                    ),
+                ).rejects.toThrow(/collides/);
+            } finally {
+                jest.dontMock("crypto");
+                jest.resetModules();
+            }
         });
 
         it("emits SEARCH arm scorer and yieldScoreAs in order", async () => {
@@ -500,6 +530,141 @@ describe("GlideFt 1.3 argv serialization", () => {
             ]);
         });
 
+        it("throws if efRuntime is set together with filter.policy ADHOC", async () => {
+            const { client } = mockClient();
+            await expect(
+                GlideFt.hybrid(
+                    client,
+                    "idx",
+                    { query: "hello" },
+                    {
+                        field: "vec",
+                        vector: "$v",
+                        efRuntime: 100,
+                        filter: { expression: "@title:hello", policy: "ADHOC" },
+                    },
+                ),
+            ).rejects.toThrow(/efRuntime/);
+        });
+
+        it("does not throw when efRuntime is set with policy BATCHES (only ADHOC is rejected)", async () => {
+            const { client, customCommand } = mockClient();
+            await GlideFt.hybrid(
+                client,
+                "idx",
+                { query: "hello" },
+                {
+                    field: "vec",
+                    vector: "$v",
+                    efRuntime: 100,
+                    filter: { expression: "@title:hello", policy: "BATCHES" },
+                },
+            );
+            const args = customCommand.mock.calls[0][0] as string[];
+            expect(args).toContain("EF_RUNTIME");
+        });
+
+        it("throws if batchSize is set without policy BATCHES", async () => {
+            const { client } = mockClient();
+            await expect(
+                GlideFt.hybrid(
+                    client,
+                    "idx",
+                    { query: "hello" },
+                    {
+                        field: "vec",
+                        vector: "$v",
+                        filter: { expression: "@title:hello", batchSize: 10 },
+                    },
+                ),
+            ).rejects.toThrow(/batchSize/);
+        });
+
+        it("throws if batchSize is set with policy ADHOC (not BATCHES)", async () => {
+            const { client } = mockClient();
+            await expect(
+                GlideFt.hybrid(
+                    client,
+                    "idx",
+                    { query: "hello" },
+                    {
+                        field: "vec",
+                        vector: "$v",
+                        filter: {
+                            expression: "@title:hello",
+                            policy: "ADHOC",
+                            batchSize: 10,
+                        },
+                    },
+                ),
+            ).rejects.toThrow(/batchSize/);
+        });
+
+        it("throws if combine RRF constant is negative", async () => {
+            const { client } = mockClient();
+            await expect(
+                GlideFt.hybrid(
+                    client,
+                    "idx",
+                    { query: "hello" },
+                    { field: "vec", vector: "$v" },
+                    { combine: { method: "RRF", constant: -1 } },
+                ),
+            ).rejects.toThrow(/constant/);
+        });
+
+        it("does not throw when combine RRF constant is 0", async () => {
+            const { client, customCommand } = mockClient();
+            await GlideFt.hybrid(
+                client,
+                "idx",
+                { query: "hello" },
+                { field: "vec", vector: "$v" },
+                { combine: { method: "RRF", constant: 0 } },
+            );
+            const args = customCommand.mock.calls[0][0] as string[];
+            expect(args).toContain("CONSTANT");
+        });
+
+        it("throws if combine LINEAR sets alpha without beta", async () => {
+            const { client } = mockClient();
+            await expect(
+                GlideFt.hybrid(
+                    client,
+                    "idx",
+                    { query: "hello" },
+                    { field: "vec", vector: "$v" },
+                    { combine: { method: "LINEAR", alpha: 0.5 } },
+                ),
+            ).rejects.toThrow(/alpha and beta/);
+        });
+
+        it("throws if combine LINEAR sets beta without alpha", async () => {
+            const { client } = mockClient();
+            await expect(
+                GlideFt.hybrid(
+                    client,
+                    "idx",
+                    { query: "hello" },
+                    { field: "vec", vector: "$v" },
+                    { combine: { method: "LINEAR", beta: 0.7 } },
+                ),
+            ).rejects.toThrow(/alpha and beta/);
+        });
+
+        it("does not throw when combine LINEAR sets neither alpha nor beta", async () => {
+            const { client, customCommand } = mockClient();
+            await GlideFt.hybrid(
+                client,
+                "idx",
+                { query: "hello" },
+                { field: "vec", vector: "$v" },
+                { combine: { method: "LINEAR", window: 20 } },
+            );
+            const args = customCommand.mock.calls[0][0] as string[];
+            expect(args).toContain("LINEAR");
+        });
+
         it("emits a bare COMBINE RRF with no sub-args", async () => {
             const { client, customCommand } = mockClient();
             await GlideFt.hybrid(
@@ -620,6 +785,45 @@ describe("GlideFt 1.3 argv serialization", () => {
             ]);
         });
 
+        it("emits LOAD with a LoadField alias as a 3-token budget entry (field AS alias)", async () => {
+            const { client, customCommand } = mockClient();
+            await GlideFt.hybrid(
+                client,
+                "idx",
+                { query: "hello" },
+                { field: "vec", vector: "$v" },
+                {
+                    loadFields: [
+                        "title",
+                        { fieldIdentifier: "__score", alias: "score" },
+                    ],
+                },
+            );
+            const args = customCommand.mock.calls[0][0] as string[];
+            const i = args.indexOf("LOAD");
+            expect(args.slice(i, i + 7)).toEqual([
+                "LOAD",
+                "4",
+                "title",
+                "__score",
+                "AS",
+                "score",
+            ]);
+        });
+
+        it("omits LOAD entirely for an empty loadFields array (never LOAD 0)", async () => {
+            const { client, customCommand } = mockClient();
+            await GlideFt.hybrid(
+                client,
+                "idx",
+                { query: "hello" },
+                { field: "vec", vector: "$v" },
+                { loadFields: [] },
+            );
+            const args = customCommand.mock.calls[0][0] as string[];
+            expect(args).not.toContain("LOAD");
+        });
+
         it("emits LOCALONLY before LOAD, DIALECT, and PARAMS regardless of field order", async () => {
             const { client, customCommand } = mockClient();
             await GlideFt.hybrid(
@@ -627,7 +831,12 @@ describe("GlideFt 1.3 argv serialization", () => {
                 "idx",
                 { query: "hello" },
                 { field: "vec", vector: "$v" },
-                { dialect: 2, loadFields: ["title"], localOnly: true },
+                {
+                    dialect: 2,
+                    loadFields: ["title"],
+                    localOnly: true,
+                    params: [{ key: "q", value: "value" }],
+                },
             );
             const args = customCommand.mock.calls[0][0] as string[];
             // Everything after the VSIM arm's own tokens.
@@ -637,6 +846,10 @@ describe("GlideFt 1.3 argv serialization", () => {
                 "LOAD",
                 "1",
                 "title",
+                "PARAMS",
+                "2",
+                "q",
+                "value",
                 "DIALECT",
                 "2",
             ]);
