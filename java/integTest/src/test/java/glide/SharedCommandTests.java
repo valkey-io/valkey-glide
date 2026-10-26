@@ -636,6 +636,60 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void set_only_if_equal(BaseClient client) {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("8.1.0"),
+                "This feature added in version 8.1.0");
+
+        String key = UUID.randomUUID().toString();
+        assertEquals(OK, client.set(key, "value").get());
+
+        // Value not equal
+        SetOptions options = SetOptions.builder().conditionalSetOnlyIfEqualTo("other").build();
+        assertNull(client.set(key, "other", options).get());
+        assertEquals("value", client.get(key).get());
+
+        // Value equal
+        options = SetOptions.builder().conditionalSetOnlyIfEqualTo("value").build();
+        assertEquals(OK, client.set(key, "other", options).get());
+        assertEquals("other", client.get(key).get());
+
+        // Non-existent key
+        String missing = UUID.randomUUID().toString();
+        assertNull(client.set(missing, "value", options).get());
+        assertEquals(0L, client.exists(new String[] {missing}).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void set_only_if_not_equal(BaseClient client) {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("9.2.0"),
+                "This feature added in version 9.2.0");
+
+        String key = UUID.randomUUID().toString();
+        assertEquals(OK, client.set(key, "value").get());
+
+        // Value equal
+        SetOptions options = SetOptions.builder().conditionalSetOnlyIfNotEqualTo("value").build();
+        assertNull(client.set(key, "other", options).get());
+        assertEquals("value", client.get(key).get());
+
+        // Value not equal
+        options = SetOptions.builder().conditionalSetOnlyIfNotEqualTo("other").build();
+        assertEquals(OK, client.set(key, "other", options).get());
+        assertEquals("other", client.get(key).get());
+
+        // Non-existent key
+        String missing = UUID.randomUUID().toString();
+        assertEquals(OK, client.set(missing, "value", options).get());
+        assertEquals("value", client.get(missing).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void set_value_with_ttl_and_update_value_with_keeping_ttl(BaseClient client) {
         String key = UUID.randomUUID().toString();
         SetOptions options = SetOptions.builder().expiry(Milliseconds(2000L)).build();

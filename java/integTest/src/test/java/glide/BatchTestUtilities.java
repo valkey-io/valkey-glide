@@ -369,6 +369,34 @@ public class BatchTestUtilities {
                     .delifeq(stringKey10, value1);
         }
 
+        String stringKey11 = generateKey("StringKey", isAtomic);
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("8.1.0")) {
+            batch
+                    .set(stringKey11, "value")
+                    .set(
+                            stringKey11,
+                            "other",
+                            SetOptions.builder().conditionalSetOnlyIfEqualTo("other").build())
+                    .set(
+                            stringKey11,
+                            "other",
+                            SetOptions.builder().conditionalSetOnlyIfEqualTo("value").build())
+        }
+
+        String stringKey12 = generateKey("StringKey", isAtomic);
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("9.2.0")) {
+            batch
+                    .set(stringKey12, "value")
+                    .set(
+                            stringKey12,
+                            "other",
+                            SetOptions.builder().conditionalSetOnlyIfNotEqualTo("value").build())
+                    .set(
+                            stringKey12,
+                            "other",
+                            SetOptions.builder().conditionalSetOnlyIfNotEqualTo("other").build())
+        }
+
         Object[] expectedResults =
                 new Object[] {
                     OK, // flushall()
@@ -433,6 +461,28 @@ public class BatchTestUtilities {
                                 OK, // set(stringKey10, value1)
                                 false, // delifeq(stringKey10, "wrong-value")
                                 true, // delifeq(stringKey10, value1)
+                            });
+        }
+
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("8.1.0")) {
+            expectedResults =
+                    concatenateArrays(
+                            expectedResults,
+                            new Object[] {
+                                OK, // set(stringKey11, "value")
+                                null, // set(stringKey11, "other", conditionalSetOnlyIfEqualTo("other")) value not equal
+                                OK, // set(stringKey11, "other", conditionalSetOnlyIfEqualTo("value")) value equal
+                            });
+        }
+
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("9.2.0")) {
+            expectedResults =
+                    concatenateArrays(
+                            expectedResults,
+                            new Object[] {
+                                OK, // set(stringKey12, "value")
+                                null, // set(stringKey12, "other", conditionalSetOnlyIfNotEqualTo("value")) value equal
+                                OK, // set(stringKey12, "other", conditionalSetOnlyIfNotEqualTo("other")) value not equal
                             });
         }
 

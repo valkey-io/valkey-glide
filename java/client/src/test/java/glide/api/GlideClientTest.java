@@ -337,6 +337,7 @@ import glide.api.models.commands.ScoreFilter;
 import glide.api.models.commands.ScriptOptions;
 import glide.api.models.commands.ScriptOptionsGlideString;
 import glide.api.models.commands.SetOptions;
+import glide.api.models.commands.SetOptions.ConditionalSet;
 import glide.api.models.commands.SetOptions.Expiry;
 import glide.api.models.commands.SortBaseOptions;
 import glide.api.models.commands.SortOptions;
@@ -412,6 +413,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
@@ -1006,9 +1008,30 @@ public class GlideClientTest {
         assertEquals(value, response.get());
     }
 
+    /** Builds {@link SetOptions} with the given value comparison condition. */
+    private static SetOptions valueComparisonOptions(ConditionalSet condition, String value) {
+        SetOptions.SetOptionsBuilder builder = SetOptions.builder().expiry(Expiry.UnixSeconds(60L));
+        return (condition == ONLY_IF_EQUAL
+                        ? builder.conditionalSetOnlyIfEqualTo(value)
+                        : builder.conditionalSetOnlyIfNotEqualTo(value))
+                .build();
+    }
+
+    /** Builds {@link SetOptions} with the given binary value comparison condition. */
+    private static SetOptions valueComparisonOptions(ConditionalSet condition, GlideString value) {
+        SetOptions.SetOptionsBuilder builder = SetOptions.builder().expiry(Expiry.UnixSeconds(60L));
+        return (condition == ONLY_IF_EQUAL
+                        ? builder.conditionalSetOnlyIfEqualTo(value)
+                        : builder.conditionalSetOnlyIfNotEqualTo(value))
+                .build();
+    }
+
     @SneakyThrows
-    @Test
-    public void set_with_SetOptions_OnlyIfEqual_success() {
+    @ParameterizedTest
+    @EnumSource(
+            value = ConditionalSet.class,
+            names = {"ONLY_IF_EQUAL", "ONLY_IF_NOT_EQUAL"})
+    public void set_with_SetOptions_value_comparison_success(ConditionalSet condition) {
         // setup
         String key = "key";
         String value = "value";

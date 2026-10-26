@@ -887,14 +887,17 @@ class TestCommands:
         key = get_random_string(10)
         assert glide_sync_client.set(key, "value") == OK
 
+        # Value not equal
         cond = OnlyIfEqual("other")
         assert glide_sync_client.set(key, "other", conditional_set=cond) is None
         assert glide_sync_client.get(key) == b"value"
 
+        # Value equal
         cond = OnlyIfEqual("value")
         assert glide_sync_client.set(key, "other", conditional_set=cond) == OK
         assert glide_sync_client.get(key) == b"other"
 
+        # Non-existent key
         missing = get_random_string(10)
         assert glide_sync_client.set(missing, "value", conditional_set=cond) is None
         assert glide_sync_client.exists([missing]) == 0
@@ -906,14 +909,17 @@ class TestCommands:
         key = get_random_string(10)
         assert glide_sync_client.set(key, "value") == OK
 
+        # Value equal
         cond = OnlyIfNotEqual("value")
         assert glide_sync_client.set(key, "other", conditional_set=cond) is None
         assert glide_sync_client.get(key) == b"value"
 
+        # Value not equal
         cond = OnlyIfNotEqual("other")
         assert glide_sync_client.set(key, "other", conditional_set=cond) == OK
         assert glide_sync_client.get(key) == b"other"
 
+        # Non-existent key
         missing = get_random_string(10)
         assert glide_sync_client.set(missing, "value", conditional_set=cond) == OK
         assert glide_sync_client.get(missing) == b"value"
