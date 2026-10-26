@@ -165,14 +165,16 @@ async def _async_pool_teardown(client, cluster_mode: bool, cache_key: tuple) -> 
         )
         batch.custom_command(["CLIENT", "UNPAUSE"])
         batch.custom_command(["CONFIG", "SET", "timeout", "0"])
-        # Both reach every node in cluster mode. SELECT 0 is legal in cluster mode
-        # on every engine (only a non-zero index is refused), and Valkey 9 cluster
-        # tests do select other databases; the empty name clears a CLIENT SETNAME.
+        # SELECT reaches every node in cluster mode and is legal there on every
+        # engine (only a non-zero index is refused); Valkey 9 cluster tests do
+        # select other databases.
         batch.custom_command(["SELECT", "0"])
-        batch.custom_command(["CLIENT", "SETNAME", ""])
         batch.custom_command(["UNWATCH"])
         batch.custom_command(["FLUSHALL", "ASYNC"])
         await client.exec(batch, raise_on_error=True)
+        # Sent on its own, not in the batch: glide-core records the name only from
+        # a single CLIENT SETNAME and replays the recorded name on reconnect.
+        await client.custom_command(["CLIENT", "SETNAME", ""])
     except Exception:
         # Client is dead — will be recreated next test
         with _client_pool_lock:
