@@ -88,7 +88,8 @@ func toMapResult(result any, err error) (map[string]any, error) {
 
 // parseFtSearchResponse parses the generic response from FT.SEARCH into an FtSearchResult.
 // Go maps lose insertion order, so sortDocuments is called to restore the expected order
-// when SORTBY or WITHSORTKEYS is used.
+// when SORTBY or WITHSORTKEYS is used, or (SortBy empty) to restore relevance order by Score
+// descending when WITHSCORES is used.
 //
 // Each document's value shape depends on which of WithScores/WithSortKeys were requested, per
 // glide-core's value_conversion.rs reshaping (which this function only unwraps, never

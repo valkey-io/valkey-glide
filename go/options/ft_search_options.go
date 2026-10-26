@@ -120,6 +120,11 @@ type FtSearchOptions struct {
 	// Combining WithSortKeys with NoContent drops the sort key -- confirmed live, the server's
 	// reply reverts to the plain WITHSCORES-only shape in that combination, so
 	// [models.FtSearchDocument.SortKey] stays empty even though WithSortKeys was requested.
+	//
+	// When SortBy is left unset, Documents is returned sorted by Score descending (the server's
+	// own BM25 relevance order), since Go's map-based result type can't otherwise preserve it.
+	// Once SortBy is also set, documents are sorted by SortBy/SortKey instead, same as without
+	// WithScores.
 	WithScores bool
 	// Scorer is the scoring function used to rank results (valkey-search 1.3.0). "BM25STD" is
 	// the only value currently registered and selectable; any other value is rejected by the

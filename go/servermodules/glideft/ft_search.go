@@ -85,11 +85,27 @@ func buildSearchArgs(indexName, query string, opts *options.FtSearchOptions) ([]
 // sortDocuments re-sorts the documents slice to match the server's SORTBY order.
 // Go maps lose insertion order, so we reconstruct the sort using the sort field
 // value from each document's Fields map, or the SortKey when WITHSORTKEYS is used.
+//
+// When SortBy is empty but WithScores is set, the server's own BM25 relevance order is what
+// Python callers see (dict insertion order is preserved there). Go's map-based Documents loses
+// that order, so it's restored here by sorting on Score descending -- the best relevance result
+// first, matching the server's rank. This only applies when SortBy is empty: once SortBy and
+// WithScores combine, the existing port rule below keeps sorting by SortBy/SortKey and never
+// falls back to Score.
 func sortDocuments(docs []models.FtSearchDocument, opts *options.FtSearchOptions, withSortKeys bool) {
 	if len(docs) <= 1 {
 		return
 	}
 	if opts == nil || opts.SortBy == "" {
+		if opts != nil && opts.WithScores {
+			sort.SliceStable(docs, func(i, j int) bool {
+				si, sj := docs[i].Score, docs[j].Score
+				if si == nil || sj == nil {
+					return false
+				}
+				return *si > *sj
+			})
+		}
 		return
 	}
 
