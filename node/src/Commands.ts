@@ -233,7 +233,7 @@ export enum InfoOptions {
     /**
      * CLUSTER_INFO: Valkey Cluster information.
      *
-     * @remarks Since Valkey version 9.1.0.
+     * @remarks Since Valkey 9.1.0.
      */
     ClusterInfo = "cluster_info",
     /**
@@ -2858,7 +2858,7 @@ export interface BitOffsetOptions {
     /** The starting offset index. */
     start: number;
     /**
-     * The ending offset index. Optional since Valkey version 8.0 and above for the BITCOUNT command.
+     * The ending offset index. Optional Since Valkey 8.0.0 for the BITCOUNT command.
      * If not provided, it will default to the end of the string.
      * Could be defined only if `start` is defined.
      */
@@ -2949,7 +2949,7 @@ export enum FlushMode {
     /**
      * Flushes synchronously.
      *
-     * since Valkey version 6.2.0.
+     * Since Valkey 6.2.0.
      */
     SYNC = "SYNC",
     /** Flushes asynchronously. */
@@ -3227,7 +3227,7 @@ export interface StreamGroupOptions {
      * find out how many entries are between the arbitrary ID (excluding it) and the stream's last
      * entry.
      *
-     * since Valkey version 7.0.0.
+     * Since Valkey 7.0.0.
      */
     entriesRead?: string;
 }
@@ -4194,7 +4194,7 @@ export function createZIncrBy(
  * See https://valkey.io/commands/sort/ for more details.
  *
  * @remarks When in cluster mode, {@link SortOptions.byPattern|byPattern} and {@link SortOptions.getPatterns|getPattern} must map to the same hash
- *     slot as the key, and this is supported only since Valkey version 8.0.
+ *     slot as the key, and this is supported only Since Valkey 8.0.0.
  */
 export interface SortOptions {
     /**
@@ -4203,7 +4203,7 @@ export interface SortOptions {
      * from the key replaces the asterisk to create the key name. For example, if `key`
      * contains IDs of objects, `byPattern` can be used to sort these IDs based on an
      * attribute of the objects, like their weights or timestamps.
-     * Supported in cluster mode since Valkey version 8.0 and above.
+     * Supported in cluster mode Since Valkey 8.0.0.
      */
     byPattern?: GlideString;
 
@@ -4225,7 +4225,7 @@ export interface SortOptions {
      * arguments can be provided to retrieve multiple attributes. The special value `#` can
      * be used to include the actual element from `key` being sorted. If not provided, only
      * the sorted elements themselves are returned.
-     * Supported in cluster mode since Valkey version 8.0 and above.
+     * Supported in cluster mode Since Valkey 8.0.0.
      */
     getPatterns?: GlideString[];
 

@@ -32,7 +32,7 @@ public enum FlushMode {
     /**
      * Flushes synchronously.
      *
-     * @since Valkey 6.2 and above.
+     * @since Valkey 6.2.0.
      */
     SYNC,
     /** Flushes asynchronously. */

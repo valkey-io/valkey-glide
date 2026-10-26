@@ -186,7 +186,7 @@ class InfoSection(Enum):
     """
     Valkey Cluster information.
 
-    Since: Valkey version 9.1.0.
+    Since: Valkey 9.1.0.
     """
 
     COMMAND_STATS = "commandstats"

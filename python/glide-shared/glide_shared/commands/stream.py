@@ -211,7 +211,7 @@ class ExclusiveIdBound(StreamRangeBound):
     a timestamp and sequence number separated by a dash ("-"), for example "1526985054069-0". Stream ID bounds can also
     be incomplete, with just a timestamp.
 
-    Since: Valkey version 6.2.0.
+    Since: Valkey 6.2.0.
 
     Attributes:
         stream_id (TEncodable): The stream ID.

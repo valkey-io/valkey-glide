@@ -1687,7 +1687,7 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
         Pattern = 1
         """ Use channel name patterns """
         Sharded = 2
-        """ Use sharded pubsub. Available since Valkey version 7.0. """
+        """ Use sharded pubsub. Available Since Valkey 7.0.0. """
 
     @dataclass
     class PubSubSubscriptions:

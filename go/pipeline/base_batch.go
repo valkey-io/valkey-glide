@@ -189,7 +189,7 @@ func (b *BaseBatch[T]) MSetNX(keyValueMap map[string]string) *T {
 //
 // Note:
 //
-//	In cluster mode move is available since Valkey 9.0.0 and above.
+//	In cluster mode move is available since Valkey 9.0.0.
 //
 // See [valkey.io] for details.
 //
@@ -4612,7 +4612,7 @@ func (b *BaseBatch[T]) Sort(key string) *T {
 // Note:
 //
 // The use of [SortOptions.byPattern] and [SortOptions.getPatterns] in cluster mode is
-// supported since Valkey version 8.0.
+// supported Since Valkey 8.0.0.
 //
 // See [valkey.io] for details.
 //
@@ -4666,7 +4666,7 @@ func (b *BaseBatch[T]) SortReadOnly(key string) *T {
 // Note:
 //
 // The use of [SortOptions.byPattern] and [SortOptions.getPatterns] in cluster mode is
-// supported since Valkey version 8.0.
+// supported Since Valkey 8.0.0.
 //
 // See [valkey.io] for details.
 //

@@ -9520,7 +9520,7 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param args the arguments for the script
      * @return the result of the script execution
      * @see <a href="https://valkey.io/commands/eval-ro/">EVAL_RO</a>
-     * @since Valkey 7.0 and above
+     * @since Valkey 7.0.0
      */
     public Object evalReadonly(String script, List<String> keys, List<String> args) {
         return executeCommandWithGlide(
@@ -9540,7 +9540,7 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param args the arguments for the script
      * @return the result of the script execution
      * @see <a href="https://valkey.io/commands/evalsha-ro/">EVALSHA_RO</a>
-     * @since Valkey 7.0 and above
+     * @since Valkey 7.0.0
      */
     public Object evalshaReadonly(String sha1, List<String> keys, List<String> args) {
         return executeCommandWithGlide(
@@ -9673,7 +9673,7 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param functionCode the source code that implements the library
      * @return the library name that was loaded
      * @see <a href="https://valkey.io/commands/function-load/">FUNCTION LOAD</a>
-     * @since Valkey 7.0 and above
+     * @since Valkey 7.0.0
      */
     public String functionLoad(String functionCode) {
         return executeCommandWithGlide(
@@ -9686,7 +9686,7 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param functionCode the source code that implements the library
      * @return the library name that was loaded
      * @see <a href="https://valkey.io/commands/function-load/">FUNCTION LOAD</a>
-     * @since Valkey 7.0 and above
+     * @since Valkey 7.0.0
      */
     public String functionLoadReplace(String functionCode) {
         return executeCommandWithGlide(
@@ -9699,7 +9699,7 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param libraryName the library name to delete
      * @return "OK"
      * @see <a href="https://valkey.io/commands/function-delete/">FUNCTION DELETE</a>
-     * @since Valkey 7.0 and above
+     * @since Valkey 7.0.0
      */
     public String functionDelete(String libraryName) {
         return executeCommandWithGlide(
@@ -9711,7 +9711,7 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      *
      * @return the serialized payload of all loaded libraries
      * @see <a href="https://valkey.io/commands/function-dump/">FUNCTION DUMP</a>
-     * @since Valkey 7.0 and above
+     * @since Valkey 7.0.0
      */
     public byte[] functionDump() {
         return executeCommandWithGlide("FUNCTION DUMP", () -> glideClient.functionDump().get());
@@ -9723,7 +9723,7 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param serializedValue the serialized data from functionDump
      * @return "OK"
      * @see <a href="https://valkey.io/commands/function-restore/">FUNCTION RESTORE</a>
-     * @since Valkey 7.0 and above
+     * @since Valkey 7.0.0
      */
     public String functionRestore(byte[] serializedValue) {
         return executeCommandWithGlide(
@@ -9737,7 +9737,7 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param policy the policy for handling existing libraries
      * @return "OK"
      * @see <a href="https://valkey.io/commands/function-restore/">FUNCTION RESTORE</a>
-     * @since Valkey 7.0 and above
+     * @since Valkey 7.0.0
      */
     public String functionRestore(byte[] serializedValue, FunctionRestorePolicy policy) {
         return executeCommandWithGlide(
@@ -9753,7 +9753,7 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      *
      * @return "OK"
      * @see <a href="https://valkey.io/commands/function-flush/">FUNCTION FLUSH</a>
-     * @since Valkey 7.0 and above
+     * @since Valkey 7.0.0
      */
     public String functionFlush() {
         return executeCommandWithGlide("FUNCTION FLUSH", () -> glideClient.functionFlush().get());
@@ -9765,7 +9765,7 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param mode the flushing mode (SYNC or ASYNC)
      * @return "OK"
      * @see <a href="https://valkey.io/commands/function-flush/">FUNCTION FLUSH</a>
-     * @since Valkey 7.0 and above
+     * @since Valkey 7.0.0
      */
     public String functionFlush(FlushMode mode) {
         return executeCommandWithGlide(
@@ -9777,7 +9777,7 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      *
      * @return "OK" if function is terminated
      * @see <a href="https://valkey.io/commands/function-kill/">FUNCTION KILL</a>
-     * @since Valkey 7.0 and above
+     * @since Valkey 7.0.0
      */
     public String functionKill() {
         return executeCommandWithGlide("FUNCTION KILL", () -> glideClient.functionKill().get());
@@ -9791,7 +9791,7 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param args the function arguments
      * @return the invoked function's return value
      * @see <a href="https://valkey.io/commands/fcall/">FCALL</a>
-     * @since Valkey 7.0 and above
+     * @since Valkey 7.0.0
      */
     public Object fcall(String name, List<String> keys, List<String> args) {
         return executeCommandWithGlide(
@@ -9811,7 +9811,7 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param args the function arguments
      * @return the invoked function's return value
      * @see <a href="https://valkey.io/commands/fcall_ro/">FCALL_RO</a>
-     * @since Valkey 7.0 and above
+     * @since Valkey 7.0.0
      */
     public Object fcallReadonly(String name, List<String> keys, List<String> args) {
         return executeCommandWithGlide(
@@ -9828,7 +9828,7 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      *
      * @return info about all libraries and their functions
      * @see <a href="https://valkey.io/commands/function-list/">FUNCTION LIST</a>
-     * @since Valkey 7.0 and above
+     * @since Valkey 7.0.0
      */
     public List<LibraryInfo> functionList() {
         return executeCommandWithGlide(
@@ -9849,7 +9849,7 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param libraryNamePattern a wildcard pattern for matching library names
      * @return info about queried libraries and their functions
      * @see <a href="https://valkey.io/commands/function-list/">FUNCTION LIST</a>
-     * @since Valkey 7.0 and above
+     * @since Valkey 7.0.0
      */
     public List<LibraryInfo> functionList(String libraryNamePattern) {
         return executeCommandWithGlide(
@@ -9869,7 +9869,7 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      *
      * @return info about all libraries and their functions including code
      * @see <a href="https://valkey.io/commands/function-list/">FUNCTION LIST</a>
-     * @since Valkey 7.0 and above
+     * @since Valkey 7.0.0
      */
     public List<LibraryInfo> functionListWithCode() {
         return executeCommandWithGlide(
@@ -9890,7 +9890,7 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param libraryNamePattern a wildcard pattern for matching library names
      * @return info about queried libraries and their functions including code
      * @see <a href="https://valkey.io/commands/function-list/">FUNCTION LIST</a>
-     * @since Valkey 7.0 and above
+     * @since Valkey 7.0.0
      */
     public List<LibraryInfo> functionListWithCode(String libraryNamePattern) {
         return executeCommandWithGlide(
@@ -9911,7 +9911,7 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      *
      * @return a map with information about running scripts and available engines
      * @see <a href="https://valkey.io/commands/function-stats/">FUNCTION STATS</a>
-     * @since Valkey 7.0 and above
+     * @since Valkey 7.0.0
      */
     @SuppressWarnings("unchecked")
     public FunctionStats functionStats() {

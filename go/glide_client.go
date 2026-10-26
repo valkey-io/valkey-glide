@@ -621,7 +621,7 @@ func (client *Client) BgSaveSchedule(ctx context.Context) (string, error) {
 
 // Aborts all in-progress and scheduled background saves.
 //
-// Available since Valkey 8.1.
+// Available since Valkey 8.1.0.
 //
 // See [valkey.io] for details.
 //

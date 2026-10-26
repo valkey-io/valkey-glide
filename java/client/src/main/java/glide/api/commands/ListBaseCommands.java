@@ -940,7 +940,7 @@ public interface ListBaseCommands {
      * Pops one or more elements from the first non-empty list from the provided <code>keys
      * </code>.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
      * @see <a href="https://valkey.io/commands/lmpop/">valkey.io</a> for details.
      * @param keys An array of keys to lists.
@@ -964,7 +964,7 @@ public interface ListBaseCommands {
      * Pops one or more elements from the first non-empty list from the provided <code>keys
      * </code>.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
      * @see <a href="https://valkey.io/commands/lmpop/">valkey.io</a> for details.
      * @param keys An array of keys to lists.
@@ -987,7 +987,7 @@ public interface ListBaseCommands {
     /**
      * Pops one element from the first non-empty list from the provided <code>keys</code>.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
      * @see <a href="https://valkey.io/commands/lmpop/">valkey.io</a> for details.
      * @param keys An array of keys to lists.
@@ -1008,7 +1008,7 @@ public interface ListBaseCommands {
     /**
      * Pops one element from the first non-empty list from the provided <code>keys</code>.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
      * @see <a href="https://valkey.io/commands/lmpop/">valkey.io</a> for details.
      * @param keys An array of keys to lists.
@@ -1040,7 +1040,7 @@ public interface ListBaseCommands {
      *           Commands</a> for more details and best practices.
      *     </ol>
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/blmpop/">valkey.io</a> for details.
      * @param keys An array of keys to lists.
      * @param direction The direction based on which elements are popped from - see {@link
@@ -1074,7 +1074,7 @@ public interface ListBaseCommands {
      *           Commands</a> for more details and best practices.
      *     </ol>
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/blmpop/">valkey.io</a> for details.
      * @param keys An array of keys to lists.
      * @param direction The direction based on which elements are popped from - see {@link
@@ -1108,7 +1108,7 @@ public interface ListBaseCommands {
      *           Commands</a> for more details and best practices.
      *     </ol>
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/lmpop/">valkey.io</a> for details.
      * @param keys An array of keys to lists.
      * @param direction The direction based on which elements are popped from - see {@link
@@ -1141,7 +1141,7 @@ public interface ListBaseCommands {
      *           Commands</a> for more details and best practices.
      *     </ol>
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/lmpop/">valkey.io</a> for details.
      * @param keys An array of keys to lists.
      * @param direction The direction based on which elements are popped from - see {@link
@@ -1204,7 +1204,7 @@ public interface ListBaseCommands {
      * </code> depending on <code>wherefrom</code>, and pushes the element at the first/last element
      * of the list stored at <code>destination</code> depending on <code>wherefrom</code>.
      *
-     * @since Valkey 6.2.0 and above.
+     * @since Valkey 6.2.0.
      * @apiNote When in cluster mode, <code>source</code> and <code>destination</code> must map to the
      *     same hash slot.
      * @see <a href="https://valkey.io/commands/lmove/">valkey.io</a> for details.
@@ -1233,7 +1233,7 @@ public interface ListBaseCommands {
      * </code> depending on <code>wherefrom</code>, and pushes the element at the first/last element
      * of the list stored at <code>destination</code> depending on <code>wherefrom</code>.
      *
-     * @since Valkey 6.2.0 and above.
+     * @since Valkey 6.2.0.
      * @apiNote When in cluster mode, <code>source</code> and <code>destination</code> must map to the
      *     same hash slot.
      * @see <a href="https://valkey.io/commands/lmove/">valkey.io</a> for details.
@@ -1265,7 +1265,7 @@ public interface ListBaseCommands {
      * <code>BLMove</code> is the blocking variant of {@link #lmove(String, String, ListDirection,
      * ListDirection)}.
      *
-     * @since Valkey 6.2.0 and above.
+     * @since Valkey 6.2.0.
      * @apiNote
      *     <ol>
      *       <li>When in cluster mode, all <code>source</code> and <code>destination</code> must map
@@ -1311,7 +1311,7 @@ public interface ListBaseCommands {
      * <code>BLMove</code> is the blocking variant of {@link #lmove(String, String, ListDirection,
      * ListDirection)}.
      *
-     * @since Valkey 6.2.0 and above.
+     * @since Valkey 6.2.0.
      * @apiNote
      *     <ol>
      *       <li>When in cluster mode, all <code>source</code> and <code>destination</code> must map

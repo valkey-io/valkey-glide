@@ -106,7 +106,7 @@ public class ClusterBatch extends BaseBatch<ClusterBatch> {
     /**
      * Publishes message on pubsub channel in sharded mode.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
      * @see <a href="https://valkey.io/commands/publish/">valkey.io</a> for details.

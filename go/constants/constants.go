@@ -75,7 +75,7 @@ const (
 	// OnlyIfEquals only sets the key if it already exists and the value is equal to the given value. Equivalent to "IFEQ" in
 	// the valkey API.
 	//
-	// since Valkey 8.1 and above.
+	// since Valkey 8.1.0.
 	OnlyIfEquals ConditionalSet = "IFEQ"
 	// OnlyIfFieldsDoNotExist only sets the hash fields if none of them already exist. Equivalent to "FNX" in the valkey API.
 	// Used with hash field expiration commands.

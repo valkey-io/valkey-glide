@@ -547,7 +547,7 @@ export const INFO_DEFAULT_FIELDS = [
 /**
  * Expected server responses for the "rdb_*_bgsave_type" INFO persistence fields.
  *
- * @remarks Since Valkey version 9.2.0.
+ * @remarks Since Valkey 9.2.0.
  */
 export const BGSAVE_TYPES = ["fork", "forkless", "none"];
 

@@ -64,7 +64,7 @@ type ClusterClient struct {
 //	  - **Reconnection Strategy**: The `BackoffStrategy` settings define how the client will attempt to reconnect
 //	      in case of disconnections.
 //	  - **Pub/Sub Subscriptions**: Predefine Pub/Sub channels and patterns to subscribe to upon connection establishment.
-//	      Supports exact channels, patterns, and sharded channels (available since Valkey version 7.0).
+//	      Supports exact channels, patterns, and sharded channels (available Since Valkey 7.0.0).
 func NewClusterClient(config *config.ClusterClientConfiguration) (*ClusterClient, error) {
 	client, err := createClient(config)
 	if err != nil {
@@ -1144,7 +1144,7 @@ func (client *ClusterClient) BgSaveScheduleWithOptions(
 // Aborts all in-progress and scheduled background saves.
 // The command will be routed to all primary nodes.
 //
-// Available since Valkey 8.1.
+// Available since Valkey 8.1.0.
 //
 // See [valkey.io] for details.
 //
@@ -1164,7 +1164,7 @@ func (client *ClusterClient) BgSaveCancel(ctx context.Context) (models.ClusterVa
 // Aborts all in-progress and scheduled background saves.
 // The command will be routed to the nodes defined by specified route, or to all primary nodes.
 //
-// Available since Valkey 8.1.
+// Available since Valkey 8.1.0.
 //
 // See [valkey.io] for details.
 //
@@ -3795,7 +3795,7 @@ func (client *ClusterClient) ClusterNodesWithRoute(
 // Each shard contains information about the primary and replicas.
 // The command will be routed to a random node.
 //
-// Since: Valkey 7.0 and above.
+// Since: Valkey 7.0.0.
 //
 // See [valkey.io] for details.
 //
@@ -3818,7 +3818,7 @@ func (client *ClusterClient) ClusterShards(ctx context.Context) ([]map[string]an
 
 // ClusterShardsWithRoute returns the mapping of cluster slots to shards with routing options.
 //
-// Since: Valkey 7.0 and above.
+// Since: Valkey 7.0.0.
 //
 // See [valkey.io] for details.
 //
@@ -3938,7 +3938,7 @@ func (client *ClusterClient) ClusterMyIdWithRoute(
 // ClusterMyShardId returns the shard ID of the current node.
 // The command will be routed to a random node.
 //
-// Since: Valkey 7.2 and above.
+// Since: Valkey 7.2.0.
 //
 // See [valkey.io] for details.
 //
@@ -3961,7 +3961,7 @@ func (client *ClusterClient) ClusterMyShardId(ctx context.Context) (string, erro
 
 // ClusterMyShardIdWithRoute returns the shard ID with routing options.
 //
-// Since: Valkey 7.2 and above.
+// Since: Valkey 7.2.0.
 //
 // See [valkey.io] for details.
 //
@@ -4052,7 +4052,7 @@ func (client *ClusterClient) ClusterCountKeysInSlot(ctx context.Context, slot in
 // ClusterLinks returns information about all TCP links between cluster nodes.
 // The command will be routed to a random node.
 //
-// Since: Valkey 7.0 and above.
+// Since: Valkey 7.0.0.
 //
 // See [valkey.io] for details.
 //
@@ -4075,7 +4075,7 @@ func (client *ClusterClient) ClusterLinks(ctx context.Context) ([]map[string]any
 
 // ClusterLinksWithRoute returns link information with routing options.
 //
-// Since: Valkey 7.0 and above.
+// Since: Valkey 7.0.0.
 //
 // See [valkey.io] for details.
 //

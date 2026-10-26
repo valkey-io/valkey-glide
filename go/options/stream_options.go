@@ -324,7 +324,7 @@ func NewXGroupSetIdOptionsOptions() *XGroupSetIdOptions {
 
 // A value representing the number of stream entries already read by the group.
 //
-// Since Valkey version 7.0.0.
+// Since Valkey 7.0.0.
 func (xgsio *XGroupSetIdOptions) SetEntriesRead(entriesRead int64) *XGroupSetIdOptions {
 	xgsio.EntriesRead = entriesRead
 	return xgsio

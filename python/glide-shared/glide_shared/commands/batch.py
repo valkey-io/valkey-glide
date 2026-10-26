@@ -314,7 +314,7 @@ class BaseBatch:
         """
         Deletes `key` if its value equals `value`.
 
-        Since: Valkey 9.0 and above.
+        Since: Valkey 9.0.0.
 
         See [valkey.io](https://valkey.io/commands/delifeq) for more details.
 
@@ -1519,7 +1519,7 @@ class BaseBatch:
 
             `None` if no elements could be popped.
 
-        Since: Valkey version 7.0.0.
+        Since: Valkey 7.0.0.
         """
         args = [str(len(keys)), *keys, direction.value]
         if count is not None:
@@ -1555,7 +1555,7 @@ class BaseBatch:
 
             None if no elements could be popped and the timeout expired.
 
-        Since: Valkey version 7.0.0.
+        Since: Valkey 7.0.0.
         """
         args = [str(timeout), str(len(keys)), *keys, direction.value]
         if count is not None:
@@ -1788,7 +1788,7 @@ class BaseBatch:
 
             `None` if `source` does not exist.
 
-        Since: Valkey version 6.2.0.
+        Since: Valkey 6.2.0.
         """
         return self.append_command(
             RequestType.LMove, [source, destination, where_from.value, where_to.value]
@@ -1825,7 +1825,7 @@ class BaseBatch:
 
             `None` if `source` does not exist or if the operation timed-out.
 
-        Since: Valkey version 6.2.0.
+        Since: Valkey 6.2.0.
         """
         return self.append_command(
             RequestType.BLMove,
@@ -1977,7 +1977,7 @@ class BaseBatch:
             - `0`: The key exists but the member does not exist in the set.
             - `-1`: The key does not exist.
 
-        Since: Valkey version 9.2.0.
+        Since: Valkey 9.2.0.
         """
         return self.append_command(RequestType.SIsMember, [key, member, "XX"])
 
@@ -2402,7 +2402,7 @@ class BaseBatch:
 
             -1 if `key` exists but has no associated expire.
 
-        Since: Valkey version 7.0.0.
+        Since: Valkey 7.0.0.
         """
         return self.append_command(RequestType.ExpireTime, [key])
 
@@ -2423,7 +2423,7 @@ class BaseBatch:
 
             -1 if `key` exists but has no associated expiration.
 
-        Since: Valkey version 7.0.0.
+        Since: Valkey 7.0.0.
         """
         return self.append_command(RequestType.PExpireTime, [key])
 
@@ -2639,7 +2639,7 @@ class BaseBatch:
         Command Response:
             TResult: The invoked function's return value.
 
-        Since: Valkey version 7.0.0.
+        Since: Valkey 7.0.0.
         """
         args = []
         if keys is not None:
@@ -2672,7 +2672,7 @@ class BaseBatch:
         Command Response:
             TResult: The return value depends on the function that was executed.
 
-        Since: Valkey version 7.0.0.
+        Since: Valkey 7.0.0.
         """
         args = []
         if keys is not None:
@@ -2696,7 +2696,7 @@ class BaseBatch:
                 - `running_script` with information about the running script.
                 - `engines` with information about available engines and their stats.
 
-        Since: Valkey version 7.0.0.
+        Since: Valkey 7.0.0.
         """
         return self.append_command(RequestType.FunctionStats, [])
 
@@ -2709,7 +2709,7 @@ class BaseBatch:
         Command response:
             bytes: The serialized payload of all loaded libraries.
 
-        Since: Valkey version 7.0.0.
+        Since: Valkey 7.0.0.
         """
         return self.append_command(RequestType.FunctionDump, [])
 
@@ -2730,7 +2730,7 @@ class BaseBatch:
         Command response:
             TOK: A simple "OK" response.
 
-        Since: Valkey version 7.0.0.
+        Since: Valkey 7.0.0.
         """
         args: List[TEncodable] = [payload]
         if policy is not None:
@@ -3329,7 +3329,7 @@ class BaseBatch:
                   message IDs that were in the Pending Entries List but no longer exist in the stream. These IDs are
                   deleted from the Pending Entries List.
 
-        Since: Valkey version 6.2.0.
+        Since: Valkey 6.2.0.
         """
         args = [key, group_name, consumer_name, str(min_idle_time_ms), start]
         if count is not None:
@@ -3373,7 +3373,7 @@ class BaseBatch:
                   message IDs that were in the Pending Entries List but no longer exist in the stream. These IDs are
                   deleted from the Pending Entries List.
 
-        Since: Valkey version 6.2.0.
+        Since: Valkey 6.2.0.
         """
         args = [key, group_name, consumer_name, str(min_idle_time_ms), start]
         if count is not None:
@@ -3631,7 +3631,7 @@ class BaseBatch:
                 - (int): The Geohash integer, if `with_hash` is set to True.
                 - List[float]: The coordinates as a two item [longitude,latitude] array, if `with_coord` is set to True.
 
-        Since: Valkey version 6.2.0.
+        Since: Valkey 6.2.0.
         """
         args = _create_geosearch_args(
             [key],
@@ -3683,7 +3683,7 @@ class BaseBatch:
         Commands response:
             int: The number of elements in the resulting sorted set stored at `destination`.
 
-        Since: Valkey version 6.2.0.
+        Since: Valkey 6.2.0.
         """
         args = _create_geosearch_args(
             [destination, source],
@@ -4135,7 +4135,7 @@ class BaseBatch:
 
             If `key` doesn't exist, or if `member` is not present in the set, None will be returned.
 
-        Since: Valkey version 7.2.0.
+        Since: Valkey 7.2.0.
         """
         return self.append_command(RequestType.ZRank, [key, member, "WITHSCORE"])
 
@@ -4176,7 +4176,7 @@ class BaseBatch:
 
             If `key` doesn't exist, or if `member` is not present in the set, `None` will be returned.
 
-        Since: Valkey version 7.2.0.
+        Since: Valkey 7.2.0.
         """
         return self.append_command(RequestType.ZRevRank, [key, member, "WITHSCORE"])
 
@@ -4688,7 +4688,7 @@ class BaseBatch:
 
             If no members could be popped, returns None.
 
-        Since: Valkey version 7.0.0.
+        Since: Valkey 7.0.0.
         """
         args = [str(len(keys))] + keys + [filter.value]
         if count is not None:
@@ -4734,7 +4734,7 @@ class BaseBatch:
 
             If no members could be popped and the timeout expired, returns None.
 
-        Since: Valkey version 7.0.0.
+        Since: Valkey 7.0.0.
         """
         args = [str(timeout), str(len(keys))] + keys + [modifier.value]
         if count is not None:
@@ -4760,7 +4760,7 @@ class BaseBatch:
         Command response:
             int: The cardinality of the intersection of the given sorted sets, or the `limit` if reached.
 
-        Since: Valkey version 7.0.0.
+        Since: Valkey 7.0.0.
         """
         args = [str(len(keys))] + keys
         if limit is not None:
@@ -5003,7 +5003,7 @@ class BaseBatch:
         Command response:
             List[int]: An array of results from the "GET" subcommands.
 
-        Since: Valkey version 6.0.0.
+        Since: Valkey 6.0.0.
         """
         args = [key] + _create_bitfield_read_only_args(subcommands)
         return self.append_command(RequestType.BitFieldReadOnly, args)
@@ -5162,7 +5162,7 @@ class BaseBatch:
 
             If 'key` does not exist, return 'None'
 
-        Since: Valkey version 6.2.0.
+        Since: Valkey 6.2.0.
         """
         args: List[TEncodable] = [key]
         if expiry is not None:
@@ -5365,7 +5365,7 @@ class BaseBatch:
 
             An empty Bytes String is returned if the keys do not exist or have no common subsequences.
 
-        Since: Valkey version 7.0.0.
+        Since: Valkey 7.0.0.
         """
         args = [key1, key2]
 
@@ -5395,7 +5395,7 @@ class BaseBatch:
         Command Response:
             The length of the longest common subsequence between the 2 strings.
 
-        Since: Valkey version 7.0.0.
+        Since: Valkey 7.0.0.
         """
         args = [key1, key2, "LEN"]
 
@@ -5436,7 +5436,7 @@ class BaseBatch:
                   represent the location of the common subsequences in the strings held by key1 and key2,
                   with the length of the match after each matches, if with_match_len is enabled.
 
-        Since: Valkey version 7.0.0.
+        Since: Valkey 7.0.0.
         """
         args = [key1, key2, "IDX"]
 
@@ -5499,7 +5499,7 @@ class BaseBatch:
 
             With the `count` option, a list of indices of matching elements will be returned.
 
-        Since: Valkey version 6.0.6.
+        Since: Valkey 6.0.6.
         """
         args = [key, element]
 
@@ -5669,7 +5669,7 @@ class BaseBatch:
         Note:
             When in cluster mode, `key`, and any patterns specified in `by_pattern` or `get_patterns`
             must map to the same hash slot. The use of `by_pattern` and `get_patterns` in cluster mode is supported
-            only since Valkey version 8.0.
+            only Since Valkey 8.0.0.
 
         Args:
             key (TEncodable): The key of the list, set, or sorted set to be sorted.
@@ -5682,7 +5682,7 @@ class BaseBatch:
                 E.g., if `by_pattern` is `weight_*`, the command will sort the elements by the values of the
                 keys `weight_<element>`.
                 If not provided, elements are sorted by their value.
-                Supported in cluster mode since Valkey version 8.0.
+                Supported in cluster mode Since Valkey 8.0.0.
             limit (Optional[Limit]): Limiting the range of the query by setting offset and result count. See `Limit` class for
                 more information.
             get_patterns (Optional[List[TEncodable]]): A pattern used to retrieve external keys' values, instead of the
@@ -5695,7 +5695,7 @@ class BaseBatch:
                 for each sorted element. Multiple `get_pattern` arguments can be provided to retrieve multiple attributes.
                 The special value `#` can be used to include the actual element from `key` being sorted.
                 If not provided, only the sorted elements themselves are returned.
-                Supported in cluster mode since Valkey version 8.0.
+                Supported in cluster mode Since Valkey 8.0.0.
             order (Optional[OrderBy]): Specifies the order to sort the elements.
                 Can be `OrderBy.ASC` (ascending) or `OrderBy.DESC` (descending).
             alpha (Optional[bool]): When `True`, sorts elements lexicographically. When `False` (default),
@@ -5729,7 +5729,7 @@ class BaseBatch:
         Note:
             When in cluster mode, `key`, and any patterns specified in `by_pattern` or `get_patterns`
             must map to the same hash slot. The use of `by_pattern` and `get_patterns` in cluster mode is supported
-            only since Valkey version 8.0.
+            only Since Valkey 8.0.0.
 
         Args:
             key (TEncodable): The key of the list, set, or sorted set to be sorted.
@@ -5742,7 +5742,7 @@ class BaseBatch:
                 E.g., if `by_pattern` is `weight_*`, the command will sort the elements by the values of the
                 keys `weight_<element>`.
                 If not provided, elements are sorted by their value.
-                Supported in cluster mode since Valkey version 8.0.
+                Supported in cluster mode Since Valkey 8.0.0.
             limit (Optional[Limit]): Limiting the range of the query by setting offset and result count. See `Limit` class for
                 more information.
             get_patterns (Optional[List[TEncodable]]): A pattern used to retrieve external keys' values, instead of the
@@ -5755,7 +5755,7 @@ class BaseBatch:
                 for each sorted element. Multiple `get_pattern` arguments can be provided to retrieve multiple attributes.
                 The special value `#` can be used to include the actual element from `key` being sorted.
                 If not provided, only the sorted elements themselves are returned.
-                Supported in cluster mode since Valkey version 8.0.
+                Supported in cluster mode Since Valkey 8.0.0.
             order (Optional[OrderBy]): Specifies the order to sort the elements.
                 Can be `OrderBy.ASC` (ascending) or `OrderBy.DESC` (descending).
             alpha (Optional[bool]): When `True`, sorts elements lexicographically. When `False` (default), sorts elements
@@ -5766,7 +5766,7 @@ class BaseBatch:
         Command response:
             List[Optional[bytes]]: Returns a list of sorted elements.
 
-        Since: Valkey version 7.0.0.
+        Since: Valkey 7.0.0.
         """
         args = _build_sort_args(key, by_pattern, limit, get_patterns, order, alpha)
         return self.append_command(RequestType.SortReadOnly, args)
@@ -5792,7 +5792,7 @@ class BaseBatch:
         Note:
             When in cluster mode, `key`, `destination`, and any patterns specified in `by_pattern` or `get_patterns`
             must map to the same hash slot. The use of `by_pattern` and `get_patterns` in cluster mode is supported
-            only since Valkey version 8.0.
+            only Since Valkey 8.0.0.
 
         Args:
             key (TEncodable): The key of the list, set, or sorted set to be sorted.
@@ -5806,7 +5806,7 @@ class BaseBatch:
                 E.g., if `by_pattern` is `weight_*`, the command will sort the elements by the values of the
                 keys `weight_<element>`.
                 If not provided, elements are sorted by their value.
-                Supported in cluster mode since Valkey version 8.0.
+                Supported in cluster mode Since Valkey 8.0.0.
             limit (Optional[Limit]): Limiting the range of the query by setting offset and result count. See `Limit` class for
                 more information.
             get_patterns (Optional[List[TEncodable]]): A pattern used to retrieve external keys' values, instead of the
@@ -5819,7 +5819,7 @@ class BaseBatch:
                 for each sorted element. Multiple `get_pattern` arguments can be provided to retrieve multiple attributes.
                 The special value `#` can be used to include the actual element from `key` being sorted.
                 If not provided, only the sorted elements themselves are returned.
-                Supported in cluster mode since Valkey version 8.0.
+                Supported in cluster mode Since Valkey 8.0.0.
             order (Optional[OrderBy]): Specifies the order to sort the elements.
                 Can be `OrderBy.ASC` (ascending) or `OrderBy.DESC` (descending).
             alpha (Optional[bool]): When `True`, sorts elements lexicographically. When `False` (default), sorts elements
@@ -5929,7 +5929,7 @@ class Batch(BaseBatch):
 
             Otherwise, return False.
 
-        Since: Valkey version 6.2.0.
+        Since: Valkey 6.2.0.
         """
         args = [source, destination]
         if destinationDB is not None:
@@ -6066,7 +6066,7 @@ class ClusterBatch(BaseBatch):
 
             Otherwise, return False.
 
-        Since: Valkey version 9.0.0.
+        Since: Valkey 9.0.0.
         """
         args = [source, destination]
         if destinationDB is not None:
@@ -6090,7 +6090,7 @@ class ClusterBatch(BaseBatch):
         Args:
             message (str): Message to publish
             channel (str): Channel to publish the message on.
-            sharded (bool): Use sharded pubsub mode. Available since Valkey version 7.0.
+            sharded (bool): Use sharded pubsub mode. Available Since Valkey 7.0.0.
 
         Returns:
             int: Number of subscriptions in that shard that received the message.
