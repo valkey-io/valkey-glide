@@ -310,6 +310,26 @@ class BaseBatch:
         """
         return self.append_command(RequestType.Append, [key, value])
 
+    def delifeq(self: TBatch, key: TEncodable, value: TEncodable) -> TBatch:
+        """
+        Deletes `key` if its value equals `value`.
+
+        Since: Valkey 9.0 and above.
+
+        See [valkey.io](https://valkey.io/commands/delifeq) for more details.
+
+        Args:
+            key (TEncodable): The key to delete.
+            value (TEncodable): The comparison value. The key is only deleted if its current value
+                matches `value` exactly.
+
+        Commands response:
+            bool: True if `key` was deleted.
+
+            False if `key` did not exist or its value did not match `value`.
+        """
+        return self.append_command(RequestType.DelIfEq, [key, value])
+
     def info(
         self: TBatch,
         sections: Optional[List[InfoSection]] = None,
