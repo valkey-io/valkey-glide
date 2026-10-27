@@ -262,6 +262,28 @@ impl RdmaResult {
         Self::failed(message, RequestErrorType::Unspecified)
     }
 
+    /// A transfer through `region` that panicked. Unwinding dropped the buffer if
+    /// the transfer had taken it, which closes the region, so this reports whether
+    /// it did.
+    ///
+    /// # Safety
+    ///
+    /// `region` must be null or a region from [`register_rdma_region`] that
+    /// [`free_rdma_region`] has not been called on.
+    unsafe fn panicked(region: *mut RdmaRegion) -> Self {
+        #[cfg(feature = "rdma")]
+        let region_closed = !region.is_null() && unsafe { &*region }.is_closed();
+        #[cfg(not(feature = "rdma"))]
+        let region_closed = {
+            let _ = region;
+            false
+        };
+        Self {
+            region_closed,
+            ..Self::rejected("internal error: the RDMA transfer panicked".to_string())
+        }
+    }
+
     fn into_raw(self) -> *mut RdmaResult {
         Box::into_raw(Box::new(self))
     }
@@ -427,7 +449,16 @@ pub unsafe extern "C-unwind" fn register_rdma_region(
     memory: *mut u8,
     length: usize,
 ) -> *mut RdmaRegistration {
-    let registration = register_region(client_adapter_ptr, memory, length);
+    // A panic must not unwind into the caller, which cannot handle it.
+    let registration = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        register_region(client_adapter_ptr, memory, length)
+    }))
+    .unwrap_or_else(|_| RdmaRegistration {
+        error_message: into_c_string(
+            "internal error: registering RDMA memory panicked".to_string(),
+        ),
+        region: std::ptr::null_mut(),
+    });
     Box::into_raw(Box::new(registration))
 }
 
@@ -525,27 +556,48 @@ pub unsafe extern "C-unwind" fn rdma_get(
     offset: usize,
     length: usize,
 ) -> *mut RdmaResult {
+    // A panic must not unwind into the caller, which cannot handle it.
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| unsafe {
+        get(client_adapter_ptr, key, key_len, region, offset, length)
+    }))
+    .unwrap_or_else(|_| unsafe { RdmaResult::panicked(region) })
+    .into_raw()
+}
+
+/// [`rdma_get`], without the panic guard.
+///
+/// # Safety
+///
+/// As for [`rdma_get`].
+unsafe fn get(
+    client_adapter_ptr: *const c_void,
+    key: *const u8,
+    key_len: usize,
+    region: *mut RdmaRegion,
+    offset: usize,
+    length: usize,
+) -> RdmaResult {
     let _ = (key_len, offset, length);
     if let Some(rejection) = reject_bad_transfer_args(client_adapter_ptr, key, region) {
-        return rejection.into_raw();
+        return rejection;
     }
 
     #[cfg(not(feature = "rdma"))]
     {
-        RdmaResult::rejected(not_compiled_in()).into_raw()
+        RdmaResult::rejected(not_compiled_in())
     }
 
     #[cfg(feature = "rdma")]
     {
         let adapter = unsafe { borrow_adapter(client_adapter_ptr) };
         if let Err(message) = require_sync_client(&adapter) {
-            return RdmaResult::rejected(message).into_raw();
+            return RdmaResult::rejected(message);
         }
         let key = unsafe { std::slice::from_raw_parts(key, key_len) };
         let region = unsafe { &mut *region };
         let buffer = match region.take() {
             Ok(buffer) => buffer,
-            Err(rejection) => return rejection.into_raw(),
+            Err(rejection) => return rejection,
         };
 
         let mut client = adapter.core.client.clone();
@@ -557,7 +609,7 @@ pub unsafe extern "C-unwind" fn rdma_get(
             Ok(None) => RdmaResult::missing(),
             Err(err) => RdmaResult::failed(errors::error_message(&err), errors::error_type(&err)),
         };
-        region.finish(buffer, result).into_raw()
+        region.finish(buffer, result)
     }
 }
 
@@ -594,27 +646,60 @@ pub unsafe extern "C-unwind" fn rdma_set(
     checksum_mode: RdmaSetChecksumMode,
     checksum: u32,
 ) -> *mut RdmaResult {
+    // A panic must not unwind into the caller, which cannot handle it.
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| unsafe {
+        set(
+            client_adapter_ptr,
+            key,
+            key_len,
+            region,
+            offset,
+            length,
+            checksum_mode,
+            checksum,
+        )
+    }))
+    .unwrap_or_else(|_| unsafe { RdmaResult::panicked(region) })
+    .into_raw()
+}
+
+/// [`rdma_set`], without the panic guard.
+///
+/// # Safety
+///
+/// As for [`rdma_set`].
+#[allow(clippy::too_many_arguments)]
+unsafe fn set(
+    client_adapter_ptr: *const c_void,
+    key: *const u8,
+    key_len: usize,
+    region: *mut RdmaRegion,
+    offset: usize,
+    length: usize,
+    checksum_mode: RdmaSetChecksumMode,
+    checksum: u32,
+) -> RdmaResult {
     let _ = (key_len, offset, length, checksum_mode, checksum);
     if let Some(rejection) = reject_bad_transfer_args(client_adapter_ptr, key, region) {
-        return rejection.into_raw();
+        return rejection;
     }
 
     #[cfg(not(feature = "rdma"))]
     {
-        RdmaResult::rejected(not_compiled_in()).into_raw()
+        RdmaResult::rejected(not_compiled_in())
     }
 
     #[cfg(feature = "rdma")]
     {
         let adapter = unsafe { borrow_adapter(client_adapter_ptr) };
         if let Err(message) = require_sync_client(&adapter) {
-            return RdmaResult::rejected(message).into_raw();
+            return RdmaResult::rejected(message);
         }
         let key = unsafe { std::slice::from_raw_parts(key, key_len) };
         let region = unsafe { &mut *region };
         let buffer = match region.take() {
             Ok(buffer) => buffer,
-            Err(rejection) => return rejection.into_raw(),
+            Err(rejection) => return rejection,
         };
 
         let mut client = adapter.core.client.clone();
@@ -627,7 +712,7 @@ pub unsafe extern "C-unwind" fn rdma_set(
             Ok(()) => RdmaResult::stored(),
             Err(err) => RdmaResult::failed(errors::error_message(&err), errors::error_type(&err)),
         };
-        region.finish(buffer, result).into_raw()
+        region.finish(buffer, result)
     }
 }
 

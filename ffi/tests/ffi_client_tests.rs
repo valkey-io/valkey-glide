@@ -1027,3 +1027,92 @@ fn rdma_memory_counters_answer_only_for_an_rdma_client() {
         close_client(plain_client);
     }
 }
+
+/// A transfer that panics returns an error instead of unwinding into the caller.
+/// Calling one from inside a tokio runtime is a real way to make it panic: the
+/// transfer blocks on the client's runtime, and tokio refuses to block inside
+/// another one.
+#[cfg(feature = "rdma")]
+#[test]
+fn a_transfer_that_panics_returns_an_error() {
+    use glide_core::connection_request::{RdmaConfig, TcpProvider};
+
+    let server = Server::new();
+    let mut request = ConnectionRequest::new();
+    request.tls_mode = TlsMode::NoTls.into();
+    let mut address = NodeAddress::new();
+    address.host = "localhost".into();
+    address.port = server.port as u32;
+    request.addresses.push(address);
+    let mut rdma = RdmaConfig::new();
+    rdma.set_tcp(TcpProvider::new());
+    request.rdma_config = protobuf::MessageField::some(rdma);
+    let request = request.write_to_bytes().expect("Failed to serialize");
+
+    unsafe {
+        let response = create_client(
+            request.as_ptr(),
+            request.len(),
+            Box::into_raw(Box::new(ClientType::SyncClient)),
+            None,
+            None,
+            0,
+        );
+        assert!((*response).connection_error_message.is_null());
+        let client = (*response).conn_ptr;
+        free_connection_response(response.cast_mut());
+
+        let mut get_memory = vec![0u8; 64];
+        let mut set_memory = vec![0u8; 64];
+        let register = |memory: &mut Vec<u8>| {
+            let registration = register_rdma_region(client, memory.as_mut_ptr(), memory.len());
+            let region = (*registration).region;
+            assert!(!region.is_null(), "the region should register");
+            free_rdma_registration(registration);
+            region
+        };
+        let get_region = register(&mut get_memory);
+        let set_region = register(&mut set_memory);
+
+        let key = b"key";
+        let runtime = Runtime::new().unwrap();
+        let (get, set) = runtime.block_on(async {
+            (
+                rdma_get(client, key.as_ptr(), key.len(), get_region, 0, 64),
+                rdma_set(
+                    client,
+                    key.as_ptr(),
+                    key.len(),
+                    set_region,
+                    0,
+                    64,
+                    RdmaSetChecksumMode::Skip,
+                    0,
+                ),
+            )
+        });
+
+        for result in [get, set] {
+            let message = CStr::from_ptr((*result).error_message).to_string_lossy();
+            assert_eq!(message, "internal error: the RDMA transfer panicked");
+            // The transfer had taken the buffer, and unwinding dropped it.
+            assert!((*result).region_closed);
+            free_rdma_result(result);
+        }
+
+        // The client survives: the same calls outside a runtime do not panic.
+        let region = register(&mut get_memory);
+        let result = rdma_get(client, key.as_ptr(), key.len(), region, 0, 64);
+        let message = CStr::from_ptr((*result).error_message).to_string_lossy();
+        assert!(
+            !message.contains("panicked"),
+            "unexpected message: {message}"
+        );
+        free_rdma_result(result);
+
+        for region in [get_region, set_region, region] {
+            free_rdma_memory_hold(free_rdma_region(region));
+        }
+        close_client(client);
+    }
+}
