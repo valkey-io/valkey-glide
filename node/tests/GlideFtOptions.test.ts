@@ -964,13 +964,17 @@ describe("GlideFt 1.3 argv serialization", () => {
                 { query: "hello" },
                 { field: "vec", vector: "$v" },
                 {
+                    clauses: [{ type: "LIMIT", offset: 0, count: 10 }],
                     withCursor: { count: 5 },
                     dialect: 2,
                 },
             );
             const args = customCommand.mock.calls[0][0] as string[];
+            const limitIdx = args.indexOf("LIMIT");
             const cursorIdx = args.indexOf("WITHCURSOR");
             const dialectIdx = args.indexOf("DIALECT");
+            expect(limitIdx).toBeGreaterThanOrEqual(0);
+            expect(cursorIdx).toBeGreaterThan(limitIdx);
             expect(args.slice(cursorIdx, cursorIdx + 3)).toEqual([
                 "WITHCURSOR",
                 "COUNT",
@@ -1008,23 +1012,26 @@ describe("GlideFt 1.3 argv serialization", () => {
             ).rejects.toThrow(/unf requires sortable/);
         });
 
-        it("accepts FLOAT16 and BFLOAT16 vector types", async () => {
-            const { client, customCommand } = mockClient();
-            const field: VectorField = {
-                type: "VECTOR",
-                name: "vec",
-                attributes: {
-                    algorithm: "FLAT",
-                    dimensions: 4,
-                    distanceMetric: "L2",
-                    type: "FLOAT16",
-                },
-            };
-            await GlideFt.create(client, "idx", [field]);
-            const args = customCommand.mock.calls[0][0] as string[];
-            expect(args).toContain("FLOAT16");
-            expect(args).not.toContain("FLOAT32");
-        });
+        it.each(["FLOAT16", "BFLOAT16"] as const)(
+            "accepts %s vector type",
+            async (vectorType) => {
+                const { client, customCommand } = mockClient();
+                const field: VectorField = {
+                    type: "VECTOR",
+                    name: "vec",
+                    attributes: {
+                        algorithm: "FLAT",
+                        dimensions: 4,
+                        distanceMetric: "L2",
+                        type: vectorType,
+                    },
+                };
+                await GlideFt.create(client, "idx", [field]);
+                const args = customCommand.mock.calls[0][0] as string[];
+                expect(args).toContain(vectorType);
+                expect(args).not.toContain("FLOAT32");
+            },
+        );
 
         it("emits FILTER, SCORE_FIELD and NOHL", async () => {
             const { client, customCommand } = mockClient();
