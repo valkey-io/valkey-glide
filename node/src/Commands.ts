@@ -187,33 +187,36 @@ export function createSet(
             args.push("XX");
         } else if (options.conditionalSet === "onlyIfDoesNotExist") {
             args.push("NX");
-        } else if (options.conditionalSet === "onlyIfEqual") {
-            args.push("IFEQ", options.comparisonValue);
-        } else if (options.conditionalSet === "onlyIfNotEqual") {
-            args.push("IFNE", options.comparisonValue);
+        } else if (
+            options.conditionalSet === "onlyIfEqual" ||
+            options.conditionalSet === "onlyIfNotEqual"
+        ) {
+            if (options.comparisonValue == null) {
+                throw new Error(
+                    `Received conditionalSet '${options.conditionalSet}' without a comparisonValue`,
+                );
+            }
+
+            args.push(
+                options.conditionalSet === "onlyIfEqual" ? "IFEQ" : "IFNE",
+                options.comparisonValue,
+            );
         }
 
         if (options.returnOldValue) {
             args.push("GET");
         }
 
-        if (options.expiry) {
-            if (
-                options.expiry !== "keepExisting" &&
-                !Number.isInteger(options.expiry.count)
-            ) {
+        if (options.expiry === "keepExisting") {
+            args.push("KEEPTTL");
+        } else if (options.expiry) {
+            if (!Number.isInteger(options.expiry.count)) {
                 throw new Error(
-                    `Received expiry '${JSON.stringify(
-                        options.expiry,
-                    )}'. Count must be an integer`,
+                    `Received expiry '${JSON.stringify(options.expiry)}'. Count must be an integer`,
                 );
             }
 
-            if (options.expiry === "keepExisting") {
-                args.push("KEEPTTL");
-            } else {
-                args.push(options.expiry.type, options.expiry.count.toString());
-            }
+            args.push(options.expiry.type, options.expiry.count.toString());
         }
     }
 
