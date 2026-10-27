@@ -349,7 +349,9 @@ class RdmaRegion:
         self._span = _memory_span(memory)
         self._client = client
         self._region = region
-        self._capacity = client._lib.rdma_region_capacity(region)
+        # The FFI registers exactly the bytes it is handed, so the region holds
+        # as many bytes as the memory spans.
+        self._capacity = self._span[1] - self._span[0]
         # Set by `close` when the fabric still kept the memory.
         self._hold = None
         # Guards `_region` and `_busy`. Held only briefly, never for the length

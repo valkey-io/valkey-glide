@@ -118,9 +118,6 @@ class _FakeLib:
         self.set_gate = None
         self.set_started = threading.Event()
 
-    def rdma_region_capacity(self, region):
-        return region["capacity"]
-
     def free_rdma_region(self, region):
         self.freed.append(region)
         return self.holds.get(id(region), _FakeFfi.NULL)
@@ -133,7 +130,7 @@ class _FakeLib:
 
     def register_rdma_region(self, client, buffer, length):
         self.registrations.append(length)
-        return _FakeRegistration({"capacity": length})
+        return _FakeRegistration(_FakeRegion())
 
     def free_rdma_registration(self, registration):
         pass
@@ -173,7 +170,11 @@ def _offline_client() -> GlideClient:
 
 
 def _offline_region(client: GlideClient, capacity: int = REGION_BYTES) -> RdmaRegion:
-    return RdmaRegion(client, bytearray(capacity), {"capacity": capacity})
+    return RdmaRegion(client, bytearray(capacity), _FakeRegion())
+
+
+class _FakeRegion:
+    """A region handle as the FFI hands one out: opaque, and equal only to itself."""
 
 
 class _FakeRegistration:
@@ -299,7 +300,7 @@ def test_a_region_closes_when_its_context_exits():
 def test_closing_a_region_lets_go_of_the_memory_when_the_fabric_has():
     client = _offline_client()
     memory = bytearray(REGION_BYTES)
-    region = RdmaRegion(client, memory, {"capacity": REGION_BYTES})
+    region = RdmaRegion(client, memory, _FakeRegion())
 
     region.close()
 
@@ -313,7 +314,7 @@ def test_a_closed_region_keeps_memory_the_fabric_still_holds():
     # the fabric lets go, even though the region is closed.
     client = _offline_client()
     memory = bytearray(REGION_BYTES)
-    raw = {"capacity": REGION_BYTES}
+    raw = _FakeRegion()
     hold = {"released": False}
     client._lib.holds[id(raw)] = hold
     region = RdmaRegion(client, memory, raw)
@@ -337,7 +338,7 @@ def test_memory_kept_for_a_failed_close_stays_kept():
     # hold is never released and the memory stays referenced.
     client = _offline_client()
     memory = bytearray(REGION_BYTES)
-    raw = {"capacity": REGION_BYTES}
+    raw = _FakeRegion()
     hold = {"released": False}
     client._lib.holds[id(raw)] = hold
     RdmaRegion(client, memory, raw).close()
@@ -419,8 +420,9 @@ def test_a_window_of_a_wide_buffer_is_still_measured_in_bytes():
     # a caller's staging area somewhere other than where the transfer runs.
     numbers = array.array("i", [0] * (REGION_BYTES // 4))
     assert numbers.itemsize == 4
-    region = RdmaRegion(_offline_client(), numbers, {"capacity": REGION_BYTES})
+    region = RdmaRegion(_offline_client(), numbers, _FakeRegion())
 
+    assert region.capacity == REGION_BYTES
     region.memoryview()[64:96] = b"\x07" * 32
     view = region.window(64, 32).memoryview()
 
@@ -487,7 +489,7 @@ def test_a_collected_region_keeps_memory_the_fabric_still_holds():
     # The same rule as for a closed region: a write could still land, so Python
     # must not free the memory until the fabric lets go.
     client = _offline_client()
-    raw = {"capacity": REGION_BYTES}
+    raw = _FakeRegion()
     hold = {"released": False}
     client._lib.holds[id(raw)] = hold
     memory = bytearray(REGION_BYTES)
@@ -510,7 +512,7 @@ def test_a_region_collected_while_its_keeper_is_locked_does_not_hang():
     # while this thread holds the keeper's lock. A finalizer that took the lock
     # then would wait on its own thread forever, so it must not take it.
     client = _offline_client()
-    raw = {"capacity": REGION_BYTES}
+    raw = _FakeRegion()
     hold = {"released": False}
     client._lib.holds[id(raw)] = hold
     memory = bytearray(REGION_BYTES)
@@ -568,7 +570,7 @@ def test_memory_released_follows_the_fabric_after_close():
     # On tcp the fabric holds the memory past the close, then lets go once the
     # client's fabric closes. The property has to change when that happens.
     client = _offline_client()
-    raw = {"capacity": REGION_BYTES}
+    raw = _FakeRegion()
     hold = {"released": False}
     client._lib.holds[id(raw)] = hold
     region = RdmaRegion(client, bytearray(REGION_BYTES), raw)
@@ -594,7 +596,7 @@ def test_a_transfer_that_closed_its_region_closes_the_python_region(
     # The FFI says the region can no longer transfer, whatever the error class.
     # Closing it here makes `region.closed` the one thing a caller checks.
     client = _offline_client()
-    raw = {"capacity": REGION_BYTES}
+    raw = _FakeRegion()
     region = RdmaRegion(client, bytearray(REGION_BYTES), raw)
     result = _FakeResult(b"connection lost", error_type, region_closed=True)
 
@@ -632,7 +634,7 @@ def test_a_cancelled_transfer_closes_the_python_region():
 
 def test_a_region_closed_on_tcp_keeps_its_memory_until_the_fabric_lets_go():
     client = _offline_client()
-    raw = {"capacity": REGION_BYTES}
+    raw = _FakeRegion()
     hold = {"released": False}
     client._lib.holds[id(raw)] = hold
     memory = bytearray(REGION_BYTES)
@@ -682,7 +684,7 @@ def _close_holding(client: GlideClient, memory) -> dict:
 
     Returns the hold. Set its ``"released"`` to let the memory go.
     """
-    raw = {"capacity": memoryview(memory).nbytes}
+    raw = _FakeRegion()
     hold = {"released": False}
     client._lib.holds[id(raw)] = hold
     RdmaRegion(client, memory, raw).close()

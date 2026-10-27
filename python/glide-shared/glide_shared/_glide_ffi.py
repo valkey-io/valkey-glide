@@ -470,8 +470,6 @@ class _GlideFFI:
                 size_t length
             );
 
-            size_t rdma_region_capacity(const RdmaRegion* region);
-
             RdmaResult* rdma_get(
                 const void* client_adapter_ptr,
                 const uint8_t* key,
