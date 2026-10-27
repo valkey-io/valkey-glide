@@ -2587,13 +2587,11 @@ mod cluster_async {
         let canonical_calls = Arc::new(atomic::AtomicUsize::new(0));
         let commands = Arc::new(atomic::AtomicUsize::new(0));
         let moved_seen = Arc::new(atomic::AtomicBool::new(false));
-        let pings_after_moved = Arc::new(atomic::AtomicUsize::new(0));
         let pings = Arc::new(atomic::AtomicUsize::new(0));
         let ping_at_get_0 = Arc::new(atomic::AtomicUsize::new(0));
         let ping_at_get_1 = Arc::new(atomic::AtomicUsize::new(0));
         let commands_clone = commands.clone();
         let moved_seen_clone = moved_seen.clone();
-        let pings_after_moved_clone = pings_after_moved.clone();
         let pings_clone = pings.clone();
         let pings_for_get = pings.clone();
         let ping_at_get_0_clone = ping_at_get_0.clone();
@@ -2622,11 +2620,6 @@ mod cluster_async {
                 }
                 if contains_slice(cmd, b"PING") {
                     pings_clone.fetch_add(1, Ordering::SeqCst);
-                    if moved_seen_clone.load(Ordering::SeqCst)
-                        && pings_after_moved_clone.fetch_add(1, Ordering::SeqCst) == 0
-                    {
-                        return Err(Err((ErrorKind::IoError, "force reconnect").into()));
-                    }
                     return Err(Ok(Value::SimpleString("PONG".into())));
                 }
                 respond_startup(name, cmd)?;
@@ -2650,19 +2643,13 @@ mod cluster_async {
             },
         );
         let raw_address_resolutions_before = raw_address_resolutions.load(Ordering::SeqCst);
-        let mut connections_before = 0;
-        modify_mock_connection_behavior(name, |behavior| {
-            connections_before = behavior.connection_id_provider.load(Ordering::SeqCst);
-        });
+        let connections_before = mock_connection_count(name);
         let value = runtime.block_on(
             cmd("GET")
                 .arg("test")
                 .query_async::<_, Option<i32>>(&mut connection),
         );
-        let mut connections_after = 0;
-        modify_mock_connection_behavior(name, |behavior| {
-            connections_after = behavior.connection_id_provider.load(Ordering::SeqCst);
-        });
+        let connections_after = mock_connection_count(name);
         assert_eq!(value, Ok(Some(123)));
         assert_eq!(
             raw_address_resolutions.load(Ordering::SeqCst),
@@ -2678,7 +2665,7 @@ mod cluster_async {
         );
         assert!(
             ping_at_get_1.load(Ordering::SeqCst) > ping_at_get_0.load(Ordering::SeqCst),
-            "expected reconnect between GETs: first PING count {}, retry PING count {}",
+            "expected the replacement connection's handshake PING between GETs: first PING count {}, retry PING count {}",
             ping_at_get_0.load(Ordering::SeqCst),
             ping_at_get_1.load(Ordering::SeqCst)
         );
@@ -8196,6 +8183,176 @@ mod cluster_async {
             total_errors += e;
         }
         (total_successes, total_errors)
+    }
+
+    fn mock_connection_count(name: &str) -> usize {
+        let mut connections = 0;
+        modify_mock_connection_behavior(name, |behavior| {
+            connections = behavior.connection_id_provider.load(Ordering::SeqCst);
+        });
+        connections
+    }
+
+    /// Sets up a single-node mock cluster whose node stays healthy (answers PING) but replies to
+    /// SET with a circular MOVED until the client opens a new connection, as an old instance kept
+    /// alive behind the same endpoint does after a failover (#7333). Returns the env and the
+    /// number of SETs the node received.
+    fn circular_moved_until_new_connection_env(
+        name: &'static str,
+        retries: u32,
+    ) -> (MockEnv, Arc<atomic::AtomicUsize>) {
+        let set_calls = Arc::new(atomic::AtomicUsize::new(0));
+        let set_calls_clone = set_calls.clone();
+        let connections_at_moved = atomic::AtomicUsize::new(usize::MAX);
+        let env = MockEnv::with_client_builder(
+            ClusterClient::builder(vec![&*format!("redis://{name}")])
+                .retries(retries)
+                .slots_refresh_rate_limit(Duration::from_secs(0), 0),
+            name,
+            move |cmd: &[u8], port| {
+                if contains_slice(cmd, b"CLUSTER") && contains_slice(cmd, b"SLOTS") {
+                    return Err(Ok(create_topology_from_config(
+                        name,
+                        vec![MockSlotRange {
+                            primary_port: port,
+                            replica_ports: vec![],
+                            slot_range: 0..16383,
+                        }],
+                    )));
+                }
+                // Match the RESP-encoded command name, so that `SETNAME` doesn't match.
+                if !contains_slice(cmd, b"\r\nSET\r\n") {
+                    // PING, SETNAME, etc. The node stays healthy.
+                    return Err(Ok(Value::SimpleString("OK".into())));
+                }
+                set_calls_clone.fetch_add(1, Ordering::SeqCst);
+                let connections = mock_connection_count(name);
+                // Remember how many connections existed when the first MOVED was sent.
+                let _ = connections_at_moved.compare_exchange(
+                    usize::MAX,
+                    connections,
+                    Ordering::SeqCst,
+                    Ordering::SeqCst,
+                );
+                if connections > connections_at_moved.load(Ordering::SeqCst) {
+                    Err(Ok(Value::SimpleString("OK".into())))
+                } else {
+                    Err(parse_redis_value(
+                        format!("-MOVED 5000 {name}:{port}\r\n").as_bytes(),
+                    ))
+                }
+            },
+        );
+        (env, set_calls)
+    }
+
+    /// A circular MOVED from a node that still answers PING must replace the connection,
+    /// not reuse it after a health check (#7333).
+    ///
+    /// To run: cargo test --test test_cluster_async -- test_async_cluster_circular_moved_replaces_healthy_connection --nocapture
+    #[test]
+    #[serial_test::parallel(otel)]
+    fn test_async_cluster_circular_moved_replaces_healthy_connection() {
+        let name = "test_circular_moved_replaces_healthy_connection";
+        let (
+            MockEnv {
+                runtime,
+                async_connection: mut connection,
+                handler: _handler,
+                ..
+            },
+            set_calls,
+        ) = circular_moved_until_new_connection_env(name, 3);
+
+        let connections_before = mock_connection_count(name);
+        let result = runtime.block_on(
+            cmd("SET")
+                .arg("test_key")
+                .arg("test_value")
+                .query_async::<_, Option<String>>(&mut connection),
+        );
+
+        assert_eq!(result, Ok(Some("OK".to_string())));
+        assert_eq!(
+            set_calls.load(Ordering::SeqCst),
+            2,
+            "expected one circular MOVED, then success on the new connection"
+        );
+        // Both the user and the management connections are replaced.
+        assert!(mock_connection_count(name) >= connections_before + 2);
+    }
+
+    /// With no retries left, a circular MOVED still replaces the connection, so the next request
+    /// doesn't reuse it.
+    ///
+    /// To run: cargo test --test test_cluster_async -- test_async_cluster_circular_moved_without_retries_replaces_connection --nocapture
+    #[test]
+    #[serial_test::parallel(otel)]
+    fn test_async_cluster_circular_moved_without_retries_replaces_connection() {
+        let name = "test_circular_moved_without_retries_replaces_connection";
+        let (
+            MockEnv {
+                runtime,
+                async_connection: mut connection,
+                handler: _handler,
+                ..
+            },
+            set_calls,
+        ) = circular_moved_until_new_connection_env(name, 0);
+
+        let mut set = cmd("SET");
+        set.arg("test_key").arg("test_value");
+        let first = runtime.block_on(set.query_async::<_, Option<String>>(&mut connection));
+        assert_eq!(first.unwrap_err().kind(), ErrorKind::Moved);
+        let second = runtime.block_on(set.query_async::<_, Option<String>>(&mut connection));
+
+        assert_eq!(second, Ok(Some("OK".to_string())));
+        assert_eq!(set_calls.load(Ordering::SeqCst), 2);
+    }
+
+    /// Pipeline variant of `test_async_cluster_circular_moved_replaces_healthy_connection`.
+    ///
+    /// To run: cargo test --test test_cluster_async -- test_async_cluster_circular_moved_pipeline_replaces_healthy_connection --nocapture
+    #[test]
+    #[serial_test::parallel(otel)]
+    fn test_async_cluster_circular_moved_pipeline_replaces_healthy_connection() {
+        let name = "test_circular_moved_pipeline_replaces_healthy_connection";
+        let (
+            MockEnv {
+                runtime,
+                async_connection: mut connection,
+                handler: _handler,
+                ..
+            },
+            set_calls,
+        ) = circular_moved_until_new_connection_env(name, 3);
+
+        let connections_before = mock_connection_count(name);
+        let result = runtime.block_on(async move {
+            let mut pipeline = redis::pipe();
+            pipeline.set("test_key", "test_value");
+            connection
+                .route_pipeline(
+                    &pipeline,
+                    0,
+                    1,
+                    None,
+                    Some(PipelineRetryStrategy {
+                        retry_server_error: true,
+                        retry_connection_error: false,
+                    }),
+                )
+                .await
+        });
+
+        assert_eq!(result, Ok(vec![Value::SimpleString("OK".into())]));
+        assert_eq!(
+            set_calls.load(Ordering::SeqCst),
+            2,
+            "expected one circular MOVED, then success on the new connection"
+        );
+        // Both the user and the management connections are replaced.
+        assert!(mock_connection_count(name) >= connections_before + 2);
     }
 
     /// Mirrors the Python stress-test script that exposed the "Connection in recovery" bug.
