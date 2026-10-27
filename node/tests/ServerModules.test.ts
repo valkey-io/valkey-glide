@@ -2664,8 +2664,8 @@ describe("Server Module Tests", () => {
                 // ft_info_score_field: default_score and the presence of
                 // score_field in index_definition both change shape at search.emulate-release >= 1.3.0 (see
                 // searchCapabilityHelpers.ts and
-                // ServerModulesVs13.test.ts's "FT.CREATE FILTER, UNF,
-                // NOHL, SCORE_FIELD" test, which exercises this gate
+                // ServerModulesVs13.test.ts's "FT.CREATE SCORE_FIELD
+                // affects ranking" test, which exercises this gate
                 // directly for an index that actually sets scoreField).
                 // This index doesn't set scoreField, so legacy and 1.3+
                 // only differ in default_score's wire type (bulk string

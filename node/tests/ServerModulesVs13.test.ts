@@ -46,6 +46,7 @@ import {
 import { ValkeyCluster } from "../../utils/TestUtils";
 import {
     ClusterBatch,
+    FtAggregateOptions,
     FtAggregateReducer,
     FtCreateOptions,
     FtHybridOptions,
@@ -95,6 +96,54 @@ function packVector2f(x: number, y: number): Buffer {
     return buf;
 }
 
+/**
+ * Encodes each value as an IEEE 754 binary16 (FLOAT16) little-endian pair,
+ * matching Python's `struct.pack("<e", v)`. Only exact binary powers (0.0,
+ * 1.0, 2.0) are used by the live test that calls this, so this doesn't need
+ * to replicate the full round-to-nearest-even rounding rule.
+ */
+function encodeFloat16(values: number[]): Buffer {
+    const buf = Buffer.alloc(values.length * 2);
+
+    values.forEach((v, i) => {
+        buf.writeUInt16LE(float32ToFloat16Bits(v), i * 2);
+    });
+
+    return buf;
+}
+
+/** Converts a JS number to its IEEE 754 binary16 bit pattern. */
+function float32ToFloat16Bits(value: number): number {
+    const floatBuf = Buffer.alloc(4);
+    floatBuf.writeFloatLE(value, 0);
+    const bits = floatBuf.readUInt32LE(0);
+
+    const sign = (bits >>> 16) & 0x8000;
+    const exponent = ((bits >>> 23) & 0xff) - 127 + 15;
+    const mantissa = bits & 0x7fffff;
+
+    if (exponent <= 0) return sign;
+    if (exponent >= 31) return sign | 0x7c00;
+    return sign | (exponent << 10) | (mantissa >>> 13);
+}
+
+/**
+ * Encodes each value as a BFLOAT16 little-endian pair -- the upper 2 bytes
+ * of its binary32 (truncation, not rounding), matching Python's
+ * `struct.pack("<f", v)[2:4]`.
+ */
+function encodeBfloat16(values: number[]): Buffer {
+    const buf = Buffer.alloc(values.length * 2);
+
+    values.forEach((v, i) => {
+        const floatBuf = Buffer.alloc(4);
+        floatBuf.writeFloatLE(v, 0);
+        floatBuf.copy(buf, i * 2, 2, 4);
+    });
+
+    return buf;
+}
+
 /** Reads a flat `GlideRecord<GlideReturnType>` row's field by key, as a string. */
 function readRowField(
     row: { key: GlideString; value: GlideReturnType }[],
@@ -113,6 +162,64 @@ function readRowField(
     return Buffer.isBuffer(entry.value)
         ? entry.value.toString()
         : String(entry.value);
+}
+
+/**
+ * Finds the real `host:port` of every REPLICA on the shard that owns
+ * `key`'s slot, using `CLUSTER KEYSLOT` and `CLUSTER SHARDS` (the actual
+ * slot function), rather than inferring placement or hard-coding the
+ * cluster's layout. Mirrors Python's
+ * `test_ft_cursor_affinity_prefer_replica_client`'s own replica-presence
+ * check, so the negative-control case fails loudly (a test fixture bug,
+ * not an engine finding) if a local cluster was started with zero
+ * replicas per shard instead of silently passing without having tested
+ * anything.
+ */
+async function findReplicaAddressesForKey(
+    client: GlideClusterClient,
+    key: GlideString,
+): Promise<{ host: string; port: number }[]> {
+    const slot = Number(
+        await client.customCommand(["CLUSTER", "KEYSLOT", key]),
+    );
+    const shardsReply = (await client.customCommand([
+        "CLUSTER",
+        "SHARDS",
+    ])) as unknown as unknown[];
+
+    const replicaAddrs: { host: string; port: number }[] = [];
+
+    for (const shard of shardsReply) {
+        const shardMap = shard as Record<string, unknown>;
+        const slots = readMapField(shardMap, "slots") as unknown[];
+        let ownsSlot = false;
+
+        for (let i = 0; i + 1 < slots.length; i += 2) {
+            const lo = Number(slots[i]);
+            const hi = Number(slots[i + 1]);
+
+            if (lo <= slot && slot <= hi) {
+                ownsSlot = true;
+                break;
+            }
+        }
+
+        if (!ownsSlot) continue;
+
+        const nodes = readMapField(shardMap, "nodes") as unknown[];
+
+        for (const rawNode of nodes) {
+            const role = readMapField(rawNode, "role")?.toString();
+
+            if (role === "replica") {
+                const host = readMapField(rawNode, "ip")?.toString() ?? "";
+                const port = Number(readMapField(rawNode, "port"));
+                replicaAddrs.push({ host, port });
+            }
+        }
+    }
+
+    return replicaAddrs;
 }
 
 const HYBRID_DOC_TEXT_WINNER = "hybrid-text-winner";
@@ -239,7 +346,9 @@ describe("GlideFt", () => {
                         );
                         expect(none[0]).toBe(0);
 
-                        // a list -> restricts to just those keys
+                        // a list -> restricts to just those keys, by SET
+                        // not just count, so a bug that returned the wrong
+                        // two keys would still fail this.
                         const some = await GlideFt.search(
                             client,
                             indexName,
@@ -249,6 +358,29 @@ describe("GlideFt", () => {
                             } as FtSearchOptions,
                         );
                         expect(some[0]).toBe(2);
+                        const someKeys = (
+                            some[1] as unknown as { key: GlideString }[]
+                        ).map((e) => e.key.toString());
+                        expect(new Set(someKeys)).toEqual(
+                            new Set([keys[0], keys[1]]),
+                        );
+
+                        // a Buffer key -> restricts to that one key.
+                        const bufferResult = await GlideFt.search(
+                            client,
+                            indexName,
+                            "*",
+                            {
+                                inKeys: [Buffer.from(keys[2])],
+                            } as FtSearchOptions,
+                        );
+                        expect(bufferResult[0]).toBe(1);
+                        const bufferKeys = (
+                            bufferResult[1] as unknown as {
+                                key: GlideString;
+                            }[]
+                        ).map((e) => e.key.toString());
+                        expect(new Set(bufferKeys)).toEqual(new Set([keys[2]]));
                     } finally {
                         await client.customCommand(["FT.DROPINDEX", indexName]);
                     }
@@ -395,23 +527,79 @@ describe("GlideFt", () => {
                         expect(
                             (asMap.get("max_price") as GlideString).toString(),
                         ).toBe("30");
+                        // RANDOM_SAMPLE with size (2) < group count (3): the
+                        // reservoir must cap at exactly `size`, not merely
+                        // tolerate a larger size, and every sampled value
+                        // must be a genuine member of the group.
+                        const sample = (
+                            asMap.get("sample") as GlideString[]
+                        ).map((v) => v.toString());
+                        expect(sample.length).toBe(2);
+
+                        for (const v of sample) {
+                            expect(["10", "30"]).toContain(v);
+                        }
+
+                        // RANDOM_SAMPLE with size (10) >= group count (3):
+                        // every value must be included.
+                        const resultFullSample = await GlideFt.aggregate(
+                            client,
+                            indexName,
+                            "*",
+                            {
+                                clauses: [
+                                    {
+                                        type: "GROUPBY",
+                                        properties: ["@category"],
+                                        reducers: [
+                                            FtAggregateReducer.randomSample(
+                                                "@price",
+                                                10,
+                                                "sample",
+                                            ),
+                                        ],
+                                    },
+                                ],
+                            },
+                        );
+                        const flatFullSample =
+                            resultFullSample[0] as unknown as {
+                                key: GlideString;
+                                value: unknown;
+                            }[];
+                        const fullSample = (
+                            new Map(
+                                flatFullSample.map((e) => [
+                                    e.key.toString(),
+                                    e.value,
+                                ]),
+                            ).get("sample") as GlideString[]
+                        ).map((v) => v.toString());
+                        expect(fullSample.length).toBe(3);
                     } finally {
                         await client.customCommand(["FT.DROPINDEX", indexName]);
                     }
                 });
 
-                it("FT.CREATE FLOAT16/BFLOAT16 vector types", async () => {
-                    if (!recordGate(capability)) return;
+                it.each([
+                    ["FLOAT16", encodeFloat16] as const,
+                    ["BFLOAT16", encodeBfloat16] as const,
+                ])(
+                    "FT.CREATE FLOAT16/BFLOAT16 vector types run a real KNN query (%s)",
+                    async (vectorType, encode) => {
+                        if (!recordGate(capability)) return;
 
-                    client = await GlideClusterClient.createClient(
-                        getClientConfigurationOption(
-                            cluster.getAddresses(),
-                            protocol,
-                        ),
-                    );
+                        client = await GlideClusterClient.createClient(
+                            getClientConfigurationOption(
+                                cluster.getAddresses(),
+                                protocol,
+                            ),
+                        );
 
-                    for (const vectorType of ["FLOAT16", "BFLOAT16"] as const) {
-                        const indexName = `${vectorType.toLowerCase()}_idx_${Date.now()}`;
+                        const prefix = "{" + getRandomKey() + "}:";
+                        const indexName =
+                            prefix +
+                            `${vectorType.toLowerCase()}_idx_${Date.now()}`;
                         const vectorField: VectorField = {
                             type: "VECTOR",
                             name: "vec",
@@ -425,22 +613,67 @@ describe("GlideFt", () => {
 
                         await GlideFt.create(client, indexName, [vectorField], {
                             dataType: "HASH",
+                            prefixes: [prefix],
                         } as FtCreateOptions);
 
                         try {
-                            // No writes/reads needed here: FT.CREATE
-                            // accepting the vector type is the behaviour
-                            // under test.
+                            // Points at known L2 distances from (1,0):
+                            // 0 -> dist 1, 1 -> dist 0, 2 -> dist 1
+                            // (matches Python's test_ft_create_float16_bfloat16_vector).
+                            const points: [string, [number, number]][] = [
+                                ["0", [0.0, 0.0]],
+                                ["1", [1.0, 0.0]],
+                                ["2", [2.0, 0.0]],
+                            ];
+
+                            for (const [suffix, coords] of points) {
+                                await client.hset(prefix + suffix, {
+                                    vec: encode(coords),
+                                });
+                            }
+
+                            await sleep();
+
+                            const queryBlob = encode([1.0, 0.0]);
+                            const result = await GlideFt.search(
+                                client,
+                                indexName,
+                                "*=>[KNN 1 @vec $blob]",
+                                {
+                                    params: [{ key: "blob", value: queryBlob }],
+                                    returnFields: [
+                                        { fieldIdentifier: "__vec_score" },
+                                    ],
+                                } as FtSearchOptions,
+                            );
+                            expect(result[0]).toBe(1);
+                            const matchedKey = prefix + "1";
+                            const resultEntries = result[1] as unknown as {
+                                key: GlideString;
+                                value: {
+                                    key: GlideString;
+                                    value: GlideString;
+                                }[];
+                            }[];
+                            const matched = resultEntries.find(
+                                (e) => e.key.toString() === matchedKey,
+                            );
+                            expect(matched).not.toBeUndefined();
+                            const score = readRowField(
+                                matched!.value,
+                                "__vec_score",
+                            );
+                            expect(Number(score)).toBe(0.0);
                         } finally {
                             await client.customCommand([
                                 "FT.DROPINDEX",
                                 indexName,
                             ]);
                         }
-                    }
-                });
+                    },
+                );
 
-                it("FT.CREATE FILTER, UNF, NOHL, SCORE_FIELD", async () => {
+                it("FT.CREATE FILTER excludes documents that fail the expression", async () => {
                     if (!recordGate(capability)) return;
 
                     client = await GlideClusterClient.createClient(
@@ -449,53 +682,286 @@ describe("GlideFt", () => {
                             protocol,
                         ),
                     );
-                    const indexName = `parity_idx_${Date.now()}`;
+                    const prefix = "{" + getRandomKey() + "}:";
+                    const indexName = prefix + "filter_idx";
+
+                    await GlideFt.create(
+                        client,
+                        indexName,
+                        [{ type: "NUMERIC", name: "age" }],
+                        {
+                            dataType: "HASH",
+                            prefixes: [prefix],
+                            filter: "@age > 18",
+                        } as FtCreateOptions,
+                    );
+
+                    try {
+                        await client.hset(prefix + "adult", { age: "25" });
+                        await client.hset(prefix + "minor", { age: "10" });
+                        await sleep();
+
+                        const result = await GlideFt.search(
+                            client,
+                            indexName,
+                            "*",
+                            { noContent: true } as FtSearchOptions,
+                        );
+                        expect(result[0]).toBe(1);
+                        const keys = (
+                            result[1] as unknown as { key: GlideString }[]
+                        ).map((e) => e.key.toString());
+                        expect(new Set(keys)).toEqual(
+                            new Set([prefix + "adult"]),
+                        );
+                    } finally {
+                        await client.customCommand(["FT.DROPINDEX", indexName]);
+                    }
+                });
+
+                it("FT.CREATE SORTABLE UNF round-trips through FT.INFO and sorts in ASCII order", async () => {
+                    if (!recordGate(capability)) return;
+
+                    client = await GlideClusterClient.createClient(
+                        getClientConfigurationOption(
+                            cluster.getAddresses(),
+                            protocol,
+                        ),
+                    );
+                    const prefix = "{" + getRandomKey() + "}:";
+                    const indexName = prefix + "unf_idx";
                     const titleField: TextField = {
                         type: "TEXT",
                         name: "title",
                         sortable: true,
                         unf: true,
                     };
-                    const boostField: NumericField = {
-                        type: "NUMERIC",
-                        name: "boost",
-                    };
 
-                    await GlideFt.create(
-                        client,
-                        indexName,
-                        [titleField, boostField],
-                        {
-                            dataType: "HASH",
-                            filter: "@title != ''",
-                            scoreField: "boost",
-                            noHighlight: true,
-                        } as FtCreateOptions,
-                    );
+                    await GlideFt.create(client, indexName, [titleField], {
+                        dataType: "HASH",
+                        prefixes: [prefix],
+                    } as FtCreateOptions);
 
                     try {
-                        await client.hset("parity:1", {
-                            title: "hello",
-                            boost: "5",
-                        });
-                        await sleep();
                         const info = (await GlideFt.info(
                             client,
                             indexName,
                         )) as Record<string, unknown>;
-                        const indexDef = info["index_definition"];
-                        const scoreField = readMapField(
-                            indexDef,
-                            "score_field",
+                        const attributes = info["attributes"] as unknown[];
+                        expect(attributes.length).toBe(1);
+                        const titleAttr = attributes[0];
+                        expect(
+                            readMapField(titleAttr, "SORTABLE")?.toString(),
+                        ).toBe("1");
+                        expect(readMapField(titleAttr, "UNF")?.toString()).toBe(
+                            "1",
                         );
+
+                        await client.hset(prefix + "1", { title: "apple" });
+                        await client.hset(prefix + "2", { title: "Banana" });
+                        await sleep();
+
+                        const result = await GlideFt.search(
+                            client,
+                            indexName,
+                            "*",
+                            {
+                                returnFields: [{ fieldIdentifier: "title" }],
+                                sortby: "title",
+                                sortbyOrder: "ASC",
+                            } as FtSearchOptions,
+                        );
+                        const orderedKeys = (
+                            result[1] as unknown as { key: GlideString }[]
+                        ).map((e) => e.key.toString());
+                        // ASCII order: uppercase 'B' (0x42) sorts before
+                        // lowercase 'a' (0x61).
+                        expect(orderedKeys).toEqual([
+                            prefix + "2",
+                            prefix + "1",
+                        ]);
+                    } finally {
+                        await client.customCommand(["FT.DROPINDEX", indexName]);
+                    }
+                });
+
+                it("FT.CREATE SCORE_FIELD affects ranking", async () => {
+                    if (!recordGate(capability)) return;
+
+                    client = await GlideClusterClient.createClient(
+                        getClientConfigurationOption(
+                            cluster.getAddresses(),
+                            protocol,
+                        ),
+                    );
+                    const prefix = "{" + getRandomKey() + "}:";
+                    const indexName = prefix + "score_field_idx";
+
+                    await GlideFt.create(
+                        client,
+                        indexName,
+                        [{ type: "TEXT", name: "title" }],
+                        {
+                            dataType: "HASH",
+                            prefixes: [prefix],
+                            scoreField: "boost",
+                        } as FtCreateOptions,
+                    );
+
+                    try {
+                        await client.hset(prefix + "low", {
+                            title: "hello world",
+                            boost: "1.0",
+                        });
+                        await client.hset(prefix + "high", {
+                            title: "hello world",
+                            boost: "100.0",
+                        });
+                        await sleep();
+
+                        const result = await GlideFt.search(
+                            client,
+                            indexName,
+                            "hello",
+                            { withScores: true } as FtSearchOptions,
+                        );
+                        expect(result[0]).toBe(2);
+                        const resultEntries = result[1] as unknown as {
+                            key: GlideString;
+                            value: [GlideString, unknown];
+                        }[];
+                        // The high-boost document must rank first (the
+                        // server-returned order) and score strictly higher
+                        // than the low-boost one.
+                        expect(resultEntries[0].key.toString()).toBe(
+                            prefix + "high",
+                        );
+                        const highScore = Number(
+                            resultEntries
+                                .find(
+                                    (e) => e.key.toString() === prefix + "high",
+                                )!
+                                .value[0].toString(),
+                        );
+                        const lowScore = Number(
+                            resultEntries
+                                .find(
+                                    (e) => e.key.toString() === prefix + "low",
+                                )!
+                                .value[0].toString(),
+                        );
+                        expect(highScore).toBeGreaterThan(lowScore);
 
                         if (
                             emulateReleaseLevel !== undefined &&
                             !checkVersionLt(emulateReleaseLevel, "1.3.0")
                         ) {
+                            const info = (await GlideFt.info(
+                                client,
+                                indexName,
+                            )) as Record<string, unknown>;
+                            const indexDef = info["index_definition"];
+                            const scoreField = readMapField(
+                                indexDef,
+                                "score_field",
+                            );
                             expect(scoreField?.toString()).toBe("boost");
+                        }
+                    } finally {
+                        await client.customCommand(["FT.DROPINDEX", indexName]);
+                    }
+                });
+
+                it("FT.CREATE NOHL is accepted (no server-side effect on this release)", async () => {
+                    if (!recordGate(capability)) return;
+
+                    client = await GlideClusterClient.createClient(
+                        getClientConfigurationOption(
+                            cluster.getAddresses(),
+                            protocol,
+                        ),
+                    );
+                    const prefix = "{" + getRandomKey() + "}:";
+                    const indexName = prefix + "nohl_idx";
+
+                    await GlideFt.create(
+                        client,
+                        indexName,
+                        [{ type: "TEXT", name: "title" }],
+                        {
+                            dataType: "HASH",
+                            prefixes: [prefix],
+                            noHighlight: true,
+                        } as FtCreateOptions,
+                    );
+
+                    await client.customCommand(["FT.DROPINDEX", indexName]);
+                });
+
+                it("FT.AGGREGATE LOAD ... AS (LoadField) renames the column at >= 1.3.0, is rejected below it", async () => {
+                    if (!recordGate(capability)) return;
+
+                    client = await GlideClusterClient.createClient(
+                        getClientConfigurationOption(
+                            cluster.getAddresses(),
+                            protocol,
+                        ),
+                    );
+                    const prefix = "{" + getRandomKey() + "}:";
+                    const indexName = prefix + "load_as_idx";
+
+                    await GlideFt.create(
+                        client,
+                        indexName,
+                        [
+                            { type: "TEXT", name: "title" },
+                            { type: "NUMERIC", name: "price" },
+                        ],
+                        {
+                            dataType: "HASH",
+                            prefixes: [prefix],
+                        } as FtCreateOptions,
+                    );
+
+                    try {
+                        await client.hset(prefix + "1", {
+                            title: "widget",
+                            price: "9",
+                        });
+                        await sleep();
+
+                        const loadFields = [
+                            "title",
+                            {
+                                fieldIdentifier: "price",
+                                alias: "cost",
+                            },
+                        ];
+
+                        if (
+                            emulateReleaseLevel !== undefined &&
+                            !checkVersionLt(emulateReleaseLevel, "1.3.0")
+                        ) {
+                            const result = await GlideFt.aggregate(
+                                client,
+                                indexName,
+                                "*",
+                                { loadFields } as FtAggregateOptions,
+                            );
+                            expect(result.length).toBe(1);
+                            const flat = result[0] as unknown as {
+                                key: GlideString;
+                                value: GlideString;
+                            }[];
+                            expect(readRowField(flat, "title")).toBe("widget");
+                            expect(readRowField(flat, "cost")).toBe("9");
+                            expect(readRowField(flat, "price")).toBeUndefined();
                         } else {
-                            expect(scoreField).toBeUndefined();
+                            await expect(
+                                GlideFt.aggregate(client, indexName, "*", {
+                                    loadFields,
+                                } as FtAggregateOptions),
+                            ).rejects.toThrow(/field `AS` does not exist/);
                         }
                     } finally {
                         await client.customCommand(["FT.DROPINDEX", indexName]);
@@ -866,6 +1332,51 @@ describe("GlideFt", () => {
                                 Array.from({ length: 20 }, (_, i) => i + 1),
                             ),
                         );
+
+                        // Negative control, mirroring the maintainers' own
+                        // TestCursorCluster.test_cursor_is_node_local: a
+                        // read explicitly routed to a REPLICA of the
+                        // index's OWN slot must fail, confirming the
+                        // cursor really is node-local rather than this
+                        // test passing vacuously because preferReplica
+                        // happened to fall back to the primary.
+                        const replicaAddrs = await findReplicaAddressesForKey(
+                            client,
+                            indexName,
+                        );
+                        expect(replicaAddrs.length).toBeGreaterThanOrEqual(1);
+
+                        const anotherPage = await GlideFt.aggregate(
+                            client,
+                            indexName,
+                            "*",
+                            {
+                                loadFields: ["n"],
+                                withCursor: { count: 5 },
+                            },
+                        );
+                        const anotherCursorId =
+                            anotherPage[1] as unknown as number;
+
+                        for (const { host, port } of replicaAddrs) {
+                            await expect(
+                                client.customCommand(
+                                    [
+                                        "FT.CURSOR",
+                                        "READ",
+                                        indexName,
+                                        anotherCursorId.toString(),
+                                    ],
+                                    {
+                                        route: {
+                                            type: "routeByAddress",
+                                            host,
+                                            port,
+                                        },
+                                    },
+                                ),
+                            ).rejects.toThrow(/Cursor/);
+                        }
                     } finally {
                         await client.customCommand(["FT.DROPINDEX", indexName]);
                     }
@@ -1710,7 +2221,7 @@ describe("GlideFt", () => {
                                     // 10 regardless of the VSIM arm's actual
                                     // default K, making the assertion below
                                     // unable to detect a change to that
-                                    // default (QA L3). LIMIT 0 20 raises the
+                                    // default. LIMIT 0 20 raises the
                                     // ceiling above K so the count below
                                     // actually measures K.
                                     clauses: [
@@ -1878,6 +2389,7 @@ describe("GlideFt", () => {
                         await sleep();
 
                         let totalRows = 0;
+                        const seenNValues = new Set<number>();
                         const page = await GlideFt.aggregate(
                             client,
                             indexName,
@@ -1888,7 +2400,16 @@ describe("GlideFt", () => {
                             },
                         );
                         let cursorId = page[1] as unknown as number;
-                        totalRows += (page[0] as unknown[]).length;
+                        let rows = page[0] as unknown as {
+                            key: GlideString;
+                            value: GlideString;
+                        }[][];
+                        totalRows += rows.length;
+
+                        for (const row of rows) {
+                            seenNValues.add(Number(readRowField(row, "n")));
+                        }
+
                         let pagesRead = 1;
 
                         while (cursorId !== 0) {
@@ -1897,13 +2418,27 @@ describe("GlideFt", () => {
                                 indexName,
                                 cursorId,
                             );
-                            totalRows += (nextPage[0] as unknown[]).length;
+                            rows = nextPage[0] as unknown as {
+                                key: GlideString;
+                                value: GlideString;
+                            }[][];
+                            totalRows += rows.length;
+
+                            for (const row of rows) {
+                                seenNValues.add(Number(readRowField(row, "n")));
+                            }
+
                             cursorId = nextPage[1] as unknown as number;
                             pagesRead++;
                             expect(pagesRead).toBeLessThanOrEqual(10);
                         }
 
                         expect(totalRows).toBe(10);
+                        expect(seenNValues).toEqual(
+                            new Set(
+                                Array.from({ length: 10 }, (_, i) => i + 1),
+                            ),
+                        );
                     } finally {
                         await client.customCommand(["FT.DROPINDEX", indexName]);
                     }
@@ -1967,6 +2502,23 @@ describe("GlideFt", () => {
                             },
                         );
                         expect(result.length).toBe(2);
+                        const keys = new Set(
+                            result.map((row) =>
+                                readRowField(
+                                    row as unknown as {
+                                        key: GlideString;
+                                        value: GlideString;
+                                    }[],
+                                    "__key",
+                                ),
+                            ),
+                        );
+                        expect(keys).toEqual(
+                            new Set([
+                                "standalone_hybrid:1",
+                                "standalone_hybrid:2",
+                            ]),
+                        );
                     } finally {
                         await client.customCommand(["FT.DROPINDEX", indexName]);
                     }
