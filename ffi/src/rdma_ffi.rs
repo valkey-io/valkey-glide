@@ -50,7 +50,6 @@ pub struct RdmaRegion {
     /// fabric then decides when the memory is safe to let go, and
     /// [`Self::released`] says when it has.
     buffer: Option<glide_rdma::RdmaBuffer>,
-    capacity: usize,
     /// Set once the fabric has let go of the caller's memory; see [`ForeignRegion`].
     released: Arc<AtomicBool>,
     /// The fabric the buffer was registered with, kept even once the buffer is
@@ -89,7 +88,6 @@ impl RdmaRegion {
     /// release `released` reports.
     fn new(buffer: glide_rdma::RdmaBuffer, released: Arc<AtomicBool>) -> Self {
         Self {
-            capacity: buffer.capacity(),
             fabric: buffer.fabric().clone(),
             revoker: buffer.revoker(),
             buffer: Some(buffer),
@@ -479,27 +477,6 @@ fn register_region(
     }
 }
 
-/// How many bytes a region covers. 0 if the pointer is null.
-///
-/// # Safety
-///
-/// * `region` must be null or a region from [`register_rdma_region`] that
-///   [`free_rdma_region`] has not been called on.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn rdma_region_capacity(region: *const RdmaRegion) -> usize {
-    if region.is_null() {
-        return 0;
-    }
-    #[cfg(not(feature = "rdma"))]
-    {
-        0
-    }
-    #[cfg(feature = "rdma")]
-    {
-        unsafe { (*region).capacity }
-    }
-}
-
 /// Read a value directly into the `[offset, offset + length)` window of a
 /// registered region.
 ///
@@ -763,7 +740,6 @@ pub unsafe extern "C" fn free_rdma_region(region: *mut RdmaRegion) -> *mut RdmaM
             released,
             fabric,
             revoker,
-            ..
         } = *unsafe { Box::from_raw(region) };
         // Dropping the buffer only queues its region's close on the fabric's
         // closing thread. Waiting for it means an idle region's memory is let go
@@ -1193,11 +1169,6 @@ mod tests {
             free_rdma_registration(std::ptr::null_mut());
             free_rdma_result(std::ptr::null_mut());
         }
-    }
-
-    #[test]
-    fn a_null_region_has_no_capacity() {
-        assert_eq!(unsafe { rdma_region_capacity(std::ptr::null()) }, 0);
     }
 
     /// Read an error message from `rdma_close_regions`, then free it.
