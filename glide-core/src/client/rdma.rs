@@ -411,12 +411,12 @@ impl Client {
             Some(Err(error)) => {
                 // Decided before the error is rewritten as a cancellation below.
                 let server_is_done = crate::rdma::server_is_done_with(&error);
-                let cause = self.rdma_cancel_cause(&loan).await;
-                let error = crate::rdma::cancelled_if(Err(error), cause)
-                    .expect_err("an error stays an error");
                 if server_is_done {
                     reclaim_rdma_loan(loan, Err(error))
                 } else {
+                    let cause = self.rdma_cancel_cause(&loan).await;
+                    let error = crate::rdma::cancelled_if(Err(error), cause)
+                        .expect_err("an error stays an error");
                     recall_rdma_loan(loan, error)
                 }
             }

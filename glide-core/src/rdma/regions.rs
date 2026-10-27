@@ -147,7 +147,8 @@ pub(crate) fn cancellation(cause: CancelCause) -> redis::RedisError {
 /// The reply a transfer reports given what cancelled it, if anything.
 ///
 /// - A failed reply with a CancelCause becomes a cancellation error since the
-///   cancel is what made it fail.
+///   cancel is most likely what made it fail. The original error is kept in its
+///   message, in case the transfer failed for an unrelated reason at the same time.
 /// - A successful reply is kept since the transfer finished before the cancel.
 /// - With no cause, the reply is kept as it is.
 pub(crate) fn cancelled_if(
@@ -155,7 +156,9 @@ pub(crate) fn cancelled_if(
     cause: Option<CancelCause>,
 ) -> redis::RedisResult<redis::Value> {
     match (reply, cause) {
-        (Err(_), Some(cause)) => Err(cancellation(cause)),
+        (Err(error), Some(cause)) => Err(protocol::cancelled(format!(
+            "{cause} (the transfer failed with: {error})"
+        ))),
         (reply, _) => reply,
     }
 }
@@ -257,6 +260,17 @@ mod tests {
             "{closing}"
         );
         assert_eq!(closing.kind(), redis::ErrorKind::ClientError);
+    }
+
+    /// A server error that is unrelated to the cancel, such as a missing key, must
+    /// still be visible to the caller.
+    #[test]
+    fn a_cancellation_keeps_the_servers_error() {
+        let failure = Err(server_error("no such key"));
+        let revoked = cancelled_if(failure, Some(CancelCause::RegionRevoked)).unwrap_err();
+        let message = revoked.to_string();
+        assert!(message.contains("region was revoked"), "{message}");
+        assert!(message.contains("no such key"), "{message}");
     }
 
     #[test]
