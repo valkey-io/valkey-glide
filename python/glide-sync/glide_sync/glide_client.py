@@ -367,6 +367,10 @@ class RdmaRegion:
         # object reachable, so the finalizer never runs under one. Skipped at
         # interpreter exit, when the library may already be gone and the
         # process's teardown releases the memory anyway.
+        #
+        # Keep this the last step that can fail. If construction raises before
+        # it, `register_rdma_region` frees the region, and a finalizer already
+        # attached would free it a second time.
         self._finalizer = weakref.finalize(
             self,
             _finalize_rdma_region,
@@ -1710,7 +1714,8 @@ class BaseClient(CoreCommands):
             raise TypeError("memory must be writable")
         if not view.c_contiguous:
             raise TypeError("memory must be C-contiguous")
-        if _RETAINED_RDMA_MEMORY.overlaps(_memory_span(view)):
+        span = _memory_span(view)
+        if _RETAINED_RDMA_MEMORY.overlaps(span):
             raise RdmaError(
                 "this memory belongs to a closed RDMA region whose last transfer "
                 "could still write into it; register different memory"
@@ -1731,7 +1736,16 @@ class BaseClient(CoreCommands):
                     raise RdmaError(
                         self._ffi.string(registration.error_message).decode(ENCODING)
                     )
-                return RdmaRegion(self, memory, registration.region)
+                region = registration.region
+                try:
+                    return RdmaRegion(self, memory, region)
+                except BaseException:
+                    # Until the RdmaRegion is built, nothing else will free the
+                    # region, so free it here instead of leaking its pinned pages.
+                    _free_rdma_region(
+                        self._lib, self._ffi, region, memory, buffer, span
+                    )
+                    raise
             finally:
                 self._lib.free_rdma_registration(registration)
         except BaseException:

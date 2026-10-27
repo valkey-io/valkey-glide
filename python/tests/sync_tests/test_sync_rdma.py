@@ -870,6 +870,50 @@ def test_a_call_that_fails_still_lets_the_client_go():
     assert client._lib.client_closes == [native]
 
 
+def _fail_to_build_regions(monkeypatch) -> None:
+    """Make building an RdmaRegion raise, at the last step that can fail."""
+
+    def refuse(*arguments, **keywords):
+        raise RuntimeError("could not build the region")
+
+    monkeypatch.setattr("glide_sync.glide_client.weakref.finalize", refuse)
+
+
+def test_a_region_that_fails_to_build_is_freed(monkeypatch):
+    # The fabric registered the memory, but no RdmaRegion owns it to free it
+    # later, so the registration itself has to free it.
+    client = _offline_client()
+    client._core_client = object()
+    raw = _FakeRegion()
+    client._lib.register_rdma_region = lambda *arguments: _FakeRegistration(raw)
+    _fail_to_build_regions(monkeypatch)
+
+    with pytest.raises(RuntimeError, match="could not build"):
+        client.register_rdma_region(bytearray(REGION_BYTES))
+
+    assert client._lib.freed == [raw]
+    assert client._rdma_calls == 0
+
+
+def test_a_region_that_fails_to_build_keeps_memory_the_fabric_holds(monkeypatch):
+    client = _offline_client()
+    client._core_client = object()
+    memory = bytearray(REGION_BYTES)
+    raw = _FakeRegion()
+    hold = {"released": False}
+    client._lib.holds[id(raw)] = hold
+    client._lib.register_rdma_region = lambda *arguments: _FakeRegistration(raw)
+    _fail_to_build_regions(monkeypatch)
+
+    with pytest.raises(RuntimeError, match="could not build"):
+        client.register_rdma_region(memory)
+
+    assert _RETAINED_RDMA_MEMORY.holds(memory), "kept while the fabric holds it"
+    hold["released"] = True
+    _RETAINED_RDMA_MEMORY.release_what_is_free()
+    assert not _RETAINED_RDMA_MEMORY.holds(memory)
+
+
 def test_a_region_that_cannot_be_revoked_is_logged(monkeypatch):
     client = _offline_client()
     client._core_client = object()
