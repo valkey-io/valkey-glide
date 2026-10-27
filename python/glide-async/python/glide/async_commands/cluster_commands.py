@@ -1271,8 +1271,7 @@ class ClusterCommands(CoreCommands):
             >>> await client.get("destination")
                 b"sheep"
 
-        Since: Valkey 6.2.0.
-               The destinationDB argument is available since Valkey 9.0.0
+        The destinationDB argument is available since Valkey 9.0.0.
         """
 
         # Build command arguments

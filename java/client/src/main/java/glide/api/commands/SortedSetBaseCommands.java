@@ -1345,7 +1345,6 @@ public interface SortedSetBaseCommands {
      * To get the elements with their scores, see {@link #zdiffWithScores}.
      *
      * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
-     * @since Valkey 6.2.0.
      * @see <a href="https://valkey.io/commands/zdiff/">valkey.io</a> for more details.
      * @param keys The keys of the sorted sets.
      * @return An <code>array</code> of elements representing the difference between the sorted sets.
@@ -1365,7 +1364,6 @@ public interface SortedSetBaseCommands {
      * To get the elements with their scores, see {@link #zdiffWithScores}.
      *
      * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
-     * @since Valkey 6.2.0.
      * @see <a href="https://valkey.io/commands/zdiff/">valkey.io</a> for more details.
      * @param keys The keys of the sorted sets.
      * @return An <code>array</code> of elements representing the difference between the sorted sets.
@@ -1384,7 +1382,6 @@ public interface SortedSetBaseCommands {
      * Returns the difference between the first sorted set and all the successive sorted sets.
      *
      * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
-     * @since Valkey 6.2.0.
      * @see <a href="https://valkey.io/commands/zdiff/">valkey.io</a> for more details.
      * @param keys The keys of the sorted sets.
      * @return A <code>Map</code> of elements and their scores representing the difference between the
@@ -1403,7 +1400,6 @@ public interface SortedSetBaseCommands {
      * Returns the difference between the first sorted set and all the successive sorted sets.
      *
      * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
-     * @since Valkey 6.2.0.
      * @see <a href="https://valkey.io/commands/zdiff/">valkey.io</a> for more details.
      * @param keys The keys of the sorted sets.
      * @return A <code>Map</code> of elements and their scores representing the difference between the
@@ -1425,7 +1421,6 @@ public interface SortedSetBaseCommands {
      *
      * @apiNote When in cluster mode, <code>destination</code> and all <code>keys</code> must map to
      *     the same hash slot.
-     * @since Valkey 6.2.0.
      * @see <a href="https://valkey.io/commands/zdiffstore/">valkey.io</a> for more details.
      * @param destination The key for the resulting sorted set.
      * @param keys The keys of the sorted sets to compare.
@@ -1445,7 +1440,6 @@ public interface SortedSetBaseCommands {
      *
      * @apiNote When in cluster mode, <code>destination</code> and all <code>keys</code> must map to
      *     the same hash slot.
-     * @since Valkey 6.2.0.
      * @see <a href="https://valkey.io/commands/zdiffstore/">valkey.io</a> for more details.
      * @param destination The key for the resulting sorted set.
      * @param keys The keys of the sorted sets to compare.
@@ -2187,7 +2181,6 @@ public interface SortedSetBaseCommands {
      * To get the elements with their scores, see {@link #zunionWithScores}.
      *
      * @apiNote When in cluster mode, all keys in <code>keys</code> must map to the same hash slot.
-     * @since Valkey 6.2.0.
      * @see <a href="https://valkey.io/commands/zunion/">valkey.io</a> for more details.
      * @param keys The keys of the sorted sets.
      * @return The resulting sorted set from the union.
@@ -2209,7 +2202,6 @@ public interface SortedSetBaseCommands {
      * To get the elements with their scores, see {@link #zunionWithScores}.
      *
      * @apiNote When in cluster mode, all keys in <code>keys</code> must map to the same hash slot.
-     * @since Valkey 6.2.0.
      * @see <a href="https://valkey.io/commands/zunion/">valkey.io</a> for more details.
      * @param keys The keys of the sorted sets.
      * @return The resulting sorted set from the union.
@@ -2232,7 +2224,6 @@ public interface SortedSetBaseCommands {
      *
      * @apiNote When in cluster mode, all keys in <code>keysOrWeightedKeys</code> must map to the same
      *     hash slot.
-     * @since Valkey 6.2.0.
      * @see <a href="https://valkey.io/commands/zunion/">valkey.io</a> for more details.
      * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
      *     <ul>
@@ -2263,7 +2254,6 @@ public interface SortedSetBaseCommands {
      *
      * @apiNote When in cluster mode, all keys in <code>keysOrWeightedKeys</code> must map to the same
      *     hash slot.
-     * @since Valkey 6.2.0.
      * @see <a href="https://valkey.io/commands/zunion/">valkey.io</a> for more details.
      * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
      *     <ul>
@@ -2296,7 +2286,6 @@ public interface SortedSetBaseCommands {
      *
      * @apiNote When in cluster mode, all keys in <code>keysOrWeightedKeys</code> must map to the same
      *     hash slot.
-     * @since Valkey 6.2.0.
      * @see <a href="https://valkey.io/commands/zunion/">valkey.io</a> for more details.
      * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
      *     <ul>
@@ -2326,7 +2315,6 @@ public interface SortedSetBaseCommands {
      *
      * @apiNote When in cluster mode, all keys in <code>keysOrWeightedKeys</code> must map to the same
      *     hash slot.
-     * @since Valkey 6.2.0.
      * @see <a href="https://valkey.io/commands/zunion/">valkey.io</a> for more details.
      * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
      *     <ul>
@@ -2355,7 +2343,6 @@ public interface SortedSetBaseCommands {
      * To get the elements with their scores, see {@link #zinterWithScores}.
      *
      * @apiNote When in cluster mode, all keys in <code>keys</code> must map to the same hash slot.
-     * @since Valkey 6.2.0.
      * @see <a href="https://valkey.io/commands/zinter/">valkey.io</a> for more details.
      * @param keys The keys of the sorted sets.
      * @return The resulting sorted set from the intersection.
@@ -2374,7 +2361,6 @@ public interface SortedSetBaseCommands {
      * To get the elements with their scores, see {@link #zinterWithScores}.
      *
      * @apiNote When in cluster mode, all keys in <code>keys</code> must map to the same hash slot.
-     * @since Valkey 6.2.0.
      * @see <a href="https://valkey.io/commands/zinter/">valkey.io</a> for more details.
      * @param keys The keys of the sorted sets.
      * @return The resulting sorted set from the intersection.
@@ -2394,7 +2380,6 @@ public interface SortedSetBaseCommands {
      *
      * @apiNote When in cluster mode, all keys in <code>keysOrWeightedKeys</code> must map to the same
      *     hash slot.
-     * @since Valkey 6.2.0.
      * @see <a href="https://valkey.io/commands/zinter/">valkey.io</a> for more details.
      * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
      *     <ul>
@@ -2419,7 +2404,6 @@ public interface SortedSetBaseCommands {
      *
      * @apiNote When in cluster mode, all keys in <code>keysOrWeightedKeys</code> must map to the same
      *     hash slot.
-     * @since Valkey 6.2.0.
      * @see <a href="https://valkey.io/commands/zinter/">valkey.io</a> for more details.
      * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
      *     <ul>
@@ -2444,7 +2428,6 @@ public interface SortedSetBaseCommands {
      *
      * @apiNote When in cluster mode, all keys in <code>keysOrWeightedKeys</code> must map to the same
      *     hash slot.
-     * @since Valkey 6.2.0.
      * @see <a href="https://valkey.io/commands/zinter/">valkey.io</a> for more details.
      * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
      *     <ul>
@@ -2471,7 +2454,6 @@ public interface SortedSetBaseCommands {
      *
      * @apiNote When in cluster mode, all keys in <code>keysOrWeightedKeys</code> must map to the same
      *     hash slot.
-     * @since Valkey 6.2.0.
      * @see <a href="https://valkey.io/commands/zinter/">valkey.io</a> for more details.
      * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
      *     <ul>

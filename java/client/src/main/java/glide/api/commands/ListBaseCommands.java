@@ -108,7 +108,6 @@ public interface ListBaseCommands {
      * Returns the index of the first occurrence of <code>element</code> inside the list specified by
      * <code>key</code>. If no match is found, <code>null</code> is returned.
      *
-     * @since Valkey 6.0.6.
      * @see <a href="https://valkey.io/commands/lpos/">valkey.io</a> for details.
      * @param key The name of the list.
      * @param element The value to search for within the list.
@@ -127,7 +126,6 @@ public interface ListBaseCommands {
      * Returns the index of the first occurrence of <code>element</code> inside the list specified by
      * <code>key</code>. If no match is found, <code>null</code> is returned.
      *
-     * @since Valkey 6.0.6.
      * @see <a href="https://valkey.io/commands/lpos/">valkey.io</a> for details.
      * @param key The name of the list.
      * @param element The value to search for within the list.
@@ -146,7 +144,6 @@ public interface ListBaseCommands {
      * Returns the index of an occurrence of <code>element</code> within a list based on the given
      * <code>options</code>. If no match is found, <code>null</code> is returned.
      *
-     * @since Valkey 6.0.6.
      * @see <a href="https://valkey.io/commands/lpos/">valkey.io</a> for details.
      * @param key The name of the list.
      * @param element The value to search for within the list.
@@ -175,7 +172,6 @@ public interface ListBaseCommands {
      * Returns the index of an occurrence of <code>element</code> within a list based on the given
      * <code>options</code>. If no match is found, <code>null</code> is returned.
      *
-     * @since Valkey 6.0.6.
      * @see <a href="https://valkey.io/commands/lpos/">valkey.io</a> for details.
      * @param key The name of the list.
      * @param element The value to search for within the list.
@@ -203,7 +199,6 @@ public interface ListBaseCommands {
     /**
      * Returns an <code>array</code> of indices of matching elements within a list.
      *
-     * @since Valkey 6.0.6.
      * @see <a href="https://valkey.io/commands/lpos/">valkey.io</a> for details.
      * @param key The name of the list.
      * @param element The value to search for within the list.
@@ -221,7 +216,6 @@ public interface ListBaseCommands {
     /**
      * Returns an <code>array</code> of indices of matching elements within a list.
      *
-     * @since Valkey 6.0.6.
      * @see <a href="https://valkey.io/commands/lpos/">valkey.io</a> for details.
      * @param key The name of the list.
      * @param element The value to search for within the list.
@@ -241,7 +235,6 @@ public interface ListBaseCommands {
      * Returns an <code>array</code> of indices of matching elements within a list based on the given
      * <code>options</code>. If no match is found, an empty <code>array</code>is returned.
      *
-     * @since Valkey 6.0.6.
      * @see <a href="https://valkey.io/commands/lpos/">valkey.io</a> for details.
      * @param key The name of the list.
      * @param element The value to search for within the list.
@@ -270,7 +263,6 @@ public interface ListBaseCommands {
      * Returns an <code>array</code> of indices of matching elements within a list based on the given
      * <code>options</code>. If no match is found, an empty <code>array</code>is returned.
      *
-     * @since Valkey 6.0.6.
      * @see <a href="https://valkey.io/commands/lpos/">valkey.io</a> for details.
      * @param key The name of the list.
      * @param element The value to search for within the list.
@@ -1204,7 +1196,6 @@ public interface ListBaseCommands {
      * </code> depending on <code>wherefrom</code>, and pushes the element at the first/last element
      * of the list stored at <code>destination</code> depending on <code>wherefrom</code>.
      *
-     * @since Valkey 6.2.0.
      * @apiNote When in cluster mode, <code>source</code> and <code>destination</code> must map to the
      *     same hash slot.
      * @see <a href="https://valkey.io/commands/lmove/">valkey.io</a> for details.
@@ -1233,7 +1224,6 @@ public interface ListBaseCommands {
      * </code> depending on <code>wherefrom</code>, and pushes the element at the first/last element
      * of the list stored at <code>destination</code> depending on <code>wherefrom</code>.
      *
-     * @since Valkey 6.2.0.
      * @apiNote When in cluster mode, <code>source</code> and <code>destination</code> must map to the
      *     same hash slot.
      * @see <a href="https://valkey.io/commands/lmove/">valkey.io</a> for details.
@@ -1265,7 +1255,6 @@ public interface ListBaseCommands {
      * <code>BLMove</code> is the blocking variant of {@link #lmove(String, String, ListDirection,
      * ListDirection)}.
      *
-     * @since Valkey 6.2.0.
      * @apiNote
      *     <ol>
      *       <li>When in cluster mode, all <code>source</code> and <code>destination</code> must map
@@ -1311,7 +1300,6 @@ public interface ListBaseCommands {
      * <code>BLMove</code> is the blocking variant of {@link #lmove(String, String, ListDirection,
      * ListDirection)}.
      *
-     * @since Valkey 6.2.0.
      * @apiNote
      *     <ol>
      *       <li>When in cluster mode, all <code>source</code> and <code>destination</code> must map

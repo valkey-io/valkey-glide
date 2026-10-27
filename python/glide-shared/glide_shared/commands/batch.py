@@ -1787,8 +1787,6 @@ class BaseBatch:
             Optional[bytes]: The popped element.
 
             `None` if `source` does not exist.
-
-        Since: Valkey 6.2.0.
         """
         return self.append_command(
             RequestType.LMove, [source, destination, where_from.value, where_to.value]
@@ -1824,8 +1822,6 @@ class BaseBatch:
             Optional[bytes]: The popped element.
 
             `None` if `source` does not exist or if the operation timed-out.
-
-        Since: Valkey 6.2.0.
         """
         return self.append_command(
             RequestType.BLMove,
@@ -2943,13 +2939,13 @@ class BaseBatch:
             start (StreamRangeBound): The starting stream entry ID bound for the range.
 
                 - Use `IdBound` to specify a stream entry ID.
-                - Since Valkey 6.2.0, use `ExclusiveIdBound` to specify an exclusive bounded stream entry ID.
+                - Use `ExclusiveIdBound` to specify an exclusive bounded stream entry ID.
                 - Use `MinId` to start with the minimum available ID.
 
             end (StreamRangeBound): The ending stream entry ID bound for the range.
 
                 - Use `IdBound` to specify a stream entry ID.
-                - Since Valkey 6.2.0, use `ExclusiveIdBound` to specify an exclusive bounded stream entry ID.
+                - Use `ExclusiveIdBound` to specify an exclusive bounded stream entry ID.
                 - Use `MaxId` to end with the maximum available ID.
 
             count (Optional[int]): An optional argument specifying the maximum count of stream entries to return.
@@ -2985,13 +2981,13 @@ class BaseBatch:
             end (StreamRangeBound): The ending stream entry ID bound for the range.
 
                 - Use `IdBound` to specify a stream entry ID.
-                - Since Valkey 6.2.0, use `ExclusiveIdBound` to specify an exclusive bounded stream entry ID.
+                - Use `ExclusiveIdBound` to specify an exclusive bounded stream entry ID.
                 - Use `MaxId` to end with the maximum available ID.
 
             start (StreamRangeBound): The starting stream entry ID bound for the range.
 
                 - Use `IdBound` to specify a stream entry ID.
-                - Since Valkey 6.2.0, use `ExclusiveIdBound` to specify an exclusive bounded stream entry ID.
+                - Use `ExclusiveIdBound` to specify an exclusive bounded stream entry ID.
                 - Use `MinId` to start with the minimum available ID.
 
             count (Optional[int]): An optional argument specifying the maximum count of stream entries to return.
@@ -3328,8 +3324,6 @@ class BaseBatch:
                 - If you are using Valkey 7.0.0 or above, the response list will also include a list containing the
                   message IDs that were in the Pending Entries List but no longer exist in the stream. These IDs are
                   deleted from the Pending Entries List.
-
-        Since: Valkey 6.2.0.
         """
         args = [key, group_name, consumer_name, str(min_idle_time_ms), start]
         if count is not None:
@@ -3372,8 +3366,6 @@ class BaseBatch:
                 - If you are using Valkey 7.0.0 or above, the response list will also include a list containing the
                   message IDs that were in the Pending Entries List but no longer exist in the stream. These IDs are
                   deleted from the Pending Entries List.
-
-        Since: Valkey 6.2.0.
         """
         args = [key, group_name, consumer_name, str(min_idle_time_ms), start]
         if count is not None:
@@ -3630,8 +3622,6 @@ class BaseBatch:
                   if `with_dist` is set to True.
                 - (int): The Geohash integer, if `with_hash` is set to True.
                 - List[float]: The coordinates as a two item [longitude,latitude] array, if `with_coord` is set to True.
-
-        Since: Valkey 6.2.0.
         """
         args = _create_geosearch_args(
             [key],
@@ -3682,8 +3672,6 @@ class BaseBatch:
 
         Commands response:
             int: The number of elements in the resulting sorted set stored at `destination`.
-
-        Since: Valkey 6.2.0.
         """
         args = _create_geosearch_args(
             [destination, source],
@@ -5002,8 +4990,6 @@ class BaseBatch:
 
         Command response:
             List[int]: An array of results from the "GET" subcommands.
-
-        Since: Valkey 6.0.0.
         """
         args = [key] + _create_bitfield_read_only_args(subcommands)
         return self.append_command(RequestType.BitFieldReadOnly, args)
@@ -5161,8 +5147,6 @@ class BaseBatch:
             Optional[bytes]: If `key` exists, return the value stored at `key`
 
             If 'key` does not exist, return 'None'
-
-        Since: Valkey 6.2.0.
         """
         args: List[TEncodable] = [key]
         if expiry is not None:
@@ -5498,8 +5482,6 @@ class BaseBatch:
             None if `element` is not in the list.
 
             With the `count` option, a list of indices of matching elements will be returned.
-
-        Since: Valkey 6.0.6.
         """
         args = [key, element]
 
@@ -5928,8 +5910,6 @@ class Batch(BaseBatch):
             bool: True if the source was copied.
 
             Otherwise, return False.
-
-        Since: Valkey 6.2.0.
         """
         args = [source, destination]
         if destinationDB is not None:

@@ -2385,8 +2385,6 @@ class CoreCommands(Protocol):
                 [b"two"]
             >>> client.lrange("testKey2", 0, -1)
                 [b"one", b"three", b"four"]
-
-        Since: Valkey 6.2.0.
         """
         return cast(
             Optional[bytes],
@@ -2442,8 +2440,6 @@ class CoreCommands(Protocol):
                 [b"two"]
             >>> updated_array2 = client.lrange("testKey2", 0, -1)
                 [b"one", b"three", bb"four"]
-
-        Since: Valkey 6.2.0.
         """
         return cast(
             Optional[bytes],
@@ -3593,13 +3589,13 @@ class CoreCommands(Protocol):
             end (StreamRangeBound): The ending stream entry ID bound for the range.
 
                 - Use `IdBound` to specify a stream entry ID.
-                - Since Valkey 6.2.0, use `ExclusiveIdBound` to specify an exclusive bounded stream entry ID.
+                - Use `ExclusiveIdBound` to specify an exclusive bounded stream entry ID.
                 - Use `MaxId` to end with the maximum available ID.
 
             start (StreamRangeBound): The starting stream entry ID bound for the range.
 
                 - Use `IdBound` to specify a stream entry ID.
-                - Since Valkey 6.2.0, use `ExclusiveIdBound` to specify an exclusive bounded stream entry ID.
+                - Use `ExclusiveIdBound` to specify an exclusive bounded stream entry ID.
                 - Use `MinId` to start with the minimum available ID.
 
             count (Optional[int]): An optional argument specifying the maximum count of stream entries to return.
@@ -4201,8 +4197,6 @@ class CoreCommands(Protocol):
                 # Stream entry "1-1" was idle for over an hour and was thus claimed by "my_consumer". The entire stream
                 # was scanned. Additionally, entry "1-2" was removed from the Pending Entries List because it no longer
                 # exists in the stream.
-
-        Since: Valkey 6.2.0.
         """
         args: List[TEncodable] = [
             key,
@@ -4270,8 +4264,6 @@ class CoreCommands(Protocol):
                 # Stream entry "1-1" was idle for over an hour and was thus claimed by "my_consumer". The entire stream
                 # was scanned. Additionally, entry "1-2" was removed from the Pending Entries List because it no longer
                 # exists in the stream.
-
-        Since: Valkey 6.2.0.
         """
         args: List[TEncodable] = [
             key,
@@ -4503,8 +4495,6 @@ class CoreCommands(Protocol):
                     ]
                 }
                 # Detailed stream information for "my_stream".
-
-        Since: Valkey 6.0.0.
         """
         args = [key, "FULL"]
         if count is not None:
@@ -4799,8 +4789,6 @@ class CoreCommands(Protocol):
                     ],
                 ]  # Returns locations within the square box of 400 km, with the center being a specific point, from nearest
                    # to farthest with the dist, hash and coords.
-
-        Since: Valkey 6.2.0.
         """
         args = _create_geosearch_args(
             [key],
@@ -4886,8 +4874,6 @@ class CoreCommands(Protocol):
             >>> client.zrange_withscores("my_dest_sorted_set", RangeByIndex(0, -1))
                 {b"Catania": 56.4412578701582, b"Palermo": 190.44242984775784} # The elements within te search area, with the
                                                                                # distance as score.
-
-        Since: Valkey 6.2.0.
         """
         args = _create_geosearch_args(
             [destination, source],
@@ -6775,8 +6761,6 @@ class CoreCommands(Protocol):
             >>> client.set("my_key", "A")  # "A" has binary value 01000001
             >>> client.bitfield_read_only("my_key", [BitFieldGet(UnsignedEncoding(2), Offset(1))])
                 [2]  # The value at offset 1 with an unsigned encoding of 2 is 2.
-
-        Since: Valkey 6.0.0.
         """
         args = [key] + _create_bitfield_read_only_args(subcommands)
         return cast(
@@ -6965,8 +6949,6 @@ class CoreCommands(Protocol):
             >>> time.sleep(1)
             >>> client.getex(b"key")
                 None
-
-        Since: Valkey 6.2.0.
         """
         args = [key]
         if expiry is not None:
@@ -7689,8 +7671,6 @@ class CoreCommands(Protocol):
                 [2, 6]
             >>> client.lpos(key, 'c', count = 0)
                 [2, 6, 7]
-
-        Since: Valkey 6.0.6.
         """
         args: List[TEncodable] = [key, element]
 

@@ -1034,7 +1034,6 @@ public interface GenericBaseCommands {
      *
      * @apiNote When in cluster mode, both <code>source</code> and <code>destination</code> must map
      *     to the same hash slot.
-     * @since Valkey 6.2.0.
      * @see <a href="https://valkey.io/commands/copy/">valkey.io</a> for details.
      * @param source The key to the source value.
      * @param destination The key where the value should be copied to.
@@ -1056,7 +1055,6 @@ public interface GenericBaseCommands {
      *
      * @apiNote When in cluster mode, both <code>source</code> and <code>destination</code> must map
      *     to the same hash slot.
-     * @since Valkey 6.2.0.
      * @see <a href="https://valkey.io/commands/copy/">valkey.io</a> for details.
      * @param source The key to the source value.
      * @param destination The key where the value should be copied to.
@@ -1117,7 +1115,6 @@ public interface GenericBaseCommands {
      *
      * @apiNote When in cluster mode, both <code>source</code> and <code>destination</code> must map
      *     to the same hash slot.
-     * @since Valkey 6.2.0.
      * @see <a href="https://valkey.io/commands/copy/">valkey.io</a> for details.
      * @param source The key to the source value.
      * @param destination The key where the value should be copied to.
@@ -1141,7 +1138,6 @@ public interface GenericBaseCommands {
      *
      * @apiNote When in cluster mode, both <code>source</code> and <code>destination</code> must map
      *     to the same hash slot.
-     * @since Valkey 6.2.0.
      * @see <a href="https://valkey.io/commands/copy/">valkey.io</a> for details.
      * @param source The key to the source value.
      * @param destination The key where the value should be copied to.
@@ -1164,7 +1160,6 @@ public interface GenericBaseCommands {
      * </code> key first if it already exists, otherwise performs no action.
      *
      * @apiNote copy command for cluster mode is supported since Valkey 9.0.0
-     * @since Valkey 6.2.0 for standalone Client.
      * @see <a href="https://valkey.io/commands/copy/">valkey.io</a> for details.
      * @param source The key to the source value.
      * @param destination The key where the value should be copied to.
@@ -1187,7 +1182,6 @@ public interface GenericBaseCommands {
      * </code> key first if it already exists, otherwise performs no action.
      *
      * @apiNote copy command for cluster mode is supported since Valkey 9.0.0
-     * @since Valkey 6.2.0 for standalone Client.
      * @see <a href="https://valkey.io/commands/copy/">valkey.io</a> for details.
      * @param source The key to the source value.
      * @param destination The key where the value should be copied to.
@@ -1210,7 +1204,6 @@ public interface GenericBaseCommands {
      * </code> key first if it already exists, otherwise performs no action.
      *
      * @apiNote copy command for cluster mode is supported since Valkey 9.0.0
-     * @since Valkey 6.2.0 for standalone Client.
      * @see <a href="https://valkey.io/commands/copy/">valkey.io</a> for details.
      * @param source The key to the source value.
      * @param destination The key where the value should be copied to.
@@ -1231,7 +1224,6 @@ public interface GenericBaseCommands {
      * </code> key first if it already exists, otherwise performs no action.
      *
      * @apiNote copy command for cluster mode is supported since Valkey 9.0.0
-     * @since Valkey 6.2.0 for standalone Client.
      * @see <a href="https://valkey.io/commands/copy/">valkey.io</a> for details.
      * @param source The key to the source value.
      * @param destination The key where the value should be copied to.

@@ -601,7 +601,6 @@ public interface BitmapBaseCommands {
      * specified <code>subCommands</code>.<br>
      * This command is routed depending on the client's {@link ReadFrom} strategy.
      *
-     * @since Valkey 6.0.0
      * @see <a href="https://valkey.io/commands/bitfield_ro/">valkey.io</a> for details.
      * @param key The key of the string.
      * @param subCommands The <code>GET</code> subCommands to be performed.
@@ -627,7 +626,6 @@ public interface BitmapBaseCommands {
      * specified <code>subCommands</code>.<br>
      * This command is routed depending on the client's {@link ReadFrom} strategy.
      *
-     * @since Valkey 6.0.0
      * @see <a href="https://valkey.io/commands/bitfield_ro/">valkey.io</a> for details.
      * @param key The key of the string.
      * @param subCommands The <code>GET</code> subCommands to be performed.

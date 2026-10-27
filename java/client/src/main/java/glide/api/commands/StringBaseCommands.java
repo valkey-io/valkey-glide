@@ -137,7 +137,6 @@ public interface StringBaseCommands {
     /**
      * Gets the value associated with the given <code>key</code>.
      *
-     * @since Valkey 6.2.0.
      * @see <a href="https://valkey.io/commands/getex/">valkey.io</a> for details.
      * @param key The <code>key</code> to retrieve from the database.
      * @return If <code>key</code> exists, return the <code>value</code> of the <code>key</code>.
@@ -153,7 +152,6 @@ public interface StringBaseCommands {
     /**
      * Gets the value associated with the given <code>key</code>.
      *
-     * @since Valkey 6.2.0.
      * @see <a href="https://valkey.io/commands/getex/">valkey.io</a> for details.
      * @param key The <code>key</code> to retrieve from the database.
      * @return If <code>key</code> exists, return the <code>value</code> of the <code>key</code>.
@@ -169,7 +167,6 @@ public interface StringBaseCommands {
     /**
      * Gets the value associated with the given <code>key</code>.
      *
-     * @since Valkey 6.2.0.
      * @see <a href="https://valkey.io/commands/getex/">valkey.io</a> for details.
      * @param key The <code>key</code> to retrieve from the database.
      * @param options The {@link GetExOptions} options.
@@ -188,7 +185,6 @@ public interface StringBaseCommands {
     /**
      * Gets the value associated with the given <code>key</code>.
      *
-     * @since Valkey 6.2.0.
      * @see <a href="https://valkey.io/commands/getex/">valkey.io</a> for details.
      * @param key The <code>key</code> to retrieve from the database.
      * @param options The {@link GetExOptions} options.

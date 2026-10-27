@@ -2946,11 +2946,7 @@ export function createBitPos(
  * See https://valkey.io/commands/flushall/ and https://valkey.io/commands/flushdb/ for details.
  */
 export enum FlushMode {
-    /**
-     * Flushes synchronously.
-     *
-     * Since Valkey 6.2.0.
-     */
+    /** Flushes synchronously. */
     SYNC = "SYNC",
     /** Flushes asynchronously. */
     ASYNC = "ASYNC",
@@ -3089,11 +3085,11 @@ export function createXLen(key: GlideString): command_request.Command {
 
 /** Optional arguments for {@link BaseClient.xpendingWithOptions|xpending}. */
 export interface StreamPendingOptions {
-    /** Filter pending entries by their idle time - in milliseconds. Available since Valkey 6.2.0. */
+    /** Filter pending entries by their idle time - in milliseconds. */
     minIdleTime?: number;
-    /** Starting stream ID bound for range. Exclusive range is available since Valkey 6.2.0. */
+    /** Starting stream ID bound for range. */
     start: Boundary<string>;
-    /** Ending stream ID bound for range. Exclusive range is available since Valkey 6.2.0. */
+    /** Ending stream ID bound for range. */
     end: Boundary<string>;
     /** Limit the number of messages returned. */
     count: number;

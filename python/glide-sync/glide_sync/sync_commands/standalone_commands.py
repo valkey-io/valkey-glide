@@ -849,8 +849,6 @@ class StandaloneCommands(CoreCommands):
             >>> client.select(1)
             >>> client.get("destination")
                 b"sheep"
-
-        Since: Valkey 6.2.0.
         """
         args: List[TEncodable] = [source, destination]
         if destinationDB is not None:

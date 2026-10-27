@@ -2537,7 +2537,6 @@ export class BaseClient {
      * Get the value of `key` and optionally set its expiration. `GETEX` is similar to {@link get}.
      *
      * @see {@link https://valkey.io/commands/getex/|valkey.op} for more details.
-     * @remarks Since Valkey 6.2.0.
      *
      * @param key - The key to retrieve from the database.
      * @param options - (Optional) Additional Parameters:
@@ -3000,7 +2999,7 @@ export class BaseClient {
      * no action.
      *
      * @see {@link https://valkey.io/commands/copy/|valkey.io} for more details.
-     * @remarks Since Valkey 6.2.0. destinationDB parameter for cluster mode is supported since Valkey 9.0.0
+     * @remarks destinationDB parameter for cluster mode is supported since Valkey 9.0.0
      *
      * @param source - The key to the source value.
      * @param destination - The key where the value should be copied to.
@@ -3295,7 +3294,6 @@ export class BaseClient {
      * Reads the array of bits representing the string that is held at `key` based on the specified `subcommands`.
      *
      * @see {@link https://valkey.io/commands/bitfield_ro/|valkey.io} for more details.
-     * @remarks Since Valkey 6.0.0.
      *
      * @param key - The key of the string.
      * @param subcommands - The {@link BitFieldGet} subcommands to be performed.
@@ -3713,7 +3711,6 @@ export class BaseClient {
      * Returns a random field name from the hash value stored at `key`.
      *
      * @see {@link https://valkey.io/commands/hrandfield/|valkey.io} for more details.
-     * @remarks Since Valkey 6.2.0.
      *
      * @param key - The key of the hash.
      * @param options - (Optional) See {@link DecoderOption}.
@@ -3813,7 +3810,6 @@ export class BaseClient {
      * Retrieves up to `count` random field names from the hash value stored at `key`.
      *
      * @see {@link https://valkey.io/commands/hrandfield/|valkey.io} for more details.
-     * @remarks Since Valkey 6.2.0.
      *
      * @param key - The key of the hash.
      * @param count - The number of field names to return.
@@ -3844,7 +3840,6 @@ export class BaseClient {
      * value stored at `key`.
      *
      * @see {@link https://valkey.io/commands/hrandfield/|valkey.io} for more details.
-     * @remarks Since Valkey 6.2.0.
      *
      * @param key - The key of the hash.
      * @param count - The number of field names to return.
@@ -4631,7 +4626,6 @@ export class BaseClient {
      * stored at `destination` depending on `whereFrom`, see {@link ListDirection}.
      *
      * @see {@link https://valkey.io/commands/lmove/|valkey.io} for details.
-     * @remarks Since Valkey 6.2.0.
      *
      * @param source - The key to the source list.
      * @param destination - The key to the destination list.
@@ -4683,7 +4677,6 @@ export class BaseClient {
      * @see {@link https://valkey.io/commands/blmove/|valkey.io} for details.
      * @remarks When in cluster mode, both `source` and `destination` must map to the same hash slot.
      * @remarks `BLMOVE` is a client blocking command, see {@link https://glide.valkey.io/how-to/connection-management/#blocking-commands|Valkey GLIDE Documentation} for more details and best practices.
-     * @remarks Since Valkey 6.2.0.
      *
      * @param source - The key to the source list.
      * @param destination - The key to the destination list.
@@ -5442,7 +5435,6 @@ export class BaseClient {
      * Checks whether each member is contained in the members of the set stored at `key`.
      *
      * @see {@link https://valkey.io/commands/smismember/|valkey.io} for more details.
-     * @remarks Since Valkey 6.2.0.
      *
      * @param key - The key of the set to check.
      * @param members - A list of members to check for existence in the set.
@@ -6003,11 +5995,11 @@ export class BaseClient {
      * @param key - The key of the stream.
      * @param start - The starting stream entry ID bound for the range.
      *     - Use `value` to specify a stream entry ID.
-     *     - Use `isInclusive: false` to specify an exclusive bounded stream entry ID. This is only available starting with Valkey version 6.2.0.
+     *     - Use `isInclusive: false` to specify an exclusive bounded stream entry ID.
      *     - Use `InfBoundary.NegativeInfinity` to start with the minimum available ID.
      * @param end - The ending stream entry ID bound for the range.
      *     - Use `value` to specify a stream entry ID.
-     *     - Use `isInclusive: false` to specify an exclusive bounded stream entry ID. This is only available starting with Valkey version 6.2.0.
+     *     - Use `isInclusive: false` to specify an exclusive bounded stream entry ID.
      *     - Use `InfBoundary.PositiveInfinity` to end with the maximum available ID.
      * @param options - (Optional) Additional parameters:
      * - (Optional) `count`: the maximum count of stream entries to return.
@@ -6050,11 +6042,11 @@ export class BaseClient {
      * @param key - The key of the stream.
      * @param end - The ending stream entry ID bound for the range.
      *     - Use `value` to specify a stream entry ID.
-     *     - Use `isInclusive: false` to specify an exclusive bounded stream entry ID. This is only available starting with Valkey version 6.2.0.
+     *     - Use `isInclusive: false` to specify an exclusive bounded stream entry ID.
      *     - Use `InfBoundary.PositiveInfinity` to end with the maximum available ID.
      * @param start - The ending stream ID bound for the range.
      *     - Use `value` to specify a stream entry ID.
-     *     - Use `isInclusive: false` to specify an exclusive bounded stream entry ID. This is only available starting with Valkey version 6.2.0.
+     *     - Use `isInclusive: false` to specify an exclusive bounded stream entry ID.
      *     - Use `InfBoundary.NegativeInfinity` to start with the minimum available ID.
      * @param options - (Optional) Additional parameters:
      * - (Optional) `count`: the maximum count of stream entries to return.
@@ -6280,7 +6272,6 @@ export class BaseClient {
      *
      * @see {@link https://valkey.io/commands/zdiff/|valkey.io} for more details.
      * @remarks When in cluster mode, all `keys` must map to the same hash slot.
-     * @remarks Since Valkey 6.2.0.
      *
      * @param keys - The keys of the sorted sets.
      * @param options - (Optional) See {@link DecoderOption}.
@@ -6311,7 +6302,6 @@ export class BaseClient {
      *
      * @see {@link https://valkey.io/commands/zdiff/|valkey.io} for more details.
      * @remarks When in cluster mode, all `keys` must map to the same hash slot.
-     * @remarks Since Valkey 6.2.0.
      *
      * @param keys - The keys of the sorted sets.
      * @param options - (Optional) See {@link DecoderOption}.
@@ -6346,7 +6336,6 @@ export class BaseClient {
      *
      * @see {@link https://valkey.io/commands/zdiffstore/|valkey.io} for more details.
      * @remarks When in cluster mode, all keys in `keys` and `destination` must map to the same hash slot.
-     * @remarks Since Valkey 6.2.0.
      *
      * @param destination - The key for the resulting sorted set.
      * @param keys - The keys of the sorted sets to compare.
@@ -6486,7 +6475,6 @@ export class BaseClient {
      * Returns the scores associated with the specified `members` in the sorted set stored at `key`.
      *
      * @see {@link https://valkey.io/commands/zmscore/|valkey.io} for more details.
-     * @remarks Since Valkey 6.2.0.
      *
      * @param key - The key of the sorted set.
      * @param members - A list of members in the sorted set.
@@ -6655,7 +6643,6 @@ export class BaseClient {
      *
      * @see {@link https://valkey.io/commands/zrangestore/|valkey.io} for more details.
      * @remarks When in cluster mode, `destination` and `source` must map to the same hash slot.
-     * @remarks Since Valkey 6.2.0.
      *
      * @param destination - The key for the destination sorted set.
      * @param source - The key of the source sorted set.
@@ -6756,8 +6743,6 @@ export class BaseClient {
      *
      * @remarks When in cluster mode, all keys in `keys` must map to the same hash slot.
      *
-     * @remarks Since Valkey 6.2.0.
-     *
      * @see {@link https://valkey.io/commands/zinter/|valkey.io} for details.
      *
      * @param keys - The keys of the sorted sets.
@@ -6789,8 +6774,6 @@ export class BaseClient {
      * @remarks When in cluster mode, all keys in `keys` must map to the same hash slot.
      *
      * @see {@link https://valkey.io/commands/zinter/|valkey.io} for details.
-     *
-     * @remarks Since Valkey 6.2.0.
      *
      * @param keys - The keys of the sorted sets with possible formats:
      *  - `GlideString[]` - for keys only.
@@ -6835,7 +6818,6 @@ export class BaseClient {
      *
      * @see {@link https://valkey.io/commands/zunion/|valkey.io} for details.
      * @remarks When in cluster mode, all keys in `keys` must map to the same hash slot.
-     * @remarks Since Valkey 6.2.0.
      *
      * @param keys - The keys of the sorted sets.
      * @param options - (Optional) See {@link DecoderOption}.
@@ -6865,8 +6847,6 @@ export class BaseClient {
      * @remarks When in cluster mode, all keys in `keys` must map to the same hash slot.
      *
      * @see {@link https://valkey.io/commands/zunion/|valkey.io} for details.
-     *
-     * @remarks Since Valkey 6.2.0.
      *
      * @param keys - The keys of the sorted sets with possible formats:
      *  - string[] - for keys only.
@@ -7132,7 +7112,7 @@ export class BaseClient {
      *
      * @param keys - The keys of the sorted sets.
      * @param timeout - The number of seconds to wait for a blocking operation to complete. A value of
-     *     `0` will block indefinitely. Since 6.0.0: timeout is interpreted as a double instead of an integer.
+     *     `0` will block indefinitely.
      * @param options - (Optional) See {@link DecoderOption}.
      * @returns An `array` containing the key where the member was popped out, the member, itself, and the member score.
      *     If no member could be popped and the `timeout` expired, returns `null`.
@@ -7211,7 +7191,7 @@ export class BaseClient {
      *
      * @param keys - The keys of the sorted sets.
      * @param timeout - The number of seconds to wait for a blocking operation to complete. A value of
-     *     `0` will block indefinitely. Since 6.0.0: timeout is interpreted as a double instead of an integer.
+     *     `0` will block indefinitely.
      * @param options - (Optional) See {@link DecoderOption}.
      * @returns An `array` containing the key where the member was popped out, the member, itself, and the member score.
      *     If no member could be popped and the `timeout` expired, returns `null`.
@@ -7950,7 +7930,6 @@ export class BaseClient {
      * Transfers ownership of pending stream entries that match the specified criteria.
      *
      * @see {@link https://valkey.io/commands/xautoclaim/|valkey.io} for more details.
-     * @remarks Since Valkey 6.2.0.
      *
      * @param key - The key of the stream.
      * @param group - The consumer group name.
@@ -8026,7 +8005,6 @@ export class BaseClient {
      * Transfers ownership of pending stream entries that match the specified criteria.
      *
      * @see {@link https://valkey.io/commands/xautoclaim/|valkey.io} for more details.
-     * @remarks Since Valkey 6.2.0.
      *
      * @param key - The key of the stream.
      * @param group - The consumer group name.
@@ -8186,7 +8164,6 @@ export class BaseClient {
      * - (Optional) `fullOptions`: If `true`, returns verbose information with a limit of the first 10 PEL entries.
      * If `number` is specified, returns verbose information limiting the returned PEL entries.
      * If `0` is specified, returns verbose information with no limit.
-     * @remark `fullOptions` - Available since Valkey 6.0.0
      * - (Optional) `decoder`: see {@link DecoderOption}.
      * @returns A {@link ReturnTypeXinfoStream} of detailed stream information for the given `key`. See
      *     the example for a sample response.
@@ -8839,7 +8816,6 @@ export class BaseClient {
      * an `array` of indices of matching elements within the list.
      *
      * @see {@link https://valkey.io/commands/lpos/|valkey.io} for more details.
-     * @remarks Since Valkey 6.0.6.
      *
      * @param key - The name of the list.
      * @param element - The value to search for within the list.
@@ -8950,7 +8926,6 @@ export class BaseClient {
      * which are within the borders of the area specified by a given shape.
      *
      * @see {@link https://valkey.io/commands/geosearch/|valkey.io} for more details.
-     * @remarks Since Valkey 6.2.0.
      *
      * @param key - The key of the sorted set.
      * @param searchFrom - The query's center point options, could be one of:
@@ -9037,7 +9012,6 @@ export class BaseClient {
      *
      * @see {@link https://valkey.io/commands/geosearchstore/|valkey.io} for more details.
      * @remarks When in cluster mode, `destination` and `source` must map to the same hash slot.
-     * @remarks Since Valkey 6.2.0.
      *
      * @param destination - The key of the destination sorted set.
      * @param source - The key of the sorted set.

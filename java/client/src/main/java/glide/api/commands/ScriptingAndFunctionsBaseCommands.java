@@ -405,7 +405,6 @@ public interface ScriptingAndFunctionsBaseCommands {
     /**
      * Sets the debugging mode for executed scripts.
      *
-     * @since Redis 3.2.0.
      * @see <a href="https://valkey.io/commands/script-debug/">valkey.io</a> for details.
      * @param mode The debugging mode to set.
      * @return <code>OK</code>.

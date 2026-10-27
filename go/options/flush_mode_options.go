@@ -7,7 +7,6 @@ type FlushMode string
 
 const (
 	// SYNC flushes synchronously.
-	// Since Valkey 6.2.0.
 	SYNC FlushMode = "SYNC"
 
 	// ASYNC flushes asynchronously.
