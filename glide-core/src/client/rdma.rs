@@ -169,7 +169,16 @@ fn reclaim_rdma_loan(
 ) -> RdmaOutcome<Option<glide_rdma::ReadReceipt>> {
     let (reply, error) = match reply {
         Ok(reply) => (reply, None),
-        Err(error) => (glide_rdma::TransferReply::Failed, Some(error)),
+        Err(error) => {
+            // `server_is_done_with` accepts every `ExtensionError`, including
+            // ones the client built, which prove nothing about the server. None
+            // should reach a transfer; catch one in tests if it does.
+            debug_assert!(
+                !crate::rdma::looks_built_locally(&error),
+                "handing back a buffer after a client error: {error}"
+            );
+            (glide_rdma::TransferReply::Failed, Some(error))
+        }
     };
     // SAFETY: `reply` is the server's answer to this loan's command or an error
     // that `crate::rdma::server_is_done_with` accepts, so the server is done with

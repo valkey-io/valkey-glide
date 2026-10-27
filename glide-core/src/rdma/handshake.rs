@@ -28,6 +28,22 @@ pub(crate) fn server_is_done_with(error: &redis::RedisError) -> bool {
     error.is_server_reply()
 }
 
+/// Whether `error` looks like an `ExtensionError` this client built, rather than
+/// one parsed from a server reply.
+///
+/// [`server_is_done_with`] accepts every `ExtensionError`, but the client builds
+/// some too: the cluster pipeline code does, and so does the conversion that
+/// wraps a client error, such as a lost connection, as a server error. Those
+/// codes are mixed case, such as `IoError` or `PipelineResponseError`. Server
+/// error codes are upper case, such as `ERR` or `WRONGTYPE`. So this is a guess,
+/// good enough for a debug check until `RedisError` records where it came from.
+pub(crate) fn looks_built_locally(error: &redis::RedisError) -> bool {
+    error.kind() == redis::ErrorKind::ExtensionError
+        && error
+            .code()
+            .is_some_and(|code| code.bytes().any(|byte| byte.is_ascii_lowercase()))
+}
+
 /// Why a `BLOB.RDMA_HELLO` was refused by the server.
 pub(crate) fn handshake_refused(node: &str, error: redis::RedisError) -> redis::RedisError {
     if !answered_by_server(&error) {
@@ -204,6 +220,38 @@ mod tests {
             )),
         ] {
             assert!(!server_is_done_with(&local), "{local}");
+        }
+    }
+
+    /// An error code the server sent is upper case. The client's own
+    /// `ExtensionError` codes are not, which is how a debug build catches one
+    /// handing a buffer back.
+    #[test]
+    fn only_a_mixed_case_extension_code_looks_built_locally() {
+        let parsed = |wire: &[u8]| {
+            redis::parse_redis_value(wire)
+                .and_then(|reply| reply.extract_error())
+                .expect_err("an error reply")
+        };
+
+        for server in [
+            parsed(b"-WRONGTYPE Operation against a key\r\n"),
+            parsed(b"-BLOBERR window out of range\r\n"),
+            parsed(b"-ERR not accepting sessions\r\n"),
+            server_error("ERR not accepting sessions"),
+            handshake_refused("10.0.0.1:6379", replica_refusal()),
+        ] {
+            assert!(!looks_built_locally(&server), "{server}");
+        }
+        // The same shape the client gives a lost connection or a pipeline
+        // failure when it wraps them as server errors.
+        for local in [
+            parsed(b"-IoError broken pipe\r\n"),
+            parsed(b"-PipelineResponseError Expected exactly one response\r\n"),
+        ] {
+            assert_eq!(local.kind(), redis::ErrorKind::ExtensionError, "{local}");
+            assert!(server_is_done_with(&local), "{local}");
+            assert!(looks_built_locally(&local), "{local}");
         }
     }
 
