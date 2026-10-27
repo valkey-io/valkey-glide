@@ -106,7 +106,7 @@ public final class SetOptions {
          *
          * @param value the value to compare
          * @return this builder instance
-         * @since Valkey 8.1 and above.
+         * @since Valkey 8.1.0.
          */
         public SetOptionsBuilder conditionalSetOnlyIfEqualTo(@NonNull String value) {
             return conditionalSetOnlyIfEqualTo(GlideString.gs(value));
@@ -121,7 +121,7 @@ public final class SetOptions {
          *
          * @param value the value to compare
          * @return this builder instance
-         * @since Valkey 8.1 and above.
+         * @since Valkey 8.1.0.
          */
         public SetOptionsBuilder conditionalSetOnlyIfEqualTo(@NonNull GlideString value) {
             this.conditionalSet = ConditionalSet.ONLY_IF_EQUAL;

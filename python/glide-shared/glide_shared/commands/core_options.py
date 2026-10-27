@@ -186,7 +186,7 @@ class InfoSection(Enum):
     """
     Valkey Cluster information.
 
-    Since: Valkey version 9.1.0.
+    Since: Valkey 9.1.0.
     """
 
     COMMAND_STATS = "commandstats"
@@ -406,8 +406,6 @@ class FlushMode(Enum):
 
     See [FLUSHALL](https://valkey.io/commands/flushall/) and [FUNCTION-FLUSH](https://valkey.io/commands/function-flush/)
     for details
-
-    SYNC was introduced in version 6.2.0.
     """
 
     ASYNC = "ASYNC"

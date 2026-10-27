@@ -72,7 +72,7 @@ func (setOptions *SetOptions) SetOnlyIfDoesNotExist() *SetOptions {
 //
 // This method overrides any previously set [SetOptions.ConditionalSet] and [SetOptions.ComparisonValue].
 //
-// since Valkey 8.1 and above.
+// since Valkey 8.1.0.
 func (setOptions *SetOptions) SetOnlyIfEquals(comparisonValue string) *SetOptions {
 	setOptions.ConditionalSet = constants.OnlyIfEquals
 	setOptions.ComparisonValue = comparisonValue

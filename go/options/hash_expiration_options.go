@@ -1,7 +1,7 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 // Package options provides configuration options for hash field expiration commands.
-// Available in Valkey 9.0 and above.
+// Available since Valkey 9.0.0.
 package options
 
 import (
