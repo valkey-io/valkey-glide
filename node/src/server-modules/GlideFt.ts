@@ -168,7 +168,11 @@ export class GlideFt {
             }
 
             if (options.filter !== undefined) {
-                if (options.filter === "") {
+                if (
+                    options.filter === "" ||
+                    (Buffer.isBuffer(options.filter) &&
+                        options.filter.length === 0)
+                ) {
                     throw new Error("filter cannot be empty.");
                 }
 

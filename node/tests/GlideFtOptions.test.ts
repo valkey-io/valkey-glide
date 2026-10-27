@@ -1057,6 +1057,17 @@ describe("GlideFt 1.3 argv serialization", () => {
                 GlideFt.create(client, "idx", [], options),
             ).rejects.toThrow(/filter cannot be empty/);
         });
+
+        it("rejects an empty Buffer filter", async () => {
+            const { client } = mockClient();
+            const options: FtCreateOptions = {
+                dataType: "HASH",
+                filter: Buffer.alloc(0),
+            };
+            await expect(
+                GlideFt.create(client, "idx", [], options),
+            ).rejects.toThrow(/filter cannot be empty/);
+        });
     });
 
     describe("FtAggregateReducer typed factories", () => {
