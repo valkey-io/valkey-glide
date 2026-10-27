@@ -1,15 +1,3 @@
-/*
- * DIVERGENCE FROM UPSTREAM: libfabric's exported functions are renamed.
- *
- * libfabric is never linked. glide-rdma defines each of these functions itself
- * under a glide_ prefix, forwarding to the libfabric it loads at run time. The
- * prefix keeps those definitions from clashing with a real libfabric that
- * something else in the same process has loaded.
- *
- * These are function-like macros, so a name is only replaced where it is called
- * or declared. fi_prov.h also has a struct field named fi_version, which a plain
- * macro would rename. The list must match SHIMMED in build.rs.
- */
 #define fi_getinfo(...) glide_fi_getinfo(__VA_ARGS__)
 #define fi_freeinfo(...) glide_fi_freeinfo(__VA_ARGS__)
 #define fi_dupinfo(...) glide_fi_dupinfo(__VA_ARGS__)
@@ -18,15 +6,6 @@
 #define fi_version(...) glide_fi_version(__VA_ARGS__)
 #define fi_open(...) glide_fi_open(__VA_ARGS__)
 #define fi_param_get(...) glide_fi_param_get(__VA_ARGS__)
-
-/*
- * DIVERGENCE FROM UPSTREAM: there are no wrappers for the functions libfabric
- * marks deprecated: fi_rx_size_left, fi_tx_size_left, fi_wait_open,
- * fi_poll_open, fi_av_bind, fi_wait, fi_poll, fi_poll_add and fi_poll_del.
- * Calling them made the compiler warn on every build, and glide-rdma uses none
- * of them. Leaving them out lets this file build without silencing those
- * warnings, so a new one is not hidden.
- */
 
 #include "wrapper.h"
 

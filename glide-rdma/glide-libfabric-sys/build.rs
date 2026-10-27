@@ -7,15 +7,6 @@ use std::sync::OnceLock;
 // Global variables for common directories.
 static CARGO_MANIFEST_DIR: OnceLock<PathBuf> = OnceLock::new();
 
-/// DIVERGENCE FROM UPSTREAM: libfabric's exported functions, which glide-rdma
-/// defines itself under a `glide_` prefix, forwarding to the libfabric it loads at
-/// run time.
-///
-/// The Rust bindings keep libfabric's names but link to the prefixed symbols and
-/// `wrapper.c` renames its calls the same way. Without the prefix, a library built
-/// from this crate would export its own `fi_getinfo` and friends, and a process
-/// that also loads the real libfabric could bind calls to the wrong copy. The
-/// list must match the one in `wrapper.c`, which a test in glide-rdma checks.
 #[cfg_attr(not(feature = "regenerate-bindings"), allow(dead_code))]
 const SHIMMED: [&str; 8] = [
     "fi_getinfo",
@@ -64,9 +55,6 @@ impl ParseCallbacks for RenameFunctions {
                 // On macOS, C symbols carry a leading underscore in the object
                 // file, and these link names bypass Rust's own mangling, so the
                 // exact symbol has to be spelled out here.
-                //
-                // DIVERGENCE FROM UPSTREAM: produces symbol names for
-                // the target OS, not the host.
                 Some(if target_is_macos() {
                     format!("_{symbol}")
                 } else {
@@ -131,10 +119,6 @@ fn main() {
     println!("cargo:rerun-if-changed=src/bindings.rs");
     println!("cargo:rerun-if-changed=include");
 
-    // DIVERGENCE FROM UPSTREAM: where the headers come from.
-    //
-    // Upstream asks pkg-config for an installed libfabric and builds against
-    // what it finds. Here, the public headers are vendored under `include/`.
     let vendored = manifest_dir.join("include");
     assert!(
         vendored.join("rdma").join("fabric.h").exists(),
@@ -146,17 +130,6 @@ fn main() {
         vendored.join("rdma"),
         vendored.join("rdma").join("providers"),
     ];
-
-    // DIVERGENCE FROM UPSTREAM: libfabric is never linked.
-    //
-    // Upstream emits `cargo:rustc-link-lib=fabric`, which puts a DT_NEEDED
-    // (Linux) or LC_LOAD_DYLIB (macOS) entry for libfabric on every binary built
-    // from these bindings. The OS loader resolves that entry while opening the
-    // file, so a host without libfabric cannot even start the process, whether
-    // or not it ever intends to use a fabric.
-    //
-    // Instead, the handful of genuinely dynamic libfabric symbols are resolved
-    // at run time by the dlopen shim in glide-rdma.
 
     // Compiles the wrapper.[ch].
     //
@@ -174,12 +147,6 @@ fn main() {
     let out_path = PathBuf::from(env::var("OUT_DIR").unwrap());
     let checked_in = manifest_dir.join("src").join("bindings.rs");
 
-    // DIVERGENCE FROM UPSTREAM: the bindings are generated once and kept.
-    //
-    // Running bindgen here would require libclang on every machine that builds
-    // this crate, including every release builder. The generated file is checked
-    // in instead. Regenerate it with `--features regenerate-bindings` after
-    // changing the vendored headers; see README.md.
     #[cfg(feature = "regenerate-bindings")]
     {
         let builder = bindgen::Builder::default().header("wrapper.h").clang_args(
