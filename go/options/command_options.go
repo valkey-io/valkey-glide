@@ -18,17 +18,21 @@ import (
 //
 // [valkey.io]: https://valkey.io/commands/set/
 type SetOptions struct {
-	// If ConditionalSet is not set the value will be set regardless of prior value existence. If value isn't set because of
-	// the condition, [api.StringCommands.SetWithOptions] will return models.CreateNilStringResult().
+	// The condition for setting the value.
+	// If not set, the value is always set.
 	ConditionalSet constants.ConditionalSet
-	// Value to compare when [SetOptions.ConditionalSet] is set to [constants.OnlyIfEquals] or [constants.OnlyIfNotEquals].
+
+	// The value to compare the current value against when [SetOptions.ConditionalSet]
+	// is [constants.OnlyIfEquals] or [constants.OnlyIfNotEquals].
 	ComparisonValue string
-	// Set command to return the old value stored at the given key, or models.CreateNilStringResult() if the key did not exist.
-	// An error is returned and [api.StringCommands.SetWithOptions] is aborted if the value stored at key is not a string.
-	// Equivalent to GET in the valkey API.
+
+	// Whether to return the existing value stored at the key.
+	// Equivalent to "GET" in the Valkey API.
+	// If not set, "OK" is returned when the value is set.
 	ReturnOldValue bool
-	// If not set, no expiry time will be set for the value.
-	// Supported ExpiryTypes ("EX", "PX", "EXAT", "PXAT", "KEEPTTL")
+
+	// The expiry for the value: "EX", "PX", "EXAT", "PXAT", or "KEEPTTL".
+	// If not set, the value has no expiry.
 	Expiry *Expiry
 }
 
