@@ -638,8 +638,7 @@ public class SharedCommandTests {
     @MethodSource("getClients")
     public void set_only_if_equal(BaseClient client) {
         assumeTrue(
-                SERVER_VERSION.isGreaterThanOrEqualTo("8.1.0"),
-                "This feature added in version 8.1.0");
+                SERVER_VERSION.isGreaterThanOrEqualTo("8.1.0"), "This feature added in version 8.1.0");
 
         String key = UUID.randomUUID().toString();
         assertEquals(OK, client.set(key, "value").get());
@@ -665,8 +664,7 @@ public class SharedCommandTests {
     @MethodSource("getClients")
     public void set_only_if_not_equal(BaseClient client) {
         assumeTrue(
-                SERVER_VERSION.isGreaterThanOrEqualTo("9.2.0"),
-                "This feature added in version 9.2.0");
+                SERVER_VERSION.isGreaterThanOrEqualTo("9.2.0"), "This feature added in version 9.2.0");
 
         String key = UUID.randomUUID().toString();
         assertEquals(OK, client.set(key, "value").get());

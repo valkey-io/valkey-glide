@@ -1392,6 +1392,7 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<String> set(
             @NonNull String key, @NonNull String value, @NonNull SetOptions options) {
+        // TODO #7447: Build binary arguments, so a binary comparison value is not converted lossily.
         String[] arguments = ArrayUtils.addAll(new String[] {key, value}, options.toArgs());
         return commandManager.submitNewCommand(Set, arguments, this::handleStringOrNullResponse);
     }

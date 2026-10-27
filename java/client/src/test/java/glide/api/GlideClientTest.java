@@ -1008,24 +1008,6 @@ public class GlideClientTest {
         assertEquals(value, response.get());
     }
 
-    /** Builds {@link SetOptions} with the given value comparison condition. */
-    private static SetOptions valueComparisonOptions(ConditionalSet condition, String value) {
-        SetOptions.SetOptionsBuilder builder = SetOptions.builder().expiry(Expiry.UnixSeconds(60L));
-        return (condition == ONLY_IF_EQUAL
-                        ? builder.conditionalSetOnlyIfEqualTo(value)
-                        : builder.conditionalSetOnlyIfNotEqualTo(value))
-                .build();
-    }
-
-    /** Builds {@link SetOptions} with the given binary value comparison condition. */
-    private static SetOptions valueComparisonOptions(ConditionalSet condition, GlideString value) {
-        SetOptions.SetOptionsBuilder builder = SetOptions.builder().expiry(Expiry.UnixSeconds(60L));
-        return (condition == ONLY_IF_EQUAL
-                        ? builder.conditionalSetOnlyIfEqualTo(value)
-                        : builder.conditionalSetOnlyIfNotEqualTo(value))
-                .build();
-    }
-
     @SneakyThrows
     @ParameterizedTest
     @EnumSource(
@@ -1049,13 +1031,10 @@ public class GlideClientTest {
         assertEquals("OK", initialResponse.get());
 
         // Set `key` to `newValue` with the correct condition
-        SetOptions setOptions =
-                SetOptions.builder()
-                        .conditionalSetOnlyIfEqualTo(value) // Key must currently have `value`
-                        .expiry(Expiry.UnixSeconds(60L))
-                        .build();
+        String comparisonValue = condition == ONLY_IF_EQUAL ? value : newValue;
+        SetOptions setOptions = valueComparisonOptions(condition, comparisonValue);
         String[] correctConditionArguments =
-                new String[] {key, newValue, ONLY_IF_EQUAL.getValkeyApi(), value, "EXAT", "60"};
+                new String[] {key, newValue, condition.getValkeyApi(), comparisonValue, "EXAT", "60"};
         CompletableFuture<String> correctSetResponse = new CompletableFuture<>();
         correctSetResponse.complete("OK");
         when(commandManager.<String>submitNewCommand(eq(pSet), eq(correctConditionArguments), any()))
@@ -1076,8 +1055,11 @@ public class GlideClientTest {
     }
 
     @SneakyThrows
-    @Test
-    public void set_with_SetOptions_OnlyIfEqual_fails() {
+    @ParameterizedTest
+    @EnumSource(
+            value = ConditionalSet.class,
+            names = {"ONLY_IF_EQUAL", "ONLY_IF_NOT_EQUAL"})
+    public void set_with_SetOptions_value_comparison_fails(ConditionalSet condition) {
         // Key-Value setup
         String key = "key";
         String value = "value";
@@ -1095,14 +1077,10 @@ public class GlideClientTest {
         assertEquals("OK", initialResponse.get());
 
         // Attempt to set `key` to `newValue` with the wrong condition
-        SetOptions wrongConditionOptions =
-                SetOptions.builder()
-                        .conditionalSetOnlyIfEqualTo(newValue) // Incorrect: current value of key is `value`
-                        .expiry(Expiry.UnixSeconds(60L))
-                        .build();
-
+        String comparisonValue = condition == ONLY_IF_EQUAL ? newValue : value;
+        SetOptions wrongConditionOptions = valueComparisonOptions(condition, comparisonValue);
         String[] wrongConditionArguments =
-                new String[] {key, newValue, ONLY_IF_EQUAL.getValkeyApi(), newValue, "EXAT", "60"};
+                new String[] {key, newValue, condition.getValkeyApi(), comparisonValue, "EXAT", "60"};
 
         CompletableFuture<String> failedSetResponse = new CompletableFuture<>();
         failedSetResponse.complete(null);
@@ -1124,14 +1102,18 @@ public class GlideClientTest {
     }
 
     @SneakyThrows
-    @Test
-    public void set_with_SetOptions_and_binary_condition_OnlyIfEqual_success() {
+    @ParameterizedTest
+    @EnumSource(
+            value = ConditionalSet.class,
+            names = {"ONLY_IF_EQUAL", "ONLY_IF_NOT_EQUAL"})
+    public void set_with_SetOptions_and_binary_value_comparison_success(ConditionalSet condition) {
         // setup
         GlideString key = gs("key");
         GlideString value = gs(new byte[] {(byte) 0xFF});
-        GlideString newValue = gs("new value");
+        GlideString newValue = gs(new byte[] {(byte) 0xC0, (byte) 0xAF});
 
         assertFalse(value.canConvertToString());
+        assertFalse(newValue.canConvertToString());
 
         // Set `key` to `value` initially
         CompletableFuture<String> initialSetResponse = new CompletableFuture<>();
@@ -1145,14 +1127,11 @@ public class GlideClientTest {
         assertEquals("OK", initialResponse.get());
 
         // Set `key` to `newValue` with the correct condition
-        SetOptions setOptions =
-                SetOptions.builder()
-                        .conditionalSetOnlyIfEqualTo(value) // Key must currently have `value`
-                        .expiry(Expiry.UnixSeconds(60L))
-                        .build();
+        GlideString comparisonValue = condition == ONLY_IF_EQUAL ? value : newValue;
+        SetOptions setOptions = valueComparisonOptions(condition, comparisonValue);
         GlideString[] correctConditionArguments =
                 new GlideString[] {
-                    key, newValue, gs(ONLY_IF_EQUAL.getValkeyApi()), value, gs("EXAT"), gs("60")
+                    key, newValue, gs(condition.getValkeyApi()), comparisonValue, gs("EXAT"), gs("60")
                 };
         CompletableFuture<String> correctSetResponse = new CompletableFuture<>();
         correctSetResponse.complete("OK");
@@ -1174,8 +1153,11 @@ public class GlideClientTest {
     }
 
     @SneakyThrows
-    @Test
-    public void set_with_SetOptions_and_binary_condition_OnlyIfEqual_fails() {
+    @ParameterizedTest
+    @EnumSource(
+            value = ConditionalSet.class,
+            names = {"ONLY_IF_EQUAL", "ONLY_IF_NOT_EQUAL"})
+    public void set_with_SetOptions_and_binary_value_comparison_fails(ConditionalSet condition) {
         // Key-Value setup
         GlideString key = gs("key");
         GlideString value = gs(new byte[] {(byte) 0xFF});
@@ -1196,15 +1178,11 @@ public class GlideClientTest {
         assertEquals("OK", initialResponse.get());
 
         // Attempt to set `key` to `newValue` with the wrong condition
-        SetOptions wrongConditionOptions =
-                SetOptions.builder()
-                        .conditionalSetOnlyIfEqualTo(newValue) // Incorrect: current value of key is `value`
-                        .expiry(Expiry.UnixSeconds(60L))
-                        .build();
-
+        GlideString comparisonValue = condition == ONLY_IF_EQUAL ? newValue : value;
+        SetOptions wrongConditionOptions = valueComparisonOptions(condition, comparisonValue);
         GlideString[] wrongConditionArguments =
                 new GlideString[] {
-                    key, newValue, gs(ONLY_IF_EQUAL.getValkeyApi()), newValue, gs("EXAT"), gs("60")
+                    key, newValue, gs(condition.getValkeyApi()), comparisonValue, gs("EXAT"), gs("60")
                 };
 
         CompletableFuture<String> failedSetResponse = new CompletableFuture<>();
@@ -16871,5 +16849,25 @@ public class GlideClientTest {
         // First '}' closes the tag ("{bar"); a '{' with no closing '}' hashes the whole key.
         assertEquals(4015, m.invoke(null, (Object) "foo{{bar}}zap".getBytes(StandardCharsets.UTF_8)));
         assertEquals(4092, m.invoke(null, (Object) "{".getBytes(StandardCharsets.UTF_8)));
+    }
+
+    // ==================== Helper Methods ====================
+
+    /** Builds {@link SetOptions} with the given value comparison condition. */
+    private static SetOptions valueComparisonOptions(ConditionalSet condition, String value) {
+        SetOptions.SetOptionsBuilder builder = SetOptions.builder().expiry(Expiry.UnixSeconds(60L));
+        return (condition == ONLY_IF_EQUAL
+                        ? builder.conditionalSetOnlyIfEqualTo(value)
+                        : builder.conditionalSetOnlyIfNotEqualTo(value))
+                .build();
+    }
+
+    /** Builds {@link SetOptions} with the given binary value comparison condition. */
+    private static SetOptions valueComparisonOptions(ConditionalSet condition, GlideString value) {
+        SetOptions.SetOptionsBuilder builder = SetOptions.builder().expiry(Expiry.UnixSeconds(60L));
+        return (condition == ONLY_IF_EQUAL
+                        ? builder.conditionalSetOnlyIfEqualTo(value)
+                        : builder.conditionalSetOnlyIfNotEqualTo(value))
+                .build();
     }
 }

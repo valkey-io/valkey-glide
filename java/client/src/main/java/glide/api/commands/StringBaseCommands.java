@@ -4,7 +4,6 @@ package glide.api.commands;
 import glide.api.models.GlideString;
 import glide.api.models.commands.GetExOptions;
 import glide.api.models.commands.SetOptions;
-import glide.api.models.commands.SetOptions.ConditionalSet;
 import glide.api.models.commands.SetOptions.SetOptionsBuilder;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -235,17 +234,15 @@ public interface StringBaseCommands {
     CompletableFuture<String> set(GlideString key, GlideString value);
 
     /**
-     * Sets the given key with the given value. Return value is dependent on the passed options.
+     * Sets the value of a key with the given options.
      *
      * @see <a href="https://valkey.io/commands/set/">valkey.io</a> for details.
      * @param key The key to store.
-     * @param value The value to store with the given key.
+     * @param value The value to store with the given <code>key</code>.
      * @param options The Set options.
-     * @return If the value is successfully set, return <code>"OK"</code>. If value isn't set because
-     *     of {@link ConditionalSet#ONLY_IF_EXISTS} or {@link ConditionalSet#ONLY_IF_DOES_NOT_EXIST}
-     *     or {@link ConditionalSet#ONLY_IF_EQUAL} or {@link ConditionalSet#ONLY_IF_NOT_EQUAL}
-     *     conditions, return <code>null</code>. If {@link SetOptionsBuilder#returnOldValue(boolean)}
-     *     is set, return the old value as a <code>String</code>.
+     * @return If {@link SetOptionsBuilder#returnOldValue(boolean)} is not set, <code>"OK"</code> if
+     *     the key was set, or <code>null</code> if the condition was not met. If it is set, the old
+     *     value stored at <code>key</code>, or <code>null</code> if <code>key</code> did not exist.
      * @example
      *     <pre>{@code
      * SetOptions options = SetOptions.builder().conditionalSetOnlyIfExists().expiry(Seconds(5L)).build();
@@ -268,17 +265,15 @@ public interface StringBaseCommands {
     CompletableFuture<String> set(String key, String value, SetOptions options);
 
     /**
-     * Sets the given key with the given value. Return value is dependent on the passed options.
+     * Sets the value of a key with the given options.
      *
      * @see <a href="https://valkey.io/commands/set/">valkey.io</a> for details.
      * @param key The key to store.
-     * @param value The value to store with the given key.
+     * @param value The value to store with the given <code>key</code>.
      * @param options The Set options.
-     * @return If the value is successfully set, return <code>"OK"</code>. If value isn't set because
-     *     of {@link ConditionalSet#ONLY_IF_EXISTS} or {@link ConditionalSet#ONLY_IF_DOES_NOT_EXIST}
-     *     or {@link ConditionalSet#ONLY_IF_EQUAL} or {@link ConditionalSet#ONLY_IF_NOT_EQUAL}
-     *     conditions, return <code>null</code>. If {@link SetOptionsBuilder#returnOldValue(boolean)}
-     *     is set, return the old value as a <code>String</code>.
+     * @return If {@link SetOptionsBuilder#returnOldValue(boolean)} is not set, <code>"OK"</code> if
+     *     the key was set, or <code>null</code> if the condition was not met. If it is set, the old
+     *     value stored at <code>key</code>, or <code>null</code> if <code>key</code> did not exist.
      * @example
      *     <pre>{@code
      * SetOptions options = SetOptions.builder().conditionalSet(ONLY_IF_EXISTS).expiry(Seconds(5L)).build();

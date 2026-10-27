@@ -59,6 +59,10 @@ public final class SetOptions {
          * SetOptions#comparisonValue}. Equivalent to <code>IFEQ comparison-value</code> in the Valkey
          * API.
          *
+         * <p>Not supported when compression is enabled. See <a
+         * href="https://glide.valkey.io/concepts/client-features/compression/#incompatible-commands">Valkey
+         * GLIDE – Data Compression</a>.
+         *
          * @since Valkey 8.1.0.
          */
         ONLY_IF_EQUAL("IFEQ"),
@@ -66,6 +70,10 @@ public final class SetOptions {
          * Only set the key if it does not exist or if its current value does not equal the {@link
          * SetOptions#comparisonValue}. Equivalent to <code>IFNE comparison-value</code> in the Valkey
          * API.
+         *
+         * <p>Not supported when compression is enabled. See <a
+         * href="https://glide.valkey.io/concepts/client-features/compression/#incompatible-commands">Valkey
+         * GLIDE – Data Compression</a>.
          *
          * @since Valkey 9.2.0.
          */
@@ -120,7 +128,7 @@ public final class SetOptions {
          *
          * @param value the value to compare
          * @return this builder instance
-         * @since Valkey 8.1 and above.
+         * @since Valkey 8.1.0.
          */
         public SetOptionsBuilder conditionalSetOnlyIfEqualTo(@NonNull String value) {
             return conditionalSetOnlyIfEqualTo(GlideString.gs(value));
@@ -135,7 +143,7 @@ public final class SetOptions {
          *
          * @param value the value to compare
          * @return this builder instance
-         * @since Valkey 8.1 and above.
+         * @since Valkey 8.1.0.
          */
         public SetOptionsBuilder conditionalSetOnlyIfEqualTo(@NonNull GlideString value) {
             this.conditionalSet = ConditionalSet.ONLY_IF_EQUAL;
@@ -153,7 +161,7 @@ public final class SetOptions {
          *
          * @param value the value to compare
          * @return this builder instance
-         * @since Valkey 9.2 and above.
+         * @since Valkey 9.2.0.
          */
         public SetOptionsBuilder conditionalSetOnlyIfNotEqualTo(@NonNull String value) {
             return conditionalSetOnlyIfNotEqualTo(GlideString.gs(value));
@@ -169,7 +177,7 @@ public final class SetOptions {
          *
          * @param value the value to compare
          * @return this builder instance
-         * @since Valkey 9.2 and above.
+         * @since Valkey 9.2.0.
          */
         public SetOptionsBuilder conditionalSetOnlyIfNotEqualTo(@NonNull GlideString value) {
             this.conditionalSet = ConditionalSet.ONLY_IF_NOT_EQUAL;
@@ -272,6 +280,7 @@ public final class SetOptions {
      * @return String[]
      */
     public String[] toArgs() {
+        // TODO #7447: Converts binary comparison values lossily. Use `toArgsBinary()` instead.
         return Arrays.stream(toArgsBinary()).map(GlideString::getString).toArray(String[]::new);
     }
 

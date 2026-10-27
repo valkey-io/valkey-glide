@@ -380,7 +380,7 @@ public class BatchTestUtilities {
                     .set(
                             stringKey11,
                             "other",
-                            SetOptions.builder().conditionalSetOnlyIfEqualTo("value").build())
+                            SetOptions.builder().conditionalSetOnlyIfEqualTo("value").build());
         }
 
         String stringKey12 = generateKey("StringKey", isAtomic);
@@ -394,7 +394,7 @@ public class BatchTestUtilities {
                     .set(
                             stringKey12,
                             "other",
-                            SetOptions.builder().conditionalSetOnlyIfNotEqualTo("other").build())
+                            SetOptions.builder().conditionalSetOnlyIfNotEqualTo("other").build());
         }
 
         Object[] expectedResults =
@@ -470,7 +470,8 @@ public class BatchTestUtilities {
                             expectedResults,
                             new Object[] {
                                 OK, // set(stringKey11, "value")
-                                null, // set(stringKey11, "other", conditionalSetOnlyIfEqualTo("other")) value not equal
+                                null, // set(stringKey11, "other", conditionalSetOnlyIfEqualTo("other")) value not
+                                // equal
                                 OK, // set(stringKey11, "other", conditionalSetOnlyIfEqualTo("value")) value equal
                             });
         }
@@ -481,8 +482,10 @@ public class BatchTestUtilities {
                             expectedResults,
                             new Object[] {
                                 OK, // set(stringKey12, "value")
-                                null, // set(stringKey12, "other", conditionalSetOnlyIfNotEqualTo("value")) value equal
-                                OK, // set(stringKey12, "other", conditionalSetOnlyIfNotEqualTo("other")) value not equal
+                                null, // set(stringKey12, "other", conditionalSetOnlyIfNotEqualTo("value")) value
+                                // equal
+                                OK, // set(stringKey12, "other", conditionalSetOnlyIfNotEqualTo("other")) value not
+                                // equal
                             });
         }
 
