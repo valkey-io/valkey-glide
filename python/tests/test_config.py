@@ -390,6 +390,36 @@ def test_convert_config_with_azaffinity_all_nodes_to_protobuf():
     assert request.client_az == az
 
 
+
+def test_config_rejects_whitespace_only_client_az():
+    strategies = [
+        ReadFrom.AZ_AFFINITY,
+        ReadFrom.AZ_AFFINITY_REPLICAS_AND_PRIMARY,
+        ReadFrom.AZ_AFFINITY_ALL_NODES,
+    ]
+    whitespaces = [" ", "   ", "\t", "\n", " \t\n "]
+    for strat in strategies:
+        for ws in whitespaces:
+            with pytest.raises(ValueError, match="client_az must be set"):
+                BaseClientConfiguration(
+                    [NodeAddress("127.0.0.1")],
+                    read_from=strat,
+                    client_az=ws,
+                )
+
+
+def test_config_normalizes_surrounding_whitespace_in_valid_client_az():
+    az = "  us-east-1a  "
+    config = BaseClientConfiguration(
+        [NodeAddress("127.0.0.1")],
+        read_from=ReadFrom.AZ_AFFINITY,
+        client_az=az,
+    )
+    assert config.client_az == "us-east-1a"
+    request = config._create_a_protobuf_conn_request()
+    assert request.client_az == "us-east-1a"
+
+
 def test_connection_timeout_in_protobuf_request():
     connection_timeout = 5000  # in milliseconds
     config = GlideClientConfiguration(
