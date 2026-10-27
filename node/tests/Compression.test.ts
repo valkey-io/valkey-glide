@@ -522,7 +522,6 @@ describe("Compression", () => {
         id: string;
         method: keyof BaseClient;
         args: unknown[];
-        minVersion?: string;
     }[] = [
         { id: "append", method: "append", args: ["0"] },
         { id: "bitcount", method: "bitcount", args: [] },
@@ -541,7 +540,6 @@ describe("Compression", () => {
                 "20",
                 { conditionalSet: "onlyIfEqual", comparisonValue: "10" },
             ],
-            minVersion: "8.1.0",
         },
         {
             id: "set_ifne",
@@ -550,7 +548,6 @@ describe("Compression", () => {
                 "20",
                 { conditionalSet: "onlyIfNotEqual", comparisonValue: "20" },
             ],
-            minVersion: "9.2.0",
         },
         { id: "setbit", method: "setbit", args: [0, 1] },
         { id: "setrange", method: "setrange", args: [1, "5"] },
@@ -566,17 +563,7 @@ describe("Compression", () => {
         ),
     )(
         "compression_incompatible_command $id cluster_mode=$clusterMode",
-        async ({ clusterMode, method, args, minVersion }) => {
-            if (
-                minVersion &&
-                (clusterMode
-                    ? clusterCluster
-                    : standaloneCluster
-                ).checkIfServerVersionLessThan(minVersion)
-            ) {
-                return;
-            }
-
+        async ({ clusterMode, method, args }) => {
             client = await createCompressedClient(clusterMode, {
                 enabled: true,
             });

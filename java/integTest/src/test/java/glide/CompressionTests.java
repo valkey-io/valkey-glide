@@ -9,7 +9,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import glide.api.BaseClient;
 import glide.api.GlideClient;
@@ -543,19 +542,18 @@ public class CompressionTests {
      */
     static Stream<Arguments> getIncompatibleCommands() {
         return Stream.of(
-                        incompatible("append", null, c -> c.append("key", "0")),
-                        incompatible("bitcount", null, c -> c.bitcount("key")),
-                        incompatible("bitpos", null, c -> c.bitpos("key", 1)),
-                        incompatible("decr", null, c -> c.decr("key")),
-                        incompatible("decrby", null, c -> c.decrBy("key", 5)),
-                        incompatible("getbit", null, c -> c.getbit("key", 0)),
-                        incompatible("getrange", null, c -> c.getrange("key", 0, 0)),
-                        incompatible("incr", null, c -> c.incr("key")),
-                        incompatible("incrby", null, c -> c.incrBy("key", 5)),
-                        incompatible("incrbyfloat", null, c -> c.incrByFloat("key", 0.5)),
+                        incompatible("append", c -> c.append("key", "0")),
+                        incompatible("bitcount", c -> c.bitcount("key")),
+                        incompatible("bitpos", c -> c.bitpos("key", 1)),
+                        incompatible("decr", c -> c.decr("key")),
+                        incompatible("decrby", c -> c.decrBy("key", 5)),
+                        incompatible("getbit", c -> c.getbit("key", 0)),
+                        incompatible("getrange", c -> c.getrange("key", 0, 0)),
+                        incompatible("incr", c -> c.incr("key")),
+                        incompatible("incrby", c -> c.incrBy("key", 5)),
+                        incompatible("incrbyfloat", c -> c.incrByFloat("key", 0.5)),
                         incompatible(
                                 "set_ifeq",
-                                "8.1.0",
                                 c ->
                                         c.set(
                                                 "key",
@@ -563,40 +561,30 @@ public class CompressionTests {
                                                 SetOptions.builder().conditionalSetOnlyIfEqualTo("10").build())),
                         incompatible(
                                 "set_ifne",
-                                "9.2.0",
                                 c ->
                                         c.set(
                                                 "key",
                                                 "20",
                                                 SetOptions.builder().conditionalSetOnlyIfNotEqualTo("20").build())),
-                        incompatible("setbit", null, c -> c.setbit("key", 0, 1)),
-                        incompatible("setrange", null, c -> c.setrange("key", 1, "5")),
-                        incompatible("strlen", null, c -> c.strlen("key")))
+                        incompatible("setbit", c -> c.setbit("key", 0, 1)),
+                        incompatible("setrange", c -> c.setrange("key", 1, "5")),
+                        incompatible("strlen", c -> c.strlen("key")))
                 .flatMap(
                         command ->
                                 Stream.of(false, true)
-                                        .map(
-                                                clusterMode ->
-                                                        Arguments.of(clusterMode, command[0], command[1], command[2])));
+                                        .map(clusterMode -> Arguments.of(clusterMode, command[0], command[1])));
     }
 
     private static Object[] incompatible(
-            String name, String minVersion, Function<BaseClient, CompletableFuture<?>> command) {
-        return new Object[] {name, minVersion, command};
+            String name, Function<BaseClient, CompletableFuture<?>> command) {
+        return new Object[] {name, command};
     }
 
     @SneakyThrows
     @ParameterizedTest(name = "{1} clusterMode={0}")
     @MethodSource("getIncompatibleCommands")
     public void compression_incompatible_command(
-            boolean clusterMode,
-            String name,
-            String minVersion,
-            Function<BaseClient, CompletableFuture<?>> command) {
-        assumeTrue(
-                minVersion == null || SERVER_VERSION.isGreaterThanOrEqualTo(minVersion),
-                "This feature added in version " + minVersion);
-
+            boolean clusterMode, String name, Function<BaseClient, CompletableFuture<?>> command) {
         try (BaseClient client = clusterMode ? compressionClusterClient() : compressionClient()) {
             Throwable cause =
                     assertThrows(ExecutionException.class, () -> command.apply(client).get()).getCause();

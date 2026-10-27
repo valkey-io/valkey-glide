@@ -1211,9 +1211,8 @@ func (suite *GlideTestSuite) TestCompressionIncompatibleCommands() {
 
 	// Commands that are incompatible with compression, called on a key that does not need to exist.
 	incompatibleCommands := []struct {
-		name       string
-		minVersion string
-		call       func(c client) error
+		name string
+		call func(c client) error
 	}{
 		{name: "Append", call: func(c client) error { return errOf(c.Append(ctx, "key", "0")) }},
 		{name: "BitCount", call: func(c client) error { return errOf(c.BitCount(ctx, "key")) }},
@@ -1225,10 +1224,10 @@ func (suite *GlideTestSuite) TestCompressionIncompatibleCommands() {
 		{name: "Incr", call: func(c client) error { return errOf(c.Incr(ctx, "key")) }},
 		{name: "IncrBy", call: func(c client) error { return errOf(c.IncrBy(ctx, "key", 5)) }},
 		{name: "IncrByFloat", call: func(c client) error { return errOf(c.IncrByFloat(ctx, "key", 0.5)) }},
-		{name: "SetIfEq", minVersion: "8.1.0", call: func(c client) error {
+		{name: "SetIfEq", call: func(c client) error {
 			return errOf(c.SetWithOptions(ctx, "key", "20", *options.NewSetOptions().SetOnlyIfEquals("10")))
 		}},
-		{name: "SetIfNe", minVersion: "9.2.0", call: func(c client) error {
+		{name: "SetIfNe", call: func(c client) error {
 			return errOf(c.SetWithOptions(ctx, "key", "20", *options.NewSetOptions().SetOnlyIfNotEquals("20")))
 		}},
 		{name: "SetBit", call: func(c client) error { return errOf(c.SetBit(ctx, "key", 0, 1)) }},
@@ -1246,10 +1245,6 @@ func (suite *GlideTestSuite) TestCompressionIncompatibleCommands() {
 
 		for _, command := range incompatibleCommands {
 			suite.T().Run(clientName+"/"+command.name, func(t *testing.T) {
-				if command.minVersion != "" {
-					suite.SkipIfServerVersionLowerThan(command.minVersion, t)
-				}
-
 				assert.ErrorContains(t, command.call(c), "incompatible with compression")
 			})
 		}
