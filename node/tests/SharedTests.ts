@@ -9820,7 +9820,7 @@ export function runBaseTests(config: {
 
         await client.set(key, initialValue);
         // set with multiple options:
-        // * only apply SET if the provided value does not equal oldValue
+        // * only apply SET if the current value does not equal the comparison value
         // * expires after 10 seconds
         // * returns the old value
         const wrongValue = "wrong value";
@@ -9833,9 +9833,9 @@ export function runBaseTests(config: {
             comparisonValue: wrongValue,
             returnOldValue: true,
         });
-        // initialValue should be get from the key
+        // initialValue is returned as the old value
         expect(setResWithAllOptions).toEqual(initialValue);
-        // newValue should be set as the key value
+        // newValue is set as the key value
         expect(await client.get(key)).toEqual(newValue);
 
         // fail command
@@ -9848,9 +9848,9 @@ export function runBaseTests(config: {
             comparisonValue: newValue,
             returnOldValue: true,
         });
-        // current value of key should be newValue
+        // newValue is returned as the old value
         expect(setResFailedWithAllOptions).toEqual(newValue);
-        // key should not be set. it remains the same
+        // the key is not set, and remains newValue
         expect(await client.get(key)).toEqual(newValue);
     }
 

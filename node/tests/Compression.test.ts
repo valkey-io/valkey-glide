@@ -569,7 +569,10 @@ describe("Compression", () => {
         async ({ clusterMode, method, args, minVersion }) => {
             if (
                 minVersion &&
-                standaloneCluster.checkIfServerVersionLessThan(minVersion)
+                (clusterMode
+                    ? clusterCluster
+                    : standaloneCluster
+                ).checkIfServerVersionLessThan(minVersion)
             ) {
                 return;
             }

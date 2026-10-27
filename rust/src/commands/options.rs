@@ -235,8 +235,8 @@ pub type FunctionFlushOptions = FlushAllOptions;
 //
 // GLIDE's `ValueComparison` diverges from redis-rs by holding a `Vec<u8>`
 // instead of a `String`: redis-rs builds that `String` lossily, silently
-// breaking comparisons of binary (non-UTF-8) values. See #5046 for a related
-// binary `IFEQ` issue in the Java client.
+// breaking comparisons of binary (non-UTF-8) values. See #7447 for a related
+// binary option-value issue in the Java client.
 //
 // TODO #7238: Use for `del_ex` (`DELEX`, Valkey 9.2).
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -470,9 +470,8 @@ public class BatchTestUtilities {
                             expectedResults,
                             new Object[] {
                                 OK, // set(stringKey11, "value")
-                                null, // set(stringKey11, "other", conditionalSetOnlyIfEqualTo("other")) value not
-                                // equal
-                                OK, // set(stringKey11, "other", conditionalSetOnlyIfEqualTo("value")) value equal
+                                null, // set(stringKey11, "other", IFEQ "other") value not equal
+                                OK, // set(stringKey11, "other", IFEQ "value") value equal
                             });
         }
 
@@ -482,10 +481,8 @@ public class BatchTestUtilities {
                             expectedResults,
                             new Object[] {
                                 OK, // set(stringKey12, "value")
-                                null, // set(stringKey12, "other", conditionalSetOnlyIfNotEqualTo("value")) value
-                                // equal
-                                OK, // set(stringKey12, "other", conditionalSetOnlyIfNotEqualTo("other")) value not
-                                // equal
+                                null, // set(stringKey12, "other", IFNE "value") value equal
+                                OK, // set(stringKey12, "other", IFNE "other") value not equal
                             });
         }
 

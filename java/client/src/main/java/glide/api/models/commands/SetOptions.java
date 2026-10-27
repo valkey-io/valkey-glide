@@ -126,6 +126,10 @@ public final class SetOptions {
          * <p>This method overrides any previously set {@code conditionalSet} and {@code
          * comparisonValue}.
          *
+         * <p>Not supported when compression is enabled. See <a
+         * href="https://glide.valkey.io/concepts/client-features/compression/#incompatible-commands">Valkey
+         * GLIDE – Data Compression</a>.
+         *
          * @param value the value to compare
          * @return this builder instance
          * @since Valkey 8.1.0.
@@ -140,6 +144,10 @@ public final class SetOptions {
          *
          * <p>This method overrides any previously set {@code conditionalSet} and {@code
          * comparisonValue}.
+         *
+         * <p>Not supported when compression is enabled. See <a
+         * href="https://glide.valkey.io/concepts/client-features/compression/#incompatible-commands">Valkey
+         * GLIDE – Data Compression</a>.
          *
          * @param value the value to compare
          * @return this builder instance
@@ -159,6 +167,10 @@ public final class SetOptions {
          * <p>This method overrides any previously set {@code conditionalSet} and {@code
          * comparisonValue}.
          *
+         * <p>Not supported when compression is enabled. See <a
+         * href="https://glide.valkey.io/concepts/client-features/compression/#incompatible-commands">Valkey
+         * GLIDE – Data Compression</a>.
+         *
          * @param value the value to compare
          * @return this builder instance
          * @since Valkey 9.2.0.
@@ -174,6 +186,10 @@ public final class SetOptions {
          *
          * <p>This method overrides any previously set {@code conditionalSet} and {@code
          * comparisonValue}.
+         *
+         * <p>Not supported when compression is enabled. See <a
+         * href="https://glide.valkey.io/concepts/client-features/compression/#incompatible-commands">Valkey
+         * GLIDE – Data Compression</a>.
          *
          * @param value the value to compare
          * @return this builder instance

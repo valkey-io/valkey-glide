@@ -19,12 +19,12 @@ import (
 // [valkey.io]: https://valkey.io/commands/set/
 type SetOptions struct {
 	// If ConditionalSet is not set the value will be set regardless of prior value existence. If value isn't set because of
-	// the condition, [api.StringCommands.SetWithOptions] will return a zero-value string ("").
+	// the condition, [api.StringCommands.SetWithOptions] will return models.CreateNilStringResult().
 	ConditionalSet constants.ConditionalSet
 	// Value to compare when [SetOptions.ConditionalSet] is set to [constants.OnlyIfEquals] or [constants.OnlyIfNotEquals].
 	ComparisonValue string
-	// Set command to return the old value stored at the given key, or a zero-value string ("") if the key did not exist. An
-	// error is returned and [api.StringCommands.SetWithOptions] is aborted if the value stored at key is not a string.
+	// Set command to return the old value stored at the given key, or models.CreateNilStringResult() if the key did not exist.
+	// An error is returned and [api.StringCommands.SetWithOptions] is aborted if the value stored at key is not a string.
 	// Equivalent to GET in the valkey API.
 	ReturnOldValue bool
 	// If not set, no expiry time will be set for the value.
@@ -74,6 +74,10 @@ func (setOptions *SetOptions) SetOnlyIfDoesNotExist() *SetOptions {
 // This method overrides any previously set [SetOptions.ConditionalSet] and [SetOptions.ComparisonValue].
 //
 // Since Valkey 8.1.0.
+//
+// Not supported when compression is enabled. See [Valkey GLIDE – Data Compression].
+//
+// [Valkey GLIDE – Data Compression]: https://glide.valkey.io/concepts/client-features/compression/#incompatible-commands
 func (setOptions *SetOptions) SetOnlyIfEquals(comparisonValue string) *SetOptions {
 	setOptions.ConditionalSet = constants.OnlyIfEquals
 	setOptions.ComparisonValue = comparisonValue
@@ -86,6 +90,10 @@ func (setOptions *SetOptions) SetOnlyIfEquals(comparisonValue string) *SetOption
 // This method overrides any previously set [SetOptions.ConditionalSet] and [SetOptions.ComparisonValue].
 //
 // Since Valkey 9.2.0.
+//
+// Not supported when compression is enabled. See [Valkey GLIDE – Data Compression].
+//
+// [Valkey GLIDE – Data Compression]: https://glide.valkey.io/concepts/client-features/compression/#incompatible-commands
 func (setOptions *SetOptions) SetOnlyIfNotEquals(comparisonValue string) *SetOptions {
 	setOptions.ConditionalSet = constants.OnlyIfNotEquals
 	setOptions.ComparisonValue = comparisonValue
