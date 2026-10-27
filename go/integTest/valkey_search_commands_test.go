@@ -2395,8 +2395,8 @@ func (suite *GlideTestSuite) TestModuleFtSearchSortByReturnExcludesSortFieldStan
 
 // --- valkey-search 1.3 stable surface ---
 //
-// WITHSCORES/SCORER, ADDSCORES, WITHCURSOR/FT.CURSOR, FT.HYBRID and LoadField aliases are wave 2
-// (after #7335 merges) and are out of scope here.
+// WITHSCORES/SCORER, ADDSCORES, WITHCURSOR/FT.CURSOR and FT.HYBRID live in
+// valkey_search_commands_wave2_test.go, which also covers the LoadField (LOAD ... AS) alias.
 
 // classifyInkeysProbeError mirrors Python's classify_inkeys_probe_error / Node's
 // classifyInkeysProbeError / Java's VectorSearch13Tests.classifyInkeysProbeError.
@@ -2425,7 +2425,11 @@ func (suite *GlideTestSuite) probeSearch13CapabilityCluster(
 			// Retry once -- FT.CREATE and FT.DROPINDEX both use probeIndex as their own first
 			// argument, so they always route to the same primary; a cluster-routing mismatch is
 			// not a possible explanation for a retry also failing.
-			_, _ = client.CustomCommand(ctx, []string{"FT.DROPINDEX", probeIndex})
+			_, retryErr := client.CustomCommand(ctx, []string{"FT.DROPINDEX", probeIndex})
+			require.NoError(
+				suite.T(), retryErr,
+				"search 1.3 capability probe could not clean up its own test index %q after one retry", probeIndex,
+			)
 		}
 	}()
 
@@ -2583,6 +2587,11 @@ func (suite *GlideTestSuite) TestModuleFtSearchInKeys() {
 	)
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), int64(2), some.TotalResults)
+	someKeys := make(map[string]struct{}, len(some.Documents))
+	for _, doc := range some.Documents {
+		someKeys[doc.Key] = struct{}{}
+	}
+	assert.Equal(suite.T(), map[string]struct{}{key1: {}, key2: {}}, someKeys)
 
 	glideft.ClusterFtDropIndex(ctx, client, index)
 }
@@ -2680,6 +2689,16 @@ func (suite *GlideTestSuite) TestModuleFtAggregateTypedReducers() {
 	assert.Equal(suite.T(), []string{"10", "30"}, prices)
 
 	assert.Equal(suite.T(), "30", fmt.Sprintf("%v", row["max_price"]))
+
+	// The group has 3 price values (10, 30, 10); RANDOM_SAMPLE with size=2 must cap its output at
+	// 2 and draw only from the group's actual values.
+	sampleAny, ok := row["sample"].([]any)
+	assert.True(suite.T(), ok, "sample should be an array")
+	assert.Equal(suite.T(), 2, len(sampleAny), "RANDOM_SAMPLE output should be capped at the configured size")
+	validPrices := map[string]struct{}{"10": {}, "30": {}}
+	for _, v := range sampleAny {
+		assert.Contains(suite.T(), validPrices, fmt.Sprintf("%v", v), "sampled value should be one of the group's own prices")
+	}
 
 	glideft.ClusterFtDropIndex(ctx, client, index)
 }

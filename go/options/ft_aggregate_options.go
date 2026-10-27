@@ -167,6 +167,53 @@ type FtAggregateParam struct {
 	Value string
 }
 
+// LoadField is a single entry in the LOAD clause of FT.AGGREGATE or FT.HYBRID, optionally
+// renaming the loaded field via AS. Modelled on FtSearchReturnField (the equivalent concept for
+// FT.SEARCH's RETURN option).
+//
+// "AS alias" in the LOAD clause is a compatibility fix introduced in valkey-search 1.3.0
+// (src/commands/ft_aggregate_parser.cc, gated by the ft_aggregate_load_as compatibility flag --
+// see COMPATIBILITY.md). Below search.emulate-release 1.3.0, the legacy branch does not
+// recognise AS as a rename keyword at all: it is consumed as just another LOAD field token
+// rather than a rename directive, so the server rejects the command outright with "Index: field
+// `AS` does not exist" once that non-existent field name is looked up. This is not validated
+// client-side; a caller relying on the alias actually renaming the column needs
+// search.emulate-release >= 1.3.0 live.
+type LoadField struct {
+	// FieldIdentifier is the identifier for the field to load.
+	FieldIdentifier string
+	// Alias is the alias to emit the field's column under. Requires search.emulate-release
+	// >= 1.3.0 to take effect; leaving this empty loads FieldIdentifier under its own name, the
+	// same as a plain LoadFields entry.
+	Alias string
+}
+
+// toArgs returns the arguments for this LOAD clause entry.
+func (f *LoadField) toArgs() []string {
+	if f.Alias == "" {
+		return []string{f.FieldIdentifier}
+	}
+	return []string{f.FieldIdentifier, "AS", f.Alias}
+}
+
+// loadFieldsToArgs serializes a LOAD clause's field list for FT.AGGREGATE and FT.HYBRID
+// (shared, since the two commands' LOAD clause grammar is byte-identical). plainFields is
+// emitted first (in order), followed by typedFields (also in order); the count is a token
+// budget, not an entry count -- each LoadField with an Alias contributes 3 tokens (field, AS,
+// alias) rather than 1, matching the parser's own accounting. Returns nil if both lists are
+// empty.
+func loadFieldsToArgs(plainFields []string, typedFields []LoadField) []string {
+	if len(plainFields) == 0 && len(typedFields) == 0 {
+		return nil
+	}
+	fieldArgs := []string{}
+	fieldArgs = append(fieldArgs, plainFields...)
+	for _, f := range typedFields {
+		fieldArgs = append(fieldArgs, f.toArgs()...)
+	}
+	return append([]string{"LOAD", strconv.Itoa(len(fieldArgs))}, fieldArgs...)
+}
+
 // FtWithCursor requests a paged reply instead of the whole result set at once, for
 // FT.AGGREGATE and FT.HYBRID -- the two commands share this option's grammar and reply shape
 // verbatim, since both forward WITHCURSOR to the same aggregate-suffix parser.
@@ -200,10 +247,18 @@ func (c *FtWithCursor) toArgs() []string {
 //
 // [valkey.io]: https://valkey.io/commands/ft.aggregate/
 type FtAggregateOptions struct {
-	// LoadAll loads all fields declared in the index. Mutually exclusive with LoadFields.
+	// LoadAll loads all fields declared in the index. Mutually exclusive with LoadFields and
+	// LoadFieldEntries.
 	LoadAll bool
-	// LoadFields loads only the specified fields. Mutually exclusive with LoadAll.
+	// LoadFields loads only the specified fields, each loaded under its own name. Mutually
+	// exclusive with LoadAll. Can be freely combined with LoadFieldEntries -- LoadFields is
+	// serialized first, followed by LoadFieldEntries, both into the same LOAD clause.
 	LoadFields []string
+	// LoadFieldEntries loads only the specified fields, each optionally renamed via
+	// [LoadField.Alias] (the LOAD ... AS form, valkey-search 1.3.0; see [LoadField]'s docstring
+	// for the compatibility gate). Mutually exclusive with LoadAll. Can be freely combined with
+	// LoadFields -- see its docstring for the emission order.
+	LoadFieldEntries []LoadField
 	// Timeout overrides the module timeout in milliseconds.
 	Timeout *int
 	// Params are key/value pairs referenced from within the query expression.
@@ -237,8 +292,8 @@ type FtAggregateOptions struct {
 
 // ToArgs returns the command arguments for FtAggregateOptions.
 func (o *FtAggregateOptions) ToArgs() ([]string, error) {
-	if o.LoadAll && len(o.LoadFields) > 0 {
-		return nil, errors.New("LoadAll and LoadFields are mutually exclusive")
+	if o.LoadAll && (len(o.LoadFields) > 0 || len(o.LoadFieldEntries) > 0) {
+		return nil, errors.New("LoadAll and LoadFields/LoadFieldEntries are mutually exclusive")
 	}
 	args := []string{}
 	if o.Verbatim {
@@ -252,9 +307,8 @@ func (o *FtAggregateOptions) ToArgs() ([]string, error) {
 	}
 	if o.LoadAll {
 		args = append(args, "LOAD", "*")
-	} else if len(o.LoadFields) > 0 {
-		args = append(args, "LOAD", strconv.Itoa(len(o.LoadFields)))
-		args = append(args, o.LoadFields...)
+	} else if loadArgs := loadFieldsToArgs(o.LoadFields, o.LoadFieldEntries); loadArgs != nil {
+		args = append(args, loadArgs...)
 	}
 	if o.Timeout != nil {
 		args = append(args, "TIMEOUT", strconv.Itoa(*o.Timeout))
