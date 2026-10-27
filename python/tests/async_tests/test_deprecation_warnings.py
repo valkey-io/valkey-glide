@@ -62,3 +62,45 @@ class TestDeprecationWarnings:
 
             # Verify they're the same classes
             assert deprecated_symbol is preferred_symbol
+
+    def test_legacy_module_introspection_does_not_warn(self):
+        """Test that inspecting sys.modules (e.g. inspect.stack, inspect.getmodule) does not warn (#7443)."""
+        import inspect
+        import warnings
+
+        # Reset warning flags
+        for module_name in _legacy_modules_and_symbols:
+            if module_name in sys.modules:
+                legacy_mod = sys.modules[module_name]
+                if hasattr(legacy_mod, "_warned"):
+                    legacy_mod._warned = False
+
+        # Introspection should never emit DeprecationWarning
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", DeprecationWarning)
+            # Standard inspect stack/module inspection queries dunder attributes like __file__, __spec__
+            inspect.stack()
+            for module_name in _legacy_modules_and_symbols:
+                mod = sys.modules[module_name]
+                assert not hasattr(mod, "__file__")
+                assert hasattr(mod, "__name__")
+
+    def test_legacy_module_star_import(self):
+        """Test that wildcard import from legacy module exposes public symbols and triggers warning on attribute access."""
+        import warnings
+
+        legacy_module_name = "glide.exceptions"
+        if legacy_module_name in sys.modules:
+            legacy_mod = sys.modules[legacy_module_name]
+            if hasattr(legacy_mod, "_warned"):
+                legacy_mod._warned = False
+
+        # Wildcard import inspects __all__
+        local_scope = {}
+        with warnings.catch_warnings(record=True) as recorded_warnings:
+            warnings.simplefilter("always", DeprecationWarning)
+            exec(f"from {legacy_module_name} import *", {}, local_scope)
+
+        # __all__ must be populated so names are bound in local_scope
+        assert len(local_scope) > 0
+        assert "RequestError" in local_scope

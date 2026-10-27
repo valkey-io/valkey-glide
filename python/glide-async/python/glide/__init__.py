@@ -248,6 +248,11 @@ class _LegacyModule(types.ModuleType):
         self._warned = False
 
     def __getattr__(self, name):
+        """Forward attribute lookups to top-level glide module, warning on deprecated access while exempting dunders."""
+        if name == "__all__":
+            return getattr(_glide_module, "__all__", [])
+        if name.startswith("__") and name.endswith("__"):
+            raise AttributeError(f"module '{self.__name__}' has no attribute '{name}'")
         if not self._warned:
             warnings.warn(
                 f"Importing from '{self.__name__}' is deprecated. "
