@@ -17,6 +17,7 @@ on:
             - node/tests/ServerModulesVs13.test.ts
             - node/tests/ServerModulesCiSync.test.ts
             - node/tests/searchCapabilityHelpers.ts
+            - node/tests/wave2SkipTracker.ts
             - .github/workflows/node-modules.yml
             - .github/actions/install-shared-dependencies/action.yml
             - .github/actions/install-engine/action.yml
@@ -30,6 +31,7 @@ on:
             - node/tests/ServerModulesVs13.test.ts
             - node/tests/ServerModulesCiSync.test.ts
             - node/tests/searchCapabilityHelpers.ts
+            - node/tests/wave2SkipTracker.ts
             - .github/workflows/node-modules.yml
             - .github/actions/install-shared-dependencies/action.yml
             - .github/actions/install-engine/action.yml
