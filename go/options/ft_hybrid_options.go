@@ -5,6 +5,7 @@ package options
 import (
 	"errors"
 	"strconv"
+	"strings"
 
 	"github.com/valkey-io/valkey-glide/go/v2/constants"
 )
@@ -146,6 +147,12 @@ func (a *FtHybridVsimArm) IsParamReference() bool {
 func (a *FtHybridVsimArm) ToArgs(generatedParamName string) ([]string, error) {
 	if (a.VectorParam == "") == (len(a.Vector) == 0) {
 		return nil, errors.New("exactly one of Vector or VectorParam must be set")
+	}
+	if a.VectorParam != "" && !strings.HasPrefix(a.VectorParam, "$") {
+		return nil, errors.New(
+			"VectorParam must start with '$' (the server rejects a parameter reference that " +
+				"doesn't: \"VSIM: vector parameter must start with '$'\")",
+		)
 	}
 	if a.EfRuntime != nil && a.Filter != nil && a.Filter.Policy == constants.HybridFilterPolicyAdhoc {
 		return nil, errors.New(
@@ -318,19 +325,25 @@ type FtHybridOptions struct {
 	// method applies.
 	Combine FtHybridCombine
 	// LoadAll loads every field declared in the index, plus both arms' score aliases
-	// automatically. Unlike a named LoadFields list, "LOAD *" cannot name an arm's score alias at
-	// all (there is nothing to name), so this form has no equivalent of the LOAD-clause alias
-	// restriction described on [FtHybridSearchArm.YieldScoreAs]. Mutually exclusive with
-	// LoadFields.
+	// automatically. Unlike a named LoadFields/LoadFieldEntries list, "LOAD *" cannot name an
+	// arm's score alias at all (there is nothing to name), so this form has no equivalent of the
+	// LOAD-clause alias restriction described on [FtHybridSearchArm.YieldScoreAs]. Mutually
+	// exclusive with LoadFields and LoadFieldEntries.
 	LoadAll bool
-	// LoadFields loads only the fields in this list, reusing the FT.AGGREGATE LOAD clause
-	// grammar verbatim (byte-identical between the two commands). Must NOT include either arm's
-	// YieldScoreAs alias -- the server rejects it outright even though the alias is otherwise
-	// freely reachable; see [FtHybridSearchArm.YieldScoreAs]. With no LOAD clause at all (both
-	// LoadAll and LoadFields left unset), FT.HYBRID's default reply is the document key and the
-	// fused score -- a default FT.AGGREGATE has no equivalent of. Mutually exclusive with
-	// LoadAll.
+	// LoadFields loads only the fields in this list, each loaded under its own name, reusing the
+	// FT.AGGREGATE LOAD clause grammar verbatim (byte-identical between the two commands). Must
+	// NOT include either arm's YieldScoreAs alias -- the server rejects it outright even though
+	// the alias is otherwise freely reachable; see [FtHybridSearchArm.YieldScoreAs]. With no LOAD
+	// clause at all (LoadAll, LoadFields and LoadFieldEntries all left unset), FT.HYBRID's
+	// default reply is the document key and the fused score -- a default FT.AGGREGATE has no
+	// equivalent of. Mutually exclusive with LoadAll. Can be freely combined with
+	// LoadFieldEntries -- see [loadFieldsToArgs] for the emission order.
 	LoadFields []string
+	// LoadFieldEntries loads only the fields in this list, each optionally renamed via
+	// [LoadField.Alias] (the LOAD ... AS form, valkey-search 1.3.0; see [LoadField]'s docstring
+	// for the compatibility gate). Subject to the same YieldScoreAs restriction as LoadFields.
+	// Mutually exclusive with LoadAll. Can be freely combined with LoadFields.
+	LoadFieldEntries []LoadField
 	// Clauses are FILTER, LIMIT, GROUPBY, SORTBY and APPLY clauses, reusing [FtAggregateClause]
 	// and its implementations verbatim from the FT.AGGREGATE options (FT.HYBRID forwards this
 	// whole tail to the exact same aggregate pipeline parser FT.AGGREGATE uses). Every arm alias
@@ -393,8 +406,8 @@ func (o *FtHybridOptions) mergeParams(generatedVsimParamName, generatedVsimParam
 // FtHybrid/ClusterFtHybrid; not intended to be set directly by callers (pass "" for both when
 // calling this directly, e.g. from a unit test, if no raw-bytes VSIM arm is involved).
 func (o *FtHybridOptions) ToArgs(generatedVsimParamName, generatedVsimParamValue string) ([]string, error) {
-	if o.LoadAll && len(o.LoadFields) > 0 {
-		return nil, errors.New("LoadAll and LoadFields are mutually exclusive")
+	if o.LoadAll && (len(o.LoadFields) > 0 || len(o.LoadFieldEntries) > 0) {
+		return nil, errors.New("LoadAll and LoadFields/LoadFieldEntries are mutually exclusive")
 	}
 	args := []string{}
 	if o.LocalOnly {
@@ -404,9 +417,8 @@ func (o *FtHybridOptions) ToArgs(generatedVsimParamName, generatedVsimParamValue
 	}
 	if o.LoadAll {
 		args = append(args, "LOAD", "*")
-	} else if len(o.LoadFields) > 0 {
-		args = append(args, "LOAD", strconv.Itoa(len(o.LoadFields)))
-		args = append(args, o.LoadFields...)
+	} else if loadArgs := loadFieldsToArgs(o.LoadFields, o.LoadFieldEntries); loadArgs != nil {
+		args = append(args, loadArgs...)
 	}
 	if o.Timeout != nil {
 		args = append(args, "TIMEOUT", strconv.Itoa(*o.Timeout))

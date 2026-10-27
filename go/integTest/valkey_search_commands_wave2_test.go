@@ -44,6 +44,47 @@ func packFloat32Vector(values ...float32) string {
 	return string(buf)
 }
 
+// float32ToFloat16Bits converts an IEEE754 float32 to IEEE754 binary16 (half-precision) bits.
+// Only exercised against exact binary powers of two (0.0, 1.0, 2.0) in this file's tests, so
+// this is not a fully general rounding implementation -- it is correct for those exact values
+// and for normal values generally, but does not handle subnormal-range rounding or NaN payloads.
+func float32ToFloat16Bits(f float32) uint16 {
+	bits := math.Float32bits(f)
+	sign := uint16((bits >> 16) & 0x8000)
+	exp := int32((bits>>23)&0xFF) - 127 + 15
+	mant := bits & 0x7FFFFF
+	if exp <= 0 {
+		return sign
+	}
+	if exp >= 0x1F {
+		return sign | 0x7C00
+	}
+	return sign | uint16(exp)<<10 | uint16(mant>>13)
+}
+
+// packFloat16Vector packs a sequence of float32 values into a little-endian binary16 byte
+// string, the wire representation FT.CREATE's FLOAT16 vector fields expect.
+func packFloat16Vector(values ...float32) string {
+	buf := make([]byte, 2*len(values))
+	for i, v := range values {
+		binary.LittleEndian.PutUint16(buf[i*2:], float32ToFloat16Bits(v))
+	}
+	return string(buf)
+}
+
+// packBfloat16Vector packs a sequence of float32 values into a little-endian bfloat16 byte
+// string (the high-order 16 bits of each float32, i.e. truncation rather than
+// round-to-nearest-ties-to-even), the wire representation FT.CREATE's BFLOAT16 vector fields
+// expect. Test values are restricted to exact binary powers of two so this simple truncation
+// agrees with the server's own round-to-nearest-ties-to-even (src/indexes/bfloat16.h).
+func packBfloat16Vector(values ...float32) string {
+	buf := make([]byte, 2*len(values))
+	for i, v := range values {
+		binary.LittleEndian.PutUint16(buf[i*2:], uint16(math.Float32bits(v)>>16))
+	}
+	return string(buf)
+}
+
 const (
 	hybridDocTextWinner   = "textwinner"
 	hybridDocVectorWinner = "vectorwinner"
@@ -163,7 +204,7 @@ func (suite *GlideTestSuite) TestModuleFtSearchWithScoresAndWithSortKeysCombined
 		assert.NotEmpty(suite.T(), doc.SortKey)
 		assert.Contains(suite.T(), doc.Fields, "title")
 	}
-	// L2: assert the actual SORTBY price ASC order and the SortKey values, not just that
+	// Assert the actual SORTBY price ASC order and the SortKey values, not just that
 	// Score/SortKey/Fields are present.
 	assert.Equal(suite.T(), []string{prefix + "1", prefix + "2"}, []string{
 		result.Documents[0].Key, result.Documents[1].Key,
@@ -450,11 +491,14 @@ type hostPort struct {
 	Port int
 }
 
-// unwrapClusterCustomCommand unwraps a models.ClusterValue[any] the same way
-// getEmulateReleaseLevel does for an unrouted command like CLUSTER KEYSLOT/CLUSTER SHARDS: the
-// single answering node's own reply lands under MultiValue() keyed by the reply's own content
-// rather than a node address (confirmed empirically against a live cluster), so the multi-value
-// map IS the reply's own contents here, not a per-node breakdown.
+// unwrapClusterCustomCommand unwraps a models.ClusterValue[any] for an unrouted command like
+// CLUSTER KEYSLOT/CLUSTER SHARDS: the single answering node's own reply lands under
+// MultiValue() keyed by the reply's own content rather than a node address (confirmed
+// empirically against a live cluster). Unlike getEmulateReleaseLevel's inline unwrap (which
+// always rebuilds a map, since CONFIG GET's single-entry map has a meaningful key -- the config
+// name -- worth preserving for readMapField), this returns the lone value directly when exactly
+// one entry is present, since CLUSTER KEYSLOT/CLUSTER SHARDS have no analogous per-entry key to
+// keep; only a genuine multi-node fan-out falls through to the rebuilt-map case below.
 func unwrapClusterCustomCommand(result models.ClusterValue[any]) any {
 	if !result.IsMultiValue() {
 		return result.SingleValue()
@@ -524,7 +568,11 @@ func (suite *GlideTestSuite) findReplicaAddrsForKey(
 
 // flatToMap normalizes either a map[string]any or a flat []any [k1, v1, k2, v2, ...] (the shape
 // a raw CustomCommand reply may come back as, depending on RESP2 vs RESP3) into a
-// map[string]any.
+// map[string]any. Shares its flat-pair-walk logic with readMapField
+// (valkey_search_commands_test.go), which looks up a single field rather than building the
+// whole map; the two are kept as separate functions since one returns a map and the other a
+// single (value, ok) pair, but the underlying "odd index is key, even index is value" walk is
+// identical.
 func flatToMap(v any) map[string]any {
 	if m, ok := v.(map[string]any); ok {
 		return m
@@ -955,6 +1003,207 @@ func (suite *GlideTestSuite) TestModuleFtHybridVsimRangeRejected() {
 		"PARAMS", "2", "blob", queryBlob,
 	})
 	assert.ErrorContains(suite.T(), err, "RANGE")
+
+	glideft.ClusterFtDropIndex(ctx, client, index)
+}
+
+// --- ft_aggregate LOAD ... AS (LoadField) ---
+
+// TestModuleFtAggregateLoadFieldAlias covers FT.AGGREGATE's LOAD ... AS form (valkey-search
+// 1.3.0, src/commands/ft_aggregate_parser.cc, compat flag ft_aggregate_load_as). Confirmed via
+// the live emulate-release level that the alias takes effect as the output column name at
+// search.emulate-release >= 1.3.0. Mixes a plain string LoadFields entry with a LoadFieldEntries
+// entry in the same aggregate call to confirm the two forms compose (non-breaking addition:
+// existing []string LoadFields callers keep working unchanged).
+//
+// Below search.emulate-release 1.3.0, the legacy branch never consumes AS as a rename keyword --
+// it falls through and gets parsed as its own LOAD field, which doesn't exist on the schema,
+// failing the clause outright (ConstructLoadParser()). Asserts that legacy failure directly,
+// rather than skipping, since the two branches intentionally produce different outcomes and both
+// are worth pinning down. Mirrors Python's test_ft_aggregate_load_as.
+func (suite *GlideTestSuite) TestModuleFtAggregateLoadFieldAlias() {
+	client := suite.defaultClusterClient()
+	ctx := context.Background()
+	if !suite.probeSearch13CapabilityCluster(ctx, client) {
+		suite.T().Skip("search module present but pre-1.3 (INKEYS probe rejected it)")
+	}
+
+	prefix := "{ft-load-as-" + uuid.New().String() + "}:"
+	index := prefix + "index"
+
+	_, err := glideft.ClusterFtCreate(ctx, client, index,
+		[]options.Field{options.NewTextField("title"), options.NewNumericField("price")},
+		&options.FtCreateOptions{DataType: constants.IndexDataTypeHash, Prefixes: []string{prefix}})
+	require.NoError(suite.T(), err)
+	_, err = client.HSet(ctx, prefix+"1", map[string]string{"title": "widget", "price": "9"})
+	require.NoError(suite.T(), err)
+	time.Sleep(time.Second)
+
+	aggOpts := &options.FtAggregateOptions{
+		LoadFields:       []string{"title"},
+		LoadFieldEntries: []options.LoadField{{FieldIdentifier: "price", Alias: "cost"}},
+	}
+
+	level := suite.getEmulateReleaseLevel(ctx, client)
+	if checkVersionLt(level, "1.3.0") {
+		_, err = glideft.ClusterFtAggregate(ctx, client, index, "*", aggOpts)
+		assert.ErrorContains(suite.T(), err, "Index: field `AS` does not exist")
+	} else {
+		rows, err := glideft.ClusterFtAggregate(ctx, client, index, "*", aggOpts)
+		require.NoError(suite.T(), err)
+		require.Len(suite.T(), rows, 1)
+		assert.Equal(suite.T(), "widget", fmt.Sprintf("%v", rows[0]["title"]))
+		assert.Equal(suite.T(), "9", fmt.Sprintf("%v", rows[0]["cost"]))
+		_, pricePresent := rows[0]["price"]
+		assert.False(suite.T(), pricePresent, "price should be loaded only under its alias, cost")
+	}
+
+	glideft.ClusterFtDropIndex(ctx, client, index)
+}
+
+// --- ft_create float16/bfloat16: real KNN query, not acceptance-only ---
+
+// TestModuleFtCreateFloat16VectorKnnReturnsRealNeighbors covers FLOAT16 vector fields
+// (valkey-search 1.3, src/indexes/vector_base.h -- 2-byte-per-element format) with an actual KNN
+// query, confirming the server returns real neighbors rather than merely accepting the schema.
+// Test values (0.0, 1.0, 2.0) are exact binary powers, so FLOAT16 round-trips them exactly.
+// Mirrors Python's test_ft_create_float16_bfloat16_vector (FLOAT16 branch).
+func (suite *GlideTestSuite) TestModuleFtCreateFloat16VectorKnnReturnsRealNeighbors() {
+	client := suite.defaultClusterClient()
+	ctx := context.Background()
+	if !suite.probeSearch13CapabilityCluster(ctx, client) {
+		suite.T().Skip("search module present but pre-1.3 (INKEYS probe rejected it)")
+	}
+
+	prefix := "{ft-vectype-f16-" + uuid.New().String() + "}:"
+	index := prefix + "index"
+	vecField := "vec"
+
+	_, err := glideft.ClusterFtCreate(ctx, client, index,
+		[]options.Field{
+			options.NewVectorFieldFlat(vecField, constants.DistanceMetricL2, 2).
+				SetType(constants.VectorDataTypeFloat16),
+		},
+		&options.FtCreateOptions{DataType: constants.IndexDataTypeHash, Prefixes: []string{prefix}})
+	require.NoError(suite.T(), err)
+
+	points := map[string][2]float32{"0": {0.0, 0.0}, "1": {1.0, 0.0}, "2": {2.0, 0.0}}
+	for keySuffix, coords := range points {
+		_, err = client.HSet(ctx, prefix+keySuffix, map[string]string{vecField: packFloat16Vector(coords[0], coords[1])})
+		require.NoError(suite.T(), err)
+	}
+	time.Sleep(time.Second)
+
+	queryBlob := packFloat16Vector(1.0, 0.0)
+	knnQuery := fmt.Sprintf("*=>[KNN 1 @%s $blob]", vecField)
+	result, err := glideft.ClusterFtSearch(ctx, client, index, knnQuery, &options.FtSearchOptions{
+		Params:       []options.FtSearchParam{{Key: "blob", Value: queryBlob}},
+		ReturnFields: []options.FtSearchReturnField{{FieldIdentifier: "__" + vecField + "_score"}},
+	})
+	require.NoError(suite.T(), err)
+	require.Equal(suite.T(), int64(1), result.TotalResults)
+	require.Len(suite.T(), result.Documents, 1)
+	matchedKey := prefix + "1"
+	assert.Equal(suite.T(), matchedKey, result.Documents[0].Key)
+	scoreStr := fmt.Sprintf("%v", result.Documents[0].Fields["__"+vecField+"_score"])
+	score, err := strconv.ParseFloat(scoreStr, 64)
+	require.NoError(suite.T(), err)
+	assert.Equal(suite.T(), 0.0, score)
+
+	glideft.ClusterFtDropIndex(ctx, client, index)
+}
+
+// TestModuleFtCreateBfloat16VectorKnnReturnsRealNeighbors is
+// TestModuleFtCreateFloat16VectorKnnReturnsRealNeighbors for BFLOAT16. Mirrors Python's
+// test_ft_create_float16_bfloat16_vector (BFLOAT16 branch).
+func (suite *GlideTestSuite) TestModuleFtCreateBfloat16VectorKnnReturnsRealNeighbors() {
+	client := suite.defaultClusterClient()
+	ctx := context.Background()
+	if !suite.probeSearch13CapabilityCluster(ctx, client) {
+		suite.T().Skip("search module present but pre-1.3 (INKEYS probe rejected it)")
+	}
+
+	prefix := "{ft-vectype-bf16-" + uuid.New().String() + "}:"
+	index := prefix + "index"
+	vecField := "vec"
+
+	_, err := glideft.ClusterFtCreate(ctx, client, index,
+		[]options.Field{
+			options.NewVectorFieldFlat(vecField, constants.DistanceMetricL2, 2).
+				SetType(constants.VectorDataTypeBfloat16),
+		},
+		&options.FtCreateOptions{DataType: constants.IndexDataTypeHash, Prefixes: []string{prefix}})
+	require.NoError(suite.T(), err)
+
+	points := map[string][2]float32{"0": {0.0, 0.0}, "1": {1.0, 0.0}, "2": {2.0, 0.0}}
+	for keySuffix, coords := range points {
+		_, err = client.HSet(ctx, prefix+keySuffix, map[string]string{vecField: packBfloat16Vector(coords[0], coords[1])})
+		require.NoError(suite.T(), err)
+	}
+	time.Sleep(time.Second)
+
+	queryBlob := packBfloat16Vector(1.0, 0.0)
+	knnQuery := fmt.Sprintf("*=>[KNN 1 @%s $blob]", vecField)
+	result, err := glideft.ClusterFtSearch(ctx, client, index, knnQuery, &options.FtSearchOptions{
+		Params:       []options.FtSearchParam{{Key: "blob", Value: queryBlob}},
+		ReturnFields: []options.FtSearchReturnField{{FieldIdentifier: "__" + vecField + "_score"}},
+	})
+	require.NoError(suite.T(), err)
+	require.Equal(suite.T(), int64(1), result.TotalResults)
+	require.Len(suite.T(), result.Documents, 1)
+	matchedKey := prefix + "1"
+	assert.Equal(suite.T(), matchedKey, result.Documents[0].Key)
+	scoreStr := fmt.Sprintf("%v", result.Documents[0].Fields["__"+vecField+"_score"])
+	score, err := strconv.ParseFloat(scoreStr, 64)
+	require.NoError(suite.T(), err)
+	assert.Equal(suite.T(), 0.0, score)
+
+	glideft.ClusterFtDropIndex(ctx, client, index)
+}
+
+// --- ft_create score_field: real ranking effect, not acceptance-only ---
+
+// TestModuleFtCreateScoreFieldAffectsRanking covers FtCreateOptions.ScoreField actually
+// affecting ranking, as opposed to merely being accepted. Two otherwise-identical documents, one
+// with a much higher score_field value, must rank first and score higher under WithScores.
+// Mirrors Python's test_ft_create_score_field_affects_ranking.
+func (suite *GlideTestSuite) TestModuleFtCreateScoreFieldAffectsRanking() {
+	client := suite.defaultClusterClient()
+	ctx := context.Background()
+	if !suite.probeSearch13CapabilityCluster(ctx, client) {
+		suite.T().Skip("search module present but pre-1.3 (INKEYS probe rejected it)")
+	}
+
+	prefix := "{ft-score-field-" + uuid.New().String() + "}:"
+	index := prefix + "index"
+
+	_, err := glideft.ClusterFtCreate(ctx, client, index,
+		[]options.Field{options.NewTextField("title")},
+		&options.FtCreateOptions{DataType: constants.IndexDataTypeHash, Prefixes: []string{prefix}, ScoreField: "boost"})
+	require.NoError(suite.T(), err)
+
+	lowKey := prefix + "low"
+	highKey := prefix + "high"
+	_, err = client.HSet(ctx, lowKey, map[string]string{"title": "hello world", "boost": "1.0"})
+	require.NoError(suite.T(), err)
+	_, err = client.HSet(ctx, highKey, map[string]string{"title": "hello world", "boost": "100.0"})
+	require.NoError(suite.T(), err)
+	time.Sleep(time.Second)
+
+	result, err := glideft.ClusterFtSearch(ctx, client, index, "hello", &options.FtSearchOptions{WithScores: true})
+	require.NoError(suite.T(), err)
+	require.Equal(suite.T(), int64(2), result.TotalResults)
+	require.Len(suite.T(), result.Documents, 2)
+
+	// The high-boost document must rank first (FtSearchResult.Documents preserves the server's
+	// ranking order) and score strictly higher than the low-boost one.
+	assert.Equal(suite.T(), highKey, result.Documents[0].Key)
+	byKey := make(map[string]float64, len(result.Documents))
+	for _, doc := range result.Documents {
+		require.NotNil(suite.T(), doc.Score, "WithScores should populate Score")
+		byKey[doc.Key] = *doc.Score
+	}
+	assert.Greater(suite.T(), byKey[highKey], byKey[lowKey])
 
 	glideft.ClusterFtDropIndex(ctx, client, index)
 }

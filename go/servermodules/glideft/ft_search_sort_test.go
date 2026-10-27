@@ -40,7 +40,7 @@ func TestSortDocuments_SortByFieldNotScoreWhenWithScoresCombined(t *testing.T) {
 }
 
 // TestSortDocuments_SortByUsesSortKeyNotScoreWithWithSortKeys mirrors the above with
-// WithSortKeys set instead of relying on the Fields map. L3 fix: the fixture uses three
+// WithSortKeys set instead of relying on the Fields map. The fixture uses three
 // documents whose Score order is NOT a monotonic (ascending or descending) match for their
 // SortKey order, unlike the previous two-element fixture where ascending-by-SortKey and
 // ascending-by-Score happened to produce the same answer. A sort-by-score bug, in either
@@ -63,8 +63,8 @@ func TestSortDocuments_SortByUsesSortKeyNotScoreWithWithSortKeys(t *testing.T) {
 	assert.Equal(t, []string{"c", "b", "a"}, keysInOrder, "must sort by SortKey ascending, not by Score")
 }
 
-// TestSortDocuments_WithScoresAloneSortsByScoreDescending covers M1: when WithScores is set and
-// SortBy is empty, Documents must come back sorted by Score descending -- restoring the
+// TestSortDocuments_WithScoresAloneSortsByScoreDescending covers the case where WithScores is
+// set and SortBy is empty: Documents must come back sorted by Score descending -- restoring the
 // server's own BM25 relevance order, which Go's map-based intermediate representation
 // otherwise loses (unlike Python's dict, which preserves insertion order). The fixture's input
 // slice order deliberately does not match either ascending or descending score order, so this

@@ -109,6 +109,66 @@ func TestFtWithCursorToArgs_Bare(t *testing.T) {
 	assert.Equal(t, []string{"WITHCURSOR"}, args)
 }
 
+// --- LoadField (LOAD ... AS) ---
+
+func TestLoadFieldToArgs_WithoutAliasIsJustTheField(t *testing.T) {
+	args, err := (&FtAggregateOptions{LoadFieldEntries: []LoadField{{FieldIdentifier: "title"}}}).ToArgs()
+	assert.NoError(t, err)
+	assert.Equal(t, []string{"LOAD", "1", "title"}, args)
+}
+
+func TestFtAggregateOptionsToArgs_LoadFieldEntriesWithAlias(t *testing.T) {
+	args, err := (&FtAggregateOptions{
+		LoadFieldEntries: []LoadField{{FieldIdentifier: "price", Alias: "cost"}},
+	}).ToArgs()
+	assert.NoError(t, err)
+	// The count is a token budget (3 for field, AS, alias), not an entry count (1).
+	assert.Equal(t, []string{"LOAD", "3", "price", "AS", "cost"}, args)
+}
+
+func TestFtAggregateOptionsToArgs_LoadFieldsAndLoadFieldEntriesCombined(t *testing.T) {
+	args, err := (&FtAggregateOptions{
+		LoadFields:       []string{"title"},
+		LoadFieldEntries: []LoadField{{FieldIdentifier: "price", Alias: "cost"}},
+	}).ToArgs()
+	assert.NoError(t, err)
+	// LoadFields is emitted first, then LoadFieldEntries, both into one LOAD clause.
+	assert.Equal(t, []string{"LOAD", "4", "title", "price", "AS", "cost"}, args)
+}
+
+func TestFtAggregateOptionsToArgs_LoadAllAndLoadFieldEntriesMutuallyExclusive(t *testing.T) {
+	_, err := (&FtAggregateOptions{
+		LoadAll:          true,
+		LoadFieldEntries: []LoadField{{FieldIdentifier: "title"}},
+	}).ToArgs()
+	assert.Error(t, err)
+}
+
+func TestFtHybridOptionsToArgs_LoadFieldEntriesWithAlias(t *testing.T) {
+	args, err := (&FtHybridOptions{
+		LoadFieldEntries: []LoadField{{FieldIdentifier: "price", Alias: "cost"}},
+	}).ToArgs("", "")
+	assert.NoError(t, err)
+	assert.Equal(t, []string{"LOAD", "3", "price", "AS", "cost"}, args)
+}
+
+func TestFtHybridOptionsToArgs_LoadFieldsAndLoadFieldEntriesCombined(t *testing.T) {
+	args, err := (&FtHybridOptions{
+		LoadFields:       []string{"title"},
+		LoadFieldEntries: []LoadField{{FieldIdentifier: "price", Alias: "cost"}},
+	}).ToArgs("", "")
+	assert.NoError(t, err)
+	assert.Equal(t, []string{"LOAD", "4", "title", "price", "AS", "cost"}, args)
+}
+
+func TestFtHybridOptionsToArgs_LoadAllAndLoadFieldEntriesMutuallyExclusive(t *testing.T) {
+	_, err := (&FtHybridOptions{
+		LoadAll:          true,
+		LoadFieldEntries: []LoadField{{FieldIdentifier: "title"}},
+	}).ToArgs("", "")
+	assert.Error(t, err)
+}
+
 func TestFtWithCursorToArgs_CountAndMaxIdle(t *testing.T) {
 	count, maxIdle := 10, 5000
 	c := &FtWithCursor{Count: &count, MaxIdle: &maxIdle}
@@ -144,6 +204,12 @@ func TestFtHybridVsimArmToArgs_ParamReferenceVectorUsedDirectly(t *testing.T) {
 	args, err := a.ToArgs("")
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"VSIM", "@vec", "$myvec"}, args)
+}
+
+func TestFtHybridVsimArmToArgs_VectorParamWithoutDollarSignRejected(t *testing.T) {
+	a := &FtHybridVsimArm{Field: "vec", VectorParam: "myvec"}
+	_, err := a.ToArgs("")
+	assert.ErrorContains(t, err, "must start with '$'")
 }
 
 func TestFtHybridVsimArmToArgs_RawBytesVectorRequiresGeneratedParamName(t *testing.T) {
@@ -457,11 +523,13 @@ func TestFtHybridOptionsToArgs_ClausesAppliedInOrder(t *testing.T) {
 // TestFtHybridOptionsToArgs_ParamsEmittedBeforeClauses is the regression test for the
 // tail-ordering bug: with no combine/local_only/load_*/timeout, a leading clause used to land
 // right after the VSIM arm's own tokens, where the server's VSIM parser claims a leading FILTER
-// as its own pre-filter instead (ft_hybrid_parser.cc's vsim_scoped FILTER handling). PARAMS is
-// always present for FT.HYBRID, so ToArgs must always put it ahead of Clauses regardless of
-// field-set order. Deliberately no LoadFields/LoadAll here -- a LOAD clause in between the VSIM
-// arm and this FILTER would mask the bug even if PARAMS were missing, since LOAD itself would
-// already separate FILTER from the VSIM arm's own argv.
+// as its own pre-filter instead (ft_hybrid_parser.cc's vsim_scoped FILTER handling). This test's
+// own VSIM arm uses VectorParam (an explicit "$q" reference, no generated entry), so PARAMS IS
+// written here -- but ToArgs's ordering guarantee holds regardless: whenever PARAMS ends up
+// non-empty (an explicit Params entry, a raw-bytes Vector's generated entry, or both), it is
+// always placed ahead of Clauses, never after. Deliberately no LoadFields/LoadAll here -- a LOAD
+// clause in between the VSIM arm and this FILTER would mask the bug even if PARAMS were
+// missing, since LOAD itself would already separate FILTER from the VSIM arm's own argv.
 func TestFtHybridOptionsToArgs_ParamsEmittedBeforeClauses(t *testing.T) {
 	args, err := (&FtHybridOptions{
 		Clauses: []FtAggregateClause{&FtAggregateFilter{Expression: "@price>0"}},
@@ -484,11 +552,11 @@ func TestFtHybridOptionsToArgs_LocalOnlyParamsAndClausesOrder(t *testing.T) {
 	}, args)
 }
 
-// TestFtHybridRegressionPostFusionFilterNoLoad is the full end-to-end regression case (3 of the
-// 3 byte-identical-with-Python cases cited in this port's report): a FILTER clause placed
-// directly after the VSIM arm's own argv, with NO LOAD clause in between and NO combine, so a
-// tail-ordering bug (PARAMS missing or emitted after Clauses) would let the server's VSIM
-// parser claim this FILTER as its own VSIM pre-filter instead of an aggregate-pipeline FILTER.
+// TestFtHybridRegressionPostFusionFilterNoLoad is the full end-to-end regression case: a
+// FILTER clause placed directly after the VSIM arm's own argv, with NO LOAD clause in between
+// and NO combine, so a tail-ordering bug (PARAMS missing or emitted after Clauses) would let the
+// server's VSIM parser claim this FILTER as its own VSIM pre-filter instead of an
+// aggregate-pipeline FILTER.
 func TestFtHybridRegressionPostFusionFilterNoLoad(t *testing.T) {
 	searchArm := &FtHybridSearchArm{Query: "goodbye", YieldScoreAs: "ss"}
 	k := 5
