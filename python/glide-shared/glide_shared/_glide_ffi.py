@@ -496,6 +496,8 @@ class _GlideFFI:
                 uint32_t checksum
             );
 
+            char* rdma_close_regions(const void* client_adapter_ptr);
+
             RdmaMemoryHold* free_rdma_region(RdmaRegion* region);
             bool rdma_memory_released(const RdmaMemoryHold* hold);
             void free_rdma_memory_hold(RdmaMemoryHold* hold);

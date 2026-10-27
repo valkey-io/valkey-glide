@@ -581,6 +581,13 @@ class BaseClient(CoreCommands):
         # Under GIL builds this is a no-op (GIL serializes access).
         # Under free-threaded builds this prevents use-after-free on concurrent close.
         self._client_lock = threading.Lock()
+        # How many RDMA FFI calls are using `_core_client`. Guarded by
+        # `_client_lock`. `close` cannot free the native client under them, so
+        # it cancels their transfers instead and leaves the freeing to the last
+        # one out.
+        self._rdma_calls = 0
+        # The native client `close` left for the last RDMA call to free.
+        self._deferred_core_client = self._ffi.NULL
 
         self._is_closed: bool = False
 
@@ -608,6 +615,10 @@ class BaseClient(CoreCommands):
             previous_owner.close()
         self._credential_provider_callback_owner = None
         self._credential_provider_callback_ref = None
+        # After a fork, the child has none of the parent's threads, so none of
+        # the RDMA calls the parent had running will ever end here.
+        self._rdma_calls = 0
+        self._deferred_core_client = self._ffi.NULL
         credential_provider = None
         if (
             self._config.credentials is not None
@@ -1694,8 +1705,6 @@ class BaseClient(CoreCommands):
             >>> region.capacity
             1048576
         """
-        client_adapter_ptr = self._require_open_client()
-
         view = memoryview(memory)
         if view.readonly:
             raise TypeError("memory must be writable")
@@ -1707,6 +1716,7 @@ class BaseClient(CoreCommands):
                 "could still write into it; register different memory"
             )
 
+        client_adapter_ptr = self._begin_rdma_call()
         buffer = self._ffi.from_buffer(view)
         try:
             registration = self._lib.register_rdma_region(
@@ -1731,6 +1741,8 @@ class BaseClient(CoreCommands):
             # an export on, so let go of the export before the error leaves.
             del buffer
             raise
+        finally:
+            self._end_rdma_call()
 
     def rdma_get(
         self,
@@ -1899,16 +1911,37 @@ class BaseClient(CoreCommands):
             )
         return int(out[0])
 
-    def _require_open_client(self):
-        """The client pointer, or an error naming what went wrong."""
-        if self._is_closed:
-            raise ClosingError(
-                "Unable to execute requests; the client is closed. Please create a new client."
-            )
-        client_adapter_ptr = self._core_client
-        if client_adapter_ptr == self._ffi.NULL:
-            raise ValueError("Invalid client pointer.")
-        return client_adapter_ptr
+    def _begin_rdma_call(self):
+        """
+        The client pointer for one RDMA FFI call, or an error naming what went
+        wrong. Until the matching `_end_rdma_call`, `close` will not free the
+        native client.
+        """
+        with self._client_lock:
+            if self._is_closed:
+                raise ClosingError(
+                    "Unable to execute requests; the client is closed. Please create a new client."
+                )
+            client_adapter_ptr = self._core_client
+            if client_adapter_ptr == self._ffi.NULL:
+                raise ValueError("Invalid client pointer.")
+            self._rdma_calls += 1
+            return client_adapter_ptr
+
+    def _end_rdma_call(self) -> None:
+        """
+        End a call `_begin_rdma_call` began, and free the native client if
+        `close` left that to the last call out and this is it.
+        """
+        with self._client_lock:
+            self._rdma_calls -= 1
+            core_client = self._deferred_core_client
+            if self._rdma_calls > 0 or core_client == self._ffi.NULL:
+                return
+            self._deferred_core_client = self._ffi.NULL
+        self._lib.close_client(core_client)
+        # Closing the client may be what lets the fabric go of memory it held.
+        _RETAINED_RDMA_MEMORY.release_what_is_free()
 
     def _to_c_key(self, key: TEncodable) -> Tuple[Any, int]:
         """A key as a pointer and a length, with the bytes kept alive by CFFI."""
@@ -1962,17 +1995,20 @@ class BaseClient(CoreCommands):
                 "this region is registered with a different client, so this "
                 "client cannot transfer with it"
             )
-        client_ptr = self._require_open_client()
-        region_ptr = region._begin_transfer()
-        region_closed = False
+        client_ptr = self._begin_rdma_call()
         try:
-            result = call(client_ptr, region_ptr)
-            if result == self._ffi.NULL:
-                raise RdmaError("Internal error: received NULL as an RDMA result")
-            region_closed = bool(result.region_closed)
-            return self._handle_rdma_result(result)
+            region_ptr = region._begin_transfer()
+            region_closed = False
+            try:
+                result = call(client_ptr, region_ptr)
+                if result == self._ffi.NULL:
+                    raise RdmaError("Internal error: received NULL as an RDMA result")
+                region_closed = bool(result.region_closed)
+                return self._handle_rdma_result(result)
+            finally:
+                region._end_transfer(close=region_closed)
         finally:
-            region._end_transfer(close=region_closed)
+            self._end_rdma_call()
 
     def _handle_rdma_result(self, result) -> Optional[RdmaReadReceipt]:
         """
@@ -2053,8 +2089,15 @@ class BaseClient(CoreCommands):
                     self._pubsub_condition.notify_all()
                 core_client = getattr(self, "_core_client", self._ffi.NULL)
                 if core_client != self._ffi.NULL:
-                    self._lib.close_client(core_client)
                     self._core_client = self._ffi.NULL
+                    if getattr(self, "_rdma_calls", 0) == 0:
+                        self._lib.close_client(core_client)
+                    else:
+                        # Freeing the native client now could free it under an
+                        # RDMA call on another thread. Cancel their transfers
+                        # instead, and let the last call out free it.
+                        self._deferred_core_client = core_client
+                        self._cancel_rdma(core_client)
                 self._pubsub_callback_ref = None
                 owner = getattr(self, "_credential_provider_callback_owner", None)
                 if owner is not None:
@@ -2063,6 +2106,24 @@ class BaseClient(CoreCommands):
                 self._credential_provider_callback_ref = None
         # Closing the client may be what lets the fabric go of memory it held.
         _RETAINED_RDMA_MEMORY.release_what_is_free()
+
+    def _cancel_rdma(self, core_client) -> None:
+        """
+        Revoke every region the client registered, which cancels every
+        transfer in flight on it, without freeing the native client.
+        """
+        error = self._lib.rdma_close_regions(core_client)
+        if error != self._ffi.NULL:
+            try:
+                message = self._ffi.string(error).decode(ENCODING)
+            finally:
+                self._lib.free_c_string(error)
+            Logger.log(
+                Level.ERROR,
+                "close",
+                "could not revoke every RDMA region, so a transfer may still be "
+                f"waiting: {message}",
+            )
 
     def __enter__(self) -> Self:
         return self

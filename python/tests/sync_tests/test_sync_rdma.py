@@ -117,6 +117,23 @@ class _FakeLib:
         # test can act while a transfer is inside the FFI.
         self.set_gate = None
         self.set_started = threading.Event()
+        # The client pointers `rdma_close_regions` and `close_client` were
+        # called with, in order.
+        self.region_closes = []
+        self.client_closes = []
+        # What `rdma_close_regions` reports: NULL, or an error message.
+        self.close_regions_error = _FakeFfi.NULL
+        self.freed_strings = []
+
+    def rdma_close_regions(self, client):
+        self.region_closes.append(client)
+        return self.close_regions_error
+
+    def close_client(self, client):
+        self.client_closes.append(client)
+
+    def free_c_string(self, string):
+        self.freed_strings.append(string)
 
     def free_rdma_region(self, region):
         self.freed.append(region)
@@ -166,6 +183,10 @@ def _offline_client() -> GlideClient:
     client._ffi = _FakeFfi()
     client._lib = _FakeLib()
     client._is_closed = False
+    client._client_lock = threading.Lock()
+    client._rdma_calls = 0
+    client._deferred_core_client = _FakeFfi.NULL
+    client._pubsub_condition = threading.Condition()
     return client
 
 
@@ -780,6 +801,91 @@ def test_closing_a_region_in_use_is_refused():
     assert transfer.finish() == {"returned": None}
     region.close()
     assert len(client._lib.freed) == 1
+
+
+def test_closing_an_idle_client_frees_it_at_once():
+    # With no RDMA call running, nothing can be using the native client.
+    client = _offline_client()
+    native = client._core_client = object()
+
+    client.close()
+
+    assert client._lib.client_closes == [native]
+    assert client._lib.region_closes == [], "close_client revokes the regions itself"
+
+
+def test_closing_mid_transfer_cancels_and_frees_after_the_transfer():
+    # Freeing the native client under the transfer is a use-after-free, so the
+    # close only revokes the regions, and the transfer frees the client on its
+    # way out.
+    client = _offline_client()
+    native = client._core_client = object()
+    region = _offline_region(client)
+    transfer = _BlockedTransfer(client, region)
+
+    client.close()
+
+    assert client._lib.region_closes == [native]
+    assert client._lib.client_closes == [], "not freed under the transfer"
+    assert transfer.finish() == {"returned": None}
+    assert client._lib.client_closes == [native], "freed once it returned"
+    assert client._rdma_calls == 0
+    region.close()
+
+
+def test_the_last_of_several_transfers_frees_the_client():
+    client = _offline_client()
+    native = client._core_client = object()
+    first = _BlockedTransfer(client, _offline_region(client))
+    # A second call holding the client, as another thread's transfer would.
+    client._begin_rdma_call()
+
+    client.close()
+    first.finish()
+    assert client._lib.client_closes == [], "one call is still running"
+
+    client._end_rdma_call()
+    assert client._lib.client_closes == [native]
+
+
+def test_a_call_that_fails_still_lets_the_client_go():
+    # A refusal happens inside the call too, so it must end the call, or a
+    # later close would leave the client for a call that never ends.
+    client = _offline_client()
+    native = client._core_client = object()
+    region = _offline_region(client)
+    window = region.window()
+    region.close()
+    failed = _FakeRegistration(None)
+    failed.error_message = b"the fabric refused it"
+    client._lib.register_rdma_region = lambda *arguments: failed
+
+    with pytest.raises(RdmaError, match="closed"):
+        client.rdma_set(b"key", window)
+    with pytest.raises(RdmaError, match="refused"):
+        client.register_rdma_region(bytearray(REGION_BYTES))
+
+    assert client._rdma_calls == 0
+    client.close()
+    assert client._lib.client_closes == [native]
+
+
+def test_a_region_that_cannot_be_revoked_is_logged(monkeypatch):
+    client = _offline_client()
+    client._core_client = object()
+    client._lib.close_regions_error = b"device error"
+    logged = []
+    monkeypatch.setattr(
+        "glide_sync.glide_client.Logger.log",
+        lambda level, identifier, message: logged.append(message),
+    )
+    client._begin_rdma_call()
+
+    client.close()
+
+    assert client._lib.freed_strings == [b"device error"]
+    assert any("device error" in message for message in logged), logged
+    client._end_rdma_call()
 
 
 def test_a_transfer_on_a_closed_client_raises_closing_error_first():
@@ -1397,9 +1503,15 @@ class TestRdmaTransfers:
             thread.join(0.5)
 
             rdma_client.close()
+            # The transfer is still inside the FFI, so the native client is
+            # left for it to free: freeing it now would free it under the call.
+            if thread.is_alive():
+                assert rdma_client._deferred_core_client != rdma_client._ffi.NULL
 
             thread.join(30)
             assert not thread.is_alive(), "closing the client ends the wait"
+            assert rdma_client._deferred_core_client == rdma_client._ffi.NULL
+            assert rdma_client._rdma_calls == 0
         finally:
             # Let the pause lapse, so the tests after this one can connect.
             time.sleep(max(0.0, pause_seconds + 0.2 - (time.monotonic() - paused_at)))
