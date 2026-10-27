@@ -4633,7 +4633,7 @@ export interface ClusterScanOptions extends ScanOptions {
 export type ZScanOptions = BaseScanOptions & {
     /**
      * If true, the scores are not included in the results.
-     * Supported from Valkey 8.0.0 and above.
+     * Supported since Valkey 8.0.0.
      */
     readonly noScores?: boolean;
 };
@@ -4644,7 +4644,7 @@ export type ZScanOptions = BaseScanOptions & {
 export type HScanOptions = BaseScanOptions & {
     /**
      * If true, the values of the fields are not included in the results.
-     * Supported from Valkey 8.0.0 and above.
+     * Supported since Valkey 8.0.0.
      */
     readonly noValues?: boolean;
 };

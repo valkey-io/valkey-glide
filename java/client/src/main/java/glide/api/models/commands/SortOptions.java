@@ -38,7 +38,7 @@ public class SortOptions extends SortBaseOptions {
      * from the key replaces the asterisk to create the key name. For example, if <code>key</code>
      * contains IDs of objects, <code>byPattern</code> can be used to sort these IDs based on an
      * attribute of the objects, like their weights or timestamps. Supported in cluster mode since
-     * Valkey version 8.0 and above.
+     * Valkey 8.0.0.
      */
     private final String byPattern;
 

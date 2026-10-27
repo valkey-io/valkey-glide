@@ -824,7 +824,7 @@ public interface HashBaseCommands {
      * <p>Note: the key-level conditional options {@link
      * HSetExOptions.HSetExOptionsBuilder#onlyIfKeyExists() onlyIfKeyExists()} and {@link
      * HSetExOptions.HSetExOptionsBuilder#onlyIfKeyDoesNotExist() onlyIfKeyDoesNotExist()} require
-     * Valkey 9.1 and above.
+     * Valkey 9.1.0.
      *
      * @since Valkey 9.0.0.
      * @see <a href="https://valkey.io/commands/hsetex/">valkey.io</a> for details.
@@ -876,7 +876,7 @@ public interface HashBaseCommands {
      * <p>Note: the key-level conditional options {@link
      * HSetExOptions.HSetExOptionsBuilder#onlyIfKeyExists() onlyIfKeyExists()} and {@link
      * HSetExOptions.HSetExOptionsBuilder#onlyIfKeyDoesNotExist() onlyIfKeyDoesNotExist()} require
-     * Valkey 9.1 and above.
+     * Valkey 9.1.0.
      *
      * @since Valkey 9.0.0.
      * @see <a href="https://valkey.io/commands/hsetex/">valkey.io</a> for details.
