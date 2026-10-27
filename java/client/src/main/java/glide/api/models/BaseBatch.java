@@ -5725,8 +5725,8 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * <code>destinationDB</code>. When <code>replace</code> is true, removes the <code>destination
      * </code> key first if it already exists, otherwise performs no action.
      *
-     * @since Valkey 6.2.0 for standalone Client.
-     * @since Valkey 9.0.0 for standaloneClient.
+     * @since Valkey 6.2.0 for standalone client.
+     * @since Valkey 9.0.0 for cluster client.
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
      * @see <a href="https://valkey.io/commands/copy/">valkey.io</a> for details.
@@ -5746,8 +5746,8 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * <code>destinationDB</code>. When <code>replace</code> is true, removes the <code>destination
      * </code> key first if it already exists, otherwise performs no action.
      *
-     * @since Valkey 6.2.0 for standalone Client.
-     * @since Valkey 9.0.0 for standaloneClient.
+     * @since Valkey 6.2.0 for standalone client.
+     * @since Valkey 9.0.0 for cluster client.
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
      * @see <a href="https://valkey.io/commands/copy/">valkey.io</a> for details.
