@@ -89,9 +89,19 @@ interface VectorFieldAttributes {
      */
     distanceMetric: "L2" | "IP" | "COSINE";
     /**
-     * Vector type. `FLOAT32` is the default if unset. `FLOAT16` and `BFLOAT16` were added in
-     * valkey-search 1.3.0 (2 bytes per element each). Callers must pass already-encoded bytes
-     * for every type; GLIDE does not encode vectors on the caller's behalf.
+     * Vector type. `FLOAT32` is the default if unset.
+     *
+     * `FLOAT16`: 2 bytes per element, IEEE 754 half precision. Added in valkey-search 1.3.0
+     * (`src/indexes/vector_base.h`). Callers must pass already-encoded bytes, the same way
+     * `FLOAT32` works today -- GLIDE does not encode vectors on the caller's behalf.
+     *
+     * `BFLOAT16`: 2 bytes per element, truncated IEEE 754 single precision (the top 16 bits of
+     * a FLOAT32 -- sign, 8-bit exponent, 7-bit mantissa). Also added in valkey-search 1.3.0.
+     * Encode by taking the high 16 bits of each FLOAT32 element's little-endian representation,
+     * e.g. in Node, `buf.writeFloatLE(value, 0)` then the BFLOAT16 bytes are `buf.subarray(2, 4)`.
+     * The engine may refuse to create or load a BFLOAT16 index on a host whose CPU lacks a SIMD
+     * BF16 code path (`CheckSimsimdBf16Capability()` in `src/indexes/vector_base.h`); this is a
+     * server-side capability check, not a GLIDE-side restriction.
      */
     type?: "FLOAT32" | "FLOAT16" | "BFLOAT16";
     /**
