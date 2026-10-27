@@ -45,14 +45,16 @@ func TestGoModulesCiSync(t *testing.T) {
 	)
 	goArmText := goArmMatch[1]
 
-	// CI invokes `make modules-test standalone-endpoints=... cluster-endpoints=...`; the local
-	// runner bypasses the Makefile's HTML-report pipe (a flaky third-party module fetch) but must
-	// run the exact same underlying `go test ./integTest/... -run TestGlideTestSuite -testify.m
-	// "^TestModule"` with the same two endpoint flags (spelled --standalone-endpoints/
-	// --cluster-endpoints at that layer). -run TestGlideTestSuite scopes the package to the one
-	// top-level function that hosts every TestModule* method, so other top-level Test* functions
-	// in the package (which need their own non-Docker server bring-up this script doesn't do)
-	// don't run and fail with an unrelated connection error.
+	// CI invokes `make modules-test standalone-endpoints=... cluster-endpoints=...`, which runs
+	// `go test ./integTest/... -testify.m TestModule` (Makefile's modules-test target) with the
+	// same two endpoint flags (spelled --standalone-endpoints/--cluster-endpoints at that layer).
+	// The local runner bypasses the Makefile's HTML-report pipe (a flaky third-party module
+	// fetch) and additionally passes `-run TestGlideTestSuite`, which CI's invocation does not --
+	// this scopes the package to the one top-level function that hosts every TestModule* method,
+	// so other top-level Test* functions in the package (which need their own non-Docker server
+	// bring-up this script doesn't do) don't run and fail with an unrelated connection error.
+	// This test checks the two flags both sides share, not the full invocation string, since the
+	// `-run` addition is a deliberate local-only difference rather than a drift to catch.
 	for _, flag := range []string{"standalone-endpoints", "cluster-endpoints"} {
 		assert.Contains(
 			t, workflowText, flag,

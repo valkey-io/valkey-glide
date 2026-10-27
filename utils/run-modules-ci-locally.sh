@@ -1,9 +1,15 @@
 #!/usr/bin/env bash
-# Reproduces the "Modules Tests (Linux)" job from
-# .github/workflows/python-modules.yml on this machine, as closely as
-# possible, against an overridable module image. Written to avoid pinning a
-# new CI image; this proves 1.3 support via a local run of the SAME job against a
-# 1.3-bearing image instead.
+# Reproduces the "Modules Tests (Linux)" job from each language's own
+# <lang>-modules.yml on this machine, as closely as possible, against an
+# overridable module image. Written to avoid pinning a new CI image; this
+# proves 1.3 support via a local run of the SAME job against a
+# 1.3-bearing image instead. Shared across every language's port branch,
+# so this file is a single source of truth per language, selected via
+# MODULES_TEST_LANG, rather than N language branches each overwriting the
+# whole script and colliding with each other and with Python's own
+# CI-sync guard (tests/test_ci_workflow_sync.py pins this file's Python
+# invocation verbatim; integTest/go_modules_ci_sync_test.go pins the Go
+# invocation the same way).
 #
 # Shares the docker start/verify logic with
 # .github/actions/start-valkey-docker/action.yml via
@@ -24,19 +30,31 @@
 #   IMAGE=valkey/valkey-bundle:9.1.3 EMULATE_RELEASE="" utils/run-modules-ci-locally.sh   # 2: 9.1.3, search 1.2.1 (skip-proof)
 #   EMULATE_RELEASE="" utils/run-modules-ci-locally.sh                    # 3: 9.2.0-rc2, module's own default emulate-release (1.0.0)
 #
+# MODULES_TEST_LANG selects which language's test tail runs (default
+# "python", preserving every existing caller's behaviour byte-for-byte):
+#   MODULES_TEST_LANG=python utils/run-modules-ci-locally.sh   # default
+#   MODULES_TEST_LANG=go utils/run-modules-ci-locally.sh
+#
 # See BUILD-MODULES-1.3.md for narrated example runs and Mac-vs-CI-runner
 # differences (notably: Docker Desktop on macOS shares /Users by default,
 # not /tmp -- any file this script bind-mounts into a container MUST live
 # under a /Users path or the mount silently becomes an empty directory
 # instead of the file, with no error).
 #
-# Requires: docker, valkey-cli (Homebrew: `brew install valkey`), and the
-# Python client already built (python3 dev.py build --client async && ...
-# --client sync) -- this script does not rebuild the wrapper, matching the
-# CI job's "Build Python wrapper" step only in effect, not in mechanism (see
-# BUILD-MODULES-1.3.md for why: the CI step runs on a fresh runner and must
-# build from scratch, this script assumes a dev checkout that's already
-# built).
+# Requires, per MODULES_TEST_LANG:
+#   python (default): docker, valkey-cli (Homebrew: `brew install
+#     valkey`), and the Python client already built (python3 dev.py build
+#     --client async && --client sync) -- this script does not rebuild
+#     the wrapper, matching the CI job's "Build Python wrapper" step only
+#     in effect, not in mechanism (see BUILD-MODULES-1.3.md for why: the
+#     CI step runs on a fresh runner and must build from scratch, this
+#     script assumes a dev checkout that's already built).
+#   go: docker, valkey-cli, the Rust toolchain + cbindgen (`cargo install
+#     cbindgen`), and `protoc-gen-go` (`go install
+#     google.golang.org/protobuf/cmd/protoc-gen-go@v1.33.0`). This script
+#     runs `make build-glide-client generate-protobuf` itself before
+#     testing, so a stale native lib or stale generated protobuf can't
+#     produce a false green.
 
 set -euo pipefail
 
