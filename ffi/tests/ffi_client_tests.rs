@@ -835,3 +835,141 @@ fn test_ffi_monitor_credential_boundary_fails_closed_before_address_conversion()
     password_request.authentication_info = protobuf::MessageField::some(auth);
     assert_eq!(call(&password_request), "No addresses provided");
 }
+
+/// Cancelling with `rdma_close_regions` while other threads are starting and
+/// running transfers. Unlike `close_client`, it never frees the client, so the
+/// transfers can keep using it, and the client still serves other commands.
+#[cfg(feature = "rdma")]
+#[test]
+fn rdma_close_regions_cancels_transfers_and_keeps_the_client() {
+    use glide_core::connection_request::{RdmaConfig, TcpProvider};
+
+    const TRANSFER_THREADS: usize = 4;
+    const CANCELLED: &str = "RDMA transfer cancelled";
+
+    let server = Server::new();
+    let mut request = ConnectionRequest::new();
+    request.tls_mode = TlsMode::NoTls.into();
+    let mut address = NodeAddress::new();
+    address.host = "localhost".into();
+    address.port = server.port as u32;
+    request.addresses.push(address);
+    // tcp is the development provider: it opens a real endpoint without EFA
+    // hardware. The server has no RDMA module, so each transfer fails at its
+    // handshake until the regions are revoked.
+    let mut rdma = RdmaConfig::new();
+    rdma.set_tcp(TcpProvider::new());
+    request.rdma_config = protobuf::MessageField::some(rdma);
+    let request = request.write_to_bytes().expect("Failed to serialize");
+
+    unsafe {
+        let response = create_client(
+            request.as_ptr(),
+            request.len(),
+            Box::into_raw(Box::new(ClientType::SyncClient)),
+            None,
+            None,
+            0,
+        );
+        assert!(
+            (*response).connection_error_message.is_null(),
+            "the client should connect: {}",
+            parse_error_msg((*response).connection_error_message)
+        );
+        let client_ptr = (*response).conn_ptr;
+        free_connection_response(response.cast_mut());
+
+        // One region per thread, since a transfer takes its region exclusively.
+        let mut memory = vec![vec![0u8; 4096]; TRANSFER_THREADS];
+        let regions: Vec<usize> = memory
+            .iter_mut()
+            .map(|memory| {
+                let registration = register_rdma_region(client_ptr, memory.as_mut_ptr(), 4096);
+                let region = (*registration).region;
+                assert!(!region.is_null(), "the region should register");
+                free_rdma_registration(registration);
+                region as usize
+            })
+            .collect();
+
+        // Each thread transfers until one is cancelled, and reports whether that
+        // transfer said its region is closed.
+        let client = client_ptr as usize;
+        let transfers: Vec<_> = regions
+            .iter()
+            .map(|&region| {
+                std::thread::spawn(move || {
+                    let key = b"key";
+                    loop {
+                        let result = rdma_get(
+                            client as *const c_void,
+                            key.as_ptr(),
+                            key.len(),
+                            region as *mut RdmaRegion,
+                            0,
+                            4096,
+                        );
+                        let message = (*result).error_message;
+                        let cancelled = !message.is_null()
+                            && CStr::from_ptr(message)
+                                .to_string_lossy()
+                                .starts_with(CANCELLED);
+                        let region_closed = (*result).region_closed;
+                        free_rdma_result(result);
+                        if cancelled {
+                            return region_closed;
+                        }
+                    }
+                })
+            })
+            .collect();
+
+        std::thread::sleep(Duration::from_millis(50));
+        let error = rdma_close_regions(client_ptr);
+        assert!(error.is_null(), "every region should revoke");
+        for transfer in transfers {
+            assert!(
+                transfer
+                    .join()
+                    .expect("the transfer thread should not panic"),
+                "a cancelled transfer should say its region is closed"
+            );
+        }
+
+        // Closing again does nothing, and no new region can register.
+        assert!(rdma_close_regions(client_ptr).is_null());
+        let registration = register_rdma_region(client_ptr, memory[0].as_mut_ptr(), 4096);
+        let message = CStr::from_ptr((*registration).error_message).to_string_lossy();
+        assert!(
+            message.starts_with(CANCELLED),
+            "unexpected message: {message}"
+        );
+        free_rdma_registration(registration);
+
+        // The client still serves every other command.
+        let (key, value) = (b"plain-key", b"plain-value");
+        let args = [key.as_ptr() as usize, value.as_ptr() as usize];
+        let args_len = [key.len() as c_ulong, value.len() as c_ulong];
+        let result = command(
+            client_ptr,
+            0,
+            RequestType::Set,
+            2,
+            args.as_ptr(),
+            args_len.as_ptr(),
+            std::ptr::null(),
+            0,
+            0,
+        );
+        let result = Box::from_raw(result);
+        assert!(result.command_error.is_null(), "SET should still work");
+        free_command_response(result.response);
+
+        // Every transfer has returned, so the regions and the client can go.
+        for region in regions {
+            let hold = free_rdma_region(region as *mut RdmaRegion);
+            free_rdma_memory_hold(hold);
+        }
+        close_client(client_ptr);
+    }
+}

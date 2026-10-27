@@ -40,7 +40,7 @@ pub extern "C" fn rdma_usable() -> bool {
 /// Not thread-safe: a transfer takes the region exclusively, so two threads must
 /// not use one region concurrently. That includes freeing it: free it with
 /// [`free_rdma_region`] only after every transfer using it has returned, even
-/// one that [`close_client`] cancelled.
+/// one that [`rdma_close_regions`] cancelled.
 #[cfg(feature = "rdma")]
 pub struct RdmaRegion {
     /// Taken out for the length of each transfer, which lends it to the server,
@@ -105,7 +105,7 @@ impl RdmaRegion {
 
     /// Whether no transfer can use this region again: a transfer ended before the
     /// server was known to be done with the memory, so no buffer came back, or the
-    /// region was revoked, for example by [`close_client`].
+    /// region was revoked, for example by [`rdma_close_regions`].
     fn is_closed(&self) -> bool {
         self.buffer
             .as_ref()
@@ -490,16 +490,17 @@ pub unsafe extern "C" fn rdma_region_capacity(region: *const RdmaRegion) -> usiz
 /// Has no timeout, waits for the server to complete the transfer so memory
 /// is not left in an undefined state.
 ///
-/// To cancel a transfer, call [`close_client`] from another thread to revoke
-/// registered regions so the server can no longer reach them. This call then
-/// returns shortly after, with [`RdmaResult::region_closed`] set. Bytes that
-/// landed before the close stay, so the window then holds an unknown mix of old
+/// To cancel a transfer, call [`rdma_close_regions`] from another thread to
+/// revoke registered regions so the server can no longer reach them. This call
+/// then returns shortly after, with [`RdmaResult::region_closed`] set. Bytes that
+/// landed before the revoke stay, so the window then holds an unknown mix of old
 /// and new bytes. The region cannot be used for another transfer; free it with
-/// [`free_rdma_region`], but only once this call has returned.
+/// [`free_rdma_region`], but only once this call has returned. Do not cancel with
+/// [`close_client`]: it frees the client, which this call may still be using.
 ///
-/// If libfabric cannot close the region, [`close_client`] cannot cancel this
-/// call, which keeps waiting until the server replies or the connection fails;
-/// see [`close_client`].
+/// If libfabric cannot close the region, [`rdma_close_regions`] cannot cancel
+/// this call, which keeps waiting until the server replies or the connection
+/// fails; see [`rdma_close_regions`].
 ///
 /// After an error the server sent, or one raised before the command was sent
 /// such as reaching the in-flight request limit, the region can be used again.
@@ -514,7 +515,8 @@ pub unsafe extern "C" fn rdma_region_capacity(region: *const RdmaRegion) -> usiz
 /// # Safety
 ///
 /// * `client_adapter_ptr` must be a pointer from [`create_client`] that
-///   [`close_client`] has not been called on when this call starts.
+///   [`close_client`] has not been called on, and [`close_client`] must not be
+///   called on it until this call returns.
 /// * `key` must point to `key_len` initialized bytes, which must stay valid for
 ///   the duration of the call.
 /// * `region` must be a region from [`register_rdma_region`] that
@@ -569,7 +571,7 @@ pub unsafe extern "C-unwind" fn rdma_get(
 /// Store a value the server reads directly out of the
 /// `[offset, offset + length)` window of a registered region.
 ///
-/// Like [`rdma_get`], it has no timeout, and calling [`close_client`] from
+/// Like [`rdma_get`], it has no timeout, and calling [`rdma_close_regions`] from
 /// another thread cancels it, with the same rules for freeing the region
 /// afterwards.
 ///
@@ -660,6 +662,60 @@ fn reject_bad_transfer_args(
     None
 }
 
+/// Cancel every RDMA transfer in flight on the client, and refuse every later
+/// registration and transfer on it.
+///
+/// Revokes every region the client registered, so the server can no longer reach
+/// that memory. Each cancelled [`rdma_get`] or [`rdma_set`] then returns shortly
+/// after on its own thread, with [`RdmaResult::region_closed`] set. This returns
+/// once the regions are revoked, without waiting for those calls. It does not free
+/// the regions: free each one with [`free_rdma_region`] once every transfer using
+/// it has returned.
+///
+/// Unlike [`close_client`], this never frees the client, so it is safe to call
+/// from another thread while transfers on the client are starting or running.
+/// The client keeps serving every other command. Calling it again does nothing,
+/// unless a region failed to close the first time; the error is then returned again.
+///
+/// # Returns
+///
+/// Null once every region is revoked, and also in a build without RDMA support,
+/// where no region can exist. Otherwise an error message, which the caller frees
+/// with [`free_c_string`]. An error means libfabric could not close at least one
+/// region, which takes a device or driver error. A transfer using that region is
+/// not cancelled: it keeps waiting until the server replies or its connection
+/// fails, since the server could still reach the memory. That memory is kept for
+/// the life of the process, so [`free_rdma_region`] returns a hold that is never
+/// released. Every other region is still revoked.
+///
+/// # Safety
+///
+/// * `client_adapter_ptr` must be a pointer from [`create_client`] that
+///   [`close_client`] has not been called on.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rdma_close_regions(client_adapter_ptr: *const c_void) -> *mut c_char {
+    if client_adapter_ptr.is_null() {
+        return into_c_string("cannot close RDMA regions without a client".to_string())
+            as *mut c_char;
+    }
+
+    #[cfg(not(feature = "rdma"))]
+    {
+        std::ptr::null_mut()
+    }
+
+    #[cfg(feature = "rdma")]
+    {
+        // Borrowed without touching the reference count: this never frees the
+        // client, so the caller's reference keeps it alive for the whole call.
+        let adapter = unsafe { &*(client_adapter_ptr as *const ClientAdapter) };
+        match adapter.core.client.close_rdma() {
+            Ok(()) => std::ptr::null_mut(),
+            Err(err) => into_c_string(errors::error_message(&err)) as *mut c_char,
+        }
+    }
+}
+
 /// Deregister a region, releasing the pinned pages.
 ///
 /// Blocks until the region has closed, which can take milliseconds for a large
@@ -681,7 +737,7 @@ fn reject_bad_transfer_args(
 /// * `region` must be null or a region from [`register_rdma_region`].
 /// * `free_rdma_region` may be called only once per region.
 /// * No transfer against the region may be in flight, including one that
-///   [`close_client`] cancelled but that has not returned yet.
+///   [`rdma_close_regions`] cancelled but that has not returned yet.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn free_rdma_region(region: *mut RdmaRegion) -> *mut RdmaMemoryHold {
     // Without the `rdma` feature no region can ever have been handed out, so
@@ -1008,6 +1064,34 @@ mod tests {
     #[test]
     fn a_null_region_has_no_capacity() {
         assert_eq!(unsafe { rdma_region_capacity(std::ptr::null()) }, 0);
+    }
+
+    /// Read an error message from `rdma_close_regions`, then free it.
+    fn take_close_error(error: *mut c_char) -> Option<String> {
+        let message = (!error.is_null()).then(|| {
+            unsafe { CStr::from_ptr(error) }
+                .to_string_lossy()
+                .into_owned()
+        });
+        unsafe { free_c_string(error) };
+        message
+    }
+
+    #[test]
+    fn closing_regions_without_a_client_is_refused() {
+        let error = take_close_error(unsafe { rdma_close_regions(std::ptr::null()) });
+        assert_eq!(
+            error.as_deref(),
+            Some("cannot close RDMA regions without a client")
+        );
+    }
+
+    /// Without the feature no region can exist, so there is nothing to revoke and
+    /// a binding may call this on every client without checking first.
+    #[cfg(not(feature = "rdma"))]
+    #[test]
+    fn closing_regions_without_rdma_does_nothing() {
+        assert!(unsafe { rdma_close_regions(unread_client_ptr()) }.is_null());
     }
 
     #[cfg(not(feature = "rdma"))]

@@ -4178,22 +4178,15 @@ fn apply_json_options(
 ///
 /// `client_adapter_ptr` is a pointer to a valid `GlideClient` returned in the `ConnectionResponse` from [`create_client`].
 ///
-/// With RDMA, this also cancels every transfer in flight on the client by
-/// revoking every region the client registered. It does not free the regions:
-/// the caller still owns each one and frees it with `free_rdma_region`.
+/// With RDMA, this also revokes every region the client registered, as
+/// `rdma_close_regions` does, and only logs a region that fails to close. It
+/// does not free the regions: the caller still owns each one and frees it with
+/// `free_rdma_region`.
 ///
-/// This returns once the regions are revoked, without waiting for the transfers
-/// it cancelled. Each cancelled `rdma_get` or `rdma_set` returns shortly after
-/// on its own thread, with `region_closed` set. Free a region only after every
-/// transfer using it has returned. Freeing it while one is still running is
-/// undefined behavior.
-///
-/// If libfabric cannot close a region, which takes a device or driver error,
-/// the failure is only logged. A transfer using that region is not cancelled:
-/// it keeps waiting until the server replies or its connection fails, since
-/// the server could still reach the memory. That memory is kept for the life
-/// of the process, so `free_rdma_region` returns a hold that is never
-/// released.
+/// This is not a way to cancel a transfer, since it frees the client the
+/// transfer may still be using. To cancel one, call `rdma_close_regions` from
+/// another thread, and call this only once every `rdma_get` and `rdma_set` on
+/// the client has returned.
 ///
 /// # Panics
 ///
@@ -4205,6 +4198,8 @@ fn apply_json_options(
 /// * `close_client` must be called after `free_connection_response` has been called to avoid creating a dangling pointer in the `ConnectionResponse`.
 /// * `client_adapter_ptr` must be obtained from the `ConnectionResponse` returned from [`create_client`].
 /// * `client_adapter_ptr` must be valid until `close_client` is called.
+/// * No `rdma_get`, `rdma_set`, `register_rdma_region`, or `rdma_close_regions`
+///   call on the client may be running or start after this is called.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn close_client(client_adapter_ptr: *const c_void) {
     assert!(!client_adapter_ptr.is_null());
@@ -4216,7 +4211,7 @@ pub unsafe extern "C" fn close_client(client_adapter_ptr: *const c_void) {
         glide_core::scope::unregister_client(client_id);
     }
 
-    // Revoke RDMA regions first and cancel any in-flight transfers.
+    // Revoke RDMA regions so the server can no longer reach the caller's memory.
     #[cfg(feature = "rdma")]
     {
         // SAFETY: the caller's reference is still held until the decrement below.
