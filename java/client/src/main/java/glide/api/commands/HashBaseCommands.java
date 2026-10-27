@@ -921,7 +921,7 @@ public interface HashBaseCommands {
      * HSetExOptions keyDoesNotExistOptions = HSetExOptions.builder()
      *     .onlyIfKeyDoesNotExist()
      *     .build();
-     * Long keyDoesNotExistResult = client.hsetex(gs("new_hash"), Map.of(gs("field1"), gs("value1")), keyDoesNotExistOptions).get();
+     * Long keyDoesNotExistResult = client.hsetex(gs("another_hash"), Map.of(gs("field1"), gs("value1")), keyDoesNotExistOptions).get();
      * }</pre>
      */
     CompletableFuture<Long> hsetex(
