@@ -1352,7 +1352,7 @@ public interface GenericBaseCommands {
      * @apiNote When in cluster mode, both <code>key</code> and the patterns specified in {@link
      *     SortOptions#byPattern} and {@link SortOptions#getPatterns} must hash to the same slot. The
      *     use of {@link SortOptions#byPattern} and {@link SortOptions#getPatterns} in cluster mode is
-     *     supported Since Valkey 8.0.0.
+     *     supported since Valkey 8.0.0.
      * @see <a href="https://valkey.io/commands/sort/">valkey.io</a> for details.
      * @param key The key of the list, set, or sorted set to be sorted.
      * @param sortOptions The {@link SortOptions}.
@@ -1379,7 +1379,7 @@ public interface GenericBaseCommands {
      * @apiNote When in cluster mode, both <code>key</code> and the patterns specified in {@link
      *     SortOptionsBinary#byPattern} and {@link SortOptionsBinary#getPatterns} must hash to the
      *     same slot. The use of {@link SortOptionsBinary#byPattern} and {@link
-     *     SortOptionsBinary#getPatterns} in cluster mode is supported Since Valkey 8.0.0.
+     *     SortOptionsBinary#getPatterns} in cluster mode is supported since Valkey 8.0.0.
      * @see <a href="https://valkey.io/commands/sort/">valkey.io</a> for details.
      * @param key The key of the list, set, or sorted set to be sorted.
      * @param sortOptions The {@link SortOptionsBinary}.
@@ -1443,7 +1443,7 @@ public interface GenericBaseCommands {
      * @apiNote When in cluster mode, both <code>key</code> and the patterns specified in {@link
      *     SortOptions#byPattern} and {@link SortOptions#getPatterns} must hash to the same slot. The
      *     use of {@link SortOptions#byPattern} and {@link SortOptions#getPatterns} in cluster mode is
-     *     supported Since Valkey 8.0.0.
+     *     supported since Valkey 8.0.0.
      * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/sort/">valkey.io</a> for details.
      * @param key The key of the list, set, or sorted set to be sorted.
@@ -1470,7 +1470,7 @@ public interface GenericBaseCommands {
      * @apiNote When in cluster mode, both <code>key</code> and the patterns specified in {@link
      *     SortOptionsBinary#byPattern} and {@link SortOptionsBinary#getPatterns} must hash to the
      *     same slot. The use of {@link SortOptionsBinary#byPattern} and {@link
-     *     SortOptionsBinary#getPatterns} in cluster mode is supported Since Valkey 8.0.0.
+     *     SortOptionsBinary#getPatterns} in cluster mode is supported since Valkey 8.0.0.
      * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/sort/">valkey.io</a> for details.
      * @param key The key of the list, set, or sorted set to be sorted.
@@ -1551,7 +1551,7 @@ public interface GenericBaseCommands {
      *           SortOptions#byPattern} and {@link SortOptions#getPatterns} must hash to the same
      *           slot.
      *       <li>The use of {@link SortOptions#byPattern} and {@link SortOptions#getPatterns} in
-     *           cluster mode is supported Since Valkey 8.0.0.
+     *           cluster mode is supported since Valkey 8.0.0.
      *     </ul>
      *
      * @see <a href="https://valkey.io/commands/sort/">valkey.io</a> for details.
@@ -1589,7 +1589,7 @@ public interface GenericBaseCommands {
      *           SortOptionsBinary#byPattern} and {@link SortOptionsBinary#getPatterns} must hash to
      *           the same slot.
      *       <li>The use of {@link SortOptionsBinary#byPattern} and {@link
-     *           SortOptionsBinary#getPatterns} in cluster mode is supported Since Valkey 8.0.0.
+     *           SortOptionsBinary#getPatterns} in cluster mode is supported since Valkey 8.0.0.
      *     </ul>
      *
      * @see <a href="https://valkey.io/commands/sort/">valkey.io</a> for details.

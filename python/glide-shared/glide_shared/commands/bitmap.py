@@ -31,7 +31,7 @@ class OffsetOptions:
 
     Attributes:
         start (int): The starting offset index.
-        end (Optional[int]): The ending offset index. Optional Since Valkey 8.0.0 for the BITCOUNT
+        end (Optional[int]): The ending offset index. Optional since Valkey 8.0.0 for the BITCOUNT
             command. If not provided, it will default to the end of the string.
         index_type (Optional[BitmapIndexType]): The index offset type. This option can only be specified if you are
             using Valkey version 7.0.0 or above. Could be either `BitmapIndexType.BYTE` or `BitmapIndexType.BIT`.

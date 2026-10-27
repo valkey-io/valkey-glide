@@ -7080,7 +7080,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @apiNote When in cluster mode, both <code>key</code> and the patterns specified in {@link
      *     SortOptions#byPattern} and {@link SortOptions#getPatterns} must hash to the same slot. The
      *     use of {@link SortOptions#byPattern} and {@link SortOptions#getPatterns} in cluster mode is
-     *     supported Since Valkey 8.0.0.
+     *     supported since Valkey 8.0.0.
      * @see <a href="https://valkey.io/commands/sort">valkey.io</a> for details.
      * @param key The key of the list, set, or sorted set to be sorted.
      * @param sortOptions The {@link SortOptions}.
@@ -7122,7 +7122,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @apiNote When in cluster mode, both <code>key</code> and the patterns specified in {@link
      *     SortOptions#byPattern} and {@link SortOptions#getPatterns} must hash to the same slot. The
      *     use of {@link SortOptions#byPattern} and {@link SortOptions#getPatterns} in cluster mode is
-     *     supported Since Valkey 8.0.0.
+     *     supported since Valkey 8.0.0.
      * @see <a href="https://valkey.io/commands/sort">valkey.io</a> for details.
      * @param key The key of the list, set, or sorted set to be sorted.
      * @param sortOptions The {@link SortOptions}.
@@ -7171,7 +7171,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      *           SortOptions#byPattern} and {@link SortOptions#getPatterns} must hash to the same
      *           slot.
      *       <li>The use of {@link SortOptions#byPattern} and {@link SortOptions#getPatterns} in
-     *           cluster mode is supported Since Valkey 8.0.0.
+     *           cluster mode is supported since Valkey 8.0.0.
      *     </ul>
      *
      * @see <a href="https://valkey.io/commands/sort">valkey.io</a> for details.

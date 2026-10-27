@@ -161,7 +161,7 @@ export namespace GlideClusterClientConfiguration {
         Pattern = 1,
 
         /**
-         * Use sharded pubsub. Available Since Valkey 7.0.0.
+         * Use sharded pubsub. Available since Valkey 7.0.0.
          */
         Sharded = 2,
     }
@@ -247,7 +247,7 @@ export interface ClusterPubSubState {
  *   - `{ duration_in_sec: number }`: Manually configure the interval for periodic checks.
  * - **Client-Side Caching**: Use `clientSideCache` (inherited from BaseClientConfiguration) to enable local caching for improved performance.
  * - **Pub/Sub Subscriptions**: Predefine Pub/Sub channels and patterns to subscribe to upon connection establishment.
- *   - Supports exact channels, patterns, and sharded channels (available Since Valkey 7.0.0).
+ *   - Supports exact channels, patterns, and sharded channels (available since Valkey 7.0.0).
  *
  * @example
  * ```typescript
@@ -1892,7 +1892,7 @@ export class GlideClusterClient extends BaseClient {
      *
      * @param message - Message to publish.
      * @param channel - Channel to publish the message on.
-     * @param sharded - Use sharded pubsub mode. Available Since Valkey 7.0.0.
+     * @param sharded - Use sharded pubsub mode. Available since Valkey 7.0.0.
      * @returns -  Number of subscriptions in primary node that received the message.
      *
      * @example

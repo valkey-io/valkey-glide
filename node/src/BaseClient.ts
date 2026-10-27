@@ -8186,7 +8186,7 @@ export class BaseClient {
      * - (Optional) `fullOptions`: If `true`, returns verbose information with a limit of the first 10 PEL entries.
      * If `number` is specified, returns verbose information limiting the returned PEL entries.
      * If `0` is specified, returns verbose information with no limit.
-     * @remark `fullOptions` - Available Since Valkey 6.0.0
+     * @remark `fullOptions` - Available since Valkey 6.0.0
      * - (Optional) `decoder`: see {@link DecoderOption}.
      * @returns A {@link ReturnTypeXinfoStream} of detailed stream information for the given `key`. See
      *     the example for a sample response.
@@ -9907,7 +9907,7 @@ export class BaseClient {
      * @see {@link https://valkey.io/commands/sort/|valkey.io} for more details.
      * @remarks When in cluster mode, both `key` and the patterns specified in {@link SortOptions.byPattern}
      * and {@link SortOptions.getPatterns} must map to the same hash slot. The use of {@link SortOptions.byPattern}
-     * and {@link SortOptions.getPatterns} in cluster mode is supported Since Valkey 8.0.0.
+     * and {@link SortOptions.getPatterns} in cluster mode is supported since Valkey 8.0.0.
      * @param key - The key of the list, set, or sorted set to be sorted.
      * @param options - (Optional) The {@link SortOptions} and {@link DecoderOption}.
      *
@@ -9943,7 +9943,7 @@ export class BaseClient {
      * @remarks Since Valkey 7.0.0.
      * @remarks When in cluster mode, both `key` and the patterns specified in {@link SortOptions.byPattern}
      * and {@link SortOptions.getPatterns} must map to the same hash slot. The use of {@link SortOptions.byPattern}
-     * and {@link SortOptions.getPatterns} in cluster mode is supported Since Valkey 8.0.0.
+     * and {@link SortOptions.getPatterns} in cluster mode is supported since Valkey 8.0.0.
      * @param key - The key of the list, set, or sorted set to be sorted.
      * @param options - (Optional) The {@link SortOptions} and {@link DecoderOption}.
      * @returns An `Array` of sorted elements
@@ -9981,7 +9981,7 @@ export class BaseClient {
      * @see {@link https://valkey.io/commands/sort|valkey.io} for more details.
      * @remarks When in cluster mode, `key`, `destination` and the patterns specified in {@link SortOptions.byPattern}
      * and {@link SortOptions.getPatterns} must map to the same hash slot. The use of {@link SortOptions.byPattern}
-     * and {@link SortOptions.getPatterns} in cluster mode is supported Since Valkey 8.0.0.
+     * and {@link SortOptions.getPatterns} in cluster mode is supported since Valkey 8.0.0.
      *
      * @param key - The key of the list, set, or sorted set to be sorted.
      * @param destination - The key where the sorted result will be stored.

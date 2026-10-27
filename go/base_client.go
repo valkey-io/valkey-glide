@@ -6967,7 +6967,7 @@ func (client *baseClient) Sort(ctx context.Context, key string) ([]models.Result
 //	while others did not. If this behavior impacts your application logic, consider splitting
 //	the request into sub-requests per slot to ensure atomicity.
 //	The use of SortOptions.byPattern and SortOptions.getPatterns in cluster mode is
-//	supported Since Valkey 8.0.0.
+//	supported since Valkey 8.0.0.
 //
 // See [valkey.io] for details.
 //
@@ -7037,7 +7037,7 @@ func (client *baseClient) SortReadOnly(ctx context.Context, key string) ([]model
 //	while others did not. If this behavior impacts your application logic, consider splitting
 //	the request into sub-requests per slot to ensure atomicity.
 //	The use of SortOptions.byPattern and SortOptions.getPatterns in cluster mode is
-//	supported Since Valkey 8.0.0.
+//	supported since Valkey 8.0.0.
 //
 // See [valkey.io] for details.
 //
@@ -7123,7 +7123,7 @@ func (client *baseClient) SortStore(ctx context.Context, key string, destination
 //	while others did not. If this behavior impacts your application logic, consider splitting
 //	the request into sub-requests per slot to ensure atomicity.
 //	The use of SortOptions.byPattern and SortOptions.getPatterns
-//	in cluster mode is supported Since Valkey 8.0.0.
+//	in cluster mode is supported since Valkey 8.0.0.
 //
 // See [valkey.io] for details.
 //

@@ -4406,7 +4406,7 @@ export class BaseBatch<T extends BaseBatch<T>> {
      * @see {@link https://valkey.io/commands/sort/|valkey.io} for more details.
      * @remarks When in cluster mode, both `key` and the patterns specified in {@link SortOptions.byPattern}
      * and {@link SortOptions.getPatterns} must map to the same hash slot. The use of {@link SortOptions.byPattern}
-     * and {@link SortOptions.getPatterns} in cluster mode is supported Since Valkey 8.0.0.
+     * and {@link SortOptions.getPatterns} in cluster mode is supported since Valkey 8.0.0.
      *
      * @param key - The key of the list, set, or sorted set to be sorted.
      * @param options - (Optional) {@link SortOptions}.
@@ -4428,7 +4428,7 @@ export class BaseBatch<T extends BaseBatch<T>> {
      * @remarks Since Valkey 7.0.0.
      * @remarks When in cluster mode, both `key` and the patterns specified in {@link SortOptions.byPattern}
      * and {@link SortOptions.getPatterns} must map to the same hash slot. The use of {@link SortOptions.byPattern}
-     * and {@link SortOptions.getPatterns} in cluster mode is supported Since Valkey 8.0.0.
+     * and {@link SortOptions.getPatterns} in cluster mode is supported since Valkey 8.0.0.
      *
      * @param key - The key of the list, set, or sorted set to be sorted.
      * @param options - (Optional) {@link SortOptions}.
@@ -4451,7 +4451,7 @@ export class BaseBatch<T extends BaseBatch<T>> {
      * @see {@link https://valkey.io/commands/sort/|valkey.io} for more details.
      * @remarks When in cluster mode, `key`, `destination` and the patterns specified in {@link SortOptions.byPattern}
      * and {@link SortOptions.getPatterns} must map to the same hash slot. The use of {@link SortOptions.byPattern}
-     * and {@link SortOptions.getPatterns} in cluster mode is supported Since Valkey 8.0.0.
+     * and {@link SortOptions.getPatterns} in cluster mode is supported since Valkey 8.0.0.
      *
      * @param key - The key of the list, set, or sorted set to be sorted.
      * @param destination - The key where the sorted result will be stored.
@@ -4624,7 +4624,7 @@ export class ClusterBatch extends BaseBatch<ClusterBatch> {
      *
      * @param message - Message to publish.
      * @param channel - Channel to publish the message on.
-     * @param sharded - Use sharded pubsub mode. Available Since Valkey 7.0.0.
+     * @param sharded - Use sharded pubsub mode. Available since Valkey 7.0.0.
      *
      * Command Response -  Number of subscriptions in primary node that received the message.
      */

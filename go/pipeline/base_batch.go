@@ -4612,7 +4612,7 @@ func (b *BaseBatch[T]) Sort(key string) *T {
 // Note:
 //
 // The use of [SortOptions.byPattern] and [SortOptions.getPatterns] in cluster mode is
-// supported Since Valkey 8.0.0.
+// supported since Valkey 8.0.0.
 //
 // See [valkey.io] for details.
 //
@@ -4666,7 +4666,7 @@ func (b *BaseBatch[T]) SortReadOnly(key string) *T {
 // Note:
 //
 // The use of [SortOptions.byPattern] and [SortOptions.getPatterns] in cluster mode is
-// supported Since Valkey 8.0.0.
+// supported since Valkey 8.0.0.
 //
 // See [valkey.io] for details.
 //

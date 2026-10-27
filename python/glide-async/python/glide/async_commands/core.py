@@ -7884,7 +7884,7 @@ class CoreCommands(Protocol):
         Note:
             When in cluster mode, `key`, and any patterns specified in `by_pattern` or `get_patterns`
             must map to the same hash slot. The use of `by_pattern` and `get_patterns` in cluster mode is supported
-            only Since Valkey 8.0.0.
+            only since Valkey 8.0.0.
 
         See [valkey.io](https://valkey.io/commands/sort) for more details.
 
@@ -7899,7 +7899,7 @@ class CoreCommands(Protocol):
                 E.g., if `by_pattern` is `weight_*`, the command will sort the elements by the values of the
                 keys `weight_<element>`.
                 If not provided, elements are sorted by their value.
-                Supported in cluster mode Since Valkey 8.0.0.
+                Supported in cluster mode since Valkey 8.0.0.
             limit (Optional[Limit]): Limiting the range of the query by setting offset and result count. See `Limit` class for
                 more information.
             get_patterns (Optional[List[TEncodable]]): A pattern used to retrieve external keys' values, instead of the
@@ -7912,7 +7912,7 @@ class CoreCommands(Protocol):
                 for each sorted element. Multiple `get_pattern` arguments can be provided to retrieve multiple attributes.
                 The special value `#` can be used to include the actual element from `key` being sorted.
                 If not provided, only the sorted elements themselves are returned.
-                Supported in cluster mode Since Valkey 8.0.0.
+                Supported in cluster mode since Valkey 8.0.0.
             order (Optional[OrderBy]): Specifies the order to sort the elements.
                 Can be `OrderBy.ASC` (ascending) or `OrderBy.DESC` (descending).
             alpha (Optional[bool]): When `True`, sorts elements lexicographically. When `False` (default), sorts elements
@@ -7962,7 +7962,7 @@ class CoreCommands(Protocol):
         Note:
             When in cluster mode, `key`, and any patterns specified in `by_pattern` or `get_patterns`
             must map to the same hash slot. The use of `by_pattern` and `get_patterns` in cluster mode is supported
-            only Since Valkey 8.0.0.
+            only since Valkey 8.0.0.
 
         Args:
             key (TEncodable): The key of the list, set, or sorted set to be sorted.
@@ -7975,7 +7975,7 @@ class CoreCommands(Protocol):
                 E.g., if `by_pattern` is `weight_*`, the command will sort the elements by the values of the
                 keys `weight_<element>`.
                 If not provided, elements are sorted by their value.
-                Supported in cluster mode Since Valkey 8.0.0.
+                Supported in cluster mode since Valkey 8.0.0.
             limit (Optional[Limit]): Limiting the range of the query by setting offset and result count. See `Limit` class for
                 more information.
             get_patterns (Optional[List[TEncodable]]): A pattern used to retrieve external keys' values, instead of the
@@ -7988,7 +7988,7 @@ class CoreCommands(Protocol):
                 for each sorted element. Multiple `get_pattern` arguments can be provided to retrieve multiple attributes.
                 The special value `#` can be used to include the actual element from `key` being sorted.
                 If not provided, only the sorted elements themselves are returned.
-                Supported in cluster mode Since Valkey 8.0.0.
+                Supported in cluster mode since Valkey 8.0.0.
             order (Optional[OrderBy]): Specifies the order to sort the elements.
                 Can be `OrderBy.ASC` (ascending) or `OrderBy.DESC` (descending).
             alpha (Optional[bool]): When `True`, sorts elements lexicographically. When `False` (default), sorts elements
@@ -8041,7 +8041,7 @@ class CoreCommands(Protocol):
         Note:
             When in cluster mode, `key`, `destination`, and any patterns specified in `by_pattern` or `get_patterns`
             must map to the same hash slot. The use of `by_pattern` and `get_patterns` in cluster mode is supported
-            only Since Valkey 8.0.0.
+            only since Valkey 8.0.0.
 
         Args:
             key (TEncodable): The key of the list, set, or sorted set to be sorted.
@@ -8055,7 +8055,7 @@ class CoreCommands(Protocol):
                 E.g., if `by_pattern` is `weight_*`, the command will sort the elements by the values of the
                 keys `weight_<element>`.
                 If not provided, elements are sorted by their value.
-                Supported in cluster mode Since Valkey 8.0.0.
+                Supported in cluster mode since Valkey 8.0.0.
             limit (Optional[Limit]): Limiting the range of the query by setting offset and result count. See `Limit` class for
                 more information.
             get_patterns (Optional[List[TEncodable]]): A pattern used to retrieve external keys' values, instead of the
@@ -8068,7 +8068,7 @@ class CoreCommands(Protocol):
                 for each sorted element. Multiple `get_pattern` arguments can be provided to retrieve multiple attributes.
                 The special value `#` can be used to include the actual element from `key` being sorted.
                 If not provided, only the sorted elements themselves are returned.
-                Supported in cluster mode Since Valkey 8.0.0.
+                Supported in cluster mode since Valkey 8.0.0.
             order (Optional[OrderBy]): Specifies the order to sort the elements.
                 Can be `OrderBy.ASC` (ascending) or `OrderBy.DESC` (descending).
             alpha (Optional[bool]): When `True`, sorts elements lexicographically. When `False` (default), sorts elements

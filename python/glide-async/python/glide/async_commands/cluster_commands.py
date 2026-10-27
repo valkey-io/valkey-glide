@@ -1088,7 +1088,7 @@ class ClusterCommands(CoreCommands):
         Args:
             message (TEncodable): Message to publish.
             channel (TEncodable): Channel to publish the message on.
-            sharded (bool): Use sharded pubsub mode. Available Since Valkey 7.0.0.
+            sharded (bool): Use sharded pubsub mode. Available since Valkey 7.0.0.
 
         Returns:
             int: Number of subscriptions in that node that received the message.
