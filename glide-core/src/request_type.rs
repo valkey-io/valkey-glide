@@ -443,6 +443,9 @@ pub enum RequestType {
     FtInfo = 2111,
     FtProfile = 2112,
     FtSearch = 2113,
+    FtHybrid = 2114,
+    FtCursorRead = 2115,
+    FtCursorDel = 2116,
 }
 
 fn get_two_word_command(first: &str, second: &str) -> Cmd {
@@ -743,6 +746,9 @@ impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
             ProtobufRequestType::FtInfo => RequestType::FtInfo,
             ProtobufRequestType::FtProfile => RequestType::FtProfile,
             ProtobufRequestType::FtSearch => RequestType::FtSearch,
+            ProtobufRequestType::FtHybrid => RequestType::FtHybrid,
+            ProtobufRequestType::FtCursorRead => RequestType::FtCursorRead,
+            ProtobufRequestType::FtCursorDel => RequestType::FtCursorDel,
             ProtobufRequestType::ModuleList => RequestType::ModuleList,
             ProtobufRequestType::ModuleLoad => RequestType::ModuleLoad,
             ProtobufRequestType::ModuleLoadEx => RequestType::ModuleLoadEx,
@@ -1358,6 +1364,9 @@ impl RequestType {
             RequestType::FtInfo => Some(cmd("FT.INFO")),
             RequestType::FtProfile => Some(cmd("FT.PROFILE")),
             RequestType::FtSearch => Some(cmd("FT.SEARCH")),
+            RequestType::FtHybrid => Some(cmd("FT.HYBRID")),
+            RequestType::FtCursorRead => Some(get_two_word_command("FT.CURSOR", "READ")),
+            RequestType::FtCursorDel => Some(get_two_word_command("FT.CURSOR", "DEL")),
             RequestType::ModuleList => Some(get_two_word_command("MODULE", "LIST")),
             RequestType::ModuleLoad => Some(get_two_word_command("MODULE", "LOAD")),
             RequestType::ModuleLoadEx => Some(get_two_word_command("MODULE", "LOADEX")),
@@ -1454,5 +1463,43 @@ impl RequestType {
             RequestType::SetNX => Some(cmd("SETNX")),
             _ => None,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn argv(request_type: RequestType) -> Vec<Vec<u8>> {
+        request_type
+            .get_command()
+            .expect("request type should build a command")
+            .args_iter()
+            .map(|arg| match arg {
+                redis::Arg::Simple(bytes) => bytes.to_vec(),
+                redis::Arg::Cursor => b"0".to_vec(),
+            })
+            .collect()
+    }
+
+    #[test]
+    fn ft_hybrid_argv_matches_custom_command() {
+        assert_eq!(argv(RequestType::FtHybrid), vec![b"FT.HYBRID".to_vec()]);
+    }
+
+    #[test]
+    fn ft_cursor_read_argv_matches_custom_command() {
+        assert_eq!(
+            argv(RequestType::FtCursorRead),
+            vec![b"FT.CURSOR".to_vec(), b"READ".to_vec()]
+        );
+    }
+
+    #[test]
+    fn ft_cursor_del_argv_matches_custom_command() {
+        assert_eq!(
+            argv(RequestType::FtCursorDel),
+            vec![b"FT.CURSOR".to_vec(), b"DEL".to_vec()]
+        );
     }
 }
