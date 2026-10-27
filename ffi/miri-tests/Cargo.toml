@@ -30,3 +30,4 @@ path = "../src/lib.rs"
 
 [features]
 pool-support = []
+rdma = []
