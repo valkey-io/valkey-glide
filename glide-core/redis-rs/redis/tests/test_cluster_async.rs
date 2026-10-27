@@ -7072,6 +7072,65 @@ mod cluster_async {
 
     #[test]
     #[serial_test::parallel(otel)]
+    fn test_async_cluster_dont_route_rdma_transfer_to_a_random_node() {
+        // An RDMA transfer must reach the key's primary. A random node may be a
+        // READONLY replica, which answers an RDMA read itself instead of replying
+        // MOVED. So when no connection is found for the key's slot, the transfer
+        // must fail instead of going to a random node.
+        let name = "test_async_cluster_dont_route_rdma_transfer_to_a_random_node";
+        let request_counter = Arc::new(AtomicU32::new(0));
+        let cloned_req_counter = request_counter.clone();
+        let MockEnv {
+            runtime,
+            async_connection: mut connection,
+            handler: _handler,
+            ..
+        } = MockEnv::with_client_builder(
+            ClusterClient::builder(vec![&*format!("redis://{name}")]).retries(1),
+            name,
+            move |received_cmd: &[u8], _| {
+                let slots_config_vec = vec![
+                    MockSlotRange {
+                        primary_port: 6379,
+                        replica_ports: vec![],
+                        slot_range: (0_u16..8000_u16),
+                    },
+                    MockSlotRange {
+                        primary_port: 6380,
+                        replica_ports: vec![],
+                        // Don't cover all slots
+                        slot_range: (8001_u16..12000_u16),
+                    },
+                ];
+                respond_startup_with_config(name, received_cmd, Some(slots_config_vec), false)?;
+                // If requests are sent to random nodes, they will be caught and counted here.
+                request_counter.fetch_add(1, Ordering::Relaxed);
+                Err(Ok(Value::Nil))
+            },
+        );
+
+        runtime
+            .block_on(async move {
+                // The keyslot of "foo" is 12182 and it isn't covered by any node.
+                for name in ["BLOB.RDMA_GET", "BLOB.RDMA_SET"] {
+                    let mut transfer = cmd(name);
+                    transfer.arg("foo").arg("1").arg("2").arg("3");
+                    let res = connection.req_packed_command(&transfer).await;
+                    let res_err = res.unwrap_err();
+                    assert_eq!(
+                        res_err.kind(),
+                        ErrorKind::ConnectionNotFoundForRoute,
+                        "{name}: {res_err:?}"
+                    );
+                }
+                assert_eq!(cloned_req_counter.load(Ordering::Relaxed), 0);
+                Ok::<_, RedisError>(())
+            })
+            .unwrap();
+    }
+
+    #[test]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_route_to_random_on_key_based_cmd() {
         // This test verifies that key-based commands get routed to a random node
         // when no connection is found for the given route. The command should

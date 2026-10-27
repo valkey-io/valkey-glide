@@ -751,7 +751,8 @@ fn base_routing(cmd: &[u8]) -> RouteBy {
         // `is_readonly_cmd`, so no read-from-replica setting sends a read to a
         // replica. The large-object module does not replicate its objects yet, so a
         // replica holds none of them and would answer every read as a missing key.
-        // Add `BLOB.RDMA_GET` there once the module replicates.
+        // Add `BLOB.RDMA_GET` there once the module replicates. For the same reason,
+        // `is_key_routing_command` keeps both out of the random-node fallback.
         b"BLOB.RDMA_GET" | b"BLOB.RDMA_SET" => RouteBy::FirstKey,
 
         b"LMPOP" | b"SINTERCARD" | b"ZDIFF" | b"ZINTER" | b"ZINTERCARD" | b"ZMPOP" | b"ZUNION" => {
@@ -848,6 +849,13 @@ impl RoutingInfo {
                     // such as SET FOO BAR, where a non-readonly replica would return a MOVED error if READONLY is off.
                     // Consequently, SPUBLISH does not meet the requirement of being a command that triggers MOVED errors.
                     // TODO: remove this when PRIMARY_PREFERRED route for SPUBLISH is added
+                    false
+                } else if matches!(cmd, b"BLOB.RDMA_GET" | b"BLOB.RDMA_SET") {
+                    // An RDMA transfer must reach the key's primary. A random node may be a
+                    // replica that was sent READONLY, which answers an RDMA read itself instead
+                    // of replying MOVED. The large-object module does not replicate its objects
+                    // yet, so that replica would report a missing key. Failing instead makes the
+                    // client refresh its slot map and retry against the primary.
                     false
                 } else {
                     true
@@ -1751,6 +1759,15 @@ mod tests_routing {
         assert_eq!(slot_addr_of(&rdma_get("foo")), SlotAddr::Master);
         assert_eq!(slot_addr_of(&rdma_set("foo")), SlotAddr::Master);
         assert_eq!(slot_addr_of(&rdma_set_with_crc("foo")), SlotAddr::Master);
+    }
+
+    #[test]
+    fn test_rdma_transfers_do_not_fall_back_to_a_random_node() {
+        // A random node may be a READONLY replica, which would answer an RDMA read
+        // itself instead of replying MOVED.
+        assert!(RoutingInfo::is_key_routing_command(b"GET"));
+        assert!(!RoutingInfo::is_key_routing_command(b"BLOB.RDMA_GET"));
+        assert!(!RoutingInfo::is_key_routing_command(b"BLOB.RDMA_SET"));
     }
 
     #[test]
