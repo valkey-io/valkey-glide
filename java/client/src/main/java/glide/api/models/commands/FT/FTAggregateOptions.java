@@ -80,9 +80,9 @@ public class FTAggregateOptions {
     private final FTWithCursor withCursor;
 
     /**
-     * {@code true} if {@link #withCursor} is set. Package-visible to {@code FT#aggregate}, which must
-     * return the raw {@code [rows, cursorId]} 2-tuple rather than casting to the flat per-document
-     * array shape when a cursor is requested.
+     * {@code true} if {@link #withCursor} is set. Used by {@link FT#aggregate} to reject {@code
+     * withCursor} outright (callers must use {@link FT#aggregateWithCursor} instead, which returns
+     * the raw {@code [rows, cursorId]} 2-tuple honestly as {@code Object[]}).
      */
     public boolean hasWithCursor() {
         return withCursor != null;

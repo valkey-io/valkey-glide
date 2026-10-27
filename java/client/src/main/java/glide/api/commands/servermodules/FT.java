@@ -621,9 +621,9 @@ public class FT {
     }
 
     /**
-     * Reads the next page of results from a cursor opened by {@link #aggregate(BaseClient, String,
-     * String, FTAggregateOptions)} (with {@code FTAggregateOptions.builder().withCursor(...)}) or
-     * {@link #hybrid}.
+     * Reads the next page of results from a cursor opened by {@link #aggregateWithCursor(BaseClient,
+     * String, String, FTAggregateOptions)} (with {@code
+     * FTAggregateOptions.builder().withCursor(...)}) or {@link #hybrid}.
      *
      * @param client The client to execute the command.
      * @param indexName The index name the cursor was opened against.
@@ -636,7 +636,7 @@ public class FT {
      *     #cursorRead} call otherwise.
      * @example
      *     <pre>{@code
-     * Object[] page = FT.aggregate(client, "myIndex", "*",
+     * Object[] page = FT.aggregateWithCursor(client, "myIndex", "*",
      *         FTAggregateOptions.builder().loadFields(new String[] {"__key"})
      *             .withCursor(new FTWithCursor(10)).build())
      *     .get();
@@ -648,8 +648,8 @@ public class FT {
     }
 
     /**
-     * Reads the next page of results from a cursor opened by {@link #aggregate(BaseClient, String,
-     * String, FTAggregateOptions)} or {@link #hybrid}.
+     * Reads the next page of results from a cursor opened by {@link #aggregateWithCursor(BaseClient,
+     * String, String, FTAggregateOptions)} or {@link #hybrid}.
      *
      * @param client The client to execute the command.
      * @param indexName The index name the cursor was opened against.
@@ -664,7 +664,7 @@ public class FT {
     }
 
     /**
-     * Reads the next page of results from a cursor opened by {@link #aggregate(BaseClient,
+     * Reads the next page of results from a cursor opened by {@link #aggregateWithCursor(BaseClient,
      * GlideString, GlideString, FTAggregateOptions)} or {@link #hybrid}.
      *
      * @param client The client to execute the command.
@@ -678,7 +678,7 @@ public class FT {
     }
 
     /**
-     * Reads the next page of results from a cursor opened by {@link #aggregate(BaseClient,
+     * Reads the next page of results from a cursor opened by {@link #aggregateWithCursor(BaseClient,
      * GlideString, GlideString, FTAggregateOptions)} or {@link #hybrid}.
      *
      * <p>Always reads from the PRIMARY of the index's slot, regardless of the client's {@code

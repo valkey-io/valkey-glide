@@ -81,8 +81,8 @@ public class FTHybridOptions {
     private final Integer dialect;
 
     /**
-     * The COMBINE clause, if set. Package-visible to {@code FT#hybrid}, which emits it directly after
-     * the VSIM arm's own argv rather than through {@link #toArgs}.
+     * The COMBINE clause, if set. Used by {@code FT#hybrid}, which emits it directly after the VSIM
+     * arm's own argv rather than through {@link #toArgs}.
      */
     public FTHybridCombine getCombine() {
         return combine;

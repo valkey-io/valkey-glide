@@ -98,7 +98,7 @@ public class VectorSearch13Tests {
 
         capability = probeSearch13Capability(clusterClient);
 
-        // RESP2 coverage (M4): a representative subset of the wave-2 live tests (scoring, cursor,
+        // RESP2 coverage: a representative subset of the wave-2 live tests (scoring, cursor,
         // FT.HYBRID) is parametrized over both protocols via getResp2Clients(); the rest of this
         // suite exercises RESP3/default only via getClients(), same as before this fixture was
         // added.
@@ -365,6 +365,9 @@ public class VectorSearch13Tests {
             // absent -> no restriction, all 3 match
             Object[] all = FT.search(client, indexName, "*", FTSearchOptions.builder().build()).get();
             assertEquals(3L, all[0]);
+            @SuppressWarnings("unchecked")
+            Map<GlideString, Object> allMap = (Map<GlideString, Object>) all[1];
+            assertEquals(new HashSet<>(Arrays.asList(gs(key1), gs(key2), gs(key3))), allMap.keySet());
 
             // empty array -> INKEYS 0, excludes every result
             Object[] none =
@@ -385,6 +388,9 @@ public class VectorSearch13Tests {
                                     FTSearchOptions.builder().inKeys(new GlideString[] {gs(key1), gs(key2)}).build())
                             .get();
             assertEquals(2L, some[0]);
+            @SuppressWarnings("unchecked")
+            Map<GlideString, Object> someMap = (Map<GlideString, Object>) some[1];
+            assertEquals(new HashSet<>(Arrays.asList(gs(key1), gs(key2))), someMap.keySet());
         } finally {
             FT.dropindex(client, indexName).get();
         }
@@ -441,37 +447,348 @@ public class VectorSearch13Tests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void ft_search_wildcard(BaseClient client) {
+        Assumptions.assumeTrue(
+                capability, "search module present but pre-1.3 (INKEYS probe rejected it)");
+
+        String prefix = "{ft-wildcard-" + UUID.randomUUID() + "}:";
+        String indexName = prefix + "index";
+        assertEquals(
+                OK,
+                FT.create(
+                                client,
+                                indexName,
+                                new FieldInfo[] {
+                                    new FieldInfo("title", new TextField()),
+                                    new FieldInfo("price", new NumericField())
+                                },
+                                FTCreateOptions.builder()
+                                        .dataType(DataType.HASH)
+                                        .prefixes(new String[] {prefix})
+                                        .build())
+                        .get());
+        try {
+            Map<String, String> doc1 = new HashMap<>();
+            doc1.put("title", "alpha");
+            doc1.put("price", "10");
+            Map<String, String> doc2 = new HashMap<>();
+            doc2.put("title", "beta");
+            doc2.put("price", "20");
+            Map<String, String> doc3 = new HashMap<>();
+            doc3.put("title", "gamma");
+            doc3.put("price", "30");
+            if (client instanceof GlideClusterClient) {
+                ((GlideClusterClient) client).hset(prefix + "1", doc1).get();
+                ((GlideClusterClient) client).hset(prefix + "2", doc2).get();
+                ((GlideClusterClient) client).hset(prefix + "3", doc3).get();
+            } else {
+                ((GlideClient) client).hset(prefix + "1", doc1).get();
+                ((GlideClient) client).hset(prefix + "2", doc2).get();
+                ((GlideClient) client).hset(prefix + "3", doc3).get();
+            }
+            Thread.sleep(1000);
+
+            Object[] result = FT.search(client, indexName, "*", FTSearchOptions.builder().build()).get();
+            assertEquals(3L, result[0]);
+            @SuppressWarnings("unchecked")
+            Map<GlideString, Object> resultMap = (Map<GlideString, Object>) result[1];
+            assertEquals(3, resultMap.size());
+        } finally {
+            FT.dropindex(client, indexName).get();
+        }
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void ft_search_vector_range_yield_distance_as(BaseClient client) {
+        Assumptions.assumeTrue(
+                capability, "search module present but pre-1.3 (INKEYS probe rejected it)");
+
+        String prefix = "{ft-vecrange-" + UUID.randomUUID() + "}:";
+        String indexName = prefix + "index";
+        FieldInfo vecField =
+                new FieldInfo(
+                        "vec", VectorFieldFlat.builder(DistanceMetric.L2, 2).type(VectorType.FLOAT32).build());
+        assertEquals(
+                OK,
+                FT.create(
+                                client,
+                                indexName,
+                                new FieldInfo[] {vecField},
+                                FTCreateOptions.builder()
+                                        .dataType(DataType.HASH)
+                                        .prefixes(new String[] {prefix})
+                                        .build())
+                        .get());
+        try {
+            // a single point at the origin, so a VECTOR_RANGE query centered on the origin
+            // computes a distance of exactly 0.0.
+            Map<GlideString, GlideString> fields = new HashMap<>();
+            fields.put(gs("vec"), gs(packVector(0.0f, 0.0f)));
+            String key = prefix + "0";
+            if (client instanceof GlideClusterClient) {
+                ((GlideClusterClient) client).hset(gs(key), fields).get();
+            } else {
+                ((GlideClient) client).hset(gs(key), fields).get();
+            }
+            Thread.sleep(1000);
+
+            byte[] queryBlob = packVector(0.0f, 0.0f);
+            Map<GlideString, GlideString> params = new HashMap<>();
+            params.put(gs("blob"), gs(queryBlob));
+            params.put(gs("r"), gs("0"));
+            Object[] result =
+                    FT.search(
+                                    client,
+                                    indexName,
+                                    "@vec:[VECTOR_RANGE $r $blob]=>{$yield_distance_as: dist}",
+                                    FTSearchOptions.builder().params(params).addReturnField("dist").build())
+                            .get();
+            assertEquals(1L, result[0]);
+            @SuppressWarnings("unchecked")
+            Map<GlideString, Object> resultMap = (Map<GlideString, Object>) result[1];
+            assertTrue(resultMap.containsKey(gs(key)));
+            @SuppressWarnings("unchecked")
+            Map<GlideString, GlideString> matchedFields =
+                    (Map<GlideString, GlideString>) resultMap.get(gs(key));
+            assertEquals(0.0, Double.parseDouble(matchedFields.get(gs("dist")).toString()), 0.0001);
+        } finally {
+            FT.dropindex(client, indexName).get();
+        }
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void ft_aggregate_sortby_adjacent_limit_widens_retained_rows(BaseClient client) {
+        Assumptions.assumeTrue(
+                capability, "search module present but pre-1.3 (INKEYS probe rejected it)");
+
+        String prefix = "{ft-sortby-limit-" + UUID.randomUUID() + "}:";
+        String indexName = prefix + "index";
+        assertEquals(
+                OK,
+                FT.create(
+                                client,
+                                indexName,
+                                new FieldInfo[] {new FieldInfo("n", new NumericField(true))},
+                                FTCreateOptions.builder()
+                                        .dataType(DataType.HASH)
+                                        .prefixes(new String[] {prefix})
+                                        .build())
+                        .get());
+        try {
+            for (int i = 1; i <= 20; i++) {
+                Map<String, String> fields = new HashMap<>();
+                fields.put("n", Integer.toString(i));
+                if (client instanceof GlideClusterClient) {
+                    ((GlideClusterClient) client).hset(prefix + "d" + i, fields).get();
+                } else {
+                    ((GlideClient) client).hset(prefix + "d" + i, fields).get();
+                }
+            }
+            Thread.sleep(1000);
+
+            String level = getEmulateReleaseLevel(client);
+            boolean legacy = checkVersionLt(level, "1.3.0");
+
+            FTAggregateOptions.SortBy sortAsc =
+                    new FTAggregateOptions.SortBy(
+                            new FTAggregateOptions.SortBy.SortProperty[] {
+                                new FTAggregateOptions.SortBy.SortProperty(
+                                        "@n", FTAggregateOptions.SortBy.SortOrder.ASC)
+                            });
+            FTAggregateOptions.SortBy sortMax5 =
+                    new FTAggregateOptions.SortBy(
+                            new FTAggregateOptions.SortBy.SortProperty[] {
+                                new FTAggregateOptions.SortBy.SortProperty(
+                                        "@n", FTAggregateOptions.SortBy.SortOrder.ASC)
+                            },
+                            5);
+
+            // SORTBY, no MAX, no LIMIT -> the SORTBY default of 10 rows.
+            Map<GlideString, Object>[] resultNoLimit =
+                    FT.aggregate(
+                                    client, indexName, "*", FTAggregateOptions.builder().addClause(sortAsc).build())
+                            .get();
+            assertEquals(10, resultNoLimit.length);
+
+            // SORTBY + LIMIT 0 15, adjacent -> the 1.3 fix raises the retained window to 15 rows;
+            // below 1.3.0, the adjacent LIMIT does not widen SORTBY's own default-10 retention.
+            Map<GlideString, Object>[] resultSortbyThenLimit =
+                    FT.aggregate(
+                                    client,
+                                    indexName,
+                                    "*",
+                                    FTAggregateOptions.builder()
+                                            .addClause(sortAsc)
+                                            .addClause(new FTAggregateOptions.Limit(0, 15))
+                                            .build())
+                            .get();
+            assertEquals(legacy ? 10 : 15, resultSortbyThenLimit.length);
+
+            // SORTBY MAX 5 + LIMIT 0 12, adjacent -> the 1.3 fix lets LIMIT outrank MAX; below
+            // 1.3.0, SORTBY's own MAX 5 still wins.
+            Map<GlideString, Object>[] resultMaxThenLimit =
+                    FT.aggregate(
+                                    client,
+                                    indexName,
+                                    "*",
+                                    FTAggregateOptions.builder()
+                                            .addClause(sortMax5)
+                                            .addClause(new FTAggregateOptions.Limit(0, 12))
+                                            .build())
+                            .get();
+            assertEquals(legacy ? 5 : 12, resultMaxThenLimit.length);
+
+            // LIMIT 0 15 THEN SORTBY -- either side of the pair counts as adjacent.
+            Map<GlideString, Object>[] resultLimitThenSortby =
+                    FT.aggregate(
+                                    client,
+                                    indexName,
+                                    "*",
+                                    FTAggregateOptions.builder()
+                                            .addClause(new FTAggregateOptions.Limit(0, 15))
+                                            .addClause(sortAsc)
+                                            .build())
+                            .get();
+            assertEquals(legacy ? 10 : 15, resultLimitThenSortby.length);
+
+            // SORTBY + GROUPBY + LIMIT 0 15 -- GROUPBY sits between SORTBY and LIMIT, so the
+            // LIMIT is not adjacent and must NOT widen SORTBY's default-10 retention, on either
+            // branch.
+            Map<GlideString, Object>[] resultGroupByBetween =
+                    FT.aggregate(
+                                    client,
+                                    indexName,
+                                    "*",
+                                    FTAggregateOptions.builder()
+                                            .addClause(sortAsc)
+                                            .addClause(
+                                                    new FTAggregateOptions.GroupBy(
+                                                            new String[] {"@n"}, new FTAggregateOptions.GroupBy.Reducer[0]))
+                                            .addClause(new FTAggregateOptions.Limit(0, 15))
+                                            .build())
+                            .get();
+            assertEquals(10, resultGroupByBetween.length);
+        } finally {
+            FT.dropindex(client, indexName).get();
+        }
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void ft_create_float16_bfloat16_vector(BaseClient client) {
         Assumptions.assumeTrue(
                 capability, "search module present but pre-1.3 (INKEYS probe rejected it)");
 
-        String float16IndexName = "float16_idx_" + UUID.randomUUID();
-        FieldInfo float16VectorField =
-                new FieldInfo(
-                        "vec", VectorFieldFlat.builder(DistanceMetric.L2, 2).type(VectorType.FLOAT16).build());
-        assertEquals(
-                OK,
-                FT.create(
-                                client,
-                                float16IndexName,
-                                new FieldInfo[] {float16VectorField},
-                                FTCreateOptions.builder().dataType(DataType.HASH).build())
-                        .get());
-        FT.dropindex(client, float16IndexName).get();
+        runFloat16Bfloat16KnnQuery(
+                client,
+                "{ft-float16-" + UUID.randomUUID() + "}:",
+                VectorType.FLOAT16,
+                VectorSearch13Tests::packFloat16);
+        runFloat16Bfloat16KnnQuery(
+                client,
+                "{ft-bfloat16-" + UUID.randomUUID() + "}:",
+                VectorType.BFLOAT16,
+                VectorSearch13Tests::packBfloat16);
+    }
 
-        String bfloat16IndexName = "bfloat16_idx_" + UUID.randomUUID();
-        FieldInfo bfloat16VectorField =
+    /** Packs a single IEEE 754 half-precision (FLOAT16) float, little-endian. */
+    private static byte[] packFloat16(float value) {
+        int bits = Float.floatToIntBits(value);
+        int sign = (bits >>> 16) & 0x8000;
+        int exponent = ((bits >>> 23) & 0xff) - 127 + 15;
+        int mantissa = (bits >>> 13) & 0x3ff;
+        int half = sign | (Math.max(0, Math.min(31, exponent)) << 10) | mantissa;
+        return new byte[] {(byte) (half & 0xff), (byte) ((half >>> 8) & 0xff)};
+    }
+
+    /**
+     * Packs a single BFLOAT16 float, little-endian: BFLOAT16 is simply the upper 16 bits of an IEEE
+     * 754 single-precision (FLOAT32) float, so truncation (no rounding) is exact for the binary-power
+     * test values this helper is used with.
+     */
+    private static byte[] packBfloat16(float value) {
+        int bits = Float.floatToIntBits(value);
+        int upper16 = bits >>> 16;
+        return new byte[] {(byte) (upper16 & 0xff), (byte) ((upper16 >>> 8) & 0xff)};
+    }
+
+    /**
+     * Creates a FLAT vector index of the given type, seeds 3 points at known L2 distances (0, 1, 4
+     * from the origin), runs a real KNN query, and asserts the actual nearest neighbor is returned
+     * with a 0.0 score -- not just that FT.CREATE/FT.DROPINDEX accept the type.
+     */
+    @SneakyThrows
+    private static void runFloat16Bfloat16KnnQuery(
+            BaseClient client,
+            String prefix,
+            VectorType vectorType,
+            java.util.function.Function<Float, byte[]> encode) {
+        String indexName = prefix + "index";
+        FieldInfo vectorField =
                 new FieldInfo(
-                        "vec", VectorFieldFlat.builder(DistanceMetric.L2, 2).type(VectorType.BFLOAT16).build());
+                        "vec", VectorFieldFlat.builder(DistanceMetric.L2, 2).type(vectorType).build());
         assertEquals(
                 OK,
                 FT.create(
                                 client,
-                                bfloat16IndexName,
-                                new FieldInfo[] {bfloat16VectorField},
-                                FTCreateOptions.builder().dataType(DataType.HASH).build())
+                                indexName,
+                                new FieldInfo[] {vectorField},
+                                FTCreateOptions.builder()
+                                        .dataType(DataType.HASH)
+                                        .prefixes(new String[] {prefix})
+                                        .build())
                         .get());
-        FT.dropindex(client, bfloat16IndexName).get();
+        try {
+            float[][] points = {{0.0f, 0.0f}, {1.0f, 0.0f}, {2.0f, 0.0f}};
+            for (int i = 0; i < points.length; i++) {
+                byte[] packed = packTwoHalfWidthFloats(encode, points[i][0], points[i][1]);
+                String key = prefix + i;
+                Map<GlideString, GlideString> hashFields = new HashMap<>();
+                hashFields.put(gs("vec"), gs(packed));
+                if (client instanceof GlideClusterClient) {
+                    ((GlideClusterClient) client).hset(gs(key), hashFields).get();
+                } else {
+                    ((GlideClient) client).hset(gs(key), hashFields).get();
+                }
+            }
+            Thread.sleep(1000);
+
+            byte[] queryBlob = packTwoHalfWidthFloats(encode, 1.0f, 0.0f);
+            String query = "*=>[KNN 1 @vec $blob]";
+            Map<GlideString, GlideString> params = new HashMap<>();
+            params.put(gs("blob"), gs(queryBlob));
+            FTSearchOptions options =
+                    FTSearchOptions.builder().params(params).addReturnField("__vec_score").build();
+            Object[] result = FT.search(client, indexName, query, options).get();
+            assertEquals(1L, result[0]);
+            @SuppressWarnings("unchecked")
+            Map<GlideString, Object> resultMap = (Map<GlideString, Object>) result[1];
+            GlideString matchedKey = gs(prefix + "1");
+            assertTrue(resultMap.containsKey(matchedKey), "expected " + matchedKey + " in " + resultMap);
+            @SuppressWarnings("unchecked")
+            Map<GlideString, GlideString> matchedFields =
+                    (Map<GlideString, GlideString>) resultMap.get(matchedKey);
+            assertEquals(
+                    0.0, Double.parseDouble(matchedFields.get(gs("__vec_score")).toString()), 0.0001);
+        } finally {
+            FT.dropindex(client, indexName).get();
+        }
+    }
+
+    /** Packs 2 half-width (FLOAT16/BFLOAT16) floats little-endian, using the given encoder. */
+    private static byte[] packTwoHalfWidthFloats(
+            java.util.function.Function<Float, byte[]> encode, float x, float y) {
+        byte[] xBytes = encode.apply(x);
+        byte[] yBytes = encode.apply(y);
+        byte[] result = new byte[xBytes.length + yBytes.length];
+        System.arraycopy(xBytes, 0, result, 0, xBytes.length);
+        System.arraycopy(yBytes, 0, result, xBytes.length, yBytes.length);
+        return result;
     }
 
     @SneakyThrows
@@ -493,35 +810,56 @@ public class VectorSearch13Tests {
         Assumptions.assumeTrue(
                 capability, "search module present but pre-1.3 (INKEYS probe rejected it)");
 
-        String indexName = "parity_idx_" + UUID.randomUUID();
+        String prefix = "{" + UUID.randomUUID() + "}:";
+        String indexName = prefix + "parity_idx";
         FieldInfo titleField =
                 new FieldInfo("title", new TextField(false, null, false, false, true, true));
         FieldInfo boostField = new FieldInfo("boost", new NumericField());
+        FieldInfo ageField = new FieldInfo("age", new NumericField());
 
         assertEquals(
                 OK,
                 FT.create(
                                 client,
                                 indexName,
-                                new FieldInfo[] {titleField, boostField},
+                                new FieldInfo[] {titleField, boostField, ageField},
                                 FTCreateOptions.builder()
                                         .dataType(DataType.HASH)
-                                        .filter("@title != ''")
+                                        .prefixes(new String[] {prefix})
+                                        .filter("@age > 18")
                                         .scoreField("boost")
                                         .noHighlight(true)
                                         .build())
                         .get());
 
         try {
-            Map<String, String> fields = new HashMap<>();
-            fields.put("title", "hello");
-            fields.put("boost", "5");
+            Map<String, String> adultFields = new HashMap<>();
+            adultFields.put("title", "hello");
+            adultFields.put("boost", "5");
+            adultFields.put("age", "25");
+            Map<String, String> minorFields = new HashMap<>();
+            minorFields.put("title", "hello");
+            minorFields.put("boost", "5");
+            minorFields.put("age", "10");
+            String adultKey = prefix + "adult";
+            String minorKey = prefix + "minor";
             if (client instanceof GlideClusterClient) {
-                ((GlideClusterClient) client).hset("parity:1", fields).get();
+                ((GlideClusterClient) client).hset(adultKey, adultFields).get();
+                ((GlideClusterClient) client).hset(minorKey, minorFields).get();
             } else {
-                ((GlideClient) client).hset("parity:1", fields).get();
+                ((GlideClient) client).hset(adultKey, adultFields).get();
+                ((GlideClient) client).hset(minorKey, minorFields).get();
             }
             Thread.sleep(1000);
+
+            // FILTER excludes "minor" (age 10) from the index even though its key matches the
+            // PREFIX; only "adult" (age 25) is indexed and returned.
+            Object[] searchResult =
+                    FT.search(client, indexName, "*", FTSearchOptions.builder().nocontent().build()).get();
+            assertEquals(1L, searchResult[0]);
+            @SuppressWarnings("unchecked")
+            Map<GlideString, Object> searchResultMap = (Map<GlideString, Object>) searchResult[1];
+            assertEquals(java.util.Collections.singleton(gs(adultKey)), searchResultMap.keySet());
 
             Map<String, Object> info = FT.info(client, indexName).get();
             assertEquals(indexName, info.get("index_name").toString());
@@ -535,6 +873,134 @@ public class VectorSearch13Tests {
             } else {
                 assertEquals(null, scoreField);
             }
+        } finally {
+            FT.dropindex(client, indexName).get();
+        }
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void ft_create_score_field_affects_ranking(BaseClient client) {
+        Assumptions.assumeTrue(
+                capability, "search module present but pre-1.3 (INKEYS probe rejected it)");
+
+        String prefix = "{ft-score-field-" + UUID.randomUUID() + "}:";
+        String indexName = prefix + "index";
+        assertEquals(
+                OK,
+                FT.create(
+                                client,
+                                indexName,
+                                new FieldInfo[] {new FieldInfo("title", new TextField())},
+                                FTCreateOptions.builder()
+                                        .dataType(DataType.HASH)
+                                        .prefixes(new String[] {prefix})
+                                        .scoreField("boost")
+                                        .build())
+                        .get());
+        try {
+            String lowKey = prefix + "low";
+            String highKey = prefix + "high";
+            Map<String, String> lowFields = new HashMap<>();
+            lowFields.put("title", "hello world");
+            lowFields.put("boost", "1.0");
+            Map<String, String> highFields = new HashMap<>();
+            highFields.put("title", "hello world");
+            highFields.put("boost", "100.0");
+            if (client instanceof GlideClusterClient) {
+                ((GlideClusterClient) client).hset(lowKey, lowFields).get();
+                ((GlideClusterClient) client).hset(highKey, highFields).get();
+            } else {
+                ((GlideClient) client).hset(lowKey, lowFields).get();
+                ((GlideClient) client).hset(highKey, highFields).get();
+            }
+            Thread.sleep(1000);
+
+            Object[] result =
+                    FT.search(client, indexName, "hello", FTSearchOptions.builder().withScores().build())
+                            .get();
+            assertEquals(2L, result[0]);
+            @SuppressWarnings("unchecked")
+            Map<GlideString, Object> resultMap = (Map<GlideString, Object>) result[1];
+            // the result map preserves the server's own ranking order; the high-boost document
+            // must rank first.
+            List<GlideString> keysInOrder = new ArrayList<>(resultMap.keySet());
+            assertEquals(gs(highKey), keysInOrder.get(0));
+
+            double highScore = Double.parseDouble(((Object[]) resultMap.get(gs(highKey)))[0].toString());
+            double lowScore = Double.parseDouble(((Object[]) resultMap.get(gs(lowKey)))[0].toString());
+            assertTrue(
+                    highScore > lowScore,
+                    "the high-boost document must score strictly higher: high="
+                            + highScore
+                            + " low="
+                            + lowScore);
+        } finally {
+            FT.dropindex(client, indexName).get();
+        }
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void ft_create_sortable_unf(BaseClient client) {
+        Assumptions.assumeTrue(
+                capability, "search module present but pre-1.3 (INKEYS probe rejected it)");
+
+        String prefix = "{ft-unf-" + UUID.randomUUID() + "}:";
+        String indexName = prefix + "index";
+        FieldInfo titleField =
+                new FieldInfo("title", new TextField(false, null, false, false, true, true));
+
+        assertEquals(
+                OK,
+                FT.create(
+                                client,
+                                indexName,
+                                new FieldInfo[] {titleField},
+                                FTCreateOptions.builder()
+                                        .dataType(DataType.HASH)
+                                        .prefixes(new String[] {prefix})
+                                        .build())
+                        .get());
+        try {
+            Map<String, Object> info = FT.info(client, indexName).get();
+            Object attributesRaw = info.get("attributes");
+            Object attribute0 = ((Object[]) attributesRaw)[0];
+            assertEquals("1", String.valueOf(readMapField(attribute0, "SORTABLE")));
+            assertEquals("1", String.valueOf(readMapField(attribute0, "UNF")));
+
+            String lowerKey = prefix + "1";
+            String upperKey = prefix + "2";
+            Map<String, String> lowerFields = new HashMap<>();
+            lowerFields.put("title", "apple");
+            Map<String, String> upperFields = new HashMap<>();
+            upperFields.put("title", "Banana");
+            if (client instanceof GlideClusterClient) {
+                ((GlideClusterClient) client).hset(lowerKey, lowerFields).get();
+                ((GlideClusterClient) client).hset(upperKey, upperFields).get();
+            } else {
+                ((GlideClient) client).hset(lowerKey, lowerFields).get();
+                ((GlideClient) client).hset(upperKey, upperFields).get();
+            }
+            Thread.sleep(1000);
+
+            Object[] result =
+                    FT.search(
+                                    client,
+                                    indexName,
+                                    "*",
+                                    FTSearchOptions.builder().sortBy("title", FTSearchOptions.SortOrder.ASC).build())
+                            .get();
+            @SuppressWarnings("unchecked")
+            Map<GlideString, Object> resultMap = (Map<GlideString, Object>) result[1];
+            List<GlideString> orderedKeys = new ArrayList<>(resultMap.keySet());
+            // ASCII order: uppercase 'B' (0x42) sorts before lowercase 'a' (0x61), matching
+            // Python's test_ft_create_sortable_unf. Mirrors Python's documented finding that UNF
+            // is parsed/stored/round-tripped but does not change observed SORTBY order on this
+            // engine build.
+            assertEquals(Arrays.asList(gs(upperKey), gs(lowerKey)), orderedKeys);
         } finally {
             FT.dropindex(client, indexName).get();
         }
@@ -616,6 +1082,36 @@ public class VectorSearch13Tests {
             assertEquals(Arrays.asList("10", "30"), priceStrings);
 
             assertEquals("30", row.get(gs("max_price")).toString());
+
+            // RANDOM_SAMPLE with size (2) < group count (3): returns at most `size` sampled
+            // "price" values, exactly 2 here (a server that ignored `size` entirely would still
+            // pass an unbounded check), and every sampled value must be a genuine member of the
+            // group's population ("10" or "30"), not an invented value.
+            Object[] cappedSample = (Object[]) row.get(gs("sample"));
+            assertEquals(2, cappedSample.length);
+            Set<String> possiblePrices = new HashSet<>(Arrays.asList("10", "30"));
+            for (Object sampledPrice : cappedSample) {
+                assertTrue(
+                        possiblePrices.contains(sampledPrice.toString()),
+                        "sampled value " + sampledPrice + " is not a member of the group's population");
+            }
+
+            // RANDOM_SAMPLE with size (10) >= group count (3): every raw value is included (not
+            // deduped, unlike TOLIST), so the sample length equals the group's full record count.
+            FTAggregateOptions.GroupBy.Reducer randomSampleUnbounded =
+                    FTAggregateOptions.GroupBy.Reducer.randomSample("@price", 10, "sample");
+            FTAggregateOptions unboundedOptions =
+                    FTAggregateOptions.builder()
+                            .addClause(
+                                    new FTAggregateOptions.GroupBy(
+                                            new String[] {"@category"},
+                                            new FTAggregateOptions.GroupBy.Reducer[] {randomSampleUnbounded}))
+                            .build();
+            Map<GlideString, Object>[] unboundedResult =
+                    FT.aggregate(client, indexName, "*", unboundedOptions).get();
+            assertEquals(1, unboundedResult.length);
+            Object[] unboundedSample = (Object[]) unboundedResult[0].get(gs("sample"));
+            assertEquals(3, unboundedSample.length);
         } finally {
             FT.dropindex(client, indexName).get();
         }
@@ -754,7 +1250,7 @@ public class VectorSearch13Tests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getResp2Clients")
     public void ft_search_with_scores_and_scorer_resp2(BaseClient client) {
-        // RESP2 coverage (M4) for scoring: the same WITHSCORES+SCORER shape as
+        // RESP2 coverage for scoring: the same WITHSCORES+SCORER shape as
         // ft_search_with_scores_and_scorer, run over a RESP2 client to confirm glide-core's
         // conversion of this reply shape is unaffected by protocol version.
         ft_search_with_scores_and_scorer(client);
@@ -1081,7 +1577,7 @@ public class VectorSearch13Tests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getResp2Clients")
     public void ft_aggregate_typed_cursor_paged_to_exhaustion_resp2(BaseClient client) {
-        // RESP2 coverage (M4) for cursors: the same WITHCURSOR paging shape as
+        // RESP2 coverage for cursors: the same WITHCURSOR paging shape as
         // ft_aggregate_typed_cursor_paged_to_exhaustion, run over a RESP2 client.
         ft_aggregate_typed_cursor_paged_to_exhaustion(client);
     }
@@ -1366,7 +1862,7 @@ public class VectorSearch13Tests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getResp2Clients")
     public void ft_hybrid_basic_query_resp2(BaseClient client) {
-        // RESP2 coverage (M4) for FT.HYBRID: the same basic-query shape as ft_hybrid_basic_query,
+        // RESP2 coverage for FT.HYBRID: the same basic-query shape as ft_hybrid_basic_query,
         // run over a RESP2 client to confirm glide-core's conversion of FT.HYBRID's reply is
         // unaffected by protocol version.
         ft_hybrid_basic_query(client);
