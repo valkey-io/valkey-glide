@@ -79,7 +79,7 @@ func (b *BaseBatch[T]) Set(key string, value string) *T {
 	return b.addCmdAndTypeChecker(C.Set, []string{key, value}, reflect.String, false)
 }
 
-// Sets the given key with the given value using the given options.
+// SetWithOptions sets the value of a key with the given options.
 //
 // See [valkey.io] for details.
 //
@@ -91,10 +91,8 @@ func (b *BaseBatch[T]) Set(key string, value string) *T {
 //
 // Command Response:
 //
-//	If the value is successfully set, returns "OK".
-//	If value isn't set because of ConditionalSet.OnlyIfExists or ConditionalSet.OnlyIfDoesNotExist
-//	or ConditionalSet.OnlyIfEquals conditions, returns `nil`.
-//	If SetOptions.returnOldValue is set, returns the old value as a String.
+//	If [options.SetOptions.ReturnOldValue] is not set, "OK" if the key was set, or `nil` if the condition was not met.
+//	If it is set, the old value stored at key, or `nil` if key did not exist.
 //
 // [valkey.io]: https://valkey.io/commands/set/
 func (b *BaseBatch[T]) SetWithOptions(key string, value string, options options.SetOptions) *T {

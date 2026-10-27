@@ -21,7 +21,7 @@ type SetOptions struct {
 	// If ConditionalSet is not set the value will be set regardless of prior value existence. If value isn't set because of
 	// the condition, [api.StringCommands.SetWithOptions] will return a zero-value string ("").
 	ConditionalSet constants.ConditionalSet
-	// Value to compare when [SetOptions.ConditionalSet] is set to `OnlyIfEquals`.
+	// Value to compare when [SetOptions.ConditionalSet] is set to [constants.OnlyIfEquals] or [constants.OnlyIfNotEquals].
 	ComparisonValue string
 	// Set command to return the old value stored at the given key, or a zero-value string ("") if the key did not exist. An
 	// error is returned and [api.StringCommands.SetWithOptions] is aborted if the value stored at key is not a string.
@@ -40,14 +40,15 @@ func NewSetOptions() *SetOptions {
 //
 // This method overrides any previously set [SetOptions.ConditionalSet] and [SetOptions.ComparisonValue].
 //
-// Deprecated: Use [SetOptions.SetOnlyIfExists], [SetOptions.SetOnlyIfDoesNotExist], or [SetOptions.SetOnlyIfEquals] instead.
+// Deprecated: Use [SetOptions.SetOnlyIfExists], [SetOptions.SetOnlyIfDoesNotExist], [SetOptions.SetOnlyIfEquals], or
+// [SetOptions.SetOnlyIfNotEquals] instead.
 func (setOptions *SetOptions) SetConditionalSet(conditionalSet constants.ConditionalSet) *SetOptions {
 	setOptions.ConditionalSet = conditionalSet
 	setOptions.ComparisonValue = ""
 	return setOptions
 }
 
-// Sets the condition to [SetOptions.OnlyIfExists] for setting the value. The key
+// Sets the condition to [constants.OnlyIfExists] for setting the value. The key
 // will be set if it already exists.
 //
 // This method overrides any previously set [SetOptions.ConditionalSet] and [SetOptions.ComparisonValue].
@@ -57,7 +58,7 @@ func (setOptions *SetOptions) SetOnlyIfExists() *SetOptions {
 	return setOptions
 }
 
-// Sets the condition to [SetOptions.OnlyIfDoesNotExist] for setting the value. The key
+// Sets the condition to [constants.OnlyIfDoesNotExist] for setting the value. The key
 // will not be set if it already exists.
 //
 // This method overrides any previously set [SetOptions.ConditionalSet] and [SetOptions.ComparisonValue].
@@ -67,14 +68,26 @@ func (setOptions *SetOptions) SetOnlyIfDoesNotExist() *SetOptions {
 	return setOptions
 }
 
-// Sets the condition to [SetOptions.OnlyIfEquals] for setting the value. The key
-// will be set if the provided comparison value matches the existing value.
+// Sets the condition to [constants.OnlyIfEquals] for setting the value. The key
+// will be set if it exists and the provided comparison value matches the existing value.
 //
 // This method overrides any previously set [SetOptions.ConditionalSet] and [SetOptions.ComparisonValue].
 //
-// since Valkey 8.1 and above.
+// Since Valkey 8.1.0.
 func (setOptions *SetOptions) SetOnlyIfEquals(comparisonValue string) *SetOptions {
 	setOptions.ConditionalSet = constants.OnlyIfEquals
+	setOptions.ComparisonValue = comparisonValue
+	return setOptions
+}
+
+// Sets the condition to [constants.OnlyIfNotEquals] for setting the value. The key
+// will be set if it does not exist or if the provided comparison value does not match the existing value.
+//
+// This method overrides any previously set [SetOptions.ConditionalSet] and [SetOptions.ComparisonValue].
+//
+// Since Valkey 9.2.0.
+func (setOptions *SetOptions) SetOnlyIfNotEquals(comparisonValue string) *SetOptions {
+	setOptions.ConditionalSet = constants.OnlyIfNotEquals
 	setOptions.ComparisonValue = comparisonValue
 	return setOptions
 }
@@ -94,7 +107,7 @@ func (opts *SetOptions) ToArgs() ([]string, error) {
 	var err error
 	if opts.ConditionalSet != "" {
 		args = append(args, string(opts.ConditionalSet))
-		if opts.ConditionalSet == constants.OnlyIfEquals {
+		if opts.ConditionalSet == constants.OnlyIfEquals || opts.ConditionalSet == constants.OnlyIfNotEquals {
 			args = append(args, opts.ComparisonValue)
 		}
 	}

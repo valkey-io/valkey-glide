@@ -576,6 +576,58 @@ func CreateStringTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer str
 		)
 	}
 
+	// TODO #5368: Compare versions semantically, not as strings.
+	if serverVer >= "8.1.0" {
+		atomicKey2 := atomicKeyPrefix + "4-" + uuid.NewString()
+
+		batch.Set(atomicKey2, "value")
+		testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "Set(atomicKey2, value)"})
+
+		batch.SetWithOptions(atomicKey2, "other", *options.NewSetOptions().SetOnlyIfEquals("other"))
+		testData = append(
+			testData,
+			CommandTestData{
+				ExpectedResponse: nil,
+				TestName:         "SetWithOptions(atomicKey2, other, OnlyIfEquals(other)) value not equal",
+			},
+		)
+
+		batch.SetWithOptions(atomicKey2, "other", *options.NewSetOptions().SetOnlyIfEquals("value"))
+		testData = append(
+			testData,
+			CommandTestData{
+				ExpectedResponse: "OK",
+				TestName:         "SetWithOptions(atomicKey2, other, OnlyIfEquals(value)) value equal",
+			},
+		)
+	}
+
+	// TODO #5368: Compare versions semantically, not as strings.
+	if serverVer >= "9.2.0" {
+		atomicKey3 := atomicKeyPrefix + "5-" + uuid.NewString()
+
+		batch.Set(atomicKey3, "value")
+		testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "Set(atomicKey3, value)"})
+
+		batch.SetWithOptions(atomicKey3, "other", *options.NewSetOptions().SetOnlyIfNotEquals("value"))
+		testData = append(
+			testData,
+			CommandTestData{
+				ExpectedResponse: nil,
+				TestName:         "SetWithOptions(atomicKey3, other, OnlyIfNotEquals(value)) value equal",
+			},
+		)
+
+		batch.SetWithOptions(atomicKey3, "other", *options.NewSetOptions().SetOnlyIfNotEquals("other"))
+		testData = append(
+			testData,
+			CommandTestData{
+				ExpectedResponse: "OK",
+				TestName:         "SetWithOptions(atomicKey3, other, OnlyIfNotEquals(other)) value not equal",
+			},
+		)
+	}
+
 	batch.GetDel(atomicKey1)
 	testData = append(testData, CommandTestData{ExpectedResponse: "7", TestName: "GetDel(atomicKey1)"})
 
