@@ -528,6 +528,31 @@ def test_a_collected_region_keeps_memory_the_fabric_still_holds():
     assert not _RETAINED_RDMA_MEMORY.holds(memory)
 
 
+@pytest.mark.parametrize("fabric_holds", [False, True], ids=["released", "held"])
+def test_a_collected_region_is_freed_when_warnings_are_errors(fabric_holds):
+    # Under `-W error` the warning raises, so the free has to happen before it.
+    client = _offline_client()
+    raw = _FakeRegion()
+    hold = {"released": False}
+    if fabric_holds:
+        client._lib.holds[id(raw)] = hold
+    memory = bytearray(REGION_BYTES)
+    region = RdmaRegion(client, memory, raw)
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", ResourceWarning)
+        # Called directly, so the raised warning reaches the test instead of
+        # being reported and dropped by the garbage collector.
+        with pytest.raises(ResourceWarning, match="without being closed"):
+            region._finalizer()
+
+    assert client._lib.freed == [raw]
+    assert _RETAINED_RDMA_MEMORY.holds(memory) is fabric_holds
+    hold["released"] = True
+    _RETAINED_RDMA_MEMORY.release_what_is_free()
+    assert not _RETAINED_RDMA_MEMORY.holds(memory)
+
+
 def test_a_region_collected_while_its_keeper_is_locked_does_not_hang():
     # The cycle collector can run during any allocation, including one made
     # while this thread holds the keeper's lock. A finalizer that took the lock

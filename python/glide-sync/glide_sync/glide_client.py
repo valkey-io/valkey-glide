@@ -268,15 +268,17 @@ def _finalize_rdma_region(lib, ffi, region, memory, view, span) -> None:
     Unlike :func:`_free_rdma_region`, this takes no lock: a finalizer can run
     while this thread already holds one, and would then wait on itself.
     """
+    hold = lib.free_rdma_region(region)
+    if hold != ffi.NULL:
+        _RETAINED_RDMA_MEMORY.keep_from_finalizer(lib, hold, memory, view, span)
+    # Last, because a warnings filter can turn the warning into an exception
+    # (`-W error`), which would skip anything after it.
     warnings.warn(
         "an RdmaRegion was garbage-collected without being closed; close it, "
         "or use it in a with block, to release its pinned pages promptly",
         ResourceWarning,
         stacklevel=2,
     )
-    hold = lib.free_rdma_region(region)
-    if hold != ffi.NULL:
-        _RETAINED_RDMA_MEMORY.keep_from_finalizer(lib, hold, memory, view, span)
 
 
 class RdmaRegion:
