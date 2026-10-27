@@ -12,6 +12,7 @@ cluster deployments behave identically.
 import asyncio
 import uuid
 
+import anyio
 import pytest
 from glide import (
     AllNodes,
@@ -439,7 +440,7 @@ class TestAsyncClientPool:
         process-wide pipe registry, stranding its responses past
         request_timeout. Assert the ordinary client draws from the shared
         sequence, keeps its registry slot across a pool borrow/release on the
-        same loop, and still completes a round-trip. ``wait_for`` bounds the
+        same loop, and still completes a round-trip. ``fail_after`` bounds the
         wait so a regression fails instead of hanging.
         """
         # The module-global registry the bug mutated, and the shared id
@@ -447,42 +448,48 @@ class TestAsyncClientPool:
         from glide._ffi_instance import _ASYNC_FFI
         from glide.glide_client import _client_registry
 
-        # Sample the shared sequence before the reader is created. The fix draws
-        # the reader's id from this sequence, so its id must land strictly after
-        # this sample; the pre-fix local counter is unrelated to it and fails
-        # here regardless of suite ordering.
-        seq_before = _ASYNC_FFI.lib.glide_allocate_client_id()
-
         ReaderClass = GlideClusterClient if cluster_mode else GlideClient
+
+        # Bracket the reader's creation with two samples of the shared sequence:
+        # the fix draws its id from that sequence, so the id must fall strictly
+        # between them. The pre-fix local counter cannot land in that gap, which
+        # makes this fail pre-fix independent of how many clients other tests in
+        # the process (xdist workers) have already created.
+        seq_before = _ASYNC_FFI.lib.glide_allocate_client_id()
         reader = await ReaderClass.create(_get_pool_client_config(cluster_mode))
-        assert reader._pipe_client_id > seq_before
-
-        pool = await AsyncClientPool.create(
-            _get_pool_client_config(cluster_mode),
-            PoolConfig(max_size=1, min_idle=1),
-        )
-        await _wait_for_pool_ready(pool, 1)
-
-        key = _make_key(cluster_mode, "survives")
-
-        async def reader_roundtrip():
-            await reader.set(key, "seeded")
-            assert await reader.get(key) == b"seeded"
-
         try:
-            # Baseline: the reader works and owns its registry slot before any
-            # pool activity.
-            assert _client_registry[reader._pipe_client_id] is reader
-            await asyncio.wait_for(reader_roundtrip(), timeout=10)
+            seq_after = _ASYNC_FFI.lib.glide_allocate_client_id()
+            assert seq_before < reader._pipe_client_id < seq_after
 
-            async with pool.borrow():
-                pass
-            # Borrow released, pool still open. The pooled client's id must not
-            # have displaced the reader in the shared registry.
-            assert _client_registry[reader._pipe_client_id] is reader
-            await asyncio.wait_for(reader_roundtrip(), timeout=10)
+            pool = await AsyncClientPool.create(
+                _get_pool_client_config(cluster_mode),
+                PoolConfig(max_size=1, min_idle=1),
+            )
+            await _wait_for_pool_ready(pool, 1)
+
+            key = _make_key(cluster_mode, "survives")
+
+            async def reader_roundtrip():
+                await reader.set(key, "seeded")
+                assert await reader.get(key) == b"seeded"
+
+            try:
+                # Baseline: the reader works and owns its registry slot before
+                # any pool activity.
+                assert _client_registry[reader._pipe_client_id] is reader
+                with anyio.fail_after(10):
+                    await reader_roundtrip()
+
+                async with pool.borrow():
+                    pass
+                # Borrow released, pool still open. The pooled client's id must
+                # not have displaced the reader in the shared registry.
+                assert _client_registry[reader._pipe_client_id] is reader
+                with anyio.fail_after(10):
+                    await reader_roundtrip()
+            finally:
+                pool.close()
         finally:
-            pool.close()
             await reader.close()
 
 
