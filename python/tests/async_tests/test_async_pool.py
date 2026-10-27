@@ -465,15 +465,15 @@ class TestAsyncClientPool:
                 _get_pool_client_config(cluster_mode),
                 PoolConfig(max_size=1, min_idle=1),
             )
-            await _wait_for_pool_ready(pool, 1)
-
-            key = _make_key(cluster_mode, "survives")
-
-            async def reader_roundtrip():
-                await reader.set(key, "seeded")
-                assert await reader.get(key) == b"seeded"
-
             try:
+                await _wait_for_pool_ready(pool, 1)
+
+                key = _make_key(cluster_mode, "survives")
+
+                async def reader_roundtrip():
+                    await reader.set(key, "seeded")
+                    assert await reader.get(key) == b"seeded"
+
                 # Baseline: the reader works and owns its registry slot before
                 # any pool activity.
                 assert _client_registry[reader._pipe_client_id] is reader
