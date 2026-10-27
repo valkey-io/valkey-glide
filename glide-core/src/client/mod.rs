@@ -3492,7 +3492,7 @@ impl Client {
     ///   untracked during the borrow (`db_maybe_dirty`); a borrow that never sent
     ///   SELECT skips the round-trip. This is the fix for the cluster discard bug: a
     ///   clean db-0 pool no longer sends a `SELECT` the cluster server rejects.
-    ///   Topology-independent — cluster supports multiple databases since Valkey 9.0
+    ///   Topology-independent — cluster supports multiple databases since Valkey 9.0.0
     ///   (`cluster-databases`), so a drift must be undone there too.
     ///
     /// Does not UNSUBSCRIBE: callers must not subscribe on a pooled client (use the

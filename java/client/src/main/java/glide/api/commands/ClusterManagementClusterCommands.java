@@ -134,7 +134,7 @@ public interface ClusterManagementClusterCommands {
      * Returns details about the shards of the cluster.<br>
      * The command will be routed to a random node.
      *
-     * @apiNote Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/cluster-shards/">valkey.io</a> for details.
      * @return An <code>array</code> of maps, where each map represents a shard and contains the
      *     following keys:
@@ -180,7 +180,7 @@ public interface ClusterManagementClusterCommands {
     /**
      * Returns details about the shards of the cluster.
      *
-     * @apiNote Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/cluster-shards/">valkey.io</a> for details.
      * @param route Specifies the routing configuration for the command. The client will route the
      *     command to the nodes defined by <code>route</code>.
@@ -203,7 +203,7 @@ public interface ClusterManagementClusterCommands {
      * Returns information about the TCP links to and from each node in the cluster.<br>
      * The command will be routed to a random node.
      *
-     * @apiNote Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/cluster-links/">valkey.io</a> for details.
      * @return An <code>array</code> of maps, where each map represents a cluster link and contains
      *     the following keys:
@@ -236,7 +236,7 @@ public interface ClusterManagementClusterCommands {
     /**
      * Returns information about the TCP links to and from each node in the cluster.
      *
-     * @apiNote Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/cluster-links/">valkey.io</a> for details.
      * @param route Specifies the routing configuration for the command. The client will route the
      *     command to the nodes defined by <code>route</code>.
@@ -299,7 +299,7 @@ public interface ClusterManagementClusterCommands {
      * more replicas). The shard ID is a unique identifier for this replication group and remains
      * constant even during failovers when the primary role transfers to a replica.
      *
-     * @apiNote Valkey 7.2 and above.
+     * @since Valkey 7.2.0.
      * @see <a href="https://valkey.io/commands/cluster-myshardid/">valkey.io</a> for details.
      * @return A <code>String</code> containing the unique shard identifier of the current node. All
      *     nodes in the same shard (primary and replicas) share the same shard ID.
@@ -319,7 +319,7 @@ public interface ClusterManagementClusterCommands {
      * more replicas). The shard ID is a unique identifier for this replication group and remains
      * constant even during failovers when the primary role transfers to a replica.
      *
-     * @apiNote Valkey 7.2 and above.
+     * @since Valkey 7.2.0.
      * @see <a href="https://valkey.io/commands/cluster-myshardid/">valkey.io</a> for details.
      * @param route Specifies the routing configuration for the command. The client will route the
      *     command to the nodes defined by <code>route</code>.
@@ -448,7 +448,7 @@ public interface ClusterManagementClusterCommands {
      * <p>This command is more efficient than {@link #clusterAddSlots} when assigning multiple
      * contiguous slot ranges, as it uses the CLUSTER ADDSLOTSRANGE command introduced in Valkey 7.0.
      *
-     * @apiNote Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/cluster-addslotsrange/">valkey.io</a> for details.
      * @param slotRanges A 2D array where each sub-array contains two elements: [start_slot, end_slot]
      *     representing an inclusive range of slots to assign. All slots must be between 0-16383 and
@@ -491,7 +491,7 @@ public interface ClusterManagementClusterCommands {
      * <p>This command is more efficient than {@link #clusterDelSlots} when removing multiple
      * contiguous slot ranges, as it uses the CLUSTER DELSLOTSRANGE command introduced in Valkey 7.0.
      *
-     * @apiNote Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/cluster-delslotsrange/">valkey.io</a> for details.
      * @param slotRanges A 2D array where each sub-array contains two elements: [start_slot, end_slot]
      *     representing an inclusive range of slots to remove. All slots must be between 0-16383 and

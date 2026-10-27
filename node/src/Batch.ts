@@ -354,7 +354,6 @@ export class BaseBatch<T extends BaseBatch<T>> {
      * Get the value of `key` and optionally set its expiration. `GETEX` is similar to {@link get}.
      *
      * @see {@link https://valkey.io/commands/getex/|valkey.io} for more details.
-     * @remarks Since Valkey version 6.2.0.
      *
      * @param key - The key to retrieve from the database.
      * @param options - (Optional) set expiriation to the given key.
@@ -440,7 +439,7 @@ export class BaseBatch<T extends BaseBatch<T>> {
      * no action.
      *
      * @see {@link https://valkey.io/commands/copy/|valkey.io} for details.
-     * @remarks Since Valkey version 6.2.0. destinationDB parameter for cluster mode is supported since Valkey 9.0.0 and above
+     * @since Valkey 9.0.0 for cluster client.
      *
      * @param source - The key to the source value.
      * @param destination - The key where the value should be copied to.
@@ -630,7 +629,7 @@ export class BaseBatch<T extends BaseBatch<T>> {
     /**
      * Move `key` from the currently selected database to the database specified by `dbIndex`.
      *
-     * @remarks Move is available for cluster mode since Valkey 9.0.0 and above.
+     * @since Valkey 9.0.0 for cluster client.
      *
      * @see {@link https://valkey.io/commands/move/|valkey.io} for details.
      *
@@ -825,7 +824,6 @@ export class BaseBatch<T extends BaseBatch<T>> {
      * Reads the array of bits representing the string that is held at `key` based on the specified `subcommands`.
      *
      * @see {@link https://valkey.io/commands/bitfield_ro/|valkey.io} for details.
-     * @remarks Since Valkey version 6.0.0.
      *
      * @param key - The key of the string.
      * @param subcommands - The {@link BitFieldGet} subcommands to be performed.
@@ -1056,7 +1054,6 @@ export class BaseBatch<T extends BaseBatch<T>> {
      * Returns a random field name from the hash value stored at `key`.
      *
      * @see {@link https://valkey.io/commands/hrandfield/|valkey.io} for details.
-     * @remarks Since Valkey version 6.2.0.
      *
      * @param key - The key of the hash.
      *
@@ -1091,7 +1088,6 @@ export class BaseBatch<T extends BaseBatch<T>> {
      * Retrieves up to `count` random field names from the hash value stored at `key`.
      *
      * @see {@link https://valkey.io/commands/hrandfield/|valkey.io} for details.
-     * @remarks Since Valkey version 6.2.0.
      *
      * @param key - The key of the hash.
      * @param count - The number of field names to return.
@@ -1110,7 +1106,6 @@ export class BaseBatch<T extends BaseBatch<T>> {
      * value stored at `key`.
      *
      * @see {@link https://valkey.io/commands/hrandfield/|valkey.io} for details.
-     * @remarks Since Valkey version 6.2.0.
      *
      * @param key - The key of the hash.
      * @param count - The number of field names to return.
@@ -1162,7 +1157,7 @@ export class BaseBatch<T extends BaseBatch<T>> {
      *
      * Command Response - The number of fields that were added to the hash.
      *
-     * @since Valkey 9.0.0
+     * @since Valkey 9.0.0.
      * @see https://valkey.io/commands/hsetex/
      */
     public hsetex(
@@ -1217,7 +1212,7 @@ export class BaseBatch<T extends BaseBatch<T>> {
      *     For every field that does not exist in the hash, a null value is returned.
      *     If `key` does not exist, returns an array of null values.
      *
-     * @since Valkey 9.0.0
+     * @since Valkey 9.0.0.
      * @see https://valkey.io/commands/hgetex/
      */
     public hgetex(
@@ -1240,7 +1235,7 @@ export class BaseBatch<T extends BaseBatch<T>> {
      *     null value is returned. If `key` does not exist, returns an array of null values.
      *     The key is deleted automatically when its last field is removed.
      *
-     * @since Valkey 9.1.0
+     * @since Valkey 9.1.0.
      * @see https://valkey.io/commands/hgetdel/
      */
     public hgetdel(key: GlideString, fields: GlideString[]): T {
@@ -1515,7 +1510,6 @@ export class BaseBatch<T extends BaseBatch<T>> {
      * stored at `destination` depending on `whereTo`, see {@link ListDirection}.
      *
      * @see {@link https://valkey.io/commands/lmove/|valkey.io} for details.
-     * @remarks Since Valkey version 6.2.0.
      *
      * @param source - The key to the source list.
      * @param destination - The key to the destination list.
@@ -1545,7 +1539,6 @@ export class BaseBatch<T extends BaseBatch<T>> {
      * @see {@link https://valkey.io/commands/blmove/|valkey.io} for details.
      * @remarks When in cluster mode, both `source` and `destination` must map to the same hash slot.
      * @remarks `BLMOVE` is a client blocking command, see {@link https://glide.valkey.io/how-to/connection-management/#blocking-commands|Valkey GLIDE Documentation} for more details and best practices.
-     * @remarks Since Valkey version 6.2.0.
      *
      * @param source - The key to the source list.
      * @param destination - The key to the destination list.
@@ -1779,7 +1772,7 @@ export class BaseBatch<T extends BaseBatch<T>> {
      * Gets the cardinality of the intersection of all the given sets.
      *
      * @see {@link https://valkey.io/commands/sintercard/|valkey.io} for details.
-     * @remarks Since Valkey version 7.0.0.
+     * @since Valkey 7.0.0.
      *
      * @param keys - The keys of the sets.
      * @param options - (Optional) Additional parameters:
@@ -1878,7 +1871,7 @@ export class BaseBatch<T extends BaseBatch<T>> {
     /** Returns if `member` is a member of the set stored at `key`,
      * or `-1` if `key` does not exist.
      * @see {@link https://valkey.io/commands/sismember/|valkey.io} for details.
-     * @remarks Since Valkey version 9.2.0.
+     * @since Valkey 9.2.0.
      *
      * @param key - The key of the set.
      * @param member - The member to check for existence in the set.
@@ -1896,7 +1889,6 @@ export class BaseBatch<T extends BaseBatch<T>> {
      * Checks whether each member is contained in the members of the set stored at `key`.
      *
      * @see {@link https://valkey.io/commands/smismember/|valkey.io} for details.
-     * @remarks Since Valkey version 6.2.0.
      *
      * @param key - The key of the set to check.
      * @param members - A list of members to check for existence in the set.
@@ -2044,7 +2036,7 @@ export class BaseBatch<T extends BaseBatch<T>> {
      * To get the expiration with millisecond precision, use {@link pexpiretime}.
      *
      * @see {@link https://valkey.io/commands/expiretime/|valkey.io} for details.
-     * @remarks Since Valkey version 7.0.0.
+     * @since Valkey 7.0.0.
      *
      * @param key - The `key` to determine the expiration value of.
      *
@@ -2110,7 +2102,7 @@ export class BaseBatch<T extends BaseBatch<T>> {
      * Returns the absolute Unix timestamp (since January 1, 1970) at which the given `key` will expire, in milliseconds.
      *
      * @see {@link https://valkey.io/commands/pexpiretime/|valkey.io} for details.
-     * @remarks Since Valkey version 7.0.0.
+     * @since Valkey 7.0.0.
      *
      * @param key - The `key` to determine the expiration value of.
      *
@@ -2219,7 +2211,7 @@ export class BaseBatch<T extends BaseBatch<T>> {
      * Returns the cardinality of the intersection of the sorted sets specified by `keys`.
      *
      * @see {@link https://valkey.io/commands/zintercard/|valkey.io} for details.
-     * @remarks Since Valkey version 7.0.0.
+     * @since Valkey 7.0.0.
      *
      * @param keys - The keys of the sorted sets to intersect.
      * @param options - (Optional) Additional parameters:
@@ -2236,7 +2228,6 @@ export class BaseBatch<T extends BaseBatch<T>> {
      * To get the elements with their scores, see {@link zdiffWithScores}.
      *
      * @see {@link https://valkey.io/commands/zdiff/|valkey.io} for details.
-     * @remarks Since Valkey version 6.2.0.
      *
      * @param keys - The keys of the sorted sets.
      *
@@ -2252,7 +2243,6 @@ export class BaseBatch<T extends BaseBatch<T>> {
      * scores.
      *
      * @see {@link https://valkey.io/commands/zdiff/|valkey.io} for details.
-     * @remarks Since Valkey version 6.2.0.
      *
      * @param keys - The keys of the sorted sets.
      *
@@ -2270,7 +2260,6 @@ export class BaseBatch<T extends BaseBatch<T>> {
      * treated as empty sets.
      *
      * @see {@link https://valkey.io/commands/zdiffstore/|valkey.io} for details.
-     * @remarks Since Valkey version 6.2.0.
      *
      * @param destination - The key for the resulting sorted set.
      * @param keys - The keys of the sorted sets to compare.
@@ -2327,7 +2316,6 @@ export class BaseBatch<T extends BaseBatch<T>> {
      * Returns the scores associated with the specified `members` in the sorted set stored at `key`.
      *
      * @see {@link https://valkey.io/commands/zmscore/|valkey.io} for details.
-     * @remarks Since Valkey version 6.2.0.
      *
      * @param key - The key of the sorted set.
      * @param members - A list of members in the sorted set.
@@ -2418,7 +2406,6 @@ export class BaseBatch<T extends BaseBatch<T>> {
      * set is created; if it exists, it's overwritten.
      *
      * @see {@link https://valkey.io/commands/zrangestore/|valkey.io} for details.
-     * @remarks Since Valkey version 6.2.0.
      *
      * @param destination - The key for the destination sorted set.
      * @param source - The key of the source sorted set.
@@ -2447,8 +2434,6 @@ export class BaseBatch<T extends BaseBatch<T>> {
      *
      * @see {@link https://valkey.io/commands/zinterstore/|valkey.io} for details.
      *
-     * @remarks Since Valkey version 6.2.0.
-     *
      * @param destination - The key of the destination sorted set.
      * @param keys - The keys of the sorted sets with possible formats:
      *  - `GlideString[]` - for keys only.
@@ -2474,8 +2459,6 @@ export class BaseBatch<T extends BaseBatch<T>> {
      * To get the scores as well, see {@link zinterWithScores}.
      * To store the result in a key as a sorted set, see {@link zinterStore}.
      *
-     * @remarks Since Valkey version 6.2.0.
-     *
      * @see {@link https://valkey.io/commands/zinter/|valkey.io} for details.
      *
      * @param keys - The keys of the sorted sets.
@@ -2492,8 +2475,6 @@ export class BaseBatch<T extends BaseBatch<T>> {
      * To store the result in a key as a sorted set, see {@link zinterStore}.
      *
      * @see {@link https://valkey.io/commands/zinter/|valkey.io} for details.
-     *
-     * @remarks Since Valkey version 6.2.0.
      *
      * @param keys - The keys of the sorted sets with possible formats:
      *  - `GlideString[]` - for keys only.
@@ -2522,7 +2503,6 @@ export class BaseBatch<T extends BaseBatch<T>> {
      * To store the result in a key as a sorted set, see {@link zunionstore}.
      *
      * @see {@link https://valkey.io/commands/zunion/|valkey.io} for details.
-     * @remarks Since Valkey version 6.2.0.
      *
      * @param keys - The keys of the sorted sets.
      *
@@ -2537,8 +2517,6 @@ export class BaseBatch<T extends BaseBatch<T>> {
      * To get the elements only, see {@link zunion}.
      *
      * @see {@link https://valkey.io/commands/zunion/|valkey.io} for details.
-     *
-     * @remarks Since Valkey version 6.2.0.
      *
      * @param keys - The keys of the sorted sets with possible formats:
      *  - `GlideString[]` - for keys only.
@@ -2663,7 +2641,7 @@ export class BaseBatch<T extends BaseBatch<T>> {
      *
      * @param keys - The keys of the sorted sets.
      * @param timeout - The number of seconds to wait for a blocking operation to complete. A value of
-     *     `0` will block indefinitely. Since Valkey version 6.0.0: timeout is interpreted as a double instead of an integer.
+     *     `0` will block indefinitely.
      *
      * Command Response - An `array` containing the key where the member was popped out, the member, itself, and the member score.
      *     If no member could be popped and the `timeout` expired, returns `null`.
@@ -2701,7 +2679,7 @@ export class BaseBatch<T extends BaseBatch<T>> {
      *
      * @param keys - The keys of the sorted sets.
      * @param timeout - The number of seconds to wait for a blocking operation to complete. A value of
-     *     `0` will block indefinitely. Since 6.0.0: timeout is interpreted as a double instead of an integer.
+     *     `0` will block indefinitely.
      *
      * Command Response - An `array` containing the key where the member was popped out, the member, itself, and the member score.
      *     If no member could be popped and the `timeout` expired, returns `null`.
@@ -2841,7 +2819,7 @@ export class BaseBatch<T extends BaseBatch<T>> {
      * Returns the rank of `member` in the sorted set stored at `key` with its score, where scores are ordered from the lowest to highest.
      *
      * @see {@link https://valkey.io/commands/zrank/|valkey.io} for more details.
-     * @remarks Since Valkey version 7.2.0.
+     * @since Valkey 7.2.0.
      *
      * @param key - The key of the sorted set.
      * @param member - The member whose rank is to be retrieved.
@@ -2875,7 +2853,7 @@ export class BaseBatch<T extends BaseBatch<T>> {
      * score, where scores are ordered from the highest to lowest, starting from `0`.
      *
      * @see {@link https://valkey.io/commands/zrevrank/|valkey.io} for details.
-     * @remarks Since Valkey version 7.2.0.
+     * @since Valkey 7.2.0.
      *
      * @param key - The key of the sorted set.
      * @param member - The member whose rank is to be retrieved.
@@ -3051,11 +3029,11 @@ export class BaseBatch<T extends BaseBatch<T>> {
      * @param key - The key of the stream.
      * @param start - The starting stream entry ID bound for the range.
      *     - Use `value` to specify a stream entry ID.
-     *     - Use `isInclusive: false` to specify an exclusive bounded stream entry ID. This is only available starting with Valkey version 6.2.0.
+     *     - Use `isInclusive: false` to specify an exclusive bounded stream entry ID.
      *     - Use `InfBoundary.NegativeInfinity` to start with the minimum available ID.
      * @param end - The ending stream ID bound for the range.
      *     - Use `value` to specify a stream entry ID.
-     *     - Use `isInclusive: false` to specify an exclusive bounded stream entry ID. This is only available starting with Valkey version 6.2.0.
+     *     - Use `isInclusive: false` to specify an exclusive bounded stream entry ID.
      *     - Use `InfBoundary.PositiveInfinity` to end with the maximum available ID.
      * @param count - An optional argument specifying the maximum count of stream entries to return.
      *     If `count` is not provided, all stream entries in the range will be returned.
@@ -3081,11 +3059,11 @@ export class BaseBatch<T extends BaseBatch<T>> {
      * @param key - The key of the stream.
      * @param end - The ending stream entry ID bound for the range.
      *     - Use `value` to specify a stream entry ID.
-     *     - Use `isInclusive: false` to specify an exclusive bounded stream entry ID. This is only available starting with Valkey version 6.2.0.
+     *     - Use `isInclusive: false` to specify an exclusive bounded stream entry ID.
      *     - Use `InfBoundary.PositiveInfinity` to end with the maximum available ID.
      * @param start - The ending stream ID bound for the range.
      *     - Use `value` to specify a stream entry ID.
-     *     - Use `isInclusive: false` to specify an exclusive bounded stream entry ID. This is only available starting with Valkey version 6.2.0.
+     *     - Use `isInclusive: false` to specify an exclusive bounded stream entry ID.
      *     - Use `InfBoundary.NegativeInfinity` to start with the minimum available ID.
      * @param count - An optional argument specifying the maximum count of stream entries to return.
      *     If `count` is not provided, all stream entries in the range will be returned.
@@ -3280,7 +3258,6 @@ export class BaseBatch<T extends BaseBatch<T>> {
      * Transfers ownership of pending stream entries that match the specified criteria.
      *
      * @see {@link https://valkey.io/commands/xautoclaim/|valkey.io} for more details.
-     * @remarks Since Valkey version 6.2.0.
      *
      * @param key - The key of the stream.
      * @param group - The consumer group name.
@@ -3326,7 +3303,6 @@ export class BaseBatch<T extends BaseBatch<T>> {
      * Transfers ownership of pending stream entries that match the specified criteria.
      *
      * @see {@link https://valkey.io/commands/xautoclaim/|valkey.io} for more details.
-     * @remarks Since Valkey version 6.2.0.
      *
      * @param key - The key of the stream.
      * @param group - The consumer group name.
@@ -3700,7 +3676,7 @@ export class BaseBatch<T extends BaseBatch<T>> {
      * Invokes a previously loaded function.
      *
      * @see {@link https://valkey.io/commands/fcall/|valkey.io} for details.
-     * @remarks Since Valkey version 7.0.0.
+     * @since Valkey 7.0.0.
      *
      * @param func - The function name.
      * @param keys - A list of `keys` accessed by the function. To ensure the correct execution of functions,
@@ -3721,7 +3697,7 @@ export class BaseBatch<T extends BaseBatch<T>> {
      * Invokes a previously loaded read-only function.
      *
      * @see {@link https://valkey.io/commands/fcall/|valkey.io} for details.
-     * @remarks Since Valkey version 7.0.0.
+     * @since Valkey 7.0.0.
      *
      * @param func - The function name.
      * @param keys - A list of `keys` accessed by the function. To ensure the correct execution of functions,
@@ -3742,7 +3718,7 @@ export class BaseBatch<T extends BaseBatch<T>> {
      * Deletes a library and all its functions.
      *
      * @see {@link https://valkey.io/commands/function-delete/|valkey.io} for details.
-     * @remarks Since Valkey version 7.0.0.
+     * @since Valkey 7.0.0.
      *
      * @param libraryCode - The library name to delete.
      *
@@ -3756,7 +3732,7 @@ export class BaseBatch<T extends BaseBatch<T>> {
      * Loads a library to Valkey.
      *
      * @see {@link https://valkey.io/commands/function-load/|valkey.io} for details.
-     * @remarks Since Valkey version 7.0.0.
+     * @since Valkey 7.0.0.
      *
      * @param libraryCode - The source code that implements the library.
      * @param replace - (Optional) Whether the given library should overwrite a library with the same name if it
@@ -3772,7 +3748,7 @@ export class BaseBatch<T extends BaseBatch<T>> {
      * Deletes all function libraries.
      *
      * @see {@link https://valkey.io/commands/function-flush/|valkey.io} for details.
-     * @remarks Since Valkey version 7.0.0.
+     * @since Valkey 7.0.0.
      *
      * @param mode - (Optional) The flushing mode, could be either {@link FlushMode.SYNC} or {@link FlushMode.ASYNC}.
      * Command Response - `"OK"`.
@@ -3785,7 +3761,7 @@ export class BaseBatch<T extends BaseBatch<T>> {
      * Returns information about the functions and libraries.
      *
      * @see {@link https://valkey.io/commands/function-list/|valkey.io} for details.
-     * @remarks Since Valkey version 7.0.0.
+     * @since Valkey 7.0.0.
      *
      * @param options - (Optional) Parameters to filter and request additional info.
      *
@@ -3800,7 +3776,7 @@ export class BaseBatch<T extends BaseBatch<T>> {
      * available execution engines.
      *
      * @see {@link https://valkey.io/commands/function-stats/|valkey.io} for details.
-     * @remarks Since Valkey version 7.0.0.
+     * @since Valkey 7.0.0.
      *
      * Command Response - A `Record` of type {@link FunctionStatsSingleResponse} with two keys:
      *
@@ -3815,7 +3791,7 @@ export class BaseBatch<T extends BaseBatch<T>> {
      * Returns the serialized payload of all loaded libraries.
      *
      * @see {@link https://valkey.io/commands/function-dump/|valkey.io} for details.
-     * @remarks Since Valkey version 7.0.0.
+     * @since Valkey 7.0.0.
      * @remarks To execute a batch with a `functionDump` command, the `exec` command requires `Decoder.Bytes` to handle the response.
      *
      * Command Response - The serialized payload of all loaded libraries.
@@ -3828,7 +3804,7 @@ export class BaseBatch<T extends BaseBatch<T>> {
      * Restores libraries from the serialized payload returned by {@link functionDump}.
      *
      * @see {@link https://valkey.io/commands/function-restore/|valkey.io} for details.
-     * @remarks Since Valkey version 7.0.0.
+     * @since Valkey 7.0.0.
      *
      * @param payload - The serialized data from {@link functionDump}.
      * @param policy - (Optional) A policy for handling existing libraries.
@@ -3871,7 +3847,6 @@ export class BaseBatch<T extends BaseBatch<T>> {
      * an `array` of indices of matching elements within the list.
      *
      * @see {@link https://valkey.io/commands/lpos/|valkey.io} for details.
-     * @remarks Since Valkey version 6.0.6.
      *
      * @param key - The name of the list.
      * @param element - The value to search for within the list.
@@ -3946,7 +3921,6 @@ export class BaseBatch<T extends BaseBatch<T>> {
      * which are within the borders of the area specified by a given shape.
      *
      * @see {@link https://valkey.io/commands/geosearch/|valkey.io} for details.
-     * @remarks Since Valkey version 6.2.0.
      *
      * @param key - The key of the sorted set.
      * @param searchFrom - The query's center point options, could be one of:
@@ -3992,7 +3966,6 @@ export class BaseBatch<T extends BaseBatch<T>> {
      * To get the result directly, see {@link geosearch}.
      *
      * @see {@link https://valkey.io/commands/geosearchstore/|valkey.io} for details.
-     * @remarks Since Valkey version 6.2.0.
      *
      * @param destination - The key of the destination sorted set.
      * @param source - The key of the sorted set.
@@ -4046,7 +4019,7 @@ export class BaseBatch<T extends BaseBatch<T>> {
      * being checked in the order they are provided.
      *
      * @see {@link https://valkey.io/commands/zmpop/|valkey.io} for details.
-     * @remarks Since Valkey version 7.0.0.
+     * @since Valkey 7.0.0.
      *
      * @param keys - The keys of the sorted sets.
      * @param modifier - The element pop criteria - either {@link ScoreFilter.MIN} or
@@ -4072,7 +4045,7 @@ export class BaseBatch<T extends BaseBatch<T>> {
      *
      * @see {@link https://valkey.io/commands/bzmpop/|valkey.io} for details.
      * @remarks `BZMPOP` is a client blocking command, see {@link https://glide.valkey.io/how-to/connection-management/#blocking-commands | Valkey GLIDE Documentation} for more details and best practices.
-     * @remarks Since Valkey version 7.0.0.
+     * @since Valkey 7.0.0.
      *
      * @param keys - The keys of the sorted sets.
      * @param modifier - The element pop criteria - either {@link ScoreFilter.MIN} or
@@ -4192,7 +4165,7 @@ export class BaseBatch<T extends BaseBatch<T>> {
      * Returns all the longest common subsequences combined between strings stored at `key1` and `key2`.
      *
      * @see {@link https://valkey.io/commands/lcs/|valkey.io} for details.
-     * @remarks Since Valkey version 7.0.0.
+     * @since Valkey 7.0.0.
      *
      * @param key1 - The key that stores the first string.
      * @param key2 - The key that stores the second string.
@@ -4208,7 +4181,7 @@ export class BaseBatch<T extends BaseBatch<T>> {
      * Returns the total length of all the longest common subsequences between strings stored at `key1` and `key2`.
      *
      * @see {@link https://valkey.io/commands/lcs/|valkey.io} for details.
-     * @remarks Since Valkey version 7.0.0.
+     * @since Valkey 7.0.0.
      *
      * @param key1 - The key that stores the first string.
      * @param key2 - The key that stores the second string.
@@ -4224,7 +4197,7 @@ export class BaseBatch<T extends BaseBatch<T>> {
      * `key1` and `key2`.
      *
      * @see {@link https://valkey.io/commands/lcs/|valkey.io} for details.
-     * @remarks Since Valkey version 7.0.0.
+     * @since Valkey 7.0.0.
      *
      * @param key1 - The key that stores the first string.
      * @param key2 - The key that stores the second string.
@@ -4311,7 +4284,7 @@ export class BaseBatch<T extends BaseBatch<T>> {
      * Pops one or more elements from the first non-empty list from the provided `keys`.
      *
      * @see {@link https://valkey.io/commands/lmpop/|valkey.io} for details.
-     * @remarks Since Valkey version 7.0.0.
+     * @since Valkey 7.0.0.
      *
      * @param keys - An array of keys to lists.
      * @param direction - The direction based on which elements are popped from - see {@link ListDirection}.
@@ -4333,7 +4306,7 @@ export class BaseBatch<T extends BaseBatch<T>> {
      * provided `key`. `BLMPOP` is the blocking variant of {@link lmpop}.
      *
      * @see {@link https://valkey.io/commands/blmpop/|valkey.io} for details.
-     * @remarks Since Valkey version 7.0.0.
+     * @since Valkey 7.0.0.
      *
      * @param keys - An array of keys to lists.
      * @param direction - The direction based on which elements are popped from - see {@link ListDirection}.
@@ -4407,7 +4380,7 @@ export class BaseBatch<T extends BaseBatch<T>> {
      * @see {@link https://valkey.io/commands/sort/|valkey.io} for more details.
      * @remarks When in cluster mode, both `key` and the patterns specified in {@link SortOptions.byPattern}
      * and {@link SortOptions.getPatterns} must map to the same hash slot. The use of {@link SortOptions.byPattern}
-     * and {@link SortOptions.getPatterns} in cluster mode is supported since Valkey version 8.0.
+     * and {@link SortOptions.getPatterns} in cluster mode is supported since Valkey 8.0.0.
      *
      * @param key - The key of the list, set, or sorted set to be sorted.
      * @param options - (Optional) {@link SortOptions}.
@@ -4426,10 +4399,10 @@ export class BaseBatch<T extends BaseBatch<T>> {
      *
      * This command is routed depending on the client's {@link ReadFrom} strategy.
      *
-     * @remarks Since Valkey version 7.0.0.
+     * @since Valkey 7.0.0.
      * @remarks When in cluster mode, both `key` and the patterns specified in {@link SortOptions.byPattern}
      * and {@link SortOptions.getPatterns} must map to the same hash slot. The use of {@link SortOptions.byPattern}
-     * and {@link SortOptions.getPatterns} in cluster mode is supported since Valkey version 8.0.
+     * and {@link SortOptions.getPatterns} in cluster mode is supported since Valkey 8.0.0.
      *
      * @param key - The key of the list, set, or sorted set to be sorted.
      * @param options - (Optional) {@link SortOptions}.
@@ -4452,7 +4425,7 @@ export class BaseBatch<T extends BaseBatch<T>> {
      * @see {@link https://valkey.io/commands/sort/|valkey.io} for more details.
      * @remarks When in cluster mode, `key`, `destination` and the patterns specified in {@link SortOptions.byPattern}
      * and {@link SortOptions.getPatterns} must map to the same hash slot. The use of {@link SortOptions.byPattern}
-     * and {@link SortOptions.getPatterns} in cluster mode is supported since Valkey version 8.0.
+     * and {@link SortOptions.getPatterns} in cluster mode is supported since Valkey 8.0.0.
      *
      * @param key - The key of the list, set, or sorted set to be sorted.
      * @param destination - The key where the sorted result will be stored.
@@ -4625,7 +4598,7 @@ export class ClusterBatch extends BaseBatch<ClusterBatch> {
      *
      * @param message - Message to publish.
      * @param channel - Channel to publish the message on.
-     * @param sharded - Use sharded pubsub mode. Available since Valkey version 7.0.
+     * @param sharded - Use sharded pubsub mode. Available since Valkey 7.0.0.
      *
      * Command Response -  Number of subscriptions in primary node that received the message.
      */

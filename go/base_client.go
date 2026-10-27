@@ -1223,10 +1223,6 @@ func (client *baseClient) Get(ctx context.Context, key string) (models.Result[st
 // Get string value associated with the given key, or an empty string is returned [models.CreateNilStringResult()] if no such
 // value exists.
 //
-// Since:
-//
-//	Valkey 6.2.0 and above.
-//
 // See [valkey.io] for details.
 //
 // Parameters:
@@ -1344,9 +1340,9 @@ func (client *baseClient) MSetNX(ctx context.Context, keyValueMap map[string]str
 
 // Move key from the currently selected database to the database specified by `dbIndex`.
 //
-// Note:
+// Since:
 //
-//	In cluster mode move is available since Valkey 9.0.0 and above.
+//	Valkey 9.0.0 for cluster client.
 //
 // See [valkey.io] for details.
 //
@@ -1635,7 +1631,7 @@ func (client *baseClient) Append(ctx context.Context, key string, value string) 
 //
 // Since:
 //
-//	Valkey 7.0 and above.
+//	Valkey 7.0.0.
 //
 // Note:
 //
@@ -1671,7 +1667,7 @@ func (client *baseClient) LCS(ctx context.Context, key1 string, key2 string) (*m
 //
 // Since:
 //
-//	Valkey 7.0 and above.
+//	Valkey 7.0.0.
 //
 // Note:
 //
@@ -1706,7 +1702,7 @@ func (client *baseClient) LCSLen(ctx context.Context, key1, key2 string) (*model
 //
 // Since:
 //
-//	Valkey 7.0 and above.
+//	Valkey 7.0.0.
 //
 // Note:
 //
@@ -2164,10 +2160,6 @@ func (client *baseClient) HScanWithOptions(
 
 // Returns a random field name from the hash value stored at `key`.
 //
-// Since:
-//
-//	Valkey 6.2.0 and above.
-//
 // See [valkey.io] for details.
 //
 // Parameters:
@@ -2190,10 +2182,6 @@ func (client *baseClient) HRandField(ctx context.Context, key string) (models.Re
 }
 
 // Retrieves up to `count` random field names from the hash value stored at `key`.
-//
-// Since:
-//
-//	Valkey 6.2.0 and above.
 //
 // See [valkey.io] for details.
 //
@@ -2221,10 +2209,6 @@ func (client *baseClient) HRandFieldWithCount(ctx context.Context, key string, c
 
 // Retrieves up to `count` random field names along with their values from the hash
 // value stored at `key`.
-//
-// Since:
-//
-//	Valkey 6.2.0 and above.
 //
 // See [valkey.io] for details.
 //
@@ -2262,7 +2246,7 @@ func (client *baseClient) HRandFieldWithCountWithValues(ctx context.Context, key
 //
 // Since:
 //
-//	Valkey 9.0 and above.
+//	Valkey 9.0.0.
 //
 // See [valkey.io] for details.
 //
@@ -2303,7 +2287,7 @@ func (client *baseClient) HSetEx(
 //
 // Since:
 //
-//	Valkey 9.0 and above.
+//	Valkey 9.0.0.
 //
 // See [valkey.io] for details.
 //
@@ -2345,7 +2329,7 @@ func (client *baseClient) HGetEx(
 //
 // Since:
 //
-//	Valkey 9.1 and above.
+//	Valkey 9.1.0.
 //
 // See [valkey.io] for details.
 //
@@ -2390,7 +2374,7 @@ func (client *baseClient) HGetDel(ctx context.Context, key string, fields []stri
 //
 // Since:
 //
-//	Valkey 9.0 and above.
+//	Valkey 9.0.0.
 //
 // See [valkey.io] for details.
 //
@@ -2437,7 +2421,7 @@ func (client *baseClient) HExpire(
 //
 // Since:
 //
-//	Valkey 9.0 and above.
+//	Valkey 9.0.0.
 //
 // See [valkey.io] for details.
 //
@@ -2483,7 +2467,7 @@ func (client *baseClient) HExpireAt(
 //
 // Since:
 //
-//	Valkey 9.0 and above.
+//	Valkey 9.0.0.
 //
 // See [valkey.io] for details.
 //
@@ -2530,7 +2514,7 @@ func (client *baseClient) HPExpire(
 //
 // Since:
 //
-//	Valkey 9.0 and above.
+//	Valkey 9.0.0.
 //
 // See [valkey.io] for details.
 //
@@ -2576,7 +2560,7 @@ func (client *baseClient) HPExpireAt(
 //
 // Since:
 //
-//	Valkey 9.0 and above.
+//	Valkey 9.0.0.
 //
 // See [valkey.io] for details.
 //
@@ -2612,7 +2596,7 @@ func (client *baseClient) HPersist(ctx context.Context, key string, fields []str
 //
 // Since:
 //
-//	Valkey 9.0 and above.
+//	Valkey 9.0.0.
 //
 // See [valkey.io] for details.
 //
@@ -2648,7 +2632,7 @@ func (client *baseClient) HTtl(ctx context.Context, key string, fields []string)
 //
 // Since:
 //
-//	Valkey 9.0 and above.
+//	Valkey 9.0.0.
 //
 // See [valkey.io] for details.
 //
@@ -2684,7 +2668,7 @@ func (client *baseClient) HPTtl(ctx context.Context, key string, fields []string
 //
 // Since:
 //
-//	Valkey 9.0 and above.
+//	Valkey 9.0.0.
 //
 // See [valkey.io] for details.
 //
@@ -2721,7 +2705,7 @@ func (client *baseClient) HExpireTime(ctx context.Context, key string, fields []
 //
 // Since:
 //
-//	Valkey 9.0 and above.
+//	Valkey 9.0.0.
 //
 // See [valkey.io] for details.
 //
@@ -3135,7 +3119,7 @@ func (client *baseClient) SIsMember(ctx context.Context, key string, member stri
 //
 // Since:
 //
-//	Valkey 9.2 and above.
+//	Valkey 9.2.0.
 //
 // See [valkey.io] for details.
 //
@@ -3279,7 +3263,7 @@ func (client *baseClient) SInterStore(ctx context.Context, destination string, k
 //
 // Since:
 //
-//	Valkey 7.0 and above.
+//	Valkey 7.0.0.
 //
 // Note:
 //
@@ -3310,7 +3294,7 @@ func (client *baseClient) SInterCard(ctx context.Context, keys []string) (int64,
 //
 // Since:
 //
-//	Valkey 7.0 and above.
+//	Valkey 7.0.0.
 //
 // Note:
 //
@@ -3953,7 +3937,7 @@ func (client *baseClient) LPushX(ctx context.Context, key string, elements []str
 //
 // Since:
 //
-//	Valkey 7.0 and above.
+//	Valkey 7.0.0.
 //
 // See [valkey.io] for details.
 //
@@ -4005,7 +3989,7 @@ func (client *baseClient) LMPop(
 //
 // Since:
 //
-//	Valkey 7.0 and above.
+//	Valkey 7.0.0.
 //
 // See [valkey.io] for details.
 //
@@ -4060,7 +4044,7 @@ func (client *baseClient) LMPopCount(
 //
 // Since:
 //
-//	Valkey 7.0 and above.
+//	Valkey 7.0.0.
 //
 // See [valkey.io] for details.
 //
@@ -4116,7 +4100,7 @@ func (client *baseClient) BLMPop(
 //
 // Since:
 //
-//	Valkey 7.0 and above.
+//	Valkey 7.0.0.
 //
 // See [valkey.io] for details.
 //
@@ -4245,10 +4229,6 @@ func (client *baseClient) LMove(
 // Note:
 //   - When in cluster mode, `source` and `destination` must map to the same hash slot.
 //   - `BLMove` is a client blocking command, see [Blocking Commands] for more details and best practices.
-//
-// Since:
-//
-//	Valkey 6.2.0 and above.
 //
 // See [valkey.io] for details.
 //
@@ -5583,7 +5563,7 @@ func (client *baseClient) BZPopMin(
 //
 // Since:
 //
-//	Valkey 7.0 and above.
+//	Valkey 7.0.0.
 //
 // See [valkey.io] for details.
 //
@@ -5645,7 +5625,7 @@ func (client *baseClient) BZMPop(
 //
 // Since:
 //
-//	Valkey 7.0 and above.
+//	Valkey 7.0.0.
 //
 // See [valkey.io] for details.
 //
@@ -5919,7 +5899,7 @@ func (client *baseClient) ZRank(ctx context.Context, key string, member string) 
 //
 // Since:
 //
-//	Valkey 7.2.0 and above.
+//	Valkey 7.2.0.
 //
 // See [valkey.io] for details.
 //
@@ -5978,7 +5958,7 @@ func (client *baseClient) ZRevRank(ctx context.Context, key string, member strin
 //
 // Since:
 //
-//	Valkey 7.2.0 and above.
+//	Valkey 7.2.0.
 //
 // See [valkey.io] for details.
 //
@@ -6057,10 +6037,6 @@ func (client *baseClient) XLen(ctx context.Context, key string) (int64, error) {
 
 // Transfers ownership of pending stream entries that match the specified criteria.
 //
-// Since:
-//
-//	Valkey 6.2.0 and above.
-//
 // See [valkey.io] for more details.
 //
 // Parameters:
@@ -6096,10 +6072,6 @@ func (client *baseClient) XAutoClaim(
 }
 
 // Transfers ownership of pending stream entries that match the specified criteria.
-//
-// Since:
-//
-//	Valkey 6.2.0 and above.
 //
 // See [valkey.io] for more details.
 //
@@ -6149,10 +6121,6 @@ func (client *baseClient) XAutoClaimWithOptions(
 
 // Transfers ownership of pending stream entries that match the specified criteria.
 //
-// Since:
-//
-//	Valkey 6.2.0 and above.
-//
 // See [valkey.io] for more details.
 //
 // Parameters:
@@ -6188,10 +6156,6 @@ func (client *baseClient) XAutoClaimJustId(
 }
 
 // Transfers ownership of pending stream entries that match the specified criteria.
-//
-// Since:
-//
-//	Valkey 6.2.0 and above.
 //
 // See [valkey.io] for more details.
 //
@@ -6828,10 +6792,6 @@ func (client *baseClient) ZRandMemberWithCountWithScores(
 
 // Returns the scores associated with the specified `members` in the sorted set stored at `key`.
 //
-// Since:
-//
-//	Valkey 6.2.0 and above.
-//
 // See [valkey.io] for details.
 //
 // Parameters:
@@ -6962,7 +6922,7 @@ func (client *baseClient) Sort(ctx context.Context, key string) ([]models.Result
 //	while others did not. If this behavior impacts your application logic, consider splitting
 //	the request into sub-requests per slot to ensure atomicity.
 //	The use of SortOptions.byPattern and SortOptions.getPatterns in cluster mode is
-//	supported since Valkey version 8.0.
+//	supported since Valkey 8.0.0.
 //
 // See [valkey.io] for details.
 //
@@ -7032,7 +6992,7 @@ func (client *baseClient) SortReadOnly(ctx context.Context, key string) ([]model
 //	while others did not. If this behavior impacts your application logic, consider splitting
 //	the request into sub-requests per slot to ensure atomicity.
 //	The use of SortOptions.byPattern and SortOptions.getPatterns in cluster mode is
-//	supported since Valkey version 8.0.
+//	supported since Valkey 8.0.0.
 //
 // See [valkey.io] for details.
 //
@@ -7118,7 +7078,7 @@ func (client *baseClient) SortStore(ctx context.Context, key string, destination
 //	while others did not. If this behavior impacts your application logic, consider splitting
 //	the request into sub-requests per slot to ensure atomicity.
 //	The use of SortOptions.byPattern and SortOptions.getPatterns
-//	in cluster mode is supported since Valkey version 8.0.
+//	in cluster mode is supported since Valkey 8.0.0.
 //
 // See [valkey.io] for details.
 //
@@ -7636,10 +7596,6 @@ func (client *baseClient) BitPosWithOptions(
 //
 //	When in cluster mode, both `source` and `destination` must map to the same hash slot.
 //
-// Since:
-//
-//	Valkey 6.2.0 and above.
-//
 // See [valkey.io] for details.
 //
 // Parameters:
@@ -7668,10 +7624,6 @@ func (client *baseClient) Copy(ctx context.Context, source string, destination s
 // Note:
 //
 //	When in cluster mode, both `source` and `destination` must map to the same hash slot.
-//
-// Since:
-//
-//	Valkey 6.2.0 and above.
 //
 // See [valkey.io] for details.
 //
@@ -8331,10 +8283,6 @@ func (client *baseClient) ZInterStoreWithOptions(
 //
 //	When in cluster mode, all `keys` must map to the same hash slot.
 //
-// Since:
-//
-//	Valkey 6.2.0 and above.
-//
 // See [valkey.io] for details.
 //
 // Parameters:
@@ -8363,10 +8311,6 @@ func (client *baseClient) ZDiff(ctx context.Context, keys []string) ([]string, e
 // Note:
 //
 //	When in cluster mode, all `keys` must map to the same hash slot.
-//
-// Since:
-//
-//	Valkey 6.2.0 and above.
 //
 // See [valkey.io] for details.
 //
@@ -8400,10 +8344,6 @@ func (client *baseClient) ZDiffWithScores(ctx context.Context, keys []string) ([
 //
 //	When in cluster mode, `destination` and all `keys` must map to the same hash slot.
 //
-// Since:
-//
-//	Valkey 6.2.0 and above.
-//
 // See [valkey.io] for details.
 //
 // Parameters:
@@ -8431,10 +8371,6 @@ func (client *baseClient) ZDiffStore(ctx context.Context, destination string, ke
 
 // Returns the union of members from sorted sets specified by the given `keys`.
 // To get the elements with their scores, see [Client.ZUnionWithScores] or [ClusterClient.ZUnionWithScores].
-//
-// Since:
-//
-//	Valkey 6.2.0 and above.
 //
 // Note:
 //
@@ -8466,10 +8402,6 @@ func (client *baseClient) ZUnion(ctx context.Context, keys options.KeyArray) ([]
 
 // Returns the union of members and their scores from sorted sets specified by the given
 // `keysOrWeightedKeys`.
-//
-// Since:
-//
-//	Valkey 6.2.0 and above.
 //
 // Note:
 //
@@ -8602,7 +8534,7 @@ func (client *baseClient) ZUnionStoreWithOptions(
 //
 // Since:
 //
-//	Valkey 7.0 and above.
+//	Valkey 7.0.0.
 //
 // See [valkey.io] for details.
 //
@@ -8630,7 +8562,7 @@ func (client *baseClient) ZInterCard(ctx context.Context, keys []string) (int64,
 //
 // Since:
 //
-//	Valkey 7.0 and above.
+//	Valkey 7.0.0.
 //
 // See [valkey.io] for details.
 //
@@ -9027,10 +8959,6 @@ func (client *baseClient) GeoDistWithUnit(
 // Returns the members of a sorted set populated with geospatial information using [Client.GeoAdd] or [ClusterClient.GeoAdd],
 // which are within the borders of the area specified by a given shape.
 //
-// Since:
-//
-//	Valkey 6.2.0 and above.
-//
 // See [valkey.io] for more details.
 //
 // Parameters:
@@ -9094,10 +9022,6 @@ func (client *baseClient) GeoSearchWithFullOptions(
 // Returns the members of a sorted set populated with geospatial information using [Client.GeoAdd] or [ClusterClient.GeoAdd],
 // which are within the borders of the area specified by a given shape.
 //
-// Since:
-//
-//	Valkey 6.2.0 and above.
-//
 // See [valkey.io] for more details.
 //
 // Parameters:
@@ -9151,10 +9075,6 @@ func (client *baseClient) GeoSearchWithResultOptions(
 // Returns the members of a sorted set populated with geospatial information using [Client.GeoAdd] or [ClusterClient.GeoAdd],
 // which are within the borders of the area specified by a given shape.
 //
-// Since:
-//
-//	Valkey 6.2.0 and above.
-//
 // See [valkey.io] for more details.
 //
 // Parameters:
@@ -9199,10 +9119,6 @@ func (client *baseClient) GeoSearchWithInfoOptions(
 // Returns the members of a sorted set populated with geospatial information using [Client.GeoAdd] or [ClusterClient.GeoAdd],
 // which are within the borders of the area specified by a given shape.
 //
-// Since:
-//
-//	Valkey 6.2.0 and above.
-//
 // See [valkey.io] for more details.
 //
 // Parameters:
@@ -9240,10 +9156,6 @@ func (client *baseClient) GeoSearch(
 // within a circular or rectangular area and stores the result in `destinationKey`. If
 // `destinationKey` already exists, it is overwritten. Otherwise, a new sorted set will be
 // created. To get the result directly, see [Client.GeoSearchWithFullOptions] or [ClusterClient.GeoSearchWithFullOptions].
-//
-// Since:
-//
-//	Valkey 6.2.0 and above.
 //
 // Note:
 //
@@ -9313,10 +9225,6 @@ func (client *baseClient) GeoSearchStoreWithFullOptions(
 // `destinationKey` already exists, it is overwritten. Otherwise, a new sorted set will be
 // created. To get the result directly, see [Client.GeoSearchWithFullOptions] or [ClusterClient.GeoSearchWithFullOptions].
 //
-// Since:
-//
-//	Valkey 6.2.0 and above.
-//
 // Note:
 //
 // When in cluster mode, `destinationKey` and `sourceKey` must map to the same hash slot.
@@ -9363,10 +9271,6 @@ func (client *baseClient) GeoSearchStore(
 // within a circular or rectangular area and stores the result in `destinationKey`. If
 // `destinationKey` already exists, it is overwritten. Otherwise, a new sorted set will be
 // created. To get the result directly, see [Client.GeoSearchWithFullOptions] or [ClusterClient.GeoSearchWithFullOptions].
-//
-// Since:
-//
-//	Valkey 6.2.0 and above.
 //
 // Note:
 //
@@ -9417,10 +9321,6 @@ func (client *baseClient) GeoSearchStoreWithResultOptions(
 // `destinationKey` already exists, it is overwritten. Otherwise, a new sorted set will be
 // created. To get the result directly, see [Client.GeoSearchWithFullOptions] or [ClusterClient.GeoSearchWithFullOptions].
 //
-// Since:
-//
-//	Valkey 6.2.0 and above.
-//
 // Note:
 //
 // When in cluster mode, `destinationKey` and `sourceKey` must map to the same hash slot.
@@ -9469,7 +9369,7 @@ func (client *baseClient) GeoSearchStoreWithInfoOptions(
 //
 // Since:
 //
-//	Valkey 7.0 and above.
+//	Valkey 7.0.0.
 //
 // See [valkey.io] for more details.
 //
@@ -9501,7 +9401,7 @@ func (client *baseClient) FunctionLoad(ctx context.Context, libraryCode string, 
 //
 // Since:
 //
-//	Valkey 7.0 and above.
+//	Valkey 7.0.0.
 //
 // See [valkey.io] for details.
 //
@@ -9526,7 +9426,7 @@ func (client *baseClient) FunctionFlush(ctx context.Context) (string, error) {
 //
 // Since:
 //
-//	Valkey 7.0 and above.
+//	Valkey 7.0.0.
 //
 // See [valkey.io] for more details.
 //
@@ -9551,7 +9451,7 @@ func (client *baseClient) FunctionFlushSync(ctx context.Context) (string, error)
 //
 // Since:
 //
-//	Valkey 7.0 and above.
+//	Valkey 7.0.0.
 //
 // See [valkey.io] for more details.
 //
@@ -9578,7 +9478,7 @@ func (client *baseClient) FunctionFlushAsync(ctx context.Context) (string, error
 //
 // Since:
 //
-//	Valkey 7.0 and above.
+//	Valkey 7.0.0.
 //
 // See [valkey.io] for more details.
 //
@@ -9605,7 +9505,7 @@ func (client *baseClient) FCall(ctx context.Context, function string) (any, erro
 //
 // Since:
 //
-//	Valkey 7.0 and above.
+//	Valkey 7.0.0.
 //
 // See [valkey.io] for more details.
 //
@@ -9633,7 +9533,7 @@ func (client *baseClient) FCallReadOnly(ctx context.Context, function string) (a
 //
 // Since:
 //
-//	Valkey 7.0 and above.
+//	Valkey 7.0.0.
 //
 // See [valkey.io] for more details.
 //
@@ -9674,7 +9574,7 @@ func (client *baseClient) FCallWithKeysAndArgs(
 //
 // Since:
 //
-//	Valkey 7.0 and above.
+//	Valkey 7.0.0.
 //
 // See [valkey.io] for more details.
 //
@@ -10076,7 +9976,7 @@ func (client *baseClient) ScriptFlushWithMode(ctx context.Context, mode options.
 //
 // Since:
 //
-//	Valkey 8.0.0
+//	Valkey 8.0.0.
 //
 // See [valkey.io] for details.
 //

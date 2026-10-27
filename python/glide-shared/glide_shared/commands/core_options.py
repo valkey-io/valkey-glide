@@ -102,7 +102,7 @@ class OnlyIfEqual(ValueComparison):
     Not supported when compression is enabled. See
     `Valkey GLIDE - Data Compression <https://glide.valkey.io/concepts/client-features/compression/#incompatible-commands>`_.
 
-    Since: Valkey version 8.1.0.
+    Since: Valkey 8.1.0.
     """
 
     def _to_args(self) -> List[TEncodable]:
@@ -117,7 +117,7 @@ class OnlyIfNotEqual(ValueComparison):
     Not supported when compression is enabled. See
     `Valkey GLIDE - Data Compression <https://glide.valkey.io/concepts/client-features/compression/#incompatible-commands>`_.
 
-    Since: Valkey version 9.2.0.
+    Since: Valkey 9.2.0.
     """
 
     def _to_args(self) -> List[TEncodable]:
@@ -196,7 +196,7 @@ class InfoSection(Enum):
     """
     Valkey Cluster information.
 
-    Since: Valkey version 9.1.0.
+    Since: Valkey 9.1.0.
     """
 
     COMMAND_STATS = "commandstats"
@@ -416,8 +416,6 @@ class FlushMode(Enum):
 
     See [FLUSHALL](https://valkey.io/commands/flushall/) and [FUNCTION-FLUSH](https://valkey.io/commands/function-flush/)
     for details
-
-    SYNC was introduced in version 6.2.0.
     """
 
     ASYNC = "ASYNC"

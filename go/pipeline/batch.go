@@ -262,7 +262,7 @@ func (b *ClusterBatch) MigrateWithOptions(
 //
 // Since:
 //
-//	Valkey 7.0 and above.
+//	Valkey 7.0.0.
 //
 // See [valkey.io] for details.
 //
@@ -284,7 +284,7 @@ func (b *ClusterBatch) SPublish(channel string, message string) *ClusterBatch {
 //
 // Since:
 //
-//	Valkey 7.0 and above.
+//	Valkey 7.0.0.
 //
 // See [valkey.io] for details.
 //
@@ -301,7 +301,7 @@ func (b *ClusterBatch) PubSubShardChannels() *ClusterBatch {
 //
 // Since:
 //
-//	Valkey 7.0 and above.
+//	Valkey 7.0.0.
 //
 // See [valkey.io] for details.
 //
@@ -328,7 +328,7 @@ func (b *ClusterBatch) PubSubShardChannelsWithPattern(pattern string) *ClusterBa
 //
 // Since:
 //
-//	Valkey 7.0 and above.
+//	Valkey 7.0.0.
 //
 // See [valkey.io] for details.
 //

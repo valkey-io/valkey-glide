@@ -136,7 +136,6 @@ public interface StringBaseCommands {
     /**
      * Gets the value associated with the given <code>key</code>.
      *
-     * @since Valkey 6.2.0.
      * @see <a href="https://valkey.io/commands/getex/">valkey.io</a> for details.
      * @param key The <code>key</code> to retrieve from the database.
      * @return If <code>key</code> exists, return the <code>value</code> of the <code>key</code>.
@@ -152,7 +151,6 @@ public interface StringBaseCommands {
     /**
      * Gets the value associated with the given <code>key</code>.
      *
-     * @since Valkey 6.2.0.
      * @see <a href="https://valkey.io/commands/getex/">valkey.io</a> for details.
      * @param key The <code>key</code> to retrieve from the database.
      * @return If <code>key</code> exists, return the <code>value</code> of the <code>key</code>.
@@ -168,7 +166,6 @@ public interface StringBaseCommands {
     /**
      * Gets the value associated with the given <code>key</code>.
      *
-     * @since Valkey 6.2.0.
      * @see <a href="https://valkey.io/commands/getex/">valkey.io</a> for details.
      * @param key The <code>key</code> to retrieve from the database.
      * @param options The {@link GetExOptions} options.
@@ -187,7 +184,6 @@ public interface StringBaseCommands {
     /**
      * Gets the value associated with the given <code>key</code>.
      *
-     * @since Valkey 6.2.0.
      * @see <a href="https://valkey.io/commands/getex/">valkey.io</a> for details.
      * @param key The <code>key</code> to retrieve from the database.
      * @param options The {@link GetExOptions} options.
@@ -731,7 +727,7 @@ public interface StringBaseCommands {
     /**
      * Deletes <code>key</code> if its value equals <code>value</code>.
      *
-     * @since Valkey 9.0 and above.
+     * @since Valkey 9.0.0.
      * @see <a href="https://valkey.io/commands/delifeq/">valkey.io</a> for details.
      * @param key The key to delete.
      * @param value The comparison value. The key is only deleted if its current value matches
@@ -749,7 +745,7 @@ public interface StringBaseCommands {
     /**
      * Deletes <code>key</code> if its value equals <code>value</code>.
      *
-     * @since Valkey 9.0 and above.
+     * @since Valkey 9.0.0.
      * @see <a href="https://valkey.io/commands/delifeq/">valkey.io</a> for details.
      * @param key The key to delete.
      * @param value The comparison value. The key is only deleted if its current value matches
@@ -768,7 +764,7 @@ public interface StringBaseCommands {
      * Returns all the longest common subsequences combined between strings stored at <code>key1
      * </code> and <code>key2</code>.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @apiNote When in cluster mode, <code>key1</code> and <code>key2</code> must map to the same
      *     hash slot.
      * @see <a href="https://valkey.io/commands/lcs/">valkey.io</a> for details.
@@ -790,7 +786,7 @@ public interface StringBaseCommands {
      * Returns all the longest common subsequences combined between strings stored at <code>key1
      * </code> and <code>key2</code>.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @apiNote When in cluster mode, <code>key1</code> and <code>key2</code> must map to the same
      *     hash slot.
      * @see <a href="https://valkey.io/commands/lcs/">valkey.io</a> for details.
@@ -812,7 +808,7 @@ public interface StringBaseCommands {
      * Returns the total length of all the longest common subsequences between strings stored at
      * <code>key1</code> and <code>key2</code>.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @apiNote When in cluster mode, <code>key1</code> and <code>key2</code> must map to the same
      *     hash slot.
      * @see <a href="https://valkey.io/commands/lcs/">valkey.io</a> for details.
@@ -832,7 +828,7 @@ public interface StringBaseCommands {
      * Returns the total length of all the longest common subsequences between strings stored at
      * <code>key1</code> and <code>key2</code>.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @apiNote When in cluster mode, <code>key1</code> and <code>key2</code> must map to the same
      *     hash slot.
      * @see <a href="https://valkey.io/commands/lcs/">valkey.io</a> for details.
@@ -852,7 +848,7 @@ public interface StringBaseCommands {
      * Returns the indices and the total length of all the longest common subsequences between strings
      * stored at <code>key1</code> and <code>key2</code>.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @apiNote When in cluster mode, <code>key1</code> and <code>key2</code> must map to the same
      *     hash slot.
      * @see <a href="https://valkey.io/commands/lcs/">valkey.io</a> for details.
@@ -895,7 +891,7 @@ public interface StringBaseCommands {
      * Returns the indices and the total length of all the longest common subsequences between strings
      * stored at <code>key1</code> and <code>key2</code>.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @apiNote When in cluster mode, <code>key1</code> and <code>key2</code> must map to the same
      *     hash slot.
      * @see <a href="https://valkey.io/commands/lcs/">valkey.io</a> for details.
@@ -938,7 +934,7 @@ public interface StringBaseCommands {
      * Returns the indices and the total length of all the longest common subsequences between strings
      * stored at <code>key1</code> and <code>key2</code>.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @apiNote When in cluster mode, <code>key1</code> and <code>key2</code> must map to the same
      *     hash slot.
      * @see <a href="https://valkey.io/commands/lcs/">valkey.io</a> for details.
@@ -983,7 +979,7 @@ public interface StringBaseCommands {
      * Returns the indices and the total length of all the longest common subsequences between strings
      * stored at <code>key1</code> and <code>key2</code>.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @apiNote When in cluster mode, <code>key1</code> and <code>key2</code> must map to the same
      *     hash slot.
      * @see <a href="https://valkey.io/commands/lcs/">valkey.io</a> for details.
@@ -1029,7 +1025,7 @@ public interface StringBaseCommands {
      * Returns the indices and lengths of the longest common subsequences between strings stored at
      * <code>key1</code> and <code>key2</code>.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @apiNote When in cluster mode, <code>key1</code> and <code>key2</code> must map to the same
      *     hash slot.
      * @see <a href="https://valkey.io/commands/lcs/">valkey.io</a> for details.
@@ -1074,7 +1070,7 @@ public interface StringBaseCommands {
      * Returns the indices and lengths of the longest common subsequences between strings stored at
      * <code>key1</code> and <code>key2</code>.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @apiNote When in cluster mode, <code>key1</code> and <code>key2</code> must map to the same
      *     hash slot.
      * @see <a href="https://valkey.io/commands/lcs/">valkey.io</a> for details.
@@ -1119,7 +1115,7 @@ public interface StringBaseCommands {
      * Returns the indices and lengths of the longest common subsequences between strings stored at
      * <code>key1</code> and <code>key2</code>.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @apiNote When in cluster mode, <code>key1</code> and <code>key2</code> must map to the same
      *     hash slot.
      * @see <a href="https://valkey.io/commands/lcs/">valkey.io</a> for details.
@@ -1167,7 +1163,7 @@ public interface StringBaseCommands {
      * Returns the indices and lengths of the longest common subsequences between strings stored at
      * <code>key1</code> and <code>key2</code>.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @apiNote When in cluster mode, <code>key1</code> and <code>key2</code> must map to the same
      *     hash slot.
      * @see <a href="https://valkey.io/commands/lcs/">valkey.io</a> for details.
