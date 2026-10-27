@@ -372,6 +372,10 @@ public class BatchTestUtilities {
         String stringKey11 = generateKey("StringKey", isAtomic);
         if (SERVER_VERSION.isGreaterThanOrEqualTo("8.1.0")) {
             batch
+                    .set(
+                            stringKey11,
+                            "value",
+                            SetOptions.builder().conditionalSetOnlyIfEqualTo("other").build())
                     .set(stringKey11, "value")
                     .set(
                             stringKey11,
@@ -386,6 +390,10 @@ public class BatchTestUtilities {
         String stringKey12 = generateKey("StringKey", isAtomic);
         if (SERVER_VERSION.isGreaterThanOrEqualTo("9.2.0")) {
             batch
+                    .set(
+                            stringKey12,
+                            "value",
+                            SetOptions.builder().conditionalSetOnlyIfNotEqualTo("other").build())
                     .set(stringKey12, "value")
                     .set(
                             stringKey12,
@@ -469,6 +477,7 @@ public class BatchTestUtilities {
                     concatenateArrays(
                             expectedResults,
                             new Object[] {
+                                null, // set(stringKey11, "value", IFEQ "other") non-existent key
                                 OK, // set(stringKey11, "value")
                                 null, // set(stringKey11, "other", IFEQ "other") value not equal
                                 OK, // set(stringKey11, "other", IFEQ "value") value equal
@@ -480,6 +489,7 @@ public class BatchTestUtilities {
                     concatenateArrays(
                             expectedResults,
                             new Object[] {
+                                OK, // set(stringKey12, "value", IFNE "other") non-existent key
                                 OK, // set(stringKey12, "value")
                                 null, // set(stringKey12, "other", IFNE "value") value equal
                                 OK, // set(stringKey12, "other", IFNE "other") value not equal

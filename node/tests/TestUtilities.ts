@@ -1223,6 +1223,14 @@ export async function batchTest(
     responseData.push(['set(key2, "baz", { returnOldValue: true })', null]);
 
     if (!cluster.checkIfServerVersionLessThan("8.1.0")) {
+        baseBatch.set(key29, foo, {
+            conditionalSet: "onlyIfEqual",
+            comparisonValue: bar,
+        });
+        responseData.push([
+            'set(key29, "foo", {conditionalSet: "onlyIfEqual", comparisonValue: "bar"}) non-existent key',
+            null,
+        ]);
         baseBatch.set(key29, foo);
         responseData.push(['set(key29, "foo")', "OK"]);
         baseBatch.set(key29, bar, {
@@ -1246,6 +1254,14 @@ export async function batchTest(
     }
 
     if (!cluster.checkIfServerVersionLessThan("9.2.0")) {
+        baseBatch.set(key30, foo, {
+            conditionalSet: "onlyIfNotEqual",
+            comparisonValue: bar,
+        });
+        responseData.push([
+            'set(key30, "foo", {conditionalSet: "onlyIfNotEqual", comparisonValue: "bar"}) non-existent key',
+            "OK",
+        ]);
         baseBatch.set(key30, foo);
         responseData.push(['set(key30, "foo")', "OK"]);
         baseBatch.set(key30, bar, {

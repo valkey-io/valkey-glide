@@ -580,6 +580,15 @@ func CreateStringTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer str
 	if serverVer >= "8.1.0" {
 		atomicKey2 := atomicKeyPrefix + "4-" + uuid.NewString()
 
+		batch.SetWithOptions(atomicKey2, "value", *options.NewSetOptions().SetOnlyIfEquals("other"))
+		testData = append(
+			testData,
+			CommandTestData{
+				ExpectedResponse: nil,
+				TestName:         "SetWithOptions(atomicKey2, value, OnlyIfEquals(other)) non-existent key",
+			},
+		)
+
 		batch.Set(atomicKey2, "value")
 		testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "Set(atomicKey2, value)"})
 
@@ -605,6 +614,15 @@ func CreateStringTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer str
 	// TODO #5368: Compare versions semantically, not as strings.
 	if serverVer >= "9.2.0" {
 		atomicKey3 := atomicKeyPrefix + "5-" + uuid.NewString()
+
+		batch.SetWithOptions(atomicKey3, "value", *options.NewSetOptions().SetOnlyIfNotEquals("other"))
+		testData = append(
+			testData,
+			CommandTestData{
+				ExpectedResponse: "OK",
+				TestName:         "SetWithOptions(atomicKey3, value, OnlyIfNotEquals(other)) non-existent key",
+			},
+		)
 
 		batch.Set(atomicKey3, "value")
 		testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "Set(atomicKey3, value)"})

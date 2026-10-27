@@ -243,11 +243,13 @@ pub type FunctionFlushOptions = FlushAllOptions;
 #[non_exhaustive]
 pub enum ValueComparison {
     /// Only set if the key exists and its value equals the given value (`IFEQ`).
+    ///
     /// Since Valkey 8.1.0.
     IFEQ(Vec<u8>),
 
     /// Only set if the key does not exist or its value does not equal the given
     /// value (`IFNE`).
+    ///
     /// Since Valkey 9.2.0.
     IFNE(Vec<u8>),
 }
