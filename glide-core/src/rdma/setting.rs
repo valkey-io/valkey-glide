@@ -108,6 +108,8 @@ pub enum IncompatibleSetting {
     ReadOnly,
     /// Nodes are found by static discovery.
     StaticDiscovery,
+    /// The client is created for a connection pool.
+    ConnectionPool,
 }
 
 impl std::fmt::Display for IncompatibleSetting {
@@ -126,6 +128,7 @@ impl std::fmt::Display for IncompatibleSetting {
                  against the primary."
             }
             Self::StaticDiscovery => "static node discovery, which is meant for proxies.",
+            Self::ConnectionPool => "connection pooling yet.",
         })
     }
 }
@@ -176,6 +179,7 @@ mod tests {
                 IncompatibleSetting::StaticDiscovery,
                 "static node discovery",
             ),
+            (IncompatibleSetting::ConnectionPool, "connection pooling"),
         ] {
             let message = RdmaUnavailable::IncompatibleSetting(setting).to_string();
             assert!(
