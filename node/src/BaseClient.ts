@@ -2909,7 +2909,7 @@ export class BaseClient {
     /**
      * Move `key` from the currently selected database to the database specified by `dbIndex`.
      *
-     * @remarks Move is available for cluster mode since Valkey 9.0.0.
+     * @since Valkey 9.0.0 for cluster client.
      *
      * @see {@link https://valkey.io/commands/move/|valkey.io} for more details.
      *
@@ -2999,7 +2999,7 @@ export class BaseClient {
      * no action.
      *
      * @see {@link https://valkey.io/commands/copy/|valkey.io} for more details.
-     * @remarks destinationDB parameter for cluster mode is supported since Valkey 9.0.0
+     * @since Valkey 9.0.0 for cluster client.
      *
      * @param source - The key to the source value.
      * @param destination - The key where the value should be copied to.
@@ -3927,7 +3927,7 @@ export class BaseClient {
      * console.log(updateResult); // 0 or 1 depending on whether field1 exists
      * ```
      *
-     * @since Valkey 9.0.0
+     * @since Valkey 9.0.0.
      * @see {@link https://valkey.io/commands/hsetex/|valkey.io}
      */
     public async hsetex(
@@ -3994,7 +3994,7 @@ export class BaseClient {
      * console.log(timestampValues); // ["value5"] - field expires in 1 minute
      * ```
      *
-     * @since Valkey 9.0.0
+     * @since Valkey 9.0.0.
      * @see {@link https://valkey.io/commands/hgetex/|valkey.io}
      */
     public async hgetex(
@@ -4031,7 +4031,7 @@ export class BaseClient {
      * console.log(mixed); // ["value3", null]
      * ```
      *
-     * @since Valkey 9.1.0
+     * @since Valkey 9.1.0.
      * @see {@link https://valkey.io/commands/hgetdel/|valkey.io}
      */
     public async hgetdel(
@@ -5180,7 +5180,7 @@ export class BaseClient {
      *
      * @see {@link https://valkey.io/commands/sintercard/|valkey.io} for more details.
      * @remarks When in cluster mode, all `keys` must map to the same hash slot.
-     * @remarks Since Valkey 7.0.0.
+     * @since Valkey 7.0.0.
      *
      * @param keys - The keys of the sets.
      * @param options - (Optional) Additional parameters:
@@ -5391,7 +5391,7 @@ export class BaseClient {
      * or `-1` if `key` does not exist.
      *
      * @see {@link https://valkey.io/commands/sismember/|valkey.io} for more details.
-     * @remarks Since Valkey 9.2.0.
+     * @since Valkey 9.2.0.
      *
      * @param key - The key of the set.
      * @param member - The member to check for existence in the set.
@@ -5743,7 +5743,7 @@ export class BaseClient {
      * To get the expiration with millisecond precision, use {@link pexpiretime}.
      *
      * @see {@link https://valkey.io/commands/expiretime/|valkey.io} for details.
-     * @remarks Since Valkey 7.0.0.
+     * @since Valkey 7.0.0.
      *
      * @param key - The `key` to determine the expiration value of.
      * @returns The expiration Unix timestamp in seconds, `-2` if `key` does not exist or `-1` if `key` exists but has no associated expire.
@@ -5844,7 +5844,7 @@ export class BaseClient {
      * Returns the absolute Unix timestamp (since January 1, 1970) at which the given `key` will expire, in milliseconds.
      *
      * @see {@link https://valkey.io/commands/pexpiretime/|valkey.io} for details.
-     * @remarks Since Valkey 7.0.0.
+     * @since Valkey 7.0.0.
      *
      * @param key - The `key` to determine the expiration value of.
      * @returns The expiration Unix timestamp in seconds, `-2` if `key` does not exist or `-1` if `key` exists but has no associated expire.
@@ -5964,7 +5964,7 @@ export class BaseClient {
      * Returns the original source code of a script in the script cache.
      *
      * @see {@link https://valkey.io/commands/script-show|valkey.io} for more details.
-     * @remarks Since Valkey 8.0.0.
+     * @since Valkey 8.0.0.
      *
      * @param sha1 - The SHA1 digest of the script.
      * @param options - (Optional) See {@link DecoderOption}.
@@ -6244,7 +6244,7 @@ export class BaseClient {
      *
      * @see {@link https://valkey.io/commands/zintercard/|valkey.io} for more details.
      * @remarks When in cluster mode, all `keys` must map to the same hash slot.
-     * @remarks Since Valkey 7.0.0.
+     * @since Valkey 7.0.0.
      *
      * @param keys - The keys of the sorted sets to intersect.
      * @param options - (Optional) Additional parameters:
@@ -7438,7 +7438,7 @@ export class BaseClient {
      * Returns the rank of `member` in the sorted set stored at `key` with its score, where scores are ordered from the lowest to highest.
      *
      * @see {@link https://valkey.io/commands/zrank/|valkey.io} for more details.
-     * @remarks Since Valkey 7.2.0.
+     * @since Valkey 7.2.0.
      *
      * @param key - The key of the sorted set.
      * @param member - The member whose rank is to be retrieved.
@@ -7502,7 +7502,7 @@ export class BaseClient {
      * score, where scores are ordered from the highest to lowest, starting from `0`.
      *
      * @see {@link https://valkey.io/commands/zrevrank/|valkey.io} for more details.
-     * @remarks Since Valkey 7.2.0.
+     * @since Valkey 7.2.0.
      *
      * @param key - The key of the sorted set.
      * @param member - The member whose rank is to be retrieved.
@@ -8751,7 +8751,7 @@ export class BaseClient {
      *
      * @see {@link https://valkey.io/commands/fcall/|valkey.io} for more details.
      * @remarks When in cluster mode, all `keys` must map to the same hash slot.
-     * @remarks Since Valkey 7.0.0.
+     * @since Valkey 7.0.0.
      *
      * @param func - The function name.
      * @param keys - A list of `keys` accessed by the function. To ensure the correct execution of functions,
@@ -8780,7 +8780,7 @@ export class BaseClient {
      *
      * @see {@link https://valkey.io/commands/fcall/|valkey.io} for more details.
      * @remarks When in cluster mode, all `keys` must map to the same hash slot.
-     * @remarks Since Valkey 7.0.0.
+     * @since Valkey 7.0.0.
      *
      * @param func - The function name.
      * @param keys - A list of `keys` accessed by the function. To ensure the correct execution of functions,
@@ -9122,7 +9122,7 @@ export class BaseClient {
      *
      * @see {@link https://valkey.io/commands/zmpop/|valkey.io} for more details.
      * @remarks When in cluster mode, all `keys` must map to the same hash slot.
-     * @remarks Since Valkey 7.0.0.
+     * @since Valkey 7.0.0.
      *
      * @param keys - The keys of the sorted sets.
      * @param modifier - The element pop criteria - either {@link ScoreFilter.MIN} or
@@ -9169,7 +9169,7 @@ export class BaseClient {
      * @see {@link https://valkey.io/commands/bzmpop/|valkey.io} for more details.
      * @remarks When in cluster mode, all `keys` must map to the same hash slot.
      * @remarks `BZMPOP` is a client blocking command, see {@link https://glide.valkey.io/how-to/connection-management/#blocking-commands | Valkey GLIDE Documentation} for more details and best practices.
-     * @remarks Since Valkey 7.0.0.
+     * @since Valkey 7.0.0.
      *
      * @param keys - The keys of the sorted sets.
      * @param modifier - The element pop criteria - either {@link ScoreFilter.MIN} or
@@ -9389,7 +9389,7 @@ export class BaseClient {
      *
      * @see {@link https://valkey.io/commands/lcs/|valkey.io} for more details.
      * @remarks When in cluster mode, `key1` and `key2` must map to the same hash slot.
-     * @remarks Since Valkey 7.0.0.
+     * @since Valkey 7.0.0.
      *
      * @param key1 - The key that stores the first string.
      * @param key2 - The key that stores the second string.
@@ -9419,7 +9419,7 @@ export class BaseClient {
      *
      * @see {@link https://valkey.io/commands/lcs/|valkey.io} for more details.
      * @remarks When in cluster mode, `key1` and `key2` must map to the same hash slot.
-     * @remarks Since Valkey 7.0.0.
+     * @since Valkey 7.0.0.
      *
      * @param key1 - The key that stores the first string.
      * @param key2 - The key that stores the second string.
@@ -9452,7 +9452,7 @@ export class BaseClient {
      *
      * @see {@link https://valkey.io/commands/lcs/|valkey.io} for more details.
      * @remarks When in cluster mode, `key1` and `key2` must map to the same hash slot.
-     * @remarks Since Valkey 7.0.0.
+     * @since Valkey 7.0.0.
      *
      * @param key1 - The key that stores the first string.
      * @param key2 - The key that stores the second string.
@@ -9700,7 +9700,7 @@ export class BaseClient {
      *
      * @see {@link https://valkey.io/commands/lmpop/|valkey.io} for more details.
      * @remarks When in cluster mode, all `keys` must map to the same hash slot.
-     * @remarks Since Valkey 7.0.0.
+     * @since Valkey 7.0.0.
      *
      * @param keys - An array of keys.
      * @param direction - The direction based on which elements are popped from - see {@link ListDirection}.
@@ -9742,7 +9742,7 @@ export class BaseClient {
      *
      * @see {@link https://valkey.io/commands/blmpop/|valkey.io} for more details.
      * @remarks When in cluster mode, all `keys` must map to the same hash slot.
-     * @remarks Since Valkey 7.0.0.
+     * @since Valkey 7.0.0.
      *
      * @param keys - An array of keys.
      * @param direction - The direction based on which elements are popped from - see {@link ListDirection}.
@@ -9914,7 +9914,7 @@ export class BaseClient {
      * This command is routed depending on the client's {@link ReadFrom} strategy.
      *
      * @see {@link https://valkey.io/commands/sort/|valkey.io} for more details.
-     * @remarks Since Valkey 7.0.0.
+     * @since Valkey 7.0.0.
      * @remarks When in cluster mode, both `key` and the patterns specified in {@link SortOptions.byPattern}
      * and {@link SortOptions.getPatterns} must map to the same hash slot. The use of {@link SortOptions.byPattern}
      * and {@link SortOptions.getPatterns} in cluster mode is supported since Valkey 8.0.0.

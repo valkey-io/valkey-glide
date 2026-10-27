@@ -761,7 +761,7 @@ export class GlideClient extends BaseClient {
      * Deletes a library and all its functions.
      *
      * @see {@link https://valkey.io/commands/function-delete/|valkey.io} for details.
-     * @remarks Since Valkey 7.0.0.
+     * @since Valkey 7.0.0.
      *
      * @param libraryCode - The library name to delete.
      * @returns A simple `"OK"` response.
@@ -782,7 +782,7 @@ export class GlideClient extends BaseClient {
      * Loads a library to Valkey.
      *
      * @see {@link https://valkey.io/commands/function-load/|valkey.io} for details.
-     * @remarks Since Valkey 7.0.0.
+     * @since Valkey 7.0.0.
      *
      * @param libraryCode - The source code that implements the library.
      * @param options - (Optional) Additional parameters:
@@ -812,7 +812,7 @@ export class GlideClient extends BaseClient {
      * Deletes all function libraries.
      *
      * @see {@link https://valkey.io/commands/function-flush/|valkey.io} for details.
-     * @remarks Since Valkey 7.0.0.
+     * @since Valkey 7.0.0.
      *
      * @param mode - (Optional) The flushing mode, could be either {@link FlushMode.SYNC} or {@link FlushMode.ASYNC}.
      * @returns A simple `"OK"` response.
@@ -833,7 +833,7 @@ export class GlideClient extends BaseClient {
      * Returns information about the functions and libraries.
      *
      * @see {@link https://valkey.io/commands/function-list/|valkey.io} for details.
-     * @remarks Since Valkey 7.0.0.
+     * @since Valkey 7.0.0.
      *
      * @param options - (Optional) See {@link FunctionListOptions} and {@link DecoderOption}.
      * @returns Info about all or selected libraries and their functions in {@link FunctionListResponse} format.
@@ -877,7 +877,7 @@ export class GlideClient extends BaseClient {
      * The response includes a mapping from node address to the command response for that node.
      *
      * @see {@link https://valkey.io/commands/function-stats/|valkey.io} for details.
-     * @remarks Since Valkey 7.0.0.
+     * @since Valkey 7.0.0.
      *
      * @param options - (Optional) See {@link DecoderOption}.
      * @returns A Record where the key is the node address and the value is a Record with two keys:
@@ -932,7 +932,7 @@ export class GlideClient extends BaseClient {
      * `FUNCTION KILL` runs on all nodes of the server, including primary and replicas.
      *
      * @see {@link https://valkey.io/commands/function-kill/|valkey.io} for details.
-     * @remarks Since Valkey 7.0.0.
+     * @since Valkey 7.0.0.
      *
      * @returns `"OK"` if function is terminated. Otherwise, throws an error.
      * @example
@@ -950,7 +950,7 @@ export class GlideClient extends BaseClient {
      * Returns the serialized payload of all loaded libraries.
      *
      * @see {@link https://valkey.io/commands/function-dump/|valkey.io} for details.
-     * @remarks Since Valkey 7.0.0.
+     * @since Valkey 7.0.0.
      *
      * @returns The serialized payload of all loaded libraries.
      *
@@ -970,7 +970,7 @@ export class GlideClient extends BaseClient {
      * Restores libraries from the serialized payload returned by {@link functionDump}.
      *
      * @see {@link https://valkey.io/commands/function-restore/|valkey.io} for details.
-     * @remarks Since Valkey 7.0.0.
+     * @since Valkey 7.0.0.
      *
      * @param payload - The serialized data from {@link functionDump}.
      * @param policy - (Optional) A policy for handling existing libraries, see {@link FunctionRestorePolicy}.
@@ -1213,7 +1213,7 @@ export class GlideClient extends BaseClient {
      *
      * @see {@link https://valkey.io/commands/bgsave/|valkey.io} for more details.
      *
-     * @since Valkey 8.1.0
+     * @since Valkey 8.1.0.
      *
      * @returns A non-empty status string.
      *

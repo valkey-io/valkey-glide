@@ -1074,7 +1074,7 @@ public interface GenericBaseCommands {
      * Move <code>key</code> from the currently selected database to the database specified by <code>
      * dbIndex</code>.
      *
-     * @apiNote For Cluster mode the move is supported since Valkey 9.0.0.
+     * @since Valkey 9.0.0 for cluster client.
      * @see <a href="https://valkey.io/commands/move/">valkey.io</a> for more details.
      * @param key The key to move.
      * @param dbIndex The index of the database to move <code>key</code> to.
@@ -1093,7 +1093,7 @@ public interface GenericBaseCommands {
      * Move <code>key</code> from the currently selected database to the database specified by <code>
      * dbIndex</code>.
      *
-     * @apiNote For Cluster mode the move is supported since Valkey 9.0.0.
+     * @since Valkey 9.0.0 for cluster client.
      * @see <a href="https://valkey.io/commands/move/">valkey.io</a> for more details.
      * @param key The key to move.
      * @param dbIndex The index of the database to move <code>key</code> to.
@@ -1159,7 +1159,7 @@ public interface GenericBaseCommands {
      * <code>destinationDB</code>. When <code>replace</code> is true, removes the <code>destination
      * </code> key first if it already exists, otherwise performs no action.
      *
-     * @apiNote copy command for cluster mode is supported since Valkey 9.0.0
+     * @since Valkey 9.0.0 for cluster client.
      * @see <a href="https://valkey.io/commands/copy/">valkey.io</a> for details.
      * @param source The key to the source value.
      * @param destination The key where the value should be copied to.
@@ -1181,7 +1181,7 @@ public interface GenericBaseCommands {
      * <code>destinationDB</code>. When <code>replace</code> is true, removes the <code>destination
      * </code> key first if it already exists, otherwise performs no action.
      *
-     * @apiNote copy command for cluster mode is supported since Valkey 9.0.0
+     * @since Valkey 9.0.0 for cluster client.
      * @see <a href="https://valkey.io/commands/copy/">valkey.io</a> for details.
      * @param source The key to the source value.
      * @param destination The key where the value should be copied to.
@@ -1203,7 +1203,7 @@ public interface GenericBaseCommands {
      * <code>destinationDB</code>. When <code>replace</code> is true, removes the <code>destination
      * </code> key first if it already exists, otherwise performs no action.
      *
-     * @apiNote copy command for cluster mode is supported since Valkey 9.0.0
+     * @since Valkey 9.0.0 for cluster client.
      * @see <a href="https://valkey.io/commands/copy/">valkey.io</a> for details.
      * @param source The key to the source value.
      * @param destination The key where the value should be copied to.
@@ -1223,7 +1223,7 @@ public interface GenericBaseCommands {
      * <code>destinationDB</code>. When <code>replace</code> is true, removes the <code>destination
      * </code> key first if it already exists, otherwise performs no action.
      *
-     * @apiNote copy command for cluster mode is supported since Valkey 9.0.0
+     * @since Valkey 9.0.0 for cluster client.
      * @see <a href="https://valkey.io/commands/copy/">valkey.io</a> for details.
      * @param source The key to the source value.
      * @param destination The key where the value should be copied to.

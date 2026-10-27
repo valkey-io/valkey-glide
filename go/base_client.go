@@ -1345,9 +1345,9 @@ func (client *baseClient) MSetNX(ctx context.Context, keyValueMap map[string]str
 
 // Move key from the currently selected database to the database specified by `dbIndex`.
 //
-// Note:
+// Since:
 //
-//	In cluster mode move is available since Valkey 9.0.0.
+//	Valkey 9.0.0 for cluster client.
 //
 // See [valkey.io] for details.
 //

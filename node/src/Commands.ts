@@ -233,7 +233,7 @@ export enum InfoOptions {
     /**
      * CLUSTER_INFO: Valkey Cluster information.
      *
-     * @remarks Since Valkey 9.1.0.
+     * @since Valkey 9.1.0.
      */
     ClusterInfo = "cluster_info",
     /**
@@ -5398,37 +5398,37 @@ export interface MemoryStats {
 
     /**
      * Memory used by cluster links in bytes.
-     * @remarks Redis 7.0+ only.
+     * @since Redis 7.0.0.
      */
     clusterLinks?: number;
 
     /**
      * Memory used by functions caches in bytes.
-     * @remarks Redis 7.0+ only.
+     * @since Redis 7.0.0.
      */
     functionsCaches?: number;
 
     /**
      * Memory used by allocator muzzy pages in bytes.
-     * @remarks Valkey 8.0+ only.
+     * @since Valkey 8.0.0.
      */
     allocatorMuzzy?: number;
 
     /**
      * Count of db dictionaries currently rehashing.
-     * @remarks Valkey 8.0+ only.
+     * @since Valkey 8.0.0.
      */
     dbDictRehashingCount?: number;
 
     /**
      * Overhead of db hashtable LUT in bytes.
-     * @remarks Valkey 8.0+ only.
+     * @since Valkey 8.0.0.
      */
     overheadDbHashtableLut?: number;
 
     /**
      * Overhead of db hashtable rehashing in bytes.
-     * @remarks Valkey 8.0+ only.
+     * @since Valkey 8.0.0.
      */
     overheadDbHashtableRehashing?: number;
 }
