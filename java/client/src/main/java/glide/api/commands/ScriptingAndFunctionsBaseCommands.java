@@ -27,7 +27,7 @@ public interface ScriptingAndFunctionsBaseCommands {
      *       <li>if no <code>keys</code> are given, command will be routed to a random primary node.
      *     </ul>
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/fcall/">valkey.io</a> for details.
      * @param function The function name.
      * @param keys An <code>array</code> of keys accessed by the function. To ensure the correct
@@ -56,7 +56,7 @@ public interface ScriptingAndFunctionsBaseCommands {
      *       <li>if no <code>keys</code> are given, command will be routed to a random primary node.
      *     </ul>
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/fcall/">valkey.io</a> for details.
      * @param function The function name.
      * @param keys An <code>array</code> of keys accessed by the function. To ensure the correct
@@ -85,7 +85,7 @@ public interface ScriptingAndFunctionsBaseCommands {
      *       <li>if no <code>keys</code> are given, command will be routed to a random node.
      *     </ul>
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/fcall_ro/">valkey.io</a> for details.
      * @param function The function name.
      * @param keys An <code>array</code> of keys accessed by the function. To ensure the correct
@@ -113,7 +113,7 @@ public interface ScriptingAndFunctionsBaseCommands {
      *       <li>if no <code>keys</code> are given, command will be routed to a random node.
      *     </ul>
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/fcall_ro/">valkey.io</a> for details.
      * @param function The function name.
      * @param keys An <code>array</code> of keys accessed by the function. To ensure the correct
@@ -136,7 +136,7 @@ public interface ScriptingAndFunctionsBaseCommands {
      * Returns the original source code of a script in the script cache.
      *
      * @see <a href="https://valkey.io/commands/script-show">valkey.io</a> for details.
-     * @since Valkey 8.0.0 and above.
+     * @since Valkey 8.0.0.
      * @param sha1 The SHA1 digest of the script.
      * @return The original source code of the script, if present in the cache. If the script is not
      *     found in the cache, an error is thrown.
@@ -152,7 +152,7 @@ public interface ScriptingAndFunctionsBaseCommands {
      * Returns the original source code of a script in the script cache.
      *
      * @see <a href="https://valkey.io/commands/script-show">valkey.io</a> for details.
-     * @since Valkey 8.0.0 and above.
+     * @since Valkey 8.0.0.
      * @param sha1 The SHA1 digest of the script.
      * @return The original source code of the script, if present in the cache. If the script is not
      *     found in the cache, an error is thrown.
@@ -252,7 +252,7 @@ public interface ScriptingAndFunctionsBaseCommands {
      * Executes a read-only Lua script.<br>
      * This command is routed depending on the client's {@link ReadFrom} strategy.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/eval_ro/">valkey.io</a> for details.
      * @param script The Lua script to execute.
      * @return A value that depends on the script that was executed.
@@ -270,7 +270,7 @@ public interface ScriptingAndFunctionsBaseCommands {
      * This command is routed depending on the client's {@link ReadFrom} strategy.
      *
      * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/eval_ro/">valkey.io</a> for details.
      * @param script The Lua script to execute.
      * @param keys An array of keys accessed by the script.
@@ -290,7 +290,7 @@ public interface ScriptingAndFunctionsBaseCommands {
      * Executes a read-only Lua script.<br>
      * This command is routed depending on the client's {@link ReadFrom} strategy.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/eval_ro/">valkey.io</a> for details.
      * @param script The Lua script to execute.
      * @return A value that depends on the script that was executed.
@@ -308,7 +308,7 @@ public interface ScriptingAndFunctionsBaseCommands {
      * This command is routed depending on the client's {@link ReadFrom} strategy.
      *
      * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/eval_ro/">valkey.io</a> for details.
      * @param script The Lua script to execute.
      * @param keys An array of keys accessed by the script.
@@ -329,7 +329,7 @@ public interface ScriptingAndFunctionsBaseCommands {
      * Executes a read-only Lua script by its SHA1 digest.<br>
      * This command is routed depending on the client's {@link ReadFrom} strategy.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/evalsha_ro/">valkey.io</a> for details.
      * @param sha1 The SHA1 digest of the script to execute.
      * @return A value that depends on the script that was executed.
@@ -347,7 +347,7 @@ public interface ScriptingAndFunctionsBaseCommands {
      * This command is routed depending on the client's {@link ReadFrom} strategy.
      *
      * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/evalsha_ro/">valkey.io</a> for details.
      * @param sha1 The SHA1 digest of the script to execute.
      * @param keys An array of keys accessed by the script.
@@ -367,7 +367,7 @@ public interface ScriptingAndFunctionsBaseCommands {
      * Executes a read-only Lua script by its SHA1 digest.<br>
      * This command is routed depending on the client's {@link ReadFrom} strategy.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/evalsha_ro/">valkey.io</a> for details.
      * @param sha1 The SHA1 digest of the script to execute.
      * @return A value that depends on the script that was executed.
@@ -385,7 +385,7 @@ public interface ScriptingAndFunctionsBaseCommands {
      * This command is routed depending on the client's {@link ReadFrom} strategy.
      *
      * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/evalsha_ro/">valkey.io</a> for details.
      * @param sha1 The SHA1 digest of the script to execute.
      * @param keys An array of keys accessed by the script.
@@ -405,7 +405,6 @@ public interface ScriptingAndFunctionsBaseCommands {
     /**
      * Sets the debugging mode for executed scripts.
      *
-     * @since Redis 3.2 and above.
      * @see <a href="https://valkey.io/commands/script-debug/">valkey.io</a> for details.
      * @param mode The debugging mode to set.
      * @return <code>OK</code>.

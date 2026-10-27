@@ -106,7 +106,7 @@ public class ClusterBatch extends BaseBatch<ClusterBatch> {
     /**
      * Publishes message on pubsub channel in sharded mode.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
      * @see <a href="https://valkey.io/commands/publish/">valkey.io</a> for details.
@@ -232,7 +232,7 @@ public class ClusterBatch extends BaseBatch<ClusterBatch> {
     /**
      * Returns details about the shards of the cluster.
      *
-     * @apiNote Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/cluster-shards/">valkey.io</a> for details.
      * @return Command response - An <code>array</code> of shard information maps.
      */
@@ -256,7 +256,7 @@ public class ClusterBatch extends BaseBatch<ClusterBatch> {
     /**
      * Returns information about the TCP links to and from each node in the cluster.
      *
-     * @apiNote Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/cluster-links/">valkey.io</a> for details.
      * @return Command response - An <code>array</code> of link information maps.
      */
@@ -442,7 +442,7 @@ public class ClusterBatch extends BaseBatch<ClusterBatch> {
     /**
      * Returns the shard ID of the current node.
      *
-     * @apiNote Valkey 7.2 and above.
+     * @since Valkey 7.2.0.
      * @see <a href="https://valkey.io/commands/cluster-myshardid/">valkey.io</a> for details.
      * @return Command response - A <code>String</code> containing the shard ID.
      */
@@ -491,7 +491,7 @@ public class ClusterBatch extends BaseBatch<ClusterBatch> {
     /**
      * Assigns hash slot ranges to the current node.
      *
-     * @apiNote Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/cluster-addslotsrange/">valkey.io</a> for details.
      * @param slotRanges A 2D array where each sub-array contains two elements: [start_slot, end_slot]
      *     representing an inclusive range of slots to assign.
@@ -517,7 +517,7 @@ public class ClusterBatch extends BaseBatch<ClusterBatch> {
     /**
      * Removes hash slot ranges from the current node.
      *
-     * @apiNote Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/cluster-delslotsrange/">valkey.io</a> for details.
      * @param slotRanges A 2D array where each sub-array contains two elements: [start_slot, end_slot]
      *     representing an inclusive range of slots to remove.

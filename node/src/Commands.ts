@@ -233,7 +233,7 @@ export enum InfoOptions {
     /**
      * CLUSTER_INFO: Valkey Cluster information.
      *
-     * @remarks Since Valkey version 9.1.0.
+     * @since Valkey 9.1.0.
      */
     ClusterInfo = "cluster_info",
     /**
@@ -2858,7 +2858,7 @@ export interface BitOffsetOptions {
     /** The starting offset index. */
     start: number;
     /**
-     * The ending offset index. Optional since Valkey version 8.0 and above for the BITCOUNT command.
+     * The ending offset index. Optional since Valkey 8.0.0 for the BITCOUNT command.
      * If not provided, it will default to the end of the string.
      * Could be defined only if `start` is defined.
      */
@@ -2946,11 +2946,7 @@ export function createBitPos(
  * See https://valkey.io/commands/flushall/ and https://valkey.io/commands/flushdb/ for details.
  */
 export enum FlushMode {
-    /**
-     * Flushes synchronously.
-     *
-     * since Valkey version 6.2.0.
-     */
+    /** Flushes synchronously. */
     SYNC = "SYNC",
     /** Flushes asynchronously. */
     ASYNC = "ASYNC",
@@ -3089,11 +3085,11 @@ export function createXLen(key: GlideString): command_request.Command {
 
 /** Optional arguments for {@link BaseClient.xpendingWithOptions|xpending}. */
 export interface StreamPendingOptions {
-    /** Filter pending entries by their idle time - in milliseconds. Available since Valkey 6.2.0. */
+    /** Filter pending entries by their idle time - in milliseconds. */
     minIdleTime?: number;
-    /** Starting stream ID bound for range. Exclusive range is available since Valkey 6.2.0. */
+    /** Starting stream ID bound for range. */
     start: Boundary<string>;
-    /** Ending stream ID bound for range. Exclusive range is available since Valkey 6.2.0. */
+    /** Ending stream ID bound for range. */
     end: Boundary<string>;
     /** Limit the number of messages returned. */
     count: number;
@@ -3227,7 +3223,7 @@ export interface StreamGroupOptions {
      * find out how many entries are between the arbitrary ID (excluding it) and the stream's last
      * entry.
      *
-     * since Valkey version 7.0.0.
+     * Since Valkey 7.0.0.
      */
     entriesRead?: string;
 }
@@ -4194,7 +4190,7 @@ export function createZIncrBy(
  * See https://valkey.io/commands/sort/ for more details.
  *
  * @remarks When in cluster mode, {@link SortOptions.byPattern|byPattern} and {@link SortOptions.getPatterns|getPattern} must map to the same hash
- *     slot as the key, and this is supported only since Valkey version 8.0.
+ *     slot as the key, and this is supported only since Valkey 8.0.0.
  */
 export interface SortOptions {
     /**
@@ -4203,7 +4199,7 @@ export interface SortOptions {
      * from the key replaces the asterisk to create the key name. For example, if `key`
      * contains IDs of objects, `byPattern` can be used to sort these IDs based on an
      * attribute of the objects, like their weights or timestamps.
-     * Supported in cluster mode since Valkey version 8.0 and above.
+     * Supported in cluster mode since Valkey 8.0.0.
      */
     byPattern?: GlideString;
 
@@ -4225,7 +4221,7 @@ export interface SortOptions {
      * arguments can be provided to retrieve multiple attributes. The special value `#` can
      * be used to include the actual element from `key` being sorted. If not provided, only
      * the sorted elements themselves are returned.
-     * Supported in cluster mode since Valkey version 8.0 and above.
+     * Supported in cluster mode since Valkey 8.0.0.
      */
     getPatterns?: GlideString[];
 
@@ -4637,7 +4633,7 @@ export interface ClusterScanOptions extends ScanOptions {
 export type ZScanOptions = BaseScanOptions & {
     /**
      * If true, the scores are not included in the results.
-     * Supported from Valkey 8.0.0 and above.
+     * Supported since Valkey 8.0.0.
      */
     readonly noScores?: boolean;
 };
@@ -4648,7 +4644,7 @@ export type ZScanOptions = BaseScanOptions & {
 export type HScanOptions = BaseScanOptions & {
     /**
      * If true, the values of the fields are not included in the results.
-     * Supported from Valkey 8.0.0 and above.
+     * Supported since Valkey 8.0.0.
      */
     readonly noValues?: boolean;
 };
@@ -5402,37 +5398,37 @@ export interface MemoryStats {
 
     /**
      * Memory used by cluster links in bytes.
-     * @remarks Redis 7.0+ only.
+     * @since Redis 7.0.0.
      */
     clusterLinks?: number;
 
     /**
      * Memory used by functions caches in bytes.
-     * @remarks Redis 7.0+ only.
+     * @since Redis 7.0.0.
      */
     functionsCaches?: number;
 
     /**
      * Memory used by allocator muzzy pages in bytes.
-     * @remarks Valkey 8.0+ only.
+     * @since Valkey 8.0.0.
      */
     allocatorMuzzy?: number;
 
     /**
      * Count of db dictionaries currently rehashing.
-     * @remarks Valkey 8.0+ only.
+     * @since Valkey 8.0.0.
      */
     dbDictRehashingCount?: number;
 
     /**
      * Overhead of db hashtable LUT in bytes.
-     * @remarks Valkey 8.0+ only.
+     * @since Valkey 8.0.0.
      */
     overheadDbHashtableLut?: number;
 
     /**
      * Overhead of db hashtable rehashing in bytes.
-     * @remarks Valkey 8.0+ only.
+     * @since Valkey 8.0.0.
      */
     overheadDbHashtableRehashing?: number;
 }

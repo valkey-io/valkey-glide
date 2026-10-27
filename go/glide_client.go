@@ -621,7 +621,7 @@ func (client *Client) BgSaveSchedule(ctx context.Context) (string, error) {
 
 // Aborts all in-progress and scheduled background saves.
 //
-// Available since Valkey 8.1.
+// Available since Valkey 8.1.0.
 //
 // See [valkey.io] for details.
 //
@@ -1083,7 +1083,7 @@ func (client *Client) RandomKey(ctx context.Context) (models.Result[string], err
 //
 // Since:
 //
-//	Valkey 7.0 and above.
+//	Valkey 7.0.0.
 //
 // Note:
 //
@@ -1115,7 +1115,7 @@ func (client *Client) FunctionKill(ctx context.Context) (string, error) {
 //
 // Since:
 //
-//	Valkey 7.0 and above.
+//	Valkey 7.0.0.
 //
 // See [valkey.io] for details.
 //
@@ -1143,7 +1143,7 @@ func (client *Client) FunctionStats(ctx context.Context) (map[string]models.Func
 //
 // Since:
 //
-//	Valkey 7.0 and above.
+//	Valkey 7.0.0.
 //
 // See [valkey.io] for details.
 //
@@ -1169,7 +1169,7 @@ func (client *Client) FunctionDelete(ctx context.Context, libName string) (strin
 //
 // Since:
 //
-//	Valkey 7.0 and above.
+//	Valkey 7.0.0.
 //
 // See [valkey.io] for details.
 //
@@ -1195,7 +1195,7 @@ func (client *Client) FunctionList(ctx context.Context, query models.FunctionLis
 //
 // Since:
 //
-//	Valkey 7.0 and above.
+//	Valkey 7.0.0.
 //
 // See [valkey.io] for more details.
 //
@@ -1220,7 +1220,7 @@ func (client *Client) FunctionDump(ctx context.Context) (string, error) {
 //
 // Since:
 //
-//	Valkey 7.0 and above.
+//	Valkey 7.0.0.
 //
 // See [valkey.io] for more details.
 //
@@ -1246,7 +1246,7 @@ func (client *Client) FunctionRestore(ctx context.Context, payload string) (stri
 //
 // Since:
 //
-//	Valkey 7.0 and above.
+//	Valkey 7.0.0.
 //
 // See [valkey.io] for more details.
 //
