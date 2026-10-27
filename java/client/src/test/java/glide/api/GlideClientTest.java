@@ -413,7 +413,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
-import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
@@ -1010,10 +1010,9 @@ public class GlideClientTest {
 
     @SneakyThrows
     @ParameterizedTest
-    @EnumSource(
-            value = ConditionalSet.class,
-            names = {"ONLY_IF_EQUAL", "ONLY_IF_NOT_EQUAL"})
-    public void set_with_SetOptions_value_comparison_success(ConditionalSet condition) {
+    @CsvSource({"ONLY_IF_EQUAL, IFEQ", "ONLY_IF_NOT_EQUAL, IFNE"})
+    public void set_with_SetOptions_value_comparison_success(
+            ConditionalSet condition, String keyword) {
         // setup
         String key = "key";
         String value = "value";
@@ -1034,7 +1033,7 @@ public class GlideClientTest {
         String comparisonValue = condition == ONLY_IF_EQUAL ? value : newValue;
         SetOptions setOptions = valueComparisonOptions(condition, comparisonValue);
         String[] correctConditionArguments =
-                new String[] {key, newValue, condition.getValkeyApi(), comparisonValue, "EXAT", "60"};
+                new String[] {key, newValue, keyword, comparisonValue, "EXAT", "60"};
         CompletableFuture<String> correctSetResponse = new CompletableFuture<>();
         correctSetResponse.complete("OK");
         when(commandManager.<String>submitNewCommand(eq(pSet), eq(correctConditionArguments), any()))
@@ -1056,10 +1055,8 @@ public class GlideClientTest {
 
     @SneakyThrows
     @ParameterizedTest
-    @EnumSource(
-            value = ConditionalSet.class,
-            names = {"ONLY_IF_EQUAL", "ONLY_IF_NOT_EQUAL"})
-    public void set_with_SetOptions_value_comparison_fails(ConditionalSet condition) {
+    @CsvSource({"ONLY_IF_EQUAL, IFEQ", "ONLY_IF_NOT_EQUAL, IFNE"})
+    public void set_with_SetOptions_value_comparison_fails(ConditionalSet condition, String keyword) {
         // Key-Value setup
         String key = "key";
         String value = "value";
@@ -1080,7 +1077,7 @@ public class GlideClientTest {
         String comparisonValue = condition == ONLY_IF_EQUAL ? newValue : value;
         SetOptions wrongConditionOptions = valueComparisonOptions(condition, comparisonValue);
         String[] wrongConditionArguments =
-                new String[] {key, newValue, condition.getValkeyApi(), comparisonValue, "EXAT", "60"};
+                new String[] {key, newValue, keyword, comparisonValue, "EXAT", "60"};
 
         CompletableFuture<String> failedSetResponse = new CompletableFuture<>();
         failedSetResponse.complete(null);
@@ -1103,10 +1100,9 @@ public class GlideClientTest {
 
     @SneakyThrows
     @ParameterizedTest
-    @EnumSource(
-            value = ConditionalSet.class,
-            names = {"ONLY_IF_EQUAL", "ONLY_IF_NOT_EQUAL"})
-    public void set_with_SetOptions_and_binary_value_comparison_success(ConditionalSet condition) {
+    @CsvSource({"ONLY_IF_EQUAL, IFEQ", "ONLY_IF_NOT_EQUAL, IFNE"})
+    public void set_with_SetOptions_and_binary_value_comparison_success(
+            ConditionalSet condition, String keyword) {
         // setup
         GlideString key = gs("key");
         GlideString value = gs(new byte[] {(byte) 0xFF});
@@ -1130,9 +1126,7 @@ public class GlideClientTest {
         GlideString comparisonValue = condition == ONLY_IF_EQUAL ? value : newValue;
         SetOptions setOptions = valueComparisonOptions(condition, comparisonValue);
         GlideString[] correctConditionArguments =
-                new GlideString[] {
-                    key, newValue, gs(condition.getValkeyApi()), comparisonValue, gs("EXAT"), gs("60")
-                };
+                new GlideString[] {key, newValue, gs(keyword), comparisonValue, gs("EXAT"), gs("60")};
         CompletableFuture<String> correctSetResponse = new CompletableFuture<>();
         correctSetResponse.complete("OK");
         when(commandManager.<String>submitNewCommand(eq(pSet), eq(correctConditionArguments), any()))
@@ -1154,10 +1148,9 @@ public class GlideClientTest {
 
     @SneakyThrows
     @ParameterizedTest
-    @EnumSource(
-            value = ConditionalSet.class,
-            names = {"ONLY_IF_EQUAL", "ONLY_IF_NOT_EQUAL"})
-    public void set_with_SetOptions_and_binary_value_comparison_fails(ConditionalSet condition) {
+    @CsvSource({"ONLY_IF_EQUAL, IFEQ", "ONLY_IF_NOT_EQUAL, IFNE"})
+    public void set_with_SetOptions_and_binary_value_comparison_fails(
+            ConditionalSet condition, String keyword) {
         // Key-Value setup
         GlideString key = gs("key");
         GlideString value = gs(new byte[] {(byte) 0xFF});
@@ -1181,9 +1174,7 @@ public class GlideClientTest {
         GlideString comparisonValue = condition == ONLY_IF_EQUAL ? newValue : value;
         SetOptions wrongConditionOptions = valueComparisonOptions(condition, comparisonValue);
         GlideString[] wrongConditionArguments =
-                new GlideString[] {
-                    key, newValue, gs(condition.getValkeyApi()), comparisonValue, gs("EXAT"), gs("60")
-                };
+                new GlideString[] {key, newValue, gs(keyword), comparisonValue, gs("EXAT"), gs("60")};
 
         CompletableFuture<String> failedSetResponse = new CompletableFuture<>();
         failedSetResponse.complete(null);
