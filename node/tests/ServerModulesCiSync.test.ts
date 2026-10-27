@@ -41,6 +41,37 @@ const LOCAL_RUNNER_FILE = join(REPO_ROOT, "utils", "run-modules-ci-locally.sh");
 
 const ENDPOINT_FLAGS = ["--standalone-endpoints", "--cluster-endpoints"];
 
+/**
+ * Slices the `node)` case arm out of the runner script's `case
+ * "$MODULES_TEST_LANG" in ... esac` block, from the `node)` label up to
+ * its closing `;;`. Narrower than searching the whole file: the Python
+ * arm of this same script already contains both endpoint flags, so a
+ * whole-file `toContain` check would still pass even if the Node arm
+ * specifically lost them (e.g. during a merge-conflict resolution that
+ * kept the wrong arm's content). Deliberately simple (a case-insensitive
+ * label match, not a shell parser) -- this is a drift GUARD over a small,
+ * hand-written script, not a general-purpose arg parser.
+ */
+function extractNodeCaseArm(runnerText: string): string {
+    const nodeArmStart = runnerText.indexOf("node)");
+
+    if (nodeArmStart === -1) {
+        throw new Error(
+            "run-modules-ci-locally.sh has no `node)` case arm to check",
+        );
+    }
+
+    const armEnd = runnerText.indexOf(";;", nodeArmStart);
+
+    if (armEnd === -1) {
+        throw new Error(
+            "run-modules-ci-locally.sh's `node)` case arm has no closing `;;`",
+        );
+    }
+
+    return runnerText.slice(nodeArmStart, armEnd);
+}
+
 describe("GlideFt CI sync: node-modules.yml / run-modules-ci-locally.sh", () => {
     it("both invoke npm run test:modules with the same endpoint flags", () => {
         const workflowText = readFileSync(WORKFLOW_FILE, "utf-8");
@@ -49,9 +80,16 @@ describe("GlideFt CI sync: node-modules.yml / run-modules-ci-locally.sh", () => 
         expect(workflowText).toContain("npm run test:modules");
         expect(runnerText).toContain("npm run test:modules");
 
+        const nodeArm = extractNodeCaseArm(runnerText);
+        expect(nodeArm).toContain("npm run test:modules");
+
         for (const flag of ENDPOINT_FLAGS) {
             expect(workflowText).toContain(flag);
-            expect(runnerText).toContain(flag);
+            // Checked against the Node arm specifically, not the whole
+            // runner script -- the Python arm already contains both
+            // flags for its own invocation, so a whole-file check would
+            // pass even if the Node arm lost them.
+            expect(nodeArm).toContain(flag);
         }
     });
 
