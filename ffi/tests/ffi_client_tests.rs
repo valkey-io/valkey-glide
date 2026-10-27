@@ -973,3 +973,57 @@ fn rdma_close_regions_cancels_transfers_and_keeps_the_client() {
         close_client(client_ptr);
     }
 }
+
+/// The memory counters answer for a client with an RDMA configuration, and
+/// refuse one without, which has no fabric to count.
+#[cfg(feature = "rdma")]
+#[test]
+fn rdma_memory_counters_answer_only_for_an_rdma_client() {
+    use glide_core::connection_request::{RdmaConfig, TcpProvider};
+
+    let server = Server::new();
+    let connect = |rdma: bool| {
+        let mut request = ConnectionRequest::new();
+        request.tls_mode = TlsMode::NoTls.into();
+        let mut address = NodeAddress::new();
+        address.host = "localhost".into();
+        address.port = server.port as u32;
+        request.addresses.push(address);
+        if rdma {
+            let mut config = RdmaConfig::new();
+            config.set_tcp(TcpProvider::new());
+            request.rdma_config = protobuf::MessageField::some(config);
+        }
+        let request = request.write_to_bytes().expect("Failed to serialize");
+        unsafe {
+            let response = create_client(
+                request.as_ptr(),
+                request.len(),
+                Box::into_raw(Box::new(ClientType::SyncClient)),
+                None,
+                None,
+                0,
+            );
+            assert!((*response).connection_error_message.is_null());
+            let client = (*response).conn_ptr;
+            free_connection_response(response.cast_mut());
+            client
+        }
+    };
+
+    unsafe {
+        let rdma_client = connect(true);
+        let (mut parked, mut leaked) = (usize::MAX, usize::MAX);
+        assert!(rdma_parked_bytes(rdma_client, &mut parked));
+        assert!(rdma_leaked_bytes(rdma_client, &mut leaked));
+        assert_eq!((parked, leaked), (0, 0), "no transfer has run");
+        close_client(rdma_client);
+
+        let plain_client = connect(false);
+        let mut out = 7;
+        assert!(!rdma_parked_bytes(plain_client, &mut out));
+        assert!(!rdma_leaked_bytes(plain_client, &mut out));
+        assert_eq!(out, 7);
+        close_client(plain_client);
+    }
+}

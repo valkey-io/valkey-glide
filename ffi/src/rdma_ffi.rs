@@ -56,16 +56,31 @@ pub struct RdmaRegion {
     /// The fabric the buffer was registered with, kept even once the buffer is
     /// gone, so [`free_rdma_region`] can wait for the region to finish closing.
     fabric: glide_rdma::RdmaFabric,
+    /// Says whether the region closed, even once the buffer is gone, so
+    /// [`free_rdma_region`] can tell parked memory from leaked memory.
+    revoker: glide_rdma::RdmaRevoker,
 }
 
 /// What [`free_rdma_region`] hands back when the fabric still holds the caller's
-/// memory, because a write may yet land in it or its region failed to close.
+/// memory. There are two reasons, and they end differently:
 ///
-/// The caller must keep the memory alive until [`rdma_memory_released`] says so,
-/// then free this with [`free_rdma_memory_hold`].
+/// * Parked: a transfer ended before the server was known to be done with the
+///   memory, and the region closed, but on the tcp provider closing a region
+///   does not stop a write already accepted. The fabric lets go of the memory
+///   once it closes, which is after [`close_client`] has been called and every
+///   region registered through that client has been freed. Only tcp parks
+///   memory: on efa-direct, closing the region also stops writes in flight.
+/// * Leaked: the region failed to close, which takes a device or driver error.
+///   The server might still reach the memory, so it is never let go of, on any
+///   provider.
+///
+/// [`rdma_memory_leaked`] says which. The caller must keep the memory alive until
+/// [`rdma_memory_released`] returns true, which for leaked memory is never, and
+/// free this with [`free_rdma_memory_hold`] either way.
 #[cfg(feature = "rdma")]
 pub struct RdmaMemoryHold {
     released: Arc<AtomicBool>,
+    leaked: bool,
 }
 
 #[cfg(feature = "rdma")]
@@ -76,6 +91,7 @@ impl RdmaRegion {
         Self {
             capacity: buffer.capacity(),
             fabric: buffer.fabric().clone(),
+            revoker: buffer.revoker(),
             buffer: Some(buffer),
             released,
         }
@@ -725,12 +741,10 @@ pub unsafe extern "C" fn rdma_close_regions(client_adapter_ptr: *const c_void) -
 /// # Returns
 ///
 /// Null when the caller may free or reuse the memory as soon as this returns. A
-/// hold when the fabric still keeps it: a transfer on this region ended before
-/// the server was known to be done with the memory and a write could still land,
-/// or the region failed to close. The caller must then keep the memory alive
-/// until [`rdma_memory_released`] returns true, and free the hold with
-/// [`free_rdma_memory_hold`]. A hold for a region that failed to close is never
-/// released. Null is a no-op that returns null.
+/// hold when the fabric still keeps it, because the memory is parked or leaked;
+/// see [`RdmaMemoryHold`]. The caller must then keep the memory alive until
+/// [`rdma_memory_released`] returns true, and free the hold with
+/// [`free_rdma_memory_hold`]. Null is a no-op that returns null.
 ///
 /// # Safety
 ///
@@ -748,6 +762,7 @@ pub unsafe extern "C" fn free_rdma_region(region: *mut RdmaRegion) -> *mut RdmaM
             buffer,
             released,
             fabric,
+            revoker,
             ..
         } = *unsafe { Box::from_raw(region) };
         // Dropping the buffer only queues its region's close on the fabric's
@@ -759,7 +774,10 @@ pub unsafe extern "C" fn free_rdma_region(region: *mut RdmaRegion) -> *mut RdmaM
         // lets go of any memory it parked, so check `released` only after.
         drop(fabric);
         if !released.load(Ordering::Acquire) {
-            return Box::into_raw(Box::new(RdmaMemoryHold { released }));
+            // Every close of this region has been tried by now, so a region that
+            // is still open will stay open.
+            let leaked = !revoker.is_released();
+            return Box::into_raw(Box::new(RdmaMemoryHold { released, leaked }));
         }
     }
     #[cfg(not(feature = "rdma"))]
@@ -769,6 +787,11 @@ pub unsafe extern "C" fn free_rdma_region(region: *mut RdmaRegion) -> *mut RdmaM
 
 /// Whether the fabric has let go of the memory a [`RdmaMemoryHold`] keeps. Once
 /// true, it stays true, and the caller may free the memory. True for null.
+///
+/// Parked memory is let go of only once [`close_client`] has been called and
+/// every region registered through that client has been freed, so polling this
+/// while still holding another region of the same client never returns true.
+/// Leaked memory is never let go of; check [`rdma_memory_leaked`] before polling.
 ///
 /// # Safety
 ///
@@ -782,6 +805,117 @@ pub unsafe extern "C" fn rdma_memory_released(hold: *const RdmaMemoryHold) -> bo
     #[cfg(not(feature = "rdma"))]
     let _ = hold;
     true
+}
+
+/// Whether the memory a [`RdmaMemoryHold`] keeps is leaked: its region failed to
+/// close, so it is never let go of and the caller must keep it for the rest of
+/// the process. False for parked memory, which is let go of later, and for null.
+///
+/// # Safety
+///
+/// * `hold` must be null or a live hold from [`free_rdma_region`].
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rdma_memory_leaked(hold: *const RdmaMemoryHold) -> bool {
+    #[cfg(feature = "rdma")]
+    if !hold.is_null() {
+        return unsafe { &*hold }.leaked;
+    }
+    #[cfg(not(feature = "rdma"))]
+    let _ = hold;
+    false
+}
+
+/// How many bytes of caller memory the client's fabric holds after transfers that
+/// ended before the server was known to be done with them: memory that is parked
+/// or leaked, from regions freed or not; see [`RdmaMemoryHold`].
+///
+/// Parked memory only accumulates while the client is open. If this passes a
+/// threshold of your own, create a new client, register your memory again, then
+/// close the old client and free its regions.
+///
+/// # Returns
+///
+/// True with the count in `out`. False when the client was created without an
+/// RDMA configuration, when this build has no RDMA support, or when a pointer is
+/// null, leaving `out` untouched.
+///
+/// # Safety
+///
+/// * `client_adapter_ptr` must be null or a pointer from [`create_client`] that
+///   [`close_client`] has not been called on.
+/// * `out` must be null or point to a writable `size_t`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rdma_parked_bytes(
+    client_adapter_ptr: *const c_void,
+    out: *mut usize,
+) -> bool {
+    #[cfg(feature = "rdma")]
+    {
+        unsafe { read_counter(client_adapter_ptr, out, |client| client.rdma_parked_bytes()) }
+    }
+    #[cfg(not(feature = "rdma"))]
+    {
+        let _ = (client_adapter_ptr, out);
+        false
+    }
+}
+
+/// How many bytes of caller memory the client's fabric can never let go of
+/// because their regions failed to close; see [`rdma_memory_leaked`].
+///
+/// A failed close takes a device or driver error, so this should stay at zero.
+/// Once it is not, the server might still write into that memory, and the
+/// client's parked memory can no longer be let go of either. Each failure is
+/// also logged at error level. Watch this against a threshold of your own, and
+/// restart the process once it is passed.
+///
+/// # Returns
+///
+/// As for [`rdma_parked_bytes`].
+///
+/// # Safety
+///
+/// As for [`rdma_parked_bytes`].
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rdma_leaked_bytes(
+    client_adapter_ptr: *const c_void,
+    out: *mut usize,
+) -> bool {
+    #[cfg(feature = "rdma")]
+    {
+        unsafe { read_counter(client_adapter_ptr, out, |client| client.rdma_leaked_bytes()) }
+    }
+    #[cfg(not(feature = "rdma"))]
+    {
+        let _ = (client_adapter_ptr, out);
+        false
+    }
+}
+
+/// Write one of the client's RDMA memory counters to `out`, or return false if the
+/// client has none.
+///
+/// # Safety
+///
+/// As for [`rdma_parked_bytes`].
+#[cfg(feature = "rdma")]
+unsafe fn read_counter(
+    client_adapter_ptr: *const c_void,
+    out: *mut usize,
+    read: impl FnOnce(&GlideClient) -> Result<usize, redis::RedisError>,
+) -> bool {
+    if client_adapter_ptr.is_null() || out.is_null() {
+        return false;
+    }
+    // Borrowed without touching the reference count, as `rdma_close_regions` does.
+    let adapter = unsafe { &*(client_adapter_ptr as *const ClientAdapter) };
+    match read(&adapter.core.client) {
+        Ok(bytes) => {
+            unsafe { *out = bytes };
+            true
+        }
+        Err(_) => false,
+    }
 }
 
 /// Free a hold from [`free_rdma_region`]. This does not free the caller's memory,
@@ -1208,6 +1342,10 @@ mod tests {
 
         assert!(!hold.is_null(), "the fabric still holds the memory");
         assert!(!unsafe { rdma_memory_released(hold) });
+        assert!(
+            !unsafe { rdma_memory_leaked(hold) },
+            "the region closed, so the memory is parked, not leaked"
+        );
         drop(fabric);
         assert!(
             unsafe { rdma_memory_released(hold) },
@@ -1302,11 +1440,59 @@ mod tests {
         unsafe { free_rdma_result(result) };
     }
 
+    /// A region that is still open once every close has been tried failed to
+    /// close, so its memory is leaked. A real failed close needs a device error,
+    /// so this stands one in: the region reports on a buffer that is never closed.
     #[cfg(feature = "rdma")]
     #[test]
-    fn a_null_hold_is_released_and_freeing_it_is_a_no_op() {
+    fn a_hold_whose_region_did_not_close_is_leaked() {
+        let fabric = tcp_fabric();
+        let mut memory = vec![0u8; 64];
+        let mut region = foreign_region(&fabric, &mut memory);
+        let mut other_memory = vec![0u8; 64];
+        let still_open = foreign_region(&fabric, &mut other_memory);
+        region.revoker = still_open.buffer.as_ref().unwrap().revoker();
+        // Park the memory, so the fabric still holds it when the region is freed.
+        let (_command, loan) = region
+            .buffer
+            .take()
+            .unwrap()
+            .lend_for_get(b"key", 0, 64)
+            .expect("lends");
+        loan.recall().expect("the region closes");
+
+        let hold = unsafe { free_rdma_region(Box::into_raw(region)) };
+
+        assert!(!hold.is_null());
+        assert!(unsafe { rdma_memory_leaked(hold) });
+        unsafe { free_rdma_memory_hold(hold) };
+        unsafe { free_rdma_region(Box::into_raw(still_open)) };
+    }
+
+    #[test]
+    fn a_null_hold_is_released_and_not_leaked() {
         assert!(unsafe { rdma_memory_released(std::ptr::null()) });
+        assert!(!unsafe { rdma_memory_leaked(std::ptr::null()) });
         unsafe { free_rdma_memory_hold(std::ptr::null_mut()) };
         assert!(unsafe { free_rdma_region(std::ptr::null_mut()) }.is_null());
+    }
+
+    #[test]
+    fn a_counter_without_a_client_or_an_output_is_refused() {
+        let mut out = 7;
+        assert!(!unsafe { rdma_parked_bytes(std::ptr::null(), &mut out) });
+        assert!(!unsafe { rdma_leaked_bytes(std::ptr::null(), &mut out) });
+        assert!(!unsafe { rdma_parked_bytes(unread_client_ptr(), std::ptr::null_mut()) });
+        assert!(!unsafe { rdma_leaked_bytes(unread_client_ptr(), std::ptr::null_mut()) });
+        assert_eq!(out, 7, "a refused call leaves the output alone");
+    }
+
+    #[cfg(not(feature = "rdma"))]
+    #[test]
+    fn a_counter_is_unavailable_without_rdma() {
+        let mut out = 7;
+        assert!(!unsafe { rdma_parked_bytes(unread_client_ptr(), &mut out) });
+        assert!(!unsafe { rdma_leaked_bytes(unread_client_ptr(), &mut out) });
+        assert_eq!(out, 7);
     }
 }
