@@ -27,6 +27,11 @@ on:
             - .github/actions/install-zig/action.yml
             - .github/workflows/lint-rust/action.yml
             - utils/cluster_manager.py
+            - "!**/*.md"
+            - "!**/THIRD_PARTY_LICENSES*"
+            # Re-include: compiled as doctests by rust/src/lib.rs
+            - rust/README.md
+            - rust/migration.md
     pull_request:
         paths:
             - rust/**
@@ -46,6 +51,11 @@ on:
             - .github/actions/install-zig/action.yml
             - .github/workflows/lint-rust/action.yml
             - utils/cluster_manager.py
+            - "!**/*.md"
+            - "!**/THIRD_PARTY_LICENSES*"
+            # Re-include: compiled as doctests by rust/src/lib.rs
+            - rust/README.md
+            - rust/migration.md
     workflow_dispatch:
     workflow_call:
 
@@ -59,7 +69,7 @@ env:
 jobs:
     lint:
         name: Lint - Rust client
-        runs-on: ubuntu-latest
+        runs-on: ubuntu-24.04
         timeout-minutes: 30
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

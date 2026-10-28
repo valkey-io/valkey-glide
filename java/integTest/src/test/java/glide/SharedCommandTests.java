@@ -636,6 +636,58 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void set_only_if_equal(BaseClient client) {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("8.1.0"), "This feature added in version 8.1.0");
+
+        String key = UUID.randomUUID().toString();
+        assertEquals(OK, client.set(key, "value").get());
+
+        // Value not equal
+        SetOptions options = SetOptions.builder().conditionalSetOnlyIfEqualTo("other").build();
+        assertNull(client.set(key, "other", options).get());
+        assertEquals("value", client.get(key).get());
+
+        // Value equal
+        options = SetOptions.builder().conditionalSetOnlyIfEqualTo("value").build();
+        assertEquals(OK, client.set(key, "other", options).get());
+        assertEquals("other", client.get(key).get());
+
+        // Non-existent key
+        String missing = UUID.randomUUID().toString();
+        assertNull(client.set(missing, "value", options).get());
+        assertEquals(0L, client.exists(new String[] {missing}).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void set_only_if_not_equal(BaseClient client) {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("9.2.0"), "This feature added in version 9.2.0");
+
+        String key = UUID.randomUUID().toString();
+        assertEquals(OK, client.set(key, "value").get());
+
+        // Value equal
+        SetOptions options = SetOptions.builder().conditionalSetOnlyIfNotEqualTo("value").build();
+        assertNull(client.set(key, "other", options).get());
+        assertEquals("value", client.get(key).get());
+
+        // Value not equal
+        options = SetOptions.builder().conditionalSetOnlyIfNotEqualTo("other").build();
+        assertEquals(OK, client.set(key, "other", options).get());
+        assertEquals("other", client.get(key).get());
+
+        // Non-existent key
+        String missing = UUID.randomUUID().toString();
+        assertEquals(OK, client.set(missing, "value", options).get());
+        assertEquals("value", client.get(missing).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void set_value_with_ttl_and_update_value_with_keeping_ttl(BaseClient client) {
         String key = UUID.randomUUID().toString();
         SetOptions options = SetOptions.builder().expiry(Milliseconds(2000L)).build();
@@ -1657,6 +1709,60 @@ public class SharedCommandTests {
         assertTrue(ttlResult[1] > 0 && ttlResult[1] <= 60); // existing2 should have TTL
         assertTrue(ttlResult[2] > 0 && ttlResult[2] <= 60); // new1 should have TTL
         assertTrue(ttlResult[3] > 0 && ttlResult[3] <= 60); // new2 should have TTL
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void hsetex_with_key_conditional_options(BaseClient client) {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("9.1.0"),
+                "HSETEX key-level NX/XX condition requires Valkey 9.1.0 or higher");
+
+        String key = "test_hsetex_key_conditional_" + UUID.randomUUID();
+        Map<String, String> fieldValueMap = new LinkedHashMap<>();
+        fieldValueMap.put("field1", "value1");
+
+        // NX: key does not exist yet, so the command should succeed
+        HSetExOptions nxOptions = HSetExOptions.builder().onlyIfKeyDoesNotExist().build();
+        Long result = client.hsetex(key, fieldValueMap, nxOptions).get();
+        assertEquals(1L, result);
+        assertEquals("value1", client.hget(key, "field1").get());
+
+        // NX: key now exists, so a second NX call should fail (return 0) and not modify the hash
+        Map<String, String> otherFieldValueMap = new LinkedHashMap<>();
+        otherFieldValueMap.put("field1", "should_not_be_set");
+        result = client.hsetex(key, otherFieldValueMap, nxOptions).get();
+        assertEquals(0L, result);
+        assertEquals("value1", client.hget(key, "field1").get());
+
+        // XX: key exists, so the command should succeed and update the field
+        HSetExOptions xxOptions = HSetExOptions.builder().onlyIfKeyExists().build();
+        Map<String, String> updateFieldValueMap = new LinkedHashMap<>();
+        updateFieldValueMap.put("field1", "updated_value1");
+        result = client.hsetex(key, updateFieldValueMap, xxOptions).get();
+        assertEquals(1L, result);
+        assertEquals("updated_value1", client.hget(key, "field1").get());
+
+        // XX: key does not exist, so the command should fail (return 0) and not create the hash
+        String missingKey = "test_hsetex_key_conditional_missing_" + UUID.randomUUID();
+        result = client.hsetex(missingKey, fieldValueMap, xxOptions).get();
+        assertEquals(0L, result);
+        assertEquals(0L, client.exists(new String[] {missingKey}).get());
+
+        // Key-level and field-level conditions can be combined, together with expiry
+        String combinedKey = "test_hsetex_key_and_field_conditional_" + UUID.randomUUID();
+        HSetExOptions combinedOptions =
+                HSetExOptions.builder()
+                        .onlyIfKeyDoesNotExist()
+                        .onlyIfNoneExist()
+                        .expiry(ExpirySet.Seconds(60L))
+                        .build();
+        result = client.hsetex(combinedKey, fieldValueMap, combinedOptions).get();
+        assertEquals(1L, result);
+        Long[] ttlResult = client.httl(combinedKey, new String[] {"field1"}).get();
+        assertEquals(1, ttlResult.length);
+        assertTrue(ttlResult[0] > 0 && ttlResult[0] <= 60);
     }
 
     @SneakyThrows
@@ -4705,6 +4811,36 @@ public class SharedCommandTests {
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> client.sismember(key2, member).get());
         assertInstanceOf(RequestException.class, executionException.getCause());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void sismemberIfExists(BaseClient client) {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("9.2.0"), "This feature added in version 9.2.0");
+        String key = UUID.randomUUID().toString();
+        String member = UUID.randomUUID().toString();
+
+        assertEquals(1, client.sadd(key, new String[] {member}).get());
+        assertEquals(1L, client.sismemberIfExists(key, member).get());
+        assertEquals(0L, client.sismemberIfExists(key, UUID.randomUUID().toString()).get());
+        assertEquals(-1L, client.sismemberIfExists(UUID.randomUUID().toString(), member).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void sismemberIfExists_binary(BaseClient client) {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("9.2.0"), "This feature added in version 9.2.0");
+        GlideString key = gs(UUID.randomUUID().toString());
+        GlideString member = gs(UUID.randomUUID().toString());
+
+        assertEquals(1, client.sadd(key, new GlideString[] {member}).get());
+        assertEquals(1L, client.sismemberIfExists(key, member).get());
+        assertEquals(0L, client.sismemberIfExists(key, gs(UUID.randomUUID().toString())).get());
+        assertEquals(-1L, client.sismemberIfExists(gs(UUID.randomUUID().toString()), member).get());
     }
 
     @SneakyThrows

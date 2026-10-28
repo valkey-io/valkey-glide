@@ -1,5 +1,7 @@
 # Developer Guide
 
+<!-- The build/test/lint commands here are intentionally mirrored in glide-core/AGENTS.md (agent quick-reference). Keep both in sync when they change. -->
+
 ## Tests
 
 To run all tests:

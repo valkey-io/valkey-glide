@@ -16,14 +16,22 @@ package glide
 //
 // void successCallback(uintptr_t requestID, struct CommandResponse *message);
 // void failureCallback(uintptr_t requestID, char *errMessage, RequestErrorType errType);
-// void pubSubCallback(void *clientPtr, enum PushKind kind,
-//                     const uint8_t *message, int64_t message_len,
-//                     const uint8_t *channel, int64_t channel_len,
-//                     const uint8_t *pattern, int64_t pattern_len);
+// void pubSubCallback(uintptr_t callbackID, enum PushKind kind,
+//                     void *message, int64_t messageLen,
+//                     void *channel, int64_t channelLen,
+//                     void *pattern, int64_t patternLen);
 // uint16_t addressResolverCallback(uintptr_t client_id, const uint8_t *host, uintptr_t host_len,
 //                                  uint16_t port,
 //                                  uint8_t *resolved_host_buf, uintptr_t resolved_host_buf_len,
 //                                  uintptr_t *resolved_host_len);
+// uint8_t credentialProviderCallback(uintptr_t client_id,
+//                                    uint8_t *access_key_id_buf, uintptr_t access_key_id_buf_len,
+//                                    uintptr_t *access_key_id_len,
+//                                    uint8_t *secret_access_key_buf, uintptr_t secret_access_key_buf_len,
+//                                    uintptr_t *secret_access_key_len,
+//                                    uint8_t *session_token_buf, uintptr_t session_token_buf_len,
+//                                    uintptr_t *session_token_len,
+//                                    int64_t *expires_at_epoch_millis);
 import "C"
 
 import (
@@ -59,6 +67,7 @@ type payload struct {
 type clientConfiguration interface {
 	ToProtobuf() (*protobuf.ConnectionRequest, error)
 	GetAddressResolver() config.AddressResolver
+	GetCredentialProvider() config.GlideCredentialProvider
 }
 
 type baseClient struct {
@@ -66,7 +75,10 @@ type baseClient struct {
 	coreClient     unsafe.Pointer
 	mu             *sync.Mutex
 	messageHandler *MessageHandler
-	resolverID     uintptr
+	// resolverID is the shared callback ID used for both the address-resolver and the
+	// credential-provider callbacks. Both are registered under the same clientID, so a
+	// single field suffices; no separate credentialProviderID is needed.
+	resolverID uintptr
 }
 
 // setMessageHandler assigns a message handler to the client for processing pub/sub messages
@@ -165,27 +177,51 @@ func createClient(cfg clientConfiguration) (*baseClient, error) {
 	}
 	client := &baseClient{pending: make(map[uintptr]struct{}), mu: &sync.Mutex{}}
 
-	// Determine resolver callback and client ID
+	// Determine resolver callback, credential provider callback, and shared client ID.
+	// A single clientID is passed to create_client and forwarded to both callbacks.
 	var resolverCallback C.AddressResolverCallback
+	var credProviderCallback C.CredentialProviderCallback
 	var clientID uintptr
-	if cfgWithResolver, ok := cfg.(interface{ GetAddressResolver() config.AddressResolver }); ok {
-		if resolver := cfgWithResolver.GetAddressResolver(); resolver != nil {
+	if resolver := cfg.GetAddressResolver(); resolver != nil {
+		if clientID == 0 {
 			clientID = uintptr(clientIDCounter.Add(1))
-			registerResolver(clientID, resolver)
-			resolverCallback = C.AddressResolverCallback(unsafe.Pointer(C.addressResolverCallback))
 		}
+		registerResolver(clientID, resolver)
+		resolverCallback = C.AddressResolverCallback(unsafe.Pointer(C.addressResolverCallback))
+	}
+	if provider := cfg.GetCredentialProvider(); provider != nil {
+		if clientID == 0 {
+			clientID = uintptr(clientIDCounter.Add(1))
+		}
+		registerCredentialProvider(clientID, provider)
+		credProviderCallback = C.CredentialProviderCallback(unsafe.Pointer(C.credentialProviderCallback))
 	}
 
-	cResponse := (*C.struct_ConnectionResponse)(
-		C.create_client(
-			(*C.uchar)(requestBytes),
-			C.uintptr_t(byteCount),
-			&clientType,
-			C.PubSubCallback(unsafe.Pointer(C.pubSubCallback)),
-			resolverCallback,
-			C.uintptr_t(clientID),
-		),
-	)
+	var cResponse *C.struct_ConnectionResponse
+	if credProviderCallback != nil {
+		cResponse = (*C.struct_ConnectionResponse)(
+			C.create_client_with_credential_provider(
+				(*C.uchar)(requestBytes),
+				C.uintptr_t(byteCount),
+				&clientType,
+				C.PubSubCallback(unsafe.Pointer(C.pubSubCallback)),
+				resolverCallback,
+				C.uintptr_t(clientID),
+				credProviderCallback,
+			),
+		)
+	} else {
+		cResponse = (*C.struct_ConnectionResponse)(
+			C.create_client(
+				(*C.uchar)(requestBytes),
+				C.uintptr_t(byteCount),
+				&clientType,
+				C.PubSubCallback(unsafe.Pointer(C.pubSubCallback)),
+				resolverCallback,
+				C.uintptr_t(clientID),
+			),
+		)
+	}
 
 	defer C.free_connection_response(cResponse)
 	cErr := cResponse.connection_error_message
@@ -193,6 +229,7 @@ func createClient(cfg clientConfiguration) (*baseClient, error) {
 		message := C.GoString(cErr)
 		if clientID != 0 {
 			unregisterResolver(clientID)
+			unregisterCredentialProvider(clientID)
 		}
 		return nil, NewConnectionError(message)
 	}
@@ -222,6 +259,7 @@ func (client *baseClient) Close() {
 
 	if client.resolverID != 0 {
 		unregisterResolver(client.resolverID)
+		unregisterCredentialProvider(client.resolverID)
 		client.resolverID = 0
 	}
 
@@ -1122,10 +1160,7 @@ func (client *baseClient) Set(ctx context.Context, key string, value string) (st
 	return handleOkResponse(result)
 }
 
-// SetWithOptions sets the given key with the given value using the given options. The return value is dependent on the
-// passed options. If the value is successfully set, "OK" is returned. If value isn't set because of [constants.OnlyIfExists]
-// or [constants.OnlyIfDoesNotExist] conditions, models.CreateNilStringResult() is returned. If [constants.ReturnOldValue] is
-// set, the old value is returned.
+// SetWithOptions sets the value of a key with the given options.
 //
 // See [valkey.io] for details.
 //
@@ -1138,10 +1173,8 @@ func (client *baseClient) Set(ctx context.Context, key string, value string) (st
 //
 // Return value:
 //
-//	If the value is successfully set, return models.Result[string] containing "OK".
-//	If value isn't set because of ConditionalSet.OnlyIfExists or ConditionalSet.OnlyIfDoesNotExist
-//	or ConditionalSet.OnlyIfEquals conditions, return models.CreateNilStringResult().
-//	If SetOptions.returnOldValue is set, return the old value as a String.
+//	If [options.SetOptions.ReturnOldValue] is not set, "OK" if the key was set, or models.CreateNilStringResult() if the
+//	condition was not met. If it is set, the old value stored at key, or models.CreateNilStringResult() if key did not exist.
 //
 // [valkey.io]: https://valkey.io/commands/set/
 func (client *baseClient) SetWithOptions(
@@ -1189,10 +1222,6 @@ func (client *baseClient) Get(ctx context.Context, key string) (models.Result[st
 
 // Get string value associated with the given key, or an empty string is returned [models.CreateNilStringResult()] if no such
 // value exists.
-//
-// Since:
-//
-//	Valkey 6.2.0 and above.
 //
 // See [valkey.io] for details.
 //
@@ -1311,9 +1340,9 @@ func (client *baseClient) MSetNX(ctx context.Context, keyValueMap map[string]str
 
 // Move key from the currently selected database to the database specified by `dbIndex`.
 //
-// Note:
+// Since:
 //
-//	In cluster mode move is available since Valkey 9.0.0 and above.
+//	Valkey 9.0.0 for cluster client.
 //
 // See [valkey.io] for details.
 //
@@ -1598,11 +1627,39 @@ func (client *baseClient) Append(ctx context.Context, key string, value string) 
 	return handleIntResponse(result)
 }
 
+// Deletes `key` if its value equals `value`.
+//
+// Since:
+//
+//	Valkey 9.0 and above.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx   - The context for controlling the command execution.
+//	key   - The key to delete.
+//	value - The comparison value. The key is only deleted if its current value matches exactly.
+//
+// Return value:
+//
+//	`true` if `key` was deleted, `false` if `key` did not exist or its value did not match `value`.
+//
+// [valkey.io]: https://valkey.io/commands/delifeq/
+func (client *baseClient) DelIfEq(ctx context.Context, key string, value string) (bool, error) {
+	result, err := client.executeCommand(ctx, C.DelIfEq, []string{key, value})
+	if err != nil {
+		return models.DefaultBoolResponse, err
+	}
+
+	return handleBoolResponse(result)
+}
+
 // Returns the longest common subsequence between strings stored at `key1` and `key2`.
 //
 // Since:
 //
-//	Valkey 7.0 and above.
+//	Valkey 7.0.0.
 //
 // Note:
 //
@@ -1638,7 +1695,7 @@ func (client *baseClient) LCS(ctx context.Context, key1 string, key2 string) (*m
 //
 // Since:
 //
-//	Valkey 7.0 and above.
+//	Valkey 7.0.0.
 //
 // Note:
 //
@@ -1673,7 +1730,7 @@ func (client *baseClient) LCSLen(ctx context.Context, key1, key2 string) (*model
 //
 // Since:
 //
-//	Valkey 7.0 and above.
+//	Valkey 7.0.0.
 //
 // Note:
 //
@@ -2131,10 +2188,6 @@ func (client *baseClient) HScanWithOptions(
 
 // Returns a random field name from the hash value stored at `key`.
 //
-// Since:
-//
-//	Valkey 6.2.0 and above.
-//
 // See [valkey.io] for details.
 //
 // Parameters:
@@ -2157,10 +2210,6 @@ func (client *baseClient) HRandField(ctx context.Context, key string) (models.Re
 }
 
 // Retrieves up to `count` random field names from the hash value stored at `key`.
-//
-// Since:
-//
-//	Valkey 6.2.0 and above.
 //
 // See [valkey.io] for details.
 //
@@ -2188,10 +2237,6 @@ func (client *baseClient) HRandFieldWithCount(ctx context.Context, key string, c
 
 // Retrieves up to `count` random field names along with their values from the hash
 // value stored at `key`.
-//
-// Since:
-//
-//	Valkey 6.2.0 and above.
 //
 // See [valkey.io] for details.
 //
@@ -2229,7 +2274,7 @@ func (client *baseClient) HRandFieldWithCountWithValues(ctx context.Context, key
 //
 // Since:
 //
-//	Valkey 9.0 and above.
+//	Valkey 9.0.0.
 //
 // See [valkey.io] for details.
 //
@@ -2270,7 +2315,7 @@ func (client *baseClient) HSetEx(
 //
 // Since:
 //
-//	Valkey 9.0 and above.
+//	Valkey 9.0.0.
 //
 // See [valkey.io] for details.
 //
@@ -2312,7 +2357,7 @@ func (client *baseClient) HGetEx(
 //
 // Since:
 //
-//	Valkey 9.1 and above.
+//	Valkey 9.1.0.
 //
 // See [valkey.io] for details.
 //
@@ -2357,7 +2402,7 @@ func (client *baseClient) HGetDel(ctx context.Context, key string, fields []stri
 //
 // Since:
 //
-//	Valkey 9.0 and above.
+//	Valkey 9.0.0.
 //
 // See [valkey.io] for details.
 //
@@ -2404,7 +2449,7 @@ func (client *baseClient) HExpire(
 //
 // Since:
 //
-//	Valkey 9.0 and above.
+//	Valkey 9.0.0.
 //
 // See [valkey.io] for details.
 //
@@ -2450,7 +2495,7 @@ func (client *baseClient) HExpireAt(
 //
 // Since:
 //
-//	Valkey 9.0 and above.
+//	Valkey 9.0.0.
 //
 // See [valkey.io] for details.
 //
@@ -2497,7 +2542,7 @@ func (client *baseClient) HPExpire(
 //
 // Since:
 //
-//	Valkey 9.0 and above.
+//	Valkey 9.0.0.
 //
 // See [valkey.io] for details.
 //
@@ -2543,7 +2588,7 @@ func (client *baseClient) HPExpireAt(
 //
 // Since:
 //
-//	Valkey 9.0 and above.
+//	Valkey 9.0.0.
 //
 // See [valkey.io] for details.
 //
@@ -2579,7 +2624,7 @@ func (client *baseClient) HPersist(ctx context.Context, key string, fields []str
 //
 // Since:
 //
-//	Valkey 9.0 and above.
+//	Valkey 9.0.0.
 //
 // See [valkey.io] for details.
 //
@@ -2615,7 +2660,7 @@ func (client *baseClient) HTtl(ctx context.Context, key string, fields []string)
 //
 // Since:
 //
-//	Valkey 9.0 and above.
+//	Valkey 9.0.0.
 //
 // See [valkey.io] for details.
 //
@@ -2651,7 +2696,7 @@ func (client *baseClient) HPTtl(ctx context.Context, key string, fields []string
 //
 // Since:
 //
-//	Valkey 9.0 and above.
+//	Valkey 9.0.0.
 //
 // See [valkey.io] for details.
 //
@@ -2688,7 +2733,7 @@ func (client *baseClient) HExpireTime(ctx context.Context, key string, fields []
 //
 // Since:
 //
-//	Valkey 9.0 and above.
+//	Valkey 9.0.0.
 //
 // See [valkey.io] for details.
 //
@@ -3097,6 +3142,38 @@ func (client *baseClient) SIsMember(ctx context.Context, key string, member stri
 	return handleBoolResponse(result)
 }
 
+// SIsMemberIfExists returns if member is a member of the set stored at key,
+// or -1 if key does not exist.
+//
+// Since:
+//
+//	Valkey 9.2.0.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx    - The context for controlling the command execution.
+//	key    - The key of the set.
+//	member - The member to check for existence in the set.
+//
+// Return value:
+//
+//	A status code indicating membership:
+//	- 1: The member exists in the set.
+//	- 0: The key exists but the member does not exist in the set.
+//	- -1: The key does not exist.
+//
+// [valkey.io]: https://valkey.io/commands/sismember/
+func (client *baseClient) SIsMemberIfExists(ctx context.Context, key string, member string) (int64, error) {
+	result, err := client.executeCommand(ctx, C.SIsMember, []string{key, member, constants.IfExistsKeyword})
+	if err != nil {
+		return models.DefaultIntResponse, err
+	}
+
+	return handleIntResponse(result)
+}
+
 // SDiff computes the difference between the first set and all the successive sets in keys.
 //
 // Note:
@@ -3214,7 +3291,7 @@ func (client *baseClient) SInterStore(ctx context.Context, destination string, k
 //
 // Since:
 //
-//	Valkey 7.0 and above.
+//	Valkey 7.0.0.
 //
 // Note:
 //
@@ -3245,7 +3322,7 @@ func (client *baseClient) SInterCard(ctx context.Context, keys []string) (int64,
 //
 // Since:
 //
-//	Valkey 7.0 and above.
+//	Valkey 7.0.0.
 //
 // Note:
 //
@@ -3888,7 +3965,7 @@ func (client *baseClient) LPushX(ctx context.Context, key string, elements []str
 //
 // Since:
 //
-//	Valkey 7.0 and above.
+//	Valkey 7.0.0.
 //
 // See [valkey.io] for details.
 //
@@ -3940,7 +4017,7 @@ func (client *baseClient) LMPop(
 //
 // Since:
 //
-//	Valkey 7.0 and above.
+//	Valkey 7.0.0.
 //
 // See [valkey.io] for details.
 //
@@ -3995,7 +4072,7 @@ func (client *baseClient) LMPopCount(
 //
 // Since:
 //
-//	Valkey 7.0 and above.
+//	Valkey 7.0.0.
 //
 // See [valkey.io] for details.
 //
@@ -4051,7 +4128,7 @@ func (client *baseClient) BLMPop(
 //
 // Since:
 //
-//	Valkey 7.0 and above.
+//	Valkey 7.0.0.
 //
 // See [valkey.io] for details.
 //
@@ -4180,10 +4257,6 @@ func (client *baseClient) LMove(
 // Note:
 //   - When in cluster mode, `source` and `destination` must map to the same hash slot.
 //   - `BLMove` is a client blocking command, see [Blocking Commands] for more details and best practices.
-//
-// Since:
-//
-//	Valkey 6.2.0 and above.
 //
 // See [valkey.io] for details.
 //
@@ -5518,7 +5591,7 @@ func (client *baseClient) BZPopMin(
 //
 // Since:
 //
-//	Valkey 7.0 and above.
+//	Valkey 7.0.0.
 //
 // See [valkey.io] for details.
 //
@@ -5580,7 +5653,7 @@ func (client *baseClient) BZMPop(
 //
 // Since:
 //
-//	Valkey 7.0 and above.
+//	Valkey 7.0.0.
 //
 // See [valkey.io] for details.
 //
@@ -5854,7 +5927,7 @@ func (client *baseClient) ZRank(ctx context.Context, key string, member string) 
 //
 // Since:
 //
-//	Valkey 7.2.0 and above.
+//	Valkey 7.2.0.
 //
 // See [valkey.io] for details.
 //
@@ -5913,7 +5986,7 @@ func (client *baseClient) ZRevRank(ctx context.Context, key string, member strin
 //
 // Since:
 //
-//	Valkey 7.2.0 and above.
+//	Valkey 7.2.0.
 //
 // See [valkey.io] for details.
 //
@@ -5992,10 +6065,6 @@ func (client *baseClient) XLen(ctx context.Context, key string) (int64, error) {
 
 // Transfers ownership of pending stream entries that match the specified criteria.
 //
-// Since:
-//
-//	Valkey 6.2.0 and above.
-//
 // See [valkey.io] for more details.
 //
 // Parameters:
@@ -6031,10 +6100,6 @@ func (client *baseClient) XAutoClaim(
 }
 
 // Transfers ownership of pending stream entries that match the specified criteria.
-//
-// Since:
-//
-//	Valkey 6.2.0 and above.
 //
 // See [valkey.io] for more details.
 //
@@ -6084,10 +6149,6 @@ func (client *baseClient) XAutoClaimWithOptions(
 
 // Transfers ownership of pending stream entries that match the specified criteria.
 //
-// Since:
-//
-//	Valkey 6.2.0 and above.
-//
 // See [valkey.io] for more details.
 //
 // Parameters:
@@ -6123,10 +6184,6 @@ func (client *baseClient) XAutoClaimJustId(
 }
 
 // Transfers ownership of pending stream entries that match the specified criteria.
-//
-// Since:
-//
-//	Valkey 6.2.0 and above.
 //
 // See [valkey.io] for more details.
 //
@@ -6763,10 +6820,6 @@ func (client *baseClient) ZRandMemberWithCountWithScores(
 
 // Returns the scores associated with the specified `members` in the sorted set stored at `key`.
 //
-// Since:
-//
-//	Valkey 6.2.0 and above.
-//
 // See [valkey.io] for details.
 //
 // Parameters:
@@ -6897,7 +6950,7 @@ func (client *baseClient) Sort(ctx context.Context, key string) ([]models.Result
 //	while others did not. If this behavior impacts your application logic, consider splitting
 //	the request into sub-requests per slot to ensure atomicity.
 //	The use of SortOptions.byPattern and SortOptions.getPatterns in cluster mode is
-//	supported since Valkey version 8.0.
+//	supported since Valkey 8.0.0.
 //
 // See [valkey.io] for details.
 //
@@ -6967,7 +7020,7 @@ func (client *baseClient) SortReadOnly(ctx context.Context, key string) ([]model
 //	while others did not. If this behavior impacts your application logic, consider splitting
 //	the request into sub-requests per slot to ensure atomicity.
 //	The use of SortOptions.byPattern and SortOptions.getPatterns in cluster mode is
-//	supported since Valkey version 8.0.
+//	supported since Valkey 8.0.0.
 //
 // See [valkey.io] for details.
 //
@@ -7053,7 +7106,7 @@ func (client *baseClient) SortStore(ctx context.Context, key string, destination
 //	while others did not. If this behavior impacts your application logic, consider splitting
 //	the request into sub-requests per slot to ensure atomicity.
 //	The use of SortOptions.byPattern and SortOptions.getPatterns
-//	in cluster mode is supported since Valkey version 8.0.
+//	in cluster mode is supported since Valkey 8.0.0.
 //
 // See [valkey.io] for details.
 //
@@ -7571,10 +7624,6 @@ func (client *baseClient) BitPosWithOptions(
 //
 //	When in cluster mode, both `source` and `destination` must map to the same hash slot.
 //
-// Since:
-//
-//	Valkey 6.2.0 and above.
-//
 // See [valkey.io] for details.
 //
 // Parameters:
@@ -7603,10 +7652,6 @@ func (client *baseClient) Copy(ctx context.Context, source string, destination s
 // Note:
 //
 //	When in cluster mode, both `source` and `destination` must map to the same hash slot.
-//
-// Since:
-//
-//	Valkey 6.2.0 and above.
 //
 // See [valkey.io] for details.
 //
@@ -8266,10 +8311,6 @@ func (client *baseClient) ZInterStoreWithOptions(
 //
 //	When in cluster mode, all `keys` must map to the same hash slot.
 //
-// Since:
-//
-//	Valkey 6.2.0 and above.
-//
 // See [valkey.io] for details.
 //
 // Parameters:
@@ -8298,10 +8339,6 @@ func (client *baseClient) ZDiff(ctx context.Context, keys []string) ([]string, e
 // Note:
 //
 //	When in cluster mode, all `keys` must map to the same hash slot.
-//
-// Since:
-//
-//	Valkey 6.2.0 and above.
 //
 // See [valkey.io] for details.
 //
@@ -8335,10 +8372,6 @@ func (client *baseClient) ZDiffWithScores(ctx context.Context, keys []string) ([
 //
 //	When in cluster mode, `destination` and all `keys` must map to the same hash slot.
 //
-// Since:
-//
-//	Valkey 6.2.0 and above.
-//
 // See [valkey.io] for details.
 //
 // Parameters:
@@ -8366,10 +8399,6 @@ func (client *baseClient) ZDiffStore(ctx context.Context, destination string, ke
 
 // Returns the union of members from sorted sets specified by the given `keys`.
 // To get the elements with their scores, see [Client.ZUnionWithScores] or [ClusterClient.ZUnionWithScores].
-//
-// Since:
-//
-//	Valkey 6.2.0 and above.
 //
 // Note:
 //
@@ -8401,10 +8430,6 @@ func (client *baseClient) ZUnion(ctx context.Context, keys options.KeyArray) ([]
 
 // Returns the union of members and their scores from sorted sets specified by the given
 // `keysOrWeightedKeys`.
-//
-// Since:
-//
-//	Valkey 6.2.0 and above.
 //
 // Note:
 //
@@ -8537,7 +8562,7 @@ func (client *baseClient) ZUnionStoreWithOptions(
 //
 // Since:
 //
-//	Valkey 7.0 and above.
+//	Valkey 7.0.0.
 //
 // See [valkey.io] for details.
 //
@@ -8565,7 +8590,7 @@ func (client *baseClient) ZInterCard(ctx context.Context, keys []string) (int64,
 //
 // Since:
 //
-//	Valkey 7.0 and above.
+//	Valkey 7.0.0.
 //
 // See [valkey.io] for details.
 //
@@ -8962,10 +8987,6 @@ func (client *baseClient) GeoDistWithUnit(
 // Returns the members of a sorted set populated with geospatial information using [Client.GeoAdd] or [ClusterClient.GeoAdd],
 // which are within the borders of the area specified by a given shape.
 //
-// Since:
-//
-//	Valkey 6.2.0 and above.
-//
 // See [valkey.io] for more details.
 //
 // Parameters:
@@ -9029,10 +9050,6 @@ func (client *baseClient) GeoSearchWithFullOptions(
 // Returns the members of a sorted set populated with geospatial information using [Client.GeoAdd] or [ClusterClient.GeoAdd],
 // which are within the borders of the area specified by a given shape.
 //
-// Since:
-//
-//	Valkey 6.2.0 and above.
-//
 // See [valkey.io] for more details.
 //
 // Parameters:
@@ -9086,10 +9103,6 @@ func (client *baseClient) GeoSearchWithResultOptions(
 // Returns the members of a sorted set populated with geospatial information using [Client.GeoAdd] or [ClusterClient.GeoAdd],
 // which are within the borders of the area specified by a given shape.
 //
-// Since:
-//
-//	Valkey 6.2.0 and above.
-//
 // See [valkey.io] for more details.
 //
 // Parameters:
@@ -9134,10 +9147,6 @@ func (client *baseClient) GeoSearchWithInfoOptions(
 // Returns the members of a sorted set populated with geospatial information using [Client.GeoAdd] or [ClusterClient.GeoAdd],
 // which are within the borders of the area specified by a given shape.
 //
-// Since:
-//
-//	Valkey 6.2.0 and above.
-//
 // See [valkey.io] for more details.
 //
 // Parameters:
@@ -9175,10 +9184,6 @@ func (client *baseClient) GeoSearch(
 // within a circular or rectangular area and stores the result in `destinationKey`. If
 // `destinationKey` already exists, it is overwritten. Otherwise, a new sorted set will be
 // created. To get the result directly, see [Client.GeoSearchWithFullOptions] or [ClusterClient.GeoSearchWithFullOptions].
-//
-// Since:
-//
-//	Valkey 6.2.0 and above.
 //
 // Note:
 //
@@ -9248,10 +9253,6 @@ func (client *baseClient) GeoSearchStoreWithFullOptions(
 // `destinationKey` already exists, it is overwritten. Otherwise, a new sorted set will be
 // created. To get the result directly, see [Client.GeoSearchWithFullOptions] or [ClusterClient.GeoSearchWithFullOptions].
 //
-// Since:
-//
-//	Valkey 6.2.0 and above.
-//
 // Note:
 //
 // When in cluster mode, `destinationKey` and `sourceKey` must map to the same hash slot.
@@ -9298,10 +9299,6 @@ func (client *baseClient) GeoSearchStore(
 // within a circular or rectangular area and stores the result in `destinationKey`. If
 // `destinationKey` already exists, it is overwritten. Otherwise, a new sorted set will be
 // created. To get the result directly, see [Client.GeoSearchWithFullOptions] or [ClusterClient.GeoSearchWithFullOptions].
-//
-// Since:
-//
-//	Valkey 6.2.0 and above.
 //
 // Note:
 //
@@ -9352,10 +9349,6 @@ func (client *baseClient) GeoSearchStoreWithResultOptions(
 // `destinationKey` already exists, it is overwritten. Otherwise, a new sorted set will be
 // created. To get the result directly, see [Client.GeoSearchWithFullOptions] or [ClusterClient.GeoSearchWithFullOptions].
 //
-// Since:
-//
-//	Valkey 6.2.0 and above.
-//
 // Note:
 //
 // When in cluster mode, `destinationKey` and `sourceKey` must map to the same hash slot.
@@ -9404,7 +9397,7 @@ func (client *baseClient) GeoSearchStoreWithInfoOptions(
 //
 // Since:
 //
-//	Valkey 7.0 and above.
+//	Valkey 7.0.0.
 //
 // See [valkey.io] for more details.
 //
@@ -9436,7 +9429,7 @@ func (client *baseClient) FunctionLoad(ctx context.Context, libraryCode string, 
 //
 // Since:
 //
-//	Valkey 7.0 and above.
+//	Valkey 7.0.0.
 //
 // See [valkey.io] for details.
 //
@@ -9461,7 +9454,7 @@ func (client *baseClient) FunctionFlush(ctx context.Context) (string, error) {
 //
 // Since:
 //
-//	Valkey 7.0 and above.
+//	Valkey 7.0.0.
 //
 // See [valkey.io] for more details.
 //
@@ -9486,7 +9479,7 @@ func (client *baseClient) FunctionFlushSync(ctx context.Context) (string, error)
 //
 // Since:
 //
-//	Valkey 7.0 and above.
+//	Valkey 7.0.0.
 //
 // See [valkey.io] for more details.
 //
@@ -9513,7 +9506,7 @@ func (client *baseClient) FunctionFlushAsync(ctx context.Context) (string, error
 //
 // Since:
 //
-//	Valkey 7.0 and above.
+//	Valkey 7.0.0.
 //
 // See [valkey.io] for more details.
 //
@@ -9540,7 +9533,7 @@ func (client *baseClient) FCall(ctx context.Context, function string) (any, erro
 //
 // Since:
 //
-//	Valkey 7.0 and above.
+//	Valkey 7.0.0.
 //
 // See [valkey.io] for more details.
 //
@@ -9568,7 +9561,7 @@ func (client *baseClient) FCallReadOnly(ctx context.Context, function string) (a
 //
 // Since:
 //
-//	Valkey 7.0 and above.
+//	Valkey 7.0.0.
 //
 // See [valkey.io] for more details.
 //
@@ -9609,7 +9602,7 @@ func (client *baseClient) FCallWithKeysAndArgs(
 //
 // Since:
 //
-//	Valkey 7.0 and above.
+//	Valkey 7.0.0.
 //
 // See [valkey.io] for more details.
 //
@@ -10011,7 +10004,7 @@ func (client *baseClient) ScriptFlushWithMode(ctx context.Context, mode options.
 //
 // Since:
 //
-//	Valkey 8.0.0
+//	Valkey 8.0.0.
 //
 // See [valkey.io] for details.
 //

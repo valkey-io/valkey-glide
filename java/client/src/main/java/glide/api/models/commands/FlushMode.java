@@ -29,11 +29,7 @@ import glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRout
  *     href="https://valkey.io/commands/function-flush/">function flush</a> at valkey.io
  */
 public enum FlushMode {
-    /**
-     * Flushes synchronously.
-     *
-     * @since Valkey 6.2 and above.
-     */
+    /** Flushes synchronously. */
     SYNC,
     /** Flushes asynchronously. */
     ASYNC;

@@ -6,6 +6,7 @@ use crate::cmd::cmd;
 use crate::executor::CommandExecutor;
 use crate::value::FromValkeyValue;
 use crate::value::ValkeyValue;
+use crate::write::ToSingleValkeyArg;
 use crate::write::ToValkeyArgs;
 use crate::write::ValkeyWrite;
 use async_trait::async_trait;
@@ -21,14 +22,16 @@ pub enum BitmapIndexType {
     Bit,
 }
 
-impl BitmapIndexType {
-    fn as_arg(&self) -> &'static str {
-        match self {
-            BitmapIndexType::Byte => "BYTE",
-            BitmapIndexType::Bit => "BIT",
-        }
+impl ToValkeyArgs for BitmapIndexType {
+    fn write_valkey_args<W: ?Sized + ValkeyWrite>(&self, out: &mut W) {
+        out.write_arg(match self {
+            BitmapIndexType::Byte => b"BYTE".as_slice(),
+            BitmapIndexType::Bit => b"BIT".as_slice(),
+        });
     }
 }
+
+impl ToSingleValkeyArg for BitmapIndexType {}
 
 /// A signed or unsigned bit encoding for `BITFIELD`/`BITFIELD_RO`.
 ///
@@ -50,6 +53,8 @@ impl ToValkeyArgs for BitEncoding {
     }
 }
 
+impl ToSingleValkeyArg for BitEncoding {}
+
 /// A bit offset for `BITFIELD`/`BITFIELD_RO`.
 ///
 /// Mirrors Python `BitOffset`/`BitOffsetMultiplier`.
@@ -69,6 +74,8 @@ impl ToValkeyArgs for BitFieldOffset {
         }
     }
 }
+
+impl ToSingleValkeyArg for BitFieldOffset {}
 
 /// Overflow behavior for `BITFIELD` `SET`/`INCRBY` subcommands.
 ///
@@ -92,6 +99,8 @@ impl ToValkeyArgs for BitOverflow {
         });
     }
 }
+
+impl ToSingleValkeyArg for BitOverflow {}
 
 /// A subcommand for `BITFIELD`/`BITFIELD_RO`.
 ///
@@ -190,7 +199,7 @@ pub trait BitmapCommands: CommandExecutor {
             .with_arg(bit)
             .with_arg(start)
             .with_arg(end)
-            .with_arg(index_type.map(|it| it.as_arg()));
+            .with_arg(index_type);
         i64::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
@@ -238,6 +247,12 @@ fn parse_bitfield(v: ValkeyValue) -> ValkeyResult<Vec<Option<i64>>> {
 mod tests {
     use super::*;
     use crate::test_utils::assert_args;
+
+    #[test]
+    fn index_type_args() {
+        assert_args(BitmapIndexType::Byte, &["BYTE"]);
+        assert_args(BitmapIndexType::Bit, &["BIT"]);
+    }
 
     #[test]
     fn encoding_and_offset_args() {

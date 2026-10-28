@@ -708,7 +708,7 @@ class ClusterCommands(CoreCommands):
             ... )
                 b'new_value' # Returns the function's return value.
 
-        Since: Valkey version 7.0.0.
+        Since: Valkey 7.0.0.
         """
         args = [function, "0"]
         if arguments is not None:
@@ -743,7 +743,7 @@ class ClusterCommands(CoreCommands):
             >>> client.fcall_ro_route("Deep_Thought", ALL_NODES)
                 42 # The return value on the function that was executed
 
-        Since: Valkey version 7.0.0.
+        Since: Valkey 7.0.0.
         """
         args: List[TEncodable] = [function, "0"]
         if arguments is not None:
@@ -790,7 +790,7 @@ class ClusterCommands(CoreCommands):
                     }
                 }
 
-        Since: Valkey version 7.0.0.
+        Since: Valkey 7.0.0.
         """
         return cast(
             TClusterResponse[TFunctionStatsSingleNodeResponse],
@@ -1005,7 +1005,7 @@ class ClusterCommands(CoreCommands):
         See [valkey.io](https://valkey.io/commands/bgsave) for more details.
 
         Note:
-            Since: Valkey 8.1.
+            Since: Valkey 8.1.0.
 
         Args:
             route (Optional[Route]): The command will be routed to all primaries, unless `route` is provided,
@@ -1063,7 +1063,7 @@ class ClusterCommands(CoreCommands):
         Args:
             message (TEncodable): Message to publish.
             channel (TEncodable): Channel to publish the message on.
-            sharded (bool): Use sharded pubsub mode. Available since Valkey version 7.0.
+            sharded (bool): Use sharded pubsub mode. Available since Valkey 7.0.0.
 
         Returns:
             int: Number of subscriptions in that node that received the message.
@@ -1239,8 +1239,7 @@ class ClusterCommands(CoreCommands):
             >>> client.get("destination")
                 b"sheep"
 
-        Since: Valkey version 6.2.0.
-               The destinationDB argument is available since Valkey 9.0.0
+        The destinationDB argument is available since Valkey 9.0.0.
         """
 
         # Build command arguments

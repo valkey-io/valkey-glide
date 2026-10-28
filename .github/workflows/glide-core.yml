@@ -33,6 +33,8 @@ on:
             - benchmarks/install_and_test.sh
             - benchmarks/utilities/**
             - utils/cluster_manager.py
+            - "!**/*.md"
+            - "!**/THIRD_PARTY_LICENSES*"
     pull_request:
         paths:
             - glide-core/**
@@ -58,6 +60,8 @@ on:
             - benchmarks/install_and_test.sh
             - benchmarks/utilities/**
             - utils/cluster_manager.py
+            - "!**/*.md"
+            - "!**/THIRD_PARTY_LICENSES*"
     workflow_dispatch:
         inputs:
             full-matrix:
@@ -109,7 +113,7 @@ run-name:
 
 jobs:
     get-matrices:
-        runs-on: ubuntu-latest
+        runs-on: ubuntu-24.04
         # Avoid running on schedule for forks
         if: (github.repository_owner == 'valkey-io' || github.event_name != 'schedule') || github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
         outputs:
@@ -132,7 +136,7 @@ jobs:
 
     approve-self-hosted:
         if: inputs.use-self-hosted-linux == true || contains(github.event.pull_request.labels.*.name, 'ci/use-self-hosted')
-        runs-on: ubuntu-latest
+        runs-on: ubuntu-24.04
         environment: AWS_ACTIONS
         needs: get-matrices
         steps:
@@ -198,9 +202,11 @@ jobs:
             - uses: ./.github/workflows/test-benchmark
               with:
                   language-flag: -rust
+                  engine-run: ${{ matrix.engine.run }}
+                  target: ${{ matrix.host.TARGET }}
 
     lint:
-        runs-on: ubuntu-latest
+        runs-on: ubuntu-24.04
         timeout-minutes: 30
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

@@ -41,6 +41,9 @@ tikv-jemallocator = { version = "0.7", features = ["disable_initial_exec_tls"] }
 napi-build = "2"
 
 
+[dev-dependencies]
+napi = { version = "=3.12.4", default-features = false, features = ["dyn-symbols", "napi8"] }
+
 [profile.release]
 opt-level = 3         # Optimize for performance
 lto = "fat"           # Enable the most aggressive Link Time Optimization

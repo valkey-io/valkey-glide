@@ -7,47 +7,50 @@ import (
 	"errors"
 )
 
+// Valkey API keywords
 const (
-	CountKeyword      string = "COUNT"      // Valkey API keyword used to extract specific number of matching indices from a list.
-	FullKeyword       string = "FULL"       // Valkey API keyword used in XINFO STREAM
-	MatchKeyword      string = "MATCH"      // Valkey API keyword used to indicate the match filter.
-	NoValuesKeyword   string = "NOVALUES"   // Valkey API keyword for the no value option for hcsan command.
-	WithScoreKeyword  string = "WITHSCORE"  // Valkey API keyword for the with score option for zrank and zrevrank commands.
-	WithScoresKeyword string = "WITHSCORES" // Valkey API keyword for ZRandMember and ZDiff command to return scores along with members.
-	NoScoresKeyword   string = "NOSCORES"   // Valkey API keyword for the no scores option for zscan command.
-	WithValuesKeyword string = "WITHVALUES" // Valkey API keyword to query hash values along their names in `HRANDFIELD`.
-	AggregateKeyWord  string = "AGGREGATE"  // Valkey API keyword for the aggregate option for multiple commands.
-	WeightsKeyword    string = "WEIGHTS"    // Valkey API keyword for the weights option for multiple commands.
-	RankKeyword       string = "RANK"       // Valkey API keyword use to determine the rank of the match to return.
-	MaxLenKeyword     string = "MAXLEN"     // Valkey API keyword used to determine the maximum number of list items to compare.
-	CopyKeyword       string = "COPY"       // Valkey API keyword used to indicate the copy flag.
-	ReplaceKeyword    string = "REPLACE"    // Subcommand string to replace existing key.
-	ABSTTLKeyword     string = "ABSTTL"     // Subcommand string to represent absolute timestamp (in milliseconds) for TTL.
-	AuthKeyword       string = "AUTH"       // Valkey API keyword for authentication.
-	Auth2Keyword      string = "AUTH2"      // Valkey API keyword for authentication with username and password.
-	KeysKeyword       string = "KEYS"       // Valkey API keyword for specifying multiple keys in commands like MIGRATE.
-	StoreKeyword      string = "STORE"
-	DbKeyword         string = "DB"
-	TypeKeyword       string = "TYPE"
-	ChangedKeyword    string = "CH"   // Valkey API keyword used to return total number of elements changed
-	IncrKeyword       string = "INCR" // Valkey API keyword to make zadd act like ZINCRBY.
-	/// Valkey API keywords for stream commands
-	IdleKeyword         string = "IDLE"       // ValKey API string to designate IDLE time in milliseconds
-	TimeKeyword         string = "TIME"       // ValKey API string to designate TIME time in unix-milliseconds
-	RetryCountKeyword   string = "RETRYCOUNT" // ValKey API string to designate RETRYCOUNT
-	ForceKeyword        string = "FORCE"      // ValKey API string to designate FORCE
-	JustIdKeyword       string = "JUSTID"     // ValKey API string to designate JUSTID
-	EntriesReadKeyword  string = "ENTRIESREAD"
-	MakeStreamKeyword   string = "MKSTREAM"
-	NoMakeStreamKeyword string = "NOMKSTREAM"
-	BlockKeyword        string = "BLOCK"
-	NoAckKeyword        string = "NOACK"
-	LimitKeyword        string = "LIMIT"
-	MinIdKeyword        string = "MINID"
-	GroupKeyword        string = "GROUP"
-	StreamsKeyword      string = "STREAMS"
-	WithCodeKeyword     string = "WITHCODE"
-	LibraryNameKeyword  string = "LIBRARYNAME"
+	CountKeyword      string = "COUNT"      // Specify the number of elements to return or scan (LPOS, LMPOP, BLMPOP, ZMPOP, BZMPOP, SCAN, HSCAN, SSCAN, ZSCAN, GEOSEARCH, XRANGE, XREVRANGE, XREAD, XREADGROUP, XAUTOCLAIM).
+	FullKeyword       string = "FULL"       // Return the full stream info state (XINFO STREAM).
+	MatchKeyword      string = "MATCH"      // Filter results by a glob-style pattern (SCAN, HSCAN, SSCAN, ZSCAN).
+	NoValuesKeyword   string = "NOVALUES"   // Return only field names (HSCAN).
+	WithScoreKeyword  string = "WITHSCORE"  // Include the score of the member (ZRANK, ZREVRANK).
+	WithScoresKeyword string = "WITHSCORES" // Include scores along with members (ZRANGE, ZRANDMEMBER, ZDIFF, ZINTER, ZUNION).
+	NoScoresKeyword   string = "NOSCORES"   // Return only members (ZSCAN).
+	WithValuesKeyword string = "WITHVALUES" // Include values along with field names (HRANDFIELD).
+	AggregateKeyWord  string = "AGGREGATE"  // Specify how scores are combined when merging sorted sets (ZINTER, ZINTERSTORE, ZUNION, ZUNIONSTORE).
+	WeightsKeyword    string = "WEIGHTS"    // Specify a multiplication factor for the scores of each input sorted set (ZINTER, ZINTERSTORE, ZUNION, ZUNIONSTORE).
+	RankKeyword       string = "RANK"       // Specify which match to return when multiple elements match (LPOS).
+	MaxLenKeyword     string = "MAXLEN"     // Limit the number of elements compared, or trim a stream by length (LPOS, XTRIM).
+	CopyKeyword       string = "COPY"       // Keep the keys on the source instance (MIGRATE).
+	ReplaceKeyword    string = "REPLACE"    // Replace an existing key or library (COPY, RESTORE, MIGRATE, FUNCTION LOAD).
+	ABSTTLKeyword     string = "ABSTTL"     // Interpret the TTL as an absolute Unix timestamp in milliseconds (RESTORE).
+	AuthKeyword       string = "AUTH"       // Authenticate to the target instance with a password (MIGRATE).
+	Auth2Keyword      string = "AUTH2"      // Authenticate to the target instance with a username and password (MIGRATE).
+	KeysKeyword       string = "KEYS"       // Migrate multiple keys in a single command (MIGRATE).
+	StoreKeyword      string = "STORE"      // Store the result in a destination key (SORT).
+	DbKeyword         string = "DB"         // Specify the destination database (COPY).
+	TypeKeyword       string = "TYPE"       // Filter results by data type (SCAN).
+	ChangedKeyword    string = "CH"         // Count changed elements, not only added elements (ZADD, GEOADD).
+	IncrKeyword       string = "INCR"       // Increment the score of the member, like ZINCRBY (ZADD).
+	IfExistsKeyword   string = "XX"         // Return -1 if the key does not exist (SISMEMBER).
+
+	/// Stream commands
+	IdleKeyword         string = "IDLE"        // Filter entries by minimum idle time, or set the idle time, in milliseconds (XPENDING, XCLAIM).
+	TimeKeyword         string = "TIME"        // Set the idle time to a Unix time in milliseconds (XCLAIM).
+	RetryCountKeyword   string = "RETRYCOUNT"  // Set the retry counter (XCLAIM).
+	ForceKeyword        string = "FORCE"       // Create pending entries for IDs not already in the PEL (XCLAIM).
+	JustIdKeyword       string = "JUSTID"      // Return only the IDs of claimed entries (XCLAIM, XAUTOCLAIM).
+	EntriesReadKeyword  string = "ENTRIESREAD" // Set the entries-read counter of the consumer group (XGROUP CREATE, XGROUP SETID).
+	MakeStreamKeyword   string = "MKSTREAM"    // Create the stream if it does not exist (XGROUP CREATE).
+	NoMakeStreamKeyword string = "NOMKSTREAM"  // Do not create the stream if it does not exist (XADD).
+	BlockKeyword        string = "BLOCK"       // Block for up to the given number of milliseconds (XREAD, XREADGROUP).
+	NoAckKeyword        string = "NOACK"       // Skip adding read entries to the PEL (XREADGROUP).
+	LimitKeyword        string = "LIMIT"       // Cap the computed cardinality, or the number of entries trimmed (SINTERCARD, ZINTERCARD, XTRIM).
+	MinIdKeyword        string = "MINID"       // Trim stream entries with IDs lower than the threshold (XTRIM).
+	GroupKeyword        string = "GROUP"       // Specify the consumer group and consumer (XREADGROUP).
+	StreamsKeyword      string = "STREAMS"     // Mark the start of the stream keys and IDs (XREAD, XREADGROUP).
+	WithCodeKeyword     string = "WITHCODE"    // Include library code (FUNCTION LIST).
+	LibraryNameKeyword  string = "LIBRARYNAME" // Filter results by library name pattern (FUNCTION LIST).
 )
 
 type InfBoundary string
@@ -65,19 +68,37 @@ const ReturnOldValue = "GET"
 type ConditionalSet string
 
 const (
-	// OnlyIfExists only sets the key if it already exists. Equivalent to "XX" in the valkey API.
+	// OnlyIfExists only sets the key if it already exists.
+	// Equivalent to "XX" in the Valkey API.
 	OnlyIfExists ConditionalSet = "XX"
-	// OnlyIfDoesNotExist only sets the key if it does not already exist. Equivalent to "NX" in the valkey API.
+
+	// OnlyIfDoesNotExist only sets the key if it does not already exist.
+	// Equivalent to "NX" in the Valkey API.
 	OnlyIfDoesNotExist ConditionalSet = "NX"
-	// OnlyIfEquals only sets the key if it already exists and the value is equal to the given value. Equivalent to "IFEQ" in
-	// the valkey API.
+
+	// OnlyIfEquals only sets the key if it already exists and the value is equal to the given value.
+	// Equivalent to "IFEQ" in the Valkey API.
+	// Since Valkey 8.1.0.
+	// Not supported when compression is enabled. See [Valkey GLIDE – Data Compression].
 	//
-	// since Valkey 8.1 and above.
+	// [Valkey GLIDE – Data Compression]: https://glide.valkey.io/concepts/client-features/compression/#incompatible-commands
 	OnlyIfEquals ConditionalSet = "IFEQ"
-	// OnlyIfFieldsDoNotExist only sets the hash fields if none of them already exist. Equivalent to "FNX" in the valkey API.
+
+	// OnlyIfNotEquals only sets the key if it does not exist or if the value is not equal to the given value.
+	// Equivalent to "IFNE" in the Valkey API.
+	// Since Valkey 9.2.0.
+	// Not supported when compression is enabled. See [Valkey GLIDE – Data Compression].
+	//
+	// [Valkey GLIDE – Data Compression]: https://glide.valkey.io/concepts/client-features/compression/#incompatible-commands
+	OnlyIfNotEquals ConditionalSet = "IFNE"
+
+	// OnlyIfFieldsDoNotExist only sets the hash fields if none of them already exist.
+	// Equivalent to "FNX" in the Valkey API.
 	// Used with hash field expiration commands.
 	OnlyIfFieldsDoNotExist ConditionalSet = "FNX"
-	// OnlyIfAllFieldsExist only sets the hash fields if all of them already exist. Equivalent to "FXX" in the valkey API.
+
+	// OnlyIfAllFieldsExist only sets the hash fields if all of them already exist.
+	// Equivalent to "FXX" in the Valkey API.
 	// Used with hash field expiration commands.
 	OnlyIfAllFieldsExist ConditionalSet = "FXX"
 )
@@ -90,6 +111,8 @@ func (conditionalSet ConditionalSet) ToString() (string, error) {
 		return string(OnlyIfDoesNotExist), nil
 	case OnlyIfEquals:
 		return string(OnlyIfEquals), nil
+	case OnlyIfNotEquals:
+		return string(OnlyIfNotEquals), nil
 	case OnlyIfFieldsDoNotExist:
 		return string(OnlyIfFieldsDoNotExist), nil
 	case OnlyIfAllFieldsExist:
@@ -102,13 +125,20 @@ func (conditionalSet ConditionalSet) ToString() (string, error) {
 type ExpireCondition string
 
 const (
-	// HasExistingExpiry only sets the key if it already exists. Equivalent to "XX" in the valkey API.
+	// HasExistingExpiry only sets the key if it already exists.
+	// Equivalent to "XX" in the Valkey API.
 	HasExistingExpiry ExpireCondition = "XX"
-	// HasNoExpiry only sets the key if it does not already exist. Equivalent to "NX" in the valkey API.
+
+	// HasNoExpiry only sets the key if it does not already exist.
+	// Equivalent to "NX" in the Valkey API.
 	HasNoExpiry ExpireCondition = "NX"
-	// NewExpiryGreaterThanCurrent only sets the key if its greater than current. Equivalent to "GT" in the valkey API.
+
+	// NewExpiryGreaterThanCurrent only sets the key if its greater than current.
+	// Equivalent to "GT" in the Valkey API.
 	NewExpiryGreaterThanCurrent ExpireCondition = "GT"
-	// NewExpiryLessThanCurrent only sets the key if its lesser than current. Equivalent to "LT" in the valkey API.
+
+	// NewExpiryLessThanCurrent only sets the key if its lesser than current.
+	// Equivalent to "LT" in the Valkey API.
 	NewExpiryLessThanCurrent ExpireCondition = "LT"
 )
 
@@ -226,40 +256,43 @@ const (
 type Section string
 
 const (
-	// SERVER: General information about the server
-	Server Section = "server"
-	// CLIENTS: Client connections section
-	Clients Section = "clients"
-	// MEMORY: Memory consumption related information
-	Memory Section = "memory"
-	// PERSISTENCE: RDB and AOF related information
-	Persistence Section = "persistence"
-	// STATS: General statistics
-	Stats Section = "stats"
-	// REPLICATION: Master/replica replication information
-	Replication Section = "replication"
-	// CPU: CPU consumption statistics
-	Cpu Section = "cpu"
-	// COMMANDSTATS: Valkey command statistics
-	Commandstats Section = "commandstats"
-	// LATENCYSTATS: Valkey command latency percentile distribution statistics
-	Latencystats Section = "latencystats"
-	// SENTINEL: Valkey Sentinel section (only applicable to Sentinel instances)
-	Sentinel Section = "sentinel"
-	// CLUSTER: Valkey Cluster section
-	Cluster Section = "cluster"
-	// MODULES: Modules section
-	Modules Section = "modules"
-	// KEYSPACE: Database related statistics
-	Keyspace Section = "keyspace"
-	// ERRORSTATS: Valkey error statistics
-	Errorstats Section = "errorstats"
 	// ALL: Return all sections (excluding module generated ones)
 	All Section = "all"
+	// CLIENTS: Client connections section
+	Clients Section = "clients"
+	// CLUSTER: Valkey Cluster section
+	Cluster Section = "cluster"
+	// CLUSTER_INFO: Valkey Cluster information
+	// Since Valkey 9.1.0.
+	ClusterInfo Section = "cluster_info"
+	// COMMANDSTATS: Valkey command statistics
+	Commandstats Section = "commandstats"
+	// CPU: CPU consumption statistics
+	Cpu Section = "cpu"
 	// DEFAULT: Return only the default set of sections
 	Default Section = "default"
+	// ERRORSTATS: Valkey error statistics
+	Errorstats Section = "errorstats"
 	// EVERYTHING: Includes all and modules
 	Everything Section = "everything"
+	// KEYSPACE: Database related statistics
+	Keyspace Section = "keyspace"
+	// LATENCYSTATS: Valkey command latency percentile distribution statistics
+	Latencystats Section = "latencystats"
+	// MEMORY: Memory consumption related information
+	Memory Section = "memory"
+	// MODULES: Modules section
+	Modules Section = "modules"
+	// PERSISTENCE: RDB and AOF related information
+	Persistence Section = "persistence"
+	// REPLICATION: Master/replica replication information
+	Replication Section = "replication"
+	// SENTINEL: Valkey Sentinel section (only applicable to Sentinel instances)
+	Sentinel Section = "sentinel"
+	// SERVER: General information about the server
+	Server Section = "server"
+	// STATS: General statistics
+	Stats Section = "stats"
 )
 
 // Identifies Scan Type of ClusterScan command

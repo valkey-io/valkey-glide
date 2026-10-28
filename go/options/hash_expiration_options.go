@@ -1,10 +1,12 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 // Package options provides configuration options for hash field expiration commands.
-// Available in Valkey 9.0 and above.
+// Available since Valkey 9.0.0.
 package options
 
 import (
+	"errors"
+
 	"github.com/valkey-io/valkey-glide/go/v2/constants"
 	"github.com/valkey-io/valkey-glide/go/v2/internal/utils"
 )
@@ -42,6 +44,13 @@ func (opts *HSetExOptions) ToArgs() ([]string, error) {
 
 	// Add conditional set options only if set
 	if opts.ConditionalSet != "" {
+
+		// TODO #6154: Separate key-level (`NX`/`XX`) from field-level (`FNX`/`FXX`) conditions.
+		// `ConditionalSet` is shared with `SET`, but `HSETEX` does not support `IFEQ` or `IFNE`.
+		if opts.ConditionalSet == constants.OnlyIfEquals || opts.ConditionalSet == constants.OnlyIfNotEquals {
+			return nil, errors.New("invalid conditional set for HSETEX")
+		}
+
 		conditionStr, err := opts.ConditionalSet.ToString()
 		if err != nil {
 			return nil, err

@@ -141,6 +141,7 @@ pub use commands::geo::GeoSearchResult;
 pub use commands::geo::GeoSearchShape;
 pub use commands::geo::GeoSearchStoreOptions;
 pub use commands::geo::GeoUnit;
+pub use commands::set::SIsMemberStatusCode;
 pub use commands::sorted_set::AggregationType;
 pub use commands::sorted_set::LexBound;
 pub use commands::sorted_set::ScoreBound;

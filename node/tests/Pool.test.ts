@@ -6,7 +6,12 @@
  */
 
 import { afterAll, beforeAll, describe, expect, it } from "@jest/globals";
-import { ClientPool, GlideClient, GlideClientConfiguration } from "..";
+import {
+    ClientPool,
+    GlideClient,
+    GlideClientConfiguration,
+    ServiceType,
+} from "..";
 import { ValkeyCluster } from "../../utils/TestUtils.js";
 import {
     getClientConfigurationOption,
@@ -466,6 +471,55 @@ describe("ClientPool", () => {
         );
 
         it(
+            "does not exceed maxSize when a borrow burst races warmup",
+            async () => {
+                const maxSize = 4;
+                const pool = await ClientPool.create(standaloneConfig, {
+                    maxSize,
+                    minIdle: maxSize,
+                    acquireTimeoutS: 10,
+                });
+
+                // Deliberately no waitForIdle: warmup connects asynchronously and
+                // racing that window is the point. An acquirer arriving before the
+                // warmup connections were counted used to read room below maxSize
+                // and spawn a redundant on-demand client, leaving surplus idle
+                // connections the pool never reclaimed.
+                try {
+                    const errors: Error[] = [];
+                    await Promise.all(
+                        Array.from({ length: 16 }, () =>
+                            (async () => {
+                                for (let i = 0; i < 5; i++) {
+                                    await pool.borrow(async (client) => {
+                                        await (client as GlideClient).ping();
+                                    });
+                                }
+                            })().catch((e: Error) => errors.push(e)),
+                        ),
+                    );
+                    expect(errors).toHaveLength(0);
+
+                    // Quiesce so totalCount is settled, not mid-release.
+                    const deadline = Date.now() + 5000;
+
+                    while (
+                        pool.idleCount !== pool.totalCount &&
+                        Date.now() < deadline
+                    ) {
+                        await new Promise((r) => setTimeout(r, 50));
+                    }
+
+                    expect(pool.totalCount).toBeLessThanOrEqual(maxSize);
+                    expect(pool.idleCount).toBeLessThanOrEqual(maxSize);
+                } finally {
+                    pool.close();
+                }
+            },
+            TIMEOUT,
+        );
+
+        it(
             "ordinary-client close does not evict pooled clients",
             async () => {
                 // On Node the collision damages registry-mediated paths: acquire()
@@ -507,6 +561,39 @@ describe("ClientPool", () => {
                 pool.close();
             },
             TIMEOUT,
+        );
+    });
+});
+
+describe("Pool credential provider guard", () => {
+    const config = (provider: unknown) =>
+        ({
+            addresses: [{ host: "invalid.example", port: 1 }],
+            credentials: {
+                username: "iam-user",
+                iamConfig: {
+                    clusterName: "cluster",
+                    service: ServiceType.Elasticache,
+                    region: "us-east-1",
+                    credentialProvider: provider,
+                },
+            },
+        }) as unknown as GlideClientConfiguration;
+
+    it("rejects a custom provider before native pool creation", async () => {
+        await expect(
+            ClientPool.create(
+                config(() => ({
+                    accessKeyId: "access",
+                    secretAccessKey: "secret",
+                })),
+            ),
+        ).rejects.toThrow("cannot use a custom IAM credentials provider");
+    });
+
+    it("rejects a malformed provider before native pool creation", async () => {
+        await expect(ClientPool.create(config("invalid"))).rejects.toThrow(
+            "credentialProvider must be a function",
         );
     });
 });

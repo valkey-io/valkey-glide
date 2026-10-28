@@ -41,6 +41,7 @@ mod test_monitor {
             redis::ConnectionAddr::Tcp(host, port) => NodeAddress {
                 host: host.clone(),
                 port: *port,
+                unix_socket_path: None,
             },
             _ => panic!("Expected TCP address"),
         }

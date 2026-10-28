@@ -90,6 +90,8 @@ impl ToValkeyArgs for ExistenceCheck {
     }
 }
 
+impl ToSingleValkeyArg for ExistenceCheck {}
+
 /// Field existence check for `HSETEX`.
 ///
 /// Mirrors redis-rs's `FieldExistenceCheck` type.
@@ -109,6 +111,8 @@ impl ToValkeyArgs for FieldExistenceCheck {
         });
     }
 }
+
+impl ToSingleValkeyArg for FieldExistenceCheck {}
 
 /// Options for the `HSETEX` command.
 ///
@@ -213,6 +217,8 @@ impl ToValkeyArgs for FlushAllOptions {
     }
 }
 
+impl ToSingleValkeyArg for FlushAllOptions {}
+
 /// Options for the `FLUSHDB` command.
 ///
 /// Mirrors redis-rs's `FlushDbOptions` type.
@@ -221,32 +227,42 @@ pub type FlushDbOptions = FlushAllOptions;
 /// Options for the `FUNCTION FLUSH` command.
 pub type FunctionFlushOptions = FlushAllOptions;
 
-/// Value comparison for `SET` — whether the key's current value must equal
-/// the given one.
+/// Value comparison for `SET` — whether the key's current value must equal,
+/// or must not equal, the given one.
 ///
-/// Mirrors redis-rs's `ValueComparison` type.
-/// Only `IFEQ` is supported.
+/// Mirrors redis-rs's `ValueComparison` type, without its digest
+/// comparisons (`IFDEQ`/`IFDNE`), which Valkey does not support.
 //
 // GLIDE's `ValueComparison` diverges from redis-rs by holding a `Vec<u8>`
 // instead of a `String`: redis-rs builds that `String` lossily, silently
-// breaking comparisons of binary (non-UTF-8) values. See #5046 for a related
-// binary `IFEQ` issue in the Java client.
+// breaking comparisons of binary (non-UTF-8) values. See #7447 for a related
+// binary option-value issue in the Java client.
 //
-// TODO #7237: Add `IFNE` (and `ValueComparison::ifne`) for Valkey 9.2.
 // TODO #7238: Use for `del_ex` (`DELEX`, Valkey 9.2).
-// TODO #7365: Compress this comparison value when used with `SET` under
-// compression (see `glide-core/src/compression.rs`).
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum ValueComparison {
-    /// Only set if the current value equals the given value (`IFEQ`).
+    /// Only set if the key exists and its value equals the given value (`IFEQ`).
+    ///
+    /// Since Valkey 8.1.0.
     IFEQ(Vec<u8>),
+
+    /// Only set if the key does not exist or its value does not equal the given
+    /// value (`IFNE`).
+    ///
+    /// Since Valkey 9.2.0.
+    IFNE(Vec<u8>),
 }
 
 impl ValueComparison {
     /// Compare for equality with the given value (`IFEQ`).
     pub fn ifeq(value: impl ToSingleValkeyArg) -> Self {
         Self::IFEQ(Self::arg_to_bytes(value))
+    }
+
+    /// Compare for inequality with the given value (`IFNE`).
+    pub fn ifne(value: impl ToSingleValkeyArg) -> Self {
+        Self::IFNE(Self::arg_to_bytes(value))
     }
 
     fn arg_to_bytes(value: impl ToSingleValkeyArg) -> Vec<u8> {
@@ -259,6 +275,10 @@ impl ToValkeyArgs for ValueComparison {
         match self {
             ValueComparison::IFEQ(value) => {
                 out.write_arg(b"IFEQ");
+                out.write_arg(value);
+            }
+            ValueComparison::IFNE(value) => {
+                out.write_arg(b"IFNE");
                 out.write_arg(value);
             }
         }
@@ -283,8 +303,7 @@ impl SetOptions {
         self
     }
 
-    /// Set the value comparison (`IFEQ`).
-    // TODO #7237: Document `IFNE` once it is supported.
+    /// Set the value comparison (`IFEQ`/`IFNE`).
     pub fn value_comparison(mut self, value_comparison: ValueComparison) -> Self {
         self.value_comparison = Some(value_comparison);
         self
@@ -296,7 +315,7 @@ impl SetOptions {
         self
     }
 
-    /// Set the expiry.
+    /// Set the expiry (`EX`/`PX`/`EXAT`/`PXAT`/`KEEPTTL`).
     pub fn with_expiration(mut self, expiration: SetExpiry) -> Self {
         self.expiration = Some(expiration);
         self
@@ -339,6 +358,8 @@ impl ToValkeyArgs for Direction {
         });
     }
 }
+
+impl ToSingleValkeyArg for Direction {}
 
 /// Expiry argument for `GETEX`/`HGETEX`.
 ///
@@ -434,15 +455,17 @@ pub enum FunctionRestorePolicy {
     Replace,
 }
 
-impl FunctionRestorePolicy {
-    pub(crate) fn as_arg(&self) -> &'static str {
-        match self {
-            FunctionRestorePolicy::Append => "APPEND",
-            FunctionRestorePolicy::Flush => "FLUSH",
-            FunctionRestorePolicy::Replace => "REPLACE",
-        }
+impl ToValkeyArgs for FunctionRestorePolicy {
+    fn write_valkey_args<W: ?Sized + ValkeyWrite>(&self, out: &mut W) {
+        out.write_arg(match self {
+            FunctionRestorePolicy::Append => b"APPEND".as_slice(),
+            FunctionRestorePolicy::Flush => b"FLUSH".as_slice(),
+            FunctionRestorePolicy::Replace => b"REPLACE".as_slice(),
+        });
     }
 }
+
+impl ToSingleValkeyArg for FunctionRestorePolicy {}
 
 /// Mode for the `CLIENT PAUSE` command.
 ///
@@ -455,14 +478,16 @@ pub enum ClientPauseMode {
     Write,
 }
 
-impl ClientPauseMode {
-    pub(crate) fn as_arg(&self) -> &'static str {
-        match self {
-            ClientPauseMode::All => "ALL",
-            ClientPauseMode::Write => "WRITE",
-        }
+impl ToValkeyArgs for ClientPauseMode {
+    fn write_valkey_args<W: ?Sized + ValkeyWrite>(&self, out: &mut W) {
+        out.write_arg(match self {
+            ClientPauseMode::All => b"ALL".as_slice(),
+            ClientPauseMode::Write => b"WRITE".as_slice(),
+        });
     }
 }
+
+impl ToSingleValkeyArg for ClientPauseMode {}
 
 /// Options for the `MIGRATE` command.
 ///
@@ -558,14 +583,16 @@ pub enum OrderBy {
     Desc,
 }
 
-impl OrderBy {
-    pub(crate) fn as_arg(&self) -> &'static str {
-        match self {
-            OrderBy::Asc => "ASC",
-            OrderBy::Desc => "DESC",
-        }
+impl ToValkeyArgs for OrderBy {
+    fn write_valkey_args<W: ?Sized + ValkeyWrite>(&self, out: &mut W) {
+        out.write_arg(match self {
+            OrderBy::Asc => b"ASC".as_slice(),
+            OrderBy::Desc => b"DESC".as_slice(),
+        });
     }
 }
+
+impl ToSingleValkeyArg for OrderBy {}
 
 /// A `LIMIT offset count` clause.
 ///
@@ -578,23 +605,51 @@ pub struct Limit {
     pub count: i64,
 }
 
+impl ToValkeyArgs for Limit {
+    fn write_valkey_args<W: ?Sized + ValkeyWrite>(&self, out: &mut W) {
+        out.write_arg(b"LIMIT");
+        out.write_arg_fmt(self.offset);
+        out.write_arg_fmt(self.count);
+    }
+}
+
 /// The type of a key, used by `OBJECT`/`TYPE`/`SCAN`.
+///
+/// Mirrors Python `ObjectType`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum ObjectType {
-    /// String.
+    /// String (`string`).
     String,
-    /// List.
+    /// List (`list`).
     List,
-    /// Set.
+    /// Set (`set`).
     Set,
-    /// Sorted set.
+    /// Sorted set (`zset`).
     ZSet,
-    /// Hash.
+    /// Hash (`hash`).
     Hash,
-    /// Stream.
+    /// Stream (`stream`).
     Stream,
 }
+
+// TODO #7082: Uncomment for `SCAN ... TYPE`. Nothing writes `ObjectType` as a
+// command argument yet: cluster scan passes it to glide-core via `to_redis()`.
+//
+// impl ToValkeyArgs for ObjectType {
+//     fn write_valkey_args<W: ?Sized + ValkeyWrite>(&self, out: &mut W) {
+//         out.write_arg(match self {
+//             ObjectType::String => b"string".as_slice(),
+//             ObjectType::List => b"list".as_slice(),
+//             ObjectType::Set => b"set".as_slice(),
+//             ObjectType::ZSet => b"zset".as_slice(),
+//             ObjectType::Hash => b"hash".as_slice(),
+//             ObjectType::Stream => b"stream".as_slice(),
+//         });
+//     }
+// }
+//
+// impl ToSingleValkeyArg for ObjectType {}
 
 impl ObjectType {
     /// Map to the vendored `redis` crate's `ObjectType` (used by cluster scan).
@@ -639,6 +694,12 @@ mod tests {
     }
 
     #[test]
+    fn field_existence_check_args() {
+        assert_args(FieldExistenceCheck::FNX, &["FNX"]);
+        assert_args(FieldExistenceCheck::FXX, &["FXX"]);
+    }
+
+    #[test]
     fn expiry_args() {
         assert_args(Expiry::EX(60), &["EX", "60"]);
         assert_args(Expiry::PX(1500), &["PX", "1500"]);
@@ -675,6 +736,12 @@ mod tests {
                 .with_expiration(SetExpiry::PX(1500)),
             &["XX", "IFEQ", "old", "GET", "PX", "1500"],
         );
+        assert_args(
+            SetOptions::default()
+                .value_comparison(ValueComparison::ifne("old"))
+                .with_expiration(SetExpiry::EX(60)),
+            &["IFNE", "old", "EX", "60"],
+        );
     }
 
     #[test]
@@ -684,8 +751,11 @@ mod tests {
             ValueComparison::IFEQ([0u8].to_vec()),
             &[b"IFEQ".as_slice(), &[0u8]],
         );
-
-        // TODO #7237: Add `IFNE` tests.
+        assert_args(ValueComparison::ifne("v"), &["IFNE", "v"]);
+        assert_args(
+            ValueComparison::IFNE([0u8].to_vec()),
+            &[b"IFNE".as_slice(), &[0u8]],
+        );
     }
 
     #[test]
@@ -731,9 +801,32 @@ mod tests {
 
     #[test]
     fn order_by_args() {
-        assert_eq!(OrderBy::Asc.as_arg(), "ASC");
-        assert_eq!(OrderBy::Desc.as_arg(), "DESC");
+        assert_args(OrderBy::Asc, &["ASC"]);
+        assert_args(OrderBy::Desc, &["DESC"]);
     }
+
+    #[test]
+    fn limit_args() {
+        assert_args(
+            Limit {
+                offset: 0,
+                count: 10,
+            },
+            &["LIMIT", "0", "10"],
+        );
+    }
+
+    // TODO #7082: Uncomment with the `ObjectType` `ToValkeyArgs` impl.
+    //
+    // #[test]
+    // fn object_type_args() {
+    //     assert_args(ObjectType::String, &["string"]);
+    //     assert_args(ObjectType::List, &["list"]);
+    //     assert_args(ObjectType::Set, &["set"]);
+    //     assert_args(ObjectType::ZSet, &["zset"]);
+    //     assert_args(ObjectType::Hash, &["hash"]);
+    //     assert_args(ObjectType::Stream, &["stream"]);
+    // }
 
     #[test]
     fn restore_options_args() {
@@ -791,14 +884,14 @@ mod tests {
 
     #[test]
     fn client_pause_mode_args() {
-        assert_eq!(ClientPauseMode::All.as_arg(), "ALL");
-        assert_eq!(ClientPauseMode::Write.as_arg(), "WRITE");
+        assert_args(ClientPauseMode::All, &["ALL"]);
+        assert_args(ClientPauseMode::Write, &["WRITE"]);
     }
 
     #[test]
     fn function_restore_policy_args() {
-        assert_eq!(FunctionRestorePolicy::Append.as_arg(), "APPEND");
-        assert_eq!(FunctionRestorePolicy::Flush.as_arg(), "FLUSH");
-        assert_eq!(FunctionRestorePolicy::Replace.as_arg(), "REPLACE");
+        assert_args(FunctionRestorePolicy::Append, &["APPEND"]);
+        assert_args(FunctionRestorePolicy::Flush, &["FLUSH"]);
+        assert_args(FunctionRestorePolicy::Replace, &["REPLACE"]);
     }
 }
