@@ -348,43 +348,56 @@ class RdmaRegion:
         # made of it.
         self._memory = memory
         self._view = client._ffi.from_buffer(memory)
-        self._span = _memory_span(memory)
-        self._client = client
-        self._region = region
-        # The FFI registers exactly the bytes it is handed, so the region holds
-        # as many bytes as the memory spans.
-        self._capacity = self._span[1] - self._span[0]
-        # Set by `close` when the fabric still kept the memory.
-        self._hold = None
-        # Guards `_region` and `_busy`. Held only briefly, never for the length
-        # of a transfer, so closing the client can still cancel one.
-        self._lock = threading.Lock()
-        # Whether a transfer is using the region. The FFI frees the region in
-        # `free_rdma_region` and takes it exclusively for each transfer, so a
-        # second transfer or a close while this is set would corrupt memory.
-        self._busy = False
-        # Frees the region if this object is collected without `close`. Its
-        # arguments keep the caller's memory alive until then, so the memory is
-        # never freed while still registered. A transfer in flight keeps this
-        # object reachable, so the finalizer never runs under one. Skipped at
-        # interpreter exit, when the library may already be gone and the
-        # process's teardown releases the memory anyway.
-        #
-        # Keep this the last step that can fail. If construction raises before
-        # it, `register_rdma_region` frees the region, and a finalizer already
-        # attached would free it a second time.
-        self._finalizer = weakref.finalize(
-            self,
-            _finalize_rdma_region,
-            client._lib,
-            client._ffi,
-            region,
-            memory,
-            self._view,
-            self._span,
-        )
-        # A documented writable property that typeshed's stub leaves out.
-        self._finalizer.atexit = False  # type: ignore[misc]
+        try:
+            self._span = _memory_span(memory)
+            self._client = client
+            self._region = region
+            # The FFI registers exactly the bytes it is handed, so the region
+            # holds as many bytes as the memory spans.
+            self._capacity = self._span[1] - self._span[0]
+            # Set by `close` when the fabric still kept the memory.
+            self._hold = None
+            # Guards `_region` and `_busy`. Held only briefly, never for the
+            # length of a transfer, so closing the client can still cancel one.
+            self._lock = threading.Lock()
+            # Whether a transfer is using the region. The FFI frees the region
+            # in `free_rdma_region` and takes it exclusively for each transfer,
+            # so a second transfer or a close while this is set would corrupt
+            # memory.
+            self._busy = False
+            # Frees the region if this object is collected without `close`. Its
+            # arguments keep the caller's memory alive until then, so the memory
+            # is never freed while still registered. A transfer in flight keeps
+            # this object reachable, so the finalizer never runs under one.
+            # Skipped at interpreter exit, when the library may already be gone
+            # and the process's teardown releases the memory anyway.
+            #
+            # Keep this the last step that can fail. If construction raises
+            # before it, `register_rdma_region` frees the region, and a
+            # finalizer already attached would free it a second time.
+            self._finalizer = weakref.finalize(
+                self,
+                _finalize_rdma_region,
+                client._lib,
+                client._ffi,
+                region,
+                memory,
+                self._view,
+                self._span,
+            )
+            # A documented writable property that typeshed's stub leaves out.
+            self._finalizer.atexit = False  # type: ignore[misc]
+        except BaseException:
+            # The error's traceback keeps `_view` alive, through this half-built
+            # region and through the arguments of whatever call failed. If
+            # `memory` is a memoryview and the error ends up in a reference
+            # cycle, Python 3.9's garbage collector crashes freeing it while
+            # `_view` still holds an export on it. Releasing ends the export
+            # however many references remain. `register_rdma_region` keeps its
+            # own export if the fabric still holds the memory, so this one is
+            # not needed for that.
+            client._ffi.release(self._view)
+            raise
 
     @property
     def capacity(self) -> int:
@@ -1917,14 +1930,20 @@ class BaseClient(CoreCommands):
             3808858755
         """
         ffi, lib = _SYNC_FFI.ffi, _SYNC_FFI.lib
-        view = memoryview(data)
-        out = ffi.new("uint32_t*")
-        buffer = ffi.from_buffer(view) if view.nbytes else ffi.NULL
-        if not lib.rdma_checksum(buffer, view.nbytes, out):
+        # Check before `view` and `buffer` exist. An error raised while `buffer`
+        # holds an export on `view` keeps both alive in its traceback, and
+        # Python 3.9's garbage collector crashes if that error ends up in a
+        # reference cycle.
+        if not lib.rdma_available():
             raise RdmaError(
                 "this build of GLIDE has no RDMA support compiled in, so it "
                 "cannot compute a transfer checksum"
             )
+        view = memoryview(data)
+        out = ffi.new("uint32_t*")
+        buffer = ffi.from_buffer(view) if view.nbytes else ffi.NULL
+        if not lib.rdma_checksum(buffer, view.nbytes, out):
+            raise RdmaError("Internal error: rdma_checksum failed")
         return int(out[0])
 
     def _begin_rdma_call(self):

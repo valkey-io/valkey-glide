@@ -47,7 +47,8 @@ def _survives_collecting_a_kept_error(failing_call: str, setup: str = "") -> Non
     Run `failing_call` in a fresh interpreter, keep the error it raises in a
     reference cycle, and collect it. On Python 3.9 the collector crashes if the
     failing frame still held a CFFI export on a memoryview, so this runs in a
-    subprocess: a crash fails the test instead of ending the session.
+    subprocess: a crash fails the test instead of ending the session. `setup`
+    may span several lines; it runs at module level before the call.
     """
     script = textwrap.dedent(f"""
         import gc
@@ -56,7 +57,7 @@ def _survives_collecting_a_kept_error(failing_call: str, setup: str = "") -> Non
         from glide_sync import GlideClient
         from glide_shared.exceptions import RdmaError
 
-        {setup}
+        SETUP
 
         def fail_and_keep_the_error():
             try:
@@ -72,7 +73,7 @@ def _survives_collecting_a_kept_error(failing_call: str, setup: str = "") -> Non
         fail_and_keep_the_error()
         gc.collect()
         print("survived")
-        """)
+        """).replace("SETUP\n", textwrap.dedent(setup) + "\n", 1)
     finished = subprocess.run(
         [sys.executable, "-c", script], capture_output=True, text=True, timeout=60
     )
@@ -88,6 +89,9 @@ class _FakeFfi:
 
     def from_buffer(self, memory):
         return memory
+
+    def release(self, view):
+        pass
 
     def string(self, message):
         return message
@@ -287,6 +291,16 @@ def test_a_checksum_matches_the_protocols_own():
     assert GlideClient.rdma_checksum(b"123456789") == 0xE306_9283
     assert GlideClient.rdma_checksum(bytearray(b"123456789")) == 0xE306_9283
     assert GlideClient.rdma_checksum(b"ab") != GlideClient.rdma_checksum(b"ba")
+
+
+@pytest.mark.skipif(
+    GlideClient.rdma_available(), reason="only a build without RDMA raises here"
+)
+def test_a_kept_checksum_error_is_collected_safely():
+    # Keeping an error is ordinary, for example to report it later. Its
+    # traceback keeps the failed checksum's frame alive, and collecting that
+    # frame used to crash Python 3.9.
+    _survives_collecting_a_kept_error('GlideClient.rdma_checksum(b"123456789")')
 
 
 def test_a_region_reports_its_capacity():
@@ -918,6 +932,50 @@ def test_a_region_that_fails_to_build_is_freed(monkeypatch):
 
     assert client._lib.freed == [raw]
     assert client._rdma_calls == 0
+
+
+def test_a_kept_error_from_a_region_that_fails_to_build_is_collected_safely():
+    # The half-built region holds an export on the caller's memory. When that
+    # memory is a memoryview, collecting the kept error used to crash Python
+    # 3.9. The real CFFI is needed here: the fake one takes no exports.
+    _survives_collecting_a_kept_error(
+        "client.register_rdma_region(memoryview(bytearray(64)))",
+        setup="""
+            import threading
+
+            import glide_sync.glide_client as module
+
+            ffi = module._SYNC_FFI.ffi
+
+            class Registration:
+                error_message = ffi.NULL
+                region = object()
+
+            class Lib:
+                def register_rdma_region(self, *arguments):
+                    return Registration()
+
+                def free_rdma_registration(self, registration):
+                    pass
+
+                def free_rdma_region(self, region):
+                    return ffi.NULL
+
+            def refuse(*arguments, **keywords):
+                raise RdmaError("could not build the region")
+
+            module.weakref.finalize = refuse
+
+            client = GlideClient.__new__(GlideClient)
+            client._ffi = ffi
+            client._lib = Lib()
+            client._is_closed = False
+            client._client_lock = threading.Lock()
+            client._rdma_calls = 0
+            client._deferred_core_client = ffi.NULL
+            client._core_client = object()
+            """,
+    )
 
 
 def test_a_region_that_fails_to_build_keeps_memory_the_fabric_holds(monkeypatch):
