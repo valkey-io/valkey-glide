@@ -42,11 +42,12 @@ find. On Linux the search tries the EFA installer's copy under `/opt/amazon/efa`
 The RDMA functions take synchronous clients only, and a pool refuses a connection
 request with an RDMA configuration.
 
-`cargo test` runs the RDMA tests that need no feature. To run all of them requires
-libfabric installed:
+`cargo test` runs the RDMA tests that need no feature. The rest need libfabric
+installed, and the ones in `tests/ffi_client_tests.rs` also need `valkey-server` on
+`PATH`. To run all of them:
 
 ```bash
-cargo test --features rdma --lib rdma_ffi
+cargo test --features rdma
 ```
 
 ## Generating the C Header File

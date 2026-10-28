@@ -14,6 +14,7 @@ on:
 
             # Rust dependencies
             - glide-core/**
+            - glide-rdma/**
             - glide-telemetry/**
             - glide-logger/**
             - deny.toml
@@ -21,6 +22,7 @@ on:
             # GitHub workflows
             - .github/workflows/ffi.yml
             - .github/actions/install-engine/action.yml
+            - .github/actions/install-libfabric/action.yml
             - .github/actions/install-protoc/action.yml
             - .github/actions/install-rust/action.yml
             - .github/actions/install-shared-dependencies/action.yml
@@ -34,6 +36,7 @@ on:
 
             # Rust dependencies
             - glide-core/**
+            - glide-rdma/**
             - glide-telemetry/**
             - glide-logger/**
             - deny.toml
@@ -41,6 +44,7 @@ on:
             # GitHub workflows
             - .github/workflows/ffi.yml
             - .github/actions/install-engine/action.yml
+            - .github/actions/install-libfabric/action.yml
             - .github/actions/install-protoc/action.yml
             - .github/actions/install-rust/action.yml
             - .github/actions/install-shared-dependencies/action.yml
@@ -88,6 +92,13 @@ jobs:
             - name: Run glide-ffi tests
               working-directory: ./ffi
               run: cargo test
+
+            - name: Install libfabric
+              uses: ./.github/actions/install-libfabric
+
+            - name: Run glide-ffi RDMA tests
+              working-directory: ./ffi
+              run: cargo test --features rdma
 
             - name: Run glide-ffi MIRI tests
               working-directory: ./ffi/miri-tests
