@@ -17,6 +17,7 @@ on:
 
             # GitHub workflows
             - .github/workflows/glide-rdma.yml
+            - .github/actions/install-libfabric/action.yml
             - .github/actions/install-protoc/action.yml
             - .github/actions/install-rust/action.yml
             - .github/workflows/lint-rust/action.yml
@@ -31,6 +32,7 @@ on:
 
             # GitHub workflows
             - .github/workflows/glide-rdma.yml
+            - .github/actions/install-libfabric/action.yml
             - .github/actions/install-protoc/action.yml
             - .github/actions/install-rust/action.yml
             - .github/workflows/lint-rust/action.yml
@@ -45,11 +47,6 @@ concurrency:
 
 env:
     CARGO_TERM_COLOR: always
-    # The vendored headers are libfabric 2.4, and a library older than the headers
-    # rejects every call. Ubuntu's package is 1.x, so Linux builds it from source.
-    LIBFABRIC_VERSION: 2.6.0
-    # From the release notes; update together with the version.
-    LIBFABRIC_SHA512: 4aa70dfad7d38c142c6758ce00a23fc0f2f919cb3a4acf9ea294c6bc1db182fc402e4e6578148b34a37b9bd0dad09045cf0284d118c6a5e47eea8b766c051c37
 
 jobs:
     tests:
@@ -71,33 +68,8 @@ jobs:
               with:
                   target: ${{ runner.os == 'macOS' && 'aarch64-apple-darwin' || 'x86_64-unknown-linux-gnu' }}
 
-            - name: Cache libfabric
-              if: runner.os == 'Linux'
-              id: cache-libfabric
-              uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-              with:
-                  path: ~/libfabric
-                  key: ${{ runner.os }}-libfabric-${{ env.LIBFABRIC_VERSION }}
-
-            - name: Build libfabric (Linux)
-              if: runner.os == 'Linux' && steps.cache-libfabric.outputs.cache-hit != 'true'
-              run: |
-                  tarball="libfabric-${LIBFABRIC_VERSION}.tar.bz2"
-                  curl -fsSL -o "$tarball" "https://github.com/ofiwg/libfabric/releases/download/v${LIBFABRIC_VERSION}/${tarball}"
-                  echo "${LIBFABRIC_SHA512}  ${tarball}" | sha512sum -c -
-                  tar xjf "$tarball"
-                  cd "libfabric-${LIBFABRIC_VERSION}"
-                  # The tests only use the tcp provider.
-                  ./configure --prefix="$HOME/libfabric" --enable-only --enable-tcp
-                  make -j"$(nproc)" install
-
-            - name: Point the loader at libfabric (Linux)
-              if: runner.os == 'Linux'
-              run: echo "GLIDE_LIBFABRIC_PATH=$HOME/libfabric/lib/libfabric.so.1" >> "$GITHUB_ENV"
-
-            - name: Install libfabric (macOS)
-              if: runner.os == 'macOS'
-              run: brew install libfabric
+            - name: Install libfabric
+              uses: ./.github/actions/install-libfabric
 
             - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
               with:
