@@ -397,6 +397,28 @@ func (b *BaseBatch[T]) Append(key string, value string) *T {
 	return b.addCmdAndTypeChecker(C.Append, []string{key, value}, reflect.Int64, false)
 }
 
+// Deletes `key` if its value equals `value`.
+//
+// Since:
+//
+//	Valkey 9.0 and above.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key   - The key to delete.
+//	value - The comparison value. The key is only deleted if its current value matches exactly.
+//
+// Command Response:
+//
+//	`true` if `key` was deleted, `false` if `key` did not exist or its value did not match `value`.
+//
+// [valkey.io]: https://valkey.io/commands/delifeq/
+func (b *BaseBatch[T]) DelIfEq(key string, value string) *T {
+	return b.addCmdAndTypeChecker(C.DelIfEq, []string{key, value}, reflect.Bool, false)
+}
+
 // Returns the longest common subsequence between strings stored at `key1` and `key2`.
 //
 // Since:

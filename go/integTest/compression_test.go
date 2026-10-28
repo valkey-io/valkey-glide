@@ -1219,6 +1219,7 @@ func (suite *GlideTestSuite) TestCompressionIncompatibleCommands() {
 		{name: "BitPos", call: func(c client) error { return errOf(c.BitPos(ctx, "key", 1)) }},
 		{name: "Decr", call: func(c client) error { return errOf(c.Decr(ctx, "key")) }},
 		{name: "DecrBy", call: func(c client) error { return errOf(c.DecrBy(ctx, "key", 5)) }},
+		{name: "DelIfEq", call: func(c client) error { return errOf(c.DelIfEq(ctx, "key", "10")) }},
 		{name: "GetBit", call: func(c client) error { return errOf(c.GetBit(ctx, "key", 0)) }},
 		{name: "GetRange", call: func(c client) error { return errOf(c.GetRange(ctx, "key", 0, 0)) }},
 		{name: "Incr", call: func(c client) error { return errOf(c.Incr(ctx, "key")) }},
@@ -1294,6 +1295,12 @@ func (suite *GlideTestSuite) TestCompressionIncompatibleCommandsWorkWithoutCompr
 	appendResult, err := client.Append(context.Background(), key, " world")
 	assert.NoError(t, err)
 	assert.Equal(t, int64(11), appendResult)
+
+	// DELIFEQ
+	if compareServerVersions(suite.serverVersion, "9.0.0") >= 0 {
+		_, err = client.DelIfEq(context.Background(), key, "nonexistent")
+		assert.NoError(t, err)
+	}
 
 	// GETRANGE
 	getrangeResult, err := client.GetRange(context.Background(), key, 0, 4)
