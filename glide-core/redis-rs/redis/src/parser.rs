@@ -933,6 +933,40 @@ mod tests {
     }
 
     #[test]
+    fn only_errors_parsed_from_a_reply_are_server_replies() {
+        for reply in [
+            b"-ERR boom\r\n".as_slice(),
+            b"-READONLY replica\r\n",
+            // A code this client does not know, so it parses as an extension error.
+            b"-OOM command not allowed when used memory > 'maxmemory'.\r\n",
+        ] {
+            let error = parse_redis_value(reply)
+                .unwrap()
+                .extract_error()
+                .expect_err("an error reply");
+            assert!(error.is_server_reply(), "{error}");
+        }
+
+        // Raised locally with the same kind a server error has.
+        let local = RedisError::from((
+            ErrorKind::ResponseError,
+            "Internal failure: receiver was dropped before delivering a response",
+        ));
+        assert!(!local.is_server_reply());
+        let io = RedisError::from(std::io::Error::from(std::io::ErrorKind::BrokenPipe));
+        assert!(!io.is_server_reply());
+    }
+
+    #[test]
+    fn a_command_never_sent_counts_as_a_server_reply() {
+        let error = RedisError::command_not_sent(ErrorKind::FatalSendError, "reason".to_string());
+
+        assert!(error.is_server_reply(), "{error}");
+        assert_eq!(error.kind(), ErrorKind::FatalSendError);
+        assert_eq!(error.detail(), Some("reason"));
+    }
+
+    #[test]
     fn parse_nested_error_and_handle_more_inputs() {
         // from https://redis.io/docs/interact/transactions/ -
         // "EXEC returned two-element bulk string reply where one is an OK code and the other an error reply. It's up to the client library to find a sensible way to provide the error to the user."

@@ -227,30 +227,42 @@ pub type FlushDbOptions = FlushAllOptions;
 /// Options for the `FUNCTION FLUSH` command.
 pub type FunctionFlushOptions = FlushAllOptions;
 
-/// Value comparison for `SET` — whether the key's current value must equal
-/// the given one.
+/// Value comparison for `SET` — whether the key's current value must equal,
+/// or must not equal, the given one.
 ///
-/// Mirrors redis-rs's `ValueComparison` type.
-/// Only `IFEQ` is supported.
+/// Mirrors redis-rs's `ValueComparison` type, without its digest
+/// comparisons (`IFDEQ`/`IFDNE`), which Valkey does not support.
 //
 // GLIDE's `ValueComparison` diverges from redis-rs by holding a `Vec<u8>`
 // instead of a `String`: redis-rs builds that `String` lossily, silently
-// breaking comparisons of binary (non-UTF-8) values. See #5046 for a related
-// binary `IFEQ` issue in the Java client.
+// breaking comparisons of binary (non-UTF-8) values. See #7447 for a related
+// binary option-value issue in the Java client.
 //
-// TODO #7237: Add `IFNE` (and `ValueComparison::ifne`) for Valkey 9.2.
 // TODO #7238: Use for `del_ex` (`DELEX`, Valkey 9.2).
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum ValueComparison {
-    /// Only set if the current value equals the given value (`IFEQ`).
+    /// Only set if the key exists and its value equals the given value (`IFEQ`).
+    ///
+    /// Since Valkey 8.1.0.
     IFEQ(Vec<u8>),
+
+    /// Only set if the key does not exist or its value does not equal the given
+    /// value (`IFNE`).
+    ///
+    /// Since Valkey 9.2.0.
+    IFNE(Vec<u8>),
 }
 
 impl ValueComparison {
     /// Compare for equality with the given value (`IFEQ`).
     pub fn ifeq(value: impl ToSingleValkeyArg) -> Self {
         Self::IFEQ(Self::arg_to_bytes(value))
+    }
+
+    /// Compare for inequality with the given value (`IFNE`).
+    pub fn ifne(value: impl ToSingleValkeyArg) -> Self {
+        Self::IFNE(Self::arg_to_bytes(value))
     }
 
     fn arg_to_bytes(value: impl ToSingleValkeyArg) -> Vec<u8> {
@@ -263,6 +275,10 @@ impl ToValkeyArgs for ValueComparison {
         match self {
             ValueComparison::IFEQ(value) => {
                 out.write_arg(b"IFEQ");
+                out.write_arg(value);
+            }
+            ValueComparison::IFNE(value) => {
+                out.write_arg(b"IFNE");
                 out.write_arg(value);
             }
         }
@@ -287,8 +303,7 @@ impl SetOptions {
         self
     }
 
-    /// Set the value comparison (`IFEQ`).
-    // TODO #7237: Document `IFNE` once it is supported.
+    /// Set the value comparison (`IFEQ`/`IFNE`).
     pub fn value_comparison(mut self, value_comparison: ValueComparison) -> Self {
         self.value_comparison = Some(value_comparison);
         self
@@ -300,7 +315,7 @@ impl SetOptions {
         self
     }
 
-    /// Set the expiry.
+    /// Set the expiry (`EX`/`PX`/`EXAT`/`PXAT`/`KEEPTTL`).
     pub fn with_expiration(mut self, expiration: SetExpiry) -> Self {
         self.expiration = Some(expiration);
         self
@@ -721,6 +736,12 @@ mod tests {
                 .with_expiration(SetExpiry::PX(1500)),
             &["XX", "IFEQ", "old", "GET", "PX", "1500"],
         );
+        assert_args(
+            SetOptions::default()
+                .value_comparison(ValueComparison::ifne("old"))
+                .with_expiration(SetExpiry::EX(60)),
+            &["IFNE", "old", "EX", "60"],
+        );
     }
 
     #[test]
@@ -730,8 +751,11 @@ mod tests {
             ValueComparison::IFEQ([0u8].to_vec()),
             &[b"IFEQ".as_slice(), &[0u8]],
         );
-
-        // TODO #7237: Add `IFNE` tests.
+        assert_args(ValueComparison::ifne("v"), &["IFNE", "v"]);
+        assert_args(
+            ValueComparison::IFNE([0u8].to_vec()),
+            &[b"IFNE".as_slice(), &[0u8]],
+        );
     }
 
     #[test]

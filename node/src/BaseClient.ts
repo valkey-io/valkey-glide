@@ -107,6 +107,7 @@ import {
     createDecr,
     createDecrBy,
     createDel,
+    createDelIfEq,
     createDump,
     createExists,
     createExpire,
@@ -2638,17 +2639,16 @@ export class BaseClient {
         );
     }
 
-    /** Set the given key with the given value. Return value is dependent on the passed options.
+    /**
+     * Sets the value of a key with the given options.
      *
      * @see {@link https://valkey.io/commands/set/|valkey.io} for details.
      *
      * @param key - The key to store.
-     * @param value - The value to store with the given key.
+     * @param value - The value to store with the given `key`.
      * @param options - (Optional) See {@link SetOptions} and {@link DecoderOption}.
-     * @returns - If the value is successfully set, return OK.
-     * If `conditional` in `options` is not set, the value will be set regardless of prior value existence.
-     * If value isn't set because of `onlyIfExists` or `onlyIfDoesNotExist` or `onlyIfEqual` conditions, return `null`.
-     * If `returnOldValue` is set, return the old value as a string.
+     * @returns If `returnOldValue` is not set, `"OK"` if the key was set, or `null` if the condition was not met.
+     * If `returnOldValue` is set, the old value stored at `key`, or `null` if `key` did not exist.
      *
      * @example
      * ```typescript
@@ -2685,6 +2685,17 @@ export class BaseClient {
      * console.log(result6);
      * // Output: null
      * // Value wasn't set because the comparisonValue is not equal to the current value of `key`. Value of `key` remains "new_value".
+     *
+     * // Example usage of set method with conditional option IFNE
+     * const result7 = await client.set("key", "another_new_value", {conditionalSet: "onlyIfNotEqual", comparisonValue: "new_value"});
+     * console.log(result7);
+     * // Output: null
+     * // Value wasn't set because the comparisonValue is equal to the current value of `key`. Value of `key` remains "new_value".
+     *
+     * const result8 = await client.set("key", "another_new_value", {conditionalSet: "onlyIfNotEqual", comparisonValue: "value we will compare to"});
+     * console.log(result8);
+     * // Output: 'OK'
+     * // Set "another_new_value" to "key" only if comparisonValue is not equal to the current value of "key".
      * ```
      */
     public async set(
@@ -9693,6 +9704,32 @@ export class BaseClient {
      */
     public async append(key: GlideString, value: GlideString): Promise<number> {
         return this.createWritePromise(createAppend(key, value));
+    }
+
+    /**
+     * Deletes `key` if its value equals `value`.
+     *
+     * @see {@link https://valkey.io/commands/delifeq/|valkey.io} for more details.
+     *
+     * @param key - The key to delete.
+     * @param value - The comparison value. The key is only deleted if its current value matches
+     *     exactly.
+     * @returns `true` if `key` was deleted, or `false` if `key` did not exist or its value did
+     *     not match `value`.
+     *
+     * @example
+     * ```typescript
+     * const deleted = await client.delifeq("key", "value");
+     * console.log(deleted); // Output: true
+     * ```
+     *
+     * @since Valkey 9.0.0
+     */
+    public async delifeq(
+        key: GlideString,
+        value: GlideString,
+    ): Promise<boolean> {
+        return this.createWritePromise(createDelIfEq(key, value));
     }
 
     /**

@@ -603,6 +603,32 @@ func ExampleClusterClient_Append() {
 	// my_value
 }
 
+func ExampleClient_DelIfEq() {
+	var client *Client = getExampleClient() // example helper function
+
+	client.Set(context.Background(), "my_key", "my_value")
+	result, err := client.DelIfEq(context.Background(), "my_key", "my_value")
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(result)
+
+	// Output: true
+}
+
+func ExampleClusterClient_DelIfEq() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
+
+	client.Set(context.Background(), "my_key", "my_value")
+	result, err := client.DelIfEq(context.Background(), "my_key", "my_value")
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(result)
+
+	// Output: true
+}
+
 func ExampleClient_GetDel() {
 	var client *Client = getExampleClient() // example helper function
 

@@ -275,7 +275,6 @@ import glide.api.models.commands.RangeOptions.ScoredRangeQuery;
 import glide.api.models.commands.RestoreOptions;
 import glide.api.models.commands.ScoreFilter;
 import glide.api.models.commands.SetOptions;
-import glide.api.models.commands.SetOptions.ConditionalSet;
 import glide.api.models.commands.SetOptions.SetOptionsBuilder;
 import glide.api.models.commands.SortOptions;
 import glide.api.models.commands.WeightAggregateOptions;
@@ -580,19 +579,18 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
     }
 
     /**
-     * Sets the given key with the given value. Return value is dependent on the passed options.
+     * Sets the value of a key with the given options.
      *
      * @see <a href="https://valkey.io/commands/set/">valkey.io</a> for details.
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
      * @param key The key to store.
-     * @param value The value to store with the given key.
+     * @param value The value to store with the given <code>key</code>.
      * @param options The Set options.
-     * @return Command Response - A <code>String</code> or <code>null</code> response. The old value
-     *     as a <code>String</code> if {@link SetOptionsBuilder#returnOldValue(boolean)} is set.
-     *     Otherwise, if the value isn't set because of {@link ConditionalSet#ONLY_IF_EXISTS} or
-     *     {@link ConditionalSet#ONLY_IF_DOES_NOT_EXIST} conditions, return <code>null</code>.
-     *     Otherwise, return <code>OK</code>.
+     * @return Command Response - If {@link SetOptionsBuilder#returnOldValue(boolean)} is not set,
+     *     <code>"OK"</code> if the key was set, or <code>null</code> if the condition was not met. If
+     *     it is set, the old value stored at <code>key</code>, or <code>null</code> if <code>key
+     *     </code> did not exist.
      */
     public <ArgType> T set(
             @NonNull ArgType key, @NonNull ArgType value, @NonNull SetOptions options) {

@@ -7,6 +7,7 @@ pub mod compression;
 pub mod connection_request;
 pub mod errors;
 pub mod otel_db_semantics;
+pub mod pool;
 pub mod request_type;
 pub mod scripts_container;
 pub mod timeout_watchdog;
