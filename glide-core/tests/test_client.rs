@@ -1961,21 +1961,13 @@ pub(crate) mod shared_client_tests {
     fn test_scoped_release_contended_lock_reclaims_slot_synchronously(
         #[values(false, true)] use_cluster: bool,
     ) {
-        // Regression for the release() Err(_) branch: when a scoped blocking
-        // command is still holding the connection lock at release time (its
-        // binding-side await was cancelled but the native task kept running and
-        // is parked in an unbounded BLPOP), release() cannot lock the connection
-        // and takes the try_lock -> Err path. The pool slot MUST be reclaimed
-        // synchronously there; the earlier code deferred the total_count
-        // decrement into a spawned task gated on acquiring that same connection
-        // lock, so for an unbounded blocking command the lock never freed and the
-        // slot leaked forever (total_count stuck at 1).
+        // A command still holding the connection at release (a native BLPOP
+        // whose binding-side await was cancelled) must not gate slot reclaim on
+        // it: a decrement deferred until the lock frees leaks the slot forever
+        // for an unbounded blocking command.
         //
-        // We force the contended path deterministically: hold a clone of the
-        // connection's Arc<Mutex> for the whole test, then call release(). The
-        // internal try_lock is guaranteed to fail, so we exercise exactly the
-        // Err(_) branch. We assert total_count returns to 0 immediately, WITHOUT
-        // ever releasing our held lock (mirroring a never-completing BLPOP).
+        // Hold the connection's lock for the whole test, mirroring a
+        // never-completing BLPOP, and assert total_count returns to 0 at once.
         block_on_all(async {
             let config = TestConfiguration {
                 request_timeout: Some(1), // millisecond
@@ -2020,10 +2012,8 @@ pub(crate) mod shared_client_tests {
                 let reclaimed = pool.release(scope.scope_id, registry);
                 assert!(reclaimed, "release should report the scope was reclaimed");
 
-                // The decrement must have happened synchronously in the Err(_)
-                // branch — we are STILL holding the connection lock, so any
-                // lock-gated deferred decrement (the buggy path) could not have
-                // run yet. Pre-fix this reads 1 (leaked); post-fix it reads 0.
+                // We still hold the connection lock, so a lock-gated decrement
+                // could not have run yet.
                 assert_eq!(
                     pool.total_count.load(std::sync::atomic::Ordering::Acquire),
                     0,
@@ -2042,74 +2032,130 @@ pub(crate) mod shared_client_tests {
         });
     }
 
+    /// Whether the server shows connection `conn_id`, on the node owning `slot`,
+    /// blocked in BLPOP. Filtered by id because the server is shared.
+    async fn blocked_blpop_clients(
+        client: &mut Client,
+        use_cluster: bool,
+        slot: u16,
+        conn_id: i64,
+    ) -> usize {
+        let routing = use_cluster.then(|| {
+            RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(Route::new(
+                slot,
+                SlotAddr::Master,
+            )))
+        });
+        let mut list = cmd("CLIENT");
+        list.arg("LIST");
+        let list = match client.send_command(&mut list, routing).await {
+            Ok(Value::BulkString(b)) => String::from_utf8_lossy(&b).into_owned(),
+            Ok(Value::VerbatimString { text, .. }) => text,
+            other => panic!("unexpected CLIENT LIST reply: {other:?}"),
+        };
+        let id_field = format!("id={conn_id} ");
+        list.lines()
+            .filter(|l| {
+                l.starts_with(&id_field)
+                    && l.contains("cmd=blpop")
+                    && l.split(' ')
+                        .any(|f| f.starts_with("flags=") && f.contains('b'))
+            })
+            .count()
+    }
+
+    /// Polls until connection `conn_id` is no longer blocked in BLPOP or a deadline passes.
+    async fn blocked_blpop_clients_after_settle(
+        client: &mut Client,
+        use_cluster: bool,
+        slot: u16,
+        conn_id: i64,
+    ) -> usize {
+        for _ in 0..40 {
+            if blocked_blpop_clients(client, use_cluster, slot, conn_id).await == 0 {
+                return 0;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        }
+        blocked_blpop_clients(client, use_cluster, slot, conn_id).await
+    }
+
+    /// Starts an unbounded scoped BLPOP and waits until the server shows it blocked.
+    /// Returns the task and the scope connection's server-side id.
+    async fn spawn_blocked_scoped_blpop(
+        test_basics: &mut TestBasics,
+        scope: &ScopeHandle,
+        key: String,
+        use_cluster: bool,
+        slot: u16,
+    ) -> (tokio::task::JoinHandle<redis::RedisResult<Value>>, i64) {
+        let conn_id = match scope.send("CLIENT", &mut [b"ID".to_vec()]).await {
+            Ok(Value::Int(id)) => id,
+            other => panic!("unexpected CLIENT ID reply: {other:?}"),
+        };
+        let (scope_id, client) = (scope.scope_id, test_basics.client.clone());
+        let blpop = tokio::spawn(async move {
+            let mut args = vec![key.into_bytes(), b"0".to_vec()];
+            glide_core::scope::send_scope_command(scope_id, "BLPOP", &mut args, &client).await
+        });
+        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+        assert_eq!(
+            blocked_blpop_clients(&mut test_basics.client, use_cluster, slot, conn_id).await,
+            1,
+            "precondition: the scoped BLPOP is blocked server-side"
+        );
+        (blpop, conn_id)
+    }
+
+    /// Releasing a scope whose blocking command was abandoned
+    /// closes its socket, so the server drops the waiter instead of letting it
+    /// consume a later push. Covers both a binding that leaves the native command
+    /// running and a caller that drops its future.
     #[rstest]
     #[serial_test::serial]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
-    #[ignore = "Fails on the pre-existing gap tracked in #7000: dropping the \
-                MultiplexedConnection doesn't close the socket while a command is \
-                outstanding, so a cancelled BLPOP's server-side waiter can still steal \
-                a later push. Not a regression from this PR."]
-    fn test_scoped_blocking_command_expired_does_not_steal_later_push(
+    fn test_released_scope_closes_socket_under_blocking_command(
         #[values(false, true)] use_cluster: bool,
+        #[values(false, true)] future_dropped: bool,
     ) {
-        // Full end-to-end version of the "no silent consumption" guarantee: a
-        // scoped BLPOP is cancelled in flight and its scope released; a later
-        // legitimate consumer then blocks on the same key and must receive a
-        // subsequent push, proving the stale scoped connection did not intercept it.
         block_on_all(async {
             let config = TestConfiguration {
-                request_timeout: Some(1), // millisecond
                 shared_server: true,
                 ..Default::default()
             };
             let mut test_basics = setup_test_basics(use_cluster, config.clone()).await;
             let bytes = scope_request_bytes(&test_basics.server, &config);
             let key = generate_random_string(10);
-            let routing_slot = glide_core::pool::slot_for_key(key.as_bytes());
-
-            let scope = ScopeHandle::setup(test_basics.client.clone(), bytes, routing_slot).await;
-
-            // Cancel an in-flight scoped BLPOP, then release (connection discarded).
-            let cancelled = {
-                let key = key.clone();
-                tokio::time::timeout(std::time::Duration::from_millis(300), async {
-                    let mut args = vec![key.clone().into_bytes(), b"0".to_vec()];
-                    scope.send("BLPOP", &mut args).await
-                })
-                .await
+            let slot = glide_core::pool::slot_for_key(key.as_bytes());
+            let scope = ScopeHandle::setup(test_basics.client.clone(), bytes, slot).await;
+            let (blpop, conn_id) =
+                spawn_blocked_scoped_blpop(&mut test_basics, &scope, key, use_cluster, slot).await;
+            let blpop = if future_dropped {
+                blpop.abort();
+                assert!(blpop.await.expect_err("aborted").is_cancelled());
+                None
+            } else {
+                Some(blpop)
             };
-            assert!(
-                cancelled.is_err(),
-                "expected cancellation, got {cancelled:?}"
+
+            glide_core::scope::release_scope(
+                scope.scope_id,
+                scope.client_id,
+                &tokio::runtime::Handle::current(),
             );
-            scope.release();
-
-            // A legitimate consumer blocks on the same key with a finite timeout.
-            let consumer = {
-                let mut consumer_client = test_basics.client.clone();
-                let key = key.clone();
-                tokio::spawn(async move {
-                    let mut cmd = redis::Cmd::new();
-                    cmd.arg("BLPOP").arg(&key).arg(2); // seconds
-                    consumer_client.send_command(&mut cmd, None).await
-                })
-            };
-
-            // Give the consumer time to register its waiter, then push once.
-            tokio::time::sleep(std::time::Duration::from_millis(200)).await;
-            let mut push_cmd = redis::Cmd::new();
-            push_cmd.arg("RPUSH").arg(&key).arg("payload");
-            let _ = test_basics.client.send_command(&mut push_cmd, None).await;
-
-            // The push must reach the legitimate consumer, not a stale scoped waiter.
-            let consumed = consumer.await.expect("consumer task join");
-            let value = consumed.expect("consumer BLPOP result");
-            match value {
-                Value::Array(items) => {
-                    assert_eq!(items.len(), 2, "BLPOP should return [key, value]");
-                    assert_eq!(items[1], Value::BulkString(b"payload".to_vec().into()));
-                }
-                other => panic!("legitimate consumer did not receive the push: {other:?}"),
+            assert_eq!(
+                blocked_blpop_clients_after_settle(
+                    &mut test_basics.client,
+                    use_cluster,
+                    slot,
+                    conn_id
+                )
+                .await,
+                0,
+                "the released scope's socket is still open with BLPOP blocked"
+            );
+            if let Some(blpop) = blpop {
+                assert!(blpop.await.expect("join").is_err());
             }
         });
     }
@@ -2117,92 +2163,93 @@ pub(crate) mod shared_client_tests {
     #[rstest]
     #[serial_test::serial]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
-    fn test_scoped_blocking_connection_discarded_on_concurrent_release(
+    fn test_parent_close_closes_scoped_socket_under_blocking_command(
         #[values(false, true)] use_cluster: bool,
     ) {
-        // Guards the clear-then-requeue race on the deferred release path. When
-        // `release` races a command still holding the connection lock, `try_lock`
-        // fails and the work is deferred to a spawned task. A binding may cancel a
-        // blocking command and release the scope while the native command is still
-        // parked; if a push then satisfies it, the command completes and clears its
-        // in-flight marker. A release that re-inspected state *after* the command
-        // finished would see a clean connection and requeue it — even though the
-        // push was already consumed. Correct behaviour is to discard from the fact
-        // that release raced an in-flight command, not from post-completion state.
-        //
-        // We reproduce deterministically: hold the lock so release defers, then
-        // reset the state to clean BEFORE the deferred task runs, then release the
-        // lock and assert the connection is still discarded.
         block_on_all(async {
             let config = TestConfiguration {
-                request_timeout: Some(1), // millisecond
                 shared_server: true,
                 ..Default::default()
             };
-            let test_basics = setup_test_basics(use_cluster, config.clone()).await;
+            let mut test_basics = setup_test_basics(use_cluster, config.clone()).await;
             let bytes = scope_request_bytes(&test_basics.server, &config);
             let key = generate_random_string(10);
-            let routing_slot = glide_core::pool::slot_for_key(key.as_bytes());
+            let slot = glide_core::pool::slot_for_key(key.as_bytes());
+            let scope = ScopeHandle::setup(test_basics.client.clone(), bytes, slot).await;
+            let (blpop, conn_id) =
+                spawn_blocked_scoped_blpop(&mut test_basics, &scope, key, use_cluster, slot).await;
 
-            let scope = ScopeHandle::setup(test_basics.client, bytes, routing_slot).await;
+            glide_core::scope::unregister_client(scope.client_id);
+            assert_eq!(
+                blocked_blpop_clients_after_settle(
+                    &mut test_basics.client,
+                    use_cluster,
+                    slot,
+                    conn_id
+                )
+                .await,
+                0,
+                "the scope's socket outlived its parent's close"
+            );
+            assert!(blpop.await.expect("join").is_err());
+        });
+    }
 
-            // Clone the registry entry's connection Arc and hold its lock so that
-            // release's `try_lock` fails and the spawned (deferred) path is taken.
+    /// A blocking command whose connection the server kills poisons the scope, so
+    /// release discards the connection instead of returning it to idle.
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_server_killed_blocking_scope_is_discarded_on_release(
+        #[values(false, true)] use_cluster: bool,
+    ) {
+        block_on_all(async {
+            let config = TestConfiguration {
+                shared_server: true,
+                ..Default::default()
+            };
+            let mut test_basics = setup_test_basics(use_cluster, config.clone()).await;
+            let bytes = scope_request_bytes(&test_basics.server, &config);
+            let key = generate_random_string(10);
+            let slot = glide_core::pool::slot_for_key(key.as_bytes());
+            let scope = ScopeHandle::setup(test_basics.client.clone(), bytes, slot).await;
+            let scope_conn_id = match scope.send("CLIENT", &mut [b"ID".to_vec()]).await {
+                Ok(Value::Int(id)) => id,
+                other => panic!("unexpected CLIENT ID reply: {other:?}"),
+            };
+
+            let (scope_id, client) = (scope.scope_id, test_basics.client.clone());
+            let blpop = tokio::spawn(async move {
+                let mut args = vec![key.into_bytes(), b"5".to_vec()];
+                glide_core::scope::send_scope_command(scope_id, "BLPOP", &mut args, &client).await
+            });
+            tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+            let routing = use_cluster.then(|| {
+                RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(Route::new(
+                    slot,
+                    SlotAddr::Master,
+                )))
+            });
+            let mut kill = cmd("CLIENT");
+            kill.arg("KILL").arg("ID").arg(scope_conn_id);
+            test_basics
+                .client
+                .send_command(&mut kill, routing)
+                .await
+                .expect("CLIENT KILL");
+            assert!(blpop.await.expect("join").is_err());
+
             let registry = glide_core::pool::get_scope_registry();
-            let conn_arc = registry
-                .get(&scope.scope_id)
-                .expect("scope entry present before release")
-                .connection
-                .clone();
-            let mut guard = conn_arc.lock().await;
-
-            // Release while the lock is held -> Err(_)/try_lock-contention branch.
-            let released = {
-                let mut pool = scope.pool.lock().await;
-                pool.release(scope.scope_id, registry)
-            };
-            assert!(released, "release should report success even when deferred");
-
-            // Simulate the racing blocking command completing (a late push arrived)
-            // and clearing every marker before the deferred task runs. This is the
-            // exact window the old post-completion state check got wrong: the
-            // connection now looks perfectly clean.
-            guard.state = glide_core::pool::ConnectionState::with_configured_db(0);
+            let mut pool = scope.pool.lock().await;
+            assert!(pool.release(scope.scope_id, registry));
             assert!(
-                guard.state.is_clean_for(0),
-                "precondition: state must look clean so a post-completion check \
-                 would (wrongly) requeue"
+                pool.idle.is_empty(),
+                "a killed connection was returned to idle"
             );
-
-            // Let the spawned task acquire the connection now that we release it.
-            drop(guard);
-
-            // Wait (bounded) for the deferred task to finish adjusting pool state.
-            let discarded = {
-                let mut discarded = false;
-                for _ in 0..200 {
-                    let pool = scope.pool.lock().await;
-                    if pool.idle.is_empty()
-                        && pool.total_count.load(std::sync::atomic::Ordering::Acquire) == 0
-                    {
-                        discarded = true;
-                        break;
-                    }
-                    drop(pool);
-                    tokio::time::sleep(std::time::Duration::from_millis(5)).await;
-                }
-                discarded
-            };
-
-            let pool = scope.pool.lock().await;
-            assert!(
-                discarded,
-                "deferred release requeued a connection that raced an in-flight \
-                 blocking command (clear-then-requeue race): idle={}, total_count={}",
-                pool.idle.len(),
-                pool.total_count.load(std::sync::atomic::Ordering::Acquire)
+            assert_eq!(
+                pool.total_count.load(std::sync::atomic::Ordering::Acquire),
+                0
             );
-            drop(pool);
         });
     }
 

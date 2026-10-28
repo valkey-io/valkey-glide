@@ -115,6 +115,18 @@ pub(crate) fn get_pool_adapter_map() -> &'static dashmap::DashMap<usize, (u64, u
     POOL_ADAPTER_MAP.get_or_init(dashmap::DashMap::new)
 }
 
+/// [`glide_core::pool::track_scope_command`] for a scope whose parent adapter is
+/// pool-borrowed; `None` otherwise.
+fn track_scope_command(
+    scope_id: u64,
+    cmd_name: &str,
+    args: &[Vec<u8>],
+) -> Option<glide_core::pool::BlockingGuard> {
+    let parent = scope::scope_parent_id(scope_id)? as usize;
+    let (pool_id, client_id) = *get_pool_adapter_map().get(&parent)?.value();
+    glide_core::pool::track_scope_command(pool_id, client_id, cmd_name, args)
+}
+
 /// Maps pool_id → ClientType for background client creation.
 static POOL_CLIENT_TYPES: std::sync::OnceLock<dashmap::DashMap<u64, ClientType>> =
     std::sync::OnceLock::new();
@@ -807,8 +819,11 @@ pub unsafe extern "C" fn glide_scope_execute_async(
     };
 
     let runtime = get_pool_runtime();
+    // Marked before spawning so the abandon monitor never sees the gap.
+    let blocking_guard = track_scope_command(scope_id, &cmd_name, &args);
 
     runtime.spawn(async move {
+        let _blocking_guard = blocking_guard;
         // OTel: create span for scope command
         let span_ptr = if GlideOpenTelemetry::is_initialized() {
             create_otel_span(RequestType::CustomCommand)
@@ -1241,6 +1256,7 @@ pub unsafe extern "C" fn glide_scope_execute(
     };
 
     let runtime = get_pool_runtime();
+    let _blocking_guard = track_scope_command(scope_id, &cmd_name, &args);
 
     // OTel: create span for scope command
     let span_ptr = if GlideOpenTelemetry::is_initialized() {

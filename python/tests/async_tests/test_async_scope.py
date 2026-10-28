@@ -11,6 +11,7 @@ Requires a running Valkey server (standalone).
 import asyncio
 import time
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
@@ -83,6 +84,22 @@ class TestAsyncIsolatedScopeBasic:
         await scope.close()
         with pytest.raises(RuntimeError, match="released"):
             await scope.ping()
+
+    async def test_release_frees_thread_of_cancelled_blocking_command(self, client):
+        """Releasing a scope ends the native call a cancelled BLPOP left running,
+        so its executor thread is free again."""
+        loop = asyncio.get_running_loop()
+        loop.set_default_executor(ThreadPoolExecutor(max_workers=1))
+        key = f"async-scope-blpop-{uuid.uuid4().hex[:8]}"
+        scope = await client.scoped_connection()
+        blpop = asyncio.create_task(scope.execute_command("BLPOP", key, "0"))
+        await asyncio.sleep(0.2)
+        blpop.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await blpop
+
+        await scope.close()
+        await asyncio.wait_for(loop.run_in_executor(None, lambda: None), timeout=2)
 
 
 class TestAsyncIsolatedScopeOCC:
@@ -168,19 +185,21 @@ class TestAsyncIsolatedScopePoolReuse:
     """Scope pool connection reuse tests."""
 
     async def test_lifo_reuse(self, client):
-        """Scopes are reused (same scope_id returned after release)."""
+        """A released connection is reused, under a fresh scope_id."""
         scope1 = await client.scoped_connection()
         id1 = scope1.scope_id
-        await scope1.ping()
+        conn1 = await scope1.execute_command("CLIENT", "ID")
         await scope1.close()
 
         await asyncio.sleep(0.1)
 
         scope2 = await client.scoped_connection()
         id2 = scope2.scope_id
+        conn2 = await scope2.execute_command("CLIENT", "ID")
         await scope2.close()
 
-        assert id1 == id2
+        assert conn1 == conn2
+        assert id1 != id2
 
     async def test_multiple_concurrent_scopes(self, client):
         """Multiple scopes can be held simultaneously."""

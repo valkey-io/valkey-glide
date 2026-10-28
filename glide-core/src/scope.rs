@@ -360,13 +360,17 @@ pub async fn execute_scope_command(
         // `is_timeout()` is a strict subset of `is_io_error()` in redis-rs (it only
         // checks for IO errors of kind TimedOut/WouldBlock), so it adds no coverage
         // beyond `is_io_error()` and is omitted here.
-        let poisoned = matches!(&result, Err(e) if e.is_io_error()
-            || e.is_connection_dropped()
-            || e.kind() == redis::ErrorKind::ProtocolDesync);
+        let poisoned = matches!(&result, Err(e) if is_poisoning_error(e));
         conn.state.blocking_in_flight = already_poisoned || poisoned;
     }
 
     result
+}
+
+/// Whether a failed blocking command may have left a server-side waiter armed or the
+/// connection in an unknown state.
+fn is_poisoning_error(e: &RedisError) -> bool {
+    e.is_io_error() || e.is_connection_dropped() || e.kind() == redis::ErrorKind::ProtocolDesync
 }
 
 /// Full-featured scope command execution with all cross-cutting concerns.
@@ -938,8 +942,16 @@ async fn build_scope_connection(
                     });
                 return Err(ScopeCreateError::InitFailed(err));
             }
-            Ok(Err(e)) => return Err(ScopeCreateError::InitFailed(e)),
-            Err(_) => return Err(ScopeCreateError::InitTimedOut),
+            // A failed or timed-out init may leave a reply outstanding; close rather
+            // than wait on it.
+            Ok(Err(e)) => {
+                conn.kill();
+                return Err(ScopeCreateError::InitFailed(e));
+            }
+            Err(_) => {
+                conn.kill();
+                return Err(ScopeCreateError::InitTimedOut);
+            }
         }
     }
 
@@ -1648,9 +1660,12 @@ pub(crate) async fn resync_idle_connection_database(
         conn.last_idle_at = std::time::Instant::now();
         guard.reidle_after_resync(conn);
         reservation.commit();
+    } else {
+        // A timed-out SELECT is still outstanding; close rather than wait on it.
+        conn.connection.kill();
     }
-    // else: re-SELECT failed — drop the connection and let `reservation`'s `Drop`
-    // reclaim the slot via `saturating_dec`.
+    // On failure the connection drops and `reservation`'s `Drop` reclaims the slot
+    // via `saturating_dec`.
 }
 
 /// Release a scope back to the pool. Fire-and-forget, non-blocking.
@@ -1818,10 +1833,15 @@ fn target_from_slot_lookup(
 /// must fail the command: dispatch used to carry on without a parent, silently
 /// running it with none of the guardrails listed on `ScopeEntry::parent_client_id`.
 pub fn resolve_scope_parent(scope_id: u64) -> Option<Client> {
-    let parent_client_id = get_scope_registry().get(&scope_id)?.parent_client_id;
+    let parent_client_id = scope_parent_id(scope_id)?;
     get_client_registry()
         .get(&parent_client_id)
         .map(|e| e.value().clone())
+}
+
+/// The id the scope's parent client was registered under.
+pub fn scope_parent_id(scope_id: u64) -> Option<u64> {
+    Some(get_scope_registry().get(&scope_id)?.parent_client_id)
 }
 
 /// Global client registry: client_id → Client.
@@ -1871,7 +1891,10 @@ mod tests {
         create_scope_connection, execute_scope_command, get_parent_client, inherited_tls_params,
         resolve_scope_parent, try_resolve_scope_target,
     };
-    use super::{build_scope_connection_addr, parse_cluster_target, strip_host_brackets};
+    use super::{
+        build_scope_connection_addr, is_poisoning_error, parse_cluster_target, strip_host_brackets,
+    };
+    use redis::{RedisResult, Value};
 
     use super::Client;
     use crate::client::{ConnectionRequest as ClientRequest, NodeAddress as ClientAddress};
@@ -2722,7 +2745,8 @@ mod tests {
         get_client_scope_pools().remove(&client_id);
         stop_endpoint(endpoint);
 
-        assert_eq!(acquired, Ok(held), "the released connection is reused");
+        let acquired = acquired.expect("the released connection is reused");
+        assert_ne!(acquired, held, "reuse allocates a fresh scope_id");
         assert!(
             elapsed < Duration::from_secs(2),
             "woke {elapsed:?} after start; the release was at 150 ms"
@@ -2986,7 +3010,10 @@ mod tests {
             assert_eq!(alternate_target, ScopeTarget::Standalone);
             reused_scope_id(pool.try_acquire(registry, alternate_target, 0, None))
         };
-        assert_eq!(second_scope_id, first_scope_id);
+        assert_ne!(
+            second_scope_id, first_scope_id,
+            "reuse allocates a fresh scope_id"
+        );
 
         {
             let mut pool = pool.lock().await;
@@ -3053,7 +3080,10 @@ mod tests {
                 None,
             ))
         };
-        assert_eq!(second_scope_id, first_scope_id);
+        assert_ne!(
+            second_scope_id, first_scope_id,
+            "reuse allocates a fresh scope_id"
+        );
 
         {
             let mut pool = pool.lock().await;
@@ -3222,7 +3252,7 @@ mod tests {
                 0,
                 None,
             ));
-            assert_eq!(reused, newest_id);
+            assert_ne!(reused, newest_id, "reuse allocates a fresh scope_id");
             assert!(pool.idle.is_empty());
             assert_eq!(pool.total_count.load(Ordering::Acquire), 2);
 
@@ -3242,6 +3272,95 @@ mod tests {
         shutdown_b.send(()).expect("stop mock server b");
         server_a.join().expect("mock server a exits cleanly");
         server_b.join().expect("mock server b exits cleanly");
+    }
+
+    /// Seat one standalone connection on a server that answers no commands after
+    /// the handshake, and borrow it.
+    async fn borrowed_silent_scope() -> (Arc<TokioMutex<ScopePool>>, u64, Sender<()>, JoinHandle<()>)
+    {
+        let (port, shutdown_sender, server) = endpoint_answering_n_more_commands(0);
+        let request_bytes = request_bytes("", port);
+        // A unique parent: `reserved_pool`'s fixed id 1 is a live client id other
+        // tests destroy, which purges its scopes mid-test.
+        let pool = ScopePool::new(
+            ScopePoolConfig::default(),
+            request_bytes.clone(),
+            crate::pool::allocate_client_id(),
+        );
+        pool.total_count.store(1, Ordering::Release);
+        let pool = Arc::new(TokioMutex::new(pool));
+        let reservation = reservation_for(&pool).await;
+        create_scope_connection(
+            pool.clone(),
+            None,
+            &request_bytes,
+            ScopeTarget::Standalone,
+            reservation,
+        )
+        .await
+        .expect("seat connection");
+        let registry = crate::pool::get_scope_registry();
+        let scope_id = reused_scope_id(pool.lock().await.try_acquire(
+            registry,
+            ScopeTarget::Standalone,
+            0,
+            None,
+        ));
+        (pool, scope_id, shutdown_sender, server)
+    }
+
+    async fn assert_released_promptly(command: tokio::task::JoinHandle<RedisResult<Value>>) {
+        let result = tokio::time::timeout(Duration::from_secs(2), command)
+            .await
+            .expect("release must stop the in-flight command")
+            .expect("command task");
+        let err = result.expect_err("a released command fails");
+        assert!(err.is_connection_dropped(), "{err}");
+    }
+
+    /// Release closes the socket under a blocking command
+    /// still in flight rather than leaving it open until the server replies.
+    #[tokio::test]
+    async fn release_cancels_in_flight_blocking_command() {
+        let (pool, scope_id, shutdown_sender, server) = borrowed_silent_scope().await;
+        let command = tokio::spawn(async move {
+            execute_scope_command(scope_id, "BLPOP", &[b"k".to_vec(), b"0".to_vec()], None).await
+        });
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        let registry = crate::pool::get_scope_registry();
+        assert!(pool.lock().await.release(scope_id, registry));
+        assert_released_promptly(command).await;
+        assert_eq!(pool.lock().await.total_count.load(Ordering::Acquire), 0);
+
+        shutdown_sender.send(()).expect("stop mock server");
+        server.join().expect("mock server exits cleanly");
+    }
+
+    /// A command still queued on the connection lock when
+    /// the scope is released must fail, not dispatch on a re-idled connection.
+    #[tokio::test]
+    async fn release_before_dispatch_stops_the_command() {
+        let (pool, scope_id, shutdown_sender, server) = borrowed_silent_scope().await;
+        let registry = crate::pool::get_scope_registry();
+        let connection = registry
+            .get(&scope_id)
+            .expect("borrowed scope is registered")
+            .connection
+            .clone();
+        let held = connection.lock().await;
+        let command = tokio::spawn(async move {
+            execute_scope_command(scope_id, "BLPOP", &[b"k".to_vec(), b"0".to_vec()], None).await
+        });
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        assert!(pool.lock().await.release(scope_id, registry));
+        drop(held);
+        assert_released_promptly(command).await;
+        assert!(pool.lock().await.idle.is_empty(), "not re-idled");
+
+        shutdown_sender.send(()).expect("stop mock server");
+        server.join().expect("mock server exits cleanly");
     }
 
     /// Holding the pool lock reproduces the contention that made the old
@@ -3371,14 +3490,6 @@ mod tests {
             Some((true, false, false, false)),
             "closing the parent must drop the scope entry, its pool, and any parent resolution"
         );
-    }
-
-    /// Mirrors the poison predicate from `execute_scope_command` directly against
-    /// synthetic errors, since constructing a real `FatalReceiveError`/`FatalSendError`
-    /// (multiplexed connection driver errors) or `ProtocolDesync` requires a live
-    /// server round-trip and isn't practical to reproduce as a pure unit test here.
-    fn is_poisoning_error(e: &redis::RedisError) -> bool {
-        e.is_io_error() || e.is_connection_dropped() || e.kind() == redis::ErrorKind::ProtocolDesync
     }
 
     #[test]
