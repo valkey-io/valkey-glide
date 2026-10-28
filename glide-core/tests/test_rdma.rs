@@ -216,7 +216,7 @@ mod dma_tests {
         let error = client
             .register_rdma_region(vec![0u8; 4096])
             .expect_err("a client without a fabric cannot register");
-        assert!(error.to_string().contains("RdmaConfiguration"), "{error}");
+        assert!(error.to_string().contains("RDMA configuration"), "{error}");
         for error in [
             client
                 .rdma_parked_bytes()
@@ -225,7 +225,7 @@ mod dma_tests {
                 .rdma_leaked_bytes()
                 .expect_err("no fabric, so nothing to report"),
         ] {
-            assert!(error.to_string().contains("RdmaConfiguration"), "{error}");
+            assert!(error.to_string().contains("RDMA configuration"), "{error}");
         }
 
         // A buffer cannot be made without a fabric, so borrow one from a
@@ -238,7 +238,7 @@ mod dma_tests {
             client.rdma_get(b"key", buffer, 0, 4096).await,
             "a transfer that never started hands the buffer back",
         );
-        assert!(error.to_string().contains("RdmaConfiguration"), "{error}");
+        assert!(error.to_string().contains("RDMA configuration"), "{error}");
     }
 
     // ---- against a mock server ----------------------------------------------

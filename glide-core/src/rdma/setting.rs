@@ -33,7 +33,7 @@ pub enum RdmaUnavailable {
     NotCompiledIn,
 
     /// No provider was named.
-    #[error("RdmaConfiguration requires a provider; none was set")]
+    #[error("an RDMA configuration requires a provider; none was set")]
     NoProviderConfigured,
 
     /// A node did not recognise the RDMA commands, so whatever module serves them

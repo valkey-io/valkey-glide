@@ -519,7 +519,7 @@ impl Client {
             .map(crate::rdma::Fabric::get)
             .ok_or_else(|| {
                 crate::rdma::protocol::configuration_error(
-                    "this client has no RDMA fabric: pass a RdmaConfiguration when creating it"
+                    "this client has no RDMA fabric: pass an RDMA configuration when creating it"
                         .to_string(),
                 )
             })
