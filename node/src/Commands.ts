@@ -4716,6 +4716,14 @@ export function createAppend(
     return createCommand(RequestType.Append, [key, value]);
 }
 
+/** @internal */
+export function createDelIfEq(
+    key: GlideString,
+    value: GlideString,
+): command_request.Command {
+    return createCommand(RequestType.DelIfEq, [key, value]);
+}
+
 /**
  * @internal
  */

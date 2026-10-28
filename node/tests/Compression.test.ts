@@ -528,6 +528,7 @@ describe("Compression", () => {
         { id: "bitpos", method: "bitpos", args: [1] },
         { id: "decr", method: "decr", args: [] },
         { id: "decrby", method: "decrBy", args: [5] },
+        { id: "delifeq", method: "delifeq", args: ["value"] },
         { id: "getbit", method: "getbit", args: [0] },
         { id: "getrange", method: "getrange", args: [0, 0] },
         { id: "incr", method: "incr", args: [] },
@@ -620,6 +621,11 @@ describe("Compression", () => {
 
             // SETRANGE
             expect(await client.setrange(key, 6, "WORLD")).toBe(11);
+
+            // DELIFEQ
+            if (!standaloneCluster.checkIfServerVersionLessThan("9.0.0")) {
+                await client.delifeq(key, "value");
+            }
 
             // GETBIT
             await client.set(key, "\x00");

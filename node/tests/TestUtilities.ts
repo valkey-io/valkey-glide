@@ -1309,6 +1309,19 @@ export async function batchTest(
     responseData.push(["append(key1, value)", 3]);
     baseBatch.del([key1]);
     responseData.push(["del([key1])", 1]);
+
+    if (!cluster.checkIfServerVersionLessThan("9.0.0")) {
+        const delIfEqKey = decodeString("{key}" + getRandomKey(), decoder);
+        baseBatch.set(delIfEqKey, value);
+        responseData.push(["set(delIfEqKey, value)", "OK"]);
+
+        baseBatch.delifeq(delIfEqKey, "wrong-value");
+        responseData.push(["delifeq(delIfEqKey, 'wrong-value')", false]);
+
+        baseBatch.delifeq(delIfEqKey, value);
+        responseData.push(["delifeq(delIfEqKey, value)", true]);
+    }
+
     baseBatch.hset(key4, [{ field, value }]);
     responseData.push(["hset(key4, { [field]: value })", 1]);
     baseBatch.hscan(key4, "0");
