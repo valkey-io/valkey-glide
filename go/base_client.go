@@ -1160,10 +1160,7 @@ func (client *baseClient) Set(ctx context.Context, key string, value string) (st
 	return handleOkResponse(result)
 }
 
-// SetWithOptions sets the given key with the given value using the given options. The return value is dependent on the
-// passed options. If the value is successfully set, "OK" is returned. If value isn't set because of [constants.OnlyIfExists]
-// or [constants.OnlyIfDoesNotExist] conditions, models.CreateNilStringResult() is returned. If [constants.ReturnOldValue] is
-// set, the old value is returned.
+// SetWithOptions sets the value of a key with the given options.
 //
 // See [valkey.io] for details.
 //
@@ -1176,10 +1173,8 @@ func (client *baseClient) Set(ctx context.Context, key string, value string) (st
 //
 // Return value:
 //
-//	If the value is successfully set, return models.Result[string] containing "OK".
-//	If value isn't set because of ConditionalSet.OnlyIfExists or ConditionalSet.OnlyIfDoesNotExist
-//	or ConditionalSet.OnlyIfEquals conditions, return models.CreateNilStringResult().
-//	If SetOptions.returnOldValue is set, return the old value as a String.
+//	If [options.SetOptions.ReturnOldValue] is not set, "OK" if the key was set, or models.CreateNilStringResult() if the
+//	condition was not met. If it is set, the old value stored at key, or models.CreateNilStringResult() if key did not exist.
 //
 // [valkey.io]: https://valkey.io/commands/set/
 func (client *baseClient) SetWithOptions(

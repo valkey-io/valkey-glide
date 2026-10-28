@@ -401,16 +401,17 @@ export class BaseBatch<T extends BaseBatch<T>> {
         return this.addAndReturn(createGetRange(key, start, end));
     }
 
-    /** Set the given key with the given value. Return value is dependent on the passed options.
+    /**
+     * Sets the value of a key with the given options.
+     *
      * @see {@link https://valkey.io/commands/set/|valkey.io} for details.
      *
      * @param key - The key to store.
-     * @param value - The value to store with the given key.
-     * @param options - The set options.
+     * @param value - The value to store with the given `key`.
+     * @param options - (Optional) See {@link SetOptions}.
      *
-     * Command Response - If the value is successfully set, return OK.
-     * If `value` isn't set because of `onlyIfExists` or `onlyIfDoesNotExist` conditions, return null.
-     * If `returnOldValue` is set, return the old value as a string.
+     * Command Response - If `returnOldValue` is not set, `"OK"` if the key was set, or `null` if the condition was not met.
+     * If `returnOldValue` is set, the old value stored at `key`, or `null` if `key` did not exist.
      */
     public set(key: GlideString, value: GlideString, options?: SetOptions): T {
         return this.addAndReturn(createSet(key, value, options));

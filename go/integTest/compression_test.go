@@ -16,6 +16,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	glide "github.com/valkey-io/valkey-glide/go/v2"
 	"github.com/valkey-io/valkey-glide/go/v2/config"
+	"github.com/valkey-io/valkey-glide/go/v2/interfaces"
 	"github.com/valkey-io/valkey-glide/go/v2/options"
 	"github.com/valkey-io/valkey-glide/go/v2/pipeline"
 )
@@ -1203,158 +1204,52 @@ func (suite *GlideTestSuite) TestCompressionSetNXViaCustomCommand() {
 // Incompatible Commands Tests
 // ============================================================================
 
-func (suite *GlideTestSuite) TestCompressionAppendIncompatible() {
-	client := suite.compressionClient()
-	defer client.Close()
+func (suite *GlideTestSuite) TestCompressionIncompatibleCommands() {
+	ctx := context.Background()
+	type client = interfaces.BaseClientCommands
+	errOf := func(_ any, err error) error { return err }
 
-	suite.assertCompressionIncompatible(client, func() error {
-		_, err := client.Append(context.Background(), "append_test_key", "_appended")
-		return err
-	})
-}
+	// Commands that are incompatible with compression, called on a key that does not need to exist.
+	incompatibleCommands := []struct {
+		name string
+		call func(c client) error
+	}{
+		{name: "Append", call: func(c client) error { return errOf(c.Append(ctx, "key", "0")) }},
+		{name: "BitCount", call: func(c client) error { return errOf(c.BitCount(ctx, "key")) }},
+		{name: "BitPos", call: func(c client) error { return errOf(c.BitPos(ctx, "key", 1)) }},
+		{name: "Decr", call: func(c client) error { return errOf(c.Decr(ctx, "key")) }},
+		{name: "DecrBy", call: func(c client) error { return errOf(c.DecrBy(ctx, "key", 5)) }},
+		{name: "DelIfEq", call: func(c client) error { return errOf(c.DelIfEq(ctx, "key", "10")) }},
+		{name: "GetBit", call: func(c client) error { return errOf(c.GetBit(ctx, "key", 0)) }},
+		{name: "GetRange", call: func(c client) error { return errOf(c.GetRange(ctx, "key", 0, 0)) }},
+		{name: "Incr", call: func(c client) error { return errOf(c.Incr(ctx, "key")) }},
+		{name: "IncrBy", call: func(c client) error { return errOf(c.IncrBy(ctx, "key", 5)) }},
+		{name: "IncrByFloat", call: func(c client) error { return errOf(c.IncrByFloat(ctx, "key", 0.5)) }},
+		{name: "SetIfEq", call: func(c client) error {
+			return errOf(c.SetWithOptions(ctx, "key", "20", *options.NewSetOptions().SetOnlyIfEquals("10")))
+		}},
+		{name: "SetIfNe", call: func(c client) error {
+			return errOf(c.SetWithOptions(ctx, "key", "20", *options.NewSetOptions().SetOnlyIfNotEquals("20")))
+		}},
+		{name: "SetBit", call: func(c client) error { return errOf(c.SetBit(ctx, "key", 0, 1)) }},
+		{name: "SetRange", call: func(c client) error { return errOf(c.SetRange(ctx, "key", 1, "5")) }},
+		{name: "Strlen", call: func(c client) error { return errOf(c.Strlen(ctx, "key")) }},
+	}
 
-// assertCompressionIncompatible calls fn against a compression-enabled client and asserts that it
-// fails with an error mentioning the compression incompatibility.
-func (suite *GlideTestSuite) assertCompressionIncompatible(client *glide.Client, fn func() error) {
-	t := suite.T()
+	clients := map[string]client{
+		"standalone": suite.compressionClient(),
+		"cluster":    suite.compressionClusterClient(),
+	}
 
-	err := fn()
-	assert.Error(t, err)
-	errMsg := strings.ToLower(err.Error())
-	assert.True(t, strings.Contains(errMsg, "incompatible") || strings.Contains(errMsg, "compression"),
-		"Error should mention incompatibility: %v", err)
-}
+	for clientName, c := range clients {
+		defer c.Close()
 
-func (suite *GlideTestSuite) TestCompressionDelIfEqIncompatible() {
-	suite.SkipIfServerVersionLowerThan("9.0.0", suite.T())
-
-	client := suite.compressionClient()
-	defer client.Close()
-
-	suite.assertCompressionIncompatible(client, func() error {
-		_, err := client.DelIfEq(context.Background(), "delifeq_test_key", "initial_value")
-		return err
-	})
-}
-
-func (suite *GlideTestSuite) TestCompressionGetRangeIncompatible() {
-	client := suite.compressionClient()
-	defer client.Close()
-
-	suite.assertCompressionIncompatible(client, func() error {
-		_, err := client.GetRange(context.Background(), "getrange_test_key", 0, 10)
-		return err
-	})
-}
-
-func (suite *GlideTestSuite) TestCompressionSetRangeIncompatible() {
-	client := suite.compressionClient()
-	defer client.Close()
-
-	suite.assertCompressionIncompatible(client, func() error {
-		_, err := client.SetRange(context.Background(), "setrange_test_key", 5, "replacement")
-		return err
-	})
-}
-
-func (suite *GlideTestSuite) TestCompressionStrlenIncompatible() {
-	client := suite.compressionClient()
-	defer client.Close()
-
-	suite.assertCompressionIncompatible(client, func() error {
-		_, err := client.Strlen(context.Background(), "strlen_test_key")
-		return err
-	})
-}
-
-func (suite *GlideTestSuite) TestCompressionIncrIncompatible() {
-	client := suite.compressionClient()
-	defer client.Close()
-
-	suite.assertCompressionIncompatible(client, func() error {
-		_, err := client.Incr(context.Background(), "incr_test_key")
-		return err
-	})
-}
-
-func (suite *GlideTestSuite) TestCompressionIncrByIncompatible() {
-	client := suite.compressionClient()
-	defer client.Close()
-
-	suite.assertCompressionIncompatible(client, func() error {
-		_, err := client.IncrBy(context.Background(), "incrby_test_key", 10)
-		return err
-	})
-}
-
-func (suite *GlideTestSuite) TestCompressionIncrByFloatIncompatible() {
-	client := suite.compressionClient()
-	defer client.Close()
-
-	suite.assertCompressionIncompatible(client, func() error {
-		_, err := client.IncrByFloat(context.Background(), "incrbyfloat_test_key", 0.5)
-		return err
-	})
-}
-
-func (suite *GlideTestSuite) TestCompressionDecrIncompatible() {
-	client := suite.compressionClient()
-	defer client.Close()
-
-	suite.assertCompressionIncompatible(client, func() error {
-		_, err := client.Decr(context.Background(), "decr_test_key")
-		return err
-	})
-}
-
-func (suite *GlideTestSuite) TestCompressionDecrByIncompatible() {
-	client := suite.compressionClient()
-	defer client.Close()
-
-	suite.assertCompressionIncompatible(client, func() error {
-		_, err := client.DecrBy(context.Background(), "decrby_test_key", 10)
-		return err
-	})
-}
-
-func (suite *GlideTestSuite) TestCompressionGetBitIncompatible() {
-	client := suite.compressionClient()
-	defer client.Close()
-
-	suite.assertCompressionIncompatible(client, func() error {
-		_, err := client.GetBit(context.Background(), "getbit_test_key", 0)
-		return err
-	})
-}
-
-func (suite *GlideTestSuite) TestCompressionSetBitIncompatible() {
-	client := suite.compressionClient()
-	defer client.Close()
-
-	suite.assertCompressionIncompatible(client, func() error {
-		_, err := client.SetBit(context.Background(), "setbit_test_key", 0, 1)
-		return err
-	})
-}
-
-func (suite *GlideTestSuite) TestCompressionBitCountIncompatible() {
-	client := suite.compressionClient()
-	defer client.Close()
-
-	suite.assertCompressionIncompatible(client, func() error {
-		_, err := client.BitCount(context.Background(), "bitcount_test_key")
-		return err
-	})
-}
-
-func (suite *GlideTestSuite) TestCompressionBitPosIncompatible() {
-	client := suite.compressionClient()
-	defer client.Close()
-
-	suite.assertCompressionIncompatible(client, func() error {
-		_, err := client.BitPos(context.Background(), "bitpos_test_key", 1)
-		return err
-	})
+		for _, command := range incompatibleCommands {
+			suite.T().Run(clientName+"/"+command.name, func(t *testing.T) {
+				assert.ErrorContains(t, command.call(c), "incompatible with compression")
+			})
+		}
+	}
 }
 
 func (suite *GlideTestSuite) TestCompressionIncompatibleCommandsWorkWithoutCompression() {
@@ -1433,6 +1328,28 @@ func (suite *GlideTestSuite) TestCompressionIncompatibleCommandsWorkWithoutCompr
 	bitcountResult, err := client.BitCount(context.Background(), key)
 	assert.NoError(t, err)
 	assert.GreaterOrEqual(t, bitcountResult, int64(0))
+
+	// SET with IFEQ
+	// TODO #5368: Compare versions semantically, not as strings.
+	if suite.serverVersion >= "8.1.0" {
+		_, err = client.Set(context.Background(), key, "hello")
+		assert.NoError(t, err)
+		setIfEqResult, err := client.SetWithOptions(
+			context.Background(), key, "world", *options.NewSetOptions().SetOnlyIfEquals("hello"))
+		assert.NoError(t, err)
+		assert.Equal(t, "OK", setIfEqResult.Value())
+	}
+
+	// SET with IFNE
+	// TODO #5368: Compare versions semantically, not as strings.
+	if suite.serverVersion >= "9.2.0" {
+		_, err = client.Set(context.Background(), key, "hello")
+		assert.NoError(t, err)
+		setIfNeResult, err := client.SetWithOptions(
+			context.Background(), key, "world", *options.NewSetOptions().SetOnlyIfNotEquals("world"))
+		assert.NoError(t, err)
+		assert.Equal(t, "OK", setIfNeResult.Value())
+	}
 
 	client.Del(context.Background(), []string{key})
 }

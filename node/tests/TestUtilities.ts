@@ -1088,7 +1088,9 @@ export async function batchTest(
         key26, // sorted set
         key27, // sorted set
         key28, // move
-    ] = Array.from({ length: 28 }, () =>
+        key29, // string
+        key30, // string
+    ] = Array.from({ length: 30 }, () =>
         decodeString("{key}" + getRandomKey(), decoder),
     );
 
@@ -1219,6 +1221,68 @@ export async function batchTest(
 
     baseBatch.set(key2, baz, { returnOldValue: true });
     responseData.push(['set(key2, "baz", { returnOldValue: true })', null]);
+
+    if (!cluster.checkIfServerVersionLessThan("8.1.0")) {
+        baseBatch.set(key29, foo, {
+            conditionalSet: "onlyIfEqual",
+            comparisonValue: bar,
+        });
+        responseData.push([
+            'set(key29, "foo", {conditionalSet: "onlyIfEqual", comparisonValue: "bar"}) non-existent key',
+            null,
+        ]);
+        baseBatch.set(key29, foo);
+        responseData.push(['set(key29, "foo")', "OK"]);
+        baseBatch.set(key29, bar, {
+            conditionalSet: "onlyIfEqual",
+            comparisonValue: bar,
+        });
+        responseData.push([
+            'set(key29, "bar", {conditionalSet: "onlyIfEqual", comparisonValue: "bar"}) value not equal',
+            null,
+        ]);
+        baseBatch.set(key29, bar, {
+            conditionalSet: "onlyIfEqual",
+            comparisonValue: foo,
+        });
+        responseData.push([
+            'set(key29, "bar", {conditionalSet: "onlyIfEqual", comparisonValue: "foo"}) value equal',
+            "OK",
+        ]);
+        baseBatch.get(key29);
+        responseData.push(["get(key29)", "bar"]);
+    }
+
+    if (!cluster.checkIfServerVersionLessThan("9.2.0")) {
+        baseBatch.set(key30, foo, {
+            conditionalSet: "onlyIfNotEqual",
+            comparisonValue: bar,
+        });
+        responseData.push([
+            'set(key30, "foo", {conditionalSet: "onlyIfNotEqual", comparisonValue: "bar"}) non-existent key',
+            "OK",
+        ]);
+        baseBatch.set(key30, foo);
+        responseData.push(['set(key30, "foo")', "OK"]);
+        baseBatch.set(key30, bar, {
+            conditionalSet: "onlyIfNotEqual",
+            comparisonValue: foo,
+        });
+        responseData.push([
+            'set(key30, "bar", {conditionalSet: "onlyIfNotEqual", comparisonValue: "foo"}) value equal',
+            null,
+        ]);
+        baseBatch.set(key30, bar, {
+            conditionalSet: "onlyIfNotEqual",
+            comparisonValue: bar,
+        });
+        responseData.push([
+            'set(key30, "bar", {conditionalSet: "onlyIfNotEqual", comparisonValue: "bar"}) value not equal',
+            "OK",
+        ]);
+        baseBatch.get(key30);
+        responseData.push(["get(key30)", "bar"]);
+    }
 
     if (!cluster.checkIfServerVersionLessThan("9.0.0")) {
         baseBatch.set(key28, foo);
