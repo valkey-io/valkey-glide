@@ -193,6 +193,8 @@ where
         socket_addr,
         true,
         GlideConnectionOptions {
+            #[cfg(feature = "rdma")]
+            rdma_fabric: params.rdma_fabric.clone(),
             push_sender: None,
             disconnect_notifier,
             discover_az,
