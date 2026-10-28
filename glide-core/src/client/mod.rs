@@ -4,7 +4,7 @@ pub mod circuit_breaker;
 mod credentials;
 mod types;
 
-use crate::client::rdma_connection::GlideConnectionWithRdma;
+use crate::client::rdma_connection::GlideConnection;
 pub use credentials::AuthGeneration;
 
 use crate::cluster_scan_container::insert_cluster_scan_cursor;
@@ -466,7 +466,7 @@ fn request_configures_cert_material(request: &ConnectionRequest) -> bool {
 pub enum ClientWrapper {
     Standalone(StandaloneClient),
     Cluster {
-        client: ClusterConnection<GlideConnectionWithRdma>,
+        client: ClusterConnection<GlideConnection>,
         /// Owns the background mTLS certificate reload task for cluster clients, if
         /// path-based reload is configured. Held so the task lives for the client's
         /// lifetime; the [`crate::tls_reload::CertReloadHandle`] shared with the reconnect loop keeps
@@ -2731,7 +2731,7 @@ async fn create_cluster_client(
     pubsub_synchronizer: Arc<dyn crate::pubsub::PubSubSynchronizer>,
     _rdma_fabric: Option<crate::rdma::Fabric>,
 ) -> RedisResult<(
-    redis::cluster_async::ClusterConnection<GlideConnectionWithRdma>,
+    redis::cluster_async::ClusterConnection<GlideConnection>,
     Option<Arc<crate::tls_reload::CertReloadManager>>,
     InheritedCertMaterial,
 )> {
@@ -3893,7 +3893,7 @@ impl GlideClientForTests for StandaloneClient {
 }
 
 // This is used for pubsub tests
-impl GlideClientForTests for ClusterConnection<GlideConnectionWithRdma> {
+impl GlideClientForTests for ClusterConnection<GlideConnection> {
     fn send_command<'a>(
         &'a mut self,
         cmd: &'a mut redis::Cmd,

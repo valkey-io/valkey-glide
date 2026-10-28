@@ -12,10 +12,10 @@
 //! ordinary commands -- never sends `BLOB.RDMA_HELLO` at all.
 
 #[cfg(not(feature = "rdma"))]
-pub type GlideConnectionWithRdma = redis::aio::MultiplexedConnection;
+pub type GlideConnection = redis::aio::MultiplexedConnection;
 
 #[cfg(feature = "rdma")]
-pub use with_rdma::GlideConnectionWithRdma;
+pub use with_rdma::GlideConnection;
 
 #[cfg(feature = "rdma")]
 mod with_rdma {
@@ -36,7 +36,7 @@ mod with_rdma {
 
     /// A connection and the RDMA session that may be opened on it.
     #[derive(Clone)]
-    pub struct GlideConnectionWithRdma {
+    pub struct GlideConnection {
         inner: MultiplexedConnection,
         /// `None` when RDMA is not configured.
         rdma: Option<Arc<Rdma>>,
@@ -112,7 +112,7 @@ mod with_rdma {
         }
     }
 
-    impl GlideConnectionWithRdma {
+    impl GlideConnection {
         /// Pair a connection with the fabric its session will be opened on.
         pub(crate) fn open(
             inner: MultiplexedConnection,
@@ -198,7 +198,7 @@ mod with_rdma {
         })
     }
 
-    impl Deref for GlideConnectionWithRdma {
+    impl Deref for GlideConnection {
         type Target = MultiplexedConnection;
 
         fn deref(&self) -> &Self::Target {
@@ -206,13 +206,13 @@ mod with_rdma {
         }
     }
 
-    impl DerefMut for GlideConnectionWithRdma {
+    impl DerefMut for GlideConnection {
         fn deref_mut(&mut self) -> &mut Self::Target {
             &mut self.inner
         }
     }
 
-    impl ConnectionLike for GlideConnectionWithRdma {
+    impl ConnectionLike for GlideConnection {
         fn req_packed_command<'a>(&'a mut self, cmd: &'a Cmd) -> RedisFuture<'a, Value> {
             Box::pin(self.send_packed_command(cmd))
         }
@@ -253,7 +253,7 @@ mod with_rdma {
         }
     }
 
-    impl Connect for GlideConnectionWithRdma {
+    impl Connect for GlideConnection {
         fn connect<'a, T>(
             info: T,
             response_timeout: Duration,
