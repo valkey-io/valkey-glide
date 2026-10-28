@@ -432,29 +432,17 @@ class TestAsyncClientPool:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     async def test_ordinary_client_survives_pool_borrow_release(self, cluster_mode):
-        """Regression for #7003.
-
-        An ordinary client drew its pipe id from a binding-local counter that
-        restarted at 1 and collided with a pooled client's id from core's
-        global sequence; the pooled client displaced the ordinary one in the
-        process-wide pipe registry, stranding its responses past
-        request_timeout. Assert the ordinary client draws from the shared
-        sequence, keeps its registry slot across a pool borrow/release on the
-        same loop, and still completes a round-trip. ``fail_after`` bounds the
-        wait so a regression fails instead of hanging.
+        """Ordinary and pooled async clients draw pipe ids from one sequence, so
+        a pooled client cannot displace an ordinary one in the pipe registry.
+        ``fail_after`` turns a regression into a failure instead of a hang.
         """
-        # The module-global registry the bug mutated, and the shared id
-        # allocator the fix makes the ordinary client draw from.
         from glide._ffi_instance import _ASYNC_FFI
         from glide.glide_client import _client_registry
 
         ReaderClass = GlideClusterClient if cluster_mode else GlideClient
 
-        # Bracket the reader's creation with two samples of the shared sequence:
-        # the fix draws its id from that sequence, so the id must fall strictly
-        # between them. The pre-fix local counter cannot land in that gap, which
-        # makes this fail pre-fix independent of how many clients other tests in
-        # the process (xdist workers) have already created.
+        # A shared-sequence id falls strictly between these two samples; a local
+        # counter does not, however many clients this process already created.
         seq_before = _ASYNC_FFI.lib.glide_allocate_client_id()
         reader = await ReaderClass.create(_get_pool_client_config(cluster_mode))
         try:
@@ -474,16 +462,12 @@ class TestAsyncClientPool:
                     await reader.set(key, "seeded")
                     assert await reader.get(key) == b"seeded"
 
-                # Baseline: the reader works and owns its registry slot before
-                # any pool activity.
                 assert _client_registry[reader._pipe_client_id] is reader
                 with anyio.fail_after(10):
                     await reader_roundtrip()
 
                 async with pool.borrow():
                     pass
-                # Borrow released, pool still open. The pooled client's id must
-                # not have displaced the reader in the shared registry.
                 assert _client_registry[reader._pipe_client_id] is reader
                 with anyio.fail_after(10):
                     await reader_roundtrip()
