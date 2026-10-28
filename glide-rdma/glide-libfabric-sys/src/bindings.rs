@@ -5519,14 +5519,6 @@ unsafe extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_rx_size_left"]
-    pub fn fi_rx_size_left(ep: *mut fid_ep) -> isize;
-}
-unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_tx_size_left"]
-    pub fn fi_tx_size_left(ep: *mut fid_ep) -> isize;
-}
-unsafe extern "C" {
     #[link_name = "\u{1}_wrap_fi_stx_context"]
     pub fn fi_stx_context(
         domain: *mut fid_domain,
@@ -5857,22 +5849,6 @@ unsafe extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_wait_open"]
-    pub fn fi_wait_open(
-        fabric: *mut fid_fabric,
-        attr: *mut fi_wait_attr,
-        waitset: *mut *mut fid_wait,
-    ) -> ::std::os::raw::c_int;
-}
-unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_poll_open"]
-    pub fn fi_poll_open(
-        domain: *mut fid_domain,
-        attr: *mut fi_poll_attr,
-        pollset: *mut *mut fid_poll,
-    ) -> ::std::os::raw::c_int;
-}
-unsafe extern "C" {
     #[link_name = "\u{1}_wrap_fi_mr_reg"]
     pub fn fi_mr_reg(
         domain: *mut fid_domain,
@@ -5967,10 +5943,6 @@ unsafe extern "C" {
         av: *mut *mut fid_av,
         context: *mut ::std::os::raw::c_void,
     ) -> ::std::os::raw::c_int;
-}
-unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_av_bind"]
-    pub fn fi_av_bind(av: *mut fid_av, fid: *mut fid, flags: u64) -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
     #[link_name = "\u{1}_wrap_fi_av_insert"]
@@ -6351,35 +6323,6 @@ unsafe extern "C" {
         fabric: *mut fid_fabric,
         fids: *mut *mut fid,
         count: ::std::os::raw::c_int,
-    ) -> ::std::os::raw::c_int;
-}
-unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_wait"]
-    pub fn fi_wait(waitset: *mut fid_wait, timeout: ::std::os::raw::c_int)
-    -> ::std::os::raw::c_int;
-}
-unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_poll"]
-    pub fn fi_poll(
-        pollset: *mut fid_poll,
-        context: *mut *mut ::std::os::raw::c_void,
-        count: ::std::os::raw::c_int,
-    ) -> ::std::os::raw::c_int;
-}
-unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_poll_add"]
-    pub fn fi_poll_add(
-        pollset: *mut fid_poll,
-        event_fid: *mut fid,
-        flags: u64,
-    ) -> ::std::os::raw::c_int;
-}
-unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_poll_del"]
-    pub fn fi_poll_del(
-        pollset: *mut fid_poll,
-        event_fid: *mut fid,
-        flags: u64,
     ) -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {

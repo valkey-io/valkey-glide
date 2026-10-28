@@ -56,7 +56,7 @@ jobs:
             fail-fast: false
             matrix:
                 # TODO #7410: Use the shared test matrix, excluding Windows.
-                os: [ubuntu-latest, macos-latest]
+                os: [ubuntu-24.04, macos-latest]
 
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -86,7 +86,7 @@ jobs:
               run: cargo test --features libfabric
 
     lint:
-        runs-on: ubuntu-latest
+        runs-on: ubuntu-24.04
         timeout-minutes: 30
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -98,3 +98,14 @@ jobs:
                   cargo-toml-folder: glide-rdma
                   github-token: ${{ secrets.GITHUB_TOKEN }}
               name: lint glide-rdma
+
+            # lint-rust runs clippy with all features, including `regenerate-bindings`.
+            # This runs bindgen, which requires libclang.
+            - name: Install libclang for bindgen
+              run: sudo apt-get update && sudo apt-get install -y libclang-dev
+
+            - uses: ./.github/workflows/lint-rust
+              with:
+                  cargo-toml-folder: glide-rdma/glide-libfabric-sys
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
+              name: lint glide-libfabric-sys
