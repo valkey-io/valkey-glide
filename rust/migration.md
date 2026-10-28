@@ -117,7 +117,11 @@ Notes:
 
   Without building a `Cmd`, `client.custom_command(&["X", "arg"])` sends the
   arguments directly and returns a `ValkeyValue`.
-- Accepted gaps: no Sentinel / unix sockets / async-std (unsupported by
+- Unix sockets: standalone clients connect through the server's socket with
+  `NodeAddress::unix("/run/valkey/valkey.sock")` or a `unix://` /
+  `redis+unix://` URL (not in cluster mode, with TLS, with `DiscoverAll`, or
+  mixed with TCP addresses).
+- Accepted gaps: no Sentinel / async-std (unsupported by
   glide-core); Pub/Sub stays client-integrated by design; generic code
   bounded on redis-rs's `ConnectionLike`-based traits should re-bound on
   `glide::AsyncCommands` (performance-motivated deviation).
@@ -138,6 +142,12 @@ prebuilt `ConnectionInfo` structs are not accepted — for anything a
 URL/host-port can't express (explicit database, credentials, protocol, TLS, …),
 build the configuration with `new(...)` and the `with_*` setters, which is
 GLIDE's connection-description type.
+
+### Unix socket URLs are stricter
+
+redis-rs silently ignores a `unix://` URL's userinfo, a `localhost` host, the
+fragment and unknown query keys; GLIDE rejects them. Pass credentials as `?user=...&pass=...`, write the
+path with no host (`unix:///run/valkey/valkey.sock`), and encode `#` as `%23`.
 
 ### `ValueComparison` supports only `IFEQ`
 

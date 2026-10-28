@@ -96,10 +96,13 @@ impl GlideClientConfiguration {
     /// `rediss://` enables TLS with full verification;
     /// `rediss://…/#insecure` disables certificate verification.
     ///
-    /// Does not support Unix-socket URLs (`unix://` or `unix+redis://`).
-    /// Does not support Valkey URLs (`valkey://` or `valkeys://`).
+    /// `unix:///path/to/valkey.sock` (or `redis+unix://`) connects through a Unix domain socket;
+    /// pass `db`, `user`, `pass` and `resp3=true` as query parameters (encode `+` as `%2B`).
+    ///
+    /// Does not support Valkey URLs (`valkey://`, `valkeys://` or `valkey+unix://`).
     // TODO #7031: Accept `valkey://` and `valkeys://` schemes.
     pub fn from_url(url: impl AsRef<str>) -> crate::ValkeyResult<Self> {
+        reject_misread_unix_socket_url(url.as_ref())?;
         let info = to_redis_connection_info(url)?;
         let (address, tls) = split_connection_addr(info.addr)?;
 
@@ -131,4 +134,41 @@ impl GlideClientConfiguration {
         req.node_discovery_mode = self.node_discovery_mode.to_core();
         req
     }
+}
+
+/// redis-rs ignores a Unix socket URL's userinfo, a `localhost` host, the fragment and unknown
+/// query keys, so reject the forms it would silently misread.
+fn reject_misread_unix_socket_url(url: &str) -> crate::ValkeyResult<()> {
+    let Some(parsed) = redis::parse_redis_url(url) else {
+        return Ok(());
+    };
+    if !matches!(parsed.scheme(), "unix" | "redis+unix") {
+        return Ok(());
+    }
+    if !parsed.username().is_empty() || parsed.password().is_some() {
+        return Err(crate::error::GlideError::Configuration(
+            "Unix socket URL must pass credentials as `user` and `pass` query parameters".into(),
+        ));
+    }
+    if parsed.host_str().is_some_and(|host| !host.is_empty()) {
+        return Err(crate::error::GlideError::Configuration(
+            "Unix socket URL must not contain a host".into(),
+        ));
+    }
+    if parsed.fragment().is_some() {
+        return Err(crate::error::GlideError::Configuration(
+            "Unix socket URL must not contain a fragment; encode `#` as `%23`".into(),
+        ));
+    }
+    // Errors never echo a key or value: a mistyped separator can put a password inside one.
+    if parsed
+        .query_pairs()
+        .any(|(key, _)| !matches!(key.as_ref(), "db" | "user" | "pass" | "resp3"))
+    {
+        return Err(crate::error::GlideError::Configuration(
+            "Unsupported query parameter in Unix socket URL; use `db`, `user`, `pass` or `resp3`"
+                .into(),
+        ));
+    }
+    Ok(())
 }

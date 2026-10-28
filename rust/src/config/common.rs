@@ -12,6 +12,7 @@ use glide_core::client::TlsMode;
 use glide_core::iam::ServiceType as CoreServiceType;
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::path::PathBuf;
 use std::time::Duration;
 
 /// Library name reported to the server.
@@ -164,7 +165,7 @@ impl NodeDiscoveryMode {
     }
 }
 
-/// A server address (host + port).
+/// A server address: a host and port, or a Unix domain socket.
 ///
 /// Mirrors Python `NodeAddress`. Defaults to `localhost:6379`.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -173,6 +174,10 @@ pub struct NodeAddress {
     pub host: String,
     /// TCP port.
     pub port: u16,
+    /// Absolute path of the server's Unix domain socket; when set, `host` and `port` are
+    /// ignored. Standalone clients on Unix platforms only; not supported with TLS,
+    /// `DiscoverAll`, or mixed with TCP addresses.
+    pub unix_socket_path: Option<PathBuf>,
 }
 
 impl NodeAddress {
@@ -181,6 +186,16 @@ impl NodeAddress {
         NodeAddress {
             host: host.into(),
             port,
+            unix_socket_path: None,
+        }
+    }
+
+    /// Address of the server's Unix domain socket at the absolute `path` (Unix platforms only).
+    pub fn unix(path: impl Into<PathBuf>) -> Self {
+        NodeAddress {
+            host: String::new(),
+            port: 0,
+            unix_socket_path: Some(path.into()),
         }
     }
 }
@@ -193,10 +208,17 @@ impl Default for NodeAddress {
 
 impl NodeAddress {
     pub(crate) fn to_core(&self) -> CoreNodeAddress {
-        CoreNodeAddress {
-            host: self.host.clone(),
-            port: self.port,
-            unix_socket_path: None,
+        match &self.unix_socket_path {
+            Some(path) => CoreNodeAddress {
+                host: String::new(),
+                port: 0,
+                unix_socket_path: Some(path.clone()),
+            },
+            None => CoreNodeAddress {
+                host: self.host.clone(),
+                port: self.port,
+                unix_socket_path: None,
+            },
         }
     }
 }
@@ -533,9 +555,7 @@ pub(crate) fn split_connection_addr(
             };
             Ok((NodeAddress::new(host, port), tls))
         }
-        redis::ConnectionAddr::Unix(_) => Err(crate::error::GlideError::Configuration(
-            "unix-socket connections are not supported by glide-core".into(),
-        )),
+        redis::ConnectionAddr::Unix(path) => Ok((NodeAddress::unix(path), TlsConfig::NoTls)),
     }
 }
 
@@ -548,11 +568,14 @@ pub(crate) fn from_redis_protocol(p: redis::ProtocolVersion) -> ProtocolVersion 
 }
 
 /// Build [`ServerCredentials`] from URL-provided username/password (either may
-/// be absent; `redis://:pass@host` yields password-only credentials).
+/// be absent; `redis://:pass@host` yields password-only credentials). Empty
+/// values, such as a Unix socket URL's `?pass=`, count as absent.
 pub(crate) fn credentials_from_info(
     username: Option<String>,
     password: Option<String>,
 ) -> Option<ServerCredentials> {
+    let username = username.filter(|username| !username.is_empty());
+    let password = password.filter(|password| !password.is_empty());
     match (username, password) {
         (None, None) => None,
         (username, password) => Some(ServerCredentials {
