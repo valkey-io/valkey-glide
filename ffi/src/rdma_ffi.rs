@@ -512,7 +512,9 @@ fn register_region(
 /// registered region.
 ///
 /// Has no timeout, waits for the server to complete the transfer so memory
-/// is not left in an undefined state.
+/// is not left in an undefined state. Because it blocks the calling thread, a
+/// call from a thread running a tokio runtime is rejected and the region stays
+/// usable.
 ///
 /// To cancel a transfer, call [`rdma_close_regions`] from another thread to
 /// revoke registered regions so the server can no longer reach them. This call
@@ -735,6 +737,15 @@ fn reject_bad_transfer_args(
     if region.is_null() {
         return Some(RdmaResult::rejected(
             "cannot transfer without a registered region".to_string(),
+        ));
+    }
+    // A transfer blocks the calling thread, which tokio refuses to do inside a
+    // runtime. Rejecting it here, before the region gives up its buffer, keeps
+    // the region usable, and avoids a panic that aborts a release build.
+    #[cfg(feature = "rdma")]
+    if tokio::runtime::Handle::try_current().is_ok() {
+        return Some(RdmaResult::rejected(
+            "cannot transfer from inside a tokio runtime".to_string(),
         ));
     }
     None
@@ -1477,6 +1488,85 @@ mod tests {
 
         assert!(result.region_closed);
         unsafe { free_rdma_result(result.into_raw()) };
+    }
+
+    /// A transfer blocks on the client's runtime, and tokio panics when asked to
+    /// block inside another one. A transfer from inside a runtime is rejected
+    /// before it takes the region's buffer, so the region stays usable.
+    #[cfg(feature = "rdma")]
+    #[test]
+    fn a_transfer_inside_a_tokio_runtime_is_rejected() {
+        let fabric = tcp_fabric();
+        let mut memory = vec![0u8; 64];
+        let region = Box::into_raw(foreign_region(&fabric, &mut memory));
+        let key = b"key";
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .build()
+            .expect("the runtime builds");
+        let guard = runtime.enter();
+
+        let get = unsafe { rdma_get(unread_client_ptr(), key.as_ptr(), key.len(), region, 0, 64) };
+        let set = unsafe {
+            rdma_set(
+                unread_client_ptr(),
+                key.as_ptr(),
+                key.len(),
+                region,
+                0,
+                64,
+                RdmaSetChecksumMode::Skip,
+                0,
+            )
+        };
+        drop(guard);
+
+        for result in [get, set] {
+            assert!(!unsafe { (*result).region_closed });
+            assert_eq!(
+                take_error(result).as_deref(),
+                Some("cannot transfer from inside a tokio runtime")
+            );
+        }
+        assert!(
+            !unsafe { &*region }.is_closed(),
+            "the region kept its buffer"
+        );
+        let hold = unsafe { free_rdma_region(region) };
+        assert!(hold.is_null(), "the idle region frees its memory at once");
+    }
+
+    /// A panic caught after a transfer took the region's buffer dropped it while
+    /// unwinding, which closes the region. One caught before then leaves the
+    /// region open.
+    #[cfg(feature = "rdma")]
+    #[test]
+    fn a_panicked_transfer_reports_whether_the_region_closed() {
+        let fabric = tcp_fabric();
+        let mut memory = vec![0u8; 64];
+        let region = Box::into_raw(foreign_region(&fabric, &mut memory));
+
+        let before_take = unsafe { RdmaResult::panicked(region) };
+        assert!(!before_take.region_closed);
+
+        drop(
+            unsafe { &mut *region }
+                .take()
+                .ok()
+                .expect("the region has its buffer"),
+        );
+        let after_take = unsafe { RdmaResult::panicked(region) };
+        assert!(after_take.region_closed);
+
+        let without_region = unsafe { RdmaResult::panicked(std::ptr::null_mut()) };
+        assert!(!without_region.region_closed);
+
+        for result in [before_take, after_take, without_region] {
+            assert_eq!(
+                take_error(result.into_raw()).as_deref(),
+                Some("internal error: the RDMA transfer panicked")
+            );
+        }
+        unsafe { free_rdma_memory_hold(free_rdma_region(region)) };
     }
 
     #[test]
