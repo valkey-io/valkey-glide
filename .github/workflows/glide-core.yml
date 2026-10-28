@@ -16,11 +16,13 @@ on:
             # Rust dependencies
             - glide-telemetry/**
             - glide-logger/**
+            - glide-rdma/**
             - deny.toml
 
             # GitHub workflows
             - .github/workflows/glide-core.yml
             - .github/actions/install-engine/action.yml
+            - .github/actions/install-libfabric/action.yml
             - .github/actions/install-protoc/action.yml
             - .github/actions/install-rust/action.yml
             - .github/actions/install-shared-dependencies/action.yml
@@ -43,11 +45,13 @@ on:
             # Rust dependencies
             - glide-telemetry/**
             - glide-logger/**
+            - glide-rdma/**
             - deny.toml
 
             # GitHub workflows
             - .github/workflows/glide-core.yml
             - .github/actions/install-engine/action.yml
+            - .github/actions/install-libfabric/action.yml
             - .github/actions/install-protoc/action.yml
             - .github/actions/install-rust/action.yml
             - .github/actions/install-shared-dependencies/action.yml
@@ -183,6 +187,16 @@ jobs:
             - name: Run glide-core tests
               working-directory: ./glide-core
               run: cargo test --features "proto,socket-layer,standalone_heartbeat"
+
+            - name: Install libfabric
+              uses: ./.github/actions/install-libfabric
+
+            # test_rdma_remote is left out as it needs RDMA hardware and a server with the module.
+            - name: Run glide-core RDMA tests
+              working-directory: ./glide-core
+              run: |
+                  cargo test --features rdma --lib
+                  cargo test --features rdma --test test_rdma
 
             - name: Check features
               working-directory: ./glide-core
