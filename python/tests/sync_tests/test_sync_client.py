@@ -8,6 +8,7 @@ import math
 import os
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Mapping, Optional, Union, cast
 
@@ -45,6 +46,7 @@ from glide_shared.commands.core_options import (
     InsertPosition,
     MigrateOptions,
     OnlyIfEqual,
+    OnlyIfNotEqual,
     UpdateOptions,
 )
 from glide_shared.commands.latency import LatencyEntry
@@ -117,6 +119,8 @@ from tests.utils.utils import (
     BGREWRITEAOF_RESPONSES,
     BGSAVE_NOT_CANCELLED_RESPONSE,
     BGSAVE_RESPONSES,
+    BGSAVE_TYPES,
+    INFO_DEFAULT_FIELDS,
     PRIMARY_SLOT_ROUTE,
     assert_client_tracking_info,
     assert_connected_sync,
@@ -136,12 +140,16 @@ from tests.utils.utils import (
     get_first_result,
     get_random_string,
     get_unix_seconds_sync,
-    parse_info_response,
+    parse_int,
     round_values,
     run_sync_func_with_timeout_in_thread,
     sync_check_if_server_version_lt,
+    sync_get_info,
     sync_get_version,
+    sync_low_busy_reply_threshold,
+    sync_wait_for,
     sync_wait_for_save_not_in_progress,
+    sync_wait_for_server_blocked,
     trigger_latency_spike_sync,
 )
 
@@ -469,20 +477,23 @@ class TestGlideClients:
             protocol=protocol,
             request_timeout=20000,  # 20 seconds timeout
         )
+        probe = create_sync_client(
+            request, cluster_mode, protocol=protocol, request_timeout=100
+        )
+        nodes = pytest.valkey_cluster.nodes_addr if cluster_mode else None  # type: ignore
 
         def run_debug_sleep():
             """
             Run a long-running DEBUG SLEEP command.
             """
-            command = ["DEBUG", "sleep", "7"]
+            command = ["DEBUG", "sleep", "3"]
             if isinstance(client, GlideClusterClient):
                 client.custom_command(command, AllNodes())
             else:
                 client.custom_command(command)
 
         def fail_to_connect_to_client():
-            # try to connect with a small timeout connection
-            time.sleep(1)
+            sync_wait_for_server_blocked(probe, nodes)
             with pytest.raises(ClosingError) as e:
                 create_sync_client(
                     request,
@@ -491,13 +502,12 @@ class TestGlideClients:
                     connection_timeout=100,  # 100 ms
                     reconnect_strategy=BackoffStrategy(
                         1, 100, 2
-                    ),  # needs to be configured so that we wont be connected within 7 seconds bc of default retries
+                    ),  # needs to be configured so that we wont be connected within 3 seconds bc of default retries
                 )
             assert "timed out" in str(e).lower() or "timeout" in str(e).lower()
 
         def connect_to_client():
-            # Create a second client with a connection timeout of 7 seconds
-            time.sleep(1)
+            sync_wait_for_server_blocked(probe, nodes)
             timeout_client = create_sync_client(
                 request,
                 cluster_mode,
@@ -511,21 +521,18 @@ class TestGlideClients:
             timeout_client.close()
 
         # Run tests
-        debug_thread_1 = threading.Thread(target=run_debug_sleep)
-        fail_thread = threading.Thread(target=fail_to_connect_to_client)
-        debug_thread_1.start()
-        fail_thread.start()
-        debug_thread_1.join()
-        fail_thread.join()
+        with ThreadPoolExecutor(2) as pool:
+            sleep = pool.submit(run_debug_sleep)
+            fail = pool.submit(fail_to_connect_to_client)
+            sleep.result()
+            fail.result()
+        with ThreadPoolExecutor(2) as pool:
+            sleep = pool.submit(run_debug_sleep)
+            connect = pool.submit(connect_to_client)
+            sleep.result()
+            connect.result()
 
-        debug_thread_2 = threading.Thread(target=run_debug_sleep)
-        connect_thread = threading.Thread(target=connect_to_client)
-        debug_thread_2.start()
-        connect_thread.start()
-        debug_thread_2.join()
-        connect_thread.join()
-
-        # Clean up the main client
+        probe.close()
         client.close()
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
@@ -873,27 +880,43 @@ class TestCommands:
         assert glide_sync_client.get(key) == value.encode()
         # Tests for ONLY_IF_EQUAL below in test_set_only_if_equal()
 
+    @pytest.mark.skip_if_version_below("8.1.0")
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    @pytest.mark.skip_if_version_below("8.1.0")
     def test_sync_set_only_if_equal(self, glide_sync_client: TGlideClient):
         key = get_random_string(10)
-        value = get_random_string(10)
-        value2 = get_random_string(10)
-        wrong_comparison_value = get_random_string(10)
-        while wrong_comparison_value == value:
-            wrong_comparison_value = get_random_string(10)
+        assert glide_sync_client.set(key, "value") == OK
 
-        glide_sync_client.set(key, value)
+        cond = OnlyIfEqual("other")
+        assert glide_sync_client.set(key, "other", conditional_set=cond) is None
+        assert glide_sync_client.get(key) == b"value"
 
-        res = glide_sync_client.set(
-            key, "foobar", conditional_set=OnlyIfEqual(wrong_comparison_value)
-        )
-        assert res is None
-        assert glide_sync_client.get(key) == value.encode()
-        res = glide_sync_client.set(key, value2, conditional_set=OnlyIfEqual(value))
-        assert res == OK
-        assert glide_sync_client.get(key) == value2.encode()
+        cond = OnlyIfEqual("value")
+        assert glide_sync_client.set(key, "other", conditional_set=cond) == OK
+        assert glide_sync_client.get(key) == b"other"
+
+        missing = get_random_string(10)
+        assert glide_sync_client.set(missing, "value", conditional_set=cond) is None
+        assert glide_sync_client.exists([missing]) == 0
+
+    @pytest.mark.skip_if_version_below("9.2.0")
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_set_only_if_not_equal(self, glide_sync_client: TGlideClient):
+        key = get_random_string(10)
+        assert glide_sync_client.set(key, "value") == OK
+
+        cond = OnlyIfNotEqual("value")
+        assert glide_sync_client.set(key, "other", conditional_set=cond) is None
+        assert glide_sync_client.get(key) == b"value"
+
+        cond = OnlyIfNotEqual("other")
+        assert glide_sync_client.set(key, "other", conditional_set=cond) == OK
+        assert glide_sync_client.get(key) == b"other"
+
+        missing = get_random_string(10)
+        assert glide_sync_client.set(missing, "value", conditional_set=cond) == OK
+        assert glide_sync_client.get(missing) == b"value"
 
     @pytest.mark.skip_if_version_below("6.2.0")
     @pytest.mark.parametrize("cluster_mode", [True, False])
@@ -1010,16 +1033,45 @@ class TestCommands:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     def test_sync_info_default(self, glide_sync_client: TGlideClient):
-        cluster_mode = isinstance(glide_sync_client, GlideClusterClient)
-        info_result = glide_sync_client.info()
-        if cluster_mode:
+        infos = sync_get_info(glide_sync_client)
+
+        # Verify that there is one response for each node.
+        if isinstance(glide_sync_client, GlideClusterClient):
             cluster_nodes = glide_sync_client.custom_command(["CLUSTER", "NODES"])
             assert isinstance(cluster_nodes, (bytes, list))
             cluster_nodes = get_first_result(cluster_nodes)
-            expected_num_of_results = cluster_nodes.count(b"master")
-            assert len(info_result) == expected_num_of_results
-        info_result = get_first_result(info_result)
-        assert b"# Memory" in info_result
+            assert len(infos) == cluster_nodes.count(b"master")
+
+        # Default fields
+        for info in infos:
+            for field in INFO_DEFAULT_FIELDS:
+                assert field in info
+
+        # Valkey 9.2+ fields
+        # ------------------
+
+        if sync_check_if_server_version_lt(glide_sync_client, "9.2.0"):
+            return
+
+        # Persistence fields
+        for persistence in sync_get_info(glide_sync_client, [InfoSection.PERSISTENCE]):
+            assert persistence.get("rdb_current_bgsave_type") in BGSAVE_TYPES
+            assert persistence.get("rdb_last_bgsave_type") in BGSAVE_TYPES
+
+            remaining_name = "forkless_estimated_seconds_remaining"
+            remaining_value = parse_int(persistence.get(remaining_name), remaining_name)
+            assert remaining_value >= -1
+
+        # Cluster info fields
+        if isinstance(glide_sync_client, GlideClusterClient):
+            for cluster_info in sync_get_info(
+                glide_sync_client, [InfoSection.CLUSTER_INFO]
+            ):
+                fallbacks_name = "cluster_io_main_thread_fallbacks"
+                fallbacks_value = parse_int(
+                    cluster_info.get(fallbacks_name), fallbacks_name
+                )
+                assert fallbacks_value >= 0
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -1148,9 +1200,7 @@ class TestCommands:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     def test_sync_config_rewrite(self, glide_sync_client: TGlideClient):
-        info_server = parse_info_response(
-            get_first_result(glide_sync_client.info([InfoSection.SERVER]))
-        )
+        info_server = sync_get_info(glide_sync_client, [InfoSection.SERVER])[0]
         if len(info_server["config_file"]) > 0:
             assert glide_sync_client.config_rewrite() == OK
         else:
@@ -2324,6 +2374,17 @@ class TestCommands:
         assert glide_sync_client.sismember(key, member)
         assert not glide_sync_client.sismember(key, get_random_string(5))
         assert not glide_sync_client.sismember("non_existing_key", member)
+
+    @pytest.mark.skip_if_version_below("9.2.0")
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_sismember_if_exists(self, glide_sync_client: TGlideClient):
+        key = get_random_string(10)
+        member = get_random_string(5)
+        assert glide_sync_client.sadd(key, [member]) == 1
+        assert glide_sync_client.sismember_if_exists(key, member) == 1
+        assert glide_sync_client.sismember_if_exists(key, get_random_string(5)) == 0
+        assert glide_sync_client.sismember_if_exists("non_existing_key", member) == -1
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -5864,6 +5925,27 @@ class TestCommands:
         assert glide_sync_client.append(key, value) == 10
         assert glide_sync_client.get(key) == (value * 2).encode()
 
+    @pytest.mark.skip_if_version_below("9.0.0")
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_delifeq(self, glide_sync_client: TGlideClient):
+        key = get_random_string(10)
+        value = get_random_string(10)
+        wrong_value = get_random_string(10)
+
+        # key does not exist yet
+        assert glide_sync_client.delifeq(key, value) is False
+
+        assert glide_sync_client.set(key, value) == OK
+
+        # value does not match
+        assert glide_sync_client.delifeq(key, wrong_value) is False
+        assert glide_sync_client.get(key) == value.encode()
+
+        # value matches, key is deleted
+        assert glide_sync_client.delifeq(key, value) is True
+        assert glide_sync_client.get(key) is None
+
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     def test_sync_xadd_xtrim_xlen(self, glide_sync_client: TGlideClient):
@@ -9054,7 +9136,7 @@ class TestCommands:
     ):
         lib_name = f"mylib1C{get_random_string(5)}"
         func_name = f"myfunc1c{get_random_string(5)}"
-        code = create_lua_lib_with_long_running_function(lib_name, func_name, 10, True)
+        code = create_lua_lib_with_long_running_function(lib_name, func_name, 3, True)
 
         # load the library
         assert glide_sync_client.function_load(code, replace=True) == lib_name.encode()
@@ -9072,12 +9154,19 @@ class TestCommands:
             test_client.fcall_ro(func_name, arguments=[])
 
         def wait_and_function_stats():
-            # it can take a few seconds for FCALL to register as running
-            time.sleep(3)
-            result = test_client2.function_stats()
+            result: Any = None
+
+            def fcall_is_running() -> bool:
+                nonlocal result
+                result = test_client2.function_stats()
+                return any(
+                    res and res.get(b"running_script") for res in result.values()
+                )
+
+            sync_wait_for(fcall_is_running, "FCALL never registered as running")
             running_scripts = False
             for res in result.values():
-                if res.get(b"running_script"):
+                if res and res.get(b"running_script"):
                     if running_scripts:
                         raise Exception("Already running script on a different node")
                     running_scripts = True
@@ -9091,14 +9180,12 @@ class TestCommands:
 
             assert running_scripts
 
-        thread1 = threading.Thread(target=endless_fcall_route_call)
-        thread2 = threading.Thread(target=wait_and_function_stats)
-
-        thread1.start()
-        thread2.start()
-
-        thread1.join()
-        thread2.join()
+        with sync_low_busy_reply_threshold(glide_sync_client):
+            with ThreadPoolExecutor(2) as pool:
+                fcall = pool.submit(endless_fcall_route_call)
+                stats = pool.submit(wait_and_function_stats)
+                fcall.result()
+                stats.result()
 
         test_client.close()
         test_client2.close()
@@ -9176,7 +9263,7 @@ class TestCommands:
     ):
         lib_name = f"mylib1C{get_random_string(5)}"
         func_name = f"myfunc1c{get_random_string(5)}"
-        code = create_lua_lib_with_long_running_function(lib_name, func_name, 10, True)
+        code = create_lua_lib_with_long_running_function(lib_name, func_name, 3, True)
 
         # nothing to kill
         with pytest.raises(RequestError) as e:
@@ -9198,30 +9285,20 @@ class TestCommands:
             assert "Script killed by user" in str(e)
 
         def wait_and_function_kill():
-            # it can take a few seconds for FCALL to register as running
-            time.sleep(3)
-            timeout = 0
-            while timeout <= 5:
-                # keep trying to kill until we get an "OK"
+            def kill_succeeded() -> bool:
                 try:
-                    result = glide_sync_client.function_kill()
-                    #  we expect to get success
-                    assert result == "OK"
-                    break
+                    return glide_sync_client.function_kill() == "OK"
                 except RequestError:
-                    # a RequestError may occur if the function is not yet running
-                    # sleep and try again
-                    timeout += 0.5
-                    time.sleep(0.5)
+                    return False
 
-        thread1 = threading.Thread(target=endless_fcall_route_call)
-        thread2 = threading.Thread(target=wait_and_function_kill)
+            sync_wait_for(kill_succeeded, "FUNCTION KILL never returned OK")
 
-        thread1.start()
-        thread2.start()
-
-        thread1.join()
-        thread2.join()
+        with sync_low_busy_reply_threshold(glide_sync_client):
+            with ThreadPoolExecutor(2) as pool:
+                fcall = pool.submit(endless_fcall_route_call)
+                kill = pool.submit(wait_and_function_kill)
+                fcall.result()
+                kill.result()
 
         # no functions running so we get notbusy error again
         with pytest.raises(RequestError) as e:
@@ -9237,7 +9314,7 @@ class TestCommands:
     ):
         lib_name = f"mylib1C{get_random_string(5)}"
         func_name = f"myfunc1c{get_random_string(5)}"
-        code = create_lua_lib_with_long_running_function(lib_name, func_name, 10, False)
+        code = create_lua_lib_with_long_running_function(lib_name, func_name, 3, False)
 
         # load the library on all primaries
         assert glide_sync_client.function_load(code, replace=True) == lib_name.encode()
@@ -9254,31 +9331,23 @@ class TestCommands:
             test_client.fcall(func_name, keys=[lib_name])
 
         def wait_and_function_kill():
-            # it can take a few seconds for FCALL to register as running
-            time.sleep(3)
-            timeout = 0
-            foundUnkillable = False
-            while timeout <= 5:
-                # keep trying to kill until we get a unkillable return error
+            def kill_reports_unkillable() -> bool:
                 try:
                     glide_sync_client.function_kill()
                 except RequestError as e:
-                    if "UNKILLABLE" in str(e):
-                        foundUnkillable = True
-                        break
-                timeout += 0.5
-                time.sleep(0.5)
-            # expect an unkillable error
-            assert foundUnkillable
+                    return "UNKILLABLE" in str(e)
+                return False
 
-        thread1 = threading.Thread(target=endless_fcall_route_call)
-        thread2 = threading.Thread(target=wait_and_function_kill)
+            sync_wait_for(
+                kill_reports_unkillable, "FUNCTION KILL never reported UNKILLABLE"
+            )
 
-        thread1.start()
-        thread2.start()
-
-        thread1.join()
-        thread2.join()
+        with sync_low_busy_reply_threshold(glide_sync_client):
+            with ThreadPoolExecutor(2) as pool:
+                fcall = pool.submit(endless_fcall_route_call)
+                kill = pool.submit(wait_and_function_kill)
+                fcall.result()
+                kill.result()
 
         test_client.close()
 
@@ -11327,7 +11396,7 @@ def script_kill_tests(
     assert "No scripts in execution right now" in str(e)
 
     # Create a long-running script
-    long_script = Script(create_long_running_lua_script(10))
+    long_script = Script(create_long_running_lua_script(3))
 
     def run_long_script():
         with pytest.raises(RequestError) as e:
@@ -11338,10 +11407,7 @@ def script_kill_tests(
         assert "Script killed by user" in str(e)
 
     def wait_and_kill_script():
-        time.sleep(3)  # Give some time for the script to start
-        timeout = 0
-        while timeout <= 5:
-            # keep trying to kill until we get an "OK"
+        def kill_succeeded() -> bool:
             try:
                 if route is not None:
                     result = cast(GlideClusterClient, glide_sync_client).script_kill(
@@ -11349,24 +11415,19 @@ def script_kill_tests(
                     )
                 else:
                     result = glide_sync_client.script_kill()
-                #  we expect to get success
-                assert result == "OK"
-                break
             except RequestError:
-                # a RequestError may occur if the script is not yet running
-                # sleep and try again
-                timeout += 0.5
-                time.sleep(0.5)
+                return False
+            return result == "OK"
+
+        sync_wait_for(kill_succeeded, "SCRIPT KILL never returned OK")
 
     # Run the long script and kill it
-    script_thread = threading.Thread(target=run_long_script)
-    kill_thread = threading.Thread(target=wait_and_kill_script)
-
-    script_thread.start()
-    kill_thread.start()
-
-    script_thread.join()
-    kill_thread.join()
+    with sync_low_busy_reply_threshold(glide_sync_client):
+        with ThreadPoolExecutor(2) as pool:
+            script = pool.submit(run_long_script)
+            kill = pool.submit(wait_and_kill_script)
+            script.result()
+            kill.result()
 
     # Verify that script_kill raises an error when no script is running
     with pytest.raises(RequestError) as e:
@@ -11602,7 +11663,7 @@ class TestSyncScripts:
         writing_script = Script("""
             redis.call('SET', KEYS[1], 'value')
             local start = redis.call('TIME')[1]
-            while redis.call('TIME')[1] - start < 15 do
+            while redis.call('TIME')[1] - start < 3 do
                 redis.call('SET', KEYS[1], 'value')
             end
         """)
@@ -11611,28 +11672,24 @@ class TestSyncScripts:
             test_client.invoke_script(writing_script, keys=[get_random_string(5)])
 
         def attempt_kill_writing_script():
-            time.sleep(3)  # Give some time for the script to start
-            foundUnkillable = False
-            while True:
+            def kill_reports_unkillable() -> bool:
                 try:
                     test_client2.script_kill()
                 except RequestError as e:
-                    if "UNKILLABLE" in str(e):
-                        foundUnkillable = True
-                        break
-                    time.sleep(0.5)
+                    return "UNKILLABLE" in str(e)
+                return False
 
-            assert foundUnkillable
+            sync_wait_for(
+                kill_reports_unkillable, "SCRIPT KILL never reported UNKILLABLE"
+            )
 
         # Run the writing script and attempt to kill it
-        script_thread = threading.Thread(target=run_writing_script)
-        kill_thread = threading.Thread(target=attempt_kill_writing_script)
-
-        script_thread.start()
-        kill_thread.start()
-
-        script_thread.join()
-        kill_thread.join()
+        with sync_low_busy_reply_threshold(glide_sync_client):
+            with ThreadPoolExecutor(2) as pool:
+                script = pool.submit(run_writing_script)
+                kill = pool.submit(attempt_kill_writing_script)
+                script.result()
+                kill.result()
 
         test_client.close()
         test_client2.close()

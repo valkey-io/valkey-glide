@@ -41,7 +41,7 @@ impl Runtime {
 
     pub fn block_on<F: Future>(&self, future: F) -> F::Output {
         let waker = std::task::Waker::noop();
-        let context = &mut Context::from_waker(&waker);
+        let context = &mut Context::from_waker(waker);
         match std::pin::pin!(future).poll(context) {
             Poll::Ready(result) => result,
             _ => panic!("No result found")

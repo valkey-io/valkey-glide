@@ -29,10 +29,10 @@ Visit our official documentation at [glide.valkey.io](https://glide.valkey.io).
 
 Valkey GLIDE is API-compatible with the following engine versions:
 
-| Engine Type           |  6.2  |  7.0  |   7.1  |  7.2  |  8.0  |  8.1  |  9.0  |
-|-----------------------|-------|-------|--------|-------|-------|-------|-------|
-| Valkey                |   -   |   -   |   -   |   ✅   |   ✅   |   ✅   |   ✅   |
-| Redis                 |   ✅   |   ✅   |   ✅   |   ✅   |   -   |   -   |   -   |
+| Engine Type           |  6.2  |  7.0  |   7.1  |  7.2  |  8.0  |  8.1  |  9.0  |  9.1  |
+|-----------------------|-------|-------|--------|-------|-------|-------|-------|-------|
+| Valkey                |   -   |   -   |   -    |   ✅   |   ✅   |   ✅   |   ✅   |   ✅   |
+| Redis                 |   ✅   |   ✅   |   ✅   |   ✅   |   -   |   -   |   -   |   -   |
 
 ## Current Status and Upcoming Releases
 
@@ -113,10 +113,12 @@ Valkey GLIDE has a growing ecosystem of integrations and extensions that enhance
 
 **⚠️ WARNING: This feature is experimental**
 
-Valkey GLIDE supports automatic compression and decompression of string values to reduce memory usage and network bandwidth. Currently supports SET, GET, MGET, MSET, GETEX, GETDEL, SETEX, PSETEX, and SETNX commands.
+Valkey GLIDE supports automatic compression and decompression of string values to reduce memory usage and network bandwidth. Currently supports SET, GET, MGET, MSET, MSETNX, GETEX, GETDEL, GETSET, SETEX, PSETEX, and SETNX commands.
 
-**Incompatible Commands**: Compression is NOT compatible with commands that manipulate string data on the server side:
-- APPEND, GETRANGE, SETRANGE, STRLEN, LCS
+**Incompatible Commands**: Compression is NOT compatible with commands that manipulate or compare string data on the server side:
+
+- APPEND, GETRANGE, SETRANGE, STRLEN, LCS, SUBSTR
+- DELIFEQ and SET with IFEQ or IFNE
 - INCR, INCRBY, INCRBYFLOAT, DECR, DECRBY
 - GETBIT, SETBIT, BITCOUNT, BITPOS, BITFIELD, BITFIELD_RO, BITOP
 

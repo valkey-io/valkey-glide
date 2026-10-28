@@ -1,42 +1,40 @@
 # AGENTS: Python Client Context for Agentic Tools
 
-This file provides AI agents and developers with the minimum but sufficient context to work productively with the Valkey GLIDE Python client. It covers build commands, testing, contribution requirements, and essential guardrails specific to the Python implementation.
+This file provides AI agents and developers with the minimum but sufficient context to work productively with the Valkey GLIDE Python client — build commands, testing, and Python-specific guardrails. It builds on [../AGENTS.md](../AGENTS.md) (repo-wide conventions, DCO, commit format, test servers) — read that first.
 
 ## Repository Overview
 
-This is the Python client binding for Valkey GLIDE, providing both async and sync client implementations. The Python wrapper consists of three components: async client (PyO3/Maturin), sync client (CFFI/setuptools), and shared logic.
+This is the Python client binding for Valkey GLIDE, providing both async and sync client implementations, as three packages: async client, sync client, and a shared package used by both. Command dispatch for **both** clients goes through CFFI calls into the `ffi/` crate; async response parsing goes through the PyO3 `_fast_response` module in `glide-shared/`.
 
-**Primary Languages:** Python, Rust (PyO3 and CFFI bindings)
-**Build System:** Custom dev.py CLI with Maturin (async) and setuptools (sync)
-**Architecture:** Hybrid Python/Rust with PyO3 (async) and CFFI (sync) bindings
+**Primary Languages:** Python, Rust (CFFI dispatch + PyO3 response parsing)
+**Build System:** Custom dev.py CLI driving Maturin (async, shared) and setuptools (sync)
+**Architecture:** Hybrid Python/Rust — CFFI for command dispatch (both clients), PyO3 for async response parsing
 
 **Key Components:**
 
-- `glide-async/` - Async client using PyO3 bindings and Unix Domain Socket communication
-- `glide-sync/` - Sync client using CFFI bindings and direct FFI communication
-- `glide-shared/` - Shared Python logic used by both clients
+- `glide-async/` - Async client (Maturin-packaged); responses arrive from Rust worker threads over an anonymous pipe
+- `glide-sync/` - Sync client (setuptools-packaged); responses are direct FFI return values
+- `glide-shared/` - Shared Python logic plus the PyO3 `_fast_response` parser (Maturin hybrid crate)
 - `tests/` - Shared test suite for both clients
 - `dev.py` - CLI utility for build, test, and development tasks
 
 ## Architecture Quick Facts
 
-**Core Implementation:** Python wrappers around glide-core Rust library
+**Core Implementation:** Python wrappers around glide-core Rust library via `ffi/`
 **Client Types:** GlideClient/GlideClusterClient (async), GlideClient/GlideClusterClient (sync)
 **API Styles:** Async with asyncio/trio support, Sync with blocking calls
-**Communication:** UDS (async), Direct FFI (sync)
+**Communication:** CFFI into `ffi/` for both clients; async responses via anonymous pipe, sync responses via FFI return values
 
-**Supported Platforms:**
+**Supported Platforms:** see the System Requirements section of [README.md](./README.md). Alpine Linux/MUSL is not supported.
 
-- Linux: Ubuntu 20+, Amazon Linux 2/2023 (x86_64, aarch64)
-- macOS: 13.7+ (x86_64), 14.7+ (aarch64)
-- **Note:** Alpine Linux/MUSL not supported
-
-**Python Versions:** 3.9, 3.10, 3.11, 3.12, 3.13
+**Python Versions:** 3.9–3.14, plus 3.14t (free-threaded). CI's always-run set is 3.9, 3.13, 3.14t (`.github/json_matrices/supported-languages-versions.json`). Free-threaded 3.14t has extra concurrency rules — see "Python Free-Threading" below.
 **Async Frameworks:** asyncio, trio, uvloop
 
 **Packages:** `valkey-glide` (async), `valkey-glide-sync` (sync)
 
 ## Build and Test Rules (Agents)
+
+<!-- These commands are intentionally mirrored in python/DEVELOPER.md (human guide). Keep both in sync when the build/test/lint commands change. -->
 
 ### Preferred (dev.py CLI)
 ```bash
@@ -50,15 +48,16 @@ python3 dev.py build --client sync --mode debug       # Build sync client (debug
 python3 dev.py build --client async --wheel           # Build async wheel
 python3 dev.py build --client sync --wheel            # Build sync wheel
 
-# Testing
-python3 dev.py test                                    # Run all tests
-python3 dev.py test --args -k <test_name>             # Run specific test
+# Testing (pytest.ini excludes pubsub and server_modules tests by default, and sets --timeout=300 per test)
+python3 dev.py test                                    # Run all tests except pubsub/server_modules
+python3 dev.py test --args -k <test_name>             # Run specific test (-k replaces the default exclusion)
+python3 dev.py test --args -k 'pubsub'                # Run the pubsub tests (CI's form)
 python3 dev.py test --args --async-backend=trio       # Test with trio backend
 python3 dev.py test --args --async-backend=asyncio    # Test with asyncio backend
 
 # Linting and Formatting
-python3 dev.py lint                                    # Auto-fix formatting (isort, black)
-python3 dev.py lint --check                           # Check formatting only
+python3 dev.py lint                                    # Auto-fix formatting (isort, black), then flake8 and mypy
+python3 dev.py lint --check                           # Same four tools; isort/black report instead of rewriting
 
 # Protobuf generation
 python3 dev.py protobuf                               # Regenerate protobuf files
@@ -74,27 +73,42 @@ python3 dev.py --help                                 # Show all available comma
 
 ### Raw Equivalents
 
+These are the steps `dev.py build` runs. `glide_shared` must be installed and `libglide_ffi` built before either client.
+
 ```bash
+# Shared package + FFI library (from python/)
+source .env/bin/activate
+(cd glide-shared && maturin develop --release)
+(cd ../ffi && cargo build --release)
+cp ../ffi/target/release/libglide_ffi.dylib glide-shared/glide_shared/   # .so on Linux
+
 # Manual async client build (from glide-async/)
 source ../.env/bin/activate
 maturin develop --release
 
-# Manual sync client build (from glide-sync/)
+# Manual sync client build (from glide-sync/) — setup.py vendors ffi/ + glide-shared/ into
+# glide-sync/ and runs cargo on the copies, so this is a from-scratch Rust build each time
 source ../.env/bin/activate
-pip install -e ../glide-shared
-python setup.py build_ext --inplace
+RELEASE_MODE=1 pip install .    # omit RELEASE_MODE for a debug build
 
 # Manual test execution (from python/)
 source .env/bin/activate
 pytest -v
 
-# Manual linting
+# Manual linting (from python/; dev.py runs mypy on the repo root, not just python/)
 source .env/bin/activate
-isort . && black . && flake8 . && mypy .
+isort . && black . && flake8 . && mypy ..
 
-# Manual protobuf generation
-protoc --python_out=glide-shared/glide_shared/protobuf --pyi_out=glide-shared/glide_shared/protobuf ../glide-core/src/protobuf/*.proto
+# Manual protobuf generation (from python/)
+source .env/bin/activate
+protoc --plugin=protoc-gen-mypy=.env/bin/protoc-gen-mypy -Iprotobuf=../glide-core/src/protobuf \
+  --python_out=glide-shared/glide_shared --mypy_out=glide-shared/glide_shared \
+  ../glide-core/src/protobuf/*.proto
 ```
+
+### Test Servers
+
+`python3 dev.py test` **auto-starts** standalone + cluster servers via `utils/cluster_manager.py` and stops them afterward — you don't start anything manually for a normal run. The `--cluster-endpoints=`/`--standalone-endpoints=` flags below are only for pointing at a server you started yourself (ad-hoc/manual testing); see the root [../AGENTS.md](../AGENTS.md) "Test Servers" section for the `cluster_manager.py` commands. A `valkey-server`/`redis-server` on `PATH` is required either way.
 
 ### Test Execution Options
 
@@ -102,47 +116,26 @@ protoc --python_out=glide-shared/glide_shared/protobuf --pyi_out=glide-shared/gl
 # Run with existing endpoints
 python3 dev.py test --args --cluster-endpoints=localhost:7000 --standalone-endpoints=localhost:6379
 
-# Run with TLS
+# Run with TLS (the harness starts its own TLS servers; this is the only mode that
+# creates the *_tls_cluster and auth fixtures that test_tls.py, the DNS tests and
+# the auth suite read)
+python3 dev.py test --args --tls
+
+# Run with TLS against existing endpoints: --tls applies to the main standalone and
+# cluster fixtures only; tests that read the harness-created *_tls_cluster/auth
+# fixtures raise AttributeError in this mode (see create_clusters() in tests/conftest.py)
 python3 dev.py test --args --tls --cluster-endpoints=localhost:7000 --standalone-endpoints=localhost:6379
 
 # Run with specific async backend
 python3 dev.py test --args --async-backend=trio --async-backend=asyncio
 
 # Run specific test pattern
-python3 dev.py test --args -k "test_set_and_get"
+python3 dev.py test --args -k "test_socket_set_get"
 ```
 
 ## Contribution Requirements
 
-### Developer Certificate of Origin (DCO) Signoff REQUIRED
-
-All commits must include a `Signed-off-by` line:
-
-```bash
-# Add signoff to new commits
-git commit -s -m "feat(python): add new command implementation"
-
-# Configure automatic signoff
-git config --global format.signOff true
-
-# Add signoff to existing commit
-git commit --amend --signoff --no-edit
-
-# Add signoff to multiple commits
-git rebase -i HEAD~n --signoff
-```
-
-### Conventional Commits
-
-Use conventional commit format:
-
-```
-<type>(<scope>): <description>
-
-[optional body]
-```
-
-**Example:** `feat(python): implement async cluster scan with routing options`
+DCO signoff and Conventional Commits are required repo-wide — see [../AGENTS.md](../AGENTS.md#contribution-requirements) for the exact commands. Use the `python` scope, e.g. `feat(python): implement async cluster scan with routing options`.
 
 ### Code Quality Requirements
 
@@ -160,13 +153,13 @@ python3 dev.py lint --check            # Check-only mode
 - `flake8` - Style and error checking
 - `mypy` - Type checking
 
-**Rust Components:**
+**Rust Components** (the PyO3 glue — CI lints this from `python/glide-async/` via the shared Rust gate; there is no `python/Cargo.toml`):
 
 ```bash
-# From python/ directory
-rustup component add clippy rustfmt
+# From python/glide-async/ — runs the full repo-wide Rust gate (fmt --check, clippy ×2, cargo deny, cargo doc).
+# See ../AGENTS.md for the exact command list.
+cargo fmt --all -- --check
 cargo clippy --all-features --all-targets -- -D warnings
-cargo fmt --manifest-path ./Cargo.toml --all
 ```
 
 ## Guardrails & Policies
@@ -174,16 +167,16 @@ cargo fmt --manifest-path ./Cargo.toml --all
 ### Generated Outputs (Never Commit)
 
 - `.env/` - Python virtual environment
-- `glide-async/target/` - Rust build artifacts (async)
-- `glide-sync/target/` - Rust build artifacts (sync)
-- `glide-shared/glide_shared/protobuf/` - Generated protobuf files
-- `build/` - Build artifacts
-- `dist/` - Distribution artifacts
-- `*.egg-info/` - Package metadata
-- `__pycache__/` - Python bytecode
-- `.pytest_cache/` - Pytest cache
-- `.mypy_cache/` - MyPy cache
-- `docs/_build/` - Sphinx documentation build
+- `glide-async/target/`, `glide-shared/target/`, `glide-sync/ffi/target/` - Rust build artifacts
+- `glide-shared/glide_shared/protobuf/*_pb2.py*` - Generated protobuf files
+- `glide-shared/glide_shared/_fast_response*.so`, `glide-shared/glide_shared/libglide_ffi.*` - Native modules copied in by the build
+- `glide-async/python/glide/glide*.so` - PyO3 module built by maturin
+- `glide-async/python/glide_shared/` - `glide_shared` vendored into the async wheel
+- `glide-sync/glide_sync/libglide_ffi.so`, `glide-sync/{ffi,glide-core,glide-logger,glide-telemetry,glide_shared,glide-shared-rs}/` - FFI library and crates vendored by `setup.py` (removed after a successful build; left behind if it fails)
+- `glide-async/README.md`, `glide-sync/README.md` - Copied from `python/README.md` at build time
+- `build/`, `dist/`, `*.egg-info/` - Packaging artifacts
+- `__pycache__/`, `.pytest_cache/`, `.mypy_cache/` - Caches
+- `docs/` except `docs/index.rst` - Sphinx output and apidoc stubs
 
 ### Python-Specific Rules
 
@@ -195,7 +188,27 @@ cargo fmt --manifest-path ./Cargo.toml --all
 - **anyio in tests:** Never use `asyncio.sleep`, `asyncio.wait_for`, or `asyncio.Queue` directly in test code. Use `anyio.sleep`, `anyio.fail_after`, and the `wait_for()` helper from `tests/utils/utils.py` instead. Tests run under both asyncio and trio via pytest-anyio.
 - **Prefer polling over sleeps:** Use `await wait_for(condition, message, timeout)` instead of fixed `await anyio.sleep(N)` delays. The condition should be an async callable returning bool. The timeout should be a reasonable small seconds.
 - **Protobuf Updates:** Run `python3 dev.py protobuf` after proto changes
+- **Stale `libglide_ffi.so` after core changes:** `install_glide_shared` (in `dev.py`) only (re)builds and copies the C-ABI `libglide_ffi.*` into `glide-shared/glide_shared/` when that destination file is **absent** — so once a copy exists, a later `dev.py build` keeps using the old one even after you change `ffi/`/`glide-core` (symptom: sync tests fail with `undefined symbol: glide_scope_...` against a stale `.so`). Rebuilding `ffi` alone does **not** fix it because the copy is skipped. To force a refresh, delete the stale lib (`rm glide-shared/glide_shared/libglide_ffi.*`) or run `python3 dev.py clean`, then rebuild. Not environment-specific. CI never hits this (ephemeral runners build from scratch).
 - **Documentation Style:** Follow Google Style Python Docstrings format
+
+### Python Free-Threading (3.14t) Concurrency Rules
+
+The async client (`glide-async/python/glide/glide_client.py`) supports free-threaded CPython (`3.14t`, GIL disabled). The module declares `#[pymodule(gil_used = false)]` in `glide-async/src/lib.rs`, and when `_FREE_THREADED` is true, response parsing runs on a `ThreadPoolExecutor` so completions can arrive on a non-event-loop thread.
+
+Cross-thread wakeups are the sharp edge. Under trio, `_CompatFuture._is_done` is an `anyio.Event` backed by a `trio.Event`, and trio primitives are **not thread-safe**: `.set()` from a foreign thread marks the event set but never reschedules the parked waiter, so the `await` hangs with no timeout firing (the main thread is parked in native code where Python signal handlers, including pytest-timeout's, cannot run). Any object completed from the response thread pool must hop back to its owning loop/run: asyncio uses `loop.call_soon_threadsafe`, trio uses the `trio.lowlevel.TrioToken.run_sync_soon` captured at future-creation time. When touching future/event completion, verify the wake path for both asyncio and trio.
+
+Build and run against free-threaded Python locally (fast iteration beats CI):
+
+```bash
+# Install the free-threaded interpreter (Homebrew: python-freethreading -> python3.14t)
+python3.14t -m venv .env   # dev.py reuses an existing .env
+python3 dev.py build
+# -k "" clears pytest.ini's default exclusion so the pubsub tests run too
+python3 dev.py test --args tests/async_tests/test_async_client.py --async-backend=trio -k ""
+# Confirm no-GIL: .env/bin/python -c "import sys; print(sys._is_gil_enabled())"  # -> False
+```
+
+Reproduce a suspected hang with a stack dump: `kill -ABRT <pid>` (faulthandler prints the parked Python stack) since py-spy needs root on macOS.
 
 ### Package Structure Rules
 

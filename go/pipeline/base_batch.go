@@ -107,10 +107,6 @@ func (b *BaseBatch[T]) SetWithOptions(key string, value string, options options.
 
 // Retrieves the value associated with the given key and optionally sets the expiration of the key.
 //
-// Since:
-//
-//	Valkey 6.2.0 and above.
-//
 // See [valkey.io] for details.
 //
 // Parameters:
@@ -187,9 +183,9 @@ func (b *BaseBatch[T]) MSetNX(keyValueMap map[string]string) *T {
 
 // Moves key from the currently selected database to the database specified by `dbIndex`.
 //
-// Note:
+// Since:
 //
-//	In cluster mode move is available since Valkey 9.0.0 and above.
+//	Valkey 9.0.0 for cluster client.
 //
 // See [valkey.io] for details.
 //
@@ -403,11 +399,33 @@ func (b *BaseBatch[T]) Append(key string, value string) *T {
 	return b.addCmdAndTypeChecker(C.Append, []string{key, value}, reflect.Int64, false)
 }
 
+// Deletes `key` if its value equals `value`.
+//
+// Since:
+//
+//	Valkey 9.0 and above.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key   - The key to delete.
+//	value - The comparison value. The key is only deleted if its current value matches exactly.
+//
+// Command Response:
+//
+//	`true` if `key` was deleted, `false` if `key` did not exist or its value did not match `value`.
+//
+// [valkey.io]: https://valkey.io/commands/delifeq/
+func (b *BaseBatch[T]) DelIfEq(key string, value string) *T {
+	return b.addCmdAndTypeChecker(C.DelIfEq, []string{key, value}, reflect.Bool, false)
+}
+
 // Returns the longest common subsequence between strings stored at `key1` and `key2`.
 //
 // Since:
 //
-//	Valkey 7.0 and above.
+//	Valkey 7.0.0.
 //
 // See [valkey.io] for details.
 //
@@ -430,7 +448,7 @@ func (b *BaseBatch[T]) LCS(key1 string, key2 string) *T {
 //
 // Since:
 //
-//	Valkey 7.0 and above.
+//	Valkey 7.0.0.
 //
 // See [valkey.io] for details.
 //
@@ -452,7 +470,7 @@ func (b *BaseBatch[T]) LCSLen(key1 string, key2 string) *T {
 //
 // Since:
 //
-//	Valkey 7.0 and above.
+//	Valkey 7.0.0.
 //
 // See [valkey.io] for details.
 //
@@ -812,10 +830,6 @@ func (b *BaseBatch[T]) HScanWithOptions(key string, cursor string, options optio
 
 // Returns a random field name from the hash value stored at `key`.
 //
-// Since:
-//
-//	Valkey 6.2.0 and above.
-//
 // See [valkey.io] for details.
 //
 // Parameters:
@@ -832,10 +846,6 @@ func (b *BaseBatch[T]) HRandField(key string) *T {
 }
 
 // Retrieves up to `count` random field names from the hash value stored at `key`.
-//
-// Since:
-//
-//	Valkey 6.2.0 and above.
 //
 // See [valkey.io] for details.
 //
@@ -862,10 +872,6 @@ func (b *BaseBatch[T]) HRandFieldWithCount(key string, count int64) *T {
 
 // Retrieves up to `count` random field names along with their values from the hash
 // value stored at `key`.
-//
-// Since:
-//
-//	Valkey 6.2.0 and above.
 //
 // See [valkey.io] for details.
 //
@@ -902,7 +908,7 @@ func (b *BaseBatch[T]) HRandFieldWithCountWithValues(key string, count int64) *T
 //
 // Since:
 //
-//	Valkey 9.0 and above.
+//	Valkey 9.0.0.
 //
 // See [valkey.io] for details.
 //
@@ -931,7 +937,7 @@ func (b *BaseBatch[T]) HSetEx(key string, fieldsAndValues map[string]string, opt
 //
 // Since:
 //
-//	Valkey 9.0 and above.
+//	Valkey 9.0.0.
 //
 // See [valkey.io] for details.
 //
@@ -961,7 +967,7 @@ func (b *BaseBatch[T]) HGetEx(key string, fields []string, opts options.HGetExOp
 //
 // Since:
 //
-//	Valkey 9.1 and above.
+//	Valkey 9.1.0.
 //
 // See [valkey.io] for details.
 //
@@ -999,7 +1005,7 @@ func (b *BaseBatch[T]) HGetDel(key string, fields []string) *T {
 //
 // Since:
 //
-//	Valkey 9.0 and above.
+//	Valkey 9.0.0.
 //
 // See [valkey.io] for details.
 //
@@ -1033,7 +1039,7 @@ func (b *BaseBatch[T]) HExpire(key string, expireTime time.Duration, fields []st
 //
 // Since:
 //
-//	Valkey 9.0 and above.
+//	Valkey 9.0.0.
 //
 // See [valkey.io] for details.
 //
@@ -1066,7 +1072,7 @@ func (b *BaseBatch[T]) HExpireAt(key string, expireTime time.Time, fields []stri
 //
 // Since:
 //
-//	Valkey 9.0 and above.
+//	Valkey 9.0.0.
 //
 // See [valkey.io] for details.
 //
@@ -1100,7 +1106,7 @@ func (b *BaseBatch[T]) HPExpire(key string, expireTime time.Duration, fields []s
 //
 // Since:
 //
-//	Valkey 9.0 and above.
+//	Valkey 9.0.0.
 //
 // See [valkey.io] for details.
 //
@@ -1133,7 +1139,7 @@ func (b *BaseBatch[T]) HPExpireAt(key string, expireTime time.Time, fields []str
 //
 // Since:
 //
-//	Valkey 9.0 and above.
+//	Valkey 9.0.0.
 //
 // See [valkey.io] for details.
 //
@@ -1162,7 +1168,7 @@ func (b *BaseBatch[T]) HPersist(key string, fields []string) *T {
 //
 // Since:
 //
-//	Valkey 9.0 and above.
+//	Valkey 9.0.0.
 //
 // See [valkey.io] for details.
 //
@@ -1191,7 +1197,7 @@ func (b *BaseBatch[T]) HTtl(key string, fields []string) *T {
 //
 // Since:
 //
-//	Valkey 9.0 and above.
+//	Valkey 9.0.0.
 //
 // See [valkey.io] for details.
 //
@@ -1220,7 +1226,7 @@ func (b *BaseBatch[T]) HPTtl(key string, fields []string) *T {
 //
 // Since:
 //
-//	Valkey 9.0 and above.
+//	Valkey 9.0.0.
 //
 // See [valkey.io] for details.
 //
@@ -1250,7 +1256,7 @@ func (b *BaseBatch[T]) HExpireTime(key string, fields []string) *T {
 //
 // Since:
 //
-//	Valkey 9.0 and above.
+//	Valkey 9.0.0.
 //
 // See [valkey.io] for details.
 //
@@ -1563,6 +1569,32 @@ func (b *BaseBatch[T]) SIsMember(key string, member string) *T {
 	return b.addCmdAndTypeChecker(C.SIsMember, []string{key, member}, reflect.Bool, false)
 }
 
+// Returns if member is a member of the set stored at key,
+// or -1 if key does not exist.
+//
+// Since:
+//
+//	Valkey 9.2.0.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key    - The key of the set.
+//	member - The member to check for existence in the set.
+//
+// Command Response:
+//
+//	A status code indicating membership:
+//	- 1: The member exists in the set.
+//	- 0: The key exists but the member does not exist in the set.
+//	- -1: The key does not exist.
+//
+// [valkey.io]: https://valkey.io/commands/sismember/
+func (b *BaseBatch[T]) SIsMemberIfExists(key string, member string) *T {
+	return b.addCmdAndTypeChecker(C.SIsMember, []string{key, member, constants.IfExistsKeyword}, reflect.Int64, false)
+}
+
 // Computes the difference between the first set and all the successive sets in keys.
 //
 // See [valkey.io] for details.
@@ -1640,7 +1672,7 @@ func (b *BaseBatch[T]) SInterStore(destination string, keys []string) *T {
 //
 // Since:
 //
-//	Valkey 7.0 and above.
+//	Valkey 7.0.0.
 //
 // See [valkey.io] for details.
 //
@@ -1661,7 +1693,7 @@ func (b *BaseBatch[T]) SInterCard(keys []string) *T {
 //
 // Since:
 //
-//	Valkey 7.0 and above.
+//	Valkey 7.0.0.
 //
 // See [valkey.io] for details.
 //
@@ -2194,7 +2226,7 @@ func (b *BaseBatch[T]) LPushX(key string, elements []string) *T {
 //
 // Since:
 //
-//	Valkey 7.0 and above.
+//	Valkey 7.0.0.
 //
 // See [valkey.io] for details.
 //
@@ -2232,7 +2264,7 @@ func (b *BaseBatch[T]) LMPop(keys []string, listDirection constants.ListDirectio
 //
 // Since:
 //
-//	Valkey 7.0 and above.
+//	Valkey 7.0.0.
 //
 // See [valkey.io] for details.
 //
@@ -2276,7 +2308,7 @@ func (b *BaseBatch[T]) LMPopCount(keys []string, listDirection constants.ListDir
 //
 // Since:
 //
-//	Valkey 7.0 and above.
+//	Valkey 7.0.0.
 //
 // See [valkey.io] for details.
 //
@@ -2321,7 +2353,7 @@ func (b *BaseBatch[T]) BLMPop(keys []string, listDirection constants.ListDirecti
 //
 // Since:
 //
-//	Valkey 7.0 and above.
+//	Valkey 7.0.0.
 //
 // See [valkey.io] for details.
 //
@@ -2427,10 +2459,6 @@ func (b *BaseBatch[T]) LMove(
 // Note:
 //
 // BLMove is a client blocking command, see [Blocking Commands] for more details and best practices.
-//
-// Since:
-//
-//	Valkey 6.2.0 and above.
 //
 // See [valkey.io] for details.
 //
@@ -3445,7 +3473,7 @@ func (b *BaseBatch[T]) BZPopMin(keys []string, timeout time.Duration) *T {
 //
 // Since:
 //
-//	Valkey 7.0 and above.
+//	Valkey 7.0.0.
 //
 // See [valkey.io] for details.
 //
@@ -3495,7 +3523,7 @@ func (b *BaseBatch[T]) BZMPop(keys []string, scoreFilter constants.ScoreFilter, 
 //
 // Since:
 //
-//	Valkey 7.0 and above.
+//	Valkey 7.0.0.
 //
 // See [valkey.io] for details.
 //
@@ -3715,7 +3743,7 @@ func (b *BaseBatch[T]) ZRank(key string, member string) *T {
 //
 // Since:
 //
-//	Valkey 7.2.0 and above.
+//	Valkey 7.2.0.
 //
 // See [valkey.io] for details.
 //
@@ -3766,7 +3794,7 @@ func (b *BaseBatch[T]) ZRevRank(key string, member string) *T {
 //
 // Since:
 //
-//	Valkey 7.2.0 and above.
+//	Valkey 7.2.0.
 //
 // See [valkey.io] for details.
 //
@@ -3832,10 +3860,6 @@ func (b *BaseBatch[T]) XLen(key string) *T {
 
 // Transfers ownership of pending stream entries that match the specified criteria.
 //
-// Since:
-//
-//	Valkey 6.2.0 and above.
-//
 // See [valkey.io] for details.
 //
 // Parameters:
@@ -3863,10 +3887,6 @@ func (b *BaseBatch[T]) XAutoClaim(key string, group string, consumer string, min
 }
 
 // Transfers ownership of pending stream entries that match the specified criteria.
-//
-// Since:
-//
-//	Valkey 6.2.0 and above.
 //
 // See [valkey.io] for details.
 //
@@ -3910,10 +3930,6 @@ func (b *BaseBatch[T]) XAutoClaimWithOptions(
 
 // Transfers ownership of pending stream entries and returns just the IDs.
 //
-// Since:
-//
-//	Valkey 6.2.0 and above.
-//
 // See [valkey.io] for details.
 //
 // Parameters:
@@ -3947,10 +3963,6 @@ func (b *BaseBatch[T]) XAutoClaimJustId(
 }
 
 // Transfers ownership of pending stream entries that match the specified criteria.
-//
-// Since:
-//
-//	Valkey 6.2.0 and above.
 //
 // See [valkey.io] for details.
 //
@@ -4478,10 +4490,6 @@ func (b *BaseBatch[T]) ZRandMemberWithCountWithScores(key string, count int64) *
 
 // Returns the scores associated with the specified `members` in the sorted set stored at `key`.
 //
-// Since:
-//
-//	Valkey 6.2.0 and above.
-//
 // See [valkey.io] for details.
 //
 // Parameters:
@@ -4586,7 +4594,7 @@ func (b *BaseBatch[T]) Sort(key string) *T {
 // Note:
 //
 // The use of [SortOptions.byPattern] and [SortOptions.getPatterns] in cluster mode is
-// supported since Valkey version 8.0.
+// supported since Valkey 8.0.0.
 //
 // See [valkey.io] for details.
 //
@@ -4640,7 +4648,7 @@ func (b *BaseBatch[T]) SortReadOnly(key string) *T {
 // Note:
 //
 // The use of [SortOptions.byPattern] and [SortOptions.getPatterns] in cluster mode is
-// supported since Valkey version 8.0.
+// supported since Valkey 8.0.0.
 //
 // See [valkey.io] for details.
 //
@@ -5100,10 +5108,6 @@ func (b *BaseBatch[T]) BitPosWithOptions(key string, bit int64, bitposOptions op
 // Copies the value stored at the source to the destination key if the
 // destination key does not yet exist.
 //
-// Since:
-//
-//	Valkey 6.2.0 and above.
-//
 // See [valkey.io] for details.
 //
 // Parameters:
@@ -5123,10 +5127,6 @@ func (b *BaseBatch[T]) Copy(source string, destination string) *T {
 // Copies the value stored at the source to the destination key. When
 // `replace` in `options` is `true`, removes the destination key first if it already
 // exists, otherwise performs no action.
-//
-// Since:
-//
-//	Valkey 6.2.0 and above.
 //
 // See [valkey.io] for details.
 //
@@ -5672,10 +5672,6 @@ func (b *BaseBatch[T]) ZInterStoreWithOptions(
 //
 // See [valkey.io] for details.
 //
-// Since:
-//
-//	Valkey 6.2.0 and above.
-//
 // Parameters:
 //
 //	keys - The keys of the sorted sets.
@@ -5696,10 +5692,6 @@ func (b *BaseBatch[T]) ZDiff(keys []string) *T {
 // Returns the difference between the first sorted set and all the successive sorted sets.
 //
 // See [valkey.io] for details.
-//
-// Since:
-//
-//	Valkey 6.2.0 and above.
 //
 // Parameters:
 //
@@ -5725,10 +5717,6 @@ func (b *BaseBatch[T]) ZDiffWithScores(keys []string) *T {
 //
 // See [valkey.io] for details.
 //
-// Since:
-//
-//	Valkey 6.2.0 and above.
-//
 // Parameters:
 //
 //	destination - The key where the resulting sorted set will be stored.
@@ -5753,10 +5741,6 @@ func (b *BaseBatch[T]) ZDiffStore(destination string, keys []string) *T {
 //
 // See [valkey.io] for details.
 //
-// Since:
-//
-//	Valkey 6.2.0 and above.
-//
 // Parameters:
 //
 //	keys - The keys of the sorted sets.
@@ -5776,10 +5760,6 @@ func (b *BaseBatch[T]) ZUnion(keys options.KeyArray) *T {
 
 // Returns the union of members and their scores from sorted sets specified by the given
 // `keysOrWeightedKeys`.
-//
-// Since:
-//
-//	Valkey 6.2.0 and above.
 //
 // See [valkey.io] for details.
 //
@@ -5964,7 +5944,7 @@ func (b *BaseBatch[T]) ZMPopWithOptions(keys []string, scoreFilter constants.Sco
 //
 // Since:
 //
-//	Valkey 7.0 and above.
+//	Valkey 7.0.0.
 //
 // See [valkey.io] for details.
 //
@@ -5988,7 +5968,7 @@ func (b *BaseBatch[T]) ZInterCard(keys []string) *T {
 //
 // Since:
 //
-//	Valkey 7.0 and above.
+//	Valkey 7.0.0.
 //
 // See [valkey.io] for details.
 //
@@ -6222,10 +6202,6 @@ func (b *BaseBatch[T]) GeoDistWithUnit(key string, member1 string, member2 strin
 // Returns the members of a sorted set populated with geospatial information using [BaseBatch.GeoAdd],
 // which are within the borders of the area specified by a given shape.
 //
-// Since:
-//
-//	Valkey 6.2.0 and above.
-//
 // See [valkey.io] for details.
 //
 // Parameters:
@@ -6283,10 +6259,6 @@ func (b *BaseBatch[T]) GeoSearchWithFullOptions(
 // Returns the members of a sorted set populated with geospatial information using [BaseBatch.GeoAdd],
 // which are within the borders of the area specified by a given shape.
 //
-// Since:
-//
-//	Valkey 6.2.0 and above.
-//
 // See [valkey.io] for details.
 //
 // Parameters:
@@ -6315,10 +6287,6 @@ func (b *BaseBatch[T]) GeoSearch(
 
 // Returns the members of a sorted set populated with geospatial information using [BaseBatch.GeoAdd],
 // which are within the borders of the area specified by a given shape.
-//
-// Since:
-//
-//	Valkey 6.2.0 and above.
 //
 // See [valkey.io] for details.
 //
@@ -6367,10 +6335,6 @@ func (b *BaseBatch[T]) GeoSearchWithResultOptions(
 // Returns the members of a sorted set populated with geospatial information using [BaseBatch.GeoAdd],
 // which are within the borders of the area specified by a given shape.
 //
-// Since:
-//
-//	Valkey 6.2.0 and above.
-//
 // See [valkey.io] for details.
 //
 // Parameters:
@@ -6412,10 +6376,6 @@ func (b *BaseBatch[T]) GeoSearchWithInfoOptions(
 // within a circular or rectangular area and stores the result in `destinationKey`. If
 // `destinationKey` already exists, it is overwritten. Otherwise, a new sorted set will be
 // created. To get the result directly, see [BaseBatch.GeoSearchWithFullOptions].
-//
-// Since:
-//
-//	Valkey 6.2.0 and above.
 //
 // See [valkey.io] for details.
 //
@@ -6474,10 +6434,6 @@ func (b *BaseBatch[T]) GeoSearchStoreWithFullOptions(
 // `destinationKey` already exists, it is overwritten. Otherwise, a new sorted set will be
 // created. To get the result directly, see [BaseBatch.GeoSearchWithFullOptions].
 //
-// Since:
-//
-//	Valkey 6.2.0 and above.
-//
 // See [valkey.io] for details.
 //
 // Parameters:
@@ -6516,10 +6472,6 @@ func (b *BaseBatch[T]) GeoSearchStore(
 // within a circular or rectangular area and stores the result in `destinationKey`. If
 // `destinationKey` already exists, it is overwritten. Otherwise, a new sorted set will be
 // created. To get the result directly, see [BaseBatch.GeoSearchWithFullOptions].
-//
-// Since:
-//
-//	Valkey 6.2.0 and above.
 //
 // See [valkey.io] for details.
 //
@@ -6562,10 +6514,6 @@ func (b *BaseBatch[T]) GeoSearchStoreWithResultOptions(
 // `destinationKey` already exists, it is overwritten. Otherwise, a new sorted set will be
 // created. To get the result directly, see [BaseBatch.GeoSearchWithFullOptions].
 //
-// Since:
-//
-//	Valkey 6.2.0 and above.
-//
 // See [valkey.io] for details.
 //
 // Parameters:
@@ -6606,7 +6554,7 @@ func (b *BaseBatch[T]) GeoSearchStoreWithInfoOptions(
 //
 // Since:
 //
-//	Valkey 7.0 and above.
+//	Valkey 7.0.0.
 //
 // See [valkey.io] for details.
 //
@@ -6633,7 +6581,7 @@ func (b *BaseBatch[T]) FunctionLoad(libraryCode string, replace bool) *T {
 //
 // Since:
 //
-//	Valkey 7.0 and above.
+//	Valkey 7.0.0.
 //
 // See [valkey.io] for details.
 //
@@ -6654,7 +6602,7 @@ func (b *BaseBatch[T]) FunctionDelete(libName string) *T {
 //
 // Since:
 //
-//	Valkey 7.0 and above.
+//	Valkey 7.0.0.
 //
 // See [valkey.io] for details.
 //
@@ -6671,7 +6619,7 @@ func (b *BaseBatch[T]) FunctionFlush() *T {
 //
 // Since:
 //
-//	Valkey 7.0 and above.
+//	Valkey 7.0.0.
 //
 // See [valkey.io] for details.
 //
@@ -6688,7 +6636,7 @@ func (b *BaseBatch[T]) FunctionFlushSync() *T {
 //
 // Since:
 //
-//	Valkey 7.0 and above.
+//	Valkey 7.0.0.
 //
 // See [valkey.io] for details.
 //
@@ -6705,7 +6653,7 @@ func (b *BaseBatch[T]) FunctionFlushAsync() *T {
 //
 // Since:
 //
-//	Valkey 7.0 and above.
+//	Valkey 7.0.0.
 //
 // See [valkey.io] for details.
 //
@@ -6728,7 +6676,7 @@ func (b *BaseBatch[T]) FCall(function string) *T {
 //
 // Since:
 //
-//	Valkey 7.0 and above.
+//	Valkey 7.0.0.
 //
 // See [valkey.io] for details.
 //
@@ -6756,7 +6704,7 @@ func (b *BaseBatch[T]) FCallWithKeysAndArgs(function string, keys []string, args
 //
 // Since:
 //
-//	Valkey 7.0 and above.
+//	Valkey 7.0.0.
 //
 // See [valkey.io] for details.
 //
@@ -6779,7 +6727,7 @@ func (b *BaseBatch[T]) FCallReadOnly(function string) *T {
 //
 // Since:
 //
-//	Valkey 7.0 and above.
+//	Valkey 7.0.0.
 //
 // See [valkey.io] for details.
 //
@@ -6809,7 +6757,7 @@ func (b *BaseBatch[T]) FCallReadOnlyWithKeysAndArgs(function string, keys []stri
 //
 // Since:
 //
-//	Valkey 7.0 and above.
+//	Valkey 7.0.0.
 //
 // Parameters:
 //
@@ -6828,7 +6776,7 @@ func (b *BaseBatch[T]) FunctionList(query models.FunctionListQuery) *T {
 //
 // Since:
 //
-//	Valkey 7.0 and above.
+//	Valkey 7.0.0.
 //
 // See [valkey.io] for details.
 //
@@ -6845,7 +6793,7 @@ func (b *BaseBatch[T]) FunctionDump() *T {
 //
 // Since:
 //
-//	Valkey 7.0 and above.
+//	Valkey 7.0.0.
 //
 // See [valkey.io] for details.
 //
@@ -6866,7 +6814,7 @@ func (b *BaseBatch[T]) FunctionRestore(payload string) *T {
 //
 // Since:
 //
-//	Valkey 7.0 and above.
+//	Valkey 7.0.0.
 //
 // See [valkey.io] for details.
 //
@@ -6961,7 +6909,7 @@ func (b *BaseBatch[T]) PubSubNumSub(channels []string) *T {
 //
 // Since:
 //
-//	Valkey 7.0 and above.
+//	Valkey 7.0.0.
 //
 // See [valkey.io] for details.
 //
@@ -7047,7 +6995,7 @@ func (b *BaseBatch[T]) ScriptFlushWithMode(mode options.FlushMode) *T {
 //
 // Since:
 //
-//	Valkey 8.0.0
+//	Valkey 8.0.0.
 //
 // See [valkey.io] for details.
 //
@@ -7429,7 +7377,7 @@ func (b *BaseBatch[T]) RandomKey() *T {
 //
 // Since:
 //
-//	Valkey 7.0 and above.
+//	Valkey 7.0.0.
 //
 // See [valkey.io] for details.
 //

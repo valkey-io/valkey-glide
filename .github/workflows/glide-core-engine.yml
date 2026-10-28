@@ -24,6 +24,8 @@ on:
             - .github/actions/install-rust/action.yml
             - .github/actions/install-shared-dependencies/action.yml
             - .github/actions/install-zig/action.yml
+            - "!**/*.md"
+            - "!**/THIRD_PARTY_LICENSES*"
     pull_request:
         paths:
             - glide-core/redis-rs/**
@@ -40,6 +42,8 @@ on:
             - .github/actions/install-rust/action.yml
             - .github/actions/install-shared-dependencies/action.yml
             - .github/actions/install-zig/action.yml
+            - "!**/*.md"
+            - "!**/THIRD_PARTY_LICENSES*"
     workflow_dispatch:
         inputs:
             use-self-hosted-linux:
@@ -63,7 +67,7 @@ env:
 jobs:
     approve-self-hosted:
         if: inputs.use-self-hosted-linux == true || contains(github.event.pull_request.labels.*.name, 'ci/use-self-hosted')
-        runs-on: ubuntu-latest
+        runs-on: ubuntu-24.04
         environment: AWS_ACTIONS
         steps:
             - name: Approval gate
@@ -72,7 +76,7 @@ jobs:
     glide-core-engine-CI:
         needs: [approve-self-hosted]
         if: always() && (needs.approve-self-hosted.result == 'success' || needs.approve-self-hosted.result == 'skipped')
-        runs-on: ${{ (inputs.use-self-hosted-linux || contains(github.event.pull_request.labels.*.name, 'ci/use-self-hosted')) && fromJSON('["self-hosted","Linux","x64","ephemeral"]') || 'ubuntu-latest' }}
+        runs-on: ${{ (inputs.use-self-hosted-linux || contains(github.event.pull_request.labels.*.name, 'ci/use-self-hosted')) && fromJSON('["self-hosted","Linux","x64","ephemeral"]') || 'ubuntu-24.04' }}
 
         steps:
             - name: Checkout repository

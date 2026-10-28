@@ -101,6 +101,11 @@ EXCLUDED_TESTS = {
         # Abandon detection tests — async-only (monitor runs on tokio runtime)
         "test_pool_abandon_detection",
         "test_pool_abandon_detection_disabled",
+        # Async provider scheduling has no sync equivalent.
+        "test_iam_custom_async_provider_forms",
+        "test_iam_close_during_provider_refresh_does_not_block_owner_runtime",
+        # Coordinates both client kinds; a pure sync twin would not test coexistence.
+        "test_live_async_sync_provider_ids_coexist_without_registry_leaks",
     ],
     "sync_only": [
         "test_sync_fork",

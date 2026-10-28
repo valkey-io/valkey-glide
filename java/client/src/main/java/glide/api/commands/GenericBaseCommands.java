@@ -16,11 +16,23 @@ import java.util.concurrent.CompletableFuture;
  * @see <a href="https://valkey.io/commands/?group=generic">Generic Commands</a>
  */
 public interface GenericBaseCommands {
-    /** Valkey API keyword used to replace the destination key. */
-    String REPLACE_VALKEY_API = "REPLACE";
+    /**
+     * Valkey API keyword used to replace the destination key.
+     *
+     * @deprecated Valkey API keyword constants are internal and will be removed in a future major
+     *     release.
+     */
+    // TODO #7401: Move to glide.internal.ValkeyKeywords.
+    @Deprecated String REPLACE_VALKEY_API = "REPLACE";
 
-    /** Valkey API keyword used to denote the destination db index. */
-    String DB_VALKEY_API = "DB";
+    /**
+     * Valkey API keyword used to denote the destination db index.
+     *
+     * @deprecated Valkey API keyword constants are internal and will be removed in a future major
+     *     release.
+     */
+    // TODO #7401: Move to glide.internal.ValkeyKeywords.
+    @Deprecated String DB_VALKEY_API = "DB";
 
     /**
      * Removes the specified <code>keys</code> from the database. A key is ignored if it does not
@@ -581,7 +593,7 @@ public interface GenericBaseCommands {
      * will expire, in seconds.<br>
      * To get the expiration with millisecond precision, use {@link #pexpiretime(String)}.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/expiretime/">valkey.io</a> for details.
      * @param key The <code>key</code> to determine the expiration value of.
      * @return The expiration Unix timestamp in seconds. <code>-2</code> if <code>key</code> does not
@@ -599,7 +611,7 @@ public interface GenericBaseCommands {
      * will expire, in seconds.<br>
      * To get the expiration with millisecond precision, use {@link #pexpiretime(String)}.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/expiretime/">valkey.io</a> for details.
      * @param key The <code>key</code> to determine the expiration value of.
      * @return The expiration Unix timestamp in seconds. <code>-2</code> if <code>key</code> does not
@@ -616,7 +628,7 @@ public interface GenericBaseCommands {
      * Returns the absolute Unix timestamp (since January 1, 1970) at which the given <code>key</code>
      * will expire, in milliseconds.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/pexpiretime/">valkey.io</a> for details.
      * @param key The <code>key</code> to determine the expiration value of.
      * @return The expiration Unix timestamp in milliseconds. <code>-2</code> if <code>key</code> does
@@ -633,7 +645,7 @@ public interface GenericBaseCommands {
      * Returns the absolute Unix timestamp (since January 1, 1970) at which the given <code>key</code>
      * will expire, in milliseconds.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/pexpiretime/">valkey.io</a> for details.
      * @param key The <code>key</code> to determine the expiration value of.
      * @return The expiration Unix timestamp in milliseconds. <code>-2</code> if <code>key</code> does
@@ -1022,7 +1034,6 @@ public interface GenericBaseCommands {
      *
      * @apiNote When in cluster mode, both <code>source</code> and <code>destination</code> must map
      *     to the same hash slot.
-     * @since Valkey 6.2.0 and above.
      * @see <a href="https://valkey.io/commands/copy/">valkey.io</a> for details.
      * @param source The key to the source value.
      * @param destination The key where the value should be copied to.
@@ -1044,7 +1055,6 @@ public interface GenericBaseCommands {
      *
      * @apiNote When in cluster mode, both <code>source</code> and <code>destination</code> must map
      *     to the same hash slot.
-     * @since Valkey 6.2.0 and above.
      * @see <a href="https://valkey.io/commands/copy/">valkey.io</a> for details.
      * @param source The key to the source value.
      * @param destination The key where the value should be copied to.
@@ -1064,7 +1074,7 @@ public interface GenericBaseCommands {
      * Move <code>key</code> from the currently selected database to the database specified by <code>
      * dbIndex</code>.
      *
-     * @apiNote For Cluster mode the move is supported since Valkey 9.0.0 and above.
+     * @since Valkey 9.0.0 for cluster client.
      * @see <a href="https://valkey.io/commands/move/">valkey.io</a> for more details.
      * @param key The key to move.
      * @param dbIndex The index of the database to move <code>key</code> to.
@@ -1083,7 +1093,7 @@ public interface GenericBaseCommands {
      * Move <code>key</code> from the currently selected database to the database specified by <code>
      * dbIndex</code>.
      *
-     * @apiNote For Cluster mode the move is supported since Valkey 9.0.0 and above.
+     * @since Valkey 9.0.0 for cluster client.
      * @see <a href="https://valkey.io/commands/move/">valkey.io</a> for more details.
      * @param key The key to move.
      * @param dbIndex The index of the database to move <code>key</code> to.
@@ -1105,7 +1115,6 @@ public interface GenericBaseCommands {
      *
      * @apiNote When in cluster mode, both <code>source</code> and <code>destination</code> must map
      *     to the same hash slot.
-     * @since Valkey 6.2.0 and above.
      * @see <a href="https://valkey.io/commands/copy/">valkey.io</a> for details.
      * @param source The key to the source value.
      * @param destination The key where the value should be copied to.
@@ -1129,7 +1138,6 @@ public interface GenericBaseCommands {
      *
      * @apiNote When in cluster mode, both <code>source</code> and <code>destination</code> must map
      *     to the same hash slot.
-     * @since Valkey 6.2.0 and above.
      * @see <a href="https://valkey.io/commands/copy/">valkey.io</a> for details.
      * @param source The key to the source value.
      * @param destination The key where the value should be copied to.
@@ -1151,8 +1159,7 @@ public interface GenericBaseCommands {
      * <code>destinationDB</code>. When <code>replace</code> is true, removes the <code>destination
      * </code> key first if it already exists, otherwise performs no action.
      *
-     * @apiNote copy command for cluster mode is supported since Valkey 9.0.0 and above
-     * @since Valkey 6.2.0 and above for standalone Client.
+     * @since Valkey 9.0.0 for cluster client.
      * @see <a href="https://valkey.io/commands/copy/">valkey.io</a> for details.
      * @param source The key to the source value.
      * @param destination The key where the value should be copied to.
@@ -1174,8 +1181,7 @@ public interface GenericBaseCommands {
      * <code>destinationDB</code>. When <code>replace</code> is true, removes the <code>destination
      * </code> key first if it already exists, otherwise performs no action.
      *
-     * @apiNote copy command for cluster mode is supported since Valkey 9.0.0 and above
-     * @since Valkey 6.2.0 and above for standalone Client.
+     * @since Valkey 9.0.0 for cluster client.
      * @see <a href="https://valkey.io/commands/copy/">valkey.io</a> for details.
      * @param source The key to the source value.
      * @param destination The key where the value should be copied to.
@@ -1197,8 +1203,7 @@ public interface GenericBaseCommands {
      * <code>destinationDB</code>. When <code>replace</code> is true, removes the <code>destination
      * </code> key first if it already exists, otherwise performs no action.
      *
-     * @apiNote copy command for cluster mode is supported since Valkey 9.0.0 and above
-     * @since Valkey 6.2.0 and above for standalone Client.
+     * @since Valkey 9.0.0 for cluster client.
      * @see <a href="https://valkey.io/commands/copy/">valkey.io</a> for details.
      * @param source The key to the source value.
      * @param destination The key where the value should be copied to.
@@ -1218,8 +1223,7 @@ public interface GenericBaseCommands {
      * <code>destinationDB</code>. When <code>replace</code> is true, removes the <code>destination
      * </code> key first if it already exists, otherwise performs no action.
      *
-     * @apiNote copy command for cluster mode is supported since Valkey 9.0.0 and above
-     * @since Valkey 6.2.0 and above for standalone Client.
+     * @since Valkey 9.0.0 for cluster client.
      * @see <a href="https://valkey.io/commands/copy/">valkey.io</a> for details.
      * @param source The key to the source value.
      * @param destination The key where the value should be copied to.
@@ -1340,7 +1344,7 @@ public interface GenericBaseCommands {
      * @apiNote When in cluster mode, both <code>key</code> and the patterns specified in {@link
      *     SortOptions#byPattern} and {@link SortOptions#getPatterns} must hash to the same slot. The
      *     use of {@link SortOptions#byPattern} and {@link SortOptions#getPatterns} in cluster mode is
-     *     supported since Valkey version 8.0.
+     *     supported since Valkey 8.0.0.
      * @see <a href="https://valkey.io/commands/sort/">valkey.io</a> for details.
      * @param key The key of the list, set, or sorted set to be sorted.
      * @param sortOptions The {@link SortOptions}.
@@ -1367,7 +1371,7 @@ public interface GenericBaseCommands {
      * @apiNote When in cluster mode, both <code>key</code> and the patterns specified in {@link
      *     SortOptionsBinary#byPattern} and {@link SortOptionsBinary#getPatterns} must hash to the
      *     same slot. The use of {@link SortOptionsBinary#byPattern} and {@link
-     *     SortOptionsBinary#getPatterns} in cluster mode is supported since Valkey version 8.0.
+     *     SortOptionsBinary#getPatterns} in cluster mode is supported since Valkey 8.0.0.
      * @see <a href="https://valkey.io/commands/sort/">valkey.io</a> for details.
      * @param key The key of the list, set, or sorted set to be sorted.
      * @param sortOptions The {@link SortOptionsBinary}.
@@ -1391,7 +1395,7 @@ public interface GenericBaseCommands {
      * and apply transformations on sorted elements.<br>
      * This command is routed depending on the client's {@link ReadFrom} strategy.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/sort/">valkey.io</a> for details.
      * @param key The key of the list, set, or sorted set to be sorted.
      * @return An <code>Array</code> of sorted elements.
@@ -1410,7 +1414,7 @@ public interface GenericBaseCommands {
      * and apply transformations on sorted elements.<br>
      * This command is routed depending on the client's {@link ReadFrom} strategy.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/sort/">valkey.io</a> for details.
      * @param key The key of the list, set, or sorted set to be sorted.
      * @return An <code>Array</code> of sorted elements.
@@ -1431,8 +1435,8 @@ public interface GenericBaseCommands {
      * @apiNote When in cluster mode, both <code>key</code> and the patterns specified in {@link
      *     SortOptions#byPattern} and {@link SortOptions#getPatterns} must hash to the same slot. The
      *     use of {@link SortOptions#byPattern} and {@link SortOptions#getPatterns} in cluster mode is
-     *     supported since Valkey version 8.0.
-     * @since Valkey 7.0 and above.
+     *     supported since Valkey 8.0.0.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/sort/">valkey.io</a> for details.
      * @param key The key of the list, set, or sorted set to be sorted.
      * @param sortOptions The {@link SortOptions}.
@@ -1458,8 +1462,8 @@ public interface GenericBaseCommands {
      * @apiNote When in cluster mode, both <code>key</code> and the patterns specified in {@link
      *     SortOptionsBinary#byPattern} and {@link SortOptionsBinary#getPatterns} must hash to the
      *     same slot. The use of {@link SortOptionsBinary#byPattern} and {@link
-     *     SortOptionsBinary#getPatterns} in cluster mode is supported since Valkey version 8.0.
-     * @since Valkey 7.0 and above.
+     *     SortOptionsBinary#getPatterns} in cluster mode is supported since Valkey 8.0.0.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/sort/">valkey.io</a> for details.
      * @param key The key of the list, set, or sorted set to be sorted.
      * @param sortOptions The {@link SortOptions}.
@@ -1539,7 +1543,7 @@ public interface GenericBaseCommands {
      *           SortOptions#byPattern} and {@link SortOptions#getPatterns} must hash to the same
      *           slot.
      *       <li>The use of {@link SortOptions#byPattern} and {@link SortOptions#getPatterns} in
-     *           cluster mode is supported since Valkey version 8.0.
+     *           cluster mode is supported since Valkey 8.0.0.
      *     </ul>
      *
      * @see <a href="https://valkey.io/commands/sort/">valkey.io</a> for details.
@@ -1577,7 +1581,7 @@ public interface GenericBaseCommands {
      *           SortOptionsBinary#byPattern} and {@link SortOptionsBinary#getPatterns} must hash to
      *           the same slot.
      *       <li>The use of {@link SortOptionsBinary#byPattern} and {@link
-     *           SortOptionsBinary#getPatterns} in cluster mode is supported since Valkey version 8.0.
+     *           SortOptionsBinary#getPatterns} in cluster mode is supported since Valkey 8.0.0.
      *     </ul>
      *
      * @see <a href="https://valkey.io/commands/sort/">valkey.io</a> for details.
@@ -1628,7 +1632,7 @@ public interface GenericBaseCommands {
      * <code>timeout</code> is reached, the command returns even if the specified number of replicas
      * were not yet reached.
      *
-     * @since Valkey 7.2 and above.
+     * @since Valkey 7.2.0.
      * @see <a href="https://valkey.io/commands/waitaof/">valkey.io</a> for details.
      * @param numlocal The number of local replicas to reach.
      * @param numreplicas The number of replicas to reach.

@@ -102,7 +102,7 @@ class StreamAddOptions:
     Attributes:
         id (Optional[TEncodable]): ID for the new entry. If set, the new entry will be added with this ID. If not
             specified, '*' is used.
-        make_stream (bool, optional): If set to False, a new stream won't be created if no stream matches the given key.
+        make_stream (bool): If set to False, a new stream won't be created if no stream matches the given key.
         trim (Optional[StreamTrimOptions]): If set, the add operation will also trim the older entries in the stream.
             See `StreamTrimOptions`.
     """
@@ -210,8 +210,6 @@ class ExclusiveIdBound(StreamRangeBound):
     Exclusive (open) stream ID boundary used to specify a range of IDs to search. Stream ID bounds can be complete with
     a timestamp and sequence number separated by a dash ("-"), for example "1526985054069-0". Stream ID bounds can also
     be incomplete, with just a timestamp.
-
-    Since: Valkey version 6.2.0.
 
     Attributes:
         stream_id (TEncodable): The stream ID.
