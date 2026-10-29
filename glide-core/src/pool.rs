@@ -1839,14 +1839,8 @@ impl ScopePoolHandle {
 /// `try_lock` here would silently leave scopes live under contention. The owning
 /// id on each [`ScopeEntry`] is what makes that possible.
 ///
-/// A scope acquired concurrently with teardown can still land in the registry
-/// after the sweep, leaking one entry. Whether that entry is inert depends on the
-/// caller: FFI and JNI remove the parent from `CLIENT_REGISTRY` via their own close
-/// paths, so dispatch fails on an unresolvable parent. Node registers pooled clients
-/// in `CLIENT_REGISTRY` under the pool's `client_id` and does not shed that entry on
-/// pool close, so a Node pooled parent can still resolve. This is not fixed from here:
-/// the pool's `client_id` overlaps plain clients' registry keys, so removing it would
-/// need an id that is unambiguous against them.
+/// The pool is unregistered before the sweep, so an acquire racing teardown sees
+/// it gone after registering its entry and removes and kills that entry itself.
 pub fn destroy_client_scope_pool(client_id: u64) {
     if let Some((_, handle)) = get_client_scope_pools().remove(&client_id) {
         handle.wakeup.notify_waiters();

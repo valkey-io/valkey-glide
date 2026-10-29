@@ -1576,6 +1576,18 @@ fn classify_acquire(
     let acquisition_slot = acquisition_slot_for(&target, routing_slot);
     match pool.try_acquire(registry, target.clone(), runtime_db, acquisition_slot) {
         ScopeAcquire::Reused(scope_id) => {
+            // Parent teardown unregisters the pool before sweeping the registry,
+            // so if the pool is gone here the sweep may have missed this entry.
+            let registered = crate::pool::get_client_scope_pools()
+                .get(&client_id)
+                .is_some_and(|handle| Arc::ptr_eq(&handle.pool, scope_pool));
+            if !registered {
+                pool.in_use.remove(&scope_id);
+                if let Some((_, entry)) = registry.remove(&scope_id) {
+                    entry.kill_handle.kill();
+                }
+                return Outcome(Fail(ScopeFailCause::PoolClosed));
+            }
             let _ = glide_telemetry::GlideOpenTelemetry::record_scope_acquire();
             Outcome(Acquired(scope_id))
         }
@@ -1886,13 +1898,14 @@ mod tests {
     use tokio::sync::Mutex as TokioMutex;
 
     use super::{
-        ScopeAcquireOutcome, ScopeCreateError, ScopeFailCause, ScopeRetryCause,
-        acquire_scope_outcome, acquisition_slot_for, build_scope_connection,
-        create_scope_connection, execute_scope_command, get_parent_client, inherited_tls_params,
-        resolve_scope_parent, try_resolve_scope_target,
+        Classified, build_scope_connection_addr, is_poisoning_error, parse_cluster_target,
+        strip_host_brackets,
     };
     use super::{
-        build_scope_connection_addr, is_poisoning_error, parse_cluster_target, strip_host_brackets,
+        ScopeAcquireOutcome, ScopeCreateError, ScopeFailCause, ScopeRetryCause,
+        acquire_scope_outcome, acquisition_slot_for, build_scope_connection, classify_acquire,
+        create_scope_connection, execute_scope_command, get_parent_client, inherited_tls_params,
+        resolve_scope_parent, try_resolve_scope_target,
     };
     use redis::{RedisResult, Value};
 
@@ -2651,6 +2664,59 @@ mod tests {
             acquired,
             ScopeAcquireOutcome::Fail(ScopeFailCause::PoolClosed)
         );
+    }
+
+    /// An acquire holding a pool handle from before parent teardown must not leave
+    /// an entry behind once teardown's sweep has run.
+    #[tokio::test]
+    async fn acquire_after_teardown_leaves_no_registry_entry() {
+        let client_id = 67_950_011_u64;
+        let (port, shutdown_sender, server) = responsive_endpoint();
+        let request_bytes = request_bytes("", port);
+        let pool = Arc::new(TokioMutex::new(ScopePool::new(
+            ScopePoolConfig::default(),
+            request_bytes.clone(),
+            client_id,
+        )));
+        pool.lock().await.total_count.store(1, Ordering::Release);
+        let reservation = reservation_for(&pool).await;
+        let _ = create_scope_connection(
+            pool.clone(),
+            None,
+            &request_bytes,
+            ScopeTarget::Standalone,
+            reservation,
+        )
+        .await;
+        assert_eq!(pool.lock().await.idle.len(), 1, "connection seated");
+        get_client_scope_pools().insert(client_id, ScopePoolHandle::for_test(&pool));
+        register_client(client_id, lazy_parent(false).await);
+
+        crate::pool::destroy_client_scope_pool(client_id);
+        let classified = classify_acquire(
+            &pool,
+            pool.lock().await,
+            client_id,
+            &tokio::runtime::Handle::current(),
+            None,
+        );
+
+        unregister_client(client_id);
+        assert!(
+            matches!(
+                classified,
+                Classified::Outcome(ScopeAcquireOutcome::Fail(ScopeFailCause::PoolClosed))
+            ),
+            "acquire on a torn-down pool must fail"
+        );
+        assert!(
+            !crate::pool::get_scope_registry()
+                .iter()
+                .any(|entry| entry.value().parent_client_id == client_id),
+            "no scope may outlive its parent's teardown"
+        );
+        shutdown_sender.send(()).expect("signal server shutdown");
+        server.join().expect("join server thread");
     }
 
     /// Seat one connection in a `max_total = 1` pool, register the parent, and hand
