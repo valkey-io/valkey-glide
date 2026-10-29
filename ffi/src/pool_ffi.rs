@@ -731,7 +731,7 @@ pub enum PoolMetricsStatus {
     /// No pool has this id.
     UnknownPool = 1,
     /// The pool lock was held and the caller is on a Tokio runtime thread,
-    /// where waiting for it would panic, so no read was made.
+    /// where waiting for it would panic.
     LockHeld = 2,
 }
 
@@ -766,10 +766,9 @@ pub extern "C" fn glide_pool_metrics(pool_id: u64) -> PoolMetrics {
     let Some(pool_arc) = pool::get_pool(pool_id) else {
         return PoolMetrics::not_read(PoolMetricsStatus::UnknownPool);
     };
-    // Holders release the lock without awaiting, so waiting is short, and a
-    // read that gives up reaches the user as an empty pool. No binding calls
-    // this from a runtime thread today; the guard exists because blocking_lock
-    // panics there and a panic through extern "C" aborts the process.
+    // Holders release the lock without awaiting, so waiting is short.
+    // blocking_lock panics on a Tokio runtime thread, and a panic through
+    // extern "C" aborts the process, so a runtime thread keeps the non-waiting read.
     let pool = if tokio::runtime::Handle::try_current().is_ok() {
         let Ok(pool) = pool_arc.try_lock() else {
             return PoolMetrics::not_read(PoolMetricsStatus::LockHeld);
@@ -1534,8 +1533,6 @@ mod pool_metrics_tests {
         );
     }
 
-    /// blocking_lock panics on a Tokio runtime thread, and a panic through the
-    /// extern "C" boundary aborts the process.
     #[test]
     fn contended_read_on_a_runtime_thread_reports_lock_held_with_no_counts() {
         let pool = registered_pool_with_two_reserved_slots();
