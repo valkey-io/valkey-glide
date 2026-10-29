@@ -607,6 +607,9 @@ class BaseClient(CoreCommands):
         self._rdma_calls = 0
         # The native client `close` left for the last RDMA call to free.
         self._deferred_core_client = self._ffi.NULL
+        # The callbacks that native client can still call, kept until it is
+        # freed.
+        self._deferred_callback_refs: Tuple[Any, ...] = ()
 
         self._is_closed: bool = False
 
@@ -638,6 +641,7 @@ class BaseClient(CoreCommands):
         # the RDMA calls the parent had running will ever end here.
         self._rdma_calls = 0
         self._deferred_core_client = self._ffi.NULL
+        self._deferred_callback_refs = ()
         credential_provider = None
         if (
             self._config.credentials is not None
@@ -1974,7 +1978,11 @@ class BaseClient(CoreCommands):
             if self._rdma_calls > 0 or core_client == self._ffi.NULL:
                 return
             self._deferred_core_client = self._ffi.NULL
+            callback_refs = self._deferred_callback_refs
+            self._deferred_callback_refs = ()
         self._lib.close_client(core_client)
+        # The callbacks can go now that the native client is closed.
+        del callback_refs
         # Closing the client may be what lets the fabric go of memory it held.
         _RETAINED_RDMA_MEMORY.release_what_is_free()
 
@@ -2132,6 +2140,13 @@ class BaseClient(CoreCommands):
                         # RDMA call on another thread. Cancel their transfers
                         # instead, and let the last call out free it.
                         self._deferred_core_client = core_client
+                        # It keeps delivering pubsub messages and refreshing
+                        # IAM tokens until it is freed, so its callbacks must
+                        # outlive it.
+                        self._deferred_callback_refs = (
+                            self._pubsub_callback_ref,
+                            self._credential_provider_callback_ref,
+                        )
                         self._cancel_rdma(core_client)
                 self._pubsub_callback_ref = None
                 owner = getattr(self, "_credential_provider_callback_owner", None)

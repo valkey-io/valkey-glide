@@ -19,6 +19,7 @@ import textwrap
 import threading
 import time
 import warnings
+import weakref
 
 import pytest
 from glide_shared.config import (
@@ -190,6 +191,9 @@ def _offline_client() -> GlideClient:
     client._client_lock = threading.Lock()
     client._rdma_calls = 0
     client._deferred_core_client = _FakeFfi.NULL
+    client._deferred_callback_refs = ()
+    client._pubsub_callback_ref = None
+    client._credential_provider_callback_ref = None
     client._pubsub_condition = threading.Condition()
     return client
 
@@ -870,6 +874,43 @@ def test_closing_mid_transfer_cancels_and_frees_after_the_transfer():
     assert client._lib.client_closes == [native], "freed once it returned"
     assert client._rdma_calls == 0
     region.close()
+
+
+class _FakeCallback:
+    """An FFI callback as the client holds one: freed once nothing refers to it."""
+
+
+def test_closing_mid_transfer_keeps_the_callbacks_until_the_client_is_freed():
+    # The native client keeps delivering pubsub messages and refreshing IAM
+    # tokens until it is freed, so its callbacks must outlive it, or it calls
+    # freed code.
+    client = _offline_client()
+    native = client._core_client = object()
+    client._pubsub_callback_ref = _FakeCallback()
+    client._credential_provider_callback_ref = _FakeCallback()
+    callbacks = [
+        weakref.ref(client._pubsub_callback_ref),
+        weakref.ref(client._credential_provider_callback_ref),
+    ]
+    alive_at_free = []
+
+    def close_client(core_client):
+        gc.collect()
+        alive_at_free.append(all(callback() is not None for callback in callbacks))
+        client._lib.client_closes.append(core_client)
+
+    client._lib.close_client = close_client
+    transfer = _BlockedTransfer(client, _offline_region(client))
+
+    client.close()
+    gc.collect()
+    assert all(callback() is not None for callback in callbacks), "still callable"
+
+    transfer.finish()
+    assert client._lib.client_closes == [native]
+    assert alive_at_free == [True]
+    gc.collect()
+    assert all(callback() is None for callback in callbacks), "released after"
 
 
 def test_the_last_of_several_transfers_frees_the_client():
