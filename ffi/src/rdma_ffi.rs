@@ -50,7 +50,7 @@ pub struct RdmaRegion {
     /// fabric then decides when the memory is safe to let go, and
     /// [`Self::released`] says when it has.
     buffer: Option<glide_rdma::RdmaBuffer>,
-    /// Set once the fabric has let go of the caller's memory; see [`ForeignRegion`].
+    /// Set once the fabric has let go of the caller's memory; see [`ForeignOwner`].
     released: Arc<AtomicBool>,
     /// The fabric the buffer was registered with, kept even once the buffer is
     /// gone, so [`free_rdma_region`] can wait for the region to finish closing.
@@ -353,7 +353,7 @@ fn block_on_transfer<T>(
     }
 }
 
-/// Caller-owned memory presented to the fabric as a registerable region.
+/// Stands in for the caller as the owner of the memory it registered.
 ///
 /// The fabric drops this when it is done with the memory: at once, once the
 /// server is known to be done with it or a region close stops writes in flight;
@@ -361,32 +361,14 @@ fn block_on_transfer<T>(
 /// failed to close. Dropping sets `released`, which is how the caller learns it
 /// may free the memory.
 #[cfg(feature = "rdma")]
-struct ForeignRegion {
-    memory: *mut u8,
-    length: usize,
+struct ForeignOwner {
     released: Arc<AtomicBool>,
 }
 
 #[cfg(feature = "rdma")]
-impl Drop for ForeignRegion {
+impl Drop for ForeignOwner {
     fn drop(&mut self) {
         self.released.store(true, Ordering::Release);
-    }
-}
-
-// SAFETY: the pointer is only ever dereferenced through `as_mut`, and the
-// caller guarantees the allocation stays valid, stays put, and is not touched
-// through any other alias while the region lives. Under those terms moving the
-// handle between threads is no less safe than holding it on one.
-#[cfg(feature = "rdma")]
-unsafe impl Send for ForeignRegion {}
-
-#[cfg(feature = "rdma")]
-impl AsMut<[u8]> for ForeignRegion {
-    fn as_mut(&mut self) -> &mut [u8] {
-        // SAFETY: `register_rdma_region` rejected a null pointer and a zero
-        // length, and the caller guarantees the rest.
-        unsafe { std::slice::from_raw_parts_mut(self.memory, self.length) }
     }
 }
 
@@ -439,9 +421,12 @@ pub unsafe extern "C" fn rdma_checksum(data: *const u8, length: usize, out: *mut
 /// * `client_adapter_ptr` must be a pointer from [`create_client`] that
 ///   [`close_client`] has not been called on.
 /// * `memory` must point to `length` writable, initialized bytes.
-/// * The allocation must stay alive, stay at the same address, and not be
-///   accessed through any other alias until [`free_rdma_region`] returns. The
-///   server writes into it at times the caller does not control.
+/// * The allocation must stay alive and at the same address until
+///   [`free_rdma_region`] says it may be freed.
+/// * The caller may read and write the memory through its own pointer between
+///   transfers, for example to fill a window before [`rdma_set`] or read one
+///   after [`rdma_get`], but not while either is running on this region; see
+///   [`rdma_get`].
 /// * The returned pointer must be freed with [`free_rdma_registration`].
 #[unsafe(no_mangle)]
 pub unsafe extern "C-unwind" fn register_rdma_region(
@@ -494,11 +479,22 @@ fn register_region(
             return failed(message);
         }
         let released = Arc::new(AtomicBool::new(false));
-        match adapter.core.client.register_rdma_region(ForeignRegion {
-            memory,
-            length,
+        let owner = ForeignOwner {
             released: released.clone(),
-        }) {
+        };
+        // Registered by address, so the caller's own writes between transfers
+        // leave the pointer core reads through valid.
+        let memory = std::ptr::NonNull::slice_from_raw_parts(
+            // SAFETY: checked non-null above.
+            unsafe { std::ptr::NonNull::new_unchecked(memory) },
+            length,
+        );
+        // SAFETY: the caller guarantees the memory is valid and stays put until
+        // `free_rdma_region` says it may be freed, which is once `owner` is
+        // dropped. Plain memory is usable from any thread. The caller does not
+        // touch it while a transfer runs, and this crate never holds a slice of
+        // it past a transfer.
+        match unsafe { adapter.core.client.register_rdma_region_raw(memory, owner) } {
             Ok(buffer) => RdmaRegistration {
                 error_message: std::ptr::null(),
                 region: Box::into_raw(Box::new(RdmaRegion::new(buffer, released))),
@@ -548,6 +544,10 @@ fn register_region(
 /// * `region` must be a region from [`register_rdma_region`] that
 ///   [`free_rdma_region`] has not been called on, and no other thread may use
 ///   it for the duration of the call.
+/// * The caller must not read or write the region's memory until this call
+///   returns. If it returns with [`RdmaResult::region_closed`] set, the server
+///   may still write into the memory until [`free_rdma_region`] says it may be
+///   freed, so the bytes there cannot be relied on.
 /// * The returned pointer must be freed with [`free_rdma_result`].
 #[unsafe(no_mangle)]
 pub unsafe extern "C-unwind" fn rdma_get(
@@ -634,7 +634,8 @@ unsafe fn get(
 /// # Safety
 ///
 /// Same contract as [`rdma_get`]. The region is read, not written, but the
-/// caller must still hold it exclusively for the duration of the call.
+/// caller must still hold it exclusively and leave its memory alone for the
+/// duration of the call.
 /// `checksum_mode` must be one of the [`RdmaSetChecksumMode`] values.
 #[unsafe(no_mangle)]
 #[allow(clippy::too_many_arguments)]
@@ -1340,33 +1341,46 @@ mod tests {
         );
     }
 
-    /// The region hands the fabric the caller's own allocation, not a copy, so
-    /// a write through it has to land in the caller's bytes.
-    #[cfg(feature = "rdma")]
-    #[test]
-    fn a_foreign_region_writes_through_to_the_callers_memory() {
-        let mut memory = vec![0u8; 8];
-        let mut region = ForeignRegion {
-            memory: memory.as_mut_ptr(),
-            length: memory.len(),
-            released: Arc::new(AtomicBool::new(false)),
-        };
-        region.as_mut().copy_from_slice(b"12345678");
-        assert_eq!(memory, b"12345678");
-    }
-
     /// A region over `memory` on `fabric`, as `register_rdma_region` builds one.
+    /// For a test that never touches `memory` again while the region lives.
     #[cfg(feature = "rdma")]
     fn foreign_region(fabric: &glide_rdma::RdmaFabric, memory: &mut [u8]) -> Box<RdmaRegion> {
+        unsafe { foreign_region_at(fabric, std::ptr::NonNull::from(memory)) }
+    }
+
+    /// [`foreign_region`] by address, for a test that goes on writing through its
+    /// own pointer as a C caller would.
+    #[cfg(feature = "rdma")]
+    unsafe fn foreign_region_at(
+        fabric: &glide_rdma::RdmaFabric,
+        memory: std::ptr::NonNull<[u8]>,
+    ) -> Box<RdmaRegion> {
         let released = Arc::new(AtomicBool::new(false));
-        let buffer = fabric
-            .register(ForeignRegion {
-                memory: memory.as_mut_ptr(),
-                length: memory.len(),
-                released: released.clone(),
-            })
-            .expect("registers");
+        let owner = ForeignOwner {
+            released: released.clone(),
+        };
+        let buffer = unsafe { fabric.register_raw(memory, owner) }.expect("registers");
         Box::new(RdmaRegion::new(buffer, released))
+    }
+
+    /// The region is the caller's own allocation, not a copy, and the caller's
+    /// writes through its own pointer between transfers are what the next
+    /// transfer sees.
+    #[cfg(feature = "rdma")]
+    #[test]
+    fn a_region_shares_the_callers_memory() {
+        let fabric = tcp_fabric();
+        let memory = Box::into_raw(vec![0u8; 8].into_boxed_slice());
+        let caller = memory.cast::<u8>();
+        let region = unsafe { foreign_region_at(&fabric, std::ptr::NonNull::new(memory).unwrap()) };
+
+        unsafe { std::ptr::copy_nonoverlapping(b"12345678".as_ptr(), caller, 8) };
+        let host = region.buffer.as_ref().unwrap().as_host();
+        assert_eq!(host.as_ptr(), caller.cast_const());
+        assert_eq!(host, b"12345678");
+
+        assert!(unsafe { free_rdma_region(Box::into_raw(region)) }.is_null());
+        drop(unsafe { Box::from_raw(memory) });
     }
 
     #[cfg(feature = "rdma")]
