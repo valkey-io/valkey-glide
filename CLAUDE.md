@@ -153,5 +153,6 @@ FFI wrappers → `glide-core` → Valkey/Redis
     <tests>glide-rdma/tests/</tests>
     <core-integration>glide-core/src/rdma/, glide-core/src/client/rdma.rs, glide-core/src/client/rdma_connection.rs</core-integration>
     <core-tests>glide-core/tests/test_rdma.rs, glide-core/tests/test_rdma_remote.rs</core-tests>
+    <ffi-integration>ffi/src/rdma_ffi.rs</ffi-integration>
   </language>
 </context-sources>

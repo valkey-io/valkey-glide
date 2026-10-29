@@ -4,7 +4,7 @@
 # This setup script defines the build logic for a Python package that wraps a
 # Rust-based FFI layer. It integrates with Cargo to compile the Rust component,
 # and vendors required Rust crates (`ffi`, `glide-core`, `glide-logger`,
-# `glide-telemetry`) and the
+# `glide-telemetry`, `glide-rdma`) and the
 # `glide_shared` Python package when building from source or creating sdists.
 #
 # It provides:
@@ -70,6 +70,10 @@ VENDORED_DEPENDENCIES = {
     "glide-telemetry": VendorFolder(
         source=ROOT.parent.parent / "glide-telemetry",
         dist=ROOT / "glide-telemetry",
+    ),
+    "glide-rdma": VendorFolder(
+        source=ROOT.parent.parent / "glide-rdma",
+        dist=ROOT / "glide-rdma",
     ),
 }
 
@@ -162,6 +166,7 @@ class CleanCommand(Command):
             "glide-core",
             "glide-logger",
             "glide-telemetry",
+            "glide-rdma",
         ]
         for pattern in paths_to_remove:
             # Perform glob under ROOT only
