@@ -93,9 +93,9 @@ const (
 type HashFieldConditionalSet string
 
 const (
-	// HashFieldsDoNotExist only sets the hash fields if none of them already exist. Equivalent to "FNX" in the valkey API.
+	// HashFieldsDoNotExist only sets the hash fields if none of them already exist. Equivalent to "FNX" in the Valkey API.
 	HashFieldsDoNotExist HashFieldConditionalSet = "FNX"
-	// HashAllFieldsExist only sets the hash fields if all of them already exist. Equivalent to "FXX" in the valkey API.
+	// HashAllFieldsExist only sets the hash fields if all of them already exist. Equivalent to "FXX" in the Valkey API.
 	HashAllFieldsExist HashFieldConditionalSet = "FXX"
 )
 

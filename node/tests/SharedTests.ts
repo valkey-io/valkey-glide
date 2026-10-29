@@ -2641,9 +2641,9 @@ export function runBaseTests(config: {
                     const field1 = getRandomKey();
                     const value1 = getRandomKey();
 
-                    // NX: key does not exist yet, so the command should succeed
+                    // NX: key does not exist, so the hash is created
                     const nxOptions = {
-                        conditionalChange:
+                        keyConditionalChange:
                             ConditionalChange.ONLY_IF_DOES_NOT_EXIST,
                     };
                     expect(
@@ -2655,7 +2655,7 @@ export function runBaseTests(config: {
                     ).toEqual(1);
                     expect(await client.hget(key, field1)).toEqual(value1);
 
-                    // NX: key now exists, so a second NX call should fail and not modify the hash
+                    // NX: key now exists, so a second NX call should not modify the hash
                     expect(
                         await client.hsetex(
                             key,
@@ -2665,9 +2665,9 @@ export function runBaseTests(config: {
                     ).toEqual(0);
                     expect(await client.hget(key, field1)).toEqual(value1);
 
-                    // XX: key exists, so the command should succeed and update the field
+                    // XX: key exists, so the field is updated
                     const xxOptions = {
-                        conditionalChange: ConditionalChange.ONLY_IF_EXISTS,
+                        keyConditionalChange: ConditionalChange.ONLY_IF_EXISTS,
                     };
                     expect(
                         await client.hsetex(
@@ -2680,7 +2680,7 @@ export function runBaseTests(config: {
                         "updated_value1",
                     );
 
-                    // XX: key does not exist, so the command should fail and not create the hash
+                    // XX: key does not exist, so the hash is not created
                     const missingKey = getRandomKey();
                     expect(
                         await client.hsetex(
@@ -2691,14 +2691,14 @@ export function runBaseTests(config: {
                     ).toEqual(0);
                     expect(await client.exists([missingKey])).toEqual(0);
 
-                    // Key-level and field-level conditions can be combined, together with expiry
+                    // Key conditional change can be combined with field conditional change and expiry
                     const combinedKey = getRandomKey();
                     expect(
                         await client.hsetex(
                             combinedKey,
                             { [field1]: value1 },
                             {
-                                conditionalChange:
+                                keyConditionalChange:
                                     ConditionalChange.ONLY_IF_DOES_NOT_EXIST,
                                 fieldConditionalChange:
                                     HashFieldConditionalChange.ONLY_IF_NONE_EXIST,

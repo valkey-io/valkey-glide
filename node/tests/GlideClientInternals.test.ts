@@ -641,11 +641,11 @@ describe("createHSetEx option arguments", () => {
 
     it("builds only key conditional change", () => {
         expect(
-            argsFor({ conditionalChange: ConditionalChange.ONLY_IF_EXISTS }),
+            argsFor({ keyConditionalChange: ConditionalChange.ONLY_IF_EXISTS }),
         ).toEqual(expected("XX"));
         expect(
             argsFor({
-                conditionalChange: ConditionalChange.ONLY_IF_DOES_NOT_EXIST,
+                keyConditionalChange: ConditionalChange.ONLY_IF_DOES_NOT_EXIST,
             }),
         ).toEqual(expected("NX"));
     });
@@ -667,27 +667,27 @@ describe("createHSetEx option arguments", () => {
         ).toEqual(expected("FXX", "PX", "5000"));
         expect(
             argsFor({
-                conditionalChange: ConditionalChange.ONLY_IF_EXISTS,
+                keyConditionalChange: ConditionalChange.ONLY_IF_EXISTS,
                 fieldConditionalChange:
                     HashFieldConditionalChange.ONLY_IF_NONE_EXIST,
             }),
         ).toEqual(expected("XX", "FNX"));
         expect(
             argsFor({
-                conditionalChange: ConditionalChange.ONLY_IF_DOES_NOT_EXIST,
+                keyConditionalChange: ConditionalChange.ONLY_IF_DOES_NOT_EXIST,
                 fieldConditionalChange:
                     HashFieldConditionalChange.ONLY_IF_ALL_EXIST,
             }),
         ).toEqual(expected("NX", "FXX"));
         expect(
             argsFor({
-                conditionalChange: ConditionalChange.ONLY_IF_EXISTS,
+                keyConditionalChange: ConditionalChange.ONLY_IF_EXISTS,
                 expiry: { type: TimeUnit.Seconds, count: 60 },
             }),
         ).toEqual(expected("XX", "EX", "60"));
         expect(
             argsFor({
-                conditionalChange: ConditionalChange.ONLY_IF_DOES_NOT_EXIST,
+                keyConditionalChange: ConditionalChange.ONLY_IF_DOES_NOT_EXIST,
                 fieldConditionalChange:
                     HashFieldConditionalChange.ONLY_IF_NONE_EXIST,
                 expiry: { type: TimeUnit.Seconds, count: 60 },

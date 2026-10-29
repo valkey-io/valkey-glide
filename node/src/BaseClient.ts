@@ -3879,7 +3879,7 @@ export class BaseClient {
      *
      * @param key - The key of the hash.
      * @param fieldsAndValues - A map or array of field-value pairs to set.
-     * @param options - Optional parameters including key-level and field-level conditional changes and expiry settings.
+     * @param options - Optional parameters including key and field conditional changes and expiry settings.
      *                  See {@link HSetExOptions}.
      * @returns A number of fields that were set.
      *
@@ -3931,16 +3931,16 @@ export class BaseClient {
      * );
      * console.log(updateResult); // 0 or 1 depending on whether field1 exists
      *
-     * // Set fields only if the key already exists (requires Valkey 9.1.0+)
+     * // Set fields only if the key already exists.
      * const keyExistsResult = await client.hsetex(
      *     "myHash",
      *     { field1: "newValue1" },
-     *     { conditionalChange: ConditionalChange.ONLY_IF_EXISTS }
+     *     { keyConditionalChange: ConditionalChange.ONLY_IF_EXISTS }
      * );
      * console.log(keyExistsResult); // 1 - "myHash" exists, so the field was set
      * ```
      *
-     * @since Valkey 9.0.0. The key-level `conditionalChange` option requires Valkey 9.1.0 and above.
+     * @since Valkey 9.0.0.
      * @see {@link https://valkey.io/commands/hsetex/|valkey.io}
      */
     public async hsetex(

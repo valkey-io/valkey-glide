@@ -1459,7 +1459,7 @@ class CoreCommands(Protocol):
         field_value_map: Mapping[TEncodable, TEncodable],
         field_conditional_change: Optional[HashFieldConditionalChange] = None,
         expiry: Optional[ExpirySet] = None,
-        conditional_change: Optional[ConditionalChange] = None,
+        key_conditional_change: Optional[ConditionalChange] = None,
     ) -> int:
         """
         Sets the specified fields to their respective values in the hash stored at `key` with optional expiration.
@@ -1479,10 +1479,8 @@ class CoreCommands(Protocol):
                 - UNIX_SEC (EXAT): Absolute expiration time in seconds (Unix timestamp).
                 - UNIX_MILLSEC (PXAT): Absolute expiration time in milliseconds (Unix timestamp).
                 - KEEP_TTL (KEEPTTL): Retain existing TTL.
-            conditional_change (Optional[ConditionalChange]): Key-level conditional change option.
-                Requires Valkey 9.1.0 and above:
-                - ONLY_IF_EXISTS (XX): Only set fields if the key already exists.
-                - ONLY_IF_DOES_NOT_EXIST (NX): Only set fields if the key does not already exist.
+            key_conditional_change (Optional[ConditionalChange]): Key conditional change option.
+                Requires Valkey 9.1.0 and above.
 
         Returns:
             int: 1 if all fields were set successfully, 0 if none were set due to conditional constraints.
@@ -1494,13 +1492,17 @@ class CoreCommands(Protocol):
                 1  # Field set because field already exists
             >>> client.hsetex("new_hash", {"field1": "value1"}, field_conditional_change=HashFieldConditionalChange.ONLY_IF_ALL_EXIST)
                 0  # No fields set because hash doesn't exist
-            >>> client.hsetex("my_hash", {"field1": "value2"}, conditional_change=ConditionalChange.ONLY_IF_EXISTS)
+            >>> client.hsetex("my_hash", {"field1": "value2"}, key_conditional_change=ConditionalChange.ONLY_IF_EXISTS)
                 1  # Field set because the key already exists
 
         Since: Valkey 9.0.0
         """
         args = _build_hsetex_args(
-            key, field_value_map, field_conditional_change, expiry, conditional_change
+            key,
+            field_value_map,
+            key_conditional_change=key_conditional_change,
+            field_conditional_change=field_conditional_change,
+            expiry=expiry,
         )
 
         return cast(

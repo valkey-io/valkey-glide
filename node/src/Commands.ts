@@ -550,8 +550,8 @@ export function createHSetEx(
     const args: GlideString[] = [key];
 
     // Add key-level conditional change option (NX | XX)
-    if (options?.conditionalChange) {
-        args.push(options.conditionalChange);
+    if (options?.keyConditionalChange) {
+        args.push(options.keyConditionalChange);
     }
 
     // Add field conditional change options (FNX | FXX)
@@ -3723,7 +3723,7 @@ export type HGetExExpiry =
  *
  * // Set fields only if the key already exists, and only if none of the fields already exist
  * const keyConditionOptions: HSetExOptions = {
- *     conditionalChange: ConditionalChange.ONLY_IF_EXISTS,
+ *     keyConditionalChange: ConditionalChange.ONLY_IF_EXISTS,
  *     fieldConditionalChange: HashFieldConditionalChange.ONLY_IF_NONE_EXIST,
  *     expiry: { type: TimeUnit.Seconds, count: 60 }
  * };
@@ -3733,12 +3733,11 @@ export type HGetExExpiry =
  */
 export interface HSetExOptions {
     /**
-     * Key-level condition: only set the fields if the hash key already exists (`XX`) or does not already
-     * exist (`NX`). See {@link ConditionalChange}.
+     * Options for handling an existing key. See {@link ConditionalChange}.
      *
      * @since Valkey 9.1.0
      */
-    conditionalChange?: ConditionalChange;
+    keyConditionalChange?: ConditionalChange;
     /** Options for handling existing fields. See {@link HashFieldConditionalChange}. */
     fieldConditionalChange?: HashFieldConditionalChange;
     /** Expiry settings for the fields. See {@link HSetExExpiry}. */

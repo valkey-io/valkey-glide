@@ -1434,18 +1434,20 @@ def helper_valkey_9_1(transaction, key, args):
     args.append(1)
     transaction.hgetdel(key, ["f1", "missing"])
     args.append([b"v1", None])
-
-    # HSETEX key-level NX/XX; the hash was removed by HGETDEL deleting its last field.
     transaction.hsetex(
-        key, {"f1": "v1"}, conditional_change=ConditionalChange.ONLY_IF_DOES_NOT_EXIST
+        key,
+        {"f1": "v1"},
+        key_conditional_change=ConditionalChange.ONLY_IF_DOES_NOT_EXIST,
     )
     args.append(1)
     transaction.hsetex(
-        key, {"f1": "v2"}, conditional_change=ConditionalChange.ONLY_IF_DOES_NOT_EXIST
+        key,
+        {"f1": "v2"},
+        key_conditional_change=ConditionalChange.ONLY_IF_DOES_NOT_EXIST,
     )
     args.append(0)
     transaction.hsetex(
-        key, {"f1": "v2"}, conditional_change=ConditionalChange.ONLY_IF_EXISTS
+        key, {"f1": "v2"}, key_conditional_change=ConditionalChange.ONLY_IF_EXISTS
     )
     args.append(1)
     transaction.hget(key, "f1")

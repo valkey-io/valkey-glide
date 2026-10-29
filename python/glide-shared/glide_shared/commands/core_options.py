@@ -418,14 +418,14 @@ class ClientPauseMode(Enum):
 def _build_hsetex_args(
     key: TEncodable,
     field_value_map: Mapping[TEncodable, TEncodable],
+    key_conditional_change: Optional[ConditionalChange] = None,
     field_conditional_change: Optional[HashFieldConditionalChange] = None,
     expiry: Optional[ExpirySet] = None,
-    conditional_change: Optional[ConditionalChange] = None,
 ) -> List[TEncodable]:
     args: List[TEncodable] = [key]
 
-    if conditional_change is not None:
-        args.append(conditional_change.value)
+    if key_conditional_change is not None:
+        args.append(key_conditional_change.value)
 
     if field_conditional_change is not None:
         args.append(field_conditional_change.value)

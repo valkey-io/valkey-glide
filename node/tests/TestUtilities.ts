@@ -1425,32 +1425,33 @@ export async function batchTest(
             [null, null],
         ]);
 
-        // HSETEX key-level NX/XX conditions; hgetdelKey no longer exists at this point
+        // HSETEX key conditional change tests - only run if server version is 9.1.0 or higher
+        // hgetdelKey no longer exists at this point, so it can be used to test NX.
         baseBatch.hsetex(
             hgetdelKey,
             { [field.toString()]: value },
-            { conditionalChange: ConditionalChange.ONLY_IF_DOES_NOT_EXIST },
+            { keyConditionalChange: ConditionalChange.ONLY_IF_DOES_NOT_EXIST },
         );
         responseData.push([
-            "hsetex(hgetdelKey, { [field]: value }, { conditionalChange: ONLY_IF_DOES_NOT_EXIST })",
+            "hsetex(hgetdelKey, { [field]: value }, { keyConditionalChange: ONLY_IF_DOES_NOT_EXIST })",
             1,
         ]);
         baseBatch.hsetex(
             hgetdelKey,
             { [field.toString()]: "value2" },
-            { conditionalChange: ConditionalChange.ONLY_IF_DOES_NOT_EXIST },
+            { keyConditionalChange: ConditionalChange.ONLY_IF_DOES_NOT_EXIST },
         );
         responseData.push([
-            "hsetex(hgetdelKey, { [field]: value2 }, { conditionalChange: ONLY_IF_DOES_NOT_EXIST })",
+            "hsetex(hgetdelKey, { [field]: value2 }, { keyConditionalChange: ONLY_IF_DOES_NOT_EXIST })",
             0,
         ]);
         baseBatch.hsetex(
             hgetdelKey,
             { [field.toString()]: "value2" },
-            { conditionalChange: ConditionalChange.ONLY_IF_EXISTS },
+            { keyConditionalChange: ConditionalChange.ONLY_IF_EXISTS },
         );
         responseData.push([
-            "hsetex(hgetdelKey, { [field]: value2 }, { conditionalChange: ONLY_IF_EXISTS })",
+            "hsetex(hgetdelKey, { [field]: value2 }, { keyConditionalChange: ONLY_IF_EXISTS })",
             1,
         ]);
         baseBatch.hget(hgetdelKey, field);

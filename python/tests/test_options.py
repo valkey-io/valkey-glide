@@ -1,7 +1,7 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 from datetime import datetime, timedelta, timezone
-from typing import List, Mapping
+from typing import Mapping
 
 import pytest
 from glide_shared.commands.batch import Batch
@@ -154,78 +154,49 @@ class TestMigrateOptions:
         ).to_args() == ["COPY", "REPLACE", "AUTH2", "user", "secret"]
 
 
+NX = ConditionalChange.ONLY_IF_DOES_NOT_EXIST
+XX = ConditionalChange.ONLY_IF_EXISTS
+FNX = HashFieldConditionalChange.ONLY_IF_NONE_EXIST
+FXX = HashFieldConditionalChange.ONLY_IF_ALL_EXIST
+EX_60 = ExpirySet(ExpiryType.SEC, 60)
+
+HSETEX_FIELDS: Mapping[TEncodable, TEncodable] = {"field1": "value1"}
+HSETEX_FIELDS_ARGS = ["FIELDS", "1", "field1", "value1"]
+
+# Expected command arguments follow the HSETEX order: [NX | XX] [FNX | FXX] [expiry].
+HSETEX_KEY_CONDITIONS = [(None, []), (NX, ["NX"]), (XX, ["XX"])]
+HSETEX_FIELD_CONDITIONS = [(None, []), (FNX, ["FNX"]), (FXX, ["FXX"])]
+HSETEX_EXPIRIES = [(None, []), (EX_60, ["EX", "60"])]
+
+
 class TestHSetExArgs:
-    FIELDS: Mapping[TEncodable, TEncodable] = {"field1": "value1"}
-    FIELDS_ARGS = ["FIELDS", "1", "field1", "value1"]
-
-    def _args(self, **kwargs) -> List[TEncodable]:
-        return _build_hsetex_args("key", self.FIELDS, **kwargs)
-
-    def test_only_field_conditional_change(self):
-        assert self._args(
-            field_conditional_change=HashFieldConditionalChange.ONLY_IF_NONE_EXIST
-        ) == ["key", "FNX", *self.FIELDS_ARGS]
-        assert self._args(
-            field_conditional_change=HashFieldConditionalChange.ONLY_IF_ALL_EXIST
-        ) == ["key", "FXX", *self.FIELDS_ARGS]
-
-    def test_only_key_conditional_change(self):
-        assert self._args(conditional_change=ConditionalChange.ONLY_IF_EXISTS) == [
+    @pytest.mark.parametrize("key_condition, key_args", HSETEX_KEY_CONDITIONS)
+    @pytest.mark.parametrize("field_condition, field_args", HSETEX_FIELD_CONDITIONS)
+    @pytest.mark.parametrize("expiry, expiry_args", HSETEX_EXPIRIES)
+    def test_hsetex_args(
+        self,
+        key_condition,
+        key_args,
+        field_condition,
+        field_args,
+        expiry,
+        expiry_args,
+    ):
+        assert _build_hsetex_args(
             "key",
-            "XX",
-            *self.FIELDS_ARGS,
-        ]
-        assert self._args(
-            conditional_change=ConditionalChange.ONLY_IF_DOES_NOT_EXIST
-        ) == ["key", "NX", *self.FIELDS_ARGS]
-
-    def test_combined_options(self):
-        assert self._args(
-            field_conditional_change=HashFieldConditionalChange.ONLY_IF_NONE_EXIST,
-            expiry=ExpirySet(ExpiryType.SEC, 60),
-        ) == ["key", "FNX", "EX", "60", *self.FIELDS_ARGS]
-        assert self._args(
-            field_conditional_change=HashFieldConditionalChange.ONLY_IF_ALL_EXIST,
-            expiry=ExpirySet(ExpiryType.MILLSEC, 5000),
-        ) == ["key", "FXX", "PX", "5000", *self.FIELDS_ARGS]
-        assert self._args(
-            conditional_change=ConditionalChange.ONLY_IF_EXISTS,
-            field_conditional_change=HashFieldConditionalChange.ONLY_IF_NONE_EXIST,
-        ) == ["key", "XX", "FNX", *self.FIELDS_ARGS]
-        assert self._args(
-            conditional_change=ConditionalChange.ONLY_IF_DOES_NOT_EXIST,
-            field_conditional_change=HashFieldConditionalChange.ONLY_IF_ALL_EXIST,
-        ) == ["key", "NX", "FXX", *self.FIELDS_ARGS]
-        assert self._args(
-            conditional_change=ConditionalChange.ONLY_IF_EXISTS,
-            expiry=ExpirySet(ExpiryType.SEC, 60),
-        ) == ["key", "XX", "EX", "60", *self.FIELDS_ARGS]
-        assert self._args(
-            conditional_change=ConditionalChange.ONLY_IF_DOES_NOT_EXIST,
-            field_conditional_change=HashFieldConditionalChange.ONLY_IF_NONE_EXIST,
-            expiry=ExpirySet(ExpiryType.SEC, 60),
-        ) == ["key", "NX", "FNX", "EX", "60", *self.FIELDS_ARGS]
-
-    def test_only_expiry(self):
-        assert self._args(expiry=ExpirySet(ExpiryType.SEC, 60)) == [
-            "key",
-            "EX",
-            "60",
-            *self.FIELDS_ARGS,
-        ]
-        assert self._args(expiry=ExpirySet(ExpiryType.KEEP_TTL, None)) == [
-            "key",
-            "KEEPTTL",
-            *self.FIELDS_ARGS,
-        ]
+            HSETEX_FIELDS,
+            key_conditional_change=key_condition,
+            field_conditional_change=field_condition,
+            expiry=expiry,
+        ) == ["key", *key_args, *field_args, *expiry_args, *HSETEX_FIELDS_ARGS]
 
     def test_batch_builds_hsetex_command(self):
         batch = Batch(is_atomic=False).hsetex(
             "key",
             {"field1": "value1", "field2": "value2"},
-            field_conditional_change=HashFieldConditionalChange.ONLY_IF_NONE_EXIST,
-            expiry=ExpirySet(ExpiryType.SEC, 10),
-            conditional_change=ConditionalChange.ONLY_IF_EXISTS,
+            field_conditional_change=FNX,
+            expiry=EX_60,
+            key_conditional_change=XX,
         )
         assert batch.commands == [
             (
@@ -235,7 +206,7 @@ class TestHSetExArgs:
                     "XX",
                     "FNX",
                     "EX",
-                    "10",
+                    "60",
                     "FIELDS",
                     "2",
                     "field1",

@@ -12098,51 +12098,51 @@ class TestScripts:
         key = f"test_hsetex_key_conditional_{get_random_string(10)}"
         field_value_map = {"field1": "value1"}
 
-        # NX: key does not exist yet, so the command should succeed
+        # NX: key does not exist, so the hash is created
         result = await glide_client.hsetex(
             key,
             field_value_map,
-            conditional_change=ConditionalChange.ONLY_IF_DOES_NOT_EXIST,
+            key_conditional_change=ConditionalChange.ONLY_IF_DOES_NOT_EXIST,
         )
         assert result == 1
         assert await glide_client.hget(key, "field1") == b"value1"
 
-        # NX: key now exists, so a second NX call should fail and not modify the hash
+        # NX: key now exists, so a second NX call should not modify the hash
         result = await glide_client.hsetex(
             key,
             {"field1": "should_not_be_set"},
-            conditional_change=ConditionalChange.ONLY_IF_DOES_NOT_EXIST,
+            key_conditional_change=ConditionalChange.ONLY_IF_DOES_NOT_EXIST,
         )
         assert result == 0
         assert await glide_client.hget(key, "field1") == b"value1"
 
-        # XX: key exists, so the command should succeed and update the field
+        # XX: key exists, so the field is updated
         result = await glide_client.hsetex(
             key,
             {"field1": "updated_value1"},
-            conditional_change=ConditionalChange.ONLY_IF_EXISTS,
+            key_conditional_change=ConditionalChange.ONLY_IF_EXISTS,
         )
         assert result == 1
         assert await glide_client.hget(key, "field1") == b"updated_value1"
 
-        # XX: key does not exist, so the command should fail and not create the hash
+        # XX: key does not exist, so the hash is not created
         missing_key = f"test_hsetex_key_conditional_missing_{get_random_string(10)}"
         result = await glide_client.hsetex(
             missing_key,
             field_value_map,
-            conditional_change=ConditionalChange.ONLY_IF_EXISTS,
+            key_conditional_change=ConditionalChange.ONLY_IF_EXISTS,
         )
         assert result == 0
         assert await glide_client.exists([missing_key]) == 0
 
-        # Key-level and field-level conditions can be combined, together with expiry
+        # Key conditional change can be combined with field conditional change and expiry
         combined_key = f"test_hsetex_key_and_field_conditional_{get_random_string(10)}"
         result = await glide_client.hsetex(
             combined_key,
             field_value_map,
             field_conditional_change=HashFieldConditionalChange.ONLY_IF_NONE_EXIST,
             expiry=ExpirySet(ExpiryType.SEC, 60),
-            conditional_change=ConditionalChange.ONLY_IF_DOES_NOT_EXIST,
+            key_conditional_change=ConditionalChange.ONLY_IF_DOES_NOT_EXIST,
         )
         assert result == 1
         ttl_result = await glide_client.httl(combined_key, ["field1"])
