@@ -709,41 +709,60 @@ pub extern "C" fn glide_pool_set_pipe_client_id(client_id: u64, pipe_client_id: 
     0
 }
 
-/// Query pool metrics. Writes idle/active/total to out pointers.
+/// Whether the counts in a [`PoolMetrics`] were read.
 ///
-/// # Safety
-/// Out pointers must be valid for writing a u32.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn glide_pool_metrics(
-    pool_id: u64,
-    idle_out: *mut u32,
-    active_out: *mut u32,
-    total_out: *mut u32,
-) -> i32 {
-    let pool_arc = match pool::get_pool(pool_id) {
-        Some(arc) => arc,
-        None => return -1,
-    };
-    match pool_arc.try_lock() {
-        Ok(pool) => {
-            if !idle_out.is_null() {
-                unsafe {
-                    *idle_out = pool.idle_count();
-                }
-            }
-            if !active_out.is_null() {
-                unsafe {
-                    *active_out = pool.active_count();
-                }
-            }
-            if !total_out.is_null() {
-                unsafe {
-                    *total_out = pool.total_count.load(AtomicOrdering::Acquire);
-                }
-            }
-            0
+/// Mirrored in the CFFI declarations in
+/// python/glide-shared/glide_shared/_glide_ffi.py; a change here must be
+/// reflected there.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PoolMetricsStatus {
+    /// The counts were read under the pool lock.
+    Read = 0,
+    /// No pool has this id.
+    UnknownPool = 1,
+    /// The pool lock was held, so no read was made.
+    LockHeld = 2,
+}
+
+/// The result of [`glide_pool_metrics`]: the counts and whether they were
+/// read, in one value, so a caller cannot take the counts without the status
+/// in hand. When `status` is not `Read`, the counts are zero and mean nothing.
+///
+/// Mirrored in the CFFI declarations beside [`PoolMetricsStatus`].
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PoolMetrics {
+    pub status: PoolMetricsStatus,
+    pub idle: u32,
+    pub active: u32,
+    pub total: u32,
+}
+
+impl PoolMetrics {
+    fn not_read(status: PoolMetricsStatus) -> Self {
+        Self {
+            status,
+            idle: 0,
+            active: 0,
+            total: 0,
         }
-        Err(_) => -1,
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn glide_pool_metrics(pool_id: u64) -> PoolMetrics {
+    let Some(pool_arc) = pool::get_pool(pool_id) else {
+        return PoolMetrics::not_read(PoolMetricsStatus::UnknownPool);
+    };
+    let Ok(pool) = pool_arc.try_lock() else {
+        return PoolMetrics::not_read(PoolMetricsStatus::LockHeld);
+    };
+    PoolMetrics {
+        status: PoolMetricsStatus::Read,
+        idle: pool.idle_count(),
+        active: pool.active_count(),
+        total: pool.total_count.load(AtomicOrdering::Acquire),
     }
 }
 
@@ -1380,6 +1399,109 @@ mod adapter_ownership_tests {
             .build()
             .unwrap();
         rt.block_on(async move { drop(adapter) });
+    }
+}
+
+#[cfg(test)]
+mod pool_metrics_tests {
+    use super::*;
+    use std::time::Duration;
+
+    /// Unregisters the pool when dropped, so a failing assertion does not leave
+    /// it in the global registry.
+    struct RegisteredPool(u64);
+
+    impl Drop for RegisteredPool {
+        fn drop(&mut self) {
+            pool::unregister_pool(self.0);
+        }
+    }
+
+    fn registered_pool_with_two_reserved_slots() -> RegisteredPool {
+        let pool = ClientPool::new(PoolConfig {
+            max_size: 4,
+            min_idle: 0,
+            idle_timeout: Duration::from_secs(300),
+            request_timeout: Duration::from_millis(250),
+            test_on_borrow: false,
+            connection_request: vec![],
+            is_async: false,
+            configured_database_id: 0,
+            abandon_timeout: Duration::ZERO,
+        })
+        .unwrap();
+        assert_eq!(pool.reserve_warmup_slots(2), 2);
+        RegisteredPool(pool::register_pool(pool))
+    }
+
+    /// The pool lock, held on another thread until `release` is called.
+    struct HeldLock {
+        release: std::sync::mpsc::Sender<()>,
+        holder: std::thread::JoinHandle<()>,
+    }
+
+    impl HeldLock {
+        fn release(self) {
+            self.release.send(()).unwrap();
+            self.holder.join().unwrap();
+        }
+    }
+
+    /// Returns once the lock is held.
+    fn hold_lock(pool_arc: Arc<tokio::sync::Mutex<ClientPool>>) -> HeldLock {
+        let (held_tx, held_rx) = std::sync::mpsc::channel();
+        let (release_tx, release_rx) = std::sync::mpsc::channel::<()>();
+        let holder = std::thread::spawn(move || {
+            let guard = pool_arc.blocking_lock();
+            held_tx.send(()).unwrap();
+            release_rx.recv().unwrap();
+            drop(guard);
+        });
+        held_rx.recv().unwrap();
+        HeldLock {
+            release: release_tx,
+            holder,
+        }
+    }
+
+    #[test]
+    fn uncontended_read_reports_read_with_the_reserved_total() {
+        let pool = registered_pool_with_two_reserved_slots();
+
+        let metrics = glide_pool_metrics(pool.0);
+
+        assert_eq!(
+            metrics,
+            PoolMetrics {
+                status: PoolMetricsStatus::Read,
+                idle: 0,
+                active: 0,
+                total: 2,
+            }
+        );
+    }
+
+    /// Pins the current behaviour: a contended read is declined rather than
+    /// waited for. #7130 changes this.
+    #[test]
+    fn contended_read_reports_lock_held_with_no_counts() {
+        let pool = registered_pool_with_two_reserved_slots();
+        let held = hold_lock(pool::get_pool(pool.0).unwrap());
+
+        let metrics = glide_pool_metrics(pool.0);
+        held.release();
+
+        assert_eq!(metrics, PoolMetrics::not_read(PoolMetricsStatus::LockHeld));
+    }
+
+    #[test]
+    fn unknown_pool_reports_unknown_pool_with_no_counts() {
+        let metrics = glide_pool_metrics(u64::MAX);
+
+        assert_eq!(
+            metrics,
+            PoolMetrics::not_read(PoolMetricsStatus::UnknownPool)
+        );
     }
 }
 

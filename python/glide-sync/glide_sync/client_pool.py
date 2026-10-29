@@ -280,14 +280,12 @@ class ClientPool:
             return client
 
     def metrics(self) -> dict:
-        """Get pool metrics: idle, active, total counts."""
-        idle = self._ffi.new("uint32_t*")
-        active = self._ffi.new("uint32_t*")
-        total = self._ffi.new("uint32_t*")
-        result = self._lib.glide_pool_metrics(self._pool_id, idle, active, total)
-        if result != 0:
-            return {"idle": 0, "active": 0, "total": 0}
-        return {"idle": idle[0], "active": active[0], "total": total[0]}
+        """Get pool metrics: idle, active, total counts.
+
+        Zeros when the pool was destroyed or the read was declined.
+        """
+        m = self._lib.glide_pool_metrics(self._pool_id)
+        return {"idle": m.idle, "active": m.active, "total": m.total}
 
     @property
     def idle_count(self) -> int:
