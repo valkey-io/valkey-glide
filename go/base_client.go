@@ -1160,10 +1160,7 @@ func (client *baseClient) Set(ctx context.Context, key string, value string) (st
 	return handleOkResponse(result)
 }
 
-// SetWithOptions sets the given key with the given value using the given options. The return value is dependent on the
-// passed options. If the value is successfully set, "OK" is returned. If value isn't set because of [constants.OnlyIfExists]
-// or [constants.OnlyIfDoesNotExist] conditions, models.CreateNilStringResult() is returned. If [constants.ReturnOldValue] is
-// set, the old value is returned.
+// SetWithOptions sets the value of a key with the given options.
 //
 // See [valkey.io] for details.
 //
@@ -1176,10 +1173,8 @@ func (client *baseClient) Set(ctx context.Context, key string, value string) (st
 //
 // Return value:
 //
-//	If the value is successfully set, return models.Result[string] containing "OK".
-//	If value isn't set because of ConditionalSet.OnlyIfExists or ConditionalSet.OnlyIfDoesNotExist
-//	or ConditionalSet.OnlyIfEquals conditions, return models.CreateNilStringResult().
-//	If SetOptions.returnOldValue is set, return the old value as a String.
+//	If [options.SetOptions.ReturnOldValue] is not set, "OK" if the key was set, or models.CreateNilStringResult() if the
+//	condition was not met. If it is set, the old value stored at key, or models.CreateNilStringResult() if key did not exist.
 //
 // [valkey.io]: https://valkey.io/commands/set/
 func (client *baseClient) SetWithOptions(
@@ -1630,6 +1625,34 @@ func (client *baseClient) Append(ctx context.Context, key string, value string) 
 	}
 
 	return handleIntResponse(result)
+}
+
+// Deletes `key` if its value equals `value`.
+//
+// Since:
+//
+//	Valkey 9.0 and above.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx   - The context for controlling the command execution.
+//	key   - The key to delete.
+//	value - The comparison value. The key is only deleted if its current value matches exactly.
+//
+// Return value:
+//
+//	`true` if `key` was deleted, `false` if `key` did not exist or its value did not match `value`.
+//
+// [valkey.io]: https://valkey.io/commands/delifeq/
+func (client *baseClient) DelIfEq(ctx context.Context, key string, value string) (bool, error) {
+	result, err := client.executeCommand(ctx, C.DelIfEq, []string{key, value})
+	if err != nil {
+		return models.DefaultBoolResponse, err
+	}
+
+	return handleBoolResponse(result)
 }
 
 // Returns the longest common subsequence between strings stored at `key1` and `key2`.

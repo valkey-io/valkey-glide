@@ -79,7 +79,7 @@ func (b *BaseBatch[T]) Set(key string, value string) *T {
 	return b.addCmdAndTypeChecker(C.Set, []string{key, value}, reflect.String, false)
 }
 
-// Sets the given key with the given value using the given options.
+// SetWithOptions sets the value of a key with the given options.
 //
 // See [valkey.io] for details.
 //
@@ -91,10 +91,8 @@ func (b *BaseBatch[T]) Set(key string, value string) *T {
 //
 // Command Response:
 //
-//	If the value is successfully set, returns "OK".
-//	If value isn't set because of ConditionalSet.OnlyIfExists or ConditionalSet.OnlyIfDoesNotExist
-//	or ConditionalSet.OnlyIfEquals conditions, returns `nil`.
-//	If SetOptions.returnOldValue is set, returns the old value as a String.
+//	If [options.SetOptions.ReturnOldValue] is not set, "OK" if the key was set, or `nil` if the condition was not met.
+//	If it is set, the old value stored at key, or `nil` if key did not exist.
 //
 // [valkey.io]: https://valkey.io/commands/set/
 func (b *BaseBatch[T]) SetWithOptions(key string, value string, options options.SetOptions) *T {
@@ -397,6 +395,28 @@ func (b *BaseBatch[T]) GetRange(key string, start int, end int) *T {
 // [valkey.io]: https://valkey.io/commands/append/
 func (b *BaseBatch[T]) Append(key string, value string) *T {
 	return b.addCmdAndTypeChecker(C.Append, []string{key, value}, reflect.Int64, false)
+}
+
+// Deletes `key` if its value equals `value`.
+//
+// Since:
+//
+//	Valkey 9.0 and above.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key   - The key to delete.
+//	value - The comparison value. The key is only deleted if its current value matches exactly.
+//
+// Command Response:
+//
+//	`true` if `key` was deleted, `false` if `key` did not exist or its value did not match `value`.
+//
+// [valkey.io]: https://valkey.io/commands/delifeq/
+func (b *BaseBatch[T]) DelIfEq(key string, value string) *T {
+	return b.addCmdAndTypeChecker(C.DelIfEq, []string{key, value}, reflect.Bool, false)
 }
 
 // Returns the longest common subsequence between strings stored at `key1` and `key2`.

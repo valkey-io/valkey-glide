@@ -5650,6 +5650,153 @@ mod cluster_async {
             .unwrap();
     }
 
+    /// The RDMA transfer command used by the tests below; the arguments only
+    /// need the right shape.
+    fn rdma_get_cmd() -> redis::Cmd {
+        let mut command = cmd("BLOB.RDMA_GET");
+        command.arg("foo").arg(1).arg(4096).arg(16);
+        command
+    }
+
+    #[test]
+    #[serial_test::parallel(otel)]
+    fn test_async_cluster_rdma_transfer_is_not_retried_after_an_io_error() {
+        let name = "test_async_cluster_rdma_transfer_is_not_retried_after_an_io_error";
+        let requests = Arc::new(atomic::AtomicUsize::new(0));
+        let MockEnv {
+            runtime,
+            async_connection: mut connection,
+            ..
+        } = MockEnv::with_client_builder(
+            ClusterClient::builder(vec![&*format!("redis://{name}")]).retries(3),
+            name,
+            {
+                let requests = requests.clone();
+                move |cmd: &[u8], _port| {
+                    respond_startup_two_nodes(name, cmd)?;
+                    match requests.fetch_add(1, atomic::Ordering::SeqCst) {
+                        // An I/O error that does not say whether the command was
+                        // sent, such as a failed write of a later command.
+                        0 => Err(Err(RedisError::from(std::io::Error::new(
+                            std::io::ErrorKind::Other,
+                            "io-error",
+                        )))),
+                        _ => Err(Ok(Value::Array(vec![Value::Int(16), Value::Int(0)]))),
+                    }
+                }
+            },
+        );
+        let result = runtime.block_on(rdma_get_cmd().query_async::<_, Value>(&mut connection));
+        // A retry could be answered while the first attempt is still writing into
+        // the caller's memory, so the error goes back to the caller instead.
+        assert!(result.unwrap_err().is_io_error());
+        assert_eq!(requests.load(atomic::Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    #[serial_test::parallel(otel)]
+    fn test_async_cluster_rdma_transfer_is_retried_after_tryagain() {
+        let name = "test_async_cluster_rdma_transfer_is_retried_after_tryagain";
+        let requests = Arc::new(atomic::AtomicUsize::new(0));
+        let MockEnv {
+            runtime,
+            async_connection: mut connection,
+            ..
+        } = MockEnv::with_client_builder(
+            ClusterClient::builder(vec![&*format!("redis://{name}")]).retries(3),
+            name,
+            {
+                let requests = requests.clone();
+                move |cmd: &[u8], _port| {
+                    respond_startup_two_nodes(name, cmd)?;
+                    match requests.fetch_add(1, atomic::Ordering::SeqCst) {
+                        // The server refused it before running it.
+                        0 => Err(parse_redis_value(b"-TRYAGAIN mock\r\n")),
+                        _ => Err(Ok(Value::Array(vec![Value::Int(16), Value::Int(0)]))),
+                    }
+                }
+            },
+        );
+        let result = runtime.block_on(rdma_get_cmd().query_async::<_, Value>(&mut connection));
+        assert_eq!(
+            result,
+            Ok(Value::Array(vec![Value::Int(16), Value::Int(0)]))
+        );
+        assert_eq!(requests.load(atomic::Ordering::SeqCst), 2);
+    }
+
+    /// A transfer whose connection could not send it, such as one whose RDMA
+    /// handshake left the connection unusable, is sent again once the connection
+    /// is replaced: the first attempt never reached the server, so it cannot still
+    /// be using the client's memory.
+    #[test]
+    #[serial_test::parallel(otel)]
+    fn test_async_cluster_rdma_transfer_is_retried_after_a_fatal_send_error() {
+        let name = "test_async_cluster_rdma_transfer_is_retried_after_a_fatal_send_error";
+        let requests = Arc::new(atomic::AtomicUsize::new(0));
+        let MockEnv {
+            runtime,
+            async_connection: mut connection,
+            ..
+        } = MockEnv::with_client_builder(
+            ClusterClient::builder(vec![&*format!("redis://{name}")]).retries(3),
+            name,
+            {
+                let requests = requests.clone();
+                move |cmd: &[u8], _port| {
+                    respond_startup_two_nodes(name, cmd)?;
+                    match requests.fetch_add(1, atomic::Ordering::SeqCst) {
+                        // What glide-core's RDMA connection returns for a
+                        // handshake that leaves the connection unusable.
+                        0 => Err(Err(RedisError::from((
+                            ErrorKind::FatalSendError,
+                            redis::SERVER_ERROR_DESCRIPTION,
+                            "the connection is being replaced".to_string(),
+                        )))),
+                        _ => Err(Ok(Value::Array(vec![Value::Int(16), Value::Int(0)]))),
+                    }
+                }
+            },
+        );
+        let result = runtime.block_on(rdma_get_cmd().query_async::<_, Value>(&mut connection));
+        assert_eq!(
+            result,
+            Ok(Value::Array(vec![Value::Int(16), Value::Int(0)]))
+        );
+        assert_eq!(requests.load(atomic::Ordering::SeqCst), 2);
+    }
+
+    #[test]
+    #[serial_test::parallel(otel)]
+    fn test_async_cluster_io_error_still_retries_other_commands() {
+        let name = "test_async_cluster_io_error_still_retries_other_commands";
+        let requests = Arc::new(atomic::AtomicUsize::new(0));
+        let MockEnv {
+            runtime,
+            async_connection: mut connection,
+            ..
+        } = MockEnv::with_client_builder(
+            ClusterClient::builder(vec![&*format!("redis://{name}")]).retries(3),
+            name,
+            {
+                let requests = requests.clone();
+                move |cmd: &[u8], _port| {
+                    respond_startup_two_nodes(name, cmd)?;
+                    match requests.fetch_add(1, atomic::Ordering::SeqCst) {
+                        0 => Err(Err(RedisError::from(std::io::Error::new(
+                            std::io::ErrorKind::Other,
+                            "io-error",
+                        )))),
+                        _ => Err(Ok(Value::Int(1))),
+                    }
+                }
+            },
+        );
+        let result = runtime.block_on(cmd("GET").arg("foo").query_async::<_, i32>(&mut connection));
+        assert_eq!(result, Ok(1));
+        assert_eq!(requests.load(atomic::Ordering::SeqCst), 2);
+    }
+
     #[test]
     #[serial_test::parallel(otel)]
     fn test_async_cluster_retry_safe_io_error_should_be_retried() {
@@ -6904,6 +7051,65 @@ mod cluster_async {
                     ErrorKind::ConnectionNotFoundForRoute,
                     "{res_err:?}"
                 );
+                assert_eq!(cloned_req_counter.load(Ordering::Relaxed), 0);
+                Ok::<_, RedisError>(())
+            })
+            .unwrap();
+    }
+
+    #[test]
+    #[serial_test::parallel(otel)]
+    fn test_async_cluster_dont_route_rdma_transfer_to_a_random_node() {
+        // An RDMA transfer must reach the key's primary. A random node may be a
+        // READONLY replica, which answers an RDMA read itself instead of replying
+        // MOVED. So when no connection is found for the key's slot, the transfer
+        // must fail instead of going to a random node.
+        let name = "test_async_cluster_dont_route_rdma_transfer_to_a_random_node";
+        let request_counter = Arc::new(AtomicU32::new(0));
+        let cloned_req_counter = request_counter.clone();
+        let MockEnv {
+            runtime,
+            async_connection: mut connection,
+            handler: _handler,
+            ..
+        } = MockEnv::with_client_builder(
+            ClusterClient::builder(vec![&*format!("redis://{name}")]).retries(1),
+            name,
+            move |received_cmd: &[u8], _| {
+                let slots_config_vec = vec![
+                    MockSlotRange {
+                        primary_port: 6379,
+                        replica_ports: vec![],
+                        slot_range: (0_u16..8000_u16),
+                    },
+                    MockSlotRange {
+                        primary_port: 6380,
+                        replica_ports: vec![],
+                        // Don't cover all slots
+                        slot_range: (8001_u16..12000_u16),
+                    },
+                ];
+                respond_startup_with_config(name, received_cmd, Some(slots_config_vec), false)?;
+                // If requests are sent to random nodes, they will be caught and counted here.
+                request_counter.fetch_add(1, Ordering::Relaxed);
+                Err(Ok(Value::Nil))
+            },
+        );
+
+        runtime
+            .block_on(async move {
+                // The keyslot of "foo" is 12182 and it isn't covered by any node.
+                for name in ["BLOB.RDMA_GET", "BLOB.RDMA_SET"] {
+                    let mut transfer = cmd(name);
+                    transfer.arg("foo").arg("1").arg("2").arg("3");
+                    let res = connection.req_packed_command(&transfer).await;
+                    let res_err = res.unwrap_err();
+                    assert_eq!(
+                        res_err.kind(),
+                        ErrorKind::ConnectionNotFoundForRoute,
+                        "{name}: {res_err:?}"
+                    );
+                }
                 assert_eq!(cloned_req_counter.load(Ordering::Relaxed), 0);
                 Ok::<_, RedisError>(())
             })

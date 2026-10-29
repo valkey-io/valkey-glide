@@ -200,43 +200,90 @@ matrix_test!(set_xx_only_if_exists, c, {
 });
 
 matrix_test!(set_get_returns_old_value, c, {
-    let k = common::key("go");
+    let k = common::key("set_get");
     let _: () = c.set(&k, "old").await.unwrap();
+
+    // Value updated
     let opts = SetOptions::default().get(true);
     let old: Option<String> = c.set_options(&k, "new", opts).await.unwrap();
     assert_eq!(old.as_deref(), Some("old"));
     let v: Option<String> = c.get(&k).await.unwrap();
     assert_eq!(v.as_deref(), Some("new"));
+
+    // Value not updated
+    if !common::version_below(&c, (7, 0, 0)).await {
+        let opts = SetOptions::default()
+            .conditional_set(ExistenceCheck::NX)
+            .get(true);
+        let old: Option<String> = c.set_options(&k, "other", opts).await.unwrap();
+        assert_eq!(old.as_deref(), Some("new"));
+        let v: Option<String> = c.get(&k).await.unwrap();
+        assert_eq!(v.as_deref(), Some("new"));
+    }
+
+    // Non-existent key
+    let missing = common::key("set_get_missing");
+    let opts = SetOptions::default().get(true);
+    let old: Option<String> = c.set_options(&missing, "value", opts).await.unwrap();
+    assert_eq!(old, None);
+    let v: Option<String> = c.get(&missing).await.unwrap();
+    assert_eq!(v.as_deref(), Some("value"));
 });
 
-// TODO #7237: Add a `SET ... IFNE` test (Valkey 9.2+).
 matrix_test!(set_ifeq_only_if_value_matches, c, {
     skip_if_version_below!(c, 8, 1, 0);
 
     let k = common::key("ifeq");
-    let _: () = c.set(&k, "old").await.unwrap();
+    let _: () = c.set(&k, "value").await.unwrap();
 
-    // IFEQ with a different current value does not set.
+    // Value not equal
     let opts = SetOptions::default().value_comparison(ValueComparison::ifeq("other"));
-    let _: Option<String> = c.set_options(&k, "new", opts).await.unwrap();
+    let res: Option<String> = c.set_options(&k, "other", opts).await.unwrap();
+    assert_eq!(res, None);
     let v: Option<String> = c.get(&k).await.unwrap();
-    assert_eq!(v.as_deref(), Some("old"));
+    assert_eq!(v.as_deref(), Some("value"));
 
-    // IFEQ with the current value sets, and GET returns the old value.
-    let opts = SetOptions::default()
-        .value_comparison(ValueComparison::ifeq("old"))
-        .get(true);
-    let old: Option<String> = c.set_options(&k, "new", opts).await.unwrap();
-    assert_eq!(old.as_deref(), Some("old"));
+    // Value equal
+    let opts = SetOptions::default().value_comparison(ValueComparison::ifeq("value"));
+    let res: Option<String> = c.set_options(&k, "other", opts.clone()).await.unwrap();
+    assert_eq!(res.as_deref(), Some("OK"));
     let v: Option<String> = c.get(&k).await.unwrap();
-    assert_eq!(v.as_deref(), Some("new"));
+    assert_eq!(v.as_deref(), Some("other"));
 
-    // IFEQ on a missing key does not create it.
+    // Non-existent key
     let missing = common::key("ifeq_missing");
-    let opts = SetOptions::default().value_comparison(ValueComparison::ifeq("any"));
-    let _: Option<String> = c.set_options(&missing, "v", opts).await.unwrap();
+    let res: Option<String> = c.set_options(&missing, "value", opts).await.unwrap();
+    assert_eq!(res, None);
     let v: Option<String> = c.get(&missing).await.unwrap();
     assert_eq!(v, None);
+});
+
+matrix_test!(set_ifne_only_if_value_differs, c, {
+    skip_if_version_below!(c, 9, 2, 0);
+
+    let k = common::key("ifne");
+    let _: () = c.set(&k, "value").await.unwrap();
+
+    // Value equal
+    let opts = SetOptions::default().value_comparison(ValueComparison::ifne("value"));
+    let res: Option<String> = c.set_options(&k, "other", opts).await.unwrap();
+    assert_eq!(res, None);
+    let v: Option<String> = c.get(&k).await.unwrap();
+    assert_eq!(v.as_deref(), Some("value"));
+
+    // Value not equal
+    let opts = SetOptions::default().value_comparison(ValueComparison::ifne("other"));
+    let res: Option<String> = c.set_options(&k, "other", opts.clone()).await.unwrap();
+    assert_eq!(res.as_deref(), Some("OK"));
+    let v: Option<String> = c.get(&k).await.unwrap();
+    assert_eq!(v.as_deref(), Some("other"));
+
+    // Non-existent key
+    let missing = common::key("ifne_missing");
+    let res: Option<String> = c.set_options(&missing, "value", opts).await.unwrap();
+    assert_eq!(res.as_deref(), Some("OK"));
+    let v: Option<String> = c.get(&missing).await.unwrap();
+    assert_eq!(v.as_deref(), Some("value"));
 });
 
 matrix_test!(set_with_expiry, c, {

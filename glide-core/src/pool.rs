@@ -136,6 +136,15 @@ pub struct ClientPool {
     discarded_ids: Vec<u64>,
 }
 
+/// Whether the serialized `ConnectionRequest` asks for RDMA. Bytes that do not
+/// parse are left for client creation to reject.
+#[cfg(feature = "proto")]
+fn requests_rdma(connection_request: &[u8]) -> bool {
+    use protobuf::Message as _;
+    crate::connection_request::ConnectionRequest::parse_from_bytes(connection_request)
+        .is_ok_and(|request| request.rdma_config.is_some())
+}
+
 impl ClientPool {
     /// Create a new pool with validated config.
     pub fn new(config: PoolConfig) -> Result<Self, PoolError> {
@@ -149,6 +158,16 @@ impl ClientPool {
         }
         if config.idle_timeout.is_zero() {
             return Err(PoolError::InvalidConfig("idle_timeout must be > 0".into()));
+        }
+        #[cfg(feature = "proto")]
+        if requests_rdma(&config.connection_request) {
+            let message = crate::rdma::RdmaUnavailable::IncompatibleSetting(
+                crate::rdma::IncompatibleSetting::ConnectionPool,
+            )
+            .to_string();
+            // The FFI and JNI bindings return only an error code, so log the reason.
+            glide_logger::log_error("pool", message.as_str());
+            return Err(PoolError::InvalidConfig(message));
         }
 
         Ok(Self {
@@ -2313,6 +2332,8 @@ mod scope_pool_tests {
         loop {
             if let Ok(client) = redis::Client::open(format!("redis://127.0.0.1:{port}")) {
                 let opts = redis::GlideConnectionOptions {
+                    #[cfg(feature = "rdma")]
+                    rdma_fabric: None,
                     push_sender: None,
                     disconnect_notifier: None,
                     discover_az: false,
@@ -3940,6 +3961,8 @@ mod scope_pool_tests {
             loop {
                 if let Ok(client) = redis::Client::open(format!("redis://[::1]:{}", server.port)) {
                     let opts = redis::GlideConnectionOptions {
+                        #[cfg(feature = "rdma")]
+                        rdma_fabric: None,
                         push_sender: None,
                         disconnect_notifier: None,
                         discover_az: false,
@@ -4390,6 +4413,38 @@ mod client_pool_tests {
         let entry = pool.take_for_release(client_id).expect("in_use");
         pool.return_to_idle(entry);
         client_id
+    }
+
+    /// A pool is not supported with RDMA, so a pool whose clients would request it
+    /// must be refused before any client is created.
+    #[cfg(feature = "proto")]
+    #[test]
+    fn new_rejects_a_request_with_rdma() {
+        use protobuf::Message as _;
+        let mut request = crate::connection_request::ConnectionRequest::new();
+        request.rdma_config = Some(Default::default()).into();
+        let mut config = test_pool_config(Duration::from_secs(5));
+        config.connection_request = request.write_to_bytes().unwrap();
+
+        match ClientPool::new(config) {
+            Err(PoolError::InvalidConfig(message)) => assert!(
+                message.starts_with("RDMA cannot be combined with connection pooling"),
+                "{message}"
+            ),
+            Err(other) => panic!("unexpected error: {other}"),
+            Ok(_) => panic!("a pool with RDMA should be rejected"),
+        }
+    }
+
+    #[cfg(feature = "proto")]
+    #[test]
+    fn new_accepts_a_request_without_rdma() {
+        use protobuf::Message as _;
+        let request = crate::connection_request::ConnectionRequest::new();
+        let mut config = test_pool_config(Duration::from_secs(5));
+        config.connection_request = request.write_to_bytes().unwrap();
+
+        assert!(ClientPool::new(config).is_ok());
     }
 
     #[test]

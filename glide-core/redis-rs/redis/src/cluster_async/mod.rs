@@ -869,6 +869,17 @@ enum CmdArg<C> {
     OperationRequest(Operation),
 }
 
+impl<C> CmdArg<C> {
+    fn lends_memory(&self) -> bool {
+        match self {
+            CmdArg::Cmd { cmd, .. } => cmd
+                .command()
+                .is_some_and(|name| crate::cluster_routing::lends_memory(&name)),
+            _ => false,
+        }
+    }
+}
+
 // Operation requests which are connected to the internal state of the connection and not send as a command to the server.
 #[derive(Clone)]
 enum Operation {
@@ -1188,6 +1199,8 @@ mod iam_token_refresh_tests {
         provider: Option<Arc<dyn crate::client::IAMTokenProvider>>,
     ) -> GlideConnectionOptions {
         GlideConnectionOptions {
+            #[cfg(feature = "rdma")]
+            rdma_fabric: None,
             push_sender: None,
             disconnect_notifier: None,
             discover_az: false,
@@ -1542,7 +1555,16 @@ where
                     format!("Received request error {} on node {:?}.", err, address)
                 );
 
-                match err.retry_method() {
+                let retry_method = match err.retry_method() {
+                    // The error does not say whether the server got the command. If
+                    // it did, it may still be using the client's memory, and a reply
+                    // to a second attempt would not say when the first one stops.
+                    RetryMethod::RetryImmediately if request.info.cmd.lends_memory() => {
+                        RetryMethod::NoRetry
+                    }
+                    retry_method => retry_method,
+                };
+                match retry_method {
                     RetryMethod::AskRedirect => {
                         let mut request = this.request.take().unwrap();
                         request
@@ -1711,6 +1733,8 @@ where
         let connection_retry_strategy = cluster_params.reconnect_retry_strategy.unwrap_or_default();
 
         let glide_connection_options = GlideConnectionOptions {
+            #[cfg(feature = "rdma")]
+            rdma_fabric: cluster_params.rdma_fabric.clone(),
             push_sender,
             disconnect_notifier,
             discover_az,

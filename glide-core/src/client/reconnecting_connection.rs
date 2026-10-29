@@ -1,5 +1,6 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
+use super::rdma_connection::GlideConnection;
 use super::{NodeAddress, TlsMode};
 use async_trait::async_trait;
 use futures_intrusive::sync::ManualResetEvent;
@@ -131,7 +132,7 @@ struct ConnectionBackend {
 /// State of the current connection. Allows the user to use a connection only when a reconnect isn't in progress or has failed.
 enum ConnectionState {
     /// A connection has been established.
-    Connected(MultiplexedConnection),
+    Connected(GlideConnection),
     /// There's a reconnection effort on the way, no need to try reconnecting again.
     Reconnecting,
     /// Initial state of connection when no connection was created during initialization.
@@ -158,16 +159,49 @@ impl fmt::Debug for ReconnectingConnection {
 async fn get_multiplexed_connection(
     client: &redis::Client,
     connection_options: &GlideConnectionOptions,
-) -> RedisResult<MultiplexedConnection> {
+) -> RedisResult<GlideConnection> {
     run_with_timeout(
         Some(
             connection_options
                 .connection_timeout
                 .unwrap_or(DEFAULT_CONNECTION_TIMEOUT),
         ),
-        client.get_multiplexed_async_connection(connection_options.clone()),
+        async {
+            let connection = client
+                .get_multiplexed_async_connection(connection_options.clone())
+                .await?;
+            Ok(open_glide_connection(
+                client,
+                connection_options,
+                connection,
+            ))
+        },
     )
     .await
+}
+
+/// Pair a fresh connection with the fabric its RDMA session will be opened on.
+///
+/// The RDMA session is opened with a `BLOB.RDMA_HELLO` by the first transfer requested.
+/// When a connection is replaced, the RDMA session goes too, it does not inherit
+/// the old one. There should be only one `BLOB.RDMA_HELLO` per RESP connection.
+#[cfg(feature = "rdma")]
+fn open_glide_connection(
+    client: &redis::Client,
+    connection_options: &GlideConnectionOptions,
+    connection: MultiplexedConnection,
+) -> GlideConnection {
+    let node = client.get_connection_info().addr.to_string();
+    GlideConnection::open(connection, connection_options.rdma_fabric.clone(), &node)
+}
+
+#[cfg(not(feature = "rdma"))]
+fn open_glide_connection(
+    _client: &redis::Client,
+    _connection_options: &GlideConnectionOptions,
+    connection: MultiplexedConnection,
+) -> GlideConnection {
+    connection
 }
 
 #[derive(Clone)]
@@ -205,6 +239,7 @@ impl TokioDisconnectNotifier {
 // on. Boxing it would change the error type at every call site.
 // TODO: Box the Err payload and drop this allow - https://github.com/valkey-io/valkey-glide/issues/6819
 #[allow(clippy::result_large_err)]
+#[allow(clippy::too_many_arguments)]
 async fn create_connection(
     connection_backend: ConnectionBackend,
     retry_strategy: RetryStrategy,
@@ -213,6 +248,7 @@ async fn create_connection(
     connection_timeout: Duration,
     tcp_nodelay: bool,
     pubsub_synchronizer: Option<Arc<dyn crate::pubsub::PubSubSynchronizer>>,
+    _rdma_fabric: Option<crate::rdma::Fabric>,
 ) -> Result<ReconnectingConnection, Box<(ReconnectingConnection, RedisError)>> {
     let client = {
         let guard = connection_backend
@@ -223,6 +259,8 @@ async fn create_connection(
     };
 
     let connection_options = GlideConnectionOptions {
+        #[cfg(feature = "rdma")]
+        rdma_fabric: _rdma_fabric.map(crate::rdma::Fabric::opened),
         push_sender,
         disconnect_notifier: Some::<Box<dyn DisconnectNotifier>>(Box::new(
             TokioDisconnectNotifier::new(),
@@ -241,6 +279,7 @@ async fn create_connection(
         client
             .get_multiplexed_async_connection(connection_options.clone())
             .await
+            .map(|connection| open_glide_connection(&client, &connection_options, connection))
             .map_err(|e| {
                 // Don't retry errors that won't resolve with retries
                 let is_permanent = matches!(
@@ -355,6 +394,7 @@ impl ReconnectingConnection {
         address_resolver: Option<&std::sync::Arc<dyn AddressResolver>>,
         iam_token_handle: Option<IAMTokenHandle>,
         cert_material_handle: Option<crate::tls_reload::CertReloadHandle>,
+        rdma_fabric: Option<crate::rdma::Fabric>,
     ) -> Result<ReconnectingConnection, Box<(ReconnectingConnection, RedisError)>> {
         log_debug(
             "connection creation",
@@ -383,6 +423,7 @@ impl ReconnectingConnection {
             connection_timeout,
             tcp_nodelay,
             pubsub_synchronizer,
+            rdma_fabric,
         )
         .await
     }
@@ -413,7 +454,7 @@ impl ReconnectingConnection {
             .store(true, Ordering::Relaxed)
     }
 
-    pub(super) async fn try_get_connection(&self) -> Option<MultiplexedConnection> {
+    pub(super) async fn try_get_connection(&self) -> Option<GlideConnection> {
         let guard = self.inner.state.lock().unwrap();
         if let ConnectionState::Connected(connection) = &*guard {
             Some(connection.clone())
@@ -422,7 +463,7 @@ impl ReconnectingConnection {
         }
     }
 
-    pub(super) async fn get_connection(&self) -> Result<MultiplexedConnection, RedisError> {
+    pub(super) async fn get_connection(&self) -> Result<GlideConnection, RedisError> {
         loop {
             self.inner.backend.connection_available_signal.wait().await;
             if let Some(connection) = self.try_get_connection().await {
