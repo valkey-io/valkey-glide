@@ -2,11 +2,9 @@
 
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-"""``check_node_startup`` reads a new node's log so ``create_servers`` can keep
-it (READY) or replace it. A node whose log shows neither "Ready" nor a bind
-error within the timeout is NO_VERDICT and is replaced like PORT_TAKEN, because
-handing it to ``valkey-cli --cluster create`` fails later on CLUSTER MEET with
-no indication of which node never came up.
+"""A log that shows neither "Ready" nor a bind error within the timeout is
+NO_VERDICT, never READY; the reason is at the ``NodeCheck.READY`` check in
+``create_servers``.
 """
 
 import sys

@@ -645,12 +645,12 @@ def create_servers(
         server, node_folder = servers_to_check.pop()
         logging.debug(f"Checking server {server.host}:{server.port}")
         verdict = check_node_startup(server, f"{node_folder}/server.log")
+        # Only a node that reported Ready goes to --cluster create: a PING answer
+        # from the port does not prove it is this node's.
         if verdict is not NodeCheck.READY:
             if verdict is NodeCheck.NO_VERDICT:
-                # Handed to --cluster create as is, a node that is not listening
-                # fails CLUSTER MEET with no indication of which node never came
-                # up. It is also still running, and would keep going with its data
-                # directory deleted underneath it.
+                # Still running, and would keep going with its data directory
+                # deleted underneath it.
                 if server.process_id() > 0:
                     try:
                         os.kill(server.process_id(), signal.SIGKILL)
