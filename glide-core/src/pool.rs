@@ -481,20 +481,21 @@ pub async fn release_client_async(pool_arc: Arc<TokioMutex<ClientPool>>, client_
     )
     .await;
 
+    if !matches!(reset_result, Ok(Ok(_))) {
+        glide_logger::log_warn_rate_limited!(
+            "pool",
+            10,
+            "Client reset failed on release — discarding connection"
+        );
+    }
+
     // Disarm only once the lock is held: the lock wait is itself a
     // cancellation point, and the outcome is handled explicitly below.
     let mut pool = pool_arc.lock().await;
     guard.pool = None;
     match reset_result {
         Ok(Ok(_)) => pool.return_to_idle(entry),
-        _ => {
-            glide_logger::log_warn_rate_limited!(
-                "pool",
-                10,
-                "Client reset failed on release — discarding connection"
-            );
-            pool.discard_client(entry.client_id);
-        }
+        _ => pool.discard_client(entry.client_id),
     }
 }
 
