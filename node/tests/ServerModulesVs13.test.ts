@@ -1444,6 +1444,484 @@ describe("GlideFt", () => {
                     }
                 });
 
+                it("FT.SEARCH bare `*` matches every document in the index", async () => {
+                    if (!recordGate(capability)) return;
+
+                    client = await GlideClusterClient.createClient(
+                        getClientConfigurationOption(
+                            cluster.getAddresses(),
+                            protocol,
+                        ),
+                    );
+                    const prefix = "{" + getRandomKey() + "}:";
+                    const indexName = prefix + "wildcard_idx";
+
+                    await GlideFt.create(
+                        client,
+                        indexName,
+                        [
+                            { type: "TEXT", name: "title" },
+                            { type: "NUMERIC", name: "price" },
+                        ],
+                        {
+                            dataType: "HASH",
+                            prefixes: [prefix],
+                        } as FtCreateOptions,
+                    );
+
+                    try {
+                        await client.hset(prefix + "1", {
+                            title: "alpha",
+                            price: "10",
+                        });
+                        await client.hset(prefix + "2", {
+                            title: "beta",
+                            price: "20",
+                        });
+                        await client.hset(prefix + "3", {
+                            title: "gamma",
+                            price: "30",
+                        });
+                        await sleep();
+
+                        const result = await GlideFt.search(
+                            client,
+                            indexName,
+                            "*",
+                            {} as FtSearchOptions,
+                        );
+                        expect(result[0]).toBe(3);
+                        const keys = (
+                            result[1] as unknown as { key: GlideString }[]
+                        ).map((e) => e.key.toString());
+                        expect(new Set(keys)).toEqual(
+                            new Set([prefix + "1", prefix + "2", prefix + "3"]),
+                        );
+                    } finally {
+                        await client.customCommand(["FT.DROPINDEX", indexName]);
+                    }
+                });
+
+                it("FT.SEARCH VECTOR_RANGE with YIELD_DISTANCE_AS, AND/OR/negation", async () => {
+                    if (!recordGate(capability)) return;
+
+                    client = await GlideClusterClient.createClient(
+                        getClientConfigurationOption(
+                            cluster.getAddresses(),
+                            protocol,
+                        ),
+                    );
+                    const prefix = "{" + getRandomKey() + "}:";
+                    const indexName = prefix + "vecrange_idx";
+
+                    await GlideFt.create(
+                        client,
+                        indexName,
+                        [
+                            {
+                                type: "VECTOR",
+                                name: "vec",
+                                attributes: {
+                                    algorithm: "FLAT",
+                                    dimensions: 2,
+                                    distanceMetric: "L2",
+                                    type: "FLOAT32",
+                                },
+                            } as VectorField,
+                            { type: "TAG", name: "category" },
+                        ],
+                        {
+                            dataType: "HASH",
+                            prefixes: [prefix],
+                        } as FtCreateOptions,
+                    );
+
+                    try {
+                        // Points at known L2 distances from the origin: 0, 1,
+                        // 4, 9 (matches Python's VECTOR_RANGE_SEARCH_POINTS).
+                        const points: [string, [number, number], string][] = [
+                            ["0", [0.0, 0.0], "a"],
+                            ["1", [1.0, 0.0], "b"],
+                            ["2", [2.0, 0.0], "a"],
+                            ["3", [3.0, 0.0], "b"],
+                        ];
+
+                        for (const [suffix, coords, category] of points) {
+                            await client.hset(prefix + suffix, {
+                                vec: packVector2f(coords[0], coords[1]),
+                                category,
+                            });
+                        }
+
+                        await sleep();
+
+                        const queryBlob = packVector2f(0.0, 0.0);
+
+                        // Standalone VECTOR_RANGE: radius 2 covers distances
+                        // 0 and 1 (keys 0, 1); key 2 (distance 4) and key 3
+                        // (distance 9) fall outside.
+                        const result = await GlideFt.search(
+                            client,
+                            indexName,
+                            "@vec:[VECTOR_RANGE 2 $blob]",
+                            {
+                                params: [{ key: "blob", value: queryBlob }],
+                                nocontent: true,
+                            } as FtSearchOptions,
+                        );
+                        expect(result[0]).toBe(2);
+                        expect(
+                            new Set(
+                                (
+                                    result[1] as unknown as {
+                                        key: GlideString;
+                                    }[]
+                                ).map((e) => e.key.toString()),
+                            ),
+                        ).toEqual(new Set([prefix + "0", prefix + "1"]));
+
+                        // YIELD_DISTANCE_AS: the computed distance is
+                        // returned under the given property name, resolved
+                        // via PARAMS for both the radius and the blob.
+                        const resultDist = await GlideFt.search(
+                            client,
+                            indexName,
+                            "@vec:[VECTOR_RANGE $r $blob]=>{$yield_distance_as: dist}",
+                            {
+                                params: [
+                                    { key: "blob", value: queryBlob },
+                                    { key: "r", value: "0" },
+                                ],
+                                returnFields: [{ fieldIdentifier: "dist" }],
+                            } as FtSearchOptions,
+                        );
+                        expect(resultDist[0]).toBe(1);
+                        const distEntries = resultDist[1] as unknown as {
+                            key: GlideString;
+                            value: { key: GlideString; value: GlideString }[];
+                        }[];
+                        expect(
+                            Number(readRowField(distEntries[0].value, "dist")),
+                        ).toBe(0.0);
+
+                        // AND with a tag filter: radius 2 (keys 0,1)
+                        // intersected with category "a" (keys 0,2) leaves
+                        // only key 0.
+                        const resultAnd = await GlideFt.search(
+                            client,
+                            indexName,
+                            "@vec:[VECTOR_RANGE 2 $blob] @category:{a}",
+                            {
+                                params: [{ key: "blob", value: queryBlob }],
+                                nocontent: true,
+                            } as FtSearchOptions,
+                        );
+                        expect(resultAnd[0]).toBe(1);
+                        expect(
+                            new Set(
+                                (
+                                    resultAnd[1] as unknown as {
+                                        key: GlideString;
+                                    }[]
+                                ).map((e) => e.key.toString()),
+                            ),
+                        ).toEqual(new Set([prefix + "0"]));
+
+                        // OR with a tag filter: radius 0 (key 0 only) union
+                        // category "b" (keys 1, 3) gives keys 0, 1, 3.
+                        const resultOr = await GlideFt.search(
+                            client,
+                            indexName,
+                            "@vec:[VECTOR_RANGE 0 $blob] | @category:{b}",
+                            {
+                                params: [{ key: "blob", value: queryBlob }],
+                                nocontent: true,
+                            } as FtSearchOptions,
+                        );
+                        expect(resultOr[0]).toBe(3);
+                        expect(
+                            new Set(
+                                (
+                                    resultOr[1] as unknown as {
+                                        key: GlideString;
+                                    }[]
+                                ).map((e) => e.key.toString()),
+                            ),
+                        ).toEqual(
+                            new Set([prefix + "0", prefix + "1", prefix + "3"]),
+                        );
+
+                        // Negation: everything NOT within radius 1 of the
+                        // origin (excludes keys 0 and 1, leaves keys 2 and
+                        // 3).
+                        const resultNegate = await GlideFt.search(
+                            client,
+                            indexName,
+                            "-@vec:[VECTOR_RANGE 1 $blob]",
+                            {
+                                params: [{ key: "blob", value: queryBlob }],
+                                nocontent: true,
+                            } as FtSearchOptions,
+                        );
+                        expect(resultNegate[0]).toBe(2);
+                        expect(
+                            new Set(
+                                (
+                                    resultNegate[1] as unknown as {
+                                        key: GlideString;
+                                    }[]
+                                ).map((e) => e.key.toString()),
+                            ),
+                        ).toEqual(new Set([prefix + "2", prefix + "3"]));
+                    } finally {
+                        await client.customCommand(["FT.DROPINDEX", indexName]);
+                    }
+                });
+
+                it("FT.AGGREGATE VECTOR_RANGE with YIELD_DISTANCE_AS, loaded and sorted by distance", async () => {
+                    if (!recordGate(capability)) return;
+
+                    client = await GlideClusterClient.createClient(
+                        getClientConfigurationOption(
+                            cluster.getAddresses(),
+                            protocol,
+                        ),
+                    );
+                    const prefix = "{" + getRandomKey() + "}:";
+                    const indexName = prefix + "agg_vecrange_idx";
+
+                    await GlideFt.create(
+                        client,
+                        indexName,
+                        [
+                            {
+                                type: "VECTOR",
+                                name: "vec",
+                                attributes: {
+                                    algorithm: "FLAT",
+                                    dimensions: 2,
+                                    distanceMetric: "L2",
+                                    type: "FLOAT32",
+                                },
+                            } as VectorField,
+                        ],
+                        {
+                            dataType: "HASH",
+                            prefixes: [prefix],
+                        } as FtCreateOptions,
+                    );
+
+                    try {
+                        // Distances 0, 1, 100 from the origin -- a radius of
+                        // 5 must include the first two and exclude the
+                        // third.
+                        const points: [number, number][] = [
+                            [0.0, 0.0],
+                            [1.0, 0.0],
+                            [10.0, 0.0],
+                        ];
+
+                        for (let i = 0; i < points.length; i++) {
+                            await client.hset(prefix + i, {
+                                vec: packVector2f(points[i][0], points[i][1]),
+                            });
+                        }
+
+                        await sleep();
+
+                        const queryBlob = packVector2f(0.0, 0.0);
+
+                        const result = await GlideFt.aggregate(
+                            client,
+                            indexName,
+                            "@vec:[VECTOR_RANGE 5 $blob]=>{$yield_distance_as: dist}",
+                            {
+                                loadFields: ["dist"],
+                                params: [{ key: "blob", value: queryBlob }],
+                                clauses: [
+                                    {
+                                        type: "SORTBY",
+                                        properties: [
+                                            {
+                                                property: "@dist",
+                                                order: SortOrder.ASC,
+                                            },
+                                        ],
+                                    },
+                                ],
+                            } as FtAggregateOptions,
+                        );
+                        expect(result.length).toBe(2);
+                        const flatRows = result as unknown as {
+                            key: GlideString;
+                            value: GlideString;
+                        }[][];
+                        const distances = flatRows
+                            .map((row) => Number(readRowField(row, "dist")))
+                            .sort((a, b) => a - b);
+                        expect(distances).toEqual([0.0, 1.0]);
+                    } finally {
+                        await client.customCommand(["FT.DROPINDEX", indexName]);
+                    }
+                });
+
+                it("FT.AGGREGATE SORTBY widening by an adjacent LIMIT", async () => {
+                    if (!recordGate(capability)) return;
+
+                    client = await GlideClusterClient.createClient(
+                        getClientConfigurationOption(
+                            cluster.getAddresses(),
+                            protocol,
+                        ),
+                    );
+                    const prefix = "{" + getRandomKey() + "}:";
+                    const indexName = prefix + "sortby_limit_idx";
+                    const legacy =
+                        emulateReleaseLevel === undefined ||
+                        checkVersionLt(emulateReleaseLevel, "1.3.0");
+
+                    await GlideFt.create(
+                        client,
+                        indexName,
+                        [{ type: "NUMERIC", name: "n", sortable: true }],
+                        {
+                            dataType: "HASH",
+                            prefixes: [prefix],
+                        } as FtCreateOptions,
+                    );
+
+                    try {
+                        for (let i = 1; i <= 20; i++) {
+                            await client.hset(prefix + `d${i}`, {
+                                n: i.toString(),
+                            });
+                        }
+
+                        await sleep();
+
+                        const sortAsc = {
+                            type: "SORTBY" as const,
+                            properties: [
+                                { property: "@n", order: SortOrder.ASC },
+                            ],
+                        };
+
+                        // SORTBY, no MAX, no LIMIT -> the default 10 rows.
+                        // Unaffected by the gate: no adjacent LIMIT, same on
+                        // both branches.
+                        let result = await GlideFt.aggregate(
+                            client,
+                            indexName,
+                            "*",
+                            { clauses: [sortAsc] } as FtAggregateOptions,
+                        );
+                        expect(result.length).toBe(10);
+
+                        // SORTBY MAX 5, no LIMIT -> 5 rows. Unaffected by
+                        // the gate: no adjacent LIMIT, same on both
+                        // branches.
+                        const sortMax5 = { ...sortAsc, max: 5 };
+                        result = await GlideFt.aggregate(
+                            client,
+                            indexName,
+                            "*",
+                            { clauses: [sortMax5] } as FtAggregateOptions,
+                        );
+                        expect(result.length).toBe(5);
+
+                        // SORTBY + LIMIT 0 15, adjacent -> the 1.3 fix
+                        // raises the retained window to 15 rows; below
+                        // 1.3.0, the adjacent LIMIT does not widen SORTBY's
+                        // own default-10 retention.
+                        result = await GlideFt.aggregate(
+                            client,
+                            indexName,
+                            "*",
+                            {
+                                clauses: [
+                                    sortAsc,
+                                    {
+                                        type: "LIMIT",
+                                        offset: 0,
+                                        count: 15,
+                                    },
+                                ],
+                            } as FtAggregateOptions,
+                        );
+                        expect(result.length).toBe(legacy ? 10 : 15);
+
+                        // SORTBY MAX 5 + LIMIT 0 12, adjacent -> the 1.3 fix
+                        // lets LIMIT outrank MAX; below 1.3.0, SORTBY's own
+                        // MAX 5 still wins.
+                        result = await GlideFt.aggregate(
+                            client,
+                            indexName,
+                            "*",
+                            {
+                                clauses: [
+                                    sortMax5,
+                                    {
+                                        type: "LIMIT",
+                                        offset: 0,
+                                        count: 12,
+                                    },
+                                ],
+                            } as FtAggregateOptions,
+                        );
+                        expect(result.length).toBe(legacy ? 5 : 12);
+
+                        // LIMIT 0 15 THEN SORTBY -- either side of the pair
+                        // counts as adjacent, not just LIMIT-after-SORTBY.
+                        // Same legacy-vs-fixed split as the SORTBY-then-LIMIT
+                        // row above.
+                        result = await GlideFt.aggregate(
+                            client,
+                            indexName,
+                            "*",
+                            {
+                                clauses: [
+                                    {
+                                        type: "LIMIT",
+                                        offset: 0,
+                                        count: 15,
+                                    },
+                                    sortAsc,
+                                ],
+                            } as FtAggregateOptions,
+                        );
+                        expect(result.length).toBe(legacy ? 10 : 15);
+
+                        // SORTBY + GROUPBY + LIMIT 0 15 -- GROUPBY sits
+                        // between SORTBY and LIMIT, so the LIMIT is not
+                        // adjacent and must NOT widen SORTBY's default-10
+                        // retention. Unaffected by the gate: GROUPBY blocks
+                        // widening on both branches.
+                        result = await GlideFt.aggregate(
+                            client,
+                            indexName,
+                            "*",
+                            {
+                                clauses: [
+                                    sortAsc,
+                                    {
+                                        type: "GROUPBY",
+                                        properties: ["@n"],
+                                        reducers: [],
+                                    },
+                                    {
+                                        type: "LIMIT",
+                                        offset: 0,
+                                        count: 15,
+                                    },
+                                ],
+                            } as FtAggregateOptions,
+                        );
+                        expect(result.length).toBe(10);
+                    } finally {
+                        await client.customCommand(["FT.DROPINDEX", indexName]);
+                    }
+                });
+
                 describe("FT.HYBRID", () => {
                     /**
                      * Creates an index with a TEXT field (`title`) and a 2-dimensional FLAT
