@@ -75,7 +75,9 @@ VENDORED_DEPENDENCIES = {
 
 # Rust source for the _fast_response PyO3 extension (only Cargo.toml + src/)
 GLIDE_SHARED_RS_SOURCE = ROOT.parent / "glide-shared"
-GLIDE_SHARED_RS_DIST = ROOT / "glide-shared-rs"
+# One level deeper than the other vendored crates so its `../../glide-core` path
+# dependency resolves to the vendored glide-core, as it does in the source tree.
+GLIDE_SHARED_RS_DIST = ROOT / "glide-shared-rs" / "glide-shared"
 
 
 def cargo_target_dir(crate_dir: Path) -> Path:
@@ -115,9 +117,9 @@ def vendor_dependencies():
 
     # Vendor only the Rust build files for glide-shared (Cargo.toml, Cargo.lock
     # + src/); --locked needs the lockfile present in the vendored copy.
-    if GLIDE_SHARED_RS_DIST.exists():
-        remove_existing(GLIDE_SHARED_RS_DIST)
-    GLIDE_SHARED_RS_DIST.mkdir()
+    if GLIDE_SHARED_RS_DIST.parent.exists():
+        remove_existing(GLIDE_SHARED_RS_DIST.parent)
+    GLIDE_SHARED_RS_DIST.mkdir(parents=True)
     for build_file in ("Cargo.toml", "Cargo.lock"):
         shutil.copy2(
             GLIDE_SHARED_RS_SOURCE / build_file, GLIDE_SHARED_RS_DIST / build_file
@@ -130,7 +132,7 @@ def cleanup_vendored():
     print("[INFO] Cleaning up vendored dependencies")
     for folder in VENDORED_DEPENDENCIES.values():
         remove_existing(folder.dist)
-    remove_existing(GLIDE_SHARED_RS_DIST)
+    remove_existing(GLIDE_SHARED_RS_DIST.parent)
 
 
 # ------------------------------------------------------------------------------

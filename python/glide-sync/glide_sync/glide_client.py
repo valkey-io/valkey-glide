@@ -10,6 +10,8 @@ if TYPE_CHECKING:
     from .isolated_scope import IsolatedScope
 
 from glide_shared._fast_response import parse_response as _fast_parse_response
+from glide_shared._fast_response import parse_value as _fast_parse_value
+from glide_shared._fast_response import value_abi_token as _value_abi_token
 from glide_shared.commands.command_args import ObjectType
 from glide_shared.commands.core_options import PubSubMsg
 from glide_shared.config import (
@@ -233,6 +235,7 @@ class BaseClient(CoreCommands):
                 )
                 if client_response.conn_ptr != self._ffi.NULL:
                     self._core_client = client_response.conn_ptr
+                    self._enable_value_results()
                 else:
                     error_message = (
                         self._ffi.string(
@@ -299,6 +302,7 @@ class BaseClient(CoreCommands):
                 adopt_client = False
             else:
                 self._core_client = core_client
+                self._enable_value_results()
                 self._credential_provider_callback_ref = credential_callback
                 self._credential_provider_callback_owner = credential_owner
                 adopt_client = True
@@ -538,11 +542,24 @@ class BaseClient(CoreCommands):
                 error_class = get_request_error_class(error.command_error_type)
                 # Free the error message to avoid memory leaks
                 raise error_class(error_message)
-            else:
-                return self._handle_response(command_result.response)
-                # Free the error message to avoid memory leaks
+            value_ptr = command_result.value
+            if value_ptr:
+                # parse_value takes ownership of the value, so free_command_result
+                # must not see it.
+                command_result.value = 0
+                return _fast_parse_value(value_ptr)
+            return self._handle_response(command_result.response)
         finally:
             self._lib.free_command_result(command_result)
+
+    def _enable_value_results(self) -> None:
+        """Have the core return parsed values instead of CommandResponse trees.
+
+        Only when both native libraries were built against the same ``Value``
+        layout; otherwise replies keep coming back through the arena.
+        """
+        if self._lib.value_abi_token() == _value_abi_token():
+            self._lib.set_sync_value_results(self._core_client, True)
 
     @staticmethod
     def _validate_response_buffers(response_buffers: List[memoryview]) -> None:

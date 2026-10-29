@@ -560,6 +560,9 @@ pub struct CommandResult {
     /// Opaque pointer to the ResponseArena that owns the response tree.
     /// If non-null, freeing this frees all response nodes and strings at once.
     pub arena: *mut ResponseArena,
+    /// A leaked `Box<Value>`, set instead of `response` for sync clients that opted in
+    /// through [`set_sync_value_results`]. The caller converts it itself.
+    pub value: *mut c_void,
 }
 
 // Deallocates a `CommandResult`.
@@ -592,6 +595,9 @@ pub unsafe extern "C" fn free_command_result(command_result_ptr: *mut CommandRes
         } else if !command_result.response.is_null() {
             free_command_response(command_result.response);
         }
+        if !command_result.value.is_null() {
+            drop(Box::from_raw(command_result.value as *mut Value));
+        }
         if !command_result.command_error.is_null() {
             let command_error = Box::from_raw(command_result.command_error);
             if !command_error.command_error_message.is_null() {
@@ -599,6 +605,35 @@ pub unsafe extern "C" fn free_command_result(command_result_ptr: *mut CommandRes
             }
         }
     }
+}
+
+/// Opt a sync client into value results. A reply with no caller-provided buffer then comes
+/// back as `CommandResult.value`, a leaked `Box<Value>`, instead of a `CommandResponse`
+/// tree, for a binding that converts the parsed value itself. Errors and the buffer entry
+/// points are unchanged. Async clients ignore the flag.
+///
+/// # Safety
+///
+/// * `client_ptr` must be a pointer created by [`create_client`] that has not been passed
+///   to [`close_client`].
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn set_sync_value_results(client_ptr: *const c_void, enabled: bool) {
+    assert!(!client_ptr.is_null());
+    let client_adapter = unsafe {
+        Arc::increment_strong_count(client_ptr);
+        Arc::from_raw(client_ptr as *const ClientAdapter)
+    };
+    client_adapter
+        .value_results
+        .store(enabled, std::sync::atomic::Ordering::Relaxed);
+}
+
+/// Size and alignment of `Value` in this build. A consumer of `CommandResult.value` must
+/// have been compiled against the same `Value`, so it compares this with its own token
+/// before opting in.
+#[unsafe(no_mangle)]
+pub extern "C" fn value_abi_token() -> u64 {
+    ((std::mem::size_of::<Value>() as u64) << 32) | std::mem::align_of::<Value>() as u64
 }
 
 /// Specifies the type of client used to execute commands.
@@ -1977,6 +2012,8 @@ pub struct ClientAdapter {
     background_runtime: ManuallyDrop<Option<Runtime>>,
     core: Arc<CommandExecutionCore>,
     pubsub_callback: Arc<std::sync::RwLock<PubSubCallback>>,
+    /// Sync replies carry the parsed `Value` instead of a `CommandResponse` tree.
+    value_results: std::sync::atomic::AtomicBool,
 }
 
 impl Drop for ClientAdapter {
@@ -2120,6 +2157,21 @@ impl ClientAdapter {
                     let _guard = bg.as_ref().map(|h| h.enter());
                     request_future.await
                 });
+                if response_buf.is_none()
+                    && self
+                        .value_results
+                        .load(std::sync::atomic::Ordering::Relaxed)
+                {
+                    return match result {
+                        Ok(value) => Box::into_raw(Box::new(CommandResult {
+                            response: std::ptr::null_mut(),
+                            command_error: std::ptr::null_mut(),
+                            arena: std::ptr::null_mut(),
+                            value: Box::into_raw(Box::new(value)) as *mut c_void,
+                        })),
+                        Err(err) => create_error_result_with_redis_error(err),
+                    };
+                }
                 Self::handle_result(result, None, None, request_id, response_buf, false)
             }
         }
@@ -2223,6 +2275,7 @@ impl ClientAdapter {
                                 response: root_ptr,
                                 command_error: std::ptr::null_mut(),
                                 arena: _arena_ptr,
+                                value: std::ptr::null_mut(),
                             }));
                         }
                         Err(err) => {
@@ -2722,6 +2775,7 @@ fn create_client_internal(
         background_runtime: ManuallyDrop::new(background_runtime),
         core,
         pubsub_callback: pubsub_callback_store.clone(),
+        value_results: std::sync::atomic::AtomicBool::new(false),
     });
     let client_adapter_ptr = Arc::as_ptr(&client_adapter).addr();
 
@@ -5370,6 +5424,7 @@ fn create_error_result_with_redis_error(err: RedisError) -> *mut CommandResult {
             command_error_type: error_type,
         })),
         arena: std::ptr::null_mut(),
+        value: std::ptr::null_mut(),
     }))
 }
 
@@ -5407,6 +5462,7 @@ fn create_error_result_with_custom_error(
             command_error_type: error_type,
         })),
         arena: std::ptr::null_mut(),
+        value: std::ptr::null_mut(),
     }))
 }
 
@@ -5857,6 +5913,7 @@ pub unsafe extern "C-unwind" fn get_cache_metrics(
                     response: root_ptr,
                     command_error: std::ptr::null_mut(),
                     arena: arena_ptr,
+                    value: std::ptr::null_mut(),
                 })),
                 Err(err) => create_error_result_with_redis_error(err),
             },

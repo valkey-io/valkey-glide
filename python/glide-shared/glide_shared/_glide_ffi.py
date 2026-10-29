@@ -109,11 +109,14 @@ class _GlideFFI:
                 CommandResponse* response;
                 CommandError* command_error;
                 void* arena;
+                uintptr_t value;
             } CommandResult;
 
             void free_command_response(CommandResponse* command_response_ptr);
             void free_response_arena(void* arena_ptr);
             void free_command_result(CommandResult* command_result_ptr);
+            void set_sync_value_results(const void* client_ptr, bool enabled);
+            uint64_t value_abi_token(void);
 
             CommandResult* command(
                 const void* client_adapter_ptr,
