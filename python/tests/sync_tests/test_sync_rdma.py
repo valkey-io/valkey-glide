@@ -1261,7 +1261,7 @@ def test_registering_without_a_fabric_names_the_cause(glide_sync_client: GlideCl
     # it. The error has to say which configuration is missing, or, in a build
     # without RDMA, that the support itself is missing.
     cause = (
-        "RdmaConfiguration"
+        "RDMA configuration"
         if GlideClient.rdma_available()
         else "no RDMA support compiled in"
     )
