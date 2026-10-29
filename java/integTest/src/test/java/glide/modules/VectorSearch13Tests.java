@@ -2304,4 +2304,54 @@ public class VectorSearch13Tests {
             FT.dropindex(client, index).get();
         }
     }
+
+    /**
+     * FT.HYBRID's {@code VSIM ... RANGE} form parses for shape but is rejected at execution on
+     * valkey-search 1.3.0-rc1/rc2 -- confirmed live (ParseFtHybridCommand's own comment in {@code
+     * src/commands/ft_hybrid_parser.cc}: "Validate the RANGE shape; ParseFtHybridCommand returns
+     * UnimplementedError after parse completes"). RANGE stays excluded from the typed FT.HYBRID API
+     * entirely -- this test exists so that if rc1's limitation is ever lifted upstream, this fails
+     * loudly instead of the exclusion silently going stale.
+     *
+     * <p>Goes through a raw custom command rather than the typed {@code FT.hybrid} builder, because
+     * RANGE stays excluded from the typed API entirely -- this also exercises the RANGE clause's own
+     * quirk confirmed during this investigation: {@code RANGE <count> ...} takes a token-budget count
+     * for its own sub-arguments (mirroring INKEYS/PARAMS/RETURN elsewhere in this module), not an
+     * arbitrary result count -- {@code RANGE 2 RADIUS 5.0} because {@code RADIUS 5.0} is 2 tokens,
+     * not {@code RANGE 10 RADIUS 5.0} as a naive reading of "RANGE &lt;n&gt;" might suggest.
+     */
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void ft_hybrid_vsim_range_rejected(BaseClient client) {
+        Assumptions.assumeTrue(
+                capability, "search module present but pre-1.3 (INKEYS probe rejected it)");
+
+        String prefix = "{ft-hybrid-range-" + UUID.randomUUID() + "}:";
+        String index = createHybridIndex(client, prefix);
+        try {
+            GlideString[] cmd = {
+                gs("FT.HYBRID"),
+                gs(index),
+                gs("SEARCH"),
+                gs(HYBRID_SEARCH_QUERY),
+                gs("VSIM"),
+                gs("@vec"),
+                gs("$blob"),
+                gs("RANGE"),
+                gs("2"),
+                gs("RADIUS"),
+                gs("5.0"),
+                gs("PARAMS"),
+                gs("2"),
+                gs("blob"),
+                gs(packVector(HYBRID_QUERY_VECTOR[0], HYBRID_QUERY_VECTOR[1]))
+            };
+            ExecutionException e =
+                    assertThrows(ExecutionException.class, () -> customCommand(client, cmd));
+            assertTrue(e.getCause().getMessage().contains("RANGE is not yet supported"));
+        } finally {
+            FT.dropindex(client, index).get();
+        }
+    }
 }
