@@ -254,6 +254,8 @@ pub fn cmd_name_from_bytes(bytes: &[u8]) -> &'static str {
         9 => match_upper(
             bytes,
             &[
+                (b"FT.CURSOR", "FT.CURSOR"),
+                (b"FT.HYBRID", "FT.HYBRID"),
                 (b"GEOSEARCH", "GEOSEARCH"),
                 (b"HEXPIREAT", "HEXPIREAT"),
                 (b"PEXPIREAT", "PEXPIREAT"),
@@ -1011,6 +1013,10 @@ mod tests {
         assert_eq!(cmd_name_from_bytes(b"get"), "GET");
         assert_eq!(cmd_name_from_bytes(b"Set"), "SET");
         assert_eq!(cmd_name_from_bytes(b"HGETALL"), "HGETALL");
+        assert_eq!(cmd_name_from_bytes(b"FT.CURSOR"), "FT.CURSOR");
+        assert_eq!(cmd_name_from_bytes(b"ft.cursor"), "FT.CURSOR");
+        assert_eq!(cmd_name_from_bytes(b"FT.HYBRID"), "FT.HYBRID");
+        assert_eq!(cmd_name_from_bytes(b"ft.hybrid"), "FT.HYBRID");
         assert_eq!(cmd_name_from_bytes(b"ping"), "PING");
         assert_eq!(cmd_name_from_bytes(b"ZADD"), "ZADD");
         assert_eq!(cmd_name_from_bytes(b"LPUSH"), "LPUSH");
