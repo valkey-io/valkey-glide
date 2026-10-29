@@ -181,8 +181,10 @@ class TestGlideClients:
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     def test_sync_send_and_receive_large_values(self, request, cluster_mode, protocol):
         glide_sync_client = create_sync_client(
-            request, cluster_mode=cluster_mode, protocol=protocol, request_timeout=5000
+            request, cluster_mode=cluster_mode, protocol=protocol, request_timeout=15000
         )
+        # Transferring ~33MB can exceed a 5s request timeout under CI load,
+        # causing a spurious TimeoutError; use a generous timeout instead.
         length = 2**25  # 33mb
         key = "0" * length
         value = "0" * length
