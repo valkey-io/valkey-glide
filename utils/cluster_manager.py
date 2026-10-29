@@ -668,9 +668,15 @@ def create_servers(
             # the engine rejects) would otherwise be replaced forever, with the
             # log that explains it deleted on every round.
             if ports is not None or replacements_left == 0:
+                if verdict is NodeCheck.PORT_TAKEN:
+                    # The port belongs to another server now, and the failure
+                    # cleanup sends SHUTDOWN to every port it finds a node folder for.
+                    remove_folder(node_folder)
+                    detail = ""
+                else:
+                    detail = f".\nSee {node_folder}/server.log for more information"
                 raise Exception(
-                    f"Couldn't start server on {server.host}:{server.port}, {failure}.\n"
-                    f"See {node_folder}/server.log for more information"
+                    f"Couldn't start server on {server.host}:{server.port}, {failure}{detail}"
                 )
             replacements_left -= 1
             remove_folder(node_folder)
