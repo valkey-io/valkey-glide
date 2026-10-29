@@ -641,6 +641,7 @@ def create_servers(
             )
         )
     # Check all servers
+    replacements_left = nodes_count
     while len(servers_to_check) > 0:
         server, node_folder = servers_to_check.pop()
         logging.debug(f"Checking server {server.host}:{server.port}")
@@ -663,11 +664,16 @@ def create_servers(
                 failure = "it never reported Ready"
             else:
                 failure = "address already in use"
-            remove_folder(node_folder)
-            if ports is not None:
+            # A failure a new port cannot fix (a bad --load-module path, a config
+            # the engine rejects) would otherwise be replaced forever, with the
+            # log that explains it deleted on every round.
+            if ports is not None or replacements_left == 0:
                 raise Exception(
-                    f"Couldn't start server on {server.host}:{server.port}, {failure}"
+                    f"Couldn't start server on {server.host}:{server.port}, {failure}.\n"
+                    f"See {node_folder}/server.log for more information"
                 )
+            replacements_left -= 1
+            remove_folder(node_folder)
             servers_to_check.add(
                 start_server(
                     server.host,
