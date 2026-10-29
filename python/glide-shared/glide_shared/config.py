@@ -1159,13 +1159,6 @@ class BaseClientConfiguration:
             Compression is NOT compatible with server-side string manipulation commands (APPEND, GETRANGE, etc.).
             If not set, compression is disabled.
 
-        rdma (Optional[RdmaConfiguration]): Configuration for remote direct memory access (RDMA) transfers.
-            ⚠️ WARNING: This feature is experimental and its API may change in a future release.
-            When set, the client opens a fabric endpoint, so ``rdma_get`` and ``rdma_set`` can move
-            values directly between server memory and memory the caller registered. Only the synchronous
-            client compiled with the RDMA feature supports this. Transfers always run against a primary,
-            so a ``ReadFrom`` that prefers a replica does not apply to them. If not set, RDMA is disabled.
-
         client_side_cache (Optional[ClientSideCache]): Configuration for client-side caching.
             See `ClientSideCache` for caching behavior details, supported commands, and expiration semantics.
 
@@ -1215,6 +1208,12 @@ class BaseClientConfiguration:
             the default library name or a configured ``lib_name``. Every character in a non-empty value must be
             printable ASCII from ``!`` (U+0021) through ``~`` (U+007E), inclusive, excluding ``(`` and ``)``.
             An empty value is treated as unset.
+        rdma (Optional[RdmaConfiguration]): Configuration for remote direct memory access (RDMA) transfers.
+            ⚠️ WARNING: This feature is experimental and its API may change in a future release.
+            When set, the client opens a fabric endpoint, so ``rdma_get`` and ``rdma_set`` can move
+            values directly between server memory and memory the caller registered. Only the synchronous
+            client compiled with the RDMA feature supports this. Transfers always run against a primary,
+            so a ``ReadFrom`` that prefers a replica does not apply to them. If not set, RDMA is disabled.
     """
 
     def __init__(
@@ -1233,12 +1232,12 @@ class BaseClientConfiguration:
         advanced_config: Optional[AdvancedBaseClientConfiguration] = None,
         lazy_connect: Optional[bool] = None,
         compression: Optional[CompressionConfiguration] = None,
-        rdma: Optional[RdmaConfiguration] = None,
         client_side_cache: Optional[ClientSideCache] = None,
         address_resolver: Optional[Callable[[str, int], Tuple[str, int]]] = None,
         client_circuit_breaker: Optional[ClientCircuitBreakerConfiguration] = None,
         lib_name: Optional[str] = None,
         client_info_tag: Optional[str] = None,
+        rdma: Optional[RdmaConfiguration] = None,
     ):
         self.addresses = addresses
         self.use_tls = use_tls
@@ -1620,7 +1619,6 @@ class GlideClientConfiguration(BaseClientConfiguration):
         advanced_config: Optional[AdvancedGlideClientConfiguration] = None,
         lazy_connect: Optional[bool] = None,
         compression: Optional[CompressionConfiguration] = None,
-        rdma: Optional[RdmaConfiguration] = None,
         read_only: bool = False,
         client_side_cache: Optional[ClientSideCache] = None,
         node_discovery_mode: NodeDiscoveryMode = NodeDiscoveryMode.STANDARD,
@@ -1628,6 +1626,7 @@ class GlideClientConfiguration(BaseClientConfiguration):
         client_circuit_breaker: Optional[ClientCircuitBreakerConfiguration] = None,
         lib_name: Optional[str] = None,
         client_info_tag: Optional[str] = None,
+        rdma: Optional[RdmaConfiguration] = None,
     ):
         super().__init__(
             addresses=addresses,
@@ -1895,12 +1894,12 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
         advanced_config: Optional[AdvancedGlideClusterClientConfiguration] = None,
         lazy_connect: Optional[bool] = None,
         compression: Optional[CompressionConfiguration] = None,
-        rdma: Optional[RdmaConfiguration] = None,
         client_side_cache: Optional[ClientSideCache] = None,
         address_resolver: Optional[Callable[[str, int], Tuple[str, int]]] = None,
         client_circuit_breaker: Optional[ClientCircuitBreakerConfiguration] = None,
         lib_name: Optional[str] = None,
         client_info_tag: Optional[str] = None,
+        rdma: Optional[RdmaConfiguration] = None,
     ):
         super().__init__(
             addresses=addresses,

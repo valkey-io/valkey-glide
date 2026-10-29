@@ -5,9 +5,11 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 
 import pytest
 from glide_shared.config import (
+    BaseClientConfiguration,
     ConfigurationError,
     GlideClientConfiguration,
     GlideClusterClientConfiguration,
@@ -31,6 +33,31 @@ def test_rdma_is_absent_from_the_request_unless_configured():
     # An unset field is what tells the core RDMA was never asked for, so a
     # default client must not carry an empty RdmaConfig.
     assert _request(None).HasField("rdma_config") is False
+
+
+@pytest.mark.parametrize(
+    "config_class",
+    [
+        BaseClientConfiguration,
+        GlideClientConfiguration,
+        GlideClusterClientConfiguration,
+    ],
+)
+def test_rdma_is_the_last_parameter(config_class):
+    # A parameter added anywhere else moves every later one, so code that
+    # passes those by position would set the wrong field.
+    parameters = list(inspect.signature(config_class.__init__).parameters)
+    assert parameters[-1] == "rdma"
+
+
+def test_a_positional_argument_after_compression_keeps_its_field():
+    parameters = list(inspect.signature(GlideClientConfiguration.__init__).parameters)
+    # The positions after `addresses`, up to and including `compression`.
+    before_read_only = [None] * (parameters.index("compression") - 1)
+    config = GlideClientConfiguration(ADDRESSES, *before_read_only, True)
+
+    assert config.read_only is True
+    assert config.rdma is None
 
 
 @pytest.mark.parametrize("cluster", [False, True], ids=["standalone", "cluster"])
