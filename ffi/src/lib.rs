@@ -871,6 +871,14 @@ mod pipe_write_tests {
     }
 }
 
+/// Allocate a client id from core's one global sequence, shared by pooled
+/// clients and every id-keyed registry. Bindings must draw pipe/registry ids
+/// from here rather than a local counter, or ids collide across the process.
+#[unsafe(no_mangle)]
+pub extern "C" fn glide_allocate_client_id() -> u64 {
+    glide_core::pool::allocate_client_id()
+}
+
 /// Create a new `SharedPipeWriter` and spawn its flush thread.
 /// Returns a `&'static` reference by leaking the allocation (lives for
 /// the lifetime of the process).

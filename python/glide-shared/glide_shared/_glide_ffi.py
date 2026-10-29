@@ -273,6 +273,7 @@ class _GlideFFI:
             void close_client(const void* client_adapter_ptr);
             void init_async_pipe(int pipe_write_fd);
             void reinit_async_pipe(int pipe_write_fd);
+            uint64_t glide_allocate_client_id(void);
 
             void free_pipe_error_string(char* ptr);
             void free_pubsub_pointer_payload(uint8_t* ptr, size_t len);

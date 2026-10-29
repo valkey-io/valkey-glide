@@ -106,6 +106,9 @@ EXCLUDED_TESTS = {
         "test_iam_close_during_provider_refresh_does_not_block_owner_runtime",
         # Coordinates both client kinds; a pure sync twin would not test coexistence.
         "test_live_async_sync_provider_ids_coexist_without_registry_leaks",
+        # Async-only: the pipe/registry id collision it guards can't occur in sync.
+        "test_ordinary_client_survives_pool_borrow_release",
+        "reader_roundtrip",
     ],
     "sync_only": [
         "test_sync_fork",

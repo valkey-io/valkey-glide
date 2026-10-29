@@ -259,7 +259,6 @@ def _slot_for_key(key: bytes) -> int:
 _async_pipe_read_fd: int = -1
 _async_pipe_write_fd: int = -1
 _async_pipe_init_pid: int = -1
-_next_client_id = itertools.count(1)
 
 
 def _close_file_descriptors(*fds: int) -> None:
@@ -801,8 +800,7 @@ class BaseClient(CoreCommands):
             iam_config.credential_provider if iam_config is not None else None
         )
         if credential_provider is None:
-            # Preserve the ordinary latest-main creation path and low pipe-ID namespace.
-            self._pipe_client_id = next(_next_client_id)
+            self._pipe_client_id = self._lib.glide_allocate_client_id()
             client_response_ptr = self._lib.create_client(
                 conn_req_bytes,
                 len(conn_req_bytes),

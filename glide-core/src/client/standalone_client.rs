@@ -175,6 +175,25 @@ impl StandaloneClient {
         iam_token_manager: Option<&Arc<crate::iam::IAMTokenManager>>,
         pubsub_synchronizer: Option<Arc<dyn crate::pubsub::PubSubSynchronizer>>,
     ) -> Result<Self, StandaloneClientConnectionError> {
+        Self::create_client_with_rdma(
+            connection_request,
+            push_sender,
+            iam_token_manager,
+            pubsub_synchronizer,
+            None,
+        )
+        .await
+    }
+
+    /// As [`Self::create_client`], with every node connection able to open an RDMA
+    /// session over `rdma_fabric`. `None` behaves exactly like `create_client`.
+    pub(crate) async fn create_client_with_rdma(
+        connection_request: ConnectionRequest,
+        push_sender: Option<mpsc::UnboundedSender<PushInfo>>,
+        iam_token_manager: Option<&Arc<crate::iam::IAMTokenManager>>,
+        pubsub_synchronizer: Option<Arc<dyn crate::pubsub::PubSubSynchronizer>>,
+        rdma_fabric: Option<crate::rdma::Fabric>,
+    ) -> Result<Self, StandaloneClientConnectionError> {
         if connection_request.addresses.is_empty() {
             return Err(StandaloneClientConnectionError::NoAddressesProvided);
         }
@@ -351,6 +370,8 @@ impl StandaloneClient {
         let discovery_iam_handle = iam_token_handle.clone();
         let discovery_cert_handle = cert_material_handle.clone();
         let discovery_resolver = connection_request.address_resolver.clone();
+        let discovery_rdma_fabric = rdma_fabric.clone();
+        let first_pass_rdma_fabric = discovery_rdma_fabric.clone();
 
         let mut stream = stream::iter(addresses)
             .map(move |address| {
@@ -368,6 +389,7 @@ impl StandaloneClient {
                 let resolver = connection_request.address_resolver.clone();
                 let iam_handle = iam_token_handle.clone();
                 let cert_handle = cert_material_handle.clone();
+                let rdma_fabric = first_pass_rdma_fabric.clone();
                 async move {
                     get_connection_and_replication_info(
                         &address,
@@ -384,6 +406,7 @@ impl StandaloneClient {
                         resolver.as_ref(),
                         iam_handle,
                         cert_handle,
+                        rdma_fabric.clone(),
                     )
                     .await
                     .map_err(|err| (address.endpoint(), err))
@@ -491,6 +514,7 @@ impl StandaloneClient {
                     let iam_handle = discovery_iam_handle.clone();
                     let cert_handle = discovery_cert_handle.clone();
                     let resolver = discovery_resolver.clone();
+                    let rdma_fabric = discovery_rdma_fabric.clone();
                     async move {
                         let result = get_connection_and_replication_info(
                             &address,
@@ -507,6 +531,7 @@ impl StandaloneClient {
                             resolver.as_ref(),
                             iam_handle,
                             cert_handle,
+                            rdma_fabric.clone(),
                         )
                         .await;
                         (address, result)
@@ -563,6 +588,7 @@ impl StandaloneClient {
                         let sync = discovery_pubsub_sync.clone();
                         let iam_handle = discovery_iam_handle.clone();
                         let cert_handle = discovery_cert_handle.clone();
+                        let rdma_fabric = discovery_rdma_fabric.clone();
                         let resolver = discovery_resolver.clone();
                         async move {
                             let result = get_connection_and_replication_info(
@@ -580,6 +606,7 @@ impl StandaloneClient {
                                 resolver.as_ref(),
                                 iam_handle,
                                 cert_handle,
+                                rdma_fabric.clone(),
                             )
                             .await;
                             (address, result)
@@ -1225,6 +1252,7 @@ async fn get_connection_and_replication_info(
     address_resolver: Option<&Arc<dyn AddressResolver>>,
     iam_token_handle: Option<super::IAMTokenHandle>,
     cert_material_handle: Option<crate::tls_reload::CertReloadHandle>,
+    rdma_fabric: Option<crate::rdma::Fabric>,
 ) -> Result<(ReconnectingConnection, Option<Value>), Box<(ReconnectingConnection, RedisError)>> {
     let reconnecting_connection = ReconnectingConnection::new(
         address,
@@ -1240,6 +1268,7 @@ async fn get_connection_and_replication_info(
         address_resolver,
         iam_token_handle,
         cert_material_handle,
+        rdma_fabric,
     )
     .await?;
 

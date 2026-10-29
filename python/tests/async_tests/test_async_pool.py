@@ -12,6 +12,7 @@ cluster deployments behave identically.
 import asyncio
 import uuid
 
+import anyio
 import pytest
 from glide import (
     AllNodes,
@@ -428,6 +429,52 @@ class TestAsyncClientPool:
             assert pool.idle_count == 1
         finally:
             pool.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    async def test_ordinary_client_survives_pool_borrow_release(self, cluster_mode):
+        """Ordinary and pooled async clients draw pipe ids from one sequence, so
+        a pooled client cannot displace an ordinary one in the pipe registry.
+        ``fail_after`` turns a regression into a failure instead of a hang.
+        """
+        from glide._ffi_instance import _ASYNC_FFI
+        from glide.glide_client import _client_registry
+
+        ReaderClass = GlideClusterClient if cluster_mode else GlideClient
+
+        # A shared-sequence id falls strictly between these two samples; a local
+        # counter does not, however many clients this process already created.
+        seq_before = _ASYNC_FFI.lib.glide_allocate_client_id()
+        reader = await ReaderClass.create(_get_pool_client_config(cluster_mode))
+        try:
+            seq_after = _ASYNC_FFI.lib.glide_allocate_client_id()
+            assert seq_before < reader._pipe_client_id < seq_after
+
+            pool = await AsyncClientPool.create(
+                _get_pool_client_config(cluster_mode),
+                PoolConfig(max_size=1, min_idle=1),
+            )
+            try:
+                await _wait_for_pool_ready(pool, 1)
+
+                key = _make_key(cluster_mode, "survives")
+
+                async def reader_roundtrip():
+                    await reader.set(key, "seeded")
+                    assert await reader.get(key) == b"seeded"
+
+                assert _client_registry[reader._pipe_client_id] is reader
+                with anyio.fail_after(10):
+                    await reader_roundtrip()
+
+                async with pool.borrow():
+                    pass
+                assert _client_registry[reader._pipe_client_id] is reader
+                with anyio.fail_after(10):
+                    await reader_roundtrip()
+            finally:
+                pool.close()
+        finally:
+            await reader.close()
 
 
 def _has_client_info_field(client_info: str, field: str, expected: str) -> bool:

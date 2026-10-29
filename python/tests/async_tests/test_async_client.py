@@ -819,14 +819,17 @@ class TestCommands:
         key = get_random_string(10)
         assert await glide_client.set(key, "value") == OK
 
+        # Value not equal
         cond = OnlyIfEqual("other")
         assert await glide_client.set(key, "other", conditional_set=cond) is None
         assert await glide_client.get(key) == b"value"
 
+        # Value equal
         cond = OnlyIfEqual("value")
         assert await glide_client.set(key, "other", conditional_set=cond) == OK
         assert await glide_client.get(key) == b"other"
 
+        # Non-existent key
         missing = get_random_string(10)
         assert await glide_client.set(missing, "value", conditional_set=cond) is None
         assert await glide_client.exists([missing]) == 0
@@ -838,14 +841,17 @@ class TestCommands:
         key = get_random_string(10)
         assert await glide_client.set(key, "value") == OK
 
+        # Value equal
         cond = OnlyIfNotEqual("value")
         assert await glide_client.set(key, "other", conditional_set=cond) is None
         assert await glide_client.get(key) == b"value"
 
+        # Value not equal
         cond = OnlyIfNotEqual("other")
         assert await glide_client.set(key, "other", conditional_set=cond) == OK
         assert await glide_client.get(key) == b"other"
 
+        # Non-existent key
         missing = get_random_string(10)
         assert await glide_client.set(missing, "value", conditional_set=cond) == OK
         assert await glide_client.get(missing) == b"value"
