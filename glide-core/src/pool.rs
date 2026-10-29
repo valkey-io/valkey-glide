@@ -1485,12 +1485,12 @@ impl ScopePool {
     /// Release a scope. Zero-cost if state is clean.
     ///
     /// Returns `false` without side effects if `scope_id` is unknown or was
-    /// already released. Otherwise, five outcomes, in order of precedence: a
-    /// closed pool just decrements the count; a clean connection goes straight
-    /// back to idle with no round-trip; a contended lock discards, since release
-    /// must not block; an armed blocking waiter or a failed re-auth discards,
-    /// because no cleanup command can undo either; anything else dirty runs the
-    /// cleanup pipeline and discards if it fails.
+    /// already released. Otherwise, in order of precedence: a connection a
+    /// command still holds, or any connection of a closed pool, is discarded; a
+    /// clean connection goes straight back to idle with no round-trip; an armed
+    /// blocking waiter or a failed re-auth discards, because no cleanup command
+    /// can undo either; anything else dirty runs the cleanup pipeline and
+    /// discards if it fails. Every discard kills the socket.
     pub fn release(&mut self, scope_id: u64, registry: &DashMap<u64, ScopeEntry>) -> bool {
         let released = self.release_inner(scope_id, registry);
         if released {

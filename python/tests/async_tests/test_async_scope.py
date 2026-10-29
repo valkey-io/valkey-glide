@@ -92,7 +92,8 @@ class TestAsyncIsolatedScopeBasic:
         loop.set_default_executor(ThreadPoolExecutor(max_workers=1))
         key = f"async-scope-blpop-{uuid.uuid4().hex[:8]}"
         scope = await client.scoped_connection()
-        blpop = asyncio.create_task(scope.execute_command("BLPOP", key, "0"))
+        # Bounded past the 2s check so a failed release can't pin the worker forever.
+        blpop = asyncio.create_task(scope.execute_command("BLPOP", key, "10"))
         await asyncio.sleep(0.2)
         blpop.cancel()
         with pytest.raises(asyncio.CancelledError):
