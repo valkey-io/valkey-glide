@@ -646,6 +646,10 @@ def create_servers(
                     os.kill(server.process_id(), signal.SIGKILL)
                 except ProcessLookupError:
                     pass
+            else:
+                logging.warning(
+                    f"Server {server} never logged its pid; it may still be running after {node_folder} is removed"
+                )
             remove_folder(node_folder)
             if ports is not None:
                 # The user passed a taken port, exit with an error

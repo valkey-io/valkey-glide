@@ -14,7 +14,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "utils"))
 
-from cluster_manager import (  # type: ignore[import-not-found]  # noqa: E402
+from cluster_manager import (  # noqa: E402
     Server,
     is_address_already_in_use,
 )
