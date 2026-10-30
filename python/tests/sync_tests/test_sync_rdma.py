@@ -1675,10 +1675,13 @@ class TestRdmaTransfers:
             # left for it to free: freeing it now would free it under the call.
             if thread.is_alive():
                 assert rdma_client._deferred_core_client != rdma_client._ffi.NULL
+                # It can still call its callbacks, so they are kept too.
+                assert rdma_client._deferred_callback_refs != ()
 
             thread.join(30)
             assert not thread.is_alive(), "closing the client ends the wait"
             assert rdma_client._deferred_core_client == rdma_client._ffi.NULL
+            assert rdma_client._deferred_callback_refs == ()
             assert rdma_client._rdma_calls == 0
         finally:
             # Let the pause lapse, so the tests after this one can connect.
