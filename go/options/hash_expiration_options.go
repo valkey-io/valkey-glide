@@ -68,6 +68,7 @@ func (opts *HSetExOptions) ToArgs() ([]string, error) {
 	keyCondition := opts.ConditionalSet
 	fieldCondition := opts.FieldConditionalSet
 
+	// TODO: https://github.com/valkey-io/valkey-glide/issues/7489
 	// Backward compatibility: field-level conditions were previously passed via ConditionalSet.
 	if legacy := constants.HashFieldConditionalSet(keyCondition); legacy == constants.HashAllFieldsExist ||
 		legacy == constants.HashFieldsDoNotExist {

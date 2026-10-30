@@ -1482,6 +1482,7 @@ class CoreCommands(Protocol):
         field_value_map: Mapping[TEncodable, TEncodable],
         field_conditional_change: Optional[HashFieldConditionalChange] = None,
         expiry: Optional[ExpirySet] = None,
+        # TODO: https://github.com/valkey-io/valkey-glide/issues/7488
         key_conditional_change: Optional[ConditionalChange] = None,
     ) -> int:
         """

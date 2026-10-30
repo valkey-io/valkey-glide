@@ -92,12 +92,16 @@ const (
 	// [Valkey GLIDE – Data Compression]: https://glide.valkey.io/concepts/client-features/compression/#incompatible-commands
 	OnlyIfNotEquals ConditionalSet = "IFNE"
 
+	// TODO: https://github.com/valkey-io/valkey-glide/issues/7489
+
 	// OnlyIfFieldsDoNotExist only sets the hash fields if none of them already exist.
 	// Equivalent to "FNX" in the Valkey API.
 	// Used with hash field expiration commands.
 	//
 	// Deprecated: Use [HashFieldsDoNotExist] with options.HSetExOptions.SetFieldConditionalSet instead.
 	OnlyIfFieldsDoNotExist ConditionalSet = "FNX"
+
+	// TODO: https://github.com/valkey-io/valkey-glide/issues/7489
 
 	// OnlyIfAllFieldsExist only sets the hash fields if all of them already exist.
 	// Equivalent to "FXX" in the Valkey API.
