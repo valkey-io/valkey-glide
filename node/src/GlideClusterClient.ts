@@ -19,6 +19,7 @@ import {
     PubSubMsg,
     convertGlideRecordToRecord,
     isGlideRecord,
+    validateUnixSocketAddresses,
 } from "./BaseClient";
 import { RequestError } from "./Errors";
 import { ClusterBatch } from "./Batch";
@@ -668,6 +669,7 @@ export class GlideClusterClient extends BaseClient {
     protected createClientRequest(
         options: GlideClusterClientConfiguration,
     ): connection_request.IConnectionRequest {
+        validateUnixSocketAddresses(options, true);
         const configuration = super.createClientRequest(options);
         configuration.clusterModeEnabled = true;
 

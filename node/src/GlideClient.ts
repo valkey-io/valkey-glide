@@ -15,6 +15,7 @@ import {
     GlideString,
     PubSubMsg,
     NodeDiscoveryMode,
+    validateUnixSocketAddresses,
 } from "./BaseClient";
 import { Batch } from "./Batch";
 import {
@@ -260,6 +261,7 @@ export class GlideClient extends BaseClient {
     protected createClientRequest(
         options: GlideClientConfiguration,
     ): connection_request.IConnectionRequest {
+        validateUnixSocketAddresses(options, false);
         const configuration = super.createClientRequest(options);
 
         this.configurePubsub(options, configuration);

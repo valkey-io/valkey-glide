@@ -484,6 +484,18 @@ export async function waitForNotBusy(client: GlideClusterClient | GlideClient) {
     } while (isBusy);
 }
 
+export function getClientInfoField(
+    clientInfo: string,
+    fieldName: string,
+): string | undefined {
+    const prefix = `${fieldName}=`;
+    return clientInfo
+        .trim()
+        .split(/\s+/u)
+        .find((field) => field.startsWith(prefix))
+        ?.slice(prefix.length);
+}
+
 /**
  * Waits until a condition is met.
  *
