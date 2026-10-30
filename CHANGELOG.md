@@ -122,6 +122,7 @@
 
 ### Breaking Changes
 
+* Rust: Require `InfoSection` enum for `info_sections` command ([#7366](https://github.com/valkey-io/valkey-glide/issues/7366))
 * Java: An AZ-affinity read strategy configured without `clientAZ` now fails at client creation. Previously the core logged a warning and downgraded the strategy to `PreferReplica`, so reads silently went to arbitrary nodes. Affects `AZ_AFFINITY` and `AZ_AFFINITY_REPLICAS_AND_PRIMARY` as well as the new `AZ_AFFINITY_ALL_NODES`, and reaches `ClientPool.create` as well as `GlideClient`/`GlideClusterClient` ([#7059](https://github.com/valkey-io/valkey-glide/pull/7059))
 * Node: `clientAz` is now trimmed and validated for the `AZAffinity`, `AZAffinityReplicasAndPrimary`, and `AZAffinityAllNodes` read strategies. A whitespace-only `clientAz` now raises a `ConfigurationError`, and a padded value (e.g. `" us-east-1a "`) is trimmed before reaching the core so reads pin to that zone instead of falling back to all nodes ([#7104](https://github.com/valkey-io/valkey-glide/pull/7104))
 
