@@ -15,6 +15,9 @@ import random
 import re
 import shlex
 import signal
+
+SIGKILL = getattr(signal, "SIGKILL", 9)
+SIGTERM = getattr(signal, "SIGTERM", 15)
 import socket
 import string
 import subprocess
@@ -504,6 +507,8 @@ def start_server(
         "yes",
         "--logfile",
         logfile,
+        "--pidfile",
+        f"{node_folder}/server.pid",
         "--protected-mode",
         "no",
         "--appendonly",
@@ -557,13 +562,17 @@ def start_server(
 
     server = Server(host, port)
 
-    # Read the process ID from the log file
+    # Read the process ID from pidfile or log file
     # Note that `p.pid` is not good here since we daemonize the process
-    process_id = wait_for_regex_in_log(
-        logfile, r"version=(.*?)pid=([\d]+), just started", 2
-    )
-    if process_id:
-        server.set_process_id(int(process_id))
+    pid = read_daemon_pid(node_folder, logfile)
+    if not pid:
+        process_id_str = wait_for_regex_in_log(
+            logfile, r"version=(.*?)pid=([\d]+), just started", 2
+        )
+        if process_id_str:
+            pid = int(process_id_str)
+    if pid:
+        server.set_process_id(pid)
 
     return server, node_folder
 
@@ -649,18 +658,9 @@ def create_servers(
         # Only a node that reported Ready goes to --cluster create: a PING answer
         # from the port does not prove it is this node's.
         if verdict is not NodeCheck.READY:
+            daemon_stopped = True
             if verdict is NodeCheck.NO_VERDICT:
-                # Still running, and would keep going with its data directory
-                # deleted underneath it.
-                if server.process_id() > 0:
-                    try:
-                        os.kill(server.process_id(), signal.SIGKILL)
-                    except ProcessLookupError:
-                        pass
-                else:
-                    logging.warning(
-                        f"Server {server} never logged its pid; it may still be running after {node_folder} is removed"
-                    )
+                daemon_stopped = stop_failed_daemon(server, node_folder)
                 failure = "it never reported Ready"
             else:
                 failure = "address already in use"
@@ -679,7 +679,12 @@ def create_servers(
                     f"Couldn't start server on {server.host}:{server.port}, {failure}{detail}"
                 )
             replacements_left -= 1
-            remove_folder(node_folder)
+            if daemon_stopped:
+                remove_folder(node_folder)
+            else:
+                logging.warning(
+                    f"Retaining {node_folder} because daemon termination could not be confirmed"
+                )
             servers_to_check.add(
                 start_server(
                     server.host,
@@ -693,6 +698,10 @@ def create_servers(
                 )
             )
             continue
+        if server.process_id() <= 0:
+            pid = read_daemon_pid(node_folder, f"{node_folder}/server.log")
+            if pid:
+                server.set_process_id(pid)
         if not wait_for_server(server, cluster_folder, tls, 10, tls_cert_file, tls_key_file, tls_ca_cert_file):
             raise Exception(
                 f"Waiting for server {server.host}:{server.port} to start exceeded timeout.\n"
@@ -1047,6 +1056,217 @@ def check_node_startup(
     return NodeCheck.NO_VERDICT
 
 
+def read_daemon_pid(node_folder: str, logfile: Optional[str] = None) -> Optional[int]:
+    """Extract daemon PID from pidfile or server log if available."""
+    # 1. Check server.pid
+    pidfile = os.path.join(node_folder, "server.pid")
+    if os.path.exists(pidfile):
+        try:
+            with open(pidfile, "r") as f:
+                content = f.read().strip()
+                if content.isdigit():
+                    return int(content)
+        except OSError:
+            pass
+
+    # 2. Check server.log
+    if not logfile:
+        logfile = os.path.join(node_folder, "server.log")
+    if os.path.exists(logfile):
+        try:
+            with open(logfile, "r") as f:
+                content = f.read()
+                # Logfmt or standard startup: pid=12345 or version=... pid=12345, just started
+                m = re.search(r"\bpid=([\d]+)\b", content)
+                if m:
+                    return int(m.group(1))
+                # Legacy log format: 12345:M or 12345:S or 12345:X or 12345:C at start of line
+                m = re.search(r"^(\d+):[MSXC\*]", content, re.MULTILINE)
+                if m:
+                    return int(m.group(1))
+        except OSError:
+            pass
+
+    return None
+
+
+def is_process_alive(pid: int) -> bool:
+    """Check whether a process with the given PID is currently alive."""
+    if pid <= 0:
+        return False
+    try:
+        os.kill(pid, 0)
+        return True
+    except (ProcessLookupError, OSError) as e:
+        if isinstance(e, ProcessLookupError) or getattr(e, "errno", None) == 3:  # ESRCH
+            return False
+        if isinstance(e, PermissionError) or getattr(e, "errno", None) == 1:  # EPERM
+            return True
+        return False
+
+
+def get_process_cmdline(pid: int) -> Optional[List[str]]:
+    """Retrieve command line arguments for process `pid` if accessible."""
+    if pid <= 0:
+        return None
+
+    # 1. Try Linux /proc/<pid>/cmdline
+    proc_cmdline = Path(f"/proc/{pid}/cmdline")
+    try:
+        if proc_cmdline.exists():
+            raw = proc_cmdline.read_bytes()
+            tokens = [
+                t.decode("utf-8", errors="replace")
+                for t in raw.split(b"\x00")
+                if t
+            ]
+            if tokens:
+                return tokens
+    except (OSError, PermissionError):
+        pass
+
+    # 2. Try POSIX ps command (macOS / BSD / Linux without /proc)
+    try:
+        res = subprocess.run(
+            ["ps", "-p", str(pid), "-o", "args="],
+            capture_output=True,
+            text=True,
+            timeout=2,
+        )
+        if res.returncode == 0 and res.stdout.strip():
+            return shlex.split(res.stdout.strip())
+    except (subprocess.SubprocessError, OSError, FileNotFoundError):
+        pass
+
+    return None
+
+
+def verify_process_ownership(pid: int, server: Server, node_folder: str) -> bool:
+    """Verify that process `pid` is the server daemon started for `server` and `node_folder`.
+
+    Guards against signaling unrelated processes on PID reuse or stale PIDs.
+    """
+    if pid <= 0:
+        return False
+
+    # Check if process exists and is accessible
+    try:
+        os.kill(pid, 0)
+    except (ProcessLookupError, OSError) as e:
+        if isinstance(e, ProcessLookupError) or getattr(e, "errno", None) == 3:  # ESRCH
+            return False
+        if isinstance(e, PermissionError) or getattr(e, "errno", None) == 1:  # EPERM
+            # Process belongs to a different user, not our spawned daemon
+            return False
+        return False
+
+    # Check Linux /proc/<pid>/cwd if available
+    try:
+        proc_cwd = Path(f"/proc/{pid}/cwd")
+        if proc_cwd.is_symlink():
+            target = os.path.realpath(str(proc_cwd))
+            if target == os.path.realpath(node_folder):
+                return True
+    except (OSError, PermissionError):
+        pass
+
+    cmdline = get_process_cmdline(pid)
+    if not cmdline:
+        # Cannot inspect process command line; cannot verify ownership
+        return False
+
+    cmd_str = " ".join(cmdline).lower()
+    # Must be valkey-server or redis-server
+    is_server = any(
+        name in cmdline[0].lower() or name in cmd_str
+        for name in ["valkey-server", "redis-server"]
+    )
+    if not is_server:
+        return False
+
+    # Must match the port or the node_folder
+    port_str = str(server.port)
+    matches_port = (
+        f"--port {port_str}" in cmd_str
+        or f"--tls-port {port_str}" in cmd_str
+        or port_str in cmdline
+    )
+    norm_folder = os.path.normpath(node_folder).lower()
+    matches_dir = any(
+        norm_folder in os.path.normpath(token).lower() for token in cmdline
+    )
+
+    return matches_port or matches_dir
+
+
+def wait_for_process_exit(pid: int, timeout: float = 2.0) -> bool:
+    """Wait up to `timeout` seconds for process `pid` to exit. Returns True if exited."""
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        if not is_process_alive(pid):
+            return True
+        time.sleep(0.05)
+    return not is_process_alive(pid)
+
+
+def stop_failed_daemon(server: Server, node_folder: str) -> bool:
+    """Safely identifies and stops the daemon process owned by a failed startup attempt.
+
+    Returns True if the daemon is confirmed stopped (or was already exited),
+    or False if ownership could not be verified or termination could not be confirmed.
+    """
+    pid = server.process_id()
+    if pid <= 0:
+        discovered_pid = read_daemon_pid(node_folder, f"{node_folder}/server.log")
+        if discovered_pid:
+            server.set_process_id(discovered_pid)
+            pid = discovered_pid
+
+    if pid <= 0:
+        logging.warning(
+            f"Server {server} pid could not be determined; retaining {node_folder} "
+            "to avoid deleting data directory under a potentially running daemon"
+        )
+        return False
+
+    if not is_process_alive(pid):
+        logging.debug(f"Server {server} (PID {pid}) has already exited")
+        return True
+
+    if not verify_process_ownership(pid, server, node_folder):
+        logging.warning(
+            f"PID {pid} does not match server {server} on {node_folder} "
+            f"(possible PID reuse or stale PID); skipping kill and retaining {node_folder}"
+        )
+        return False
+
+    # Attempt graceful SIGTERM first
+    try:
+        os.kill(pid, SIGTERM)
+    except (ProcessLookupError, OSError):
+        return True
+
+    if wait_for_process_exit(pid, timeout=2.0):
+        logging.debug(f"Server {server} (PID {pid}) stopped after SIGTERM")
+        return True
+
+    # Escalate to SIGKILL if still running
+    try:
+        os.kill(pid, SIGKILL)
+    except (ProcessLookupError, OSError):
+        return True
+
+    if wait_for_process_exit(pid, timeout=2.0):
+        logging.debug(f"Server {server} (PID {pid}) stopped after SIGKILL")
+        return True
+
+    logging.error(
+        f"Server {server} (PID {pid}) could not be terminated; process still running; "
+        f"retaining {node_folder}"
+    )
+    return False
+
+
 def dir_path(path: str):
     try:
         # Try to create the path folder if it isn't exist
@@ -1210,7 +1430,7 @@ def stop_clusters(
         for pid in pid_arr:
             try:
                 # Kill the process
-                os.kill(int(pid), signal.SIGKILL)
+                os.kill(int(pid), SIGKILL)
             except ProcessLookupError as e:
                 logging.debug(f"Could not kill server with PID: {pid}. {e}")
                 pass
