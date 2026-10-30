@@ -1584,7 +1584,7 @@ fn classify_acquire(
             if !registered {
                 pool.in_use.remove(&scope_id);
                 if let Some((_, entry)) = registry.remove(&scope_id) {
-                    entry.kill_handle.kill();
+                    entry.discard();
                 }
                 return Outcome(Fail(ScopeFailCause::PoolClosed));
             }

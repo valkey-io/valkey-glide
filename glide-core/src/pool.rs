@@ -1378,14 +1378,7 @@ impl ScopePool {
             conn.acquisition_slot = acquisition_slot;
             // Preserve the connection's actual db; reset only borrow-scoped flags.
             conn.state.begin_borrow(runtime_db);
-            registry.insert(
-                scope_id,
-                ScopeEntry {
-                    kill_handle: conn.connection.clone(),
-                    connection: Arc::new(TokioMutex::new(conn)),
-                    parent_client_id: self.parent_client_id,
-                },
-            );
+            registry.insert(scope_id, ScopeEntry::new(conn, self.parent_client_id));
             self.in_use.insert(scope_id, ());
             return ScopeAcquire::Reused(scope_id);
         }
@@ -1509,208 +1502,198 @@ impl ScopePool {
             return false;
         };
 
-        // A command still holding the connection (in flight, or queued on its lock)
-        // was abandoned by this release: discard rather than hand it to a new borrower.
-        if entry.held_by_command() || self.state.load(Ordering::Acquire) != POOL_RUNNING {
-            entry.kill_handle.kill();
+        if self.state.load(Ordering::Acquire) != POOL_RUNNING {
+            entry.discard();
             saturating_dec(&self.total_count);
             return true;
         }
+        // A command still holding the connection (in flight, or queued on its lock)
+        // was abandoned by this release: discard rather than hand it to a new borrower.
+        let Some(conn) = entry.reclaim() else {
+            saturating_dec(&self.total_count);
+            return true;
+        };
 
-        match entry.connection.try_lock() {
-            Ok(conn) => {
-                if conn.state.is_clean_for(conn.state.parent_db) {
-                    let idle_conn = ScopedConnection {
-                        scope_id: conn.scope_id,
-                        connection: conn.connection.clone(),
-                        created_at: conn.created_at,
-                        last_idle_at: Instant::now(),
-                        borrowed_at: None,
-                        // Clean: already on the baseline. Carry the actual db forward rather
-                        // than discarding it to 0.
-                        state: ConnectionState::with_configured_db(conn.state.selected_db),
-                        pinned_slot: None,
-                        // Idle: not borrowed, so no acquisition slot. Set per borrow.
-                        acquisition_slot: None,
-                        target: conn.target.clone(),
-                        last_auth_generation: conn.last_auth_generation,
-                    };
-                    drop(conn);
-                    self.idle.push_back(idle_conn);
-                } else {
-                    // An armed waiter or a failed re-auth is unrecoverable by any
-                    // cleanup command, so discard rather than return to idle.
-                    if conn.state.blocking_in_flight || conn.state.must_discard {
-                        drop(conn);
-                        entry.kill_handle.kill();
-                        saturating_dec(&self.total_count);
-                        return true;
-                    }
-                    // Dirty state — pipeline all cleanup commands in a single round-trip.
-                    // If any command fails or the pipeline times out, discard the connection.
-                    let conn_arc = entry.connection.clone();
-                    let request_timeout = self.config.request_timeout;
-                    // Reset to this borrow's baseline (the parent's runtime db), not the
-                    // pool's static config.
-                    let self_parent_db = conn.state.parent_db;
-                    let self_configured_client_name = self.configured_client_name.clone();
-
-                    let client_id = self.parent_client_id;
-                    let pools = get_client_scope_pools();
-                    let pool_arc = pools.get(&client_id).map(|p| p.value().pool.clone());
-
-                    tokio::spawn(async move {
-                        let mut guard = conn_arc.lock().await;
-                        let timeout = request_timeout * 2;
-
-                        // Build a single pipeline with all cleanup commands
-                        let mut pipe = redis::Pipeline::new();
-                        let mut cmd_count = 0;
-
-                        // DISCARD (implicitly unwatches) or UNWATCH
-                        if guard.state.multi_active {
-                            pipe.cmd("DISCARD");
-                            cmd_count += 1;
-                        } else if guard.state.watch_active {
-                            pipe.cmd("UNWATCH");
-                            cmd_count += 1;
-                        }
-
-                        // Subscription cleanup
-                        if guard.state.has_subscriptions() {
-                            let mut channels = Vec::new();
-                            let mut patterns = Vec::new();
-                            let mut sharded = Vec::new();
-                            for sub in &guard.state.subscriptions {
-                                match sub {
-                                    ScopeSubscription::Channel(c) => channels.push(c.clone()),
-                                    ScopeSubscription::Pattern(p) => patterns.push(p.clone()),
-                                    ScopeSubscription::ShardedChannel(s) => sharded.push(s.clone()),
-                                }
-                            }
-                            if !channels.is_empty() {
-                                let mut cmd = redis::Cmd::new();
-                                cmd.arg("UNSUBSCRIBE");
-                                for c in &channels {
-                                    cmd.arg(c.as_slice());
-                                }
-                                pipe.add_command(cmd);
-                                cmd_count += 1;
-                            }
-                            if !patterns.is_empty() {
-                                let mut cmd = redis::Cmd::new();
-                                cmd.arg("PUNSUBSCRIBE");
-                                for p in &patterns {
-                                    cmd.arg(p.as_slice());
-                                }
-                                pipe.add_command(cmd);
-                                cmd_count += 1;
-                            }
-                            if !sharded.is_empty() {
-                                let mut cmd = redis::Cmd::new();
-                                cmd.arg("SUNSUBSCRIBE");
-                                for s in &sharded {
-                                    cmd.arg(s.as_slice());
-                                }
-                                pipe.add_command(cmd);
-                                cmd_count += 1;
-                            }
-                        }
-
-                        // CLIENT TRACKING OFF
-                        if guard.state.tracking_enabled {
-                            pipe.cmd("CLIENT").arg("TRACKING").arg("OFF");
-                            cmd_count += 1;
-                        }
-
-                        // SELECT <parent_db> — restore this borrow's database baseline
-                        // (the parent's runtime database at acquire), not the static config.
-                        if guard.state.selected_db != self_parent_db {
-                            pipe.cmd("SELECT").arg(self_parent_db.to_string());
-                            cmd_count += 1;
-                        }
-
-                        // CLIENT SETNAME <configured_client_name> (reset connection
-                        // name back to the configured baseline, empty if none).
-                        if guard.state.client_name_changed {
-                            pipe.cmd("CLIENT")
-                                .arg("SETNAME")
-                                .arg(self_configured_client_name.as_str());
-                            cmd_count += 1;
-                        }
-
-                        // Send the entire pipeline as one round-trip with timeout
-                        let cleanup_result = if cmd_count > 0 {
-                            tokio::time::timeout(
-                                timeout,
-                                guard.connection.send_packed_commands(&pipe, 0, cmd_count),
-                            )
-                            .await
-                        } else {
-                            // No cleanup needed (shouldn't reach here, but handle gracefully)
-                            Ok(Ok(vec![]))
-                        };
-
-                        // Succeeded → re-idle; any error, including a rejected SELECT
-                        // (see pipeline_replies_ok) → discard rather than re-idle on the wrong db.
-                        let success = pipeline_replies_ok(&cleanup_result);
-
-                        if success {
-                            if let Some(pool_arc) = pool_arc {
-                                let idle_conn = ScopedConnection {
-                                    scope_id: guard.scope_id,
-                                    connection: guard.connection.clone(),
-                                    created_at: guard.created_at,
-                                    last_idle_at: Instant::now(),
-                                    borrowed_at: None,
-                                    // After cleanup the connection is on the baseline db,
-                                    // so record that as its actual db, not a default.
-                                    state: ConnectionState::with_configured_db(self_parent_db),
-                                    pinned_slot: None,
-                                    // Idle: not borrowed, so no acquisition slot. Set per borrow.
-                                    acquisition_slot: None,
-                                    target: guard.target.clone(),
-                                    last_auth_generation: guard.last_auth_generation,
-                                };
-                                drop(guard);
-
-                                let mut pool = pool_arc.lock().await;
-                                if pool.state.load(Ordering::Acquire) == POOL_RUNNING {
-                                    pool.idle.push_back(idle_conn);
-                                } else {
-                                    saturating_dec(&pool.total_count);
-                                }
-                                pool.wakeup.notify_waiters();
-                            } else {
-                                drop(guard);
-                            }
-                        } else {
-                            // Cleanup failed — discard the connection entirely
-                            glide_logger::log_warn_rate_limited!(
-                                "pool",
-                                10,
-                                "Scope connection cleanup failed — discarding connection"
-                            );
-                            guard.connection.kill();
-                            drop(guard);
-                            if let Some(pool_arc) = pool_arc {
-                                let pool = pool_arc.lock().await;
-                                saturating_dec(&pool.total_count);
-                                pool.wakeup.notify_waiters();
-                            }
-                        }
-                    });
-                }
-                true
-            }
-            Err(_) => {
-                // Unreachable: a lock holder also holds the Arc, so `held_by_command` above
-                // already discarded. Fail closed rather than panic.
-                entry.kill_handle.kill();
+        if conn.state.is_clean_for(conn.state.parent_db) {
+            let idle_conn = ScopedConnection {
+                scope_id: conn.scope_id,
+                connection: conn.connection,
+                created_at: conn.created_at,
+                last_idle_at: Instant::now(),
+                borrowed_at: None,
+                // Clean: already on the baseline. Carry the actual db forward rather
+                // than discarding it to 0.
+                state: ConnectionState::with_configured_db(conn.state.selected_db),
+                pinned_slot: None,
+                // Idle: not borrowed, so no acquisition slot. Set per borrow.
+                acquisition_slot: None,
+                target: conn.target,
+                last_auth_generation: conn.last_auth_generation,
+            };
+            self.idle.push_back(idle_conn);
+        } else {
+            // An armed waiter or a failed re-auth is unrecoverable by any
+            // cleanup command, so discard rather than return to idle.
+            if conn.state.blocking_in_flight || conn.state.must_discard {
+                conn.connection.kill();
                 saturating_dec(&self.total_count);
-                true
+                return true;
             }
+            // Dirty state — pipeline all cleanup commands in a single round-trip.
+            // If any command fails or the pipeline times out, discard the connection.
+            let request_timeout = self.config.request_timeout;
+            // Reset to this borrow's baseline (the parent's runtime db), not the
+            // pool's static config.
+            let self_parent_db = conn.state.parent_db;
+            let self_configured_client_name = self.configured_client_name.clone();
+
+            let client_id = self.parent_client_id;
+            let pools = get_client_scope_pools();
+            let pool_arc = pools.get(&client_id).map(|p| p.value().pool.clone());
+
+            tokio::spawn(async move {
+                let mut guard = conn;
+                let timeout = request_timeout * 2;
+
+                // Build a single pipeline with all cleanup commands
+                let mut pipe = redis::Pipeline::new();
+                let mut cmd_count = 0;
+
+                // DISCARD (implicitly unwatches) or UNWATCH
+                if guard.state.multi_active {
+                    pipe.cmd("DISCARD");
+                    cmd_count += 1;
+                } else if guard.state.watch_active {
+                    pipe.cmd("UNWATCH");
+                    cmd_count += 1;
+                }
+
+                // Subscription cleanup
+                if guard.state.has_subscriptions() {
+                    let mut channels = Vec::new();
+                    let mut patterns = Vec::new();
+                    let mut sharded = Vec::new();
+                    for sub in &guard.state.subscriptions {
+                        match sub {
+                            ScopeSubscription::Channel(c) => channels.push(c.clone()),
+                            ScopeSubscription::Pattern(p) => patterns.push(p.clone()),
+                            ScopeSubscription::ShardedChannel(s) => sharded.push(s.clone()),
+                        }
+                    }
+                    if !channels.is_empty() {
+                        let mut cmd = redis::Cmd::new();
+                        cmd.arg("UNSUBSCRIBE");
+                        for c in &channels {
+                            cmd.arg(c.as_slice());
+                        }
+                        pipe.add_command(cmd);
+                        cmd_count += 1;
+                    }
+                    if !patterns.is_empty() {
+                        let mut cmd = redis::Cmd::new();
+                        cmd.arg("PUNSUBSCRIBE");
+                        for p in &patterns {
+                            cmd.arg(p.as_slice());
+                        }
+                        pipe.add_command(cmd);
+                        cmd_count += 1;
+                    }
+                    if !sharded.is_empty() {
+                        let mut cmd = redis::Cmd::new();
+                        cmd.arg("SUNSUBSCRIBE");
+                        for s in &sharded {
+                            cmd.arg(s.as_slice());
+                        }
+                        pipe.add_command(cmd);
+                        cmd_count += 1;
+                    }
+                }
+
+                // CLIENT TRACKING OFF
+                if guard.state.tracking_enabled {
+                    pipe.cmd("CLIENT").arg("TRACKING").arg("OFF");
+                    cmd_count += 1;
+                }
+
+                // SELECT <parent_db> — restore this borrow's database baseline
+                // (the parent's runtime database at acquire), not the static config.
+                if guard.state.selected_db != self_parent_db {
+                    pipe.cmd("SELECT").arg(self_parent_db.to_string());
+                    cmd_count += 1;
+                }
+
+                // CLIENT SETNAME <configured_client_name> (reset connection
+                // name back to the configured baseline, empty if none).
+                if guard.state.client_name_changed {
+                    pipe.cmd("CLIENT")
+                        .arg("SETNAME")
+                        .arg(self_configured_client_name.as_str());
+                    cmd_count += 1;
+                }
+
+                // Send the entire pipeline as one round-trip with timeout
+                let cleanup_result = if cmd_count > 0 {
+                    tokio::time::timeout(
+                        timeout,
+                        guard.connection.send_packed_commands(&pipe, 0, cmd_count),
+                    )
+                    .await
+                } else {
+                    // No cleanup needed (shouldn't reach here, but handle gracefully)
+                    Ok(Ok(vec![]))
+                };
+
+                // Succeeded → re-idle; any error, including a rejected SELECT
+                // (see pipeline_replies_ok) → discard rather than re-idle on the wrong db.
+                let success = pipeline_replies_ok(&cleanup_result);
+
+                if success {
+                    if let Some(pool_arc) = pool_arc {
+                        let idle_conn = ScopedConnection {
+                            scope_id: guard.scope_id,
+                            connection: guard.connection.clone(),
+                            created_at: guard.created_at,
+                            last_idle_at: Instant::now(),
+                            borrowed_at: None,
+                            // After cleanup the connection is on the baseline db,
+                            // so record that as its actual db, not a default.
+                            state: ConnectionState::with_configured_db(self_parent_db),
+                            pinned_slot: None,
+                            // Idle: not borrowed, so no acquisition slot. Set per borrow.
+                            acquisition_slot: None,
+                            target: guard.target.clone(),
+                            last_auth_generation: guard.last_auth_generation,
+                        };
+                        drop(guard);
+
+                        let mut pool = pool_arc.lock().await;
+                        if pool.state.load(Ordering::Acquire) == POOL_RUNNING {
+                            pool.idle.push_back(idle_conn);
+                        } else {
+                            saturating_dec(&pool.total_count);
+                        }
+                        pool.wakeup.notify_waiters();
+                    } else {
+                        drop(guard);
+                    }
+                } else {
+                    // Cleanup failed — discard the connection entirely
+                    glide_logger::log_warn_rate_limited!(
+                        "pool",
+                        10,
+                        "Scope connection cleanup failed — discarding connection"
+                    );
+                    guard.connection.kill();
+                    drop(guard);
+                    if let Some(pool_arc) = pool_arc {
+                        let pool = pool_arc.lock().await;
+                        saturating_dec(&pool.total_count);
+                        pool.wakeup.notify_waiters();
+                    }
+                }
+            });
         }
+        true
     }
 
     /// Close this pool and drop its scopes, with the pool lock held.
@@ -1725,7 +1708,7 @@ impl ScopePool {
         for key in keys {
             self.in_use.remove(&key);
             if let Some((_, entry)) = registry.remove(&key) {
-                entry.kill_handle.kill();
+                entry.discard();
             }
         }
         self.total_count.store(0, Ordering::Release);
@@ -1745,20 +1728,38 @@ pub struct ScopeEntry {
     /// Kept here rather than on `ScopedConnection` so there is one source of
     /// truth: a connection outlives any single scope, so an id on both could
     /// disagree about which client currently owns the scope.
-    pub parent_client_id: u64,
+    pub(crate) parent_client_id: u64,
     /// A clone of the connection, used only to `kill()` its socket without the
-    /// lock an abandoned command may still hold. Discarding a borrowed connection must `kill()` it: dropping
-    /// alone waits for every reply, so a blocking command's server-side waiter
-    /// would outlive the discard.
-    pub kill_handle: redis::aio::MultiplexedConnection,
+    /// lock an abandoned command may still hold.
+    kill_handle: redis::aio::MultiplexedConnection,
 }
 
 impl ScopeEntry {
-    /// Whether a command still holds this connection (in flight or queued on its
-    /// lock). Only meaningful once the entry is out of the registry, which stops
-    /// new commands from picking it up.
-    fn held_by_command(&self) -> bool {
-        Arc::strong_count(&self.connection) > 1
+    pub(crate) fn new(conn: ScopedConnection, parent_client_id: u64) -> Self {
+        Self {
+            kill_handle: conn.connection.clone(),
+            connection: Arc::new(TokioMutex::new(conn)),
+            parent_client_id,
+        }
+    }
+
+    /// Close the socket. The only exit for an entry whose connection a command
+    /// may still hold: dropping alone waits for every reply, so a blocking
+    /// command's server-side waiter would outlive the discard.
+    pub(crate) fn discard(self) {
+        self.kill_handle.kill();
+    }
+
+    /// Sole ownership of the connection, or `None` after discarding it if a
+    /// command still holds it (in flight or queued on its lock).
+    fn reclaim(self) -> Option<ScopedConnection> {
+        match Arc::try_unwrap(self.connection) {
+            Ok(conn) => Some(conn.into_inner()),
+            Err(_) => {
+                self.kill_handle.kill();
+                None
+            }
+        }
     }
 }
 
@@ -1855,7 +1856,7 @@ pub fn destroy_client_scope_pool(client_id: u64) {
         .collect();
     for scope_id in owned {
         if let Some((_, entry)) = registry.remove(&scope_id) {
-            entry.kill_handle.kill();
+            entry.discard();
         }
     }
 }
