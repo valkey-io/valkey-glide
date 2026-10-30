@@ -122,6 +122,9 @@ EXCLUDED_TESTS = {
         # Abandon detection tests — async-only (monitor runs on tokio runtime)
         "test_pool_abandon_detection",
         "test_pool_abandon_detection_disabled",
+        "test_pool_abandon_skips_client_whose_scope_is_blocking",
+        # Scope release test — async-only (cancelled await pins an executor thread)
+        "test_release_frees_thread_of_cancelled_blocking_command",
         # Async provider scheduling has no sync equivalent.
         "test_iam_custom_async_provider_forms",
         "test_iam_close_during_provider_refresh_does_not_block_owner_runtime",
