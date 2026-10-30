@@ -705,7 +705,7 @@ pub fn pool_destroy(pool_id: i64) {
             for cid in discarded {
                 scope::unregister_client(cid);
             }
-            pool_guard.destroy();
+            ClientPool::destroy(pool_guard);
         });
     }
 }

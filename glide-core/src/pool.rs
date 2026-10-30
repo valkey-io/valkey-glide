@@ -351,49 +351,53 @@ impl ClientPool {
     }
 
     /// Destroy the pool — drop all clients.
-    pub fn destroy(&mut self) {
-        // Warn if any clients are still borrowed (likely leak)
-        let in_use_count = self.in_use.len();
-        if in_use_count > 0 {
-            glide_logger::log_warn(
-                "pool",
-                format!(
-                    "Pool destroyed with {} client(s) still borrowed — possible connection leak. \
-                     Ensure all acquired clients are released before closing the pool.",
-                    in_use_count
-                ),
-            );
-        }
+    ///
+    /// Takes the lock guard so the lock is released before the destruction logs
+    /// are written; a metrics read waiting for the lock must not wait on the log sink.
+    pub fn destroy(mut pool: tokio::sync::MutexGuard<'_, ClientPool>) {
+        let borrowed = pool.in_use.len();
 
         // Defensive fallback: every permanent drop should go through
         // discard_client(), which unregisters both registries. If a path forgets,
         // clean up here rather than leak; DashMap::remove is idempotent.
-        for entry in self.idle.iter() {
+        for entry in pool.idle.iter() {
             unregister_blocking_flag(entry.client_id);
             unregister_pool_client(entry.client_id);
         }
-        for entry in self.in_use.iter() {
+        for entry in pool.in_use.iter() {
             unregister_blocking_flag(*entry.key());
             unregister_pool_client(*entry.key());
         }
 
-        self.state.store(POOL_CLOSED, Ordering::Release);
+        pool.state.store(POOL_CLOSED, Ordering::Release);
 
         // Invalidate scopes owned by this pool's clients before dropping them, so a
         // scope cannot outlive the client it borrowed from.
-        for client_id in self
+        for client_id in pool
             .idle
             .iter()
             .map(|c| c.client_id)
-            .chain(self.in_use.iter().map(|e| *e.key()))
+            .chain(pool.in_use.iter().map(|e| *e.key()))
             .collect::<Vec<_>>()
         {
             destroy_client_scope_pool(client_id);
         }
 
-        self.idle.clear();
-        self.in_use.clear();
-        self.total_count.store(0, Ordering::Release);
+        pool.idle.clear();
+        pool.in_use.clear();
+        pool.total_count.store(0, Ordering::Release);
+        drop(pool);
+
+        if borrowed > 0 {
+            glide_logger::log_warn(
+                "pool",
+                format!(
+                    "Pool destroyed with {} client(s) still borrowed — possible connection leak. \
+                     Ensure all acquired clients are released before closing the pool.",
+                    borrowed
+                ),
+            );
+        }
         glide_logger::log_info("pool", "Pool destroyed");
     }
 
@@ -481,20 +485,21 @@ pub async fn release_client_async(pool_arc: Arc<TokioMutex<ClientPool>>, client_
     )
     .await;
 
+    if !matches!(reset_result, Ok(Ok(_))) {
+        glide_logger::log_warn_rate_limited!(
+            "pool",
+            10,
+            "Client reset failed on release — discarding connection"
+        );
+    }
+
     // Disarm only once the lock is held: the lock wait is itself a
     // cancellation point, and the outcome is handled explicitly below.
     let mut pool = pool_arc.lock().await;
     guard.pool = None;
     match reset_result {
         Ok(Ok(_)) => pool.return_to_idle(entry),
-        _ => {
-            glide_logger::log_warn_rate_limited!(
-                "pool",
-                10,
-                "Client reset failed on release — discarding connection"
-            );
-            pool.discard_client(entry.client_id);
-        }
+        _ => pool.discard_client(entry.client_id),
     }
 }
 

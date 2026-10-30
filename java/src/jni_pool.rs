@@ -243,7 +243,7 @@ pub extern "system" fn Java_glide_ffi_resolvers_GlidePoolResolver_glidePoolDestr
             glide_core::scope::unregister_client(cid);
             get_pool_client_map().remove(&cid);
         }
-        pool.destroy();
+        ClientPool::destroy(pool);
     });
     0
 }
