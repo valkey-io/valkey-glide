@@ -629,9 +629,8 @@ pub extern "C" fn glide_pool_destroy(pool_id: u64) -> i32 {
     }
 
     {
-        // try_lock rather than blocking_lock: the abandon monitor may hold the
-        // lock briefly during a scan. Using blocking_lock here can deadlock if
-        // the monitor's async sleep is pending on the same runtime.
+        // Cleanup runs inline when the lock is free and is handed to a task when
+        // it is not, so destroy never waits on the caller's thread.
         if let Ok(mut pool) = pool_arc.try_lock() {
             // Clean up POOL_CLIENTS entries for all clients owned by this pool
             // (includes discarded clients that the abandon monitor removed from in_use)
