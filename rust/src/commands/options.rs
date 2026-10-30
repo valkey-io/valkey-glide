@@ -468,44 +468,48 @@ impl ToValkeyArgs for FunctionRestorePolicy {
 impl ToSingleValkeyArg for FunctionRestorePolicy {}
 
 /// Section of information for the `INFO` command.
+///
+/// Mirrors Python `InfoSection`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum InfoSection {
-    /// Return all sections (excluding module-generated ones).
+    /// Return all sections, excluding module generated ones (`all`).
     All,
-    /// Client connections section.
+    /// Client connections section (`clients`).
     Clients,
-    /// Valkey Cluster section.
+    /// Valkey Cluster section (`cluster`).
     Cluster,
-    /// Cluster info section (Valkey 9.1.0+).
+    /// Valkey Cluster information (`cluster_info`).
+    ///
+    /// Since Valkey 9.1.0.
     ClusterInfo,
-    /// Valkey command statistics.
+    /// Valkey command statistics (`commandstats`).
     CommandStats,
-    /// CPU consumption statistics.
+    /// CPU consumption statistics (`cpu`).
     Cpu,
-    /// Return only the default set of sections.
+    /// Return only the default set of sections (`default`).
     Default,
-    /// Valkey error statistics.
+    /// Valkey error statistics (`errorstats`).
     ErrorStats,
-    /// Includes all and modules sections.
+    /// Includes all and modules (`everything`).
     Everything,
-    /// Database-related statistics.
+    /// Database related statistics (`keyspace`).
     Keyspace,
-    /// Valkey command latency percentile distribution statistics.
+    /// Valkey command latency percentile distribution statistics (`latencystats`).
     LatencyStats,
-    /// Memory consumption-related information.
+    /// Memory consumption related information (`memory`).
     Memory,
-    /// Modules section.
+    /// Modules section (`modules`).
     Modules,
-    /// RDB and AOF-related information.
+    /// RDB and AOF related information (`persistence`).
     Persistence,
-    /// Master/replica replication information.
+    /// Primary/replica replication information (`replication`).
     Replication,
-    /// Valkey Sentinel section (only applicable to Sentinel instances).
+    /// Valkey Sentinel section, only applicable to Sentinel instances (`sentinel`).
     Sentinel,
-    /// General information about the Valkey server.
+    /// General information about the server (`server`).
     Server,
-    /// General statistics.
+    /// General statistics (`stats`).
     Stats,
 }
 
