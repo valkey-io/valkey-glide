@@ -139,6 +139,13 @@ class ClientPool:
                 "Use the main client's pubsub API for subscriptions."
             )
 
+        # TODO: support RDMA in pools.
+        if getattr(client_config, "rdma", None) is not None:
+            raise ValueError(
+                "Pool clients cannot have RDMA configured. "
+                "Use a client outside a pool for RDMA transfers."
+            )
+
         ffi_instance = _GlideFFI()
         self._ffi = ffi_instance.ffi
         self._lib = ffi_instance.lib

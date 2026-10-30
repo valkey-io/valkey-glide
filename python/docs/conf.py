@@ -120,6 +120,13 @@ def avoid_duplicate(app, what, name, obj, skip, options):
         "args",
         # ValueComparison
         "comparison_value",
+        # RdmaConfiguration
+        "provider",
+        "interface",
+        # RdmaProvider.Tcp
+        "bind",
+        # RdmaSetChecksum.Known
+        "value",
     )
     # Check if the attribute name itself is in exclusions
     if name in exclusions:

@@ -435,6 +435,19 @@ class TestGlideClients:
         glide_sync_client.close()
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP3])
+    def test_sync_closed_reports_whether_the_client_was_closed(
+        self, glide_sync_client: TGlideClient
+    ):
+        assert glide_sync_client.closed is False
+
+        glide_sync_client.close()
+        assert glide_sync_client.closed is True
+
+        glide_sync_client.close()
+        assert glide_sync_client.closed is True
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     def test_sync_closed_client_raises_error(self, glide_sync_client: TGlideClient):
         glide_sync_client.close()
