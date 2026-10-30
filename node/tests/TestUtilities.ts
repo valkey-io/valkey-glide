@@ -20,6 +20,7 @@ import {
     BitwiseOperation,
     ClientTrackingInfo,
     ClusterBatch,
+    ConditionalChange,
     Decoder,
     FlushMode,
     FunctionListResponse,
@@ -1499,6 +1500,36 @@ export async function batchTest(
         responseData.push([
             "hgetdel(hgetdelKey, [field, field2])",
             [null, null],
+        ]);
+
+        // HSETEX key conditional change tests - only run if server version is 9.1.0 or higher
+        // hgetdelKey no longer exists at this point, so it can be used to test NX.
+        baseBatch.hsetex(
+            hgetdelKey,
+            { [field.toString()]: value },
+            { keyConditionalChange: ConditionalChange.ONLY_IF_DOES_NOT_EXIST },
+        );
+        responseData.push([
+            "hsetex(hgetdelKey, { [field]: value }, { keyConditionalChange: ONLY_IF_DOES_NOT_EXIST })",
+            1,
+        ]);
+        baseBatch.hsetex(
+            hgetdelKey,
+            { [field.toString()]: "value2" },
+            { keyConditionalChange: ConditionalChange.ONLY_IF_DOES_NOT_EXIST },
+        );
+        responseData.push([
+            "hsetex(hgetdelKey, { [field]: value2 }, { keyConditionalChange: ONLY_IF_DOES_NOT_EXIST })",
+            0,
+        ]);
+        baseBatch.hsetex(
+            hgetdelKey,
+            { [field.toString()]: "value2" },
+            { keyConditionalChange: ConditionalChange.ONLY_IF_EXISTS },
+        );
+        responseData.push([
+            "hsetex(hgetdelKey, { [field]: value2 }, { keyConditionalChange: ONLY_IF_EXISTS })",
+            1,
         ]);
     }
 

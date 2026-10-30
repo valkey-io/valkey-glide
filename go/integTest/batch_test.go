@@ -1437,9 +1437,10 @@ func CreateHashTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer strin
 		)
 	}
 
-	// HGETDEL command (Valkey 9.1+)
+	// HGETDEL command and HSETEX key conditional change (NX/XX) (Valkey 9.1+)
 	// TODO #5368: Compare versions semantically, not as strings.
 	if serverVer >= "9.1.0" {
+		// HGETDEL command
 		getdelKey := prefix + "getdel-" + uuid.NewString()
 		batch.HSet(getdelKey, map[string]string{"field1": "value1", "field2": "value2"})
 		testData = append(testData, CommandTestData{ExpectedResponse: int64(2), TestName: "HSet(getdelKey, 2 fields)"})
@@ -1454,6 +1455,27 @@ func CreateHashTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer strin
 				},
 				TestName: "HGetDel(getdelKey, [field1, nonexistent])",
 			},
+		)
+
+		// HSETEX command with key conditional change (NX/XX)
+		hsetexKey := prefix + "hsetex-key-cond-" + uuid.NewString()
+		nxOptions := options.NewHSetExOptions().SetConditionalSet(constants.OnlyIfDoesNotExist)
+		xxOptions := options.NewHSetExOptions().SetConditionalSet(constants.OnlyIfExists)
+
+		batch.HSetEx(hsetexKey, map[string]string{"field1": "value1"}, nxOptions)
+		testData = append(
+			testData,
+			CommandTestData{ExpectedResponse: int64(1), TestName: "HSetEx(hsetexKey, field1=value1, NX) - key absent"},
+		)
+		batch.HSetEx(hsetexKey, map[string]string{"field1": "value2"}, nxOptions)
+		testData = append(
+			testData,
+			CommandTestData{ExpectedResponse: int64(0), TestName: "HSetEx(hsetexKey, field1=value2, NX) - key exists"},
+		)
+		batch.HSetEx(hsetexKey, map[string]string{"field1": "value2"}, xxOptions)
+		testData = append(
+			testData,
+			CommandTestData{ExpectedResponse: int64(1), TestName: "HSetEx(hsetexKey, field1=value2, XX) - key exists"},
 		)
 	}
 

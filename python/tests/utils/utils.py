@@ -40,6 +40,7 @@ from glide_shared.commands.bitmap import (
 )
 from glide_shared.commands.command_args import Limit, ListDirection, OrderBy
 from glide_shared.commands.core_options import (
+    ConditionalChange,
     ExpireOptions,
     ExpiryGetEx,
     ExpirySet,
@@ -1586,6 +1587,22 @@ def helper_valkey_9_1(transaction, key29, args):
     args.append(1)
     transaction.hgetdel(key29, ["f1", "missing"])
     args.append([b"v1", None])
+    transaction.hsetex(
+        key29,
+        {"f1": "v1"},
+        key_conditional_change=ConditionalChange.ONLY_IF_DOES_NOT_EXIST,
+    )
+    args.append(1)
+    transaction.hsetex(
+        key29,
+        {"f1": "v2"},
+        key_conditional_change=ConditionalChange.ONLY_IF_DOES_NOT_EXIST,
+    )
+    args.append(0)
+    transaction.hsetex(
+        key29, {"f1": "v2"}, key_conditional_change=ConditionalChange.ONLY_IF_EXISTS
+    )
+    args.append(1)
 
 
 def helper6(

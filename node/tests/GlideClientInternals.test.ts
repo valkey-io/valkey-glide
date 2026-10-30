@@ -11,8 +11,11 @@ import {
     BaseClient,
     BaseClientConfiguration,
     AZ_AFFINITY_READ_FROM_STRATEGIES,
+    ConditionalChange,
     ConfigurationError,
     GlideClusterClientConfiguration,
+    HashFieldConditionalChange,
+    HSetExOptions,
     Logger,
     MAX_REQUEST_ARGS_LEN,
     ReadFrom,
@@ -31,6 +34,7 @@ import {
     connection_request,
 } from "../build-ts/ProtobufMessage";
 import {
+    createHSetEx,
     createMigrate,
     createSet,
     SetOptions,
@@ -607,6 +611,61 @@ describe("createMigrate (multi-key) validation", () => {
                 "KEYS",
                 "k",
             ]),
+        );
+    });
+});
+
+describe("createHSetEx option arguments", () => {
+    const fields = [{ field: "field1", value: "value1" }];
+    const keyConditions: [ConditionalChange | undefined, string[]][] = [
+        [undefined, []],
+        [ConditionalChange.ONLY_IF_DOES_NOT_EXIST, ["NX"]],
+        [ConditionalChange.ONLY_IF_EXISTS, ["XX"]],
+    ];
+    const fieldConditions: [
+        HashFieldConditionalChange | undefined,
+        string[],
+    ][] = [
+        [undefined, []],
+        [HashFieldConditionalChange.ONLY_IF_NONE_EXIST, ["FNX"]],
+        [HashFieldConditionalChange.ONLY_IF_ALL_EXIST, ["FXX"]],
+    ];
+    const expiries: [HSetExOptions["expiry"], string[]][] = [
+        [undefined, []],
+        [{ type: TimeUnit.Seconds, count: 60 }, ["EX", "60"]],
+    ];
+    const fieldsArgs = ["FIELDS", "1", "field1", "value1"];
+
+    // Arguments follow the HSETEX order: [NX | XX] [FNX | FXX] [expiry].
+    const cases = keyConditions.flatMap(([keyCondition, keyArgs]) =>
+        fieldConditions.flatMap(([fieldCondition, fieldArgs]) =>
+            expiries.map(
+                ([expiry, expiryArgs]) =>
+                    [
+                        {
+                            keyConditionalChange: keyCondition,
+                            fieldConditionalChange: fieldCondition,
+                            expiry,
+                        },
+                        ["key", ...keyArgs, ...fieldArgs, ...expiryArgs],
+                    ] as [HSetExOptions, string[]],
+            ),
+        ),
+    );
+
+    it.each(cases)("builds arguments for %j", (options, expectedArgs) => {
+        const cmd = createHSetEx("key", fields, options);
+        expect(cmd.requestType).toEqual(RequestType.HSetEx);
+        expect(cmd.argsArray?.args).toEqual(
+            convertStringArrayToBuffer([...expectedArgs, ...fieldsArgs]),
+        );
+    });
+
+    it("builds KEEPTTL expiry", () => {
+        expect(
+            createHSetEx("key", fields, { expiry: "KEEPTTL" }).argsArray?.args,
+        ).toEqual(
+            convertStringArrayToBuffer(["key", "KEEPTTL", ...fieldsArgs]),
         );
     });
 });

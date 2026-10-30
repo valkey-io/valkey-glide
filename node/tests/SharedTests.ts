@@ -2630,6 +2630,95 @@ export function runBaseTests(config: {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `hsetex with key conditional changes_%p`,
+        async (protocol) => {
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    if (cluster.checkIfServerVersionLessThan("9.1.0")) {
+                        return;
+                    }
+
+                    const key = getRandomKey();
+                    const field1 = getRandomKey();
+                    const value1 = getRandomKey();
+
+                    // NX: key does not exist, so the hash is created
+                    const nxOptions = {
+                        keyConditionalChange:
+                            ConditionalChange.ONLY_IF_DOES_NOT_EXIST,
+                    };
+                    expect(
+                        await client.hsetex(
+                            key,
+                            { [field1]: value1 },
+                            nxOptions,
+                        ),
+                    ).toEqual(1);
+                    expect(await client.hget(key, field1)).toEqual(value1);
+
+                    // NX: key now exists, so a second NX call should not modify the hash
+                    expect(
+                        await client.hsetex(
+                            key,
+                            { [field1]: "should_not_be_set" },
+                            nxOptions,
+                        ),
+                    ).toEqual(0);
+                    expect(await client.hget(key, field1)).toEqual(value1);
+
+                    // XX: key exists, so the field is updated
+                    const xxOptions = {
+                        keyConditionalChange: ConditionalChange.ONLY_IF_EXISTS,
+                    };
+                    expect(
+                        await client.hsetex(
+                            key,
+                            { [field1]: "updated_value1" },
+                            xxOptions,
+                        ),
+                    ).toEqual(1);
+                    expect(await client.hget(key, field1)).toEqual(
+                        "updated_value1",
+                    );
+
+                    // XX: key does not exist, so the hash is not created
+                    const missingKey = getRandomKey();
+                    expect(
+                        await client.hsetex(
+                            missingKey,
+                            { [field1]: value1 },
+                            xxOptions,
+                        ),
+                    ).toEqual(0);
+                    expect(await client.exists([missingKey])).toEqual(0);
+
+                    // Key conditional change can be combined with field conditional change and expiry
+                    const combinedKey = getRandomKey();
+                    expect(
+                        await client.hsetex(
+                            combinedKey,
+                            { [field1]: value1 },
+                            {
+                                keyConditionalChange:
+                                    ConditionalChange.ONLY_IF_DOES_NOT_EXIST,
+                                fieldConditionalChange:
+                                    HashFieldConditionalChange.ONLY_IF_NONE_EXIST,
+                                expiry: { type: TimeUnit.Seconds, count: 60 },
+                            },
+                        ),
+                    ).toEqual(1);
+                    const ttlResult = await client.httl(combinedKey, [field1]);
+                    expect(ttlResult.length).toEqual(1);
+                    expect(ttlResult[0]).toBeGreaterThan(0);
+                    expect(ttlResult[0]).toBeLessThanOrEqual(60);
+                },
+                protocol,
+            );
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `hgetex basic functionality_%p`,
         async (protocol) => {
             await runTest(

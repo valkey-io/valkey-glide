@@ -2,15 +2,19 @@
 
 import struct
 from datetime import datetime, timedelta, timezone
+from typing import Mapping
 
 import pytest
 from glide_shared.commands.command_args import OrderBy
 from glide_shared.commands.core_options import (
+    ConditionalChange,
     ExpiryGetEx,
     ExpirySet,
     ExpiryType,
     ExpiryTypeGetEx,
+    HashFieldConditionalChange,
     MigrateOptions,
+    _build_hsetex_args,
 )
 from glide_shared.commands.server_modules.ft_options.ft_aggregate_options import (
     FtAggregateOptions,
@@ -32,6 +36,7 @@ from glide_shared.commands.server_modules.ft_options.ft_search_options import (
     FtSearchLimit,
     FtSearchOptions,
 )
+from glide_shared.constants import TEncodable
 
 from tests.conftest import classify_inkeys_probe_error
 from tests.utils.ft_test_helpers import json_groupby_column
@@ -169,6 +174,43 @@ class TestMigrateOptions:
         assert MigrateOptions(
             copy=True, replace=True, username="user", password="secret"
         ).to_args() == ["COPY", "REPLACE", "AUTH2", "user", "secret"]
+
+
+NX = ConditionalChange.ONLY_IF_DOES_NOT_EXIST
+XX = ConditionalChange.ONLY_IF_EXISTS
+FNX = HashFieldConditionalChange.ONLY_IF_NONE_EXIST
+FXX = HashFieldConditionalChange.ONLY_IF_ALL_EXIST
+EX_60 = ExpirySet(ExpiryType.SEC, 60)
+
+HSETEX_FIELDS: Mapping[TEncodable, TEncodable] = {"field1": "value1"}
+HSETEX_FIELDS_ARGS = ["FIELDS", "1", "field1", "value1"]
+
+# Expected command arguments follow the HSETEX order: [NX | XX] [FNX | FXX] [expiry].
+HSETEX_KEY_CONDITIONS = [(None, []), (NX, ["NX"]), (XX, ["XX"])]
+HSETEX_FIELD_CONDITIONS = [(None, []), (FNX, ["FNX"]), (FXX, ["FXX"])]
+HSETEX_EXPIRIES = [(None, []), (EX_60, ["EX", "60"])]
+
+
+class TestHSetExArgs:
+    @pytest.mark.parametrize("key_condition, key_args", HSETEX_KEY_CONDITIONS)
+    @pytest.mark.parametrize("field_condition, field_args", HSETEX_FIELD_CONDITIONS)
+    @pytest.mark.parametrize("expiry, expiry_args", HSETEX_EXPIRIES)
+    def test_hsetex_args(
+        self,
+        key_condition,
+        key_args,
+        field_condition,
+        field_args,
+        expiry,
+        expiry_args,
+    ):
+        assert _build_hsetex_args(
+            "key",
+            HSETEX_FIELDS,
+            key_conditional_change=key_condition,
+            field_conditional_change=field_condition,
+            expiry=expiry,
+        ) == ["key", *key_args, *field_args, *expiry_args, *HSETEX_FIELDS_ARGS]
 
 
 class TestFtAggregateReducerUnitTests:
