@@ -104,17 +104,38 @@ for port in "$STANDALONE_PORT" $(seq "$CLUSTER_PORT_START" "$((CLUSTER_PORT_STAR
 done
 
 echo "=== Running modules tests ==="
-cd "${REPO_ROOT}/python"
-# Single-sourced from .github/workflows/python-modules.yml's "Run modules
-# tests" step (these must not drift independently -- see
-# tests/test_ci_workflow_sync.py, which greps the workflow file for this
-# exact arg list and fails the test suite if it ever changes there without
-# a matching update here).
-python3 dev.py test --args \
-    --standalone-endpoints="${MODULES_STANDALONE_ENDPOINT}" \
-    --cluster-endpoints="${MODULES_CLUSTER_ENDPOINTS}" \
-    -k server_modules \
-    --async-backend=asyncio \
-    --html=pytest_report.html \
-    --self-contained-html \
-    -rs
+MODULES_TEST_LANG="${MODULES_TEST_LANG:-python}"
+case "$MODULES_TEST_LANG" in
+    python)
+        cd "${REPO_ROOT}/python"
+        # Single-sourced from .github/workflows/python-modules.yml's "Run modules
+        # tests" step (these must not drift independently -- see
+        # tests/test_ci_workflow_sync.py, which greps the workflow file for this
+        # exact arg list and fails the test suite if it ever changes there without
+        # a matching update here).
+        python3 dev.py test --args \
+            --standalone-endpoints="${MODULES_STANDALONE_ENDPOINT}" \
+            --cluster-endpoints="${MODULES_CLUSTER_ENDPOINTS}" \
+            -k server_modules \
+            --async-backend=asyncio \
+            --html=pytest_report.html \
+            --self-contained-html \
+            -rs
+        ;;
+    node)
+        cd "${REPO_ROOT}/node"
+        # Single-sourced from .github/workflows/node-modules.yml's "Run modules
+        # tests" step -- these must not drift independently; see
+        # tests/ServerModulesCiSync.test.ts, which greps the workflow file for
+        # this exact arg list and fails the suite if it ever changes there without
+        # a matching update here. Assumes a dev checkout that's already built
+        # (npm ci && npm run build), matching the Python arm's own assumption.
+        npm run test:modules -- \
+            --standalone-endpoints="${MODULES_STANDALONE_ENDPOINT}" \
+            --cluster-endpoints="${MODULES_CLUSTER_ENDPOINTS}"
+        ;;
+    *)
+        echo "ERROR: unknown MODULES_TEST_LANG '${MODULES_TEST_LANG}' (expected python or node)" >&2
+        exit 1
+        ;;
+esac
