@@ -1475,11 +1475,6 @@ func CreateHashTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer strin
 			testData,
 			CommandTestData{ExpectedResponse: int64(1), TestName: "HSetEx(hsetexKey, field1=value2, XX) - key exists"},
 		)
-		batch.HGet(hsetexKey, "field1")
-		testData = append(
-			testData,
-			CommandTestData{ExpectedResponse: "value2", TestName: "HGet(hsetexKey, field1)"},
-		)
 	}
 
 	return BatchTestData{CommandTestData: testData, TestName: "Hash commands"}

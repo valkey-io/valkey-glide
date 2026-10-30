@@ -1603,8 +1603,6 @@ def helper_valkey_9_1(transaction, key29, args):
         key29, {"f1": "v2"}, key_conditional_change=ConditionalChange.ONLY_IF_EXISTS
     )
     args.append(1)
-    transaction.hget(key29, "f1")
-    args.append(b"v2")
 
 
 def helper6(

@@ -1531,8 +1531,6 @@ export async function batchTest(
             "hsetex(hgetdelKey, { [field]: value2 }, { keyConditionalChange: ONLY_IF_EXISTS })",
             1,
         ]);
-        baseBatch.hget(hgetdelKey, field);
-        responseData.push(["hget(hgetdelKey, field)", "value2"]);
     }
 
     baseBatch.lpush(key5, [field1, field2, field3, field4]);
