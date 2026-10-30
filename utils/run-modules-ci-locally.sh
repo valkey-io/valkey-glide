@@ -104,17 +104,55 @@ for port in "$STANDALONE_PORT" $(seq "$CLUSTER_PORT_START" "$((CLUSTER_PORT_STAR
 done
 
 echo "=== Running modules tests ==="
-cd "${REPO_ROOT}/python"
-# Single-sourced from .github/workflows/python-modules.yml's "Run modules
-# tests" step (these must not drift independently -- see
-# tests/test_ci_workflow_sync.py, which greps the workflow file for this
-# exact arg list and fails the test suite if it ever changes there without
-# a matching update here).
-python3 dev.py test --args \
-    --standalone-endpoints="${MODULES_STANDALONE_ENDPOINT}" \
-    --cluster-endpoints="${MODULES_CLUSTER_ENDPOINTS}" \
-    -k server_modules \
-    --async-backend=asyncio \
-    --html=pytest_report.html \
-    --self-contained-html \
-    -rs
+MODULES_TEST_LANG="${MODULES_TEST_LANG:-python}"
+case "$MODULES_TEST_LANG" in
+    python)
+        cd "${REPO_ROOT}/python"
+        # Single-sourced from .github/workflows/python-modules.yml's "Run modules
+        # tests" step (these must not drift independently -- see
+        # tests/test_ci_workflow_sync.py, which greps the workflow file for this
+        # exact arg list and fails the test suite if it ever changes there without
+        # a matching update here).
+        python3 dev.py test --args \
+            --standalone-endpoints="${MODULES_STANDALONE_ENDPOINT}" \
+            --cluster-endpoints="${MODULES_CLUSTER_ENDPOINTS}" \
+            -k server_modules \
+            --async-backend=asyncio \
+            --html=pytest_report.html \
+            --self-contained-html \
+            -rs
+        ;;
+    java)
+        cd "${REPO_ROOT}/java"
+        # Single-sourced from .github/workflows/java-modules.yml's "Build and run
+        # modules tests" step -- these must not drift independently; see
+        # integTest/src/test/java/.../JavaModulesCiSyncTest.java, which parses the
+        # workflow file for this exact gradle target + flags and fails the suite if
+        # it ever changes there without a matching update here. protoc 29.1 must be
+        # first on PATH -- a newer system protoc generates code the pinned
+        # protobuf-java runtime can't compile. protoc 29.1 is pinned under the
+        # shared Glide root (one level above every per-language worktree,
+        # including this one), not inside this worktree.
+        PROTOC_29_1_DIR="${REPO_ROOT}/../tools/protoc-29.1/bin"
+        if [ ! -d "$PROTOC_29_1_DIR" ]; then
+            echo "ERROR: pinned protoc 29.1 not found at ${PROTOC_29_1_DIR}." >&2
+            echo "       Install it there before running the java modules tests -- falling" >&2
+            echo "       back to whatever protoc is on PATH would silently risk generating" >&2
+            echo "       code the pinned protobuf-java runtime can't compile." >&2
+            exit 1
+        fi
+        export PATH="${PROTOC_29_1_DIR}:${PATH}"
+        # --rerun-tasks: modulesTest's inputs don't include the -D endpoint
+        # properties, so Gradle's up-to-date check doesn't notice when this
+        # script runs it a second time against a different image/level -- it
+        # would otherwise report a stale UP-TO-DATE pass instead of actually
+        # re-testing against the new server.
+        GLIDE_DOCKER_SERVERS=true ./gradlew --no-daemon --rerun-tasks :integTest:modulesTest \
+            -Dstandalone-endpoints="${MODULES_STANDALONE_ENDPOINT}" \
+            -Dcluster-endpoints="${MODULES_CLUSTER_ENDPOINTS}"
+        ;;
+    *)
+        echo "ERROR: unknown MODULES_TEST_LANG '${MODULES_TEST_LANG}' (expected python or java)" >&2
+        exit 1
+        ;;
+esac

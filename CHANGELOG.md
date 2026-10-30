@@ -4,6 +4,8 @@
 
 ### Features
 
+* Java: valkey-search 1.3 stable surface for FT.SEARCH/FT.CREATE/FT.AGGREGATE — `inKeys` on `FTSearchOptions` (absent/`[]`/a list), a `VectorType` enum (`FLOAT32`/`FLOAT16`/`BFLOAT16`) replacing the hard-coded `FLOAT32` on vector field builders, `FTCreateOptions.filter`/`scoreField`/`noHighlight`, per-field `unf` (SORTABLE un-normalized sort, requires `sortable`) on `TextField`/`TagField`/`NumericField`, typed `FTAggregateOptions.GroupBy.Reducer.toList`/`firstValue`/`randomSample` factories over the existing generic `Reducer` constructor, and `count()` now serializes to `LIMIT 0 0` instead of a bare `COUNT` token the server's FT.SEARCH parser does not recognise (with `count`/`limit` guarded as mutually exclusive, which wasn't previously enforced) ([#7379](https://github.com/valkey-io/valkey-glide/pull/7379))
+* Java: Add valkey-search 1.3 scoring, cursors and FT.HYBRID — `withScores`/`scorer` on `FTSearchOptions`, `addScores`/`scorer` on `FTAggregateOptions`; paged `FT.aggregateWithCursor`/`FT.cursorRead`/`FT.cursorDel` (`FTAggregateOptions.withCursor`); a new `FT.hybrid` API fusing a text/tag/numeric SEARCH arm with a VSIM vector-similarity arm via `FTHybridCombine.Rrf`/`.Linear`/`.Function`; and `FTAggregateOptions.LoadField` for `LOAD ... AS` renaming (compat-gated on `search.emulate-release` >= 1.3.0) ([#7379](https://github.com/valkey-io/valkey-glide/pull/7379))
 * All: Add support for Valkey 9.0 commands:
   * `DELIFEQ` ([#6146](https://github.com/valkey-io/valkey-glide/issues/6146))
 * Java, Node, Python, Go: Add support for Valkey 9.1 commands:

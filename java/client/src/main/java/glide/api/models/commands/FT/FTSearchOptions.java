@@ -20,6 +20,14 @@ public class FTSearchOptions {
 
     @Builder.Default private final Map<GlideString, GlideString> identifiers = new HashMap<>();
 
+    /**
+     * Restricts the search to only this set of keys, filtering out any matching result whose key is
+     * not in the list. The result count is adjusted to reflect the filtered set. An explicit empty
+     * array is distinct from {@code null}: {@code null} omits {@code INKEYS} entirely (no
+     * restriction), while an empty array sends {@code INKEYS 0} and excludes every result.
+     */
+    private final GlideString[] inKeys;
+
     /** Query timeout in milliseconds. */
     private final Integer timeout;
 
@@ -52,6 +60,26 @@ public class FTSearchOptions {
 
     private final ConsistencyMode consistency;
 
+    /**
+     * If set, augments the output with each document's relevance score (valkey-search 1.3.0). This
+     * changes the result shape: each document value in the result map becomes a two-element list
+     * {@code [score, fieldMap]} instead of just {@code fieldMap} (a {@code GlideString}- encoded
+     * decimal string, not a float). With {@code nocontent} set, the shape becomes {@code [score,
+     * {}]}. Combining {@code withSortKeys} with {@code nocontent} gives the same {@code [score, {}]},
+     * because the server drops the sort key in that combination. With both {@code withScores} and
+     * {@code withSortKeys} and content present, each row becomes a three-element list {@code [score,
+     * sortKey, fieldMap]}.
+     */
+    @Builder.Default private final boolean withScores = false;
+
+    /**
+     * The scoring function used to rank results (valkey-search 1.3.0, {@code
+     * src/indexes/scoring/scorer.h}). {@code "BM25STD"} is the only value currently registered and
+     * selectable; any other value is rejected by the server. Has no visible effect unless combined
+     * with {@link #withScores} (or inspected indirectly via {@code sortBy}).
+     */
+    private final GlideString scorer;
+
     /** Sort order for SORTBY clause. */
     public enum SortOrder {
         ASC,
@@ -82,6 +110,11 @@ public class FTSearchOptions {
         if (sortBy == null && withSortKeys) {
             throw new IllegalArgumentException("withSortKeys requires sortBy to be set.");
         }
+        if (count && limit != null) {
+            throw new IllegalArgumentException(
+                    "count and limit are mutually exclusive -- count maps to LIMIT 0 0 "
+                            + "internally, so an explicit limit would conflict with it.");
+        }
         ArrayList<GlideString> args = new ArrayList<GlideString>();
         if (shardScope != null) {
             args.add(gs(shardScope.toString()));
@@ -101,6 +134,13 @@ public class FTSearchOptions {
         if (slop != null) {
             args.add(gs("SLOP"));
             args.add(gs(slop.toString()));
+        }
+        if (inKeys != null) {
+            args.add(gs("INKEYS"));
+            args.add(gs(Integer.toString(inKeys.length)));
+            for (GlideString key : inKeys) {
+                args.add(key);
+            }
         }
         if (!identifiers.isEmpty()) {
             int returnIndex = args.size();
@@ -146,7 +186,20 @@ public class FTSearchOptions {
             args.add(gs(Integer.toString(limit.getRight())));
         }
         if (count) {
-            args.add(gs("COUNT"));
+            // COUNT is not a real FT.SEARCH keyword -- valkey-search's parser
+            // rejects a bare COUNT token outright. The count-only form the
+            // server actually recognises is LIMIT 0 0; the guard at the top
+            // of this method already confirmed limit is unset.
+            args.add(gs("LIMIT"));
+            args.add(gs("0"));
+            args.add(gs("0"));
+        }
+        if (withScores) {
+            args.add(gs("WITHSCORES"));
+        }
+        if (scorer != null) {
+            args.add(gs("SCORER"));
+            args.add(scorer);
         }
         if (dialect != null) {
             args.add(gs("DIALECT"));
@@ -173,6 +226,8 @@ public class FTSearchOptions {
         void inorder(boolean inorder) {}
 
         void withSortKeys(boolean withSortKeys) {}
+
+        void withScores(boolean withScores) {}
 
         public FTSearchOptionsBuilder() {
             this.identifiers$value = new HashMap<>();
@@ -344,6 +399,38 @@ public class FTSearchOptions {
          */
         public FTSearchOptionsBuilder consistency(@NonNull ConsistencyMode consistency) {
             this.consistency = consistency;
+            return this;
+        }
+
+        /**
+         * If set, augments the output with each document's relevance score. See {@link #withScores} for
+         * the resulting shape change.
+         */
+        public FTSearchOptionsBuilder withScores() {
+            this.withScores$value = true;
+            this.withScores$set = true;
+            return this;
+        }
+
+        /**
+         * Set the scoring function used to rank results. {@code "BM25STD"} is the only value currently
+         * registered and selectable.
+         *
+         * @param scorer The scoring function name.
+         */
+        public FTSearchOptionsBuilder scorer(@NonNull String scorer) {
+            this.scorer = gs(scorer);
+            return this;
+        }
+
+        /**
+         * Set the scoring function used to rank results. {@code "BM25STD"} is the only value currently
+         * registered and selectable.
+         *
+         * @param scorer The scoring function name.
+         */
+        public FTSearchOptionsBuilder scorer(@NonNull GlideString scorer) {
+            this.scorer = scorer;
             return this;
         }
     }
