@@ -71,6 +71,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import static org.junit.jupiter.api.Named.named;
 
+import glide.LuaTimeLimit;
 import glide.api.GlideClusterClient;
 import glide.api.models.ClusterBatch;
 import glide.api.models.ClusterValue;
@@ -2367,9 +2368,11 @@ public class CommandTests {
         // load the lib
         assertEquals(libName, clusterClient.functionLoad(code, true).get());
 
-        try (GlideClusterClient testClient =
-                GlideClusterClient.createClient(commonClusterClientConfig().requestTimeout(10000).build())
-                        .get()) {
+        try (LuaTimeLimit limit = LuaTimeLimit.set(clusterClient, 100);
+                GlideClusterClient testClient =
+                        GlideClusterClient.createClient(
+                                        commonClusterClientConfig().requestTimeout(10000).build())
+                                .get()) {
             try {
                 // call the function without await
                 // Using a random primary node route, otherwise FCALL can go to a replica.
@@ -2423,9 +2426,11 @@ public class CommandTests {
         // load the lib
         assertEquals(libName, clusterClient.functionLoad(code, true).get());
 
-        try (GlideClusterClient testClient =
-                GlideClusterClient.createClient(commonClusterClientConfig().requestTimeout(10000).build())
-                        .get()) {
+        try (LuaTimeLimit limit = LuaTimeLimit.set(clusterClient, 100);
+                GlideClusterClient testClient =
+                        GlideClusterClient.createClient(
+                                        commonClusterClientConfig().requestTimeout(10000).build())
+                                .get()) {
             try {
                 // call the function without await
                 // Using a random primary node route, otherwise FCALL can go to a replica.
@@ -2481,9 +2486,11 @@ public class CommandTests {
         // load the lib
         assertEquals(libName, clusterClient.functionLoad(code, true, route).get());
 
-        try (GlideClusterClient testClient =
-                GlideClusterClient.createClient(commonClusterClientConfig().requestTimeout(10000).build())
-                        .get()) {
+        try (LuaTimeLimit limit = LuaTimeLimit.set(clusterClient, 100);
+                GlideClusterClient testClient =
+                        GlideClusterClient.createClient(
+                                        commonClusterClientConfig().requestTimeout(10000).build())
+                                .get()) {
             try {
                 // call the function without await
                 testClient.fcall(funcName, route);
@@ -2535,9 +2542,11 @@ public class CommandTests {
         // load the lib
         assertEquals(libName, clusterClient.functionLoad(code, true, route).get());
 
-        try (GlideClusterClient testClient =
-                GlideClusterClient.createClient(commonClusterClientConfig().requestTimeout(10000).build())
-                        .get()) {
+        try (LuaTimeLimit limit = LuaTimeLimit.set(clusterClient, 100);
+                GlideClusterClient testClient =
+                        GlideClusterClient.createClient(
+                                        commonClusterClientConfig().requestTimeout(10000).build())
+                                .get()) {
             try {
                 // call the function without await
                 testClient.fcall(funcName, route);
@@ -2574,7 +2583,7 @@ public class CommandTests {
         String libName = "functionKill_key_based_write_function";
         String funcName = "deadlock_write_function_with_key_based_route";
         String key = libName;
-        String code = createLuaLibWithLongRunningFunction(libName, funcName, 6, false);
+        String code = createLuaLibWithLongRunningFunction(libName, funcName, 2, false);
         Route route = new SlotKeyRoute(key, PRIMARY);
 
         assertEquals(OK, clusterClient.functionFlush(SYNC, route).get());
@@ -2590,9 +2599,11 @@ public class CommandTests {
         // load the lib
         assertEquals(libName, clusterClient.functionLoad(code, true, route).get());
 
-        try (GlideClusterClient testClient =
-                GlideClusterClient.createClient(commonClusterClientConfig().requestTimeout(10000).build())
-                        .get()) {
+        try (LuaTimeLimit limit = LuaTimeLimit.set(clusterClient, 100);
+                GlideClusterClient testClient =
+                        GlideClusterClient.createClient(
+                                        commonClusterClientConfig().requestTimeout(10000).build())
+                                .get()) {
             try {
                 // call the function without await
                 promise = testClient.fcall(funcName, new String[] {key}, new String[0]);
@@ -2642,7 +2653,7 @@ public class CommandTests {
         GlideString funcName = gs("deadlock_write_function_with_key_based_route");
         GlideString key = libName;
         GlideString code =
-                gs(createLuaLibWithLongRunningFunction(libName.toString(), funcName.toString(), 6, false));
+                gs(createLuaLibWithLongRunningFunction(libName.toString(), funcName.toString(), 2, false));
         Route route = new SlotKeyRoute(key.toString(), PRIMARY);
 
         assertEquals(OK, clusterClient.functionFlush(SYNC, route).get());
@@ -2659,9 +2670,11 @@ public class CommandTests {
         // load the lib
         assertEquals(libName, clusterClient.functionLoad(code, true, route).get());
 
-        try (GlideClusterClient testClient =
-                GlideClusterClient.createClient(commonClusterClientConfig().requestTimeout(10000).build())
-                        .get()) {
+        try (LuaTimeLimit limit = LuaTimeLimit.set(clusterClient, 100);
+                GlideClusterClient testClient =
+                        GlideClusterClient.createClient(
+                                        commonClusterClientConfig().requestTimeout(10000).build())
+                                .get()) {
             try {
                 // call the function without await
                 promise = testClient.fcall(funcName, new GlideString[] {key}, new GlideString[0]);
@@ -3891,9 +3904,11 @@ public class CommandTests {
                         .toLowerCase()
                         .contains("no scripts in execution right now"));
 
-        try (GlideClusterClient testClient =
-                GlideClusterClient.createClient(commonClusterClientConfig().requestTimeout(15000).build())
-                        .get()) {
+        try (LuaTimeLimit limit = LuaTimeLimit.set(clusterClient, 100);
+                GlideClusterClient testClient =
+                        GlideClusterClient.createClient(
+                                        commonClusterClientConfig().requestTimeout(15000).build())
+                                .get()) {
             try {
                 // Poll scriptKill in background; block on script in foreground to guarantee execution
                 CompletableFuture<String> killResult =
@@ -3932,21 +3947,10 @@ public class CommandTests {
 
         String key = UUID.randomUUID().toString();
         Route route = new SlotKeyRoute(key, PRIMARY);
-        String code = createLongRunningLuaScript(6, false);
+        String code = createLongRunningLuaScript(2, false);
 
-        // Lower lua-time-limit on the target primary so the server starts reporting BUSY (and
-        // accepting SCRIPT KILL) shortly after the script begins, instead of after the 5000ms
-        // default. Without this, SCRIPT KILL is queued behind the running script and blocks until
-        // the request timeout fires, which is the source of the flakiness.
-        String originalLuaTimeLimit =
-                clusterClient
-                        .configGet(new String[] {"lua-time-limit"}, route)
-                        .get()
-                        .getSingleValue()
-                        .get("lua-time-limit");
-        clusterClient.configSet(Collections.singletonMap("lua-time-limit", "100"), route).get();
-
-        try (Script script = new Script(code, false);
+        try (LuaTimeLimit limit = LuaTimeLimit.set(clusterClient, 100);
+                Script script = new Script(code, false);
                 GlideClusterClient testClient =
                         GlideClusterClient.createClient(
                                         commonClusterClientConfig()
@@ -3981,10 +3985,6 @@ public class CommandTests {
             } catch (Exception ignored) {
                 // Write script completes normally after its duration
             }
-        } finally {
-            clusterClient
-                    .configSet(Collections.singletonMap("lua-time-limit", originalLuaTimeLimit), route)
-                    .get();
         }
         waitForNotBusy(clusterClient::scriptKill);
         clusterClient.ping().get();
