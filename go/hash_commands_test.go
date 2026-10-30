@@ -795,7 +795,7 @@ func ExampleClient_HSetEx() {
 }
 
 func ExampleClient_HSetEx_keyConditionalSet() {
-	// Key-level conditions require Valkey 9.1+
+	// Key conditions require Valkey 9.1+
 	var client *Client = getExampleClient() // example helper function
 
 	fields := map[string]string{"field1": "value1"}
@@ -822,7 +822,7 @@ func ExampleClient_HSetEx_keyConditionalSet() {
 }
 
 func ExampleClusterClient_HSetEx_keyConditionalSet() {
-	// Key-level conditions require Valkey 9.1+
+	// Key conditions require Valkey 9.1+
 	var client *ClusterClient = getExampleClusterClient() // example helper function
 
 	fields := map[string]string{"field1": "value1"}

@@ -559,7 +559,7 @@ export function createHSetEx(
 ): command_request.Command {
     const args: GlideString[] = [key];
 
-    // Add key-level conditional change option (NX | XX)
+    // Add key conditional change option (NX | XX)
     if (options?.keyConditionalChange) {
         args.push(options.keyConditionalChange);
     }

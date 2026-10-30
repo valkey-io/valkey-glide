@@ -1608,7 +1608,7 @@ func (suite *GlideTestSuite) TestHSetEx_WithKeyConditionalSet() {
 		key := "test_hsetex_key_conditional_" + uuid.NewString()
 		fields := map[string]string{"field1": "value1"}
 
-		// NX: key does not exist yet, so the command should succeed
+		// NX: key does not exist, so the hash is created
 		nxOptions := options.NewHSetExOptions().SetConditionalSet(constants.OnlyIfDoesNotExist)
 		result, err := client.HSetEx(ctx, key, fields, nxOptions)
 		assert.NoError(suite.T(), err)
@@ -1617,7 +1617,7 @@ func (suite *GlideTestSuite) TestHSetEx_WithKeyConditionalSet() {
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), "value1", value.Value())
 
-		// NX: key now exists, so a second NX call should fail (return 0) and not modify the hash
+		// NX: key now exists, so a second NX call should not modify the hash
 		result, err = client.HSetEx(ctx, key, map[string]string{"field1": "should_not_be_set"}, nxOptions)
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), int64(0), result)
@@ -1625,7 +1625,7 @@ func (suite *GlideTestSuite) TestHSetEx_WithKeyConditionalSet() {
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), "value1", value.Value())
 
-		// XX: key exists, so the command should succeed and update the field
+		// XX: key exists, so the field is updated
 		xxOptions := options.NewHSetExOptions().SetConditionalSet(constants.OnlyIfExists)
 		result, err = client.HSetEx(ctx, key, map[string]string{"field1": "updated_value1"}, xxOptions)
 		assert.NoError(suite.T(), err)
@@ -1634,7 +1634,7 @@ func (suite *GlideTestSuite) TestHSetEx_WithKeyConditionalSet() {
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), "updated_value1", value.Value())
 
-		// XX: key does not exist, so the command should fail (return 0) and not create the hash
+		// XX: key does not exist, so the hash is not created
 		missingKey := "test_hsetex_key_conditional_missing_" + uuid.NewString()
 		result, err = client.HSetEx(ctx, missingKey, fields, xxOptions)
 		assert.NoError(suite.T(), err)
@@ -1643,7 +1643,7 @@ func (suite *GlideTestSuite) TestHSetEx_WithKeyConditionalSet() {
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), int64(0), exists)
 
-		// Key-level and field-level conditions can be combined, together with expiry
+		// Key conditional change can be combined with field conditional change and expiry
 		combinedKey := "test_hsetex_key_and_field_conditional_" + uuid.NewString()
 		combinedOptions := options.NewHSetExOptions().
 			SetConditionalSet(constants.OnlyIfDoesNotExist).

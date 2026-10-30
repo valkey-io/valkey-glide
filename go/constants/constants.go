@@ -111,7 +111,7 @@ const (
 	OnlyIfAllFieldsExist ConditionalSet = "FXX"
 )
 
-// A HashFieldConditionalSet defines a field-level condition for setting hash fields, used by the HSETEX command.
+// A HashFieldConditionalSet defines a field condition for setting hash fields, used by the HSETEX command.
 type HashFieldConditionalSet string
 
 const (

@@ -17,13 +17,13 @@ import (
 //
 // [valkey.io]: https://valkey.io/commands/hsetex/
 type HSetExOptions struct {
-	// ConditionalSet is the key-level condition: [constants.OnlyIfExists] (XX) or [constants.OnlyIfDoesNotExist] (NX).
-	// Key-level conditions require Valkey 9.1 and above.
+	// ConditionalSet is the key condition: [constants.OnlyIfExists] (XX) or [constants.OnlyIfDoesNotExist] (NX).
+	// Key conditions require Valkey 9.1 and above.
 	//
-	// For backward compatibility, the deprecated field-level constants [constants.OnlyIfAllFieldsExist] (FXX) and
+	// For backward compatibility, the deprecated field condition constants [constants.OnlyIfAllFieldsExist] (FXX) and
 	// [constants.OnlyIfFieldsDoNotExist] (FNX) are still accepted here; use FieldConditionalSet instead.
 	ConditionalSet constants.ConditionalSet
-	// FieldConditionalSet is the field-level condition: [constants.HashAllFieldsExist] (FXX) or
+	// FieldConditionalSet is the field condition: [constants.HashAllFieldsExist] (FXX) or
 	// [constants.HashFieldsDoNotExist] (FNX).
 	FieldConditionalSet constants.HashFieldConditionalSet
 	Expiry              *Expiry
@@ -34,21 +34,21 @@ func NewHSetExOptions() HSetExOptions {
 	return HSetExOptions{}
 }
 
-// SetConditionalSet sets the key-level conditional set option: [constants.OnlyIfExists] (XX) or
+// SetConditionalSet sets the key conditional set option: [constants.OnlyIfExists] (XX) or
 // [constants.OnlyIfDoesNotExist] (NX).
 //
 // Since:
 //
-//	Valkey 9.1 and above for key-level conditions.
+//	Valkey 9.1 and above for key conditions.
 //
-// Passing the deprecated field-level constants ([constants.OnlyIfAllFieldsExist] or
+// Passing the deprecated field condition constants ([constants.OnlyIfAllFieldsExist] or
 // [constants.OnlyIfFieldsDoNotExist]) is still supported; use [HSetExOptions.SetFieldConditionalSet] instead.
 func (opts HSetExOptions) SetConditionalSet(conditionalSet constants.ConditionalSet) HSetExOptions {
 	opts.ConditionalSet = conditionalSet
 	return opts
 }
 
-// SetFieldConditionalSet sets the field-level conditional set option: [constants.HashAllFieldsExist] (FXX) or
+// SetFieldConditionalSet sets the field conditional set option: [constants.HashAllFieldsExist] (FXX) or
 // [constants.HashFieldsDoNotExist] (FNX).
 func (opts HSetExOptions) SetFieldConditionalSet(fieldConditionalSet constants.HashFieldConditionalSet) HSetExOptions {
 	opts.FieldConditionalSet = fieldConditionalSet
@@ -69,12 +69,12 @@ func (opts *HSetExOptions) ToArgs() ([]string, error) {
 	fieldCondition := opts.FieldConditionalSet
 
 	// TODO: https://github.com/valkey-io/valkey-glide/issues/7489
-	// Backward compatibility: field-level conditions were previously passed via ConditionalSet.
+	// Backward compatibility: field conditions were previously passed via ConditionalSet.
 	if legacy := constants.HashFieldConditionalSet(keyCondition); legacy == constants.HashAllFieldsExist ||
 		legacy == constants.HashFieldsDoNotExist {
 		if fieldCondition != "" {
 			return nil, errors.New(
-				"HSetExOptions: field-level condition set in both ConditionalSet and FieldConditionalSet",
+				"HSetExOptions: field condition set in both ConditionalSet and FieldConditionalSet",
 			)
 		}
 		fieldCondition, keyCondition = legacy, ""
@@ -85,7 +85,7 @@ func (opts *HSetExOptions) ToArgs() ([]string, error) {
 	case constants.OnlyIfExists, constants.OnlyIfDoesNotExist:
 		args = append(args, string(keyCondition))
 	default:
-		return nil, errors.New("HSetExOptions: invalid key-level condition " + string(keyCondition))
+		return nil, errors.New("HSetExOptions: invalid key condition " + string(keyCondition))
 	}
 
 	switch fieldCondition {
@@ -93,7 +93,7 @@ func (opts *HSetExOptions) ToArgs() ([]string, error) {
 	case constants.HashAllFieldsExist, constants.HashFieldsDoNotExist:
 		args = append(args, string(fieldCondition))
 	default:
-		return nil, errors.New("HSetExOptions: invalid field-level condition " + string(fieldCondition))
+		return nil, errors.New("HSetExOptions: invalid field condition " + string(fieldCondition))
 	}
 
 	// Add expiry options

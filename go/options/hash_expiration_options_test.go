@@ -109,15 +109,15 @@ func TestHSetExOptionsToArgs_InvalidConditions(t *testing.T) {
 		SetConditionalSet(constants.OnlyIfFieldsDoNotExist).
 		SetFieldConditionalSet(constants.HashAllFieldsExist)
 	_, err := opts.ToArgs()
-	assert.ErrorContains(t, err, "field-level condition set in both")
+	assert.ErrorContains(t, err, "field condition set in both")
 
 	opts = NewHSetExOptions().SetConditionalSet(constants.OnlyIfEquals)
 	_, err = opts.ToArgs()
-	assert.ErrorContains(t, err, "invalid key-level condition")
+	assert.ErrorContains(t, err, "invalid key condition")
 
 	opts = NewHSetExOptions().SetFieldConditionalSet(constants.HashFieldConditionalSet("XX"))
 	_, err = opts.ToArgs()
-	assert.ErrorContains(t, err, "invalid field-level condition")
+	assert.ErrorContains(t, err, "invalid field condition")
 
 	opts = NewHSetExOptions().SetExpiry(NewExpiryPersist())
 	_, err = opts.ToArgs()

@@ -617,99 +617,55 @@ describe("createMigrate (multi-key) validation", () => {
 
 describe("createHSetEx option arguments", () => {
     const fields = [{ field: "field1", value: "value1" }];
-    const argsFor = (options?: HSetExOptions) =>
-        createHSetEx("key", fields, options).argsArray?.args;
-    const expected = (...optionArgs: string[]) =>
-        convertStringArrayToBuffer([
-            "key",
-            ...optionArgs,
-            "FIELDS",
-            "1",
-            "field1",
-            "value1",
-        ]);
+    const keyConditions: [ConditionalChange | undefined, string[]][] = [
+        [undefined, []],
+        [ConditionalChange.ONLY_IF_DOES_NOT_EXIST, ["NX"]],
+        [ConditionalChange.ONLY_IF_EXISTS, ["XX"]],
+    ];
+    const fieldConditions: [
+        HashFieldConditionalChange | undefined,
+        string[],
+    ][] = [
+        [undefined, []],
+        [HashFieldConditionalChange.ONLY_IF_NONE_EXIST, ["FNX"]],
+        [HashFieldConditionalChange.ONLY_IF_ALL_EXIST, ["FXX"]],
+    ];
+    const expiries: [HSetExOptions["expiry"], string[]][] = [
+        [undefined, []],
+        [{ type: TimeUnit.Seconds, count: 60 }, ["EX", "60"]],
+    ];
+    const fieldsArgs = ["FIELDS", "1", "field1", "value1"];
 
-    it("builds only field conditional change", () => {
-        expect(
-            argsFor({
-                fieldConditionalChange:
-                    HashFieldConditionalChange.ONLY_IF_NONE_EXIST,
-            }),
-        ).toEqual(expected("FNX"));
-        expect(
-            argsFor({
-                fieldConditionalChange:
-                    HashFieldConditionalChange.ONLY_IF_ALL_EXIST,
-            }),
-        ).toEqual(expected("FXX"));
+    // Arguments follow the HSETEX order: [NX | XX] [FNX | FXX] [expiry].
+    const cases = keyConditions.flatMap(([keyCondition, keyArgs]) =>
+        fieldConditions.flatMap(([fieldCondition, fieldArgs]) =>
+            expiries.map(
+                ([expiry, expiryArgs]) =>
+                    [
+                        {
+                            keyConditionalChange: keyCondition,
+                            fieldConditionalChange: fieldCondition,
+                            expiry,
+                        },
+                        ["key", ...keyArgs, ...fieldArgs, ...expiryArgs],
+                    ] as [HSetExOptions, string[]],
+            ),
+        ),
+    );
+
+    it.each(cases)("builds arguments for %j", (options, expectedArgs) => {
+        const cmd = createHSetEx("key", fields, options);
+        expect(cmd.requestType).toEqual(RequestType.HSetEx);
+        expect(cmd.argsArray?.args).toEqual(
+            convertStringArrayToBuffer([...expectedArgs, ...fieldsArgs]),
+        );
     });
 
-    it("builds only key conditional change", () => {
+    it("builds KEEPTTL expiry", () => {
         expect(
-            argsFor({ keyConditionalChange: ConditionalChange.ONLY_IF_EXISTS }),
-        ).toEqual(expected("XX"));
-        expect(
-            argsFor({
-                keyConditionalChange: ConditionalChange.ONLY_IF_DOES_NOT_EXIST,
-            }),
-        ).toEqual(expected("NX"));
-    });
-
-    it("builds combined options in command order", () => {
-        expect(
-            argsFor({
-                fieldConditionalChange:
-                    HashFieldConditionalChange.ONLY_IF_NONE_EXIST,
-                expiry: { type: TimeUnit.Seconds, count: 60 },
-            }),
-        ).toEqual(expected("FNX", "EX", "60"));
-        expect(
-            argsFor({
-                fieldConditionalChange:
-                    HashFieldConditionalChange.ONLY_IF_ALL_EXIST,
-                expiry: { type: TimeUnit.Milliseconds, count: 5000 },
-            }),
-        ).toEqual(expected("FXX", "PX", "5000"));
-        expect(
-            argsFor({
-                keyConditionalChange: ConditionalChange.ONLY_IF_EXISTS,
-                fieldConditionalChange:
-                    HashFieldConditionalChange.ONLY_IF_NONE_EXIST,
-            }),
-        ).toEqual(expected("XX", "FNX"));
-        expect(
-            argsFor({
-                keyConditionalChange: ConditionalChange.ONLY_IF_DOES_NOT_EXIST,
-                fieldConditionalChange:
-                    HashFieldConditionalChange.ONLY_IF_ALL_EXIST,
-            }),
-        ).toEqual(expected("NX", "FXX"));
-        expect(
-            argsFor({
-                keyConditionalChange: ConditionalChange.ONLY_IF_EXISTS,
-                expiry: { type: TimeUnit.Seconds, count: 60 },
-            }),
-        ).toEqual(expected("XX", "EX", "60"));
-        expect(
-            argsFor({
-                keyConditionalChange: ConditionalChange.ONLY_IF_DOES_NOT_EXIST,
-                fieldConditionalChange:
-                    HashFieldConditionalChange.ONLY_IF_NONE_EXIST,
-                expiry: { type: TimeUnit.Seconds, count: 60 },
-            }),
-        ).toEqual(expected("NX", "FNX", "EX", "60"));
-    });
-
-    it("builds only expiry", () => {
-        expect(
-            argsFor({ expiry: { type: TimeUnit.Seconds, count: 60 } }),
-        ).toEqual(expected("EX", "60"));
-        expect(argsFor({ expiry: "KEEPTTL" })).toEqual(expected("KEEPTTL"));
-    });
-
-    it("builds the request type", () => {
-        expect(createHSetEx("key", fields).requestType).toEqual(
-            RequestType.HSetEx,
+            createHSetEx("key", fields, { expiry: "KEEPTTL" }).argsArray?.args,
+        ).toEqual(
+            convertStringArrayToBuffer(["key", "KEEPTTL", ...fieldsArgs]),
         );
     });
 });
