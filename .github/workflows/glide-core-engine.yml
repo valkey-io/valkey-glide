@@ -15,6 +15,7 @@ on:
             # Rust dependencies
             - glide-telemetry/**
             - glide-logger/**
+            - glide-rdma/**
             - deny.toml
 
             # GitHub workflows
@@ -33,6 +34,7 @@ on:
             # Rust dependencies
             - glide-telemetry/**
             - glide-logger/**
+            - glide-rdma/**
             - deny.toml
 
             # GitHub workflows
@@ -106,7 +108,8 @@ jobs:
               shell: bash
               run: |
                   cargo fmt --all -- --check
-                  cargo clippy -- -D warnings
+                  cargo clippy --all-features --all-targets -- -D warnings
+                  cargo clippy --all-targets -- -D warnings
                   cargo install --locked cargo-deny
                   cargo deny --config ${GITHUB_WORKSPACE}/deny.toml --exclude-dev check all
               working-directory: ./glide-core/redis-rs/redis

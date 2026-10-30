@@ -57,6 +57,7 @@ public final class GeoSearchOrigin {
         private final GlideString member;
 
         public String[] toArgs() {
+            // TODO #7447: Converts `member` lossily. Add a binary-safe `toGlideStringArgs()`.
             return new String[] {FROMMEMBER_VALKEY_API, member.toString()};
         }
     }

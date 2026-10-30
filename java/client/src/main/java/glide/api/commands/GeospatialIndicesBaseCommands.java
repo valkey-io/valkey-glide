@@ -273,7 +273,6 @@ public interface GeospatialIndicesBaseCommands {
      * Returns the members of a sorted set populated with geospatial information using {@link
      * #geoadd(String, Map)}, which are within the borders of the area specified by a given shape.
      *
-     * @since Valkey 6.2.0 and above.
      * @see <a href="https://valkey.io/commands/geosearch">valkey.io</a> for more details.
      * @param key The key of the sorted set.
      * @param searchFrom The query's center point options, could be one of:
@@ -312,7 +311,6 @@ public interface GeospatialIndicesBaseCommands {
      * Returns the members of a sorted set populated with geospatial information using {@link
      * #geoadd(String, Map)}, which are within the borders of the area specified by a given shape.
      *
-     * @since Valkey 6.2.0 and above.
      * @see <a href="https://valkey.io/commands/geosearch">valkey.io</a> for more details.
      * @param key The key of the sorted set.
      * @param searchFrom The query's center point options, could be one of:
@@ -351,7 +349,6 @@ public interface GeospatialIndicesBaseCommands {
      * Returns the members of a sorted set populated with geospatial information using {@link
      * #geoadd(String, Map)}, which are within the borders of the area specified by a given shape.
      *
-     * @since Valkey 6.2.0 and above.
      * @see <a href="https://valkey.io/commands/geosearch">valkey.io</a> for more details.
      * @param key The key of the sorted set.
      * @param searchFrom The query's center point options, could be one of:
@@ -396,7 +393,6 @@ public interface GeospatialIndicesBaseCommands {
      * Returns the members of a sorted set populated with geospatial information using {@link
      * #geoadd(String, Map)}, which are within the borders of the area specified by a given shape.
      *
-     * @since Valkey 6.2.0 and above.
      * @see <a href="https://valkey.io/commands/geosearch">valkey.io</a> for more details.
      * @param key The key of the sorted set.
      * @param searchFrom The query's center point options, could be one of:
@@ -441,7 +437,6 @@ public interface GeospatialIndicesBaseCommands {
      * Returns the members of a sorted set populated with geospatial information using {@link
      * #geoadd(String, Map)}, which are within the borders of the area specified by a given shape.
      *
-     * @since Valkey 6.2.0 and above.
      * @see <a href="https://valkey.io/commands/geosearch">valkey.io</a> for more details.
      * @param key The key of the sorted set.
      * @param searchFrom The query's center point options, could be one of:
@@ -513,7 +508,6 @@ public interface GeospatialIndicesBaseCommands {
      * Returns the members of a sorted set populated with geospatial information using {@link
      * #geoadd(String, Map)}, which are within the borders of the area specified by a given shape.
      *
-     * @since Valkey 6.2.0 and above.
      * @see <a href="https://valkey.io/commands/geosearch">valkey.io</a> for more details.
      * @param key The key of the sorted set.
      * @param searchFrom The query's center point options, could be one of:
@@ -585,7 +579,6 @@ public interface GeospatialIndicesBaseCommands {
      * Returns the members of a sorted set populated with geospatial information using {@link
      * #geoadd(String, Map)}, which are within the borders of the area specified by a given shape.
      *
-     * @since Valkey 6.2.0 and above.
      * @see <a href="https://valkey.io/commands/geosearch">valkey.io</a> for more details.
      * @param key The key of the sorted set.
      * @param searchFrom The query's center point options, could be one of:
@@ -664,7 +657,6 @@ public interface GeospatialIndicesBaseCommands {
      * Returns the members of a sorted set populated with geospatial information using {@link
      * #geoadd(String, Map)}, which are within the borders of the area specified by a given shape.
      *
-     * @since Valkey 6.2.0 and above.
      * @see <a href="https://valkey.io/commands/geosearch">valkey.io</a> for more details.
      * @param key The key of the sorted set.
      * @param searchFrom The query's center point options, could be one of:
@@ -746,7 +738,6 @@ public interface GeospatialIndicesBaseCommands {
      * created. To get the result directly, see `{@link #geosearch(String, SearchOrigin,
      * GeoSearchShape)}.
      *
-     * @since Valkey 6.2.0 and above.
      * @apiNote When in cluster mode, <code>source</code> and <code>destination</code> must map to the
      *     same hash slot.
      * @see <a href="https://valkey.io/commands/geosearch">valkey.io</a> for more details.
@@ -790,7 +781,6 @@ public interface GeospatialIndicesBaseCommands {
      * created. To get the result directly, see `{@link #geosearch(String, SearchOrigin,
      * GeoSearchShape)}.
      *
-     * @since Valkey 6.2.0 and above.
      * @apiNote When in cluster mode, <code>source</code> and <code>destination</code> must map to the
      *     same hash slot.
      * @see <a href="https://valkey.io/commands/geosearch">valkey.io</a> for more details.
@@ -837,7 +827,6 @@ public interface GeospatialIndicesBaseCommands {
      * created. To get the result directly, see `{@link #geosearch(String, SearchOrigin,
      * GeoSearchShape, GeoSearchResultOptions)}.
      *
-     * @since Valkey 6.2.0 and above.
      * @apiNote When in cluster mode, <code>source</code> and <code>destination</code> must map to the
      *     same hash slot.
      * @see <a href="https://valkey.io/commands/geosearch">valkey.io</a> for more details.
@@ -888,7 +877,6 @@ public interface GeospatialIndicesBaseCommands {
      * created. To get the result directly, see `{@link #geosearch(String, SearchOrigin,
      * GeoSearchShape, GeoSearchResultOptions)}.
      *
-     * @since Valkey 6.2.0 and above.
      * @apiNote When in cluster mode, <code>source</code> and <code>destination</code> must map to the
      *     same hash slot.
      * @see <a href="https://valkey.io/commands/geosearch">valkey.io</a> for more details.
@@ -939,7 +927,6 @@ public interface GeospatialIndicesBaseCommands {
      * created. To get the result directly, see `{@link #geosearch(String, SearchOrigin,
      * GeoSearchShape, GeoSearchOptions)}.
      *
-     * @since Valkey 6.2.0 and above.
      * @apiNote When in cluster mode, <code>source</code> and <code>destination</code> must map to the
      *     same hash slot.
      * @see <a href="https://valkey.io/commands/geosearch">valkey.io</a> for more details.
@@ -989,7 +976,6 @@ public interface GeospatialIndicesBaseCommands {
      * created. To get the result directly, see `{@link #geosearch(String, SearchOrigin,
      * GeoSearchShape, GeoSearchOptions)}.
      *
-     * @since Valkey 6.2.0 and above.
      * @apiNote When in cluster mode, <code>source</code> and <code>destination</code> must map to the
      *     same hash slot.
      * @see <a href="https://valkey.io/commands/geosearch">valkey.io</a> for more details.
@@ -1039,7 +1025,6 @@ public interface GeospatialIndicesBaseCommands {
      * created. To get the result directly, see `{@link #geosearch(String, SearchOrigin,
      * GeoSearchShape, GeoSearchOptions, GeoSearchResultOptions)}.
      *
-     * @since Valkey 6.2.0 and above.
      * @apiNote When in cluster mode, <code>source</code> and <code>destination</code> must map to the
      *     same hash slot.
      * @see <a href="https://valkey.io/commands/geosearch">valkey.io</a> for more details.
@@ -1093,7 +1078,6 @@ public interface GeospatialIndicesBaseCommands {
      * created. To get the result directly, see `{@link #geosearch(String, SearchOrigin,
      * GeoSearchShape, GeoSearchOptions, GeoSearchResultOptions)}.
      *
-     * @since Valkey 6.2.0 and above.
      * @apiNote When in cluster mode, <code>source</code> and <code>destination</code> must map to the
      *     same hash slot.
      * @see <a href="https://valkey.io/commands/geosearch">valkey.io</a> for more details.

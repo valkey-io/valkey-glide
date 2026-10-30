@@ -743,6 +743,18 @@ fn base_routing(cmd: &[u8]) -> RouteBy {
 
         b"MIGRATE" => RouteBy::ThirdArg,
 
+        // The RDMA transfer commands are of the form:
+        // BLOB.RDMA_GET <key> <rkey> <remote-address> <length> [<rkey> <remote-address> <length> ...]
+        // BLOB.RDMA_SET <key> <total-length> [CRC <crc32c>] <rkey> <remote-address> <length> [...]
+        //
+        // Both go to the key's primary: they are deliberately left out of
+        // `is_readonly_cmd`, so no read-from-replica setting sends a read to a
+        // replica. The large-object module does not replicate its objects yet, so a
+        // replica holds none of them and would answer every read as a missing key.
+        // Add `BLOB.RDMA_GET` there once the module replicates. For the same reason,
+        // `is_key_routing_command` keeps both out of the random-node fallback.
+        b"BLOB.RDMA_GET" | b"BLOB.RDMA_SET" => RouteBy::FirstKey,
+
         b"LMPOP" | b"SINTERCARD" | b"ZDIFF" | b"ZINTER" | b"ZINTERCARD" | b"ZMPOP" | b"ZUNION" => {
             RouteBy::SecondArgAfterKeyCount
         }
@@ -838,6 +850,13 @@ impl RoutingInfo {
                     // Consequently, SPUBLISH does not meet the requirement of being a command that triggers MOVED errors.
                     // TODO: remove this when PRIMARY_PREFERRED route for SPUBLISH is added
                     false
+                } else if matches!(cmd, b"BLOB.RDMA_GET" | b"BLOB.RDMA_SET") {
+                    // An RDMA transfer must reach the key's primary. A random node may be a
+                    // replica that was sent READONLY, which answers an RDMA read itself instead
+                    // of replying MOVED. The large-object module does not replicate its objects
+                    // yet, so that replica would report a missing key. Failing instead makes the
+                    // client refresh its slot map and retry against the primary.
+                    false
                 } else {
                     true
                 }
@@ -854,6 +873,88 @@ impl RoutingInfo {
         R: Routable + ?Sized,
     {
         let cmd = &r.command()?[..];
+
+        // FT.CURSOR and FT.AGGREGATE/FT.HYBRID ...
+        // WITHCURSOR must land on the PRIMARY of the index-name slot,
+        // regardless of ReadFrom, because a cursor is a per-process,
+        // main-thread-only singleton on the server that created it
+        // (src/cursor.h "Main thread only") -- confirmed against the
+        // maintainers' own cluster test
+        // (valkey-search integration/test_cursor.py:305,
+        // TestCursorCluster.test_cursor_is_node_local), which runs a query
+        // on one primary, then shows FT.CURSOR READ succeeding there and
+        // failing on every other node in the shard. A read sent to a
+        // replica -- which PREFER_REPLICA/AZAffinity would otherwise do for
+        // any plain readonly command -- would reach a node that never
+        // created the cursor and get "Cursor not found" partway through
+        // paging. Pinning to the slot's primary deterministically keeps the
+        // query node and the read node the same, and is also the only
+        // option that survives a replica resync (which the server's own
+        // design note lists as an event that discards a replica's cursors;
+        // primaries are not subject to that).
+        //
+        // FT.CURSOR itself is in the READ ACL category and absent from the
+        // is_readonly_cmd() list below (it falls through to `_ =>
+        // RouteBy::FirstKey` with is_readonly_cmd returning false, so it
+        // already resolves to SlotAddr::Master today) -- routed explicitly
+        // here anyway so this stays correct and documented even if a future
+        // change adds it to that list without noticing the cursor
+        // implication. FT.HYBRID is handled the same way for the same
+        // reason, ahead of its own typed API landing.
+        //
+        // FT.AGGREGATE IS in the is_readonly_cmd() list (plain FT.AGGREGATE
+        // genuinely has no cursor-affinity requirement and benefits from
+        // replica routing like any other read), so only the WITHCURSOR case
+        // needs to be pulled out of that path -- detected with a plain
+        // position() scan rather than the full option-tail scanner
+        // value_conversion.rs uses for reply-type dispatch: a false
+        // positive here (e.g. an INKEYS/PARAMS/LOAD value happening to
+        // equal "WITHCURSOR") only ever means "routed to the primary when
+        // it didn't strictly need to be" -- a availability/distribution
+        // cost, not a correctness bug, unlike reply-shape dispatch mistakes
+        // (which can misparse the actual response). glide-core's own full scanner isn't reachable from
+        // this crate anyway (glide-core depends on this one, not the other
+        // way around), so duplicating that level of rigor here would cost
+        // more than it returns for a routing-only decision.
+        //
+        // FT.SEARCH WITHCURSOR is deliberately NOT covered: it is a
+        // Valkey-only extension, out of scope here, and GLIDE's typed
+        // API never emits it.
+        //
+        // This branch is not just a primary pin on top of what `_ =>
+        // RouteBy::FirstKey` would already compute correctly -- it also
+        // fixes the SLOT itself (affonsov review #7335). FirstKey reads
+        // `arg_idx(1)` as the key. For `FT.CURSOR READ index cursor_id` and
+        // `FT.CURSOR DEL index cursor_id`, argument 1 is the subcommand
+        // token (`READ`/`DEL`), not the index name -- the index name is
+        // argument 2. Routing on `arg_idx(1)` would have hashed the
+        // subcommand token's slot instead of the index's, sending the
+        // command to a shard that most likely isn't the one holding the
+        // cursor at all, not just skipping the primary pin above. FT.HYBRID
+        // has no subcommand token (`FT.HYBRID index ...`), so its index
+        // name genuinely is argument 1, same as FirstKey would already
+        // compute -- only FT.CURSOR needs the different offset. A future
+        // cleanup must not fold this branch away as redundant with
+        // FirstKey: FirstKey was never correct for FT.CURSOR to begin with.
+        if cmd.eq_ignore_ascii_case(b"FT.CURSOR") || cmd.eq_ignore_ascii_case(b"FT.HYBRID") {
+            return r
+                .arg_idx(if cmd.eq_ignore_ascii_case(b"FT.CURSOR") {
+                    2
+                } else {
+                    1
+                })
+                .map(|key| {
+                    RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(get_route(
+                        false, key,
+                    )))
+                });
+        }
+        if cmd.eq_ignore_ascii_case(b"FT.AGGREGATE") && r.position(b"WITHCURSOR").is_some() {
+            return r.arg_idx(1).map(|key| {
+                RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(get_route(false, key)))
+            });
+        }
+
         match base_routing(cmd) {
             RouteBy::AllNodes => Some(RoutingInfo::MultiNode((
                 MultipleNodeRoutingInfo::AllNodes,
@@ -988,6 +1089,12 @@ pub fn is_readonly(routable: &impl Routable) -> bool {
         Some(cmd) => is_readonly_cmd(cmd.as_slice()),
         None => false,
     }
+}
+
+/// Returns `true` if the given `cmd` is an RDMA transfer, which lends the
+/// client's memory to the server until the server replies.
+pub(crate) fn lends_memory(cmd: &[u8]) -> bool {
+    matches!(cmd, b"BLOB.RDMA_GET" | b"BLOB.RDMA_SET")
 }
 
 /// Returns `true` if the given `cmd` is a readonly command.
@@ -1556,9 +1663,112 @@ mod tests_routing {
         ResponsePolicy, Route, RoutingInfo, ShardAddrs, SingleNodeRoutingInfo, SlotAddr,
     };
     use crate::cluster_routing::{is_readonly, is_readonly_cmd, Routable, ShardUpdateResult};
-    use crate::{cluster_topology::slot, cmd, parser::parse_redis_value, Value};
+    use crate::{cluster_topology::slot, cmd, parser::parse_redis_value, Cmd, Value};
     use core::panic;
     use std::sync::{Arc, RwLock};
+
+    /// `BLOB.RDMA_GET <key> <rkey> <remote-address> <length>`, the read half of an RDMA
+    /// transfer.
+    fn rdma_get(key: &str) -> crate::Cmd {
+        let mut command = cmd("BLOB.RDMA_GET");
+        command
+            .arg(key)
+            .arg("439041101") // rkey
+            .arg("140229324210176") // remote-address
+            .arg("262144"); // window length
+        command
+    }
+
+    /// `BLOB.RDMA_SET <key> <total-length> <rkey> <remote-address> <length>`, the write half.
+    fn rdma_set(key: &str) -> crate::Cmd {
+        let mut command = cmd("BLOB.RDMA_SET");
+        command
+            .arg(key)
+            .arg("262144") // payload length
+            .arg("439041101") // rkey
+            .arg("140229324210176") // remote-address
+            .arg("262144"); // window length
+        command
+    }
+
+    /// `BLOB.RDMA_SET <key> <total-length> CRC <crc32c> <rkey> <remote-address> <length>`,
+    /// the write half with a checksum for the server to verify.
+    fn rdma_set_with_crc(key: &str) -> crate::Cmd {
+        let mut command = cmd("BLOB.RDMA_SET");
+        command
+            .arg(key)
+            .arg("262144") // payload length
+            .arg("CRC")
+            .arg("3632233996") // crc32c
+            .arg("439041101") // rkey
+            .arg("140229324210176") // remote-address
+            .arg("262144"); // window length
+        command
+    }
+
+    fn rdma_cmd(name: &str, key: &str) -> crate::Cmd {
+        match name {
+            "BLOB.RDMA_GET" => rdma_get(key),
+            "BLOB.RDMA_SET" => rdma_set(key),
+            "BLOB.RDMA_SET CRC" => rdma_set_with_crc(key),
+            other => panic!("not a RDMA transfer command: {other}"),
+        }
+    }
+
+    fn slot_of(routable: &impl Routable) -> u16 {
+        match RoutingInfo::for_routable(routable) {
+            Some(RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(route))) => {
+                route.slot()
+            }
+            other => panic!("expected a single specific node, got {other:?}"),
+        }
+    }
+
+    fn slot_addr_of(routable: &impl Routable) -> SlotAddr {
+        match RoutingInfo::for_routable(routable) {
+            Some(RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(route))) => {
+                route.slot_addr()
+            }
+            other => panic!("expected a single specific node, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_routing_info_rdma_routes_by_its_key() {
+        let mut plain = cmd("GET");
+        plain.arg("foo");
+        let expected = slot_of(&plain);
+
+        for name in ["BLOB.RDMA_GET", "BLOB.RDMA_SET", "BLOB.RDMA_SET CRC"] {
+            assert_eq!(
+                slot_of(&rdma_cmd(name, "foo")),
+                expected,
+                "{name} should hash the same key as GET"
+            );
+        }
+    }
+
+    #[test]
+    fn test_routing_info_rdma_reads_are_pinned_to_the_primary() {
+        // Unlike a plain GET: the large-object module does not replicate its
+        // objects yet, so only the primary can answer an RDMA read.
+        let mut plain_get = cmd("GET");
+        plain_get.arg("foo");
+        assert_eq!(slot_addr_of(&plain_get), SlotAddr::ReplicaOptional);
+
+        assert_eq!(slot_addr_of(&rdma_get("foo")), SlotAddr::Master);
+        assert_eq!(slot_addr_of(&rdma_set("foo")), SlotAddr::Master);
+        assert_eq!(slot_addr_of(&rdma_set_with_crc("foo")), SlotAddr::Master);
+    }
+
+    #[test]
+    fn test_rdma_transfers_do_not_fall_back_to_a_random_node() {
+        // A random node may be a READONLY replica, which would answer an RDMA read
+        // itself instead of replying MOVED.
+        assert!(RoutingInfo::is_key_routing_command(b"GET"));
+        assert!(!RoutingInfo::is_key_routing_command(b"BLOB.RDMA_GET"));
+        assert!(!RoutingInfo::is_key_routing_command(b"BLOB.RDMA_SET"));
+    }
 
     #[test]
     fn test_routing_info_mixed_capatalization() {
@@ -2203,5 +2413,124 @@ mod tests_routing {
         assert!(!is_readonly_cmd(
             Routable::command(&test_cmd).unwrap().as_slice()
         ));
+    }
+
+    /// Helper asserting a command resolves to SingleNode(SpecificNode(Route
+    /// { slot, SlotAddr::Master })), i.e. the primary of the slot the given
+    /// key would hash to -- the pinning this module adds for
+    /// FT.CURSOR/FT.HYBRID/FT.AGGREGATE WITHCURSOR.
+    fn assert_routes_to_primary_of_key(cmd: &Cmd, key_arg: &str) {
+        let routing = RoutingInfo::for_routable(cmd);
+        let expected_slot = crate::cluster_topology::get_slot(key_arg.as_bytes());
+        match routing {
+            Some(RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(route))) => {
+                assert_eq!(route.slot(), expected_slot, "routed to the wrong slot");
+                assert_eq!(
+                    route.slot_addr(),
+                    SlotAddr::Master,
+                    "must route to the primary, not a replica"
+                );
+            }
+            other => panic!("expected SpecificNode(Master), got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_ft_cursor_read_routes_to_primary() {
+        let mut cmd = cmd("FT.CURSOR");
+        cmd.arg("READ").arg("myindex").arg("12345");
+        assert_routes_to_primary_of_key(&cmd, "myindex");
+    }
+
+    #[test]
+    fn test_ft_cursor_del_routes_to_primary() {
+        let mut cmd = cmd("FT.CURSOR");
+        cmd.arg("DEL").arg("myindex").arg("12345");
+        assert_routes_to_primary_of_key(&cmd, "myindex");
+    }
+
+    #[test]
+    fn test_ft_hybrid_routes_to_primary() {
+        let mut cmd = cmd("FT.HYBRID");
+        cmd.arg("myindex").arg("SEARCH").arg("hello").arg("VSIM");
+        assert_routes_to_primary_of_key(&cmd, "myindex");
+    }
+
+    #[test]
+    fn test_ft_aggregate_withcursor_routes_to_primary() {
+        let mut cmd = cmd("FT.AGGREGATE");
+        cmd.arg("myindex")
+            .arg("*")
+            .arg("WITHCURSOR")
+            .arg("COUNT")
+            .arg("10");
+        assert_routes_to_primary_of_key(&cmd, "myindex");
+    }
+
+    #[test]
+    fn test_ft_aggregate_without_withcursor_still_prefers_replica() {
+        // Plain FT.AGGREGATE (no WITHCURSOR) must NOT be forced to the
+        // primary -- it has no cursor-affinity requirement and should keep
+        // benefiting from replica routing like any other read, via the
+        // ordinary is_readonly_cmd() path this special case must not
+        // disturb.
+        let mut cmd = cmd("FT.AGGREGATE");
+        cmd.arg("myindex").arg("*");
+        let routing = RoutingInfo::for_routable(&cmd);
+        match routing {
+            Some(RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(route))) => {
+                assert_eq!(
+                    route.slot_addr(),
+                    SlotAddr::ReplicaOptional,
+                    "plain FT.AGGREGATE (no WITHCURSOR) must still prefer a replica"
+                );
+            }
+            other => panic!("expected SpecificNode(ReplicaOptional), got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_ft_aggregate_withcursor_detection_is_not_fooled_by_other_commands() {
+        // A sibling command that merely contains "WITHCURSOR" as a
+        // substring of something else must not trip this -- position()
+        // matches whole arguments, not substrings, so this is really just
+        // confirming that property holds for this specific keyword too.
+        let mut cmd = cmd("FT.AGGREGATE");
+        cmd.arg("myindex")
+            .arg("*")
+            .arg("LOAD")
+            .arg("1")
+            .arg("NOTWITHCURSORFIELD");
+        let routing = RoutingInfo::for_routable(&cmd);
+        match routing {
+            Some(RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(route))) => {
+                assert_eq!(
+                    route.slot_addr(),
+                    SlotAddr::ReplicaOptional,
+                    "a field value that merely CONTAINS \"withcursor\" as a \
+                     substring must not trigger primary pinning"
+                );
+            }
+            other => panic!("expected SpecificNode(ReplicaOptional), got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_ft_aggregate_withcursor_false_positive_from_exact_value_still_routes_to_primary() {
+        // The comment above this routing special-case concedes a
+        // false positive is possible when a caller-controlled VALUE (not
+        // just a substring) happens to equal "WITHCURSOR" exactly -- e.g. a
+        // LOAD field or an INKEYS key literally named that. This confirms
+        // that scenario really does happen (position() matches it) and that
+        // the only consequence is routing to the primary rather than any
+        // misdirection or data leak, exactly as documented: an
+        // availability/distribution cost, not a correctness bug.
+        let mut cmd = cmd("FT.AGGREGATE");
+        cmd.arg("myindex")
+            .arg("*")
+            .arg("LOAD")
+            .arg("1")
+            .arg("WITHCURSOR");
+        assert_routes_to_primary_of_key(&cmd, "myindex");
     }
 }

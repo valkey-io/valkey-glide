@@ -7,6 +7,8 @@ import os
 import struct
 import sys
 import threading
+import warnings
+import weakref
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -245,7 +247,6 @@ def _slot_for_key(key: bytes) -> int:
 _async_pipe_read_fd: int = -1
 _async_pipe_write_fd: int = -1
 _async_pipe_init_pid: int = -1
-_next_client_id = itertools.count(1)
 
 
 def _close_file_descriptors(*fds: int) -> None:
@@ -267,7 +268,10 @@ _async_pipe_loop: Optional[asyncio.AbstractEventLoop] = (
 # trio raises BusyResourceError if two tasks wait on the same fd at once.
 _trio_pipe_token: Optional[object] = None
 _async_pipe_lock = threading.Lock()
-_client_registry: dict = {}
+# Weak refs: routing frames must not keep an unclosed client (and its connection) alive.
+_client_registry: "weakref.WeakValueDictionary[int, Any]" = (
+    weakref.WeakValueDictionary()
+)
 _pipe_remainder: bytes = b""
 _FRAME_STRUCT = struct.Struct("=QQQQ")  # Pre-compiled for hot path
 _PUBSUB_SENTINEL = 0xFFFFFFFFFFFFFFFF  # request_id sentinel for pubsub frames
@@ -295,24 +299,39 @@ def _free_orphaned_frame(request_id, response_ptr, arena_or_err):
         if arena_or_err & (1 << 63):
             # Pointer-mode pubsub: free the heap-allocated payload
             payload_len = arena_or_err & 0x7FFFFFFFFFFFFFFF
-            any_c = next(iter(_client_registry.values()), None)
-            if any_c:
-                any_c._lib.free_pubsub_pointer_payload(
-                    any_c._ffi.cast("uint8_t*", response_ptr), payload_len
-                )
-        return
-    any_c = next(iter(_client_registry.values()), None)
-    if any_c is None:
+            _ASYNC_FFI.lib.free_pubsub_pointer_payload(
+                _ASYNC_FFI.ffi.cast("uint8_t*", response_ptr), payload_len
+            )
         return
     try:
         if response_ptr != 0 and arena_or_err != 0:
-            any_c._lib.free_response_arena(any_c._ffi.cast("void*", arena_or_err))
+            _ASYNC_FFI.lib.free_response_arena(
+                _ASYNC_FFI.ffi.cast("void*", arena_or_err)
+            )
         elif response_ptr == 0 and arena_or_err != 0:
             err_ptr = arena_or_err & 0x00FFFFFFFFFFFFFF
             if err_ptr:
-                any_c._lib.free_pipe_error_string(any_c._ffi.cast("char*", err_ptr))
+                _ASYNC_FFI.lib.free_pipe_error_string(
+                    _ASYNC_FFI.ffi.cast("char*", err_ptr)
+                )
     except Exception:
         pass
+
+
+def _release_core_client(lib, core_client, create_pid: int) -> None:
+    """Close the core client of a client garbage-collected without close() (same fork guard)."""
+    if create_pid == os.getpid():
+        # finally: under -W error::ResourceWarning the warning raises, and a
+        # finalizer does not run twice, so the connection would never close.
+        try:
+            warnings.warn(
+                "GlideClient was garbage-collected without close(); "
+                "closing its connection. Call close() or use 'async with'.",
+                ResourceWarning,
+                stacklevel=2,
+            )
+        finally:
+            lib.close_client(core_client)
 
 
 def _resolve_future(fut, result, client):
@@ -524,11 +543,9 @@ def _on_async_pipe_readable() -> None:  # noqa: C901
                 if client is not None:
                     _handle_pointer_pubsub(client, response_ptr, payload_len)
                 else:
-                    any_c = next(iter(_client_registry.values()), None)
-                    if any_c:
-                        any_c._lib.free_pubsub_pointer_payload(
-                            any_c._ffi.cast("uint8_t*", response_ptr), payload_len
-                        )
+                    _ASYNC_FFI.lib.free_pubsub_pointer_payload(
+                        _ASYNC_FFI.ffi.cast("uint8_t*", response_ptr), payload_len
+                    )
             else:
                 # Inline pubsub: response_ptr = payload_len, data follows header
                 payload_len = response_ptr
@@ -646,6 +663,9 @@ class _ProviderNativeCreate:
 
 
 class BaseClient(CoreCommands):
+    # Class default: ClientPool builds its adapters without __init__ and owns their lifetime.
+    _core_client_finalizer: Optional["weakref.finalize"] = None
+
     def __init__(self, config: BaseClientConfiguration):
         """To create a new client, use the `create` classmethod"""
         _glide_ffi = _ASYNC_FFI
@@ -732,8 +752,7 @@ class BaseClient(CoreCommands):
             iam_config.credential_provider if iam_config is not None else None
         )
         if credential_provider is None:
-            # Preserve the ordinary latest-main creation path and low pipe-ID namespace.
-            self._pipe_client_id = next(_next_client_id)
+            self._pipe_client_id = self._lib.glide_allocate_client_id()
             client_response_ptr = self._lib.create_client(
                 conn_req_bytes,
                 len(conn_req_bytes),
@@ -821,6 +840,13 @@ class BaseClient(CoreCommands):
                 LogLevel.INFO, "connection info", "new connection established"
             )
 
+        # Close the connection if the client is dropped without close(); holds no ref to self.
+        self._core_client_finalizer = weakref.finalize(
+            self, _release_core_client, self._lib, self._core_client, self._create_pid
+        )
+        # typeshed gives finalize empty __slots__; atexit is settable at runtime.
+        self._core_client_finalizer.atexit = False  # type: ignore[misc]
+
         self._setup_pipe_after_creation(credential_provider is not None)
 
         return self
@@ -845,6 +871,8 @@ class BaseClient(CoreCommands):
             owner = self._credential_provider_callback_owner
             self._credential_provider_callback_owner = None
             self._credential_provider_callback_ref = None
+        if self._core_client_finalizer is not None:
+            self._core_client_finalizer.detach()
         if core_client is not None and self._create_pid == os.getpid():
             self._lib.close_client(core_client)
         if owner is not None:
@@ -1384,6 +1412,9 @@ class BaseClient(CoreCommands):
             self._pubsub_futures.clear()
 
         _client_registry.pop(getattr(self, "_pipe_client_id", 0), None)
+
+        if self._core_client_finalizer is not None:
+            self._core_client_finalizer.detach()
 
         # Skip FFI call if this client was created in a different process
         # (the tokio Runtime doesn't survive fork; dropping it would hang).

@@ -209,7 +209,7 @@ pub(crate) struct IamTokenState {
     /// Optional custom credentials callback.
     ///
     /// When `Some`, this closure is invoked to obtain AWS credentials
-    /// `(access_key_id, secret_access_key, session_token)` instead of using the
+    /// `(access_key_id, secret_access_key, session_token, expires_at)` instead of using the
     /// default AWS credential chain. The callback must be `Send + Sync` so that
     /// it can be called from the async background refresh task.
     pub(crate) credentials_provider: Option<CredentialsProvider>,
@@ -293,7 +293,7 @@ impl IAMTokenManager {
     ///   about potential performance consequences.
     /// * `credentials_provider` - Optional custom callback to retrieve AWS credentials.
     ///   When `Some`, this closure is called instead of the default AWS credential chain.
-    ///   Returns `(access_key_id, secret_access_key, session_token)` where session token
+    ///   Returns `(access_key_id, secret_access_key, session_token, expires_at)` where session token
     ///   may be `None` for long-term credentials.
     ///   When `None`, the default AWS credential chain (environment variables,
     ///   `~/.aws/credentials`, EC2/ECS metadata, etc.) is used.

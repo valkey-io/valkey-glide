@@ -887,14 +887,17 @@ class TestCommands:
         key = get_random_string(10)
         assert glide_sync_client.set(key, "value") == OK
 
+        # Value not equal
         cond = OnlyIfEqual("other")
         assert glide_sync_client.set(key, "other", conditional_set=cond) is None
         assert glide_sync_client.get(key) == b"value"
 
+        # Value equal
         cond = OnlyIfEqual("value")
         assert glide_sync_client.set(key, "other", conditional_set=cond) == OK
         assert glide_sync_client.get(key) == b"other"
 
+        # Non-existent key
         missing = get_random_string(10)
         assert glide_sync_client.set(missing, "value", conditional_set=cond) is None
         assert glide_sync_client.exists([missing]) == 0
@@ -906,14 +909,17 @@ class TestCommands:
         key = get_random_string(10)
         assert glide_sync_client.set(key, "value") == OK
 
+        # Value equal
         cond = OnlyIfNotEqual("value")
         assert glide_sync_client.set(key, "other", conditional_set=cond) is None
         assert glide_sync_client.get(key) == b"value"
 
+        # Value not equal
         cond = OnlyIfNotEqual("other")
         assert glide_sync_client.set(key, "other", conditional_set=cond) == OK
         assert glide_sync_client.get(key) == b"other"
 
+        # Non-existent key
         missing = get_random_string(10)
         assert glide_sync_client.set(missing, "value", conditional_set=cond) == OK
         assert glide_sync_client.get(missing) == b"value"
@@ -5924,6 +5930,27 @@ class TestCommands:
 
         assert glide_sync_client.append(key, value) == 10
         assert glide_sync_client.get(key) == (value * 2).encode()
+
+    @pytest.mark.skip_if_version_below("9.0.0")
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_delifeq(self, glide_sync_client: TGlideClient):
+        key = get_random_string(10)
+        value = get_random_string(10)
+        wrong_value = get_random_string(10)
+
+        # key does not exist yet
+        assert glide_sync_client.delifeq(key, value) is False
+
+        assert glide_sync_client.set(key, value) == OK
+
+        # value does not match
+        assert glide_sync_client.delifeq(key, wrong_value) is False
+        assert glide_sync_client.get(key) == value.encode()
+
+        # value matches, key is deleted
+        assert glide_sync_client.delifeq(key, value) is True
+        assert glide_sync_client.get(key) is None
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])

@@ -25,7 +25,11 @@ from glide_sync import GlideClient, GlideClusterClient, TGlideClient
 from pytest import param
 
 from tests.sync_tests.conftest import create_sync_client
-from tests.utils.utils import create_sync_client_config, get_random_string
+from tests.utils.utils import (
+    create_sync_client_config,
+    get_random_string,
+    sync_check_if_server_version_lt,
+)
 
 
 # Data Generation Functions
@@ -1481,48 +1485,41 @@ class TestCompressionIncompatibleCommands:
     of the original values.
     """
 
-    # Command name, arguments array, and expected result for incompatible commands.
-    # Expected results are used by test_incompatible_commands_compression_disabled,
-    # and depend on the test key being populated with "10".
+    # Command name, arguments array, expected result, and minimum server version for
+    # incompatible commands. Expected results and minimum versions are only used by
+    # test_incompatible_commands_compression_disabled, which sends the commands to the
+    # server. Expected results depend on the test key being populated with "10".
     INCOMPATIBLE_COMMANDS = [
-        param("append", ["0"], 3, id="append"),
-        param("bitcount", [], 5, id="bitcount"),
-        param("bitpos", [1], 2, id="bitpos"),
-        param("decr", [], 9, id="decr"),
-        param("decrby", [5], 5, id="decrby"),
-        param("getbit", [0], 0, id="getbit"),
-        param("getrange", [0, 0], b"1", id="getrange"),
-        param("incr", [], 11, id="incr"),
-        param("incrby", [5], 15, id="incrby"),
-        param("incrbyfloat", [0.5], 10.5, id="incrbyfloat"),
-        param(
-            "set",
-            ["20", OnlyIfEqual("10")],
-            OK,
-            id="set_ifeq",
-            marks=pytest.mark.skip_if_version_below("8.1.0"),
-        ),
-        param(
-            "set",
-            ["20", OnlyIfNotEqual("20")],
-            OK,
-            id="set_ifne",
-            marks=pytest.mark.skip_if_version_below("9.2.0"),
-        ),
-        param("setbit", [0, 1], 0, id="setbit"),
-        param("setrange", [1, "5"], 2, id="setrange"),
-        param("strlen", [], 2, id="strlen"),
+        param("append", ["0"], 3, None, id="append"),
+        param("bitcount", [], 5, None, id="bitcount"),
+        param("bitpos", [1], 2, None, id="bitpos"),
+        param("decr", [], 9, None, id="decr"),
+        param("decrby", [5], 5, None, id="decrby"),
+        param("delifeq", ["10"], True, "9.0.0", id="delifeq"),
+        param("getbit", [0], 0, None, id="getbit"),
+        param("getrange", [0, 0], b"1", None, id="getrange"),
+        param("incr", [], 11, None, id="incr"),
+        param("incrby", [5], 15, None, id="incrby"),
+        param("incrbyfloat", [0.5], 10.5, None, id="incrbyfloat"),
+        param("set", ["20", OnlyIfEqual("10")], OK, "8.1.0", id="set_ifeq"),
+        param("set", ["20", OnlyIfNotEqual("20")], OK, "9.2.0", id="set_ifne"),
+        param("setbit", [0, 1], 0, None, id="setbit"),
+        param("setrange", [1, "5"], 2, None, id="setrange"),
+        param("strlen", [], 2, None, id="strlen"),
     ]
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    @pytest.mark.parametrize("method, args, expected", INCOMPATIBLE_COMMANDS)
+    @pytest.mark.parametrize(
+        "method, args, expected, min_version", INCOMPATIBLE_COMMANDS
+    )
     def test_incompatible_commands(
         self,
         compression_client: TGlideClient,
         method: str,
         args: List[Any],
         expected: Any,
+        min_version: Optional[str],
     ):
         with pytest.raises(Exception) as exc_info:
             getattr(compression_client, method)("key", *args)
@@ -1530,13 +1527,16 @@ class TestCompressionIncompatibleCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    @pytest.mark.parametrize("method, args, expected", INCOMPATIBLE_COMMANDS)
+    @pytest.mark.parametrize(
+        "method, args, expected, min_version", INCOMPATIBLE_COMMANDS
+    )
     def test_incompatible_commands_custom(
         self,
         compression_client: TGlideClient,
         method: str,
         args: List[Any],
         expected: Any,
+        min_version: Optional[str],
     ):
         command: List[TEncodable] = [method.upper(), "key"]
         for arg in args:
@@ -1552,7 +1552,9 @@ class TestCompressionIncompatibleCommands:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     @pytest.mark.parametrize("is_atomic", [True, False])
-    @pytest.mark.parametrize("method, args, expected", INCOMPATIBLE_COMMANDS)
+    @pytest.mark.parametrize(
+        "method, args, expected, min_version", INCOMPATIBLE_COMMANDS
+    )
     def test_incompatible_commands_batch(
         self,
         compression_client: TGlideClient,
@@ -1560,6 +1562,7 @@ class TestCompressionIncompatibleCommands:
         method: str,
         args: List[Any],
         expected: Any,
+        min_version: Optional[str],
     ):
         # Create batch with incompatible command
         batch = (
@@ -1585,15 +1588,23 @@ class TestCompressionIncompatibleCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    @pytest.mark.parametrize("method, args, expected", INCOMPATIBLE_COMMANDS)
+    @pytest.mark.parametrize(
+        "method, args, expected, min_version", INCOMPATIBLE_COMMANDS
+    )
     def test_incompatible_commands_compression_disabled(
         self,
         no_compression_client: TGlideClient,
         method: str,
         args: List[Any],
         expected: Any,
+        min_version: Optional[str],
     ):
         """Test that incompatible commands work when compression is disabled."""
+        if min_version and sync_check_if_server_version_lt(
+            no_compression_client, min_version
+        ):
+            pytest.skip(f"Requires server version {min_version} or later")
+
         key = f"no_compression_test_{get_random_string(8)}"
         assert no_compression_client.set(key, "10") == OK
 

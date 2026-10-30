@@ -68,19 +68,37 @@ const ReturnOldValue = "GET"
 type ConditionalSet string
 
 const (
-	// OnlyIfExists only sets the key if it already exists. Equivalent to "XX" in the valkey API.
+	// OnlyIfExists only sets the key if it already exists.
+	// Equivalent to "XX" in the Valkey API.
 	OnlyIfExists ConditionalSet = "XX"
-	// OnlyIfDoesNotExist only sets the key if it does not already exist. Equivalent to "NX" in the valkey API.
+
+	// OnlyIfDoesNotExist only sets the key if it does not already exist.
+	// Equivalent to "NX" in the Valkey API.
 	OnlyIfDoesNotExist ConditionalSet = "NX"
-	// OnlyIfEquals only sets the key if it already exists and the value is equal to the given value. Equivalent to "IFEQ" in
-	// the valkey API.
+
+	// OnlyIfEquals only sets the key if it already exists and the value is equal to the given value.
+	// Equivalent to "IFEQ" in the Valkey API.
+	// Since Valkey 8.1.0.
+	// Not supported when compression is enabled. See [Valkey GLIDE – Data Compression].
 	//
-	// since Valkey 8.1 and above.
+	// [Valkey GLIDE – Data Compression]: https://glide.valkey.io/concepts/client-features/compression/#incompatible-commands
 	OnlyIfEquals ConditionalSet = "IFEQ"
-	// OnlyIfFieldsDoNotExist only sets the hash fields if none of them already exist. Equivalent to "FNX" in the valkey API.
+
+	// OnlyIfNotEquals only sets the key if it does not exist or if the value is not equal to the given value.
+	// Equivalent to "IFNE" in the Valkey API.
+	// Since Valkey 9.2.0.
+	// Not supported when compression is enabled. See [Valkey GLIDE – Data Compression].
+	//
+	// [Valkey GLIDE – Data Compression]: https://glide.valkey.io/concepts/client-features/compression/#incompatible-commands
+	OnlyIfNotEquals ConditionalSet = "IFNE"
+
+	// OnlyIfFieldsDoNotExist only sets the hash fields if none of them already exist.
+	// Equivalent to "FNX" in the Valkey API.
 	// Used with hash field expiration commands.
 	OnlyIfFieldsDoNotExist ConditionalSet = "FNX"
-	// OnlyIfAllFieldsExist only sets the hash fields if all of them already exist. Equivalent to "FXX" in the valkey API.
+
+	// OnlyIfAllFieldsExist only sets the hash fields if all of them already exist.
+	// Equivalent to "FXX" in the Valkey API.
 	// Used with hash field expiration commands.
 	OnlyIfAllFieldsExist ConditionalSet = "FXX"
 )
@@ -93,6 +111,8 @@ func (conditionalSet ConditionalSet) ToString() (string, error) {
 		return string(OnlyIfDoesNotExist), nil
 	case OnlyIfEquals:
 		return string(OnlyIfEquals), nil
+	case OnlyIfNotEquals:
+		return string(OnlyIfNotEquals), nil
 	case OnlyIfFieldsDoNotExist:
 		return string(OnlyIfFieldsDoNotExist), nil
 	case OnlyIfAllFieldsExist:
@@ -105,13 +125,20 @@ func (conditionalSet ConditionalSet) ToString() (string, error) {
 type ExpireCondition string
 
 const (
-	// HasExistingExpiry only sets the key if it already exists. Equivalent to "XX" in the valkey API.
+	// HasExistingExpiry only sets the key if it already exists.
+	// Equivalent to "XX" in the Valkey API.
 	HasExistingExpiry ExpireCondition = "XX"
-	// HasNoExpiry only sets the key if it does not already exist. Equivalent to "NX" in the valkey API.
+
+	// HasNoExpiry only sets the key if it does not already exist.
+	// Equivalent to "NX" in the Valkey API.
 	HasNoExpiry ExpireCondition = "NX"
-	// NewExpiryGreaterThanCurrent only sets the key if its greater than current. Equivalent to "GT" in the valkey API.
+
+	// NewExpiryGreaterThanCurrent only sets the key if its greater than current.
+	// Equivalent to "GT" in the Valkey API.
 	NewExpiryGreaterThanCurrent ExpireCondition = "GT"
-	// NewExpiryLessThanCurrent only sets the key if its lesser than current. Equivalent to "LT" in the valkey API.
+
+	// NewExpiryLessThanCurrent only sets the key if its lesser than current.
+	// Equivalent to "LT" in the Valkey API.
 	NewExpiryLessThanCurrent ExpireCondition = "LT"
 )
 
