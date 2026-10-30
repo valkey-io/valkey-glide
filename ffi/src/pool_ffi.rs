@@ -653,7 +653,7 @@ pub extern "C" fn glide_pool_destroy(pool_id: u64) -> i32 {
                     }
                 }
             }
-            pool.destroy();
+            ClientPool::destroy(pool);
         } else {
             // Lock contended — schedule async cleanup so resources are eventually freed.
             let pool_arc_async = pool_arc.clone();
@@ -677,7 +677,7 @@ pub extern "C" fn glide_pool_destroy(pool_id: u64) -> i32 {
                         }
                     }
                 }
-                pool.destroy();
+                ClientPool::destroy(pool);
             });
         }
     }
