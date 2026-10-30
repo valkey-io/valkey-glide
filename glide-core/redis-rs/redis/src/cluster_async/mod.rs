@@ -65,7 +65,7 @@ use std::{
     net::{IpAddr, SocketAddr},
     pin::Pin,
     sync::{
-        atomic::{self, AtomicIsize, AtomicUsize, Ordering},
+        atomic::{self, AtomicBool, AtomicIsize, AtomicUsize, Ordering},
         Arc,
     },
     task::{self, Poll},
@@ -564,6 +564,8 @@ pub(crate) struct InnerCore<C> {
     /// This prevents validation from removing connections that were just created
     /// during topology discovery but haven't been assigned slots yet.
     pub(crate) topology_refresh_lock: tokio::sync::Mutex<()>,
+    /// Set when the client is gone. Read and written under `conn_lock`.
+    closed: AtomicBool,
 }
 
 pub(crate) type Core<C> = Arc<InnerCore<C>>;
@@ -748,6 +750,20 @@ impl<C> Dispose for ClusterConnInner<C> {
             #[cfg(feature = "tokio-comp")]
             handle.abort()
         }
+
+        // Recovery and per-node reconnect tasks each hold the core, and with it the
+        // connection to every node. A task reconnecting a node that stays down retries
+        // forever, so stop them here or the client's connections outlive the client.
+        if let ConnectionState::Recover(recover) = &self.state {
+            recover.abort();
+        }
+        // A blocking write on purpose: skipping the clear would leak the connections.
+        let mut conn_lock = self.inner.conn_lock.write();
+        // A task that is mid-poll on another thread may still ask for a reconnect;
+        // `closed` makes that a no-op.
+        self.inner.closed.store(true, Ordering::Relaxed);
+        conn_lock.refresh_conn_state.clear_refresh_state();
+        drop(conn_lock);
 
         // Fail any requests buffered in the recovery queue
         fail_queued_senders(&mut self.recovery_queue, "Connection dropped");
@@ -945,6 +961,17 @@ enum RecoverFuture {
     RefreshingSlots(JoinHandle<RedisResult<()>>),
     ReconnectToInitialNodes(JoinHandle<()>),
     Reconnect(JoinHandle<()>),
+}
+
+impl RecoverFuture {
+    fn abort(&self) {
+        match self {
+            RecoverFuture::RefreshingSlots(handle) => handle.abort(),
+            RecoverFuture::ReconnectToInitialNodes(handle) | RecoverFuture::Reconnect(handle) => {
+                handle.abort()
+            }
+        }
+    }
 }
 
 enum ConnectionState {
@@ -1235,6 +1262,7 @@ mod iam_token_refresh_tests {
             initial_nodes: Vec::new(),
             glide_connection_options: options_with_provider(provider),
             topology_refresh_lock: tokio::sync::Mutex::new(()),
+            closed: AtomicBool::new(false),
         })
     }
 
@@ -1770,6 +1798,7 @@ where
             initial_nodes: initial_nodes.to_vec(),
             glide_connection_options,
             topology_refresh_lock: tokio::sync::Mutex::new(()),
+            closed: AtomicBool::new(false),
         });
         let mut connection = ClusterConnInner {
             inner,
@@ -2141,6 +2170,13 @@ where
                 continue;
             }
             let mut conn_lock = inner.conn_lock.write();
+            if inner.closed.load(Ordering::Relaxed) {
+                log_debug_lazy!(
+                    "cluster",
+                    format!("Skipping refresh for {}: the client is closed", address)
+                );
+                break;
+            }
             // A request to replace the connection doesn't join a task that may keep the existing
             // one; the new task supersedes it (dropping the old state aborts it and wakes waiters).
             let existing_task = conn_lock
@@ -5656,6 +5692,7 @@ mod circular_moved_address_normalization_tests {
             initial_nodes: Vec::new(),
             glide_connection_options: GlideConnectionOptions::default(),
             topology_refresh_lock: tokio::sync::Mutex::new(()),
+            closed: AtomicBool::new(false),
         })
     }
 
@@ -5752,6 +5789,7 @@ mod circular_moved_address_normalization_tests {
             initial_nodes: Vec::new(),
             glide_connection_options: GlideConnectionOptions::default(),
             topology_refresh_lock: tokio::sync::Mutex::new(()),
+            closed: AtomicBool::new(false),
         });
 
         assert_eq!(
@@ -6010,6 +6048,7 @@ pub(super) mod refresh_task_resolution_tests {
             initial_nodes: Vec::new(),
             glide_connection_options: GlideConnectionOptions::default(),
             topology_refresh_lock: tokio::sync::Mutex::new(()),
+            closed: AtomicBool::new(false),
         });
         resolver.0.store(0, Ordering::SeqCst);
         assert!(core.is_circular_moved_redirect_prepared(
@@ -6182,6 +6221,7 @@ pub(super) mod refresh_task_resolution_tests {
             initial_nodes: Vec::new(),
             glide_connection_options: GlideConnectionOptions::default(),
             topology_refresh_lock: tokio::sync::Mutex::new(()),
+            closed: AtomicBool::new(false),
         })
     }
 
@@ -6235,6 +6275,7 @@ pub(super) mod refresh_task_resolution_tests {
             initial_nodes: Vec::new(),
             glide_connection_options: GlideConnectionOptions::default(),
             topology_refresh_lock: tokio::sync::Mutex::new(()),
+            closed: AtomicBool::new(false),
         })
     }
 
@@ -6363,6 +6404,7 @@ pub(super) mod refresh_task_resolution_tests {
             ],
             glide_connection_options: GlideConnectionOptions::default(),
             topology_refresh_lock: tokio::sync::Mutex::new(()),
+            closed: AtomicBool::new(false),
         })
     }
 
@@ -6482,6 +6524,88 @@ pub(super) mod refresh_task_resolution_tests {
         .expect("already-resolved refresh should install a connection");
 
         assert_eq!(connected_port, 6381);
+    }
+
+    #[tokio::test]
+    async fn dispose_stops_recovery_and_refresh_tasks_and_releases_the_core() {
+        let _guard = gated_test_guard().await;
+        let core = core_with_non_idempotent_resolver();
+
+        // The connect to port 6381 parks until the test releases it, like a node that
+        // stays down.
+        ClusterConnInner::trigger_refresh_connection_tasks(
+            core.clone(),
+            HashSet::from([ClusterAddress::ReadyToDial("resolved-node:6381".to_owned())]),
+            RefreshConnectionType::AllConnections,
+            ExistingConnection::Ignore,
+        )
+        .await;
+        tokio::time::timeout(Duration::from_secs(1), POISON_CONNECT_STARTED.notified())
+            .await
+            .expect("the refresh task should start connecting");
+
+        // A recovery task that never finishes on its own.
+        let recovery = tokio::spawn({
+            let core = core.clone();
+            async move {
+                std::future::pending::<()>().await;
+                drop(core);
+            }
+        });
+
+        let weak_core = Arc::downgrade(&core);
+        let connection = Disposable::new(ClusterConnInner {
+            inner: core,
+            in_flight_requests: Default::default(),
+            refresh_error: None,
+            state: ConnectionState::Recover(RecoverFuture::Reconnect(recovery)),
+            periodic_checks_handler: None,
+            connections_validation_handler: None,
+            recovery_queue: std::collections::VecDeque::new(),
+        });
+        drop(connection);
+
+        tokio::time::timeout(Duration::from_secs(1), async {
+            while weak_core.strong_count() > 0 {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("disposing the connection must release the core and its connections");
+    }
+
+    #[tokio::test]
+    async fn no_reconnect_starts_after_dispose() {
+        let _guard = gated_test_guard().await;
+        let core = core_with_non_idempotent_resolver();
+        drop(Disposable::new(ClusterConnInner {
+            inner: core.clone(),
+            in_flight_requests: Default::default(),
+            refresh_error: None,
+            state: ConnectionState::PollComplete,
+            periodic_checks_handler: None,
+            connections_validation_handler: None,
+            recovery_queue: std::collections::VecDeque::new(),
+        }));
+
+        // A task that was mid-poll on another thread when the client went away asks
+        // for a reconnect to a node that stays down.
+        let notifiers = ClusterConnInner::trigger_refresh_connection_tasks(
+            core.clone(),
+            HashSet::from([ClusterAddress::ReadyToDial("resolved-node:6381".to_owned())]),
+            RefreshConnectionType::AllConnections,
+            ExistingConnection::Ignore,
+        )
+        .await;
+
+        assert!(notifiers.is_empty());
+        assert!(core
+            .conn_lock
+            .read()
+            .refresh_conn_state
+            .refresh_address_in_progress
+            .is_empty());
+        assert_eq!(Arc::strong_count(&core), 1, "no task may hold the core");
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 3)]
@@ -6870,6 +6994,7 @@ pub(super) mod refresh_task_resolution_tests {
             initial_nodes: vec!["redis://127.0.0.1:6379".parse().unwrap()],
             glide_connection_options: GlideConnectionOptions::default(),
             topology_refresh_lock: tokio::sync::Mutex::new(()),
+            closed: AtomicBool::new(false),
         });
 
         let result = get_random_connections_from_initial_nodes(&core, 1)
