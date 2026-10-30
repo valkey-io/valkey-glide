@@ -166,6 +166,12 @@ public class SharedCommandTests {
     private static final String INITIAL_VALUE = "VALUE";
     private static final String ANOTHER_VALUE = "VALUE2";
 
+    // Both exceed the client's default 250 ms request timeout: a blocking command that is still
+    // pending after that point was not cut short by the request timeout.
+    private static final double BLOCKING_TIMEOUT_SECONDS = 0.5;
+    private static final long BLOCKING_TIMEOUT_MS = 500L;
+    private static final long NO_TIMEOUT_WAIT_MS = 500L;
+
     @BeforeAll
     @SneakyThrows
     public static void init() {
@@ -6229,13 +6235,16 @@ public class SharedCommandTests {
                         : GlideClusterClient.createClient(commonClusterClientConfig().build()).get()) {
 
             // ensure that commands doesn't time out even if timeout > request timeout
-            assertNull(testClient.bzpopmin(new String[] {key}, 1).get());
+            assertNull(testClient.bzpopmin(new String[] {key}, BLOCKING_TIMEOUT_SECONDS).get());
 
             // with 0 timeout (no timeout) should never time out,
             // but we wrap the test with timeout to avoid test failing or stuck forever
             assertThrows(
                     TimeoutException.class, // <- future timeout, not command timeout
-                    () -> testClient.bzpopmin(new String[] {key}, 0).get(3, TimeUnit.SECONDS));
+                    () ->
+                            testClient
+                                    .bzpopmin(new String[] {key}, 0)
+                                    .get(NO_TIMEOUT_WAIT_MS, TimeUnit.MILLISECONDS));
         }
     }
 
@@ -6251,13 +6260,16 @@ public class SharedCommandTests {
                         : GlideClusterClient.createClient(commonClusterClientConfig().build()).get()) {
 
             // ensure that commands doesn't time out even if timeout > request timeout
-            assertNull(testClient.bzpopmin(new GlideString[] {key}, 1).get());
+            assertNull(testClient.bzpopmin(new GlideString[] {key}, BLOCKING_TIMEOUT_SECONDS).get());
 
             // with 0 timeout (no timeout) should never time out,
             // but we wrap the test with timeout to avoid test failing or stuck forever
             assertThrows(
                     TimeoutException.class, // <- future timeout, not command timeout
-                    () -> testClient.bzpopmin(new GlideString[] {key}, 0).get(3, TimeUnit.SECONDS));
+                    () ->
+                            testClient
+                                    .bzpopmin(new GlideString[] {key}, 0)
+                                    .get(NO_TIMEOUT_WAIT_MS, TimeUnit.MILLISECONDS));
         }
     }
 
@@ -6390,13 +6402,16 @@ public class SharedCommandTests {
                         : GlideClusterClient.createClient(commonClusterClientConfig().build()).get()) {
 
             // ensure that commands doesn't time out even if timeout > request timeout
-            assertNull(testClient.bzpopmax(new String[] {key}, 1).get());
+            assertNull(testClient.bzpopmax(new String[] {key}, BLOCKING_TIMEOUT_SECONDS).get());
 
             // with 0 timeout (no timeout) should never time out,
             // but we wrap the test with timeout to avoid test failing or stuck forever
             assertThrows(
                     TimeoutException.class, // <- future timeout, not command timeout
-                    () -> testClient.bzpopmax(new String[] {key}, 0).get(3, TimeUnit.SECONDS));
+                    () ->
+                            testClient
+                                    .bzpopmax(new String[] {key}, 0)
+                                    .get(NO_TIMEOUT_WAIT_MS, TimeUnit.MILLISECONDS));
         }
     }
 
@@ -6412,13 +6427,16 @@ public class SharedCommandTests {
                         : GlideClusterClient.createClient(commonClusterClientConfig().build()).get()) {
 
             // ensure that commands doesn't time out even if timeout > request timeout
-            assertNull(testClient.bzpopmax(new GlideString[] {key}, 1).get());
+            assertNull(testClient.bzpopmax(new GlideString[] {key}, BLOCKING_TIMEOUT_SECONDS).get());
 
             // with 0 timeout (no timeout) should never time out,
             // but we wrap the test with timeout to avoid test failing or stuck forever
             assertThrows(
                     TimeoutException.class, // <- future timeout, not command timeout
-                    () -> testClient.bzpopmax(new GlideString[] {key}, 0).get(3, TimeUnit.SECONDS));
+                    () ->
+                            testClient
+                                    .bzpopmax(new GlideString[] {key}, 0)
+                                    .get(NO_TIMEOUT_WAIT_MS, TimeUnit.MILLISECONDS));
         }
     }
 
@@ -8393,13 +8411,16 @@ public class SharedCommandTests {
                         : GlideClusterClient.createClient(commonClusterClientConfig().build()).get()) {
 
             // ensure that commands doesn't time out even if timeout > request timeout
-            assertNull(testClient.bzmpop(new String[] {key}, MAX, 1).get());
+            assertNull(testClient.bzmpop(new String[] {key}, MAX, BLOCKING_TIMEOUT_SECONDS).get());
 
             // with 0 timeout (no timeout) should never time out,
             // but we wrap the test with timeout to avoid test failing or stuck forever
             assertThrows(
                     TimeoutException.class, // <- future timeout, not command timeout
-                    () -> testClient.bzmpop(new String[] {key}, MAX, 0).get(3, TimeUnit.SECONDS));
+                    () ->
+                            testClient
+                                    .bzmpop(new String[] {key}, MAX, 0)
+                                    .get(NO_TIMEOUT_WAIT_MS, TimeUnit.MILLISECONDS));
         }
     }
 
@@ -8417,13 +8438,16 @@ public class SharedCommandTests {
                         : GlideClusterClient.createClient(commonClusterClientConfig().build()).get()) {
 
             // ensure that commands doesn't time out even if timeout > request timeout
-            assertNull(testClient.bzmpop(new GlideString[] {key}, MAX, 1).get());
+            assertNull(testClient.bzmpop(new GlideString[] {key}, MAX, BLOCKING_TIMEOUT_SECONDS).get());
 
             // with 0 timeout (no timeout) should never time out,
             // but we wrap the test with timeout to avoid test failing or stuck forever
             assertThrows(
                     TimeoutException.class, // <- future timeout, not command timeout
-                    () -> testClient.bzmpop(new GlideString[] {key}, MAX, 0).get(3, TimeUnit.SECONDS));
+                    () ->
+                            testClient
+                                    .bzmpop(new GlideString[] {key}, MAX, 0)
+                                    .get(NO_TIMEOUT_WAIT_MS, TimeUnit.MILLISECONDS));
         }
     }
 
@@ -8868,12 +8892,11 @@ public class SharedCommandTests {
                         : GlideClusterClient.createClient(commonClusterClientConfig().build()).get()) {
 
             // ensure that commands doesn't time out even if timeout > request timeout
-            long oneSecondInMS = 1000L;
             assertNull(
                     testClient
                             .xread(
                                     createMap(key1, timestamp_1_1),
-                                    StreamReadOptions.builder().block(oneSecondInMS).build())
+                                    StreamReadOptions.builder().block(BLOCKING_TIMEOUT_MS).build())
                             .get());
 
             // with 0 timeout (no timeout) should never time out,
@@ -8884,7 +8907,7 @@ public class SharedCommandTests {
                             testClient
                                     .xread(
                                             createMap(key1, timestamp_1_1), StreamReadOptions.builder().block(0L).build())
-                                    .get(3, TimeUnit.SECONDS));
+                                    .get(NO_TIMEOUT_WAIT_MS, TimeUnit.MILLISECONDS));
         }
     }
 
@@ -8931,12 +8954,11 @@ public class SharedCommandTests {
                         : GlideClusterClient.createClient(commonClusterClientConfig().build()).get()) {
 
             // ensure that commands doesn't time out even if timeout > request timeout
-            long oneSecondInMS = 1000L;
             assertNull(
                     testClient
                             .xreadBinary(
                                     createMap(key1, timestamp_1_1),
-                                    StreamReadOptions.builder().block(oneSecondInMS).build())
+                                    StreamReadOptions.builder().block(BLOCKING_TIMEOUT_MS).build())
                             .get());
 
             // with 0 timeout (no timeout) should never time out,
@@ -8947,7 +8969,7 @@ public class SharedCommandTests {
                             testClient
                                     .xreadBinary(
                                             createMap(key1, timestamp_1_1), StreamReadOptions.builder().block(0L).build())
-                                    .get(3, TimeUnit.SECONDS));
+                                    .get(NO_TIMEOUT_WAIT_MS, TimeUnit.MILLISECONDS));
         }
     }
 
@@ -10210,14 +10232,13 @@ public class SharedCommandTests {
 
             // subsequent calls to read ">" will block:
             // ensure that command doesn't time out even if timeout > request timeout
-            long oneSecondInMS = 1000L;
             assertNull(
                     testClient
                             .xreadgroup(
                                     createMap(timeoutKey, ">"),
                                     timeoutGroupName,
                                     timeoutConsumerName,
-                                    StreamReadGroupOptions.builder().block(oneSecondInMS).build())
+                                    StreamReadGroupOptions.builder().block(BLOCKING_TIMEOUT_MS).build())
                             .get());
 
             // with 0 timeout (no timeout) should never time out,
@@ -10231,7 +10252,7 @@ public class SharedCommandTests {
                                             timeoutGroupName,
                                             timeoutConsumerName,
                                             StreamReadGroupOptions.builder().block(0L).build())
-                                    .get(3, TimeUnit.SECONDS));
+                                    .get(NO_TIMEOUT_WAIT_MS, TimeUnit.MILLISECONDS));
         }
     }
 
@@ -10349,14 +10370,13 @@ public class SharedCommandTests {
 
             // subsequent calls to read ">" will block:
             // ensure that command doesn't time out even if timeout > request timeout
-            long oneSecondInMS = 1000L;
             assertNull(
                     testClient
                             .xreadgroup(
                                     createMap(timeoutKey, gs(">")),
                                     timeoutGroupName,
                                     timeoutConsumerName,
-                                    StreamReadGroupOptions.builder().block(oneSecondInMS).build())
+                                    StreamReadGroupOptions.builder().block(BLOCKING_TIMEOUT_MS).build())
                             .get());
 
             // with 0 timeout (no timeout) should never time out,
@@ -10370,7 +10390,7 @@ public class SharedCommandTests {
                                             timeoutGroupName,
                                             timeoutConsumerName,
                                             StreamReadGroupOptions.builder().block(0L).build())
-                                    .get(3, TimeUnit.SECONDS));
+                                    .get(NO_TIMEOUT_WAIT_MS, TimeUnit.MILLISECONDS));
         }
     }
 
@@ -13437,7 +13457,10 @@ public class SharedCommandTests {
                         : GlideClusterClient.createClient(commonClusterClientConfig().build()).get()) {
 
             // ensure that commands doesn't time out even if timeout > request timeout
-            assertNull(testClient.blmpop(new String[] {key}, ListDirection.LEFT, 1).get());
+            assertNull(
+                    testClient
+                            .blmpop(new String[] {key}, ListDirection.LEFT, BLOCKING_TIMEOUT_SECONDS)
+                            .get());
 
             // with 0 timeout (no timeout) should never time out,
             // but we wrap the test with timeout to avoid test failing or stuck forever
@@ -13446,7 +13469,7 @@ public class SharedCommandTests {
                     () ->
                             testClient
                                     .blmpop(new String[] {key}, ListDirection.LEFT, 0)
-                                    .get(3, TimeUnit.SECONDS));
+                                    .get(NO_TIMEOUT_WAIT_MS, TimeUnit.MILLISECONDS));
         }
     }
 
@@ -13463,7 +13486,10 @@ public class SharedCommandTests {
                         : GlideClusterClient.createClient(commonClusterClientConfig().build()).get()) {
 
             // ensure that commands doesn't time out even if timeout > request timeout
-            assertNull(testClient.blmpop(new GlideString[] {key}, ListDirection.LEFT, 1).get());
+            assertNull(
+                    testClient
+                            .blmpop(new GlideString[] {key}, ListDirection.LEFT, BLOCKING_TIMEOUT_SECONDS)
+                            .get());
 
             // with 0 timeout (no timeout) should never time out,
             // but we wrap the test with timeout to avoid test failing or stuck forever
@@ -13472,7 +13498,7 @@ public class SharedCommandTests {
                     () ->
                             testClient
                                     .blmpop(new GlideString[] {key}, ListDirection.LEFT, 0)
-                                    .get(3, TimeUnit.SECONDS));
+                                    .get(NO_TIMEOUT_WAIT_MS, TimeUnit.MILLISECONDS));
         }
     }
 
@@ -13813,7 +13839,10 @@ public class SharedCommandTests {
                                 .get()) {
 
             // ensure that commands doesn't time out even if timeout > request timeout
-            assertNull(testClient.blmove(key1, key2, ListDirection.LEFT, ListDirection.LEFT, 1).get());
+            assertNull(
+                    testClient
+                            .blmove(key1, key2, ListDirection.LEFT, ListDirection.LEFT, BLOCKING_TIMEOUT_SECONDS)
+                            .get());
 
             // with 0 timeout (no timeout) should never time out,
             // but we wrap the test with timeout to avoid test failing or stuck forever
@@ -13822,7 +13851,7 @@ public class SharedCommandTests {
                     () ->
                             testClient
                                     .blmove(key1, key2, ListDirection.LEFT, ListDirection.LEFT, 0)
-                                    .get(3, TimeUnit.SECONDS));
+                                    .get(NO_TIMEOUT_WAIT_MS, TimeUnit.MILLISECONDS));
         }
     }
 
@@ -13843,7 +13872,10 @@ public class SharedCommandTests {
                                 .get()) {
 
             // ensure that commands doesn't time out even if timeout > request timeout
-            assertNull(testClient.blmove(key1, key2, ListDirection.LEFT, ListDirection.LEFT, 1).get());
+            assertNull(
+                    testClient
+                            .blmove(key1, key2, ListDirection.LEFT, ListDirection.LEFT, BLOCKING_TIMEOUT_SECONDS)
+                            .get());
 
             // with 0 timeout (no timeout) should never time out,
             // but we wrap the test with timeout to avoid test failing or stuck forever
@@ -13852,7 +13884,7 @@ public class SharedCommandTests {
                     () ->
                             testClient
                                     .blmove(key1, key2, ListDirection.LEFT, ListDirection.LEFT, 0)
-                                    .get(3, TimeUnit.SECONDS));
+                                    .get(NO_TIMEOUT_WAIT_MS, TimeUnit.MILLISECONDS));
         }
     }
 
@@ -18157,14 +18189,14 @@ public class SharedCommandTests {
             }
             // ensure that commands do not time out, even if timeout > request timeout
             assertEquals(OK, testClient.set(key, "value").get());
-            assertEquals(clientReplicas, testClient.wait(1L, 1000L).get());
+            assertEquals(clientReplicas, testClient.wait(1L, BLOCKING_TIMEOUT_MS).get());
 
             // with 0 timeout (no timeout) wait should block indefinitely,
             // but we wrap the test with timeout to avoid test failing or being stuck forever
             assertEquals(OK, testClient.set(key, "value2").get());
             assertThrows(
                     TimeoutException.class, // <- future timeout, not command timeout
-                    () -> testClient.wait(100L, 0L).get(1000, TimeUnit.MILLISECONDS));
+                    () -> testClient.wait(100L, 0L).get(NO_TIMEOUT_WAIT_MS, TimeUnit.MILLISECONDS));
         }
     }
 
