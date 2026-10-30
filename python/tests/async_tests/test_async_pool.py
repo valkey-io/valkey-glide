@@ -403,6 +403,33 @@ class TestAsyncClientPool:
             pool.close()
 
     @pytest.mark.parametrize("cluster_mode", [False])
+    async def test_pool_abandon_skips_client_whose_scope_is_blocking(
+        self, cluster_mode
+    ):
+        """A scope blocking on behalf of a borrowed client keeps the abandon
+        monitor from reclaiming that client."""
+        config = _get_pool_client_config(cluster_mode)
+        pool = await AsyncClientPool.create(
+            config,
+            PoolConfig(max_size=1, min_idle=1, abandon_timeout_ms=2000),
+        )
+        await _wait_for_pool_ready(pool, 1)
+        key = _make_key(cluster_mode, "scope-blocking-abandon")
+        try:
+            async with pool.borrow() as client:
+                async with await client.scoped_connection() as scope:
+                    blpop = asyncio.create_task(
+                        scope.execute_command("BLPOP", key, "4")
+                    )
+                    await asyncio.sleep(3.5)
+                    assert (
+                        pool.active_count == 1
+                    ), "the blocked scope's parent was reclaimed"
+                    assert await blpop is None
+        finally:
+            pool.close()
+
+    @pytest.mark.parametrize("cluster_mode", [False])
     async def test_pool_abandon_detection_disabled(self, cluster_mode):
         """Setting abandon_timeout_ms=0 disables the abandon monitor."""
         config = _get_pool_client_config(cluster_mode)

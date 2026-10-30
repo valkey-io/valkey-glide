@@ -502,9 +502,7 @@ func TestPoolDoesNotExceedMaxSizeUnderWarmupBurst(t *testing.T) {
 					}
 
 					// Quiesce so the counters are settled, not mid-release: a borrow still in
-					// flight would otherwise leave IdleCount lagging TotalCount. A zero total is
-					// not a settled pool — glide_pool_metrics reports no counts when the pool
-					// lock is contended, which Go reports as 0 — so keep polling.
+					// flight would otherwise leave IdleCount lagging TotalCount.
 					var total, idle int
 					deadline := time.Now().Add(15 * time.Second)
 					for time.Now().Before(deadline) {
