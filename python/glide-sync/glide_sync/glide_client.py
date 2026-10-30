@@ -1980,8 +1980,13 @@ class BaseClient(CoreCommands):
             self._deferred_core_client = self._ffi.NULL
             callback_refs = self._deferred_callback_refs
             self._deferred_callback_refs = ()
+            owner = self._credential_provider_callback_owner
+            self._credential_provider_callback_owner = None
         self._lib.close_client(core_client)
-        # The callbacks can go now that the native client is closed.
+        # Now that the native client is closed, nothing can call the callbacks
+        # or refresh the IAM token.
+        if owner is not None:
+            owner.close()
         del callback_refs
         # Closing the client may be what lets the fabric go of memory it held.
         _RETAINED_RDMA_MEMORY.release_what_is_free()
@@ -2141,18 +2146,20 @@ class BaseClient(CoreCommands):
                         # instead, and let the last call out free it.
                         self._deferred_core_client = core_client
                         # It keeps delivering pubsub messages and refreshing
-                        # IAM tokens until it is freed, so its callbacks must
-                        # outlive it.
+                        # IAM tokens until it is freed, so its callbacks and
+                        # the credential owner must outlive it.
                         self._deferred_callback_refs = (
                             self._pubsub_callback_ref,
                             self._credential_provider_callback_ref,
                         )
                         self._cancel_rdma(core_client)
                 self._pubsub_callback_ref = None
-                owner = getattr(self, "_credential_provider_callback_owner", None)
-                if owner is not None:
-                    owner.close()
-                self._credential_provider_callback_owner = None
+                deferred = getattr(self, "_deferred_core_client", self._ffi.NULL)
+                if deferred == self._ffi.NULL:
+                    owner = getattr(self, "_credential_provider_callback_owner", None)
+                    if owner is not None:
+                        owner.close()
+                    self._credential_provider_callback_owner = None
                 self._credential_provider_callback_ref = None
         # Closing the client may be what lets the fabric go of memory it held.
         _RETAINED_RDMA_MEMORY.release_what_is_free()

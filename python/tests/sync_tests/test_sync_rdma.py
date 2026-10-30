@@ -194,6 +194,7 @@ def _offline_client() -> GlideClient:
     client._deferred_callback_refs = ()
     client._pubsub_callback_ref = None
     client._credential_provider_callback_ref = None
+    client._credential_provider_callback_owner = None
     client._pubsub_condition = threading.Condition()
     return client
 
@@ -911,6 +912,52 @@ def test_closing_mid_transfer_keeps_the_callbacks_until_the_client_is_freed():
     assert alive_at_free == [True]
     gc.collect()
     assert all(callback() is None for callback in callbacks), "released after"
+
+
+class _FakeCredentialOwner:
+    """A credential provider owner: the IAM refresh calls the provider while it is open."""
+
+    def __init__(self):
+        self.closed = False
+
+    def close(self):
+        self.closed = True
+
+
+def test_closing_an_idle_client_stops_iam_refresh_at_once():
+    client = _offline_client()
+    client._core_client = object()
+    owner = client._credential_provider_callback_owner = _FakeCredentialOwner()
+
+    client.close()
+
+    assert owner.closed is True
+    assert client._credential_provider_callback_owner is None
+
+
+def test_closing_mid_transfer_keeps_iam_refresh_working_until_the_client_is_freed():
+    # The native client refreshes its IAM token until it is freed, and a
+    # closed owner makes every refresh fail.
+    client = _offline_client()
+    native = client._core_client = object()
+    owner = client._credential_provider_callback_owner = _FakeCredentialOwner()
+    open_at_free = []
+
+    def close_client(core_client):
+        open_at_free.append(not owner.closed)
+        client._lib.client_closes.append(core_client)
+
+    client._lib.close_client = close_client
+    transfer = _BlockedTransfer(client, _offline_region(client))
+
+    client.close()
+    assert owner.closed is False, "the native client can still refresh"
+
+    transfer.finish()
+    assert client._lib.client_closes == [native]
+    assert open_at_free == [True]
+    assert owner.closed is True
+    assert client._credential_provider_callback_owner is None
 
 
 def test_the_last_of_several_transfers_frees_the_client():
