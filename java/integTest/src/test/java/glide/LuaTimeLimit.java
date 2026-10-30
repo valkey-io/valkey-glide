@@ -9,6 +9,7 @@ import glide.api.GlideClient;
 import glide.api.GlideClusterClient;
 import java.util.Collections;
 import java.util.Map;
+import java.util.Objects;
 import lombok.SneakyThrows;
 
 /**
@@ -31,7 +32,7 @@ public final class LuaTimeLimit implements AutoCloseable {
 
     /** Sets {@code lua-time-limit} to {@code millis} on every node reachable through the client. */
     public static LuaTimeLimit set(BaseClient client, int millis) {
-        String original = configGet(client).get(CONFIG);
+        String original = Objects.requireNonNull(configGet(client).get(CONFIG), "CONFIG GET " + CONFIG);
         configSet(client, Integer.toString(millis));
         return new LuaTimeLimit(client, original);
     }

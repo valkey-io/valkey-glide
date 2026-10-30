@@ -3966,24 +3966,27 @@ public class CommandTests {
             CompletableFuture<Object> scriptFuture =
                     testClient.invokeScript(script, ScriptOptions.builder().key(key).build());
 
-            // Poll SCRIPT KILL until the server reports the script is unkillable (write script).
-            waitFor(
-                    () -> {
-                        try {
-                            clusterClient.scriptKill(route).get();
-                            return false; // returned OK - not the expected error, keep polling
-                        } catch (Exception e) {
-                            String msg = e.getMessage() != null ? e.getMessage().toLowerCase() : "";
-                            // NotBusy means the script hasn't started yet - keep polling.
-                            return msg.contains("unkillable");
-                        }
-                    },
-                    "Expected to find 'unkillable' error for write script");
-
             try {
-                scriptFuture.get();
-            } catch (Exception ignored) {
-                // Write script completes normally after its duration
+                // Poll SCRIPT KILL until the server reports the script is unkillable (write script).
+                waitFor(
+                        () -> {
+                            try {
+                                clusterClient.scriptKill(route).get();
+                                return false; // returned OK - not the expected error, keep polling
+                            } catch (Exception e) {
+                                String msg = e.getMessage() != null ? e.getMessage().toLowerCase() : "";
+                                // NotBusy means the script hasn't started yet - keep polling.
+                                return msg.contains("unkillable");
+                            }
+                        },
+                        "Expected to find 'unkillable' error for write script");
+            } finally {
+                // The script cannot be killed, and a busy server rejects the CONFIG SET that restores
+                // lua-time-limit, so wait it out before the resources close.
+                try {
+                    scriptFuture.get();
+                } catch (Exception ignored) {
+                }
             }
         }
         waitForNotBusy(clusterClient::scriptKill);

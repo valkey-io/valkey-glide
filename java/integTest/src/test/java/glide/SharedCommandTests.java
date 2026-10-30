@@ -166,11 +166,12 @@ public class SharedCommandTests {
     private static final String INITIAL_VALUE = "VALUE";
     private static final String ANOTHER_VALUE = "VALUE2";
 
-    // Both exceed the client's default 250 ms request timeout: a blocking command that is still
-    // pending after that point was not cut short by the request timeout.
+    // The timeout-check tests need the request timeout shorter than both waits below: a blocking
+    // command still pending after them was not cut short by it. Shared clients use the default.
+    private static final int REQUEST_TIMEOUT_MS = 250;
     private static final double BLOCKING_TIMEOUT_SECONDS = 0.5;
-    private static final long BLOCKING_TIMEOUT_MS = 500L;
-    private static final long NO_TIMEOUT_WAIT_MS = 500L;
+    private static final long BLOCKING_TIMEOUT_MS = (long) (BLOCKING_TIMEOUT_SECONDS * 1000);
+    private static final long NO_TIMEOUT_WAIT_MS = 2L * REQUEST_TIMEOUT_MS;
 
     @BeforeAll
     @SneakyThrows
@@ -13828,12 +13829,14 @@ public class SharedCommandTests {
                 SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0"), "This feature added in version 6.2.0");
         String key1 = "{key}-1" + UUID.randomUUID();
         String key2 = "{key}-2" + UUID.randomUUID();
-        // create new client with extended request timeout (2000 millis) to allow for blocking commands
+        // own client, so the request timeout the assertions below depend on is explicit
         try (BaseClient testClient =
                 client instanceof GlideClient
-                        ? GlideClient.createClient(commonClientConfig().requestTimeout(2000).build()).get()
+                        ? GlideClient.createClient(
+                                        commonClientConfig().requestTimeout(REQUEST_TIMEOUT_MS).build())
+                                .get()
                         : GlideClusterClient.createClient(
-                                        commonClusterClientConfig().requestTimeout(2000).build())
+                                        commonClusterClientConfig().requestTimeout(REQUEST_TIMEOUT_MS).build())
                                 .get()) {
 
             // ensure that commands doesn't time out even if timeout > request timeout
@@ -13861,12 +13864,14 @@ public class SharedCommandTests {
                 SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0"), "This feature added in version 6.2.0");
         GlideString key1 = gs("{key}-1" + UUID.randomUUID());
         GlideString key2 = gs("{key}-2" + UUID.randomUUID());
-        // create new client with extended request timeout (2000 millis) to allow for blocking commands
+        // own client, so the request timeout the assertions below depend on is explicit
         try (BaseClient testClient =
                 client instanceof GlideClient
-                        ? GlideClient.createClient(commonClientConfig().requestTimeout(2000).build()).get()
+                        ? GlideClient.createClient(
+                                        commonClientConfig().requestTimeout(REQUEST_TIMEOUT_MS).build())
+                                .get()
                         : GlideClusterClient.createClient(
-                                        commonClusterClientConfig().requestTimeout(2000).build())
+                                        commonClusterClientConfig().requestTimeout(REQUEST_TIMEOUT_MS).build())
                                 .get()) {
 
             // ensure that commands doesn't time out even if timeout > request timeout
