@@ -47,6 +47,57 @@ type FtAggregateReducer struct {
 	Name string
 }
 
+// NewToListReducer creates a TOLIST reducer, which collects all values for field across the
+// records in a group into a single array, removing duplicates and nil values. If a value is
+// itself an array, it is flattened one level before being added. Values are returned in the
+// order they were first encountered.
+func NewToListReducer(field string, name string) FtAggregateReducer {
+	return FtAggregateReducer{Function: "TOLIST", Args: []string{field}, Name: name}
+}
+
+// FtAggregateFirstValueOptions holds the optional By/Order parameters for NewFirstValueReducer.
+type FtAggregateFirstValueOptions struct {
+	// By is the property used to choose which record's value of Field is returned. Required if
+	// Order is set.
+	By string
+	// Order is the direction used to pick the winning record when By is set.
+	Order constants.FtAggregateOrderBy
+}
+
+// NewFirstValueReducer creates a FIRST_VALUE reducer, which returns the value of field from a
+// single record in the group. Without options.By, the first record encountered wins. With
+// options.By, the record whose By property is smallest (the default) or largest (per
+// options.Order) wins; ties keep the first-encountered record. Returns an error if Order is set
+// without By.
+func NewFirstValueReducer(
+	field string, options *FtAggregateFirstValueOptions, name string,
+) (FtAggregateReducer, error) {
+	args := []string{field}
+	if options != nil {
+		if options.Order != "" && options.By == "" {
+			return FtAggregateReducer{}, errors.New("FirstValue: Order requires By to be set")
+		}
+		if options.By != "" {
+			args = append(args, "BY", options.By)
+			if options.Order != "" {
+				args = append(args, string(options.Order))
+			}
+		}
+	}
+	return FtAggregateReducer{Function: "FIRST_VALUE", Args: args, Name: name}, nil
+}
+
+// NewRandomSampleReducer creates a RANDOM_SAMPLE reducer, which returns a uniform random sample
+// of up to size values of field from the records in a group, using reservoir sampling. size must
+// be a non-negative integer no greater than 1000; the server rejects values outside this range.
+func NewRandomSampleReducer(field string, size int, name string) FtAggregateReducer {
+	return FtAggregateReducer{
+		Function: "RANDOM_SAMPLE",
+		Args:     []string{field, strconv.Itoa(size)},
+		Name:     name,
+	}
+}
+
 func (r *FtAggregateReducer) toArgs() []string {
 	args := []string{"REDUCE", r.Function, strconv.Itoa(len(r.Args))}
 	args = append(args, r.Args...)
@@ -116,16 +167,98 @@ type FtAggregateParam struct {
 	Value string
 }
 
+// LoadField is a single entry in the LOAD clause of FT.AGGREGATE or FT.HYBRID, optionally
+// renaming the loaded field via AS. Modelled on FtSearchReturnField (the equivalent concept for
+// FT.SEARCH's RETURN option).
+//
+// "AS alias" in the LOAD clause is a compatibility fix introduced in valkey-search 1.3.0
+// (src/commands/ft_aggregate_parser.cc, gated by the ft_aggregate_load_as compatibility flag --
+// see COMPATIBILITY.md). Below search.emulate-release 1.3.0, the legacy branch does not
+// recognise AS as a rename keyword at all: it is consumed as just another LOAD field token
+// rather than a rename directive, so the server rejects the command outright with "Index: field
+// `AS` does not exist" once that non-existent field name is looked up. This is not validated
+// client-side; a caller relying on the alias actually renaming the column needs
+// search.emulate-release >= 1.3.0 live.
+type LoadField struct {
+	// FieldIdentifier is the identifier for the field to load.
+	FieldIdentifier string
+	// Alias is the alias to emit the field's column under. Requires search.emulate-release
+	// >= 1.3.0 to take effect; leaving this empty loads FieldIdentifier under its own name, the
+	// same as a plain LoadFields entry.
+	Alias string
+}
+
+// toArgs returns the arguments for this LOAD clause entry.
+func (f *LoadField) toArgs() []string {
+	if f.Alias == "" {
+		return []string{f.FieldIdentifier}
+	}
+	return []string{f.FieldIdentifier, "AS", f.Alias}
+}
+
+// loadFieldsToArgs serializes a LOAD clause's field list for FT.AGGREGATE and FT.HYBRID
+// (shared, since the two commands' LOAD clause grammar is byte-identical). plainFields is
+// emitted first (in order), followed by typedFields (also in order); the count is a token
+// budget, not an entry count -- each LoadField with an Alias contributes 3 tokens (field, AS,
+// alias) rather than 1, matching the parser's own accounting. Returns nil if both lists are
+// empty.
+func loadFieldsToArgs(plainFields []string, typedFields []LoadField) []string {
+	if len(plainFields) == 0 && len(typedFields) == 0 {
+		return nil
+	}
+	fieldArgs := []string{}
+	fieldArgs = append(fieldArgs, plainFields...)
+	for _, f := range typedFields {
+		fieldArgs = append(fieldArgs, f.toArgs()...)
+	}
+	return append([]string{"LOAD", strconv.Itoa(len(fieldArgs))}, fieldArgs...)
+}
+
+// FtWithCursor requests a paged reply instead of the whole result set at once, for
+// FT.AGGREGATE and FT.HYBRID -- the two commands share this option's grammar and reply shape
+// verbatim, since both forward WITHCURSOR to the same aggregate-suffix parser.
+//
+// A paged query, and every subsequent FT.CURSOR READ/DEL against the cursor it opens, is pinned
+// to the PRIMARY of the index's slot regardless of a cluster client's ReadFrom configuration --
+// a cursor is a per-process, node-local resource, and this is a deliberate exception to the
+// client's normal read routing.
+type FtWithCursor struct {
+	// Count is the number of rows to return per page.
+	Count *int
+	// MaxIdle is how long (in milliseconds) the cursor may sit idle between reads before the
+	// server discards it.
+	MaxIdle *int
+}
+
+func (c *FtWithCursor) toArgs() []string {
+	args := []string{"WITHCURSOR"}
+	if c.Count != nil {
+		args = append(args, "COUNT", strconv.Itoa(*c.Count))
+	}
+	if c.MaxIdle != nil {
+		args = append(args, "MAXIDLE", strconv.Itoa(*c.MaxIdle))
+	}
+	return args
+}
+
 // FtAggregateOptions holds optional arguments for the FT.AGGREGATE command.
 //
 // See [valkey.io] for details.
 //
 // [valkey.io]: https://valkey.io/commands/ft.aggregate/
 type FtAggregateOptions struct {
-	// LoadAll loads all fields declared in the index. Mutually exclusive with LoadFields.
+	// LoadAll loads all fields declared in the index. Mutually exclusive with LoadFields and
+	// LoadFieldEntries.
 	LoadAll bool
-	// LoadFields loads only the specified fields. Mutually exclusive with LoadAll.
+	// LoadFields loads only the specified fields, each loaded under its own name. Mutually
+	// exclusive with LoadAll. Can be freely combined with LoadFieldEntries -- LoadFields is
+	// serialized first, followed by LoadFieldEntries, both into the same LOAD clause.
 	LoadFields []string
+	// LoadFieldEntries loads only the specified fields, each optionally renamed via
+	// [LoadField.Alias] (the LOAD ... AS form, valkey-search 1.3.0; see [LoadField]'s docstring
+	// for the compatibility gate). Mutually exclusive with LoadAll. Can be freely combined with
+	// LoadFields -- see its docstring for the emission order.
+	LoadFieldEntries []LoadField
 	// Timeout overrides the module timeout in milliseconds.
 	Timeout *int
 	// Params are key/value pairs referenced from within the query expression.
@@ -140,12 +273,27 @@ type FtAggregateOptions struct {
 	Slop *int
 	// Dialect sets the query dialect version.
 	Dialect *int
+	// AddScores exposes the relevance score as a pipeline field named "__score" (valkey-search
+	// 1.3.0). "__score" can then be referenced like any other pipeline field in a LoadFields
+	// entry, an FtAggregateApply expression, or an FtAggregateSortProperty.
+	AddScores bool
+	// Scorer is the scoring function used to compute "__score" and rank results (valkey-search
+	// 1.3.0). "BM25STD" is the only value currently registered and selectable; any other value
+	// is rejected by the server. Has no visible effect unless combined with AddScores (or
+	// inspected indirectly via a SORTBY on "__score").
+	Scorer string
+	// WithCursor requests a paged reply instead of the whole result set at once. See
+	// [FtWithCursor]. The reply shape becomes a two-element array of [rows, cursorId], where rows
+	// is this same aggregate response shape and cursorId is passed to a subsequent
+	// [github.com/valkey-io/valkey-glide/go/v2/servermodules/glideft.FtCursorRead] call to fetch
+	// the next page (0 once exhausted).
+	WithCursor *FtWithCursor
 }
 
 // ToArgs returns the command arguments for FtAggregateOptions.
 func (o *FtAggregateOptions) ToArgs() ([]string, error) {
-	if o.LoadAll && len(o.LoadFields) > 0 {
-		return nil, errors.New("LoadAll and LoadFields are mutually exclusive")
+	if o.LoadAll && (len(o.LoadFields) > 0 || len(o.LoadFieldEntries) > 0) {
+		return nil, errors.New("LoadAll and LoadFields/LoadFieldEntries are mutually exclusive")
 	}
 	args := []string{}
 	if o.Verbatim {
@@ -159,9 +307,8 @@ func (o *FtAggregateOptions) ToArgs() ([]string, error) {
 	}
 	if o.LoadAll {
 		args = append(args, "LOAD", "*")
-	} else if len(o.LoadFields) > 0 {
-		args = append(args, "LOAD", strconv.Itoa(len(o.LoadFields)))
-		args = append(args, o.LoadFields...)
+	} else if loadArgs := loadFieldsToArgs(o.LoadFields, o.LoadFieldEntries); loadArgs != nil {
+		args = append(args, loadArgs...)
 	}
 	if o.Timeout != nil {
 		args = append(args, "TIMEOUT", strconv.Itoa(*o.Timeout))
@@ -177,6 +324,15 @@ func (o *FtAggregateOptions) ToArgs() ([]string, error) {
 	}
 	if o.Dialect != nil {
 		args = append(args, "DIALECT", strconv.Itoa(*o.Dialect))
+	}
+	if o.AddScores {
+		args = append(args, "ADDSCORES")
+	}
+	if o.Scorer != "" {
+		args = append(args, "SCORER", o.Scorer)
+	}
+	if o.WithCursor != nil {
+		args = append(args, o.WithCursor.toArgs()...)
 	}
 	return args, nil
 }

@@ -42,6 +42,10 @@ type baseField struct {
 	Name     string
 	Alias    string
 	Sortable bool
+	// Unf, if set, keeps the sorted value in its original (un-normalized) form, e.g. preserving
+	// case for TEXT/TAG fields that would otherwise be lowercased for sorting (valkey-search
+	// 1.3.0). Requires Sortable to also be set.
+	Unf bool
 }
 
 func (f *baseField) baseArgs(ft fieldType) []string {
@@ -51,6 +55,21 @@ func (f *baseField) baseArgs(ft fieldType) []string {
 	}
 	args = append(args, string(ft))
 	return args
+}
+
+// sortableUnfArgs appends SORTABLE and, immediately after it, UNF -- the only position
+// valkey-search recognises UNF in. Returns an error if Unf is set without Sortable.
+func sortableUnfArgs(args []string, sortable bool, unf bool) ([]string, error) {
+	if unf && !sortable {
+		return nil, errors.New("unf requires Sortable to be set")
+	}
+	if sortable {
+		args = append(args, "SORTABLE")
+		if unf {
+			args = append(args, "UNF")
+		}
+	}
+	return args, nil
 }
 
 // TextField represents a full-text search field.
@@ -83,6 +102,9 @@ func (f *TextField) SetAlias(alias string) *TextField { f.Alias = alias; return 
 // SetSortable enables sorting on this field.
 func (f *TextField) SetSortable(sortable bool) *TextField { f.Sortable = sortable; return f }
 
+// SetUnf keeps the sorted value in its original (un-normalized) form. Requires SetSortable(true).
+func (f *TextField) SetUnf(unf bool) *TextField { f.Unf = unf; return f }
+
 // SetNoStem disables stemming when indexing the field.
 func (f *TextField) SetNoStem(nostem bool) *TextField { f.NoStem = nostem; return f }
 
@@ -112,8 +134,9 @@ func (f *TextField) ToArgs() ([]string, error) {
 	} else if f.NoSuffixTrie {
 		args = append(args, "NOSUFFIXTRIE")
 	}
-	if f.Sortable {
-		args = append(args, "SORTABLE")
+	args, err := sortableUnfArgs(args, f.Sortable, f.Unf)
+	if err != nil {
+		return nil, err
 	}
 	return args, nil
 }
@@ -142,6 +165,9 @@ func (f *TagField) SetAlias(alias string) *TagField { f.Alias = alias; return f 
 // SetSortable enables sorting on this field.
 func (f *TagField) SetSortable(sortable bool) *TagField { f.Sortable = sortable; return f }
 
+// SetUnf keeps the sorted value in its original (un-normalized) form. Requires SetSortable(true).
+func (f *TagField) SetUnf(unf bool) *TagField { f.Unf = unf; return f }
+
 // SetSeparator sets the tag separator character.
 func (f *TagField) SetSeparator(sep string) *TagField { f.Separator = sep; return f }
 
@@ -157,8 +183,9 @@ func (f *TagField) ToArgs() ([]string, error) {
 	if f.CaseSensitive {
 		args = append(args, "CASESENSITIVE")
 	}
-	if f.Sortable {
-		args = append(args, "SORTABLE")
+	args, err := sortableUnfArgs(args, f.Sortable, f.Unf)
+	if err != nil {
+		return nil, err
 	}
 	return args, nil
 }
@@ -183,11 +210,15 @@ func (f *NumericField) SetAlias(alias string) *NumericField { f.Alias = alias; r
 // SetSortable enables sorting on this field.
 func (f *NumericField) SetSortable(sortable bool) *NumericField { f.Sortable = sortable; return f }
 
+// SetUnf keeps the sorted value in its original (un-normalized) form. Requires SetSortable(true).
+func (f *NumericField) SetUnf(unf bool) *NumericField { f.Unf = unf; return f }
+
 // ToArgs returns the command arguments for this NumericField.
 func (f *NumericField) ToArgs() ([]string, error) {
 	args := f.baseArgs(fieldTypeNumeric)
-	if f.Sortable {
-		args = append(args, "SORTABLE")
+	args, err := sortableUnfArgs(args, f.Sortable, f.Unf)
+	if err != nil {
+		return nil, err
 	}
 	return args, nil
 }
@@ -378,6 +409,22 @@ type FtCreateOptions struct {
 	StopWords []string
 	// Punctuation is a custom set of punctuation characters to use during tokenization.
 	Punctuation string
+	// Filter is a filter expression limiting which documents the index applies to
+	// (valkey-search 1.3.0). A document that doesn't match this expression is excluded from the
+	// index even if its key matches a configured prefix. An empty string omits FILTER entirely,
+	// matching this package's convention for every other optional string field.
+	Filter string
+	// ScoreField is the name of a document field whose numeric value is used as the document's
+	// custom score, multiplying into the final relevance score (valkey-search 1.3.0). The field
+	// must already exist in the document; it is not itself a schema definition. FT.INFO only
+	// reports this option back under index_definition's score_field key when
+	// search.emulate-release is at least 1.3.0; below that level the pair is omitted and
+	// default_score reports the literal string "1" regardless of this option.
+	ScoreField string
+	// NoHighlight emits NOHL. valkey-search does not support highlighting at all, so this is a
+	// genuine no-op on this engine; the token is accepted but not even stored for FT.INFO to
+	// report. Implemented for wire compatibility with RediSearch clients.
+	NoHighlight bool
 }
 
 // ToArgs returns the command arguments for FtCreateOptions.
@@ -421,6 +468,15 @@ func (o *FtCreateOptions) ToArgs() ([]string, error) {
 	}
 	if o.Punctuation != "" {
 		args = append(args, "PUNCTUATION", o.Punctuation)
+	}
+	if o.Filter != "" {
+		args = append(args, "FILTER", o.Filter)
+	}
+	if o.ScoreField != "" {
+		args = append(args, "SCORE_FIELD", o.ScoreField)
+	}
+	if o.NoHighlight {
+		args = append(args, "NOHL")
 	}
 	return args, nil
 }
