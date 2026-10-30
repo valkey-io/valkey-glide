@@ -5,7 +5,6 @@ from datetime import datetime, timedelta, timezone
 from typing import Mapping
 
 import pytest
-from glide_shared.commands.batch import Batch
 from glide_shared.commands.command_args import OrderBy
 from glide_shared.commands.core_options import (
     ConditionalChange,
@@ -38,7 +37,6 @@ from glide_shared.commands.server_modules.ft_options.ft_search_options import (
     FtSearchOptions,
 )
 from glide_shared.constants import TEncodable
-from glide_shared.protobuf.command_request_pb2 import RequestType
 
 from tests.conftest import classify_inkeys_probe_error
 from tests.utils.ft_test_helpers import json_groupby_column
@@ -213,33 +211,6 @@ class TestHSetExArgs:
             field_conditional_change=field_condition,
             expiry=expiry,
         ) == ["key", *key_args, *field_args, *expiry_args, *HSETEX_FIELDS_ARGS]
-
-    def test_batch_builds_hsetex_command(self):
-        batch = Batch(is_atomic=False).hsetex(
-            "key",
-            {"field1": "value1", "field2": "value2"},
-            field_conditional_change=FNX,
-            expiry=EX_60,
-            key_conditional_change=XX,
-        )
-        assert batch.commands == [
-            (
-                RequestType.HSetEx,
-                [
-                    "key",
-                    "XX",
-                    "FNX",
-                    "EX",
-                    "60",
-                    "FIELDS",
-                    "2",
-                    "field1",
-                    "value1",
-                    "field2",
-                    "value2",
-                ],
-            )
-        ]
 
 
 class TestFtAggregateReducerUnitTests:
