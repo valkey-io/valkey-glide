@@ -10,92 +10,81 @@ import (
 	"github.com/valkey-io/valkey-glide/go/v2/constants"
 )
 
-func TestHSetExOptionsToArgs_NoOptions(t *testing.T) {
-	opts := NewHSetExOptions()
-	args, err := opts.ToArgs()
-	assert.NoError(t, err)
-	assert.Equal(t, []string{}, args)
+func TestHSetExOptionsToArgs(t *testing.T) {
+	keyConditions := []struct {
+		condition constants.ConditionalSet
+		args      []string
+	}{
+		{"", nil},
+		{constants.OnlyIfDoesNotExist, []string{"NX"}},
+		{constants.OnlyIfExists, []string{"XX"}},
+	}
+	fieldConditions := []struct {
+		condition constants.HashFieldConditionalSet
+		args      []string
+	}{
+		{"", nil},
+		{constants.HashFieldsDoNotExist, []string{"FNX"}},
+		{constants.HashAllFieldsExist, []string{"FXX"}},
+	}
+	expiries := []struct {
+		expiry *Expiry
+		args   []string
+	}{
+		{nil, nil},
+		{NewExpiryIn(60 * time.Second), []string{"EX", "60"}},
+	}
+
+	// Arguments follow the HSETEX order: [NX | XX] [FNX | FXX] [expiry].
+	for _, key := range keyConditions {
+		for _, field := range fieldConditions {
+			for _, expiry := range expiries {
+				opts := NewHSetExOptions().
+					SetConditionalSet(key.condition).
+					SetFieldConditionalSet(field.condition).
+					SetExpiry(expiry.expiry)
+				expected := []string{}
+				expected = append(expected, key.args...)
+				expected = append(expected, field.args...)
+				expected = append(expected, expiry.args...)
+
+				args, err := opts.ToArgs()
+				assert.NoError(t, err)
+				assert.Equal(t, expected, args)
+			}
+		}
+	}
 }
 
-func TestHSetExOptionsToArgs_OnlyFieldConditionalSet(t *testing.T) {
-	opts := NewHSetExOptions().SetFieldConditionalSet(constants.HashFieldsDoNotExist)
-	args, err := opts.ToArgs()
-	assert.NoError(t, err)
-	assert.Equal(t, []string{"FNX"}, args)
+func TestHSetExExpiryArgs(t *testing.T) {
+	timestamp := time.Unix(1700000000, 0)
 
-	opts = NewHSetExOptions().SetFieldConditionalSet(constants.HashAllFieldsExist)
-	args, err = opts.ToArgs()
-	assert.NoError(t, err)
-	assert.Equal(t, []string{"FXX"}, args)
-}
+	tests := []struct {
+		name     string
+		expiry   *Expiry
+		expected []string
+	}{
+		{"seconds", &Expiry{Type: constants.Seconds, Duration: 60}, []string{"EX", "60"}},
+		{"milliseconds", &Expiry{Type: constants.Milliseconds, Duration: 5500}, []string{"PX", "5500"}},
+		{"unix seconds", &Expiry{Type: constants.UnixSeconds, Timestamp: timestamp}, []string{"EXAT", "1700000000"}},
+		{
+			"unix milliseconds",
+			&Expiry{Type: constants.UnixMilliseconds, Timestamp: timestamp},
+			[]string{"PXAT", "1700000000000"},
+		},
+		{"keep existing", NewExpiryKeepExisting(), []string{"KEEPTTL"}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			args, err := hsetExExpiryArgs(test.expiry)
+			assert.NoError(t, err)
+			assert.Equal(t, test.expected, args)
+		})
+	}
 
-func TestHSetExOptionsToArgs_OnlyKeyConditionalSet(t *testing.T) {
-	opts := NewHSetExOptions().SetConditionalSet(constants.OnlyIfExists)
-	args, err := opts.ToArgs()
-	assert.NoError(t, err)
-	assert.Equal(t, []string{"XX"}, args)
-
-	opts = NewHSetExOptions().SetConditionalSet(constants.OnlyIfDoesNotExist)
-	args, err = opts.ToArgs()
-	assert.NoError(t, err)
-	assert.Equal(t, []string{"NX"}, args)
-}
-
-func TestHSetExOptionsToArgs_CombinedOptions(t *testing.T) {
-	opts := NewHSetExOptions().
-		SetFieldConditionalSet(constants.HashFieldsDoNotExist).
-		SetExpiry(NewExpiryIn(60 * time.Second))
-	args, err := opts.ToArgs()
-	assert.NoError(t, err)
-	assert.Equal(t, []string{"FNX", "EX", "60"}, args)
-
-	opts = NewHSetExOptions().
-		SetFieldConditionalSet(constants.HashAllFieldsExist).
-		SetExpiry(NewExpiryIn(5500 * time.Millisecond))
-	args, err = opts.ToArgs()
-	assert.NoError(t, err)
-	assert.Equal(t, []string{"FXX", "PX", "5500"}, args)
-
-	opts = NewHSetExOptions().
-		SetConditionalSet(constants.OnlyIfExists).
-		SetFieldConditionalSet(constants.HashFieldsDoNotExist)
-	args, err = opts.ToArgs()
-	assert.NoError(t, err)
-	assert.Equal(t, []string{"XX", "FNX"}, args)
-
-	opts = NewHSetExOptions().
-		SetConditionalSet(constants.OnlyIfDoesNotExist).
-		SetFieldConditionalSet(constants.HashAllFieldsExist)
-	args, err = opts.ToArgs()
-	assert.NoError(t, err)
-	assert.Equal(t, []string{"NX", "FXX"}, args)
-
-	opts = NewHSetExOptions().
-		SetConditionalSet(constants.OnlyIfExists).
-		SetExpiry(NewExpiryIn(60 * time.Second))
-	args, err = opts.ToArgs()
-	assert.NoError(t, err)
-	assert.Equal(t, []string{"XX", "EX", "60"}, args)
-
-	opts = NewHSetExOptions().
-		SetConditionalSet(constants.OnlyIfDoesNotExist).
-		SetFieldConditionalSet(constants.HashFieldsDoNotExist).
-		SetExpiry(NewExpiryIn(60 * time.Second))
-	args, err = opts.ToArgs()
-	assert.NoError(t, err)
-	assert.Equal(t, []string{"NX", "FNX", "EX", "60"}, args)
-}
-
-func TestHSetExOptionsToArgs_OnlyExpiry(t *testing.T) {
-	opts := NewHSetExOptions().SetExpiry(NewExpiryIn(60 * time.Second))
-	args, err := opts.ToArgs()
-	assert.NoError(t, err)
-	assert.Equal(t, []string{"EX", "60"}, args)
-
-	opts = NewHSetExOptions().SetExpiry(NewExpiryKeepExisting())
-	args, err = opts.ToArgs()
-	assert.NoError(t, err)
-	assert.Equal(t, []string{"KEEPTTL"}, args)
+	// PERSIST is not supported by HSETEX.
+	_, err := hsetExExpiryArgs(NewExpiryPersist())
+	assert.ErrorContains(t, err, "invalid expiry type")
 }
 
 func TestHSetExOptionsToArgs_LegacyFieldConditionInConditionalSet(t *testing.T) {
@@ -129,4 +118,8 @@ func TestHSetExOptionsToArgs_InvalidConditions(t *testing.T) {
 	opts = NewHSetExOptions().SetFieldConditionalSet(constants.HashFieldConditionalSet("XX"))
 	_, err = opts.ToArgs()
 	assert.ErrorContains(t, err, "invalid field-level condition")
+
+	opts = NewHSetExOptions().SetExpiry(NewExpiryPersist())
+	_, err = opts.ToArgs()
+	assert.ErrorContains(t, err, "invalid expiry type")
 }

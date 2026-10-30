@@ -98,21 +98,33 @@ func (opts *HSetExOptions) ToArgs() ([]string, error) {
 
 	// Add expiry options
 	if opts.Expiry != nil {
-		switch opts.Expiry.Type {
-		case constants.Seconds:
-			args = append(args, "EX", utils.IntToString(int64(opts.Expiry.Duration)))
-		case constants.Milliseconds:
-			args = append(args, "PX", utils.IntToString(int64(opts.Expiry.Duration)))
-		case constants.UnixSeconds:
-			args = append(args, "EXAT", utils.IntToString(int64(opts.Expiry.GetTime())))
-		case constants.UnixMilliseconds:
-			args = append(args, "PXAT", utils.IntToString(int64(opts.Expiry.GetTime())))
-		case constants.KeepExisting:
-			args = append(args, "KEEPTTL")
+		expiryArgs, err := hsetExExpiryArgs(opts.Expiry)
+		if err != nil {
+			return nil, err
 		}
+		args = append(args, expiryArgs...)
 	}
 
 	return args, nil
+}
+
+// hsetExExpiryArgs converts an [Expiry] to the expiry arguments of the HSETEX command:
+// EX, PX, EXAT, PXAT or KEEPTTL. Other expiry types, such as PERSIST, are not supported by HSETEX.
+func hsetExExpiryArgs(expiry *Expiry) ([]string, error) {
+	switch expiry.Type {
+	case constants.Seconds:
+		return []string{"EX", utils.IntToString(int64(expiry.Duration))}, nil
+	case constants.Milliseconds:
+		return []string{"PX", utils.IntToString(int64(expiry.Duration))}, nil
+	case constants.UnixSeconds:
+		return []string{"EXAT", utils.IntToString(int64(expiry.GetTime()))}, nil
+	case constants.UnixMilliseconds:
+		return []string{"PXAT", utils.IntToString(int64(expiry.GetTime()))}, nil
+	case constants.KeepExisting:
+		return []string{"KEEPTTL"}, nil
+	default:
+		return nil, errors.New("HSetExOptions: invalid expiry type " + string(expiry.Type))
+	}
 }
 
 // HGetExOptions represents optional arguments for the HGETEX command.
