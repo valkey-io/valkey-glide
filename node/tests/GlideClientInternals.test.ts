@@ -19,7 +19,6 @@ import {
     Logger,
     MAX_REQUEST_ARGS_LEN,
     ReadFrom,
-    TimeUnit,
     applyTlsAdvancedConfiguration,
     loadClientCertificateAndKeyFromFile,
     loadRootCertificatesFromFile,
@@ -34,7 +33,13 @@ import {
     command_request,
     connection_request,
 } from "../build-ts/ProtobufMessage";
-import { createHSetEx, createMigrate } from "../build-ts/Commands";
+import {
+    createHSetEx,
+    createMigrate,
+    createSet,
+    SetOptions,
+    TimeUnit,
+} from "../build-ts/Commands";
 import { convertStringArrayToBuffer } from "./TestUtilities";
 const { RequestType } = command_request;
 
@@ -705,6 +710,79 @@ describe("createHSetEx option arguments", () => {
     it("builds the request type", () => {
         expect(createHSetEx("key", fields).requestType).toEqual(
             RequestType.HSetEx,
+        );
+    });
+});
+
+describe("createSet", () => {
+    function expectArgs(options: SetOptions | undefined, expected: string[]) {
+        const cmd = createSet("key", "value", options);
+        expect(cmd.requestType).toEqual(RequestType.Set);
+        expect(cmd.argsArray?.args).toEqual(
+            convertStringArrayToBuffer(["key", "value", ...expected]),
+        );
+    }
+
+    it("builds command without options", () => {
+        expectArgs(undefined, []);
+    });
+
+    it("builds command with XX and NX", () => {
+        expectArgs({ conditionalSet: "onlyIfExists" }, ["XX"]);
+        expectArgs({ conditionalSet: "onlyIfDoesNotExist" }, ["NX"]);
+    });
+
+    it("builds command with IFEQ and IFNE", () => {
+        expectArgs(
+            { conditionalSet: "onlyIfEqual", comparisonValue: "other" },
+            ["IFEQ", "other"],
+        );
+        expectArgs(
+            { conditionalSet: "onlyIfNotEqual", comparisonValue: "other" },
+            ["IFNE", "other"],
+        );
+    });
+
+    it("throws when IFEQ or IFNE has no comparison value", () => {
+        for (const conditionalSet of ["onlyIfEqual", "onlyIfNotEqual"]) {
+            for (const comparisonValue of [null, undefined]) {
+                expect(() =>
+                    createSet("key", "value", {
+                        conditionalSet,
+                        comparisonValue,
+                    } as unknown as SetOptions),
+                ).toThrow(
+                    `Received conditionalSet '${conditionalSet}' without a comparisonValue`,
+                );
+            }
+        }
+    });
+
+    it("builds command with KEEPTTL and expiry", () => {
+        expectArgs({ expiry: "keepExisting" }, ["KEEPTTL"]);
+        expectArgs({ expiry: { type: TimeUnit.Seconds, count: 10 } }, [
+            "EX",
+            "10",
+        ]);
+    });
+
+    it("throws when expiry is not an integer", () => {
+        expect(() =>
+            createSet("key", "value", {
+                expiry: { type: TimeUnit.Seconds, count: 1.5 },
+            }),
+        ).toThrow("Count must be an integer");
+    });
+
+    it("builds command with all options", () => {
+        expectArgs(
+            {
+                conditionalSet: "onlyIfNotEqual",
+                comparisonValue: "other",
+                returnOldValue: true,
+                expiry: { type: TimeUnit.Seconds, count: 10 },
+            },
+            ["IFNE", "other", "GET", "EX", "10"],
         );
     });
 });

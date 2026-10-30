@@ -3,17 +3,17 @@
 from enum import Enum
 from typing import List, Mapping, Optional
 
+from glide_shared.commands.command_args import OrderBy
 from glide_shared.commands.server_modules.ft_options.ft_constants import (
     FtSearchKeywords,
 )
 from glide_shared.constants import TEncodable
 
-
-class OrderBy(Enum):
-    """Sort order for FT.SEARCH SORTBY clause."""
-
-    ASC = "ASC"
-    DESC = "DESC"
+# OrderBy (imported above) is re-exported from command_args rather than
+# redefined here: FT.SEARCH's SORTBY direction is the exact same
+# ASC/DESC concept FT.AGGREGATE's SortBy clause already uses via
+# command_args.OrderBy. The public name `OrderBy` stays importable from this
+# module for existing callers.
 
 
 class InfoScope(Enum):
@@ -132,6 +132,9 @@ class FtSearchOptions:
         withsortkeys: Optional[bool] = False,
         shard_scope: Optional[ShardScope] = None,
         consistency: Optional[ConsistencyMode] = None,
+        in_keys: Optional[List[TEncodable]] = None,
+        with_scores: Optional[bool] = False,
+        scorer: Optional[TEncodable] = None,
     ):
         """
         Initialize the FT.SEARCH optional fields.
@@ -145,8 +148,14 @@ class FtSearchOptions:
                 query expression.
             limit (Optional[FtSearchLimit]): This option provides pagination capability. Only the keys that satisfy the offset
                 and count values are returned. See `FtSearchLimit`.
-            count (Optional[bool]): This flag option suppresses returning the contents of keys.
-                Only the number of keys is returned.
+            count (Optional[bool]): Returns only the total number of matching documents, with no document rows at
+                all (not even keys). Previously this emitted a bare ``COUNT`` token, which
+                valkey-search's FT.SEARCH parser does not recognise at all -- confirmed live, the server rejects it
+                outright with ``"Unexpected argument 'COUNT'"`` (``src/commands/ft_search_parser.cc`` has no COUNT
+                keyword registered). This now maps to the server's actual documented count-only form instead,
+                ``LIMIT 0 0`` (confirmed live: returns just the total count with zero result rows). Mutually
+                exclusive with ``limit``, since both control the same LIMIT clause; raises ``ValueError`` if both
+                are set.
             nocontent (Optional[bool]): If set, the query returns only the document IDs and not the content.
                 The document entries in the result will have empty attribute maps.
             dialect (Optional[int]): The query dialect version to use. The only supported dialect is ``2``.
@@ -161,6 +170,37 @@ class FtSearchOptions:
                 key is the value of the field used for sorting, or ``None`` if the field is missing.
             shard_scope (Optional[ShardScope]): Controls shard participation in cluster mode. See `ShardScope`.
             consistency (Optional[ConsistencyMode]): Controls consistency requirements in cluster mode. See `ConsistencyMode`.
+            in_keys (Optional[List[TEncodable]]): Restricts the search to only this set of keys, filtering out any
+                matching result whose key is not in the list. The result count is adjusted to reflect the
+                filtered set. ``[]`` (an explicit empty list) is distinct from the default ``None``: ``None``
+                omits INKEYS entirely (no restriction), while ``[]`` sends ``INKEYS 0`` and excludes every result.
+            with_scores (Optional[bool]): If set, augments the output with each document's relevance score
+                (valkey-search 1.3.0). This changes the result shape: each document value in the result map
+                becomes a two-element list ``[score, field_map]`` instead of just ``field_map`` (a `bytes`-encoded
+                decimal string, e.g. ``b"0.287682086229"`` -- confirmed live, not a float, on both RESP2 and RESP3).
+                With ``nocontent=True``, the shape becomes ``[score, {}]``, with an empty field map. Combining
+                ``withsortkeys=True`` with ``nocontent=True`` gives the same ``[score, {}]``, because the server drops
+                the sort key in that combination (confirmed live). It is not ``[score, None, {}]``. With
+                both ``with_scores=True`` and ``withsortkeys=True`` and content present, each row becomes a
+                three-element list ``[score, sort_key, field_map]`` (`glide-core`'s
+                ``FTSearchWithScoresAndSortKeysReturnType``), a genuinely different shape from either flag alone.
+            scorer (Optional[TEncodable]): The scoring function used to rank results (valkey-search 1.3.0,
+                ``src/indexes/scoring/scorer.h``). ``"BM25STD"`` is the only value currently registered and
+                selectable; any other value is rejected by the server. Has no visible effect unless combined with
+                ``with_scores=True`` (or inspected indirectly via ``sortby``).
+
+        Note:
+            Vector Range queries (``@field:[VECTOR_RANGE <radius> $blob]``) are written directly into the
+            query string passed to `FT.SEARCH`, not as a field on this class; see the examples below.
+            As of valkey-search 1.3.0-rc1, a VECTOR_RANGE predicate used as a pre-filter inside a KNN query
+            is rejected by the server (a "single-VR model" limitation of that release) -- VECTOR_RANGE and
+            KNN cannot currently be combined in the same query.
+
+        Examples:
+            >>> await client.custom_command(["FT.SEARCH", "idx", "@vec:[VECTOR_RANGE 5 $blob]=>{$yield_distance_as: dist}",
+            ...     "PARAMS", "2", "blob", query_vector_bytes, "SORTBY", "dist"])
+            # Finds all vectors within radius 5 of the query vector, sorted by distance, which is returned
+            # under the "dist" property via YIELD_DISTANCE_AS.
         """
         self.return_fields = return_fields
         self.timeout = timeout
@@ -177,6 +217,9 @@ class FtSearchOptions:
         self.withsortkeys = withsortkeys
         self.shard_scope = shard_scope
         self.consistency = consistency
+        self.in_keys = in_keys
+        self.with_scores = with_scores
+        self.scorer = scorer
 
     def _validate(self) -> None:
         """Validate mutually dependent options."""
@@ -184,6 +227,12 @@ class FtSearchOptions:
             raise ValueError("sortby_order requires sortby to be set.")
         if self.sortby is None and self.withsortkeys:
             raise ValueError("withsortkeys requires sortby to be set.")
+        if self.count and self.limit is not None:
+            raise ValueError(
+                "count and limit are mutually exclusive -- count maps to "
+                "LIMIT 0 0 internally, so an explicit limit "
+                "would conflict with it."
+            )
 
     def _query_flags_to_args(self) -> List[TEncodable]:
         """Serialize cluster-mode and query-parsing flags."""
@@ -202,6 +251,46 @@ class FtSearchOptions:
             args.extend([FtSearchKeywords.SLOP, str(self.slop)])
         return args
 
+    def _in_keys_to_args(self) -> List[TEncodable]:
+        """Serialize the INKEYS option."""
+        if self.in_keys is None:
+            return []
+        return [FtSearchKeywords.INKEYS, str(len(self.in_keys))] + list(self.in_keys)
+
+    def _return_fields_to_args(self) -> List[TEncodable]:
+        """Serialize the RETURN option."""
+        if not self.return_fields:
+            return []
+        return_field_args: List[TEncodable] = []
+        for return_field in self.return_fields:
+            return_field_args.extend(return_field.to_args())
+        return [
+            FtSearchKeywords.RETURN,
+            str(len(return_field_args)),
+        ] + return_field_args
+
+    def _sortby_to_args(self) -> List[TEncodable]:
+        """Serialize the SORTBY and WITHSORTKEYS options."""
+        args: List[TEncodable] = []
+        if self.sortby is not None:
+            args.append(FtSearchKeywords.SORTBY)
+            args.append(self.sortby)
+            if self.sortby_order:
+                args.append(self.sortby_order.value)
+        if self.withsortkeys:
+            args.append(FtSearchKeywords.WITHSORTKEYS)
+        return args
+
+    def _params_to_args(self) -> List[TEncodable]:
+        """Serialize the PARAMS option."""
+        if not self.params:
+            return []
+        args: List[TEncodable] = [FtSearchKeywords.PARAMS, str(len(self.params) * 2)]
+        for name, value in self.params.items():
+            args.append(name)
+            args.append(value)
+        return args
+
     def to_args(self) -> List[TEncodable]:
         """
         Get the optional arguments for the FT.SEARCH command.
@@ -212,33 +301,26 @@ class FtSearchOptions:
         """
         self._validate()
         args: List[TEncodable] = self._query_flags_to_args()
-        if self.return_fields:
-            args.append(FtSearchKeywords.RETURN)
-            return_field_args: List[TEncodable] = []
-            for return_field in self.return_fields:
-                return_field_args.extend(return_field.to_args())
-            args.append(str(len(return_field_args)))
-            args.extend(return_field_args)
-        if self.sortby is not None:
-            args.append(FtSearchKeywords.SORTBY)
-            args.append(self.sortby)
-            if self.sortby_order:
-                args.append(self.sortby_order.value)
-        if self.withsortkeys:
-            args.append(FtSearchKeywords.WITHSORTKEYS)
+        args.extend(self._in_keys_to_args())
+        args.extend(self._return_fields_to_args())
+        args.extend(self._sortby_to_args())
         if self.timeout:
             args.append(FtSearchKeywords.TIMEOUT)
             args.append(str(self.timeout))
-        if self.params:
-            args.append(FtSearchKeywords.PARAMS)
-            args.append(str(len(self.params) * 2))
-            for name, value in self.params.items():
-                args.append(name)
-                args.append(value)
+        args.extend(self._params_to_args())
         if self.limit:
             args.extend(self.limit.to_args())
         if self.count:
-            args.append(FtSearchKeywords.COUNT)
+            # COUNT is not a real FT.SEARCH keyword (confirmed
+            # live -- the server rejects a bare COUNT token outright). The
+            # count-only form the server actually recognises is LIMIT 0 0;
+            # _validate() above has already confirmed self.limit is unset
+            # (they're mutually exclusive) by the time this runs.
+            args.extend([FtSearchKeywords.LIMIT, "0", "0"])
+        if self.with_scores:
+            args.append(FtSearchKeywords.WITHSCORES)
+        if self.scorer is not None:
+            args.extend([FtSearchKeywords.SCORER, self.scorer])
         if self.dialect is not None:
             args.extend([FtSearchKeywords.DIALECT, str(self.dialect)])
         return args

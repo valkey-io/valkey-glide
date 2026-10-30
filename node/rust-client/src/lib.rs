@@ -531,38 +531,34 @@ fn process_command_for_compression(
     let command_name = &all_args[0];
     let command_str = String::from_utf8_lossy(command_name).to_uppercase();
     let request_type = match command_str.as_str() {
-        "SET" => RequestType::Set,
-        "MSET" => RequestType::MSet,
-        "MSETNX" => RequestType::MSetNX,
-        "SETEX" => RequestType::SetEx,
-        "PSETEX" => RequestType::PSetEx,
-        "SETNX" => RequestType::SetNX,
         "APPEND" => RequestType::Append,
-        "GETRANGE" => RequestType::GetRange,
-        "SETRANGE" => RequestType::SetRange,
-        "STRLEN" => RequestType::Strlen,
-        "LCS" => RequestType::LCS,
-        "SUBSTR" => RequestType::Substr,
-        "DELIFEQ" => RequestType::DelIfEq,
-        "INCR" => RequestType::Incr,
-        "INCRBY" => RequestType::IncrBy,
-        "INCRBYFLOAT" => RequestType::IncrByFloat,
-        "DECR" => RequestType::Decr,
-        "DECRBY" => RequestType::DecrBy,
-        "GETBIT" => RequestType::GetBit,
-        "SETBIT" => RequestType::SetBit,
         "BITCOUNT" => RequestType::BitCount,
-        "BITPOS" => RequestType::BitPos,
         "BITFIELD" => RequestType::BitField,
         "BITFIELD_RO" => RequestType::BitFieldReadOnly,
         "BITOP" => RequestType::BitOp,
+        "BITPOS" => RequestType::BitPos,
+        "DECR" => RequestType::Decr,
+        "DECRBY" => RequestType::DecrBy,
+        "DELIFEQ" => RequestType::DelIfEq,
+        "GETBIT" => RequestType::GetBit,
+        "GETRANGE" => RequestType::GetRange,
+        "GETSET" => RequestType::GetSet,
+        "INCR" => RequestType::Incr,
+        "INCRBY" => RequestType::IncrBy,
+        "INCRBYFLOAT" => RequestType::IncrByFloat,
+        "LCS" => RequestType::LCS,
+        "MSET" => RequestType::MSet,
+        "MSETNX" => RequestType::MSetNX,
+        "PSETEX" => RequestType::PSetEx,
+        "SET" => RequestType::Set,
+        "SETBIT" => RequestType::SetBit,
+        "SETEX" => RequestType::SetEx,
+        "SETNX" => RequestType::SetNX,
+        "SETRANGE" => RequestType::SetRange,
+        "STRLEN" => RequestType::Strlen,
+        "SUBSTR" => RequestType::Substr,
         _ => return Ok(()),
     };
-
-    glide_core::compression::validate_command_compression_compatibility(
-        request_type,
-        compression_manager_ref,
-    )?;
 
     let mut args: Vec<Vec<u8>> = all_args[1..].to_vec();
     process_command_args_for_compression(&mut args, request_type, compression_manager_ref)?;
@@ -3801,6 +3797,7 @@ mod tests {
                 addresses: vec![NodeAddress {
                     host: "127.0.0.1".to_string(),
                     port: 1,
+                    unix_socket_path: None,
                 }],
                 lazy_connect: true,
                 ..request

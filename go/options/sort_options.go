@@ -6,7 +6,7 @@ const (
 	// ALPHA subcommand string to include in the SORT and SORT_RO commands.
 	ALPHA_COMMAND_STRING = "ALPHA"
 	// BY subcommand string to include in the SORT and SORT_RO commands.
-	// Supported in cluster mode since Valkey version 8.0 and above.
+	// Supported in cluster mode since Valkey 8.0.0.
 	BY_COMMAND_STRING = "BY"
 	// GET subcommand string to include in the SORT and SORT_RO commands.
 	GET_COMMAND_STRING = "GET"
@@ -59,7 +59,7 @@ func (opts *SortOptions) SetIsAlpha(isAlpha bool) *SortOptions {
 // from the key replaces the asterisk to create the key name. For example, if key
 // contains IDs of objects, byPattern can be used to sort these IDs based on an
 // attribute of the objects, like their weights or timestamps.
-// Supported in cluster mode since Valkey version 8.0 and above.
+// Supported in cluster mode since Valkey 8.0.0.
 func (opts *SortOptions) SetByPattern(byPattern string) *SortOptions {
 	opts.ByPattern = byPattern
 	return opts
@@ -76,7 +76,7 @@ func (opts *SortOptions) SetByPattern(byPattern string) *SortOptions {
 // arguments can be provided to retrieve multiple attributes. The special value # can
 // be used to include the actual element from key being sorted. If not provided, only
 // the sorted elements themselves are returned.
-// Supported in cluster mode since Valkey version 8.0 and above.
+// Supported in cluster mode since Valkey 8.0.0.
 func (opts *SortOptions) AddGetPattern(getPattern string) *SortOptions {
 	opts.GetPatterns = append(opts.GetPatterns, getPattern)
 	return opts

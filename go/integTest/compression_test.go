@@ -16,6 +16,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	glide "github.com/valkey-io/valkey-glide/go/v2"
 	"github.com/valkey-io/valkey-glide/go/v2/config"
+	"github.com/valkey-io/valkey-glide/go/v2/interfaces"
 	"github.com/valkey-io/valkey-glide/go/v2/options"
 	"github.com/valkey-io/valkey-glide/go/v2/pipeline"
 )
@@ -1203,264 +1204,52 @@ func (suite *GlideTestSuite) TestCompressionSetNXViaCustomCommand() {
 // Incompatible Commands Tests
 // ============================================================================
 
-func (suite *GlideTestSuite) TestCompressionAppendIncompatible() {
-	client := suite.compressionClient()
-	defer client.Close()
-
-	t := suite.T()
-
-	key := fmt.Sprintf("append_test_%s", randomString(8))
-	_, err := client.Set(context.Background(), key, "initial_value")
-	assert.NoError(t, err)
-
-	// APPEND should fail with compression enabled
-	_, err = client.Append(context.Background(), key, "_appended")
-	assert.Error(t, err)
-	errMsg := strings.ToLower(err.Error())
-	assert.True(t, strings.Contains(errMsg, "incompatible") || strings.Contains(errMsg, "compression"),
-		"Error should mention incompatibility: %v", err)
-
-	client.Del(context.Background(), []string{key})
-}
-
-func (suite *GlideTestSuite) TestCompressionGetRangeIncompatible() {
-	client := suite.compressionClient()
-	defer client.Close()
-
-	t := suite.T()
-
-	key := fmt.Sprintf("getrange_test_%s", randomString(8))
-	_, err := client.Set(context.Background(), key, generateCompressibleText(1024))
-	assert.NoError(t, err)
-
-	// GETRANGE should fail with compression enabled
-	_, err = client.GetRange(context.Background(), key, 0, 10)
-	assert.Error(t, err)
-	errMsg := strings.ToLower(err.Error())
-	assert.True(t, strings.Contains(errMsg, "incompatible") || strings.Contains(errMsg, "compression"),
-		"Error should mention incompatibility: %v", err)
-
-	client.Del(context.Background(), []string{key})
-}
-
-func (suite *GlideTestSuite) TestCompressionSetRangeIncompatible() {
-	client := suite.compressionClient()
-	defer client.Close()
-
-	t := suite.T()
-
-	key := fmt.Sprintf("setrange_test_%s", randomString(8))
-	_, err := client.Set(context.Background(), key, generateCompressibleText(1024))
-	assert.NoError(t, err)
-
-	// SETRANGE should fail with compression enabled
-	_, err = client.SetRange(context.Background(), key, 5, "replacement")
-	assert.Error(t, err)
-	errMsg := strings.ToLower(err.Error())
-	assert.True(t, strings.Contains(errMsg, "incompatible") || strings.Contains(errMsg, "compression"),
-		"Error should mention incompatibility: %v", err)
-
-	client.Del(context.Background(), []string{key})
-}
-
-func (suite *GlideTestSuite) TestCompressionStrlenIncompatible() {
-	client := suite.compressionClient()
-	defer client.Close()
-
-	t := suite.T()
-
-	key := fmt.Sprintf("strlen_test_%s", randomString(8))
-	_, err := client.Set(context.Background(), key, generateCompressibleText(1024))
-	assert.NoError(t, err)
-
-	// STRLEN should fail with compression enabled
-	_, err = client.Strlen(context.Background(), key)
-	assert.Error(t, err)
-	errMsg := strings.ToLower(err.Error())
-	assert.True(t, strings.Contains(errMsg, "incompatible") || strings.Contains(errMsg, "compression"),
-		"Error should mention incompatibility: %v", err)
-
-	client.Del(context.Background(), []string{key})
-}
-
-func (suite *GlideTestSuite) TestCompressionIncrIncompatible() {
-	client := suite.compressionClient()
-	defer client.Close()
-
-	t := suite.T()
-
-	key := fmt.Sprintf("incr_test_%s", randomString(8))
-	_, err := client.Set(context.Background(), key, "100")
-	assert.NoError(t, err)
-
-	// INCR should fail with compression enabled
-	_, err = client.Incr(context.Background(), key)
-	assert.Error(t, err)
-	errMsg := strings.ToLower(err.Error())
-	assert.True(t, strings.Contains(errMsg, "incompatible") || strings.Contains(errMsg, "compression"),
-		"Error should mention incompatibility: %v", err)
-
-	client.Del(context.Background(), []string{key})
-}
-
-func (suite *GlideTestSuite) TestCompressionIncrByIncompatible() {
-	client := suite.compressionClient()
-	defer client.Close()
-
-	t := suite.T()
-
-	key := fmt.Sprintf("incrby_test_%s", randomString(8))
-	_, err := client.Set(context.Background(), key, "100")
-	assert.NoError(t, err)
-
-	// INCRBY should fail with compression enabled
-	_, err = client.IncrBy(context.Background(), key, 10)
-	assert.Error(t, err)
-	errMsg := strings.ToLower(err.Error())
-	assert.True(t, strings.Contains(errMsg, "incompatible") || strings.Contains(errMsg, "compression"),
-		"Error should mention incompatibility: %v", err)
-
-	client.Del(context.Background(), []string{key})
-}
-
-func (suite *GlideTestSuite) TestCompressionIncrByFloatIncompatible() {
-	client := suite.compressionClient()
-	defer client.Close()
-
-	t := suite.T()
-
-	key := fmt.Sprintf("incrbyfloat_test_%s", randomString(8))
-	_, err := client.Set(context.Background(), key, "100.5")
-	assert.NoError(t, err)
-
-	// INCRBYFLOAT should fail with compression enabled
-	_, err = client.IncrByFloat(context.Background(), key, 0.5)
-	assert.Error(t, err)
-	errMsg := strings.ToLower(err.Error())
-	assert.True(t, strings.Contains(errMsg, "incompatible") || strings.Contains(errMsg, "compression"),
-		"Error should mention incompatibility: %v", err)
-
-	client.Del(context.Background(), []string{key})
-}
-
-func (suite *GlideTestSuite) TestCompressionDecrIncompatible() {
-	client := suite.compressionClient()
-	defer client.Close()
-
-	t := suite.T()
-
-	key := fmt.Sprintf("decr_test_%s", randomString(8))
-	_, err := client.Set(context.Background(), key, "100")
-	assert.NoError(t, err)
-
-	// DECR should fail with compression enabled
-	_, err = client.Decr(context.Background(), key)
-	assert.Error(t, err)
-	errMsg := strings.ToLower(err.Error())
-	assert.True(t, strings.Contains(errMsg, "incompatible") || strings.Contains(errMsg, "compression"),
-		"Error should mention incompatibility: %v", err)
-
-	client.Del(context.Background(), []string{key})
-}
-
-func (suite *GlideTestSuite) TestCompressionDecrByIncompatible() {
-	client := suite.compressionClient()
-	defer client.Close()
-
-	t := suite.T()
-
-	key := fmt.Sprintf("decrby_test_%s", randomString(8))
-	_, err := client.Set(context.Background(), key, "100")
-	assert.NoError(t, err)
-
-	// DECRBY should fail with compression enabled
-	_, err = client.DecrBy(context.Background(), key, 10)
-	assert.Error(t, err)
-	errMsg := strings.ToLower(err.Error())
-	assert.True(t, strings.Contains(errMsg, "incompatible") || strings.Contains(errMsg, "compression"),
-		"Error should mention incompatibility: %v", err)
-
-	client.Del(context.Background(), []string{key})
-}
-
-func (suite *GlideTestSuite) TestCompressionGetBitIncompatible() {
-	client := suite.compressionClient()
-	defer client.Close()
-
-	t := suite.T()
-
-	key := fmt.Sprintf("getbit_test_%s", randomString(8))
-	_, err := client.Set(context.Background(), key, "test_value")
-	assert.NoError(t, err)
-
-	// GETBIT should fail with compression enabled
-	_, err = client.GetBit(context.Background(), key, 0)
-	assert.Error(t, err)
-	errMsg := strings.ToLower(err.Error())
-	assert.True(t, strings.Contains(errMsg, "incompatible") || strings.Contains(errMsg, "compression"),
-		"Error should mention incompatibility: %v", err)
-
-	client.Del(context.Background(), []string{key})
-}
-
-func (suite *GlideTestSuite) TestCompressionSetBitIncompatible() {
-	client := suite.compressionClient()
-	defer client.Close()
-
-	t := suite.T()
-
-	key := fmt.Sprintf("setbit_test_%s", randomString(8))
-	_, err := client.Set(context.Background(), key, "test_value")
-	assert.NoError(t, err)
-
-	// SETBIT should fail with compression enabled
-	_, err = client.SetBit(context.Background(), key, 0, 1)
-	assert.Error(t, err)
-	errMsg := strings.ToLower(err.Error())
-	assert.True(t, strings.Contains(errMsg, "incompatible") || strings.Contains(errMsg, "compression"),
-		"Error should mention incompatibility: %v", err)
-
-	client.Del(context.Background(), []string{key})
-}
-
-func (suite *GlideTestSuite) TestCompressionBitCountIncompatible() {
-	client := suite.compressionClient()
-	defer client.Close()
-
-	t := suite.T()
-
-	key := fmt.Sprintf("bitcount_test_%s", randomString(8))
-	_, err := client.Set(context.Background(), key, "test_value")
-	assert.NoError(t, err)
-
-	// BITCOUNT should fail with compression enabled
-	_, err = client.BitCount(context.Background(), key)
-	assert.Error(t, err)
-	errMsg := strings.ToLower(err.Error())
-	assert.True(t, strings.Contains(errMsg, "incompatible") || strings.Contains(errMsg, "compression"),
-		"Error should mention incompatibility: %v", err)
-
-	client.Del(context.Background(), []string{key})
-}
-
-func (suite *GlideTestSuite) TestCompressionBitPosIncompatible() {
-	client := suite.compressionClient()
-	defer client.Close()
-
-	t := suite.T()
-
-	key := fmt.Sprintf("bitpos_test_%s", randomString(8))
-	_, err := client.Set(context.Background(), key, "test_value")
-	assert.NoError(t, err)
-
-	// BITPOS should fail with compression enabled
-	_, err = client.BitPos(context.Background(), key, 1)
-	assert.Error(t, err)
-	errMsg := strings.ToLower(err.Error())
-	assert.True(t, strings.Contains(errMsg, "incompatible") || strings.Contains(errMsg, "compression"),
-		"Error should mention incompatibility: %v", err)
-
-	client.Del(context.Background(), []string{key})
+func (suite *GlideTestSuite) TestCompressionIncompatibleCommands() {
+	ctx := context.Background()
+	type client = interfaces.BaseClientCommands
+	errOf := func(_ any, err error) error { return err }
+
+	// Commands that are incompatible with compression, called on a key that does not need to exist.
+	incompatibleCommands := []struct {
+		name string
+		call func(c client) error
+	}{
+		{name: "Append", call: func(c client) error { return errOf(c.Append(ctx, "key", "0")) }},
+		{name: "BitCount", call: func(c client) error { return errOf(c.BitCount(ctx, "key")) }},
+		{name: "BitPos", call: func(c client) error { return errOf(c.BitPos(ctx, "key", 1)) }},
+		{name: "Decr", call: func(c client) error { return errOf(c.Decr(ctx, "key")) }},
+		{name: "DecrBy", call: func(c client) error { return errOf(c.DecrBy(ctx, "key", 5)) }},
+		{name: "DelIfEq", call: func(c client) error { return errOf(c.DelIfEq(ctx, "key", "10")) }},
+		{name: "GetBit", call: func(c client) error { return errOf(c.GetBit(ctx, "key", 0)) }},
+		{name: "GetRange", call: func(c client) error { return errOf(c.GetRange(ctx, "key", 0, 0)) }},
+		{name: "Incr", call: func(c client) error { return errOf(c.Incr(ctx, "key")) }},
+		{name: "IncrBy", call: func(c client) error { return errOf(c.IncrBy(ctx, "key", 5)) }},
+		{name: "IncrByFloat", call: func(c client) error { return errOf(c.IncrByFloat(ctx, "key", 0.5)) }},
+		{name: "SetIfEq", call: func(c client) error {
+			return errOf(c.SetWithOptions(ctx, "key", "20", *options.NewSetOptions().SetOnlyIfEquals("10")))
+		}},
+		{name: "SetIfNe", call: func(c client) error {
+			return errOf(c.SetWithOptions(ctx, "key", "20", *options.NewSetOptions().SetOnlyIfNotEquals("20")))
+		}},
+		{name: "SetBit", call: func(c client) error { return errOf(c.SetBit(ctx, "key", 0, 1)) }},
+		{name: "SetRange", call: func(c client) error { return errOf(c.SetRange(ctx, "key", 1, "5")) }},
+		{name: "Strlen", call: func(c client) error { return errOf(c.Strlen(ctx, "key")) }},
+	}
+
+	clients := map[string]client{
+		"standalone": suite.compressionClient(),
+		"cluster":    suite.compressionClusterClient(),
+	}
+
+	for clientName, c := range clients {
+		defer c.Close()
+
+		for _, command := range incompatibleCommands {
+			suite.T().Run(clientName+"/"+command.name, func(t *testing.T) {
+				assert.ErrorContains(t, command.call(c), "incompatible with compression")
+			})
+		}
+	}
 }
 
 func (suite *GlideTestSuite) TestCompressionIncompatibleCommandsWorkWithoutCompression() {
@@ -1507,6 +1296,12 @@ func (suite *GlideTestSuite) TestCompressionIncompatibleCommandsWorkWithoutCompr
 	assert.NoError(t, err)
 	assert.Equal(t, int64(11), appendResult)
 
+	// DELIFEQ
+	if compareServerVersions(suite.serverVersion, "9.0.0") >= 0 {
+		_, err = client.DelIfEq(context.Background(), key, "nonexistent")
+		assert.NoError(t, err)
+	}
+
 	// GETRANGE
 	getrangeResult, err := client.GetRange(context.Background(), key, 0, 4)
 	assert.NoError(t, err)
@@ -1533,6 +1328,28 @@ func (suite *GlideTestSuite) TestCompressionIncompatibleCommandsWorkWithoutCompr
 	bitcountResult, err := client.BitCount(context.Background(), key)
 	assert.NoError(t, err)
 	assert.GreaterOrEqual(t, bitcountResult, int64(0))
+
+	// SET with IFEQ
+	// TODO #5368: Compare versions semantically, not as strings.
+	if suite.serverVersion >= "8.1.0" {
+		_, err = client.Set(context.Background(), key, "hello")
+		assert.NoError(t, err)
+		setIfEqResult, err := client.SetWithOptions(
+			context.Background(), key, "world", *options.NewSetOptions().SetOnlyIfEquals("hello"))
+		assert.NoError(t, err)
+		assert.Equal(t, "OK", setIfEqResult.Value())
+	}
+
+	// SET with IFNE
+	// TODO #5368: Compare versions semantically, not as strings.
+	if suite.serverVersion >= "9.2.0" {
+		_, err = client.Set(context.Background(), key, "hello")
+		assert.NoError(t, err)
+		setIfNeResult, err := client.SetWithOptions(
+			context.Background(), key, "world", *options.NewSetOptions().SetOnlyIfNotEquals("world"))
+		assert.NoError(t, err)
+		assert.Equal(t, "OK", setIfNeResult.Value())
+	}
 
 	client.Del(context.Background(), []string{key})
 }

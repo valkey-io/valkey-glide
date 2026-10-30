@@ -32,6 +32,7 @@
 //! └─────────────────────────────────────┘
 //! ```
 
+use crate::client::AuthGeneration;
 use crate::client::Client as GlideClient;
 use dashmap::DashMap;
 use std::collections::VecDeque;
@@ -135,6 +136,15 @@ pub struct ClientPool {
     discarded_ids: Vec<u64>,
 }
 
+/// Whether the serialized `ConnectionRequest` asks for RDMA. Bytes that do not
+/// parse are left for client creation to reject.
+#[cfg(feature = "proto")]
+fn requests_rdma(connection_request: &[u8]) -> bool {
+    use protobuf::Message as _;
+    crate::connection_request::ConnectionRequest::parse_from_bytes(connection_request)
+        .is_ok_and(|request| request.rdma_config.is_some())
+}
+
 impl ClientPool {
     /// Create a new pool with validated config.
     pub fn new(config: PoolConfig) -> Result<Self, PoolError> {
@@ -148,6 +158,16 @@ impl ClientPool {
         }
         if config.idle_timeout.is_zero() {
             return Err(PoolError::InvalidConfig("idle_timeout must be > 0".into()));
+        }
+        #[cfg(feature = "proto")]
+        if requests_rdma(&config.connection_request) {
+            let message = crate::rdma::RdmaUnavailable::IncompatibleSetting(
+                crate::rdma::IncompatibleSetting::ConnectionPool,
+            )
+            .to_string();
+            // The FFI and JNI bindings return only an error code, so log the reason.
+            glide_logger::log_error("pool", message.as_str());
+            return Err(PoolError::InvalidConfig(message));
         }
 
         Ok(Self {
@@ -253,6 +273,31 @@ impl ClientPool {
         client_id
     }
 
+    /// Reserve `n` slots against `max_size` up front, before any warmup connection
+    /// is attempted. Returns the number actually reserved (capped so `total_count`
+    /// never exceeds `max_size`).
+    ///
+    /// Warmup connects asynchronously; without reserving, an acquirer racing the
+    /// warmup window sees `total_count` still low, `should_create()` returns true, and
+    /// it spawns an on-demand client redundant with the warmup client already in
+    /// flight. Each warmup task consumes its reservation via `add_client_reserved` on
+    /// success or returns it via `release_reservation` on failure.
+    pub fn reserve_warmup_slots(&self, n: u32) -> u32 {
+        let max = self.config.max_size;
+        let mut reserved = 0;
+        //TODO: (#7175) `fetch_update` is deprecated for `try_update` since Rust 1.99, but `try_update`
+        // needs 1.95 and the MSRV is 1.94.1.
+        #[allow(deprecated)]
+        let _ = self
+            .total_count
+            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |cur| {
+                let room = max.saturating_sub(cur);
+                reserved = room.min(n);
+                (reserved > 0).then_some(cur + reserved)
+            });
+        reserved
+    }
+
     /// Release a client back to the idle pool by client_id.
     ///
     /// Removes the client from `in_use` and returns it as `Some(entry)` for the
@@ -289,7 +334,7 @@ impl ClientPool {
     /// `drain_discarded_ids` so every binding reclaims the adapter / handle it
     /// holds for that id. Also clears both core registries, so callers need not.
     pub fn discard_client(&mut self, client_id: u64) {
-        self.total_count.fetch_sub(1, Ordering::AcqRel);
+        saturating_dec(&self.total_count);
         self.discarded_ids.push(client_id);
         unregister_pool_client(client_id);
         unregister_blocking_flag(client_id);
@@ -300,7 +345,7 @@ impl ClientPool {
     /// Give back a slot reserved by a binding that never became a client.
     /// No id exists, so there is nothing for a binding to reclaim.
     pub fn release_reservation(&mut self) {
-        self.total_count.fetch_sub(1, Ordering::AcqRel);
+        saturating_dec(&self.total_count);
         let (_, condvar) = &*self.release_notify;
         condvar.notify_one();
     }
@@ -374,7 +419,8 @@ impl ClientPool {
 /// This is the shared implementation used by all language bindings (FFI, JNI).
 /// It performs:
 /// 1. Takes the client out of `in_use`
-/// 2. Sends DISCARD + SELECT (batched reset) with a timeout of 2× request_timeout
+/// 2. Resets dirtied connection state (`reset_connection_state`) with a timeout
+///    of 2× request_timeout
 /// 3. Returns the client to idle on success, or discards it on failure
 /// 4. A `LeakGuard` ensures `discard_client(client_id)` is called if the future is cancelled
 ///
@@ -426,7 +472,9 @@ pub async fn release_client_async(pool_arc: Arc<TokioMutex<ClientPool>>, client_
         client_id: guard_client_id,
     };
 
-    // Reset state: DISCARD (cancel MULTI/WATCH) + SELECT <configured_db>
+    // Reset only the state the borrow dirtied: DISCARD a still-open MULTI, and
+    // SELECT back to the configured db if the borrow drifted off it. See
+    // `reset_connection_state`.
     let reset_result = tokio::time::timeout(
         timeout_duration,
         entry.client.reset_connection_state(configured_db),
@@ -805,8 +853,9 @@ pub struct ConnectionState {
     /// server-side waiter armed. A still-set connection is discarded on release;
     /// clean protocol errors clear it so the connection is reused.
     pub blocking_in_flight: bool,
-    /// Set when IAM re-authentication failed. The generation bookmark advances only
-    /// on success, so reusing this connection would retry the same failing AUTH.
+    /// Set when a rotation re-AUTH (IAM or password) failed. The generation bookmark
+    /// advances only on success, so reusing this connection would retry the same
+    /// failing AUTH.
     pub must_discard: bool,
 }
 
@@ -1028,11 +1077,12 @@ pub struct ScopedConnection {
     pub acquisition_slot: Option<u16>,
     /// The topology-aware destination this connection was created for.
     pub target: ScopeTarget,
-    /// Last IAM token generation this connection's AUTH was applied at (see
-    /// `IAMTokenManager::token_generation`). Per-connection rather than on the
-    /// shared `Client` since scoped connections are reused independently.
-    /// Starts at 0 so a fresh connection re-authenticates on first use if needed.
-    pub last_iam_generation: AtomicU64,
+    /// Generation of the client's credentials this connection's AUTH was applied
+    /// at: the IAM token generation (see `IAMTokenManager::token_generation`) for
+    /// an IAM client, otherwise `CredentialsHandle::generation`. Per-connection
+    /// rather than on the shared `Client` since scoped connections are reused
+    /// independently.
+    pub last_auth_generation: AuthGeneration,
 }
 
 /// Per-client scope pool.
@@ -1425,9 +1475,7 @@ impl ScopePool {
                         // Idle: not borrowed, so no acquisition slot. Set per borrow.
                         acquisition_slot: None,
                         target: conn.target.clone(),
-                        last_iam_generation: AtomicU64::new(
-                            conn.last_iam_generation.load(Ordering::Relaxed),
-                        ),
+                        last_auth_generation: conn.last_auth_generation,
                     };
                     drop(conn);
                     self.idle.push_back(idle_conn);
@@ -1563,9 +1611,7 @@ impl ScopePool {
                                     // Idle: not borrowed, so no acquisition slot. Set per borrow.
                                     acquisition_slot: None,
                                     target: guard.target.clone(),
-                                    last_iam_generation: AtomicU64::new(
-                                        guard.last_iam_generation.load(Ordering::Relaxed),
-                                    ),
+                                    last_auth_generation: guard.last_auth_generation,
                                 };
                                 drop(guard);
 
@@ -1920,6 +1966,33 @@ mod client_pool_marking_tests {
         .expect("valid pool config")
     }
 
+    /// `reset_connection_state` must fail (so release discards the connection) when
+    /// DISCARD could not run while a MULTI was open — otherwise the connection is
+    /// reused with a still-open transaction and the next borrower's commands queue
+    /// into it. With no MULTI open, the DISCARD outcome is not load-bearing and is
+    /// ignored. Uses a lazy client to a dead port so DISCARD fails with a connection
+    /// error (not the expected "DISCARD without MULTI"), which must propagate.
+    #[tokio::test]
+    async fn reset_fails_when_discard_fails_with_multi_open() {
+        // No MULTI open: the DISCARD outcome is not load-bearing, so reset succeeds
+        // regardless of the connection error.
+        let mut no_multi = lazy_client().await;
+        assert!(
+            no_multi.reset_connection_state(0).await.is_ok(),
+            "a DISCARD error with no MULTI open must be ignored"
+        );
+
+        // MULTI open + a connection error (not "DISCARD without MULTI") means the
+        // transaction may still be open, so reset must fail and the caller discards
+        // the connection.
+        let mut multi_open = lazy_client().await;
+        multi_open.set_multi_active_for_test(true);
+        assert!(
+            multi_open.reset_connection_state(0).await.is_err(),
+            "a DISCARD failure with MULTI open must propagate so the connection is not reused"
+        );
+    }
+
     /// A client is not pool-managed until it enters the pool, and `add_client` must
     /// mark it at the ownership boundary — this pins the marking that Java and Node's
     /// Rust pool depend on (both reach the pool through `add_client`).
@@ -1981,6 +2054,104 @@ mod client_pool_marking_tests {
                 "allocate_client_id collided with a pooled id"
             );
         }
+    }
+
+    /// A pool configured for the warmup-reservation tests: short timeouts, no
+    /// live connections (warmup is simulated by the test, not dialed).
+    fn warmup_pool(max_size: u32, min_idle: u32) -> ClientPool {
+        ClientPool::new(PoolConfig {
+            max_size,
+            min_idle,
+            idle_timeout: Duration::from_secs(60),
+            request_timeout: Duration::from_secs(1),
+            test_on_borrow: false,
+            connection_request: Vec::new(),
+            is_async: true,
+            configured_database_id: 0,
+            abandon_timeout: Duration::from_secs(300),
+        })
+        .expect("valid pool config")
+    }
+
+    /// `reserve_warmup_slots` counts the warmed connections against `max_size` the
+    /// instant warmup is decided, never over-reserving past the bound.
+    #[test]
+    fn warmup_reservation_counts_against_max_size() {
+        let pool = warmup_pool(4, 4);
+        assert_eq!(pool.reserve_warmup_slots(4), 4, "all 4 warmup slots fit");
+        assert_eq!(
+            pool.total_count.load(std::sync::atomic::Ordering::Acquire),
+            4,
+            "total_count reflects the reservation immediately"
+        );
+        // A second request has no room — the bound is never exceeded.
+        assert_eq!(pool.reserve_warmup_slots(4), 0, "pool already at max_size");
+        assert_eq!(
+            pool.total_count.load(std::sync::atomic::Ordering::Acquire),
+            4
+        );
+    }
+
+    /// An acquirer racing the warmup window must not spawn an on-demand client
+    /// redundant with a warmup connection still in flight.
+    ///
+    /// The defect is purely in the accounting `should_create()` reads, so this models
+    /// it without the network. `run(reserve)` counts how many on-demand spawns
+    /// `should_create()` authorises during warmup: with `reserve=true` (the fix) the
+    /// pool reads as full and authorises none; with `reserve=false` (pre-fix) it keeps
+    /// returning true and authorises `max_size` surplus spawns. Both arms run here, so
+    /// the A-B lives in the test itself rather than depending on hand-editing the fix.
+    #[tokio::test]
+    async fn warmup_window_does_not_authorise_surplus_on_demand() {
+        let max_size = 4u32;
+
+        /// Returns how many on-demand spawns `should_create()` authorises during
+        /// warmup. With `reserve=true` the slots are reserved up front (fixed path)
+        /// so it authorises none; with `reserve=false` (pre-fix) it over-authorises.
+        // Mirrors the binding's fetch_add so a wrong spawn over-shoots.
+        async fn surplus_spawns_during_warmup(max_size: u32, reserve: bool) -> u32 {
+            let mut pool = warmup_pool(max_size, max_size);
+            if reserve {
+                assert_eq!(pool.reserve_warmup_slots(max_size), max_size);
+            }
+            let mut surplus = 0;
+            for _ in 0..16 {
+                if pool.try_acquire() < 0 && pool.should_create() {
+                    pool.total_count
+                        .fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+                    surplus += 1;
+                }
+            }
+            surplus
+        }
+
+        // A: pre-fix — warmup slots uncounted, so every racing acquirer over-creates.
+        assert_eq!(
+            surplus_spawns_during_warmup(max_size, false).await,
+            max_size,
+            "pre-fix: unreserved warmup window authorises max_size surplus spawns"
+        );
+
+        // B: fixed — reserved slots make the pool read as full, authorising none.
+        assert_eq!(
+            surplus_spawns_during_warmup(max_size, true).await,
+            0,
+            "no on-demand spawn may be authorised while warmup fills the pool"
+        );
+
+        // Warmup connections then land on the reserved slots and settle at max_size.
+        let mut pool = warmup_pool(max_size, max_size);
+        assert_eq!(pool.reserve_warmup_slots(max_size), max_size);
+        for _ in 0..max_size {
+            let client = lazy_client().await;
+            pool.add_client_reserved(client);
+        }
+        assert_eq!(
+            pool.total_count.load(std::sync::atomic::Ordering::Acquire),
+            max_size,
+            "after quiescing, total_count must settle at exactly max_size"
+        );
+        assert_eq!(pool.idle.len() as u32, max_size);
     }
 }
 
@@ -2161,6 +2332,8 @@ mod scope_pool_tests {
         loop {
             if let Ok(client) = redis::Client::open(format!("redis://127.0.0.1:{port}")) {
                 let opts = redis::GlideConnectionOptions {
+                    #[cfg(feature = "rdma")]
+                    rdma_fabric: None,
                     push_sender: None,
                     disconnect_notifier: None,
                     discover_az: false,
@@ -3368,6 +3541,184 @@ mod scope_pool_tests {
         crate::pool::get_client_scope_pools().remove(&client_id);
     }
 
+    /// A batch `SELECT` must move `current_database()` when the server applies it,
+    /// and must NOT move it when the server rejects it — the pool-release drift
+    /// check reads `current_database`, and scope connections handshake into it, so a
+    /// poisoned value breaks later acquires. Pins both the store-on-applied wiring in
+    /// `send_pipeline` and the reply-validation (`batch_reply_applied`) that rejects
+    /// an out-of-range SELECT returned inside an Ok array. Uses a real standalone
+    /// server (db 4 valid, db 99 out of range); the companion unit test covers the
+    /// dispatch-failure direction.
+    #[tokio::test]
+    async fn batch_select_moves_current_database_after_successful_dispatch() {
+        let server = TestServer::start();
+        wait_for_server_ready(server.port).await;
+
+        let mut client = {
+            let mut request = crate::client::ConnectionRequest::default();
+            request.addresses.push(crate::client::NodeAddress {
+                host: "127.0.0.1".into(),
+                port: server.port,
+                unix_socket_path: None,
+            });
+            crate::client::Client::new(request, None)
+                .await
+                .expect("client connects to the test server")
+        };
+        assert_eq!(client.current_database(), 0, "starts on db 0");
+
+        // Drift via a pipeline (non-atomic batch) rather than a bare SELECT.
+        let mut pipe = redis::pipe();
+        pipe.cmd("SELECT").arg(4).cmd("PING");
+        client
+            .send_pipeline(&pipe, None, false, None, Default::default())
+            .await
+            .expect("pipeline with SELECT 4 dispatches on a standalone server");
+        assert_eq!(
+            client.current_database(),
+            4,
+            "a successful batch SELECT must move current_database so release sees the drift"
+        );
+
+        // Drift back to db 0 via a second pipeline, confirming the tracking follows
+        // the last SELECT rather than latching the first.
+        let mut back = redis::pipe();
+        back.cmd("SELECT").arg(0).cmd("PING");
+        client
+            .send_pipeline(&back, None, false, None, Default::default())
+            .await
+            .expect("pipeline with SELECT 0 dispatches");
+        assert_eq!(client.current_database(), 0, "the last batch SELECT wins");
+
+        // A rejected SELECT must NOT move current_database: with raise_on_error=false
+        // an out-of-range `SELECT 99` comes back as a ServerError *inside* an Ok array,
+        // so the outer Result is Ok but the db was never applied. Storing it would
+        // poison every later scope acquire (they handshake SELECT <current_database>).
+        let mut bad = redis::pipe();
+        bad.cmd("SELECT").arg(99).cmd("PING");
+        let _ = client
+            .send_pipeline(&bad, None, false, None, Default::default())
+            .await;
+        assert_eq!(
+            client.current_database(),
+            0,
+            "a rejected SELECT reply must not move current_database"
+        );
+
+        // A SELECT merely *queued* inside a raw MULTI (no EXEC) replies QUEUED, not
+        // OK — the db never changed, so it must not move current_database either.
+        let mut queued = redis::pipe();
+        queued.cmd("MULTI").cmd("SELECT").arg(5);
+        let _ = client
+            .send_pipeline(&queued, None, false, None, Default::default())
+            .await;
+        assert_eq!(
+            client.current_database(),
+            0,
+            "a QUEUED (un-executed) SELECT must not move current_database"
+        );
+        // Close the dangling transaction so the connection is clean for drop.
+        let _ = client.send_command(&mut redis::cmd("DISCARD"), None).await;
+    }
+
+    /// `reset_connection_state` must restore the configured db when a SELECT may
+    /// have landed untracked — not only when `current_database` shows drift. An
+    /// earlier batch SELECT that the server applied, followed by a rejected one,
+    /// leaves the connection on the new db while `current_database` still reads the
+    /// configured value; the `db_maybe_dirty` flag is what makes release fail safe
+    /// here. A-B: without the flag (drift-only check) this leaks the wrong db.
+    #[tokio::test]
+    async fn release_restores_db_when_current_database_underreports() {
+        use redis::FromRedisValue as _;
+        let server = TestServer::start();
+        wait_for_server_ready(server.port).await;
+
+        let mut client = {
+            let mut request = crate::client::ConnectionRequest::default();
+            request.addresses.push(crate::client::NodeAddress {
+                host: "127.0.0.1".into(),
+                port: server.port,
+                unix_socket_path: None,
+            });
+            crate::client::Client::new(request, None)
+                .await
+                .expect("client connects to the test server")
+        };
+
+        // SELECT 3 applies; SELECT 99 is rejected. `last_select_db` sees only the
+        // last (99 → ServerError → not recorded), so current_database stays 0 while
+        // the connection is really on db 3.
+        let mut pipe = redis::pipe();
+        pipe.cmd("SELECT").arg(3).cmd("SELECT").arg(99);
+        let _ = client
+            .send_pipeline(&pipe, None, false, None, Default::default())
+            .await;
+        assert_eq!(
+            client.current_database(),
+            0,
+            "current_database under-reports: it still reads the configured db"
+        );
+
+        // Confirm the connection really drifted to db 3.
+        let info_before = client
+            .send_command(redis::cmd("CLIENT").arg("INFO"), None)
+            .await
+            .expect("CLIENT INFO");
+        let info_before = String::from_redis_value(&info_before).unwrap_or_default();
+        assert!(
+            info_before.contains(" db=3"),
+            "connection should be on db 3 after the applied SELECT, got: {info_before}"
+        );
+
+        // Release reset must restore db 0 despite no tracked drift, driven by the
+        // db_maybe_dirty flag.
+        client
+            .reset_connection_state(0)
+            .await
+            .expect("reset restores the configured db");
+        let info_after = client
+            .send_command(redis::cmd("CLIENT").arg("INFO"), None)
+            .await
+            .expect("CLIENT INFO");
+        let info_after = String::from_redis_value(&info_after).unwrap_or_default();
+        assert!(
+            info_after.contains(" db=0"),
+            "reset must restore db 0 even though current_database showed no drift, got: {info_after}"
+        );
+    }
+
+    /// A "DISCARD without MULTI" reply must be tolerated even with `multi_active`
+    /// set — the cluster case, where a successful AllNodes DISCARD still aggregates
+    /// to that error (see `reset_connection_state`). A standalone server with no
+    /// MULTI open stands in for the reply. A-B validated: the old `is_err()` gate
+    /// discarded the connection here.
+    #[tokio::test]
+    async fn reset_ignores_discard_without_multi_even_when_multi_flag_set() {
+        let server = TestServer::start();
+        wait_for_server_ready(server.port).await;
+
+        let mut client = {
+            let mut request = crate::client::ConnectionRequest::default();
+            request.addresses.push(crate::client::NodeAddress {
+                host: "127.0.0.1".into(),
+                port: server.port,
+                unix_socket_path: None,
+            });
+            crate::client::Client::new(request, None)
+                .await
+                .expect("client connects to the test server")
+        };
+
+        // The tracker believes a MULTI is open, but the connection has none, so the
+        // server's DISCARD replies "DISCARD without MULTI" — the expected, ignorable
+        // error. Reset must still succeed (connection is clean, reusable).
+        client.set_multi_active_for_test(true);
+        client
+            .reset_connection_state(0)
+            .await
+            .expect("a DISCARD-without-MULTI reply must be ignored, not propagated");
+    }
+
     /// End-to-end through the FFI entry `acquire_scope_outcome`, exercising the glue the
     /// direct-call tests skip: that a non-zero parent `current_database()` is actually
     /// read from the client registry, that a wrong-db idle connection drives the
@@ -3610,6 +3961,8 @@ mod scope_pool_tests {
             loop {
                 if let Ok(client) = redis::Client::open(format!("redis://[::1]:{}", server.port)) {
                     let opts = redis::GlideConnectionOptions {
+                        #[cfg(feature = "rdma")]
+                        rdma_fabric: None,
                         push_sender: None,
                         disconnect_notifier: None,
                         discover_az: false,
@@ -4060,6 +4413,38 @@ mod client_pool_tests {
         let entry = pool.take_for_release(client_id).expect("in_use");
         pool.return_to_idle(entry);
         client_id
+    }
+
+    /// A pool is not supported with RDMA, so a pool whose clients would request it
+    /// must be refused before any client is created.
+    #[cfg(feature = "proto")]
+    #[test]
+    fn new_rejects_a_request_with_rdma() {
+        use protobuf::Message as _;
+        let mut request = crate::connection_request::ConnectionRequest::new();
+        request.rdma_config = Some(Default::default()).into();
+        let mut config = test_pool_config(Duration::from_secs(5));
+        config.connection_request = request.write_to_bytes().unwrap();
+
+        match ClientPool::new(config) {
+            Err(PoolError::InvalidConfig(message)) => assert!(
+                message.starts_with("RDMA cannot be combined with connection pooling"),
+                "{message}"
+            ),
+            Err(other) => panic!("unexpected error: {other}"),
+            Ok(_) => panic!("a pool with RDMA should be rejected"),
+        }
+    }
+
+    #[cfg(feature = "proto")]
+    #[test]
+    fn new_accepts_a_request_without_rdma() {
+        use protobuf::Message as _;
+        let request = crate::connection_request::ConnectionRequest::new();
+        let mut config = test_pool_config(Duration::from_secs(5));
+        config.connection_request = request.write_to_bytes().unwrap();
+
+        assert!(ClientPool::new(config).is_ok());
     }
 
     #[test]

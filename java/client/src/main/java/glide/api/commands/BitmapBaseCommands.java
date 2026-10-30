@@ -59,7 +59,7 @@ public interface BitmapBaseCommands {
      * number indicating offsets starting at the end of the list, with <code>-1</code> being the last
      * byte of the list, <code>-2</code> being the penultimate, and so on.
      *
-     * @since Valkey 8.0 and above
+     * @since Valkey 8.0.0
      * @see <a href="https://valkey.io/commands/bitcount/">valkey.io</a> for details.
      * @param key The key for the string to count the set bits of.
      * @param start The starting offset byte index.
@@ -80,7 +80,7 @@ public interface BitmapBaseCommands {
      * number indicating offsets starting at the end of the list, with <code>-1</code> being the last
      * byte of the list, <code>-2</code> being the penultimate, and so on.
      *
-     * @since Valkey 8.0 and above
+     * @since Valkey 8.0.0
      * @see <a href="https://valkey.io/commands/bitcount/">valkey.io</a> for details.
      * @param key The key for the string to count the set bits of.
      * @param start The starting offset byte index.
@@ -146,7 +146,7 @@ public interface BitmapBaseCommands {
      * <code>-1</code> being the last element of the list, <code>-2</code> being the penultimate, and
      * so on.
      *
-     * @since Valkey 7.0 and above
+     * @since Valkey 7.0.0
      * @see <a href="https://valkey.io/commands/bitcount/">valkey.io</a> for details.
      * @param key The key for the string to count the set bits of.
      * @param start The starting offset.
@@ -172,7 +172,7 @@ public interface BitmapBaseCommands {
      * <code>-1</code> being the last element of the list, <code>-2</code> being the penultimate, and
      * so on.
      *
-     * @since Valkey 7.0 and above
+     * @since Valkey 7.0.0
      * @see <a href="https://valkey.io/commands/bitcount/">valkey.io</a> for details.
      * @param key The key for the string to count the set bits of.
      * @param start The starting offset.
@@ -416,7 +416,7 @@ public interface BitmapBaseCommands {
      * offsets starting at the end of the list, with <code>-1</code> being the last element of the
      * list, <code>-2</code> being the penultimate, and so on.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/bitpos/">valkey.io</a> for details.
      * @param key The key of the string.
      * @param bit The bit value to match. The value must be <code>0</code> or <code>1</code>.
@@ -448,7 +448,7 @@ public interface BitmapBaseCommands {
      * offsets starting at the end of the list, with <code>-1</code> being the last element of the
      * list, <code>-2</code> being the penultimate, and so on.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/bitpos/">valkey.io</a> for details.
      * @param key The key of the string.
      * @param bit The bit value to match. The value must be <code>0</code> or <code>1</code>.
@@ -601,7 +601,6 @@ public interface BitmapBaseCommands {
      * specified <code>subCommands</code>.<br>
      * This command is routed depending on the client's {@link ReadFrom} strategy.
      *
-     * @since Valkey 6.0 and above
      * @see <a href="https://valkey.io/commands/bitfield_ro/">valkey.io</a> for details.
      * @param key The key of the string.
      * @param subCommands The <code>GET</code> subCommands to be performed.
@@ -627,7 +626,6 @@ public interface BitmapBaseCommands {
      * specified <code>subCommands</code>.<br>
      * This command is routed depending on the client's {@link ReadFrom} strategy.
      *
-     * @since Valkey 6.0 and above
      * @see <a href="https://valkey.io/commands/bitfield_ro/">valkey.io</a> for details.
      * @param key The key of the string.
      * @param subCommands The <code>GET</code> subCommands to be performed.

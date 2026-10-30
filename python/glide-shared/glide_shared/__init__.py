@@ -48,8 +48,10 @@ from .commands.core_options import (
     MigrateOptions,
     MonitorMsg,
     OnlyIfEqual,
+    OnlyIfNotEqual,
     PubSubMsg,
     UpdateOptions,
+    ValueComparison,
 )
 from .commands.latency import LatencyEntry, LatencyEventInfo
 from .commands.memory import MemoryStats, MemoryStatsDb
@@ -64,6 +66,8 @@ from .commands.server_modules.ft_options.ft_aggregate_options import (
     FtAggregateReducer,
     FtAggregateSortBy,
     FtAggregateSortProperty,
+    FtWithCursor,
+    LoadField,
 )
 from .commands.server_modules.ft_options.ft_create_options import (
     DataType,
@@ -80,6 +84,17 @@ from .commands.server_modules.ft_options.ft_create_options import (
     VectorFieldAttributesFlat,
     VectorFieldAttributesHnsw,
     VectorType,
+)
+from .commands.server_modules.ft_options.ft_hybrid_options import (
+    FtHybridCombine,
+    FtHybridFunction,
+    FtHybridLinear,
+    FtHybridOptions,
+    FtHybridRrf,
+    FtHybridSearchArm,
+    FtHybridVsimArm,
+    FtHybridVsimFilter,
+    HybridFilterPolicy,
 )
 from .commands.server_modules.ft_options.ft_profile_options import (
     FtProfileOptions,
@@ -280,6 +295,7 @@ __all__ = [
     "ConditionalChange",
     "HashFieldConditionalChange",
     "OnlyIfEqual",
+    "OnlyIfNotEqual",
     "ExpireOptions",
     "ExpiryGetEx",
     "ExpirySet",
@@ -325,6 +341,7 @@ __all__ = [
     "TrimByMaxLen",
     "TrimByMinId",
     "UpdateOptions",
+    "ValueComparison",
     # PubSub
     "PubSubMsg",
     "ALL_CHANNELS",
@@ -387,6 +404,17 @@ __all__ = [
     "FtAggregateReducer",
     "FtAggregateSortBy",
     "FtAggregateSortProperty",
+    "FtWithCursor",
+    "LoadField",
+    "FtHybridCombine",
+    "FtHybridFunction",
+    "FtHybridLinear",
+    "FtHybridOptions",
+    "FtHybridRrf",
+    "FtHybridSearchArm",
+    "FtHybridVsimArm",
+    "FtHybridVsimFilter",
+    "HybridFilterPolicy",
     "FtProfileOptions",
     "QueryType",
     # OpenTelemetry

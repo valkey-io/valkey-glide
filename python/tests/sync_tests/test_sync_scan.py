@@ -49,7 +49,7 @@ def is_cluster_ready(client: GlideClusterClient, count: int) -> bool:
             ):
                 break
 
-        time.sleep(2)
+        time.sleep(0.2)
 
     return True
 

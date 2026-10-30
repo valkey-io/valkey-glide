@@ -50,7 +50,7 @@ async def is_cluster_ready(client: GlideClusterClient, count: int) -> bool:
             ):
                 break
 
-        await anyio.sleep(2)
+        await anyio.sleep(0.2)
 
     return True
 

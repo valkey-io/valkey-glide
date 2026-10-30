@@ -30,7 +30,7 @@
 //! [`execute_scope_command`]) so every queued command reaches the server and its
 //! own EXECABORT governs the transaction, as on the non-scoped path.
 
-use crate::client::Client;
+use crate::client::{AuthGeneration, Client};
 use crate::errors::RequestErrorType;
 use crate::pool::{
     ScopedConnection, get_client_scope_pools, get_scope_registry, slot_for_key,
@@ -230,7 +230,7 @@ fn slot_of_unanimous_keys(keys: &[&[u8]]) -> ScopeSlot {
 /// - `cmd_name`: The command name (e.g., "GET", "SET", "WATCH")
 /// - `args`: Command arguments as byte slices
 /// - `client`: The parent Client. `None` sends the command raw — no timeout, no
-///   decompression and no IAM re-authentication — which is only useful for tests
+///   decompression and no rotation re-authentication — which is only useful for tests
 ///   that need to observe a connection's state before any re-auth can mask it.
 ///
 /// # Returns
@@ -241,6 +241,7 @@ pub async fn execute_scope_command(
     args: &[Vec<u8>],
     client: Option<&Client>,
 ) -> RedisResult<Value> {
+    crate::rdma::refuse_direct(cmd_name.as_bytes())?;
     let registry = get_scope_registry();
     let entry = match registry.get(&scope_id) {
         Some(e) => e.connection.clone(),
@@ -330,13 +331,13 @@ pub async fn execute_scope_command(
         Some(c) => {
             let ScopedConnection {
                 connection,
-                last_iam_generation,
+                last_auth_generation,
                 ..
             } = &mut *conn;
             c.send_command_on_connection(
                 &cmd,
                 connection,
-                last_iam_generation,
+                last_auth_generation,
                 multi_active_before_command || subscribed_before_command,
             )
             .await
@@ -493,6 +494,9 @@ pub enum ScopeCreateError {
     ConnectTimedOut,
     /// IAM is configured on the parent but no token is currently available.
     IamTokenUnavailable,
+    /// IAM authentication is configured but TLS is disabled. An IAM token is a
+    /// bearer credential and must never be sent over plaintext TCP.
+    IamRequiresTls,
     /// The AUTH/SELECT/CLIENT SETNAME init pipeline failed.
     InitFailed(RedisError),
     /// The init pipeline did not complete within `SCOPE_CONNECT_TIMEOUT`.
@@ -519,6 +523,7 @@ pub enum ScopeCreateErrorKind {
     ConnectFailed,
     ConnectTimedOut,
     IamTokenUnavailable,
+    IamRequiresTls,
     InitFailed,
     InitTimedOut,
     PoolClosed,
@@ -539,6 +544,7 @@ impl ScopeCreateErrorKind {
             | Self::NoSeedAddress
             | Self::InvalidClusterTarget
             | Self::InvalidUnixSocketAddress => Some(ScopeFailCause::InvalidConfiguration),
+            Self::IamRequiresTls => Some(ScopeFailCause::IamRequiresTls),
             Self::ParentCertMaterialUnavailable => {
                 Some(ScopeFailCause::ParentCertMaterialUnavailable)
             }
@@ -571,6 +577,7 @@ impl ScopeCreateError {
             Self::ConnectFailed(_) => ScopeCreateErrorKind::ConnectFailed,
             Self::ConnectTimedOut => ScopeCreateErrorKind::ConnectTimedOut,
             Self::IamTokenUnavailable => ScopeCreateErrorKind::IamTokenUnavailable,
+            Self::IamRequiresTls => ScopeCreateErrorKind::IamRequiresTls,
             Self::InitFailed(_) => ScopeCreateErrorKind::InitFailed,
             Self::InitTimedOut => ScopeCreateErrorKind::InitTimedOut,
             Self::PoolClosed => ScopeCreateErrorKind::PoolClosed,
@@ -598,6 +605,9 @@ impl std::fmt::Display for ScopeCreateError {
             Self::ConnectFailed(e) => write!(f, "connect failed: {e}"),
             Self::ConnectTimedOut => write!(f, "connect timed out after {SCOPE_CONNECT_TIMEOUT:?}"),
             Self::IamTokenUnavailable => f.write_str("IAM token unavailable; cannot AUTH"),
+            Self::IamRequiresTls => f.write_str(
+                "IAM authentication requires TLS; refusing to send an IAM token over a plaintext connection",
+            ),
             Self::InitFailed(e) => write!(f, "init pipeline failed: {e}"),
             Self::InitTimedOut => {
                 write!(f, "init pipeline timed out after {SCOPE_CONNECT_TIMEOUT:?}")
@@ -613,8 +623,11 @@ struct PreparedScopeConnection {
     connection: redis::aio::MultiplexedConnection,
     /// Database the connection was SELECTed into (parent runtime DB, else config).
     database_id: u32,
-    /// IAM token generation the initial AUTH was built from (0 when IAM is not in use).
-    initial_iam_generation: u64,
+    /// Credential generation the initial AUTH was built from: the IAM token
+    /// generation for an IAM client, otherwise `CredentialsHandle::generation`
+    /// (`AuthGeneration::NEVER` when the credentials came from the request bytes,
+    /// i.e. no owning Client was passed).
+    initial_auth_generation: AuthGeneration,
 }
 
 /// Strip surrounding `[ ]` from an IPv6 host. A bracketed literal is a URL-authority
@@ -728,6 +741,15 @@ async fn build_scope_connection(
         .tls_mode
         .enum_value()
         .unwrap_or(crate::connection_request::TlsMode::SecureTls);
+    // An IAM token is a bearer credential: never transmit it over plaintext. When
+    // the parent authenticates as an IAM identity, reject a no-TLS scope before any
+    // connect or token fetch, so a misconfigured scope fails closed instead of
+    // leaking the token in a cleartext AUTH on the first command / reconnect.
+    if tls_mode == crate::connection_request::TlsMode::NoTls
+        && client.and_then(|c| c.iam_token_manager()).is_some()
+    {
+        return Err(ScopeCreateError::IamRequiresTls);
+    }
     let tls_params = inherited_tls_params(client).await;
     // The parent configured certificate material, but none is reachable yet (a
     // lazy parent that has not connected). Connecting would downgrade to system
@@ -786,6 +808,9 @@ async fn build_scope_connection(
     })
     .map_err(ScopeCreateError::ClientOpenFailed)?;
     let opts = redis::GlideConnectionOptions {
+        // An isolated scope's connection never carries a transfer.
+        #[cfg(feature = "rdma")]
+        rdma_fabric: None,
         push_sender: None,
         disconnect_notifier: None,
         discover_az: false,
@@ -817,32 +842,42 @@ async fn build_scope_connection(
     let mut init_count = 0;
 
     // Generation observed at AUTH-build time, so send_command_on_connection can
-    // detect whether the token has rotated again since this connection's initial
-    // AUTH (rather than always re-authenticating on the very first command, or
-    // missing a rotation that lands between here and the first command).
-    let mut initial_iam_generation: u64 = 0;
+    // detect whether the credential has rotated again since this connection's
+    // initial AUTH (rather than always re-authenticating on the very first
+    // command, or missing a rotation that lands between here and the first
+    // command).
+    let mut initial_auth_generation = AuthGeneration::NEVER;
 
     // AUTH: IAM authentication takes priority when configured on the parent client
-    // (matching the documented priority in `AuthenticationInfo`'s doc comment), otherwise
-    // fall back to the protobuf-configured password/username.
+    // (matching the documented priority in `AuthenticationInfo`'s doc comment).
+    // Otherwise the owning Client's current credentials: the request bytes are
+    // the pool's first-acquire snapshot and never see a later
+    // `update_connection_password`. Only the raw test path, which has no Client,
+    // reads them.
     if let Some(manager) = client.and_then(|c| c.iam_token_manager()) {
         // Read the generation before the token: if a refresh lands in this gap,
-        // `initial_iam_generation` records the (now-stale) pre-refresh generation,
+        // `initial_auth_generation` records the (now-stale) pre-refresh generation,
         // so the mismatch on the first scope command still triggers a
         // reauthentication. Reading generation after the token could otherwise
         // suppress it — a refresh landing there would mean the initial AUTH used
         // the old token, but the recorded generation already matches the new one.
-        let generation_before_auth = manager.token_generation();
+        let generation_before_auth = AuthGeneration::from_source(manager.token_generation());
         let current_token = manager.get_token().await;
         if current_token.is_empty() {
             return Err(ScopeCreateError::IamTokenUnavailable);
         }
-        initial_iam_generation = generation_before_auth;
+        initial_auth_generation = generation_before_auth;
         init_pipe
             .cmd("AUTH")
             .arg(manager.username())
             .arg(current_token.as_str());
         init_count += 1;
+    } else if let Some(handle) = client.map(|c| c.credentials()) {
+        initial_auth_generation = handle.generation();
+        if let Some(auth_cmd) = handle.current().auth_command() {
+            init_pipe.add_command(auth_cmd);
+            init_count += 1;
+        }
     } else if let Some(ref auth_info) = proto.authentication_info.0 {
         let password = &auth_info.password;
         let username = &auth_info.username;
@@ -911,7 +946,7 @@ async fn build_scope_connection(
     Ok(PreparedScopeConnection {
         connection: conn,
         database_id,
-        initial_iam_generation,
+        initial_auth_generation,
     })
 }
 
@@ -970,9 +1005,7 @@ pub async fn create_scope_connection(
                 // a borrow picks it up.
                 acquisition_slot: None,
                 target,
-                last_iam_generation: std::sync::atomic::AtomicU64::new(
-                    prepared.initial_iam_generation,
-                ),
+                last_auth_generation: prepared.initial_auth_generation,
             });
             reservation.commit();
             Ok(())
@@ -1034,6 +1067,10 @@ pub enum ScopeFailCause {
     /// The stored connection request cannot produce a scoped connection
     /// (unparseable, no seed address, invalid `lib_name` or cluster target).
     InvalidConfiguration,
+    /// IAM authentication is configured but the scope request disables TLS. Kept
+    /// distinct from `InvalidConfiguration` so the borrower-facing error names
+    /// the TLS requirement instead of a generic configuration failure.
+    IamRequiresTls,
     /// The pool is closing or closed; it will not serve again.
     PoolClosed,
 }
@@ -1138,7 +1175,8 @@ impl ScopeAcquireError {
             }
             Self::Terminal(
                 ScopeFailCause::ParentCertMaterialUnavailable
-                | ScopeFailCause::InvalidConfiguration,
+                | ScopeFailCause::InvalidConfiguration
+                | ScopeFailCause::IamRequiresTls,
             ) => RequestErrorType::Unspecified,
         }
     }
@@ -1190,6 +1228,9 @@ impl std::fmt::Display for ScopeFailCause {
             Self::InvalidConfiguration => {
                 f.write_str("connection configuration cannot produce a scoped connection")
             }
+            Self::IamRequiresTls => f.write_str(
+                "IAM authentication requires TLS; refusing to send an IAM token over a plaintext connection",
+            ),
             Self::PoolClosed => f.write_str("scope pool is closed"),
         }
     }
@@ -3616,6 +3657,77 @@ mod tests {
         assert!(
             !matches!(err, ScopeCreateError::ParentCertMaterialUnavailable),
             "system-trust TLS must still be allowed, got: {err}"
+        );
+    }
+
+    /// Fake AWS credentials so `IAMTokenManager::new` can locally sign a SigV4
+    /// token without reaching real AWS.
+    fn setup_iam_test_credentials() {
+        unsafe {
+            std::env::set_var("AWS_ACCESS_KEY_ID", "test_access_key");
+            std::env::set_var("AWS_SECRET_ACCESS_KEY", "test_secret_key");
+            std::env::set_var("AWS_SESSION_TOKEN", "test_session_token");
+        }
+    }
+
+    /// A lazy IAM parent built the way production does — `Client::new` with IAM
+    /// config and TLS enabled. This is the reachable state the scope guard defends
+    /// against: a TLS IAM parent whose scope request disables TLS. (A no-TLS IAM
+    /// parent cannot exist: `Client::new` rejects it.)
+    async fn lazy_iam_parent() -> Client {
+        setup_iam_test_credentials();
+        let request = ClientRequest {
+            addresses: vec![ClientAddress {
+                host: "127.0.0.1".to_string(),
+                port: 1,
+                unix_socket_path: None,
+            }],
+            lazy_connect: true,
+            tls_mode: Some(crate::client::TlsMode::SecureTls),
+            authentication_info: Some(crate::client::AuthenticationInfo {
+                username: Some("iam-test-user".to_string()),
+                password: None,
+                iam_config: Some(crate::client::IamAuthenticationConfig {
+                    cluster_name: "test-cluster".to_string(),
+                    region: "us-east-1".to_string(),
+                    service_type: crate::iam::ServiceType::ElastiCache,
+                    refresh_interval_seconds: None,
+                    credentials_provider: None,
+                }),
+            }),
+            ..Default::default()
+        };
+        Client::new(request, None)
+            .await
+            .expect("lazy IAM client construction does not touch the network")
+    }
+
+    /// A scope off an IAM parent whose request disables TLS must fail with
+    /// `IamRequiresTls` before obtaining or sending the token.
+    #[tokio::test]
+    async fn scope_rejects_iam_over_plaintext() {
+        let parent = lazy_iam_parent().await;
+
+        // `request_bytes` builds a standalone NoTls request (no tls_mode set).
+        let err = scope_connect_error(&parent, &request_bytes("GlideRust", 1)).await;
+        assert!(
+            matches!(err, ScopeCreateError::IamRequiresTls),
+            "IAM + NoTls scope must fail closed, got: {err}"
+        );
+    }
+
+    /// A-B companion: without an IAM manager, the same NoTls scope request is NOT
+    /// rejected by the IAM guard (it proceeds to the connect attempt and fails
+    /// there, since nothing listens on the seed port). This proves the guard keys
+    /// on IAM, not merely on `NoTls`.
+    #[tokio::test]
+    async fn scope_allows_plaintext_without_iam() {
+        let parent = lazy_parent(false).await;
+
+        let err = scope_connect_error(&parent, &request_bytes("GlideRust", 1)).await;
+        assert!(
+            !matches!(err, ScopeCreateError::IamRequiresTls),
+            "a non-IAM plaintext scope must not hit the IAM/TLS guard, got: {err}"
         );
     }
 

@@ -185,23 +185,75 @@ func (suite *GlideTestSuite) TestSetWithOptions_OnlyIfEquals() {
 	suite.SkipIfServerVersionLowerThan("8.1.0", suite.T())
 	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
 		key := uuid.New().String()
-		suite.verifyOK(client.Set(context.Background(), key, initialValue))
+		suite.verifyOK(client.Set(context.Background(), key, "value"))
 
-		// successful set
-		opts := options.NewSetOptions().SetOnlyIfEquals(initialValue)
-		result, err := client.SetWithOptions(context.Background(), key, anotherValue, *opts)
+		// Value not equal
+		opts := options.NewSetOptions().SetOnlyIfEquals("other")
+		result, err := client.SetWithOptions(context.Background(), key, "other", *opts)
+		suite.NoError(err)
+		assert.True(suite.T(), result.IsNil())
+
+		result, err = client.Get(context.Background(), key)
+		suite.NoError(err)
+		assert.Equal(suite.T(), "value", result.Value())
+
+		// Value equal
+		opts = options.NewSetOptions().SetOnlyIfEquals("value")
+		result, err = client.SetWithOptions(context.Background(), key, "other", *opts)
 		suite.NoError(err)
 		assert.Equal(suite.T(), "OK", result.Value())
 
 		result, err = client.Get(context.Background(), key)
 		suite.NoError(err)
-		assert.Equal(suite.T(), anotherValue, result.Value())
+		assert.Equal(suite.T(), "other", result.Value())
 
-		// unsuccessful set
-		opts = options.NewSetOptions().SetOnlyIfEquals(initialValue)
-		result, err = client.SetWithOptions(context.Background(), key, initialValue, *opts)
+		// Non-existent key
+		missing := uuid.New().String()
+		result, err = client.SetWithOptions(context.Background(), missing, "value", *opts)
 		suite.NoError(err)
 		assert.True(suite.T(), result.IsNil())
+
+		exists, err := client.Exists(context.Background(), []string{missing})
+		suite.NoError(err)
+		assert.Equal(suite.T(), int64(0), exists)
+	})
+}
+
+func (suite *GlideTestSuite) TestSetWithOptions_OnlyIfNotEquals() {
+	suite.SkipIfServerVersionLowerThan("9.2.0", suite.T())
+	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
+		key := uuid.New().String()
+		suite.verifyOK(client.Set(context.Background(), key, "value"))
+
+		// Value equal
+		opts := options.NewSetOptions().SetOnlyIfNotEquals("value")
+		result, err := client.SetWithOptions(context.Background(), key, "other", *opts)
+		suite.NoError(err)
+		assert.True(suite.T(), result.IsNil())
+
+		result, err = client.Get(context.Background(), key)
+		suite.NoError(err)
+		assert.Equal(suite.T(), "value", result.Value())
+
+		// Value not equal
+		opts = options.NewSetOptions().SetOnlyIfNotEquals("other")
+		result, err = client.SetWithOptions(context.Background(), key, "other", *opts)
+		suite.NoError(err)
+		assert.Equal(suite.T(), "OK", result.Value())
+
+		result, err = client.Get(context.Background(), key)
+		suite.NoError(err)
+		assert.Equal(suite.T(), "other", result.Value())
+
+		// Non-existent key
+		missing := uuid.New().String()
+		result, err = client.SetWithOptions(context.Background(), missing, "value", *opts)
+		suite.NoError(err)
+		assert.Equal(suite.T(), "OK", result.Value())
+
+		result, err = client.Get(context.Background(), missing)
+		suite.NoError(err)
+		assert.Equal(suite.T(), "value", result.Value())
 	})
 }
 
@@ -571,6 +623,36 @@ func (suite *GlideTestSuite) TestAppend_existingAndNonExistingKeys() {
 		res1, err = client.Get(context.Background(), key)
 		suite.NoError(err)
 		assert.Equal(suite.T(), value1+value2, res1.Value())
+	})
+}
+
+func (suite *GlideTestSuite) TestDelIfEq() {
+	suite.SkipIfServerVersionLowerThan("9.0.0", suite.T())
+
+	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
+		key := uuid.New().String()
+		value := uuid.New().String()
+		wrongValue := uuid.New().String()
+
+		res, err := client.DelIfEq(context.Background(), key, value)
+		suite.NoError(err)
+		assert.False(suite.T(), res)
+
+		suite.verifyOK(client.Set(context.Background(), key, value))
+
+		res, err = client.DelIfEq(context.Background(), key, wrongValue)
+		suite.NoError(err)
+		assert.False(suite.T(), res)
+		res1, err := client.Get(context.Background(), key)
+		suite.NoError(err)
+		assert.Equal(suite.T(), value, res1.Value())
+
+		res, err = client.DelIfEq(context.Background(), key, value)
+		suite.NoError(err)
+		assert.True(suite.T(), res)
+		res1, err = client.Get(context.Background(), key)
+		suite.NoError(err)
+		assert.True(suite.T(), res1.IsNil())
 	})
 }
 

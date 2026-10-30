@@ -28,8 +28,8 @@ from glide_shared.commands.core_options import (
     HashFieldConditionalChange,
     InsertPosition,
     MigrateOptions,
-    OnlyIfEqual,
     UpdateOptions,
+    ValueComparison,
     _build_hsetex_args,
     _build_sort_args,
 )
@@ -282,32 +282,28 @@ class CoreCommands(Protocol):
         self,
         key: TEncodable,
         value: TEncodable,
-        conditional_set: Optional[Union[ConditionalChange, OnlyIfEqual]] = None,
+        conditional_set: Optional[Union[ConditionalChange, ValueComparison]] = None,
         expiry: Optional[ExpirySet] = None,
         return_old_value: bool = False,
     ) -> Optional[Union[TOK, bytes]]:
         """
-        Set the given key with the given value. Return value is dependent on the passed options.
+        Set the value of a key with the given options.
 
         See [valkey.io](https://valkey.io/commands/set/) for more details.
 
         Args:
             key (TEncodable): the key to store.
             value (TEncodable): the value to store with the given key.
-            conditional_set (Optional[ConditionalChange], optional): set the key only if the given condition is met.
-                Equivalent to [`XX` | `NX` | `IFEQ` comparison-value] in the Valkey API. Defaults to None.
-            expiry (Optional[ExpirySet], optional): set expiriation to the given key.
-                Equivalent to [`EX` | `PX` | `EXAT` | `PXAT` | `KEEPTTL`] in the Valkey API. Defaults to None.
-            return_old_value (bool, optional): Return the old value stored at key, or None if key did not exist.
-                An error is returned and SET aborted if the value stored at key is not a string.
-                Equivalent to `GET` in the Valkey API. Defaults to False.
+            conditional_set (Optional[Union[ConditionalChange, ValueComparison]]): set the key only if the
+                given condition is met. Defaults to None.
+            expiry (Optional[ExpirySet]): set expiration to the given key. Defaults to None.
+            return_old_value (bool): Return the old value stored at key, or None if key did not exist.
+                An error is returned and SET aborted if the value stored at key is not a string. Defaults to False.
 
         Returns:
-            Optional[Union[TOK, bytes]]: If the value is successfully set, return OK (a `str`).
-
-            If value isn't set because of `only_if_exists` or `only_if_does_not_exist` conditions, return `None`.
-
-            If return_old_value is set, return the old value as a bytes string.
+            Optional[Union[TOK, bytes]]: If `return_old_value` is false, return "OK" if the value was set, or `None`
+            if it was not. If `return_old_value` is true, return the previous value as `bytes`, or `None` if the key
+            did not exist.
 
         Example:
             >>> client.set(b"key", b"value")
@@ -334,22 +330,23 @@ class CoreCommands(Protocol):
                 # ONLY_IF_EQUAL -> Only set key if provided value is equal to current value of the key
             >>> client.set("key", "value")
                 'OK' # Reset "key" to "value"
-            >>> client.set("key", "new_value", conditional_set=OnlyIfEqual("different_value")
-                'None' # Did not rewrite value of "key" because provided value was not equal to the previous value of "key"
+            >>> client.set("key", "new_value", conditional_set=OnlyIfEqual("different_value"))
+                None # Did not rewrite value of "key" because provided value was not equal to the previous value of "key"
             >>> client.get("key")
                 b'value' # Still the original value because nothing got rewritten in the last call
-            >>> client.set("key", "new_value", conditional_set=OnlyIfEqual("value")
+            >>> client.set("key", "new_value", conditional_set=OnlyIfEqual("value"))
                 'OK'
             >>> client.get("key")
-                b'newest_value" # Set "key" to "new_value" because the provided value was equal to the previous value of "key"
+                b'new_value' # Set "key" to "new_value" because the provided value was equal to the previous value of "key"
+                # ONLY_IF_NOT_EQUAL -> Only set key if provided value is not equal to current value of the key
+            >>> client.set("key", "newest_value", conditional_set=OnlyIfNotEqual("new_value"))
+                None # Did not rewrite value of "key" because provided value was equal to the current value of "key"
+            >>> client.set("key", "newest_value", conditional_set=OnlyIfNotEqual("value"))
+                'OK' # Set "key" to "newest_value" because provided value was not equal to the current value of "key"
         """
         args = [key, value]
-        if isinstance(conditional_set, ConditionalChange):
-            args.append(conditional_set.value)
-
-        elif isinstance(conditional_set, OnlyIfEqual):
-            args.extend(["IFEQ", conditional_set.comparison_value])
-
+        if conditional_set is not None:
+            args.extend(conditional_set._to_args())
         if return_old_value:
             args.append("GET")
         if expiry is not None:
@@ -481,6 +478,32 @@ class CoreCommands(Protocol):
                 b"Hello world"  # Returns the value stored in "key", which is now "Hello world".
         """
         return cast(int, self._execute_command(RequestType.Append, [key, value]))
+
+    def delifeq(self, key: TEncodable, value: TEncodable) -> bool:
+        """
+        Deletes `key` if its value equals `value`.
+
+        Since: Valkey 9.0.0.
+
+        See [valkey.io](https://valkey.io/commands/delifeq) for more details.
+
+        Args:
+            key (TEncodable): The key to delete.
+            value (TEncodable): The comparison value. The key is only deleted if its current value
+                matches `value` exactly.
+
+        Returns:
+            bool: True if `key` was deleted. False if `key` did not exist or its value did not match
+                `value`.
+
+        Examples:
+            >>> client.set("key", "value")
+            >>> client.delifeq("key", "wrong_value")
+                False
+            >>> client.delifeq("key", "value")
+                True
+        """
+        return cast(bool, self._execute_command(RequestType.DelIfEq, [key, value]))
 
     def strlen(self, key: TEncodable) -> int:
         """
@@ -1996,7 +2019,7 @@ class CoreCommands(Protocol):
             >>> client.lmpop(["testKey"], ListDirection.LEFT, 2)
                {b"testKey": [b"three", b"two"]}
 
-        Since: Valkey version 7.0.0.
+        Since: Valkey 7.0.0.
         """
         args = [str(len(keys)), *keys, direction.value]
         if count is not None:
@@ -2046,7 +2069,7 @@ class CoreCommands(Protocol):
             >>> client.blmpop(["testKey"], ListDirection.LEFT, 0.1, 2)
                {b"testKey": [b"three", b"two"]}
 
-        Since: Valkey version 7.0.0.
+        Since: Valkey 7.0.0.
         """
         args = [str(timeout), str(len(keys)), *keys, direction.value]
         if count is not None:
@@ -2359,8 +2382,6 @@ class CoreCommands(Protocol):
                 [b"two"]
             >>> client.lrange("testKey2", 0, -1)
                 [b"one", b"three", b"four"]
-
-        Since: Valkey version 6.2.0.
         """
         return cast(
             Optional[bytes],
@@ -2416,8 +2437,6 @@ class CoreCommands(Protocol):
                 [b"two"]
             >>> updated_array2 = client.lrange("testKey2", 0, -1)
                 [b"one", b"three", bb"four"]
-
-        Since: Valkey version 6.2.0.
         """
         return cast(
             Optional[bytes],
@@ -2645,7 +2664,7 @@ class CoreCommands(Protocol):
             >>> client.sismember_if_exists("non_existing_set", "member1")
                 -1  # Indicates that "non_existing_set" does not exist.
 
-        Since: Valkey version 9.2.0.
+        Since: Valkey 9.2.0.
         """
         return cast(
             int,
@@ -3073,7 +3092,7 @@ class CoreCommands(Protocol):
         Args:
             key (TEncodable): The key to set a timeout on.
             seconds (int): The timeout in seconds.
-            option (ExpireOptions, optional): The expire option.
+            option (Optional[ExpireOptions]): The expire option.
 
         Returns:
             bool: `True` if the timeout was set.
@@ -3230,7 +3249,7 @@ class CoreCommands(Protocol):
             >>> client.expiretime("my_key")
                 1718614954
 
-        Since: Valkey version 7.0.0.
+        Since: Valkey 7.0.0.
         """
         return cast(int, self._execute_command(RequestType.ExpireTime, [key]))
 
@@ -3261,7 +3280,7 @@ class CoreCommands(Protocol):
             >>> client.pexpiretime("my_key")
                 1718615446670
 
-        Since: Valkey version 7.0.0.
+        Since: Valkey 7.0.0.
         """
         return cast(int, self._execute_command(RequestType.PExpireTime, [key]))
 
@@ -3567,13 +3586,13 @@ class CoreCommands(Protocol):
             end (StreamRangeBound): The ending stream entry ID bound for the range.
 
                 - Use `IdBound` to specify a stream entry ID.
-                - Since Valkey 6.2.0, use `ExclusiveIdBound` to specify an exclusive bounded stream entry ID.
+                - Use `ExclusiveIdBound` to specify an exclusive bounded stream entry ID.
                 - Use `MaxId` to end with the maximum available ID.
 
             start (StreamRangeBound): The starting stream entry ID bound for the range.
 
                 - Use `IdBound` to specify a stream entry ID.
-                - Since Valkey 6.2.0, use `ExclusiveIdBound` to specify an exclusive bounded stream entry ID.
+                - Use `ExclusiveIdBound` to specify an exclusive bounded stream entry ID.
                 - Use `MinId` to start with the minimum available ID.
 
             count (Optional[int]): An optional argument specifying the maximum count of stream entries to return.
@@ -4175,8 +4194,6 @@ class CoreCommands(Protocol):
                 # Stream entry "1-1" was idle for over an hour and was thus claimed by "my_consumer". The entire stream
                 # was scanned. Additionally, entry "1-2" was removed from the Pending Entries List because it no longer
                 # exists in the stream.
-
-        Since: Valkey version 6.2.0.
         """
         args: List[TEncodable] = [
             key,
@@ -4244,8 +4261,6 @@ class CoreCommands(Protocol):
                 # Stream entry "1-1" was idle for over an hour and was thus claimed by "my_consumer". The entire stream
                 # was scanned. Additionally, entry "1-2" was removed from the Pending Entries List because it no longer
                 # exists in the stream.
-
-        Since: Valkey version 6.2.0.
         """
         args: List[TEncodable] = [
             key,
@@ -4477,8 +4492,6 @@ class CoreCommands(Protocol):
                     ]
                 }
                 # Detailed stream information for "my_stream".
-
-        Since: Valkey version 6.0.0.
         """
         args = [key, "FULL"]
         if count is not None:
@@ -4773,8 +4786,6 @@ class CoreCommands(Protocol):
                     ],
                 ]  # Returns locations within the square box of 400 km, with the center being a specific point, from nearest
                    # to farthest with the dist, hash and coords.
-
-        Since: Valkey version 6.2.0.
         """
         args = _create_geosearch_args(
             [key],
@@ -4860,8 +4871,6 @@ class CoreCommands(Protocol):
             >>> client.zrange_withscores("my_dest_sorted_set", RangeByIndex(0, -1))
                 {b"Catania": 56.4412578701582, b"Palermo": 190.44242984775784} # The elements within te search area, with the
                                                                                # distance as score.
-
-        Since: Valkey version 6.2.0.
         """
         args = _create_geosearch_args(
             [destination, source],
@@ -5459,7 +5468,7 @@ class CoreCommands(Protocol):
             >>> client.zrank_withscore("my_sorted_set", "non_existing_member")
                 None  # Indicates that "non_existing_member" is not present in the sorted set "my_sorted_set".
 
-        Since: Valkey version 7.2.0.
+        Since: Valkey 7.2.0.
         """
         return cast(
             Optional[List[Union[int, float]]],
@@ -5518,7 +5527,7 @@ class CoreCommands(Protocol):
             >>> client.zrevrank("my_sorted_set", "member2")
                 [2, 8.2]  # "member2" with score 8.2 has the third-highest score in the sorted set "my_sorted_set"
 
-        Since: Valkey version 7.2.0.
+        Since: Valkey 7.2.0.
         """
         return cast(
             Optional[List[Union[int, float]]],
@@ -6292,7 +6301,7 @@ class CoreCommands(Protocol):
                 [b'zSet1', {b'three': 3.0, b'two': 2.0}]  # "three" with score 3.0 and "two" with score 2.0 were
                                                           # popped from "zSet1".
 
-        Since: Valkey version 7.0.0.
+        Since: Valkey 7.0.0.
         """
         args: List[TEncodable] = [str(len(keys))] + keys + [filter.value]
         if count is not None:
@@ -6349,7 +6358,7 @@ class CoreCommands(Protocol):
                 [b'zSet1', {b'three': 3.0, b'two': 2.0}]  # "three" with score 3.0 and "two" with score 2.0 were
                                                           # popped from "zSet1".
 
-        Since: Valkey version 7.0.0.
+        Since: Valkey 7.0.0.
         """
         args = [str(timeout), str(len(keys))] + keys + [modifier.value]
         if count is not None:
@@ -6388,7 +6397,7 @@ class CoreCommands(Protocol):
                 1  # A `limit` of 1 was provided, so the intersection computation exits early and yields the `limit` value
                    # of 1.
 
-        Since: Valkey version 7.0.0.
+        Since: Valkey 7.0.0.
         """
         args = [str(len(keys))] + keys
         if limit is not None:
@@ -6417,7 +6426,7 @@ class CoreCommands(Protocol):
             >>> client.script_show(script.get_hash())
                 b"return { KEYS[1], ARGV[1] }"
 
-        Since: Valkey version 8.0.0.
+        Since: Valkey 8.0.0.
         """
         return cast(bytes, self._execute_command(RequestType.ScriptShow, [sha1]))
 
@@ -6749,8 +6758,6 @@ class CoreCommands(Protocol):
             >>> client.set("my_key", "A")  # "A" has binary value 01000001
             >>> client.bitfield_read_only("my_key", [BitFieldGet(UnsignedEncoding(2), Offset(1))])
                 [2]  # The value at offset 1 with an unsigned encoding of 2 is 2.
-
-        Since: Valkey version 6.0.0.
         """
         args = [key] + _create_bitfield_read_only_args(subcommands)
         return cast(
@@ -6921,7 +6928,7 @@ class CoreCommands(Protocol):
 
         Args:
             key (TEncodable): The key to get.
-            expiry (Optional[ExpiryGetEx], optional): set expiriation to the given key.
+            expiry (Optional[ExpiryGetEx]): set expiration to the given key.
                 Equivalent to [`EX` | `PX` | `EXAT` | `PXAT` | `PERSIST`] in the Valkey API.
 
         Returns:
@@ -6939,8 +6946,6 @@ class CoreCommands(Protocol):
             >>> time.sleep(1)
             >>> client.getex(b"key")
                 None
-
-        Since: Valkey version 6.2.0.
         """
         args = [key]
         if expiry is not None:
@@ -7345,7 +7350,7 @@ class CoreCommands(Protocol):
             >>> client.fcall("Deep_Thought")
                 b'new_value' # Returns the function's return value.
 
-        Since: Valkey version 7.0.0.
+        Since: Valkey 7.0.0.
         """
         args: List[TEncodable] = []
         if keys is not None:
@@ -7389,7 +7394,7 @@ class CoreCommands(Protocol):
                     "Ultimate", "Question", "of", "Life,", "the", "Universe,", "and", "Everything"])
                 42 # The return value on the function that was executed
 
-        Since: Valkey version 7.0.0.
+        Since: Valkey 7.0.0.
         """
         args: List[TEncodable] = []
         if keys is not None:
@@ -7479,7 +7484,7 @@ class CoreCommands(Protocol):
             >>> client.lcs("testKey1", "testKey2")
                 b'acd'
 
-        Since: Valkey version 7.0.0.
+        Since: Valkey 7.0.0.
         """
         args: List[TEncodable] = [key1, key2]
 
@@ -7518,7 +7523,7 @@ class CoreCommands(Protocol):
             >>> client.lcs_len("testKey1", "testKey2")
                 3  # the length of the longest common subsequence between these 2 strings (b"acd") is 3.
 
-        Since: Valkey version 7.0.0.
+        Since: Valkey 7.0.0.
         """
         args: List[TEncodable] = [key1, key2, "LEN"]
 
@@ -7607,7 +7612,7 @@ class CoreCommands(Protocol):
                     b'len': 7
                 }
 
-        Since: Valkey version 7.0.0.
+        Since: Valkey 7.0.0.
         """
         args: List[TEncodable] = [key1, key2, "IDX"]
 
@@ -7663,8 +7668,6 @@ class CoreCommands(Protocol):
                 [2, 6]
             >>> client.lpos(key, 'c', count = 0)
                 [2, 6, 7]
-
-        Since: Valkey version 6.0.6.
         """
         args: List[TEncodable] = [key, element]
 
@@ -7788,7 +7791,7 @@ class CoreCommands(Protocol):
         Note:
             When in cluster mode, `key`, and any patterns specified in `by_pattern` or `get_patterns`
             must map to the same hash slot. The use of `by_pattern` and `get_patterns` in cluster mode is supported
-            only since Valkey version 8.0.
+            only since Valkey 8.0.0.
 
         See [valkey.io](https://valkey.io/commands/sort) for more details.
 
@@ -7803,7 +7806,7 @@ class CoreCommands(Protocol):
                 E.g., if `by_pattern` is `weight_*`, the command will sort the elements by the values of the
                 keys `weight_<element>`.
                 If not provided, elements are sorted by their value.
-                Supported in cluster mode since Valkey version 8.0.
+                Supported in cluster mode since Valkey 8.0.0.
             limit (Optional[Limit]): Limiting the range of the query by setting offset and result count. See `Limit` class for
                 more information.
             get_patterns (Optional[List[TEncodable]]): A pattern used to retrieve external keys' values, instead of the
@@ -7816,7 +7819,7 @@ class CoreCommands(Protocol):
                 for each sorted element. Multiple `get_pattern` arguments can be provided to retrieve multiple attributes.
                 The special value `#` can be used to include the actual element from `key` being sorted.
                 If not provided, only the sorted elements themselves are returned.
-                Supported in cluster mode since Valkey version 8.0.
+                Supported in cluster mode since Valkey 8.0.0.
             order (Optional[OrderBy]): Specifies the order to sort the elements.
                 Can be `OrderBy.ASC` (ascending) or `OrderBy.DESC` (descending).
             alpha (Optional[bool]): When `True`, sorts elements lexicographically. When `False` (default), sorts elements
@@ -7866,7 +7869,7 @@ class CoreCommands(Protocol):
         Note:
             When in cluster mode, `key`, and any patterns specified in `by_pattern` or `get_patterns`
             must map to the same hash slot. The use of `by_pattern` and `get_patterns` in cluster mode is supported
-            only since Valkey version 8.0.
+            only since Valkey 8.0.0.
 
         Args:
             key (TEncodable): The key of the list, set, or sorted set to be sorted.
@@ -7879,7 +7882,7 @@ class CoreCommands(Protocol):
                 E.g., if `by_pattern` is `weight_*`, the command will sort the elements by the values of the
                 keys `weight_<element>`.
                 If not provided, elements are sorted by their value.
-                Supported in cluster mode since Valkey version 8.0.
+                Supported in cluster mode since Valkey 8.0.0.
             limit (Optional[Limit]): Limiting the range of the query by setting offset and result count. See `Limit` class for
                 more information.
             get_patterns (Optional[List[TEncodable]]): A pattern used to retrieve external keys' values, instead of the
@@ -7892,7 +7895,7 @@ class CoreCommands(Protocol):
                 for each sorted element. Multiple `get_pattern` arguments can be provided to retrieve multiple attributes.
                 The special value `#` can be used to include the actual element from `key` being sorted.
                 If not provided, only the sorted elements themselves are returned.
-                Supported in cluster mode since Valkey version 8.0.
+                Supported in cluster mode since Valkey 8.0.0.
             order (Optional[OrderBy]): Specifies the order to sort the elements.
                 Can be `OrderBy.ASC` (ascending) or `OrderBy.DESC` (descending).
             alpha (Optional[bool]): When `True`, sorts elements lexicographically. When `False` (default), sorts elements
@@ -7918,7 +7921,7 @@ class CoreCommands(Protocol):
             >>> client.sort_ro("user_ids", by_pattern="user:*->age", get_patterns=["user:*->name"])
                 [b'Bob', b'Alice']
 
-        Since: Valkey version 7.0.0.
+        Since: Valkey 7.0.0.
         """
         args = _build_sort_args(key, by_pattern, limit, get_patterns, order, alpha)
         result = self._execute_command(RequestType.SortReadOnly, args)
@@ -7945,7 +7948,7 @@ class CoreCommands(Protocol):
         Note:
             When in cluster mode, `key`, `destination`, and any patterns specified in `by_pattern` or `get_patterns`
             must map to the same hash slot. The use of `by_pattern` and `get_patterns` in cluster mode is supported
-            only since Valkey version 8.0.
+            only since Valkey 8.0.0.
 
         Args:
             key (TEncodable): The key of the list, set, or sorted set to be sorted.
@@ -7959,7 +7962,7 @@ class CoreCommands(Protocol):
                 E.g., if `by_pattern` is `weight_*`, the command will sort the elements by the values of the
                 keys `weight_<element>`.
                 If not provided, elements are sorted by their value.
-                Supported in cluster mode since Valkey version 8.0.
+                Supported in cluster mode since Valkey 8.0.0.
             limit (Optional[Limit]): Limiting the range of the query by setting offset and result count. See `Limit` class for
                 more information.
             get_patterns (Optional[List[TEncodable]]): A pattern used to retrieve external keys' values, instead of the
@@ -7972,7 +7975,7 @@ class CoreCommands(Protocol):
                 for each sorted element. Multiple `get_pattern` arguments can be provided to retrieve multiple attributes.
                 The special value `#` can be used to include the actual element from `key` being sorted.
                 If not provided, only the sorted elements themselves are returned.
-                Supported in cluster mode since Valkey version 8.0.
+                Supported in cluster mode since Valkey 8.0.0.
             order (Optional[OrderBy]): Specifies the order to sort the elements.
                 Can be `OrderBy.ASC` (ascending) or `OrderBy.DESC` (descending).
             alpha (Optional[bool]): When `True`, sorts elements lexicographically. When `False` (default), sorts elements

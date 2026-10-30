@@ -80,22 +80,26 @@ pub extern "system" fn Java_glide_ffi_resolvers_GlidePoolResolver_glidePoolCreat
     let runtime = get_runtime();
     pool::start_abandon_monitor(pool_id, runtime.handle());
 
-    // Spawn min_idle background client creation
+    // Reserve the warmup slots up front so should_create() reads the pool as full
+    // while these connections are still in flight; see ClientPool::reserve_warmup_slots.
     if min_idle > 0 {
         let pool_arc = pool::get_pool(pool_id).unwrap();
-        for _ in 0..(min_idle as u32) {
+        let reserved =
+            runtime.block_on(async { pool_arc.lock().await.reserve_warmup_slots(min_idle as u32) });
+        for _ in 0..reserved {
             let pool_clone = pool_arc.clone();
             let conn_bytes = bytes.clone();
-            let runtime = get_runtime();
             runtime.spawn(async move {
                 match create_pool_client(&conn_bytes).await {
                     Ok(client) => {
                         let mut pool = pool_clone.lock().await;
                         if pool.state.load(Ordering::Acquire) != POOL_RUNNING {
+                            pool.release_reservation();
                             return;
                         }
-                        // add_client returns the assigned client_id
-                        let client_id = pool.add_client(client.clone());
+                        // Slot already reserved above — add_client_reserved does not
+                        // increment total_count.
+                        let client_id = pool.add_client_reserved(client.clone());
                         // Also register in JNI handle table for command dispatch
                         get_handle_table().insert(client_id, client.clone());
                         // Register in scope client registry too
@@ -103,7 +107,11 @@ pub extern "system" fn Java_glide_ffi_resolvers_GlidePoolResolver_glidePoolCreat
                         // pool_client_map is populated only when the client is actually
                         // acquired (borrowed), not here at idle-creation time.
                     }
-                    Err(e) => log::error!("Pool background client creation failed: {}", e),
+                    Err(e) => {
+                        log::error!("Pool background client creation failed: {}", e);
+                        // Return the slot this warmup task reserved but never filled.
+                        pool_clone.lock().await.release_reservation();
+                    }
                 }
             });
         }

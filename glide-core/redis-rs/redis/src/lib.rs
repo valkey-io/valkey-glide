@@ -388,6 +388,7 @@ pub use crate::types::{
     RedisResult,
     RedisWrite,
     ToRedisArgs,
+    SERVER_ERROR_DESCRIPTION,
 
     // low level values
     Value,

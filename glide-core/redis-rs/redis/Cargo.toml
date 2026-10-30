@@ -94,6 +94,9 @@ tracing = "0.1"
 lazy_static = "1"
 lru = "0.18.0"
 
+# Only needed for RDMA
+glide-rdma = { path = "../../../glide-rdma", version = "0.1", optional = true }
+
 [features]
 default = [
     "aio",
@@ -118,6 +121,7 @@ aio = [
     "dispose",
 ]
 cluster = ["crc16", "rand"]
+rdma = ["dep:glide-rdma", "glide-rdma/libfabric"]
 tls-rustls-insecure = []
 tokio-comp = ["aio", "tokio/net", "tokio-retry2"]
 tokio-rustls-comp = ["tokio-comp"]

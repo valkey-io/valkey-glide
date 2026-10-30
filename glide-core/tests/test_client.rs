@@ -874,7 +874,8 @@ pub(crate) mod shared_client_tests {
             let test_basics = setup_test_basics(
                 use_cluster,
                 TestConfiguration {
-                    shared_server: true,
+                    use_tls: true,
+                    shared_server: false,
                     ..Default::default()
                 },
             )
@@ -918,7 +919,7 @@ pub(crate) mod shared_client_tests {
 
             let connection_request = glide_core::connection_request::ConnectionRequest {
                 addresses: addresses_info,
-                tls_mode: TlsMode::NoTls.into(),
+                tls_mode: TlsMode::InsecureTls.into(),
                 cluster_mode_enabled: use_cluster,
                 request_timeout: 10000,
                 authentication_info: protobuf::MessageField::some(auth_info),
@@ -1217,7 +1218,8 @@ pub(crate) mod shared_client_tests {
             let test_basics = setup_test_basics(
                 use_cluster,
                 TestConfiguration {
-                    shared_server: true,
+                    use_tls: true,
+                    shared_server: false,
                     ..Default::default()
                 },
             )
@@ -1261,7 +1263,7 @@ pub(crate) mod shared_client_tests {
 
             let connection_request = glide_core::connection_request::ConnectionRequest {
                 addresses: addresses_info,
-                tls_mode: TlsMode::NoTls.into(),
+                tls_mode: TlsMode::InsecureTls.into(),
                 cluster_mode_enabled: use_cluster,
                 request_timeout: 10000,
                 authentication_info: protobuf::MessageField::some(auth_info),
@@ -4915,32 +4917,57 @@ pub(crate) mod shared_client_tests {
     async fn setup_iam_local_server(
         iam_username: &str,
     ) -> (
+        tempfile::TempDir,
         RedisServer,
         redis::ConnectionAddr,
         glide_core::connection_request::ConnectionRequest,
     ) {
         use ::protobuf::MessageField;
         use glide_core::connection_request as protobuf;
-        use protobuf::TlsMode;
         use protobuf::{AuthenticationInfo as ProtoAuthInfo, IamCredentials, NodeAddress};
         use protobuf::{
             ConnectionRequest as ProtoConnectionRequest, ServiceType as ProtoServiceType,
         };
 
-        // `nopass` means ACL ignores the supplied password entirely (verified
-        // empirically: `AUTH iamuser <anything>` succeeds), which is the closest
-        // local stand-in for how a real ElastiCache/MemoryDB IAM-enabled user
-        // accepts a valid-looking SigV4-signed token without the test having
-        // real AWS access.
-        let server = RedisServer::new(ServerType::Tcp { tls: false });
+        // IAM auth requires TLS, so the server is TLS-enabled and the request
+        // verifies it against the test CA — the scope exercises IAM `AUTH` over an
+        // encrypted channel. `nopass` means ACL ignores the supplied password
+        // entirely (verified empirically: `AUTH iamuser <anything>` succeeds), the
+        // closest local stand-in for how a real ElastiCache/MemoryDB IAM-enabled
+        // user accepts a valid-looking SigV4-signed token without real AWS access.
+        let tempdir = tempfile::tempdir().expect("Failed to create temp dir");
+        let tls_paths = build_tls_file_paths(&tempdir);
+        let ca_cert_bytes = tls_paths.read_ca_cert_as_bytes();
+        let server = RedisServer::new_with_addr_tls_modules_and_spawner(
+            redis::ConnectionAddr::TcpTls {
+                host: "127.0.0.1".to_string(),
+                port: get_available_port(),
+                insecure: false,
+                tls_params: None,
+            },
+            Some(tls_paths),
+            &[],
+            // No mTLS: IAM authenticates with a password-style AUTH, not a client
+            // certificate, so the server must not require one.
+            false,
+            |cmd| cmd.spawn().expect("Failed to spawn server"),
+        );
         let addr = server.get_client_addr();
+        tokio::time::sleep(std::time::Duration::from_millis(300)).await;
         let (host, port) = match &addr {
-            redis::ConnectionAddr::Tcp(host, port) => (host.clone(), *port),
-            other => panic!("Expected a plain TCP test server address, got: {other:?}"),
+            redis::ConnectionAddr::TcpTls { host, port, .. } => (host.clone(), *port),
+            other => panic!("Expected a TLS test server address, got: {other:?}"),
         };
 
+        // Connect the ACL-setup client over TLS too (insecure: skip verification —
+        // this raw helper connection is not the subject under test).
         let setup_client = redis::Client::open(redis::ConnectionInfo {
-            addr: addr.clone(),
+            addr: redis::ConnectionAddr::TcpTls {
+                host: host.clone(),
+                port,
+                insecure: true,
+                tls_params: None,
+            },
             redis: RedisConnectionInfo::default(),
         })
         .unwrap();
@@ -4970,7 +4997,9 @@ pub(crate) mod shared_client_tests {
             port: port.into(),
             ..Default::default()
         });
-        proto_request.tls_mode = TlsMode::NoTls.into();
+        // Verify the server against the test CA (SecureTls); IAM auth requires TLS.
+        proto_request.root_certs.push(ca_cert_bytes.into());
+        proto_request.tls_mode = protobuf::TlsMode::SecureTls.into();
         let mut iam_credentials = IamCredentials::new();
         iam_credentials.cluster_name = "test-scope-iam-cluster".into();
         iam_credentials.region = "us-east-1".into();
@@ -4980,7 +5009,7 @@ pub(crate) mod shared_client_tests {
         auth_info.iam_credentials = MessageField(Some(Box::new(iam_credentials)));
         proto_request.authentication_info = MessageField(Some(Box::new(auth_info)));
 
-        (server, addr, proto_request)
+        (tempdir, server, addr, proto_request)
     }
 
     /// Reads `cmdstat_auth`'s `calls=` counter from `INFO commandstats`.
@@ -4991,6 +5020,13 @@ pub(crate) mod shared_client_tests {
             .send_packed_command(&info_cmd)
             .await
             .expect("INFO commandstats should succeed");
+        auth_calls_from_info(raw)
+    }
+
+    /// `cmdstat_auth`'s `calls=` counter in an `INFO commandstats` reply, 0 when
+    /// no AUTH has been seen.
+    #[cfg(feature = "proto")]
+    fn auth_calls_from_info(raw: Value) -> u64 {
         let text = match raw {
             Value::BulkString(bytes) => String::from_utf8_lossy(&bytes).to_string(),
             Value::VerbatimString { text, .. } => text,
@@ -5007,6 +5043,341 @@ pub(crate) mod shared_client_tests {
             }
         }
         0
+    }
+
+    /// Starts a local server that requires `password` from the default user. Returns
+    /// the server, an admin connection (authenticated before the password was set, so
+    /// it can keep reconfiguring the server), and a request carrying that password.
+    #[cfg(feature = "proto")]
+    async fn setup_password_local_server(
+        password: &str,
+    ) -> (
+        RedisServer,
+        redis::aio::MultiplexedConnection,
+        glide_core::connection_request::ConnectionRequest,
+    ) {
+        use ::protobuf::MessageField;
+        use glide_core::connection_request as protobuf;
+        use protobuf::ConnectionRequest as ProtoConnectionRequest;
+        use protobuf::TlsMode;
+        use protobuf::{AuthenticationInfo as ProtoAuthInfo, NodeAddress};
+
+        let server = RedisServer::new(ServerType::Tcp { tls: false });
+        let addr = server.get_client_addr();
+        let (host, port) = match &addr {
+            redis::ConnectionAddr::Tcp(host, port) => (host.clone(), *port),
+            other => panic!("Expected a plain TCP test server address, got: {other:?}"),
+        };
+
+        let admin_client = redis::Client::open(redis::ConnectionInfo {
+            addr,
+            redis: RedisConnectionInfo::default(),
+        })
+        .unwrap();
+        let mut admin_conn = retry(|| async {
+            admin_client
+                .get_multiplexed_async_connection(redis::GlideConnectionOptions::default())
+                .await
+                .ok()
+        })
+        .await;
+        set_requirepass(&mut admin_conn, password).await;
+
+        let mut proto_request = ProtoConnectionRequest::new();
+        proto_request.addresses.push(NodeAddress {
+            host: host.into(),
+            port: port.into(),
+            ..Default::default()
+        });
+        proto_request.tls_mode = TlsMode::NoTls.into();
+        let mut auth_info = ProtoAuthInfo::new();
+        auth_info.password = password.into();
+        proto_request.authentication_info = MessageField(Some(Box::new(auth_info)));
+
+        (server, admin_conn, proto_request)
+    }
+
+    #[cfg(feature = "proto")]
+    async fn set_requirepass(admin_conn: &mut redis::aio::MultiplexedConnection, password: &str) {
+        let mut set = redis::cmd("CONFIG");
+        set.arg("SET").arg("requirepass").arg(password);
+        admin_conn
+            .send_packed_command(&set)
+            .await
+            .expect("CONFIG SET requirepass should succeed");
+    }
+
+    /// `ACL WHOAMI` through a scope's raw connection, which is authenticated by
+    /// whatever `create_scope_connection` did and nothing else.
+    #[cfg(feature = "proto")]
+    async fn scope_whoami(scope_id: u64) -> String {
+        let args: Vec<Vec<u8>> = vec![b"WHOAMI".to_vec()];
+        let value = glide_core::scope::execute_scope_command(scope_id, "ACL", &args, None)
+            .await
+            .expect("ACL WHOAMI through the scope should succeed");
+        match value {
+            Value::BulkString(bytes) => String::from_utf8(bytes.to_vec()).unwrap(),
+            Value::SimpleString(s) => s,
+            other => panic!("Unexpected ACL WHOAMI response shape: {other:?}"),
+        }
+    }
+
+    /// A scope created after the owning Client's password was rotated must
+    /// authenticate with the new password. The request bytes passed to the acquire
+    /// were serialized before the rotation, so they carry the old password.
+    #[cfg(feature = "proto")]
+    #[rstest]
+    #[case::immediate_auth(true)]
+    #[case::store_only(false)]
+    #[serial_test::serial]
+    fn test_new_scope_authenticates_with_the_rotated_password(#[case] immediate_auth: bool) {
+        use ::protobuf::Message as _;
+        use glide_core::scope;
+
+        block_on_all(async move {
+            let (_server, mut admin_conn, proto_request) =
+                setup_password_local_server("old-password").await;
+            let bytes = proto_request
+                .write_to_bytes()
+                .expect("serialize scope connection request");
+            let mut client = Client::new(proto_request.into(), None)
+                .await
+                .expect("Client::new with the initial password should succeed");
+
+            set_requirepass(&mut admin_conn, "new-password").await;
+            client
+                .update_connection_password(Some("new-password".to_string()), immediate_auth)
+                .await
+                .expect("update_connection_password should succeed");
+
+            let client_id = 3u64;
+            scope::register_client(client_id, client.clone());
+            let runtime = tokio::runtime::Handle::current();
+            let scope_id = scope::acquire_scope(
+                client_id,
+                bytes,
+                &runtime,
+                None,
+                std::time::Duration::from_secs(10),
+            )
+            .await
+            .expect("a scope created after the rotation must authenticate with the new password");
+
+            let args: Vec<Vec<u8>> = vec![];
+            let pong = scope::execute_scope_command(scope_id, "PING", &args, None)
+                .await
+                .expect("the scope connection must be authenticated");
+            assert_eq!(pong, Value::SimpleString("PONG".to_string()));
+
+            scope::release_scope(scope_id, client_id, &runtime);
+            scope::unregister_client(client_id);
+        });
+    }
+
+    /// A raw `AUTH <user> <password>` sent through the Client changes what a
+    /// reconnect authenticates with, so it must change what a new scope
+    /// authenticates with, for the username as well as the password.
+    #[cfg(feature = "proto")]
+    #[rstest]
+    #[serial_test::serial]
+    fn test_new_scope_authenticates_as_the_user_of_a_raw_auth_command() {
+        use ::protobuf::Message as _;
+        use glide_core::scope;
+
+        block_on_all(async {
+            let (_server, mut admin_conn, proto_request) =
+                setup_password_local_server("old-password").await;
+            let bytes = proto_request
+                .write_to_bytes()
+                .expect("serialize scope connection request");
+            let client = Client::new(proto_request.into(), None)
+                .await
+                .expect("Client::new with the initial password should succeed");
+
+            let mut setuser = redis::cmd("ACL");
+            setuser
+                .arg("SETUSER")
+                .arg("rotated-user")
+                .arg("on")
+                .arg("allkeys")
+                .arg("+@all")
+                .arg(">user-password");
+            admin_conn
+                .send_packed_command(&setuser)
+                .await
+                .expect("ACL SETUSER should succeed");
+
+            let mut auth = redis::cmd("AUTH");
+            auth.arg("rotated-user").arg("user-password");
+            client
+                .clone()
+                .send_command(&mut auth, None)
+                .await
+                .expect("AUTH through the Client should succeed");
+
+            let client_id = 4u64;
+            scope::register_client(client_id, client.clone());
+            let runtime = tokio::runtime::Handle::current();
+            let scope_id = scope::acquire_scope(
+                client_id,
+                bytes,
+                &runtime,
+                None,
+                std::time::Duration::from_secs(10),
+            )
+            .await
+            .expect("scope acquire after a raw AUTH");
+
+            assert_eq!(
+                scope_whoami(scope_id).await,
+                "rotated-user",
+                "the scope must authenticate as the user the Client authenticated as"
+            );
+
+            scope::release_scope(scope_id, client_id, &runtime);
+            scope::unregister_client(client_id);
+        });
+    }
+    /// A one-argument `AUTH <password>` authenticates the default user. A scope
+    /// built afterwards must authenticate as `default` too, not pair the
+    /// previously stored username with the default user's password.
+    #[cfg(feature = "proto")]
+    #[rstest]
+    #[serial_test::serial]
+    fn test_new_scope_authenticates_as_default_after_a_one_argument_auth() {
+        use ::protobuf::Message as _;
+        use glide_core::scope;
+
+        block_on_all(async {
+            let (_server, mut admin_conn, proto_request) =
+                setup_password_local_server("old-password").await;
+            let bytes = proto_request
+                .write_to_bytes()
+                .expect("serialize scope connection request");
+            let client = Client::new(proto_request.into(), None)
+                .await
+                .expect("Client::new with the initial password should succeed");
+
+            let mut setuser = redis::cmd("ACL");
+            setuser
+                .arg("SETUSER")
+                .arg("rotated-user")
+                .arg("on")
+                .arg("allkeys")
+                .arg("+@all")
+                .arg(">user-password");
+            admin_conn
+                .send_packed_command(&setuser)
+                .await
+                .expect("ACL SETUSER should succeed");
+
+            let mut auth_user = redis::cmd("AUTH");
+            auth_user.arg("rotated-user").arg("user-password");
+            client
+                .clone()
+                .send_command(&mut auth_user, None)
+                .await
+                .expect("AUTH as the named user should succeed");
+
+            let mut auth_default = redis::cmd("AUTH");
+            auth_default.arg("old-password");
+            client
+                .clone()
+                .send_command(&mut auth_default, None)
+                .await
+                .expect("one-argument AUTH as the default user should succeed");
+
+            let client_id = 6u64;
+            scope::register_client(client_id, client.clone());
+            let runtime = tokio::runtime::Handle::current();
+            let scope_id = scope::acquire_scope(
+                client_id,
+                bytes,
+                &runtime,
+                None,
+                std::time::Duration::from_secs(10),
+            )
+            .await
+            .expect("scope acquire after a one-argument AUTH");
+
+            assert_eq!(
+                scope_whoami(scope_id).await,
+                "default",
+                "the scope must authenticate as the default user, like the Client"
+            );
+
+            scope::release_scope(scope_id, client_id, &runtime);
+            scope::unregister_client(client_id);
+        });
+    }
+
+    /// `HELLO 3 AUTH <user> <password>` sent through the Client changes what a
+    /// reconnect authenticates with, so it must change what a new scope
+    /// authenticates with, for the username as well as the password.
+    #[cfg(feature = "proto")]
+    #[rstest]
+    #[serial_test::serial]
+    fn test_new_scope_authenticates_as_the_user_of_a_hello_auth_command() {
+        use ::protobuf::Message as _;
+        use glide_core::scope;
+
+        block_on_all(async {
+            let (_server, mut admin_conn, proto_request) =
+                setup_password_local_server("old-password").await;
+            let bytes = proto_request
+                .write_to_bytes()
+                .expect("serialize scope connection request");
+            let client = Client::new(proto_request.into(), None)
+                .await
+                .expect("Client::new with the initial password should succeed");
+
+            let mut setuser = redis::cmd("ACL");
+            setuser
+                .arg("SETUSER")
+                .arg("hello-user")
+                .arg("on")
+                .arg("allkeys")
+                .arg("+@all")
+                .arg(">user-password");
+            admin_conn
+                .send_packed_command(&setuser)
+                .await
+                .expect("ACL SETUSER should succeed");
+
+            let mut hello = redis::cmd("HELLO");
+            hello
+                .arg("3")
+                .arg("AUTH")
+                .arg("hello-user")
+                .arg("user-password");
+            client
+                .clone()
+                .send_command(&mut hello, None)
+                .await
+                .expect("HELLO ... AUTH through the Client should succeed");
+
+            let client_id = 5u64;
+            scope::register_client(client_id, client.clone());
+            let runtime = tokio::runtime::Handle::current();
+            let scope_id = scope::acquire_scope(
+                client_id,
+                bytes,
+                &runtime,
+                None,
+                std::time::Duration::from_secs(10),
+            )
+            .await
+            .expect("scope acquire after HELLO ... AUTH");
+
+            assert_eq!(
+                scope_whoami(scope_id).await,
+                "hello-user",
+                "the scope must authenticate as the user the Client authenticated as"
+            );
+
+            scope::release_scope(scope_id, client_id, &runtime);
+            scope::unregister_client(client_id);
+        });
     }
 
     /// Regression test for the initial AUTH on a scoped connection
@@ -5028,7 +5399,8 @@ pub(crate) mod shared_client_tests {
             setup_test_credentials();
 
             let iam_username = "iamuser";
-            let (_server, _addr, proto_request) = setup_iam_local_server(iam_username).await;
+            let (_tempdir, _server, _addr, proto_request) =
+                setup_iam_local_server(iam_username).await;
             let connection_request_bytes = proto_request
                 .write_to_bytes()
                 .expect("serialize scope connection request");
@@ -5087,7 +5459,8 @@ pub(crate) mod shared_client_tests {
             setup_test_credentials();
 
             let iam_username = "iamuser";
-            let (_server, addr, proto_request) = setup_iam_local_server(iam_username).await;
+            let (_tempdir, _server, addr, proto_request) =
+                setup_iam_local_server(iam_username).await;
             let bytes = proto_request
                 .clone()
                 .write_to_bytes()
@@ -5143,6 +5516,162 @@ pub(crate) mod shared_client_tests {
         });
     }
 
+    /// Scope connections authenticate with the owning Client's current password,
+    /// not the password the pool was seeded with. After
+    /// `update_connection_password`, a scope connection built afterwards AUTHs
+    /// with the new password. An idle scope connection re-AUTHs before its next
+    /// command only after `immediate_auth` succeeded; a store-only update is for
+    /// reconnects, so it leaves the idle connection's session alone, exactly as
+    /// it leaves the client's own connection, and the connection keeps working
+    /// even while the server does not hold the new password yet.
+    ///
+    /// The store-only case therefore updates the client *before* rotating the
+    /// server; the `immediate_auth` case must rotate the server first.
+    ///
+    /// The server keeps an already-authenticated session valid across a password
+    /// change, so command success on the reused connection proves nothing by
+    /// itself; the idle half is observed on the node's `cmdstat_auth` counter,
+    /// read raw through the scope (`client: None`, which cannot re-AUTH). Both
+    /// halves also check the session's identity with `ACL WHOAMI`: the old
+    /// password is removed from the server, but `default` is `nopass`, so a build
+    /// that skipped AUTH would still answer commands.
+    #[cfg(feature = "proto")]
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_scope_authenticates_with_the_updated_password(
+        #[values(false, true)] use_cluster: bool,
+        #[values(false, true)] immediate_auth: bool,
+    ) {
+        use glide_core::scope;
+
+        // A dedicated ACL user, so the rotation never touches `default`: the
+        // cluster teardown script authenticates as `default`.
+        const USERNAME: &str = "scopeuser";
+        const OLD_PASSWORD: &str = "ReallySecurePassword";
+        const NEW_PASSWORD: &str = "EvenMoreSecurePassword";
+
+        block_on_all(async move {
+            let configuration = TestConfiguration {
+                shared_server: false,
+                connection_info: Some(RedisConnectionInfo {
+                    username: Some(USERNAME.to_string()),
+                    password: Some(OLD_PASSWORD.to_string()),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            };
+            let mut test_basics = setup_test_basics(use_cluster, configuration.clone()).await;
+            let bytes = scope_request_bytes(&test_basics.server, &configuration);
+            let client = test_basics.client.clone();
+
+            let client_id = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("system clock after epoch")
+                .as_nanos() as u64;
+            scope::register_client(client_id, client.clone());
+            let runtime = tokio::runtime::Handle::current();
+            let acquire =
+                || acquire_scope_within(client_id, &bytes, std::time::Duration::from_secs(5));
+            let whoami = |scope_id: u64| async move {
+                match scope::execute_scope_command(scope_id, "ACL", &[b"WHOAMI".to_vec()], None)
+                    .await
+                    .expect("raw ACL WHOAMI through the scope")
+                {
+                    Value::BulkString(bytes) => String::from_utf8_lossy(&bytes).to_string(),
+                    Value::SimpleString(s) => s,
+                    other => panic!("Unexpected ACL WHOAMI reply shape: {other:?}"),
+                }
+            };
+
+            // Scope A is released so it sits idle across the rotation.
+            let scope_a = acquire()
+                .await
+                .expect("scope acquirable with the seeded password");
+            scope::send_scope_command(scope_a, "PING", &mut [], &client)
+                .await
+                .expect("scope works before the password changes");
+            scope::release_scope(scope_a, client_id, &runtime);
+            let pool = glide_core::pool::get_or_create_scope_pool(client_id, bytes.clone()).pool;
+            retry(|| async { (pool.lock().await.idle.len() == 1).then_some(()) }).await;
+
+            // `<OLD_PASSWORD` removes the old password, so any later AUTH with it
+            // is rejected.
+            async fn rotate_server_password(client: &mut Client) {
+                let mut rotate = redis::cmd("ACL");
+                rotate
+                    .arg("SETUSER")
+                    .arg(USERNAME)
+                    .arg(format!(">{NEW_PASSWORD}"))
+                    .arg(format!("<{OLD_PASSWORD}"));
+                assert_eq!(
+                    client.send_command(&mut rotate, None).await.unwrap(),
+                    Value::Okay
+                );
+            }
+            if immediate_auth {
+                rotate_server_password(&mut test_basics.client).await;
+            }
+            test_basics
+                .client
+                .update_connection_password(Some(NEW_PASSWORD.to_string()), immediate_auth)
+                .await
+                .expect("update_connection_password should succeed");
+
+            // Idle half. Both INFO reads go through the raw path on the same
+            // connection, so the counter is that node's and the reads add no AUTH.
+            let reused_a = acquire()
+                .await
+                .expect("the idle scope connection is reusable");
+            let info_args: Vec<Vec<u8>> = vec![b"commandstats".to_vec()];
+            let auth_calls_before = auth_calls_from_info(
+                scope::execute_scope_command(reused_a, "INFO", &info_args, None)
+                    .await
+                    .expect("raw INFO through the reused scope"),
+            );
+            scope::send_scope_command(reused_a, "PING", &mut [], &client)
+                .await
+                .expect("the reused scope connection works after the password update");
+            let auth_calls_after = auth_calls_from_info(
+                scope::execute_scope_command(reused_a, "INFO", &info_args, None)
+                    .await
+                    .expect("raw INFO through the reused scope"),
+            );
+            assert_eq!(
+                auth_calls_after - auth_calls_before,
+                u64::from(immediate_auth),
+                "the reused scope connection re-AUTHs once after immediate_auth and never after a store-only update"
+            );
+            assert_eq!(
+                whoami(reused_a).await,
+                USERNAME,
+                "the reused scope connection must still be authenticated as the client's user"
+            );
+
+            if !immediate_auth {
+                rotate_server_password(&mut test_basics.client).await;
+            }
+
+            // Build half: holding the reused idle connection forces the second
+            // acquire to build a new one.
+            let scope_b = acquire().await.expect(
+                "a scope connection built after the rotation must AUTH with the new password",
+            );
+            scope::send_scope_command(scope_b, "PING", &mut [], &client)
+                .await
+                .expect("the newly built scope connection works");
+            assert_eq!(
+                whoami(scope_b).await,
+                USERNAME,
+                "the newly built scope connection must be authenticated as the client's user"
+            );
+
+            scope::release_scope(reused_a, client_id, &runtime);
+            scope::release_scope(scope_b, client_id, &runtime);
+            scope::unregister_client(client_id);
+        });
+    }
+
     /// A rejected IAM re-authentication must not leave the connection in the pool:
     /// the bookmark advances only on success, so a retained connection would retry
     /// the same failing AUTH for the next borrower.
@@ -5156,7 +5685,8 @@ pub(crate) mod shared_client_tests {
             setup_test_credentials();
 
             let iam_username = "iamuser";
-            let (_server, addr, proto_request) = setup_iam_local_server(iam_username).await;
+            let (_tempdir, _server, addr, proto_request) =
+                setup_iam_local_server(iam_username).await;
             let bytes = proto_request
                 .clone()
                 .write_to_bytes()
@@ -5234,7 +5764,7 @@ pub(crate) mod shared_client_tests {
     /// Regression test for the scope path's IAM rotation re-authentication.
     ///
     /// Drives the real consumer, `Client::send_command_on_connection`, with two
-    /// independent `AtomicU64` generation bookmarks on two separate connections,
+    /// independent `AuthGeneration` bookmarks on two separate connections,
     /// and asserts that a single token rotation makes each connection send its own
     /// `AUTH`. That is precisely what the shared `token_changed` flag could not do:
     /// whichever consumer looked first cleared it and the other silently missed the
@@ -5243,13 +5773,14 @@ pub(crate) mod shared_client_tests {
     #[rstest]
     #[serial_test::serial]
     fn test_iam_rotation_reauthenticates_each_connection_independently() {
-        use std::sync::atomic::AtomicU64;
+        use glide_core::client::AuthGeneration;
 
         block_on_all(async {
             setup_test_credentials();
 
             let iam_username = "iamuser";
-            let (_server, addr, proto_request) = setup_iam_local_server(iam_username).await;
+            let (_tempdir, _server, addr, proto_request) =
+                setup_iam_local_server(iam_username).await;
 
             let mut client = Client::new(proto_request.into(), None)
                 .await
@@ -5276,10 +5807,9 @@ pub(crate) mod shared_client_tests {
             let mut admin_conn = open_conn().await;
 
             // Each connection owns its own bookmark, exactly as `ScopedConnection`
-            // does. A fresh manager sits at generation 1, so 0 always mismatches
-            // and the first command on each connection authenticates.
-            let bookmark_a = AtomicU64::new(0);
-            let bookmark_b = AtomicU64::new(0);
+            // does; `NEVER` makes the first command on each connection authenticate.
+            let mut bookmark_a = AuthGeneration::NEVER;
+            let mut bookmark_b = AuthGeneration::NEVER;
 
             let whoami_cmd = redis::cmd("ACL").arg("WHOAMI").to_owned();
             let whoami = |value: redis::RedisResult<Value>| -> String {
@@ -5294,11 +5824,11 @@ pub(crate) mod shared_client_tests {
             // malformed single-argument `AUTH` bug: a one-arg AUTH is rejected by
             // the server, so an identity assertion here fails without the username.
             let a_initial = client
-                .send_command_on_connection(&whoami_cmd, &mut conn_a, &bookmark_a, false)
+                .send_command_on_connection(&whoami_cmd, &mut conn_a, &mut bookmark_a, false)
                 .await;
             assert_eq!(whoami(a_initial), iam_username);
             let b_initial = client
-                .send_command_on_connection(&whoami_cmd, &mut conn_b, &bookmark_b, false)
+                .send_command_on_connection(&whoami_cmd, &mut conn_b, &mut bookmark_b, false)
                 .await;
             assert_eq!(whoami(b_initial), iam_username);
 
@@ -5312,7 +5842,7 @@ pub(crate) mod shared_client_tests {
 
             // Connection A observes the rotation first and updates its bookmark.
             let a_after = client
-                .send_command_on_connection(&whoami_cmd, &mut conn_a, &bookmark_a, false)
+                .send_command_on_connection(&whoami_cmd, &mut conn_a, &mut bookmark_a, false)
                 .await;
             assert_eq!(whoami(a_after), iam_username);
 
@@ -5320,7 +5850,7 @@ pub(crate) mod shared_client_tests {
             // `token_changed` flag, A's re-auth above cleared it and this connection
             // sends no AUTH at all.
             let b_after = client
-                .send_command_on_connection(&whoami_cmd, &mut conn_b, &bookmark_b, false)
+                .send_command_on_connection(&whoami_cmd, &mut conn_b, &mut bookmark_b, false)
                 .await;
             assert_eq!(whoami(b_after), iam_username);
 
@@ -5334,7 +5864,7 @@ pub(crate) mod shared_client_tests {
 
             // And no further AUTH once both bookmarks are current again.
             let a_settled = client
-                .send_command_on_connection(&whoami_cmd, &mut conn_a, &bookmark_a, false)
+                .send_command_on_connection(&whoami_cmd, &mut conn_a, &mut bookmark_a, false)
                 .await;
             assert_eq!(whoami(a_settled), iam_username);
             assert_eq!(
@@ -5362,7 +5892,8 @@ pub(crate) mod shared_client_tests {
             setup_test_credentials();
 
             let iam_username = "iamuser";
-            let (_server, addr, proto_request) = setup_iam_local_server(iam_username).await;
+            let (_tempdir, _server, addr, proto_request) =
+                setup_iam_local_server(iam_username).await;
 
             let mut client = Client::new(proto_request.into(), None)
                 .await
@@ -5452,7 +5983,8 @@ pub(crate) mod shared_client_tests {
             setup_test_credentials();
 
             let iam_username = "iamuser";
-            let (_server, addr, proto_request) = setup_iam_local_server(iam_username).await;
+            let (_tempdir, _server, addr, proto_request) =
+                setup_iam_local_server(iam_username).await;
 
             let mut client = Client::new(proto_request.into(), None)
                 .await
@@ -5532,7 +6064,8 @@ pub(crate) mod shared_client_tests {
             setup_test_credentials();
 
             let iam_username = "iamuser";
-            let (_server, addr, proto_request) = setup_iam_local_server(iam_username).await;
+            let (_tempdir, _server, addr, proto_request) =
+                setup_iam_local_server(iam_username).await;
 
             let mut client = Client::new(proto_request.into(), None)
                 .await
@@ -5614,16 +6147,29 @@ pub(crate) mod shared_client_tests {
             setup_test_credentials();
 
             let iam_username = "iamuser";
+            // IAM auth requires TLS, so stand up a TLS cluster. The request uses
+            // InsecureTls (skip verification) so no CA has to be threaded through.
+            let tempdir = tempfile::tempdir().expect("Failed to create temp dir");
+            let tls_paths = build_tls_file_paths(&tempdir);
             let cluster =
-                crate::utilities::cluster::RedisCluster::new(false, &None, Some(3), Some(0));
+                crate::utilities::cluster::RedisCluster::new_with_tls(3, 0, Some(tls_paths));
             let addresses = cluster.get_server_addresses();
 
             // Grant the `nopass` IAM user on every node (mirrors the standalone
             // `setup_iam_local_server`; `nopass` lets a valid-looking token AUTH
             // without real AWS).
             for addr in &addresses {
+                let (host, port) = match addr {
+                    redis::ConnectionAddr::TcpTls { host, port, .. } => (host.clone(), *port),
+                    other => panic!("Expected a TLS cluster node address, got: {other:?}"),
+                };
                 let admin = redis::Client::open(redis::ConnectionInfo {
-                    addr: addr.clone(),
+                    addr: redis::ConnectionAddr::TcpTls {
+                        host,
+                        port,
+                        insecure: true,
+                        tls_params: None,
+                    },
                     redis: RedisConnectionInfo::default(),
                 })
                 .unwrap();
@@ -5657,7 +6203,7 @@ pub(crate) mod shared_client_tests {
                 };
                 let mut req = ProtoConnectionRequest::new();
                 for addr in &addresses {
-                    if let redis::ConnectionAddr::Tcp(host, port) = addr {
+                    if let redis::ConnectionAddr::TcpTls { host, port, .. } = addr {
                         req.addresses.push(NodeAddress {
                             host: host.clone().into(),
                             port: (*port as u32),
@@ -5665,7 +6211,7 @@ pub(crate) mod shared_client_tests {
                         });
                     }
                 }
-                req.tls_mode = TlsMode::NoTls.into();
+                req.tls_mode = TlsMode::InsecureTls.into();
                 req.cluster_mode_enabled = true;
                 req.request_timeout = 10000;
                 let mut iam = IamCredentials::new();
@@ -5766,6 +6312,270 @@ pub(crate) mod shared_client_tests {
                  (before={auth_before}, after={auth_after}); if equal, the \
                  cluster_scan path did not run the reconcile"
             );
+        });
+    }
+
+    /// Regression test for #7301, on a real 3-shard cluster (so AllNodes routing
+    /// spans multiple primaries):
+    ///
+    /// 1. (all versions) A MULTI opened on `AllNodes` must be cleared on every node
+    ///    on release: re-acquire and assert `PING` to each primary returns `PONG`
+    ///    (an open MULTI replies `QUEUED`). Fails deterministically on the pre-fix
+    ///    single-node DISCARD, which leaves ≥2 of 3 primaries dirty.
+    /// 2. (all versions) A MULTI opened on a SINGLE primary must still re-idle: the
+    ///    release DISCARD fans out to `AllNodes`, so the owner answers `+OK` while
+    ///    the siblings answer "DISCARD without MULTI" and the aggregate is `Err` —
+    ///    which must be tolerated, not read as a reset failure that discards the
+    ///    connection. Exercises the classify-by-message branch on a live cluster.
+    /// 3. (Valkey 9.0+ multi-db clusters) A borrow that `SELECT`ed another db must
+    ///    be restored to the configured db on release — guards against the wrong
+    ///    fix of skipping `SELECT` by topology, which would leak db 7.
+    #[cfg(feature = "proto")]
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_cluster_pool_release_returns_clean_connection_to_idle() {
+        use glide_core::pool::{ClientPool, PoolConfig, release_client_async};
+        use protobuf::Message as _;
+        use std::sync::Arc;
+        use std::time::Duration;
+        use tokio::sync::Mutex as TokioMutex;
+
+        block_on_all(async {
+            // Dedicated 3-shard cluster: a known N≥2 so the AllNodes-vs-one-node
+            // DISCARD difference is deterministic (not dependent on shared-cluster
+            // size or which node Random happened to pick).
+            let cluster =
+                crate::utilities::cluster::RedisCluster::new(false, &None, Some(3), Some(0));
+            let addresses = cluster.get_server_addresses();
+            let configuration = TestConfiguration {
+                cluster_mode: ClusterMode::Enabled,
+                request_timeout: Some(10_000),
+                ..Default::default()
+            };
+            let connection_request = create_connection_request(&addresses, &configuration);
+            let request_bytes = connection_request
+                .write_to_bytes()
+                .expect("serialize cluster connection request");
+
+            // configured db 0 — the same bytes the client connects with, exactly
+            // as every binding derives PoolConfig.configured_database_id.
+            let pool_config = PoolConfig {
+                max_size: 4,
+                min_idle: 0,
+                idle_timeout: Duration::from_secs(300),
+                request_timeout: Duration::from_secs(10),
+                test_on_borrow: false,
+                connection_request: request_bytes.clone(),
+                is_async: true,
+                configured_database_id: 0,
+                abandon_timeout: Duration::ZERO,
+            };
+            let pool_arc = Arc::new(TokioMutex::new(
+                ClientPool::new(pool_config).expect("valid pool config"),
+            ));
+
+            // ── borrow helpers ──────────────────────────────────────────────
+            let add_and_acquire = |pool_arc: Arc<TokioMutex<ClientPool>>, client: Client| async move {
+                let mut pool = pool_arc.lock().await;
+                let id = pool.add_client(client);
+                assert_eq!(pool.try_acquire(), id as i64, "the fresh client is idle");
+                id
+            };
+
+            let all_nodes = || RoutingInfo::MultiNode((MultipleNodeRoutingInfo::AllNodes, None));
+
+            // ── 1. open MULTI on every primary, release, require all clean ──
+            let client = Client::new(connection_request.clone().into(), None)
+                .await
+                .expect("cluster client creation");
+            let client_id = add_and_acquire(pool_arc.clone(), client).await;
+            {
+                let pool = pool_arc.lock().await;
+                let mut entry = pool.in_use.get_mut(&client_id).expect("borrowed entry");
+                entry
+                    .client
+                    .send_command(&mut redis::cmd("MULTI"), Some(all_nodes()))
+                    .await
+                    .expect("MULTI on all primaries");
+            }
+            release_client_async(pool_arc.clone(), client_id).await;
+            {
+                let mut pool = pool_arc.lock().await;
+                assert_eq!(
+                    pool.idle_count(),
+                    1,
+                    "a clean cluster release must return the connection to idle, not discard it"
+                );
+                assert!(
+                    pool.drain_discarded_ids().is_empty(),
+                    "nothing should be discarded"
+                );
+                assert_eq!(
+                    pool.try_acquire(),
+                    client_id as i64,
+                    "same connection reused"
+                );
+            }
+            {
+                let pool = pool_arc.lock().await;
+                let mut entry = pool.in_use.get_mut(&client_id).expect("reused entry");
+                let reply = entry
+                    .client
+                    .send_command(&mut redis::cmd("PING"), Some(all_nodes()))
+                    .await
+                    .expect("PING all primaries on the reused connection");
+                // Every per-node reply must be PONG. A primary that still had the
+                // prior borrow's MULTI open would answer QUEUED.
+                let nodes: Vec<Value> = match reply {
+                    Value::Map(m) => m.into_iter().map(|(_, v)| v).collect(),
+                    other => panic!("expected per-node map from AllNodes PING: {other:?}"),
+                };
+                assert!(
+                    nodes.len() >= 2,
+                    "need ≥2 primaries to distinguish AllNodes from single-node DISCARD"
+                );
+                for v in nodes {
+                    assert_eq!(
+                        v,
+                        Value::SimpleString("PONG".into()),
+                        "a primary still had MULTI open after release — DISCARD did not reach \
+                         every node (got {v:?} instead of PONG)"
+                    );
+                }
+            }
+
+            // ── 2. MULTI open on a SINGLE primary: release must still re-idle ──
+            // The production shape the AllNodes DISCARD aggregation must tolerate:
+            // the owning node answers +OK, every other node answers "DISCARD
+            // without MULTI", so the aggregate is Err even though the reset
+            // succeeded. Section 1's all-nodes MULTI makes every DISCARD succeed
+            // (aggregate Ok), so only this single-node case exercises the
+            // classify-by-message branch on a live cluster.
+            let client = Client::new(connection_request.clone().into(), None)
+                .await
+                .expect("cluster client creation");
+            let client_id = add_and_acquire(pool_arc.clone(), client).await;
+            let one_primary = {
+                let key = format!("{{{}}}:pool7301multi", generate_random_string(8));
+                RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(Route::new(
+                    get_slot(key.as_bytes()),
+                    SlotAddr::Master,
+                )))
+            };
+            {
+                let pool = pool_arc.lock().await;
+                let mut entry = pool.in_use.get_mut(&client_id).expect("borrowed entry");
+                entry
+                    .client
+                    .send_command(&mut redis::cmd("MULTI"), Some(one_primary.clone()))
+                    .await
+                    .expect("MULTI on a single primary");
+            }
+            release_client_async(pool_arc.clone(), client_id).await;
+            {
+                let mut pool = pool_arc.lock().await;
+                assert_eq!(
+                    pool.idle_count(),
+                    1,
+                    "a single-node-MULTI release must re-idle: the siblings' \
+                     \"DISCARD without MULTI\" aggregate error must be tolerated, not \
+                     treated as a reset failure"
+                );
+                assert!(
+                    pool.drain_discarded_ids().is_empty(),
+                    "nothing should be discarded"
+                );
+                assert_eq!(
+                    pool.try_acquire(),
+                    client_id as i64,
+                    "same connection reused"
+                );
+            }
+            {
+                let pool = pool_arc.lock().await;
+                let mut entry = pool.in_use.get_mut(&client_id).expect("reused entry");
+                let reply = entry
+                    .client
+                    .send_command(&mut redis::cmd("PING"), Some(all_nodes()))
+                    .await
+                    .expect("PING all primaries on the reused connection");
+                let nodes: Vec<Value> = match reply {
+                    Value::Map(m) => m.into_iter().map(|(_, v)| v).collect(),
+                    other => panic!("expected per-node map from AllNodes PING: {other:?}"),
+                };
+                for v in nodes {
+                    assert_eq!(
+                        v,
+                        Value::SimpleString("PONG".into()),
+                        "the owning primary still had MULTI open after release \
+                         (got {v:?} instead of PONG)"
+                    );
+                }
+            }
+
+            // ── 3. db drift must be restored (Valkey 9.0+ multi-db cluster) ──
+            let mut version_probe = Client::new(connection_request.clone().into(), None)
+                .await
+                .expect("cluster client creation");
+            if utilities::version_greater_or_equal(&mut version_probe, "9.0.0").await {
+                let client = Client::new(connection_request.into(), None)
+                    .await
+                    .expect("cluster client creation");
+                let client_id = add_and_acquire(pool_arc.clone(), client).await;
+                // Drift to db 7 on a single primary (reachable in production via
+                // customCommand), using a hash-tagged key's slot.
+                let key = format!("{{{}}}:pool7301", generate_random_string(8));
+                let route = RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(
+                    Route::new(get_slot(key.as_bytes()), SlotAddr::Master),
+                ));
+                {
+                    let pool = pool_arc.lock().await;
+                    let mut entry = pool.in_use.get_mut(&client_id).expect("borrowed entry");
+                    let mut select7 = redis::cmd("SELECT");
+                    select7.arg("7");
+                    entry
+                        .client
+                        .send_command(&mut select7, Some(route.clone()))
+                        .await
+                        .expect("SELECT 7 on a 9.0+ cluster");
+                }
+                release_client_async(pool_arc.clone(), client_id).await;
+                {
+                    let mut pool = pool_arc.lock().await;
+                    assert_eq!(
+                        pool.idle_count(),
+                        1,
+                        "drifted-db release must still re-idle"
+                    );
+                    assert_eq!(
+                        pool.try_acquire(),
+                        client_id as i64,
+                        "same connection reused"
+                    );
+                }
+                {
+                    let pool = pool_arc.lock().await;
+                    let mut entry = pool.in_use.get_mut(&client_id).expect("reused entry");
+                    let mut info = redis::cmd("CLIENT");
+                    info.arg("INFO");
+                    let reply = entry
+                        .client
+                        .send_command(&mut info, Some(route))
+                        .await
+                        .expect("CLIENT INFO on the reused connection");
+                    let info = match reply {
+                        Value::BulkString(b) => String::from_utf8_lossy(&b).to_string(),
+                        Value::VerbatimString { text, .. } => text,
+                        other => panic!("unexpected CLIENT INFO reply: {other:?}"),
+                    };
+                    assert!(
+                        info.contains("db=0"),
+                        "release must restore the configured db 0 after a borrow drifted to \
+                         db 7, not leak the drifted db to the next borrower: {info}"
+                    );
+                }
+            }
         });
     }
 }

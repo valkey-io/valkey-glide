@@ -58,8 +58,8 @@ class NodeAddress:
     Represents the address of a node, either a TCP host and port or a Unix domain socket.
 
     Attributes:
-        host (str, optional): The server host. Defaults to "localhost".
-        port (int, optional): The server port. Defaults to 6379.
+        host (str): The server host. Defaults to "localhost".
+        port (int): The server port. Defaults to 6379.
         unix_socket_path (Optional[StrPath]): Absolute path of the server's Unix domain socket.
             When set, ``host`` and ``port`` are ignored. Standalone clients only, without TLS.
             For example::
@@ -246,8 +246,9 @@ class CompressionConfiguration:
 
     WARNING: This feature is experimental and not recommended for production use.
 
-    Compression is NOT compatible with commands that manipulate string data on the server side:
-    - APPEND, GETRANGE, SETRANGE, STRLEN, LCS
+    Compression is NOT compatible with commands that manipulate or compare string data on the server side:
+    - APPEND, GETRANGE, SETRANGE, STRLEN, LCS, SUBSTR
+    - DELIFEQ and SET with IFEQ or IFNE
     - INCR, INCRBY, INCRBYFLOAT, DECR, DECRBY
     - GETBIT, SETBIT, BITCOUNT, BITPOS, BITFIELD, BITFIELD_RO, BITOP
 
@@ -1242,7 +1243,7 @@ class BaseClientConfiguration:
         Generates a Protobuf ConnectionRequest using the values from this ClientConfiguration.
 
         Args:
-            cluster_mode (bool, optional): The cluster mode of the client. Defaults to False.
+            cluster_mode (bool): The cluster mode of the client. Defaults to False.
 
         Returns:
             ConnectionRequest: Protobuf ConnectionRequest.
@@ -1686,7 +1687,7 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
         Pattern = 1
         """ Use channel name patterns """
         Sharded = 2
-        """ Use sharded pubsub. Available since Valkey version 7.0. """
+        """ Use sharded pubsub. Available since Valkey 7.0.0. """
 
     @dataclass
     class PubSubSubscriptions:

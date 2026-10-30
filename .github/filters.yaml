@@ -1,0 +1,29 @@
+# Single source of truth for the gate-job doc-only skip. Add new doc/asset patterns below.
+#
+# 1. semgrep, ort have no trigger `paths:`, so a gate job runs
+#    dorny/paths-filter against this file (predicate-quantifier: some-with-excludes
+#    => code=false only when every changed file is a doc). Gate `if:` tests
+#    code != 'false' (fail closed: run unless definitively doc-only).
+# 2. Per-language workflows skip via their own `on: paths:`, each ending in
+#    "!**/*.md" + "!**/THIRD_PARTY_LICENSES*" so docs and attribution files
+#    inside a code tree (node/DEVELOPER.md) skip too. GitHub evaluates triggers
+#    before any job, so those lines can't read this file.
+# 3. codeql.yml and git-secrets-scan.yml stay ungated. codeql: its merge gate is
+#    a code_scanning rule needing a real SARIF upload, so a skipped analyze job
+#    would hang the check forever. git-secrets: no push/schedule trigger (PR time
+#    is its only scan) and it scans .md too, so gating would let a secret in docs
+#    merge unscanned.
+code:
+    - "**"
+    - "!**/*.md"
+    - "!**/*.rst"
+    - "!**/THIRD_PARTY_LICENSES*" # generated attribution files, no extension
+    - "!LICENSE"
+    - "!NOTICE"
+    - "!.gitignore"
+    - "!**/.gitignore"
+    - "!**/*.png"
+    - "!**/*.svg"
+    - "!**/*.jpg"
+    - "!**/*.jpeg"
+    - "!**/*.gif"

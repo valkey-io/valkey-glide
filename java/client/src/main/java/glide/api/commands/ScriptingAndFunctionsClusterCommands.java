@@ -24,7 +24,7 @@ public interface ScriptingAndFunctionsClusterCommands {
      * Loads a library to Valkey.<br>
      * The command will be routed to all primary nodes.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/function-load/">valkey.io</a> for details.
      * @param libraryCode The source code that implements the library.
      * @param replace Whether the given library should overwrite a library with the same name if it
@@ -43,7 +43,7 @@ public interface ScriptingAndFunctionsClusterCommands {
      * Loads a library to Valkey.<br>
      * The command will be routed to all primary nodes.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/function-load/">valkey.io</a> for details.
      * @param libraryCode The source code that implements the library.
      * @param replace Whether the given library should overwrite a library with the same name if it
@@ -61,7 +61,7 @@ public interface ScriptingAndFunctionsClusterCommands {
     /**
      * Loads a library to Valkey.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/function-load/">valkey.io</a> for details.
      * @param libraryCode The source code that implements the library.
      * @param replace Whether the given library should overwrite a library with the same name if it
@@ -82,7 +82,7 @@ public interface ScriptingAndFunctionsClusterCommands {
     /**
      * Loads a library to Valkey.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/function-load/">valkey.io</a> for details.
      * @param libraryCode The source code that implements the library.
      * @param replace Whether the given library should overwrite a library with the same name if it
@@ -105,7 +105,7 @@ public interface ScriptingAndFunctionsClusterCommands {
      * Returns information about the functions and libraries.<br>
      * The command will be routed to a random node.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/function-list/">valkey.io</a> for details.
      * @param withCode Specifies whether to request the library code from the server or not.
      * @return Info about all libraries and their functions.
@@ -131,7 +131,7 @@ public interface ScriptingAndFunctionsClusterCommands {
      * Returns information about the functions and libraries.<br>
      * The command will be routed to a random node.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/function-list/">valkey.io</a> for details.
      * @param withCode Specifies whether to request the library code from the server or not.
      * @return Info about all libraries and their functions.
@@ -157,7 +157,7 @@ public interface ScriptingAndFunctionsClusterCommands {
      * Returns information about the functions and libraries.<br>
      * The command will be routed to a random node.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/function-list/">valkey.io</a> for details.
      * @param libNamePattern A wildcard pattern for matching library names.
      * @param withCode Specifies whether to request the library code from the server or not.
@@ -184,7 +184,7 @@ public interface ScriptingAndFunctionsClusterCommands {
      * Returns information about the functions and libraries.<br>
      * The command will be routed to a random node.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/function-list/">valkey.io</a> for details.
      * @param libNamePattern A wildcard pattern for matching library names.
      * @param withCode Specifies whether to request the library code from the server or not.
@@ -211,7 +211,7 @@ public interface ScriptingAndFunctionsClusterCommands {
     /**
      * Returns information about the functions and libraries.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/function-list/">valkey.io</a> for details.
      * @param withCode Specifies whether to request the library code from the server or not.
      * @param route Specifies the routing configuration for the command. The client will route the
@@ -241,7 +241,7 @@ public interface ScriptingAndFunctionsClusterCommands {
     /**
      * Returns information about the functions and libraries.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/function-list/">valkey.io</a> for details.
      * @param withCode Specifies whether to request the library code from the server or not.
      * @param route Specifies the routing configuration for the command. The client will route the
@@ -271,7 +271,7 @@ public interface ScriptingAndFunctionsClusterCommands {
     /**
      * Returns information about the functions and libraries.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/function-list/">valkey.io</a> for details.
      * @param libNamePattern A wildcard pattern for matching library names.
      * @param withCode Specifies whether to request the library code from the server or not.
@@ -302,7 +302,7 @@ public interface ScriptingAndFunctionsClusterCommands {
     /**
      * Returns information about the functions and libraries.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/function-list/">valkey.io</a> for details.
      * @param libNamePattern A wildcard pattern for matching library names.
      * @param withCode Specifies whether to request the library code from the server or not.
@@ -334,7 +334,7 @@ public interface ScriptingAndFunctionsClusterCommands {
      * Deletes all function libraries.<br>
      * The command will be routed to all primary nodes.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/function-flush/">valkey.io</a> for details.
      * @return <code>OK</code>.
      * @example
@@ -349,7 +349,7 @@ public interface ScriptingAndFunctionsClusterCommands {
      * Deletes all function libraries.<br>
      * The command will be routed to all primary nodes.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/function-flush/">valkey.io</a> for details.
      * @param mode The flushing mode, could be either {@link FlushMode#SYNC} or {@link
      *     FlushMode#ASYNC}.
@@ -365,7 +365,7 @@ public interface ScriptingAndFunctionsClusterCommands {
     /**
      * Deletes all function libraries.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/function-flush/">valkey.io</a> for details.
      * @param route Specifies the routing configuration for the command. The client will route the
      *     command to the nodes defined by <code>route</code>.
@@ -381,7 +381,7 @@ public interface ScriptingAndFunctionsClusterCommands {
     /**
      * Deletes all function libraries.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/function-flush/">valkey.io</a> for details.
      * @param mode The flushing mode, could be either {@link FlushMode#SYNC} or {@link
      *     FlushMode#ASYNC}.
@@ -400,7 +400,7 @@ public interface ScriptingAndFunctionsClusterCommands {
      * Deletes a library and all its functions.<br>
      * The command will be routed to all primary nodes.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/function-delete/">valkey.io</a> for details.
      * @param libName The library name to delete.
      * @return <code>OK</code>.
@@ -416,7 +416,7 @@ public interface ScriptingAndFunctionsClusterCommands {
      * Deletes a library and all its functions.<br>
      * The command will be routed to all primary nodes.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/function-delete/">valkey.io</a> for details.
      * @param libName The library name to delete.
      * @return <code>OK</code>.
@@ -431,7 +431,7 @@ public interface ScriptingAndFunctionsClusterCommands {
     /**
      * Deletes a library and all its functions.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/function-delete/">valkey.io</a> for details.
      * @param libName The library name to delete.
      * @param route Specifies the routing configuration for the command. The client will route the
@@ -448,7 +448,7 @@ public interface ScriptingAndFunctionsClusterCommands {
     /**
      * Deletes a library and all its functions.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/function-delete/">valkey.io</a> for details.
      * @param libName The library name to delete.
      * @param route Specifies the routing configuration for the command. The client will route the
@@ -466,7 +466,7 @@ public interface ScriptingAndFunctionsClusterCommands {
      * Returns the serialized payload of all loaded libraries.<br>
      * The command will be routed to a random node.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/function-dump/">valkey.io</a> for details.
      * @return The serialized payload of all loaded libraries.
      * @example
@@ -480,7 +480,7 @@ public interface ScriptingAndFunctionsClusterCommands {
     /**
      * Returns the serialized payload of all loaded libraries.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/function-dump/">valkey.io</a> for details.
      * @param route Specifies the routing configuration for the command. The client will route the
      *     command to the nodes defined by <code>route</code>.
@@ -497,7 +497,7 @@ public interface ScriptingAndFunctionsClusterCommands {
      * Restores libraries from the serialized payload returned by {@link #functionDump()}.<br>
      * The command will be routed to all primary nodes.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/function-restore/">valkey.io</a> for details.
      * @param payload The serialized data from {@link #functionDump()}.
      * @return <code>OK</code>.
@@ -513,7 +513,7 @@ public interface ScriptingAndFunctionsClusterCommands {
      * Restores libraries from the serialized payload returned by {@link #functionDump()}.<br>
      * The command will be routed to all primary nodes.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/function-restore/">valkey.io</a> for details.
      * @param payload The serialized data from {@link #functionDump()}.
      * @param policy A policy for handling existing libraries.
@@ -529,7 +529,7 @@ public interface ScriptingAndFunctionsClusterCommands {
     /**
      * Restores libraries from the serialized payload returned by {@link #functionDump(Route)}.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/function-restore/">valkey.io</a> for details.
      * @param payload The serialized data from {@link #functionDump()}.
      * @param route Specifies the routing configuration for the command. The client will route the
@@ -546,7 +546,7 @@ public interface ScriptingAndFunctionsClusterCommands {
     /**
      * Restores libraries from the serialized payload returned by {@link #functionDump(Route)}.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/function-restore/">valkey.io</a> for details.
      * @param payload The serialized data from {@link #functionDump()}.
      * @param policy A policy for handling existing libraries.
@@ -567,7 +567,7 @@ public interface ScriptingAndFunctionsClusterCommands {
      * The command will be routed to a primary random node.<br>
      * To route to a replica please refer to {@link #fcallReadOnly(String)}.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/fcall/">valkey.io</a> for details.
      * @param function The function name.
      * @return The invoked function's return value.
@@ -584,7 +584,7 @@ public interface ScriptingAndFunctionsClusterCommands {
      * The command will be routed to a primary random node.<br>
      * To route to a replica please refer to {@link #fcallReadOnly(String)}.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/fcall/">valkey.io</a> for details.
      * @param function The function name.
      * @return The invoked function's return value.
@@ -599,7 +599,7 @@ public interface ScriptingAndFunctionsClusterCommands {
     /**
      * Invokes a previously loaded function.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/fcall/">valkey.io</a> for details.
      * @param function The function name.
      * @param route Specifies the routing configuration for the command. The client will route the
@@ -618,7 +618,7 @@ public interface ScriptingAndFunctionsClusterCommands {
     /**
      * Invokes a previously loaded function.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/fcall/">valkey.io</a> for details.
      * @param function The function name.
      * @param route Specifies the routing configuration for the command. The client will route the
@@ -639,7 +639,7 @@ public interface ScriptingAndFunctionsClusterCommands {
      * The command will be routed to a random primary node.<br>
      * To route to a replica please refer to {@link #fcallReadOnly(String, String[])}.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/fcall/">valkey.io</a> for details.
      * @param function The function name.
      * @param arguments An <code>array</code> of <code>function</code> arguments. <code>arguments
@@ -659,7 +659,7 @@ public interface ScriptingAndFunctionsClusterCommands {
      * The command will be routed to a random primary node.<br>
      * To route to a replica please refer to {@link #fcallReadOnly(String, String[])}.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/fcall/">valkey.io</a> for details.
      * @param function The function name.
      * @param arguments An <code>array</code> of <code>function</code> arguments. <code>arguments
@@ -677,7 +677,7 @@ public interface ScriptingAndFunctionsClusterCommands {
     /**
      * Invokes a previously loaded function.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/fcall/">valkey.io</a> for details.
      * @param function The function name.
      * @param arguments An <code>array</code> of <code>function</code> arguments. <code>arguments
@@ -697,7 +697,7 @@ public interface ScriptingAndFunctionsClusterCommands {
     /**
      * Invokes a previously loaded function.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/fcall/">valkey.io</a> for details.
      * @param function The function name.
      * @param arguments An <code>array</code> of <code>function</code> arguments. <code>arguments
@@ -719,7 +719,7 @@ public interface ScriptingAndFunctionsClusterCommands {
      * Invokes a previously loaded read-only function.<br>
      * The command is routed to a random node depending on the client's {@link ReadFrom} strategy.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/fcall_ro/">valkey.io</a> for details.
      * @param function The function name.
      * @return The invoked function's return value.
@@ -735,7 +735,7 @@ public interface ScriptingAndFunctionsClusterCommands {
      * Invokes a previously loaded read-only function.<br>
      * The command is routed to a random node depending on the client's {@link ReadFrom} strategy.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/fcall_ro/">valkey.io</a> for details.
      * @param function The function name.
      * @return The invoked function's return value.
@@ -750,7 +750,7 @@ public interface ScriptingAndFunctionsClusterCommands {
     /**
      * Invokes a previously loaded read-only function.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/fcall_ro/">valkey.io</a> for details.
      * @param function The function name.
      * @param route Specifies the routing configuration for the command. The client will route the
@@ -769,7 +769,7 @@ public interface ScriptingAndFunctionsClusterCommands {
     /**
      * Invokes a previously loaded read-only function.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/fcall_ro/">valkey.io</a> for details.
      * @param function The function name.
      * @param route Specifies the routing configuration for the command. The client will route the
@@ -789,7 +789,7 @@ public interface ScriptingAndFunctionsClusterCommands {
      * Invokes a previously loaded function.<br>
      * The command is routed to a random node depending on the client's {@link ReadFrom} strategy.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/fcall_ro/">valkey.io</a> for details.
      * @param function The function name.
      * @param arguments An <code>array</code> of <code>function</code> arguments. <code>arguments
@@ -808,7 +808,7 @@ public interface ScriptingAndFunctionsClusterCommands {
      * Invokes a previously loaded function.<br>
      * The command is routed to a random node depending on the client's {@link ReadFrom} strategy.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/fcall_ro/">valkey.io</a> for details.
      * @param function The function name.
      * @param arguments An <code>array</code> of <code>function</code> arguments. <code>arguments
@@ -826,7 +826,7 @@ public interface ScriptingAndFunctionsClusterCommands {
     /**
      * Invokes a previously loaded read-only function.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/fcall_ro/">valkey.io</a> for details.
      * @param function The function name.
      * @param arguments An <code>array</code> of <code>function</code> arguments. <code>arguments
@@ -847,7 +847,7 @@ public interface ScriptingAndFunctionsClusterCommands {
     /**
      * Invokes a previously loaded read-only function.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/fcall_ro/">valkey.io</a> for details.
      * @param function The function name.
      * @param arguments An <code>array</code> of <code>function</code> arguments. <code>arguments
@@ -870,7 +870,7 @@ public interface ScriptingAndFunctionsClusterCommands {
      * <code>FUNCTION KILL</code> terminates read-only functions only.<br>
      * The command will be routed to all nodes.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/function-kill/">valkey.io</a> for details.
      * @return <code>OK</code> if function is terminated. Otherwise, throws an error.
      * @example
@@ -885,7 +885,7 @@ public interface ScriptingAndFunctionsClusterCommands {
      * Kills a function that is currently executing.<br>
      * <code>FUNCTION KILL</code> terminates read-only functions only.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/function-kill/">valkey.io</a> for details.
      * @param route Specifies the routing configuration for the command. The client will route the
      *     command to the nodes defined by <code>route</code>.
@@ -903,7 +903,7 @@ public interface ScriptingAndFunctionsClusterCommands {
      * available execution engines.<br>
      * The command will be routed to all nodes.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/function-stats/">valkey.io</a> for details.
      * @return A <code>Map</code> with two keys:
      *     <ul>
@@ -937,7 +937,7 @@ public interface ScriptingAndFunctionsClusterCommands {
      * available execution engines.<br>
      * The command will be routed to all nodes.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/function-stats/">valkey.io</a> for details.
      * @return A <code>Map</code> with two keys:
      *     <ul>
@@ -970,7 +970,7 @@ public interface ScriptingAndFunctionsClusterCommands {
      * Returns information about the function that's currently running and information about the
      * available execution engines.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/function-stats/">valkey.io</a> for details.
      * @param route Specifies the routing configuration for the command. The client will route the
      *     command to the nodes defined by <code>route</code>.
@@ -1003,7 +1003,7 @@ public interface ScriptingAndFunctionsClusterCommands {
      * Returns information about the function that's currently running and information about the
      * available execution engines.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/function-stats/">valkey.io</a> for details.
      * @param route Specifies the routing configuration for the command. The client will route the
      *     command to the nodes defined by <code>route</code>.

@@ -228,7 +228,11 @@ def copy_readme_to_package(package_dir: Path) -> None:
     copy2(source, dest)
 
 
-def install_glide_shared(env: Dict[str, str], release: bool = False) -> None:
+def install_glide_shared(env: Dict[str, str], release: bool = False) -> Path:
+    """
+    Installs glide-shared, builds the FFI library, and copies it into glide_shared.
+    Returns the path of the built FFI library.
+    """
     cmd = [str(venv_ctx["python_exe"]), "-m", "maturin", "develop", "--locked"]
     if release:
         cmd += ["--release"]
@@ -242,36 +246,33 @@ def install_glide_shared(env: Dict[str, str], release: bool = False) -> None:
     )
 
     # Build the FFI library and copy to glide_shared so it can be found
-    # without requiring glide-sync to be installed.
-    ffi_output_dir = FFI_OUTPUT_DIR_RELEASE if release else FFI_OUTPUT_DIR_DEBUG
-    try:
-        ffi_lib_path = find_libglide_ffi(ffi_output_dir)
-        dest = SHARED_PACKAGE_DIR / ffi_lib_path.name
-        needs_build = not dest.exists()
-    except FileNotFoundError:
-        needs_build = True
-        dest = None
+    # without requiring glide-sync to be installed. Always rebuild so
+    # the installed library reflects the latest `glide-core` and `ffi`.
+    # `cargo` builds incrementally, so this is fast when nothing has changed.
+    ffi_build_cmd = [
+        "cargo",
+        "rustc",
+        "--lib",
+        "--crate-type",
+        "cdylib",
+        "--locked",
+    ]
 
-    if needs_build:
-        ffi_build_cmd = [
-            "cargo",
-            "rustc",
-            "--lib",
-            "--crate-type",
-            "cdylib",
-            "--locked",
-        ]
-        if release:
-            ffi_build_cmd += ["--release"]
-        run_command(
-            ffi_build_cmd,
-            cwd=FFI_DIR,
-            env=shared_env,
-            label="build FFI library",
-        )
-        ffi_lib_path = find_libglide_ffi(ffi_output_dir)
-        dest = SHARED_PACKAGE_DIR / ffi_lib_path.name
-        copy2(ffi_lib_path, dest)
+    if release:
+        ffi_build_cmd += ["--release"]
+
+    run_command(
+        ffi_build_cmd,
+        cwd=FFI_DIR,
+        env=shared_env,
+        label="build FFI library",
+    )
+
+    ffi_output_dir = FFI_OUTPUT_DIR_RELEASE if release else FFI_OUTPUT_DIR_DEBUG
+    ffi_lib_path = find_libglide_ffi(ffi_output_dir)
+    copy2(ffi_lib_path, SHARED_PACKAGE_DIR / ffi_lib_path.name)
+
+    return ffi_lib_path
 
 
 def build_async_client_wheel(
@@ -422,34 +423,12 @@ def build_sync_client(
     if wheel:
         return build_sync_client_wheel(env)
 
-    install_glide_shared(env, release=release)
+    libglide_ffi_path = install_glide_shared(env, release=release)
     env.update(
         {  # Update it with your GLIDE variables
             "GLIDE_VERSION": glide_version,
         }
     )
-    # Build the FFI library
-    build_args = ["cargo", "rustc", "--lib", "--crate-type", "cdylib", "--locked"]
-    if release:
-        build_args += ["--release"]
-
-    run_command(
-        build_args,
-        cwd=FFI_DIR,
-        label="Build the FFI rust library",
-        env=env,
-    )
-
-    # Locate the FFI library output file
-    libglide_ffi_path = (
-        find_libglide_ffi(FFI_OUTPUT_DIR_RELEASE)
-        if release
-        else find_libglide_ffi(FFI_OUTPUT_DIR_DEBUG)
-    )
-    if not libglide_ffi_path.exists():
-        raise FileNotFoundError(
-            f"Expected shared object not found at {libglide_ffi_path}"
-        )
 
     # Copy to glide_sync package dir
     dest_path = SYNC_FFI_LIB
@@ -493,8 +472,18 @@ def clean_clients(client: ClientTarget) -> None:
 
     # Clean sync-only artifacts.
     if client in (ClientTarget.SYNC, ClientTarget.ALL):
+        # Prefer the venv interpreter (it has setuptools; a system/Homebrew
+        # python3 that launched dev.py may not), but fall back to the current
+        # interpreter when no venv exists yet so `clean` never dies before
+        # removing SYNC_FFI_LIB.
+        venv_python = venv_ctx["python_exe"]
+        clean_python = (
+            str(venv_python)
+            if venv_python is not None and venv_python.exists()
+            else sys.executable
+        )
         run_command(
-            [sys.executable, "setup.py", "clean"],
+            [clean_python, "setup.py", "clean"],
             cwd=GLIDE_SYNC_DIR,
             label="setup.py clean",
         )

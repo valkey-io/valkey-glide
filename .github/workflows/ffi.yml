@@ -14,6 +14,7 @@ on:
 
             # Rust dependencies
             - glide-core/**
+            - glide-rdma/**
             - glide-telemetry/**
             - glide-logger/**
             - deny.toml
@@ -21,17 +22,21 @@ on:
             # GitHub workflows
             - .github/workflows/ffi.yml
             - .github/actions/install-engine/action.yml
+            - .github/actions/install-libfabric/action.yml
             - .github/actions/install-protoc/action.yml
             - .github/actions/install-rust/action.yml
             - .github/actions/install-shared-dependencies/action.yml
             - .github/actions/install-zig/action.yml
             - .github/workflows/lint-rust/action.yml
+            - "!**/*.md"
+            - "!**/THIRD_PARTY_LICENSES*"
     pull_request:
         paths:
             - ffi/**
 
             # Rust dependencies
             - glide-core/**
+            - glide-rdma/**
             - glide-telemetry/**
             - glide-logger/**
             - deny.toml
@@ -39,11 +44,14 @@ on:
             # GitHub workflows
             - .github/workflows/ffi.yml
             - .github/actions/install-engine/action.yml
+            - .github/actions/install-libfabric/action.yml
             - .github/actions/install-protoc/action.yml
             - .github/actions/install-rust/action.yml
             - .github/actions/install-shared-dependencies/action.yml
             - .github/actions/install-zig/action.yml
             - .github/workflows/lint-rust/action.yml
+            - "!**/*.md"
+            - "!**/THIRD_PARTY_LICENSES*"
     workflow_dispatch:
     workflow_call:
 
@@ -84,6 +92,13 @@ jobs:
             - name: Run glide-ffi tests
               working-directory: ./ffi
               run: cargo test
+
+            - name: Install libfabric
+              uses: ./.github/actions/install-libfabric
+
+            - name: Run glide-ffi RDMA tests
+              working-directory: ./ffi
+              run: cargo test --features rdma
 
             - name: Run glide-ffi MIRI tests
               working-directory: ./ffi/miri-tests
