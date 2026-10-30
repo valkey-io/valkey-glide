@@ -109,11 +109,11 @@ pub struct ClusterScanArgs {
 }
 
 impl ClusterScanArgs {
-    /// Creates a new [`ClusterScanArgsBuilder`] instance.
+    /// Creates a new `ClusterScanArgsBuilder` instance.
     ///
     /// # Returns
     ///
-    /// A [`ClusterScanArgsBuilder`] instance for configuring cluster scan arguments.
+    /// A `ClusterScanArgsBuilder` instance for configuring cluster scan arguments.
     pub fn builder() -> ClusterScanArgsBuilder {
         ClusterScanArgsBuilder::default()
     }
@@ -297,7 +297,7 @@ impl ScanStateRC {
 
     /// Creates a new instance of [`ScanStateRC`].
     ///
-    /// This method initializes the [`ScanStateRC`] with a reference to a [`ScanState`] that is initially set to `None`.
+    /// This method initializes the [`ScanStateRC`] with a reference to a `ScanState` that is initially set to `None`.
     /// An empty ScanState is equivalent to a 0 cursor.
     pub fn new() -> Self {
         Self {

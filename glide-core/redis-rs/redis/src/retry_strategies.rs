@@ -25,7 +25,7 @@ pub const MAX_JITTER_PERCENT: u32 = 100;
 impl RetryStrategy {
     /// Create RetryStrategy from given parameters.
     ///
-    /// A `jitter_percent` above [`MAX_JITTER_PERCENT`] is capped to it. Use [`Self::try_new`]
+    /// A `jitter_percent` above `MAX_JITTER_PERCENT` is capped to it. Use [`Self::try_new`]
     /// to reject it instead.
     pub fn new(
         exponent_base: u32,
@@ -45,7 +45,7 @@ impl RetryStrategy {
         Self::with_params(exponent_base, factor, number_of_retries, jitter)
     }
 
-    /// Like [`Self::new`], but fails if `jitter_percent` exceeds [`MAX_JITTER_PERCENT`]. A larger
+    /// Like [`Self::new`], but fails if `jitter_percent` exceeds `MAX_JITTER_PERCENT`. A larger
     /// jitter would make the lower jitter bound negative, which `Duration::mul_f64` cannot represent.
     pub fn try_new(
         exponent_base: u32,

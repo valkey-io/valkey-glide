@@ -1470,8 +1470,8 @@ pub(crate) enum ShardUpdateResult {
 
 const READ_LK_ERR_SHARDADDRS: &str = "Failed to acquire read lock for ShardAddrs";
 const WRITE_LK_ERR_SHARDADDRS: &str = "Failed to acquire write lock for ShardAddrs";
-/// This is just a simplified version of [`Slot`],
-/// which stores only the master and [optional] replica
+/// This is just a simplified version of `Slot`,
+/// which stores only the master and optional replica
 /// to avoid the need to choose a replica each time
 /// a command is executed
 #[derive(Debug)]
