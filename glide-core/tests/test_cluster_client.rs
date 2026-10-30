@@ -13,7 +13,7 @@ mod cluster_client_tests {
     use crate::utilities::{
         cluster::{
             LONG_CLUSTER_TEST_TIMEOUT, RedisCluster, SHORT_CLUSTER_TEST_TIMEOUT,
-            setup_cluster_with_replicas, setup_test_basics_internal,
+            create_cluster_client, setup_cluster_with_replicas, setup_test_basics_internal,
         },
         *,
     };
@@ -941,6 +941,114 @@ mod cluster_client_tests {
                 WINDOW_MS,
                 CONNECTION_TIMEOUT_MS,
             );
+        });
+    }
+
+    /// Number of connections on `addr` whose `CLIENT LIST` name is one of `names`.
+    async fn count_named_connections(addr: &redis::ConnectionAddr, names: &[&str]) -> usize {
+        let client = redis::Client::open(redis::ConnectionInfo {
+            addr: addr.clone(),
+            redis: RedisConnectionInfo {
+                protocol: redis::ProtocolVersion::RESP2,
+                ..Default::default()
+            },
+        })
+        .unwrap();
+        let mut conn = client
+            .get_multiplexed_async_connection(redis::GlideConnectionOptions::default())
+            .await
+            .unwrap();
+        let list: String = redis::cmd("CLIENT")
+            .arg("LIST")
+            .query_async(&mut conn)
+            .await
+            .unwrap();
+        list.lines()
+            .filter(|line| {
+                line.split(' ')
+                    .any(|field| names.iter().any(|name| field == format!("name={name}")))
+            })
+            .count()
+    }
+
+    #[rstest]
+    #[timeout(LONG_CLUSTER_TEST_TIMEOUT)]
+    fn test_close_releases_connections_while_reconnecting_a_dead_node() {
+        // Dropping the client while it retries a node that went away must still close its
+        // connections to the nodes that are up. The retry loop never ends on its own while
+        // the node stays down, so it must not keep the client's connections alive.
+        block_on_all(async {
+            const CLIENT_NAME: &str = "close-while-reconnecting";
+            let names = [
+                CLIENT_NAME,
+                redis::cluster_async::testing::MANAGEMENT_CONN_NAME,
+            ];
+
+            let cluster = RedisCluster::new(false, &None, Some(3), Some(0));
+            let addresses = cluster.get_server_addresses();
+            let pids = cluster.all_server_pids();
+            let mut client = create_cluster_client(
+                Some(&cluster),
+                TestConfiguration {
+                    client_name: Some(CLIENT_NAME.to_string()),
+                    ..Default::default()
+                },
+            )
+            .await;
+
+            let mut ping = redis::cmd("PING");
+            client
+                .send_command(
+                    &mut ping,
+                    Some(RoutingInfo::MultiNode((
+                        MultipleNodeRoutingInfo::AllMasters,
+                        None,
+                    ))),
+                )
+                .await
+                .unwrap();
+            for addr in &addresses {
+                assert!(count_named_connections(addr, &names).await > 0);
+            }
+
+            // Kill one primary and send it a command, so the client starts reconnecting to it.
+            let (dead_addr, alive_addrs) = addresses.split_first().unwrap();
+            std::process::Command::new("kill")
+                .args(["-9", &pids[0].to_string()])
+                .output()
+                .unwrap();
+            let (host, port) = match dead_addr {
+                redis::ConnectionAddr::Tcp(host, port) => (host.clone(), *port),
+                other => panic!("unexpected address {other:?}"),
+            };
+            let mut ping = redis::cmd("PING");
+            let result = client
+                .send_command(
+                    &mut ping,
+                    Some(RoutingInfo::SingleNode(SingleNodeRoutingInfo::ByAddress {
+                        host,
+                        port,
+                    })),
+                )
+                .await;
+            assert!(result.is_err(), "PING to the killed node: {result:?}");
+            tokio::time::sleep(Duration::from_millis(500)).await;
+
+            drop(client);
+
+            for addr in alive_addrs {
+                let closed = tokio::time::timeout(Duration::from_secs(5), async {
+                    while count_named_connections(addr, &names).await > 0 {
+                        tokio::time::sleep(Duration::from_millis(100)).await;
+                    }
+                })
+                .await;
+                assert!(
+                    closed.is_ok(),
+                    "the dropped client still has {} connections on {addr:?}",
+                    count_named_connections(addr, &names).await
+                );
+            }
         });
     }
 }
