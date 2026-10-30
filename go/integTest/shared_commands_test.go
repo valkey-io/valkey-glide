@@ -1642,6 +1642,15 @@ func (suite *GlideTestSuite) TestHSetEx_WithKeyConditionalSet() {
 		exists, err := client.Exists(ctx, []string{missingKey})
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), int64(0), exists)
+	})
+}
+
+func (suite *GlideTestSuite) TestHSetEx_WithAll() {
+	suite.SkipIfServerVersionLowerThan("9.1.0", suite.T())
+
+	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
+		ctx := context.Background()
+		fields := map[string]string{"field1": "value1"}
 
 		// Key conditional change can be combined with field conditional change and expiry
 		combinedKey := "test_hsetex_key_and_field_conditional_" + uuid.NewString()
@@ -1649,7 +1658,7 @@ func (suite *GlideTestSuite) TestHSetEx_WithKeyConditionalSet() {
 			SetConditionalSet(constants.OnlyIfDoesNotExist).
 			SetFieldConditionalSet(constants.HashFieldsDoNotExist).
 			SetExpiry(options.NewExpiryIn(60 * time.Second))
-		result, err = client.HSetEx(ctx, combinedKey, fields, combinedOptions)
+		result, err := client.HSetEx(ctx, combinedKey, fields, combinedOptions)
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), int64(1), result)
 		ttls, err := client.HTtl(ctx, combinedKey, []string{"field1"})

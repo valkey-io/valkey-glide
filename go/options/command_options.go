@@ -238,6 +238,19 @@ func (ex *Expiry) SetType(expiryType constants.ExpiryType) *Expiry {
 	return ex
 }
 
+// ToArgs converts the expiry to command arguments: EX, PX, EXAT, PXAT, KEEPTTL or PERSIST.
+// Callers are responsible for rejecting expiry types that their command does not support.
+func (ex *Expiry) ToArgs() ([]string, error) {
+	switch ex.Type {
+	case constants.Seconds, constants.Milliseconds, constants.UnixSeconds, constants.UnixMilliseconds:
+		return []string{string(ex.Type), strconv.FormatUint(ex.GetTime(), 10)}, nil
+	case constants.KeepExisting, constants.Persist:
+		return []string{string(ex.Type)}, nil
+	default:
+		return nil, errors.New("invalid expiry type " + string(ex.Type))
+	}
+}
+
 // GetTime returns the time in the appropriate unit (seconds or milliseconds)
 func (ex *Expiry) GetTime() uint64 {
 	if ex.Type == constants.UnixSeconds {

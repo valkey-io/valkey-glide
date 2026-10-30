@@ -56,7 +56,7 @@ func TestHSetExOptionsToArgs(t *testing.T) {
 	}
 }
 
-func TestHSetExExpiryArgs(t *testing.T) {
+func TestExpiryToArgs(t *testing.T) {
 	timestamp := time.Unix(1700000000, 0)
 
 	tests := []struct {
@@ -73,17 +73,23 @@ func TestHSetExExpiryArgs(t *testing.T) {
 			[]string{"PXAT", "1700000000000"},
 		},
 		{"keep existing", NewExpiryKeepExisting(), []string{"KEEPTTL"}},
+		{"persist", NewExpiryPersist(), []string{"PERSIST"}},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			args, err := hsetExExpiryArgs(test.expiry)
+			args, err := test.expiry.ToArgs()
 			assert.NoError(t, err)
 			assert.Equal(t, test.expected, args)
 		})
 	}
 
-	// PERSIST is not supported by HSETEX.
-	_, err := hsetExExpiryArgs(NewExpiryPersist())
+	_, err := (&Expiry{Type: "INVALID"}).ToArgs()
+	assert.ErrorContains(t, err, "invalid expiry type")
+}
+
+func TestHSetExOptionsToArgs_PersistNotSupported(t *testing.T) {
+	opts := NewHSetExOptions().SetExpiry(NewExpiryPersist())
+	_, err := opts.ToArgs()
 	assert.ErrorContains(t, err, "invalid expiry type")
 }
 

@@ -17,14 +17,14 @@ import (
 //
 // [valkey.io]: https://valkey.io/commands/hsetex/
 type HSetExOptions struct {
-	// ConditionalSet is the key condition: [constants.OnlyIfExists] (XX) or [constants.OnlyIfDoesNotExist] (NX).
-	// Key conditions require Valkey 9.1 and above.
+	// ConditionalSet is the key condition, see [constants.ConditionalSet]. Key conditions require Valkey 9.1.0.
 	//
-	// For backward compatibility, the deprecated field condition constants [constants.OnlyIfAllFieldsExist] (FXX) and
-	// [constants.OnlyIfFieldsDoNotExist] (FNX) are still accepted here; use FieldConditionalSet instead.
+	// TODO: https://github.com/valkey-io/valkey-glide/issues/7489 Remove this backward compatibility note in the next
+	// major release.
+	// For backward compatibility, the deprecated field condition constants are still accepted here;
+	// use FieldConditionalSet instead.
 	ConditionalSet constants.ConditionalSet
-	// FieldConditionalSet is the field condition: [constants.HashAllFieldsExist] (FXX) or
-	// [constants.HashFieldsDoNotExist] (FNX).
+	// FieldConditionalSet is the field condition, see [constants.HashFieldConditionalSet].
 	FieldConditionalSet constants.HashFieldConditionalSet
 	Expiry              *Expiry
 }
@@ -34,22 +34,22 @@ func NewHSetExOptions() HSetExOptions {
 	return HSetExOptions{}
 }
 
-// SetConditionalSet sets the key conditional set option: [constants.OnlyIfExists] (XX) or
-// [constants.OnlyIfDoesNotExist] (NX).
+// SetConditionalSet sets the key conditional set option, see [constants.ConditionalSet].
 //
 // Since:
 //
-//	Valkey 9.1 and above for key conditions.
+//	Valkey 9.1.0 for key conditions.
 //
-// Passing the deprecated field condition constants ([constants.OnlyIfAllFieldsExist] or
-// [constants.OnlyIfFieldsDoNotExist]) is still supported; use [HSetExOptions.SetFieldConditionalSet] instead.
+// TODO: https://github.com/valkey-io/valkey-glide/issues/7489 Remove this backward compatibility note in the next
+// major release.
+// Passing the deprecated field condition constants is still supported; use [HSetExOptions.SetFieldConditionalSet]
+// instead.
 func (opts HSetExOptions) SetConditionalSet(conditionalSet constants.ConditionalSet) HSetExOptions {
 	opts.ConditionalSet = conditionalSet
 	return opts
 }
 
-// SetFieldConditionalSet sets the field conditional set option: [constants.HashAllFieldsExist] (FXX) or
-// [constants.HashFieldsDoNotExist] (FNX).
+// SetFieldConditionalSet sets the field conditional set option, see [constants.HashFieldConditionalSet].
 func (opts HSetExOptions) SetFieldConditionalSet(fieldConditionalSet constants.HashFieldConditionalSet) HSetExOptions {
 	opts.FieldConditionalSet = fieldConditionalSet
 	return opts
@@ -98,7 +98,11 @@ func (opts *HSetExOptions) ToArgs() ([]string, error) {
 
 	// Add expiry options
 	if opts.Expiry != nil {
-		expiryArgs, err := hsetExExpiryArgs(opts.Expiry)
+		// HSETEX does not support PERSIST.
+		if opts.Expiry.Type == constants.Persist {
+			return nil, errors.New("HSetExOptions: invalid expiry type " + string(opts.Expiry.Type))
+		}
+		expiryArgs, err := opts.Expiry.ToArgs()
 		if err != nil {
 			return nil, err
 		}
@@ -106,25 +110,6 @@ func (opts *HSetExOptions) ToArgs() ([]string, error) {
 	}
 
 	return args, nil
-}
-
-// hsetExExpiryArgs converts an [Expiry] to the expiry arguments of the HSETEX command:
-// EX, PX, EXAT, PXAT or KEEPTTL. Other expiry types, such as PERSIST, are not supported by HSETEX.
-func hsetExExpiryArgs(expiry *Expiry) ([]string, error) {
-	switch expiry.Type {
-	case constants.Seconds:
-		return []string{"EX", utils.IntToString(int64(expiry.Duration))}, nil
-	case constants.Milliseconds:
-		return []string{"PX", utils.IntToString(int64(expiry.Duration))}, nil
-	case constants.UnixSeconds:
-		return []string{"EXAT", utils.IntToString(int64(expiry.GetTime()))}, nil
-	case constants.UnixMilliseconds:
-		return []string{"PXAT", utils.IntToString(int64(expiry.GetTime()))}, nil
-	case constants.KeepExisting:
-		return []string{"KEEPTTL"}, nil
-	default:
-		return nil, errors.New("HSetExOptions: invalid expiry type " + string(expiry.Type))
-	}
 }
 
 // HGetExOptions represents optional arguments for the HGETEX command.
