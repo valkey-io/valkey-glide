@@ -275,6 +275,10 @@ pub(crate) struct Pipeline<SinkItem> {
     progress: Arc<AtomicU64>,
     /// Aborts the driver task that owns the socket. See [`Pipeline::kill`].
     abort_handle: AbortHandle,
+    /// Set once the server tracks keys for the client-side cache on this connection
+    /// (`CLIENT TRACKING ON`). Shared with the `PipelineSink`, which flushes the cache
+    /// when the connection closes.
+    tracking_on: Arc<AtomicBool>,
 }
 
 impl<SinkItem> Debug for Pipeline<SinkItem>
@@ -297,12 +301,24 @@ pin_project! {
         is_stream_closed: Arc<AtomicBool>,
         response_sync_lost: bool,
         cache: Option<Arc<dyn GlideCache>>,
+        tracking_on: Arc<AtomicBool>,
         progress: Arc<AtomicU64>,
     }
 
         impl<T> PinnedDrop for PipelineSink<T> {
         fn drop(this: Pin<&mut Self>) {
             let this = this.project();
+
+            // Invalidations for this connection stop when it closes, and the ones the server
+            // sends before the client reconnects are lost, so anything cached until now may
+            // already be stale. This runs for any closed tracking connection, including one
+            // glide replaces on purpose, and the cache may be shared with other clients.
+            if this.tracking_on.load(Ordering::Acquire) {
+                if let Some(cache) = this.cache {
+                    cache.flush_all_server_assisted();
+                }
+            }
+
             let push_manager = this.push_manager.load();
             let address = push_manager.get_address();
 
@@ -326,6 +342,7 @@ where
         disconnect_notifier: Option<Box<dyn DisconnectNotifier>>,
         is_stream_closed: Arc<AtomicBool>,
         cache: Option<Arc<dyn GlideCache>>,
+        tracking_on: Arc<AtomicBool>,
         progress: Arc<AtomicU64>,
     ) -> Self
     where
@@ -340,6 +357,7 @@ where
             is_stream_closed,
             response_sync_lost: false,
             cache,
+            tracking_on,
             progress,
         }
     }
@@ -780,12 +798,14 @@ where
             Arc::new(ArcSwap::new(Arc::new(PushManager::default())));
         let is_stream_closed = Arc::new(AtomicBool::new(false));
         let progress = Arc::new(AtomicU64::new(0));
+        let tracking_on = Arc::new(AtomicBool::new(false));
         let sink = PipelineSink::new::<SinkItem>(
             sink_stream,
             push_manager.clone(),
             disconnect_notifier,
             is_stream_closed.clone(),
             cache,
+            tracking_on.clone(),
             progress.clone(),
         );
         let (abort_handle, abort_registration) = AbortHandle::new_pair();
@@ -800,6 +820,7 @@ where
                 is_stream_closed,
                 progress,
                 abort_handle,
+                tracking_on,
             },
             f,
         )
@@ -980,6 +1001,11 @@ where
         self.is_stream_closed.store(true, Ordering::Relaxed);
         self.abort_handle.abort();
     }
+
+    /// Records that the server tracks keys for the client-side cache on this connection.
+    fn set_tracking_on(&self) {
+        self.tracking_on.store(true, Ordering::Release);
+    }
 }
 
 /// A connection object which can be cloned, allowing requests to be be sent concurrently
@@ -1090,6 +1116,11 @@ impl MultiplexedConnection {
                 }
             }
         };
+        // Setup succeeded, so it turned tracking on. A connection whose setup failed was
+        // never used and tracked nothing, so it must not flush the cache.
+        if connection_info.redis.server_assisted_cache {
+            con.pipeline.set_tracking_on();
+        }
 
         Ok((con, driver))
     }
@@ -1684,6 +1715,94 @@ mod tests {
             1,
         )
         .await;
+    }
+
+    /// Closes a connection under a cache holding one entry, and returns how many entries
+    /// are left once the driver has stopped.
+    async fn entries_left_after_connection_closes(tracking_on: bool) -> u64 {
+        let cache = new_lru_cache(CacheConfig {
+            max_memory_bytes: 10_000,
+            ttl: None,
+            enable_metrics: false,
+        });
+        let mut cached = crate::cmd("GET");
+        cached.arg("key");
+        cache.set_cached_cmd(&cached, Value::BulkString(b"value".to_vec().into()));
+        assert_eq!(cache.entry_count(), 1);
+
+        let (command_tx, _command_rx) = mpsc::unbounded_channel();
+        let (response_tx, response_rx) = futures_mpsc::channel(1);
+        let sink = ResponseSink {
+            command_tx,
+            response_rx,
+        };
+        let (pipeline, driver) = Pipeline::new(sink, None, Some(cache.clone()));
+        if tracking_on {
+            pipeline.set_tracking_on();
+        }
+        let driver = tokio::spawn(driver);
+
+        // The server closes the connection.
+        drop(response_tx);
+        driver.await.unwrap();
+        drop(pipeline);
+        cache.entry_count()
+    }
+
+    #[tokio::test]
+    async fn test_cache_flushed_when_tracking_connection_closes() {
+        assert_eq!(entries_left_after_connection_closes(true).await, 0);
+    }
+
+    #[tokio::test]
+    async fn test_cache_kept_when_connection_without_tracking_closes() {
+        // A TTL-only cache, or a connection whose setup failed before tracking was on.
+        assert_eq!(entries_left_after_connection_closes(false).await, 1);
+    }
+
+    #[tokio::test]
+    async fn test_response_read_before_tracking_connection_closes_is_not_cached() {
+        let cache = new_lru_cache(CacheConfig {
+            max_memory_bytes: 10_000,
+            ttl: None,
+            enable_metrics: false,
+        });
+        let (command_tx, mut command_rx) = mpsc::unbounded_channel();
+        let (mut response_tx, response_rx) = futures_mpsc::channel(1);
+        let sink = ResponseSink {
+            command_tx,
+            response_rx,
+        };
+        let (pipeline, driver) = Pipeline::new(sink, None, Some(cache.clone()));
+        pipeline.set_tracking_on();
+        let driver = tokio::spawn(driver);
+        let connection = MultiplexedConnection::builder(pipeline)
+            .with_cache(Some(cache.clone()))
+            .build()
+            .await
+            .unwrap();
+
+        let request = tokio::spawn(async move {
+            let mut connection = connection;
+            let mut command = crate::cmd("GET");
+            command.arg("key");
+            connection.send_packed_command(&command).await
+        });
+        command_rx.recv().await.expect("command must be sent");
+
+        // The reply and the close reach the driver together. Whichever runs first, the
+        // fill or the flush, no entry may be left.
+        response_tx
+            .try_send(Ok(Value::BulkString(b"value".to_vec().into())))
+            .unwrap();
+        drop(response_tx);
+
+        assert_eq!(
+            request.await.unwrap().unwrap(),
+            Value::BulkString(b"value".to_vec().into())
+        );
+        driver.await.unwrap();
+        assert_eq!(cache.entry_count(), 0);
     }
 
     /// A mock connection used to benchmark the pipeline buffer in isolation,
