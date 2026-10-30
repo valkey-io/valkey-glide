@@ -461,12 +461,18 @@ class _GlideFFI:
             int32_t glide_pool_destroy(uint64_t pool_id);
             size_t glide_pool_get_client_ptr(uint64_t client_id);
             int32_t glide_pool_set_pipe_client_id(uint64_t client_id, uint64_t pipe_client_id);
-            int32_t glide_pool_metrics(
-                uint64_t pool_id,
-                uint32_t* idle_out,
-                uint32_t* active_out,
-                uint32_t* total_out
-            );
+            typedef enum {
+                Read = 0,
+                UnknownPool = 1,
+                LockHeld = 2
+            } PoolMetricsStatus;
+            typedef struct {
+                PoolMetricsStatus status;
+                uint32_t idle;
+                uint32_t active;
+                uint32_t total;
+            } PoolMetrics;
+            PoolMetrics glide_pool_metrics(uint64_t pool_id);
 
             // ============== ISOLATED EXECUTION SCOPES ==============
             CommandResult* glide_scope_acquire_blocking(

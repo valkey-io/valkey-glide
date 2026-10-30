@@ -664,6 +664,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "crc-fast"
+version = "1.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e75b2483e97a5a7da73ac68a05b629f9c53cff58d8ed1c77866079e18b00dba5"
+dependencies = [
+ "digest 0.10.7",
+ "spin",
+]
+
+[[package]]
 name = "crc16"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1047,6 +1057,7 @@ dependencies = [
  "futures-intrusive",
  "glide-core-engine",
  "glide-logger",
+ "glide-rdma",
  "glide-telemetry",
  "http 1.5.0",
  "libc",
@@ -1088,6 +1099,7 @@ dependencies = [
  "futures",
  "futures-util",
  "glide-logger",
+ "glide-rdma",
  "glide-telemetry",
  "itoa",
  "lazy_static",
@@ -1121,6 +1133,7 @@ dependencies = [
  "glide-core",
  "glide-core-engine",
  "glide-logger",
+ "glide-rdma",
  "lazy_static",
  "libc",
  "opentelemetry",
@@ -1137,6 +1150,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "glide-libfabric-sys"
+version = "0.1.0"
+dependencies = [
+ "cc",
+ "libc",
+]
+
+[[package]]
 name = "glide-logger"
 version = "0.1.1"
 dependencies = [
@@ -1145,6 +1166,18 @@ dependencies = [
  "tracing",
  "tracing-appender",
  "tracing-subscriber",
+]
+
+[[package]]
+name = "glide-rdma"
+version = "0.1.0"
+dependencies = [
+ "crc-fast",
+ "glide-libfabric-sys",
+ "glide-logger",
+ "libc",
+ "thiserror 2.0.21",
+ "tokio",
 ]
 
 [[package]]
@@ -2640,6 +2673,12 @@ dependencies = [
  "libc",
  "windows-sys 0.61.2",
 ]
+
+[[package]]
+name = "spin"
+version = "0.10.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "023a211cb3138dbc438680b32560ad89f699977624c9f8dbb95a47d5b4c07dd3"
 
 [[package]]
 name = "stable_deref_trait"

@@ -8,6 +8,7 @@ from unittest.mock import Mock, call
 
 import pytest
 import setuptools
+from setuptools.command.egg_info import FileList
 
 BUILD_UTILS_PATH = Path(__file__).resolve().parent.parent / "build_utils.py"
 BUILD_UTILS_SPEC = spec_from_file_location("glide_sync_build_utils", BUILD_UTILS_PATH)
@@ -36,6 +37,30 @@ def test_rust_cdylib_filename(
 def test_rust_cdylib_filename_rejects_unknown_platform() -> None:
     with pytest.raises(RuntimeError, match="Unsupported platform: freebsd"):
         rust_cdylib_filename("glide_ffi", "freebsd")
+
+
+def test_sdist_manifest_includes_build_helper_and_rdma_sources(
+    monkeypatch, tmp_path, setup_module
+) -> None:
+    sources = [
+        "build_utils.py",
+        str(Path("glide-rdma") / "Cargo.toml"),
+        str(Path("glide-rdma") / "src" / "lib.rs"),
+        str(Path("glide-rdma") / "glide-libfabric-sys" / "Cargo.toml"),
+        str(Path("glide-rdma") / "glide-libfabric-sys" / "build.rs"),
+    ]
+    for source in sources:
+        path = tmp_path / source
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.touch()
+    monkeypatch.chdir(tmp_path)
+    command = setup_module.sdist(setup_module.BinaryDistribution())
+    command.template = str(BUILD_UTILS_PATH.with_name("MANIFEST.in"))
+    command.filelist = FileList()
+
+    command.read_template()
+
+    assert set(command.filelist.files) == set(sources)
 
 
 @pytest.fixture

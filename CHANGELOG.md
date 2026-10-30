@@ -17,6 +17,7 @@
 * Rust: Implement `ToSingleValkeyArg` and `ToValkeyArgs` for option types ([#7381](https://github.com/valkey-io/valkey-glide/issues/7381))
 * Core: Add `glide-rdma` crate, an RDMA transfer layer over libfabric (loaded at runtime), for later RDMA support ([#7177](https://github.com/valkey-io/valkey-glide/pull/7177))
 * Core: Add opt-in RDMA support to glide-core behind the `rdma` feature: `RdmaConfig` in the connection request, `Client::register_rdma_region` / `rdma_get` / `rdma_set` / `close_rdma`, and the `rdma_parked_bytes` / `rdma_leaked_bytes` counters. Transfers route to the key's primary and have no request timeout. `BLOB.RDMA_*` commands are refused when sent any other way, in every build ([#7412](https://github.com/valkey-io/valkey-glide/pull/7412))
+* Core/FFI: Add opt-in RDMA to glide-ffi behind the `rdma` feature: `rdma_available`, `rdma_usable`, `rdma_checksum`, `register_rdma_region` over caller-owned memory, `rdma_get` / `rdma_set` (blocking, with `region_closed` saying whether the region can transfer again), and `free_rdma_region` with `RdmaMemoryHold` for memory the fabric still holds (`rdma_memory_leaked` says whether it is leaked rather than parked), plus the `rdma_parked_bytes` / `rdma_leaked_bytes` counters. Sync clients only; pools refuse an RDMA configuration, and `rdma_close_regions` cancels transfers in flight without freeing the client ([#7458](https://github.com/valkey-io/valkey-glide/pull/7458))
 
 ### Fixes
 
