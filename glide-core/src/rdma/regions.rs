@@ -169,11 +169,7 @@ mod tests {
     use glide_rdma::{FabricConfig, Provider};
 
     fn server_error(detail: &str) -> redis::RedisError {
-        redis::RedisError::from((
-            redis::ErrorKind::ResponseError,
-            redis::SERVER_ERROR_DESCRIPTION,
-            detail.to_string(),
-        ))
+        redis::RedisError::server_reply(redis::ErrorKind::ResponseError, detail.to_string())
     }
 
     fn tcp_fabric() -> glide_rdma::RdmaFabric {
