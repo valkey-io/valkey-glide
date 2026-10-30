@@ -696,7 +696,7 @@ public class SharedCommandTests {
     @MethodSource("getClients")
     public void set_value_with_ttl_and_update_value_with_keeping_ttl(BaseClient client) {
         String key = UUID.randomUUID().toString();
-        SetOptions options = SetOptions.builder().expiry(Milliseconds(2000L)).build();
+        SetOptions options = SetOptions.builder().expiry(Milliseconds(500L)).build();
         client.set(key, INITIAL_VALUE, options).get();
         String data = client.get(key).get();
         assertEquals(INITIAL_VALUE, data);
@@ -706,7 +706,7 @@ public class SharedCommandTests {
         data = client.get(key).get();
         assertEquals(ANOTHER_VALUE, data);
 
-        Thread.sleep(2222); // sleep a bit more than TTL
+        Thread.sleep(600); // sleep a bit more than TTL
 
         data = client.get(key).get();
         assertNull(data);
@@ -722,12 +722,12 @@ public class SharedCommandTests {
         String data = client.get(key).get();
         assertEquals(INITIAL_VALUE, data);
 
-        options = SetOptions.builder().expiry(Milliseconds(2000L)).build();
+        options = SetOptions.builder().expiry(Milliseconds(500L)).build();
         client.set(key, ANOTHER_VALUE, options).get();
         data = client.get(key).get();
         assertEquals(ANOTHER_VALUE, data);
 
-        Thread.sleep(2222); // sleep a bit more than new TTL
+        Thread.sleep(600); // sleep a bit more than new TTL
 
         data = client.get(key).get();
         assertNull(data);
@@ -3009,16 +3009,16 @@ public class SharedCommandTests {
 
         String key = "test_httl_expired_" + UUID.randomUUID();
 
-        // Set fields with very short expiration (1 second)
+        // Set fields with very short expiration (200 milliseconds)
         Map<String, String> fieldValueMap = new LinkedHashMap<>();
         fieldValueMap.put("field1", "value1");
         fieldValueMap.put("field2", "value2");
 
-        HSetExOptions setOptions = HSetExOptions.builder().expiry(ExpirySet.Seconds(1L)).build();
+        HSetExOptions setOptions = HSetExOptions.builder().expiry(ExpirySet.Milliseconds(200L)).build();
         client.hsetex(key, fieldValueMap, setOptions).get();
 
         // Wait for fields to expire
-        Thread.sleep(1500);
+        Thread.sleep(400);
 
         // Test HTTL on expired fields
         String[] fields = {"field1", "field2"};
@@ -3167,17 +3167,16 @@ public class SharedCommandTests {
 
         String key = "test_hpttl_expired_" + UUID.randomUUID();
 
-        // Set fields with very short expiration (1000 milliseconds)
+        // Set fields with very short expiration (200 milliseconds)
         Map<String, String> fieldValueMap = new LinkedHashMap<>();
         fieldValueMap.put("field1", "value1");
         fieldValueMap.put("field2", "value2");
 
-        HSetExOptions setOptions =
-                HSetExOptions.builder().expiry(ExpirySet.Milliseconds(1000L)).build();
+        HSetExOptions setOptions = HSetExOptions.builder().expiry(ExpirySet.Milliseconds(200L)).build();
         client.hsetex(key, fieldValueMap, setOptions).get();
 
         // Wait for expiration
-        Thread.sleep(1500);
+        Thread.sleep(400);
 
         // Test HPTTL on expired fields
         String[] fields = {"field1", "field2"};
@@ -3378,16 +3377,16 @@ public class SharedCommandTests {
 
         String key = "test_hexpiretime_expired_" + UUID.randomUUID();
 
-        // Set fields with very short expiration (1 second)
+        // Set fields with very short expiration (200 milliseconds)
         Map<String, String> fieldValueMap = new LinkedHashMap<>();
         fieldValueMap.put("field1", "value1");
         fieldValueMap.put("field2", "value2");
 
-        HSetExOptions setOptions = HSetExOptions.builder().expiry(ExpirySet.Seconds(1L)).build();
+        HSetExOptions setOptions = HSetExOptions.builder().expiry(ExpirySet.Milliseconds(200L)).build();
         client.hsetex(key, fieldValueMap, setOptions).get();
 
         // Wait for fields to expire
-        Thread.sleep(1500);
+        Thread.sleep(400);
 
         // Test HEXPIRETIME on expired fields
         String[] fields = {"field1", "field2"};
@@ -3606,14 +3605,13 @@ public class SharedCommandTests {
 
         String key = "test_hpexpiretime_expired_" + UUID.randomUUID();
 
-        // Set fields with very short expiration (1000 milliseconds)
+        // Set fields with very short expiration (200 milliseconds)
         Map<String, String> fieldValueMap = createMap("field1", "value1", "field2", "value2");
-        HSetExOptions setOptions =
-                HSetExOptions.builder().expiry(ExpirySet.Milliseconds(1000L)).build();
+        HSetExOptions setOptions = HSetExOptions.builder().expiry(ExpirySet.Milliseconds(200L)).build();
         client.hsetex(key, fieldValueMap, setOptions).get();
 
         // Wait for expiration
-        Thread.sleep(1500);
+        Thread.sleep(400);
 
         // Test HPEXPIRETIME on expired fields
         String[] fields = {"field1", "field2"};
@@ -9505,7 +9503,7 @@ public class SharedCommandTests {
                 result);
 
         // Sleep to ensure the idle time value and inactive time value returned by xinfo_consumers is >0
-        Thread.sleep(2000);
+        Thread.sleep(200);
         Map<String, Object>[] consumers = client.xinfoConsumers(key, groupName1).get();
         assertEquals(1, consumers.length);
         Map<String, Object> consumerInfo = consumers[0];
@@ -10518,7 +10516,7 @@ public class SharedCommandTests {
         assertDeepEquals(expectedResult, pending_results);
 
         // ensure idle_time > 0
-        Thread.sleep(2000);
+        Thread.sleep(200);
         Object[][] pending_results_extended =
                 client.xpending(key, groupName, InfRangeBound.MIN, InfRangeBound.MAX, 10L).get();
 
@@ -10700,7 +10698,7 @@ public class SharedCommandTests {
         assertDeepEquals(expectedResult, pending_results);
 
         // ensure idle_time > 0
-        Thread.sleep(2000);
+        Thread.sleep(200);
         Object[][] pending_results_extended =
                 client.xpending(key, groupName, InfRangeBound.MIN, InfRangeBound.MAX, 10L).get();
 
@@ -12569,7 +12567,7 @@ public class SharedCommandTests {
     public void objectIdletime(BaseClient client) {
         String key = UUID.randomUUID().toString();
         assertEquals(OK, client.set(key, "").get());
-        Thread.sleep(2000);
+        Thread.sleep(1200); // OBJECT IDLETIME has one-second resolution
         assertTrue(client.objectIdletime(key).get() > 0L);
     }
 
@@ -12579,7 +12577,7 @@ public class SharedCommandTests {
     public void objectIdletime_binary_(BaseClient client) {
         GlideString key = gs(UUID.randomUUID().toString());
         assertEquals(OK, client.set(key, gs("")).get());
-        Thread.sleep(2000);
+        Thread.sleep(1200); // OBJECT IDLETIME has one-second resolution
         assertTrue(client.objectIdletime(key).get() > 0L);
     }
 

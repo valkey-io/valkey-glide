@@ -216,11 +216,7 @@ public class ClientSideCacheTests {
     public void test_cache_ttl_expiration(BaseClient client) {
         // Create cache with short TTL
         ClientSideCache shortTtlCache =
-                ClientSideCache.builder()
-                        .maxCacheKb(1L)
-                        .entryTtlMs(2000L) // 2 seconds
-                        .enableMetrics(true)
-                        .build();
+                ClientSideCache.builder().maxCacheKb(1L).entryTtlMs(300L).enableMetrics(true).build();
 
         BaseClient shortTtlClient;
         if (client instanceof GlideClient) {
@@ -248,7 +244,7 @@ public class ClientSideCacheTests {
             assertEquals(value, shortTtlClient.get(key).get());
 
             // Wait for TTL to expire
-            Thread.sleep(3000);
+            Thread.sleep(500);
 
             // GET after expiration - should fetch from server again
             assertEquals(value, shortTtlClient.get(key).get());
