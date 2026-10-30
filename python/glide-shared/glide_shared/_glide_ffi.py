@@ -440,6 +440,70 @@ class _GlideFFI:
 
             void close_monitor_client(const void* client_ptr);
 
+            // ============== RDMA ==============
+            typedef struct RdmaRegion RdmaRegion;
+            typedef struct RdmaMemoryHold RdmaMemoryHold;
+
+            typedef struct {
+                const char* error_message;
+                RdmaRegion* region;
+            } RdmaRegistration;
+
+            typedef struct {
+                const char* error_message;
+                int error_type;
+                bool found;
+                size_t bytes_written;
+                bool has_checksum;
+                uint32_t checksum;
+                bool region_closed;
+            } RdmaResult;
+
+            bool rdma_available(void);
+            bool rdma_usable(void);
+
+            bool rdma_checksum(const uint8_t* data, size_t length, uint32_t* out);
+
+            RdmaRegistration* register_rdma_region(
+                const void* client_adapter_ptr,
+                uint8_t* memory,
+                size_t length
+            );
+
+            RdmaResult* rdma_get(
+                const void* client_adapter_ptr,
+                const uint8_t* key,
+                size_t key_len,
+                RdmaRegion* region,
+                size_t offset,
+                size_t length
+            );
+
+            typedef enum {
+                RDMA_SET_CHECKSUM_SKIP = 0,
+                RDMA_SET_CHECKSUM_COMPUTE = 1,
+                RDMA_SET_CHECKSUM_KNOWN = 2
+            } RdmaSetChecksumMode;
+
+            RdmaResult* rdma_set(
+                const void* client_adapter_ptr,
+                const uint8_t* key,
+                size_t key_len,
+                RdmaRegion* region,
+                size_t offset,
+                size_t length,
+                RdmaSetChecksumMode checksum_mode,
+                uint32_t checksum
+            );
+
+            char* rdma_close_regions(const void* client_adapter_ptr);
+
+            RdmaMemoryHold* free_rdma_region(RdmaRegion* region);
+            bool rdma_memory_released(const RdmaMemoryHold* hold);
+            void free_rdma_memory_hold(RdmaMemoryHold* hold);
+            void free_rdma_registration(RdmaRegistration* registration);
+            void free_rdma_result(RdmaResult* result);
+
             // ============== UTILITY FUNCTIONS ==============
             void free_c_string(char* s);
             unsigned long get_min_compressed_size();

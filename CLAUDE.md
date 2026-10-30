@@ -154,5 +154,7 @@ FFI wrappers → `glide-core` → Valkey/Redis
     <core-integration>glide-core/src/rdma/, glide-core/src/client/rdma.rs, glide-core/src/client/rdma_connection.rs</core-integration>
     <core-tests>glide-core/tests/test_rdma.rs, glide-core/tests/test_rdma_remote.rs</core-tests>
     <ffi-integration>ffi/src/rdma_ffi.rs</ffi-integration>
+    <python-integration>python/glide-sync/glide_sync/glide_client.py, python/glide-shared/glide_shared/config.py</python-integration>
+    <python-tests>python/tests/sync_tests/test_sync_rdma.py, python/tests/test_rdma_config.py</python-tests>
   </language>
 </context-sources>
