@@ -281,7 +281,7 @@ jobs:
 
             # Upload the native .node modules as artifacts
             - name: Upload Native Modules
-              uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+              uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
               with:
                   name: bindings-${{ matrix.TARGET }}-${{ matrix.RUNNER }}
                   path: ./node/${{ matrix.TARGET }}
@@ -290,7 +290,7 @@ jobs:
 
             # We want to use the native.js and native.d.ts files in the base package, but we don't have the glide dir yet so we upload them as artifacts
             - name: Upload Module js files
-              uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+              uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
               if: ${{ matrix.TARGET == 'x86_64-unknown-linux-gnu' }}
               with:
                   name: js-files-${{ github.run_id }}
