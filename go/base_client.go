@@ -39,6 +39,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"runtime"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -458,6 +459,10 @@ func (client *baseClient) executeCommandWithRoute(
 		C.uint64_t(spanPtr),
 	)
 	client.mu.Unlock()
+	// Keep args reachable until C.command returns. toCStrings hands the string data to the
+	// core as bare uintptr values that the GC cannot see, so the backing memory must not be
+	// freed or moved while the core still reads those pointers.
+	runtime.KeepAlive(args)
 	payload, err := client.waitForResponse(ctx, requestID, resultChannel)
 	if err != nil {
 		return nil, err
@@ -539,6 +544,10 @@ func (client *baseClient) executeBatch(
 		C.uint64_t(spanPtr),
 	)
 	client.mu.Unlock()
+	// Keep batch reachable until C.batch returns. createCmdInfo hands the command args to the
+	// core as raw pointers via unsafe.StringData, which the GC cannot see, so the backing
+	// memory must not be freed or moved while the core still reads those pointers.
+	runtime.KeepAlive(batch)
 
 	payload, err := client.waitForResponse(ctx, requestID, resultChannel)
 	if err != nil {
@@ -9921,6 +9930,11 @@ func (client *baseClient) executeScriptWithRoute(
 		C.uint64_t(spanPtr),
 	)
 	client.mu.Unlock()
+	// Keep keys and args reachable until C.invoke_script returns. toCStrings hands the string
+	// data to the core as bare uintptr values that the GC cannot see, so the backing memory
+	// must not be freed or moved while the core still reads those pointers.
+	runtime.KeepAlive(keys)
+	runtime.KeepAlive(args)
 
 	payload, err := client.waitForResponse(ctx, requestID, resultChannel)
 	if err != nil {
