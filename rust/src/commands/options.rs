@@ -473,55 +473,38 @@ impl ToSingleValkeyArg for FunctionRestorePolicy {}
 pub enum InfoSection {
     /// Return all sections (excluding module-generated ones).
     All,
-
     /// Client connections section.
     Clients,
-
     /// Valkey Cluster section.
     Cluster,
-
     /// Cluster info section (Valkey 9.1.0+).
     ClusterInfo,
-
     /// Valkey command statistics.
     CommandStats,
-
     /// CPU consumption statistics.
     Cpu,
-
     /// Return only the default set of sections.
     Default,
-
     /// Valkey error statistics.
     ErrorStats,
-
     /// Includes all and modules sections.
     Everything,
-
     /// Database-related statistics.
     Keyspace,
-
     /// Valkey command latency percentile distribution statistics.
     LatencyStats,
-
     /// Memory consumption-related information.
     Memory,
-
     /// Modules section.
     Modules,
-
     /// RDB and AOF-related information.
     Persistence,
-
     /// Master/replica replication information.
     Replication,
-
     /// Valkey Sentinel section (only applicable to Sentinel instances).
     Sentinel,
-
     /// General information about the Valkey server.
     Server,
-
     /// General statistics.
     Stats,
 }
