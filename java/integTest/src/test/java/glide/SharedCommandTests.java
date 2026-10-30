@@ -3010,7 +3010,6 @@ public class SharedCommandTests {
 
         String key = "test_httl_expired_" + UUID.randomUUID();
 
-        // Set fields with very short expiration (200 milliseconds)
         Map<String, String> fieldValueMap = new LinkedHashMap<>();
         fieldValueMap.put("field1", "value1");
         fieldValueMap.put("field2", "value2");
@@ -3168,7 +3167,6 @@ public class SharedCommandTests {
 
         String key = "test_hpttl_expired_" + UUID.randomUUID();
 
-        // Set fields with very short expiration (200 milliseconds)
         Map<String, String> fieldValueMap = new LinkedHashMap<>();
         fieldValueMap.put("field1", "value1");
         fieldValueMap.put("field2", "value2");
@@ -3378,7 +3376,6 @@ public class SharedCommandTests {
 
         String key = "test_hexpiretime_expired_" + UUID.randomUUID();
 
-        // Set fields with very short expiration (200 milliseconds)
         Map<String, String> fieldValueMap = new LinkedHashMap<>();
         fieldValueMap.put("field1", "value1");
         fieldValueMap.put("field2", "value2");
@@ -3606,7 +3603,6 @@ public class SharedCommandTests {
 
         String key = "test_hpexpiretime_expired_" + UUID.randomUUID();
 
-        // Set fields with very short expiration (200 milliseconds)
         Map<String, String> fieldValueMap = createMap("field1", "value1", "field2", "value2");
         HSetExOptions setOptions = HSetExOptions.builder().expiry(ExpirySet.Milliseconds(200L)).build();
         client.hsetex(key, fieldValueMap, setOptions).get();

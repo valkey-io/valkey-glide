@@ -1209,8 +1209,6 @@ public class CommandTests {
                 int timeout = 4000; // ms
                 while (timeout >= 0) {
                     try {
-                        // valkey kills a function with 5 sec delay
-                        // but this will always throw an error in the test
                         regularClient.functionKill().get();
                     } catch (ExecutionException executionException) {
                         // looking for an error with "unkillable" in the message
@@ -1277,8 +1275,6 @@ public class CommandTests {
                 int timeout = 4000; // ms
                 while (timeout >= 0) {
                     try {
-                        // valkey kills a function with 5 sec delay
-                        // but this will always throw an error in the test
                         regularClient.functionKill().get();
                     } catch (ExecutionException executionException) {
                         // looking for an error with "unkillable" in the message
@@ -2153,8 +2149,6 @@ public class CommandTests {
                 timeout = 4000;
                 while (timeout >= 0) {
                     try {
-                        // valkey kills a script with 5 sec delay
-                        // but this will always throw an error in the test
                         regularClient.scriptKill().get();
                     } catch (ExecutionException execException) {
                         // looking for an error with "unkillable" in the message
