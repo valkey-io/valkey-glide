@@ -109,6 +109,10 @@ EXCLUDED_TESTS = {
         # Async-only: the pipe/registry id collision it guards can't occur in sync.
         "test_ordinary_client_survives_pool_borrow_release",
         "reader_roundtrip",
+        # Async-only: the client registry and its finalizer are part of the
+        # event-loop pipe transport, which the sync client does not have.
+        "test_unreferenced_client_releases_connection",
+        "dropped_client_gone",
     ],
     "sync_only": [
         "test_sync_fork",
