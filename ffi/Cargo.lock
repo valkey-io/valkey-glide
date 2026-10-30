@@ -81,7 +81,7 @@ dependencies = [
  "aws-smithy-runtime",
  "aws-smithy-runtime-api",
  "aws-smithy-schema",
- "aws-smithy-types 1.8.1",
+ "aws-smithy-types 1.9.1",
  "aws-types",
  "bytes",
  "fastrand",
@@ -103,7 +103,7 @@ checksum = "e93964ffdaf57857f544be3666a5f57570bb699e934700f11b49708f61bb556e"
 dependencies = [
  "aws-smithy-async",
  "aws-smithy-runtime-api",
- "aws-smithy-types 1.8.1",
+ "aws-smithy-types 1.9.1",
  "zeroize",
 ]
 
@@ -142,7 +142,7 @@ dependencies = [
  "aws-smithy-http",
  "aws-smithy-runtime",
  "aws-smithy-runtime-api",
- "aws-smithy-types 1.8.1",
+ "aws-smithy-types 1.9.1",
  "aws-types",
  "bytes",
  "bytes-utils",
@@ -171,7 +171,7 @@ dependencies = [
  "aws-smithy-runtime",
  "aws-smithy-runtime-api",
  "aws-smithy-schema",
- "aws-smithy-types 1.8.1",
+ "aws-smithy-types 1.9.1",
  "aws-types",
  "bytes",
  "fastrand",
@@ -196,7 +196,7 @@ dependencies = [
  "aws-smithy-runtime",
  "aws-smithy-runtime-api",
  "aws-smithy-schema",
- "aws-smithy-types 1.8.1",
+ "aws-smithy-types 1.9.1",
  "aws-types",
  "bytes",
  "fastrand",
@@ -222,7 +222,7 @@ dependencies = [
  "aws-smithy-runtime",
  "aws-smithy-runtime-api",
  "aws-smithy-schema",
- "aws-smithy-types 1.8.1",
+ "aws-smithy-types 1.9.1",
  "aws-smithy-xml",
  "aws-types",
  "fastrand",
@@ -240,7 +240,7 @@ dependencies = [
  "aws-credential-types",
  "aws-smithy-http",
  "aws-smithy-runtime-api",
- "aws-smithy-types 1.8.1",
+ "aws-smithy-types 1.9.1",
  "bytes",
  "form_urlencoded",
  "hex",
@@ -270,7 +270,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "639b4d8f8555f24a9be649811c3eb0b4d4616f4d61daf0c32e28873bc1ea9af1"
 dependencies = [
  "aws-smithy-runtime-api",
- "aws-smithy-types 1.8.1",
+ "aws-smithy-types 1.9.1",
  "bytes",
  "bytes-utils",
  "futures-core",
@@ -292,7 +292,7 @@ checksum = "7bd25384a4e437aa8d8f339afad4b69e786b936a7cb10db668a7aaf66717b1a8"
 dependencies = [
  "aws-smithy-async",
  "aws-smithy-runtime-api",
- "aws-smithy-types 1.8.1",
+ "aws-smithy-types 1.9.1",
  "h2",
  "http 1.5.0",
  "hyper",
@@ -316,7 +316,7 @@ checksum = "3385d469edbe8b60cc72002784652b5efca39178192aa9cc4b44c9875c6bdc18"
 dependencies = [
  "aws-smithy-runtime-api",
  "aws-smithy-schema",
- "aws-smithy-types 1.8.1",
+ "aws-smithy-types 1.9.1",
 ]
 
 [[package]]
@@ -336,7 +336,7 @@ checksum = "f1d1d71f6562be974caa85442ecd90194c40fdb5df045f182a6c2e872ce95056"
 dependencies = [
  "aws-smithy-runtime-api",
  "aws-smithy-schema",
- "aws-smithy-types 1.8.1",
+ "aws-smithy-types 1.9.1",
  "aws-smithy-xml",
  "urlencoding",
 ]
@@ -353,7 +353,7 @@ dependencies = [
  "aws-smithy-observability",
  "aws-smithy-runtime-api",
  "aws-smithy-schema",
- "aws-smithy-types 1.8.1",
+ "aws-smithy-types 1.9.1",
  "bytes",
  "fastrand",
  "http 1.5.0",
@@ -373,7 +373,7 @@ checksum = "9bb0deb40a69de59f7809251cfe1ab16de135f42c49d222d1202b4d0ce19720f"
 dependencies = [
  "aws-smithy-async",
  "aws-smithy-runtime-api-macros",
- "aws-smithy-types 1.8.1",
+ "aws-smithy-types 1.9.1",
  "bytes",
  "http 1.5.0",
  "pin-project-lite",
@@ -400,7 +400,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e8f395d93304280b64b7632fea798d177e74897fe7f063416ce627cd6fa24829"
 dependencies = [
  "aws-smithy-runtime-api",
- "aws-smithy-types 1.8.1",
+ "aws-smithy-types 1.9.1",
  "http 1.5.0",
 ]
 
@@ -426,9 +426,9 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-types"
-version = "1.8.1"
+version = "1.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "69bb407740a197147da48238ecc94498493c9e85445732360cec180296ca45f1"
+checksum = "cf183d70774ea2cfcc101ca74a8884e4c76be8b9df65cd303f6a1175c88e8f80"
 dependencies = [
  "base64-simd",
  "bytes",
@@ -439,7 +439,6 @@ dependencies = [
  "itoa",
  "num-integer",
  "pin-project-lite",
- "pin-utils",
  "ryu",
  "serde",
  "time",
@@ -453,7 +452,7 @@ checksum = "0b932c8d6dc127fc980eecd78f8694ae9b9551b69a93a7def2a199c1c0033daf"
 dependencies = [
  "aws-smithy-runtime-api",
  "aws-smithy-schema",
- "aws-smithy-types 1.8.1",
+ "aws-smithy-types 1.9.1",
  "xmlparser",
 ]
 
@@ -467,7 +466,7 @@ dependencies = [
  "aws-smithy-async",
  "aws-smithy-runtime-api",
  "aws-smithy-schema",
- "aws-smithy-types 1.8.1",
+ "aws-smithy-types 1.9.1",
  "rustc_version",
  "tracing",
 ]
@@ -542,9 +541,9 @@ dependencies = [
 
 [[package]]
 name = "cc"
-version = "1.5.1"
+version = "1.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f360145194ee8e21db5ee7f3fcd4fe52210864c75c985dae33218202c8bbe040"
+checksum = "86e055fa6e3e40ad6187ba25b6855eeb635d5271f8e0f0e1e9a5826b8d75bea0"
 dependencies = [
  "find-msvc-tools",
  "jobserver",
@@ -850,9 +849,9 @@ dependencies = [
 
 [[package]]
 name = "find-msvc-tools"
-version = "0.1.14"
+version = "0.1.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aedcfb3409746eddb02b9e19ebda1c3394f759a152e48ee875a0844d1b955484"
+checksum = "1c66915cc5391097de7a2b0b972e8505aa33c0df401fd3a6811dbdb32881ba48"
 
 [[package]]
 name = "flate2"
@@ -2765,7 +2764,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
 dependencies = [
  "fastrand",
- "getrandom 0.4.3",
+ "getrandom 0.3.4",
  "once_cell",
  "rustix 1.1.5",
  "windows-sys 0.61.2",
@@ -2862,9 +2861,9 @@ dependencies = [
 
 [[package]]
 name = "tokio"
-version = "1.53.3"
+version = "1.54.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ce3335fa71841cda333a58d7615b03901380ecf09d59b3296d21f8bbac0dde4e"
+checksum = "b52fd3255258d26fac7264ab5a76b53c13367136dc011d3d6ad4f8ed070396a3"
 dependencies = [
  "bytes",
  "libc",
@@ -3197,9 +3196,9 @@ checksum = "b6c140620e7ffbb22c2dee59cafe6084a59b5ffc27a8859a5f0d494b5d52b6be"
 
 [[package]]
 name = "uuid"
-version = "1.26.1"
+version = "1.29.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2ef6dac1e96601b4fb3acccccff2139741fcb757cb9a36089bf5be91cfb285ce"
+checksum = "4a0e2d11620c50695fe12bbbfde96b3477fe606e7284c22d505c12ce51214514"
 dependencies = [
  "getrandom 0.4.3",
  "js-sys",
