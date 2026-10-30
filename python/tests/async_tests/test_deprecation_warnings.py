@@ -48,6 +48,37 @@ class TestDeprecationWarnings:
             # Import the module and access an attribute to trigger the warning
             exec(f"from {module_name} import {symbol_name}")
 
+    def test_legacy_module_introspection_does_not_warn(self):
+        """Test that inspecting legacy modules (e.g. inspect.stack, hasattr __file__) does not warn."""
+        import inspect
+        import warnings
+
+        # Reset _warned flags
+        for module_name in _legacy_modules_and_symbols:
+            if module_name in sys.modules:
+                legacy_module = sys.modules[module_name]
+                if hasattr(legacy_module, "_warned"):
+                    legacy_module._warned = False
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            # inspect.stack() walks sys.modules checking hasattr(m, '__file__')
+            inspect.stack()
+
+            for module_name in _legacy_modules_and_symbols:
+                if module_name in sys.modules:
+                    mod = sys.modules[module_name]
+                    assert hasattr(mod, "__file__")
+                    hasattr(mod, "__spec__")
+                    hasattr(mod, "__path__")
+                    hasattr(mod, "__loader__")
+                    hasattr(mod, "__package__")
+                    hasattr(mod, "__doc__")
+                    hasattr(mod, "__wrapped__")
+                    inspect.getmodule(mod)
+                    dir(mod)
+                    repr(mod)
+
     def test_deprecated_imports_still_work(self):
         """Test that deprecated imports still provide the correct classes."""
         for module_name, symbol_name in _legacy_modules_and_symbols.items():
