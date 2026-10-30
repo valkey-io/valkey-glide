@@ -7707,7 +7707,7 @@ func (suite *GlideTestSuite) TestXGroupCreate_XGroupDestroy() {
 		suite.NoError(err)
 		suite.False(destroyed)
 
-		// ENTRIESREAD option was added in valkey 7.0.0
+		// ENTRIESREAD option was added in Valkey 7.0.0
 		opts = options.NewXGroupCreateOptions().SetEntriesRead(100)
 		// TODO #5368: Compare versions semantically, not as strings.
 		if suite.serverVersion >= "7.0.0" {
