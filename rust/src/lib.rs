@@ -119,6 +119,7 @@ pub use commands::options::FlushDbOptions;
 pub use commands::options::FunctionFlushOptions;
 pub use commands::options::FunctionRestorePolicy;
 pub use commands::options::HashFieldExpirationOptions;
+pub use commands::options::InfoSection;
 pub use commands::options::Limit;
 pub use commands::options::LposOptions;
 pub use commands::options::MigrateOptions;
