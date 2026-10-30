@@ -919,11 +919,10 @@ mod tests {
 
         assert_eq!(
             result.unwrap().extract_error(),
-            Err(RedisError::from((
+            Err(RedisError::server_reply(
                 ErrorKind::BusyLoadingError,
-                "An error was signalled by the server",
                 "server is loading".to_string()
-            )))
+            ))
         );
 
         let mut bytes = bytes::BytesMut::from(b"+OK\r\n".as_slice());
@@ -945,6 +944,7 @@ mod tests {
                 .extract_error()
                 .expect_err("an error reply");
             assert!(error.is_server_reply(), "{error}");
+            assert_eq!(error.origin(), crate::types::ErrorOrigin::Server);
         }
 
         // Raised locally with the same kind a server error has.
@@ -953,15 +953,18 @@ mod tests {
             "Internal failure: receiver was dropped before delivering a response",
         ));
         assert!(!local.is_server_reply());
+        assert_eq!(local.origin(), crate::types::ErrorOrigin::Local);
         let io = RedisError::from(std::io::Error::from(std::io::ErrorKind::BrokenPipe));
         assert!(!io.is_server_reply());
+        assert_eq!(io.origin(), crate::types::ErrorOrigin::Local);
     }
 
     #[test]
-    fn a_command_never_sent_counts_as_a_server_reply() {
+    fn a_command_never_sent_is_marked_not_sent() {
         let error = RedisError::command_not_sent(ErrorKind::FatalSendError, "reason".to_string());
 
-        assert!(error.is_server_reply(), "{error}");
+        assert_eq!(error.origin(), crate::types::ErrorOrigin::NotSent);
+        assert!(!error.is_server_reply(), "{error}");
         assert_eq!(error.kind(), ErrorKind::FatalSendError);
         assert_eq!(error.detail(), Some("reason"));
     }
@@ -976,11 +979,10 @@ mod tests {
 
         assert_eq!(
             result.unwrap().extract_error(),
-            Err(RedisError::from((
+            Err(RedisError::server_reply(
                 ErrorKind::BusyLoadingError,
-                "An error was signalled by the server",
                 "server is loading".to_string()
-            )))
+            ))
         );
 
         let result = parse_redis_value(b"+OK\r\n").unwrap();

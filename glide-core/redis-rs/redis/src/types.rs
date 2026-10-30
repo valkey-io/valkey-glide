@@ -400,24 +400,40 @@ impl From<tokio::time::error::Elapsed> for RedisError {
     }
 }
 
-/// How every error parsed from a server's error reply is described, which is how
-/// [`RedisError::is_server_reply`] tells those apart from errors raised locally.
+/// Where a `RedisError` came from.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ErrorOrigin {
+    /// Parsed from an error reply. The server answered the command.
+    Server,
+    /// Raised on the client before the command was written to the connection.
+    /// The server never saw it.
+    NotSent,
+    /// Raised on the client after the command may have been sent: a lost
+    /// connection, a timeout, a parse failure. Nothing is known about what the
+    /// server did.
+    Local,
+}
+
+/// Description string attached to errors parsed from a server reply.
 ///
-/// To raise an error locally that should count as a server reply, use
-/// [`RedisError::command_not_sent`] rather than this description.
+/// Prefer [`RedisError::origin`] or [`RedisError::is_server_reply`] rather than
+/// checking this description.
 pub const SERVER_ERROR_DESCRIPTION: &str = "An error was signalled by the server:";
 
 impl From<ServerError> for RedisError {
     fn from(value: ServerError) -> Self {
-        // TODO - Consider changing RedisError to explicitly represent whether an error came from the server or not. Today it is only implied.
         match value {
             ServerError::ExtensionError { code, detail } => make_extension_error(code, detail),
             ServerError::KnownError { kind, detail } => {
                 let desc = SERVER_ERROR_DESCRIPTION;
                 let kind: ErrorKind = kind.into();
-                match detail {
-                    Some(detail) => RedisError::from((kind, desc, detail)),
-                    None => RedisError::from((kind, desc)),
+                let repr = match detail {
+                    Some(detail) => ErrorRepr::WithDescriptionAndDetail(kind, desc, detail),
+                    None => ErrorRepr::WithDescription(kind, desc),
+                };
+                RedisError {
+                    repr,
+                    origin: ErrorOrigin::Server,
                 }
             }
         }
@@ -831,6 +847,7 @@ impl fmt::Debug for Value {
 /// struct.
 pub struct RedisError {
     repr: ErrorRepr,
+    origin: ErrorOrigin,
 }
 
 #[derive(Debug)]
@@ -843,17 +860,18 @@ enum ErrorRepr {
 
 impl PartialEq for RedisError {
     fn eq(&self, other: &RedisError) -> bool {
-        match (&self.repr, &other.repr) {
-            (&ErrorRepr::WithDescription(kind_a, _), &ErrorRepr::WithDescription(kind_b, _)) => {
-                kind_a == kind_b
+        self.origin == other.origin
+            && match (&self.repr, &other.repr) {
+                (&ErrorRepr::WithDescription(kind_a, _), &ErrorRepr::WithDescription(kind_b, _)) => {
+                    kind_a == kind_b
+                }
+                (
+                    &ErrorRepr::WithDescriptionAndDetail(kind_a, _, _),
+                    &ErrorRepr::WithDescriptionAndDetail(kind_b, _, _),
+                ) => kind_a == kind_b,
+                (ErrorRepr::ExtensionError(a, _), ErrorRepr::ExtensionError(b, _)) => *a == *b,
+                _ => false,
             }
-            (
-                &ErrorRepr::WithDescriptionAndDetail(kind_a, _, _),
-                &ErrorRepr::WithDescriptionAndDetail(kind_b, _, _),
-            ) => kind_a == kind_b,
-            (ErrorRepr::ExtensionError(a, _), ErrorRepr::ExtensionError(b, _)) => *a == *b,
-            _ => false,
-        }
     }
 }
 
@@ -861,6 +879,7 @@ impl From<io::Error> for RedisError {
     fn from(err: io::Error) -> RedisError {
         RedisError {
             repr: ErrorRepr::IoError(err),
+            origin: ErrorOrigin::Local,
         }
     }
 }
@@ -869,6 +888,7 @@ impl From<Utf8Error> for RedisError {
     fn from(_: Utf8Error) -> RedisError {
         RedisError {
             repr: ErrorRepr::WithDescription(ErrorKind::TypeError, "Invalid UTF-8"),
+            origin: ErrorOrigin::Local,
         }
     }
 }
@@ -881,6 +901,7 @@ impl From<NulError> for RedisError {
                 "Value contains interior nul terminator",
                 err.to_string(),
             ),
+            origin: ErrorOrigin::Local,
         }
     }
 }
@@ -893,6 +914,7 @@ impl From<rustls::Error> for RedisError {
                 "TLS error",
                 err.to_string(),
             ),
+            origin: ErrorOrigin::Local,
         }
     }
 }
@@ -905,6 +927,7 @@ impl From<rustls_pki_types::InvalidDnsNameError> for RedisError {
                 "TLS Error",
                 err.to_string(),
             ),
+            origin: ErrorOrigin::Local,
         }
     }
 }
@@ -913,6 +936,7 @@ impl From<FromUtf8Error> for RedisError {
     fn from(_: FromUtf8Error) -> RedisError {
         RedisError {
             repr: ErrorRepr::WithDescription(ErrorKind::TypeError, "Cannot convert from UTF-8"),
+            origin: ErrorOrigin::Local,
         }
     }
 }
@@ -924,6 +948,7 @@ impl From<ParseIntError> for RedisError {
                 ErrorKind::TypeError,
                 "Cannot parse string as an integer",
             ),
+            origin: ErrorOrigin::Local,
         }
     }
 }
@@ -932,6 +957,7 @@ impl From<(ErrorKind, &'static str)> for RedisError {
     fn from((kind, desc): (ErrorKind, &'static str)) -> RedisError {
         RedisError {
             repr: ErrorRepr::WithDescription(kind, desc),
+            origin: ErrorOrigin::Local,
         }
     }
 }
@@ -940,6 +966,7 @@ impl From<(ErrorKind, &'static str, String)> for RedisError {
     fn from((kind, desc, detail): (ErrorKind, &'static str, String)) -> RedisError {
         RedisError {
             repr: ErrorRepr::WithDescriptionAndDetail(kind, desc, detail),
+            origin: ErrorOrigin::Local,
         }
     }
 }
@@ -1019,32 +1046,41 @@ impl RedisError {
         }
     }
 
+    /// Returns where this error originated.
+    pub fn origin(&self) -> ErrorOrigin {
+        self.origin
+    }
+
     /// Whether this error is an error reply the server sent, rather than one
     /// raised on the client, such as a lost connection.
     ///
     /// An error reply proves the server answered the command. A client-side error
     /// proves nothing about what the server did, even when it has the same kind:
     /// some local failures are reported as `ResponseError` too.
-    ///
-    /// Also true for an error built with [`Self::command_not_sent`].
     pub fn is_server_reply(&self) -> bool {
-        match self.repr {
-            ErrorRepr::ExtensionError(_, _) => true,
-            ErrorRepr::WithDescription(_, desc)
-            | ErrorRepr::WithDescriptionAndDetail(_, desc, _) => desc == SERVER_ERROR_DESCRIPTION,
-            ErrorRepr::IoError(_) => false,
-        }
+        self.origin == ErrorOrigin::Server
     }
 
     /// An error for a command this client never sent.
     ///
-    /// [`Self::is_server_reply`] is true for this error. That is safe because
-    /// the server never saw the command, so it cannot be using the buffer.
-    /// Treat the response as if the server replied "done with this buffer".
+    /// Sets origin to [`ErrorOrigin::NotSent`].
     ///
     /// Use this only when the command was never written to the connection.
     pub fn command_not_sent(kind: ErrorKind, reason: String) -> Self {
-        RedisError::from((kind, SERVER_ERROR_DESCRIPTION, reason))
+        RedisError {
+            repr: ErrorRepr::WithDescriptionAndDetail(kind, SERVER_ERROR_DESCRIPTION, reason),
+            origin: ErrorOrigin::NotSent,
+        }
+    }
+
+    /// An error representing a reply from the server with the given kind and detail.
+    ///
+    /// Sets origin to [`ErrorOrigin::Server`].
+    pub fn server_reply(kind: ErrorKind, detail: String) -> Self {
+        RedisError {
+            repr: ErrorRepr::WithDescriptionAndDetail(kind, SERVER_ERROR_DESCRIPTION, detail),
+            origin: ErrorOrigin::Server,
+        }
     }
 
     /// Returns the error detail.
@@ -1265,7 +1301,10 @@ impl RedisError {
                 format!("{ioerror_description}: {e}"),
             )),
         };
-        Self { repr }
+        Self {
+            repr,
+            origin: self.origin,
+        }
     }
 
     pub(crate) fn retry_method(&self) -> RetryMethod {
@@ -1337,6 +1376,7 @@ pub fn make_extension_error(code: String, detail: Option<String>) -> RedisError 
                 None => "Unknown extension error encountered".to_string(),
             },
         ),
+        origin: ErrorOrigin::Server,
     }
 }
 
