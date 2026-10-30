@@ -104,6 +104,7 @@ public class ClientPool implements AutoCloseable {
         // delegates to ConnectionManager's shared builder, so a pooled request carries the same fields
         // a directly-created client's does.
         ConnectionManager.validateClientAz(config.getClientConfig());
+        ConnectionManager.validateUnixSocketAddresses(config.getClientConfig());
 
         byte[] connectionRequestBytes = serializeConnectionRequest(config.getClientConfig());
 

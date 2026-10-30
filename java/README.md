@@ -296,6 +296,20 @@ public class Main {
 }
 ```
 
+### Standalone Valkey over a Unix domain socket:
+
+A standalone client can connect through the server's Unix domain socket (its `unixsocket` setting, as an absolute path) instead of TCP. Unix domain sockets are not available on Windows, and are not supported in cluster mode, with TLS, with `NodeDiscoveryMode.DISCOVER_ALL`, or mixed with TCP addresses.
+
+```java
+GlideClientConfiguration config =
+        GlideClientConfiguration.builder()
+                .address(NodeAddress.builder().unixSocketPath("/run/valkey/valkey.sock").build())
+                .build();
+try (GlideClient client = GlideClient.createClient(config).get()) {
+    System.out.println(client.ping().get());
+}
+```
+
 ### Cluster Valkey:
 ```java
 // You can run this example code in Main.java.

@@ -16,6 +16,7 @@ import glide.api.models.configuration.GlideClientConfiguration;
 import glide.api.models.configuration.GlideClusterClientConfiguration;
 import glide.api.models.configuration.GlideCredentialProvider;
 import glide.api.models.configuration.IamAuthConfig;
+import glide.api.models.configuration.NodeAddress;
 import glide.api.models.configuration.ReadFrom;
 import glide.api.models.configuration.ServerCredentials;
 import glide.api.models.configuration.ServiceType;
@@ -35,6 +36,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 public class ConnectionManagerTest {
 
     private static final String AZ = "us-east-1a";
+    private static final String SOCKET_PATH = "/run/valkey/valkey.sock";
 
     /** Derived from the enum so a strategy added later is covered without editing this file. */
     private static Stream<ReadFrom> azStrategies() {
@@ -518,5 +520,118 @@ public class ConnectionManagerTest {
         IllegalArgumentException error =
                 assertThrows(IllegalArgumentException.class, () -> ClientPool.create(poolConfig));
         assertTrue(error.getMessage().contains("custom address resolver"), error.getMessage());
+    }
+
+    private static NodeAddress socketAddress() {
+        return NodeAddress.builder().unixSocketPath(SOCKET_PATH).build();
+    }
+
+    @Test
+    void buildConnectionRequest_sendsOnlyTheUnixSocketPath() {
+        GlideClientConfiguration config =
+                GlideClientConfiguration.builder().address(socketAddress()).build();
+
+        ConnectionRequestOuterClass.NodeAddress address =
+                ConnectionManager.buildConnectionRequest(config).getAddresses(0);
+
+        assertTrue(address.hasUnixSocketPath());
+        assertEquals(SOCKET_PATH, address.getUnixSocketPath());
+        assertEquals("", address.getHost());
+        assertEquals(0, address.getPort());
+    }
+
+    @Test
+    void buildConnectionRequest_sendsAnEmptyUnixSocketPathForTheCoreToReject() {
+        GlideClientConfiguration config =
+                GlideClientConfiguration.builder()
+                        .address(NodeAddress.builder().unixSocketPath("").build())
+                        .build();
+
+        ConnectionRequestOuterClass.NodeAddress address =
+                ConnectionManager.buildConnectionRequest(config).getAddresses(0);
+
+        assertTrue(address.hasUnixSocketPath());
+        assertEquals("", address.getUnixSocketPath());
+    }
+
+    @Test
+    void buildConnectionRequest_tcpAddressHasNoUnixSocketPath() {
+        GlideClientConfiguration config =
+                GlideClientConfiguration.builder()
+                        .address(NodeAddress.builder().host("10.0.0.1").port(6380).build())
+                        .build();
+
+        ConnectionRequestOuterClass.NodeAddress address =
+                ConnectionManager.buildConnectionRequest(config).getAddresses(0);
+
+        assertFalse(address.hasUnixSocketPath());
+        assertEquals("10.0.0.1", address.getHost());
+        assertEquals(6380, address.getPort());
+    }
+
+    @Test
+    void validateUnixSocketAddresses_rejectsTls() {
+        ConfigurationError error =
+                assertThrows(
+                        ConfigurationError.class,
+                        () ->
+                                ConnectionManager.validateUnixSocketAddresses(
+                                        GlideClientConfiguration.builder()
+                                                .address(socketAddress())
+                                                .useTLS(true)
+                                                .build()));
+        assertTrue(error.getMessage().contains("TLS"), error.getMessage());
+    }
+
+    @Test
+    void validateUnixSocketAddresses_rejectsMixedAddresses() {
+        ConfigurationError error =
+                assertThrows(
+                        ConfigurationError.class,
+                        () ->
+                                ConnectionManager.validateUnixSocketAddresses(
+                                        GlideClientConfiguration.builder()
+                                                .address(socketAddress())
+                                                .address(NodeAddress.builder().build())
+                                                .build()));
+        assertTrue(error.getMessage().contains("combined with TCP addresses"), error.getMessage());
+    }
+
+    @Test
+    void validateUnixSocketAddresses_rejectsClusterMode() {
+        ConfigurationError error =
+                assertThrows(
+                        ConfigurationError.class,
+                        () ->
+                                ConnectionManager.validateUnixSocketAddresses(
+                                        GlideClusterClientConfiguration.builder().address(socketAddress()).build()));
+        assertTrue(error.getMessage().contains("cluster mode"), error.getMessage());
+    }
+
+    @Test
+    void createClient_throwsSynchronouslyForUnixSocketMisconfiguration() {
+        assertThrows(
+                ConfigurationError.class,
+                () ->
+                        GlideClient.createClient(
+                                GlideClientConfiguration.builder().address(socketAddress()).useTLS(true).build()));
+        assertThrows(
+                ConfigurationError.class,
+                () ->
+                        GlideClusterClient.createClient(
+                                GlideClusterClientConfiguration.builder().address(socketAddress()).build()));
+    }
+
+    @Test
+    void clientPoolCreate_rejectsUnixSocketWithTls() {
+        ClientPoolConfig poolConfig =
+                ClientPoolConfig.builder()
+                        .clientConfig(
+                                GlideClientConfiguration.builder().address(socketAddress()).useTLS(true).build())
+                        .build();
+
+        ConfigurationError error =
+                assertThrows(ConfigurationError.class, () -> ClientPool.create(poolConfig));
+        assertTrue(error.getMessage().contains("TLS"), error.getMessage());
     }
 }
