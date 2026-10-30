@@ -875,6 +875,7 @@ mod to_single_arg {
         use crate::commands::options::FieldExistenceCheck;
         use crate::commands::options::FlushAllOptions;
         use crate::commands::options::FunctionRestorePolicy;
+        use crate::commands::options::InfoSection;
         // TODO #7082: Uncomment with the `ObjectType` `ToSingleValkeyArg` impl.
         // use crate::commands::options::ObjectType;
         use crate::commands::options::OrderBy;
@@ -895,6 +896,7 @@ mod to_single_arg {
         assert_single(FlushAllOptions::default());
         assert_single(FunctionRestorePolicy::Append);
         assert_single(GeoUnit::Meters);
+        assert_single(InfoSection::Cpu);
         assert_single(LexBound::Inclusive(b"a".to_vec()));
         // TODO #7082: Uncomment with the `ObjectType` `ToSingleValkeyArg` impl.
         // assert_single(ObjectType::ZSet);
