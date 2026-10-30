@@ -13,6 +13,7 @@
 * All: Add support for Valkey 9.2 commands:
   * `SISMEMBER` with `XX` option ([#7202](https://github.com/valkey-io/valkey-glide/issues/7202))
   * `SET` with `IFNE` option ([#7237](https://github.com/valkey-io/valkey-glide/issues/7237))
+* Python/CI: Add experimental Windows AMD64 (CPython 3.9–3.14) and ARM64 (CPython 3.11–3.14) wheel builds for the async and sync clients, including Windows FFI width fixes and a threaded async response-pipe reader. Wheels remain build-only CI artifacts; Windows integration coverage is required before PyPI publishing ([#6826](https://github.com/valkey-io/valkey-glide/pull/6826)).
 * Rust: Implement `ToSingleValkeyArg` and `ToValkeyArgs` for option types ([#7381](https://github.com/valkey-io/valkey-glide/issues/7381))
 * Core: Add `glide-rdma` crate, an RDMA transfer layer over libfabric (loaded at runtime), for later RDMA support ([#7177](https://github.com/valkey-io/valkey-glide/pull/7177))
 * Core: Add opt-in RDMA support to glide-core behind the `rdma` feature: `RdmaConfig` in the connection request, `Client::register_rdma_region` / `rdma_get` / `rdma_set` / `close_rdma`, and the `rdma_parked_bytes` / `rdma_leaked_bytes` counters. Transfers route to the key's primary and have no request timeout. `BLOB.RDMA_*` commands are refused when sent any other way, in every build ([#7412](https://github.com/valkey-io/valkey-glide/pull/7412))

@@ -416,9 +416,18 @@ def test_sync_pool_shell_close_needs_no_provider_fields():
     client._lib.close_client.assert_called_once()
 
 
-@pytest.mark.parametrize("failure_point", ["pipe", "set_blocking"])
+@pytest.mark.parametrize(
+    ("platform", "failure_point"),
+    [
+        ("posix", "pipe"),
+        ("posix", "set_blocking"),
+        ("posix", "init_async_pipe"),
+        ("nt", "pipe"),
+        ("nt", "init_async_pipe"),
+    ],
+)
 def test_async_direct_provider_pipe_oserror_rolls_back_only_provider(
-    monkeypatch, failure_point
+    monkeypatch, platform, failure_point
 ):
     import glide.glide_client as async_client_module
 
@@ -443,11 +452,18 @@ def test_async_direct_provider_pipe_oserror_rolls_back_only_provider(
     def fail_set_blocking(_fd, _blocking):
         raise OSError("injected pipe setup failure")
 
-    if failure_point == "pipe":
-        monkeypatch.setattr(async_client_module.os, "pipe", fail_pipe)
-    else:
-        monkeypatch.setattr(async_client_module.os, "pipe", tracked_pipe)
-        monkeypatch.setattr(async_client_module.os, "set_blocking", fail_set_blocking)
+    fake_os = SimpleNamespace(
+        name=platform,
+        getpid=os.getpid,
+        pipe=fail_pipe if failure_point == "pipe" else tracked_pipe,
+        set_blocking=MagicMock(
+            side_effect=fail_set_blocking if failure_point == "set_blocking" else None
+        ),
+        close=os.close,
+    )
+    monkeypatch.setattr(async_client_module, "os", fake_os)
+    if failure_point == "init_async_pipe":
+        fake_lib.init_async_pipe.side_effect = OSError("injected pipe setup failure")
 
     monkeypatch.setattr(async_client_module, "_client_registry", {})
     monkeypatch.setattr(async_client_module, "_async_pipe_read_fd", -1)
@@ -495,7 +511,7 @@ def test_async_direct_provider_pipe_oserror_rolls_back_only_provider(
     assert async_client_module._async_pipe_read_fd == -1
     assert async_client_module._async_pipe_write_fd == -1
     assert async_client_module._async_pipe_init_pid == 0
-    assert len(created_fds) == (2 if failure_point == "set_blocking" else 0)
+    assert len(created_fds) == (0 if failure_point == "pipe" else 2)
     for fd in created_fds:
         with pytest.raises(OSError):
             os.fstat(fd)
@@ -507,16 +523,20 @@ def test_async_direct_provider_pipe_oserror_rolls_back_only_provider(
     assert async_client_module._async_pipe_read_fd == -1
     assert async_client_module._async_pipe_write_fd == -1
     assert async_client_module._async_pipe_init_pid == 0
-    assert len(created_fds) == (4 if failure_point == "set_blocking" else 0)
+    assert len(created_fds) == (0 if failure_point == "pipe" else 4)
     for fd in created_fds:
         with pytest.raises(OSError):
             os.fstat(fd)
+    assert fake_os.set_blocking.call_count == (
+        2 if platform == "posix" and failure_point != "pipe" else 0
+    )
 
 
+@pytest.mark.parametrize("platform", ["posix", "nt"])
 @pytest.mark.parametrize("anyio_backend", ["asyncio"])
 @pytest.mark.anyio
 async def test_async_direct_provider_partial_pipe_setup_failure_releases_ownership(
-    monkeypatch, anyio_backend
+    monkeypatch, anyio_backend, platform
 ):
     import glide.glide_client as async_client_module
     import glide_shared.ffi_helpers as helpers
@@ -563,7 +583,7 @@ async def test_async_direct_provider_partial_pipe_setup_failure_releases_ownersh
     def fail_add_reader(pipe_read_fd, _callback):
         pipe_read_fds.append(pipe_read_fd)
         registered_pipe_ids.extend(registry)
-        raise RuntimeError("injected add_reader failure")
+        raise RuntimeError("injected reader registration failure")
 
     with helpers._credential_provider_owners._lock:
         baseline_owner_ids = set(helpers._credential_provider_owners._owners)
@@ -578,6 +598,27 @@ async def test_async_direct_provider_partial_pipe_setup_failure_releases_ownersh
     monkeypatch.setattr(async_client_module, "_async_pipe_registered", False)
     monkeypatch.setattr(async_client_module, "_async_pipe_loop", None)
     monkeypatch.setattr(async_client_module, "_async_pipe_init_pid", 0)
+    monkeypatch.setattr(async_client_module, "_windows_pipe_thread", None)
+    monkeypatch.setattr(
+        async_client_module,
+        "os",
+        SimpleNamespace(
+            name=platform,
+            getpid=os.getpid,
+            pipe=os.pipe,
+            close=os.close,
+            set_blocking=MagicMock(),
+        ),
+    )
+    thread_factory = MagicMock()
+    thread_factory.return_value.start.side_effect = lambda: fail_add_reader(
+        async_client_module._async_pipe_read_fd, None
+    )
+    monkeypatch.setattr(
+        async_client_module,
+        "threading",
+        SimpleNamespace(Lock=threading.Lock, Thread=thread_factory),
+    )
     monkeypatch.setattr(loop, "add_reader", fail_add_reader)
 
     config = GlideClientConfiguration(
@@ -595,7 +636,7 @@ async def test_async_direct_provider_partial_pipe_setup_failure_releases_ownersh
     )
 
     try:
-        with pytest.raises(RuntimeError, match="injected add_reader failure"):
+        with pytest.raises(RuntimeError, match="injected reader registration failure"):
             await async_client_module.GlideClient.create(config)
 
         assert len(pipe_read_fds) == 1
