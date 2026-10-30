@@ -22,6 +22,7 @@ import {
     MutualTls,
 } from "../build-ts";
 import {
+    ClusterScanCursor,
     createLeakedStringVec,
     freeLeakedStringVec,
     valueFromSplitPointer,
@@ -1099,5 +1100,64 @@ describe("TLS PEM file loaders", () => {
             clientKeyPath: "/tmp/k",
         };
         expect(_pathVariant.kind).toBe("path");
+    });
+});
+
+describe("ClusterScanCursor resolution (#7467)", () => {
+    class TestGlideClusterClient extends GlideClusterClient {
+        public testResolveCursor(cursor: unknown) {
+            return this.resolveClusterScanCursor(cursor);
+        }
+    }
+
+    let testClient: TestGlideClusterClient;
+
+    beforeAll(() => {
+        testClient = Object.create(TestGlideClusterClient.prototype);
+    });
+
+    it("accepts ClusterScanCursor instance", () => {
+        const cursor = new ClusterScanCursor();
+        const resolved = testClient.testResolveCursor(cursor);
+        expect(resolved).toBe(cursor);
+    });
+
+    it("accepts '0' string to start new scan", () => {
+        const resolved = testClient.testResolveCursor("0");
+        expect(resolved).toBeInstanceOf(ClusterScanCursor);
+        expect(resolved.getCursor()).toBe("");
+    });
+
+    it("accepts empty string to start new scan", () => {
+        const resolved = testClient.testResolveCursor("");
+        expect(resolved).toBeInstanceOf(ClusterScanCursor);
+        expect(resolved.getCursor()).toBe("");
+    });
+
+    it("accepts Buffer containing '0'", () => {
+        const resolved = testClient.testResolveCursor(Buffer.from("0"));
+        expect(resolved).toBeInstanceOf(ClusterScanCursor);
+        expect(resolved.getCursor()).toBe("");
+    });
+
+    it("accepts custom cursor string", () => {
+        const resolved = testClient.testResolveCursor("test-cursor-id");
+        expect(resolved).toBeInstanceOf(ClusterScanCursor);
+        expect(resolved.getCursor()).toBe("test-cursor-id");
+    });
+
+    it("rejects invalid cursor with descriptive RequestError", () => {
+        expect(() => testClient.testResolveCursor({})).toThrow(
+            /Invalid cursor provided for cluster scan/,
+        );
+        expect(() => testClient.testResolveCursor(null)).toThrow(
+            /Invalid cursor provided for cluster scan/,
+        );
+        expect(() => testClient.testResolveCursor(undefined)).toThrow(
+            /Invalid cursor provided for cluster scan/,
+        );
+        expect(() => testClient.testResolveCursor(true)).toThrow(
+            /Invalid cursor provided for cluster scan/,
+        );
     });
 });

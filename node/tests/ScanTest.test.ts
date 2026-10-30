@@ -84,6 +84,13 @@ describe("Scan GlideClusterClient", () => {
             expect(allKeys).toHaveLength(3);
             expect(allKeys).toEqual(expect.arrayContaining([key1, key2, key3]));
 
+            // Starting scan with "0" as string cursor (#7467)
+            const [stringCursor, stringKeys] = await client.scan("0", {
+                count: 10,
+            });
+            expect(stringCursor).toBeInstanceOf(ClusterScanCursor);
+            expect(stringKeys).toBeDefined();
+
             // Iterate over keys matching a pattern
             const [key4, key5] = ["notMykey", "somethingElse"];
             await client.mset([

@@ -831,12 +831,42 @@ export class GlideClusterClient extends BaseClient {
     }
 
     /**
+     * Resolves a provided cursor to a valid `ClusterScanCursor`.
+     * Accepts an existing `ClusterScanCursor`, or `"0"` to start a new scan.
+     * Throws `RequestError` if an invalid cursor is provided.
      * @internal
      */
+    protected resolveClusterScanCursor(cursor: unknown): ClusterScanCursor {
+        if (cursor instanceof ClusterScanCursor) {
+            return cursor;
+        }
+
+        if (cursor === "0" || cursor === "") {
+            return new ClusterScanCursor();
+        }
+
+        if (typeof cursor === "string") {
+            return new ClusterScanCursor(cursor);
+        }
+
+        if (cursor instanceof Buffer) {
+            const cursorStr = cursor.toString();
+            return cursorStr === "0" || cursorStr === ""
+                ? new ClusterScanCursor()
+                : new ClusterScanCursor(cursorStr);
+        }
+
+        throw new RequestError(
+            "Invalid cursor provided for cluster scan. Expected a ClusterScanCursor or initial cursor '0', received: " +
+                typeof cursor,
+        );
+    }
+
     protected createClusterScanPromise(
-        cursor: ClusterScanCursor,
+        cursor: ClusterScanCursor | GlideString,
         options?: ClusterScanOptions & DecoderOption,
     ): Promise<[ClusterScanCursor, GlideString[]]> {
+        const scanCursor = this.resolveClusterScanCursor(cursor);
         this.ensureClientIsOpen();
         const callbackIndex = this.getCallbackIndex();
 
@@ -879,7 +909,7 @@ export class GlideClusterClient extends BaseClient {
 
                 const success = this.clientHandle!.clusterScan(
                     callbackIndex,
-                    cursor.getCursor(),
+                    scanCursor.getCursor(),
                     matchPattern,
                     options?.count ?? undefined,
                     options?.type,
@@ -960,7 +990,7 @@ export class GlideClusterClient extends BaseClient {
      * ```
      */
     public async scan(
-        cursor: ClusterScanCursor,
+        cursor: ClusterScanCursor | GlideString,
         options?: ClusterScanOptions & DecoderOption,
     ): Promise<[ClusterScanCursor, GlideString[]]> {
         return this.createClusterScanPromise(cursor, options);
