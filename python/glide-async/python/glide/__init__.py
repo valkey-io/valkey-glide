@@ -248,17 +248,23 @@ class _LegacyModule(types.ModuleType):
         self._warned = False
 
     def __getattr__(self, name):
-        if not self._warned:
-            warnings.warn(
-                f"Importing from '{self.__name__}' is deprecated. "
-                f"Please import directly from 'glide' instead.",
-                DeprecationWarning,
-                stacklevel=2,
-            )
-            self._warned = True
+        # Do not warn on dunder attributes accessed during introspection
+        # (e.g. inspect.getmodule checking hasattr(module, '__file__'))
+        if not (name.startswith("__") and name.endswith("__")):
+            if not self._warned:
+                warnings.warn(
+                    f"Importing from '{self.__name__}' is deprecated. "
+                    f"Please import directly from 'glide' instead.",
+                    DeprecationWarning,
+                    stacklevel=2,
+                )
+                self._warned = True
 
         # Access the attribute from the real top-level glide module
         return getattr(_glide_module, name)
+
+    def __dir__(self):
+        return dir(_glide_module)
 
 
 # Replace old modules with lazy proxy modules
