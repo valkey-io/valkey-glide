@@ -847,6 +847,7 @@ export class GlideClusterClient extends BaseClient {
 
         if (cursor instanceof Buffer) {
             const cursorStr = cursor.toString();
+
             if (cursorStr === "0" || cursorStr === "") {
                 return new ClusterScanCursor();
             }
@@ -864,11 +865,13 @@ export class GlideClusterClient extends BaseClient {
         const scanCursor = this.resolveClusterScanCursor(cursor);
         this.ensureClientIsOpen();
         const cursorValue = scanCursor.getCursor();
+
         if (typeof cursorValue !== "string") {
             throw new RequestError(
                 `Invalid cursor provided for cluster scan. Expected getCursor() to return a string, received: ${typeof cursorValue}`,
             );
         }
+
         const callbackIndex = this.getCallbackIndex();
 
         return new Promise<[ClusterScanCursor, GlideString[]]>(
