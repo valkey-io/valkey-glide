@@ -103,10 +103,10 @@ __metadata:
   resolution: "@test/common@workspace:."
   dependencies:
     "@types/node": "npm:26.2.0"
-    "@types/pg": "npm:^8.11.11"
-    "@valkey/valkey-glide": "npm:2.5.0"
+    "@types/pg": "npm:^8.23.1"
+    "@valkey/valkey-glide": "npm:2.5.3"
     decimal.js: "npm:^10.5.0"
-    pg: "npm:^8.14.1"
+    pg: "npm:^8.23.1"
     typescript: "npm:^5.0.4"
     winston: "npm:^3.17.0"
   languageName: unknown
@@ -121,14 +121,14 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/pg@npm:^8.11.11":
-  version: 8.21.0
-  resolution: "@types/pg@npm:8.21.0"
+"@types/pg@npm:^8.23.1":
+  version: 8.23.1
+  resolution: "@types/pg@npm:8.23.1"
   dependencies:
     "@types/node": "npm:*"
     pg-protocol: "npm:*"
     pg-types: "npm:^2.2.0"
-  checksum: 10c0/829b1185896a722a9c802e0d3cbbe66fba9d963f759d727acd68206803e37d5c4249241abcc2a595b0e3ebc667293de722a668a016a1d4ab1bbc3f5dbe3b7c93
+  checksum: 10c0/0e39ff7dbe233e1e50b172d87fe84cca086a52e255adb104ef1d60619cded356c4414427ffbea58e70a5a985c3036603c8e544ca2937fc1cf4050185109973be
   languageName: node
   linkType: hard
 
@@ -139,58 +139,58 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@valkey/valkey-glide-darwin-arm64@npm:2.5.0":
-  version: 2.5.0
-  resolution: "@valkey/valkey-glide-darwin-arm64@npm:2.5.0"
+"@valkey/valkey-glide-darwin-arm64@npm:2.5.3":
+  version: 2.5.3
+  resolution: "@valkey/valkey-glide-darwin-arm64@npm:2.5.3"
   conditions: os=darwin & cpu=arm64
   languageName: node
   linkType: hard
 
-"@valkey/valkey-glide-darwin-x64@npm:2.5.0":
-  version: 2.5.0
-  resolution: "@valkey/valkey-glide-darwin-x64@npm:2.5.0"
+"@valkey/valkey-glide-darwin-x64@npm:2.5.3":
+  version: 2.5.3
+  resolution: "@valkey/valkey-glide-darwin-x64@npm:2.5.3"
   conditions: os=darwin & cpu=x64
   languageName: node
   linkType: hard
 
-"@valkey/valkey-glide-linux-arm64-gnu@npm:2.5.0":
-  version: 2.5.0
-  resolution: "@valkey/valkey-glide-linux-arm64-gnu@npm:2.5.0"
+"@valkey/valkey-glide-linux-arm64-gnu@npm:2.5.3":
+  version: 2.5.3
+  resolution: "@valkey/valkey-glide-linux-arm64-gnu@npm:2.5.3"
   conditions: os=linux & cpu=arm64 & libc=glibc
   languageName: node
   linkType: hard
 
-"@valkey/valkey-glide-linux-arm64-musl@npm:2.5.0":
-  version: 2.5.0
-  resolution: "@valkey/valkey-glide-linux-arm64-musl@npm:2.5.0"
+"@valkey/valkey-glide-linux-arm64-musl@npm:2.5.3":
+  version: 2.5.3
+  resolution: "@valkey/valkey-glide-linux-arm64-musl@npm:2.5.3"
   conditions: os=linux & cpu=arm64 & libc=musl
   languageName: node
   linkType: hard
 
-"@valkey/valkey-glide-linux-x64-gnu@npm:2.5.0":
-  version: 2.5.0
-  resolution: "@valkey/valkey-glide-linux-x64-gnu@npm:2.5.0"
+"@valkey/valkey-glide-linux-x64-gnu@npm:2.5.3":
+  version: 2.5.3
+  resolution: "@valkey/valkey-glide-linux-x64-gnu@npm:2.5.3"
   conditions: os=linux & cpu=x64 & libc=glibc
   languageName: node
   linkType: hard
 
-"@valkey/valkey-glide-linux-x64-musl@npm:2.5.0":
-  version: 2.5.0
-  resolution: "@valkey/valkey-glide-linux-x64-musl@npm:2.5.0"
+"@valkey/valkey-glide-linux-x64-musl@npm:2.5.3":
+  version: 2.5.3
+  resolution: "@valkey/valkey-glide-linux-x64-musl@npm:2.5.3"
   conditions: os=linux & cpu=x64 & libc=musl
   languageName: node
   linkType: hard
 
-"@valkey/valkey-glide@npm:2.5.0":
-  version: 2.5.0
-  resolution: "@valkey/valkey-glide@npm:2.5.0"
+"@valkey/valkey-glide@npm:2.5.3":
+  version: 2.5.3
+  resolution: "@valkey/valkey-glide@npm:2.5.3"
   dependencies:
-    "@valkey/valkey-glide-darwin-arm64": "npm:2.5.0"
-    "@valkey/valkey-glide-darwin-x64": "npm:2.5.0"
-    "@valkey/valkey-glide-linux-arm64-gnu": "npm:2.5.0"
-    "@valkey/valkey-glide-linux-arm64-musl": "npm:2.5.0"
-    "@valkey/valkey-glide-linux-x64-gnu": "npm:2.5.0"
-    "@valkey/valkey-glide-linux-x64-musl": "npm:2.5.0"
+    "@valkey/valkey-glide-darwin-arm64": "npm:2.5.3"
+    "@valkey/valkey-glide-darwin-x64": "npm:2.5.3"
+    "@valkey/valkey-glide-linux-arm64-gnu": "npm:2.5.3"
+    "@valkey/valkey-glide-linux-arm64-musl": "npm:2.5.3"
+    "@valkey/valkey-glide-linux-x64-gnu": "npm:2.5.3"
+    "@valkey/valkey-glide-linux-x64-musl": "npm:2.5.3"
     long: "npm:5"
     protobufjs: "npm:^7.6.3"
   dependenciesMeta:
@@ -206,7 +206,7 @@ __metadata:
       optional: true
     "@valkey/valkey-glide-linux-x64-musl":
       optional: true
-  checksum: 10c0/4dbb399bc8333f19cf05a5f40e3f351c51c9ffc58fa8590d2a42063cf1f5bfbee944596a717e5bd1c3085a3e226f71ebc7f6fddeace81e63f6ec6fc6849a3a6c
+  checksum: 10c0/e2d0e165f7c0d7b6d1f362c7b41fb20afb85b53fe92f43e853bb241e5c585c40105d7776932cd803849a264ef55c8ddcd66d3711dc5998591339cecdcc488e6b
   languageName: node
   linkType: hard
 
@@ -338,17 +338,17 @@ __metadata:
   languageName: node
   linkType: hard
 
-"pg-cloudflare@npm:^1.4.0":
-  version: 1.4.0
-  resolution: "pg-cloudflare@npm:1.4.0"
-  checksum: 10c0/553764d00055052648393cda53c1feb065991d6f9fbfdeb56cf8396c5b33377ab2897aaf5dc9cd3933d09023a1f01e8b1ca755431dcf5fd71c92ea277e2888f1
+"pg-cloudflare@npm:^1.4.1":
+  version: 1.4.1
+  resolution: "pg-cloudflare@npm:1.4.1"
+  checksum: 10c0/32e62c987073472e81c0dc218f850b1212b4e2c1f35d50433d87d054fe268f549ebaf8fc6c1227ab24c12b318f3e3a2a191ffbdfb2daa30b39aa6802ab8fe2f6
   languageName: node
   linkType: hard
 
-"pg-connection-string@npm:^2.14.0":
-  version: 2.14.0
-  resolution: "pg-connection-string@npm:2.14.0"
-  checksum: 10c0/c26d85970f782de72b90aa45b4acfa34df90242fc08bc676e8827297164044dbfb40a2cf20b0646bd02662a6b14c5ed27f322db627e41e582f2b705bc41e8b47
+"pg-connection-string@npm:^2.14.1":
+  version: 2.14.1
+  resolution: "pg-connection-string@npm:2.14.1"
+  checksum: 10c0/7321eed97579b4972a714909e7a444beb2186780fe7fd86ea719ff7c8f1fad07d7e5f85722c4992245b23683ed7d2fe2bdda8f7469fed4c016bb5c3379c575ca
   languageName: node
   linkType: hard
 
@@ -368,10 +368,17 @@ __metadata:
   languageName: node
   linkType: hard
 
-"pg-protocol@npm:*, pg-protocol@npm:^1.16.0":
+"pg-protocol@npm:*":
   version: 1.16.0
   resolution: "pg-protocol@npm:1.16.0"
   checksum: 10c0/8ea4a8f4970aa0ca1e5bf9a482da0a41a043d7470fbaf7592736971146b09a2a4003d953c0091b72fc30bf7a7994a0b7fdf897bf50cd219787bd22806b3ffb04
+  languageName: node
+  linkType: hard
+
+"pg-protocol@npm:^1.16.1":
+  version: 1.16.1
+  resolution: "pg-protocol@npm:1.16.1"
+  checksum: 10c0/84e8bf05c3548c8ffcad29247c075f8f1cf477600c92a7eb0ab27c6c4cbdbe1280433582bfba91f629b1f68bcaf4ae26436a898f430e884d7887543931e8ade6
   languageName: node
   linkType: hard
 
@@ -388,14 +395,14 @@ __metadata:
   languageName: node
   linkType: hard
 
-"pg@npm:^8.14.1":
-  version: 8.23.0
-  resolution: "pg@npm:8.23.0"
+"pg@npm:^8.23.1":
+  version: 8.23.1
+  resolution: "pg@npm:8.23.1"
   dependencies:
-    pg-cloudflare: "npm:^1.4.0"
-    pg-connection-string: "npm:^2.14.0"
+    pg-cloudflare: "npm:^1.4.1"
+    pg-connection-string: "npm:^2.14.1"
     pg-pool: "npm:^3.14.0"
-    pg-protocol: "npm:^1.16.0"
+    pg-protocol: "npm:^1.16.1"
     pg-types: "npm:2.2.0"
     pgpass: "npm:1.0.5"
   peerDependencies:
@@ -406,7 +413,7 @@ __metadata:
   peerDependenciesMeta:
     pg-native:
       optional: true
-  checksum: 10c0/11ce12a71b4239588c18f078531c378d5bcdbcb9ea892e080a6e71f91aaece2b4b8fd93ee5777f94210f9258ff56161f8ed1a45050c32d295aaca037bba12ee8
+  checksum: 10c0/084ce2bcd025705105d4d9a4c4438b178117acbaae5c766e3d3c9fb812cc55d826a212189e19937b8e3b0a8914a3c3e4ba78ad62af73890f37406a676c1f9e0c
   languageName: node
   linkType: hard
 
