@@ -12,6 +12,7 @@ import {
     BaseClientConfiguration,
     AZ_AFFINITY_READ_FROM_STRATEGIES,
     ConfigurationError,
+    GlideClusterClient,
     GlideClusterClientConfiguration,
     Logger,
     MAX_REQUEST_ARGS_LEN,
@@ -1140,10 +1141,10 @@ describe("ClusterScanCursor resolution (#7467)", () => {
         expect(resolved.getCursor()).toBe("");
     });
 
-    it("accepts custom cursor string", () => {
-        const resolved = testClient.testResolveCursor("test-cursor-id");
-        expect(resolved).toBeInstanceOf(ClusterScanCursor);
-        expect(resolved.getCursor()).toBe("test-cursor-id");
+    it("rejects arbitrary cursor string without existing ClusterScanCursor", () => {
+        expect(() => testClient.testResolveCursor("test-cursor-id")).toThrow(
+            /Invalid cursor provided for cluster scan/,
+        );
     });
 
     it("rejects invalid cursor with descriptive RequestError", () => {

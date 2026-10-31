@@ -845,20 +845,15 @@ export class GlideClusterClient extends BaseClient {
             return new ClusterScanCursor();
         }
 
-        if (typeof cursor === "string") {
-            return new ClusterScanCursor(cursor);
-        }
-
         if (cursor instanceof Buffer) {
             const cursorStr = cursor.toString();
-            return cursorStr === "0" || cursorStr === ""
-                ? new ClusterScanCursor()
-                : new ClusterScanCursor(cursorStr);
+            if (cursorStr === "0" || cursorStr === "") {
+                return new ClusterScanCursor();
+            }
         }
 
         throw new RequestError(
-            "Invalid cursor provided for cluster scan. Expected a ClusterScanCursor or initial cursor '0', received: " +
-                typeof cursor,
+            "Invalid cursor provided for cluster scan. Pass the ClusterScanCursor returned by the previous call, or '0' to start a new scan.",
         );
     }
 
@@ -868,6 +863,12 @@ export class GlideClusterClient extends BaseClient {
     ): Promise<[ClusterScanCursor, GlideString[]]> {
         const scanCursor = this.resolveClusterScanCursor(cursor);
         this.ensureClientIsOpen();
+        const cursorValue = scanCursor.getCursor();
+        if (typeof cursorValue !== "string") {
+            throw new RequestError(
+                `Invalid cursor provided for cluster scan. Expected getCursor() to return a string, received: ${typeof cursorValue}`,
+            );
+        }
         const callbackIndex = this.getCallbackIndex();
 
         return new Promise<[ClusterScanCursor, GlideString[]]>(
@@ -909,7 +910,7 @@ export class GlideClusterClient extends BaseClient {
 
                 const success = this.clientHandle!.clusterScan(
                     callbackIndex,
-                    scanCursor.getCursor(),
+                    cursorValue,
                     matchPattern,
                     options?.count ?? undefined,
                     options?.type,
