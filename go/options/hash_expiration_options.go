@@ -8,7 +8,6 @@ import (
 	"errors"
 
 	"github.com/valkey-io/valkey-glide/go/v2/constants"
-	"github.com/valkey-io/valkey-glide/go/v2/internal/utils"
 )
 
 // HSetExOptions represents optional arguments for the HSETEX command.
@@ -138,18 +137,15 @@ func (opts *HGetExOptions) ToArgs() ([]string, error) {
 
 	// Add expiry options
 	if opts.Expiry != nil {
-		switch opts.Expiry.Type {
-		case constants.Seconds:
-			args = append(args, "EX", utils.IntToString(int64(opts.Expiry.Duration)))
-		case constants.Milliseconds:
-			args = append(args, "PX", utils.IntToString(int64(opts.Expiry.Duration)))
-		case constants.UnixSeconds:
-			args = append(args, "EXAT", utils.IntToString(int64(opts.Expiry.GetTime())))
-		case constants.UnixMilliseconds:
-			args = append(args, "PXAT", utils.IntToString(int64(opts.Expiry.GetTime())))
-		case constants.Persist:
-			args = append(args, "PERSIST")
+		// HGETEX does not support KEEPTTL.
+		if opts.Expiry.Type == constants.KeepExisting {
+			return nil, errors.New("HGetExOptions: invalid expiry type " + string(opts.Expiry.Type))
 		}
+		expiryArgs, err := opts.Expiry.ToArgs()
+		if err != nil {
+			return nil, err
+		}
+		args = append(args, expiryArgs...)
 	}
 
 	return args, nil
