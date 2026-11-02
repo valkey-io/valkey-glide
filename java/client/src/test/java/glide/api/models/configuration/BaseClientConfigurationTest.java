@@ -1,12 +1,15 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models.configuration;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import glide.api.models.GlideString;
+import java.nio.charset.StandardCharsets;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -275,6 +278,91 @@ public class BaseClientConfigurationTest {
 
         ClientSideCache cacheDefault = ClientSideCache.builder().maxCacheKb(1024).build();
         assertFalse(cacheDefault.isServerAssisted());
+    }
+
+    @Test
+    void testTrackingPrefixDefaultsToNull() {
+        ClientSideCache cache = ClientSideCache.builder().maxCacheKb(1024).serverAssisted(true).build();
+        assertNull(cache.getTrackingPrefix());
+
+        assertNull(ClientSideCache.create(1024, 0).getTrackingPrefix());
+    }
+
+    @Test
+    void testTrackingPrefixAcceptedWithServerAssisted() {
+        ClientSideCache cache =
+                ClientSideCache.builder()
+                        .maxCacheKb(1024)
+                        .serverAssisted(true)
+                        .trackingPrefix("xxx:")
+                        .build();
+        assertEquals(GlideString.gs("xxx:"), cache.getTrackingPrefix());
+        assertArrayEquals(
+                "xxx:".getBytes(StandardCharsets.UTF_8), cache.getTrackingPrefix().getBytes());
+    }
+
+    @Test
+    void testTrackingPrefixAcceptsGlideString() {
+        byte[] rawPrefix = {(byte) 0xff, 'k', ':'};
+        ClientSideCache cache =
+                ClientSideCache.builder()
+                        .maxCacheKb(1024)
+                        .serverAssisted(true)
+                        .trackingPrefix(GlideString.gs(rawPrefix))
+                        .build();
+        assertArrayEquals(rawPrefix, cache.getTrackingPrefix().getBytes());
+    }
+
+    @Test
+    void testTrackingPrefixNullIsAllowedWithoutServerAssisted() {
+        ClientSideCache fromString =
+                ClientSideCache.builder().maxCacheKb(1024).trackingPrefix((String) null).build();
+        assertNull(fromString.getTrackingPrefix());
+
+        ClientSideCache fromGlideString =
+                ClientSideCache.builder().maxCacheKb(1024).trackingPrefix((GlideString) null).build();
+        assertNull(fromGlideString.getTrackingPrefix());
+    }
+
+    @Test
+    void testTrackingPrefixRejectsEmptyPrefix() {
+        IllegalArgumentException error =
+                assertThrows(
+                        IllegalArgumentException.class,
+                        () ->
+                                ClientSideCache.builder()
+                                        .maxCacheKb(1024)
+                                        .serverAssisted(true)
+                                        .trackingPrefix("")
+                                        .build());
+        assertTrue(error.getMessage().contains("must not be empty"), error.getMessage());
+
+        assertThrows(
+                IllegalArgumentException.class,
+                () ->
+                        ClientSideCache.builder()
+                                .maxCacheKb(1024)
+                                .serverAssisted(true)
+                                .trackingPrefix(GlideString.gs(new byte[0]))
+                                .build());
+    }
+
+    @Test
+    void testTrackingPrefixRequiresServerAssisted() {
+        IllegalArgumentException error =
+                assertThrows(
+                        IllegalArgumentException.class,
+                        () -> ClientSideCache.builder().maxCacheKb(1024).trackingPrefix("xxx:").build());
+        assertTrue(error.getMessage().contains("serverAssisted"), error.getMessage());
+
+        assertThrows(
+                IllegalArgumentException.class,
+                () ->
+                        ClientSideCache.builder()
+                                .maxCacheKb(1024)
+                                .serverAssisted(false)
+                                .trackingPrefix("xxx:")
+                                .build());
     }
 
     @Test

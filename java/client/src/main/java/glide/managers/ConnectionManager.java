@@ -654,6 +654,11 @@ public class ConnectionManager {
             cacheBuilder.setEnableMetrics(clientSideCache.isEnableMetrics());
             cacheBuilder.setServerAssisted(clientSideCache.isServerAssisted());
             cacheBuilder.setEntryTtlMs(clientSideCache.getEntryTtlMs());
+            if (clientSideCache.getTrackingPrefix() != null) {
+                cacheBuilder.setTrackingPrefix(
+                        com.google.protobuf.ByteString.copyFrom(
+                                clientSideCache.getTrackingPrefix().getBytes()));
+            }
             if (clientSideCache.getEvictionPolicy() != null) {
                 switch (clientSideCache.getEvictionPolicy()) {
                     case LRU:

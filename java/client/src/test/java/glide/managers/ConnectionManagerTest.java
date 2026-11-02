@@ -6,10 +6,12 @@ import static org.junit.jupiter.api.Assertions.*;
 import connection_request.ConnectionRequestOuterClass;
 import glide.api.GlideClient;
 import glide.api.GlideClusterClient;
+import glide.api.models.GlideString;
 import glide.api.models.configuration.AddressResolver;
 import glide.api.models.configuration.BackoffStrategy;
 import glide.api.models.configuration.BaseClientConfiguration;
 import glide.api.models.configuration.ClientCircuitBreakerConfiguration;
+import glide.api.models.configuration.ClientSideCache;
 import glide.api.models.configuration.CompressionBackend;
 import glide.api.models.configuration.CompressionConfiguration;
 import glide.api.models.configuration.GlideClientConfiguration;
@@ -23,6 +25,7 @@ import glide.api.models.exceptions.ConfigurationError;
 import glide.api.models.pool.ClientPool;
 import glide.api.models.pool.ClientPoolConfig;
 import java.lang.reflect.Method;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
@@ -372,6 +375,92 @@ public class ConnectionManagerTest {
         assertEquals(0, strategy.getNumberOfRetries(), "number_of_retries");
         assertEquals(0, strategy.getFactor(), "factor");
         assertEquals(0, strategy.getExponentBase(), "exponent_base");
+    }
+
+    /** The tracking prefix must reach the core as the exact UTF-8 bytes the user configured. */
+    @Test
+    void buildConnectionRequest_carriesClientSideCacheTrackingPrefix() {
+        ClientSideCache cache =
+                ClientSideCache.builder()
+                        .maxCacheKb(512)
+                        .entryTtlMs(1500)
+                        .enableMetrics(true)
+                        .serverAssisted(true)
+                        .trackingPrefix("xxx:")
+                        .build();
+        GlideClientConfiguration clientConfig =
+                GlideClientConfiguration.builder().clientSideCache(cache).build();
+
+        ConnectionRequestOuterClass.ConnectionRequest request =
+                ConnectionManager.buildConnectionRequest(clientConfig);
+
+        assertTrue(request.hasClientSideCache(), "client_side_cache present");
+        ConnectionRequestOuterClass.ClientSideCache wire = request.getClientSideCache();
+        assertEquals(cache.getCacheId(), wire.getCacheId());
+        assertEquals(512, wire.getMaxCacheKb());
+        assertEquals(1500, wire.getEntryTtlMs());
+        assertTrue(wire.getEnableMetrics());
+        assertTrue(wire.getServerAssisted());
+        assertTrue(wire.hasTrackingPrefix(), "tracking_prefix present");
+        assertArrayEquals(
+                "xxx:".getBytes(StandardCharsets.UTF_8), wire.getTrackingPrefix().toByteArray());
+    }
+
+    /** Raw (non UTF-8) prefix bytes given as a GlideString are forwarded unchanged. */
+    @Test
+    void buildConnectionRequest_carriesRawTrackingPrefixBytes() {
+        byte[] rawPrefix = {(byte) 0xff, (byte) 0xfe, 'k', ':'};
+        ClientSideCache cache =
+                ClientSideCache.builder()
+                        .maxCacheKb(512)
+                        .serverAssisted(true)
+                        .trackingPrefix(GlideString.gs(rawPrefix))
+                        .build();
+        GlideClusterClientConfiguration clientConfig =
+                GlideClusterClientConfiguration.builder().clientSideCache(cache).build();
+
+        ConnectionRequestOuterClass.ConnectionRequest request =
+                ConnectionManager.buildConnectionRequest(clientConfig);
+
+        assertTrue(request.getClientSideCache().hasTrackingPrefix());
+        assertArrayEquals(rawPrefix, request.getClientSideCache().getTrackingPrefix().toByteArray());
+    }
+
+    /** Without a prefix the optional field stays unset, so the core keeps tracking every key. */
+    @Test
+    void buildConnectionRequest_omitsTrackingPrefixWhenNotConfigured() {
+        ClientSideCache cache = ClientSideCache.builder().maxCacheKb(512).serverAssisted(true).build();
+        GlideClientConfiguration clientConfig =
+                GlideClientConfiguration.builder().clientSideCache(cache).build();
+
+        ConnectionRequestOuterClass.ConnectionRequest request =
+                ConnectionManager.buildConnectionRequest(clientConfig);
+
+        assertTrue(request.hasClientSideCache());
+        assertTrue(request.getClientSideCache().getServerAssisted());
+        assertFalse(request.getClientSideCache().hasTrackingPrefix(), "tracking_prefix unset");
+    }
+
+    /** The pooled serialization path goes through the same builder and must carry the prefix too. */
+    @Test
+    void clientPoolSerialization_carriesClientSideCacheTrackingPrefix() throws Exception {
+        ClientSideCache cache =
+                ClientSideCache.builder()
+                        .maxCacheKb(512)
+                        .serverAssisted(true)
+                        .trackingPrefix("pool:")
+                        .build();
+        GlideClientConfiguration clientConfig =
+                GlideClientConfiguration.builder().clientSideCache(cache).build();
+
+        ConnectionRequestOuterClass.ConnectionRequest request =
+                ConnectionRequestOuterClass.ConnectionRequest.parseFrom(poolBytes(clientConfig));
+
+        assertTrue(request.hasClientSideCache(), "pooled client_side_cache present");
+        assertTrue(request.getClientSideCache().getServerAssisted());
+        assertArrayEquals(
+                "pool:".getBytes(StandardCharsets.UTF_8),
+                request.getClientSideCache().getTrackingPrefix().toByteArray());
     }
 
     private static BackoffStrategy.BackoffStrategyBuilder validBackoff() {

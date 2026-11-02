@@ -1,11 +1,14 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide;
 
+import static glide.TestUtilities.assertClientTrackingInfo;
 import static glide.TestUtilities.commonClientConfig;
 import static glide.TestUtilities.commonClusterClientConfig;
 import static glide.TestUtilities.getRandomString;
 import static glide.TestUtilities.waitFor;
 import static glide.api.BaseClient.OK;
+import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleMultiNodeRoute.ALL_NODES;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -14,9 +17,13 @@ import static org.junit.jupiter.api.Named.named;
 import glide.api.BaseClient;
 import glide.api.GlideClient;
 import glide.api.GlideClusterClient;
+import glide.api.models.ClusterValue;
 import glide.api.models.configuration.ClientSideCache;
 import glide.api.models.configuration.EvictionPolicy;
+import glide.api.models.configuration.ProtocolVersion;
 import glide.api.models.exceptions.RequestException;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
@@ -24,6 +31,7 @@ import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Stream;
 import lombok.SneakyThrows;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -717,6 +725,349 @@ public class ClientSideCacheTests {
             ((GlideClient) client).flushall().get();
         } else {
             ((GlideClusterClient) client).flushall().get();
+        }
+    }
+
+    // ==================== Tracking prefix ====================
+
+    /** Client modes the tracking-prefix tests run in. Each test creates the clients it needs. */
+    public static Stream<Arguments> clientModes() {
+        return Stream.of(
+                Arguments.of(named("GlideClient", false)), Arguments.of(named("GlideClusterClient", true)));
+    }
+
+    /** A server-assisted cache (RESP3 only) scoped to {@code prefix}, with metrics enabled. */
+    private static ClientSideCache prefixedCache(String prefix) {
+        return ClientSideCache.builder()
+                .maxCacheKb(1024L)
+                .entryTtlMs(0L)
+                .enableMetrics(true)
+                .serverAssisted(true)
+                .trackingPrefix(prefix)
+                .build();
+    }
+
+    /** Creates a RESP3 client in the requested mode, with or without a client-side cache. */
+    @SneakyThrows
+    private static BaseClient createClient(boolean cluster, ClientSideCache cache) {
+        if (cluster) {
+            return GlideClusterClient.createClient(
+                            commonClusterClientConfig()
+                                    .protocol(ProtocolVersion.RESP3)
+                                    .clientSideCache(cache)
+                                    .build())
+                    .get();
+        }
+        return GlideClient.createClient(
+                        commonClientConfig().protocol(ProtocolVersion.RESP3).clientSideCache(cache).build())
+                .get();
+    }
+
+    /** CLIENT TRACKINGINFO of one of the client's connections. */
+    @SneakyThrows
+    private static Map<String, Object> trackingInfo(BaseClient client) {
+        if (client instanceof GlideClusterClient) {
+            return ((GlideClusterClient) client).clientTrackingInfo().get();
+        }
+        return ((GlideClient) client).clientTrackingInfo().get();
+    }
+
+    /** Asserts that a CLIENT TRACKINGINFO reply reports BCAST tracking scoped to {@code prefix}. */
+    @SuppressWarnings("unchecked")
+    private static void assertTrackingPrefix(Map<String, Object> info, String prefix) {
+        Set<String> flags = (Set<String>) info.get("flags");
+        assertTrue(flags.contains("on"), "flags: " + flags);
+        assertTrue(flags.contains("bcast"), "flags: " + flags);
+        Object[] prefixes = (Object[]) info.get("prefixes");
+        assertEquals(1, prefixes.length, "prefixes: " + Arrays.toString(prefixes));
+        assertEquals(prefix, prefixes[0].toString());
+    }
+
+    /**
+     * The configured prefix is registered on every server connection, so the server only broadcasts
+     * invalidations for keys under that prefix.
+     */
+    @ParameterizedTest
+    @MethodSource("clientModes")
+    @SneakyThrows
+    public void trackingPrefix_is_registered_with_the_server(boolean cluster) {
+        try (BaseClient client = createClient(cluster, prefixedCache("xxx:"))) {
+            assertTrackingPrefix(trackingInfo(client), "xxx:");
+
+            if (cluster) {
+                // Every node connection, primaries and replicas, carries the same prefix.
+                ClusterValue<Map<String, Object>> allNodes =
+                        ((GlideClusterClient) client).clientTrackingInfo(ALL_NODES).get();
+                assertTrue(allNodes.getMultiValue().size() > 1, "expected a multi-node reply");
+                for (Map<String, Object> nodeInfo : allNodes.getMultiValue().values()) {
+                    assertTrackingPrefix(nodeInfo, "xxx:");
+                }
+            }
+        }
+    }
+
+    /**
+     * Without a prefix the server tracks every key (the empty prefix). This is the pre-existing
+     * behaviour and must not change.
+     */
+    @ParameterizedTest(autoCloseArguments = true)
+    @MethodSource("glide.TestSources#serverAssistedCacheClients")
+    @SneakyThrows
+    public void serverAssisted_without_prefix_tracks_all_keys(BaseClient client) {
+        assertClientTrackingInfo(trackingInfo(client), true);
+    }
+
+    /** Number of cache hits so far, derived from the hit rate and the lookup count. */
+    @SneakyThrows
+    private static long hits(BaseClient client) {
+        return Math.round(client.getCacheHitRate().get() * client.getCacheTotalLookups().get());
+    }
+
+    /**
+     * Reads {@code key} until it is served from the cache.
+     *
+     * <p>In cluster mode the client registers tracking on every node connection, replicas included,
+     * so one write produces one invalidation per node. The replica invalidations arrive after
+     * replication and can evict an entry that was just re-fetched from the primary. Polling until a
+     * read is a hit, after a short settle, leaves the entry in a stable state for the assertions that
+     * follow. Standalone servers have a single connection, so the first attempt succeeds.
+     */
+    @SneakyThrows
+    private static void warmCache(BaseClient client, String key, String expected) {
+        waitFor(
+                () -> {
+                    if (!expected.equals(client.get(key).get())) {
+                        return false;
+                    }
+                    Thread.sleep(50);
+                    long hitsBefore = hits(client);
+                    return expected.equals(client.get(key).get()) && hits(client) == hitsBefore + 1;
+                },
+                "key " + key + " was not served from the cache");
+    }
+
+    /** Asserts that reading {@code key} is served from the cache (one more lookup, one more hit). */
+    @SneakyThrows
+    private static void assertCacheHit(BaseClient client, String key, String expected) {
+        long lookupsBefore = client.getCacheTotalLookups().get();
+        long hitsBefore = hits(client);
+        assertEquals(expected, client.get(key).get());
+        assertEquals(lookupsBefore + 1, client.getCacheTotalLookups().get(), "lookups for " + key);
+        assertEquals(hitsBefore + 1, hits(client), "hits for " + key);
+    }
+
+    /**
+     * Asserts that reading {@code key} bypasses the cache entirely: it is served by the server, not
+     * stored, and not counted as a lookup.
+     */
+    @SneakyThrows
+    private static void assertCacheBypassed(BaseClient client, String key, String expected) {
+        long entriesBefore = client.getCacheEntryCount().get();
+        long lookupsBefore = client.getCacheTotalLookups().get();
+        assertEquals(expected, client.get(key).get());
+        assertEquals(entriesBefore, client.getCacheEntryCount().get(), key + " must not be cached");
+        assertEquals(lookupsBefore, client.getCacheTotalLookups().get(), key + " is not a lookup");
+    }
+
+    /**
+     * Two clients with different prefixes: each one caches only its own namespace, is invalidated
+     * only for writes in its own namespace, and never caches keys outside its prefix.
+     */
+    @ParameterizedTest
+    @MethodSource("clientModes")
+    @SneakyThrows
+    public void trackingPrefix_scopes_invalidations_between_clients(boolean cluster) {
+        try (BaseClient clientA = createClient(cluster, prefixedCache("xxx:"));
+                BaseClient clientB = createClient(cluster, prefixedCache("yyy:"));
+                BaseClient writer = createClient(cluster, null)) {
+            String suffix = getRandomString(8);
+            String keyA = "xxx:" + suffix;
+            String keyB = "yyy:" + suffix;
+            assertEquals(OK, writer.set(keyA, "a1").get());
+            assertEquals(OK, writer.set(keyB, "b1").get());
+
+            // Each client caches its own namespace.
+            warmCache(clientA, keyA, "a1");
+            warmCache(clientB, keyB, "b1");
+            assertEquals(1L, clientA.getCacheEntryCount().get());
+            assertEquals(1L, clientB.getCacheEntryCount().get());
+            assertCacheHit(clientA, keyA, "a1");
+            assertCacheHit(clientB, keyB, "b1");
+
+            // Keys outside the prefix are served by the server and never cached nor counted.
+            assertCacheBypassed(clientA, keyB, "b1");
+            assertCacheBypassed(clientB, keyA, "a1");
+
+            // A write in namespace A invalidates client A only: A observes the new value while
+            // B keeps serving its own entry from the cache.
+            assertEquals(OK, writer.set(keyA, "a2").get());
+            waitFor(
+                    () -> "a2".equals(clientA.get(keyA).get()),
+                    "client A did not observe the xxx:* invalidation");
+            assertEquals(1L, clientB.getCacheEntryCount().get(), "client B keeps its yyy:* entry");
+            assertCacheHit(clientB, keyB, "b1");
+
+            // A write in namespace B invalidates client B only.
+            warmCache(clientA, keyA, "a2");
+            assertEquals(OK, writer.set(keyB, "b2").get());
+            waitFor(
+                    () -> "b2".equals(clientB.get(keyB).get()),
+                    "client B did not observe the yyy:* invalidation");
+            assertEquals(1L, clientA.getCacheEntryCount().get(), "client A keeps its xxx:* entry");
+            assertCacheHit(clientA, keyA, "a2");
+
+            // Client A reads the updated yyy:* value straight from the server (never stale) and
+            // still does not cache it.
+            assertCacheBypassed(clientA, keyB, "b2");
+            assertEquals(1L, clientA.getCacheEntryCount().get());
+        }
+    }
+
+    /**
+     * A prefixed client never caches keys outside its prefix, for single-key reads and for MGET, so
+     * it can never serve a stale value for a key the server will not invalidate.
+     */
+    @ParameterizedTest
+    @MethodSource("clientModes")
+    @SneakyThrows
+    public void trackingPrefix_bypasses_cache_for_keys_outside_prefix(boolean cluster) {
+        try (BaseClient cached = createClient(cluster, prefixedCache("xxx:"));
+                BaseClient writer = createClient(cluster, null)) {
+            String suffix = getRandomString(8);
+            String tracked = "xxx:" + suffix;
+            String tracked2 = "xxx:second:" + suffix;
+            String untracked = "zzz:" + suffix;
+            String untrackedHash = "zzz:hash:" + suffix;
+            String untrackedSet = "zzz:set:" + suffix;
+            assertEquals(OK, writer.set(tracked, "t1").get());
+            assertEquals(OK, writer.set(tracked2, "s1").get());
+            assertEquals(OK, writer.set(untracked, "u1").get());
+            assertEquals(
+                    1L, writer.hset(untrackedHash, Collections.singletonMap("field", "value")).get());
+            assertEquals(1L, writer.sadd(untrackedSet, new String[] {"member"}).get());
+
+            // GET on an untracked key: served by the server, not cached, not counted.
+            assertCacheBypassed(cached, untracked, "u1");
+            assertCacheBypassed(cached, untracked, "u1");
+            assertEquals(0L, cached.getCacheEntryCount().get());
+            assertEquals(0L, cached.getCacheTotalLookups().get());
+
+            // The writer changes it and the prefixed client sees the new value immediately,
+            // without any invalidation involved.
+            assertEquals(OK, writer.set(untracked, "u2").get());
+            assertCacheBypassed(cached, untracked, "u2");
+
+            // Other cacheable commands on untracked keys are bypassed too.
+            assertEquals(Collections.singletonMap("field", "value"), cached.hgetall(untrackedHash).get());
+            assertEquals(Collections.singleton("member"), cached.smembers(untrackedSet).get());
+            assertEquals(0L, cached.getCacheEntryCount().get());
+            assertEquals(0L, cached.getCacheTotalLookups().get());
+
+            // MGET mixing tracked and untracked keys returns the full ordered result and only
+            // stores the tracked key. The tracked key is already cached, so it is a hit while the
+            // untracked key is fetched from the server without being counted.
+            warmCache(cached, tracked, "t1");
+            assertEquals(1L, cached.getCacheEntryCount().get());
+            long lookupsBefore = cached.getCacheTotalLookups().get();
+            long hitsBefore = hits(cached);
+            assertArrayEquals(
+                    new String[] {"u2", "t1"}, cached.mget(new String[] {untracked, tracked}).get());
+            assertEquals(1L, cached.getCacheEntryCount().get(), "the untracked key is not stored");
+            assertEquals(lookupsBefore + 1, cached.getCacheTotalLookups().get(), "one lookup");
+            assertEquals(hitsBefore + 1, hits(cached), "one hit for the tracked key");
+
+            // A tracked key first seen through MGET is stored (one miss); the untracked key still
+            // reflects a fresh write.
+            assertEquals(OK, writer.set(untracked, "u3").get());
+            lookupsBefore = cached.getCacheTotalLookups().get();
+            hitsBefore = hits(cached);
+            assertArrayEquals(
+                    new String[] {"t1", "u3", "s1"},
+                    cached.mget(new String[] {tracked, untracked, tracked2}).get());
+            assertEquals(lookupsBefore + 2, cached.getCacheTotalLookups().get(), "two lookups");
+            assertEquals(hitsBefore + 1, hits(cached), "one hit, one miss");
+            // Settle on two entries: in cluster mode a late replica invalidation may evict and the
+            // next MGET re-stores, so poll rather than assert once.
+            waitFor(
+                    () ->
+                            Arrays.equals(
+                                            new String[] {"t1", "u3", "s1"},
+                                            cached.mget(new String[] {tracked, untracked, tracked2}).get())
+                                    && cached.getCacheEntryCount().get() == 2L,
+                    "both tracked keys were not stored by MGET");
+
+            // The tracked key is still invalidated by the server.
+            assertEquals(OK, writer.set(tracked, "t2").get());
+            waitFor(
+                    () ->
+                            Arrays.equals(
+                                    new String[] {"t2", "u3"}, cached.mget(new String[] {tracked, untracked}).get()),
+                    "the tracked MGET key was not invalidated");
+        }
+    }
+
+    /** Configuration errors are reported by the builder, before any connection is opened. */
+    @Test
+    public void trackingPrefix_configuration_errors() {
+        // A prefix requires server-assisted tracking.
+        IllegalArgumentException noServerAssisted =
+                assertThrows(
+                        IllegalArgumentException.class,
+                        () ->
+                                ClientSideCache.builder()
+                                        .maxCacheKb(1024L)
+                                        .entryTtlMs(0L)
+                                        .trackingPrefix("xxx:")
+                                        .build());
+        assertTrue(
+                noServerAssisted.getMessage().contains("serverAssisted"), noServerAssisted.getMessage());
+
+        // An empty prefix is rejected.
+        IllegalArgumentException empty =
+                assertThrows(
+                        IllegalArgumentException.class,
+                        () ->
+                                ClientSideCache.builder()
+                                        .maxCacheKb(1024L)
+                                        .entryTtlMs(0L)
+                                        .serverAssisted(true)
+                                        .trackingPrefix("")
+                                        .build());
+        assertTrue(empty.getMessage().contains("must not be empty"), empty.getMessage());
+    }
+
+    /** Two clients created with the same prefixed {@code ClientSideCache} share one cache. */
+    @ParameterizedTest
+    @MethodSource("clientModes")
+    @SneakyThrows
+    public void trackingPrefix_shared_cache(boolean cluster) {
+        ClientSideCache sharedCache = prefixedCache("xxx:");
+        try (BaseClient client1 = createClient(cluster, sharedCache);
+                BaseClient client2 = createClient(cluster, sharedCache)) {
+            assertTrackingPrefix(trackingInfo(client1), "xxx:");
+            assertTrackingPrefix(trackingInfo(client2), "xxx:");
+
+            String key = "xxx:shared_" + getRandomString(10);
+            assertEquals(OK, client1.set(key, "value").get());
+            warmCache(client1, key, "value");
+
+            // The entry populated through client 1 is visible and served through client 2.
+            assertEquals(1L, client2.getCacheEntryCount().get(), "entry visible through client 2");
+            assertCacheHit(client2, key, "value");
+            assertEquals(client1.getCacheTotalLookups().get(), client2.getCacheTotalLookups().get());
+
+            // A key outside the prefix is not stored by either client.
+            String outside = "yyy:shared_" + getRandomString(10);
+            assertEquals(OK, client1.set(outside, "v").get());
+            assertCacheBypassed(client1, outside, "v");
+            assertCacheBypassed(client2, outside, "v");
+            assertEquals(1L, client1.getCacheEntryCount().get());
+
+            // An invalidation reaches the shared cache through either client's connection.
+            assertEquals(OK, client2.set(key, "value2").get());
+            waitFor(
+                    () -> "value2".equals(client1.get(key).get()),
+                    "shared prefixed cache was not invalidated");
         }
     }
 }
