@@ -12200,6 +12200,12 @@ class TestSyncScripts:
         assert result == 0
         assert glide_sync_client.exists([missing_key]) == 0
 
+    @pytest.mark.skip_if_version_below("9.1.0")
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_hsetex_with_all(self, glide_sync_client: TGlideClient):
+        field_value_map = {"field1": "value1"}
+
         # Key conditional change can be combined with field conditional change and expiry
         combined_key = f"test_hsetex_key_and_field_conditional_{get_random_string(10)}"
         result = glide_sync_client.hsetex(
