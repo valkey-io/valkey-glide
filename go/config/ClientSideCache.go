@@ -34,18 +34,21 @@ func (e EvictionPolicy) String() string {
 	}
 }
 
-// ClientSideCache represents configuration for client-side caching with TTL-based expiration.
+// ClientSideCache represents configuration for client-side caching.
 //
 // This struct configures a local cache that stores read command responses
-// on the client side to reduce network round-trips and server load. The cache
-// uses Time-To-Live (TTL) based expiration, where entries are automatically
-// removed after a specified duration.
+// on the client side to reduce network round-trips and server load. Entries
+// expire after a configurable Time-To-Live (TTL) and, when ServerAssisted is
+// enabled, are also invalidated as soon as the server reports that the key changed.
 //
 // Important:
-//   - Glide currently supports TTL-based caching only. Invalidation-based
-//     client-side caching (where the server notifies clients of key changes) is not
-//     currently supported. This means cached values may become stale if updated on
-//     the server before the TTL expires.
+//   - Without ServerAssisted, the cache is TTL-based only: cached values may become
+//     stale if they are updated on the server before the TTL expires.
+//   - With ServerAssisted, GLIDE enables server-assisted client-side caching
+//     (CLIENT TRACKING ON BCAST, RESP3 only) and the server broadcasts an invalidation
+//     message whenever a tracked key is modified, so cached values are evicted promptly.
+//     By default every key is tracked; TrackingPrefix restricts tracking (and caching)
+//     to a single key namespace.
 //   - Currently, Glide's client-side cache supports lazy eviction only. Expired entries
 //     are removed only when accessed after their TTL has expired. There is no proactive
 //     background cleanup of expired entries.
@@ -82,20 +85,35 @@ type ClientSideCache struct {
 	// and the server sends invalidation messages when tracked keys are modified.
 	// Requires RESP3 protocol.
 	ServerAssisted bool
+
+	// TrackingPrefix restricts server-assisted tracking to keys that start with this prefix.
+	// An empty string (the default) means no prefix is set and every key is tracked.
+	//
+	// When set, GLIDE sends CLIENT TRACKING ON BCAST PREFIX <prefix> on every connection
+	// (including reconnections and every cluster node), so the server only broadcasts
+	// invalidations for keys under the prefix. The local cache stores only keys that start
+	// with the prefix; keys outside it are always fetched from the server, are never cached
+	// (so they can never be stale) and do not count towards the cache metrics.
+	//
+	// Requires ServerAssisted to be enabled (and therefore RESP3). The prefix is fixed for
+	// the lifetime of the client, and clients sharing the same ClientSideCache instance
+	// must use the same prefix.
+	TrackingPrefix string
 }
 
 // NewClientSideCache creates a new ClientSideCache configuration with an auto-generated unique ID.
 //
 // This function configures a local cache that stores read command responses
-// on the client side to reduce network round-trips and server load. The cache
-// uses Time-To-Live (TTL) based expiration, where entries are automatically
-// removed after a specified duration.
+// on the client side to reduce network round-trips and server load. Entries
+// expire after the given TTL. Call WithServerAssisted(true) to additionally
+// have the server invalidate cached keys as soon as they are modified, and
+// WithTrackingPrefix to limit tracking and caching to a single key namespace.
 //
 // Important:
-//   - Glide currently supports TTL-based caching only. Invalidation-based
-//     client-side caching (where the server notifies clients of key changes) is not
-//     currently supported. This means cached values may become stale if updated on
-//     the server before the TTL expires.
+//   - Without server-assisted caching, the cache is TTL-based only: cached values may
+//     become stale if they are updated on the server before the TTL expires.
+//   - With server-assisted caching (RESP3 only), the server broadcasts an invalidation
+//     message whenever a tracked key is modified and the entry is evicted promptly.
 //   - Currently, Glide's client-side cache supports lazy eviction only. Expired entries
 //     are removed only when accessed after their TTL has expired. There is no proactive
 //     background cleanup of expired entries.
@@ -109,6 +127,8 @@ type ClientSideCache struct {
 //     even if the configurations are identical.
 //   - Clients using different db's cannot share the same cache.
 //   - Clients using different ACL users cannot share the same cache.
+//   - Clients sharing a cache must use the same TrackingPrefix; creating a client with a
+//     different prefix for an already registered cache fails.
 //
 // Parameters:
 //   - maxCacheKb: Maximum size of the cache in kilobytes (KB). Must be positive.
@@ -125,6 +145,8 @@ type ClientSideCache struct {
 //	    log.Fatal(err)
 //	}
 //	cache.WithEvictionPolicy(EvictionPolicyLRU).WithMetrics(true)
+//	// Only track and cache keys under "user:" with server-assisted invalidation:
+//	cache.WithServerAssisted(true).WithTrackingPrefix("user:")
 func NewClientSideCache(maxCacheKb uint64, entryTtlMs uint64) (*ClientSideCache, error) {
 	if maxCacheKb == 0 {
 		return nil, fmt.Errorf("maxCacheKb must be positive")
@@ -161,16 +183,47 @@ func (c *ClientSideCache) WithServerAssisted(enable bool) *ClientSideCache {
 	return c
 }
 
+// WithTrackingPrefix restricts server-assisted tracking and caching to keys that start with prefix.
+//
+// With a prefix, the server only broadcasts invalidations for keys under that prefix
+// (CLIENT TRACKING ON BCAST PREFIX <prefix>), and the local cache only stores such keys.
+// Keys outside the prefix are always fetched from the server and are never cached, so they
+// can never be stale. The prefix is fixed for the lifetime of the client, and clients sharing
+// the same ClientSideCache instance must use the same prefix.
+//
+// Requires ServerAssisted to be enabled (RESP3). Setting a non-empty prefix without
+// ServerAssisted makes client creation fail. Pass an empty string to clear the prefix and
+// track all keys again.
+//
+// Returns the same ClientSideCache instance for method chaining.
+func (c *ClientSideCache) WithTrackingPrefix(prefix string) *ClientSideCache {
+	c.TrackingPrefix = prefix
+	return c
+}
+
 // toProtobuf converts the ClientSideCache configuration to protobuf format.
 // This method is used internally to serialize the cache configuration for
 // communication with the Rust core.
-func (c *ClientSideCache) toProtobuf() *protobuf.ClientSideCache {
+//
+// It returns an error when TrackingPrefix is set without ServerAssisted.
+func (c *ClientSideCache) toProtobuf() (*protobuf.ClientSideCache, error) {
+	if c.TrackingPrefix != "" && !c.ServerAssisted {
+		return nil, fmt.Errorf(
+			"TrackingPrefix %q requires ServerAssisted to be enabled; call WithServerAssisted(true)",
+			c.TrackingPrefix,
+		)
+	}
+
 	protoCache := &protobuf.ClientSideCache{
 		CacheId:        c.cacheId,
 		MaxCacheKb:     c.MaxCacheKb,
 		EntryTtlMs:     c.EntryTtlMs,
 		EnableMetrics:  c.EnableMetrics,
 		ServerAssisted: c.ServerAssisted,
+	}
+
+	if c.TrackingPrefix != "" {
+		protoCache.TrackingPrefix = []byte(c.TrackingPrefix)
 	}
 
 	if c.EvictionPolicy != nil {
@@ -184,5 +237,5 @@ func (c *ClientSideCache) toProtobuf() *protobuf.ClientSideCache {
 		}
 	}
 
-	return protoCache
+	return protoCache, nil
 }

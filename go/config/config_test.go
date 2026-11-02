@@ -2189,6 +2189,101 @@ func TestNewClientSideCache_ServerAssistedExplicitlyDisabled(t *testing.T) {
 	assert.False(t, cache.ServerAssisted)
 }
 
+func TestNewClientSideCache_TrackingPrefixDefaultEmpty(t *testing.T) {
+	cache, err := NewClientSideCache(1024, 60000)
+	assert.NoError(t, err)
+	assert.Equal(t, "", cache.TrackingPrefix)
+
+	pb, err := cache.toProtobuf()
+	assert.NoError(t, err)
+	assert.Nil(t, pb.TrackingPrefix, "no prefix must leave the optional protobuf field unset")
+}
+
+func TestClientSideCache_WithTrackingPrefix_SetsFieldAndProtobuf(t *testing.T) {
+	cache, err := NewClientSideCache(1024, 60000)
+	assert.NoError(t, err)
+
+	returned := cache.WithServerAssisted(true).WithTrackingPrefix("xxx:")
+	assert.Same(t, cache, returned, "WithTrackingPrefix must return the same instance for chaining")
+	assert.Equal(t, "xxx:", cache.TrackingPrefix)
+
+	pb, err := cache.toProtobuf()
+	assert.NoError(t, err)
+	assert.True(t, pb.ServerAssisted)
+	assert.Equal(t, []byte("xxx:"), pb.TrackingPrefix)
+}
+
+func TestClientSideCache_WithTrackingPrefix_EmptyClearsPrefix(t *testing.T) {
+	cache, err := NewClientSideCache(1024, 60000)
+	assert.NoError(t, err)
+	cache.WithServerAssisted(true).WithTrackingPrefix("xxx:").WithTrackingPrefix("")
+	assert.Equal(t, "", cache.TrackingPrefix)
+
+	pb, err := cache.toProtobuf()
+	assert.NoError(t, err)
+	assert.Nil(t, pb.TrackingPrefix)
+}
+
+func TestClientSideCache_TrackingPrefixWithoutServerAssisted_Errors(t *testing.T) {
+	cache, err := NewClientSideCache(1024, 60000)
+	assert.NoError(t, err)
+	cache.WithTrackingPrefix("xxx:")
+
+	_, err = cache.toProtobuf()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "ServerAssisted")
+}
+
+func TestClientConfiguration_ClientSideCacheTrackingPrefix(t *testing.T) {
+	cache, err := NewClientSideCache(1024, 60000)
+	assert.NoError(t, err)
+	cache.WithServerAssisted(true).WithTrackingPrefix("xxx:")
+
+	config := NewClientConfiguration().
+		WithAddress(&NodeAddress{Host: "localhost", Port: 6379}).
+		WithClientSideCache(cache)
+	result, err := config.ToProtobuf()
+	assert.NoError(t, err)
+	assert.NotNil(t, result.ClientSideCache)
+	assert.True(t, result.ClientSideCache.ServerAssisted)
+	assert.Equal(t, []byte("xxx:"), result.ClientSideCache.TrackingPrefix)
+
+	clusterCache, err := NewClientSideCache(1024, 60000)
+	assert.NoError(t, err)
+	clusterCache.WithServerAssisted(true).WithTrackingPrefix("yyy:")
+
+	clusterConfig := NewClusterClientConfiguration().
+		WithAddress(&NodeAddress{Host: "localhost", Port: 7000}).
+		WithClientSideCache(clusterCache)
+	clusterResult, err := clusterConfig.ToProtobuf()
+	assert.NoError(t, err)
+	assert.NotNil(t, clusterResult.ClientSideCache)
+	assert.Equal(t, []byte("yyy:"), clusterResult.ClientSideCache.TrackingPrefix)
+}
+
+func TestClientConfiguration_ClientSideCacheTrackingPrefixWithoutServerAssisted_Errors(t *testing.T) {
+	cache, err := NewClientSideCache(1024, 60000)
+	assert.NoError(t, err)
+	cache.WithTrackingPrefix("xxx:")
+
+	config := NewClientConfiguration().
+		WithAddress(&NodeAddress{Host: "localhost", Port: 6379}).
+		WithClientSideCache(cache)
+	result, err := config.ToProtobuf()
+	assert.Nil(t, result)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid client-side cache configuration")
+	assert.Contains(t, err.Error(), "ServerAssisted")
+
+	clusterConfig := NewClusterClientConfiguration().
+		WithAddress(&NodeAddress{Host: "localhost", Port: 7000}).
+		WithClientSideCache(cache)
+	clusterResult, err := clusterConfig.ToProtobuf()
+	assert.Nil(t, clusterResult)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "ServerAssisted")
+}
+
 func TestClientConfiguration_WithInflightRequestsLimit(t *testing.T) {
 	config := NewClientConfiguration().
 		WithAddress(&NodeAddress{Host: "localhost", Port: 6379}).
