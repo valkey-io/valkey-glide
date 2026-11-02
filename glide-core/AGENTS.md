@@ -31,7 +31,7 @@ This file provides AI agents with the minimum but sufficient context to work pro
 
 <!-- These commands are intentionally mirrored in glide-core/DEVELOPER.md (human guide). Keep both in sync when the build/test/lint commands change. -->
 
-All four crates share the same lint gate (`.github/workflows/lint-rust/action.yml`), run from the crate's own directory. The same gate also runs against `java/`, `node/rust-client/`, `python/glide-async/` (binding glue), `benchmarks/rust/`, and `rust/` (see `../AGENTS.md`). `cargo deny` uses the repo-root `deny.toml` (`--config ${GITHUB_WORKSPACE}/deny.toml` in CI; adjust the relative path to the repo root for the crate you're in — `../deny.toml` only works for a depth-1 crate):
+All crates—including `glide-core/redis-rs/redis/` (the vendored engine fork)—share the same lint gate (`.github/workflows/lint-rust/action.yml`), run from the crate's own directory. The same gate also runs against `java/`, `node/rust-client/`, `python/glide-async/` (binding glue), `benchmarks/rust/`, and `rust/` (see `../AGENTS.md`). `cargo deny` uses the repo-root `deny.toml` (`--config ${GITHUB_WORKSPACE}/deny.toml` in CI; adjust the relative path to the repo root for the crate you're in — `../deny.toml` only works for a depth-1 crate):
 
 ```bash
 cargo fmt --all -- --check
@@ -41,17 +41,14 @@ cargo install --locked cargo-deny && cargo deny --config "$(git rev-parse --show
 RUSTDOCFLAGS="-Dwarnings" cargo doc --no-deps --document-private-items
 ```
 
-**`glide-core/redis-rs/redis/` (the vendored engine fork) uses a DIFFERENT, separate gate** (`.github/workflows/glide-core-engine.yml`), not the shared one above:
+In addition to the shared lint gate, `glide-core/redis-rs/redis/` runs security audit and unused-dependency checks in `.github/workflows/glide-core-engine.yml`:
 
 ```bash
 cd glide-core/redis-rs/redis
-cargo fmt --all -- --check
-cargo clippy -- -D warnings   # no --all-features/--all-targets here: tests/benches carry required-features (test_async, bench_cluster, …), so --all-targets would fail to compile without selecting them
-cargo install --locked cargo-deny && cargo deny --config "$(git rev-parse --show-toplevel)/deny.toml" --exclude-dev check all
 cargo audit                   # separate from cargo-deny; fails the job if any advisory is found
 cargo install --locked cargo-machete && cargo machete   # unused-dependency check; fails if any found
 ```
-No `cargo doc` lint step here. Build/test for this crate also run from `redis-rs/redis/src/` for build/test/doc-tests but from `redis-rs/redis/` for lint/bench/audit/machete — mind the working directory:
+Build/test for this crate also run from `redis-rs/redis/src/` for build/test/doc-tests but from `redis-rs/redis/` for lint/bench/audit/machete — mind the working directory:
 ```bash
 cd glide-core/redis-rs/redis/src && cargo build --release && cargo test --release && cargo test --doc
 cd glide-core/redis-rs/redis && cargo bench

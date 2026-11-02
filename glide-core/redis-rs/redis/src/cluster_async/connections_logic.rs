@@ -495,9 +495,9 @@ where
 }
 
 /// Splits a string address into host and port. If the passed address cannot be parsed, None is returned.
-/// [addr] should be in one of the following formats:
-/// - IPv4/hostname: "<host>:<port>" (e.g., "127.0.0.1:6379")
-/// - IPv6 bracketed: "[<ipv6>]:<port>" (e.g., "[2001:db8::1]:6379")
+/// `addr` should be in one of the following formats:
+/// - IPv4/hostname: `"<host>:<port>"` (e.g., `"127.0.0.1:6379"`)
+/// - IPv6 bracketed: `"[<ipv6>]:<port>"` (e.g., `"[2001:db8::1]:6379"`)
 pub fn get_host_and_port_from_addr(addr: &str) -> Option<(&str, u16)> {
     parse_cluster_address(addr)
 }

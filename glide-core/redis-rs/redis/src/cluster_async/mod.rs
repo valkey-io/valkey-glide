@@ -240,7 +240,7 @@ where
     }
 
     /// Special handling for `SCAN` command, using `cluster_scan_with_pattern`.
-    /// It is a special case of [`cluster_scan`], with an additional match pattern.
+    /// It is a special case of `cluster_scan`, with an additional match pattern.
     /// Perform a `SCAN` command on a cluster, using scan state object in order to handle changes in topology
     /// and make sure that all keys that were in the cluster from start to end of the scan are scanned.
     /// In order to make sure all keys in the cluster scanned, topology refresh occurs more frequently and may affect performance.

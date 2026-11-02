@@ -618,7 +618,7 @@ impl Client {
 
     /// Updates the TLS connection parameters in connection_info.
     ///
-    /// The parameters live inside the [`ConnectionAddr::TcpTls`] variant, so this
+    /// The parameters live inside the [`crate::ConnectionAddr::TcpTls`] variant, so this
     /// rewrites that variant's `tls_params` field, preserving host, port, and the
     /// `insecure` flag. It is a no-op for non-TLS addresses. The updated params are
     /// picked up on the next connection attempt (reconnect), since the custom-cert
@@ -648,8 +648,6 @@ impl Client {
     /// # Arguments
     ///
     /// * `database_id` - The database ID to use for connections (typically 0-15)
-    ///
-    /// ```
     pub fn update_database(&mut self, database_id: i64) {
         self.connection_info.redis.db = database_id;
     }

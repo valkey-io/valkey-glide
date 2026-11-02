@@ -1030,7 +1030,7 @@ pub fn cmd(name: &str) -> Cmd {
 
 /// Shortcut function to creating a fenced command with a single argument.
 ///
-/// /// ```rust
+/// ```rust
 /// redis::fenced_cmd("PING");
 /// ```
 pub fn fenced_cmd(name: &str) -> Cmd {
