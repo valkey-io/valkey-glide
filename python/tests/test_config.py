@@ -7,6 +7,7 @@ from unittest import mock
 
 import pytest
 from glide_shared.cache import ClientSideCache
+from glide_shared.commands.client_tracking import _parse_client_tracking_info
 from glide_shared.config import (
     AdvancedBaseClientConfiguration,
     AdvancedGlideClientConfiguration,
@@ -1529,3 +1530,16 @@ def test_client_side_cache_tracking_prefix_mutated_after_create_is_revalidated()
     )
     with pytest.raises(ValueError, match="tracking_prefix must not be empty"):
         config._create_a_protobuf_conn_request()
+
+
+def test_client_tracking_info_parser_keeps_non_utf8_prefix():
+    """A non-UTF-8 prefix is decoded with surrogateescape and round-trips to bytes."""
+    prefix = b"\xff\xfe:"
+    info = _parse_client_tracking_info(
+        {b"flags": [b"on", b"bcast"], b"redirect": 0, b"prefixes": [prefix, b"xxx:"]}
+    )
+    assert info.flags == {"on", "bcast"}
+    assert info.redirect == 0
+    assert "xxx:" in info.prefixes
+    (raw,) = info.prefixes - {"xxx:"}
+    assert raw.encode("utf-8", "surrogateescape") == prefix

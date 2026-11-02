@@ -678,6 +678,55 @@ class TestSyncClientSideCache:
         client.close()
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
+    def test_sync_tracking_prefix_non_utf8_bytes_end_to_end(
+        self, request, cluster_mode
+    ):
+        """A bytes prefix that is not valid UTF-8 is registered, cached and invalidated."""
+        prefix = b"\xff\xfe:"
+        cache = build_client_side_cache(
+            entry_ttl_ms=0,
+            enable_metrics=True,
+            server_assisted=True,
+            tracking_prefix=prefix,
+        )
+        client = create_sync_client(
+            request,
+            cluster_mode=cluster_mode,
+            protocol=ProtocolVersion.RESP3,
+            cache=cache,
+        )
+        writer = create_sync_client(request, cluster_mode=cluster_mode)
+
+        info = client.client_tracking_info()
+        assert_client_tracking_info(
+            info, on=True, prefix=prefix.decode("utf-8", "surrogateescape")
+        )
+        (reported,) = info.prefixes
+        assert reported.encode("utf-8", "surrogateescape") == prefix
+
+        key = prefix + get_random_string(8).encode()
+        assert writer.set(key, "v1") == "OK"
+        sync_read_until_cached(client, lambda: client.get(key), b"v1")
+        assert client.get_cache_entry_count() == 1
+        sync_assert_cache_hit(client, lambda: client.get(key), b"v1")
+
+        # A key outside the binary prefix is bypassed.
+        other = b"\xff:" + get_random_string(8).encode()
+        assert writer.set(other, "o1") == "OK"
+        sync_assert_cache_bypassed(client, lambda: client.get(other), b"o1")
+        assert client.get_cache_entry_count() == 1
+
+        assert writer.set(key, "v2") == "OK"
+
+        sync_wait_for(
+            lambda: client.get(key) == b"v2",
+            "the binary-prefixed key was not invalidated",
+        )
+
+        client.close()
+        writer.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
     def test_sync_server_assisted_without_prefix_tracks_all_keys(
         self, request, cluster_mode
     ):

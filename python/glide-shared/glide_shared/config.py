@@ -1389,10 +1389,8 @@ class BaseClientConfiguration:
         if cache_config.eviction_policy:
             cache_request.eviction_policy = cache_config.eviction_policy.value
 
-        # Re-validate here: the dataclass is mutable, so the prefix may have been
-        # changed after construction. The core rejects the same cases, but failing
-        # before the request is built gives a clearer Python error.
-        cache_config._validate_tracking_prefix()
+        # Validates the (mutable) prefix as well: the core rejects the same cases,
+        # but failing before the request is built gives a clearer Python error.
         tracking_prefix = cache_config._tracking_prefix_bytes()
         if tracking_prefix is not None:
             cache_request.tracking_prefix = tracking_prefix

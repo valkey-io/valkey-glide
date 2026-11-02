@@ -108,7 +108,12 @@ class ClientSideCache:
             raise ValueError("tracking_prefix requires server_assisted=True")
 
     def _tracking_prefix_bytes(self) -> Optional[bytes]:
-        """Returns ``tracking_prefix`` encoded as bytes (str is UTF-8 encoded), or None."""
+        """Returns ``tracking_prefix`` encoded as bytes (str is UTF-8 encoded), or None.
+
+        Validates the prefix first: the dataclass is mutable, so the prefix may have
+        changed since construction.
+        """
+        self._validate_tracking_prefix()
         if self.tracking_prefix is None:
             return None
         if isinstance(self.tracking_prefix, str):
@@ -152,7 +157,10 @@ class ClientSideCache:
             server_assisted (bool): If True, enables server-assisted client-side caching.
                 When enabled, GLIDE sends CLIENT TRACKING ON BCAST during connection setup
                 and the server sends invalidation messages when tracked keys are modified.
-                Requires RESP3 protocol.
+                Requires RESP3 protocol. The tracking state is owned by the client: do not
+                issue RESET or CLIENT TRACKING manually on a client with server-assisted
+                caching, because that stops the invalidations while the cache keeps
+                serving its entries.
             tracking_prefix (Optional[Union[str, bytes]]): Key prefix to track in
                 server-assisted mode. When set, GLIDE sends
                 ``CLIENT TRACKING ON BCAST PREFIX <prefix>`` on every connection, so the
