@@ -339,6 +339,99 @@ mod standalone_client_tests {
     }
 
     #[rstest]
+    #[case(ReadFrom::Primary, 4, 0)]
+    #[case(ReadFrom::PreferReplica, 0, 4)]
+    #[case(ReadFrom::AllNodes, 2, 2)]
+    #[case(ReadFrom::AZAffinity, 0, 4)]
+    #[case(ReadFrom::AZAffinityReplicasAndPrimary, 0, 4)]
+    #[case(ReadFrom::AZAffinityAllNodes, 2, 2)]
+    #[serial_test::serial]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
+    fn test_readonly_pipeline_uses_read_from_strategy(
+        #[case] read_from: ReadFrom,
+        #[case] expected_primary_reads: u16,
+        #[case] expected_replica_reads: u16,
+    ) {
+        let servers = create_primary_mock_with_replicas_az(1, Some("test-az"), &["test-az"]);
+        let mut first_get = redis::cmd("GET");
+        first_get.arg("key-1");
+        let mut second_get = redis::cmd("GET");
+        second_get.arg("key-2");
+
+        for server in &servers {
+            for _ in 0..2 {
+                server.add_response(&first_get, "$-1\r\n".to_string());
+                server.add_response(&second_get, "$-1\r\n".to_string());
+            }
+        }
+
+        let addresses = get_mock_addresses(&servers);
+        let mut connection_request =
+            create_connection_request(addresses.as_slice(), &Default::default());
+        connection_request.read_from = read_from.into();
+        connection_request.client_az = "test-az".to_string().into();
+
+        block_on_all(async {
+            let mut client =
+                StandaloneClient::create_client(connection_request.into(), None, None, None)
+                    .await
+                    .unwrap();
+            let mut pipeline = redis::Pipeline::new();
+            pipeline.add_command(first_get).add_command(second_get);
+
+            for _ in 0..2 {
+                let result = client.send_pipeline(&pipeline, 0, 2).await.unwrap();
+                assert_eq!(result, vec![Value::Nil, Value::Nil]);
+            }
+        });
+
+        assert_eq!(
+            servers[0].get_number_of_received_commands(),
+            expected_primary_reads
+        );
+        assert_eq!(
+            servers[1].get_number_of_received_commands(),
+            expected_replica_reads
+        );
+    }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
+    fn test_pipeline_with_write_uses_primary() {
+        let servers = create_primary_mock_with_replicas(1);
+        let mut get = redis::cmd("GET");
+        get.arg("key");
+        let mut set = redis::cmd("SET");
+        set.arg("key").arg("value");
+
+        for server in &servers {
+            server.add_response(&get, "$-1\r\n".to_string());
+            server.add_response(&set, "+OK\r\n".to_string());
+        }
+
+        let addresses = get_mock_addresses(&servers);
+        let mut connection_request =
+            create_connection_request(addresses.as_slice(), &Default::default());
+        connection_request.read_from = ReadFrom::PreferReplica.into();
+
+        block_on_all(async {
+            let mut client =
+                StandaloneClient::create_client(connection_request.into(), None, None, None)
+                    .await
+                    .unwrap();
+            let mut pipeline = redis::Pipeline::new();
+            pipeline.add_command(get).add_command(set);
+
+            let result = client.send_pipeline(&pipeline, 0, 2).await.unwrap();
+            assert_eq!(result, vec![Value::Nil, Value::Okay]);
+        });
+
+        assert_eq!(servers[0].get_number_of_received_commands(), 2);
+        assert_eq!(servers[1].get_number_of_received_commands(), 0);
+    }
+
+    #[rstest]
     #[serial_test::serial]
     #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
     fn test_read_from_replica_always_read_from_primary() {

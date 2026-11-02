@@ -1057,7 +1057,11 @@ impl StandaloneClient {
         offset: usize,
         count: usize,
     ) -> RedisResult<Vec<Value>> {
-        let reconnecting_connection = self.get_primary_connection();
+        // Transactions and pipelines containing any write must remain on the
+        // primary. A fully read-only, non-atomic pipeline can use the configured
+        // read-from strategy just like a single read-only command.
+        let readonly = is_readonly_nonatomic_pipeline(pipeline);
+        let reconnecting_connection = self.get_connection(readonly).await;
         let mut connection = reconnecting_connection.get_connection().await?;
         let result = connection
             .send_packed_commands(pipeline, offset, count)
@@ -1321,6 +1325,13 @@ fn get_read_from(read_from: Option<super::ReadFrom>) -> ReadFrom {
     }
 }
 
+fn is_readonly_nonatomic_pipeline(pipeline: &redis::Pipeline) -> bool {
+    !pipeline.is_atomic()
+        && pipeline
+            .cmd_iter()
+            .all(|command| cluster_routing::is_readonly(command.as_ref()))
+}
+
 /// Parse replica addresses from a primary's INFO REPLICATION response.
 /// Format: slave0:ip=10.1.35.66,port=6379,state=online,offset=144849,lag=0
 fn parse_replica_addresses(replication_info: &str) -> Vec<NodeAddress> {
@@ -1390,6 +1401,20 @@ fn address_is_known(addr: &NodeAddress, existing: &[String], discovered: &[NodeA
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn readonly_pipeline_requires_all_commands_to_be_readonly_and_non_atomic() {
+        let mut readonly = redis::Pipeline::new();
+        readonly.get("key-1").get("key-2");
+        assert!(is_readonly_nonatomic_pipeline(&readonly));
+
+        let mut mixed = redis::Pipeline::new();
+        mixed.get("key").set("key", "value");
+        assert!(!is_readonly_nonatomic_pipeline(&mixed));
+
+        readonly.atomic();
+        assert!(!is_readonly_nonatomic_pipeline(&readonly));
+    }
 
     #[test]
     fn test_parse_replica_addresses_basic() {
