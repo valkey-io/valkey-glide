@@ -1922,10 +1922,38 @@ pub(crate) mod test_cache {
         }
     }
 
-    async fn set(client: &mut glide_core::client::Client, key: &str, value: &str) {
+    /// Writes `key` and, in cluster mode, waits until the shard's replica acknowledged it.
+    ///
+    /// Every connection of a GLIDE cluster client runs `CLIENT TRACKING`, including the
+    /// connections to replicas. A replica applies the write after the primary and then pushes
+    /// its own invalidation, which can evict an entry a cached client filled in the meantime
+    /// (pre-existing behaviour, see `test_server_assisted_nil_invalidation_flushes_cache` in
+    /// cluster mode). `WAIT` returns once the replica applied the write, i.e. after it emitted
+    /// that push, so the tests below do not depend on replication timing.
+    async fn set(
+        client: &mut glide_core::client::Client,
+        key: &str,
+        value: &str,
+        use_cluster: bool,
+    ) {
         let mut cmd = redis::cmd("SET");
         cmd.arg(key).arg(value);
         client.send_command(&mut cmd, None).await.unwrap();
+        if use_cluster {
+            use redis::cluster_routing::{Route, RoutingInfo, SingleNodeRoutingInfo, SlotAddr};
+            let mut wait = redis::cmd("WAIT");
+            wait.arg(1).arg(5000);
+            let route = RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(Route::new(
+                get_slot(key.as_bytes()),
+                SlotAddr::Master,
+            )));
+            let acked = client.send_command(&mut wait, Some(route)).await.unwrap();
+            assert_eq!(
+                acked,
+                Value::Int(1),
+                "replica did not acknowledge the write"
+            );
+        }
     }
 
     async fn get(client: &mut glide_core::client::Client, key: &str) -> Value {
@@ -2133,8 +2161,8 @@ pub(crate) mod test_cache {
             let suffix = generate_random_string(8);
             let key_a = format!("xxx:{suffix}");
             let key_b = format!("yyy:{suffix}");
-            set(&mut writer.client, &key_a, "a1").await;
-            set(&mut writer.client, &key_b, "b1").await;
+            set(&mut writer.client, &key_a, "a1", use_cluster).await;
+            set(&mut writer.client, &key_b, "b1", use_cluster).await;
 
             // Each client caches its own namespace.
             assert_eq!(get(&mut client_a.client, &key_a).await, bulk("a1"));
@@ -2171,7 +2199,7 @@ pub(crate) mod test_cache {
             );
 
             // A write in namespace A invalidates client A only.
-            set(&mut writer.client, &key_a, "a2").await;
+            set(&mut writer.client, &key_a, "a2", use_cluster).await;
             wait_until!(
                 std::time::Duration::from_secs(2),
                 "client A to observe the xxx:* invalidation",
@@ -2185,7 +2213,7 @@ pub(crate) mod test_cache {
             assert_eq!(get(&mut client_b.client, &key_b).await, bulk("b1"));
 
             // A write in namespace B invalidates client B only.
-            set(&mut writer.client, &key_b, "b2").await;
+            set(&mut writer.client, &key_b, "b2", use_cluster).await;
             wait_until!(
                 std::time::Duration::from_secs(2),
                 "client B to observe the yyy:* invalidation",
@@ -2236,8 +2264,8 @@ pub(crate) mod test_cache {
             let suffix = generate_random_string(8);
             let tracked = format!("xxx:{suffix}");
             let untracked = format!("zzz:{suffix}");
-            set(&mut writer.client, &tracked, "t1").await;
-            set(&mut writer.client, &untracked, "u1").await;
+            set(&mut writer.client, &tracked, "t1", use_cluster).await;
+            set(&mut writer.client, &untracked, "u1", use_cluster).await;
 
             // GET on an untracked key: served by the server, not cached, not counted.
             assert_eq!(get(&mut cached.client, &untracked).await, bulk("u1"));
@@ -2247,7 +2275,7 @@ pub(crate) mod test_cache {
 
             // The writer changes it and the prefixed client sees the new value immediately,
             // without any invalidation involved.
-            set(&mut writer.client, &untracked, "u2").await;
+            set(&mut writer.client, &untracked, "u2", use_cluster).await;
             assert_eq!(get(&mut cached.client, &untracked).await, bulk("u2"));
 
             // MGET mixing tracked and untracked keys: both values are returned, only the
@@ -2267,7 +2295,7 @@ pub(crate) mod test_cache {
 
             // Second MGET: the tracked key hits, the untracked key is fetched again and reflects
             // a fresh write.
-            set(&mut writer.client, &untracked, "u3").await;
+            set(&mut writer.client, &untracked, "u3", use_cluster).await;
             let mut mget = redis::cmd("MGET");
             mget.arg(&tracked).arg(&untracked);
             assert_eq!(
@@ -2282,7 +2310,7 @@ pub(crate) mod test_cache {
             );
 
             // The tracked key is still invalidated by the server.
-            set(&mut writer.client, &tracked, "t2").await;
+            set(&mut writer.client, &tracked, "t2", use_cluster).await;
             wait_until!(
                 std::time::Duration::from_secs(2),
                 "the tracked MGET key to be invalidated",
@@ -2315,7 +2343,7 @@ pub(crate) mod test_cache {
             .await;
 
             let key = format!("xxx:{}", generate_random_string(8));
-            set(&mut test_basics.client, &key, "value").await;
+            set(&mut test_basics.client, &key, "value", use_cluster).await;
             assert_eq!(get(&mut test_basics.client, &key).await, bulk("value"));
             assert_eq!(entry_count(&test_basics.client), 1);
 
@@ -2394,10 +2422,10 @@ pub(crate) mod test_cache {
 
             // Invalidations keep flowing on the new connection.
             let key = format!("xxx:{}", generate_random_string(8));
-            set(&mut killer, &key, "v1").await;
+            set(&mut killer, &key, "v1", false).await;
             assert_eq!(get(&mut cached.client, &key).await, bulk("v1"));
             assert_eq!(get(&mut cached.client, &key).await, bulk("v1"));
-            set(&mut killer, &key, "v2").await;
+            set(&mut killer, &key, "v2", false).await;
             wait_until!(
                 std::time::Duration::from_secs(2),
                 "invalidation after reconnect",
@@ -2524,7 +2552,7 @@ pub(crate) mod test_cache {
                 .expect("same prefix shares the cache");
 
             let key = format!("xxx:{}", generate_random_string(8));
-            set(&mut first.client, &key, "shared").await;
+            set(&mut first.client, &key, "shared", use_cluster).await;
             assert_eq!(get(&mut first.client, &key).await, bulk("shared"));
             assert_eq!(entry_count(&first.client), 1);
             assert_eq!(entry_count(&second), 1, "both clients see the same cache");
