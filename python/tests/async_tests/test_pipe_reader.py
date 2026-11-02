@@ -1,8 +1,10 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 import asyncio
+import gc
 import struct
 import threading
+import weakref
 from concurrent.futures import Future, ThreadPoolExecutor
 from types import SimpleNamespace
 from unittest.mock import Mock
@@ -203,14 +205,61 @@ def test_completed_requests_still_free_native_response(pipe_client, closed):
     assert future.cancelled()
 
 
-@pytest.mark.parametrize("pointer_mode", [False, True])
-def test_orphaned_frames_free_native_memory(pipe_client, pointer_mode):
-    if pointer_mode:
-        pipe._handle_pipe_frame(None, pipe._PUBSUB_SENTINEL, 100, (1 << 63) | 7)
-        pipe_client._lib.free_pubsub_pointer_payload.assert_called_once()
+@pytest.mark.parametrize("frame_kind", ["success", "error", "pointer", "inline"])
+@pytest.mark.parametrize("empty_registry", [False, True])
+@pytest.mark.parametrize("split_frame", [False, True])
+def test_orphaned_frames_free_native_memory(
+    monkeypatch, pipe_client, frame_kind, empty_registry, split_frame
+):
+    monkeypatch.setattr(
+        pipe, "_ASYNC_FFI", SimpleNamespace(ffi=pipe_client._ffi, lib=pipe_client._lib)
+    )
+    if empty_registry:
+        pipe._client_registry.clear()
+    if frame_kind == "pointer":
+        frame = pipe._FRAME_STRUCT.pack(8, pipe._PUBSUB_SENTINEL, 100, (1 << 63) | 7)
+    elif frame_kind == "inline":
+        frame = pipe._FRAME_STRUCT.pack(8, pipe._PUBSUB_SENTINEL, 7, 0) + b"payload"
     else:
-        pipe._handle_pipe_frame(None, 1, 100, 101)
-        pipe_client._lib.free_response_arena.assert_called_once()
+        response_ptr = 100 if frame_kind == "success" else 0
+        arena_or_err = 101 if frame_kind == "success" else (1 << 56) | 101
+        frame = pipe._FRAME_STRUCT.pack(8, 1, response_ptr, arena_or_err)
+    reads = [frame[:-3], frame[-3:]] if split_frame else [frame]
+    monkeypatch.setattr(pipe.os, "read", Mock(side_effect=reads))
+
+    assert pipe._on_async_pipe_readable()
+    if split_frame:
+        assert pipe._pipe_remainder == frame[:-3]
+        assert pipe_client._lib.mock_calls == []
+        assert pipe._on_async_pipe_readable()
+
+    pointer = pipe_client._ffi.cast.return_value
+    if frame_kind == "pointer":
+        pipe_client._ffi.cast.assert_called_once_with("uint8_t*", 100)
+        pipe_client._lib.free_pubsub_pointer_payload.assert_called_once_with(pointer, 7)
+    elif frame_kind == "success":
+        pipe_client._ffi.cast.assert_called_once_with("void*", 101)
+        pipe_client._lib.free_response_arena.assert_called_once_with(pointer)
+    elif frame_kind == "error":
+        pipe_client._ffi.cast.assert_called_once_with("char*", 101)
+        pipe_client._lib.free_pipe_error_string.assert_called_once_with(pointer)
+    else:
+        pipe_client._ffi.cast.assert_not_called()
+    assert len(pipe_client._lib.mock_calls) == (0 if frame_kind == "inline" else 1)
+    assert pipe._pipe_remainder == b""
+    pipe._c_parse_response.assert_not_called()
+
+
+def test_client_registry_does_not_keep_clients_alive():
+    client = pipe.BaseClient(Mock(rdma=None))
+    pipe._client_registry[7] = client
+    reference = weakref.ref(client)
+
+    del client
+    gc.collect()
+
+    assert reference() is None
+    assert 7 not in pipe._client_registry
 
 
 def test_windows_reader_survives_unexpected_read_failure(monkeypatch, pipe_client):
@@ -222,7 +271,7 @@ def test_windows_reader_survives_unexpected_read_failure(monkeypatch, pipe_clien
 
 
 def test_windows_pipe_setup_starts_one_blocking_reader(monkeypatch):
-    client = pipe.BaseClient(Mock())
+    client = pipe.BaseClient(Mock(rdma=None))
     client._lib = Mock()
     client._is_asyncio = True
     client._loop = Mock()
@@ -272,7 +321,7 @@ def anyio_backend(request):
 
 @pytest.fixture
 async def pubsub_client(monkeypatch, pipe_client, anyio_backend):
-    client = pipe.BaseClient(Mock())
+    client = pipe.BaseClient(Mock(rdma=None))
     client._lib = Mock()
     client._is_asyncio = anyio_backend == "asyncio"
     if client._is_asyncio:
@@ -355,7 +404,7 @@ async def test_windows_pubsub_callback_runs_on_owning_loop(
 
 
 def test_queued_pubsub_is_discarded_after_client_close():
-    client = pipe.BaseClient(Mock())
+    client = pipe.BaseClient(Mock(rdma=None))
     client._is_closed = True
     payload = struct.pack("=II", 3, 0) + struct.pack("=II", 0, 0)
     pipe._handle_inline_pubsub(client, payload)
@@ -412,7 +461,7 @@ def test_pending_future_replacement_uses_reader_lock(
 
 @pytest.fixture
 def scope_client(monkeypatch, pipe_client):
-    client = pipe.BaseClient(Mock())
+    client = pipe.BaseClient(Mock(rdma=None))
     client._lib = Mock(glide_scope_acquire_pipe=Mock(return_value=0))
     client._core_client = client._ffi.cast("void*", 77)
     client._conn_req_bytes = b"request"

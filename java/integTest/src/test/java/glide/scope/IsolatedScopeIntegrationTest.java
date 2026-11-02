@@ -209,7 +209,7 @@ public class IsolatedScopeIntegrationTest {
         IsolatedScope scope1 =
                 client.scopedConnection(Duration.ofSeconds(10)).get(10, TimeUnit.SECONDS);
         long scopeId1 = scope1.getScopeId();
-        scope1.ping().get(5, TimeUnit.SECONDS);
+        String connId1 = scope1.executeCommand("CLIENT", "ID").get(5, TimeUnit.SECONDS);
         scope1.close();
 
         // Give the pool a moment to process the release
@@ -219,9 +219,11 @@ public class IsolatedScopeIntegrationTest {
         IsolatedScope scope2 =
                 client.scopedConnection(Duration.ofSeconds(10)).get(10, TimeUnit.SECONDS);
         long scopeId2 = scope2.getScopeId();
+        String connId2 = scope2.executeCommand("CLIENT", "ID").get(5, TimeUnit.SECONDS);
         scope2.close();
 
-        assertEquals(scopeId1, scopeId2, "LIFO reuse: same scope_id should be returned");
+        assertEquals(connId1, connId2, "LIFO reuse: same connection should be returned");
+        assertNotEquals(scopeId1, scopeId2, "a reused connection gets a fresh scope_id");
 
         client.close();
         System.out.println("Scope reuse test PASSED!");

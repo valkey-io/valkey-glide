@@ -43,6 +43,7 @@ python3 dev.py build --client async --mode release    # Build async client (opti
 python3 dev.py build --client sync --mode release     # Build sync client (optimized)
 python3 dev.py build --client async --mode debug      # Build async client (debug)
 python3 dev.py build --client sync --mode debug       # Build sync client (debug)
+python3 dev.py build --client sync --rdma             # Build sync client with RDMA
 
 # Build wheels for local testing
 python3 dev.py build --client async --wheel           # Build async wheel

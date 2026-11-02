@@ -79,8 +79,15 @@ def setup_module(monkeypatch):
 @pytest.mark.parametrize("current_platform", ["linux", "darwin", "win32"])
 @pytest.mark.parametrize("target_override", [None, "relative", "absolute"])
 @pytest.mark.parametrize("release", [False, True])
+@pytest.mark.parametrize("rdma", [False, True])
 def test_build_ext_uses_cargo_target_and_platform_filenames(
-    monkeypatch, tmp_path, setup_module, current_platform, target_override, release
+    monkeypatch,
+    tmp_path,
+    setup_module,
+    current_platform,
+    target_override,
+    release,
+    rdma,
 ):
     if target_override is None:
         monkeypatch.delenv("CARGO_TARGET_DIR", raising=False)
@@ -89,6 +96,7 @@ def test_build_ext_uses_cargo_target_and_platform_filenames(
         target = tmp_path / "cache" if target_override == "absolute" else Path("cache")
         monkeypatch.setenv("CARGO_TARGET_DIR", str(target))
     monkeypatch.setenv("RELEASE_MODE", "1" if release else "0")
+    monkeypatch.setenv("GLIDE_SYNC_RDMA", "1" if rdma else "0")
     ffi_path = tmp_path / "ffi"
     shared_path = tmp_path / "glide-shared"
     shared_path.mkdir()
@@ -116,6 +124,20 @@ def test_build_ext_uses_cargo_target_and_platform_filenames(
     command.build_lib = str(build_lib)
 
     command.run()
+
+    ffi_command = [
+        "cargo",
+        "rustc",
+        "--lib",
+        "--crate-type",
+        "cdylib",
+        "--locked",
+    ]
+    if release:
+        ffi_command.append("--release")
+    if rdma:
+        ffi_command.extend(["--features", "rdma"])
+    assert setup_module.subprocess.run.call_args_list[0].args[0] == ffi_command
 
     profile = "release" if release else "debug"
     ffi_name = rust_cdylib_filename("glide_ffi", current_platform)

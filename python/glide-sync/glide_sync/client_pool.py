@@ -139,6 +139,13 @@ class ClientPool:
                 "Use the main client's pubsub API for subscriptions."
             )
 
+        # TODO: support RDMA in pools.
+        if getattr(client_config, "rdma", None) is not None:
+            raise ValueError(
+                "Pool clients cannot have RDMA configured. "
+                "Use a client outside a pool for RDMA transfers."
+            )
+
         ffi_instance = _GlideFFI()
         self._ffi = ffi_instance.ffi
         self._lib = ffi_instance.lib
@@ -282,7 +289,7 @@ class ClientPool:
     def metrics(self) -> dict:
         """Get pool metrics: idle, active, total counts.
 
-        Zeros when the pool was destroyed or the read was declined.
+        Zeros when the pool was destroyed.
         """
         m = self._lib.glide_pool_metrics(self._pool_id)
         return {"idle": m.idle, "active": m.active, "total": m.total}
