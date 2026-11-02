@@ -2213,6 +2213,16 @@ func TestClientSideCache_WithTrackingPrefix_SetsFieldAndProtobuf(t *testing.T) {
 	assert.Equal(t, []byte("xxx:"), pb.TrackingPrefix)
 }
 
+func TestClientSideCache_WithTrackingPrefix_BinaryPrefix(t *testing.T) {
+	cache, err := NewClientSideCache(1024, 60000)
+	assert.NoError(t, err)
+	cache.WithServerAssisted(true).WithTrackingPrefix("\xff\x00:")
+
+	pb, err := cache.toProtobuf()
+	assert.NoError(t, err)
+	assert.Equal(t, []byte{0xff, 0x00, ':'}, pb.TrackingPrefix, "binary prefixes must be passed byte for byte")
+}
+
 func TestClientSideCache_WithTrackingPrefix_EmptyClearsPrefix(t *testing.T) {
 	cache, err := NewClientSideCache(1024, 60000)
 	assert.NoError(t, err)

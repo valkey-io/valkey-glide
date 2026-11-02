@@ -28,6 +28,7 @@ type CacheClient interface {
 	GetCacheExpirations(ctx context.Context) (int64, error)
 	GetCacheTotalLookups(ctx context.Context) (int64, error)
 	ClientTrackingInfo(ctx context.Context) (models.ClientTrackingInfo, error)
+	FlushAll(ctx context.Context) (string, error)
 }
 
 const (
@@ -915,6 +916,15 @@ func (suite *GlideTestSuite) readUntilCached(ctx context.Context, client CacheCl
 	return last
 }
 
+// settleCacheAfter repeatedly runs read until the cache holds exactly want entries. See readUntilCached for
+// why a write to a tracked key needs this before asserting on the entry count.
+func (suite *GlideTestSuite) settleCacheAfter(ctx context.Context, client CacheClient, want int64, read func() error) {
+	suite.T().Helper()
+	suite.waitFor(func() bool {
+		return read() == nil && suite.cacheEntries(ctx, client) == want
+	}, fmt.Sprintf("cache never settled at %d entries", want))
+}
+
 // getValue reads key and returns its string value, failing the test on error or nil.
 func (suite *GlideTestSuite) getValue(ctx context.Context, client interfaces.BaseClientCommands, key string) string {
 	suite.T().Helper()
@@ -1199,5 +1209,158 @@ func (suite *GlideTestSuite) TestClientSideCache_TrackingPrefix_SharedCacheIdRej
 		assert.Equal(suite.T(), int64(1), suite.cacheEntries(ctx, second), "both clients see the same cache")
 		assert.Equal(suite.T(), "shared", suite.getValue(ctx, second, key))
 		assert.Equal(suite.T(), int64(1), suite.cacheEntries(ctx, second), "the shared entry is reused, not duplicated")
+	})
+}
+
+// A flush still clears the whole cache when a prefix is registered: the server sends the null
+// invalidation to every tracking client regardless of its prefixes.
+func (suite *GlideTestSuite) TestClientSideCache_TrackingPrefix_FlushClearsCache() {
+	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
+		cached, err := suite.createClientWithCache(client, newPrefixedCache(suite.T(), "xxx:"))
+		require.NoError(suite.T(), err)
+
+		ctx := context.Background()
+		key := "xxx:" + uuid.New().String()
+		result, err := cached.Set(ctx, key, "v1")
+		suite.verifyOK(result, err)
+		assert.Equal(suite.T(), "v1", suite.readUntilCached(ctx, cached, key, 1))
+
+		result, err = cached.FlushAll(ctx)
+		suite.verifyOK(result, err)
+		suite.waitFor(func() bool {
+			return suite.cacheEntries(ctx, cached) == 0
+		}, "FLUSHALL did not clear the prefixed cache")
+
+		value, err := cached.Get(ctx, key)
+		require.NoError(suite.T(), err)
+		assert.True(suite.T(), value.IsNil(), "the key is gone from the server and not served from the cache")
+	})
+}
+
+// HGETALL and SMEMBERS honour the prefix like GET: tracked hashes/sets are cached and hit on the second
+// read, untracked ones are never cached and do not count as lookups.
+func (suite *GlideTestSuite) TestClientSideCache_TrackingPrefix_HashAndSetCommands() {
+	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
+		cached, err := suite.createClientWithCache(client, newPrefixedCache(suite.T(), "xxx:"))
+		require.NoError(suite.T(), err)
+		writer := suite.writerClientFor(client)
+
+		ctx := context.Background()
+		suffix := uuid.New().String()
+		trackedHash, untrackedHash := "xxx:hash:"+suffix, "zzz:hash:"+suffix
+		trackedSet, untrackedSet := "xxx:set:"+suffix, "zzz:set:"+suffix
+		fields := map[string]string{"f1": "v1", "f2": "v2"}
+		members := map[string]struct{}{"m1": {}, "m2": {}}
+
+		for _, key := range []string{trackedHash, untrackedHash} {
+			added, err := writer.HSet(ctx, key, fields)
+			require.NoError(suite.T(), err)
+			assert.Equal(suite.T(), int64(2), added)
+		}
+		for _, key := range []string{trackedSet, untrackedSet} {
+			added, err := writer.SAdd(ctx, key, []string{"m1", "m2"})
+			require.NoError(suite.T(), err)
+			assert.Equal(suite.T(), int64(2), added)
+		}
+
+		// Tracked hash: cached, second read is a hit.
+		suite.settleCacheAfter(ctx, cached, 1, func() error {
+			_, err := cached.HGetAll(ctx, trackedHash)
+			return err
+		})
+		lookups := suite.cacheLookups(ctx, cached)
+		hitRate, _ := suite.cacheRates(ctx, cached)
+		hash, err := cached.HGetAll(ctx, trackedHash)
+		require.NoError(suite.T(), err)
+		assert.Equal(suite.T(), fields, hash)
+		assert.Equal(suite.T(), int64(1), suite.cacheEntries(ctx, cached))
+		assert.Equal(suite.T(), lookups+1, suite.cacheLookups(ctx, cached))
+		newHitRate, _ := suite.cacheRates(ctx, cached)
+		assert.Greater(suite.T(), newHitRate, hitRate, "second HGETALL of a tracked hash is a hit")
+
+		// Tracked set: cached as a second entry, second read is a hit.
+		suite.settleCacheAfter(ctx, cached, 2, func() error {
+			_, err := cached.SMembers(ctx, trackedSet)
+			return err
+		})
+		lookups = suite.cacheLookups(ctx, cached)
+		hitRate, _ = suite.cacheRates(ctx, cached)
+		set, err := cached.SMembers(ctx, trackedSet)
+		require.NoError(suite.T(), err)
+		assert.Equal(suite.T(), members, set)
+		assert.Equal(suite.T(), int64(2), suite.cacheEntries(ctx, cached))
+		assert.Equal(suite.T(), lookups+1, suite.cacheLookups(ctx, cached))
+		newHitRate, _ = suite.cacheRates(ctx, cached)
+		assert.Greater(suite.T(), newHitRate, hitRate, "second SMEMBERS of a tracked set is a hit")
+
+		// Untracked hash and set: full responses from the server, never cached, no lookups.
+		lookups = suite.cacheLookups(ctx, cached)
+		hitRate, missRate := suite.cacheRates(ctx, cached)
+		for range 2 {
+			hash, err = cached.HGetAll(ctx, untrackedHash)
+			require.NoError(suite.T(), err)
+			assert.Equal(suite.T(), fields, hash)
+			set, err = cached.SMembers(ctx, untrackedSet)
+			require.NoError(suite.T(), err)
+			assert.Equal(suite.T(), members, set)
+		}
+		assert.Equal(suite.T(), int64(2), suite.cacheEntries(ctx, cached), "untracked hash/set are not cached")
+		assert.Equal(suite.T(), lookups, suite.cacheLookups(ctx, cached), "untracked hash/set are not lookups")
+		newHitRate, newMissRate := suite.cacheRates(ctx, cached)
+		assert.Equal(suite.T(), hitRate, newHitRate)
+		assert.Equal(suite.T(), missRate, newMissRate)
+
+		// A write to the untracked hash is visible immediately (never stale).
+		_, err = writer.HSet(ctx, untrackedHash, map[string]string{"f3": "v3"})
+		require.NoError(suite.T(), err)
+		hash, err = cached.HGetAll(ctx, untrackedHash)
+		require.NoError(suite.T(), err)
+		assert.Equal(suite.T(), "v3", hash["f3"])
+
+		// A write to the tracked hash is invalidated by the server.
+		_, err = writer.HSet(ctx, trackedHash, map[string]string{"f3": "v3"})
+		require.NoError(suite.T(), err)
+		suite.waitFor(func() bool {
+			hash, err := cached.HGetAll(ctx, trackedHash)
+			return err == nil && hash["f3"] == "v3"
+		}, "the tracked hash was not invalidated")
+	})
+}
+
+// A binary (non UTF-8) prefix is passed to the server byte for byte and applied to the local cache.
+func (suite *GlideTestSuite) TestClientSideCache_TrackingPrefix_BinaryPrefix() {
+	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
+		prefix := "\xff\x00:"
+		cached, err := suite.createClientWithCache(client, newPrefixedCache(suite.T(), prefix))
+		require.NoError(suite.T(), err)
+		writer := suite.writerClientFor(client)
+
+		ctx := context.Background()
+		info, err := cached.ClientTrackingInfo(ctx)
+		require.NoError(suite.T(), err)
+		require.Len(suite.T(), info.Prefixes, 1)
+		assert.Equal(suite.T(), []byte{0xff, 0x00, ':'}, []byte(info.Prefixes[0]))
+
+		key := prefix + uuid.New().String()
+		result, err := writer.Set(ctx, key, "v1")
+		suite.verifyOK(result, err)
+		assert.Equal(suite.T(), "v1", suite.readUntilCached(ctx, cached, key, 1))
+
+		// A key that shares only the first byte of the prefix is not tracked.
+		other := "\xff\x01:" + uuid.New().String()
+		result, err = writer.Set(ctx, other, "o1")
+		suite.verifyOK(result, err)
+		lookups := suite.cacheLookups(ctx, cached)
+		assert.Equal(suite.T(), "o1", suite.getValue(ctx, cached, other))
+		assert.Equal(suite.T(), int64(1), suite.cacheEntries(ctx, cached))
+		assert.Equal(suite.T(), lookups, suite.cacheLookups(ctx, cached))
+
+		// A write from the writer invalidates the tracked key.
+		result, err = writer.Set(ctx, key, "v2")
+		suite.verifyOK(result, err)
+		suite.waitFor(func() bool {
+			val, err := cached.Get(ctx, key)
+			return err == nil && val.Value() == "v2"
+		}, "the binary-prefixed key was not invalidated")
 	})
 }
