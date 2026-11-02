@@ -792,8 +792,9 @@ pub trait GlideCache: Send + Sync + Debug {
 pub(crate) trait MGetCacheExt: GlideCache {
     /// Looks up the individual keys of an MGET command in the cache.
     ///
-    /// Returns `None` when `cmd` is not a valid MGET command, leaving the
-    /// caller to execute it unchanged. Metrics are recorded once per key.
+    /// Returns `None` when `cmd` is not a valid MGET command, or when none of its
+    /// keys is inside the tracking prefix, leaving the caller to execute it
+    /// unchanged. Metrics are recorded once per key.
     /// Keys outside the tracking prefix are always fetched from the server and
     /// never stored; they do not count as hits or misses.
     fn get_cached_mget(&self, cmd: &Cmd) -> Option<MGetCacheLookup> {
@@ -810,6 +811,11 @@ pub(crate) trait MGetCacheExt: GlideCache {
             })
             .collect::<Option<_>>()?;
         if keys.is_empty() {
+            return None;
+        }
+        // Nothing can be served from or stored in the cache: send the original
+        // command instead of re-encoding it and re-assembling the response.
+        if !keys.iter().any(|key| self.core().is_tracked(key)) {
             return None;
         }
 
@@ -1687,26 +1693,18 @@ mod tests {
     }
 
     #[test]
-    fn test_mget_with_only_untracked_keys_always_goes_to_server() {
+    fn test_mget_with_only_untracked_keys_bypasses_the_cache_path() {
         let cache = prefixed_cache(b"xxx:");
         let mut cmd = Cmd::new();
         cmd.arg("MGET").arg("yyy:a").arg("zzz:b");
 
-        for _ in 0..2 {
-            let lookup = cache.get_cached_mget(&cmd).unwrap();
-            assert!(!lookup.is_complete());
-            assert_eq!(lookup.missing_count(), 2);
-            let result = cache
-                .complete_cached_mget(
-                    lookup,
-                    Value::Array(vec![Value::BulkString(b"a".to_vec().into()), Value::Nil]),
-                )
-                .unwrap();
-            assert_eq!(
-                result,
-                Value::Array(vec![Value::BulkString(b"a".to_vec().into()), Value::Nil])
-            );
-        }
+        // No key can be cached, so the caller must send the original command untouched
+        // instead of re-encoding it through the cache MGET path.
+        assert!(cache.get_cached_mget(&cmd).is_none());
+        // ... and the generic single-key path does not treat MGET as cacheable either.
+        let (value, fill) = cache.get_cached_cmd_with_fill(&cmd);
+        assert!(value.is_none());
+        assert!(fill.is_none());
 
         assert_eq!(cache.entry_count(), 0);
         assert_eq!(cache.metrics().unwrap().total_lookups(), 0);
@@ -1716,19 +1714,24 @@ mod tests {
     fn test_mget_untracked_key_does_not_register_a_fill() {
         let cache = prefixed_cache(b"xxx:");
         let mut cmd = Cmd::new();
-        cmd.arg("MGET").arg("yyy:b");
+        cmd.arg("MGET").arg("xxx:a").arg("yyy:b");
         let lookup = cache.get_cached_mget(&cmd).unwrap();
+        assert_eq!(lookup.missing_count(), 2);
 
         // An invalidation for the untracked key while the request is in flight is harmless:
-        // nothing is pending for it and nothing gets inserted afterwards.
+        // nothing is pending for it and nothing gets inserted for it afterwards.
         cache.invalidate_server_assisted(b"yyy:b");
         cache
             .complete_cached_mget(
                 lookup,
-                Value::Array(vec![Value::BulkString(b"b".to_vec().into())]),
+                Value::Array(vec![
+                    Value::BulkString(b"a".to_vec().into()),
+                    Value::BulkString(b"b".to_vec().into()),
+                ]),
             )
             .unwrap();
-        assert_eq!(cache.entry_count(), 0);
+        assert_eq!(cache.entry_count(), 1, "only the tracked key is stored");
+        assert_eq!(cache.get(b"yyy:b", CachedKeyType::String), None);
     }
 
     // ==================== CacheEntry ====================
