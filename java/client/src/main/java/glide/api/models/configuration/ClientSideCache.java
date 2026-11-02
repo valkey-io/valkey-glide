@@ -146,7 +146,7 @@ public class ClientSideCache {
          * Sets the key prefix that scopes server-assisted caching. See {@link
          * ClientSideCache#getTrackingPrefix()}.
          *
-         * @param trackingPrefix The key prefix, encoded as UTF-8, or {@code null} to track all keys.
+         * @param trackingPrefix The key prefix, encoded as UTF-8. Omit the call to track all keys.
          * @return This builder.
          */
         public ClientSideCacheBuilder trackingPrefix(String trackingPrefix) {
@@ -158,7 +158,7 @@ public class ClientSideCache {
          * Sets the key prefix that scopes server-assisted caching, as raw bytes. See {@link
          * ClientSideCache#getTrackingPrefix()}.
          *
-         * @param trackingPrefix The key prefix, or {@code null} to track all keys.
+         * @param trackingPrefix The key prefix as raw bytes. Omit the call to track all keys.
          * @return This builder.
          */
         public ClientSideCacheBuilder trackingPrefix(GlideString trackingPrefix) {

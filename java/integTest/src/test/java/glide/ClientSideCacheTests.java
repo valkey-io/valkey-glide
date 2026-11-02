@@ -7,6 +7,7 @@ import static glide.TestUtilities.commonClusterClientConfig;
 import static glide.TestUtilities.getRandomString;
 import static glide.TestUtilities.waitFor;
 import static glide.api.BaseClient.OK;
+import static glide.api.models.GlideString.gs;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleMultiNodeRoute.ALL_NODES;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -18,17 +19,21 @@ import glide.api.BaseClient;
 import glide.api.GlideClient;
 import glide.api.GlideClusterClient;
 import glide.api.models.ClusterValue;
+import glide.api.models.GlideString;
 import glide.api.models.configuration.ClientSideCache;
 import glide.api.models.configuration.EvictionPolicy;
 import glide.api.models.configuration.ProtocolVersion;
 import glide.api.models.exceptions.RequestException;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.Test;
@@ -1068,6 +1073,171 @@ public class ClientSideCacheTests {
             waitFor(
                     () -> "value2".equals(client1.get(key).get()),
                     "shared prefixed cache was not invalidated");
+        }
+    }
+
+    /**
+     * A flush still clears the whole cache when a prefix is registered: the server sends the null
+     * invalidation to every tracking client regardless of its prefixes.
+     */
+    @ParameterizedTest
+    @MethodSource("clientModes")
+    @SneakyThrows
+    public void trackingPrefix_flush_clears_cache(boolean cluster) {
+        try (BaseClient cached = createClient(cluster, prefixedCache("xxx:"))) {
+            String key = "xxx:flush_" + getRandomString(8);
+            assertEquals(OK, cached.set(key, "value").get());
+            warmCache(cached, key, "value");
+            assertEquals(1L, cached.getCacheEntryCount().get());
+
+            if (cluster) {
+                assertEquals(OK, ((GlideClusterClient) cached).flushall().get());
+            } else {
+                assertEquals(OK, ((GlideClient) cached).flushall().get());
+            }
+
+            waitFor(
+                    () -> cached.getCacheEntryCount().get() == 0L,
+                    "the null invalidation did not flush the prefixed cache");
+        }
+    }
+
+    /** Cacheable multi-value commands on tracked keys are stored and served from the cache. */
+    @ParameterizedTest
+    @MethodSource("clientModes")
+    @SneakyThrows
+    public void trackingPrefix_caches_tracked_hash_and_set(boolean cluster) {
+        try (BaseClient cached = createClient(cluster, prefixedCache("xxx:"));
+                BaseClient writer = createClient(cluster, null)) {
+            String suffix = getRandomString(8);
+            String trackedHash = "xxx:hash:" + suffix;
+            String trackedSet = "xxx:set:" + suffix;
+            Map<String, String> hash = Collections.singletonMap("field", "value");
+            Set<String> members = Collections.singleton("member");
+            assertEquals(1L, writer.hset(trackedHash, hash).get());
+            assertEquals(1L, writer.sadd(trackedSet, new String[] {"member"}).get());
+
+            // HGETALL on a tracked key: stored on the first read, served from the cache after.
+            waitFor(
+                    () -> {
+                        assertEquals(hash, cached.hgetall(trackedHash).get());
+                        Thread.sleep(50);
+                        long hitsBefore = hits(cached);
+                        return hash.equals(cached.hgetall(trackedHash).get()) && hits(cached) == hitsBefore + 1;
+                    },
+                    "tracked hash was not served from the cache");
+            assertEquals(1L, cached.getCacheEntryCount().get(), "hash entry stored");
+            long lookupsBefore = cached.getCacheTotalLookups().get();
+            long hitsBefore = hits(cached);
+            assertEquals(hash, cached.hgetall(trackedHash).get());
+            assertEquals(lookupsBefore + 1, cached.getCacheTotalLookups().get());
+            assertEquals(hitsBefore + 1, hits(cached), "HGETALL hit");
+
+            // SMEMBERS on a tracked key: same behaviour, one more entry.
+            waitFor(
+                    () -> {
+                        assertEquals(members, cached.smembers(trackedSet).get());
+                        Thread.sleep(50);
+                        long before = hits(cached);
+                        return members.equals(cached.smembers(trackedSet).get()) && hits(cached) == before + 1;
+                    },
+                    "tracked set was not served from the cache");
+            assertEquals(2L, cached.getCacheEntryCount().get(), "set entry stored");
+            lookupsBefore = cached.getCacheTotalLookups().get();
+            hitsBefore = hits(cached);
+            assertEquals(members, cached.smembers(trackedSet).get());
+            assertEquals(lookupsBefore + 1, cached.getCacheTotalLookups().get());
+            assertEquals(hitsBefore + 1, hits(cached), "SMEMBERS hit");
+
+            // Writes to the tracked keys are still invalidated by the server.
+            assertEquals(1L, writer.hset(trackedHash, Collections.singletonMap("f2", "v2")).get());
+            waitFor(
+                    () -> cached.hgetall(trackedHash).get().containsKey("f2"),
+                    "tracked hash was not invalidated");
+            assertEquals(1L, writer.sadd(trackedSet, new String[] {"m2"}).get());
+            waitFor(
+                    () -> cached.smembers(trackedSet).get().contains("m2"),
+                    "tracked set was not invalidated");
+        }
+    }
+
+    /**
+     * CLIENT TRACKINGINFO through a binary-safe custom command: one reply per node connection in
+     * cluster mode, a single reply in standalone mode.
+     */
+    @SneakyThrows
+    @SuppressWarnings("unchecked")
+    private static Collection<Map<GlideString, Object>> binaryTrackingInfos(BaseClient client) {
+        GlideString[] args = {gs("CLIENT"), gs("TRACKINGINFO")};
+        if (client instanceof GlideClusterClient) {
+            Map<String, Object> perNode =
+                    ((GlideClusterClient) client).customCommand(args, ALL_NODES).get().getMultiValue();
+            assertTrue(perNode.size() > 1, "expected a multi-node reply");
+            return perNode.values().stream()
+                    .map(info -> (Map<GlideString, Object>) info)
+                    .collect(Collectors.toList());
+        }
+        return Collections.singletonList(
+                (Map<GlideString, Object>) ((GlideClient) client).customCommand(args).get());
+    }
+
+    /** A prefix made of arbitrary bytes is registered byte for byte and works end to end. */
+    @ParameterizedTest
+    @MethodSource("clientModes")
+    @SneakyThrows
+    public void trackingPrefix_binary_prefix(boolean cluster) {
+        byte[] prefix = {(byte) 0xff, 0, ':'};
+        ClientSideCache cache =
+                ClientSideCache.builder()
+                        .maxCacheKb(1024L)
+                        .entryTtlMs(0L)
+                        .enableMetrics(true)
+                        .serverAssisted(true)
+                        .trackingPrefix(gs(prefix))
+                        .build();
+        assertArrayEquals(prefix, cache.getTrackingPrefix().getBytes());
+
+        try (BaseClient cached = createClient(cluster, cache);
+                BaseClient writer = createClient(cluster, null)) {
+            // Every server connection reports exactly the configured bytes.
+            for (Map<GlideString, Object> info : binaryTrackingInfos(cached)) {
+                Object[] prefixes = (Object[]) info.get(gs("prefixes"));
+                assertEquals(1, prefixes.length, "prefixes: " + Arrays.toString(prefixes));
+                assertArrayEquals(prefix, ((GlideString) prefixes[0]).getBytes());
+            }
+
+            // A key under the binary prefix is cached and served from the cache.
+            byte[] suffix = getRandomString(8).getBytes(StandardCharsets.UTF_8);
+            byte[] keyBytes = new byte[prefix.length + suffix.length];
+            System.arraycopy(prefix, 0, keyBytes, 0, prefix.length);
+            System.arraycopy(suffix, 0, keyBytes, prefix.length, suffix.length);
+            GlideString key = gs(keyBytes);
+            assertEquals(OK, writer.set(key, gs("v1")).get());
+            waitFor(
+                    () -> {
+                        if (!gs("v1").equals(cached.get(key).get())) {
+                            return false;
+                        }
+                        Thread.sleep(50);
+                        long hitsBefore = hits(cached);
+                        return gs("v1").equals(cached.get(key).get()) && hits(cached) == hitsBefore + 1;
+                    },
+                    "binary-prefixed key was not served from the cache");
+            assertEquals(1L, cached.getCacheEntryCount().get());
+
+            // A key outside the binary prefix (same bytes, different first byte) is bypassed.
+            keyBytes[0] = (byte) 0xfe;
+            GlideString outside = gs(keyBytes.clone());
+            assertEquals(OK, writer.set(outside, gs("o1")).get());
+            long lookupsBefore = cached.getCacheTotalLookups().get();
+            assertEquals(gs("o1"), cached.get(outside).get());
+            assertEquals(1L, cached.getCacheEntryCount().get(), "key outside the prefix not cached");
+            assertEquals(lookupsBefore, cached.getCacheTotalLookups().get());
+
+            // A write from another client invalidates the cached binary-prefixed key.
+            assertEquals(OK, writer.set(key, gs("v2")).get());
+            waitFor(
+                    () -> gs("v2").equals(cached.get(key).get()), "binary-prefixed key was not invalidated");
         }
     }
 }
