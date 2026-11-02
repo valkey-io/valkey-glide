@@ -13,9 +13,11 @@ import {
 import { ValkeyCluster } from "../../utils/TestUtils.js";
 import {
     ClientSideCache,
+    ClientTrackingInfo,
     EvictionPolicy,
     GlideClient,
     GlideClusterClient,
+    GlideString,
     ProtocolVersion,
 } from "../build-ts";
 import {
@@ -28,6 +30,96 @@ import {
 
 const TIMEOUT = 50000;
 const CLEANUP_TIMEOUT = 10000;
+
+describe("ClientSideCache tracking prefix configuration", () => {
+    const base = { maxCacheKb: 1024, entryTtlMs: 0 };
+
+    it("defaults trackingPrefix to undefined", () => {
+        expect(new ClientSideCache(base).trackingPrefix).toBeUndefined();
+        expect(ClientSideCache.create(1024, 0).trackingPrefix).toBeUndefined();
+        expect(
+            new ClientSideCache({ ...base, serverAssisted: true })
+                .trackingPrefix,
+        ).toBeUndefined();
+    });
+
+    it("accepts a string prefix with serverAssisted", () => {
+        const cache = new ClientSideCache({
+            ...base,
+            serverAssisted: true,
+            trackingPrefix: "xxx:",
+        });
+        expect(cache.trackingPrefix).toBe("xxx:");
+        expect(cache.serverAssisted).toBe(true);
+
+        const created = ClientSideCache.create(1024, 0, {
+            serverAssisted: true,
+            trackingPrefix: "xxx:",
+        });
+        expect(created.trackingPrefix).toBe("xxx:");
+        expect(created.serverAssisted).toBe(true);
+    });
+
+    it("accepts a Buffer prefix with serverAssisted", () => {
+        const prefix = Buffer.from("xxx:");
+        const cache = new ClientSideCache({
+            ...base,
+            serverAssisted: true,
+            trackingPrefix: prefix,
+        });
+        expect(cache.trackingPrefix).toEqual(prefix);
+
+        const created = ClientSideCache.create(1024, 0, {
+            serverAssisted: true,
+            trackingPrefix: prefix,
+        });
+        expect(created.trackingPrefix).toEqual(prefix);
+    });
+
+    it("rejects an empty prefix", () => {
+        const emptyPrefixes: GlideString[] = ["", Buffer.alloc(0)];
+
+        for (const trackingPrefix of emptyPrefixes) {
+            expect(
+                () =>
+                    new ClientSideCache({
+                        ...base,
+                        serverAssisted: true,
+                        trackingPrefix,
+                    }),
+            ).toThrow("trackingPrefix must not be empty");
+            expect(() =>
+                ClientSideCache.create(1024, 0, {
+                    serverAssisted: true,
+                    trackingPrefix,
+                }),
+            ).toThrow("trackingPrefix must not be empty");
+        }
+    });
+
+    it("rejects a prefix without serverAssisted", () => {
+        expect(
+            () => new ClientSideCache({ ...base, trackingPrefix: "xxx:" }),
+        ).toThrow("trackingPrefix requires serverAssisted to be true");
+        expect(
+            () =>
+                new ClientSideCache({
+                    ...base,
+                    serverAssisted: false,
+                    trackingPrefix: Buffer.from("xxx:"),
+                }),
+        ).toThrow("trackingPrefix requires serverAssisted to be true");
+        expect(() =>
+            ClientSideCache.create(1024, 0, { trackingPrefix: "xxx:" }),
+        ).toThrow("trackingPrefix requires serverAssisted to be true");
+        expect(() =>
+            ClientSideCache.create(1024, 0, {
+                serverAssisted: false,
+                trackingPrefix: "xxx:",
+            }),
+        ).toThrow("trackingPrefix requires serverAssisted to be true");
+    });
+});
 
 describe("ClientSideCache", () => {
     let standaloneCluster: ValkeyCluster;
@@ -77,6 +169,257 @@ describe("ClientSideCache", () => {
     ): Promise<void> {
         expect(await client.set(key, value)).toBe("OK");
         expect(await client.get(key)).toBe(value);
+    }
+
+    type CacheClient = GlideClient | GlideClusterClient;
+    type CacheClientFactory = (
+        cache: ClientSideCache | null,
+    ) => Promise<CacheClient>;
+
+    /**
+     * Server-assisted cache with metrics that only tracks keys starting with `prefix`.
+     */
+    function prefixedCache(prefix: GlideString): ClientSideCache {
+        return new ClientSideCache({
+            maxCacheKb: 1024,
+            entryTtlMs: 0,
+            serverAssisted: true,
+            enableMetrics: true,
+            trackingPrefix: prefix,
+        });
+    }
+
+    /**
+     * Tracking info of the connection behind the client. With the default route a
+     * cluster client answers for a single node.
+     */
+    async function trackingInfo(
+        client: CacheClient,
+    ): Promise<ClientTrackingInfo> {
+        return (await client.clientTrackingInfo()) as ClientTrackingInfo;
+    }
+
+    function expectPrefixes(info: ClientTrackingInfo, prefixes: string[]) {
+        expect(info.flags.has("on")).toBe(true);
+        expect(info.flags.has("bcast")).toBe(true);
+        expect([...info.prefixes].sort()).toEqual([...prefixes].sort());
+    }
+
+    /**
+     * Writes a key and waits until the replica applied the write. Both the primary
+     * and the replica broadcast an invalidation for the key; waiting for replication
+     * makes sure both reach the caching clients before the test reads the key again,
+     * otherwise a read served in between is dropped by the late invalidation.
+     */
+    async function writeAndReplicate(
+        writer: CacheClient,
+        key: string,
+        value: string,
+    ): Promise<void> {
+        expect(await writer.set(key, value)).toBe("OK");
+        const args = ["WAIT", "1", "1000"];
+
+        if (writer instanceof GlideClusterClient) {
+            await writer.customCommand(args, {
+                route: { type: "primarySlotKey", key },
+            });
+        } else {
+            await writer.customCommand(args);
+        }
+    }
+
+    /**
+     * Polls until the client observes `value` for `key` and the cache holds
+     * `expectedEntries` entries again, i.e. the invalidation was processed and the
+     * fresh value was stored.
+     */
+    async function waitForFreshValue(
+        client: CacheClient,
+        key: string,
+        value: string,
+        expectedEntries: number,
+    ): Promise<void> {
+        await waitFor(
+            async () =>
+                (await client.get(key)) === value &&
+                (await client.getCacheEntryCount()) === expectedEntries,
+            `${key} was not invalidated and re-cached with value ${value}`,
+        );
+    }
+
+    /**
+     * Two clients with different prefixes and a writer without cache: each client
+     * caches only its own namespace, a write in one namespace invalidates only the
+     * client tracking it, and keys outside the prefix are always served by the server.
+     */
+    async function checkPrefixScopesInvalidations(
+        createClient: CacheClientFactory,
+    ): Promise<void> {
+        const clientA = await createClient(prefixedCache("xxx:"));
+        const clientB = await createClient(prefixedCache("yyy:"));
+        const writer = await createClient(null);
+
+        try {
+            const suffix = `{prefix_scope_${Date.now()}}`;
+            const keyA = `xxx:${suffix}`;
+            const keyB = `yyy:${suffix}`;
+            await writeAndReplicate(writer, keyA, "a1");
+            await writeAndReplicate(writer, keyB, "b1");
+
+            // Each client caches its own namespace: one miss, one hit.
+            expect(await clientA.get(keyA)).toBe("a1");
+            expect(await clientA.get(keyA)).toBe("a1");
+            expect(await clientB.get(keyB)).toBe("b1");
+            expect(await clientB.get(keyB)).toBe("b1");
+            expect(await clientA.getCacheEntryCount()).toBe(1);
+            expect(await clientB.getCacheEntryCount()).toBe(1);
+            expect(await clientA.getCacheTotalLookups()).toBe(2);
+            expect(await clientB.getCacheTotalLookups()).toBe(2);
+            expect(await clientA.getCacheHitRate()).toBe(0.5);
+            expect(await clientB.getCacheHitRate()).toBe(0.5);
+
+            // Keys outside the prefix are served by the server, never cached and
+            // not counted as lookups.
+            expect(await clientA.get(keyB)).toBe("b1");
+            expect(await clientA.get(keyB)).toBe("b1");
+            expect(await clientB.get(keyA)).toBe("a1");
+            expect(await clientB.get(keyA)).toBe("a1");
+            expect(await clientA.getCacheEntryCount()).toBe(1);
+            expect(await clientB.getCacheEntryCount()).toBe(1);
+            expect(await clientA.getCacheTotalLookups()).toBe(2);
+            expect(await clientB.getCacheTotalLookups()).toBe(2);
+
+            // A write in namespace A invalidates client A only.
+            await writeAndReplicate(writer, keyA, "a2");
+            await waitForFreshValue(clientA, keyA, "a2", 1);
+            expect(await clientB.getCacheEntryCount()).toBe(1);
+            expect(await clientB.getCacheTotalLookups()).toBe(2);
+            expect(await clientB.get(keyB)).toBe("b1"); // still a hit
+            expect(await clientB.getCacheTotalLookups()).toBe(3);
+
+            // A write in namespace B invalidates client B only.
+            const lookupsA = await clientA.getCacheTotalLookups();
+            await writeAndReplicate(writer, keyB, "b2");
+            await waitForFreshValue(clientB, keyB, "b2", 1);
+            expect(await clientA.getCacheEntryCount()).toBe(1);
+            expect(await clientA.getCacheTotalLookups()).toBe(lookupsA);
+            expect(await clientA.get(keyA)).toBe("a2"); // still a hit
+            expect(await clientA.getCacheTotalLookups()).toBe(lookupsA + 1);
+
+            // Client A reads the new yyy:* value straight from the server (never
+            // stale) and still does not cache it.
+            expect(await clientA.get(keyB)).toBe("b2");
+            expect(await clientA.getCacheEntryCount()).toBe(1);
+            expect(await clientA.getCacheTotalLookups()).toBe(lookupsA + 1);
+        } finally {
+            clientA.close();
+            clientB.close();
+            writer.close();
+        }
+    }
+
+    /**
+     * A prefixed client never caches keys outside its prefix, for GET and for MGET,
+     * so it can never serve a stale value for a key the server will not invalidate.
+     */
+    async function checkPrefixBypassesCacheOutsidePrefix(
+        createClient: CacheClientFactory,
+    ): Promise<void> {
+        const cached = await createClient(prefixedCache("xxx:"));
+        const writer = await createClient(null);
+
+        try {
+            const suffix = `{prefix_bypass_${Date.now()}}`;
+            const tracked = `xxx:${suffix}`;
+            const untracked = `zzz:${suffix}`;
+            await writeAndReplicate(writer, tracked, "t1");
+            expect(await writer.set(untracked, "u1")).toBe("OK");
+
+            // GET on an untracked key: served by the server, not cached, not counted.
+            expect(await cached.get(untracked)).toBe("u1");
+            expect(await cached.get(untracked)).toBe("u1");
+            expect(await cached.getCacheEntryCount()).toBe(0);
+            expect(await cached.getCacheTotalLookups()).toBe(0);
+
+            // The writer changes it and the prefixed client sees the new value
+            // immediately, without any invalidation involved.
+            expect(await writer.set(untracked, "u2")).toBe("OK");
+            expect(await cached.get(untracked)).toBe("u2");
+
+            // MGET mixing tracked and untracked keys: complete ordered result,
+            // only the tracked key is stored.
+            expect(await cached.mget([tracked, untracked])).toEqual([
+                "t1",
+                "u2",
+            ]);
+            expect(await cached.getCacheEntryCount()).toBe(1);
+            expect(await cached.getCacheTotalLookups()).toBe(1);
+
+            // Second MGET: the tracked key hits, the untracked key is fetched again
+            // and reflects a fresh write.
+            expect(await writer.set(untracked, "u3")).toBe("OK");
+            expect(await cached.mget([untracked, tracked])).toEqual([
+                "u3",
+                "t1",
+            ]);
+            expect(await cached.getCacheEntryCount()).toBe(1);
+            expect(await cached.getCacheTotalLookups()).toBe(2);
+            expect(await cached.getCacheHitRate()).toBe(0.5);
+
+            // The tracked key is still invalidated by the server, and MGET
+            // re-caches the fresh value.
+            await writeAndReplicate(writer, tracked, "t2");
+            await waitFor(
+                async () =>
+                    JSON.stringify(await cached.mget([tracked, untracked])) ===
+                        JSON.stringify(["t2", "u3"]) &&
+                    (await cached.getCacheEntryCount()) === 1,
+                "the tracked MGET key was not invalidated and re-cached",
+            );
+        } finally {
+            cached.close();
+            writer.close();
+        }
+    }
+
+    /**
+     * Two clients created from the same prefixed ClientSideCache share the cache
+     * and both register the prefix with the server.
+     */
+    async function checkSharedPrefixedCache(
+        createClient: CacheClientFactory,
+    ): Promise<void> {
+        const cache = prefixedCache("xxx:");
+        const client1 = await createClient(cache);
+        const client2 = await createClient(cache);
+
+        try {
+            expectPrefixes(await trackingInfo(client1), ["xxx:"]);
+            expectPrefixes(await trackingInfo(client2), ["xxx:"]);
+
+            const key = `xxx:{prefix_shared_${Date.now()}}`;
+            await writeAndReplicate(client1, key, "value");
+            expect(await client1.get(key)).toBe("value"); // miss, populates cache
+
+            expect(await client2.getCacheEntryCount()).toBe(1);
+            expect(await client2.get(key)).toBe("value"); // hit from the shared cache
+
+            expect(await client1.getCacheHitRate()).toBe(0.5);
+            expect(await client2.getCacheHitRate()).toBe(0.5);
+            expect(await client1.getCacheTotalLookups()).toBe(2);
+            expect(await client2.getCacheTotalLookups()).toBe(2);
+
+            // A key outside the prefix is not cached by either client.
+            const outside = `yyy:{prefix_shared_${Date.now()}}`;
+            expect(await client1.set(outside, "value")).toBe("OK");
+            expect(await client1.get(outside)).toBe("value");
+            expect(await client2.get(outside)).toBe("value");
+            expect(await client1.getCacheEntryCount()).toBe(1);
+            expect(await client2.getCacheTotalLookups()).toBe(2);
+        } finally {
+            client1.close();
+            client2.close();
+        }
     }
 
     describe("Standalone Client-side Cache Tests", () => {
@@ -724,6 +1067,64 @@ describe("ClientSideCache", () => {
             },
             TIMEOUT,
         );
+
+        describe("tracking prefix", () => {
+            const createClient: CacheClientFactory = (cache) =>
+                createStandaloneClientWithCache(ProtocolVersion.RESP3, cache);
+
+            it.each([
+                ["string", "xxx:" as GlideString],
+                ["Buffer", Buffer.from("xxx:") as GlideString],
+            ])(
+                "is registered with the server (%s prefix)",
+                async (_, prefix) => {
+                    client = (await createClient(
+                        prefixedCache(prefix),
+                    )) as GlideClient;
+                    expectPrefixes(await trackingInfo(client), ["xxx:"]);
+                },
+                TIMEOUT,
+            );
+
+            it(
+                "without a prefix every key is tracked",
+                async () => {
+                    client = (await createClient(
+                        new ClientSideCache({
+                            maxCacheKb: 1024,
+                            entryTtlMs: 0,
+                            serverAssisted: true,
+                        }),
+                    )) as GlideClient;
+                    expectPrefixes(await trackingInfo(client), [""]);
+                },
+                TIMEOUT,
+            );
+
+            it(
+                "scopes invalidations between clients",
+                async () => {
+                    await checkPrefixScopesInvalidations(createClient);
+                },
+                TIMEOUT,
+            );
+
+            it(
+                "bypasses the cache for keys outside the prefix",
+                async () => {
+                    await checkPrefixBypassesCacheOutsidePrefix(createClient);
+                },
+                TIMEOUT,
+            );
+
+            it(
+                "is shared by clients using the same cache",
+                async () => {
+                    await checkSharedPrefixedCache(createClient);
+                },
+                TIMEOUT,
+            );
+        });
     });
 
     describe("Cluster Client-side Cache Tests", () => {
@@ -1409,5 +1810,73 @@ describe("ClientSideCache", () => {
             },
             TIMEOUT,
         );
+
+        describe("tracking prefix", () => {
+            const createClient: CacheClientFactory = (cache) =>
+                createClusterClientWithCache(ProtocolVersion.RESP3, cache);
+
+            it.each([
+                ["string", "xxx:" as GlideString],
+                ["Buffer", Buffer.from("xxx:") as GlideString],
+            ])(
+                "is registered with every node (%s prefix)",
+                async (_, prefix) => {
+                    client = (await createClient(
+                        prefixedCache(prefix),
+                    )) as GlideClusterClient;
+                    expectPrefixes(await trackingInfo(client), ["xxx:"]);
+
+                    const perNode = (await client.clientTrackingInfo({
+                        route: "allNodes",
+                    })) as Record<string, ClientTrackingInfo>;
+                    const nodes = Object.keys(perNode);
+                    expect(nodes.length).toBeGreaterThan(1);
+
+                    for (const node of nodes) {
+                        expectPrefixes(perNode[node], ["xxx:"]);
+                    }
+                },
+                TIMEOUT,
+            );
+
+            it(
+                "without a prefix every key is tracked",
+                async () => {
+                    client = (await createClient(
+                        new ClientSideCache({
+                            maxCacheKb: 1024,
+                            entryTtlMs: 0,
+                            serverAssisted: true,
+                        }),
+                    )) as GlideClusterClient;
+                    expectPrefixes(await trackingInfo(client), [""]);
+                },
+                TIMEOUT,
+            );
+
+            it(
+                "scopes invalidations between clients",
+                async () => {
+                    await checkPrefixScopesInvalidations(createClient);
+                },
+                TIMEOUT,
+            );
+
+            it(
+                "bypasses the cache for keys outside the prefix",
+                async () => {
+                    await checkPrefixBypassesCacheOutsidePrefix(createClient);
+                },
+                TIMEOUT,
+            );
+
+            it(
+                "is shared by clients using the same cache",
+                async () => {
+                    await checkSharedPrefixedCache(createClient);
+                },
+                TIMEOUT,
+            );
+        });
     });
 });

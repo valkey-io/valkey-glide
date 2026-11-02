@@ -10128,6 +10128,12 @@ export class BaseClient {
                 evictionPolicy: cache.evictionPolicy,
                 enableMetrics: cache.enableMetrics,
                 serverAssisted: cache.serverAssisted,
+                trackingPrefix:
+                    cache.trackingPrefix === undefined
+                        ? undefined
+                        : typeof cache.trackingPrefix === "string"
+                          ? Buffer.from(cache.trackingPrefix, "utf-8")
+                          : cache.trackingPrefix,
             });
         }
 
