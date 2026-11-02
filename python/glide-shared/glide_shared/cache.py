@@ -29,12 +29,12 @@ class EvictionPolicy(Enum):
 @dataclass
 class ClientSideCache:
     """
-    Configuration for client-side caching with TTL-based expiration.
+    Configuration for client-side caching.
 
     This class configures a local cache that stores read command responses
-    on the client side to reduce network round-trips and server load. The cache
-    uses Time-To-Live (TTL) based expiration, where entries are automatically
-    removed after a specified duration.
+    on the client side to reduce network round-trips and server load. Entries
+    expire after a configurable Time-To-Live (TTL) and, with ``server_assisted=True``,
+    are also invalidated as soon as the server reports that the key changed.
 
     Cached entries expire based on TTL. Without ``server_assisted``, server-side key
     changes are not propagated to the cache, so values may become stale before TTL
@@ -51,9 +51,11 @@ class ClientSideCache:
     ``CLIENT TRACKING ON BCAST PREFIX <prefix>`` on every connection (and every
     cluster node), so the server only broadcasts invalidations for keys under that
     prefix and the client only caches those keys. Keys outside the prefix are always
-    fetched from the server, are never cached and never go stale. The prefix is
-    fixed for the lifetime of the connections; clients sharing the same cache must
-    use the same prefix.
+    fetched from the server, are never cached and never go stale. Matching is a
+    byte-wise, case-sensitive starts-with check; a key equal to the prefix is tracked.
+    The prefix is fixed for the lifetime of the client and cannot be changed after
+    connecting; clients sharing the same ``ClientSideCache`` instance must use the
+    same prefix.
 
     Attributes:
         cache_id (str): Identifier of the cache. Clients created with the same
@@ -105,7 +107,7 @@ class ClientSideCache:
         if not self.server_assisted:
             raise ValueError("tracking_prefix requires server_assisted=True")
 
-    def tracking_prefix_bytes(self) -> Optional[bytes]:
+    def _tracking_prefix_bytes(self) -> Optional[bytes]:
         """Returns ``tracking_prefix`` encoded as bytes (str is UTF-8 encoded), or None."""
         if self.tracking_prefix is None:
             return None
@@ -155,9 +157,14 @@ class ClientSideCache:
                 server-assisted mode. When set, GLIDE sends
                 ``CLIENT TRACKING ON BCAST PREFIX <prefix>`` on every connection, so the
                 server only broadcasts invalidations for keys starting with the prefix and
-                the client only caches those keys. Keys outside the prefix are always read
-                from the server and never cached, so they can never be stale. A ``str`` is
-                encoded as UTF-8. The prefix is fixed per connection. Requires
+                the client only caches those keys. Without a prefix the server broadcasts
+                an invalidation for every key written by any client, which does not scale
+                when the cached working set is a small part of the keyspace. Keys outside
+                the prefix are always read from the server and never cached, so they can
+                never be stale; an ``MGET`` mixing tracked and untracked keys still returns
+                the full ordered result and only the tracked keys are stored. Matching is a
+                byte-wise, case-sensitive starts-with check. A ``str`` is encoded as UTF-8.
+                The prefix is fixed for the lifetime of the client. Requires
                 ``server_assisted=True`` and must not be empty; leave it as None to track
                 all keys.
 
@@ -168,6 +175,7 @@ class ClientSideCache:
             ValueError: If ``max_cache_kb`` is not positive, ``entry_ttl_ms`` is negative,
                 ``tracking_prefix`` is empty, or ``tracking_prefix`` is set without
                 ``server_assisted=True``.
+            TypeError: If ``tracking_prefix`` is neither ``str`` nor ``bytes``.
 
         Example:
             Create a basic cache:

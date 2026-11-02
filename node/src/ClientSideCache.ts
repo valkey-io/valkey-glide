@@ -50,11 +50,18 @@ export interface ClientSideCacheConfig {
      * When set, GLIDE sends `CLIENT TRACKING ON BCAST PREFIX <prefix>` on every
      * connection (and every cluster node), so the server only broadcasts
      * invalidations for keys starting with this prefix, and the client only
-     * caches those keys. Keys outside the prefix are always fetched from the
-     * server, are never cached and therefore can never be stale.
+     * caches those keys. Without a prefix the server broadcasts an invalidation
+     * for every key written by any client, which does not scale when the cached
+     * working set is a small part of the keyspace. Keys outside the prefix are
+     * always fetched from the server, are never cached and therefore can never
+     * be stale; an `MGET` mixing tracked and untracked keys still returns the
+     * full ordered result and only the tracked keys are stored. Matching is a
+     * byte-wise, case-sensitive starts-with check; a key equal to the prefix is
+     * tracked.
      *
-     * The prefix is fixed for the lifetime of the connection. All clients that
-     * share the same `ClientSideCache` instance use the same prefix.
+     * The prefix is fixed for the lifetime of the client and cannot be changed
+     * after connecting. All clients that share the same `ClientSideCache`
+     * instance use the same prefix.
      * Requires `serverAssisted: true` (and therefore RESP3) and must not be empty.
      * Defaults to undefined, meaning every key is tracked and cached.
      */

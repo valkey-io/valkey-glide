@@ -1393,7 +1393,7 @@ class BaseClientConfiguration:
         # changed after construction. The core rejects the same cases, but failing
         # before the request is built gives a clearer Python error.
         cache_config._validate_tracking_prefix()
-        tracking_prefix = cache_config.tracking_prefix_bytes()
+        tracking_prefix = cache_config._tracking_prefix_bytes()
         if tracking_prefix is not None:
             cache_request.tracking_prefix = tracking_prefix
 

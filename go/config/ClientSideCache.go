@@ -93,11 +93,16 @@ type ClientSideCache struct {
 	// (including reconnections and every cluster node), so the server only broadcasts
 	// invalidations for keys under the prefix. The local cache stores only keys that start
 	// with the prefix; keys outside it are always fetched from the server, are never cached
-	// (so they can never be stale) and do not count towards the cache metrics.
+	// (so they can never be stale) and do not count towards the cache metrics. An MGET
+	// mixing tracked and untracked keys still returns the full ordered result and only the
+	// tracked keys are stored. Matching is a byte-wise, case-sensitive starts-with check;
+	// a key equal to the prefix is tracked. Without a prefix the server broadcasts an
+	// invalidation for every key written by any client, which does not scale when the
+	// cached working set is a small part of the keyspace.
 	//
 	// Requires ServerAssisted to be enabled (and therefore RESP3). The prefix is fixed for
-	// the lifetime of the client, and clients sharing the same ClientSideCache instance
-	// must use the same prefix.
+	// the lifetime of the client and cannot be changed after connecting; clients sharing
+	// the same ClientSideCache instance must use the same prefix.
 	TrackingPrefix string
 }
 
