@@ -209,7 +209,9 @@ export class ClientSideCache {
 
         if (config.trackingPrefix !== undefined) {
             if (config.trackingPrefix.length === 0) {
-                throw new Error("trackingPrefix must not be empty");
+                throw new Error(
+                    "trackingPrefix must not be empty; omit it to track all keys",
+                );
             }
 
             if (!serverAssisted) {

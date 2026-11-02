@@ -10132,9 +10132,7 @@ export class BaseClient {
                 trackingPrefix:
                     cache.trackingPrefix === undefined
                         ? undefined
-                        : typeof cache.trackingPrefix === "string"
-                          ? Buffer.from(cache.trackingPrefix, "utf-8")
-                          : cache.trackingPrefix,
+                        : Buffer.from(cache.trackingPrefix),
             });
         }
 

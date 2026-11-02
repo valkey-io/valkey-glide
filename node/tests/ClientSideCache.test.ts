@@ -14,9 +14,11 @@ import { ValkeyCluster } from "../../utils/TestUtils.js";
 import {
     ClientSideCache,
     ClientTrackingInfo,
+    Decoder,
     EvictionPolicy,
     GlideClient,
     GlideClusterClient,
+    GlideRecord,
     GlideString,
     ProtocolVersion,
 } from "../build-ts";
@@ -87,13 +89,17 @@ describe("ClientSideCache tracking prefix configuration", () => {
                         serverAssisted: true,
                         trackingPrefix,
                     }),
-            ).toThrow("trackingPrefix must not be empty");
+            ).toThrow(
+                "trackingPrefix must not be empty; omit it to track all keys",
+            );
             expect(() =>
                 ClientSideCache.create(1024, 0, {
                     serverAssisted: true,
                     trackingPrefix,
                 }),
-            ).toThrow("trackingPrefix must not be empty");
+            ).toThrow(
+                "trackingPrefix must not be empty; omit it to track all keys",
+            );
         }
     });
 
@@ -206,26 +212,30 @@ describe("ClientSideCache", () => {
     }
 
     /**
-     * Writes a key and waits until the replica applied the write. Both the primary
-     * and the replica broadcast an invalidation for the key; waiting for replication
-     * makes sure both reach the caching clients before the test reads the key again,
-     * otherwise a read served in between is dropped by the late invalidation.
+     * Waits until the replicas applied the writes issued so far by `writer`. Both
+     * the primary and the replica broadcast an invalidation for a tracked key;
+     * waiting for replication makes sure both reach the caching clients before the
+     * test reads the key again, otherwise a read served in between is dropped by
+     * the late invalidation.
      */
-    async function writeAndReplicate(
-        writer: CacheClient,
-        key: string,
-        value: string,
-    ): Promise<void> {
-        expect(await writer.set(key, value)).toBe("OK");
+    async function awaitReplication(writer: CacheClient): Promise<void> {
         const args = ["WAIT", "1", "1000"];
 
         if (writer instanceof GlideClusterClient) {
-            await writer.customCommand(args, {
-                route: { type: "primarySlotKey", key },
-            });
+            await writer.customCommand(args, { route: "allPrimaries" });
         } else {
             await writer.customCommand(args);
         }
+    }
+
+    /** Writes a key and waits until the replica applied the write. */
+    async function writeAndReplicate(
+        writer: CacheClient,
+        key: GlideString,
+        value: string,
+    ): Promise<void> {
+        expect(await writer.set(key, value)).toBe("OK");
+        await awaitReplication(writer);
     }
 
     /**
@@ -235,7 +245,7 @@ describe("ClientSideCache", () => {
      */
     async function waitForFreshValue(
         client: CacheClient,
-        key: string,
+        key: GlideString,
         value: string,
         expectedEntries: number,
     ): Promise<void> {
@@ -376,6 +386,159 @@ describe("ClientSideCache", () => {
                     (await cached.getCacheEntryCount()) === 1,
                 "the tracked MGET key was not invalidated and re-cached",
             );
+        } finally {
+            cached.close();
+            writer.close();
+        }
+    }
+
+    /**
+     * FLUSHALL still clears the whole cache when a prefix is registered: the server
+     * sends the `null` invalidation to every tracking client regardless of prefixes.
+     */
+    async function checkPrefixFlushClearsCache(
+        createClient: CacheClientFactory,
+    ): Promise<void> {
+        const cached = await createClient(prefixedCache("xxx:"));
+
+        try {
+            const key = `xxx:{prefix_flush_${Date.now()}}`;
+            await writeAndReplicate(cached, key, "v1");
+            await waitForFreshValue(cached, key, "v1", 1);
+
+            expect(await cached.flushall()).toBe("OK");
+            await waitFor(
+                async () => (await cached.getCacheEntryCount()) === 0,
+                "FLUSHALL did not clear the prefixed cache",
+            );
+            expect(await cached.get(key)).toBeNull();
+        } finally {
+            cached.close();
+        }
+    }
+
+    /**
+     * HGETALL and SMEMBERS follow the prefix like GET: tracked hashes and sets are
+     * cached, untracked ones are always served by the server and never counted.
+     */
+    async function checkPrefixCachesHashAndSetInsidePrefixOnly(
+        createClient: CacheClientFactory,
+    ): Promise<void> {
+        const cached = await createClient(prefixedCache("xxx:"));
+        const writer = await createClient(null);
+
+        try {
+            const suffix = `{prefix_types_${Date.now()}}`;
+            const trackedHash = `xxx:${suffix}:h`;
+            const untrackedHash = `zzz:${suffix}:h`;
+            const trackedSet = `xxx:${suffix}:s`;
+            const untrackedSet = `zzz:${suffix}:s`;
+            expect(await writer.hset(trackedHash, { f: "v1" })).toBe(1);
+            expect(await writer.hset(untrackedHash, { f: "v1" })).toBe(1);
+            expect(await writer.sadd(trackedSet, ["m"])).toBe(1);
+            expect(await writer.sadd(untrackedSet, ["m"])).toBe(1);
+            await awaitReplication(writer);
+
+            const hash = [{ field: "f", value: "v1" }];
+            const set = new Set(["m"]);
+
+            // Tracked hash: miss then hit.
+            expect(await cached.hgetall(trackedHash)).toEqual(hash);
+            expect(await cached.hgetall(trackedHash)).toEqual(hash);
+            expect(await cached.getCacheEntryCount()).toBe(1);
+            expect(await cached.getCacheTotalLookups()).toBe(2);
+
+            // Untracked hash: served by the server, not cached, not counted.
+            expect(await cached.hgetall(untrackedHash)).toEqual(hash);
+            expect(await cached.hgetall(untrackedHash)).toEqual(hash);
+            expect(await cached.getCacheEntryCount()).toBe(1);
+            expect(await cached.getCacheTotalLookups()).toBe(2);
+
+            // Tracked set: miss then hit.
+            expect(await cached.smembers(trackedSet)).toEqual(set);
+            expect(await cached.smembers(trackedSet)).toEqual(set);
+            expect(await cached.getCacheEntryCount()).toBe(2);
+            expect(await cached.getCacheTotalLookups()).toBe(4);
+            expect(await cached.getCacheHitRate()).toBe(0.5);
+
+            // Untracked set: served by the server, not cached, not counted.
+            expect(await cached.smembers(untrackedSet)).toEqual(set);
+            expect(await cached.smembers(untrackedSet)).toEqual(set);
+            expect(await cached.getCacheEntryCount()).toBe(2);
+            expect(await cached.getCacheTotalLookups()).toBe(4);
+
+            // Writes to untracked keys are visible immediately (nothing cached).
+            expect(await writer.hset(untrackedHash, { f: "v2" })).toBe(0);
+            expect(await writer.sadd(untrackedSet, ["n"])).toBe(1);
+            expect(await cached.hgetall(untrackedHash)).toEqual([
+                { field: "f", value: "v2" },
+            ]);
+            expect(await cached.smembers(untrackedSet)).toEqual(
+                new Set(["m", "n"]),
+            );
+            expect(await cached.getCacheEntryCount()).toBe(2);
+            expect(await cached.getCacheTotalLookups()).toBe(4);
+
+            // Tracked keys are invalidated by the server and re-cached.
+            expect(await writer.hset(trackedHash, { f: "v2" })).toBe(0);
+            expect(await writer.sadd(trackedSet, ["n"])).toBe(1);
+            await awaitReplication(writer);
+            await waitFor(
+                async () =>
+                    JSON.stringify(await cached.hgetall(trackedHash)) ===
+                        JSON.stringify([{ field: "f", value: "v2" }]) &&
+                    (await cached.smembers(trackedSet)).size === 2 &&
+                    (await cached.getCacheEntryCount()) === 2,
+                "tracked hash and set were not invalidated and re-cached",
+            );
+        } finally {
+            cached.close();
+            writer.close();
+        }
+    }
+
+    /** Raw prefixes reported by CLIENT TRACKINGINFO, decoded as bytes. */
+    async function rawTrackingPrefixes(client: CacheClient): Promise<Buffer[]> {
+        const info = (await client.customCommand(["CLIENT", "TRACKINGINFO"], {
+            decoder: Decoder.Bytes,
+        })) as unknown as GlideRecord<unknown>;
+        const prefixes = info.find((entry) =>
+            (entry.key as Buffer).equals(Buffer.from("prefixes")),
+        );
+        return prefixes?.value as Buffer[];
+    }
+
+    /**
+     * A binary (non UTF-8) prefix is registered byte for byte, and binary keys under
+     * it are cached and invalidated like any other tracked key.
+     */
+    async function checkBinaryPrefix(
+        createClient: CacheClientFactory,
+    ): Promise<void> {
+        const prefix = Buffer.from([0xff, 0x00, 0x3a]);
+        const cached = await createClient(prefixedCache(prefix));
+        const writer = await createClient(null);
+
+        try {
+            expect(await rawTrackingPrefixes(cached)).toEqual([prefix]);
+
+            const suffix = `{prefix_binary_${Date.now()}}`;
+            const tracked = Buffer.concat([prefix, Buffer.from(suffix)]);
+            const untracked = `zzz:${suffix}`;
+            await writeAndReplicate(writer, tracked, "v1");
+            expect(await writer.set(untracked, "u1")).toBe("OK");
+
+            expect(await cached.get(tracked)).toBe("v1");
+            expect(await cached.get(tracked)).toBe("v1");
+            expect(await cached.getCacheEntryCount()).toBe(1);
+            expect(await cached.getCacheTotalLookups()).toBe(2);
+
+            expect(await cached.get(untracked)).toBe("u1");
+            expect(await cached.getCacheEntryCount()).toBe(1);
+            expect(await cached.getCacheTotalLookups()).toBe(2);
+
+            await writeAndReplicate(writer, tracked, "v2");
+            await waitForFreshValue(cached, tracked, "v2", 1);
         } finally {
             cached.close();
             writer.close();
@@ -1121,6 +1284,32 @@ describe("ClientSideCache", () => {
                 "is shared by clients using the same cache",
                 async () => {
                     await checkSharedPrefixedCache(createClient);
+                },
+                TIMEOUT,
+            );
+
+            it(
+                "is cleared by FLUSHALL",
+                async () => {
+                    await checkPrefixFlushClearsCache(createClient);
+                },
+                TIMEOUT,
+            );
+
+            it(
+                "caches hashes and sets only inside the prefix",
+                async () => {
+                    await checkPrefixCachesHashAndSetInsidePrefixOnly(
+                        createClient,
+                    );
+                },
+                TIMEOUT,
+            );
+
+            it(
+                "supports a binary prefix",
+                async () => {
+                    await checkBinaryPrefix(createClient);
                 },
                 TIMEOUT,
             );
@@ -1874,6 +2063,32 @@ describe("ClientSideCache", () => {
                 "is shared by clients using the same cache",
                 async () => {
                     await checkSharedPrefixedCache(createClient);
+                },
+                TIMEOUT,
+            );
+
+            it(
+                "is cleared by FLUSHALL",
+                async () => {
+                    await checkPrefixFlushClearsCache(createClient);
+                },
+                TIMEOUT,
+            );
+
+            it(
+                "caches hashes and sets only inside the prefix",
+                async () => {
+                    await checkPrefixCachesHashAndSetInsidePrefixOnly(
+                        createClient,
+                    );
+                },
+                TIMEOUT,
+            );
+
+            it(
+                "supports a binary prefix",
+                async () => {
+                    await checkBinaryPrefix(createClient);
                 },
                 TIMEOUT,
             );
