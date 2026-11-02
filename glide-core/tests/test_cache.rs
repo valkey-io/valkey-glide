@@ -1902,4 +1902,632 @@ pub(crate) mod test_cache {
             );
         });
     }
+
+    // ==================== Tracking prefix ====================
+
+    fn prefixed_cache_config(
+        cache_id: &str,
+        prefix: &[u8],
+        enable_metrics: bool,
+    ) -> ClientSideCache {
+        ClientSideCache {
+            cache_id: cache_id.to_string().into(),
+            max_cache_kb: 1024,
+            entry_ttl_ms: 0,
+            eviction_policy: None,
+            enable_metrics,
+            server_assisted: true,
+            tracking_prefix: Some(prefix.to_vec().into()),
+            ..Default::default()
+        }
+    }
+
+    async fn set(client: &mut glide_core::client::Client, key: &str, value: &str) {
+        let mut cmd = redis::cmd("SET");
+        cmd.arg(key).arg(value);
+        client.send_command(&mut cmd, None).await.unwrap();
+    }
+
+    async fn get(client: &mut glide_core::client::Client, key: &str) -> Value {
+        let mut cmd = redis::cmd("GET");
+        cmd.arg(key);
+        client.send_command(&mut cmd, None).await.unwrap()
+    }
+
+    fn bulk(value: &str) -> Value {
+        Value::BulkString(value.as_bytes().to_vec().into())
+    }
+
+    fn entry_count(client: &glide_core::client::Client) -> i64 {
+        match client.cache_entry_count().unwrap() {
+            Value::Int(count) => count,
+            other => panic!("unexpected entry count value: {other:?}"),
+        }
+    }
+
+    fn total_lookups(client: &glide_core::client::Client) -> i64 {
+        match client.cache_total_lookups().unwrap() {
+            Value::Int(count) => count,
+            other => panic!("unexpected total lookups value: {other:?}"),
+        }
+    }
+
+    /// Polls `$condition` until it holds or `$timeout` elapses.
+    macro_rules! wait_until {
+        ($timeout:expr, $description:expr, $condition:expr) => {
+            tokio::time::timeout($timeout, async {
+                while !$condition {
+                    tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+                }
+            })
+            .await
+            .unwrap_or_else(|_| panic!("timed out waiting for: {}", $description))
+        };
+    }
+
+    /// Unwraps the error of a client creation attempt (`Client` has no `Debug` impl).
+    fn expect_creation_error(
+        result: Result<glide_core::client::Client, glide_core::client::ConnectionError>,
+        context: &str,
+    ) -> glide_core::client::ConnectionError {
+        match result {
+            Ok(_) => panic!("client creation unexpectedly succeeded: {context}"),
+            Err(err) => err,
+        }
+    }
+
+    /// Returns the (flags, prefixes) reported by `CLIENT TRACKINGINFO` for the client's
+    /// connection. In cluster mode the reply may be a per-node map; every node connection is
+    /// configured identically, so the first node's entry is used.
+    async fn tracking_info(client: &mut glide_core::client::Client) -> (Vec<String>, Vec<Vec<u8>>) {
+        fn as_bytes(value: &Value) -> Vec<u8> {
+            match value {
+                Value::BulkString(bytes) => bytes.to_vec(),
+                Value::SimpleString(text) => text.as_bytes().to_vec(),
+                Value::VerbatimString { text, .. } => text.as_bytes().to_vec(),
+                other => panic!("unexpected string value: {other:?}"),
+            }
+        }
+
+        fn parse(entries: &[(Value, Value)]) -> (Vec<String>, Vec<Vec<u8>>) {
+            let mut flags = Vec::new();
+            let mut prefixes = Vec::new();
+            for (field, value) in entries {
+                match (as_bytes(field).as_slice(), value) {
+                    (b"flags", Value::Array(items) | Value::Set(items)) => {
+                        flags = items
+                            .iter()
+                            .map(|item| String::from_utf8_lossy(&as_bytes(item)).into_owned())
+                            .collect();
+                    }
+                    (b"prefixes", Value::Array(items) | Value::Set(items)) => {
+                        prefixes = items.iter().map(as_bytes).collect();
+                    }
+                    _ => {}
+                }
+            }
+            (flags, prefixes)
+        }
+
+        let mut cmd = redis::cmd("CLIENT");
+        cmd.arg("TRACKINGINFO");
+        let reply = client.send_command(&mut cmd, None).await.unwrap();
+        let Value::Map(entries) = reply else {
+            panic!("unexpected CLIENT TRACKINGINFO reply: {reply:?}");
+        };
+        let is_info_map = entries.iter().any(|(field, _)| as_bytes(field) == b"flags");
+        if is_info_map {
+            return parse(&entries);
+        }
+        // Cluster multi-node reply: { "host:port" => { flags, redirect, prefixes } }
+        let (_, first) = entries.first().expect("at least one node in the reply");
+        let Value::Map(node_entries) = first else {
+            panic!("unexpected per-node CLIENT TRACKINGINFO reply: {first:?}");
+        };
+        parse(node_entries)
+    }
+
+    /// The configured prefix must be registered on the server connection, so the server only
+    /// broadcasts invalidations for keys under that prefix.
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_tracking_prefix_is_registered_with_the_server(
+        #[values(false, true)] use_cluster: bool,
+    ) {
+        block_on_all(async move {
+            let mut test_basics = setup_test_basics(
+                use_cluster,
+                TestConfiguration {
+                    shared_server: true,
+                    protocol: ProtocolVersion::RESP3,
+                    client_side_cache: Some(prefixed_cache_config(
+                        "tracking_prefix_registered",
+                        b"xxx:",
+                        false,
+                    )),
+                    ..Default::default()
+                },
+            )
+            .await;
+
+            let (flags, prefixes) = tracking_info(&mut test_basics.client).await;
+            assert!(flags.iter().any(|flag| flag == "on"), "flags: {flags:?}");
+            assert!(flags.iter().any(|flag| flag == "bcast"), "flags: {flags:?}");
+            assert_eq!(prefixes, vec![b"xxx:".to_vec()]);
+        });
+    }
+
+    /// Without a prefix the server tracks every key (the empty prefix), which is the
+    /// pre-existing behaviour and must not change.
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_server_assisted_without_prefix_tracks_all_keys(
+        #[values(false, true)] use_cluster: bool,
+    ) {
+        block_on_all(async move {
+            let mut test_basics = setup_test_basics(
+                use_cluster,
+                TestConfiguration {
+                    shared_server: true,
+                    protocol: ProtocolVersion::RESP3,
+                    client_side_cache: Some(ClientSideCache {
+                        cache_id: "tracking_no_prefix".to_string().into(),
+                        max_cache_kb: 1024,
+                        entry_ttl_ms: 0,
+                        eviction_policy: None,
+                        enable_metrics: false,
+                        server_assisted: true,
+                        ..Default::default()
+                    }),
+                    ..Default::default()
+                },
+            )
+            .await;
+
+            let (flags, prefixes) = tracking_info(&mut test_basics.client).await;
+            assert!(flags.iter().any(|flag| flag == "bcast"), "flags: {flags:?}");
+            assert_eq!(prefixes, vec![Vec::<u8>::new()], "empty prefix = all keys");
+        });
+    }
+
+    /// Two clients with different prefixes: each one is invalidated only for writes in its own
+    /// namespace, and neither caches keys outside its prefix.
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_tracking_prefix_scopes_invalidations_between_clients(
+        #[values(false, true)] use_cluster: bool,
+    ) {
+        block_on_all(async move {
+            let mut client_a = setup_test_basics(
+                use_cluster,
+                TestConfiguration {
+                    shared_server: true,
+                    protocol: ProtocolVersion::RESP3,
+                    client_side_cache: Some(prefixed_cache_config("scoped_cache_a", b"xxx:", true)),
+                    ..Default::default()
+                },
+            )
+            .await;
+            let mut client_b = setup_test_basics(
+                use_cluster,
+                TestConfiguration {
+                    shared_server: true,
+                    protocol: ProtocolVersion::RESP3,
+                    client_side_cache: Some(prefixed_cache_config("scoped_cache_b", b"yyy:", true)),
+                    ..Default::default()
+                },
+            )
+            .await;
+            let mut writer = setup_test_basics(
+                use_cluster,
+                TestConfiguration {
+                    shared_server: true,
+                    ..Default::default()
+                },
+            )
+            .await;
+
+            let suffix = generate_random_string(8);
+            let key_a = format!("xxx:{suffix}");
+            let key_b = format!("yyy:{suffix}");
+            set(&mut writer.client, &key_a, "a1").await;
+            set(&mut writer.client, &key_b, "b1").await;
+
+            // Each client caches its own namespace.
+            assert_eq!(get(&mut client_a.client, &key_a).await, bulk("a1"));
+            assert_eq!(get(&mut client_a.client, &key_a).await, bulk("a1"));
+            assert_eq!(get(&mut client_b.client, &key_b).await, bulk("b1"));
+            assert_eq!(get(&mut client_b.client, &key_b).await, bulk("b1"));
+            assert_eq!(entry_count(&client_a.client), 1);
+            assert_eq!(entry_count(&client_b.client), 1);
+            assert_eq!(total_lookups(&client_a.client), 2);
+            assert_eq!(total_lookups(&client_b.client), 2);
+
+            // Keys outside the prefix are served from the server and never cached.
+            assert_eq!(get(&mut client_a.client, &key_b).await, bulk("b1"));
+            assert_eq!(get(&mut client_b.client, &key_a).await, bulk("a1"));
+            assert_eq!(
+                entry_count(&client_a.client),
+                1,
+                "client A must not cache yyy:*"
+            );
+            assert_eq!(
+                entry_count(&client_b.client),
+                1,
+                "client B must not cache xxx:*"
+            );
+            assert_eq!(
+                total_lookups(&client_a.client),
+                2,
+                "bypassed keys are not lookups"
+            );
+            assert_eq!(
+                total_lookups(&client_b.client),
+                2,
+                "bypassed keys are not lookups"
+            );
+
+            // A write in namespace A invalidates client A only.
+            set(&mut writer.client, &key_a, "a2").await;
+            wait_until!(
+                std::time::Duration::from_secs(2),
+                "client A to observe the xxx:* invalidation",
+                get(&mut client_a.client, &key_a).await == bulk("a2")
+            );
+            assert_eq!(
+                entry_count(&client_b.client),
+                1,
+                "client B keeps its yyy:* entry"
+            );
+            assert_eq!(get(&mut client_b.client, &key_b).await, bulk("b1"));
+
+            // A write in namespace B invalidates client B only.
+            set(&mut writer.client, &key_b, "b2").await;
+            wait_until!(
+                std::time::Duration::from_secs(2),
+                "client B to observe the yyy:* invalidation",
+                get(&mut client_b.client, &key_b).await == bulk("b2")
+            );
+            assert_eq!(
+                entry_count(&client_a.client),
+                1,
+                "client A keeps its xxx:* entry"
+            );
+            assert_eq!(get(&mut client_a.client, &key_a).await, bulk("a2"));
+
+            // Client A reads the updated yyy:* value straight from the server (never stale),
+            // and still does not cache it.
+            assert_eq!(get(&mut client_a.client, &key_b).await, bulk("b2"));
+            assert_eq!(entry_count(&client_a.client), 1);
+        });
+    }
+
+    /// A prefixed client never caches keys outside its prefix, for GET and for MGET, so it can
+    /// never serve a stale value for a key the server will not invalidate.
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_tracking_prefix_bypasses_cache_for_keys_outside_prefix(
+        #[values(false, true)] use_cluster: bool,
+    ) {
+        block_on_all(async move {
+            let mut cached = setup_test_basics(
+                use_cluster,
+                TestConfiguration {
+                    shared_server: true,
+                    protocol: ProtocolVersion::RESP3,
+                    client_side_cache: Some(prefixed_cache_config("bypass_cache", b"xxx:", true)),
+                    ..Default::default()
+                },
+            )
+            .await;
+            let mut writer = setup_test_basics(
+                use_cluster,
+                TestConfiguration {
+                    shared_server: true,
+                    ..Default::default()
+                },
+            )
+            .await;
+
+            let suffix = generate_random_string(8);
+            let tracked = format!("xxx:{suffix}");
+            let untracked = format!("zzz:{suffix}");
+            set(&mut writer.client, &tracked, "t1").await;
+            set(&mut writer.client, &untracked, "u1").await;
+
+            // GET on an untracked key: served by the server, not cached, not counted.
+            assert_eq!(get(&mut cached.client, &untracked).await, bulk("u1"));
+            assert_eq!(get(&mut cached.client, &untracked).await, bulk("u1"));
+            assert_eq!(entry_count(&cached.client), 0);
+            assert_eq!(total_lookups(&cached.client), 0);
+
+            // The writer changes it and the prefixed client sees the new value immediately,
+            // without any invalidation involved.
+            set(&mut writer.client, &untracked, "u2").await;
+            assert_eq!(get(&mut cached.client, &untracked).await, bulk("u2"));
+
+            // MGET mixing tracked and untracked keys: both values are returned, only the
+            // tracked key is stored.
+            let mut mget = redis::cmd("MGET");
+            mget.arg(&tracked).arg(&untracked);
+            assert_eq!(
+                cached.client.send_command(&mut mget, None).await.unwrap(),
+                Value::Array(vec![bulk("t1"), bulk("u2")])
+            );
+            assert_eq!(entry_count(&cached.client), 1);
+            assert_eq!(
+                total_lookups(&cached.client),
+                1,
+                "one miss for the tracked key"
+            );
+
+            // Second MGET: the tracked key hits, the untracked key is fetched again and reflects
+            // a fresh write.
+            set(&mut writer.client, &untracked, "u3").await;
+            let mut mget = redis::cmd("MGET");
+            mget.arg(&tracked).arg(&untracked);
+            assert_eq!(
+                cached.client.send_command(&mut mget, None).await.unwrap(),
+                Value::Array(vec![bulk("t1"), bulk("u3")])
+            );
+            assert_eq!(entry_count(&cached.client), 1);
+            assert_eq!(
+                total_lookups(&cached.client),
+                2,
+                "one hit for the tracked key"
+            );
+
+            // The tracked key is still invalidated by the server.
+            set(&mut writer.client, &tracked, "t2").await;
+            wait_until!(
+                std::time::Duration::from_secs(2),
+                "the tracked MGET key to be invalidated",
+                {
+                    let mut mget = redis::cmd("MGET");
+                    mget.arg(&tracked).arg(&untracked);
+                    cached.client.send_command(&mut mget, None).await.unwrap()
+                        == Value::Array(vec![bulk("t2"), bulk("u3")])
+                }
+            );
+        });
+    }
+
+    /// A flush still clears the whole cache when a prefix is registered: the server sends the
+    /// `null` invalidation to every tracking client regardless of its prefixes.
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_tracking_prefix_flush_still_clears_cache(#[values(false, true)] use_cluster: bool) {
+        block_on_all(async move {
+            let mut test_basics = setup_test_basics(
+                use_cluster,
+                TestConfiguration {
+                    shared_server: false,
+                    protocol: ProtocolVersion::RESP3,
+                    client_side_cache: Some(prefixed_cache_config("prefix_flush", b"xxx:", true)),
+                    ..Default::default()
+                },
+            )
+            .await;
+
+            let key = format!("xxx:{}", generate_random_string(8));
+            set(&mut test_basics.client, &key, "value").await;
+            assert_eq!(get(&mut test_basics.client, &key).await, bulk("value"));
+            assert_eq!(entry_count(&test_basics.client), 1);
+
+            let mut flushdb = redis::cmd("FLUSHDB");
+            let _ = test_basics.client.send_command(&mut flushdb, None).await;
+
+            wait_until!(
+                std::time::Duration::from_secs(2),
+                "the null invalidation to flush the prefixed cache",
+                entry_count(&test_basics.client) == 0
+            );
+        });
+    }
+
+    /// The prefix is re-registered on reconnection because it is part of the connection setup.
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_tracking_prefix_survives_reconnection() {
+        block_on_all(async move {
+            let mut cached = setup_test_basics(
+                false,
+                TestConfiguration {
+                    shared_server: false,
+                    protocol: ProtocolVersion::RESP3,
+                    client_side_cache: Some(prefixed_cache_config(
+                        "prefix_reconnect",
+                        b"xxx:",
+                        true,
+                    )),
+                    ..Default::default()
+                },
+            )
+            .await;
+            assert!(
+                matches!(cached.server, BackingServer::Standalone(Some(_))),
+                "expected a dedicated standalone server"
+            );
+            let mut killer = create_client(
+                &cached.server,
+                TestConfiguration {
+                    shared_server: true,
+                    ..Default::default()
+                },
+            )
+            .await;
+
+            let (_, prefixes) = tracking_info(&mut cached.client).await;
+            assert_eq!(prefixes, vec![b"xxx:".to_vec()]);
+
+            // Drop every other connection to the server; the cached client must reconnect.
+            let mut kill = redis::cmd("CLIENT");
+            kill.arg("KILL")
+                .arg("TYPE")
+                .arg("normal")
+                .arg("SKIPME")
+                .arg("yes");
+            killer.send_command(&mut kill, None).await.unwrap();
+
+            wait_until!(
+                std::time::Duration::from_secs(5),
+                "the cached client to reconnect",
+                {
+                    let mut ping = redis::cmd("PING");
+                    cached.client.send_command(&mut ping, None).await.is_ok()
+                }
+            );
+
+            let (flags, prefixes) = tracking_info(&mut cached.client).await;
+            assert!(flags.iter().any(|flag| flag == "bcast"), "flags: {flags:?}");
+            assert_eq!(
+                prefixes,
+                vec![b"xxx:".to_vec()],
+                "prefix re-registered after reconnect"
+            );
+
+            // Invalidations keep flowing on the new connection.
+            let key = format!("xxx:{}", generate_random_string(8));
+            set(&mut killer, &key, "v1").await;
+            assert_eq!(get(&mut cached.client, &key).await, bulk("v1"));
+            assert_eq!(get(&mut cached.client, &key).await, bulk("v1"));
+            set(&mut killer, &key, "v2").await;
+            wait_until!(
+                std::time::Duration::from_secs(2),
+                "invalidation after reconnect",
+                get(&mut cached.client, &key).await == bulk("v2")
+            );
+        });
+    }
+
+    /// Configuration errors are reported at client creation, before any connection is opened.
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_tracking_prefix_configuration_errors(#[values(false, true)] use_cluster: bool) {
+        block_on_all(async move {
+            let _server;
+            let addr = if use_cluster {
+                cluster::get_shared_cluster_addresses(false)
+                    .into_iter()
+                    .next()
+                    .expect("cluster address")
+            } else {
+                _server = RedisServer::new(ServerType::Tcp { tls: false });
+                _server.get_client_addr()
+            };
+
+            // Prefix without server-assisted tracking.
+            let configuration = TestConfiguration {
+                shared_server: true,
+                protocol: ProtocolVersion::RESP3,
+                client_side_cache: Some(ClientSideCache {
+                    cache_id: "prefix_without_server_assisted".to_string().into(),
+                    max_cache_kb: 1024,
+                    server_assisted: false,
+                    tracking_prefix: Some(b"xxx:".to_vec().into()),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            };
+            let request = create_connection_request(std::slice::from_ref(&addr), &configuration);
+            let err = expect_creation_error(
+                glide_core::client::Client::new(request.into(), None).await,
+                "a prefix requires server_assisted",
+            );
+            let message = format!("{err:?}");
+            assert!(message.contains("server_assisted"), "{message}");
+
+            // Empty prefix.
+            let configuration = TestConfiguration {
+                shared_server: true,
+                protocol: ProtocolVersion::RESP3,
+                client_side_cache: Some(ClientSideCache {
+                    cache_id: "empty_prefix".to_string().into(),
+                    max_cache_kb: 1024,
+                    server_assisted: true,
+                    tracking_prefix: Some(Vec::new().into()),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            };
+            let request = create_connection_request(std::slice::from_ref(&addr), &configuration);
+            let err = expect_creation_error(
+                glide_core::client::Client::new(request.into(), None).await,
+                "an empty prefix is rejected",
+            );
+            let message = format!("{err:?}");
+            assert!(message.contains("must not be empty"), "{message}");
+        });
+    }
+
+    /// Two clients may share a cache id only when they track the same prefix.
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_shared_cache_id_requires_same_tracking_prefix(
+        #[values(false, true)] use_cluster: bool,
+    ) {
+        block_on_all(async move {
+            let cache_id = format!("shared_prefixed_{}", generate_random_string(6));
+            let mut first = setup_test_basics(
+                use_cluster,
+                TestConfiguration {
+                    shared_server: true,
+                    protocol: ProtocolVersion::RESP3,
+                    client_side_cache: Some(prefixed_cache_config(&cache_id, b"xxx:", true)),
+                    ..Default::default()
+                },
+            )
+            .await;
+
+            let addr = if use_cluster {
+                cluster::get_shared_cluster_addresses(false)
+                    .into_iter()
+                    .next()
+                    .expect("cluster address")
+            } else {
+                get_shared_server_address(false)
+            };
+
+            // Same id, different prefix: rejected before connecting.
+            let configuration = TestConfiguration {
+                shared_server: true,
+                protocol: ProtocolVersion::RESP3,
+                client_side_cache: Some(prefixed_cache_config(&cache_id, b"yyy:", true)),
+                ..Default::default()
+            };
+            let request = create_connection_request(std::slice::from_ref(&addr), &configuration);
+            let err = expect_creation_error(
+                glide_core::client::Client::new(request.into(), None).await,
+                "a different prefix cannot attach to the same cache id",
+            );
+            let message = format!("{err:?}");
+            assert!(message.contains("different tracking prefix"), "{message}");
+
+            // Same id, same prefix: shares the cache.
+            let configuration = TestConfiguration {
+                shared_server: true,
+                protocol: ProtocolVersion::RESP3,
+                client_side_cache: Some(prefixed_cache_config(&cache_id, b"xxx:", true)),
+                ..Default::default()
+            };
+            let request = create_connection_request(std::slice::from_ref(&addr), &configuration);
+            let second = glide_core::client::Client::new(request.into(), None)
+                .await
+                .expect("same prefix shares the cache");
+
+            let key = format!("xxx:{}", generate_random_string(8));
+            set(&mut first.client, &key, "shared").await;
+            assert_eq!(get(&mut first.client, &key).await, bulk("shared"));
+            assert_eq!(entry_count(&first.client), 1);
+            assert_eq!(entry_count(&second), 1, "both clients see the same cache");
+        });
+    }
 }

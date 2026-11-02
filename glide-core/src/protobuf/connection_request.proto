@@ -122,6 +122,10 @@ message ClientSideCache {
     optional EvictionPolicy eviction_policy = 4;
     bool enable_metrics = 5;
     bool server_assisted = 6;
+    // Key prefix registered with `CLIENT TRACKING ON BCAST PREFIX <prefix>`.
+    // Only keys starting with this prefix are tracked by the server and cached locally.
+    // Requires `server_assisted = true`. Must not be empty when set. Unset = all keys.
+    optional bytes tracking_prefix = 7;
 }
 
 enum EvictionPolicy {

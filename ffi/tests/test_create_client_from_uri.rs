@@ -1402,6 +1402,174 @@ fn test_create_client_from_uri_invalid_eviction_policy() {
 }
 
 #[test]
+fn test_create_client_from_uri_with_server_assisted_cache_and_tracking_prefix() {
+    let server = Server::new();
+    let uri = CString::new(format!("redis://127.0.0.1:{}", server.port)).unwrap();
+    let options = CString::new(
+        r#"{
+        "protocol": "RESP3",
+        "client_side_cache": {
+            "max_cache_kb": 1024,
+            "entry_ttl_ms": 0,
+            "server_assisted": true,
+            "tracking_prefix": "user:"
+        }
+    }"#,
+    )
+    .unwrap();
+
+    let client_type = Box::into_raw(Box::new(ClientType::SyncClient));
+
+    let response = unsafe {
+        create_client_from_uri(
+            uri.as_ptr(),
+            options.as_ptr(),
+            client_type,
+            null_pubsub_callback(),
+        )
+    };
+
+    assert!(!response.is_null());
+    let conn_response = unsafe { &*response };
+
+    if conn_response.connection_error_message.is_null() {
+        assert!(!conn_response.conn_ptr.is_null());
+        unsafe {
+            close_client(conn_response.conn_ptr);
+            free_connection_response(response as *mut ConnectionResponse);
+            drop(Box::from_raw(client_type));
+        }
+    } else {
+        let error = parse_error_msg(conn_response.connection_error_message);
+        panic!("Failed to create client with server_assisted cache and tracking_prefix: {error}");
+    }
+}
+
+/// Runs `create_client_from_uri` with the given JSON options and returns the error message.
+fn client_side_cache_error(options_json: &str) -> String {
+    let server = Server::new();
+    let uri = CString::new(format!("redis://127.0.0.1:{}", server.port)).unwrap();
+    let options = CString::new(options_json).unwrap();
+    let client_type = Box::into_raw(Box::new(ClientType::SyncClient));
+
+    let response = unsafe {
+        create_client_from_uri(
+            uri.as_ptr(),
+            options.as_ptr(),
+            client_type,
+            null_pubsub_callback(),
+        )
+    };
+
+    assert!(!response.is_null());
+    let conn_response = unsafe { &*response };
+    assert!(
+        !conn_response.connection_error_message.is_null(),
+        "expected client creation to fail for options: {options_json}"
+    );
+    assert!(conn_response.conn_ptr.is_null());
+    let error = parse_error_msg(conn_response.connection_error_message);
+
+    unsafe {
+        free_connection_response(response as *mut ConnectionResponse);
+        drop(Box::from_raw(client_type));
+    }
+    error
+}
+
+#[test]
+fn test_create_client_from_uri_tracking_prefix_requires_server_assisted() {
+    let error = client_side_cache_error(
+        r#"{
+        "protocol": "RESP3",
+        "client_side_cache": {
+            "max_cache_kb": 1024,
+            "entry_ttl_ms": 0,
+            "tracking_prefix": "user:"
+        }
+    }"#,
+    );
+    assert!(
+        error.contains("tracking_prefix requires server_assisted"),
+        "expected server_assisted error, got: {error}"
+    );
+}
+
+#[test]
+fn test_create_client_from_uri_tracking_prefix_must_not_be_empty() {
+    let error = client_side_cache_error(
+        r#"{
+        "protocol": "RESP3",
+        "client_side_cache": {
+            "max_cache_kb": 1024,
+            "entry_ttl_ms": 0,
+            "server_assisted": true,
+            "tracking_prefix": ""
+        }
+    }"#,
+    );
+    assert!(
+        error.contains("tracking_prefix must not be empty"),
+        "expected empty prefix error, got: {error}"
+    );
+}
+
+#[test]
+fn test_create_client_from_uri_tracking_prefix_must_be_a_string() {
+    let error = client_side_cache_error(
+        r#"{
+        "protocol": "RESP3",
+        "client_side_cache": {
+            "max_cache_kb": 1024,
+            "entry_ttl_ms": 0,
+            "server_assisted": true,
+            "tracking_prefix": 42
+        }
+    }"#,
+    );
+    assert!(
+        error.contains("tracking_prefix must be a string"),
+        "expected type error, got: {error}"
+    );
+}
+
+#[test]
+fn test_create_client_from_uri_server_assisted_must_be_a_boolean() {
+    let error = client_side_cache_error(
+        r#"{
+        "protocol": "RESP3",
+        "client_side_cache": {
+            "max_cache_kb": 1024,
+            "entry_ttl_ms": 0,
+            "server_assisted": "yes"
+        }
+    }"#,
+    );
+    assert!(
+        error.contains("server_assisted must be a boolean"),
+        "expected type error, got: {error}"
+    );
+}
+
+#[test]
+fn test_create_client_from_uri_server_assisted_requires_resp3() {
+    let error = client_side_cache_error(
+        r#"{
+        "protocol": "RESP2",
+        "client_side_cache": {
+            "max_cache_kb": 1024,
+            "entry_ttl_ms": 0,
+            "server_assisted": true
+        }
+    }"#,
+    );
+    assert!(
+        error.contains("RESP3"),
+        "expected RESP3 requirement error, got: {error}"
+    );
+}
+
+#[test]
 fn test_create_client_from_uri_client_side_cache_missing_max_cache_kb() {
     let server = Server::new();
     let uri = CString::new(format!("redis://127.0.0.1:{}", server.port)).unwrap();

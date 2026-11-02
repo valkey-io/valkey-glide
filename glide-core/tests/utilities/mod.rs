@@ -1271,6 +1271,9 @@ pub fn is_key_cached(
     key: &[u8],
     cache_key_type: redis::cache::glide_cache::CachedKeyType,
 ) -> bool {
-    let cache = redis::cache::get_or_create_cache(cache_id, 1000, 0, None, true);
+    // Only caches created without a tracking prefix can be inspected through this helper: the
+    // registry rejects attaching to an existing cache with a different prefix.
+    let cache = redis::cache::get_or_create_cache(cache_id, 1000, 0, None, true, None)
+        .expect("cache registered without a tracking prefix");
     cache.get(key, cache_key_type).is_some()
 }

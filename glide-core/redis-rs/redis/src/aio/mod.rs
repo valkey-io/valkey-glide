@@ -232,25 +232,34 @@ where
                 "server_assisted_cache requires RESP3 protocol",
             )));
         }
-        match cmd("CLIENT")
-            .arg("TRACKING")
-            .arg("ON")
-            .arg("BCAST")
-            .query_async(con)
-            .await
-        {
+        // Broadcasting mode: the server pushes invalidations for every modified key, or only
+        // for keys matching `PREFIX` when one is configured. The prefix is re-registered on
+        // every (re)connection because this setup runs for each new connection.
+        let mut tracking = cmd("CLIENT");
+        tracking.arg("TRACKING").arg("ON").arg("BCAST");
+        if let Some(prefix) = &connection_info.tracking_prefix {
+            tracking.arg("PREFIX").arg(prefix.as_slice());
+        }
+        match tracking.query_async(con).await {
             Ok(Value::Okay) => {}
             Err(e) => {
                 return Err(RedisError::from((
                     ErrorKind::ClientError,
                     "Failed to enable server-assisted client tracking",
-                    e.to_string(),
+                    format!(
+                        "prefix={:?}: {e}",
+                        connection_info
+                            .tracking_prefix
+                            .as_deref()
+                            .map(String::from_utf8_lossy)
+                    ),
                 )));
             }
-            _ => {
+            other => {
                 return Err(RedisError::from((
                     ErrorKind::ClientError,
                     "Unexpected response from CLIENT TRACKING ON BCAST",
+                    format!("{other:?}"),
                 )));
             }
         }

@@ -241,7 +241,11 @@ impl StandaloneClient {
         }
 
         let valkey_connection_info =
-            get_valkey_connection_info(&connection_request, iam_token_manager).await;
+            get_valkey_connection_info(&connection_request, iam_token_manager)
+                .await
+                .map_err(|err| {
+                    StandaloneClientConnectionError::FailedConnection(vec![(None, err)])
+                })?;
         let retry_strategy = match connection_request.connection_retry_strategy {
             Some(strategy) => RetryStrategy::try_new(
                 strategy.exponent_base,
