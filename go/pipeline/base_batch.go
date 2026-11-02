@@ -7234,7 +7234,7 @@ func (b *BaseBatch[T]) FlushDBWithOptions(mode options.FlushMode) *T {
 //
 // Command Response:
 //
-// A piece of generative computer art of that specific valkey version along with the Valkey version.
+// A piece of generative computer art of that specific Valkey version along with the Valkey version.
 //
 // [valkey.io]: https://valkey.io/commands/lolwut/
 func (b *BaseBatch[T]) Lolwut() *T {
@@ -7251,7 +7251,7 @@ func (b *BaseBatch[T]) Lolwut() *T {
 //
 // Command Response:
 //
-// A piece of generative computer art of that specific valkey version along with the Valkey version.
+// A piece of generative computer art of that specific Valkey version along with the Valkey version.
 //
 // [valkey.io]: https://valkey.io/commands/lolwut/
 func (b *BaseBatch[T]) LolwutWithOptions(opts options.LolwutOptions) *T {
