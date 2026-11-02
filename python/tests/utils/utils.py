@@ -433,6 +433,97 @@ def sync_wait_for(
     raise TimeoutError(failure)
 
 
+# Client-side cache helpers
+# -------------------------
+#
+# Server-assisted invalidations for a write arrive on every node connection of a
+# client: the primary sends one when the key is written and each replica sends
+# another when it applies the replicated write. A late duplicate cancels a cache
+# fill that is still in flight, so the first read right after a write may not be
+# stored. Read a freshly written key with ``read_until_cached`` and only assert on
+# cached entries of keys that have not been written since.
+
+
+def cache_hits(client) -> int:
+    """Returns the number of cache hits recorded by the client's cache metrics."""
+    return round(client.get_cache_hit_rate() * client.get_cache_total_lookups())
+
+
+async def read_until_cached(
+    client: TGlideClient, read: Callable[[], Awaitable[Any]], expected: Any
+) -> None:
+    """Repeats ``read`` until its (tracked, not yet cached) key is stored in the cache.
+
+    ``read`` must return ``expected`` every time; it is retried only when the
+    cache entry count did not grow, which means the fill was cancelled.
+    """
+
+    async def stored() -> bool:
+        before = client.get_cache_entry_count()
+        assert await read() == expected
+        return client.get_cache_entry_count() == before + 1
+
+    await wait_for(stored, "the read value was not stored in the cache")
+
+
+def sync_read_until_cached(
+    client: TSyncGlideClient, read: Callable[[], Any], expected: Any
+) -> None:
+    """Sync twin of ``read_until_cached``."""
+
+    def stored() -> bool:
+        before = client.get_cache_entry_count()
+        assert read() == expected
+        return client.get_cache_entry_count() == before + 1
+
+    sync_wait_for(stored, "the read value was not stored in the cache")
+
+
+async def assert_cache_hit(
+    client: TGlideClient, read: Callable[[], Awaitable[Any]], expected: Any
+) -> None:
+    """Asserts that ``read`` returns ``expected`` and is served by the cache."""
+    hits = cache_hits(client)
+    lookups = client.get_cache_total_lookups()
+    assert await read() == expected
+    assert cache_hits(client) == hits + 1, "expected a cache hit"
+    assert client.get_cache_total_lookups() == lookups + 1
+
+
+def sync_assert_cache_hit(
+    client: TSyncGlideClient, read: Callable[[], Any], expected: Any
+) -> None:
+    """Sync twin of ``assert_cache_hit``."""
+    hits = cache_hits(client)
+    lookups = client.get_cache_total_lookups()
+    assert read() == expected
+    assert cache_hits(client) == hits + 1, "expected a cache hit"
+    assert client.get_cache_total_lookups() == lookups + 1
+
+
+async def assert_cache_bypassed(
+    client: TGlideClient, read: Callable[[], Awaitable[Any]], expected: Any
+) -> None:
+    """Asserts that ``read`` returns ``expected`` without touching the cache.
+
+    A key outside the tracking prefix is neither a hit nor a miss, and a value is
+    only stored by a fill that a miss started, so an unchanged lookup count proves
+    the read bypassed the cache.
+    """
+    lookups = client.get_cache_total_lookups()
+    assert await read() == expected
+    assert client.get_cache_total_lookups() == lookups, "bypassed keys are not lookups"
+
+
+def sync_assert_cache_bypassed(
+    client: TSyncGlideClient, read: Callable[[], Any], expected: Any
+) -> None:
+    """Sync twin of ``assert_cache_bypassed``."""
+    lookups = client.get_cache_total_lookups()
+    assert read() == expected
+    assert client.get_cache_total_lookups() == lookups, "bypassed keys are not lookups"
+
+
 # While a script or function runs, the server does not read other clients'
 # commands until busy-reply-threshold (default 5000 ms) elapses, so a kill or
 # stats poll against a running script cannot complete sooner than that.
@@ -2455,14 +2546,20 @@ def build_client_side_cache(**kwargs) -> ClientSideCache:
 # --------------
 
 
-def assert_client_tracking_info(info, on: bool) -> None:
-    """Assert that a ClientTrackingInfo reflects expected tracking state."""
+def assert_client_tracking_info(info, on: bool, prefix: str = "") -> None:
+    """Assert that a ClientTrackingInfo reflects expected tracking state.
+
+    Args:
+        info: The ``ClientTrackingInfo`` to check.
+        on: Whether server-assisted tracking is expected to be enabled.
+        prefix: The single prefix expected when ``on`` is True. The empty string
+            (default) is what the server reports when every key is tracked.
+    """
     if on:
         assert "on" in info.flags
         assert "bcast" in info.flags
         assert info.redirect == 0  # tracking enabled but no redirection
-        assert len(info.prefixes) == 1
-        assert "" in info.prefixes
+        assert info.prefixes == {prefix}
     else:
         assert "off" in info.flags
         assert info.redirect == -1  # tracking disabled
