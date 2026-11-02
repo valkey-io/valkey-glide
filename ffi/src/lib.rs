@@ -4210,23 +4210,13 @@ fn apply_json_options(
                 .ok_or_else(|| "client_side_cache.server_assisted must be a boolean".to_string())?;
         }
 
-        // tracking_prefix (optional; requires server_assisted, must not be empty)
+        // tracking_prefix (optional). Only the JSON type is checked here; the semantic rules
+        // (requires server_assisted, must not be empty) are enforced once, by the core, when
+        // the client is created, and surface as a configuration error.
         if let Some(prefix) = cache_obj.get("tracking_prefix") {
             let prefix = prefix
                 .as_str()
                 .ok_or_else(|| "client_side_cache.tracking_prefix must be a string".to_string())?;
-            if prefix.is_empty() {
-                return Err(
-                    "client_side_cache.tracking_prefix must not be empty; omit it to track all keys"
-                        .to_string(),
-                );
-            }
-            if !config.server_assisted {
-                return Err(
-                    "client_side_cache.tracking_prefix requires server_assisted to be true"
-                        .to_string(),
-                );
-            }
             config.tracking_prefix = Some(prefix.as_bytes().to_vec().into());
         }
 

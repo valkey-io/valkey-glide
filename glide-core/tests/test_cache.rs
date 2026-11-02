@@ -1948,10 +1948,9 @@ pub(crate) mod test_cache {
                 SlotAddr::Master,
             )));
             let acked = client.send_command(&mut wait, Some(route)).await.unwrap();
-            assert_eq!(
-                acked,
-                Value::Int(1),
-                "replica did not acknowledge the write"
+            assert!(
+                matches!(acked, Value::Int(replicas) if replicas >= 1),
+                "no replica acknowledged the write: {acked:?}"
             );
         }
     }
@@ -2005,8 +2004,8 @@ pub(crate) mod test_cache {
     }
 
     /// Returns the (flags, prefixes) reported by `CLIENT TRACKINGINFO` for the client's
-    /// connection. In cluster mode the reply may be a per-node map; every node connection is
-    /// configured identically, so the first node's entry is used.
+    /// connection. In cluster mode the reply is a per-node map; every node connection must
+    /// report the same tracking state, which is asserted before returning it.
     async fn tracking_info(client: &mut glide_core::client::Client) -> (Vec<String>, Vec<Vec<u8>>) {
         fn as_bytes(value: &Value) -> Vec<u8> {
             match value {
@@ -2048,11 +2047,27 @@ pub(crate) mod test_cache {
             return parse(&entries);
         }
         // Cluster multi-node reply: { "host:port" => { flags, redirect, prefixes } }
-        let (_, first) = entries.first().expect("at least one node in the reply");
-        let Value::Map(node_entries) = first else {
-            panic!("unexpected per-node CLIENT TRACKINGINFO reply: {first:?}");
-        };
-        parse(node_entries)
+        let mut per_node = entries.iter().map(|(node, info)| {
+            let Value::Map(node_entries) = info else {
+                panic!("unexpected per-node CLIENT TRACKINGINFO reply: {info:?}");
+            };
+            let (mut flags, prefixes) = parse(node_entries);
+            flags.sort();
+            (
+                String::from_utf8_lossy(&as_bytes(node)).into_owned(),
+                flags,
+                prefixes,
+            )
+        });
+        let (first_node, flags, prefixes) = per_node.next().expect("at least one node");
+        for (node, node_flags, node_prefixes) in per_node {
+            assert_eq!(
+                (&node_flags, &node_prefixes),
+                (&flags, &prefixes),
+                "node {node} reports a different tracking state than {first_node}"
+            );
+        }
+        (flags, prefixes)
     }
 
     /// The configured prefix must be registered on the server connection, so the server only
@@ -2309,6 +2324,83 @@ pub(crate) mod test_cache {
                 "one hit for the tracked key"
             );
 
+            // HGETALL and SMEMBERS follow the same rule: tracked hash/set cached, untracked
+            // ones served by the server without touching the cache or its metrics.
+            let entries_before = entry_count(&cached.client);
+            let lookups_before = total_lookups(&cached.client);
+            for (command, create, tracked_key, untracked_key) in [
+                (
+                    "HGETALL",
+                    "HSET",
+                    format!("xxx:h{suffix}"),
+                    format!("zzz:h{suffix}"),
+                ),
+                (
+                    "SMEMBERS",
+                    "SADD",
+                    format!("xxx:s{suffix}"),
+                    format!("zzz:s{suffix}"),
+                ),
+            ] {
+                for key in [&tracked_key, &untracked_key] {
+                    let mut create_cmd = redis::cmd(create);
+                    create_cmd.arg(key).arg("f");
+                    if create == "HSET" {
+                        create_cmd.arg("v");
+                    }
+                    writer
+                        .client
+                        .send_command(&mut create_cmd, None)
+                        .await
+                        .unwrap();
+                }
+                if use_cluster {
+                    // Let the replicas emit their invalidations before reading (see `set`).
+                    for key in [&tracked_key, &untracked_key] {
+                        set(&mut writer.client, &format!("{key}:barrier"), "x", true).await;
+                    }
+                }
+                for _ in 0..2 {
+                    let mut read = redis::cmd(command);
+                    read.arg(&untracked_key);
+                    cached.client.send_command(&mut read, None).await.unwrap();
+                }
+                assert_eq!(
+                    entry_count(&cached.client),
+                    entries_before,
+                    "{command} on an untracked key must not be cached"
+                );
+                assert_eq!(
+                    total_lookups(&cached.client),
+                    lookups_before,
+                    "{command} on an untracked key is not a lookup"
+                );
+            }
+            // Tracked hash and set are cached: each read adds one entry and counts as a lookup.
+            for (index, (command, key)) in [
+                ("HGETALL", format!("xxx:h{suffix}")),
+                ("SMEMBERS", format!("xxx:s{suffix}")),
+            ]
+            .into_iter()
+            .enumerate()
+            {
+                let expected_entries = entries_before + index as i64 + 1;
+                wait_until!(
+                    std::time::Duration::from_secs(5),
+                    "the tracked hash/set to be cached",
+                    {
+                        let mut read = redis::cmd(command);
+                        read.arg(&key);
+                        cached.client.send_command(&mut read, None).await.unwrap();
+                        entry_count(&cached.client) == expected_entries
+                    }
+                );
+            }
+            assert!(
+                total_lookups(&cached.client) >= lookups_before + 2,
+                "tracked hash/set reads are lookups"
+            );
+
             // The tracked key is still invalidated by the server.
             set(&mut writer.client, &tracked, "t2", use_cluster).await;
             wait_until!(
@@ -2348,7 +2440,11 @@ pub(crate) mod test_cache {
             assert_eq!(entry_count(&test_basics.client), 1);
 
             let mut flushdb = redis::cmd("FLUSHDB");
-            let _ = test_basics.client.send_command(&mut flushdb, None).await;
+            test_basics
+                .client
+                .send_command(&mut flushdb, None)
+                .await
+                .expect("FLUSHDB");
 
             wait_until!(
                 std::time::Duration::from_secs(2),
@@ -2359,13 +2455,19 @@ pub(crate) mod test_cache {
     }
 
     /// The prefix is re-registered on reconnection because it is part of the connection setup.
+    ///
+    /// Standalone only: killing every connection of a cluster client exercises the cluster
+    /// topology-recovery machinery (slow, with its own tests) rather than the tracking setup,
+    /// which is identical for every node connection and asserted on all nodes by
+    /// `test_tracking_prefix_is_registered_with_the_server`.
     #[rstest]
     #[serial_test::serial]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
     fn test_tracking_prefix_survives_reconnection() {
         block_on_all(async move {
+            let use_cluster = false;
             let mut cached = setup_test_basics(
-                false,
+                use_cluster,
                 TestConfiguration {
                     shared_server: false,
                     protocol: ProtocolVersion::RESP3,
@@ -2379,8 +2481,11 @@ pub(crate) mod test_cache {
             )
             .await;
             assert!(
-                matches!(cached.server, BackingServer::Standalone(Some(_))),
-                "expected a dedicated standalone server"
+                matches!(
+                    cached.server,
+                    BackingServer::Standalone(Some(_)) | BackingServer::Cluster(Some(_))
+                ),
+                "expected a dedicated server"
             );
             let mut killer = create_client(
                 &cached.server,
@@ -2394,14 +2499,18 @@ pub(crate) mod test_cache {
             let (_, prefixes) = tracking_info(&mut cached.client).await;
             assert_eq!(prefixes, vec![b"xxx:".to_vec()]);
 
-            // Drop every other connection to the server; the cached client must reconnect.
+            // Drop every other connection on every node; the cached client must reconnect.
             let mut kill = redis::cmd("CLIENT");
             kill.arg("KILL")
                 .arg("TYPE")
                 .arg("normal")
                 .arg("SKIPME")
                 .arg("yes");
-            killer.send_command(&mut kill, None).await.unwrap();
+            let routing = use_cluster.then_some(redis::cluster_routing::RoutingInfo::MultiNode((
+                redis::cluster_routing::MultipleNodeRoutingInfo::AllNodes,
+                None,
+            )));
+            killer.send_command(&mut kill, routing).await.unwrap();
 
             wait_until!(
                 std::time::Duration::from_secs(5),
@@ -2420,12 +2529,19 @@ pub(crate) mod test_cache {
                 "prefix re-registered after reconnect"
             );
 
-            // Invalidations keep flowing on the new connection.
+            // Invalidations keep flowing on the new connections. Right after a mass
+            // disconnect the cluster client may still be refreshing its topology, so give
+            // the first read a moment to be routed to the slot owner.
             let key = format!("xxx:{}", generate_random_string(8));
-            set(&mut killer, &key, "v1", false).await;
+            set(&mut killer, &key, "v1", use_cluster).await;
+            wait_until!(
+                std::time::Duration::from_secs(5),
+                "the reconnected client to read the new key",
+                get(&mut cached.client, &key).await == bulk("v1")
+            );
             assert_eq!(get(&mut cached.client, &key).await, bulk("v1"));
-            assert_eq!(get(&mut cached.client, &key).await, bulk("v1"));
-            set(&mut killer, &key, "v2", false).await;
+            assert_eq!(entry_count(&cached.client), 1);
+            set(&mut killer, &key, "v2", use_cluster).await;
             wait_until!(
                 std::time::Duration::from_secs(2),
                 "invalidation after reconnect",
@@ -2492,6 +2608,137 @@ pub(crate) mod test_cache {
             );
             let message = format!("{err:?}");
             assert!(message.contains("must not be empty"), "{message}");
+        });
+    }
+
+    /// Prefixes are raw bytes: a non-UTF-8 prefix is registered verbatim, scopes the cache and
+    /// still receives invalidations.
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_tracking_prefix_binary_bytes(#[values(false, true)] use_cluster: bool) {
+        block_on_all(async move {
+            let prefix: &[u8] = &[0xff, 0x00, b':'];
+            let mut cached = setup_test_basics(
+                use_cluster,
+                TestConfiguration {
+                    shared_server: true,
+                    protocol: ProtocolVersion::RESP3,
+                    client_side_cache: Some(prefixed_cache_config("binary_prefix", prefix, true)),
+                    ..Default::default()
+                },
+            )
+            .await;
+            let mut writer = setup_test_basics(
+                use_cluster,
+                TestConfiguration {
+                    shared_server: true,
+                    ..Default::default()
+                },
+            )
+            .await;
+
+            let (_, prefixes) = tracking_info(&mut cached.client).await;
+            assert_eq!(
+                prefixes,
+                vec![prefix.to_vec()],
+                "prefix registered as raw bytes"
+            );
+
+            // The key is not valid UTF-8, so the commands are built from the raw bytes.
+            let mut raw_key = prefix.to_vec();
+            raw_key.extend_from_slice(generate_random_string(8).as_bytes());
+
+            let mut set_cmd = redis::cmd("SET");
+            set_cmd.arg(raw_key.as_slice()).arg("v1");
+            writer
+                .client
+                .send_command(&mut set_cmd, None)
+                .await
+                .unwrap();
+            if use_cluster {
+                use redis::cluster_routing::{Route, RoutingInfo, SingleNodeRoutingInfo, SlotAddr};
+                let mut wait = redis::cmd("WAIT");
+                wait.arg(1).arg(5000);
+                let route = RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(
+                    Route::new(get_slot(&raw_key), SlotAddr::Master),
+                ));
+                writer
+                    .client
+                    .send_command(&mut wait, Some(route))
+                    .await
+                    .unwrap();
+            }
+
+            let mut get_cmd = redis::cmd("GET");
+            get_cmd.arg(raw_key.as_slice());
+            assert_eq!(
+                cached
+                    .client
+                    .send_command(&mut get_cmd, None)
+                    .await
+                    .unwrap(),
+                bulk("v1")
+            );
+            assert_eq!(
+                cached
+                    .client
+                    .send_command(&mut get_cmd, None)
+                    .await
+                    .unwrap(),
+                bulk("v1")
+            );
+            assert_eq!(
+                entry_count(&cached.client),
+                1,
+                "binary-prefixed key is cached"
+            );
+
+            // A key with a different first byte is outside the prefix.
+            let mut other = vec![0xfe, 0x00, b':'];
+            other.extend_from_slice(b"k");
+            let mut set_other = redis::cmd("SET");
+            set_other.arg(other.as_slice()).arg("o");
+            writer
+                .client
+                .send_command(&mut set_other, None)
+                .await
+                .unwrap();
+            let mut get_other = redis::cmd("GET");
+            get_other.arg(other.as_slice());
+            cached
+                .client
+                .send_command(&mut get_other, None)
+                .await
+                .unwrap();
+            assert_eq!(
+                entry_count(&cached.client),
+                1,
+                "key outside the binary prefix is not cached"
+            );
+
+            // Invalidation still reaches the binary-prefixed key.
+            let mut set_cmd = redis::cmd("SET");
+            set_cmd.arg(raw_key.as_slice()).arg("v2");
+            writer
+                .client
+                .send_command(&mut set_cmd, None)
+                .await
+                .unwrap();
+            wait_until!(
+                std::time::Duration::from_secs(2),
+                "the binary-prefixed key to be invalidated",
+                {
+                    let mut get_cmd = redis::cmd("GET");
+                    get_cmd.arg(raw_key.as_slice());
+                    cached
+                        .client
+                        .send_command(&mut get_cmd, None)
+                        .await
+                        .unwrap()
+                        == bulk("v2")
+                }
+            );
         });
     }
 

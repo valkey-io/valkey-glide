@@ -581,6 +581,14 @@ impl<S: EvictionStrategy> GlideCacheImpl<S> {
 // ==================== GlideCache Trait ====================
 
 /// Core caching interface for Glide
+///
+/// The provided command-level methods (`get_cached_cmd`, `set_cached_cmd`,
+/// `get_cached_cmd_with_fill`, `complete_cached_cmd` and the MGET helpers) enforce the
+/// tracking prefix through [`CacheCore::is_tracked`] before touching the store. The
+/// low-level `insert` / `insert_if_active_fill` methods deliberately do not: they are the
+/// store primitives. Implementations that override the command-level methods must keep
+/// calling `self.core().is_tracked(key)` before inserting, otherwise the cache can hold keys
+/// the server never invalidates.
 pub trait GlideCache: Send + Sync + Debug {
     // ==================== Core Access ====================
     /// Access the shared cache core
@@ -1732,6 +1740,37 @@ mod tests {
             .unwrap();
         assert_eq!(cache.entry_count(), 1, "only the tracked key is stored");
         assert_eq!(cache.get(b"yyy:b", CachedKeyType::String), None);
+    }
+
+    #[test]
+    fn test_prefixed_cache_flush_clears_entries_and_blocks_pending_fills() {
+        let cache = prefixed_cache(b"xxx:");
+        let stored = get_cmd(b"xxx:stored");
+        let (_, fill) = cache.get_cached_cmd_with_fill(&stored);
+        cache.complete_cached_cmd(
+            &stored,
+            Value::BulkString(b"v".to_vec().into()),
+            fill.unwrap(),
+        );
+        assert_eq!(cache.entry_count(), 1);
+
+        // A fill is pending for another tracked key when the null invalidation arrives.
+        let pending = get_cmd(b"xxx:pending");
+        let (_, pending_fill) = cache.get_cached_cmd_with_fill(&pending);
+
+        cache.flush_all_server_assisted();
+        assert_eq!(cache.entry_count(), 0, "flush empties a prefixed cache");
+
+        cache.complete_cached_cmd(
+            &pending,
+            Value::BulkString(b"stale".to_vec().into()),
+            pending_fill.unwrap(),
+        );
+        assert_eq!(
+            cache.entry_count(),
+            0,
+            "a fill started before the flush is discarded"
+        );
     }
 
     // ==================== CacheEntry ====================

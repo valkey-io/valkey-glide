@@ -243,6 +243,12 @@ pub struct RedisConnectionInfo {
     pub server_assisted_cache: bool,
     /// Key prefix passed as `CLIENT TRACKING ON BCAST PREFIX <prefix>`. `None` tracks all keys.
     /// Only meaningful when `server_assisted_cache` is `true`.
+    ///
+    /// When `cache` is set, this must equal `cache.core().tracking_prefix()`: the server only
+    /// invalidates keys under this prefix while the cache only stores keys under its own, so a
+    /// mismatch would let the cache hold keys the server never invalidates. Builders that go
+    /// through `redis::cache::get_or_create_cache` get this for free, since the registry rejects
+    /// a cache id reused with a different prefix.
     pub tracking_prefix: Option<Vec<u8>>,
 }
 

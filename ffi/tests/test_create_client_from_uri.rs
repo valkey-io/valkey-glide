@@ -1445,6 +1445,49 @@ fn test_create_client_from_uri_with_server_assisted_cache_and_tracking_prefix() 
     }
 }
 
+#[test]
+fn test_create_client_from_uri_with_server_assisted_cache_without_prefix() {
+    let server = Server::new();
+    let uri = CString::new(format!("redis://127.0.0.1:{}", server.port)).unwrap();
+    let options = CString::new(
+        r#"{
+        "protocol": "RESP3",
+        "client_side_cache": {
+            "max_cache_kb": 1024,
+            "entry_ttl_ms": 0,
+            "server_assisted": true
+        }
+    }"#,
+    )
+    .unwrap();
+
+    let client_type = Box::into_raw(Box::new(ClientType::SyncClient));
+
+    let response = unsafe {
+        create_client_from_uri(
+            uri.as_ptr(),
+            options.as_ptr(),
+            client_type,
+            null_pubsub_callback(),
+        )
+    };
+
+    assert!(!response.is_null());
+    let conn_response = unsafe { &*response };
+
+    if conn_response.connection_error_message.is_null() {
+        assert!(!conn_response.conn_ptr.is_null());
+        unsafe {
+            close_client(conn_response.conn_ptr);
+            free_connection_response(response as *mut ConnectionResponse);
+            drop(Box::from_raw(client_type));
+        }
+    } else {
+        let error = parse_error_msg(conn_response.connection_error_message);
+        panic!("Failed to create client with server_assisted cache and no prefix: {error}");
+    }
+}
+
 /// Runs `create_client_from_uri` with the given JSON options and returns the error message.
 fn client_side_cache_error(options_json: &str) -> String {
     let server = Server::new();

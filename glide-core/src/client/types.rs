@@ -137,6 +137,11 @@ pub struct ClientSideCache {
     pub entry_ttl_ms: u64,
     pub eviction_policy: Option<EvictionPolicy>,
     pub enable_metrics: bool,
+    /// Enables server-assisted invalidation (`CLIENT TRACKING ON BCAST`, RESP3 only).
+    ///
+    /// The tracking state is owned by the client: issuing `RESET` or `CLIENT TRACKING`
+    /// manually on such a client stops the invalidations while the cache keeps serving its
+    /// entries, and is not supported.
     pub server_assisted: bool,
     /// Key prefix registered with the server via `CLIENT TRACKING ON BCAST PREFIX`.
     /// When set, only keys starting with this prefix receive server invalidations and only

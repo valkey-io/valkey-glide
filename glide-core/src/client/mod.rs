@@ -383,9 +383,13 @@ pub async fn get_valkey_connection_info(
 
 /// Validates a client-side cache configuration and registers (or attaches to) its cache.
 fn get_or_create_cache_from_config(config: &ClientSideCache) -> RedisResult<Arc<dyn GlideCache>> {
-    config
-        .validate()
-        .map_err(|msg| redis::RedisError::from((redis::ErrorKind::InvalidClientConfig, "", msg)))?;
+    config.validate().map_err(|msg| {
+        redis::RedisError::from((
+            redis::ErrorKind::InvalidClientConfig,
+            "Invalid client-side cache configuration",
+            msg,
+        ))
+    })?;
     get_or_create_cache(
         &config.cache_id,
         config.max_cache_kb,
@@ -3313,6 +3317,8 @@ impl Client {
 
         // Validates the cache config (prefix rules) and registers the cache before any
         // connection is opened, so a misconfiguration fails client creation up front.
+        // `get_valkey_connection_info` later re-attaches to the same registered cache; that
+        // second call is idempotent and cannot fail for a config that passed here.
         let client_side_cache = request
             .client_side_cache
             .as_ref()
