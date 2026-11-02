@@ -2691,6 +2691,24 @@ export function runBaseTests(config: {
                         ),
                     ).toEqual(0);
                     expect(await client.exists([missingKey])).toEqual(0);
+                },
+                protocol,
+            );
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `hsetex with all options_%p`,
+        async (protocol) => {
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    if (cluster.checkIfServerVersionLessThan("9.1.0")) {
+                        return;
+                    }
+
+                    const field1 = getRandomKey();
+                    const value1 = getRandomKey();
 
                     // Key conditional change can be combined with field conditional change and expiry
                     const combinedKey = getRandomKey();
