@@ -322,9 +322,6 @@ func (o *FtAggregateOptions) ToArgs() ([]string, error) {
 	for _, clause := range o.Clauses {
 		args = append(args, clause.ftAggregateClauseArgs()...)
 	}
-	if o.Dialect != nil {
-		args = append(args, "DIALECT", strconv.Itoa(*o.Dialect))
-	}
 	if o.AddScores {
 		args = append(args, "ADDSCORES")
 	}
@@ -333,6 +330,9 @@ func (o *FtAggregateOptions) ToArgs() ([]string, error) {
 	}
 	if o.WithCursor != nil {
 		args = append(args, o.WithCursor.toArgs()...)
+	}
+	if o.Dialect != nil {
+		args = append(args, "DIALECT", strconv.Itoa(*o.Dialect))
 	}
 	return args, nil
 }

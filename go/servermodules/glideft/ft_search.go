@@ -6,6 +6,7 @@ import (
 	"context"
 	"sort"
 	"strconv"
+	"strings"
 
 	"github.com/valkey-io/valkey-glide/go/v2/constants"
 	"github.com/valkey-io/valkey-glide/go/v2/models"
@@ -42,7 +43,7 @@ func FtSearch(
 		return models.FtSearchResult{}, err
 	}
 	result, execErr := execStandalone(client, ctx, args)
-	return parseFtSearchResponse(result, execErr, withSortKeys, opts)
+	return parseFtSearchResponse(result, execErr, withSortKeys, opts, query)
 }
 
 // ClusterFtSearch is the cluster variant of [FtSearch].
@@ -58,7 +59,7 @@ func ClusterFtSearch(
 		return models.FtSearchResult{}, err
 	}
 	result, execErr := execCluster(client, ctx, args)
-	return parseFtSearchResponse(result, execErr, withSortKeys, opts)
+	return parseFtSearchResponse(result, execErr, withSortKeys, opts, query)
 }
 
 func buildSearchArgs(indexName, query string, opts *options.FtSearchOptions) ([]string, bool, error) {
@@ -77,6 +78,57 @@ func buildSearchArgs(indexName, query string, opts *options.FtSearchOptions) ([]
 	return args, withSortKeys, nil
 }
 
+// isPureVectorKnnQuery reports whether query is a KNN vector query with no sibling text/tag/
+// numeric pre-filter -- the one case (confirmed against valkey-search's
+// query::SearchParameters::PreParseQueryString, search.cc) where the server's own Neighbor.score
+// is a KNN distance (lower is closer) rather than a BM25-style relevance score (higher is
+// better), and where the server keeps the reply in ascending (closest-first) order instead of
+// resorting it by descending relevance the way a hybrid `text=>[KNN ...]` query is. Mirrors the
+// server's own FindVectorDelimiter (search.cc, confirmed as of commit 51db89d, 1.3.0-rc2) byte
+// for byte: scans for "=>" followed by optional whitespace then "[", skipping a QMA-style
+// "=> {" block or a literal "=>" inside free text that isn't followed by "[", continuing the
+// scan rather than matching on the first occurrence blindly. FindVectorDelimiter today does
+// this scan with no awareness of tag braces, quoted strings, or escape sequences -- a `=>[`
+// sequence inside any of those is still read as the real delimiter server-side, so this
+// function matching that exactly is correct against today's server. If FindVectorDelimiter is
+// later changed to skip `=>[` inside braces/quotes/escapes, this function must change to match
+// it, or query strings containing an escaped/quoted/braced `=>[` will silently pick the wrong
+// sort direction. A pre-filter (everything before the delimiter) that is empty or exactly "*"
+// (match-all, optionally surrounded by whitespace) means no text/tag/numeric predicate competes
+// with the vector clause.
+func isPureVectorKnnQuery(query string) bool {
+	delimiterStart := -1
+	searchFrom := 0
+
+	for {
+		idx := strings.Index(query[searchFrom:], "=>")
+		if idx < 0 {
+			break
+		}
+
+		absIdx := searchFrom + idx
+		after := absIdx + len("=>")
+		for after < len(query) && (query[after] == ' ' || query[after] == '\t' ||
+			query[after] == '\n' || query[after] == '\r') {
+			after++
+		}
+
+		if after < len(query) && query[after] == '[' {
+			delimiterStart = absIdx
+			break
+		}
+
+		searchFrom = absIdx + len("=>")
+	}
+
+	if delimiterStart < 0 {
+		return false
+	}
+
+	preFilter := strings.TrimSpace(query[:delimiterStart])
+	return preFilter == "" || preFilter == "*"
+}
+
 // TODO (#5853): We should find a way to NOT have to do it client-side. The current
 // limitations are that we only have access to CustomCommand and we are forced to not
 // "leak" out of the glideft folder which limits our ability to parse from CustomCommand.
@@ -86,24 +138,35 @@ func buildSearchArgs(indexName, query string, opts *options.FtSearchOptions) ([]
 // Go maps lose insertion order, so we reconstruct the sort using the sort field
 // value from each document's Fields map, or the SortKey when WITHSORTKEYS is used.
 //
-// When SortBy is empty but WithScores is set, the server's own BM25 relevance order is what
-// Python callers see (dict insertion order is preserved there). Go's map-based Documents loses
-// that order, so it's restored here by sorting on Score descending -- the best relevance result
-// first, matching the server's rank. This only applies when SortBy is empty: once SortBy and
-// WithScores combine, the existing port rule below keeps sorting by SortBy/SortKey and never
-// falls back to Score.
-func sortDocuments(docs []models.FtSearchDocument, opts *options.FtSearchOptions, withSortKeys bool) {
+// When SortBy is empty but WithScores is set, the server's own relevance order is what Python
+// callers see (dict insertion order is preserved there). Go's map-based Documents loses that
+// order, so it's restored here by sorting on Score, with the document key as a deterministic
+// tiebreak (the server's own tie-break for an equivalent case, search.cc, is also the key,
+// ascending). For a pure-vector KNN query (see isPureVectorKnnQuery), Score is a distance, where
+// lower is closer, and the server keeps its reply in ascending order -- so this sorts ascending
+// to match. Every other case (BM25 text relevance, or a hybrid text+KNN query, which the server
+// itself re-ranks to relevance descending) sorts descending, best match first. This only applies
+// when SortBy is empty: once SortBy and WithScores combine, the existing port rule below keeps
+// sorting by SortBy/SortKey and never falls back to Score.
+func sortDocuments(docs []models.FtSearchDocument, opts *options.FtSearchOptions, withSortKeys bool, query string) {
 	if len(docs) <= 1 {
 		return
 	}
 	if opts == nil || opts.SortBy == "" {
 		if opts != nil && opts.WithScores {
+			ascending := isPureVectorKnnQuery(query)
 			sort.SliceStable(docs, func(i, j int) bool {
 				si, sj := docs[i].Score, docs[j].Score
 				if si == nil || sj == nil {
 					return false
 				}
-				return *si > *sj
+				if *si != *sj {
+					if ascending {
+						return *si < *sj
+					}
+					return *si > *sj
+				}
+				return docs[i].Key < docs[j].Key
 			})
 		}
 		return

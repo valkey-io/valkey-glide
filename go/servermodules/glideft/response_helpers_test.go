@@ -24,7 +24,7 @@ func TestParseFtSearchResponse_WithScoresOnly(t *testing.T) {
 			"key2": []any{"0.25", map[string]any{"field2": "value2"}},
 		},
 	}
-	result, err := parseFtSearchResponse(reply, nil, false, &options.FtSearchOptions{WithScores: true})
+	result, err := parseFtSearchResponse(reply, nil, false, &options.FtSearchOptions{WithScores: true}, "@title:hello")
 	require.NoError(t, err)
 	assert.EqualValues(t, 2, result.TotalResults)
 	require.Len(t, result.Documents, 2)
@@ -49,7 +49,7 @@ func TestParseFtSearchResponse_WithScoresAndNoContent(t *testing.T) {
 		},
 	}
 	result, err := parseFtSearchResponse(
-		reply, nil, false, &options.FtSearchOptions{WithScores: true, NoContent: true},
+		reply, nil, false, &options.FtSearchOptions{WithScores: true, NoContent: true}, "@title:hello",
 	)
 	require.NoError(t, err)
 	for _, doc := range result.Documents {
@@ -67,7 +67,7 @@ func TestParseFtSearchResponse_WithScoresAndWithSortKeysCombinedShape(t *testing
 		},
 	}
 	result, err := parseFtSearchResponse(
-		reply, nil, true, &options.FtSearchOptions{WithScores: true, SortBy: "price", WithSortKeys: true},
+		reply, nil, true, &options.FtSearchOptions{WithScores: true, SortBy: "price", WithSortKeys: true}, "@title:hello",
 	)
 	require.NoError(t, err)
 	require.Len(t, result.Documents, 1)
@@ -91,7 +91,7 @@ func TestParseFtSearchResponse_WithScoresAndWithSortKeysNoContentDropsSortKey(t 
 	}
 	result, err := parseFtSearchResponse(
 		reply, nil, true,
-		&options.FtSearchOptions{WithScores: true, SortBy: "price", WithSortKeys: true, NoContent: true},
+		&options.FtSearchOptions{WithScores: true, SortBy: "price", WithSortKeys: true, NoContent: true}, "@title:hello",
 	)
 	require.NoError(t, err)
 	require.Len(t, result.Documents, 1)
@@ -109,7 +109,7 @@ func TestParseFtSearchResponse_WithSortKeysOnlyUnaffectedByScoreParsing(t *testi
 		},
 	}
 	result, err := parseFtSearchResponse(
-		reply, nil, true, &options.FtSearchOptions{SortBy: "price", WithSortKeys: true},
+		reply, nil, true, &options.FtSearchOptions{SortBy: "price", WithSortKeys: true}, "@title:hello",
 	)
 	require.NoError(t, err)
 	require.Len(t, result.Documents, 1)
@@ -123,7 +123,7 @@ func TestParseFtSearchResponse_NeitherFlagPlainFieldMap(t *testing.T) {
 		int64(1),
 		map[string]any{"key1": map[string]any{"title": "hello"}},
 	}
-	result, err := parseFtSearchResponse(reply, nil, false, &options.FtSearchOptions{})
+	result, err := parseFtSearchResponse(reply, nil, false, &options.FtSearchOptions{}, "@title:hello")
 	require.NoError(t, err)
 	require.Len(t, result.Documents, 1)
 	doc := result.Documents[0]
@@ -137,7 +137,7 @@ func TestParseFtSearchResponse_UnparseableScoreErrors(t *testing.T) {
 		int64(1),
 		map[string]any{"key1": []any{"not-a-number", map[string]any{}}},
 	}
-	_, err := parseFtSearchResponse(reply, nil, false, &options.FtSearchOptions{WithScores: true})
+	_, err := parseFtSearchResponse(reply, nil, false, &options.FtSearchOptions{WithScores: true}, "@title:hello")
 	assert.Error(t, err)
 }
 

@@ -103,6 +103,29 @@ func TestFtAggregateOptionsToArgs_WithCursorCombinedWithLoadAndScoring(t *testin
 	assert.Equal(t, []string{"LOAD", "1", "price", "ADDSCORES", "WITHCURSOR", "COUNT", "5"}, args)
 }
 
+// TestFtAggregateOptionsToArgs_DialectEmittedLastAfterAddScoresScorerAndWithCursor is a
+// regression test: DIALECT must be the terminal token, matching FtSearchOptions.ToArgs and
+// FtHybridOptions.ToArgs, both of which already emit DIALECT last. Previously
+// FtAggregateOptions.ToArgs emitted DIALECT before ADDSCORES/SCORER/WITHCURSOR instead.
+func TestFtAggregateOptionsToArgs_DialectEmittedLastAfterAddScoresScorerAndWithCursor(t *testing.T) {
+	dialect := 2
+	count := 5
+	args, err := (&FtAggregateOptions{
+		AddScores: true,
+		Scorer:    "BM25STD",
+		WithCursor: &FtWithCursor{
+			Count: &count,
+		},
+		Dialect: &dialect,
+	}).ToArgs()
+	assert.NoError(t, err)
+	assert.Equal(
+		t,
+		[]string{"ADDSCORES", "SCORER", "BM25STD", "WITHCURSOR", "COUNT", "5", "DIALECT", "2"},
+		args,
+	)
+}
+
 func TestFtWithCursorToArgs_Bare(t *testing.T) {
 	args, err := (&FtAggregateOptions{WithCursor: &FtWithCursor{}}).ToArgs()
 	assert.NoError(t, err)

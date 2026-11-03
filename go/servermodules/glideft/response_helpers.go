@@ -106,6 +106,7 @@ func parseFtSearchResponse(
 	err error,
 	withSortKeys bool,
 	opts *options.FtSearchOptions,
+	query string,
 ) (models.FtSearchResult, error) {
 	if err != nil {
 		return models.FtSearchResult{}, err
@@ -150,7 +151,7 @@ func parseFtSearchResponse(
 		docs = append(docs, doc)
 	}
 
-	sortDocuments(docs, opts, withSortKeys)
+	sortDocuments(docs, opts, withSortKeys, query)
 	return models.FtSearchResult{TotalResults: count, Documents: docs}, nil
 }
 
@@ -223,6 +224,13 @@ func parseFtSearchDocumentValue(key string, val any, withScores, withSortKeys bo
 // parseFtScore parses a WITHSCORES score value. glide-core passes the score through as the
 // bulk-string decimal text valkey-search returns (e.g. "0.287682086229"), not a float -- this is
 // the one place that text is parsed into a Go float64.
+//
+// Confirmed live against a source-built valkey-search 1.3.0-rc2 module (raw wire capture, both
+// RESP2 and RESP3): valkey-search's own FT.SEARCH command handler replies the score with
+// ValkeyModule_ReplyWithString (ft_search.cc's ReplyScore, for BM25, SCORER and KNN-distance
+// scores alike) -- a bulk string on the wire under both protocols, byte-identical
+// ("$N\r\n<decimal text>\r\n"). There is no RESP3-specific double-reply path to accept here;
+// `string` is not an assumption, it is what the server always sends.
 func parseFtScore(key string, v any) (float64, error) {
 	s, ok := v.(string)
 	if !ok {
@@ -268,6 +276,13 @@ func parseFtAggregateResponse(result any, err error) ([]map[string]any, error) {
 // FT.AGGREGATE/FT.HYBRID (when opts.WithCursor is set) and FT.CURSOR READ: a two-element array
 // of [rows, cursorId], where rows is the same per-document mapping shape
 // parseFtAggregateResponse unwraps, and cursorId is 0 once the cursor is exhausted.
+//
+// Confirmed live against a source-built valkey-search 1.3.0-rc2 module (raw wire capture, both
+// RESP2 and RESP3): the cursor id comes back as a RESP integer reply (":N\r\n",
+// ValkeyModule_ReplyWithLongLong in ft_cursor.cc) under both protocols, byte-identical. The
+// `redis` crate's Value::Int variant that glide-core hands back for an integer reply does not
+// vary by protocol either. `int64` is not an assumption here, it is what the server always
+// sends and what glide-core always surfaces.
 func parseCursorWrappedAggregateResponse(result any, err error) ([]map[string]any, int64, error) {
 	if err != nil {
 		return nil, 0, err
