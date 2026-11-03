@@ -862,6 +862,9 @@ public class FT {
      * arm) in a single query with a paged ({@code WITHCURSOR}) reply, fusing both arms' results into
      * one ranked reply.
      *
+     * <p>Requires valkey-search 1.3 or later. See the <a
+     * href="https://valkey.io/commands/ft.hybrid/">FT.HYBRID documentation</a>.
+     *
      * @param client The client to execute the command.
      * @param indexName The index name to query.
      * @param searchArm The text/tag/numeric query arm. See {@link FTHybridSearchArm}.
@@ -871,7 +874,9 @@ public class FT {
      * @return A two-element {@code Object[]} of {@code [rows, cursorId]}, where {@code rows} is the
      *     same per-document mapping shape {@link #hybrid} returns and {@code cursorId} is a {@code
      *     Long}, {@code 0} once the cursor is exhausted, or the id to pass to a subsequent {@link
-     *     #cursorRead} call otherwise.
+     *     #cursorRead} call otherwise. With no explicit {@code LIMIT} clause, {@code rows} is capped
+     *     at 10 per the server's own default, even after reading the cursor to exhaustion; add an
+     *     {@code FTAggregateOptions.Limit} clause through {@code options} to request more.
      * @throws IllegalArgumentException If {@code options} does not have {@code withCursor} set.
      * @example
      *     <pre>{@code
@@ -898,6 +903,9 @@ public class FT {
      * arm) in a single query with a paged ({@code WITHCURSOR}) reply, fusing both arms' results into
      * one ranked reply.
      *
+     * <p>Requires valkey-search 1.3 or later. See the <a
+     * href="https://valkey.io/commands/ft.hybrid/">FT.HYBRID documentation</a>.
+     *
      * <p>Transactions: FT.HYBRID is an ordinary custom command as far as GLIDE's batch/transaction
      * machinery is concerned, but the server itself rejects FT.HYBRID inside MULTI/EXEC outright (and
      * inside a Lua script, or when the reader thread pool is disabled), because the per-arm results
@@ -911,7 +919,8 @@ public class FT {
      * @param options The optional arguments for the FT.HYBRID command. Must have {@code withCursor}
      *     set; see {@link FTHybridOptions.FTHybridOptionsBuilder}.
      * @return A two-element {@code Object[]} of {@code [rows, cursorId]}. See the {@code String}
-     *     overload's {@code @return} for the shape of each element.
+     *     overload's {@code @return} for the shape of each element, including the default {@code
+     *     LIMIT 10} cap that still applies when reading the cursor to exhaustion.
      * @throws IllegalArgumentException If {@code options} does not have {@code withCursor} set.
      */
     public static CompletableFuture<Object[]> hybridWithCursor(
