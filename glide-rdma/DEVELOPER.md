@@ -93,5 +93,5 @@ rejected.
 
 ## Updating the libfabric headers
 
-See "Regenerating the bindings" in
-[`glide-libfabric-sys/DEVELOPER.md`](glide-libfabric-sys/DEVELOPER.md).
+See
+[Regenerating the bindings](glide-libfabric-sys/DEVELOPER.md#regenerating-the-bindings).

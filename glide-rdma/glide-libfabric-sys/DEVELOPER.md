@@ -50,8 +50,8 @@ libfabric on the runtime machine.
    which requires the runtime host to have libfabric even if they weren't
    going to use the `glide-rdma` feature. Here, `glide-rdma` defines libfabric
    symbols and resolves them at runtime by the dlopen shim in `glide-rdma`.
-   This crate is only usable together with `glide-rdma`. Since nothing is
-   linked, the manifest also has no `links = "libfabric"` key.
+   Since nothing is linked, the manifest also has no `links = "libfabric"`
+   key.
 
    Those definitions are named `glide_fi_getinfo` and so on, not libfabric's own
    names, so that they cannot clash with a real libfabric that something else in
@@ -85,8 +85,8 @@ libfabric on the runtime machine.
 
 1. **The crate is renamed from `ofi-libfabric-sys` to `glide-libfabric-sys`.**
    Upstream already publishes `ofi-libfabric-sys` on crates.io, and this copy
-   has to be published too once `glide-core` depends on `glide-rdma`. Code
-   imports it as `glide_libfabric_sys`.
+   is published too, because `glide-core` depends on `glide-rdma` (behind its
+   `rdma` feature). Code imports it as `glide_libfabric_sys`.
 
 Together, (3) and (4) mean a release builder needs neither `libfabric-dev` nor
 `libclang`.
