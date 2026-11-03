@@ -1506,6 +1506,94 @@ mod pool_metrics_tests {
 }
 
 #[cfg(test)]
+mod pool_destroy_tests {
+    use super::*;
+    use std::net::TcpListener;
+    use std::time::{Duration, Instant};
+
+    /// A client whose release is mid-reset is in none of the pool's collections,
+    /// so destroy must find its scope parent some other way; otherwise scopes
+    /// keep dispatching on a parent whose pool is gone.
+    #[test]
+    fn destroy_unregisters_the_scope_parent_of_a_client_mid_release() {
+        // Accepts but never speaks: the release's reset connects, then waits on
+        // the handshake until its timeout, which keeps the client mid-release
+        // for the length of the test.
+        let blackhole = TcpListener::bind("127.0.0.1:0").unwrap();
+        let mut request = connection_request::ConnectionRequest::new();
+        let mut addr = connection_request::NodeAddress::new();
+        addr.host = "127.0.0.1".into();
+        addr.port = blackhole.local_addr().unwrap().port() as u32;
+        request.addresses.push(addr);
+        request.lazy_connect = true;
+        request.request_timeout = 10_000;
+        let bytes = request.write_to_bytes().unwrap();
+
+        let pool = ClientPool::new(PoolConfig {
+            max_size: 1,
+            min_idle: 0,
+            idle_timeout: Duration::from_secs(300),
+            request_timeout: Duration::from_secs(10),
+            test_on_borrow: false,
+            connection_request: bytes.clone(),
+            is_async: false,
+            configured_database_id: 0,
+            abandon_timeout: Duration::ZERO,
+        })
+        .unwrap();
+        let pool_id = pool::register_pool(pool);
+        let pool_arc = pool::get_pool(pool_id).unwrap();
+
+        // Seat one client the way the warmup path does.
+        let client_id = glide_core::pool::allocate_client_id();
+        let (adapter_ptr, client) =
+            create_pool_client(&bytes, ClientType::SyncClient, client_id as usize)
+                .expect("lazy client");
+        {
+            let mut pool = pool_arc.lock();
+            let flag = Arc::new(std::sync::atomic::AtomicU32::new(0));
+            pool.idle.push_back(PooledClient {
+                client_id,
+                client: client.clone(),
+                created_at: Instant::now(),
+                last_idle_at: Instant::now(),
+                borrowed_at: None,
+                state: ClientState::Idle,
+                is_blocking: flag.clone(),
+            });
+            pool.total_count.fetch_add(1, AtomicOrdering::AcqRel);
+            glide_core::pool::register_blocking_flag(client_id, flag);
+            get_pool_clients().insert(
+                client_id,
+                PoolClientEntry {
+                    adapter_ptr,
+                    client,
+                    created_at: Instant::now(),
+                },
+            );
+            get_pool_adapter_map().insert(adapter_ptr, (pool_id, client_id));
+        }
+        assert_eq!(glide_pool_try_acquire(pool_id), client_id as i64);
+        assert!(scope::get_parent_client(adapter_ptr as u64).is_some());
+
+        assert_eq!(glide_pool_release(pool_id, client_id), 0);
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while pool_arc.lock().in_use.contains_key(&client_id) {
+            assert!(Instant::now() < deadline, "release never took the client");
+            std::thread::sleep(Duration::from_millis(5));
+        }
+
+        assert_eq!(glide_pool_destroy(pool_id), 0);
+
+        assert!(
+            scope::get_parent_client(adapter_ptr as u64).is_none(),
+            "the scope parent of a client mid-release survived destroy"
+        );
+        drop(blackhole);
+    }
+}
+
+#[cfg(test)]
 mod watchdog_gating_tests {
     use super::should_arm_watchdog;
 
