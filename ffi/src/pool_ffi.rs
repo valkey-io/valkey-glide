@@ -649,9 +649,6 @@ pub enum PoolMetricsStatus {
     Read = 0,
     /// No pool has this id.
     UnknownPool = 1,
-    /// The pool lock was held and the caller is on a Tokio runtime thread,
-    /// where waiting for it would panic.
-    LockHeld = 2,
 }
 
 /// The result of [`glide_pool_metrics`]: the counts and whether they were
