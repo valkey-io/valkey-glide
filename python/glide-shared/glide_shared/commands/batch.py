@@ -26,6 +26,7 @@ from glide_shared.commands.core_options import (
     MigrateOptions,
     UpdateOptions,
     ValueComparison,
+    _build_hsetex_args,
     _build_sort_args,
 )
 from glide_shared.commands.sorted_set import (
@@ -1116,6 +1117,8 @@ class BaseBatch:
         field_value_map: Mapping[TEncodable, TEncodable],
         field_conditional_change: Optional[HashFieldConditionalChange] = None,
         expiry: Optional[ExpirySet] = None,
+        # TODO: https://github.com/valkey-io/valkey-glide/issues/7488
+        key_conditional_change: Optional[ConditionalChange] = None,
     ) -> TBatch:
         """
         Sets the specified fields to their respective values in the hash stored at `key` with optional expiration.
@@ -1135,28 +1138,21 @@ class BaseBatch:
                 - EXAT: Absolute expiration time in seconds (Unix timestamp).
                 - PXAT: Absolute expiration time in milliseconds (Unix timestamp).
                 - KEEPTTL: Retain existing TTL.
+            key_conditional_change (Optional[ConditionalChange]): Key conditional change option.
+                Requires Valkey 9.1.0 and above.
 
         Commands response:
             int: 1 if all fields were set successfully, 0 if none were set due to conditional constraints.
 
         Since: Valkey 9.0.0
         """
-        args: List[TEncodable] = [key]
-
-        # Add field conditional change option if specified
-        if field_conditional_change is not None:
-            args.append(field_conditional_change.value)
-
-        # Add expiry options if specified
-        if expiry is not None:
-            args.extend(expiry.get_cmd_args())
-
-        # Add FIELDS keyword and field count
-        args.extend(["FIELDS", str(len(field_value_map))])
-
-        # Add field-value pairs
-        for field, value in field_value_map.items():
-            args.extend([field, value])
+        args = _build_hsetex_args(
+            key,
+            field_value_map,
+            key_conditional_change=key_conditional_change,
+            field_conditional_change=field_conditional_change,
+            expiry=expiry,
+        )
 
         return self.append_command(RequestType.HSetEx, args)
 
