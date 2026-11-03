@@ -4956,8 +4956,8 @@ class CoreCommands(Protocol):
                     f"Cannot choose both {update_condition.value} and NX."
                 )
 
-        # Only scores are stringified; members are passed through so bytes-like
-        # members are not turned into their Python repr.
+        # Only scores are stringified; members are passed through as TEncodable so
+        # bytes and memoryview members are not turned into their Python repr.
         members_scores_list: List[TEncodable] = [
             item
             for member, score in members_scores.items()
