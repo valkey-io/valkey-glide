@@ -99,12 +99,8 @@ public class ClientPool implements AutoCloseable {
                             + "Resolve addresses before configuring the pool.");
         }
 
-        // Ahead of the connectivity probe below, so a static-config mistake surfaces as a
-        // ConfigurationError naming the real reason instead of a probe failure. The serializer below
-        // delegates to ConnectionManager's shared builder, so a pooled request carries the same fields
-        // a directly-created client's does.
-        ConnectionManager.validateClientAz(config.getClientConfig());
-
+        // The serializer delegates to ConnectionManager's shared builder, so a pooled request carries
+        // the same fields a directly-created client's does.
         byte[] connectionRequestBytes = serializeConnectionRequest(config.getClientConfig());
 
         long poolId =

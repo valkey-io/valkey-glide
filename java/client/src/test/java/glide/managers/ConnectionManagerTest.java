@@ -4,8 +4,6 @@ package glide.managers;
 import static org.junit.jupiter.api.Assertions.*;
 
 import connection_request.ConnectionRequestOuterClass;
-import glide.api.GlideClient;
-import glide.api.GlideClusterClient;
 import glide.api.models.configuration.AddressResolver;
 import glide.api.models.configuration.BackoffStrategy;
 import glide.api.models.configuration.BaseClientConfiguration;
@@ -13,7 +11,6 @@ import glide.api.models.configuration.ClientCircuitBreakerConfiguration;
 import glide.api.models.configuration.CompressionBackend;
 import glide.api.models.configuration.CompressionConfiguration;
 import glide.api.models.configuration.GlideClientConfiguration;
-import glide.api.models.configuration.GlideClusterClientConfiguration;
 import glide.api.models.configuration.GlideCredentialProvider;
 import glide.api.models.configuration.IamAuthConfig;
 import glide.api.models.configuration.ReadFrom;
@@ -91,52 +88,50 @@ public class ConnectionManagerTest {
         assertDoesNotThrow(() -> ConnectionManager.mapReadFrom(readFrom));
     }
 
-    @ParameterizedTest
-    @MethodSource("azStrategies")
-    void validateClientAz_rejectsAzStrategyWithoutClientAz(ReadFrom readFrom) {
-        ConfigurationError nullAz =
-                assertThrows(
-                        ConfigurationError.class,
-                        () -> ConnectionManager.validateClientAz(config(readFrom, null)));
-        assertTrue(nullAz.getMessage().contains("clientAZ must be set"));
-        assertTrue(nullAz.getMessage().contains(readFrom.name()));
-
-        assertThrows(
-                ConfigurationError.class, () -> ConnectionManager.validateClientAz(config(readFrom, "")));
-    }
-
     /**
-     * A whitespace-only AZ is not "set" in any useful sense: the core compares AZs exactly and never
-     * trims, so it would engage the strategy, match no node, and silently fall back to routing across
-     * all nodes.
+     * An AZ-affinity strategy without a usable {@code clientAZ} must not throw: the request goes out
+     * with the strategy and no {@code client_az}, and the core logs a warning and downgrades it to
+     * {@code PreferReplica}, as before 2.6. Pinned on both the direct and the pooled path, because
+     * rejecting it broke existing clients that set the strategy without an AZ.
      */
     @ParameterizedTest
     @MethodSource("azStrategies")
-    void validateClientAz_rejectsWhitespaceOnlyClientAz(ReadFrom readFrom) {
-        for (String blank : new String[] {" ", "   ", "\t", "\n", " \t\n "}) {
-            assertThrows(
-                    ConfigurationError.class,
-                    () -> ConnectionManager.validateClientAz(config(readFrom, blank)),
-                    "Expected rejection for blank clientAZ " + blank.replace("\n", "\\n"));
+    void azStrategyWithoutClientAz_isSentWithoutClientAz(ReadFrom readFrom) throws Exception {
+        for (String missing : new String[] {null, "", " ", " \t\n "}) {
+            GlideClientConfiguration config = config(readFrom, missing);
+            String label =
+                    readFrom + " with clientAZ " + (missing == null ? "null" : "'" + missing + "'");
+
+            ConnectionRequestOuterClass.ConnectionRequest direct =
+                    assertDoesNotThrow(() -> ConnectionManager.buildConnectionRequest(config), label);
+            ConnectionRequestOuterClass.ConnectionRequest pooled =
+                    ConnectionRequestOuterClass.ConnectionRequest.parseFrom(poolBytes(config));
+
+            for (ConnectionRequestOuterClass.ConnectionRequest request :
+                    new ConnectionRequestOuterClass.ConnectionRequest[] {direct, pooled}) {
+                assertEquals(ConnectionManager.mapReadFrom(readFrom), request.getReadFrom(), label);
+                assertEquals("", request.getClientAz(), label);
+            }
         }
     }
 
     /**
-     * A padded AZ is accepted and <em>normalized</em>. Forwarding it raw would satisfy validation and
-     * then match no node, because the core compares AZs with exact equality — the same
-     * silent-fallback outcome as a blank value, and easily produced by {@code getenv} returning
+     * A padded AZ is <em>normalized</em>. Forwarding it raw would engage the strategy and then match
+     * no node, because the core compares AZs with exact equality, and {@code getenv} easily returns
      * {@code "us-east-1a\n"}.
      */
     @ParameterizedTest
     @MethodSource("azStrategies")
-    void validateClientAz_normalizesSurroundingWhitespace(ReadFrom readFrom) {
+    void resolveClientAz_trimsSurroundingWhitespace(ReadFrom readFrom) {
         GlideClientConfiguration padded = config(readFrom, " " + AZ + "\n");
 
-        assertDoesNotThrow(() -> ConnectionManager.validateClientAz(padded));
         assertEquals(AZ, ConnectionManager.resolveClientAz(padded), "forwarded value must be trimmed");
+        assertEquals(AZ, ConnectionManager.buildConnectionRequest(padded).getClientAz());
     }
 
-    /** Blank values resolve to absent, which is what makes the validation above reject them. */
+    /**
+     * Blank values resolve to absent, so the core sees no AZ rather than one that matches no node.
+     */
     @Test
     void resolveClientAz_treatsBlankAsAbsent() {
         for (String blank : new String[] {"", " ", "   ", "\t", "\n", " \t\n "}) {
@@ -145,44 +140,6 @@ public class ConnectionManagerTest {
                     "blank clientAZ must resolve to null: " + blank.replace("\n", "\\n"));
         }
         assertNull(ConnectionManager.resolveClientAz(config(ReadFrom.AZ_AFFINITY_ALL_NODES, null)));
-    }
-
-    /**
-     * The check runs on the synchronous path in {@code BaseClient.createClient}, so callers see a
-     * direct throw rather than an {@code ExecutionException} on the returned future. Asserting on
-     * {@code createClient} itself — with no {@code get()} — is what pins that; the throw happens
-     * before any connection is attempted, so no server is needed.
-     */
-    @Test
-    void createClient_throwsSynchronouslyWhenAzStrategyHasNoClientAz() {
-        assertThrows(
-                ConfigurationError.class,
-                () ->
-                        GlideClient.createClient(
-                                GlideClientConfiguration.builder()
-                                        .readFrom(ReadFrom.AZ_AFFINITY_ALL_NODES)
-                                        .build()));
-
-        assertThrows(
-                ConfigurationError.class,
-                () ->
-                        GlideClusterClient.createClient(
-                                GlideClusterClientConfiguration.builder()
-                                        .readFrom(ReadFrom.AZ_AFFINITY_ALL_NODES)
-                                        .clientAZ("   ")
-                                        .build()));
-    }
-
-    @ParameterizedTest
-    @MethodSource("azStrategies")
-    void validateClientAz_acceptsAzStrategyWithClientAz(ReadFrom readFrom) {
-        assertDoesNotThrow(() -> ConnectionManager.validateClientAz(config(readFrom, AZ)));
-    }
-
-    @ParameterizedTest
-    @MethodSource("nonAzStrategies")
-    void validateClientAz_ignoresNonAzStrategies(ReadFrom readFrom) {
-        assertDoesNotThrow(() -> ConnectionManager.validateClientAz(config(readFrom, null)));
     }
 
     /**
@@ -217,29 +174,13 @@ public class ConnectionManagerTest {
         assertEquals(AZ, request.getClientAz(), "pooled client_az for " + readFrom);
     }
 
-    @Test
-    void clientPoolCreate_throwsConfigurationErrorWhenAzStrategyHasNoClientAz() {
-        // ClientPool.create validates before its connectivity probe, so a static-config mistake
-        // surfaces as ConfigurationError naming the real reason. Without that ordering the throw lands
-        // in the probe's catch (Exception) and is relabelled "Pool connectivity probe failed".
-        ClientPoolConfig poolConfig =
-                ClientPoolConfig.builder()
-                        .clientConfig(
-                                GlideClientConfiguration.builder().readFrom(ReadFrom.AZ_AFFINITY_ALL_NODES).build())
-                        .build();
-
-        ConfigurationError error =
-                assertThrows(ConfigurationError.class, () -> ClientPool.create(poolConfig));
-        assertTrue(error.getMessage().contains("clientAZ must be set"));
-    }
-
     /**
      * The three AZ-affinity strategies, and only those, must require an AZ.
      *
      * <p>{@code requiresClientAz()} lists the AZ strategies by hand, so a strategy added to the enum
-     * without being listed there would silently skip {@code clientAZ} validation and let the core
-     * downgrade it to {@code PreferReplica}. The count assertion is what surfaces that: a new
-     * constant fails here, forcing an explicit answer for it.
+     * without being listed there would be missed by callers that ask whether an AZ is needed. The
+     * count assertion is what surfaces that: a new constant fails here, forcing an explicit answer
+     * for it.
      */
     @Test
     void requiresClientAz_isSetForExactlyTheAzStrategies() {
