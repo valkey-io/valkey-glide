@@ -679,15 +679,14 @@ impl PoolMetrics {
 
 #[unsafe(no_mangle)]
 pub extern "C" fn glide_pool_metrics(pool_id: u64) -> PoolMetrics {
-    let Some(pool_arc) = pool::get_pool(pool_id) else {
-        return PoolMetrics::not_read(PoolMetricsStatus::UnknownPool);
-    };
-    let pool = pool_arc.lock();
-    PoolMetrics {
-        status: PoolMetricsStatus::Read,
-        idle: pool.idle_count(),
-        active: pool.active_count(),
-        total: pool.total_count.load(AtomicOrdering::Acquire),
+    match pool::pool_counts(pool_id) {
+        Some(counts) => PoolMetrics {
+            status: PoolMetricsStatus::Read,
+            idle: counts.idle,
+            active: counts.active,
+            total: counts.total,
+        },
+        None => PoolMetrics::not_read(PoolMetricsStatus::UnknownPool),
     }
 }
 

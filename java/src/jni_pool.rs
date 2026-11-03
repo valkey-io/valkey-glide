@@ -246,18 +246,8 @@ pub extern "system" fn Java_glide_ffi_resolvers_GlidePoolResolver_glidePoolMetri
     _class: JClass,
     pool_id: jlong,
 ) -> jni::sys::jintArray {
-    let pool_arc = match pool::get_pool(pool_id as u64) {
-        Some(arc) => arc,
-        None => return std::ptr::null_mut(),
-    };
-
-    let (idle, active, total) = {
-        let pool = pool_arc.lock();
-        (
-            pool.idle_count() as i32,
-            pool.active_count() as i32,
-            pool.total_count.load(Ordering::Acquire) as i32,
-        )
+    let Some(counts) = pool::pool_counts(pool_id as u64) else {
+        return std::ptr::null_mut();
     };
 
     let result = match env.new_int_array(3) {
@@ -265,7 +255,15 @@ pub extern "system" fn Java_glide_ffi_resolvers_GlidePoolResolver_glidePoolMetri
         Err(_) => return std::ptr::null_mut(),
     };
     if env
-        .set_int_array_region(&result, 0, &[idle, active, total])
+        .set_int_array_region(
+            &result,
+            0,
+            &[
+                counts.idle as i32,
+                counts.active as i32,
+                counts.total as i32,
+            ],
+        )
         .is_err()
     {
         return std::ptr::null_mut();

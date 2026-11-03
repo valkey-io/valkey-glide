@@ -657,23 +657,12 @@ pub fn pool_release<'a>(env: &'a Env, pool_id: i64, client_id: i64) -> Result<Ob
 
 #[napi]
 pub fn pool_metrics(pool_id: i64) -> Result<PoolMetrics> {
-    let registry = pool::get_pool_registry();
-    let pool_entry = registry
-        .get(&(pool_id as u64))
+    let counts = pool::pool_counts(pool_id as u64)
         .ok_or_else(|| Error::new(Status::InvalidArg, "Invalid pool_id"))?;
-
-    let (idle, active, total) = {
-        let pool_guard = pool_entry.value().lock();
-        let idle = pool_guard.idle.len() as u32;
-        let active = pool_guard.in_use.len() as u32;
-        let total = pool_guard.total_count.load(Ordering::Acquire);
-        (idle, active, total)
-    };
-
     Ok(PoolMetrics {
-        idle,
-        active,
-        total,
+        idle: counts.idle,
+        active: counts.active,
+        total: counts.total,
     })
 }
 

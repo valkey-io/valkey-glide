@@ -440,6 +440,28 @@ impl ClientPool {
     pub fn active_count(&self) -> u32 {
         self.in_use.len() as u32
     }
+
+    pub fn counts(&self) -> PoolCounts {
+        PoolCounts {
+            idle: self.idle_count(),
+            active: self.active_count(),
+            total: self.total_count.load(Ordering::Acquire),
+        }
+    }
+}
+
+/// The three counts every binding reports, read together under one lock so
+/// they describe the same instant.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PoolCounts {
+    pub idle: u32,
+    pub active: u32,
+    pub total: u32,
+}
+
+/// `None` when no pool has this id.
+pub fn pool_counts(pool_id: u64) -> Option<PoolCounts> {
+    Some(get_pool(pool_id)?.lock().counts())
 }
 
 /// Async release of a pooled client with state reset and leak protection.
