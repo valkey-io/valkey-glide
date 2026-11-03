@@ -121,8 +121,8 @@ pub struct PooledClient {
 /// The lock every holder of a registered [`ClientPool`] goes through.
 ///
 /// Holders do in-memory work under the guard and release it without awaiting,
-/// so a `std::sync::Mutex` is enough: `lock()` waits for at most one critical
-/// section, from any thread, runtime or not. The guard is `!Send`, so holding
+/// so a `std::sync::Mutex` is enough: `lock()` waits only for in-memory
+/// critical sections, from any thread, runtime or not. The guard is `!Send`, so holding
 /// it across an `.await` in a spawned task does not compile.
 ///
 /// A holder that panics mid-section poisons the mutex. `lock()` recovers the

@@ -112,7 +112,7 @@ enum WarmupOutcome {
 
 /// Hand back `n` warmup reservations the calling task holds.  No-op if the pool
 /// is already unregistered — the reservations died with the registry entry.
-async fn release_warmup_slots(pool_id: u64, n: u32) {
+fn release_warmup_slots(pool_id: u64, n: u32) {
     if n == 0 {
         return;
     }
@@ -137,7 +137,7 @@ async fn warmup_dial(pool_id: u64, conn_bytes: &[u8], seat_then_discard: bool) -
     let connection_request = match ProtobufConnectionRequest::parse_from_bytes(conn_bytes) {
         Ok(req) => req,
         Err(e) => {
-            release_warmup_slots(pool_id, 1).await;
+            release_warmup_slots(pool_id, 1);
             return WarmupOutcome::Failed(format!(
                 "Failed to parse connection request during warmup: {e}"
             ));
@@ -168,7 +168,7 @@ async fn warmup_dial(pool_id: u64, conn_bytes: &[u8], seat_then_discard: bool) -
     let client: Client = match Client::new(internal_req, None).await {
         Ok(c) => c,
         Err(e) => {
-            release_warmup_slots(pool_id, 1).await;
+            release_warmup_slots(pool_id, 1);
             return WarmupOutcome::Failed(format!("Pool warmup: failed to create client: {e}"));
         }
     };
@@ -329,14 +329,14 @@ pub fn create_pool<'a>(
             WarmupOutcome::Failed(msg) => {
                 glide_logger::log_warn("pool", msg.clone());
                 // Nothing was spawned for the other slots, so hand them back here.
-                release_warmup_slots(pool_id as u64, reserved - 1).await;
+                release_warmup_slots(pool_id as u64, reserved - 1);
                 let _ = first_tx.send(Err(msg));
                 return;
             }
             WarmupOutcome::Aborted => {
                 // Pool destroyed mid-dial.  Leaving the oneshot unreported is
                 // deliberate: the dropped sender rejects the deferred.
-                release_warmup_slots(pool_id as u64, reserved - 1).await;
+                release_warmup_slots(pool_id as u64, reserved - 1);
                 return;
             }
         }

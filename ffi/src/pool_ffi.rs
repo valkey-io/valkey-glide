@@ -301,6 +301,7 @@ pub unsafe extern "C" fn glide_pool_create(
                         if pool.state.load(AtomicOrdering::Acquire) != POOL_RUNNING {
                             // Give the reserved slot back; the pool is gone.
                             pool.release_reservation();
+                            drop(pool);
                             // Never stored in get_pool_clients(), so glide_pool_destroy cannot reclaim it.
                             drop_orphaned_adapter!(adapter_ptr);
                             return;
@@ -398,6 +399,7 @@ pub extern "C" fn glide_pool_try_acquire(pool_id: u64) -> i64 {
                     let mut pool = pool_clone.lock();
                     if pool.state.load(AtomicOrdering::Acquire) != POOL_RUNNING {
                         pool.release_reservation();
+                        drop(pool);
                         // Never stored in get_pool_clients(), so glide_pool_destroy cannot reclaim it.
                         drop_orphaned_adapter!(adapter_ptr);
                         return;
@@ -492,6 +494,7 @@ pub extern "C" fn glide_pool_acquire_blocking(pool_id: u64, timeout_ms: u64) -> 
                             let mut p = pool_clone.lock();
                             if p.state.load(AtomicOrdering::Acquire) != POOL_RUNNING {
                                 p.release_reservation();
+                                drop(p);
                                 // Never stored in get_pool_clients(), so glide_pool_destroy cannot reclaim it.
                                 drop_orphaned_adapter!(adapter_ptr);
                                 return;
