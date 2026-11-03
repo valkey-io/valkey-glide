@@ -1332,13 +1332,13 @@ fn is_readonly_nonatomic_pipeline(pipeline: &redis::Pipeline) -> bool {
                 return false;
             };
             is_readonly_cmd(command_name.as_slice())
-                && !mutates_server_state(command_name.as_slice())
+                && !requires_primary_pipeline_routing(command_name.as_slice())
         })
 }
 
 // The cluster routing predicate also includes keyless administrative commands
-// that can be routed without a hash slot; those are not safe replica reads.
-fn mutates_server_state(command: &[u8]) -> bool {
+// and commands with node-local state; those must retain primary pipeline routing.
+fn requires_primary_pipeline_routing(command: &[u8]) -> bool {
     matches!(
         command,
         b"ACL DELUSER"
@@ -1358,6 +1358,7 @@ fn mutates_server_state(command: &[u8]) -> bool {
             | b"CONFIG REWRITE"
             | b"CONFIG SET"
             | b"FUNCTION KILL"
+            | b"HSCAN"
             | b"LATENCY RESET"
             | b"MEMORY PURGE"
             | b"MODULE LOAD"
@@ -1366,12 +1367,16 @@ fn mutates_server_state(command: &[u8]) -> bool {
             | b"PUBLISH"
             | b"REPLICAOF"
             | b"SAVE"
+            | b"SCAN"
             | b"SCRIPT FLUSH"
             | b"SCRIPT KILL"
             | b"SCRIPT LOAD"
+            | b"SELECT"
             | b"SHUTDOWN"
             | b"SLOWLOG RESET"
             | b"SPUBLISH"
+            | b"SSCAN"
+            | b"ZSCAN"
     )
 }
 
@@ -1466,6 +1471,12 @@ mod tests {
         let mut shutdown = redis::Pipeline::new();
         shutdown.cmd("SHUTDOWN");
         assert!(!is_readonly_nonatomic_pipeline(&shutdown));
+
+        for command in ["SCAN", "HSCAN", "SSCAN", "ZSCAN", "SELECT"] {
+            let mut primary_only = redis::Pipeline::new();
+            primary_only.cmd(command);
+            assert!(!is_readonly_nonatomic_pipeline(&primary_only));
+        }
 
         readonly.atomic();
         assert!(!is_readonly_nonatomic_pipeline(&readonly));

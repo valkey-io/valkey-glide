@@ -465,6 +465,73 @@ mod standalone_client_tests {
     }
 
     #[rstest]
+    #[case("SCAN")]
+    #[case("HSCAN")]
+    #[case("SSCAN")]
+    #[case("ZSCAN")]
+    #[case("SELECT")]
+    #[serial_test::serial]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
+    fn test_pipeline_with_node_local_state_uses_primary(#[case] command_name: &str) {
+        let servers = create_primary_mock_with_replicas(1);
+        let command = redis::cmd(command_name);
+
+        for server in &servers {
+            server.add_response(&command, "+OK\r\n".to_string());
+        }
+
+        let addresses = get_mock_addresses(&servers);
+        let mut connection_request =
+            create_connection_request(addresses.as_slice(), &Default::default());
+        connection_request.read_from = ReadFrom::PreferReplica.into();
+
+        block_on_all(async {
+            let mut client =
+                StandaloneClient::create_client(connection_request.into(), None, None, None)
+                    .await
+                    .unwrap();
+            let mut pipeline = redis::Pipeline::new();
+            pipeline.add_command(command);
+
+            let result = client.send_pipeline(&pipeline, 0, 1).await.unwrap();
+            assert_eq!(result, vec![Value::Okay]);
+        });
+
+        assert_eq!(servers[0].get_number_of_received_commands(), 1);
+        assert_eq!(servers[1].get_number_of_received_commands(), 0);
+    }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
+    fn test_single_select_request_is_sent_to_all_nodes() {
+        let servers = create_primary_mock_with_replicas(2);
+        let mut select = redis::cmd("SELECT");
+        select.arg(1);
+
+        for server in &servers {
+            server.add_response(&select, "+OK\r\n".to_string());
+        }
+
+        let addresses = get_mock_addresses(&servers);
+        let mut connection_request =
+            create_connection_request(addresses.as_slice(), &Default::default());
+        connection_request.read_from = ReadFrom::PreferReplica.into();
+
+        block_on_all(async {
+            let mut client =
+                StandaloneClient::create_client(connection_request.into(), None, None, None)
+                    .await
+                    .unwrap();
+            assert_eq!(client.send_command(&select).await, Ok(Value::Okay));
+        });
+
+        for server in &servers {
+            assert_eq!(server.get_number_of_received_commands(), 1);
+        }
+    }
+
+    #[rstest]
     #[serial_test::serial]
     #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
     fn test_read_from_replica_always_read_from_primary() {
