@@ -46,6 +46,7 @@ use tokio::sync::Notify;
 // POOL STATES
 // ═══════════════════════════════════════════════════════════════════════════════
 
+/// [`ScopePool`] states, stored in its `AtomicU8`. [`ClientPool`] uses [`PoolState`].
 pub const POOL_RUNNING: u8 = 0;
 pub const POOL_CLOSING: u8 = 1;
 pub const POOL_CLOSED: u8 = 2;
@@ -216,7 +217,7 @@ impl ClientPool {
     }
 
     /// Non-blocking acquire. Returns `client_id` on success (>= 0).
-    /// Returns `-1` if pool is closed/closing, `-3` if no idle client available.
+    /// Returns `-1` if the pool is closed, `-3` if no idle client is available.
     /// Evicts idle connections past idle_timeout internally.
     ///
     /// The `is_blocking` flag for the acquired client is accessible lock-free via
