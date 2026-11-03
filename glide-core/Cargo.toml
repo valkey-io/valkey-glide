@@ -1,6 +1,6 @@
 [package]
 name = "glide-core"
-version = "0.1.1"
+version = "0.2.0"
 
 # About
 description = "Core for Valkey GLIDE. This crate isn't intended to be used directly."
