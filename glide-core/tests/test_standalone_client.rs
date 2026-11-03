@@ -434,6 +434,39 @@ mod standalone_client_tests {
     #[rstest]
     #[serial_test::serial]
     #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
+    fn test_pipeline_with_config_set_uses_primary() {
+        let servers = create_primary_mock_with_replicas(1);
+        let mut config_set = redis::cmd("CONFIG");
+        config_set.arg("SET").arg("maxmemory").arg("0");
+
+        for server in &servers {
+            server.add_response(&config_set, "+OK\r\n".to_string());
+        }
+
+        let addresses = get_mock_addresses(&servers);
+        let mut connection_request =
+            create_connection_request(addresses.as_slice(), &Default::default());
+        connection_request.read_from = ReadFrom::PreferReplica.into();
+
+        block_on_all(async {
+            let mut client =
+                StandaloneClient::create_client(connection_request.into(), None, None, None)
+                    .await
+                    .unwrap();
+            let mut pipeline = redis::Pipeline::new();
+            pipeline.add_command(config_set);
+
+            let result = client.send_pipeline(&pipeline, 0, 1).await.unwrap();
+            assert_eq!(result, vec![Value::Okay]);
+        });
+
+        assert_eq!(servers[0].get_number_of_received_commands(), 1);
+        assert_eq!(servers[1].get_number_of_received_commands(), 0);
+    }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
     fn test_read_from_replica_always_read_from_primary() {
         test_read_from_replica(ReadFromReplicaTestConfig::default());
     }
