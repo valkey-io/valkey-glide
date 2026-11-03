@@ -1370,13 +1370,13 @@ function _addFtAggregateOptions(options?: FtAggregateOptions): GlideString[] {
 
     args.push(..._addAggregateClauses(options.clauses));
 
-    if (options.dialect !== undefined)
-        args.push("DIALECT", options.dialect.toString());
-
     if (options.addScores) args.push("ADDSCORES");
     if (options.scorer !== undefined) args.push("SCORER", options.scorer);
 
     args.push(..._addWithCursor(options.withCursor));
+
+    if (options.dialect !== undefined)
+        args.push("DIALECT", options.dialect.toString());
 
     return args;
 }

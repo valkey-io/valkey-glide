@@ -233,6 +233,27 @@ describe("GlideFt 1.3 argv serialization", () => {
                 "5",
             ]);
         });
+
+        it("emits DIALECT last, after ADDSCORES, SCORER, and WITHCURSOR (ordering-bug proof)", async () => {
+            const { client, customCommand } = mockClient();
+            await GlideFt.aggregate(client, "idx", "*", {
+                addScores: true,
+                scorer: "BM25STD",
+                withCursor: { count: 5 },
+                dialect: 2,
+            });
+            const args = customCommand.mock.calls[0][0] as string[];
+            expect(args.slice(3)).toEqual([
+                "ADDSCORES",
+                "SCORER",
+                "BM25STD",
+                "WITHCURSOR",
+                "COUNT",
+                "5",
+                "DIALECT",
+                "2",
+            ]);
+        });
     });
 
     describe("FT.CURSOR", () => {
