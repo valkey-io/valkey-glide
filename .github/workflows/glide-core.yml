@@ -109,7 +109,7 @@ on:
                 default: false
 
 concurrency:
-    group: glide-core-${{ github.head_ref || github.ref }}-${{ toJson(inputs) }}
+    group: glide-core-${{ github.head_ref || github.ref }}-${{ github.workflow }}-${{ toJson(inputs) }}
     cancel-in-progress: true
 
 env:
