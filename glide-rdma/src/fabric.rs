@@ -13,6 +13,7 @@ use crate::error::RdmaError;
 use crate::progress::{ProgressDriver, ProgressGuard};
 use crate::region_ref::RegionRef;
 use crate::session::Handshake;
+use crate::shared::RdmaSharedBuffer;
 
 /// One address vector entry.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -119,6 +120,46 @@ impl RdmaFabric {
         })
     }
 
+    /// The fabric of `group`, opened for `config` if nothing holds it, so that
+    /// clients naming one group share one endpoint and the memory registered on
+    /// it. Held weakly: the fabric closes once its last holder drops.
+    ///
+    /// # Errors
+    ///
+    /// When `group` is empty, when it is open with a configuration other than
+    /// `config`, or as [`Self::open`].
+    pub fn open_in_group(group: &str, config: &FabricConfig) -> Result<Self, RdmaError> {
+        if group.is_empty() {
+            return Err(RdmaError::Configuration(
+                "a fabric group name must not be empty".into(),
+            ));
+        }
+        type Groups = Vec<(String, FabricConfig, std::sync::Weak<FabricInner>)>;
+        static GROUPS: Mutex<Groups> = Mutex::new(Vec::new());
+
+        // Held across the open, so two clients starting together open one fabric.
+        let mut groups = GROUPS.lock().unwrap_or_else(PoisonError::into_inner);
+        groups.retain(|(_, _, fabric)| fabric.strong_count() > 0);
+        if let Some((_, open, fabric)) = groups.iter().find(|(name, _, _)| name == group) {
+            if open != config {
+                return Err(RdmaError::Configuration(format!(
+                    "fabric group {group:?} is open with {open}, but a client of it asked for \
+                     {config}"
+                )));
+            }
+            if let Some(inner) = fabric.upgrade() {
+                return Ok(Self { inner });
+            }
+        }
+        let fabric = Self::open(config)?;
+        groups.push((
+            group.to_string(),
+            config.clone(),
+            Arc::downgrade(&fabric.inner),
+        ));
+        Ok(fabric)
+    }
+
     /// Register host memory for the server to RMA against.
     ///
     /// Registration is expensive and pins pages against `RLIMIT_MEMLOCK`, so reuse a
@@ -191,6 +232,21 @@ impl RdmaFabric {
             host,
             self.clone(),
         ))
+    }
+
+    /// Register memory owned outside Rust as a [`RdmaSharedBuffer`].
+    ///
+    /// # Safety
+    ///
+    /// As [`Self::register_raw`], applied per window: the owner may touch a
+    /// window's memory only while no transfer of it is in flight.
+    pub unsafe fn register_shared_raw(
+        &self,
+        memory: NonNull<[u8]>,
+        owner: impl Send + 'static,
+    ) -> Result<RdmaSharedBuffer, RdmaError> {
+        // SAFETY: the caller upholds `register_raw`'s contract.
+        unsafe { self.register_raw(memory, owner) }.map(RdmaBuffer::into_shared)
     }
 
     /// Open one RDMA session for one RESP connection.
@@ -615,6 +671,34 @@ pub(crate) mod tests {
                 "the good address before it was given back"
             );
         }
+    }
+
+    #[test]
+    fn a_group_is_one_fabric_until_its_last_holder_drops() {
+        let loopback = || FabricConfig::new(Provider::Tcp).with_bind("127.0.0.1");
+        // Unique to this test, as groups are process-wide.
+        let (a, b) = ("fabric-test-group-a", "fabric-test-group-b");
+
+        let first = RdmaFabric::open_in_group(a, &loopback()).expect("opens");
+        let second = RdmaFabric::open_in_group(a, &loopback()).expect("opens");
+        assert!(first.is(&second), "one fabric for the group");
+        assert!(!first.is(&fabric()), "no group opens its own");
+        let other = RdmaFabric::open_in_group(b, &loopback()).expect("opens");
+        assert!(!first.is(&other), "another group is not shared");
+
+        let error = RdmaFabric::open_in_group(a, &FabricConfig::new(Provider::Tcp)).unwrap_err();
+        assert!(
+            matches!(&error, RdmaError::Configuration(message)
+                if message.contains("fabric group \"fabric-test-group-a\" is open with Tcp, bind: 127.0.0.1")),
+            "{error:?}"
+        );
+
+        let error = RdmaFabric::open_in_group("", &loopback()).unwrap_err();
+        assert!(matches!(error, RdmaError::Configuration(_)), "{error:?}");
+
+        drop((first, second));
+        // Held weakly, so the group opens afresh, even with another configuration.
+        RdmaFabric::open_in_group(a, &FabricConfig::new(Provider::Tcp)).expect("opens");
     }
 
     #[test]
