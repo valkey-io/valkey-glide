@@ -579,6 +579,17 @@ pub extern "C" fn glide_pool_destroy(pool_id: u64) -> i32 {
     };
 
     let mut pool = pool_arc.lock();
+    // A client whose release is mid-reset is in neither idle, in_use nor
+    // discarded_ids, so the id loop below cannot reach its scopes; the adapter
+    // map, keyed by pool, can.
+    let owned: Vec<usize> = get_pool_adapter_map()
+        .iter()
+        .filter(|e| e.value().0 == pool_id)
+        .map(|e| *e.key())
+        .collect();
+    for adapter_ptr in owned {
+        glide_core::scope::unregister_client(adapter_ptr as u64);
+    }
     // Clean up POOL_CLIENTS entries for all clients owned by this pool
     // (includes discarded clients that the abandon monitor removed from in_use)
     let discarded = pool.drain_discarded_ids();
