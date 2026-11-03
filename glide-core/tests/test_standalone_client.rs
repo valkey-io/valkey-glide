@@ -447,6 +447,81 @@ mod standalone_client_tests {
     }
 
     #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
+    fn test_pipeline_with_cursor_aggregate_uses_primary() {
+        let mut pipeline = redis::Pipeline::new();
+        pipeline
+            .cmd("FT.AGGREGATE")
+            .arg("index")
+            .arg("*")
+            .arg("WITHCURSOR");
+        assert_pipeline_routes_to_primary(pipeline);
+    }
+
+    #[rstest]
+    #[case("+OK\r\n", 1, 2)]
+    #[case("-ERR database synchronization failed\r\n", 2, 1)]
+    #[serial_test::serial]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
+    fn test_batch_select_synchronizes_replicas_or_falls_back_to_primary(
+        #[case] replica_select_response: &str,
+        #[case] expected_primary_commands: u16,
+        #[case] expected_replica_commands: u16,
+    ) {
+        let servers = create_primary_mock_with_replicas(1);
+        let mut select = redis::cmd("SELECT");
+        select.arg(1);
+        let mut get = redis::cmd("GET");
+        get.arg("key");
+
+        servers[0].add_response(&select, "+OK\r\n".to_string());
+        servers[0].add_response(&get, "$-1\r\n".to_string());
+        servers[1].add_response(&select, replica_select_response.to_string());
+        servers[1].add_response(&get, "$-1\r\n".to_string());
+
+        let addresses = get_mock_addresses(&servers);
+        let mut connection_request =
+            create_connection_request(addresses.as_slice(), &Default::default());
+        connection_request.read_from = ReadFrom::PreferReplica.into();
+
+        block_on_all(async {
+            let mut client = GlideClient::new(connection_request.into(), None)
+                .await
+                .unwrap();
+            let mut pipeline = redis::Pipeline::new();
+            pipeline.add_command(select);
+
+            assert_eq!(
+                client
+                    .send_pipeline(
+                        &pipeline,
+                        None,
+                        false,
+                        None,
+                        redis::PipelineRetryStrategy::default(),
+                    )
+                    .await
+                    .unwrap(),
+                Value::Array(vec![Value::Okay])
+            );
+            assert_eq!(
+                client.send_command(&mut get, None).await.unwrap(),
+                Value::Nil
+            );
+        });
+
+        assert_eq!(
+            servers[0].get_number_of_received_commands(),
+            expected_primary_commands
+        );
+        assert_eq!(
+            servers[1].get_number_of_received_commands(),
+            expected_replica_commands
+        );
+    }
+
+    #[rstest]
     #[case("SCAN")]
     #[case("HSCAN")]
     #[case("SSCAN")]

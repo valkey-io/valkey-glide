@@ -3711,10 +3711,24 @@ impl Client {
     /// db (`update_stored_database_id`), the OTel `db_namespace`, and
     /// `current_database` (read by scope connections).
     async fn apply_batch_select_db(&mut self, db: u32) {
-        if let Err(e) = self.update_stored_database_id(db as i64).await {
+        let update_result = {
+            let mut guard = self.internal_client.write().await;
+            match &mut *guard {
+                ClientWrapper::Standalone(client) => {
+                    client.synchronize_connection_database(db as i64).await
+                }
+                ClientWrapper::Cluster { client, .. } => {
+                    client.update_connection_database(db as i64).await
+                }
+                ClientWrapper::Lazy(_) => {
+                    unreachable!("Lazy client should have been initialized")
+                }
+            }
+        };
+        if let Err(e) = update_result {
             log_warn(
                 "apply_batch_select_db",
-                format!("failed to update reconnect database to {db}: {e}"),
+                format!("failed to synchronize database {db}: {e}"),
             );
         }
         Arc::make_mut(&mut self.otel_metadata).db_namespace = db.to_string();

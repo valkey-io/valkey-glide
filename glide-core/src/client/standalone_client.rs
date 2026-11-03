@@ -10,11 +10,12 @@ use glide_logger::log_info;
 use glide_logger::log_warn;
 use glide_telemetry::Telemetry;
 use redis::aio::ConnectionLike;
-use redis::cluster_routing::{self, ResponsePolicy, Routable, RoutingInfo, is_readonly_cmd};
+use redis::cluster_routing::{
+    self, ResponsePolicy, Routable, RoutingInfo, SingleNodeRoutingInfo, SlotAddr, is_readonly_cmd,
+};
 use redis::{AddressResolver, PushInfo, RedisError, RedisResult, RetryStrategy, Value};
 use std::sync::Arc;
-use std::sync::atomic::AtomicUsize;
-use std::sync::atomic::Ordering;
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::time::Duration;
 use tokio::sync::mpsc;
 use tokio::task;
@@ -89,6 +90,7 @@ struct DropWrapper {
     primary_index: usize,
     nodes: Vec<ReconnectingConnection>,
     read_from: ReadFrom,
+    replicas_database_consistent: AtomicBool,
     /// When true, write commands are blocked and INFO REPLICATION is skipped during connection.
     read_only: bool,
     /// Owns the background mTLS certificate reload task, when path-based reload is
@@ -705,6 +707,7 @@ impl StandaloneClient {
                 primary_index,
                 nodes,
                 read_from,
+                replicas_database_consistent: AtomicBool::new(true),
                 read_only,
                 _cert_material_manager: cert_material_manager,
                 cert_material,
@@ -889,7 +892,13 @@ impl StandaloneClient {
     }
 
     async fn get_connection(&self, readonly: bool) -> &ReconnectingConnection {
-        if self.inner.nodes.len() == 1 || !readonly {
+        if self.inner.nodes.len() == 1
+            || !readonly
+            || !self
+                .inner
+                .replicas_database_consistent
+                .load(Ordering::Acquire)
+        {
             return self.get_primary_connection();
         }
 
@@ -1170,10 +1179,51 @@ impl StandaloneClient {
 
     /// Update the database id used to establish connection with the servers.
     pub async fn update_connection_database(&self, database_id: i64) -> RedisResult<Value> {
+        self.store_connection_database(database_id);
+        self.inner
+            .replicas_database_consistent
+            .store(true, Ordering::Release);
+
+        Ok(Value::Okay)
+    }
+
+    fn store_connection_database(&self, database_id: i64) {
         for node in self.inner.nodes.iter() {
             node.update_connection_database(database_id);
         }
+    }
 
+    pub(super) async fn synchronize_connection_database(
+        &self,
+        database_id: i64,
+    ) -> RedisResult<Value> {
+        self.store_connection_database(database_id);
+        self.inner
+            .replicas_database_consistent
+            .store(false, Ordering::Release);
+
+        let mut select = redis::cmd("SELECT");
+        select.arg(database_id);
+        for (index, node) in self.inner.nodes.iter().enumerate() {
+            if index == self.inner.primary_index {
+                continue;
+            }
+
+            let Some(mut connection) = node.try_get_connection().await else {
+                return Err(RedisError::from((
+                    redis::ErrorKind::AllConnectionsUnavailable,
+                    "replica unavailable while synchronizing database",
+                )));
+            };
+            if let Err(error) = connection.send_packed_command(&select).await {
+                node.reconnect(ReconnectReason::ConnectionDropped);
+                return Err(error);
+            }
+        }
+
+        self.inner
+            .replicas_database_consistent
+            .store(true, Ordering::Release);
         Ok(Value::Okay)
     }
 
@@ -1332,15 +1382,15 @@ fn is_readonly_nonatomic_pipeline(pipeline: &redis::Pipeline) -> bool {
                 return false;
             };
             is_readonly_cmd(command_name.as_slice())
-                && !requires_primary_pipeline_routing(command_name.as_slice())
+                && !requires_primary_pipeline_routing(command.as_ref(), command_name.as_slice())
         })
 }
 
 // The cluster routing predicate also includes keyless administrative commands
 // and commands with node-local state; those must retain primary pipeline routing.
-fn requires_primary_pipeline_routing(command: &[u8]) -> bool {
+fn requires_primary_pipeline_routing(command: &redis::Cmd, command_name: &[u8]) -> bool {
     matches!(
-        command,
+        command_name,
         b"ACL DELUSER"
             | b"ACL LOAD"
             | b"ACL SAVE"
@@ -1377,7 +1427,13 @@ fn requires_primary_pipeline_routing(command: &[u8]) -> bool {
             | b"SPUBLISH"
             | b"SSCAN"
             | b"ZSCAN"
-    )
+    ) || (command_name == b"FT.AGGREGATE"
+        && matches!(
+            RoutingInfo::for_routable(command),
+            Some(RoutingInfo::SingleNode(
+                SingleNodeRoutingInfo::SpecificNode(route)
+            )) if route.slot_addr() == SlotAddr::Master
+        ))
 }
 
 /// Parse replica addresses from a primary's INFO REPLICATION response.
@@ -1477,6 +1533,12 @@ mod tests {
             primary_only.cmd(command);
             assert!(!is_readonly_nonatomic_pipeline(&primary_only));
         }
+
+        let mut aggregate = redis::Pipeline::new();
+        aggregate.cmd("FT.AGGREGATE").arg("index").arg("*");
+        assert!(is_readonly_nonatomic_pipeline(&aggregate));
+        aggregate.arg("WITHCURSOR");
+        assert!(!is_readonly_nonatomic_pipeline(&aggregate));
 
         readonly.atomic();
         assert!(!is_readonly_nonatomic_pipeline(&readonly));
