@@ -25,6 +25,7 @@ from glide_shared.connection_request import (
     _create_async_connection_request,
     _create_sync_connection_request,
 )
+from glide_shared.exceptions import ClosingError, get_connection_error_class
 from glide_shared.protobuf.connection_request_pb2 import ConnectionRequest
 from glide_shared.protobuf.connection_request_pb2 import ReadFrom as ProtobufReadFrom
 from glide_shared.protobuf.connection_request_pb2 import TlsMode
@@ -1462,3 +1463,11 @@ def test_recovery_requests_queue_size_in_proto():
     )
     request_custom = config_custom._create_a_protobuf_conn_request(cluster_mode=True)
     assert request_custom.recovery_requests_queue_size == 500
+
+
+def test_connection_error_class_maps_only_configuration_type():
+    # 1 is ConnectionErrorType::Configuration in ffi/src/lib.rs.
+    assert get_connection_error_class(1) is ConfigurationError
+    assert get_connection_error_class(0) is ClosingError
+    assert get_connection_error_class(0, default=RuntimeError) is RuntimeError
+    assert get_connection_error_class(1, default=RuntimeError) is ConfigurationError

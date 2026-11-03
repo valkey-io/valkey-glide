@@ -506,6 +506,10 @@ fn test_ffi_rejects_invalid_final_lib_name_before_lazy_creation() {
         let error = parse_error_msg(response.connection_error_message);
         assert!(error.contains("configuration error"), "{error}");
         assert!(error.contains("library name"), "{error}");
+        assert_eq!(
+            response.connection_error_type,
+            ConnectionErrorType::Configuration
+        );
 
         free_connection_response(response_ptr as *mut ConnectionResponse);
     }
@@ -550,6 +554,10 @@ fn test_ffi_monitor_rejects_invalid_final_lib_name_before_connection() {
         assert!(
             error.to_ascii_lowercase().contains("library name"),
             "{error}"
+        );
+        assert_eq!(
+            response.connection_error_type,
+            ConnectionErrorType::Configuration
         );
 
         free_connection_response(response_ptr as *mut ConnectionResponse);
@@ -597,7 +605,122 @@ fn test_ffi_monitor_rejects_unix_socket_with_tls() {
             error.contains("TLS is not supported over Unix domain sockets"),
             "{error}"
         );
+        assert_eq!(
+            response.connection_error_type,
+            ConnectionErrorType::Configuration
+        );
 
+        free_connection_response(response_ptr as *mut ConnectionResponse);
+    }
+}
+
+fn create_sync_client_response(request: &ConnectionRequest) -> *const ConnectionResponse {
+    let request_bytes = request.write_to_bytes().expect("Failed to serialize");
+    let client_type = ClientType::SyncClient;
+    unsafe {
+        create_client(
+            request_bytes.as_ptr(),
+            request_bytes.len(),
+            &client_type,
+            None,
+            None,
+            0,
+        )
+    }
+}
+
+/// The core's Unix domain socket checks reach the wrapper as a configuration error.
+#[rstest]
+#[case::cluster_mode("/tmp/glide-ffi.sock", true, TlsMode::NoTls)]
+#[case::relative_path("glide-ffi.sock", false, TlsMode::NoTls)]
+#[case::tls("/tmp/glide-ffi.sock", false, TlsMode::SecureTls)]
+fn test_ffi_reports_unix_socket_rejection_as_configuration_error(
+    #[case] path: &str,
+    #[case] cluster_mode: bool,
+    #[case] tls_mode: TlsMode,
+) {
+    let mut request = ConnectionRequest::new();
+    request.tls_mode = tls_mode.into();
+    request.cluster_mode_enabled = cluster_mode;
+    request.lazy_connect = true;
+    let mut address = NodeAddress::new();
+    address.unix_socket_path = Some(path.into());
+    request.addresses.push(address);
+
+    unsafe {
+        let response_ptr = create_sync_client_response(&request);
+        assert!(!response_ptr.is_null());
+        let response = &*response_ptr;
+        assert!(response.conn_ptr.is_null());
+        let error = parse_error_msg(response.connection_error_message);
+        assert!(error.contains("configuration error"), "{error}");
+        assert_eq!(
+            response.connection_error_type,
+            ConnectionErrorType::Configuration,
+            "{error}"
+        );
+        free_connection_response(response_ptr as *mut ConnectionResponse);
+    }
+}
+
+/// Failures that are not the core's configuration validation keep the unspecified type, so the
+/// wrapper's exception for them is unchanged.
+#[test]
+fn test_ffi_reports_other_creation_errors_as_unspecified() {
+    let mut rejected = ConnectionRequest::new();
+    rejected.lazy_connect = true;
+    rejected.credential_provider_key = Some("key".into());
+    let mut address = NodeAddress::new();
+    address.host = "127.0.0.1".into();
+    address.port = 1;
+    rejected.addresses.push(address);
+
+    unsafe {
+        let response_ptr = create_sync_client_response(&rejected);
+        let response = &*response_ptr;
+        assert!(response.conn_ptr.is_null());
+        assert!(!response.connection_error_message.is_null());
+        assert_eq!(
+            response.connection_error_type,
+            ConnectionErrorType::Unspecified
+        );
+        free_connection_response(response_ptr as *mut ConnectionResponse);
+    }
+
+    // Compression was reported this way before 2.6; it keeps that type.
+    let mut compression = rejected.clone();
+    compression.credential_provider_key = None;
+    let mut compression_config = glide_core::connection_request::CompressionConfig::new();
+    compression_config.enabled = true;
+    compression_config.compression_level = Some(100);
+    compression_config.min_compression_size = 64;
+    compression.compression_config = Some(compression_config).into();
+    unsafe {
+        let response_ptr = create_sync_client_response(&compression);
+        let response = &*response_ptr;
+        assert!(response.conn_ptr.is_null());
+        let error = parse_error_msg(response.connection_error_message);
+        assert!(error.contains("compression"), "{error}");
+        assert_eq!(
+            response.connection_error_type,
+            ConnectionErrorType::Unspecified,
+            "{error}"
+        );
+        free_connection_response(response_ptr as *mut ConnectionResponse);
+    }
+
+    let mut lazy = rejected.clone();
+    lazy.credential_provider_key = None;
+    unsafe {
+        let response_ptr = create_sync_client_response(&lazy);
+        let response = &*response_ptr;
+        assert!(!response.conn_ptr.is_null());
+        assert!(response.connection_error_message.is_null());
+        assert_eq!(
+            response.connection_error_type,
+            ConnectionErrorType::Unspecified
+        );
+        close_client(response.conn_ptr);
         free_connection_response(response_ptr as *mut ConnectionResponse);
     }
 }

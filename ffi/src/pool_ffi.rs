@@ -154,7 +154,8 @@ fn create_pool_client(
         None, // no address resolver (uses the one in ConnectionRequest if any)
         None, // custom credential providers are rejected by glide_pool_create
         client_id,
-    )?;
+    )
+    .map_err(|err| err.message)?;
 
     // Extract the Client from the adapter for pool bookkeeping
     let adapter = unsafe {

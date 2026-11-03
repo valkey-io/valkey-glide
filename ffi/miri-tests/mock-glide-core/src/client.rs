@@ -25,6 +25,12 @@ use redis::{
 
 pub struct ConnectionError;
 
+impl ConnectionError {
+    pub fn is_configuration(&self) -> bool {
+        false
+    }
+}
+
 /// Mock inflight tracker for Miri tests — no-op Drop.
 pub struct MockInflightTracker;
 
