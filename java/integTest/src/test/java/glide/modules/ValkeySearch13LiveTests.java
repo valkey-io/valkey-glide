@@ -74,7 +74,7 @@ import org.junit.jupiter.params.provider.MethodSource;
  * tests all target the 1.2 surface and don't need to tell a pre-1.3 module apart from a missing
  * one. Mirrors the Node and Python references' probe.
  */
-public class VectorSearch13Tests {
+public class ValkeySearch13LiveTests {
 
     private static final List<Arguments> clients = new ArrayList<>();
     private static final List<Arguments> resp2Clients = new ArrayList<>();
@@ -688,12 +688,12 @@ public class VectorSearch13Tests {
                 client,
                 "{ft-float16-" + UUID.randomUUID() + "}:",
                 VectorType.FLOAT16,
-                VectorSearch13Tests::packFloat16);
+                ValkeySearch13LiveTests::packFloat16);
         runFloat16Bfloat16KnnQuery(
                 client,
                 "{ft-bfloat16-" + UUID.randomUUID() + "}:",
                 VectorType.BFLOAT16,
-                VectorSearch13Tests::packBfloat16);
+                ValkeySearch13LiveTests::packBfloat16);
     }
 
     /** Packs a single IEEE 754 half-precision (FLOAT16) float, little-endian. */
@@ -2204,6 +2204,57 @@ public class VectorSearch13Tests {
 
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void ft_hybrid_withCursor_split_matches_aggregate(BaseClient client) {
+        Assumptions.assumeTrue(
+                capability, "search module present but pre-1.3 (INKEYS probe rejected it)");
+
+        String prefix = "{ft-hybrid-cursor-split-" + UUID.randomUUID() + "}:";
+        String index = createHybridIndex(client, prefix);
+        try {
+            FTHybridSearchArm searchArm = new FTHybridSearchArm(HYBRID_SEARCH_QUERY);
+            FTHybridVsimArm vsimArm =
+                    FTHybridVsimArm.builder("vec", packVector(HYBRID_QUERY_VECTOR[0], HYBRID_QUERY_VECTOR[1]))
+                            .build();
+
+            IllegalArgumentException hybridRejection =
+                    assertThrows(
+                            IllegalArgumentException.class,
+                            () ->
+                                    FT.hybrid(
+                                                    client,
+                                                    index,
+                                                    searchArm,
+                                                    vsimArm,
+                                                    FTHybridOptions.builder().withCursor(new FTWithCursor(1)).build())
+                                            .get());
+            assertTrue(hybridRejection.getMessage().contains("FT.hybridWithCursor"));
+
+            IllegalArgumentException hybridWithCursorRejection =
+                    assertThrows(
+                            IllegalArgumentException.class,
+                            () ->
+                                    FT.hybridWithCursor(
+                                                    client, index, searchArm, vsimArm, FTHybridOptions.builder().build())
+                                            .get());
+            assertTrue(hybridWithCursorRejection.getMessage().contains("FT.hybrid"));
+
+            Object[] page =
+                    FT.hybridWithCursor(
+                                    client,
+                                    index,
+                                    searchArm,
+                                    vsimArm,
+                                    FTHybridOptions.builder().withCursor(new FTWithCursor(10)).build())
+                            .get();
+            assertEquals(2, page.length);
+        } finally {
+            FT.dropindex(client, index).get();
+        }
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClustersOnly")
     public void ft_hybrid_with_cursor_prefer_replica_client_paged_to_exhaustion(
             BaseClient clusterClient) {
@@ -2224,7 +2275,7 @@ public class VectorSearch13Tests {
         try {
             int totalRows = 0;
             Object[] page =
-                    FT.hybrid(
+                    FT.hybridWithCursor(
                                     preferReplicaClient,
                                     index,
                                     new FTHybridSearchArm("*"),

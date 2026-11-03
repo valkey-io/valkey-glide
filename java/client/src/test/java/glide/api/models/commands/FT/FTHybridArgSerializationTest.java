@@ -16,13 +16,13 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 /**
- * Argv-serialization tests for FT.HYBRID's typed options: {@link FTHybridSearchArm}, {@link
- * FTHybridVsimArm}, {@link FTHybridVsimFilter}, {@link FTHybridCombine} and {@link
- * FTHybridOptions}. Mirrors Python's {@code test_options.py} (TestFtHybridSearchArm,
+ * Argv-serialization tests for FT.HYBRID's typed options (valkey-search 1.3): {@link
+ * FTHybridSearchArm}, {@link FTHybridVsimArm}, {@link FTHybridVsimFilter}, {@link FTHybridCombine}
+ * and {@link FTHybridOptions}. Mirrors Python's {@code test_options.py} (TestFtHybridSearchArm,
  * TestFtHybridVsimArm, TestFtHybridVsimFilter, TestFtHybridCombine, TestFtWithCursor,
  * TestFtHybridOptions).
  */
-public class FTHybridOptions13Test {
+public class FTHybridArgSerializationTest {
 
     // ---- FTHybridSearchArm ----
 

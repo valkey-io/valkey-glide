@@ -51,6 +51,15 @@ public class FTHybridOptions {
     private final FTWithCursor withCursor;
 
     /**
+     * {@code true} if {@link #withCursor} is set. Used by {@code FT#hybrid} to reject {@code
+     * withCursor} outright (callers must use {@code FT#hybridWithCursor} instead, which returns the
+     * cursor-wrapped {@code [rows, cursorId]} shape honestly).
+     */
+    public boolean hasWithCursor() {
+        return withCursor != null;
+    }
+
+    /**
      * Restricts the query to the local shard rather than fanning out across the cluster. This is a
      * valkey-search extension not present in RediSearch's FT.HYBRID. LOCALONLY is accepted anywhere
      * in this tail BEFORE PARAMS (including after DIALECT or a LOAD clause) but is rejected

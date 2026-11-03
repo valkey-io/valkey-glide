@@ -3,13 +3,18 @@ package glide.api.commands.servermodules;
 
 import static glide.api.models.GlideString.gs;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
 
+import glide.api.BaseClient;
 import glide.api.models.GlideString;
 import glide.api.models.commands.FT.FTAggregateOptions;
 import glide.api.models.commands.FT.FTHybridCombine;
 import glide.api.models.commands.FT.FTHybridOptions;
 import glide.api.models.commands.FT.FTHybridSearchArm;
 import glide.api.models.commands.FT.FTHybridVsimArm;
+import glide.api.models.commands.FT.FTWithCursor;
 import java.util.HashMap;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -17,7 +22,9 @@ import org.junit.jupiter.api.Test;
 /**
  * Unit tests for {@link FT#hybridArgs}, FT.HYBRID's full argv assembly (the UUID-generated {@code
  * $<name>}/PARAMS pair for a raw-bytes VSIM arm, the merge with caller-supplied params, and COMBINE
- * placement), exercised without a live client via an injectable deterministic name supplier.
+ * placement), exercised without a live client via an injectable deterministic name supplier; and
+ * for the {@code withCursor} dispatch split between {@link FT#hybrid} and {@link
+ * FT#hybridWithCursor}.
  */
 public class FTTest {
 
@@ -156,5 +163,33 @@ public class FTTest {
                     gs("@ss > 0")
                 },
                 args);
+    }
+
+    @Test
+    public void hybrid_rejectsWithCursorSet() {
+        BaseClient client = mock(BaseClient.class);
+        FTHybridSearchArm searchArm = new FTHybridSearchArm("hello");
+        FTHybridVsimArm vsimArm = new FTHybridVsimArm("vec", "rawbytesforvec".getBytes());
+        FTHybridOptions options = FTHybridOptions.builder().withCursor(new FTWithCursor(10)).build();
+
+        IllegalArgumentException e =
+                assertThrows(
+                        IllegalArgumentException.class,
+                        () -> FT.hybrid(client, "myindex", searchArm, vsimArm, options));
+        assertTrue(e.getMessage().contains("FT.hybridWithCursor"));
+    }
+
+    @Test
+    public void hybridWithCursor_rejectsWithCursorUnset() {
+        BaseClient client = mock(BaseClient.class);
+        FTHybridSearchArm searchArm = new FTHybridSearchArm("hello");
+        FTHybridVsimArm vsimArm = new FTHybridVsimArm("vec", "rawbytesforvec".getBytes());
+        FTHybridOptions options = FTHybridOptions.builder().build();
+
+        IllegalArgumentException e =
+                assertThrows(
+                        IllegalArgumentException.class,
+                        () -> FT.hybridWithCursor(client, "myindex", searchArm, vsimArm, options));
+        assertTrue(e.getMessage().contains("FT.hybrid"));
     }
 }

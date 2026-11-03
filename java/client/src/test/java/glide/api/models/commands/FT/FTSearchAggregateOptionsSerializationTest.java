@@ -26,7 +26,7 @@ import org.junit.jupiter.api.Test;
  * and {@code count}'s LIMIT 0 0 serialization. Mirrors Node's {@code GlideFtOptions.test.ts} and
  * Python's {@code test_options.py}.
  */
-public class FTOptions13Test {
+public class FTSearchAggregateOptionsSerializationTest {
 
     // ---- FTCreateOptions ----
 

@@ -623,7 +623,7 @@ public class FT {
     /**
      * Reads the next page of results from a cursor opened by {@link #aggregateWithCursor(BaseClient,
      * String, String, FTAggregateOptions)} (with {@code
-     * FTAggregateOptions.builder().withCursor(...)}) or {@link #hybrid}.
+     * FTAggregateOptions.builder().withCursor(...)}) or {@link #hybridWithCursor}.
      *
      * @param client The client to execute the command.
      * @param indexName The index name the cursor was opened against.
@@ -649,7 +649,7 @@ public class FT {
 
     /**
      * Reads the next page of results from a cursor opened by {@link #aggregateWithCursor(BaseClient,
-     * String, String, FTAggregateOptions)} or {@link #hybrid}.
+     * String, String, FTAggregateOptions)} or {@link #hybridWithCursor}.
      *
      * @param client The client to execute the command.
      * @param indexName The index name the cursor was opened against.
@@ -665,7 +665,7 @@ public class FT {
 
     /**
      * Reads the next page of results from a cursor opened by {@link #aggregateWithCursor(BaseClient,
-     * GlideString, GlideString, FTAggregateOptions)} or {@link #hybrid}.
+     * GlideString, GlideString, FTAggregateOptions)} or {@link #hybridWithCursor}.
      *
      * @param client The client to execute the command.
      * @param indexName The index name the cursor was opened against.
@@ -679,7 +679,7 @@ public class FT {
 
     /**
      * Reads the next page of results from a cursor opened by {@link #aggregateWithCursor(BaseClient,
-     * GlideString, GlideString, FTAggregateOptions)} or {@link #hybrid}.
+     * GlideString, GlideString, FTAggregateOptions)} or {@link #hybridWithCursor}.
      *
      * <p>Always reads from the PRIMARY of the index's slot, regardless of the client's {@code
      * ReadFrom} configuration -- a cursor is a per-process, node-local resource. A cursor opened by
@@ -778,16 +778,22 @@ public class FT {
      * Combines a text/tag/numeric query (the SEARCH arm) with a vector similarity search (the VSIM
      * arm) in a single query, fusing both arms' results into one ranked reply.
      *
+     * <p>Rejects {@code options} with {@code withCursor} set -- use {@link
+     * #hybridWithCursor(BaseClient, String, FTHybridSearchArm, FTHybridVsimArm, FTHybridOptions)}
+     * instead, which returns the honestly-typed {@code [rows, cursorId]} 2-tuple that WITHCURSOR
+     * actually produces.
+     *
      * @param client The client to execute the command.
      * @param indexName The index name to query.
      * @param searchArm The text/tag/numeric query arm. See {@link FTHybridSearchArm}.
      * @param vsimArm The vector similarity search arm. See {@link FTHybridVsimArm}.
      * @param options The optional arguments for the FT.HYBRID command, covering COMBINE, LOAD,
-     *     FILTER/LIMIT/GROUPBY/SORTBY/APPLY clauses, WITHCURSOR, LOCALONLY, TIMEOUT, PARAMS and
-     *     DIALECT. See {@link FTHybridOptions}.
+     *     FILTER/LIMIT/GROUPBY/SORTBY/APPLY clauses, LOCALONLY, TIMEOUT, PARAMS and DIALECT. See
+     *     {@link FTHybridOptions}.
      * @return An array containing a mapping of field name and associated value for each matching
-     *     document. When {@code options}' {@code withCursor} is set, the reply shape instead matches
-     *     FT.AGGREGATE's own WITHCURSOR shape: a two-element array of {@code [rows, cursorId]}.
+     *     document, after both arms' results have been fused and any clauses in {@code options}
+     *     applied.
+     * @throws IllegalArgumentException If {@code options} has {@code withCursor} set.
      * @example
      *     <pre>{@code
      * Object[] result = FT.hybrid(client, "idx",
@@ -796,7 +802,6 @@ public class FT {
      *         FTHybridOptions.builder()
      *             .combine(FTHybridCombine.Rrf.builder().constant(60.0).build())
      *             .loadFields(new String[] {"title"})
-     *             .withCursor(new FTWithCursor(10))
      *             .build())
      *     .get();
      * }</pre>
@@ -814,6 +819,11 @@ public class FT {
      * Combines a text/tag/numeric query (the SEARCH arm) with a vector similarity search (the VSIM
      * arm) in a single query, fusing both arms' results into one ranked reply.
      *
+     * <p>Rejects {@code options} with {@code withCursor} set -- use {@link
+     * #hybridWithCursor(BaseClient, GlideString, FTHybridSearchArm, FTHybridVsimArm,
+     * FTHybridOptions)} instead, which returns the honestly-typed {@code [rows, cursorId]} 2-tuple
+     * that WITHCURSOR actually produces.
+     *
      * <p>Transactions: FT.HYBRID is an ordinary custom command as far as GLIDE's batch/transaction
      * machinery is concerned, but the server itself rejects FT.HYBRID inside MULTI/EXEC outright (and
      * inside a Lua script, or when the reader thread pool is disabled), because the per-arm results
@@ -826,8 +836,9 @@ public class FT {
      * @param vsimArm The vector similarity search arm. See {@link FTHybridVsimArm}.
      * @param options The optional arguments for the FT.HYBRID command. See {@link FTHybridOptions}.
      * @return An array containing a mapping of field name and associated value for each matching
-     *     document, or a cursor-wrapped {@code [rows, cursorId]} pair when {@code options}' {@code
-     *     withCursor} is set.
+     *     document, after both arms' results have been fused and any clauses in {@code options}
+     *     applied.
+     * @throws IllegalArgumentException If {@code options} has {@code withCursor} set.
      */
     public static CompletableFuture<Object[]> hybrid(
             @NonNull BaseClient client,
@@ -835,6 +846,85 @@ public class FT {
             @NonNull FTHybridSearchArm searchArm,
             @NonNull FTHybridVsimArm vsimArm,
             @NonNull FTHybridOptions options) {
+        if (options.hasWithCursor()) {
+            throw new IllegalArgumentException(
+                    "FT.hybrid's declared return type Object[] (the fused per-document mapping) cannot"
+                            + " also represent WITHCURSOR's own [rows, cursorId] 2-tuple reply shape; call"
+                            + " FT.hybridWithCursor(...) instead, which returns that shape honestly.");
+        }
+        GlideString[] args =
+                hybridArgs(indexName, searchArm, vsimArm, options, FT::generatedVsimParamName);
+        return executeCommand(client, args, false);
+    }
+
+    /**
+     * Combines a text/tag/numeric query (the SEARCH arm) with a vector similarity search (the VSIM
+     * arm) in a single query with a paged ({@code WITHCURSOR}) reply, fusing both arms' results into
+     * one ranked reply.
+     *
+     * @param client The client to execute the command.
+     * @param indexName The index name to query.
+     * @param searchArm The text/tag/numeric query arm. See {@link FTHybridSearchArm}.
+     * @param vsimArm The vector similarity search arm. See {@link FTHybridVsimArm}.
+     * @param options The optional arguments for the FT.HYBRID command. Must have {@code withCursor}
+     *     set; see {@link FTHybridOptions.FTHybridOptionsBuilder}.
+     * @return A two-element {@code Object[]} of {@code [rows, cursorId]}, where {@code rows} is the
+     *     same per-document mapping shape {@link #hybrid} returns and {@code cursorId} is a {@code
+     *     Long}, {@code 0} once the cursor is exhausted, or the id to pass to a subsequent {@link
+     *     #cursorRead} call otherwise.
+     * @throws IllegalArgumentException If {@code options} does not have {@code withCursor} set.
+     * @example
+     *     <pre>{@code
+     * Object[] page = FT.hybridWithCursor(client, "idx",
+     *         new FTHybridSearchArm(gs("hello world"), null, gs("ss")),
+     *         FTHybridVsimArm.builder("vec", queryVectorBytes).k(10).yieldScoreAs("vs").build(),
+     *         FTHybridOptions.builder().withCursor(new FTWithCursor(10)).build())
+     *     .get();
+     * Object[] rows = (Object[]) page[0];
+     * long cursorId = (long) page[1];
+     * }</pre>
+     */
+    public static CompletableFuture<Object[]> hybridWithCursor(
+            @NonNull BaseClient client,
+            @NonNull String indexName,
+            @NonNull FTHybridSearchArm searchArm,
+            @NonNull FTHybridVsimArm vsimArm,
+            @NonNull FTHybridOptions options) {
+        return hybridWithCursor(client, gs(indexName), searchArm, vsimArm, options);
+    }
+
+    /**
+     * Combines a text/tag/numeric query (the SEARCH arm) with a vector similarity search (the VSIM
+     * arm) in a single query with a paged ({@code WITHCURSOR}) reply, fusing both arms' results into
+     * one ranked reply.
+     *
+     * <p>Transactions: FT.HYBRID is an ordinary custom command as far as GLIDE's batch/transaction
+     * machinery is concerned, but the server itself rejects FT.HYBRID inside MULTI/EXEC outright (and
+     * inside a Lua script, or when the reader thread pool is disabled), because the per-arm results
+     * cannot be revalidated against concurrent mutations before fusion under forced synchronous
+     * execution.
+     *
+     * @param client The client to execute the command.
+     * @param indexName The index name to query.
+     * @param searchArm The text/tag/numeric query arm. See {@link FTHybridSearchArm}.
+     * @param vsimArm The vector similarity search arm. See {@link FTHybridVsimArm}.
+     * @param options The optional arguments for the FT.HYBRID command. Must have {@code withCursor}
+     *     set; see {@link FTHybridOptions.FTHybridOptionsBuilder}.
+     * @return A two-element {@code Object[]} of {@code [rows, cursorId]}. See the {@code String}
+     *     overload's {@code @return} for the shape of each element.
+     * @throws IllegalArgumentException If {@code options} does not have {@code withCursor} set.
+     */
+    public static CompletableFuture<Object[]> hybridWithCursor(
+            @NonNull BaseClient client,
+            @NonNull GlideString indexName,
+            @NonNull FTHybridSearchArm searchArm,
+            @NonNull FTHybridVsimArm vsimArm,
+            @NonNull FTHybridOptions options) {
+        if (!options.hasWithCursor()) {
+            throw new IllegalArgumentException(
+                    "FT.hybridWithCursor requires options.withCursor to be set; call FT.hybrid instead"
+                            + " for a plain (non-paged) hybrid query.");
+        }
         GlideString[] args =
                 hybridArgs(indexName, searchArm, vsimArm, options, FT::generatedVsimParamName);
         return executeCommand(client, args, false);
