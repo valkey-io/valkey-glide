@@ -20,6 +20,7 @@
 
 ### Fixes
 
+* Python: `zadd` (async, sync and `Batch`/`ClusterBatch`) no longer stringifies `bytes`, `bytearray` and `memoryview` members into their Python repr; members are now passed through verbatim and only the scores are converted to strings ([#7521](https://github.com/valkey-io/valkey-glide/issues/7521))
 * Core: Scoped connections authenticate with the client's current password after `update_connection_password` (or a user-issued `AUTH`/`HELLO`), instead of the password the client was created with: a scope connection built after the rotation sends the new password, and an idle one re-authenticates before its next command once the server has accepted the new password (`immediate_auth`, `AUTH`, `HELLO`); a store-only update leaves open scope connections as they are, like the client's own connection ([#7334](https://github.com/valkey-io/valkey-glide/issues/7334))
 * Core: `GETSET` compresses value when enabled ([#7411](https://github.com/valkey-io/valkey-glide/issues/7411))
 * Core: Reject `SET` with `IFEQ` or `IFNE` when compression is enabled ([#7365](https://github.com/valkey-io/valkey-glide/issues/7365))
