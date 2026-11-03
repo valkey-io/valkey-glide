@@ -193,6 +193,68 @@ mod dma_tests {
         );
     }
 
+    /// A close marks the client closed before it revokes each region, so a
+    /// transfer can be refused in between. Its region can never transfer again,
+    /// so it must come back revoked, not looking usable.
+    ///
+    /// Transfers race the close, so a run without the fix only fails some of the
+    /// time; several transfers looping at once make that most of the time.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn a_transfer_refused_while_the_client_closes_comes_back_revoked() {
+        const TRANSFERS: usize = 8;
+        let server = RedisServer::new(ServerType::Tcp { tls: false });
+        let port = extract_port(&server.get_client_addr());
+        wait_for_server_to_become_ready(&server.get_client_addr()).await;
+        let request = glide_core::client::ConnectionRequest {
+            addresses: vec![NodeAddress {
+                host: "127.0.0.1".to_string(),
+                port,
+                unix_socket_path: None,
+            }],
+            rdma: RdmaSetting::Configured(FabricConfig::new(Provider::Tcp)),
+            ..Default::default()
+        };
+        let client = Client::new(request, None).await.expect("connects");
+
+        // Without the module every transfer fails fast and hands its buffer back,
+        // so each task keeps transferring until the close cancels one.
+        let transfers: Vec<_> = (0..TRANSFERS)
+            .map(|_| {
+                let mut client = client.clone();
+                let mut buffer = client.register_rdma_region(vec![0u8; 4096]).unwrap();
+                tokio::spawn(async move {
+                    loop {
+                        match client.rdma_get(b"key", buffer, 0, 4096).await {
+                            RdmaOutcome::Settled {
+                                buffer: back,
+                                result: Err(error),
+                            } => {
+                                if error.to_string().contains("RDMA transfer cancelled") {
+                                    return back.is_revoked();
+                                }
+                                buffer = back;
+                            }
+                            // No buffer back means the region closed.
+                            RdmaOutcome::Recalled(_) => return true,
+                            RdmaOutcome::Settled { result: Ok(_), .. } => {
+                                panic!("a server without the module cannot serve a transfer")
+                            }
+                        }
+                    }
+                })
+            })
+            .collect();
+
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        client.close_rdma().expect("every region closes");
+        for transfer in transfers {
+            assert!(
+                transfer.await.unwrap(),
+                "a transfer cancelled by the close must see its region revoked"
+            );
+        }
+    }
+
     /// A client built without RDMA says what is missing, whether it is asked to
     /// register memory or to transfer.
     #[tokio::test]
@@ -217,6 +279,15 @@ mod dma_tests {
             .register_rdma_region(vec![0u8; 4096])
             .expect_err("a client without a fabric cannot register");
         assert!(error.to_string().contains("RDMA configuration"), "{error}");
+        let (memory, owner, released) = foreign_memory();
+        let error = unsafe { client.register_rdma_region_raw(memory, owner) }
+            .expect_err("nor register raw memory");
+        assert!(error.to_string().contains("RDMA configuration"), "{error}");
+        assert!(
+            released.load(std::sync::atomic::Ordering::SeqCst),
+            "and the owner is dropped"
+        );
+        unsafe { free_foreign_memory(memory) };
         for error in [
             client
                 .rdma_parked_bytes()
@@ -478,6 +549,73 @@ mod dma_tests {
             freed: freed.clone(),
         };
         (memory, freed)
+    }
+
+    /// Sets its flag when dropped, as the owner of raw memory.
+    struct Released(std::sync::Arc<std::sync::atomic::AtomicBool>);
+
+    impl Drop for Released {
+        fn drop(&mut self) {
+            self.0.store(true, std::sync::atomic::Ordering::SeqCst);
+        }
+    }
+
+    /// Memory a C caller owns, reached only through its raw pointer, with an owner
+    /// for `register_rdma_region_raw` and the flag it sets once dropped.
+    fn foreign_memory() -> (
+        std::ptr::NonNull<[u8]>,
+        Released,
+        std::sync::Arc<std::sync::atomic::AtomicBool>,
+    ) {
+        let memory = Box::into_raw(vec![0u8; 4096].into_boxed_slice());
+        let released = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        (
+            std::ptr::NonNull::new(memory).unwrap(),
+            Released(released.clone()),
+            released,
+        )
+    }
+
+    /// Frees memory from `foreign_memory`.
+    unsafe fn free_foreign_memory(memory: std::ptr::NonNull<[u8]>) {
+        drop(unsafe { Box::from_raw(memory.as_ptr()) });
+    }
+
+    /// Raw memory is a region like any other: closing the client revokes it, and
+    /// its owner is dropped once the region is closed. After the close a raw
+    /// registration is refused and its owner dropped at once.
+    #[tokio::test]
+    async fn closing_the_client_revokes_raw_memory_and_drops_its_owner() {
+        let (_peer, hello) = hello_reply();
+        let scripts = HashMap::from([("BLOB.RDMA_HELLO".to_string(), vec![hello])]);
+        let mock = ServerMock::new_with_command_scripts(primary_responses(), scripts);
+        let client = rdma_client_against(&mock).await;
+        let (memory, owner, released) = foreign_memory();
+        let buffer = unsafe { client.register_rdma_region_raw(memory, owner) }.expect("registers");
+        assert_eq!(buffer.capacity(), 4096);
+
+        client.close_rdma().expect("the region closes");
+        assert!(buffer.is_revoked());
+        assert!(
+            !released.load(std::sync::atomic::Ordering::SeqCst),
+            "the buffer still holds it"
+        );
+        drop(buffer);
+        assert!(
+            freed_promptly(&released).await,
+            "dropped once the region is closed"
+        );
+        unsafe { free_foreign_memory(memory) };
+
+        let (memory, owner, released) = foreign_memory();
+        let refused = unsafe { client.register_rdma_region_raw(memory, owner) }
+            .expect_err("no registration after close");
+        assert!(refused.to_string().contains("closed"), "{refused}");
+        assert!(
+            released.load(std::sync::atomic::Ordering::SeqCst),
+            "and the owner is dropped"
+        );
+        unsafe { free_foreign_memory(memory) };
     }
 
     /// Wait up to [`PROMPTLY`] for `freed` to be set.

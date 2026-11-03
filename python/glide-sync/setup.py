@@ -4,7 +4,7 @@
 # This setup script defines the build logic for a Python package that wraps a
 # Rust-based FFI layer. It integrates with Cargo to compile the Rust component,
 # and vendors required Rust crates (`ffi`, `glide-core`, `glide-logger`,
-# `glide-telemetry`) and the
+# `glide-telemetry`, `glide-rdma`) and the
 # `glide_shared` Python package when building from source or creating sdists.
 #
 # It provides:
@@ -18,6 +18,7 @@
 #
 # Environment Variables:
 # - `GLIDE_SYNC_RELEASE=1` — Enables release mode and triggers vendoring during sdist creation.
+# - `GLIDE_SYNC_RDMA=1` — Builds the FFI layer with RDMA support.
 #
 # Typical usage:
 #   python setup.py build_ext      # Build the Rust shared library
@@ -70,6 +71,10 @@ VENDORED_DEPENDENCIES = {
     "glide-telemetry": VendorFolder(
         source=ROOT.parent.parent / "glide-telemetry",
         dist=ROOT / "glide-telemetry",
+    ),
+    "glide-rdma": VendorFolder(
+        source=ROOT.parent.parent / "glide-rdma",
+        dist=ROOT / "glide-rdma",
     ),
 }
 
@@ -162,6 +167,7 @@ class CleanCommand(Command):
             "glide-core",
             "glide-logger",
             "glide-telemetry",
+            "glide-rdma",
         ]
         for pattern in paths_to_remove:
             # Perform glob under ROOT only
@@ -200,11 +206,27 @@ class build_ext(build_ext_orig):
             }
         )
 
+        # Builds the RDMA support in. libfabric is dynamically loaded only
+        # when a client provides an optional RDMA configuration.
+        rdma = os.environ.get("GLIDE_SYNC_RDMA", "0") == "1"
+        cargo_cmd = [
+            "cargo",
+            "rustc",
+            "--lib",
+            "--crate-type",
+            "cdylib",
+            "--locked",
+        ] + (["--release"] if release else [])
+        if rdma:
+            cargo_cmd += ["--features", "rdma"]
+
         ffi_path = VENDORED_DEPENDENCIES["ffi"].dist
-        print(f"[INFO] Building Rust FFI lib with cargo in {ffi_path}")
+        print(
+            f"[INFO] Building Rust FFI lib with cargo in {ffi_path}"
+            f"{' (RDMA enabled)' if rdma else ''}"
+        )
         subprocess.run(
-            ["cargo", "rustc", "--lib", "--crate-type", "cdylib", "--locked"]
-            + (["--release"] if release else []),
+            cargo_cmd,
             cwd=ffi_path,
             env=env,
             check=True,

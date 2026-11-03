@@ -3633,8 +3633,6 @@ where
                     // - For non-key-based commands, avoid attempting redirection to a random node
                     //   as it wouldn't result in MOVED hints and can lead to unwanted results
                     //   (e.g., sending management command to a different node than the user asked for); instead, raise the error.
-                    let mut conn_check = ConnectionCheck::RandomConnection;
-
                     let routable_cmd = cmd.and_then(|cmd| Routable::command(&*cmd));
                     if routable_cmd.is_some()
                         && !RoutingInfo::is_key_routing_command(&routable_cmd.unwrap())
@@ -3655,33 +3653,47 @@ where
                         )
                     );
 
-                    // Step 3: Obtain the reconnect notifier, ensuring the lock is released immediately after.
-                    let reconnect_notifier = {
-                        let conn_lock = core.conn_lock.read();
-                        conn_lock.notifier_for_route(&route).clone()
+                    // Step 3: Wait for any in-progress reconnect tasks for this route.
+                    // The node may be missing while its connection is being refreshed, e.g. replaced
+                    // after a circular MOVED or during topology reconnection. Register for each
+                    // notification under the same read guard as the lookup, so that no refresh-state
+                    // transition or superseding task can fire the notifier in between. Keep waiting
+                    // while a refresh for the route is still in progress across supersessions.
+                    let conn_option = loop {
+                        let refreshed = {
+                            let conn_lock = core.conn_lock.read();
+                            if let Some(found) = conn_lock.connection_for_route(&route) {
+                                break Some(found);
+                            }
+                            conn_lock
+                                .notifier_for_route(&route)
+                                .map(|notifier| notifier.notified_owned())
+                        };
+                        match refreshed {
+                            Some(refreshed) => {
+                                log_debug_lazy!(
+                                    "cluster",
+                                    format!("SpecificNode: Waiting on reconnect notifier for route `{route:?}`.")
+                                );
+                                refreshed.await;
+                                log_debug_lazy!(
+                                    "cluster",
+                                    format!("SpecificNode: Finished waiting on notifier for route `{route:?}`. Retrying connection lookup.")
+                                );
+                            }
+                            None => break None,
+                        }
                     };
 
-                    // Step 4: If a notifier exists, wait for it to signal completion.
-                    if let Some(notifier) = reconnect_notifier {
-                        log_debug_lazy!("cluster", format!("SpecificNode: Waiting on reconnect notifier for route `{route:?}`."));
-
-                        notifier.notified().await;
-
-                        log_debug_lazy!("cluster", format!("SpecificNode: Finished waiting on notifier for route `{route:?}`. Retrying connection lookup."));
-
-                        // Step 5: Retry the connection lookup after waiting for the reconnect task.
-                        if let Some((conn, address)) =
-                            core.conn_lock.read().connection_for_route(&route)
-                        {
-                            conn_check = ConnectionCheck::Found((conn, address));
-                        } else {
-                            log_debug_lazy!("cluster", format!("SpecificNode: No connection found for route `{route:?}` after waiting on reconnect notifier. Proceeding to random node."));
-                        }
+                    if let Some(found) = conn_option {
+                        ConnectionCheck::Found(found)
                     } else {
-                        log_debug_lazy!("cluster", format!("SpecificNode: No active reconnect task for route `{route:?}`. Proceeding to random node."));
+                        log_debug_lazy!(
+                            "cluster",
+                            format!("SpecificNode: No active reconnect task for route `{route:?}`. Proceeding to random node.")
+                        );
+                        ConnectionCheck::RandomConnection
                     }
-
-                    conn_check
                 }
             }
             InternalSingleNodeRouting::Random => ConnectionCheck::RandomConnection,
@@ -6886,5 +6898,88 @@ pub(super) mod refresh_task_resolution_tests {
                 .port,
             6390
         );
+    }
+
+    fn get_connection_by_specific_route(
+        core: &Arc<InnerCore<RecordingConnection>>,
+        route: Route,
+    ) -> Pin<Box<impl Future<Output = RedisResult<(String, RecordingConnection)>>>> {
+        Box::pin(ClusterConnInner::get_connection(
+            InternalSingleNodeRouting::SpecificNode(route),
+            core.clone(),
+            None,
+        ))
+    }
+
+    #[tokio::test]
+    async fn specific_node_routing_waits_for_in_progress_refresh() {
+        use crate::cluster_routing::{Route, SlotAddr};
+        use futures::FutureExt;
+
+        let _guard = gated_test_guard().await;
+        let core = core_with_non_idempotent_resolver();
+        let address = "resolved-node:6381";
+        core.conn_lock.write().slot_map = SlotMap::new(
+            vec![Slot::new(0, 16383, address.to_owned(), vec![])],
+            HashMap::new(),
+            ReadFromReplicaStrategy::AlwaysFromPrimary,
+        );
+        let route = Route::new(0, SlotAddr::Master);
+
+        // Without a refresh in progress, a missing node fails right away.
+        let Some(Err(err)) = get_connection_by_specific_route(&core, route).now_or_never() else {
+            panic!("expected no connection for the route");
+        };
+        assert_eq!(err.kind(), ErrorKind::AllConnectionsUnavailable);
+
+        // With a refresh in progress for the route's address, the lookup waits for it.
+        insert_in_progress_refresh(&core, address, false);
+        let mut lookup = get_connection_by_specific_route(&core, route);
+        assert!(
+            (&mut lookup).now_or_never().is_none(),
+            "lookup should wait for the in-progress refresh"
+        );
+
+        complete_refresh(&core, address, 6381);
+        let (found_address, connection) = lookup.await.expect("connection found after refresh");
+        assert_eq!(found_address, address);
+        assert_eq!(connection.port, 6381);
+    }
+
+    #[tokio::test]
+    async fn specific_node_routing_waits_across_superseded_refresh() {
+        use crate::cluster_routing::{Route, SlotAddr};
+        use futures::FutureExt;
+
+        let _guard = gated_test_guard().await;
+        let core = core_with_non_idempotent_resolver();
+        let address = "resolved-node:6381";
+        core.conn_lock.write().slot_map = SlotMap::new(
+            vec![Slot::new(0, 16383, address.to_owned(), vec![])],
+            HashMap::new(),
+            ReadFromReplicaStrategy::AlwaysFromPrimary,
+        );
+        let route = Route::new(0, SlotAddr::Master);
+
+        // Insert first in-progress refresh
+        insert_in_progress_refresh(&core, address, true);
+        let mut lookup = get_connection_by_specific_route(&core, route);
+        assert!((&mut lookup).now_or_never().is_none());
+
+        // A newer refresh supersedes the old one, which wakes the waiters before the new
+        // connection exists. The lookup keeps waiting for the newer refresh.
+        insert_in_progress_refresh(&core, address, false);
+        assert!(
+            (&mut lookup).now_or_never().is_none(),
+            "lookup should continue waiting for the superseding refresh"
+        );
+
+        // Complete the new refresh
+        complete_refresh(&core, address, 6381);
+        let (found_address, connection) = lookup
+            .await
+            .expect("connection found after superseding refresh");
+        assert_eq!(found_address, address);
+        assert_eq!(connection.port, 6381);
     }
 }

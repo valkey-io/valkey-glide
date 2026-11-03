@@ -477,7 +477,7 @@ func (client *Client) FlushDBWithOptions(ctx context.Context, mode options.Flush
 //
 // Return value:
 //
-// A piece of generative computer art of that specific valkey version along with the Valkey version.
+// A piece of generative computer art of that specific Valkey version along with the Valkey version.
 //
 // [valkey.io]: https://valkey.io/commands/lolwut/
 func (client *Client) Lolwut(ctx context.Context) (string, error) {
@@ -499,7 +499,7 @@ func (client *Client) Lolwut(ctx context.Context) (string, error) {
 //
 // Return value:
 //
-// A piece of generative computer art of that specific valkey version along with the Valkey version.
+// A piece of generative computer art of that specific Valkey version along with the Valkey version.
 //
 // [valkey.io]: https://valkey.io/commands/lolwut/
 func (client *baseClient) LolwutWithOptions(ctx context.Context, opts options.LolwutOptions) (string, error) {

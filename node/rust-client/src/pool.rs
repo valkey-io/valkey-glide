@@ -705,7 +705,7 @@ pub fn pool_destroy(pool_id: i64) {
             for cid in discarded {
                 scope::unregister_client(cid);
             }
-            pool_guard.destroy();
+            ClientPool::destroy(pool_guard);
         });
     }
 }
@@ -769,19 +769,21 @@ pub fn scope_execute<'a>(
     // client's guardrails to another client's connection.
     let _ = client_id;
 
-    get_pool_runtime().spawn(async move {
-        let parsed = scope::deserialize_command(&cmd_data);
-        let (cmd_name, args) = match parsed {
-            Some(p) => p,
-            None => {
-                deferred.reject(Error::new(
-                    Status::InvalidArg,
-                    "Invalid command wire format",
-                ));
-                return;
-            }
-        };
+    let Some((cmd_name, args)) = scope::deserialize_command(&cmd_data) else {
+        deferred.reject(Error::new(
+            Status::InvalidArg,
+            "Invalid command wire format",
+        ));
+        return Ok(promise);
+    };
+    // The scope's parent id is its pooled client_id; marked before spawning so the
+    // abandon monitor never sees the gap.
+    let blocking_guard = scope::scope_parent_id(scope_id_u64).and_then(|parent| {
+        glide_core::pool::track_scope_command_by_client(parent, &cmd_name, &args)
+    });
 
+    get_pool_runtime().spawn(async move {
+        let _blocking_guard = blocking_guard;
         // Without the parent every guardrail in send_scope_command is unavailable,
         // so fail rather than send the command raw. Neutral wording: resolve_scope_parent
         // returns None for both an unknown/released scope_id and a registered scope

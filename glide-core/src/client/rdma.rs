@@ -208,6 +208,12 @@ impl Client {
     /// caller should register a region once and advertise windows of it per
     /// transfer rather than registering per operation.
     ///
+    /// `memory` must own its bytes, as a `Vec<u8>` or `Box<[u8]>` does. For memory
+    /// the owner keeps reaching through its own pointer, such as memory a C caller
+    /// allocated, use [`Self::register_rdma_region_raw`] instead: wrapping that
+    /// pointer in an `AsMut` type and passing it here is undefined behavior; see
+    /// [`glide_rdma::RdmaFabric::register`].
+    ///
     /// The region is revoked when the client is closed with [`Self::close_rdma`].
     pub fn register_rdma_region(
         &self,
@@ -215,6 +221,33 @@ impl Client {
     ) -> Result<glide_rdma::RdmaBuffer, redis::RedisError> {
         let rdma_fabric = self.require_rdma_fabric()?;
         self.rdma_regions.register(|| rdma_fabric.register(memory))
+    }
+
+    /// Register memory owned outside Rust, such as memory a C caller allocated,
+    /// by its address.
+    ///
+    /// Use this instead of [`Self::register_rdma_region`] when the owner keeps its
+    /// own pointer to the memory and reads or writes through it between transfers;
+    /// see [`glide_rdma::RdmaFabric::register_raw`] for why.
+    ///
+    /// `owner` is dropped once the fabric is done with the memory, which is when the
+    /// memory may be freed. It is dropped at once if registration fails, including
+    /// when the client has no RDMA configuration or is closed.
+    ///
+    /// The region is revoked when the client is closed with [`Self::close_rdma`].
+    ///
+    /// # Safety
+    ///
+    /// The same as [`glide_rdma::RdmaFabric::register_raw`].
+    pub unsafe fn register_rdma_region_raw(
+        &self,
+        memory: std::ptr::NonNull<[u8]>,
+        owner: impl Send + 'static,
+    ) -> Result<glide_rdma::RdmaBuffer, redis::RedisError> {
+        let rdma_fabric = self.require_rdma_fabric()?;
+        // SAFETY: the caller upholds `register_raw`'s contract.
+        self.rdma_regions
+            .register(|| unsafe { rdma_fabric.register_raw(memory, owner) })
     }
 
     /// Bytes of registered memory this client is holding back because transfers
@@ -337,6 +370,15 @@ impl Client {
         buffer: glide_rdma::RdmaBuffer,
     ) -> RdmaOutcome<T::Reply> {
         if let Err(error) = self.check_rdma_buffer(&buffer) {
+            // A close marks the client closed before it revokes each region, so
+            // the buffer may not be revoked yet. Wait for the close to reach it, so
+            // the caller sees the region revoked, as it is about to be, rather than
+            // usable. Waited for here and not in the check, which only borrows the
+            // buffer: a `RdmaBuffer` is not `Sync`, so holding that borrow across an
+            // `.await` would stop the transfer's future being `Send`.
+            if self.rdma_regions.is_closed() {
+                self.rdma_regions.close_finished().await;
+            }
             return RdmaOutcome::Settled {
                 buffer,
                 result: Err(error),

@@ -4186,6 +4186,16 @@ fn apply_json_options(
 ///
 /// `client_adapter_ptr` is a pointer to a valid `GlideClient` returned in the `ConnectionResponse` from [`create_client`].
 ///
+/// With RDMA, this also revokes every region the client registered, as
+/// `rdma_close_regions` does, and only logs a region that fails to close. It
+/// does not free the regions: the caller still owns each one and frees it with
+/// `free_rdma_region`.
+///
+/// This is not a way to cancel a transfer, since it frees the client the
+/// transfer may still be using. To cancel one, call `rdma_close_regions` from
+/// another thread, and call this only once every `rdma_get` and `rdma_set` on
+/// the client has returned.
+///
 /// # Panics
 ///
 /// This function panics when called with a null `client_adapter_ptr`.
@@ -4196,6 +4206,8 @@ fn apply_json_options(
 /// * `close_client` must be called after `free_connection_response` has been called to avoid creating a dangling pointer in the `ConnectionResponse`.
 /// * `client_adapter_ptr` must be obtained from the `ConnectionResponse` returned from [`create_client`].
 /// * `client_adapter_ptr` must be valid until `close_client` is called.
+/// * No `rdma_get`, `rdma_set`, `register_rdma_region`, or `rdma_close_regions`
+///   call on the client may be running or start after this is called.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn close_client(client_adapter_ptr: *const c_void) {
     assert!(!client_adapter_ptr.is_null());
@@ -4205,6 +4217,21 @@ pub unsafe extern "C" fn close_client(client_adapter_ptr: *const c_void) {
     {
         let client_id = client_adapter_ptr as usize as u64;
         glide_core::scope::unregister_client(client_id);
+    }
+
+    // Revoke RDMA regions so the server can no longer reach the caller's memory.
+    #[cfg(feature = "rdma")]
+    {
+        // SAFETY: the caller's reference is still held until the decrement below.
+        let adapter = unsafe { &*(client_adapter_ptr as *const ClientAdapter) };
+        if let Err(error) = adapter.core.client.close_rdma() {
+            glide_logger::log_error(
+                "close_client",
+                format!(
+                    "could not revoke every RDMA region, so a transfer may still be waiting: {error}"
+                ),
+            );
+        }
     }
 
     // This will bring the strong count down to 0 once all client requests are done.
@@ -8317,3 +8344,6 @@ mod tests_push_notification_safety {
 mod pool_ffi;
 #[cfg(feature = "pool-support")]
 pub use pool_ffi::*;
+
+mod rdma_ffi;
+pub use rdma_ffi::*;

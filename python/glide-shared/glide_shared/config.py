@@ -39,6 +39,9 @@ from glide_shared.protobuf.connection_request_pb2 import (
 from glide_shared.protobuf.connection_request_pb2 import (
     ProtocolVersion as SentProtocolVersion,
 )
+from glide_shared.protobuf.connection_request_pb2 import (
+    RdmaConfig as ProtobufRdmaConfig,
+)
 from glide_shared.protobuf.connection_request_pb2 import ReadFrom as ProtobufReadFrom
 from glide_shared.protobuf.connection_request_pb2 import (
     TlsMode,
@@ -324,6 +327,147 @@ class CompressionConfiguration:
         # - int > 0 = use that value
         if self.max_decompressed_size is not None:
             config.max_decompressed_size = self.max_decompressed_size
+
+        return config
+
+
+class RdmaProvider:
+    """
+    The fabric providers that can carry RDMA transfers.
+    Pass one to ``RdmaConfiguration``.
+    """
+
+    @dataclass(frozen=True)
+    class EfaDirect:
+        """
+        AWS Elastic Fabric Adapter, the provider RDMA is built for.
+        Needs EFA hardware and libfabric on both the client and the server.
+        """
+
+    @dataclass(frozen=True)
+    class Tcp:
+        """
+        Software-emulated RDMA transfers over TCP, for development and tests.
+
+        Needs no hardware and offers no performance benefit over a normal ``GET`` or
+        ``SET``: it exists so the RDMA path can be exercised on an ordinary machine.
+
+        Attributes:
+            bind (Optional[str]): Source address to bind to. TCP binds an IP address
+                where ``RdmaProvider.EfaDirect`` has none, so this has no counterpart there. If
+                not set, the provider chooses.
+        """
+
+        bind: Optional[str] = None
+
+
+class RdmaSetChecksum:
+    """
+    Whether ``rdma_set`` asks the server to check the bytes it read against a
+    CRC-32c before storing them. With a checksum, the server refuses to store
+    bytes whose CRC-32c differs, and the write raises ``RdmaError``.
+    """
+
+    @dataclass(frozen=True)
+    class Skip:
+        """Send no checksum. The server stores whatever it read."""
+
+    @dataclass(frozen=True)
+    class Compute:
+        """
+        Compute the CRC-32c of the window before sending. This reads every byte
+        of the window once.
+        """
+
+    @dataclass(frozen=True)
+    class Known:
+        """
+        Send a CRC-32c the caller already has for the window's bytes, for
+        example from ``GlideClient.rdma_checksum``, so the window is not read
+        again.
+
+        Attributes:
+            value (int): The CRC-32c, an unsigned 32-bit integer.
+        """
+
+        value: int
+
+
+@dataclass
+class RdmaConfiguration:
+    """
+    The configuration for enabling remote direct memory access (RDMA) transfers.
+
+    RDMA moves values straight between server memory and host memory the caller
+    registered instead of through the RESP reply. Only the synchronous client
+    supports it and only on a machine with libfabric installed — check
+    :meth:`BaseClient.rdma_usable` first. Leaving this unset means that
+    no fabric is opened and libfabric is never loaded.
+
+    Creating a client fails if RDMA is combined with enabled compression,
+    ``lazy_connect``, read-only mode, or static node discovery.
+
+    Attributes:
+        provider (Union[RdmaProvider.EfaDirect, RdmaProvider.Tcp]): The fabric
+            provider to open, ``RdmaProvider.EfaDirect()`` or ``RdmaProvider.Tcp()``.
+        interface (Optional[str]): Fabric domain to pin to when a host has more
+            than one card. If not set, the first domain the provider returns is
+            used.
+
+    Example::
+
+        config = GlideClientConfiguration(
+            addresses=[NodeAddress("localhost", 6379)],
+            rdma=RdmaConfiguration(provider=RdmaProvider.EfaDirect()),
+        )
+    """
+
+    provider: Union["RdmaProvider.EfaDirect", "RdmaProvider.Tcp"]
+    interface: Optional[str] = None
+
+    def __post_init__(self) -> None:
+        """Validate the RDMA configuration parameters."""
+        if not isinstance(self.provider, (RdmaProvider.EfaDirect, RdmaProvider.Tcp)):
+            raise ConfigurationError(
+                "provider must be RdmaProvider.EfaDirect() or RdmaProvider.Tcp(), got "
+                f"{type(self.provider).__name__}"
+            )
+
+        if (
+            isinstance(self.provider, RdmaProvider.Tcp)
+            and self.provider.bind is not None
+        ):
+            if not self.provider.bind:
+                raise ConfigurationError("bind must not be empty if set")
+
+        if self.interface is not None and not self.interface:
+            raise ConfigurationError("interface must not be empty if set")
+
+    def _to_protobuf(self) -> ProtobufRdmaConfig:
+        """
+        Converts the RDMA configuration to protobuf format.
+
+        Returns:
+            ProtobufRdmaConfig: The protobuf RDMA configuration.
+
+        Raises:
+            ConfigurationError: If any configuration parameter is invalid.
+        """
+        # Re-validate, in case the fields were reassigned after __post_init__.
+        self.__post_init__()
+
+        config = ProtobufRdmaConfig()
+        if isinstance(self.provider, RdmaProvider.Tcp):
+            # Reached through the field so the oneof is marked set even when
+            # there is no bind address to carry.
+            config.tcp.SetInParent()
+            if self.provider.bind is not None:
+                config.tcp.bind = self.provider.bind
+        else:
+            config.efa_direct.SetInParent()
+
+        if self.interface is not None:
+            config.interface = self.interface
 
         return config
 
@@ -1064,6 +1208,12 @@ class BaseClientConfiguration:
             the default library name or a configured ``lib_name``. Every character in a non-empty value must be
             printable ASCII from ``!`` (U+0021) through ``~`` (U+007E), inclusive, excluding ``(`` and ``)``.
             An empty value is treated as unset.
+        rdma (Optional[RdmaConfiguration]): Configuration for remote direct memory access (RDMA) transfers.
+            ⚠️ WARNING: This feature is experimental and its API may change in a future release.
+            When set, the client opens a fabric endpoint, so ``rdma_get`` and ``rdma_set`` can move
+            values directly between server memory and memory the caller registered. Only the synchronous
+            client compiled with the RDMA feature supports this. Transfers always run against a primary,
+            so a ``ReadFrom`` that prefers a replica does not apply to them. If not set, RDMA is disabled.
     """
 
     def __init__(
@@ -1087,6 +1237,7 @@ class BaseClientConfiguration:
         client_circuit_breaker: Optional[ClientCircuitBreakerConfiguration] = None,
         lib_name: Optional[str] = None,
         client_info_tag: Optional[str] = None,
+        rdma: Optional[RdmaConfiguration] = None,
     ):
         self.addresses = addresses
         self.use_tls = use_tls
@@ -1104,6 +1255,7 @@ class BaseClientConfiguration:
         self.advanced_config = advanced_config
         self.lazy_connect = lazy_connect
         self.compression = compression
+        self.rdma = rdma
         self.client_side_cache = client_side_cache
         self.address_resolver = address_resolver
         self.client_circuit_breaker = client_circuit_breaker
@@ -1294,6 +1446,8 @@ class BaseClientConfiguration:
             request.lazy_connect = self.lazy_connect
         if self.compression is not None:
             request.compression_config.CopyFrom(self.compression._to_protobuf())
+        if self.rdma is not None:
+            request.rdma_config.CopyFrom(self.rdma._to_protobuf())
         return request
 
     def _get_pubsub_callback_and_context(
@@ -1472,6 +1626,7 @@ class GlideClientConfiguration(BaseClientConfiguration):
         client_circuit_breaker: Optional[ClientCircuitBreakerConfiguration] = None,
         lib_name: Optional[str] = None,
         client_info_tag: Optional[str] = None,
+        rdma: Optional[RdmaConfiguration] = None,
     ):
         super().__init__(
             addresses=addresses,
@@ -1490,6 +1645,7 @@ class GlideClientConfiguration(BaseClientConfiguration):
             advanced_config=advanced_config,
             lazy_connect=lazy_connect,
             compression=compression,
+            rdma=rdma,
             client_side_cache=client_side_cache,
             address_resolver=address_resolver,
             client_circuit_breaker=client_circuit_breaker,
@@ -1743,6 +1899,7 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
         client_circuit_breaker: Optional[ClientCircuitBreakerConfiguration] = None,
         lib_name: Optional[str] = None,
         client_info_tag: Optional[str] = None,
+        rdma: Optional[RdmaConfiguration] = None,
     ):
         super().__init__(
             addresses=addresses,
@@ -1761,6 +1918,7 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
             advanced_config=advanced_config,
             lazy_connect=lazy_connect,
             compression=compression,
+            rdma=rdma,
             client_side_cache=client_side_cache,
             address_resolver=address_resolver,
             client_circuit_breaker=client_circuit_breaker,

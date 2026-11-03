@@ -32,6 +32,7 @@ from glide_shared.commands.core_options import (
     PubSubMsg,
     UpdateOptions,
     ValueComparison,
+    _build_hsetex_args,
     _build_sort_args,
 )
 from glide_shared.commands.sorted_set import (
@@ -1469,6 +1470,8 @@ class CoreCommands(Protocol):
         field_value_map: Mapping[TEncodable, TEncodable],
         field_conditional_change: Optional[HashFieldConditionalChange] = None,
         expiry: Optional[ExpirySet] = None,
+        # TODO: https://github.com/valkey-io/valkey-glide/issues/7488
+        key_conditional_change: Optional[ConditionalChange] = None,
     ) -> int:
         """
         Sets the specified fields to their respective values in the hash stored at `key` with optional expiration.
@@ -1488,6 +1491,8 @@ class CoreCommands(Protocol):
                 - UNIX_SEC (EXAT): Absolute expiration time in seconds (Unix timestamp).
                 - UNIX_MILLSEC (PXAT): Absolute expiration time in milliseconds (Unix timestamp).
                 - KEEP_TTL (KEEPTTL): Retain existing TTL.
+            key_conditional_change (Optional[ConditionalChange]): Key conditional change option.
+                Requires Valkey 9.1.0 and above.
 
         Returns:
             int: 1 if all fields were set successfully, 0 if none were set due to conditional constraints.
@@ -1499,25 +1504,18 @@ class CoreCommands(Protocol):
                 1  # Field set because field already exists
             >>> await client.hsetex("new_hash", {"field1": "value1"}, field_conditional_change=HashFieldConditionalChange.ONLY_IF_ALL_EXIST)
                 0  # No fields set because hash doesn't exist
+            >>> await client.hsetex("my_hash", {"field1": "value2"}, key_conditional_change=ConditionalChange.ONLY_IF_EXISTS)
+                1  # Field set because the key already exists
 
         Since: Valkey 9.0.0
         """
-        args: List[TEncodable] = [key]
-
-        # Add field conditional change option if specified
-        if field_conditional_change is not None:
-            args.append(field_conditional_change.value)
-
-        # Add expiry options if specified
-        if expiry is not None:
-            args.extend(expiry.get_cmd_args())
-
-        # Add FIELDS keyword and field count
-        args.extend(["FIELDS", str(len(field_value_map))])
-
-        # Add field-value pairs
-        for field, value in field_value_map.items():
-            args.extend([field, value])
+        args = _build_hsetex_args(
+            key,
+            field_value_map,
+            key_conditional_change=key_conditional_change,
+            field_conditional_change=field_conditional_change,
+            expiry=expiry,
+        )
 
         return cast(
             int,
