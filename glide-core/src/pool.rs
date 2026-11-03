@@ -4536,6 +4536,48 @@ mod client_pool_tests {
         client_id
     }
 
+    /// Pool code writes the client-to-pool map while holding the pool lock, so a
+    /// refresh that waited for that lock with its map guard still held would
+    /// deadlock against it.
+    #[test]
+    fn refresh_by_client_waits_for_the_pool_lock_without_holding_the_map() {
+        let pool_id =
+            register_pool(ClientPool::new(test_pool_config(Duration::from_secs(5))).unwrap());
+        let client_id = allocate_client_id();
+        register_pool_client(pool_id, client_id);
+        let pool_arc = get_pool(pool_id).unwrap();
+
+        let (held_tx, held_rx) = std::sync::mpsc::channel();
+        let (release_tx, release_rx) = std::sync::mpsc::channel::<()>();
+        let holder = std::thread::spawn(move || {
+            let _guard = pool_arc.lock();
+            held_tx.send(()).unwrap();
+            release_rx.recv().unwrap();
+        });
+        held_rx.recv().unwrap();
+
+        let refresher = std::thread::spawn(move || refresh_activity_by_client(client_id));
+        std::thread::sleep(Duration::from_millis(100));
+
+        let (removed_tx, removed_rx) = std::sync::mpsc::channel();
+        let remover = std::thread::spawn(move || {
+            unregister_pool_client(client_id);
+            removed_tx.send(()).unwrap();
+        });
+        let removed = removed_rx.recv_timeout(Duration::from_secs(2));
+
+        release_tx.send(()).unwrap();
+        holder.join().unwrap();
+        refresher.join().unwrap();
+        remover.join().unwrap();
+        unregister_pool(pool_id);
+
+        assert!(
+            removed.is_ok(),
+            "the map write waited for a refresh that was waiting for the pool lock"
+        );
+    }
+
     /// A pool is not supported with RDMA, so a pool whose clients would request it
     /// must be refused before any client is created.
     #[cfg(feature = "proto")]
