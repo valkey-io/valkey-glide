@@ -526,6 +526,81 @@ print(f"Compressed bytes: {stats['total_bytes_compressed']}")
 print(f"Compression skipped: {stats['compression_skipped_count']}")
 ```
 
+## RDMA Transfers (EXPERIMENTAL)
+
+**⚠️ WARNING: This feature is experimental. Its API may change in a future release.**
+
+The sync client can read and write values with RDMA (remote direct memory access): the server
+copies a value straight into, or out of, memory you registered, with no copy through the client.
+It needs a server that serves the `BLOB.RDMA_*` commands, and `libfabric` 2.4 or newer on the
+client machine. libfabric is loaded only when a client asks for RDMA, so the published
+`valkey-glide-sync` wheel runs anywhere.
+
+RDMA is only in the sync client. It cannot be combined with enabled compression, `lazy_connect`,
+read-only mode or static node discovery, and `ClientPool` does not support it. Transfers always go
+to the key's primary.
+
+### Basic RDMA Setup
+
+```python
+from glide_sync import (
+    GlideClient, GlideClientConfiguration, NodeAddress,
+    RdmaConfiguration, RdmaProvider, RdmaSetChecksum,
+)
+
+# rdma_available: this build has RDMA. rdma_usable: libfabric also loads here.
+if not GlideClient.rdma_usable():
+    raise SystemExit("needs libfabric 2.4 or newer")
+
+client = GlideClient.create(GlideClientConfiguration(
+    addresses=[NodeAddress("localhost", 6379)],
+    # EfaDirect() for EFA hardware. Tcp() emulates RDMA over TCP, for development only.
+    rdma=RdmaConfiguration(provider=RdmaProvider.EfaDirect()),
+))
+
+# Register memory once: it pins the pages, which is slow. Then transfer through windows of it.
+slab = bytearray(64 << 20)  # or an mmap, a NumPy array, a tensor's storage
+with client.register_rdma_region(slab) as region:
+    window = region.window(0, 11)
+    window.memoryview()[:] = b"hello world"
+    client.rdma_set(b"greeting", window, checksum=RdmaSetChecksum.Compute())
+
+    receipt = client.rdma_get(b"greeting", region.window(4096, 4096))
+    if receipt is not None:  # None: the key does not exist
+        value = region.window(4096, receipt.bytes_written).memoryview()
+client.close()
+```
+
+- GLIDE never copies or frees your memory. The region keeps a reference to it, so it stays alive
+  while the region is open. Close regions when you are done (or use `with`), since their pages
+  stay pinned until then.
+- A region carries one transfer at a time. Threads that transfer at once each need their own
+  region, for example one per non-overlapping slice of the same buffer.
+- `rdma_get` checks every value it reads against the CRC-32c the server reports. `rdma_set` checks
+  only if you pass a checksum: `Skip()` (the default), `Compute()`, or `Known(crc)`.
+- Transfers have no timeout. To cancel one, call `client.close()` from another thread; the blocked
+  call raises `ClosingError`, and you need a new client.
+
+### Handling a Failed Transfer
+
+Some failures close the region because the server might still be using the memory. Check
+`region.closed` after any error rather than the error's class:
+
+```python
+from glide_sync import GlideError
+
+try:
+    receipt = client.rdma_get(key, region.window(offset, length))
+except GlideError:
+    if region.closed and not client.closed:
+        region = client.register_rdma_region(slab)
+    raise
+```
+
+GLIDE never retries a transfer, since only you know whether sending a value again is safe.
+Registering again raises `RdmaError` while GLIDE still holds the memory, which only happens with
+the `Tcp()` provider or after a device error; `region.memory_released` tells you when it is free.
+
 ---
 
 For complete examples with error handling, please refer to:

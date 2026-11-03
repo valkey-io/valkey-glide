@@ -668,6 +668,11 @@ class BaseClient(CoreCommands):
 
     def __init__(self, config: BaseClientConfiguration):
         """To create a new client, use the `create` classmethod"""
+        if getattr(config, "rdma", None) is not None:
+            raise ConfigurationError(
+                "RDMA is only available on the synchronous client; create a "
+                "glide_sync client to use RdmaConfiguration"
+            )
         _glide_ffi = _ASYNC_FFI
         self._ffi = _glide_ffi.ffi
         self._lib = _glide_ffi.lib
