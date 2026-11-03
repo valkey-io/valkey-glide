@@ -8,6 +8,7 @@ import (
 	"errors"
 
 	"github.com/valkey-io/valkey-glide/go/v2/constants"
+	"github.com/valkey-io/valkey-glide/go/v2/internal/utils"
 )
 
 // HSetExOptions represents optional arguments for the HSETEX command.
@@ -16,16 +17,8 @@ import (
 //
 // [valkey.io]: https://valkey.io/commands/hsetex/
 type HSetExOptions struct {
-	// ConditionalSet is the key condition, see [constants.ConditionalSet]. Key conditions require Valkey 9.1.0.
-	//
-	// TODO: https://github.com/valkey-io/valkey-glide/issues/7489 Remove this backward compatibility note in the next
-	// major release.
-	// For backward compatibility, the deprecated field condition constants are still accepted here;
-	// use FieldConditionalSet instead.
 	ConditionalSet constants.ConditionalSet
-	// FieldConditionalSet is the field condition, see [constants.HashFieldConditionalSet].
-	FieldConditionalSet constants.HashFieldConditionalSet
-	Expiry              *Expiry
+	Expiry         *Expiry
 }
 
 // NewHSetExOptions creates a new HSetExOptions instance.
@@ -33,24 +26,9 @@ func NewHSetExOptions() HSetExOptions {
 	return HSetExOptions{}
 }
 
-// SetConditionalSet sets the key conditional set option, see [constants.ConditionalSet].
-//
-// Since:
-//
-//	Valkey 9.1.0 for key conditions.
-//
-// TODO: https://github.com/valkey-io/valkey-glide/issues/7489 Remove this backward compatibility note in the next
-// major release.
-// Passing the deprecated field condition constants is still supported; use [HSetExOptions.SetFieldConditionalSet]
-// instead.
+// SetConditionalSet sets the conditional set option.
 func (opts HSetExOptions) SetConditionalSet(conditionalSet constants.ConditionalSet) HSetExOptions {
 	opts.ConditionalSet = conditionalSet
-	return opts
-}
-
-// SetFieldConditionalSet sets the field conditional set option, see [constants.HashFieldConditionalSet].
-func (opts HSetExOptions) SetFieldConditionalSet(fieldConditionalSet constants.HashFieldConditionalSet) HSetExOptions {
-	opts.FieldConditionalSet = fieldConditionalSet
 	return opts
 }
 
@@ -60,52 +38,40 @@ func (opts HSetExOptions) SetExpiry(expiry *Expiry) HSetExOptions {
 	return opts
 }
 
-// ToArgs converts the options to command arguments, in the order [NX | XX] [FNX | FXX] [expiry].
+// ToArgs converts the options to command arguments.
 func (opts *HSetExOptions) ToArgs() ([]string, error) {
 	args := []string{}
 
-	keyCondition := opts.ConditionalSet
-	fieldCondition := opts.FieldConditionalSet
+	// Add conditional set options only if set
+	if opts.ConditionalSet != "" {
 
-	// TODO: https://github.com/valkey-io/valkey-glide/issues/7489
-	// Backward compatibility: field conditions were previously passed via ConditionalSet.
-	if legacy := constants.HashFieldConditionalSet(keyCondition); legacy == constants.HashAllFieldsExist ||
-		legacy == constants.HashFieldsDoNotExist {
-		if fieldCondition != "" {
-			return nil, errors.New(
-				"HSetExOptions: field condition set in both ConditionalSet and FieldConditionalSet",
-			)
+		// TODO #6154: Separate key-level (`NX`/`XX`) from field-level (`FNX`/`FXX`) conditions.
+		// `ConditionalSet` is shared with `SET`, but `HSETEX` does not support `IFEQ` or `IFNE`.
+		if opts.ConditionalSet == constants.OnlyIfEquals || opts.ConditionalSet == constants.OnlyIfNotEquals {
+			return nil, errors.New("invalid conditional set for HSETEX")
 		}
-		fieldCondition, keyCondition = legacy, ""
-	}
 
-	switch keyCondition {
-	case "":
-	case constants.OnlyIfExists, constants.OnlyIfDoesNotExist:
-		args = append(args, string(keyCondition))
-	default:
-		return nil, errors.New("HSetExOptions: invalid key condition " + string(keyCondition))
-	}
-
-	switch fieldCondition {
-	case "":
-	case constants.HashAllFieldsExist, constants.HashFieldsDoNotExist:
-		args = append(args, string(fieldCondition))
-	default:
-		return nil, errors.New("HSetExOptions: invalid field condition " + string(fieldCondition))
+		conditionStr, err := opts.ConditionalSet.ToString()
+		if err != nil {
+			return nil, err
+		}
+		args = append(args, conditionStr)
 	}
 
 	// Add expiry options
 	if opts.Expiry != nil {
-		// HSETEX does not support PERSIST.
-		if opts.Expiry.Type == constants.Persist {
-			return nil, errors.New("HSetExOptions: invalid expiry type " + string(opts.Expiry.Type))
+		switch opts.Expiry.Type {
+		case constants.Seconds:
+			args = append(args, "EX", utils.IntToString(int64(opts.Expiry.Duration)))
+		case constants.Milliseconds:
+			args = append(args, "PX", utils.IntToString(int64(opts.Expiry.Duration)))
+		case constants.UnixSeconds:
+			args = append(args, "EXAT", utils.IntToString(int64(opts.Expiry.GetTime())))
+		case constants.UnixMilliseconds:
+			args = append(args, "PXAT", utils.IntToString(int64(opts.Expiry.GetTime())))
+		case constants.KeepExisting:
+			args = append(args, "KEEPTTL")
 		}
-		expiryArgs, err := opts.Expiry.ToArgs()
-		if err != nil {
-			return nil, err
-		}
-		args = append(args, expiryArgs...)
 	}
 
 	return args, nil
@@ -137,15 +103,18 @@ func (opts *HGetExOptions) ToArgs() ([]string, error) {
 
 	// Add expiry options
 	if opts.Expiry != nil {
-		// HGETEX does not support KEEPTTL.
-		if opts.Expiry.Type == constants.KeepExisting {
-			return nil, errors.New("HGetExOptions: invalid expiry type " + string(opts.Expiry.Type))
+		switch opts.Expiry.Type {
+		case constants.Seconds:
+			args = append(args, "EX", utils.IntToString(int64(opts.Expiry.Duration)))
+		case constants.Milliseconds:
+			args = append(args, "PX", utils.IntToString(int64(opts.Expiry.Duration)))
+		case constants.UnixSeconds:
+			args = append(args, "EXAT", utils.IntToString(int64(opts.Expiry.GetTime())))
+		case constants.UnixMilliseconds:
+			args = append(args, "PXAT", utils.IntToString(int64(opts.Expiry.GetTime())))
+		case constants.Persist:
+			args = append(args, "PERSIST")
 		}
-		expiryArgs, err := opts.Expiry.ToArgs()
-		if err != nil {
-			return nil, err
-		}
-		args = append(args, expiryArgs...)
 	}
 
 	return args, nil

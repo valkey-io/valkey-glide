@@ -116,6 +116,7 @@ func (setOptions *SetOptions) SetExpiry(expiry *Expiry) *SetOptions {
 
 func (opts *SetOptions) ToArgs() ([]string, error) {
 	args := []string{}
+	var err error
 	if opts.ConditionalSet != "" {
 		args = append(args, string(opts.ConditionalSet))
 		if opts.ConditionalSet == constants.OnlyIfEquals || opts.ConditionalSet == constants.OnlyIfNotEquals {
@@ -128,18 +129,17 @@ func (opts *SetOptions) ToArgs() ([]string, error) {
 	}
 
 	if opts.Expiry != nil {
-		// SET does not support PERSIST.
-		if opts.Expiry.Type == constants.Persist {
-			return nil, errors.New("SetOptions: invalid expiry type " + string(opts.Expiry.Type))
+		switch opts.Expiry.Type {
+		case constants.Seconds, constants.Milliseconds, constants.UnixSeconds, constants.UnixMilliseconds:
+			args = append(args, string(opts.Expiry.Type), strconv.FormatUint(opts.Expiry.GetTime(), 10))
+		case constants.KeepExisting:
+			args = append(args, string(opts.Expiry.Type))
+		default:
+			err = errors.New("invalid expiry type")
 		}
-		expiryArgs, err := opts.Expiry.ToArgs()
-		if err != nil {
-			return nil, err
-		}
-		args = append(args, expiryArgs...)
 	}
 
-	return args, nil
+	return args, err
 }
 
 // GetExOptions represents optional arguments for the [GetExWithOptions] command.
@@ -164,20 +164,20 @@ func (getExOptions *GetExOptions) SetExpiry(expiry *Expiry) *GetExOptions {
 
 func (opts *GetExOptions) ToArgs() ([]string, error) {
 	args := []string{}
+	var err error
 
 	if opts.Expiry != nil {
-		// GETEX does not support KEEPTTL.
-		if opts.Expiry.Type == constants.KeepExisting {
-			return nil, errors.New("GetExOptions: invalid expiry type " + string(opts.Expiry.Type))
+		switch opts.Expiry.Type {
+		case constants.Seconds, constants.Milliseconds, constants.UnixSeconds, constants.UnixMilliseconds:
+			args = append(args, string(opts.Expiry.Type), strconv.FormatUint(opts.Expiry.GetTime(), 10))
+		case constants.Persist:
+			args = append(args, string(opts.Expiry.Type))
+		default:
+			err = errors.New("invalid expiry type")
 		}
-		expiryArgs, err := opts.Expiry.ToArgs()
-		if err != nil {
-			return nil, err
-		}
-		args = append(args, expiryArgs...)
 	}
 
-	return args, nil
+	return args, err
 }
 
 // Expiry is used to configure the lifetime of a value.
@@ -236,19 +236,6 @@ func NewExpiryPersist() *Expiry {
 func (ex *Expiry) SetType(expiryType constants.ExpiryType) *Expiry {
 	ex.Type = expiryType
 	return ex
-}
-
-// ToArgs converts the expiry to command arguments: EX, PX, EXAT, PXAT, KEEPTTL or PERSIST.
-// Callers are responsible for rejecting expiry types that their command does not support.
-func (ex *Expiry) ToArgs() ([]string, error) {
-	switch ex.Type {
-	case constants.Seconds, constants.Milliseconds, constants.UnixSeconds, constants.UnixMilliseconds:
-		return []string{string(ex.Type), strconv.FormatUint(ex.GetTime(), 10)}, nil
-	case constants.KeepExisting, constants.Persist:
-		return []string{string(ex.Type)}, nil
-	default:
-		return nil, errors.New("invalid expiry type " + string(ex.Type))
-	}
 }
 
 // GetTime returns the time in the appropriate unit (seconds or milliseconds)
