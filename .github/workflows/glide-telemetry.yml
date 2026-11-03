@@ -44,7 +44,7 @@ on:
     workflow_call:
 
 concurrency:
-    group: glide-telemetry-${{ github.head_ref || github.ref }}
+    group: glide-telemetry-${{ github.head_ref || github.ref }}-${{ github.workflow }}
     cancel-in-progress: true
 
 env:

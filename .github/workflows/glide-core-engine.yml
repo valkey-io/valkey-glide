@@ -62,7 +62,7 @@ on:
                 default: false
 
 concurrency:
-    group: glide-core-engine-${{ github.head_ref || github.ref }}
+    group: glide-core-engine-${{ github.head_ref || github.ref }}-${{ github.workflow }}
     cancel-in-progress: true
 
 env:

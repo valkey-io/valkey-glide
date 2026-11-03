@@ -47,7 +47,7 @@ on:
     # TODO #7409: Run this workflow from fmt-all.yml and full-matrix-tests.yml.
 
 concurrency:
-    group: glide-rdma-${{ github.head_ref || github.ref }}
+    group: glide-rdma-${{ github.head_ref || github.ref }}-${{ github.workflow }}
     cancel-in-progress: true
 
 env:

@@ -64,7 +64,7 @@ on:
     workflow_call:
 
 concurrency:
-    group: rust-${{ github.head_ref || github.ref }}
+    group: rust-${{ github.head_ref || github.ref }}-${{ github.workflow }}
     cancel-in-progress: true
 
 env:
