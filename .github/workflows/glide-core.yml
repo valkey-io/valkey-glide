@@ -14,8 +14,8 @@ on:
             - benchmarks/rust/**
 
             # Rust dependencies
-            - glide-telemetry/**
             - glide-logger/**
+            - glide-telemetry/**
             - glide-rdma/**
             - deny.toml
 
@@ -35,6 +35,8 @@ on:
             - benchmarks/install_and_test.sh
             - benchmarks/utilities/**
             - utils/cluster_manager.py
+
+            # Exclusions
             - "!**/*.md"
             - "!**/THIRD_PARTY_LICENSES*"
     pull_request:
@@ -43,8 +45,8 @@ on:
             - benchmarks/rust/**
 
             # Rust dependencies
-            - glide-telemetry/**
             - glide-logger/**
+            - glide-telemetry/**
             - glide-rdma/**
             - deny.toml
 
@@ -64,6 +66,8 @@ on:
             - benchmarks/install_and_test.sh
             - benchmarks/utilities/**
             - utils/cluster_manager.py
+
+            # Exclusions
             - "!**/*.md"
             - "!**/THIRD_PARTY_LICENSES*"
     workflow_dispatch:

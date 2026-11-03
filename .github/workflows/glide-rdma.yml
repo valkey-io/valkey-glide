@@ -13,6 +13,7 @@ on:
             - glide-rdma/**
 
             # Rust dependencies
+            - glide-logger/**
             - deny.toml
 
             # GitHub workflows
@@ -21,13 +22,15 @@ on:
             - .github/actions/install-protoc/action.yml
             - .github/actions/install-rust/action.yml
             - .github/workflows/lint-rust/action.yml
+
+            # Exclusions
             - "!**/*.md"
-            - "!**/THIRD_PARTY_LICENSES*"
     pull_request:
         paths:
             - glide-rdma/**
 
             # Rust dependencies
+            - glide-logger/**
             - deny.toml
 
             # GitHub workflows
@@ -36,10 +39,12 @@ on:
             - .github/actions/install-protoc/action.yml
             - .github/actions/install-rust/action.yml
             - .github/workflows/lint-rust/action.yml
+
+            # Exclusions
             - "!**/*.md"
-            - "!**/THIRD_PARTY_LICENSES*"
     workflow_dispatch:
-    # TODO #7409: Add `workflow_call:` so fmt-all.yml, full-matrix-tests.yml, and rust-cd.yml can run this workflow.
+    workflow_call:
+    # TODO #7409: Run this workflow from fmt-all.yml and full-matrix-tests.yml.
 
 concurrency:
     group: glide-rdma-${{ github.head_ref || github.ref }}
@@ -77,11 +82,11 @@ jobs:
                   key: ${{ runner.os }}-glide-rdma-${{ hashFiles('glide-rdma/Cargo.lock') }}
                   restore-keys: ${{ runner.os }}-glide-rdma-
 
-            - name: Run tests
+            - name: Run glide-rdma tests
               working-directory: ./glide-rdma
               run: cargo test
 
-            - name: Run tests with libfabric
+            - name: Run glide-rdma tests with libfabric
               working-directory: ./glide-rdma
               run: cargo test --features libfabric
 

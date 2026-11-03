@@ -21,8 +21,9 @@ on:
             - .github/actions/install-protoc/action.yml
             - .github/actions/install-rust/action.yml
             - .github/workflows/lint-rust/action.yml
+
+            # Exclusions
             - "!**/*.md"
-            - "!**/THIRD_PARTY_LICENSES*"
     pull_request:
         paths:
             - glide-telemetry/**
@@ -36,8 +37,9 @@ on:
             - .github/actions/install-protoc/action.yml
             - .github/actions/install-rust/action.yml
             - .github/workflows/lint-rust/action.yml
+
+            # Exclusions
             - "!**/*.md"
-            - "!**/THIRD_PARTY_LICENSES*"
     workflow_dispatch:
     workflow_call:
 
@@ -49,7 +51,7 @@ env:
     CARGO_TERM_COLOR: always
 
 jobs:
-    test:
+    tests:
         runs-on: ubuntu-24.04
         timeout-minutes: 15
         steps:

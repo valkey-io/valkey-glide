@@ -13,9 +13,9 @@ on:
             - rust/**
 
             # Rust dependencies
-            - glide-core/**
-            - glide-telemetry/**
             - glide-logger/**
+            - glide-telemetry/**
+            - glide-core/**
             - deny.toml
 
             # GitHub workflows
@@ -27,6 +27,8 @@ on:
             - .github/actions/install-zig/action.yml
             - .github/workflows/lint-rust/action.yml
             - utils/cluster_manager.py
+
+            # Exclusions
             - "!**/*.md"
             - "!**/THIRD_PARTY_LICENSES*"
             # Re-include: compiled as doctests by rust/src/lib.rs
@@ -37,9 +39,9 @@ on:
             - rust/**
 
             # Rust dependencies
-            - glide-core/**
-            - glide-telemetry/**
             - glide-logger/**
+            - glide-telemetry/**
+            - glide-core/**
             - deny.toml
 
             # GitHub workflows
@@ -51,6 +53,8 @@ on:
             - .github/actions/install-zig/action.yml
             - .github/workflows/lint-rust/action.yml
             - utils/cluster_manager.py
+
+            # Exclusions
             - "!**/*.md"
             - "!**/THIRD_PARTY_LICENSES*"
             # Re-include: compiled as doctests by rust/src/lib.rs

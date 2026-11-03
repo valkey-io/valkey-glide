@@ -45,6 +45,11 @@ jobs:
             - validate-branch
         uses: ./.github/workflows/glide-telemetry.yml
 
+    test-glide-rdma:
+        needs:
+            - validate-branch
+        uses: ./.github/workflows/glide-rdma.yml
+
     test-glide-core-engine:
         needs:
             - validate-branch
@@ -64,6 +69,7 @@ jobs:
         needs:
             - test-glide-logger
             - test-glide-telemetry
+            - test-glide-rdma
             - test-glide-core-engine
             - test-glide-core
             - test-valkey-glide
