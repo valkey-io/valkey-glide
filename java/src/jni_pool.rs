@@ -84,15 +84,14 @@ pub extern "system" fn Java_glide_ffi_resolvers_GlidePoolResolver_glidePoolCreat
     // while these connections are still in flight; see ClientPool::reserve_warmup_slots.
     if min_idle > 0 {
         let pool_arc = pool::get_pool(pool_id).unwrap();
-        let reserved =
-            runtime.block_on(async { pool_arc.lock().await.reserve_warmup_slots(min_idle as u32) });
+        let reserved = pool_arc.lock().reserve_warmup_slots(min_idle as u32);
         for _ in 0..reserved {
             let pool_clone = pool_arc.clone();
             let conn_bytes = bytes.clone();
             runtime.spawn(async move {
                 match create_pool_client(&conn_bytes).await {
                     Ok(client) => {
-                        let mut pool = pool_clone.lock().await;
+                        let mut pool = pool_clone.lock();
                         if pool.state.load(Ordering::Acquire) != POOL_RUNNING {
                             pool.release_reservation();
                             return;
@@ -110,7 +109,7 @@ pub extern "system" fn Java_glide_ffi_resolvers_GlidePoolResolver_glidePoolCreat
                     Err(e) => {
                         log::error!("Pool background client creation failed: {}", e);
                         // Return the slot this warmup task reserved but never filled.
-                        pool_clone.lock().await.release_reservation();
+                        pool_clone.lock().release_reservation();
                     }
                 }
             });
@@ -132,55 +131,50 @@ pub extern "system" fn Java_glide_ffi_resolvers_GlidePoolResolver_glidePoolTryAc
         None => return -2,
     };
 
-    match pool_arc.try_lock() {
-        Ok(mut pool) => {
-            // Reclaim the Java-side handles of clients core has discarded
-            let discarded = pool.drain_discarded_ids();
-            for cid in discarded {
-                get_handle_table().remove(&cid);
-                glide_core::scope::unregister_client(cid);
-                get_pool_client_map().remove(&cid);
-            }
-
-            let result = pool.try_acquire();
-            if result >= 0 {
-                // Register in CLIENT_TO_POOL and pool_client_map so activity refresh
-                // fires at command dispatch time for this borrowed client.
-                glide_core::pool::register_pool_client(pool_id as u64, result as u64);
-                get_pool_client_map().insert(result as u64, pool_id as u64);
-            }
-            if result < 0 && pool.should_create() {
-                pool.total_count.fetch_add(1, Ordering::AcqRel);
-                let pool_clone = pool_arc.clone();
-                let bytes = pool.config.connection_request.clone();
-                drop(pool);
-                let runtime = get_runtime();
-                runtime.spawn(async move {
-                    match create_pool_client(&bytes).await {
-                        Ok(client) => {
-                            let mut pool = pool_clone.lock().await;
-                            if pool.state.load(Ordering::Acquire) != POOL_RUNNING {
-                                pool.release_reservation();
-                                return;
-                            }
-                            let client_id = pool.add_client_reserved(client.clone());
-                            get_handle_table().insert(client_id, client.clone());
-                            glide_core::scope::register_client(client_id, client);
-                            // pool_client_map is populated only when the client is actually
-                            // acquired (borrowed), not here at idle-creation time.
-                        }
-                        Err(e) => {
-                            log::error!("Pool background client creation failed: {}", e);
-                            let mut pool = pool_clone.lock().await;
-                            pool.release_reservation();
-                        }
-                    }
-                });
-            }
-            result
-        }
-        Err(_) => -1,
+    let mut pool = pool_arc.lock();
+    // Reclaim the Java-side handles of clients core has discarded
+    let discarded = pool.drain_discarded_ids();
+    for cid in discarded {
+        get_handle_table().remove(&cid);
+        glide_core::scope::unregister_client(cid);
+        get_pool_client_map().remove(&cid);
     }
+
+    let result = pool.try_acquire();
+    if result >= 0 {
+        // Register in CLIENT_TO_POOL and pool_client_map so activity refresh
+        // fires at command dispatch time for this borrowed client.
+        glide_core::pool::register_pool_client(pool_id as u64, result as u64);
+        get_pool_client_map().insert(result as u64, pool_id as u64);
+    }
+    if result < 0 && pool.should_create() {
+        pool.total_count.fetch_add(1, Ordering::AcqRel);
+        let pool_clone = pool_arc.clone();
+        let bytes = pool.config.connection_request.clone();
+        drop(pool);
+        let runtime = get_runtime();
+        runtime.spawn(async move {
+            match create_pool_client(&bytes).await {
+                Ok(client) => {
+                    let mut pool = pool_clone.lock();
+                    if pool.state.load(Ordering::Acquire) != POOL_RUNNING {
+                        pool.release_reservation();
+                        return;
+                    }
+                    let client_id = pool.add_client_reserved(client.clone());
+                    get_handle_table().insert(client_id, client.clone());
+                    glide_core::scope::register_client(client_id, client);
+                    // pool_client_map is populated only when the client is actually
+                    // acquired (borrowed), not here at idle-creation time.
+                }
+                Err(e) => {
+                    log::error!("Pool background client creation failed: {}", e);
+                    pool_clone.lock().release_reservation();
+                }
+            }
+        });
+    }
+    result
 }
 
 /// Release a client back to the pool.
@@ -220,31 +214,28 @@ pub extern "system" fn Java_glide_ffi_resolvers_GlidePoolResolver_glidePoolDestr
         None => return -1,
     };
     let handle_table = get_handle_table();
-    let runtime = get_runtime();
-    runtime.spawn(async move {
-        let mut pool = pool_arc.lock().await;
-        // Clean up JNI handle table entries for all pooled clients
-        // (includes clients core has discarded)
-        let discarded = pool.drain_discarded_ids();
-        for entry in pool.idle.iter() {
-            handle_table.remove(&entry.client_id);
-            glide_core::scope::unregister_client(entry.client_id);
-            get_pool_client_map().remove(&entry.client_id);
-            glide_core::pool::unregister_blocking_flag(entry.client_id);
-        }
-        for entry in pool.in_use.iter() {
-            handle_table.remove(entry.key());
-            glide_core::scope::unregister_client(*entry.key());
-            get_pool_client_map().remove(entry.key());
-            glide_core::pool::unregister_blocking_flag(*entry.key());
-        }
-        for cid in discarded {
-            handle_table.remove(&cid);
-            glide_core::scope::unregister_client(cid);
-            get_pool_client_map().remove(&cid);
-        }
-        ClientPool::destroy(pool);
-    });
+    let mut pool = pool_arc.lock();
+    // Clean up JNI handle table entries for all pooled clients
+    // (includes clients core has discarded)
+    let discarded = pool.drain_discarded_ids();
+    for entry in pool.idle.iter() {
+        handle_table.remove(&entry.client_id);
+        glide_core::scope::unregister_client(entry.client_id);
+        get_pool_client_map().remove(&entry.client_id);
+        glide_core::pool::unregister_blocking_flag(entry.client_id);
+    }
+    for entry in pool.in_use.iter() {
+        handle_table.remove(entry.key());
+        glide_core::scope::unregister_client(*entry.key());
+        get_pool_client_map().remove(entry.key());
+        glide_core::pool::unregister_blocking_flag(*entry.key());
+    }
+    for cid in discarded {
+        handle_table.remove(&cid);
+        glide_core::scope::unregister_client(cid);
+        get_pool_client_map().remove(&cid);
+    }
+    ClientPool::destroy(pool);
     0
 }
 
@@ -261,13 +252,7 @@ pub extern "system" fn Java_glide_ffi_resolvers_GlidePoolResolver_glidePoolMetri
     };
 
     let (idle, active, total) = {
-        // Use blocking_lock() instead of try_lock(): the metrics call is not on the
-        // hot path, and using try_lock() returns (0,0,0) when the lock is contended
-        // (e.g. during a heavy test load), causing getActiveCount() to spuriously
-        // return 0 even when clients are borrowed. A brief blocking wait gives
-        // accurate metrics without introducing a deadlock risk, since this function
-        // runs on a JNI thread (not on the Tokio runtime's async executor).
-        let pool = pool_arc.blocking_lock();
+        let pool = pool_arc.lock();
         (
             pool.idle_count() as i32,
             pool.active_count() as i32,
