@@ -7,9 +7,8 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 use super::*;
-use glide_core::pool::{self, ClientPool, ClientState, POOL_RUNNING, PoolConfig, PooledClient};
+use glide_core::pool::{self, ClientPool, ClientState, PoolConfig, PoolState, PooledClient};
 use glide_core::scope;
-use std::sync::atomic::Ordering as AtomicOrdering;
 
 /// Drop an adapter [`Arc`] whose owning reference `create_pool_client` handed
 /// out as a raw pointer. Must be called before any early return that occurs after
@@ -298,7 +297,7 @@ pub unsafe extern "C" fn glide_pool_create(
                 match create_pool_client(&bytes, ct_clone, pre_cid) {
                     Ok((adapter_ptr, client)) => {
                         let mut pool = pool_clone.lock();
-                        if pool.state.load(AtomicOrdering::Acquire) != POOL_RUNNING {
+                        if pool.state != PoolState::Running {
                             // Give the reserved slot back; the pool is gone.
                             pool.release_reservation();
                             drop(pool);
@@ -384,7 +383,7 @@ pub extern "C" fn glide_pool_try_acquire(pool_id: u64) -> i64 {
 
     if result < 0 && pool.should_create() {
         // Trigger background creation
-        pool.total_count.fetch_add(1, AtomicOrdering::AcqRel);
+        pool.total_count += 1;
         let pool_clone = pool_arc.clone();
         let bytes = pool.config.connection_request.clone();
         drop(pool);
@@ -397,7 +396,7 @@ pub extern "C" fn glide_pool_try_acquire(pool_id: u64) -> i64 {
             match create_pool_client(&bytes, bg_ct, pre_cid) {
                 Ok((adapter_ptr, client)) => {
                     let mut pool = pool_clone.lock();
-                    if pool.state.load(AtomicOrdering::Acquire) != POOL_RUNNING {
+                    if pool.state != PoolState::Running {
                         pool.release_reservation();
                         drop(pool);
                         // Never stored in get_pool_clients(), so glide_pool_destroy cannot reclaim it.
@@ -479,7 +478,7 @@ pub extern "C" fn glide_pool_acquire_blocking(pool_id: u64, timeout_ms: u64) -> 
             }
             // Trigger background creation if needed
             if r < 0 && pool.should_create() {
-                pool.total_count.fetch_add(1, AtomicOrdering::AcqRel);
+                pool.total_count += 1;
                 let pool_clone = pool_arc.clone();
                 let bytes = pool.config.connection_request.clone();
                 drop(pool);
@@ -492,7 +491,7 @@ pub extern "C" fn glide_pool_acquire_blocking(pool_id: u64, timeout_ms: u64) -> 
                     match create_pool_client(&bytes, bg_ct, pre_cid) {
                         Ok((adapter_ptr, client)) => {
                             let mut p = pool_clone.lock();
-                            if p.state.load(AtomicOrdering::Acquire) != POOL_RUNNING {
+                            if p.state != PoolState::Running {
                                 p.release_reservation();
                                 drop(p);
                                 // Never stored in get_pool_clients(), so glide_pool_destroy cannot reclaim it.
@@ -600,7 +599,7 @@ pub extern "C" fn glide_pool_destroy(pool_id: u64) -> i32 {
         .idle
         .iter()
         .map(|e| e.client_id)
-        .chain(pool.in_use.iter().map(|e| *e.key()))
+        .chain(pool.in_use.keys().copied())
         .chain(discarded)
         .collect();
     for cid in client_ids {
@@ -1360,7 +1359,7 @@ mod pool_metrics_tests {
     }
 
     fn registered_pool_with_two_reserved_slots() -> RegisteredPool {
-        let pool = ClientPool::new(PoolConfig {
+        let mut pool = ClientPool::new(PoolConfig {
             max_size: 4,
             min_idle: 0,
             idle_timeout: Duration::from_secs(300),
@@ -1561,7 +1560,7 @@ mod pool_destroy_tests {
                 state: ClientState::Idle,
                 is_blocking: flag.clone(),
             });
-            pool.total_count.fetch_add(1, AtomicOrdering::AcqRel);
+            pool.total_count += 1;
             glide_core::pool::register_blocking_flag(client_id, flag);
             get_pool_clients().insert(
                 client_id,

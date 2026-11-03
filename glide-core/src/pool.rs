@@ -26,7 +26,7 @@
 //! │  ┌─────────────────────────────┐    │
 //! │  │ ClientPool                  │    │
 //! │  │  idle: VecDeque (LIFO)      │    │
-//! │  │  in_use: DashMap            │    │
+//! │  │  in_use: HashMap            │    │
 //! │  │  config: PoolConfig         │    │
 //! │  └─────────────────────────────┘    │
 //! └─────────────────────────────────────┘
@@ -35,7 +35,7 @@
 use crate::client::AuthGeneration;
 use crate::client::Client as GlideClient;
 use dashmap::DashMap;
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
 use std::sync::atomic::{AtomicU8, AtomicU32, AtomicU64, Ordering};
 use std::sync::{Arc, OnceLock, PoisonError};
 use std::time::{Duration, Instant};
@@ -49,6 +49,12 @@ use tokio::sync::Notify;
 pub const POOL_RUNNING: u8 = 0;
 pub const POOL_CLOSING: u8 = 1;
 pub const POOL_CLOSED: u8 = 2;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PoolState {
+    Running,
+    Closed,
+}
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // CONFIGURATION
@@ -149,11 +155,10 @@ pub struct ClientPool {
     /// warmest connection is reused first and long-idle ones age out.
     pub idle: VecDeque<PooledClient>,
     /// Currently borrowed clients (client_id → PooledClient).
-    pub in_use: DashMap<u64, PooledClient>,
+    pub in_use: HashMap<u64, PooledClient>,
     /// Current total count (idle + in_use + creating).
-    pub total_count: AtomicU32,
-    /// Pool lifecycle state.
-    pub state: AtomicU8,
+    pub total_count: u32,
+    pub state: PoolState,
     /// Condvar notified when a client is returned to idle (for blocking acquire).
     pub release_notify: Arc<(std::sync::Mutex<()>, std::sync::Condvar)>,
     /// Only `discard_client` pushes here; bindings read it via `drain_discarded_ids`.
@@ -197,9 +202,9 @@ impl ClientPool {
         Ok(Self {
             config,
             idle: VecDeque::new(),
-            in_use: DashMap::new(),
-            total_count: AtomicU32::new(0),
-            state: AtomicU8::new(POOL_RUNNING),
+            in_use: HashMap::new(),
+            total_count: 0,
+            state: PoolState::Running,
             release_notify: Arc::new((std::sync::Mutex::new(()), std::sync::Condvar::new())),
             discarded_ids: Vec::new(),
         })
@@ -218,7 +223,7 @@ impl ClientPool {
     /// `glide_core::pool::get_blocking_flag(client_id)`, populated at client-creation
     /// time in the global `BLOCKING_FLAG_REGISTRY`.
     pub fn try_acquire(&mut self) -> i64 {
-        if self.state.load(Ordering::Acquire) != POOL_RUNNING {
+        if self.state != PoolState::Running {
             return -1;
         }
 
@@ -247,8 +252,7 @@ impl ClientPool {
 
     /// Whether background creation should be triggered (room below max_size).
     pub fn should_create(&self) -> bool {
-        self.state.load(Ordering::Acquire) == POOL_RUNNING
-            && self.total_count.load(Ordering::Acquire) < self.config.max_size
+        self.state == PoolState::Running && self.total_count < self.config.max_size
     }
 
     /// Add a newly created client to the idle pool. Returns the assigned client_id.
@@ -270,7 +274,7 @@ impl ClientPool {
             is_blocking: flag.clone(),
         };
         self.idle.push_back(entry);
-        self.total_count.fetch_add(1, Ordering::AcqRel);
+        self.total_count += 1;
         get_blocking_flag_registry().insert(client_id, flag);
         client_id
     }
@@ -306,19 +310,9 @@ impl ClientPool {
     /// it spawns an on-demand client redundant with the warmup client already in
     /// flight. Each warmup task consumes its reservation via `add_client_reserved` on
     /// success or returns it via `release_reservation` on failure.
-    pub fn reserve_warmup_slots(&self, n: u32) -> u32 {
-        let max = self.config.max_size;
-        let mut reserved = 0;
-        //TODO: (#7175) `fetch_update` is deprecated for `try_update` since Rust 1.99, but `try_update`
-        // needs 1.95 and the MSRV is 1.94.1.
-        #[allow(deprecated)]
-        let _ = self
-            .total_count
-            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |cur| {
-                let room = max.saturating_sub(cur);
-                reserved = room.min(n);
-                (reserved > 0).then_some(cur + reserved)
-            });
+    pub fn reserve_warmup_slots(&mut self, n: u32) -> u32 {
+        let reserved = self.config.max_size.saturating_sub(self.total_count).min(n);
+        self.total_count += reserved;
         reserved
     }
 
@@ -333,13 +327,12 @@ impl ClientPool {
     /// 2. Calling `return_to_idle(entry)` to put it back in the idle pool
     ///    Or on failure, calling `discard_client(client_id)` to remove it for good.
     pub fn take_for_release(&mut self, client_id: u64) -> Option<PooledClient> {
-        let entry = self.in_use.remove(&client_id);
-        entry.map(|(_, e)| e)
+        self.in_use.remove(&client_id)
     }
 
     /// Return a client to the idle pool after successful state reset.
     pub fn return_to_idle(&mut self, mut entry: PooledClient) {
-        if self.state.load(Ordering::Acquire) != POOL_RUNNING {
+        if self.state != PoolState::Running {
             self.discard_client(entry.client_id);
             return;
         }
@@ -358,7 +351,7 @@ impl ClientPool {
     /// `drain_discarded_ids` so every binding reclaims the adapter / handle it
     /// holds for that id. Also clears both core registries, so callers need not.
     pub fn discard_client(&mut self, client_id: u64) {
-        saturating_dec(&self.total_count);
+        self.total_count = self.total_count.saturating_sub(1);
         self.discarded_ids.push(client_id);
         unregister_pool_client(client_id);
         unregister_blocking_flag(client_id);
@@ -369,7 +362,7 @@ impl ClientPool {
     /// Give back a slot reserved by a binding that never became a client.
     /// No id exists, so there is nothing for a binding to reclaim.
     pub fn release_reservation(&mut self) {
-        saturating_dec(&self.total_count);
+        self.total_count = self.total_count.saturating_sub(1);
         let (_, condvar) = &*self.release_notify;
         condvar.notify_one();
     }
@@ -388,12 +381,12 @@ impl ClientPool {
             unregister_blocking_flag(entry.client_id);
             unregister_pool_client(entry.client_id);
         }
-        for entry in pool.in_use.iter() {
-            unregister_blocking_flag(*entry.key());
-            unregister_pool_client(*entry.key());
+        for &client_id in pool.in_use.keys() {
+            unregister_blocking_flag(client_id);
+            unregister_pool_client(client_id);
         }
 
-        pool.state.store(POOL_CLOSED, Ordering::Release);
+        pool.state = PoolState::Closed;
 
         // Invalidate scopes owned by this pool's clients before dropping them, so a
         // scope cannot outlive the client it borrowed from.
@@ -401,7 +394,7 @@ impl ClientPool {
             .idle
             .iter()
             .map(|c| c.client_id)
-            .chain(pool.in_use.iter().map(|e| *e.key()))
+            .chain(pool.in_use.keys().copied())
             .collect::<Vec<_>>()
         {
             destroy_client_scope_pool(client_id);
@@ -409,7 +402,7 @@ impl ClientPool {
 
         pool.idle.clear();
         pool.in_use.clear();
-        pool.total_count.store(0, Ordering::Release);
+        pool.total_count = 0;
         drop(pool);
 
         if borrowed > 0 {
@@ -445,7 +438,7 @@ impl ClientPool {
         PoolCounts {
             idle: self.idle_count(),
             active: self.active_count(),
-            total: self.total_count.load(Ordering::Acquire),
+            total: self.total_count,
         }
     }
 }
@@ -779,20 +772,20 @@ pub fn start_abandon_monitor(pool_id: u64, runtime_handle: &tokio::runtime::Hand
 
             let abandoned_ids: Vec<u64> = {
                 let pool = pool_arc_monitor.lock();
-                if pool.state.load(Ordering::Acquire) != POOL_RUNNING {
+                if pool.state != PoolState::Running {
                     break;
                 }
                 let now = Instant::now();
                 pool.in_use
                     .iter()
-                    .filter_map(|entry| {
+                    .filter_map(|(&client_id, entry)| {
                         // Skip clients currently executing blocking commands
-                        if entry.value().is_blocking.load(Ordering::Acquire) > 0 {
+                        if entry.is_blocking.load(Ordering::Acquire) > 0 {
                             return None;
                         }
-                        let borrowed_at = entry.value().borrowed_at?;
+                        let borrowed_at = entry.borrowed_at?;
                         if now.duration_since(borrowed_at) > abandon_timeout {
-                            Some(*entry.key())
+                            Some(client_id)
                         } else {
                             None
                         }
@@ -816,10 +809,10 @@ pub fn start_abandon_monitor(pool_id: u64, runtime_handle: &tokio::runtime::Hand
                 // Revalidate under lock: activity may have been refreshed or blocking
                 // flag set between the scan and this removal.
                 if let Some(entry) = pool.in_use.get(&client_id) {
-                    if entry.value().is_blocking.load(Ordering::Acquire) > 0 {
+                    if entry.is_blocking.load(Ordering::Acquire) > 0 {
                         continue;
                     }
-                    if entry.value().borrowed_at.is_some_and(|borrowed_at| {
+                    if entry.borrowed_at.is_some_and(|borrowed_at| {
                         Instant::now().duration_since(borrowed_at) <= abandon_timeout
                     }) {
                         continue;
@@ -842,9 +835,9 @@ pub fn start_abandon_monitor(pool_id: u64, runtime_handle: &tokio::runtime::Hand
 /// borrow duration. No-op if the pool or client is not found.
 pub fn refresh_client_activity(pool_id: u64, client_id: u64) {
     if let Some(pool_arc) = get_pool(pool_id)
-        && let Some(mut entry) = pool_arc.lock().in_use.get_mut(&client_id)
+        && let Some(entry) = pool_arc.lock().in_use.get_mut(&client_id)
     {
-        entry.value_mut().borrowed_at = Some(Instant::now());
+        entry.borrowed_at = Some(Instant::now());
     }
 }
 
@@ -2088,8 +2081,7 @@ mod client_pool_marking_tests {
     async fn add_client_reserved_marks_pool_managed() {
         let client = lazy_client().await;
         let mut pool = test_pool();
-        pool.total_count
-            .fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+        pool.total_count += 1;
         let id = pool.add_client_reserved(client);
         let entry = pool
             .idle
@@ -2143,19 +2135,15 @@ mod client_pool_marking_tests {
     /// instant warmup is decided, never over-reserving past the bound.
     #[test]
     fn warmup_reservation_counts_against_max_size() {
-        let pool = warmup_pool(4, 4);
+        let mut pool = warmup_pool(4, 4);
         assert_eq!(pool.reserve_warmup_slots(4), 4, "all 4 warmup slots fit");
         assert_eq!(
-            pool.total_count.load(std::sync::atomic::Ordering::Acquire),
-            4,
+            pool.total_count, 4,
             "total_count reflects the reservation immediately"
         );
         // A second request has no room — the bound is never exceeded.
         assert_eq!(pool.reserve_warmup_slots(4), 0, "pool already at max_size");
-        assert_eq!(
-            pool.total_count.load(std::sync::atomic::Ordering::Acquire),
-            4
-        );
+        assert_eq!(pool.total_count, 4);
     }
 
     /// An acquirer racing the warmup window must not spawn an on-demand client
@@ -2183,8 +2171,7 @@ mod client_pool_marking_tests {
             let mut surplus = 0;
             for _ in 0..16 {
                 if pool.try_acquire() < 0 && pool.should_create() {
-                    pool.total_count
-                        .fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+                    pool.total_count += 1;
                     surplus += 1;
                 }
             }
@@ -2213,8 +2200,7 @@ mod client_pool_marking_tests {
             pool.add_client_reserved(client);
         }
         assert_eq!(
-            pool.total_count.load(std::sync::atomic::Ordering::Acquire),
-            max_size,
+            pool.total_count, max_size,
             "after quiescing, total_count must settle at exactly max_size"
         );
         assert_eq!(pool.idle.len() as u32, max_size);
@@ -4213,7 +4199,7 @@ mod abandon_monitor_tests {
             register_pool_client(pool_id, client_id);
 
             // (d) back-date borrowed_at so the monitor's age check fires
-            if let Some(mut entry) = pool.in_use.get_mut(&client_id) {
+            if let Some(entry) = pool.in_use.get_mut(&client_id) {
                 entry.borrowed_at = Some(Instant::now() - abandon_timeout * 3);
             }
         } // pool mutex released
@@ -4250,9 +4236,9 @@ mod abandon_monitor_tests {
         // ── 7. Cleanup ─────────────────────────────────────────────────────────
         flag.store(0, Ordering::Release);
         {
-            let pool = pool_arc.lock();
+            let mut pool = pool_arc.lock();
             pool.in_use.remove(&client_id);
-            pool.total_count.fetch_sub(1, Ordering::AcqRel);
+            pool.total_count -= 1;
         }
         unregister_blocking_flag(client_id);
         unregister_pool_client(client_id);
@@ -4297,7 +4283,7 @@ mod abandon_monitor_tests {
             register_pool_client(pool_id, client_id);
 
             // Back-date borrowed_at past the abandon timeout
-            if let Some(mut entry) = pool.in_use.get_mut(&client_id) {
+            if let Some(entry) = pool.in_use.get_mut(&client_id) {
                 entry.borrowed_at = Some(Instant::now() - abandon_timeout * 3);
             }
         }
@@ -4355,7 +4341,7 @@ mod abandon_monitor_tests {
             cid
         };
         let backdate = |pool_arc: &Arc<PoolMutex>| {
-            let pool = pool_arc.lock();
+            let mut pool = pool_arc.lock();
             pool.in_use
                 .get_mut(&client_id)
                 .expect("borrowed")
@@ -4423,7 +4409,7 @@ mod abandon_monitor_tests {
             register_pool_client(pool_id, client_id);
 
             // Back-date borrowed_at well past the abandon timeout
-            if let Some(mut entry) = pool.in_use.get_mut(&client_id) {
+            if let Some(entry) = pool.in_use.get_mut(&client_id) {
                 entry.borrowed_at = Some(Instant::now() - abandon_timeout * 3);
             }
         }
@@ -4620,7 +4606,7 @@ mod client_pool_tests {
 
         pool.discard_client(entry.client_id);
 
-        assert_eq!(pool.total_count.load(Ordering::Acquire), 0);
+        assert_eq!(pool.total_count, 0);
         assert_eq!(pool.drain_discarded_ids(), vec![client_id]);
         assert!(get_blocking_flag(client_id).is_none());
         assert!(!is_pool_client(client_id));
@@ -4632,11 +4618,11 @@ mod client_pool_tests {
     fn release_reservation_reports_nothing() {
         let mut pool = ClientPool::new(test_pool_config(Duration::from_secs(5))).unwrap();
         // Bindings reserve a slot with a bare increment before creating the client.
-        pool.total_count.fetch_add(1, Ordering::AcqRel);
+        pool.total_count += 1;
 
         pool.release_reservation();
 
-        assert_eq!(pool.total_count.load(Ordering::Acquire), 0);
+        assert_eq!(pool.total_count, 0);
         assert!(pool.drain_discarded_ids().is_empty());
     }
 
@@ -4656,7 +4642,7 @@ mod client_pool_tests {
             -3,
             "the only idle client must be evicted"
         );
-        assert_eq!(pool.total_count.load(Ordering::Acquire), 0);
+        assert_eq!(pool.total_count, 0);
         assert_eq!(
             pool.drain_discarded_ids(),
             vec![client_id],
@@ -4703,7 +4689,7 @@ mod client_pool_tests {
                 0,
                 "a client that failed reset must not be reused"
             );
-            assert_eq!(pool.total_count.load(Ordering::Acquire), 0);
+            assert_eq!(pool.total_count, 0);
             assert_eq!(
                 pool.drain_discarded_ids(),
                 vec![client_id],
@@ -4757,7 +4743,7 @@ mod client_pool_tests {
             let _ = release.await;
 
             let mut pool = pool_arc.lock();
-            assert_eq!(pool.total_count.load(Ordering::Acquire), 0);
+            assert_eq!(pool.total_count, 0);
             assert_eq!(
                 pool.drain_discarded_ids(),
                 vec![client_id],

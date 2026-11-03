@@ -7,11 +7,10 @@
 //! so that commands flow through the existing Java command dispatch path.
 
 use crate::jni_client::{get_handle_table, get_runtime};
-use glide_core::pool::{self, ClientPool, POOL_RUNNING, PoolConfig};
+use glide_core::pool::{self, ClientPool, PoolConfig, PoolState};
 use jni::JNIEnv;
 use jni::objects::{JByteArray, JClass};
 use jni::sys::{jint, jlong};
-use std::sync::atomic::Ordering;
 use std::time::Duration;
 
 /// Maps handle_id (== client_id for pool clients) → pool_id.
@@ -92,7 +91,7 @@ pub extern "system" fn Java_glide_ffi_resolvers_GlidePoolResolver_glidePoolCreat
                 match create_pool_client(&conn_bytes).await {
                     Ok(client) => {
                         let mut pool = pool_clone.lock();
-                        if pool.state.load(Ordering::Acquire) != POOL_RUNNING {
+                        if pool.state != PoolState::Running {
                             pool.release_reservation();
                             return;
                         }
@@ -148,7 +147,7 @@ pub extern "system" fn Java_glide_ffi_resolvers_GlidePoolResolver_glidePoolTryAc
         get_pool_client_map().insert(result as u64, pool_id as u64);
     }
     if result < 0 && pool.should_create() {
-        pool.total_count.fetch_add(1, Ordering::AcqRel);
+        pool.total_count += 1;
         let pool_clone = pool_arc.clone();
         let bytes = pool.config.connection_request.clone();
         drop(pool);
@@ -157,7 +156,7 @@ pub extern "system" fn Java_glide_ffi_resolvers_GlidePoolResolver_glidePoolTryAc
             match create_pool_client(&bytes).await {
                 Ok(client) => {
                     let mut pool = pool_clone.lock();
-                    if pool.state.load(Ordering::Acquire) != POOL_RUNNING {
+                    if pool.state != PoolState::Running {
                         pool.release_reservation();
                         return;
                     }
@@ -224,11 +223,11 @@ pub extern "system" fn Java_glide_ffi_resolvers_GlidePoolResolver_glidePoolDestr
         get_pool_client_map().remove(&entry.client_id);
         glide_core::pool::unregister_blocking_flag(entry.client_id);
     }
-    for entry in pool.in_use.iter() {
-        handle_table.remove(entry.key());
-        glide_core::scope::unregister_client(*entry.key());
-        get_pool_client_map().remove(entry.key());
-        glide_core::pool::unregister_blocking_flag(*entry.key());
+    for &client_id in pool.in_use.keys() {
+        handle_table.remove(&client_id);
+        glide_core::scope::unregister_client(client_id);
+        get_pool_client_map().remove(&client_id);
+        glide_core::pool::unregister_blocking_flag(client_id);
     }
     for cid in discarded {
         handle_table.remove(&cid);

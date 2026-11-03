@@ -13,7 +13,7 @@
 use crate::create_handle_for_client;
 use glide_core::client::{Client, ConnectionRequest};
 use glide_core::connection_request::ConnectionRequest as ProtobufConnectionRequest;
-use glide_core::pool::{self, ClientPool, POOL_RUNNING, PoolConfig};
+use glide_core::pool::{self, ClientPool, PoolConfig, PoolState};
 use glide_core::scope;
 use napi::bindgen_prelude::*;
 use napi::threadsafe_function::ThreadsafeFunction;
@@ -179,7 +179,7 @@ async fn warmup_dial(pool_id: u64, conn_bytes: &[u8], seat_then_discard: bool) -
         match registry.get(&pool_id) {
             Some(pool_entry) => {
                 let mut pool_guard = pool_entry.value().lock();
-                if pool_guard.state.load(Ordering::Acquire) != POOL_RUNNING {
+                if pool_guard.state != PoolState::Running {
                     // Pool was destroyed before this dial finished.
                     pool_guard.release_reservation();
                     return WarmupOutcome::Aborted;
@@ -508,15 +508,13 @@ fn maybe_spawn_on_demand_creation(pool_entry: Arc<pool::PoolMutex>, pool_guard: 
         return;
     }
     // Pre-reserve the slot so concurrent callers don't over-create.
-    pool_guard
-        .total_count
-        .fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+    pool_guard.total_count += 1;
     let bytes = pool_guard.config.connection_request.clone();
     get_pool_runtime().spawn(async move {
         match create_raw_pool_client(&bytes).await {
             Ok(client) => {
                 let mut pg = pool_entry.lock();
-                if pg.state.load(std::sync::atomic::Ordering::Acquire) != POOL_RUNNING {
+                if pg.state != PoolState::Running {
                     pg.release_reservation();
                     return;
                 }
@@ -677,8 +675,8 @@ pub fn pool_destroy(pool_id: i64) {
         for entry in pool_guard.idle.iter() {
             scope::unregister_client(entry.client_id);
         }
-        for entry in pool_guard.in_use.iter() {
-            scope::unregister_client(*entry.key());
+        for &client_id in pool_guard.in_use.keys() {
+            scope::unregister_client(client_id);
         }
         // discard_client() already unregistered the core registries for these ids;
         // only the scope entry is ours.
