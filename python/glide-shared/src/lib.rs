@@ -377,11 +377,14 @@ fn parse_response(py: Python<'_>, ptr: usize) -> (PyObject, usize) {
     (obj, arena_ptr)
 }
 
-/// Size and alignment of `Value` in this build. It must equal the ffi library's
-/// `value_abi_token` before `parse_value` may be used on its values.
+/// Fingerprint of the memory layout of `Value` in this build: its size and alignment, the
+/// size and alignment of the private types it embeds (`bytes::Bytes` inside `BulkString`,
+/// `num_bigint::BigInt` inside `BigNumber`), and how `Option<Value>` packs its
+/// discriminant. It must equal the ffi library's `value_abi_token` before `parse_value`
+/// may be used on its values.
 #[pyfunction]
 fn value_abi_token() -> u64 {
-    ((std::mem::size_of::<Value>() as u64) << 32) | std::mem::align_of::<Value>() as u64
+    redis::value_abi::value_abi_fingerprint()
 }
 
 #[pymodule(gil_used = false)]
