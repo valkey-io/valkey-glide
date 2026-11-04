@@ -2,6 +2,7 @@
 
 #### Fixes
 * CORE: Fall back to existing cluster connections when initial nodes are unavailable during topology refresh. When `refreshTopologyFromInitialNodes=true` and the initial/seed node is unreachable (e.g., dead primary during failover), the topology refresh now queries healthy existing connections instead of failing silently. This complements #5836 to enable failover recovery when the seed node itself is the failed node. ([#5814](https://github.com/valkey-io/valkey-glide/pull/5814))
+* CORE: Standalone clients decrement the `total_clients` telemetry counter once, when the client is dropped, instead of on every command, which drove it to 0 after the first command ([#7540](https://github.com/valkey-io/valkey-glide/issues/7540))
 
 #### Operational Enhancements
 * CORE, Java: Add diagnostic logging for failover, topology refresh, and pipeline issues — lazy and rate-limited logging macros in logger_core, MOVED error scenario identification, topology refresh throttle/overwrite tracking, pipeline send/response timing, inflight slot exhaustion, recovery state transitions, adaptive health snapshots, and Java-side timeout elapsed time. Fix Java Logger Supplier overloads to check level before evaluating. ([#5756](https://github.com/valkey-io/valkey-glide/pull/5756))
