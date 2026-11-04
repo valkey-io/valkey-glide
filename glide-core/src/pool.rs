@@ -2304,6 +2304,32 @@ mod scope_pool_tests {
             Self { child, port }
         }
 
+        /// Like [`start`], but as a replica of the server on `primary_port`.
+        fn start_replica_of(primary_port: u16) -> Self {
+            let port = get_available_port();
+            let child = Command::new("redis-server")
+                .args([
+                    "--port",
+                    &port.to_string(),
+                    "--daemonize",
+                    "no",
+                    "--save",
+                    "",
+                    "--appendonly",
+                    "no",
+                    "--bind",
+                    "127.0.0.1",
+                    "--replicaof",
+                    "127.0.0.1",
+                    &primary_port.to_string(),
+                ])
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .spawn()
+                .expect("spawn redis-server replica for regression test");
+            Self { child, port }
+        }
+
         /// Like [`start`], but binds the server to the IPv6 loopback `::1`.
         fn start_ipv6() -> Self {
             let port = get_available_port();
@@ -3768,10 +3794,11 @@ mod scope_pool_tests {
     }
 
     /// Release must discard a connection the borrow left unusable and still reuse a
-    /// clean one. `CLIENT REPLY OFF|SKIP` times out the reset DISCARD (PING in
-    /// read-only mode, which rejects DISCARD locally); a RESP3 `SUBSCRIBE` answers it
-    /// normally, so only `subscribe_sent` catches it. A-B: the dirty ones were
-    /// re-idled when DISCARD errors counted only with a MULTI open.
+    /// clean one. `CLIENT REPLY OFF|SKIP` times out the reset; a RESP3 `SUBSCRIBE`
+    /// answers it normally, so only `subscribe_sent` catches it. The read-only cases
+    /// pin that read-only mode, which rejects DISCARD locally, still reuses a clean
+    /// connection. A-B: the dirty ones were re-idled when DISCARD errors counted
+    /// only with a MULTI open.
     #[tokio::test]
     async fn release_discards_a_connection_left_unusable() {
         let cases: [(bool, &[&str], bool); 6] = [
@@ -3797,6 +3824,75 @@ mod scope_pool_tests {
                 crate::client::Client::new(request, None)
                     .await
                     .expect("client connects to the test server")
+            };
+            let pool_arc = Arc::new(TokioMutex::new(
+                super::ClientPool::new(super::PoolConfig {
+                    max_size: 1,
+                    min_idle: 0,
+                    idle_timeout: std::time::Duration::from_secs(60),
+                    request_timeout: std::time::Duration::from_secs(1),
+                    test_on_borrow: false,
+                    connection_request: Vec::new(),
+                    is_async: true,
+                    configured_database_id: 0,
+                    abandon_timeout: std::time::Duration::from_secs(300),
+                })
+                .expect("valid pool config"),
+            ));
+            let client_id = {
+                let mut pool = pool_arc.lock().await;
+                let id = pool.add_client(client.clone());
+                assert_eq!(pool.try_acquire(), id as i64);
+                id
+            };
+
+            let mut cmd = redis::cmd(command[0]);
+            for arg in &command[1..] {
+                cmd.arg(*arg);
+            }
+            let _ = client.send_command(&mut cmd, None).await;
+
+            super::release_client_async(pool_arc.clone(), client_id).await;
+            let mut pool = pool_arc.lock().await;
+            assert_eq!(
+                pool.idle_count(),
+                u32::from(reused),
+                "read_only={read_only} {command:?}: reused={reused} expected"
+            );
+            let _ = pool.drain_discarded_ids();
+        }
+    }
+
+    /// With replicas, a read-routed `CLIENT REPLY OFF` lands on a replica, but
+    /// standalone DISCARD reaches only the primary; release must still discard it.
+    /// A-B: re-idled when standalone skipped the all-nodes SELECT without db drift.
+    #[tokio::test]
+    async fn release_discards_a_replica_left_unusable() {
+        let primary = TestServer::start();
+        let replica = TestServer::start_replica_of(primary.port);
+        wait_for_server_ready(primary.port).await;
+        wait_for_server_ready(replica.port).await;
+
+        for (read_only, command, reused) in [
+            (false, &["PING"][..], true),
+            (false, &["CLIENT", "REPLY", "OFF"][..], false),
+            (true, &["PING"][..], true),
+            (true, &["CLIENT", "REPLY", "OFF"][..], false),
+        ] {
+            let mut client = {
+                let mut request = crate::client::ConnectionRequest::default();
+                for port in [primary.port, replica.port] {
+                    request.addresses.push(crate::client::NodeAddress {
+                        host: "127.0.0.1".into(),
+                        port,
+                        unix_socket_path: None,
+                    });
+                }
+                request.read_from = Some(crate::client::ReadFrom::PreferReplica);
+                request.read_only = read_only;
+                crate::client::Client::new(request, None)
+                    .await
+                    .expect("client connects to primary and replica")
             };
             let pool_arc = Arc::new(TokioMutex::new(
                 super::ClientPool::new(super::PoolConfig {

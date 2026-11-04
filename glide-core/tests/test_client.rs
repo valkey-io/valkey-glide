@@ -6376,6 +6376,8 @@ pub(crate) mod shared_client_tests {
     ///    the siblings answer "DISCARD without MULTI" and the aggregate is `Err` —
     ///    which must be tolerated, not read as a reset failure that discards the
     ///    connection. Exercises the classify-by-message branch on a live cluster.
+    ///    A primary left with `CLIENT REPLY OFF` must instead be discarded, even
+    ///    though a sibling's "DISCARD without MULTI" can return before it times out.
     /// 3. (Valkey 9.0+ multi-db clusters) A borrow that `SELECT`ed another db must
     ///    be restored to the configured db on release — guards against the wrong
     ///    fix of skipping `SELECT` by topology, which would leak db 7.
@@ -6573,6 +6575,41 @@ pub(crate) mod shared_client_tests {
                          (got {v:?} instead of PONG)"
                     );
                 }
+            }
+
+            // ── 2b. a node left unable to reply must be discarded, not re-idled ──
+            // Short timeout: CLIENT REPLY OFF and the release liveness PING time out.
+            let short_timeout = create_connection_request(
+                &addresses,
+                &TestConfiguration {
+                    cluster_mode: ClusterMode::Enabled,
+                    request_timeout: Some(500),
+                    ..Default::default()
+                },
+            );
+            let client = Client::new(short_timeout.into(), None)
+                .await
+                .expect("cluster client creation");
+            let client_id = add_and_acquire(pool_arc.clone(), client).await;
+            {
+                let pool = pool_arc.lock().await;
+                let mut entry = pool.in_use.get_mut(&client_id).expect("borrowed entry");
+                let _ = entry
+                    .client
+                    .send_command(
+                        redis::cmd("CLIENT").arg("REPLY").arg("OFF"),
+                        Some(one_primary.clone()),
+                    )
+                    .await;
+            }
+            release_client_async(pool_arc.clone(), client_id).await;
+            {
+                let mut pool = pool_arc.lock().await;
+                assert_eq!(
+                    pool.drain_discarded_ids(),
+                    vec![client_id],
+                    "a CLIENT REPLY OFF node must fail the reset and be discarded"
+                );
             }
 
             // ── 3. db drift must be restored (Valkey 9.0+ multi-db cluster) ──

@@ -3565,20 +3565,22 @@ impl Client {
 
     /// Reset connection state to a clean baseline after a pool borrow is returned.
     ///
-    /// - DISCARD (PING in read-only mode) — always sent (not gated on the
-    ///   intent-tracked `multi_active`, which can desync under concurrent use), to
-    ///   `AllNodes` on cluster. A
-    ///   "DISCARD without MULTI" reply is expected and ignored; any other failure is
-    ///   propagated so release discards the connection rather than reuse one it
-    ///   can't reset. See the error-classification note at the call site for why
-    ///   cluster forces matching by message.
-    /// - SELECT <configured_db> — sent only when the database drifted
+    /// - DISCARD — always sent (not gated on the intent-tracked `multi_active`,
+    ///   which can desync under concurrent use), to `AllNodes` on cluster; skipped
+    ///   on read-only standalone, which can't open a MULTI. A "DISCARD without
+    ///   MULTI" reply is expected and ignored; any other failure is propagated so
+    ///   release discards the connection rather than reuse one it can't reset. See
+    ///   the error-classification note at the call site for why cluster forces
+    ///   matching by message.
+    /// - PING — cluster only, to `AllNodes`: the liveness check, since the DISCARD
+    ///   aggregate can mask a node that stopped replying.
+    /// - SELECT <configured_db> — always sent on standalone, where it is the
+    ///   all-nodes liveness check. On cluster, sent only when the database drifted
     ///   (`current_database() != configured_db`) or a SELECT may have applied
-    ///   untracked during the borrow (`db_maybe_dirty`); a borrow that never sent
-    ///   SELECT skips the round-trip. This is the fix for the cluster discard bug: a
-    ///   clean db-0 pool no longer sends a `SELECT` the cluster server rejects.
-    ///   Topology-independent — cluster supports multiple databases since Valkey 9.0.0
-    ///   (`cluster-databases`), so a drift must be undone there too.
+    ///   untracked during the borrow (`db_maybe_dirty`): a clean db-0 cluster pool
+    ///   must not send a `SELECT` the cluster server rejects. Cluster supports
+    ///   multiple databases since Valkey 9.0.0 (`cluster-databases`), so a drift
+    ///   must be undone there too.
     ///
     /// Does not UNSUBSCRIBE: callers must not subscribe on a pooled client (use the
     /// parent client's pub/sub API, which keeps dedicated connections). A client that
@@ -3590,37 +3592,43 @@ impl Client {
                 "Pooled client subscribed during the borrow; its connection cannot be reset",
             )));
         }
-        let discard_routing = self.is_cluster_mode().then_some(RoutingInfo::MultiNode((
-            MultipleNodeRoutingInfo::AllNodes,
-            None,
-        )));
-        // Read-only mode rejects DISCARD locally and can't open a MULTI, so PING is
-        // its liveness check.
-        let probe = if self.read_only { "PING" } else { "DISCARD" };
-        let discard_result = self
-            .send_command(&mut redis::cmd(probe), discard_routing)
-            .await;
-        // Classify the DISCARD outcome by message, not `is_err()`. "DISCARD without
-        // MULTI" (no transaction open) is expected and ignored. On cluster it is
-        // unavoidable even on success: DISCARD fans out to AllNodes but a borrow's
-        // MULTI lives on one node, so the others answer "DISCARD without MULTI" and
-        // the `None`-policy aggregate surfaces that as an Err. Any other failure
-        // (dead connection, timeout, circuit breaker) is propagated so release
-        // discards the connection; as the one round-trip every release makes,
-        // DISCARD is also the liveness check. A real owner-node failure cannot be
-        // masked by a sibling's no-MULTI error: transport failures short-circuit
-        // aggregation before the per-node reply loop, and an owner node with an
-        // open MULTI has no DISCARD error path (it returns +OK).
-        if let Err(e) = &discard_result
-            && !Self::is_discard_without_multi(e)
-        {
-            return discard_result.map(|_| ());
+        let is_cluster = self.is_cluster_mode();
+        let all_nodes = || RoutingInfo::MultiNode((MultipleNodeRoutingInfo::AllNodes, None));
+        // Read-only standalone rejects DISCARD locally and can't open a MULTI.
+        if is_cluster || !self.read_only {
+            let discard_result = self
+                .send_command(&mut redis::cmd("DISCARD"), is_cluster.then(all_nodes))
+                .await;
+            // Classify the DISCARD outcome by message, not `is_err()`. "DISCARD
+            // without MULTI" (no transaction open) is expected and ignored. On
+            // cluster it is unavoidable even on success: DISCARD fans out to
+            // AllNodes but a borrow's MULTI lives on one node, so the others answer
+            // "DISCARD without MULTI" and the `None`-policy aggregate surfaces that
+            // as an Err. Any other failure (dead connection, timeout, circuit
+            // breaker) is propagated so release discards the connection.
+            if let Err(e) = &discard_result
+                && !Self::is_discard_without_multi(e)
+            {
+                return discard_result.map(|_| ());
+            }
+        }
+
+        // Cluster liveness check. The DISCARD aggregate can return a sibling's
+        // "without MULTI" before a node that stopped replying (`CLIENT REPLY OFF`)
+        // times out, so PING every node: PING has no benign error.
+        if is_cluster {
+            self.send_command(&mut redis::cmd("PING"), Some(all_nodes()))
+                .await?;
         }
 
         // `None` routing is intentional: SELECT is an AllNodes command, so it fans
-        // out to every node without spelling it out like DISCARD above. Restore on
-        // tracked drift OR a possible untracked SELECT (see `db_maybe_dirty`).
-        if self.current_database() != configured_db
+        // out to every node without spelling it out like DISCARD above. Standalone
+        // always sends it: standalone ignores routing, so DISCARD reaches only the
+        // primary, and SELECT is the liveness check for replicas a read-routed
+        // borrow used. Cluster restores only on tracked drift OR a possible
+        // untracked SELECT (see `db_maybe_dirty`).
+        if !is_cluster
+            || self.current_database() != configured_db
             || self.shared.db_maybe_dirty.load(Ordering::Acquire)
         {
             let mut select_cmd = redis::cmd("SELECT");
