@@ -24,9 +24,9 @@ libfabric = ["dep:glide-libfabric-sys", "dep:libc", "dep:tokio", "dep:glide-logg
 # GLIDE dependencies
 # Vendored from ofiwg/libfabric rev 6953579a5035, so that GLIDE owns the build
 # script where there was a hard link to libfabric.
-glide-libfabric-sys = { path = "glide-libfabric-sys", version = "0.1", optional = true }
+glide-libfabric-sys = { path = "glide-libfabric-sys", version = "0.1.0", optional = true }
 # Unexpected completion-queue failures and parked memory.
-glide-logger = { path = "../glide-logger", version = "0.1", optional = true }
+glide-logger = { path = "../glide-logger", version = "0.1.1", optional = true }
 
 # External dependencies
 crc-fast = { version = "1.10", default-features = false, features = ["std"] }
