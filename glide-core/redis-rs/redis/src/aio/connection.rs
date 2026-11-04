@@ -142,7 +142,7 @@ where
     /// The caller owns the bytes from here on, so a stream built with them and then
     /// dropped without being read discards them rather than returning them here.
     fn take_decoder_buffer(&mut self) -> bytes::BytesMut {
-        let leftover = bytes::BytesMut::from(self.decoder.buffer());
+        let leftover = read_buf_with_leftover(self.decoder.buffer());
         self.decoder = combine::stream::Decoder::new();
         leftover
     }
@@ -476,6 +476,25 @@ where
 ///
 /// The `Monitor` and `PubSub` stream constructors all route through here, over the
 /// borrowed `&mut con` and the moved `con` alike, so every path stays in step.
+/// Initial read-buffer capacity of a stream's codec; the same as tokio's
+/// `FramedRead` default.
+const STREAM_READ_BUF_CAPACITY: usize = 8 * 1024;
+
+/// Builds a stream's read buffer holding `leftover`.
+///
+/// Allocated with [`STREAM_READ_BUF_CAPACITY`] rather than with
+/// `BytesMut::from(leftover)`: `BytesMut` remembers the capacity it was
+/// created with, and `ValueCodec` splits small frames off the read buffer, so
+/// each refill made while the caller still holds such values allocates a new
+/// buffer of at least that original capacity. A buffer created from a short
+/// leftover remembers no capacity, and those refills would offer reads of a
+/// single byte and grow from there.
+fn read_buf_with_leftover(leftover: &[u8]) -> bytes::BytesMut {
+    let mut buf = bytes::BytesMut::with_capacity(leftover.len().max(STREAM_READ_BUF_CAPACITY));
+    buf.extend_from_slice(leftover);
+    buf
+}
+
 fn framed_with_leftover<C>(con: C, leftover: bytes::BytesMut) -> Framed<C, ValueCodec>
 where
     C: AsyncRead + AsyncWrite + Unpin,
@@ -1070,6 +1089,55 @@ mod pubsub_tests {
                     panic!("stream ended before delivering the {nth} buffered message")
                 });
             assert_expected_message(msg);
+        }
+    }
+}
+
+#[cfg(all(test, feature = "tokio-comp"))]
+mod tests {
+    use super::*;
+    use crate::parser::test_io::{bulk_frame, ChunkedIo};
+    use futures_util::StreamExt;
+
+    /// A `PubSub`/`Monitor` stream's read buffer, seeded from the handshake
+    /// leftover, must read in full chunks while the caller holds decoded
+    /// values. Small frames are split off the read buffer, so a refill while
+    /// they are alive allocates a new buffer of at least the seed's original
+    /// capacity; a seed with no original capacity would make that refill
+    /// offer a single byte, then grow by doubling, one read per step.
+    #[test]
+    fn stream_seeded_from_leftover_reads_in_full_chunks_while_values_are_held() {
+        for leftover in [&b""[..], &b"$3\r\nab"[..]] {
+            let mut wire = Vec::new();
+            for i in 0..200u8 {
+                wire.extend_from_slice(&bulk_frame(&[i; 97]));
+            }
+            // The decoder holds "$3\r\nab"; the stream gets "c\r\n" first.
+            let wire = if leftover.is_empty() {
+                wire
+            } else {
+                [&b"c\r\n"[..], &wire].concat()
+            };
+            let (io, offered) = ChunkedIo::new(wire, 4096);
+            let mut framed = framed_with_leftover(io, read_buf_with_leftover(leftover));
+            let values: Vec<Value> = tokio::runtime::Builder::new_current_thread()
+                .build()
+                .unwrap()
+                .block_on(async {
+                    let mut values = Vec::new();
+                    while let Some(v) = framed.next().await {
+                        values.push(v.unwrap().unwrap());
+                    }
+                    values
+                });
+            assert_eq!(values.len(), 200 + usize::from(!leftover.is_empty()));
+            let offered: Vec<usize> = offered.lock().unwrap().iter().map(|&(n, _)| n).collect();
+            let smallest = offered.iter().min().copied().unwrap();
+            assert!(
+                smallest >= 1024,
+                "leftover {leftover:?}: a read was offered {smallest} bytes ({} reads: {offered:?})",
+                offered.len()
+            );
         }
     }
 }

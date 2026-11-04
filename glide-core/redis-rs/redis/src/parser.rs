@@ -977,14 +977,8 @@ mod tests {
 
     use super::*;
 
-    /// A RESP bulk-string frame carrying `payload`.
     #[cfg(feature = "aio")]
-    fn bulk_frame(payload: &[u8]) -> Vec<u8> {
-        let mut f = format!("${}\r\n", payload.len()).into_bytes();
-        f.extend_from_slice(payload);
-        f.extend_from_slice(b"\r\n");
-        f
-    }
+    use super::test_io::bulk_frame;
 
     /// A bulk-string frame of `fill` bytes whose total encoded length is
     /// exactly `total`. Returns the frame and its payload length.
@@ -1684,5 +1678,89 @@ mod tests {
             );
             assert!(bytes.is_empty(), "codec must consume the whole frame");
         }
+    }
+}
+
+/// Test transport for the codec's read-buffer tests.
+#[cfg(all(test, feature = "aio"))]
+pub(crate) mod test_io {
+    use std::pin::Pin;
+    use std::sync::{Arc, Mutex};
+    use std::task::{Context, Poll};
+    use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
+
+    /// Per read: the read space offered (the read buffer's spare capacity)
+    /// and the end address of the read buffer's allocation.
+    pub(crate) type Reads = Arc<Mutex<Vec<(usize, usize)>>>;
+
+    /// Serves `data` in reads of at most `chunk` bytes, like a socket with
+    /// that much data ready per read, and records each read in [`Reads`].
+    /// Writes are discarded.
+    pub(crate) struct ChunkedIo {
+        data: Vec<u8>,
+        pos: usize,
+        chunk: usize,
+        offered: Reads,
+    }
+
+    impl ChunkedIo {
+        /// Returns the transport and a handle to its recorded reads.
+        pub(crate) fn new(data: Vec<u8>, chunk: usize) -> (Self, Reads) {
+            let offered = Arc::new(Mutex::new(Vec::new()));
+            let io = ChunkedIo {
+                data,
+                pos: 0,
+                chunk,
+                offered: offered.clone(),
+            };
+            (io, offered)
+        }
+    }
+
+    impl AsyncRead for ChunkedIo {
+        fn poll_read(
+            mut self: Pin<&mut Self>,
+            _cx: &mut Context<'_>,
+            buf: &mut ReadBuf<'_>,
+        ) -> Poll<std::io::Result<()>> {
+            let n = self
+                .chunk
+                .min(buf.remaining())
+                .min(self.data.len() - self.pos);
+            if self.pos < self.data.len() {
+                // End address of the read buffer's allocation: `buf` covers
+                // its spare capacity, which runs to the allocation's end.
+                let end = buf.filled().as_ptr() as usize + buf.capacity();
+                self.offered.lock().unwrap().push((buf.remaining(), end));
+            }
+            let pos = self.pos;
+            buf.put_slice(&self.data[pos..pos + n]);
+            self.pos += n;
+            Poll::Ready(Ok(()))
+        }
+    }
+
+    impl AsyncWrite for ChunkedIo {
+        fn poll_write(
+            self: Pin<&mut Self>,
+            _cx: &mut Context<'_>,
+            buf: &[u8],
+        ) -> Poll<std::io::Result<usize>> {
+            Poll::Ready(Ok(buf.len()))
+        }
+        fn poll_flush(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
+            Poll::Ready(Ok(()))
+        }
+        fn poll_shutdown(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
+            Poll::Ready(Ok(()))
+        }
+    }
+
+    /// A RESP bulk-string frame carrying `payload`.
+    pub(crate) fn bulk_frame(payload: &[u8]) -> Vec<u8> {
+        let mut f = format!("${}\r\n", payload.len()).into_bytes();
+        f.extend_from_slice(payload);
+        f.extend_from_slice(b"\r\n");
+        f
     }
 }
