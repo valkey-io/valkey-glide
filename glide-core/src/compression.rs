@@ -7,6 +7,7 @@ use std::borrow::Cow;
 use std::fmt;
 
 use crate::request_type::RequestType;
+use glide_logger::log_warn;
 use glide_telemetry::Telemetry;
 
 /// Detailed compression error with context for debugging
@@ -982,31 +983,43 @@ pub fn decompress_single_value_response(
     use redis::Value;
 
     match value {
-        Value::BulkString(bytes) => {
-            // Check if data has compression header before attempting decompression
-            if !has_magic_header(&bytes) {
-                // Not compressed, return as-is
-                return Ok(Value::BulkString(bytes));
-            }
-            // Data is compressed - decompress and propagate any errors (including size limit)
-            let decompressed = manager.decompress_value(&bytes)?;
-            Ok(Value::BulkString(decompressed.into()))
+        Value::BulkString(bytes) => match decompress_or_keep(&bytes, manager)? {
+            Some(decompressed) => Ok(Value::BulkString(decompressed.into())),
+            None => Ok(Value::BulkString(bytes)),
+        },
+        Value::SimpleString(s) => match decompress_or_keep(s.as_bytes(), manager)? {
+            Some(decompressed) => Ok(match String::from_utf8(decompressed) {
+                Ok(decompressed_string) => Value::SimpleString(decompressed_string),
+                Err(e) => Value::BulkString(e.into_bytes().into()),
+            }),
+            None => Ok(Value::SimpleString(s)),
+        },
+        other => Ok(other),
+    }
+}
+
+/// Decompresses one reply element, or returns `None` when its stored bytes are the answer.
+///
+/// A plain value can begin with the magic header by coincidence, and the client cannot tell
+/// that from a corrupted compressed value, so a header that does not decode keeps its stored
+/// bytes. Only the size limit is an error.
+fn decompress_or_keep(
+    bytes: &[u8],
+    manager: &CompressionManager,
+) -> CompressionResult<Option<Vec<u8>>> {
+    if !has_magic_header(bytes) {
+        return Ok(None);
+    }
+    match manager.decompress_value(bytes) {
+        Ok(decompressed) => Ok(Some(decompressed)),
+        Err(limit @ CompressionError::SizeLimitExceeded { .. }) => Err(limit),
+        Err(other) => {
+            log_warn(
+                "decompression",
+                format!("Keeping stored bytes for a value with a compression header: {other}"),
+            );
+            Ok(None)
         }
-        Value::SimpleString(s) => {
-            let bytes = s.as_bytes();
-            // Check if data has compression header before attempting decompression
-            if !has_magic_header(bytes) {
-                // Not compressed, return as-is
-                return Ok(Value::SimpleString(s));
-            }
-            // Data is compressed - decompress and propagate any errors (including size limit)
-            let decompressed = manager.decompress_value(bytes)?;
-            match String::from_utf8(decompressed) {
-                Ok(decompressed_string) => Ok(Value::SimpleString(decompressed_string)),
-                Err(e) => Ok(Value::BulkString(e.into_bytes().into())),
-            }
-        }
-        _ => Ok(value),
     }
 }
 
