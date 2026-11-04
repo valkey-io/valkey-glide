@@ -4,7 +4,7 @@
 
 ### Features
 
-* Java: Add valkey-search 1.3 support — FT.SEARCH/FT.CREATE/FT.AGGREGATE additions (`inKeys`, a `VectorType` enum, `FTCreateOptions.filter`/`scoreField`/`noHighlight`, per-field `unf`, typed aggregate reducers), scoring (`withScores`/`scorer`), paged cursors (`FT.aggregateWithCursor`/`FT.hybridWithCursor`/`FT.cursorRead`/`FT.cursorDel`), `FT.hybrid`/`FT.hybridWithCursor` fusing a text/tag/numeric SEARCH arm with a VSIM vector-similarity arm, and `LOAD ... AS` renaming ([#7379](https://github.com/valkey-io/valkey-glide/pull/7379))
+* Java: Add valkey-search 1.3 support — FT.SEARCH/FT.CREATE/FT.AGGREGATE additions (`inKeys`, a `VectorType` enum, `FTCreateOptions.filter`/`scoreField`/`noHighlight`, per-field `unf`, typed aggregate reducers), scoring (`withScores`/`scorer`), paged cursors (`FT.aggregateWithCursor`/`FT.hybridWithCursor`/`FT.cursorRead`/`FT.cursorDel`), `FT.hybrid`/`FT.hybridWithCursor` fusing a text/tag/numeric SEARCH arm with a VSIM vector-similarity arm, and `LOAD ... AS` renaming (requires `search.emulate-release` >= 1.3.0) ([#7379](https://github.com/valkey-io/valkey-glide/pull/7379))
 * All: Add support for Valkey 9.0 commands:
   * `DELIFEQ` ([#6146](https://github.com/valkey-io/valkey-glide/issues/6146))
 * Java, Node, Python, Go: Add support for Valkey 9.1 commands:
