@@ -872,12 +872,8 @@ class TestCommands:
     def test_sync_memoryview_args_sent_by_byte_length(
         self, glide_sync_client: TGlideClient, view_fn
     ):
-        """Regression: a memoryview argument is sent with its byte length.
-
-        For these views len() is smaller than nbytes (it counts elements, or
-        rows of a 2-D view), so measuring the argument with len() sent only a
-        prefix of the buffer and stored a truncated value or key.
-        """
+        """Test that set() and custom_command() accept memoryview values and keys
+        whose len() is smaller than nbytes (wider item formats and 2-D views)."""
         data = os.urandom(64)
         view = view_fn(data)
         assert len(view) < view.nbytes == len(data)

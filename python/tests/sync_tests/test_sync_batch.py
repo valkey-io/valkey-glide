@@ -163,12 +163,8 @@ class TestSyncBatch:
     def test_sync_batch_memoryview_args_sent_by_byte_length(
         self, glide_sync_client: TGlideClient
     ):
-        """Regression: batch arguments are sent with their byte length.
-
-        For these views len() is smaller than nbytes (it counts elements, or
-        rows of a 2-D view), so measuring the argument with len() sent only a
-        prefix of the buffer and stored a truncated value.
-        """
+        """Test that batch set() accepts memoryview values whose len() is smaller
+        than nbytes (wider item formats and 2-D views)."""
         data = os.urandom(64)
         views = [
             memoryview(data).cast("H"),
