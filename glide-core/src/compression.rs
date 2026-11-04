@@ -718,8 +718,8 @@ pub mod lz4_backend {
     const LZ4_DEFAULT_LEVEL: i32 = 0;
 
     /// Upper bound on decompressed bytes per compressed byte of an LZ4 block. A match-length
-    /// extension byte adds at most 255 output bytes; every other field of a sequence (token,
-    /// literals, offset) produces fewer output bytes than it costs.
+    /// extension byte adds at most 255 output bytes; a token plus its 2-byte offset yields at
+    /// most 18 match bytes for 3 input bytes, and a literal costs one byte per byte.
     const LZ4_MAX_EXPANSION_RATIO: usize = 255;
 
     #[derive(Debug)]
