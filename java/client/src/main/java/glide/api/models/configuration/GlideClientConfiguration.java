@@ -61,8 +61,10 @@ public class GlideClientConfiguration extends BaseClientConfiguration {
      * accidental write operations.
      *
      * <p>Note: read-only mode is not compatible with the AZ_AFFINITY,
-     * AZ_AFFINITY_REPLICAS_AND_PRIMARY, or AZ_AFFINITY_ALL_NODES read strategies. Attempting to
-     * combine them fails during client creation.
+     * AZ_AFFINITY_REPLICAS_AND_PRIMARY, or AZ_AFFINITY_ALL_NODES read strategies. Combining them with
+     * a {@code clientAZ} set fails during client creation. Without a {@code clientAZ}, the core
+     * downgrades AZ_AFFINITY and AZ_AFFINITY_REPLICAS_AND_PRIMARY to PREFER_REPLICA before that
+     * check, so the client connects and reads from replicas.
      *
      * <p>Defaults to false.
      */
