@@ -50,7 +50,7 @@ class OffsetOptions:
 
     def to_args(self) -> List[str]:
         args = [str(self.start)]
-        if self.end:
+        if self.end is not None:
             args.append(str(self.end))
         if self.index_type is not None:
             args.append(self.index_type.value)

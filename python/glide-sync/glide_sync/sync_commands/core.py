@@ -5170,7 +5170,7 @@ class CoreCommands(Protocol):
         return cast(
             Mapping[bytes, float],
             self._execute_command(
-                RequestType.ZPopMax, [key, str(count)] if count else [key]
+                RequestType.ZPopMax, [key, str(count)] if count is not None else [key]
             ),
         )
 
@@ -5241,7 +5241,7 @@ class CoreCommands(Protocol):
                 {b'member3': 7.5 , b'member2': 8.0}  # Indicates that 'member3' with a score of 7.5 and 'member2' with a score
                                                      # of 8.0 have been removed from the sorted set.
         """
-        args: List[TEncodable] = [key, str(count)] if count else [key]
+        args: List[TEncodable] = [key, str(count)] if count is not None else [key]
         return cast(
             Mapping[bytes, float],
             self._execute_command(RequestType.ZPopMin, args),

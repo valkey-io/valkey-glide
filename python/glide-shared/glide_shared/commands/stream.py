@@ -410,15 +410,15 @@ class StreamClaimOptions:
             List[str]: The options as a list of arguments for the `XCLAIM` command.
         """
         args: List[TEncodable] = []
-        if self.idle:
+        if self.idle is not None:
             args.append(self.IDLE_VALKEY_API)
             args.append(str(self.idle))
 
-        if self.idle_unix_time:
+        if self.idle_unix_time is not None:
             args.append(self.TIME_VALKEY_API)
             args.append(str(self.idle_unix_time))
 
-        if self.retry_count:
+        if self.retry_count is not None:
             args.append(self.RETRY_COUNT_VALKEY_API)
             args.append(str(self.retry_count))
 

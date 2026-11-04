@@ -84,10 +84,10 @@ class JsonGetOptions:
 
     def get_options(self) -> List[str]:
         args = []
-        if self.indent:
+        if self.indent is not None:
             args.extend(["INDENT", self.indent])
-        if self.new_line:
+        if self.new_line is not None:
             args.extend(["NEWLINE", self.new_line])
-        if self.space:
+        if self.space is not None:
             args.extend(["SPACE", self.space])
         return args
