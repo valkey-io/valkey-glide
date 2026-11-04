@@ -2139,6 +2139,11 @@ impl ClientAdapter {
     where
         Fut: Future<Output = RedisResult<Value>> + Send + 'static,
     {
+        // Boxed first, so only a pointer moves through the frames below (`block_on_sync`,
+        // `block_on_worker`, the runtime's spawn) on the foreign caller's thread, whose stack can
+        // be 128 KiB (musl). A request future of a few KiB, such as one that awaits the unboxed
+        // `send_command`, moved by value through them overflows that stack in a debug build.
+        let request_future = Box::pin(request_future);
         match self.core.client_type {
             ClientType::AsyncClient {
                 success_callback,
@@ -5842,7 +5847,7 @@ unsafe fn execute_command(
         }
     };
 
-    // Inflight tracking is handled by send_command() via InflightRequestTracker on Cmd.
+    // Inflight tracking is handled by send_command(), which reserves its own slot.
     let mut client = client_adapter.core.client.clone();
 
     // Abandon monitor integration: for pool-borrowed clients refresh the inactivity
