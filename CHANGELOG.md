@@ -86,6 +86,7 @@
 * Core: Releasing a scope, or closing its parent client, while a blocking command is in flight now closes the scope's socket, so the server drops the blocked waiter instead of letting it consume a later push — the socket used to stay open until the server replied, which for `BLPOP key 0` is never. A reused scope connection also gets a fresh scope id, and a blocking scope command keeps the abandon monitor from reclaiming its pool-borrowed parent mid-command ([#7000](https://github.com/valkey-io/valkey-glide/issues/7000))
 * Core: Validate client library names ([#6891](https://github.com/valkey-io/valkey-glide/pull/6891))
 * Rust: Commands that take a key or argument list encode a byte slice passed as the list (e.g. `&b"key"[..]`) as one argument instead of one argument per byte ([#7313](https://github.com/valkey-io/valkey-glide/issues/7313))
+* Core: Standalone clients decrement the `total_clients` telemetry counter once, when the client is dropped, instead of on every command, which drove it to 0 after the first command ([#7540](https://github.com/valkey-io/valkey-glide/issues/7540))
 
 ### Changes
 
