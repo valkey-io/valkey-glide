@@ -632,9 +632,15 @@ pub unsafe extern "C" fn set_sync_value_results(client_ptr: *const c_void, enabl
 /// the crates whose private layout it embeds, and the compiler that laid it out. A consumer
 /// of `CommandResult.value` must have been built against the same, so it compares this with
 /// its own token before opting in.
+///
+/// The versions come from the build script. `ffi/miri-tests` compiles this file without it,
+/// so a build that has no record reports `unknown` rather than failing to compile.
 #[unsafe(no_mangle)]
 pub extern "C" fn value_abi_token() -> u64 {
-    redis::value_abi::value_abi_token(env!("VALUE_ABI_DEPS"), env!("VALUE_ABI_RUSTC"))
+    redis::value_abi::value_abi_token(
+        option_env!("VALUE_ABI_DEPS").unwrap_or("unknown"),
+        option_env!("VALUE_ABI_RUSTC").unwrap_or("unknown"),
+    )
 }
 
 /// Specifies the type of client used to execute commands.

@@ -382,7 +382,10 @@ fn parse_response(py: Python<'_>, ptr: usize) -> (PyObject, usize) {
 /// equal the ffi library's `value_abi_token` before `parse_value` may be used on its values.
 #[pyfunction]
 fn value_abi_token() -> u64 {
-    redis::value_abi::value_abi_token(env!("VALUE_ABI_DEPS"), env!("VALUE_ABI_RUSTC"))
+    redis::value_abi::value_abi_token(
+        option_env!("VALUE_ABI_DEPS").unwrap_or("unknown"),
+        option_env!("VALUE_ABI_RUSTC").unwrap_or("unknown"),
+    )
 }
 
 #[pymodule(gil_used = false)]
