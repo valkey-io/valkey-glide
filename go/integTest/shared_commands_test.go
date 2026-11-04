@@ -185,23 +185,75 @@ func (suite *GlideTestSuite) TestSetWithOptions_OnlyIfEquals() {
 	suite.SkipIfServerVersionLowerThan("8.1.0", suite.T())
 	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
 		key := uuid.New().String()
-		suite.verifyOK(client.Set(context.Background(), key, initialValue))
+		suite.verifyOK(client.Set(context.Background(), key, "value"))
 
-		// successful set
-		opts := options.NewSetOptions().SetOnlyIfEquals(initialValue)
-		result, err := client.SetWithOptions(context.Background(), key, anotherValue, *opts)
+		// Value not equal
+		opts := options.NewSetOptions().SetOnlyIfEquals("other")
+		result, err := client.SetWithOptions(context.Background(), key, "other", *opts)
+		suite.NoError(err)
+		assert.True(suite.T(), result.IsNil())
+
+		result, err = client.Get(context.Background(), key)
+		suite.NoError(err)
+		assert.Equal(suite.T(), "value", result.Value())
+
+		// Value equal
+		opts = options.NewSetOptions().SetOnlyIfEquals("value")
+		result, err = client.SetWithOptions(context.Background(), key, "other", *opts)
 		suite.NoError(err)
 		assert.Equal(suite.T(), "OK", result.Value())
 
 		result, err = client.Get(context.Background(), key)
 		suite.NoError(err)
-		assert.Equal(suite.T(), anotherValue, result.Value())
+		assert.Equal(suite.T(), "other", result.Value())
 
-		// unsuccessful set
-		opts = options.NewSetOptions().SetOnlyIfEquals(initialValue)
-		result, err = client.SetWithOptions(context.Background(), key, initialValue, *opts)
+		// Non-existent key
+		missing := uuid.New().String()
+		result, err = client.SetWithOptions(context.Background(), missing, "value", *opts)
 		suite.NoError(err)
 		assert.True(suite.T(), result.IsNil())
+
+		exists, err := client.Exists(context.Background(), []string{missing})
+		suite.NoError(err)
+		assert.Equal(suite.T(), int64(0), exists)
+	})
+}
+
+func (suite *GlideTestSuite) TestSetWithOptions_OnlyIfNotEquals() {
+	suite.SkipIfServerVersionLowerThan("9.2.0", suite.T())
+	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
+		key := uuid.New().String()
+		suite.verifyOK(client.Set(context.Background(), key, "value"))
+
+		// Value equal
+		opts := options.NewSetOptions().SetOnlyIfNotEquals("value")
+		result, err := client.SetWithOptions(context.Background(), key, "other", *opts)
+		suite.NoError(err)
+		assert.True(suite.T(), result.IsNil())
+
+		result, err = client.Get(context.Background(), key)
+		suite.NoError(err)
+		assert.Equal(suite.T(), "value", result.Value())
+
+		// Value not equal
+		opts = options.NewSetOptions().SetOnlyIfNotEquals("other")
+		result, err = client.SetWithOptions(context.Background(), key, "other", *opts)
+		suite.NoError(err)
+		assert.Equal(suite.T(), "OK", result.Value())
+
+		result, err = client.Get(context.Background(), key)
+		suite.NoError(err)
+		assert.Equal(suite.T(), "other", result.Value())
+
+		// Non-existent key
+		missing := uuid.New().String()
+		result, err = client.SetWithOptions(context.Background(), missing, "value", *opts)
+		suite.NoError(err)
+		assert.Equal(suite.T(), "OK", result.Value())
+
+		result, err = client.Get(context.Background(), missing)
+		suite.NoError(err)
+		assert.Equal(suite.T(), "value", result.Value())
 	})
 }
 
@@ -571,6 +623,36 @@ func (suite *GlideTestSuite) TestAppend_existingAndNonExistingKeys() {
 		res1, err = client.Get(context.Background(), key)
 		suite.NoError(err)
 		assert.Equal(suite.T(), value1+value2, res1.Value())
+	})
+}
+
+func (suite *GlideTestSuite) TestDelIfEq() {
+	suite.SkipIfServerVersionLowerThan("9.0.0", suite.T())
+
+	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
+		key := uuid.New().String()
+		value := uuid.New().String()
+		wrongValue := uuid.New().String()
+
+		res, err := client.DelIfEq(context.Background(), key, value)
+		suite.NoError(err)
+		assert.False(suite.T(), res)
+
+		suite.verifyOK(client.Set(context.Background(), key, value))
+
+		res, err = client.DelIfEq(context.Background(), key, wrongValue)
+		suite.NoError(err)
+		assert.False(suite.T(), res)
+		res1, err := client.Get(context.Background(), key)
+		suite.NoError(err)
+		assert.Equal(suite.T(), value, res1.Value())
+
+		res, err = client.DelIfEq(context.Background(), key, value)
+		suite.NoError(err)
+		assert.True(suite.T(), res)
+		res1, err = client.Get(context.Background(), key)
+		suite.NoError(err)
+		assert.True(suite.T(), res1.IsNil())
 	})
 }
 
@@ -1515,6 +1597,74 @@ func (suite *GlideTestSuite) TestHSetEx_WithExpiration() {
 		assert.NoError(suite.T(), err)
 		assert.True(suite.T(), ttls2[0] > 0 && ttls2[0] <= 30)
 		assert.True(suite.T(), ttls2[1] > 0 && ttls2[1] <= 30)
+	})
+}
+
+func (suite *GlideTestSuite) TestHSetEx_WithKeyConditionalSet() {
+	suite.SkipIfServerVersionLowerThan("9.1.0", suite.T())
+
+	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
+		ctx := context.Background()
+		key := "test_hsetex_key_conditional_" + uuid.NewString()
+		fields := map[string]string{"field1": "value1"}
+
+		// NX: key does not exist, so the hash is created
+		nxOptions := options.NewHSetExOptions().SetConditionalSet(constants.OnlyIfDoesNotExist)
+		result, err := client.HSetEx(ctx, key, fields, nxOptions)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(1), result)
+		value, err := client.HGet(ctx, key, "field1")
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), "value1", value.Value())
+
+		// NX: key now exists, so a second NX call should not modify the hash
+		result, err = client.HSetEx(ctx, key, map[string]string{"field1": "should_not_be_set"}, nxOptions)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(0), result)
+		value, err = client.HGet(ctx, key, "field1")
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), "value1", value.Value())
+
+		// XX: key exists, so the field is updated
+		xxOptions := options.NewHSetExOptions().SetConditionalSet(constants.OnlyIfExists)
+		result, err = client.HSetEx(ctx, key, map[string]string{"field1": "updated_value1"}, xxOptions)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(1), result)
+		value, err = client.HGet(ctx, key, "field1")
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), "updated_value1", value.Value())
+
+		// XX: key does not exist, so the hash is not created
+		missingKey := "test_hsetex_key_conditional_missing_" + uuid.NewString()
+		result, err = client.HSetEx(ctx, missingKey, fields, xxOptions)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(0), result)
+		exists, err := client.Exists(ctx, []string{missingKey})
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(0), exists)
+	})
+}
+
+func (suite *GlideTestSuite) TestHSetEx_WithAll() {
+	suite.SkipIfServerVersionLowerThan("9.1.0", suite.T())
+
+	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
+		ctx := context.Background()
+		fields := map[string]string{"field1": "value1"}
+
+		// Key conditional change can be combined with field conditional change and expiry
+		combinedKey := "test_hsetex_key_and_field_conditional_" + uuid.NewString()
+		combinedOptions := options.NewHSetExOptions().
+			SetConditionalSet(constants.OnlyIfDoesNotExist).
+			SetFieldConditionalSet(constants.HashFieldsDoNotExist).
+			SetExpiry(options.NewExpiryIn(60 * time.Second))
+		result, err := client.HSetEx(ctx, combinedKey, fields, combinedOptions)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(1), result)
+		ttls, err := client.HTtl(ctx, combinedKey, []string{"field1"})
+		assert.NoError(suite.T(), err)
+		assert.Len(suite.T(), ttls, 1)
+		assert.True(suite.T(), ttls[0] > 0 && ttls[0] <= 60)
 	})
 }
 
@@ -7557,7 +7707,7 @@ func (suite *GlideTestSuite) TestXGroupCreate_XGroupDestroy() {
 		suite.NoError(err)
 		suite.False(destroyed)
 
-		// ENTRIESREAD option was added in valkey 7.0.0
+		// ENTRIESREAD option was added in Valkey 7.0.0
 		opts = options.NewXGroupCreateOptions().SetEntriesRead(100)
 		// TODO #5368: Compare versions semantically, not as strings.
 		if suite.serverVersion >= "7.0.0" {

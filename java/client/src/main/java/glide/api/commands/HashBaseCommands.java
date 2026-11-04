@@ -563,7 +563,6 @@ public interface HashBaseCommands {
     /**
      * Returns a random field name from the hash value stored at <code>key</code>.
      *
-     * @since Valkey 6.2 and above.
      * @see <a href="https://valkey.io/commands/hrandfield/">valkey.io</a> for details.
      * @param key The key of the hash.
      * @return A random field name from the hash stored at <code>key</code>, or <code>null</code> when
@@ -579,7 +578,6 @@ public interface HashBaseCommands {
     /**
      * Returns a random field name from the hash value stored at <code>key</code>.
      *
-     * @since Valkey 6.2 and above.
      * @see <a href="https://valkey.io/commands/hrandfield/">valkey.io</a> for details.
      * @param key The key of the hash.
      * @return A random field name from the hash stored at <code>key</code>, or <code>null</code> when
@@ -596,7 +594,6 @@ public interface HashBaseCommands {
      * Retrieves up to <code>count</code> random field names from the hash value stored at <code>key
      * </code>.
      *
-     * @since Valkey 6.2 and above.
      * @see <a href="https://valkey.io/commands/hrandfield/">valkey.io</a> for details.
      * @param key The key of the hash.
      * @param count The number of field names to return.<br>
@@ -616,7 +613,6 @@ public interface HashBaseCommands {
      * Retrieves up to <code>count</code> random field names from the hash value stored at <code>key
      * </code>.
      *
-     * @since Valkey 6.2 and above.
      * @see <a href="https://valkey.io/commands/hrandfield/">valkey.io</a> for details.
      * @param key The key of the hash.
      * @param count The number of field names to return.<br>
@@ -636,7 +632,6 @@ public interface HashBaseCommands {
      * Retrieves up to <code>count</code> random field names along with their values from the hash
      * value stored at <code>key</code>.
      *
-     * @since Valkey 6.2 and above.
      * @see <a href="https://valkey.io/commands/hrandfield/">valkey.io</a> for details.
      * @param key The key of the hash.
      * @param count The number of field names to return.<br>
@@ -658,7 +653,6 @@ public interface HashBaseCommands {
      * Retrieves up to <code>count</code> random field names along with their values from the hash
      * value stored at <code>key</code>.
      *
-     * @since Valkey 6.2 and above.
      * @see <a href="https://valkey.io/commands/hrandfield/">valkey.io</a> for details.
      * @param key The key of the hash.
      * @param count The number of field names to return.<br>
@@ -830,9 +824,9 @@ public interface HashBaseCommands {
      * <p>Note: the key-level conditional options {@link
      * HSetExOptions.HSetExOptionsBuilder#onlyIfKeyExists() onlyIfKeyExists()} and {@link
      * HSetExOptions.HSetExOptionsBuilder#onlyIfKeyDoesNotExist() onlyIfKeyDoesNotExist()} require
-     * Valkey 9.1 and above.
+     * Valkey 9.1.0.
      *
-     * @since Valkey 9.0 and above.
+     * @since Valkey 9.0.0.
      * @see <a href="https://valkey.io/commands/hsetex/">valkey.io</a> for details.
      * @param key The key of the hash.
      * @param fieldValueMap A field-value map consisting of fields and their corresponding values to
@@ -882,9 +876,9 @@ public interface HashBaseCommands {
      * <p>Note: the key-level conditional options {@link
      * HSetExOptions.HSetExOptionsBuilder#onlyIfKeyExists() onlyIfKeyExists()} and {@link
      * HSetExOptions.HSetExOptionsBuilder#onlyIfKeyDoesNotExist() onlyIfKeyDoesNotExist()} require
-     * Valkey 9.1 and above.
+     * Valkey 9.1.0.
      *
-     * @since Valkey 9.0 and above.
+     * @since Valkey 9.0.0.
      * @see <a href="https://valkey.io/commands/hsetex/">valkey.io</a> for details.
      * @param key The key of the hash.
      * @param fieldValueMap A field-value map consisting of fields and their corresponding values to
@@ -921,7 +915,7 @@ public interface HashBaseCommands {
      * HSetExOptions keyDoesNotExistOptions = HSetExOptions.builder()
      *     .onlyIfKeyDoesNotExist()
      *     .build();
-     * Long keyDoesNotExistResult = client.hsetex(gs("new_hash"), Map.of(gs("field1"), gs("value1")), keyDoesNotExistOptions).get();
+     * Long keyDoesNotExistResult = client.hsetex(gs("another_hash"), Map.of(gs("field1"), gs("value1")), keyDoesNotExistOptions).get();
      * }</pre>
      */
     CompletableFuture<Long> hsetex(
@@ -931,7 +925,7 @@ public interface HashBaseCommands {
      * Retrieves the values of specified fields from the hash stored at <code>key</code> and
      * optionally sets their expiration or removes it.
      *
-     * @since Valkey 9.0 and above.
+     * @since Valkey 9.0.0.
      * @see <a href="https://valkey.io/commands/hgetex/">valkey.io</a> for details.
      * @param key The key of the hash.
      * @param fields The fields in the hash stored at <code>key</code> to retrieve from the database.
@@ -970,7 +964,7 @@ public interface HashBaseCommands {
      * Retrieves the values of specified fields from the hash stored at <code>key</code> and
      * optionally sets their expiration or removes it.
      *
-     * @since Valkey 9.0 and above.
+     * @since Valkey 9.0.0.
      * @see <a href="https://valkey.io/commands/hgetex/">valkey.io</a> for details.
      * @param key The key of the hash.
      * @param fields The fields in the hash stored at <code>key</code> to retrieve from the database.
@@ -1013,7 +1007,7 @@ public interface HashBaseCommands {
      * only if the new expiration is greater than the current one, or only if the new expiration is
      * less than the current one.
      *
-     * @since Valkey 9.0 and above.
+     * @since Valkey 9.0.0.
      * @see <a href="https://valkey.io/commands/hexpire/">valkey.io</a> for details.
      * @param key The key of the hash.
      * @param seconds The expiration time in seconds.
@@ -1062,7 +1056,7 @@ public interface HashBaseCommands {
      * only if the new expiration is greater than the current one, or only if the new expiration is
      * less than the current one.
      *
-     * @since Valkey 9.0 and above.
+     * @since Valkey 9.0.0.
      * @see <a href="https://valkey.io/commands/hexpire/">valkey.io</a> for details.
      * @param key The key of the hash.
      * @param seconds The expiration time in seconds.
@@ -1112,7 +1106,7 @@ public interface HashBaseCommands {
      * with expiration time) to persistent (a field that will never expire as no expiration time is
      * associated).
      *
-     * @since Valkey 9.0 and above.
+     * @since Valkey 9.0.0.
      * @see <a href="https://valkey.io/commands/hpersist/">valkey.io</a> for details.
      * @param key The key of the hash.
      * @param fields The fields to remove expiration from.
@@ -1144,7 +1138,7 @@ public interface HashBaseCommands {
      * with expiration time) to persistent (a field that will never expire as no expiration time is
      * associated).
      *
-     * @since Valkey 9.0 and above.
+     * @since Valkey 9.0.0.
      * @see <a href="https://valkey.io/commands/hpersist/">valkey.io</a> for details.
      * @param key The key of the hash.
      * @param fields The fields to remove expiration from.
@@ -1175,7 +1169,7 @@ public interface HashBaseCommands {
      * Sets expiration time for hash fields, in milliseconds. Creates the hash if it doesn't exist. If
      * a field is already expired, it will be deleted rather than expired.
      *
-     * @since Valkey 9.0 and above.
+     * @since Valkey 9.0.0.
      * @see <a href="https://valkey.io/commands/hpexpire/">valkey.io</a> for details.
      * @param key The key of the hash.
      * @param milliseconds The expiration time to set for the fields, in milliseconds.
@@ -1212,7 +1206,7 @@ public interface HashBaseCommands {
      * Sets expiration time for hash fields, in milliseconds. Creates the hash if it doesn't exist. If
      * a field is already expired, it will be deleted rather than expired.
      *
-     * @since Valkey 9.0 and above.
+     * @since Valkey 9.0.0.
      * @see <a href="https://valkey.io/commands/hpexpire/">valkey.io</a> for details.
      * @param key The key of the hash.
      * @param milliseconds The expiration time to set for the fields, in milliseconds.
@@ -1253,7 +1247,7 @@ public interface HashBaseCommands {
      * hash if it doesn't exist. If a field is already expired, it will be deleted rather than
      * expired.
      *
-     * @since Valkey 9.0 and above.
+     * @since Valkey 9.0.0.
      * @see <a href="https://valkey.io/commands/hexpireat/">valkey.io</a> for details.
      * @param key The key of the hash.
      * @param unixSeconds The expiration time to set for the fields, as a Unix timestamp in seconds.
@@ -1291,7 +1285,7 @@ public interface HashBaseCommands {
      * hash if it doesn't exist. If a field is already expired, it will be deleted rather than
      * expired.
      *
-     * @since Valkey 9.0 and above.
+     * @since Valkey 9.0.0.
      * @see <a href="https://valkey.io/commands/hexpireat/">valkey.io</a> for details.
      * @param key The key of the hash.
      * @param unixSeconds The expiration time to set for the fields, as a Unix timestamp in seconds.
@@ -1332,7 +1326,7 @@ public interface HashBaseCommands {
      * HPEXPIREAT</code> has the same effect and semantic as <code>HEXPIREAT</code>, but the Unix time
      * at which the field will expire is specified in milliseconds instead of seconds.
      *
-     * @since Valkey 9.0 and above.
+     * @since Valkey 9.0.0.
      * @see <a href="https://valkey.io/commands/hpexpireat/">valkey.io</a> for details.
      * @param key The key of the hash.
      * @param unixMilliseconds The expiration time to set for the fields, as a Unix timestamp in
@@ -1376,7 +1370,7 @@ public interface HashBaseCommands {
      * HPEXPIREAT</code> has the same effect and semantic as <code>HEXPIREAT</code>, but the Unix time
      * at which the field will expire is specified in milliseconds instead of seconds.
      *
-     * @since Valkey 9.0 and above.
+     * @since Valkey 9.0.0.
      * @see <a href="https://valkey.io/commands/hpexpireat/">valkey.io</a> for details.
      * @param key The key of the hash.
      * @param unixMilliseconds The expiration time to set for the fields, as a Unix timestamp in
@@ -1418,7 +1412,7 @@ public interface HashBaseCommands {
     /**
      * Returns the remaining time to live of hash fields that have a timeout, in seconds.
      *
-     * @since Valkey 9.0 and above.
+     * @since Valkey 9.0.0.
      * @see <a href="https://valkey.io/commands/httl/">valkey.io</a> for details.
      * @param key The key of the hash.
      * @param fields The fields to get the TTL for.
@@ -1444,7 +1438,7 @@ public interface HashBaseCommands {
     /**
      * Returns the remaining time to live of hash fields that have a timeout, in seconds.
      *
-     * @since Valkey 9.0 and above.
+     * @since Valkey 9.0.0.
      * @see <a href="https://valkey.io/commands/httl/">valkey.io</a> for details.
      * @param key The key of the hash.
      * @param fields The fields to get the TTL for.
@@ -1470,7 +1464,7 @@ public interface HashBaseCommands {
     /**
      * Returns the remaining time to live of hash fields that have a timeout, in milliseconds.
      *
-     * @since Valkey 9.0 and above.
+     * @since Valkey 9.0.0.
      * @see <a href="https://valkey.io/commands/hpttl/">valkey.io</a> for details.
      * @param key The key of the hash.
      * @param fields The fields to get the TTL for.
@@ -1496,7 +1490,7 @@ public interface HashBaseCommands {
     /**
      * Returns the remaining time to live of hash fields that have a timeout, in milliseconds.
      *
-     * @since Valkey 9.0 and above.
+     * @since Valkey 9.0.0.
      * @see <a href="https://valkey.io/commands/hpttl/">valkey.io</a> for details.
      * @param key The key of the hash.
      * @param fields The fields to get the TTL for.
@@ -1522,7 +1516,7 @@ public interface HashBaseCommands {
     /**
      * Returns the absolute Unix timestamp (in seconds) at which the given hash fields will expire.
      *
-     * @since Valkey 9.0 and above.
+     * @since Valkey 9.0.0.
      * @see <a href="https://valkey.io/commands/hexpiretime/">valkey.io</a> for details.
      * @param key The key of the hash.
      * @param fields The fields to get the expiration timestamp for.
@@ -1548,7 +1542,7 @@ public interface HashBaseCommands {
     /**
      * Returns the absolute Unix timestamp (in seconds) at which the given hash fields will expire.
      *
-     * @since Valkey 9.0 and above.
+     * @since Valkey 9.0.0.
      * @see <a href="https://valkey.io/commands/hexpiretime/">valkey.io</a> for details.
      * @param key The key of the hash.
      * @param fields The fields to get the expiration timestamp for.
@@ -1575,7 +1569,7 @@ public interface HashBaseCommands {
      * Returns the absolute Unix timestamp (in milliseconds) at which the given hash fields will
      * expire.
      *
-     * @since Valkey 9.0 and above.
+     * @since Valkey 9.0.0.
      * @see <a href="https://valkey.io/commands/hpexpiretime/">valkey.io</a> for details.
      * @param key The key of the hash.
      * @param fields The fields to get the expiration timestamp for.
@@ -1602,7 +1596,7 @@ public interface HashBaseCommands {
      * Returns the absolute Unix timestamp (in milliseconds) at which the given hash fields will
      * expire.
      *
-     * @since Valkey 9.0 and above.
+     * @since Valkey 9.0.0.
      * @see <a href="https://valkey.io/commands/hpexpiretime/">valkey.io</a> for details.
      * @param key The key of the hash.
      * @param fields The fields to get the expiration timestamp for.

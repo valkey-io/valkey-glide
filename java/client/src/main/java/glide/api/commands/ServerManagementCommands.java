@@ -185,7 +185,7 @@ public interface ServerManagementCommands {
     /**
      * Aborts all in-progress and scheduled background saves.
      *
-     * @since Valkey 8.1
+     * @since Valkey 8.1.0
      * @see <a href="https://valkey.io/commands/bgsave/">valkey.io</a> for details.
      * @return A non-empty status string.
      * @example

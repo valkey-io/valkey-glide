@@ -34,27 +34,43 @@ use crate::region_ref::RegionRef;
 
 /// Memory handed over by the caller, kept at one fixed address until it is freed.
 ///
-/// The caller's `AsMut::as_mut` is called exactly once when this is created. Every
-/// later access goes through the pointer that call returned.
+/// Every access goes through `bytes`, the one pointer taken when this is created.
 pub(crate) struct HostMemory {
     /// This is dropped to free the memory at the end.
-    owner: NonNull<dyn AsMut<[u8]> + Send>,
+    owner: NonNull<dyn Send>,
     bytes: NonNull<[u8]>,
 }
 
-// SAFETY: `owner` is `Send`, and `bytes` points into memory `owner` owns, so moving
+// SAFETY: `owner` is `Send`. `bytes` points either into memory `owner` owns or, from
+// `from_raw`, into memory its caller promised may be used from any thread, so moving
 // both to another thread together is moving the caller's `Send` value.
 unsafe impl Send for HostMemory {}
 
 impl HostMemory {
+    /// Memory Rust owns. The caller's `AsMut::as_mut` is called exactly once, here.
     pub(crate) fn new(memory: impl AsMut<[u8]> + Send + 'static) -> Self {
         // Turned into a raw pointer before `bytes` is taken from it, so it is never
         // used as a reference afterwards. Writing through a reference to the
         // caller's value after taking `bytes` would invalidate `bytes` whenever the
         // data lives inside that value, as it does in a `[u8; N]`.
-        let owner: NonNull<dyn AsMut<[u8]> + Send> = NonNull::from(Box::leak(Box::new(memory)));
+        let owner = NonNull::from(Box::leak(Box::new(memory)));
         // SAFETY: `owner` was just leaked, so nothing else refers to it.
         let bytes = NonNull::from(unsafe { (*owner.as_ptr()).as_mut() });
+        Self { owner, bytes }
+    }
+
+    /// Memory the caller keeps its own pointer to, kept as that pointer.
+    ///
+    /// No reference to the bytes is formed here, so the caller's own reads and
+    /// writes through its pointer between transfers leave `bytes` valid. A
+    /// reference formed from the `&mut [u8]` that `AsMut` returns would not survive
+    /// them. `owner` holds nothing but is dropped when the memory may be freed.
+    ///
+    /// # Safety
+    ///
+    /// See [`RdmaFabric::register_raw`].
+    pub(crate) unsafe fn from_raw(bytes: NonNull<[u8]>, owner: impl Send + 'static) -> Self {
+        let owner = NonNull::from(Box::leak(Box::new(owner)));
         Self { owner, bytes }
     }
 
@@ -64,7 +80,9 @@ impl HostMemory {
 
     pub(crate) fn bytes(&self) -> &[u8] {
         // SAFETY: `bytes` stays valid until `self` drops. The only `&mut` to it comes
-        // from `bytes_mut`, which needs `&mut self`, so the two never overlap.
+        // from `bytes_mut`, which needs `&mut self`, so the two never overlap. Memory
+        // from `from_raw` is not touched through the caller's own pointer while
+        // either is alive; see `RdmaFabric::register_raw`.
         unsafe { self.bytes.as_ref() }
     }
 
@@ -536,13 +554,14 @@ impl RdmaRevoker {
 
 #[cfg(test)]
 mod tests {
-    use super::{LentBuffer, RdmaBuffer, RdmaRevoker};
+    use super::{HostMemory, LentBuffer, RdmaBuffer, RdmaRevoker};
     use crate::command::{RdmaCommand, ReadReceipt, SetChecksum, TransferReply};
     use crate::config::{FabricConfig, Provider};
     use crate::error::RdmaError;
     use crate::fabric::RdmaFabric;
     use crate::fabric::tests::fabric_whose_close_stops_writes;
     use crate::region_ref::RegionRef;
+    use std::ptr::{self, NonNull};
     use std::sync::Arc;
     use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
     use std::sync::mpsc;
@@ -1164,6 +1183,75 @@ mod tests {
         assert_eq!(&buffer.as_host()[..5], b"hello");
 
         assert_eq!(lookups.load(Ordering::SeqCst), 1);
+    }
+
+    /// Memory a C caller owns, as `register_raw` is meant for: boxed so it stays put,
+    /// reached afterwards only through the raw pointer the caller would hold.
+    fn foreign_memory(length: usize) -> NonNull<[u8]> {
+        let memory = Box::into_raw(vec![0u8; length].into_boxed_slice());
+        NonNull::new(memory).unwrap()
+    }
+
+    /// Frees memory from `foreign_memory`.
+    unsafe fn free_foreign_memory(memory: NonNull<[u8]>) {
+        drop(unsafe { Box::from_raw(memory.as_ptr()) });
+    }
+
+    /// The owner writes through its own pointer between transfers, and those writes
+    /// must leave the pointer the memory was registered with usable. With a
+    /// reference taken at registration, as `AsMut` gives, the owner's first write
+    /// would invalidate it; `cargo miri test` catches that.
+    #[test]
+    fn raw_memory_stays_usable_after_writes_through_the_owners_pointer() {
+        let memory = foreign_memory(16);
+        let caller = memory.cast::<u8>().as_ptr();
+        let mut host = unsafe { HostMemory::from_raw(memory, ()) };
+
+        unsafe { *caller.add(3) = 7 };
+        assert_eq!(host.bytes()[3], 7);
+        host.bytes_mut()[4] = 9;
+        assert_eq!(unsafe { *caller.add(4) }, 9);
+        unsafe { *caller.add(5) = 1 };
+        assert_eq!(host.bytes()[5], 1);
+
+        drop(host);
+        unsafe { free_foreign_memory(memory) };
+    }
+
+    /// A transfer of raw memory sees the owner's bytes, the owner sees what the
+    /// transfer left, and `owner` is dropped once the fabric is done with it.
+    #[test]
+    fn a_raw_registration_shares_the_owners_bytes_and_drops_the_owner_when_done() {
+        let fabric = fabric();
+        let memory = foreign_memory(64);
+        let caller = memory.cast::<u8>().as_ptr();
+        let (owner, freed, _) = tracked();
+        let buffer = unsafe { fabric.register_raw(memory, owner) }.unwrap();
+        assert_eq!(buffer.capacity(), 64);
+
+        unsafe { ptr::copy_nonoverlapping(b"hello".as_ptr(), caller, 5) };
+        let (mut buffer, _) = unsafe { lent_for_get(buffer).reclaim(receipt(5)) }.unwrap();
+        assert_eq!(&buffer.as_host()[..5], b"hello");
+        buffer.copy_from(b"world").unwrap();
+        assert_eq!(unsafe { std::slice::from_raw_parts(caller, 5) }, b"world");
+
+        drop(buffer);
+        fabric.wait_for_closes();
+        assert!(freed.load(Ordering::SeqCst));
+        unsafe { free_foreign_memory(memory) };
+    }
+
+    #[test]
+    fn a_failed_raw_registration_drops_the_owner_at_once() {
+        let memory = foreign_memory(1);
+        let empty = NonNull::slice_from_raw_parts(memory.cast::<u8>(), 0);
+        let (owner, freed, _) = tracked();
+
+        let error = unsafe { fabric().register_raw(empty, owner) }.unwrap_err();
+
+        assert!(matches!(error, RdmaError::Configuration(_)), "{error:?}");
+        assert!(freed.load(Ordering::SeqCst));
+        unsafe { free_foreign_memory(memory) };
     }
 
     #[test]

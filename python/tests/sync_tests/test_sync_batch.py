@@ -437,13 +437,14 @@ class TestSyncBatch:
             else ClusterBatch(is_atomic=is_atomic)
         )
 
+        batch.set(key, "value", conditional_set=OnlyIfEqual("other"))
         batch.set(key, "value")
         batch.set(key, "other", conditional_set=OnlyIfEqual("other"))
         batch.set(key, "other", conditional_set=OnlyIfEqual("value"))
         batch.get(key)
 
         result = exec_batch(glide_sync_client, batch)
-        assert result == [OK, None, OK, b"other"]
+        assert result == [None, OK, None, OK, b"other"]
 
     @pytest.mark.skip_if_version_below("9.2.0")
     @pytest.mark.parametrize("cluster_mode", [True, False])
@@ -460,13 +461,14 @@ class TestSyncBatch:
             else ClusterBatch(is_atomic=is_atomic)
         )
 
+        batch.set(key, "value", conditional_set=OnlyIfNotEqual("other"))
         batch.set(key, "value")
         batch.set(key, "other", conditional_set=OnlyIfNotEqual("value"))
         batch.set(key, "other", conditional_set=OnlyIfNotEqual("other"))
         batch.get(key)
 
         result = exec_batch(glide_sync_client, batch)
-        assert result == [OK, None, OK, b"other"]
+        assert result == [OK, OK, None, OK, b"other"]
 
     # The object commands are tested here instead of transaction_test because they have special requirements:
     # - OBJECT FREQ and OBJECT IDLETIME require specific maxmemory policies to be set on the config

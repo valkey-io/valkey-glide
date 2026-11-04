@@ -9,6 +9,7 @@
 #![allow(unsafe_op_in_unsafe_fn)]
 
 // Dump the bindgen generated code, and export as public module named "bindings".
+#[allow(clippy::missing_safety_doc, clippy::type_complexity)]
 pub mod bindgen {
     include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 }

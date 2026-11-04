@@ -358,7 +358,9 @@ jobs:
 
                       # Build FFI library and glide-shared native extension for async wheel
                       # Note: working directory inside container is python/glide-async
-                      cd ../../ffi && cargo build --release && cd ..
+                      # Built with RDMA like the sync wheel's: with both wheels installed,
+                      # the sync client loads this copy.
+                      cd ../../ffi && cargo build --release --features rdma && cd ..
                       cp ffi/target/release/libglide_ffi.so python/glide-async/python/glide_shared/
                       cd python/glide-shared
                       pip install maturin
@@ -381,8 +383,9 @@ jobs:
               if: startsWith(matrix.build.NAMED_OS, 'darwin')
               shell: bash
               run: |
-                  # Build FFI library
-                  cd ffi && cargo build --release --target ${{ matrix.build.TARGET }}
+                  # Build FFI library, with RDMA like the sync wheel's: with both wheels
+                  # installed, the sync client loads this copy.
+                  cd ffi && cargo build --release --features rdma --target ${{ matrix.build.TARGET }}
                   cp target/${{ matrix.build.TARGET }}/release/libglide_ffi.dylib ../python/glide-async/python/glide_shared/
                   cd ..
                   # Build glide-shared native extension (_fast_response) for all target interpreters
@@ -457,6 +460,11 @@ jobs:
                   CIBW_ARCHS_MACOS: auto
                   CIBW_ENABLE: ${{ steps.cibw_config.outputs.enable_flags }}
                   MACOSX_DEPLOYMENT_TARGET: "10.12"
+                  # Build RDMA into every published wheel. Users opt in per client,
+                  # and libfabric is only loaded when they do.
+                  # This replaces [tool.cibuildwheel.environment] in pyproject.toml
+                  # rather than adding to it, so RELEASE_MODE must be repeated here.
+                  CIBW_ENVIRONMENT: RELEASE_MODE=1 GLIDE_SYNC_RDMA=1
 
             - name: Smoke test wheels
               run: |
@@ -477,6 +485,30 @@ jobs:
                   /tmp/smoke-sync/bin/python /tmp/get-pip.py
                   /tmp/smoke-sync/bin/pip install --find-links python/glide-sync/wheels "valkey-glide-sync==${RELEASE_VERSION}"
                   /tmp/smoke-sync/bin/python -c "from glide_sync import GlideClient; print('Sync smoke test passed')"
+
+                  /tmp/smoke-sync/bin/python - <<'PYEOF'
+                  from glide_sync import GlideClient
+
+                  assert GlideClient.rdma_available(), "wheel was built without RDMA support"
+                  print("RDMA usable:", GlideClient.rdma_usable())
+                  PYEOF
+
+                  # With both clients installed, the sync client loads the FFI library
+                  # from the async wheel, so that one needs RDMA too.
+                  rm -rf /tmp/smoke-both
+                  $PYTHON -m venv --without-pip /tmp/smoke-both
+                  /tmp/smoke-both/bin/python /tmp/get-pip.py
+                  /tmp/smoke-both/bin/pip install --find-links python/glide-async/wheels --find-links python/glide-sync/wheels \
+                    "valkey-glide==${RELEASE_VERSION}" "valkey-glide-sync==${RELEASE_VERSION}"
+                  /tmp/smoke-both/bin/python - <<'PYEOF'
+                  import glide  # noqa: F401 (both clients import side by side)
+                  from glide_shared._glide_ffi import LIB_FILE
+                  from glide_sync import GlideClient
+
+                  assert LIB_FILE.parent.name == "glide_shared", f"expected the async wheel's FFI library, loaded {LIB_FILE}"
+                  assert GlideClient.rdma_available(), "the FFI library loaded with both wheels installed has no RDMA support"
+                  print("Async and sync smoke test passed")
+                  PYEOF
 
             ### UPLOAD WHEELS ###
 

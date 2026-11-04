@@ -197,6 +197,9 @@ After installing prerequisites and cloning the repository, you can build the asy
 ```bash
 # Build the async client in release mode
 python3 dev.py build --client async --mode release
+
+# Build the sync client with RDMA support
+python3 dev.py build --client sync --rdma
 ```
 
 > These commands handle environment setup, dependency installation, and consistent build logic.
@@ -304,6 +307,27 @@ To run [async](tests/async_tests/test_dns.py) and [sync](tests/sync_tests/test_s
 
 If the environment variable is not set, DNS tests will be skipped.
 
+### RDMA Tests
+
+RDMA is only in the sync client, and only when it is built with `--rdma`. `libfabric` 2.4 or
+newer is loaded when a client first opens a fabric, so it only has to be installed where the
+tests run. Set `GLIDE_LIBFABRIC_PATH` to the library file to use a copy the default search does
+not find.
+
+[`tests/sync_tests/test_sync_rdma.py`](tests/sync_tests/test_sync_rdma.py) and
+[`tests/test_rdma_config.py`](tests/test_rdma_config.py) run without fabric hardware, including
+on a build without RDMA. The transfer tests (`TestRdmaTransfers`) are skipped unless
+`GLIDE_RDMA_SERVER` names a server that serves the `BLOB.RDMA_*` commands:
+
+```bash
+python3 dev.py build --client sync --rdma
+export GLIDE_RDMA_SERVER=<host>:<port>
+export GLIDE_RDMA_PROVIDER=efa-direct  # on a machine with an EFA device; the default is tcp
+python3 dev.py test --args tests/sync_tests/test_sync_rdma.py tests/test_rdma_config.py
+```
+
+For `tcp`, load the server module with `fabric-provider Emulated`; its default is `EfaDirect`.
+
 ## Protobuf
 
 ---
@@ -397,13 +421,14 @@ This section explains how the `valkey-glide` (async client) and `valkey-glide-sy
    - ffi
    - glide-core
    - glide-logger
+   - glide-rdma
    - glide_shared (Python module)
 
    Vendoring ensures that all dependencies are self-contained within the package at build time, which is required for reproducible builds and compatibility with tools like cibuildwheel.
 
 2. **Build steps**
    - The necessary dependencies are vendored into the `glide-sync` directory before the build starts.
-   - We run `cargo build` in the `glide-sync/ffi/` folder to compile the Rust FFI library.
+   - We run `cargo build` in the `glide-sync/ffi/` folder to compile the Rust FFI library. With `GLIDE_SYNC_RDMA=1`, it is built with the `rdma` feature. Published wheels set it, so every published sync wheel includes RDMA; libfabric is loaded only when a client asks for RDMA.
    - The resulting shared object file (e.g. `libglide_ffi.so`) is copied into the `glide-sync/glide_sync/` directory.
    - We then build the Python package, either as a wheel or as an sdist.
 

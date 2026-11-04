@@ -27,7 +27,10 @@ public final class SetOptions {
      */
     private final ConditionalSet conditionalSet;
 
-    /** Value to compare when {@link ConditionalSet#ONLY_IF_EQUAL} is set. */
+    /**
+     * Value to compare when {@link ConditionalSet#ONLY_IF_EQUAL} or {@link
+     * ConditionalSet#ONLY_IF_NOT_EQUAL} is set.
+     */
     private final GlideString comparisonValue;
 
     /**
@@ -52,10 +55,29 @@ public final class SetOptions {
          */
         ONLY_IF_DOES_NOT_EXIST("NX"),
         /**
-         * Only set the key if the current value of key equals the {@link SetOptions#comparisonValue}.
-         * Equivalent to <code>IFEQ comparison-value</code> in the Valkey API.
+         * Only set the key if it exists and its current value equals the {@link
+         * SetOptions#comparisonValue}. Equivalent to <code>IFEQ comparison-value</code> in the Valkey
+         * API.
+         *
+         * <p>Not supported when compression is enabled. See <a
+         * href="https://glide.valkey.io/concepts/client-features/compression/#incompatible-commands">Valkey
+         * GLIDE – Data Compression</a>.
+         *
+         * @since Valkey 8.1.0.
          */
-        ONLY_IF_EQUAL("IFEQ");
+        ONLY_IF_EQUAL("IFEQ"),
+        /**
+         * Only set the key if it does not exist or if its current value does not equal the {@link
+         * SetOptions#comparisonValue}. Equivalent to <code>IFNE comparison-value</code> in the Valkey
+         * API.
+         *
+         * <p>Not supported when compression is enabled. See <a
+         * href="https://glide.valkey.io/concepts/client-features/compression/#incompatible-commands">Valkey
+         * GLIDE – Data Compression</a>.
+         *
+         * @since Valkey 9.2.0.
+         */
+        ONLY_IF_NOT_EQUAL("IFNE");
 
         private final String valkeyApi;
     }
@@ -99,14 +121,18 @@ public final class SetOptions {
 
         /**
          * Sets the condition to {@link ConditionalSet#ONLY_IF_EQUAL} for setting the value. The key
-         * will be set if the provided comparison value matches the existing value.
+         * will be set if it exists and the provided comparison value matches the existing value.
          *
          * <p>This method overrides any previously set {@code conditionalSet} and {@code
          * comparisonValue}.
          *
+         * <p>Not supported when compression is enabled. See <a
+         * href="https://glide.valkey.io/concepts/client-features/compression/#incompatible-commands">Valkey
+         * GLIDE – Data Compression</a>.
+         *
          * @param value the value to compare
          * @return this builder instance
-         * @since Valkey 8.1 and above.
+         * @since Valkey 8.1.0.
          */
         public SetOptionsBuilder conditionalSetOnlyIfEqualTo(@NonNull String value) {
             return conditionalSetOnlyIfEqualTo(GlideString.gs(value));
@@ -114,17 +140,63 @@ public final class SetOptions {
 
         /**
          * Sets the condition to {@link ConditionalSet#ONLY_IF_EQUAL} for setting the value. The key
-         * will be set if the provided comparison value matches the existing value.
+         * will be set if it exists and the provided comparison value matches the existing value.
          *
          * <p>This method overrides any previously set {@code conditionalSet} and {@code
          * comparisonValue}.
          *
+         * <p>Not supported when compression is enabled. See <a
+         * href="https://glide.valkey.io/concepts/client-features/compression/#incompatible-commands">Valkey
+         * GLIDE – Data Compression</a>.
+         *
          * @param value the value to compare
          * @return this builder instance
-         * @since Valkey 8.1 and above.
+         * @since Valkey 8.1.0.
          */
         public SetOptionsBuilder conditionalSetOnlyIfEqualTo(@NonNull GlideString value) {
             this.conditionalSet = ConditionalSet.ONLY_IF_EQUAL;
+            this.comparisonValue = value;
+            return this;
+        }
+
+        /**
+         * Sets the condition to {@link ConditionalSet#ONLY_IF_NOT_EQUAL} for setting the value. The key
+         * will be set if it does not exist or if the provided comparison value does not match the
+         * existing value.
+         *
+         * <p>This method overrides any previously set {@code conditionalSet} and {@code
+         * comparisonValue}.
+         *
+         * <p>Not supported when compression is enabled. See <a
+         * href="https://glide.valkey.io/concepts/client-features/compression/#incompatible-commands">Valkey
+         * GLIDE – Data Compression</a>.
+         *
+         * @param value the value to compare
+         * @return this builder instance
+         * @since Valkey 9.2.0.
+         */
+        public SetOptionsBuilder conditionalSetOnlyIfNotEqualTo(@NonNull String value) {
+            return conditionalSetOnlyIfNotEqualTo(GlideString.gs(value));
+        }
+
+        /**
+         * Sets the condition to {@link ConditionalSet#ONLY_IF_NOT_EQUAL} for setting the value. The key
+         * will be set if it does not exist or if the provided comparison value does not match the
+         * existing value.
+         *
+         * <p>This method overrides any previously set {@code conditionalSet} and {@code
+         * comparisonValue}.
+         *
+         * <p>Not supported when compression is enabled. See <a
+         * href="https://glide.valkey.io/concepts/client-features/compression/#incompatible-commands">Valkey
+         * GLIDE – Data Compression</a>.
+         *
+         * @param value the value to compare
+         * @return this builder instance
+         * @since Valkey 9.2.0.
+         */
+        public SetOptionsBuilder conditionalSetOnlyIfNotEqualTo(@NonNull GlideString value) {
+            this.conditionalSet = ConditionalSet.ONLY_IF_NOT_EQUAL;
             this.comparisonValue = value;
             return this;
         }
@@ -224,6 +296,7 @@ public final class SetOptions {
      * @return String[]
      */
     public String[] toArgs() {
+        // TODO #7447: Converts binary comparison values lossily. Use `toArgsBinary()` instead.
         return Arrays.stream(toArgsBinary()).map(GlideString::getString).toArray(String[]::new);
     }
 
@@ -236,7 +309,8 @@ public final class SetOptions {
         final ArgsBuilder argsBuilder = new ArgsBuilder();
         if (conditionalSet != null) {
             argsBuilder.add(conditionalSet.valkeyApi);
-            if (conditionalSet == ConditionalSet.ONLY_IF_EQUAL) {
+            if (conditionalSet == ConditionalSet.ONLY_IF_EQUAL
+                    || conditionalSet == ConditionalSet.ONLY_IF_NOT_EQUAL) {
                 argsBuilder.add(comparisonValue);
             }
         }

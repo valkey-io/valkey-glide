@@ -30,7 +30,7 @@
 //! [`execute_scope_command`]) so every queued command reaches the server and its
 //! own EXECABORT governs the transaction, as on the non-scoped path.
 
-use crate::client::Client;
+use crate::client::{AuthGeneration, Client};
 use crate::errors::RequestErrorType;
 use crate::pool::{
     ScopedConnection, get_client_scope_pools, get_scope_registry, slot_for_key,
@@ -230,7 +230,7 @@ fn slot_of_unanimous_keys(keys: &[&[u8]]) -> ScopeSlot {
 /// - `cmd_name`: The command name (e.g., "GET", "SET", "WATCH")
 /// - `args`: Command arguments as byte slices
 /// - `client`: The parent Client. `None` sends the command raw — no timeout, no
-///   decompression and no IAM re-authentication — which is only useful for tests
+///   decompression and no rotation re-authentication — which is only useful for tests
 ///   that need to observe a connection's state before any re-auth can mask it.
 ///
 /// # Returns
@@ -241,6 +241,7 @@ pub async fn execute_scope_command(
     args: &[Vec<u8>],
     client: Option<&Client>,
 ) -> RedisResult<Value> {
+    crate::rdma::refuse_direct(cmd_name.as_bytes())?;
     let registry = get_scope_registry();
     let entry = match registry.get(&scope_id) {
         Some(e) => e.connection.clone(),
@@ -330,13 +331,13 @@ pub async fn execute_scope_command(
         Some(c) => {
             let ScopedConnection {
                 connection,
-                last_iam_generation,
+                last_auth_generation,
                 ..
             } = &mut *conn;
             c.send_command_on_connection(
                 &cmd,
                 connection,
-                last_iam_generation,
+                last_auth_generation,
                 multi_active_before_command || subscribed_before_command,
             )
             .await
@@ -359,13 +360,17 @@ pub async fn execute_scope_command(
         // `is_timeout()` is a strict subset of `is_io_error()` in redis-rs (it only
         // checks for IO errors of kind TimedOut/WouldBlock), so it adds no coverage
         // beyond `is_io_error()` and is omitted here.
-        let poisoned = matches!(&result, Err(e) if e.is_io_error()
-            || e.is_connection_dropped()
-            || e.kind() == redis::ErrorKind::ProtocolDesync);
+        let poisoned = matches!(&result, Err(e) if is_poisoning_error(e));
         conn.state.blocking_in_flight = already_poisoned || poisoned;
     }
 
     result
+}
+
+/// Whether a failed blocking command may have left a server-side waiter armed or the
+/// connection in an unknown state.
+fn is_poisoning_error(e: &RedisError) -> bool {
+    e.is_io_error() || e.is_connection_dropped() || e.kind() == redis::ErrorKind::ProtocolDesync
 }
 
 /// Full-featured scope command execution with all cross-cutting concerns.
@@ -622,8 +627,11 @@ struct PreparedScopeConnection {
     connection: redis::aio::MultiplexedConnection,
     /// Database the connection was SELECTed into (parent runtime DB, else config).
     database_id: u32,
-    /// IAM token generation the initial AUTH was built from (0 when IAM is not in use).
-    initial_iam_generation: u64,
+    /// Credential generation the initial AUTH was built from: the IAM token
+    /// generation for an IAM client, otherwise `CredentialsHandle::generation`
+    /// (`AuthGeneration::NEVER` when the credentials came from the request bytes,
+    /// i.e. no owning Client was passed).
+    initial_auth_generation: AuthGeneration,
 }
 
 /// Strip surrounding `[ ]` from an IPv6 host. A bracketed literal is a URL-authority
@@ -804,6 +812,9 @@ async fn build_scope_connection(
     })
     .map_err(ScopeCreateError::ClientOpenFailed)?;
     let opts = redis::GlideConnectionOptions {
+        // An isolated scope's connection never carries a transfer.
+        #[cfg(feature = "rdma")]
+        rdma_fabric: None,
         push_sender: None,
         disconnect_notifier: None,
         discover_az: false,
@@ -835,32 +846,42 @@ async fn build_scope_connection(
     let mut init_count = 0;
 
     // Generation observed at AUTH-build time, so send_command_on_connection can
-    // detect whether the token has rotated again since this connection's initial
-    // AUTH (rather than always re-authenticating on the very first command, or
-    // missing a rotation that lands between here and the first command).
-    let mut initial_iam_generation: u64 = 0;
+    // detect whether the credential has rotated again since this connection's
+    // initial AUTH (rather than always re-authenticating on the very first
+    // command, or missing a rotation that lands between here and the first
+    // command).
+    let mut initial_auth_generation = AuthGeneration::NEVER;
 
     // AUTH: IAM authentication takes priority when configured on the parent client
-    // (matching the documented priority in `AuthenticationInfo`'s doc comment), otherwise
-    // fall back to the protobuf-configured password/username.
+    // (matching the documented priority in `AuthenticationInfo`'s doc comment).
+    // Otherwise the owning Client's current credentials: the request bytes are
+    // the pool's first-acquire snapshot and never see a later
+    // `update_connection_password`. Only the raw test path, which has no Client,
+    // reads them.
     if let Some(manager) = client.and_then(|c| c.iam_token_manager()) {
         // Read the generation before the token: if a refresh lands in this gap,
-        // `initial_iam_generation` records the (now-stale) pre-refresh generation,
+        // `initial_auth_generation` records the (now-stale) pre-refresh generation,
         // so the mismatch on the first scope command still triggers a
         // reauthentication. Reading generation after the token could otherwise
         // suppress it — a refresh landing there would mean the initial AUTH used
         // the old token, but the recorded generation already matches the new one.
-        let generation_before_auth = manager.token_generation();
+        let generation_before_auth = AuthGeneration::from_source(manager.token_generation());
         let current_token = manager.get_token().await;
         if current_token.is_empty() {
             return Err(ScopeCreateError::IamTokenUnavailable);
         }
-        initial_iam_generation = generation_before_auth;
+        initial_auth_generation = generation_before_auth;
         init_pipe
             .cmd("AUTH")
             .arg(manager.username())
             .arg(current_token.as_str());
         init_count += 1;
+    } else if let Some(handle) = client.map(|c| c.credentials()) {
+        initial_auth_generation = handle.generation();
+        if let Some(auth_cmd) = handle.current().auth_command() {
+            init_pipe.add_command(auth_cmd);
+            init_count += 1;
+        }
     } else if let Some(ref auth_info) = proto.authentication_info.0 {
         let password = &auth_info.password;
         let username = &auth_info.username;
@@ -921,15 +942,23 @@ async fn build_scope_connection(
                     });
                 return Err(ScopeCreateError::InitFailed(err));
             }
-            Ok(Err(e)) => return Err(ScopeCreateError::InitFailed(e)),
-            Err(_) => return Err(ScopeCreateError::InitTimedOut),
+            // A failed or timed-out init may leave a reply outstanding; close rather
+            // than wait on it.
+            Ok(Err(e)) => {
+                conn.kill();
+                return Err(ScopeCreateError::InitFailed(e));
+            }
+            Err(_) => {
+                conn.kill();
+                return Err(ScopeCreateError::InitTimedOut);
+            }
         }
     }
 
     Ok(PreparedScopeConnection {
         connection: conn,
         database_id,
-        initial_iam_generation,
+        initial_auth_generation,
     })
 }
 
@@ -988,9 +1017,7 @@ pub async fn create_scope_connection(
                 // a borrow picks it up.
                 acquisition_slot: None,
                 target,
-                last_iam_generation: std::sync::atomic::AtomicU64::new(
-                    prepared.initial_iam_generation,
-                ),
+                last_auth_generation: prepared.initial_auth_generation,
             });
             reservation.commit();
             Ok(())
@@ -1549,6 +1576,18 @@ fn classify_acquire(
     let acquisition_slot = acquisition_slot_for(&target, routing_slot);
     match pool.try_acquire(registry, target.clone(), runtime_db, acquisition_slot) {
         ScopeAcquire::Reused(scope_id) => {
+            // Parent teardown unregisters the pool before sweeping the registry,
+            // so if the pool is gone here the sweep may have missed this entry.
+            let registered = crate::pool::get_client_scope_pools()
+                .get(&client_id)
+                .is_some_and(|handle| Arc::ptr_eq(&handle.pool, scope_pool));
+            if !registered {
+                pool.in_use.remove(&scope_id);
+                if let Some((_, entry)) = registry.remove(&scope_id) {
+                    entry.discard();
+                }
+                return Outcome(Fail(ScopeFailCause::PoolClosed));
+            }
             let _ = glide_telemetry::GlideOpenTelemetry::record_scope_acquire();
             Outcome(Acquired(scope_id))
         }
@@ -1633,9 +1672,12 @@ pub(crate) async fn resync_idle_connection_database(
         conn.last_idle_at = std::time::Instant::now();
         guard.reidle_after_resync(conn);
         reservation.commit();
+    } else {
+        // A timed-out SELECT is still outstanding; close rather than wait on it.
+        conn.connection.kill();
     }
-    // else: re-SELECT failed — drop the connection and let `reservation`'s `Drop`
-    // reclaim the slot via `saturating_dec`.
+    // On failure the connection drops and `reservation`'s `Drop` reclaims the slot
+    // via `saturating_dec`.
 }
 
 /// Release a scope back to the pool. Fire-and-forget, non-blocking.
@@ -1803,10 +1845,15 @@ fn target_from_slot_lookup(
 /// must fail the command: dispatch used to carry on without a parent, silently
 /// running it with none of the guardrails listed on `ScopeEntry::parent_client_id`.
 pub fn resolve_scope_parent(scope_id: u64) -> Option<Client> {
-    let parent_client_id = get_scope_registry().get(&scope_id)?.parent_client_id;
+    let parent_client_id = scope_parent_id(scope_id)?;
     get_client_registry()
         .get(&parent_client_id)
         .map(|e| e.value().clone())
+}
+
+/// The id the scope's parent client was registered under.
+pub fn scope_parent_id(scope_id: u64) -> Option<u64> {
+    Some(get_scope_registry().get(&scope_id)?.parent_client_id)
 }
 
 /// Global client registry: client_id → Client.
@@ -1851,12 +1898,16 @@ mod tests {
     use tokio::sync::Mutex as TokioMutex;
 
     use super::{
+        Classified, build_scope_connection_addr, is_poisoning_error, parse_cluster_target,
+        strip_host_brackets,
+    };
+    use super::{
         ScopeAcquireOutcome, ScopeCreateError, ScopeFailCause, ScopeRetryCause,
-        acquire_scope_outcome, acquisition_slot_for, build_scope_connection,
+        acquire_scope_outcome, acquisition_slot_for, build_scope_connection, classify_acquire,
         create_scope_connection, execute_scope_command, get_parent_client, inherited_tls_params,
         resolve_scope_parent, try_resolve_scope_target,
     };
-    use super::{build_scope_connection_addr, parse_cluster_target, strip_host_brackets};
+    use redis::{RedisResult, Value};
 
     use super::Client;
     use crate::client::{ConnectionRequest as ClientRequest, NodeAddress as ClientAddress};
@@ -2615,6 +2666,59 @@ mod tests {
         );
     }
 
+    /// An acquire holding a pool handle from before parent teardown must not leave
+    /// an entry behind once teardown's sweep has run.
+    #[tokio::test]
+    async fn acquire_after_teardown_leaves_no_registry_entry() {
+        let client_id = 67_950_011_u64;
+        let (port, shutdown_sender, server) = responsive_endpoint();
+        let request_bytes = request_bytes("", port);
+        let pool = Arc::new(TokioMutex::new(ScopePool::new(
+            ScopePoolConfig::default(),
+            request_bytes.clone(),
+            client_id,
+        )));
+        pool.lock().await.total_count.store(1, Ordering::Release);
+        let reservation = reservation_for(&pool).await;
+        let _ = create_scope_connection(
+            pool.clone(),
+            None,
+            &request_bytes,
+            ScopeTarget::Standalone,
+            reservation,
+        )
+        .await;
+        assert_eq!(pool.lock().await.idle.len(), 1, "connection seated");
+        get_client_scope_pools().insert(client_id, ScopePoolHandle::for_test(&pool));
+        register_client(client_id, lazy_parent(false).await);
+
+        crate::pool::destroy_client_scope_pool(client_id);
+        let classified = classify_acquire(
+            &pool,
+            pool.lock().await,
+            client_id,
+            &tokio::runtime::Handle::current(),
+            None,
+        );
+
+        unregister_client(client_id);
+        assert!(
+            matches!(
+                classified,
+                Classified::Outcome(ScopeAcquireOutcome::Fail(ScopeFailCause::PoolClosed))
+            ),
+            "acquire on a torn-down pool must fail"
+        );
+        assert!(
+            !crate::pool::get_scope_registry()
+                .iter()
+                .any(|entry| entry.value().parent_client_id == client_id),
+            "no scope may outlive its parent's teardown"
+        );
+        shutdown_sender.send(()).expect("signal server shutdown");
+        server.join().expect("join server thread");
+    }
+
     /// Seat one connection in a `max_total = 1` pool, register the parent, and hand
     /// back `(pool, scope_id of the held connection, request bytes, server)`.
     async fn held_single_slot_pool(
@@ -2707,7 +2811,8 @@ mod tests {
         get_client_scope_pools().remove(&client_id);
         stop_endpoint(endpoint);
 
-        assert_eq!(acquired, Ok(held), "the released connection is reused");
+        let acquired = acquired.expect("the released connection is reused");
+        assert_ne!(acquired, held, "reuse allocates a fresh scope_id");
         assert!(
             elapsed < Duration::from_secs(2),
             "woke {elapsed:?} after start; the release was at 150 ms"
@@ -2971,7 +3076,10 @@ mod tests {
             assert_eq!(alternate_target, ScopeTarget::Standalone);
             reused_scope_id(pool.try_acquire(registry, alternate_target, 0, None))
         };
-        assert_eq!(second_scope_id, first_scope_id);
+        assert_ne!(
+            second_scope_id, first_scope_id,
+            "reuse allocates a fresh scope_id"
+        );
 
         {
             let mut pool = pool.lock().await;
@@ -3038,7 +3146,10 @@ mod tests {
                 None,
             ))
         };
-        assert_eq!(second_scope_id, first_scope_id);
+        assert_ne!(
+            second_scope_id, first_scope_id,
+            "reuse allocates a fresh scope_id"
+        );
 
         {
             let mut pool = pool.lock().await;
@@ -3207,7 +3318,7 @@ mod tests {
                 0,
                 None,
             ));
-            assert_eq!(reused, newest_id);
+            assert_ne!(reused, newest_id, "reuse allocates a fresh scope_id");
             assert!(pool.idle.is_empty());
             assert_eq!(pool.total_count.load(Ordering::Acquire), 2);
 
@@ -3227,6 +3338,95 @@ mod tests {
         shutdown_b.send(()).expect("stop mock server b");
         server_a.join().expect("mock server a exits cleanly");
         server_b.join().expect("mock server b exits cleanly");
+    }
+
+    /// Seat one standalone connection on a server that answers no commands after
+    /// the handshake, and borrow it.
+    async fn borrowed_silent_scope() -> (Arc<TokioMutex<ScopePool>>, u64, Sender<()>, JoinHandle<()>)
+    {
+        let (port, shutdown_sender, server) = endpoint_answering_n_more_commands(0);
+        let request_bytes = request_bytes("", port);
+        // A unique parent: `reserved_pool`'s fixed id 1 is a live client id other
+        // tests destroy, which purges its scopes mid-test.
+        let pool = ScopePool::new(
+            ScopePoolConfig::default(),
+            request_bytes.clone(),
+            crate::pool::allocate_client_id(),
+        );
+        pool.total_count.store(1, Ordering::Release);
+        let pool = Arc::new(TokioMutex::new(pool));
+        let reservation = reservation_for(&pool).await;
+        create_scope_connection(
+            pool.clone(),
+            None,
+            &request_bytes,
+            ScopeTarget::Standalone,
+            reservation,
+        )
+        .await
+        .expect("seat connection");
+        let registry = crate::pool::get_scope_registry();
+        let scope_id = reused_scope_id(pool.lock().await.try_acquire(
+            registry,
+            ScopeTarget::Standalone,
+            0,
+            None,
+        ));
+        (pool, scope_id, shutdown_sender, server)
+    }
+
+    async fn assert_released_promptly(command: tokio::task::JoinHandle<RedisResult<Value>>) {
+        let result = tokio::time::timeout(Duration::from_secs(2), command)
+            .await
+            .expect("release must stop the in-flight command")
+            .expect("command task");
+        let err = result.expect_err("a released command fails");
+        assert!(err.is_connection_dropped(), "{err}");
+    }
+
+    /// Release closes the socket under a blocking command
+    /// still in flight rather than leaving it open until the server replies.
+    #[tokio::test]
+    async fn release_cancels_in_flight_blocking_command() {
+        let (pool, scope_id, shutdown_sender, server) = borrowed_silent_scope().await;
+        let command = tokio::spawn(async move {
+            execute_scope_command(scope_id, "BLPOP", &[b"k".to_vec(), b"0".to_vec()], None).await
+        });
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        let registry = crate::pool::get_scope_registry();
+        assert!(pool.lock().await.release(scope_id, registry));
+        assert_released_promptly(command).await;
+        assert_eq!(pool.lock().await.total_count.load(Ordering::Acquire), 0);
+
+        shutdown_sender.send(()).expect("stop mock server");
+        server.join().expect("mock server exits cleanly");
+    }
+
+    /// A command still queued on the connection lock when
+    /// the scope is released must fail, not dispatch on a re-idled connection.
+    #[tokio::test]
+    async fn release_before_dispatch_stops_the_command() {
+        let (pool, scope_id, shutdown_sender, server) = borrowed_silent_scope().await;
+        let registry = crate::pool::get_scope_registry();
+        let connection = registry
+            .get(&scope_id)
+            .expect("borrowed scope is registered")
+            .connection
+            .clone();
+        let held = connection.lock().await;
+        let command = tokio::spawn(async move {
+            execute_scope_command(scope_id, "BLPOP", &[b"k".to_vec(), b"0".to_vec()], None).await
+        });
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        assert!(pool.lock().await.release(scope_id, registry));
+        drop(held);
+        assert_released_promptly(command).await;
+        assert!(pool.lock().await.idle.is_empty(), "not re-idled");
+
+        shutdown_sender.send(()).expect("stop mock server");
+        server.join().expect("mock server exits cleanly");
     }
 
     /// Holding the pool lock reproduces the contention that made the old
@@ -3356,14 +3556,6 @@ mod tests {
             Some((true, false, false, false)),
             "closing the parent must drop the scope entry, its pool, and any parent resolution"
         );
-    }
-
-    /// Mirrors the poison predicate from `execute_scope_command` directly against
-    /// synthetic errors, since constructing a real `FatalReceiveError`/`FatalSendError`
-    /// (multiplexed connection driver errors) or `ProtocolDesync` requires a live
-    /// server round-trip and isn't practical to reproduce as a pure unit test here.
-    fn is_poisoning_error(e: &redis::RedisError) -> bool {
-        e.is_io_error() || e.is_connection_dropped() || e.kind() == redis::ErrorKind::ProtocolDesync
     }
 
     #[test]

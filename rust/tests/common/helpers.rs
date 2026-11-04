@@ -58,7 +58,7 @@ pub fn parse_int(value: &str, name: &str) -> i64 {
 
 /// Return the fields and values from the given `INFO` sections, with one map per node reply.
 // TODO #7362: Support cluster clients once the typed `INFO` methods return per-node replies.
-pub async fn get_info<C>(c: &C, sections: &[&str]) -> Vec<HashMap<String, String>>
+pub async fn get_info<C>(c: &C, sections: &[glide::InfoSection]) -> Vec<HashMap<String, String>>
 where
     C: glide::ServerManagementCommands + Sync,
 {

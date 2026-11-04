@@ -24,10 +24,10 @@ use tokio::sync::oneshot;
 use tokio::sync::oneshot::error::RecvError;
 
 use super::boxed_sleep;
-use super::testing::RefreshConnectionType;
 use super::CmdArg;
 use super::PendingRequest;
 use super::PipelineRetryStrategy;
+use super::ReconnectMode;
 use super::RedirectNode;
 use super::RequestInfo;
 use super::{Core, InternalSingleNodeRouting, OperationTarget, Response};
@@ -918,6 +918,7 @@ where
                     pipeline,
                     pipeline_responses,
                     matches!(retry_method, RetryMethod::ReconnectAndRetry),
+                    ReconnectMode::CheckExisting,
                     &mut pipeline_map,
                     response_policies,
                 )
@@ -961,12 +962,15 @@ where
 /// This function refreshes the connections for the nodes corresponding to the failure errors,
 /// and if configured to retry, it will invoke the retry mechanism for the affected commands.
 /// If not retrying, it triggers an asynchronous refresh without waiting.
+/// `mode` decides whether a healthy existing connection may be kept.
+#[allow(clippy::too_many_arguments)]
 async fn handle_reconnect_logic<C>(
     indices_addresses_and_error: Vec<((usize, Option<usize>), String, ServerError)>,
     core: Core<C>,
     pipeline: &Pipeline,
     pipeline_responses: &mut PipelineResponses,
     should_retry: bool,
+    mode: ReconnectMode,
     pipeline_map: &mut NodePipelineMap<C>,
     response_policies: &mut ResponsePoliciesMap,
 ) -> Result<(), (OperationTarget, RedisError)>
@@ -978,6 +982,7 @@ where
         .iter()
         .map(|(_, address, _)| crate::cluster::ClusterAddress::ReadyToDial(address.clone()))
         .collect();
+    let (conn_type, existing_conn) = mode.refresh_args();
 
     // If we're supposed to retry, refresh connections and retry commands.
     // Since the commands are marked for retry, we will wait fot the refresh to complete, and then retry the commands.
@@ -985,8 +990,8 @@ where
         ClusterConnInner::refresh_and_update_connections(
             core.clone(),
             addresses,
-            RefreshConnectionType::OnlyUserConnection,
-            true,
+            conn_type,
+            existing_conn,
         )
         .await;
 
@@ -1004,8 +1009,8 @@ where
         ClusterConnInner::trigger_refresh_connection_tasks(
             core.clone(),
             addresses.clone(),
-            RefreshConnectionType::OnlyUserConnection,
-            true,
+            conn_type,
+            existing_conn,
         )
         .await;
     }
@@ -1135,6 +1140,7 @@ where
             pipeline,
             pipeline_responses,
             true, // should_retry = true, we want to retry after reconnect
+            ReconnectMode::Replace,
             pipeline_map,
             response_policies,
         )

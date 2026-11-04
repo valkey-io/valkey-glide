@@ -324,7 +324,7 @@ func NewXGroupSetIdOptionsOptions() *XGroupSetIdOptions {
 
 // A value representing the number of stream entries already read by the group.
 //
-// Since Valkey version 7.0.0.
+// Since Valkey 7.0.0.
 func (xgsio *XGroupSetIdOptions) SetEntriesRead(entriesRead int64) *XGroupSetIdOptions {
 	xgsio.EntriesRead = entriesRead
 	return xgsio
@@ -428,8 +428,6 @@ func (xiso *XInfoStreamOptions) ToArgs() ([]string, error) {
 type StreamBoundary string
 
 // Create a new stream boundary.
-//
-// Note: Exclusive ranges (`isInclusive=false`) have been added since Valkey 6.2.0.
 func NewStreamBoundary(streamId string, isInclusive bool) StreamBoundary {
 	if !isInclusive {
 		return StreamBoundary("(" + streamId)
