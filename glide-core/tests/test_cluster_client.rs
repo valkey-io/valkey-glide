@@ -6,7 +6,9 @@ mod utilities;
 #[cfg(test)]
 mod cluster_client_tests {
     use std::collections::HashMap;
+    #[cfg(unix)]
     use std::sync::Arc;
+    #[cfg(unix)]
     use std::time::Duration;
 
     use crate::constants::{IP_ADDRESS_V4, IP_ADDRESS_V6};
