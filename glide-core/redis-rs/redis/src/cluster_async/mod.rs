@@ -1042,7 +1042,8 @@ struct Message<C: Sized> {
     /// loop had dispatched would be, so retries, redirects, slot refresh and reconnects run
     /// exactly as if the event loop had made that attempt. The recovery queue (meant for new
     /// requests) does not buffer, cap or fail this attempt; a retry that the event loop sends
-    /// back through `pending_requests_tx` (reconnects) meets it like any retry. Like any
+    /// back through `pending_requests_tx` (reconnects) meets the recovery queue like any retry.
+    /// Like any
     /// in-flight request, it can also be the one `send_refresh_error` answers with a failed
     /// slot refresh's error.
     first_attempt_error: Option<(OperationTarget, RedisError)>,

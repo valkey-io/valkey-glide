@@ -703,15 +703,18 @@ where
         // `Forward` then drains the channel again before this flush. Large batches flush at
         // once; at most one yield per flush; nothing is ever held back.
         //
-        // Only when other requests are waiting for replies (`in_flight` holds more than the
-        // unflushed ones), i.e. more than one producer is active. A single sequential caller
-        // (typical for standalone, management and pubsub connections at low load) never
-        // yields, so its requests cost what they did without coalescing.
+        // Only when other requests are awaiting replies (`in_flight` holds more than the
+        // unflushed ones), which is when other producers are likely to be sending too. A single
+        // sequential caller (typical for standalone, management and pubsub connections at low
+        // load) does not yield while its previous replies have all arrived. Entries whose
+        // callers gave up stay in `in_flight` until their late replies arrive, and count too.
         //
         // Cost of a yield: `tokio::task::yield_now` defers the wake until the worker has run its
-        // other ready tasks (on the multi-thread runtime, until it next polls the I/O driver,
-        // with a zero timeout if idle); then a self-wake goes round `Forward` once more. That is
-        // two extra writer polls, during which replies are not read, and one `Box`.
+        // other ready tasks. On the multi-thread runtime deferred wakes run when the worker next
+        // polls the I/O driver: with a zero timeout when it has nothing else to run, or at the
+        // latest after `event_interval` (61) task polls when busy. Then a self-wake goes round
+        // `Forward` once more. That is two extra writer polls, during which replies are not
+        // read, and one `Box`.
         if *self.as_mut().project().unflushed > 0 && coalesce_enabled() {
             let this = self.as_mut().project();
             if !*this.coalesce_yielded
@@ -2683,17 +2686,23 @@ mod tests {
         driver.abort();
     }
 
-    /// Answers every command with `+OK`, at once unless `hold_replies` is set (then into `held`,
-    /// for the test to send later), and records how many commands each non-empty flush
-    /// carried. Notifies `on_send` when it accepts a command.
+    /// Replies a [`FlushRecordingSink`] holds back while `hold` is set.
+    #[derive(Default)]
+    struct HeldReplies {
+        hold: bool,
+        count: usize,
+    }
+
+    /// Answers every command with `+OK`, at once unless replies are held (then the test sends
+    /// them later), and records how many commands each non-empty flush carried. Notifies
+    /// `on_send` when it accepts a command.
     struct FlushRecordingSink {
         resp_tx: mpsc::UnboundedSender<RedisResult<Value>>,
         resp_rx: mpsc::UnboundedReceiver<RedisResult<Value>>,
         unflushed: usize,
         flushes: Arc<std::sync::Mutex<Vec<usize>>>,
         on_send: Arc<tokio::sync::Notify>,
-        hold_replies: Arc<AtomicBool>,
-        held: Arc<std::sync::Mutex<usize>>,
+        held: Arc<std::sync::Mutex<HeldReplies>>,
     }
 
     impl FlushRecordingSink {
@@ -2703,7 +2712,6 @@ mod tests {
                 resp_tx: resp_tx.clone(),
                 flushes: Default::default(),
                 on_send: Default::default(),
-                hold_replies: Default::default(),
                 held: Default::default(),
             };
             let sink = Self {
@@ -2712,7 +2720,6 @@ mod tests {
                 unflushed: 0,
                 flushes: handles.flushes.clone(),
                 on_send: handles.on_send.clone(),
-                hold_replies: handles.hold_replies.clone(),
                 held: handles.held.clone(),
             };
             (sink, handles)
@@ -2724,16 +2731,23 @@ mod tests {
         resp_tx: mpsc::UnboundedSender<RedisResult<Value>>,
         flushes: Arc<std::sync::Mutex<Vec<usize>>>,
         on_send: Arc<tokio::sync::Notify>,
-        hold_replies: Arc<AtomicBool>,
-        held: Arc<std::sync::Mutex<usize>>,
+        held: Arc<std::sync::Mutex<HeldReplies>>,
     }
 
     impl FlushRecordingHandles {
-        /// Sends the replies held so far and answers later commands at once.
+        fn hold_replies(&self) {
+            self.held.lock().unwrap().hold = true;
+        }
+
+        fn held_replies(&self) -> usize {
+            self.held.lock().unwrap().count
+        }
+
+        /// Sends the replies held so far, in order, and answers later commands at once.
         fn release_replies(&self) {
-            self.hold_replies.store(false, Ordering::SeqCst);
-            let held = std::mem::take(&mut *self.held.lock().unwrap());
-            for _ in 0..held {
+            let mut held = self.held.lock().unwrap();
+            held.hold = false;
+            for _ in 0..std::mem::take(&mut held.count) {
                 let _ = self.resp_tx.send(Ok(Value::Okay));
             }
         }
@@ -2777,11 +2791,13 @@ mod tests {
         fn start_send(self: Pin<&mut Self>, _item: Vec<u8>) -> Result<(), Self::Error> {
             let this = self.get_mut();
             this.unflushed += 1;
-            if this.hold_replies.load(Ordering::SeqCst) {
-                *this.held.lock().unwrap() += 1;
+            let mut held = this.held.lock().unwrap();
+            if held.hold {
+                held.count += 1;
             } else {
                 let _ = this.resp_tx.send(Ok(Value::Okay));
             }
+            drop(held);
             this.on_send.notify_one();
             Ok(())
         }
@@ -2824,7 +2840,7 @@ mod tests {
         let driver = tokio::spawn(driver);
 
         // An outstanding request: flushed alone (nothing else in flight), reply held.
-        handles.hold_replies.store(true, Ordering::SeqCst);
+        handles.hold_replies();
         let outstanding = tokio::spawn(send_ping(pipeline.clone()));
         handles.on_send.notified().await;
 
@@ -2842,7 +2858,7 @@ mod tests {
         });
         let second = tokio::spawn(send_ping(pipeline.clone()));
         tokio::time::timeout(Duration::from_secs(5), async {
-            while *handles.held.lock().unwrap() < 3 {
+            while handles.held_replies() < 3 {
                 tokio::task::yield_now().await;
             }
         })

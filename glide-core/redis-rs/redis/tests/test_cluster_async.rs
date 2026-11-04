@@ -8970,8 +8970,9 @@ mod cluster_async {
     /// out of budget, so `FuturesUnordered` does not count it as a yield and polls every drained
     /// request once in the poll that drains them: all of them are sent before the event loop
     /// returns and clears its recovery flag. The node issues the new requests from new tasks when
-    /// it has received 200 of the 300 drained ones, which is past the first 128; they run on the
-    /// other worker while the event loop is still sending.
+    /// it has received 200 of the 300 drained ones, which is past the first 128, and holds the
+    /// event loop for up to 30 ms while they run on the other worker: any of them that took the
+    /// fast path would reach the node then, ahead of the drained requests not yet sent.
     #[test]
     #[serial_test::parallel(otel)]
     fn test_async_cluster_fast_path_drained_requests_are_sent_before_new_ones() {
@@ -9043,6 +9044,17 @@ mod cluster_async {
                                     .query_async::<_, Option<i32>>(&mut connection)
                                     .await
                             }));
+                        }
+                        drop(fresh_requests);
+                        // Hold the event loop here (this handler runs on its task) while the new
+                        // requests run on the other worker. If the fast path were open, they
+                        // would reach the node now, ahead of the 100 drained requests not yet
+                        // sent; with it closed they wait for the event loop, and this times out.
+                        let deadline = std::time::Instant::now() + Duration::from_millis(30);
+                        while !arrivals.lock().unwrap().contains(&"fresh")
+                            && std::time::Instant::now() < deadline
+                        {
+                            std::thread::sleep(Duration::from_millis(1));
                         }
                     }
                 } else if contains_slice(cmd, b"fresh") {
