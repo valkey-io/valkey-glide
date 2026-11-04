@@ -730,6 +730,29 @@ public class ConnectionManager {
     }
 
     /**
+     * Rejects a strategy whose {@link glide.api.models.configuration.ReadFrom#requiresClientAz()} is
+     * true, today only {@code AZ_AFFINITY_ALL_NODES}, when it has no {@code clientAZ}.
+     *
+     * <p>{@code AZ_AFFINITY_ALL_NODES} has thrown since it was added, so no client depends on it
+     * working without an AZ. {@code AZ_AFFINITY} and {@code AZ_AFFINITY_REPLICAS_AND_PRIMARY} are
+     * accepted without one: the core logs a warning and downgrades them to {@code PreferReplica}, as
+     * in 2.5.2 and earlier, and rejecting them would break existing clients.
+     *
+     * <p>Called synchronously from {@code BaseClient.createClient} and from {@code ClientPool.create}
+     * ahead of its connectivity probe, so callers see a direct throw rather than an {@code
+     * ExecutionException} or a probe failure.
+     *
+     * @throws ConfigurationError if {@code AZ_AFFINITY_ALL_NODES} is selected without a {@code
+     *     clientAZ}.
+     */
+    public static void validateClientAz(BaseClientConfiguration configuration) {
+        glide.api.models.configuration.ReadFrom readFrom = configuration.getReadFrom();
+        if (readFrom.requiresClientAz() && resolveClientAz(configuration) == null) {
+            throw new ConfigurationError("clientAZ must be set when readFrom is set to " + readFrom);
+        }
+    }
+
+    /**
      * The {@code clientAZ} as it should reach the core: trimmed, or null when absent or blank.
      *
      * <p>The core compares availability zones with exact equality and never trims ({@code
@@ -737,10 +760,6 @@ public class ConnectionManager {
      * us-east-1a "} — easily produced by {@code getenv} or a file read — would engage the strategy,
      * match no node, and silently spread reads cluster-wide. No real availability-zone name carries
      * surrounding whitespace, so trimming cannot break a value that works today.
-     *
-     * <p>An AZ-affinity strategy with no {@code clientAZ} is not rejected here: the core logs a
-     * warning and downgrades it to {@code PreferReplica}, as it did before 2.6. Throwing instead
-     * breaks existing clients that set the strategy without an AZ.
      *
      * <p>The shared request builder normalizes through here so no caller can forward a raw value.
      */

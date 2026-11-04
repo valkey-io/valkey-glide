@@ -13,12 +13,18 @@ public enum ReadFrom {
     /**
      * Spread the read requests between replicas in the same client's AZ (Aviliablity zone) in a
      * round-robin manner, falling back to other replicas or the primary if needed.
+     *
+     * <p>Uses {@code clientAZ}. When it is unset or blank, the core logs a warning and reads use
+     * {@link #PREFER_REPLICA} instead.
      */
     AZ_AFFINITY,
     /**
      * Spread the read requests among nodes within the client's Availability Zone (AZ) in a round
      * robin manner, prioritizing local replicas, then the local primary, and falling back to any
      * replica or the primary if needed.
+     *
+     * <p>Uses {@code clientAZ}. When it is unset or blank, the core logs a warning and reads use
+     * {@link #PREFER_REPLICA} instead.
      */
     AZ_AFFINITY_REPLICAS_AND_PRIMARY,
     /** Spread the read requests between all nodes (primary and replicas) in a round-robin manner. */
@@ -37,17 +43,22 @@ public enum ReadFrom {
      * take a share of the reads. That strategy sends every read to an in-AZ replica whenever one is
      * connected, so the primary serves reads only as a fallback.
      *
-     * <p>Requires {@code clientAZ} to be set on the client configuration.
+     * <p>Requires {@code clientAZ} to be set on the client configuration. Client creation throws a
+     * {@code ConfigurationError} when it is unset or blank.
      */
     AZ_AFFINITY_ALL_NODES;
 
-    /** Whether this strategy needs {@code clientAZ} set on the client configuration. */
+    /**
+     * Whether client creation rejects this strategy when {@code clientAZ} is unset or blank.
+     *
+     * <p>Only {@link #AZ_AFFINITY_ALL_NODES}. {@link #AZ_AFFINITY} and {@link
+     * #AZ_AFFINITY_REPLICAS_AND_PRIMARY} also use {@code clientAZ}, but without one they fall back to
+     * {@link #PREFER_REPLICA}, as in 2.5.2 and earlier.
+     */
     public boolean requiresClientAz() {
-        // A new AZ-scoped strategy has to be listed here too.
-        // ConnectionManagerTest.requiresClientAz_isSetForExactlyTheAzStrategies fails until every
+        // A new AZ-scoped strategy must decide here whether a missing clientAZ is an error.
+        // ConnectionManagerTest.requiresClientAz_isSetForExactlyAzAffinityAllNodes fails until every
         // constant has an explicit answer.
-        return this == AZ_AFFINITY
-                || this == AZ_AFFINITY_REPLICAS_AND_PRIMARY
-                || this == AZ_AFFINITY_ALL_NODES;
+        return this == AZ_AFFINITY_ALL_NODES;
     }
 }
