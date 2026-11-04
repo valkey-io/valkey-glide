@@ -24,6 +24,9 @@ glide-core-engine = { path = "./redis-rs/redis", version = "0.1", features = ["a
 glide-rdma = { path = "../glide-rdma", version = "0.1", optional = true }
 
 # External dependencies
+# Lock-free read of the live standalone connection on the command path (already
+# in the dependency tree through glide-core-engine).
+arc-swap = "1.7"
 async-trait = { version = "0.1" }
 aws-config = "1"
 aws-credential-types = "1"

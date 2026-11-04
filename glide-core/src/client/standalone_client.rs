@@ -935,7 +935,9 @@ impl StandaloneClient {
         // Mark command as sent for watchdog diagnostics
         cmd.watchdog_phase
             .store(redis::PHASE_SENT, std::sync::atomic::Ordering::Release);
-        let mut connection = reconnecting_connection.get_connection().await?;
+        // Shared (`Arc`) handle: no per-command `GlideConnection` clone, `state`
+        // mutex or connection-available wait while connected.
+        let connection = reconnecting_connection.get_shared_connection().await?;
         let result = connection.send_packed_command(cmd).await;
         match result {
             Err(err) if err.is_unrecoverable_error() => {
@@ -1102,8 +1104,7 @@ impl StandaloneClient {
                     return;
                 }
 
-                let Some(mut connection) = reconnecting_connection.try_get_connection().await
-                else {
+                let Some(connection) = reconnecting_connection.try_get_connection().await else {
                     log_debug(
                         "StandaloneClient",
                         "heartbeat stopped while connection is reconnecting",
@@ -1285,7 +1286,7 @@ async fn get_connection_and_replication_info(
     )
     .await?;
 
-    let mut multiplexed_connection = match reconnecting_connection.get_connection().await {
+    let multiplexed_connection = match reconnecting_connection.get_connection().await {
         Ok(multiplexed_connection) => multiplexed_connection,
         Err(err) => {
             reconnecting_connection.reconnect(ReconnectReason::ConnectionDropped);
