@@ -8,6 +8,10 @@
 * Core/FFI: create clients on a runtime worker so the connect does not use the caller's stack ([#7644](https://github.com/valkey-io/valkey-glide/pull/7644))
 * Go: strip LLVM bitcode from the prebuilt `libglide_ffi.a` so Go 1.26.11+ / 1.27.4+ no longer reject it with `disallowed LTO section` ([#7739](https://github.com/valkey-io/valkey-glide/pull/7739))
 
+### Changes
+
+* Core: Fewer allocations per reply and per command. Replies of up to 4 KiB (other than RESP3 pushes) are split off the connection's read buffer instead of copied, and a single command's packed buffer is queued for sending without an owner allocation. A retained small reply value now keeps its read buffer (typically 8 KiB, at most about 85 KiB) alive until it is dropped; `Value::detach_buffers` copies it out, and the new `bytes_into_vec` converts it to a `Vec<u8>` without keeping the read buffer ([#7531](https://github.com/valkey-io/valkey-glide/pull/7531))
+
 ## 2.6
 
 ### Features
