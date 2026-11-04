@@ -1094,6 +1094,43 @@ mod tests {
         assert_eq!(e.arg_idx(2), None);
     }
 
+    /// The multiplexed connection's write sink queues a packed command as
+    /// `Bytes::from(Vec)` without allocating only when the Vec has no spare
+    /// capacity (otherwise it falls back to `Bytes::from_owner`). This pins
+    /// down that `get_packed_command` reserves the exact packed length.
+    #[test]
+    fn test_packed_command_has_exact_capacity() {
+        // The >SHARED_ARG_INLINE_MAX arg below goes through buf_pool's
+        // shared shards.
+        let _g = crate::buf_pool::TEST_POOL_SERIAL
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        let mut get = Cmd::new();
+        get.arg("GET").arg("key");
+        let mut set = Cmd::new();
+        set.arg("SET").arg("key").arg(vec![b'v'; 1000]);
+        let mut set_large = Cmd::new();
+        set_large
+            .arg("SET")
+            .arg("key")
+            .arg(&vec![b'w'; 2 * super::SHARED_ARG_INLINE_MAX][..]);
+        let mut scan = Cmd::new();
+        scan.arg("SCAN").cursor_arg(1234567).arg("COUNT").arg(10);
+        let mut fenced = super::fenced_cmd("MULTI");
+        fenced.arg("x");
+        let mut empty_arg = Cmd::new();
+        empty_arg.arg("GET").arg(b"");
+        for cmd in [get, set, set_large, scan, fenced, empty_arg] {
+            let packed = cmd.get_packed_command();
+            assert_eq!(
+                packed.len(),
+                packed.capacity(),
+                "packed command {:?} has spare capacity",
+                String::from_utf8_lossy(&packed)
+            );
+        }
+    }
+
     #[test]
     fn test_response_timeout_defaults_to_none() {
         let cmd = Cmd::new();
