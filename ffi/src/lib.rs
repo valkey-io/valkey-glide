@@ -6297,21 +6297,11 @@ pub unsafe extern "C" fn batch(
         let _ = batch_pool_ids;
         let _ = batch_blocking_arc;
 
-        // Process batch response for decompression if compression is enabled
-        match result {
-            Ok(value) => glide_core::compression::try_decompress_batch_response(
-                value,
-                compression_manager_for_decompression.as_deref(),
-            )
-            .map_err(|e| {
-                redis::RedisError::from((
-                    redis::ErrorKind::IoError,
-                    "Decompression error",
-                    e.to_string(),
-                ))
-            }),
-            Err(e) => Err(e),
-        }
+        let decompressed = glide_core::compression::try_decompress_batch_response(
+            result?,
+            compression_manager_for_decompression.as_deref(),
+        )?;
+        Ok(decompressed)
     })
 }
 

@@ -490,18 +490,6 @@ fn compression_error_to_redis(err: glide_core::compression::CompressionError) ->
     RedisError::from((ErrorKind::ClientError, "Compression error", err.to_string()))
 }
 
-fn process_batch_response_for_decompression(
-    response: Value,
-    client: &Client,
-) -> std::result::Result<Value, glide_core::compression::CompressionError> {
-    let compression_manager = client.compression_manager();
-    let Some(manager) = compression_manager.as_deref() else {
-        return Ok(response);
-    };
-
-    glide_core::compression::decompress_batch_response(response, manager)
-}
-
 fn process_command_for_compression(
     cmd: &mut Cmd,
     client: &Client,
@@ -754,19 +742,11 @@ async fn execute_batch(
             .await
     };
 
-    match result {
-        Ok(value) => match process_batch_response_for_decompression(value.clone(), client) {
-            Ok(processed_value) => Ok(processed_value),
-            Err(err) => {
-                log_warn(
-                    "batch_response_decompression",
-                    format!("Failed to decompress batch response: {err}"),
-                );
-                Ok(value)
-            }
-        },
-        Err(err) => Err(err),
-    }
+    let decompressed = glide_core::compression::try_decompress_batch_response(
+        result?,
+        client.compression_manager().as_deref(),
+    )?;
+    Ok(decompressed)
 }
 
 // ============================================================================

@@ -1340,36 +1340,15 @@ impl Client {
 
         // Post-process: decompress and convert to expected type.
         // Done after the mutable borrow on cmd is released.
-        let processed_value = if let Some(ref compression_manager) = compression_manager {
-            if let Some(request_type) = extract_request_type_from_cmd(&cmd) {
-                match crate::compression::process_response_for_decompression(
-                    raw_value.clone(),
+        let processed_value = match (&compression_manager, extract_request_type_from_cmd(&cmd)) {
+            (Some(compression_manager), Some(request_type)) => {
+                crate::compression::process_response_for_decompression(
+                    raw_value,
                     request_type,
                     Some(compression_manager.as_ref()),
-                ) {
-                    Ok(decompressed_value) => decompressed_value,
-                    Err(e) => {
-                        // Propagate critical errors (size limit exceeded, incompatible command)
-                        // to the user instead of silently falling back to raw value
-                        if e.should_propagate() {
-                            return Err(redis::RedisError::from((
-                                redis::ErrorKind::IoError,
-                                "Decompression error",
-                                e.to_string(),
-                            )));
-                        }
-                        log_warn(
-                            "send_command_decompression",
-                            format!("Failed to decompress response: {}", e),
-                        );
-                        raw_value
-                    }
-                }
-            } else {
-                raw_value
+                )?
             }
-        } else {
-            raw_value
+            _ => raw_value,
         };
 
         let expected_type = expected_type_for_cmd(&cmd);
@@ -1782,31 +1761,18 @@ impl Client {
             None => connection.send_packed_command(&cmd_to_send).await?,
         };
 
-        // Apply decompression if compression is enabled
-        let processed_value = if let Some(ref compression_manager) = self.compression_manager {
-            if let Some(request_type) = extract_request_type_from_cmd(cmd) {
-                match crate::compression::process_response_for_decompression(
-                    raw_value.clone(),
+        let processed_value = match (
+            &self.compression_manager,
+            extract_request_type_from_cmd(cmd),
+        ) {
+            (Some(compression_manager), Some(request_type)) => {
+                crate::compression::process_response_for_decompression(
+                    raw_value,
                     request_type,
                     Some(compression_manager.as_ref()),
-                ) {
-                    Ok(decompressed) => decompressed,
-                    Err(e) => {
-                        if e.should_propagate() {
-                            return Err(redis::RedisError::from((
-                                redis::ErrorKind::IoError,
-                                "Decompression error",
-                                e.to_string(),
-                            )));
-                        }
-                        raw_value
-                    }
-                }
-            } else {
-                raw_value
+                )?
             }
-        } else {
-            raw_value
+            _ => raw_value,
         };
 
         // Type conversion
