@@ -286,7 +286,7 @@ class FtHybridVsimArm:
                 )
             param_ref = generated_param_name
         field_ref: TEncodable
-        if isinstance(self.field, (bytes, bytearray)):
+        if isinstance(self.field, (bytes, bytearray, memoryview)):
             field_ref = b"@" + bytes(self.field)
         else:
             field_ref = f"@{self.field}"
