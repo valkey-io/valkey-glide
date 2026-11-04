@@ -1340,15 +1340,16 @@ impl Client {
 
         // Post-process: decompress and convert to expected type.
         // Done after the mutable borrow on cmd is released.
-        let processed_value = match (&compression_manager, extract_request_type_from_cmd(&cmd)) {
-            (Some(compression_manager), Some(request_type)) => {
-                crate::compression::process_response_for_decompression(
+        let processed_value = match &compression_manager {
+            Some(compression_manager) => match extract_request_type_from_cmd(&cmd) {
+                Some(request_type) => crate::compression::process_response_for_decompression(
                     raw_value,
                     request_type,
                     Some(compression_manager.as_ref()),
-                )?
-            }
-            _ => raw_value,
+                )?,
+                None => raw_value,
+            },
+            None => raw_value,
         };
 
         let expected_type = expected_type_for_cmd(&cmd);
@@ -1761,18 +1762,16 @@ impl Client {
             None => connection.send_packed_command(&cmd_to_send).await?,
         };
 
-        let processed_value = match (
-            &self.compression_manager,
-            extract_request_type_from_cmd(cmd),
-        ) {
-            (Some(compression_manager), Some(request_type)) => {
-                crate::compression::process_response_for_decompression(
+        let processed_value = match &self.compression_manager {
+            Some(compression_manager) => match extract_request_type_from_cmd(cmd) {
+                Some(request_type) => crate::compression::process_response_for_decompression(
                     raw_value,
                     request_type,
                     Some(compression_manager.as_ref()),
-                )?
-            }
-            _ => raw_value,
+                )?,
+                None => raw_value,
+            },
+            None => raw_value,
         };
 
         // Type conversion
