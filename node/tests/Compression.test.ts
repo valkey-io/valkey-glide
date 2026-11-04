@@ -14,6 +14,8 @@ import { ValkeyCluster } from "../../utils/TestUtils.js";
 import {
     BaseClient,
     BaseClientConfiguration,
+    Batch,
+    ClusterBatch,
     ClusterTransaction,
     CompressionBackend,
     CompressionConfiguration,
@@ -982,6 +984,68 @@ describe("Compression", () => {
             expect(after.total_values_decompressed).toBe(
                 before.total_values_decompressed,
             );
+        },
+        TIMEOUT,
+    );
+
+    it.each([
+        [false, false],
+        [false, true],
+        [true, false],
+        [true, true],
+    ])(
+        "compression_batch_keeps_header_shaped_neighbour cluster_mode=%p atomic=%p",
+        async (clusterMode, atomic) => {
+            client = await createCompressedClient(clusterMode, {
+                enabled: true,
+            });
+            const plainClient = clusterMode
+                ? await GlideClusterClient.createClient(
+                      getClientConfigurationOption(
+                          getAddresses(true),
+                          ProtocolVersion.RESP3,
+                      ),
+                  )
+                : await GlideClient.createClient(
+                      getClientConfigurationOption(
+                          getAddresses(false),
+                          ProtocolVersion.RESP3,
+                      ),
+                  );
+
+            try {
+                const compressedKey = uniqueKey("{batch_collision}_compressed");
+                const plainKey = uniqueKey("{batch_collision}_plain");
+                // Names a real backend so the decoder runs, on a payload it rejects.
+                const headerShapedPlain = Buffer.from([
+                    0x00, 0x01, 0x02, 0x00, 0x01, 0x7a, 0x7a, 0x7a, 0x7a,
+                ]);
+
+                await client.set(compressedKey, TEXT_1K);
+                await plainClient.set(plainKey, headerShapedPlain);
+
+                const results = clusterMode
+                    ? await (client as GlideClusterClient).exec(
+                          new ClusterBatch(atomic)
+                              .get(compressedKey)
+                              .get(plainKey),
+                          true,
+                          { decoder: Decoder.Bytes },
+                      )
+                    : await (client as GlideClient).exec(
+                          new Batch(atomic).get(compressedKey).get(plainKey),
+                          true,
+                          { decoder: Decoder.Bytes },
+                      );
+
+                expect(results).not.toBeNull();
+                expect((results![0] as Buffer).toString()).toBe(TEXT_1K);
+                expect(results![1]).toEqual(headerShapedPlain);
+
+                await plainClient.del([compressedKey, plainKey]);
+            } finally {
+                plainClient.close();
+            }
         },
         TIMEOUT,
     );
