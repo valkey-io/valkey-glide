@@ -328,9 +328,12 @@ where
 /// (which must copy payloads into owned `Vec`s because a bulk string may
 /// straddle socket reads), we first *scan* the buffered bytes for one complete
 /// top-level frame without consuming anything. Once a full frame is buffered,
-/// we `split_to(len).freeze()` it into a refcounted [`bytes::Bytes`] (zero-copy) and
-/// build the [`Value`] tree by slicing bulk-string payloads directly out of
-/// that frame — no per-value allocation or memcpy.
+/// we take it out of the read buffer as a refcounted [`bytes::Bytes`] (small
+/// frames are split off zero-copy unless the read buffer has grown large,
+/// other frames are copied into a pooled buffer; see
+/// `ValueCodec::decode_stream`) and build the [`Value`] tree by
+/// slicing bulk-string payloads directly out of that frame — no per-value
+/// allocation or memcpy.
 ///
 /// The scan only walks type bytes and length headers (payloads are skipped by
 /// length), so its cost is proportional to the number of RESP elements, not
@@ -700,6 +703,28 @@ mod aio_support {
     use tokio::io::AsyncRead;
     use tokio_util::codec::{Decoder, Encoder};
 
+    /// Complete frames up to this size are split off the read buffer instead
+    /// of copied (see `ValueCodec::decode_stream`). Same bound as the pool's
+    /// small-copy cut-off: above it the pooled copy is kept.
+    pub(crate) const ZERO_COPY_MAX_FRAME: usize = crate::buf_pool::POOL_MIN;
+
+    /// Small frames are only split off a read buffer whose visible capacity
+    /// (`BytesMut::capacity`) is at most this large. A split frame shares the
+    /// read buffer's allocation, so one retained small value keeps the whole
+    /// allocation alive; this caps that at about 64 KiB (the consumed prefix
+    /// of an allocation is not visible, so the bound is approximate).
+    ///
+    /// tokio's `FramedRead` starts with an 8 KiB buffer. When it needs room
+    /// while split-off values are still alive, `BytesMut` allocates a fresh
+    /// buffer of `max(unconsumed + 1, original capacity)` (8 KiB here), so
+    /// small-reply traffic stays under the bound. A reply too big for the
+    /// current buffer makes `BytesMut` grow it by doubling: 4-32 KiB replies
+    /// (copied, not split) can grow it to 16-64 KiB, which later split values
+    /// then pin. A reply that grows it past 64 KiB (a few tens of KiB or more)
+    /// turns splitting off for the rest of that connection, because
+    /// `BytesMut` never shrinks; such connections decode exactly as before.
+    pub(crate) const ZERO_COPY_MAX_READ_BUF: usize = 64 * 1024;
+
     /// Tokio codec that decodes RESP frames zero-copy from the read
     /// buffer. See the `zero_copy` module for the strategy.
     #[derive(Default)]
@@ -708,14 +733,46 @@ mod aio_support {
         /// front of the read buffer. Valid across calls because nothing is
         /// consumed until the frame completes.
         scan: super::zero_copy::ScanState,
+        /// End address of a read-buffer allocation seen larger than
+        /// [`ZERO_COPY_MAX_READ_BUF`]. Small frames are copied, not split,
+        /// while the buffer still ends here.
+        large_read_buf_end: Option<usize>,
     }
 
     impl ValueCodec {
+        /// Whether `bytes` lives in an allocation known to be larger than
+        /// [`ZERO_COPY_MAX_READ_BUF`].
+        ///
+        /// `capacity()` only covers the allocation from the unconsumed data
+        /// to its end; the consumed prefix is not observable. Near the tail
+        /// of a large buffer the visible capacity is small, so the end
+        /// address of any allocation once seen above the bound is remembered.
+        /// The way `FramedRead` uses its buffer (`advance`, `split_to`,
+        /// `reserve`), the end address only changes when `BytesMut`
+        /// reallocates, and then the check runs again on the new allocation.
+        /// If the allocator reuses the address for a new allocation, small
+        /// frames keep being copied until the next reallocation.
+        fn in_large_read_buf(&mut self, bytes: &BytesMut) -> bool {
+            let end = (bytes.as_ptr() as usize).wrapping_add(bytes.capacity());
+            if bytes.capacity() > ZERO_COPY_MAX_READ_BUF {
+                self.large_read_buf_end = Some(end);
+                return true;
+            }
+            if self.large_read_buf_end == Some(end) {
+                return true;
+            }
+            self.large_read_buf_end = None;
+            false
+        }
+
         fn decode_stream(
             &mut self,
             bytes: &mut BytesMut,
             eof: bool,
         ) -> RedisResult<Option<RedisResult<Value>>> {
+            // Checked on every call (including partial-frame ones) so a
+            // large allocation is noticed while its visible capacity is big.
+            let large_read_buf = self.in_large_read_buf(bytes);
             if bytes.is_empty() {
                 return Ok(None);
             }
@@ -741,11 +798,12 @@ mod aio_support {
                 }
                 Ok(Some(end)) => {
                     self.scan.reset();
-                    // Copy the complete frame out of the read buffer into a
-                    // recycled pooled buffer (see `buf_pool`), then slice
-                    // bulk-string payloads out of it zero-copy.
+                    // Frames above `ZERO_COPY_MAX_FRAME` are copied out of the
+                    // read buffer into a recycled pooled buffer (see
+                    // `buf_pool`); bulk-string payloads are then sliced out of
+                    // the frame zero-copy.
                     //
-                    // Copy-always was chosen from profiling against a real
+                    // Copying them was chosen from profiling against a real
                     // network peer:
                     // - Freezing frames out of the read buffer (even only
                     //   large ones) defeats the BytesMut allocation reuse and
@@ -757,8 +815,35 @@ mod aio_support {
                     //   defeat allocator reuse; fault handling reached 30% of
                     //   client CPU at 64 KB). The pool recycles the frame
                     //   buffers so their pages stay resident.
-                    let frame = crate::buf_pool::pooled_bytes_from_slice(&bytes[..end]);
-                    bytes.advance(end);
+                    //
+                    // Small frames are split off the read buffer itself
+                    // instead (`split_to().freeze()`). Copying costs a small
+                    // reply two allocations made on the connection task and
+                    // usually freed by the caller task on another worker
+                    // thread (the frame copy, then the `Bytes` promotion when a
+                    // payload is sliced out of it). A split makes no
+                    // per-reply allocation. Its costs are shared instead: one
+                    // fresh 8 KiB read buffer plus a `Shared` header whenever
+                    // `FramedRead` needs room while split values are still
+                    // alive (about once per buffer-full of small frames), and
+                    // one atomic refcount per buffer that the connection task
+                    // and the caller threads all update. The realloc churn
+                    // described above was measured for large frames; at this
+                    // size the buffer is replaced at most once per 8 KiB.
+                    //
+                    // Memory retention: a split frame pins the whole read
+                    // buffer allocation, so splitting is skipped while that
+                    // allocation is known to be larger than
+                    // `ZERO_COPY_MAX_READ_BUF` (a large reply grew it). Values
+                    // kept long-term should be detached
+                    // (`Value::detach_buffers`, as the client-side cache does).
+                    let frame = if end <= ZERO_COPY_MAX_FRAME && !large_read_buf {
+                        bytes.split_to(end).freeze()
+                    } else {
+                        let frame = crate::buf_pool::pooled_bytes_from_slice(&bytes[..end]);
+                        bytes.advance(end);
+                        frame
+                    };
                     let mut pos = 0;
                     let value = super::zero_copy::parse_value(&frame, &mut pos, 1)?;
                     Ok(Some(Ok(value)))
@@ -891,6 +976,277 @@ mod tests {
     use crate::types::make_extension_error;
 
     use super::*;
+
+    /// A RESP bulk-string frame carrying `payload`.
+    #[cfg(feature = "aio")]
+    fn bulk_frame(payload: &[u8]) -> Vec<u8> {
+        let mut f = format!("${}\r\n", payload.len()).into_bytes();
+        f.extend_from_slice(payload);
+        f.extend_from_slice(b"\r\n");
+        f
+    }
+
+    /// A bulk-string frame of `fill` bytes whose total encoded length is
+    /// exactly `total`. Returns the frame and its payload length.
+    #[cfg(feature = "aio")]
+    fn bulk_frame_of_len(total: usize, fill: u8) -> (Vec<u8>, usize) {
+        // "$" + digits + "\r\n" + payload + "\r\n"
+        let payload_len = (0..total)
+            .rev()
+            .find(|p| p + p.to_string().len() + 5 == total)
+            .expect("some payload length encodes to `total` bytes");
+        let f = bulk_frame(&vec![fill; payload_len]);
+        assert_eq!(f.len(), total);
+        (f, payload_len)
+    }
+
+    /// Decodes one complete bulk string and returns its payload.
+    #[cfg(feature = "aio")]
+    fn decode_bulk(codec: &mut ValueCodec, buf: &mut bytes::BytesMut) -> bytes::Bytes {
+        use tokio_util::codec::Decoder;
+        match codec.decode(buf) {
+            Ok(Some(Ok(Value::BulkString(b)))) => b,
+            other => panic!("expected a bulk string, got {other:?}"),
+        }
+    }
+
+    /// Address range of `buf`'s allocation from its current position to its
+    /// end: a payload pointing in here was split off, not copied.
+    #[cfg(feature = "aio")]
+    fn alloc_range(buf: &bytes::BytesMut) -> std::ops::Range<usize> {
+        let start = buf.as_ptr() as usize;
+        start..start + buf.capacity()
+    }
+
+    /// Small frames are split off the read buffer (no copy). Values sliced from
+    /// one frame must stay intact while later frames are decoded from the same
+    /// buffer and the buffer is refilled; a frame above the zero-copy bound takes
+    /// the pooled-copy path and must decode identically.
+    #[cfg(feature = "aio")]
+    #[test]
+    fn small_frames_split_off_read_buffer_stay_valid() {
+        use tokio_util::codec::Decoder;
+        // The large frame goes through buf_pool's shared shards.
+        let _g = crate::buf_pool::TEST_POOL_SERIAL
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        let mut codec = ValueCodec::default();
+        let small = vec![b'a'; 512];
+        let large = vec![b'b'; aio_support::ZERO_COPY_MAX_FRAME + 1];
+        let mut buf = bytes::BytesMut::with_capacity(8192);
+        buf.extend_from_slice(&bulk_frame(&small));
+        buf.extend_from_slice(&bulk_frame(&small[..7]));
+        // Partial third frame: decoded only after more bytes arrive.
+        let third = bulk_frame(&large);
+        buf.extend_from_slice(&third[..100]);
+        let first_alloc = alloc_range(&buf);
+        let v1 = decode_bulk(&mut codec, &mut buf);
+        let v2 = decode_bulk(&mut codec, &mut buf);
+        assert!(
+            first_alloc.contains(&(v1.as_ptr() as usize)),
+            "v1 not split"
+        );
+        assert!(
+            first_alloc.contains(&(v2.as_ptr() as usize)),
+            "v2 not split"
+        );
+        assert_eq!(codec.decode(&mut buf).unwrap(), None);
+        buf.extend_from_slice(&third[100..]);
+        let v3 = decode_bulk(&mut codec, &mut buf);
+        // Refill with new data after everything was consumed; old values untouched.
+        buf.extend_from_slice(&bulk_frame(b"zzzzzzzz"));
+        let v4 = decode_bulk(&mut codec, &mut buf);
+        // Refill past the remaining capacity while split values are alive:
+        // `BytesMut` must move to a new allocation and leave v1/v2 intact.
+        let refill: Vec<u8> = (0..64u8).flat_map(|i| bulk_frame(&[i; 200])).collect();
+        assert!(refill.len() > buf.capacity());
+        buf.extend_from_slice(&refill);
+        assert!(!first_alloc.contains(&(buf.as_ptr() as usize)));
+        for i in 0..64u8 {
+            assert_eq!(&decode_bulk(&mut codec, &mut buf)[..], &[i; 200][..]);
+        }
+        assert_eq!(&v1[..], &small[..]);
+        assert_eq!(&v2[..], &small[..7]);
+        assert_eq!(&v3[..], &large[..]);
+        assert_eq!(&v4[..], b"zzzzzzzz");
+        assert!(buf.is_empty());
+    }
+
+    /// The read-buffer bound is inclusive: a small frame is split off a read
+    /// buffer of exactly `ZERO_COPY_MAX_READ_BUF` bytes and copied out of
+    /// one a byte larger.
+    #[cfg(feature = "aio")]
+    #[test]
+    fn read_buffer_split_boundary_is_zero_copy_max_read_buf() {
+        let limit = aio_support::ZERO_COPY_MAX_READ_BUF;
+        for (capacity, expect_split) in [(limit, true), (limit + 1, false)] {
+            let mut codec = ValueCodec::default();
+            let mut buf = bytes::BytesMut::with_capacity(capacity);
+            assert_eq!(buf.capacity(), capacity, "test setup: exact capacity");
+            buf.extend_from_slice(&bulk_frame(b"small"));
+            let range = alloc_range(&buf);
+            let v = decode_bulk(&mut codec, &mut buf);
+            assert_eq!(&v[..], b"small");
+            assert_eq!(
+                range.contains(&(v.as_ptr() as usize)),
+                expect_split,
+                "read buffer of {capacity} bytes"
+            );
+        }
+    }
+
+    /// End to end through tokio's `FramedRead` (its real `reserve` and read
+    /// behaviour): small replies are split off the read buffer, a large reply
+    /// grows the buffer past `ZERO_COPY_MAX_READ_BUF`, and small replies after
+    /// it are copied so they cannot pin the grown buffer.
+    #[cfg(feature = "aio")]
+    #[test]
+    fn framed_read_splits_small_replies_until_the_buffer_grows() {
+        // Held outside the runtime: a std MutexGuard must not live across
+        // an await point.
+        let _g = crate::buf_pool::TEST_POOL_SERIAL
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        tokio::runtime::Builder::new_current_thread()
+            .build()
+            .unwrap()
+            .block_on(framed_read_splits_small_replies_until_the_buffer_grows_body());
+    }
+
+    #[cfg(feature = "aio")]
+    async fn framed_read_splits_small_replies_until_the_buffer_grows_body() {
+        use futures_util::StreamExt;
+        let small: Vec<Vec<u8>> = (0..100u8).map(|i| vec![i; 100]).collect();
+        let large = vec![b'L'; 4 * aio_support::ZERO_COPY_MAX_READ_BUF];
+        let mut wire = Vec::new();
+        for s in &small {
+            wire.extend_from_slice(&bulk_frame(s));
+        }
+        wire.extend_from_slice(&bulk_frame(&large));
+        for s in &small {
+            wire.extend_from_slice(&bulk_frame(s));
+        }
+
+        type Framed<'a> = tokio_util::codec::FramedRead<&'a [u8], ValueCodec>;
+        async fn next_bulk(framed: &mut Framed<'_>) -> bytes::Bytes {
+            match framed.next().await {
+                Some(Ok(Ok(Value::BulkString(b)))) => b,
+                other => panic!("expected a bulk string, got {other:?}"),
+            }
+        }
+        // A split payload ends right before the read buffer's next unread
+        // byte (only its CRLF in between); a copied one does not.
+        fn was_split(b: &bytes::Bytes, framed: &Framed<'_>) -> bool {
+            b.as_ptr() as usize + b.len() + 2 == framed.read_buffer().as_ptr() as usize
+        }
+
+        let mut framed = Framed::new(&wire[..], ValueCodec::default());
+        let mut kept = Vec::new();
+        for s in &small {
+            let b = next_bulk(&mut framed).await;
+            assert_eq!(&b[..], &s[..]);
+            assert!(was_split(&b, &framed), "small reply before the large one");
+            kept.push(b);
+        }
+        let big = next_bulk(&mut framed).await;
+        assert_eq!(big.len(), large.len());
+        for s in &small {
+            let b = next_bulk(&mut framed).await;
+            assert_eq!(&b[..], &s[..]);
+            assert!(!was_split(&b, &framed), "small reply after the large one");
+        }
+        // Values split before the read buffer grew are still intact.
+        for (b, s) in kept.iter().zip(&small) {
+            assert_eq!(&b[..], &s[..]);
+        }
+    }
+
+    /// The split/copy boundary is the whole encoded frame length: a frame of
+    /// exactly `ZERO_COPY_MAX_FRAME` bytes is split off the read buffer, one
+    /// byte more is copied out of it.
+    #[cfg(feature = "aio")]
+    #[test]
+    fn frame_split_boundary_is_zero_copy_max_frame() {
+        let _g = crate::buf_pool::TEST_POOL_SERIAL
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        let max = aio_support::ZERO_COPY_MAX_FRAME;
+        let (at_max, at_max_len) = bulk_frame_of_len(max, b'x');
+        let (over_max, over_max_len) = bulk_frame_of_len(max + 1, b'y');
+
+        let mut codec = ValueCodec::default();
+        let mut buf = bytes::BytesMut::with_capacity(16 * 1024);
+        buf.extend_from_slice(&at_max);
+        buf.extend_from_slice(&over_max);
+        let range = alloc_range(&buf);
+
+        let split = decode_bulk(&mut codec, &mut buf);
+        assert_eq!(&split[..], &vec![b'x'; at_max_len][..]);
+        assert!(
+            range.contains(&(split.as_ptr() as usize)),
+            "a {max}-byte frame should be split off the read buffer"
+        );
+
+        let copied = decode_bulk(&mut codec, &mut buf);
+        assert_eq!(&copied[..], &vec![b'y'; over_max_len][..]);
+        assert!(
+            !range.contains(&(copied.as_ptr() as usize)),
+            "a {}-byte frame should be copied out of the read buffer",
+            max + 1
+        );
+        assert!(buf.is_empty());
+    }
+
+    /// Memory retention: a small frame split off a large read buffer would
+    /// keep the whole allocation alive, so small frames are copied while the
+    /// read buffer's allocation exceeds `ZERO_COPY_MAX_READ_BUF`, including
+    /// at its tail where the visible capacity is small. Splitting resumes
+    /// once the reader moves to a small allocation.
+    #[cfg(feature = "aio")]
+    #[test]
+    fn small_frames_are_copied_out_of_a_large_read_buffer() {
+        let _g = crate::buf_pool::TEST_POOL_SERIAL
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        let limit = aio_support::ZERO_COPY_MAX_READ_BUF;
+        let mut codec = ValueCodec::default();
+
+        // A small frame at the front of a large allocation.
+        let mut buf = bytes::BytesMut::with_capacity(2 * limit);
+        let small = bulk_frame(b"front");
+        buf.extend_from_slice(&small);
+        let range = alloc_range(&buf);
+        let front = decode_bulk(&mut codec, &mut buf);
+        assert_eq!(&front[..], b"front");
+        assert!(!range.contains(&(front.as_ptr() as usize)));
+
+        // A large frame fills the allocation; the small frame after it sits in
+        // the tail, where the visible capacity is below the limit.
+        let tail = bulk_frame(b"tail");
+        let (large, large_payload_len) = bulk_frame_of_len(buf.capacity() - tail.len(), b'L');
+        buf.extend_from_slice(&large);
+        buf.extend_from_slice(&tail);
+        let range = alloc_range(&buf);
+        assert_eq!(buf.len(), buf.capacity(), "test setup: allocation is full");
+        let big = decode_bulk(&mut codec, &mut buf);
+        assert_eq!(big.len(), large_payload_len);
+        assert!(buf.capacity() <= limit, "test setup: tail must look small");
+        let tail_value = decode_bulk(&mut codec, &mut buf);
+        assert_eq!(&tail_value[..], b"tail");
+        assert!(
+            !range.contains(&(tail_value.as_ptr() as usize)),
+            "a small frame at the tail of a large read buffer must be copied"
+        );
+        assert!(buf.is_empty());
+
+        // A fresh small allocation (what FramedRead reallocates to): split.
+        let mut buf = bytes::BytesMut::with_capacity(8 * 1024);
+        buf.extend_from_slice(&bulk_frame(b"fresh"));
+        let range = alloc_range(&buf);
+        let fresh = decode_bulk(&mut codec, &mut buf);
+        assert_eq!(&fresh[..], b"fresh");
+        assert!(range.contains(&(fresh.as_ptr() as usize)));
+    }
 
     #[cfg(feature = "aio")]
     #[test]

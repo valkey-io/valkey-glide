@@ -118,21 +118,22 @@ pub(crate) fn pooled_bytes_from_slice(data: &[u8]) -> Bytes {
     Bytes::from_owner(PooledBuf(buf))
 }
 
+/// Pool tests assert on shared shard state; serialize them so one test's
+/// pops/pushes can't race another's assertions (test threads round-robin
+/// onto the same 8 shards).
+///
+/// Any lib test that routes a >[`POOL_MIN`] payload through
+/// [`pooled_bytes_from_slice`] (e.g. decoding a large frame through the
+/// codec) touches the same shards and MUST hold this guard too, or it races
+/// the shard-state assertions in this module's tests.
+#[cfg(test)]
+pub(crate) static TEST_POOL_SERIAL: Mutex<()> = Mutex::new(());
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    /// Pool tests assert on shared shard state; serialize them so one test's
-    /// pops/pushes can't race another's assertions (test threads round-robin
-    /// onto the same 8 shards).
-    ///
-    /// NOTE: this guard only covers tests in this module. Any other lib test
-    /// that routes a >[`POOL_MIN`] payload through
-    /// [`pooled_bytes_from_slice`] (e.g. decoding a large frame through the
-    /// codec) touches the same shards without taking `SERIAL` and would race
-    /// the shard-state assertions below. Keep such tests out of the lib test
-    /// binary or extend this guard if that ever happens.
-    static SERIAL: Mutex<()> = Mutex::new(());
+    use super::TEST_POOL_SERIAL as SERIAL;
 
     #[test]
     fn roundtrip_and_reuse() {
