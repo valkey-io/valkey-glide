@@ -313,6 +313,9 @@ pin_project! {
             // sends before the client reconnects are lost, so anything cached until now may
             // already be stale. This runs for any closed tracking connection, including one
             // glide replaces on purpose, and the cache may be shared with other clients.
+            // Skipping this while another tracking connection to the node is open isn't safe:
+            // that one only has the invalidations sent since it turned tracking on, and glide
+            // can connect a replacement before the old connection is dropped.
             if this.tracking_on.load(Ordering::Acquire) {
                 if let Some(cache) = this.cache {
                     cache.flush_all_server_assisted();
@@ -1116,8 +1119,9 @@ impl MultiplexedConnection {
                 }
             }
         };
-        // Setup succeeded, so it turned tracking on. A connection whose setup failed was
-        // never used and tracked nothing, so it must not flush the cache.
+        // Setup succeeded, so it turned tracking on. A failed setup may have turned tracking
+        // on too (it can fail later, on the AZ `INFO`), but that connection was never handed
+        // out, so nothing in the cache came from it and closing it needn't flush.
         if connection_info.redis.server_assisted_cache {
             con.pipeline.set_tracking_on();
         }
